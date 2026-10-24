@@ -30,3 +30,10 @@ infra/certs/
 .claude/launch.json
 .claude/settings.local.json
 .claude/worktrees/
+
+# Кадры и промо дизайнера пересобираются скриптами design/art/src и живут в
+# галерее, а не в git (решение владельца 24.10.2026, docs/35 Р143); в git —
+# только кадры, на которые ссылается макет ui-fixes.html
+design/art/out/preview/*
+!design/art/out/preview/ui-*.png
+design/art/out/promo/

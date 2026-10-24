@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Кабинет партнёра</title>
+<!--
+  Макет к design/art/meta-v2.md §8 и docs/23-referral-and-partner-program.md
+  §4.4: кабинет партнёра — отдельное приложение, только агрегаты, без
+  персональных данных приведённых игроков. Снимок — out/preview/partner-panel.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  :root { --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a; --border: #43425f; --text: #f3eee6; --muted: #aeaac4; --faint: #6f6c8a;
+    --accent: #ff8f3f; --secondary: #46d9c6; --elite: #ffd15c; --success: #8ee86b; --danger: #ff5d5d; --info: #5ccfff; --passive: #c47dff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 13px/1.4 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; width: 1780px; }
+  h1 { font: 22px/1.2 "Russo One"; margin: 0 0 4px; } .lead { color: var(--muted); margin: 0 0 16px; max-width: 170ch; font-size: 14px; }
+  .wrap { display: flex; gap: 26px; align-items: flex-start; }
+  .desk { width: 1280px; height: 800px; border-radius: 12px; overflow: hidden; display: grid; grid-template-columns: 220px 1fr; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45; }
+  .side { background: var(--sunken); padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; } .brand img { width: 120px; } .brand span { font: 11px "Russo One"; color: var(--secondary); letter-spacing: .1em; text-transform: uppercase; }
+  .nav { padding: 8px 10px; border-radius: 7px; color: var(--muted); font-size: 13.5px; } .nav.on { background: var(--surface); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
+  .who { margin-top: auto; padding: 10px; border-radius: 8px; background: var(--surface); font-size: 12px; } .who b { display: block; font: 13px "Russo One"; }
+  .main { padding: 18px 22px; overflow: hidden; }
+  .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; } .top h2 { font: 22px "Russo One"; margin: 0; } .seg { margin-left: auto; display: flex; gap: 3px; padding: 3px; border-radius: 8px; background: var(--sunken); } .seg span { padding: 5px 10px; border-radius: 6px; color: var(--muted); } .seg span.on { background: var(--surface); color: var(--text); }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .kpi { padding: 12px; border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 1px 0 #ffffff0d; }
+  .kpi span { color: var(--muted); font-size: 12px; } .kpi b { display: block; font: 22px/1.2 "Russo One"; margin-top: 4px; } .kpi em { font-style: normal; font-size: 11.5px; }
+  .up { color: var(--success); } .down { color: var(--danger); }
+  .grid2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; margin-top: 12px; }
+  .panel { padding: 12px 14px; border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px #ffffff0a; }
+  .panel h3 { margin: 0 0 8px; font: 13px "Russo One"; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .funnel div { display: grid; grid-template-columns: 120px 1fr 70px; gap: 8px; align-items: center; margin-bottom: 7px; }
+  .funnel i { display: block; height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--accent), #ff8f3f66); }
+  table { width: 100%; border-collapse: collapse; } th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border); } td { padding: 7px 8px; border-bottom: 1px solid #ffffff08; } td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; padding: 2px 7px; border-radius: 5px; font-size: 11px; background: var(--sunken); }
+  .note { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: #46d9c614; box-shadow: inset 0 0 0 1px #46d9c655; font-size: 12px; color: var(--muted); }
+  .phone { width: 390px; height: 800px; border-radius: 22px; overflow: hidden; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45; padding: 14px; position: relative; }
+  .ph-title { font: 22px "Russo One"; margin: 4px 0 10px; }
+  .linkcard { padding: 12px; border-radius: 10px; background: var(--surface); margin-bottom: 8px; box-shadow: inset 0 0 0 1px #ffffff0a; }
+  .url { font-family: ui-monospace, monospace; font-size: 12px; padding: 7px 9px; border-radius: 6px; background: var(--sunken); margin: 6px 0; word-break: break-all; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .btn { padding: 8px 10px; border-radius: 6px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px var(--border); font-size: 12.5px; text-align: center; flex: 1; }
+  .btn.p { color: #230f02; background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -3px 0 #a0582a; font-family: "Russo One"; }
+  .mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; } .mini div { padding: 6px; border-radius: 6px; background: var(--sunken); } .mini b { display: block; font: 15px "Russo One"; } .mini span { font-size: 10.5px; color: var(--muted); }
+  .mat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; } .mat div { height: 64px; border-radius: 7px; background: linear-gradient(180deg, #3a2860, #1d1c31); display: grid; place-items: center; font-size: 11px; color: var(--muted); box-shadow: inset 0 0 0 1px #ffffff12; }
+</style>
+</head>
+<body>
+<h1>Кабинет партнёра — последняя очередь, но продуман заранее</h1>
+<p class="lead">Отдельное приложение для блогеров и каналов (docs/23 §4.4): вход через Telegram, только агрегаты — никаких имён и платежей конкретных игроков. Язык — как у админки (плотно, спокойно), но с брендом: руна, палитра, шрифт. На ПК — обзор; на телефоне — главное для партнёра: ссылки, промокоды и материалы. Решения — <b>meta-v2.md §8</b>.</p>
+<div class="wrap">
+<div class="desk">
+  <div class="side">
+    <div class="brand"><img src="../out/brand/wordmark.svg" alt=""></div>
+    <span style="font:11px 'Russo One';color:var(--secondary);letter-spacing:.12em;text-transform:uppercase;margin:-6px 0 12px 4px">Партнёрам</span>
+    <div class="nav on">Обзор</div><div class="nav">Ссылки и промокоды</div><div class="nav">Воронка</div><div class="nav">Начисления и выплаты</div><div class="nav">Материалы</div><div class="nav">Условия</div>
+    <div class="who"><b>Канал «Игры на вечер»</b>RevShare 25% · 12 мес.<br><span style="color:var(--success)">● договор активен</span></div>
+  </div>
+  <div class="main">
+    <div class="top"><h2>Обзор</h2><div class="seg"><span>7 дней</span><span class="on">30 дней</span><span>Всё время</span></div></div>
+    <div class="kpis">
+      <div class="kpi"><span>Переходы</span><b>18 420</b><em class="up">+12%</em></div>
+      <div class="kpi"><span>Регистрации</span><b>4 105</b><em class="up">22,3% конверсия</em></div>
+      <div class="kpi"><span>Играют 7 дней</span><b>31%</b><em class="muted">органика 28%</em></div>
+      <div class="kpi"><span>Первые платежи</span><b>212</b><em class="up">+9%</em></div>
+      <div class="kpi"><span>Начислено</span><b>41 870 ₽</b><em class="muted">из них в холде 9 400</em></div>
+      <div class="kpi" style="box-shadow:inset 0 0 0 1px #ffd15c88"><span>К выплате</span><b style="color:var(--elite)">32 470 ₽</b><em class="muted">выплата 5 ноября</em></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>По дням</h3>
+        <svg viewBox="0 0 700 220" width="100%" height="220">
+          <g stroke="#43425f" stroke-dasharray="3 4"><path d="M0 40H700M0 100H700M0 160H700"/></g>
+          <polyline fill="none" stroke="#ff8f3f" stroke-width="3" points="0,170 25,160 50,165 75,140 100,150 125,120 150,130 175,110 200,115 225,95 250,100 275,90 300,80 325,95 350,70 375,72 400,60 425,66 450,52 475,58 500,46 525,50 550,40 575,44 600,36 625,42 650,30 675,34 700,26"/>
+          <polyline fill="none" stroke="#46d9c6" stroke-width="3" points="0,200 25,198 50,196 75,190 100,192 125,184 150,186 175,180 200,182 225,174 250,176 275,170 300,166 325,170 350,160 375,162 400,156 425,158 450,150 475,152 500,146 525,148 550,140 575,142 600,136 625,138 650,130 675,132 700,128"/>
+          <text x="6" y="18" fill="#ff8f3f" font-family="Russo One" font-size="12">регистрации</text><text x="110" y="18" fill="#46d9c6" font-family="Russo One" font-size="12">начисления, ₽</text>
+        </svg>
+      </div>
+      <div class="panel"><h3>Воронка</h3>
+        <div class="funnel">
+          <div><span>Переход</span><i style="width:100%"></i><span class="n">18 420</span></div>
+          <div><span>Открыл игру</span><i style="width:62%"></i><span class="n">11 410</span></div>
+          <div><span>Сыграл забег</span><i style="width:38%"></i><span class="n">7 020</span></div>
+          <div><span>Регистрация</span><i style="width:22%"></i><span class="n">4 105</span></div>
+          <div><span>Играет 7 дней</span><i style="width:7%"></i><span class="n">1 273</span></div>
+          <div><span>Первый платёж</span><i style="width:1.2%"></i><span class="n">212</span></div>
+        </div>
+        <div class="note">Только сводные числа: кто именно из вашей аудитории играет и платит, кабинет не показывает — так защищены игроки.</div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:12px"><h3>Ссылки и промокоды</h3>
+      <table>
+        <tr><th>Ссылка / код</th><th>Кампания</th><th class="n">Переходы</th><th class="n">Регистрации</th><th class="n">Конверсия</th><th class="n">Первые платежи</th><th class="n">Начислено</th></tr>
+        <tr><td><span class="chip">t.me/rubezh_bot?start=p-games</span></td><td>пост 12.10</td><td class="n">9 840</td><td class="n">2 310</td><td class="n">23,5%</td><td class="n">131</td><td class="n">25 900 ₽</td></tr>
+        <tr><td><span class="chip">ВЕЧЕР300</span></td><td>стрим</td><td class="n">—</td><td class="n">1 120</td><td class="n">—</td><td class="n">58</td><td class="n">10 300 ₽</td></tr>
+        <tr><td><span class="chip">t.me/rubezh_bot?start=p-games-story</span></td><td>история</td><td class="n">8 580</td><td class="n">675</td><td class="n">7,9%</td><td class="n">23</td><td class="n">5 670 ₽</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="phone">
+  <div class="ph-title">Ссылки и коды</div>
+  <div class="linkcard">
+    <div class="row"><b class="d" style="font-family:'Russo One'">Пост 12.10</b><span class="chip" style="margin-left:auto;color:var(--success)">активна</span></div>
+    <div class="url">t.me/rubezh_bot?start=p-games</div>
+    <div class="row"><span class="btn">Копировать</span><span class="btn">QR</span><span class="btn">Поделиться</span></div>
+    <div class="mini"><div><b>9 840</b><span>переходы</span></div><div><b>2 310</b><span>регистрации</span></div><div><b>25 900 ₽</b><span>начислено</span></div></div>
+  </div>
+  <div class="linkcard">
+    <div class="row"><b style="font-family:'Russo One'">Промокод ВЕЧЕР300</b><span class="chip" style="margin-left:auto">300 монет новичку</span></div>
+    <div class="mini"><div><b>1 120</b><span>ввели</span></div><div><b>58</b><span>платежей</span></div><div><b>10 300 ₽</b><span>начислено</span></div></div>
+  </div>
+  <div class="row" style="margin:4px 0 12px"><span class="btn p">+ Новая ссылка</span><span class="btn">+ Промокод</span></div>
+  <div style="font:12px 'Russo One';letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Материалы</div>
+  <div class="mat"><div>Промо 1:1</div><div>Промо 16:9</div><div style="grid-column:1/3">Промо 21:9 — обложка канала</div><div>Тексты постов</div><div>Логотип и значок</div></div>
+  <div class="note">Картинки — из промо-набора игры, с вашей ссылкой и промокодом, впечатанными на сервере.</div>
+</div>
+</div>
+</body>
+</html>
