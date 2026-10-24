@@ -39,6 +39,10 @@ zones:
   - packages/app-shell/test/audio.test.ts
   - packages/app-shell/test/haptics.test.ts
   - packages/app-shell/test/guide.test.ts
+  - packages/core-game/test/gem-drops.test.ts
+  - packages/core-game/test/run-summary.test.ts
+  - docs/30-configuration-map.md
+  - docs/27-design-system-and-app-shell.md
 shared:
   - packages/core-game/test/radar.test.ts
   - packages/core-game/test/looks.test.ts
@@ -243,7 +247,7 @@ batch: 2
 - [x] Тест повторяемости и `sim-purity` зелёные.
 - [x] Облик, радар, звук, вибрация и гайдбук есть; эффект под переключателем.
 - [x] Эталоны и коридоры обновлены, в PR таблица `pnpm balance:sim`.
-- [ ] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`),
+- [x] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`),
   `pnpm budget` и `pnpm docs:check` зелёные.
 
 ## PR
