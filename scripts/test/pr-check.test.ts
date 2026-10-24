@@ -171,6 +171,17 @@ describe("checkTaskLine", () => {
     expect(checkTaskLine("Задача: tasks/T-0042-wipe.md\n\nтекст", "task/T-0042", files)).toEqual([]);
   });
 
+  it("архивный путь принимается, когда файл лежит в архиве ветки (T-0204)", () => {
+    const archived = ["archive/T-0042-wipe.md", "T-0043-other.md"];
+    expect(checkTaskLine("Задача: tasks/archive/T-0042-wipe.md", "task/T-0042", archived)).toEqual([]);
+  });
+
+  it("путь верхней папки принимается, пока файл наверху; путь, которого нет ни там ни там, — ошибка", () => {
+    expect(checkTaskLine("Задача: tasks/T-0043-other.md", "task/T-0043", files)).toEqual([]);
+    expect(checkTaskLine("Задача: tasks/archive/T-0042-wipe.md", "task/T-0042", files)).toHaveLength(1);
+    expect(checkTaskLine("Задача: tasks/T-0042-wipe.md", "task/T-0042", ["archive/T-0042-wipe.md"])).toHaveLength(1);
+  });
+
   it("отклоняет несуществующий файл", () => {
     expect(checkTaskLine("Задача: tasks/T-0042-nope.md", "task/T-0042", files)).toHaveLength(1);
   });

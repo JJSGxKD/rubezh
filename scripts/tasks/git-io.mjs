@@ -34,9 +34,12 @@ function listLines(args) {
   return out === "" ? [] : out.split("\n");
 }
 
-/** Файлы каталога tasks/ в `base` (по умолчанию origin/dev): `[{ name, text }]`. */
+/**
+ * Файлы `tasks/` и `tasks/archive/` в `base` (по умолчанию origin/dev):
+ * `[{ name, text }]`, где `name` — путь от `tasks/` (`T-….md` или `archive/T-….md`).
+ */
 export function readOriginTasks(base = BASE) {
-  const names = listLines(["ls-tree", "--name-only", base, "tasks/"])
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/", "tasks/archive/"])
     .map((path) => path.replace(/^tasks\//, ""))
     .filter((name) => name.endsWith(".md") && (isTaskFile(name) || name === "epics.md"));
   return names.map((name) => ({ name, text: git(["show", `${base}:tasks/${name}`]) }));
@@ -127,8 +130,11 @@ export function loadRegistryState(base = BASE) {
   };
 }
 
-/** Текст файла задачи в ветке `task/T-NNNN` на origin — оттуда видно, кто взял. */
+/** Текст файла задачи в ветке `task/T-NNNN` на origin — оттуда видно, кто взял; файл ищется наверху и в архиве. */
 export function readBranchFile(id, fileName) {
-  const result = tryGit(["show", `origin/task/${id}:tasks/${fileName}`]);
-  return result.ok ? result.stdout : null;
+  for (const path of [`tasks/${fileName}`, `tasks/archive/${fileName}`]) {
+    const result = tryGit(["show", `origin/task/${id}:${path}`]);
+    if (result.ok) return result.stdout;
+  }
+  return null;
 }

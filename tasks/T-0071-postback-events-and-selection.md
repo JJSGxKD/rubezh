@@ -37,7 +37,7 @@ batch: 4
 
 # T-0071. Постбэки — покупки и возврат на следующий день, выбор событий у назначения
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0071.json)](README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](T-0069-postback-destinations-layer.md) [![T-0070](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json&label=T-0070)](T-0070-postback-s2s-and-partner.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0071.json)](README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](archive/T-0069-postback-destinations-layer.md) [![T-0070](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json&label=T-0070)](T-0070-postback-s2s-and-partner.md)
 
 ## Зачем
 

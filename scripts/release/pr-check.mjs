@@ -126,8 +126,9 @@ export function checkTaskLine(body, headRefName, taskFiles) {
   if (!branch) return [];
 
   const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
-  const match = /^Задача:\s*`?tasks\/(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
-  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
+  const match = /^Задача:\s*`?tasks\/(?:archive\/)?(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
+  // К PR задача уже закрыта и лежит в архиве; верхняя папка тоже принимается (задача ещё открыта).
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/archive/${branch[1]}-….md»`];
   if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
 
   const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
@@ -152,8 +153,8 @@ export function checkTrailers(messages) {
 }
 
 function taskFilesAt(ref) {
-  const out = execFileSync("git", ["ls-tree", "--name-only", ref, "tasks/"], { encoding: "utf8" });
-  return out.split("\n").map((line) => line.replace(/^tasks\//, "")).filter((name) => /^T-\d{4}-.+\.md$/.test(name));
+  const out = execFileSync("git", ["ls-tree", "--name-only", ref, "tasks/", "tasks/archive/"], { encoding: "utf8" });
+  return out.split("\n").map((line) => line.replace(/^tasks\//, "")).filter((name) => /^(?:archive\/)?T-\d{4}-.+\.md$/.test(name));
 }
 
 function prCommitMessages(base, head) {
