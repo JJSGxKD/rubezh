@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
+import { trackGroupClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
@@ -85,6 +86,8 @@ export interface TabBarProps {
   items: readonly TabItem[];
   activeId: string | null;
   onSelect(id: string): void;
+  /** имя группы для события `ui_clicked`: нажатие пункта — `<track>.<id пункта>` (Р141) */
+  track?: string;
 }
 
 /**
@@ -140,6 +143,7 @@ export function TabBar(props: TabBarProps): ReactNode {
               aria-label={item.label}
               onClick={() => {
                 if (!active) uiFeedback("select");
+                trackGroupClick(props.track, item.id);
                 props.onSelect(item.id);
               }}
               className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1"
@@ -243,6 +247,8 @@ export function SegmentedControl(props: {
   onSelect(id: string): void;
   /** "s" — для тесных мест: на узком экране подписи сжимаются (segmented-rules.ts). */
   size?: SegmentedSize;
+  /** имя группы для события `ui_clicked`: смена пункта — `<track>.<id пункта>` (Р141) */
+  track?: string;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
@@ -276,6 +282,7 @@ export function SegmentedControl(props: {
             onClick={() => {
               if (active) return;
               uiFeedback("select");
+              trackGroupClick(props.track, item.id);
               props.onSelect(item.id);
             }}
             className={[
