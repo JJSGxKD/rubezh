@@ -132,8 +132,9 @@ function measure() {
       matches: isScreen,
     },
     // Интерфейс забега — своим чанком после первой загрузки: HUD, пауза,
-    // выбор улучшения, характеристики и их словарь.
-    { name: "Интерфейс забега", limitKb: 16, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
+    // выбор улучшения, характеристики и их словарь. 19 КБ — с 24.10.2026:
+    // окна-реликвии и сцена сундука (PR #452, #453) подняли замер до 15,3 КБ.
+    { name: "Интерфейс забега", limitKb: 19, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
     { name: "Инструменты команды", limitKb: 17, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 430, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
