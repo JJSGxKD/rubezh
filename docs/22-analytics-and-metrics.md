@@ -421,6 +421,10 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
   производительности (`28-diagnostics.md` §3.2), хэш контента. `fps_sample`
   при этом **не** шлётся поминутно: сводки на забег достаточно, а детальный
   таймлайн живёт в отчётах диагностики;
+- `run_finished`, `run_abandoned` — поле `art` (булево, необязательное): забег
+  шёл с черновым артом «Новый облик боя» (`27-design-system-and-app-shell.md`
+  §7.1, T-0230). По нему сравнивают `perfAvgFps` и `perfP95FrameMs` с артом и
+  без; доли удержания — штатным сравнением флага `art.sprites` в «Воронке»;
 - `run_finished`, `run_abandoned` — сводка производительности у всех игроков
   плоскими полями с префиксом `perf`: `perfFrames`, `perfAvgFps`,
   `perfP95FrameMs`, `perfOver33Ratio`, `perfPeakObjects`, `perfDisplayHz`,

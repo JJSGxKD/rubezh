@@ -213,6 +213,11 @@ let lastSavedSec = 0;
  * перед `finished`/`abandoned`, итог забирает его и обнуляет.
  */
 let pendingDiagnostics: RunDiagnostics | null = null;
+/**
+ * Шёл ли забег с черновым артом: берётся из опций, с которыми он стартовал, —
+ * настройку игрок мог сменить уже после. `null` — забега нет.
+ */
+let runArt: boolean | null = null;
 
 /** Ошибок клиента к началу забега: запись несёт, сколько случилось за забег. */
 let errorsAtRunStart = 0;
@@ -318,6 +323,8 @@ export const useRun = create<RunStore>((set, get) => ({
       // через сутки — иначе панель разработчика пропадает по дороге.
       const devRun =
         devModeAllowed() && (useDevMode.getState().armed || resume?.dev === true || resume?.cheats === true);
+      const graphics = runGraphics();
+      runArt = graphics.art;
       // Снаряжение — из подписанного снимка на устройстве: забег без сети
       // начинается с надетым. Продолженный забег берёт набор из своего
       // снимка, а надетое с тех пор могло смениться.
@@ -342,7 +349,7 @@ export const useRun = create<RunStore>((set, get) => ({
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
           fpsOverlay: diagnostics.enabled && diagnostics.fpsOverlay,
         },
-        graphics: runGraphics(),
+        graphics,
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
@@ -737,7 +744,9 @@ function finishRun(
   track(event, {
     ...outcomeFields(result, isNewRecord),
     ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
+    ...(runArt === null ? {} : { art: runArt }),
   });
+  runArt = null;
 }
 
 /**

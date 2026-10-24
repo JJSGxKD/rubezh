@@ -3,8 +3,8 @@ id: T-0230
 title: Черновой арт — тестерам флагом панели, с выключателем в «Графике»
 epic: E12
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -25,6 +25,10 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - apps/web-telegram/vite.config.ts
+  - tasks/T-0238-appearance-shell.md
+  - tasks/T-0239-appearance-in-run.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -35,7 +39,7 @@ batch: 3
 
 # T-0230. Черновой арт — тестерам флагом панели, с выключателем в «Графике»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json)](../README.md#значки-статуса)
 
 ## Зачем
 
@@ -154,11 +158,11 @@ batch: 3
 
 ## Критерии приёмки
 
-- [ ] Флаг `art.sprites.testers` включает арт только тестерам, `art.sprites` — всем.
-- [ ] Игрок с доступом может выключить арт в «Графике»; без доступа строки нет.
-- [ ] `run_ended` несёт `art`.
-- [ ] Без флагов и без сети забег идёт фигурами, как сейчас.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Флаг `art.sprites.testers` включает арт только тестерам, `art.sprites` — всем.
+- [x] Игрок с доступом может выключить арт в «Графике»; без доступа строки нет.
+- [x] `run_ended` несёт `art`.
+- [x] Без флагов и без сети забег идёт фигурами, как сейчас.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

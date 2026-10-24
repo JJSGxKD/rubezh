@@ -303,6 +303,8 @@ export interface RunGraphicsOptions {
   weaponEffects: boolean;
   /** всплывающие числа урона и вспышки гибели */
   damageNumbers: boolean;
+  /** черновой арт «Новый облик боя» вместо фигур; режим листа разработчика включает его независимо */
+  art: boolean;
 }
 
 export interface RunDiagnosticsOptions {

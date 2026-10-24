@@ -254,6 +254,7 @@ export class WorldRenderer {
   setGraphics(graphics: RunGraphicsOptions | null): void {
     this.graphics = graphics;
     this.applyEffectSwitches();
+    this.applyArtMode();
   }
 
   /**
@@ -268,7 +269,15 @@ export class WorldRenderer {
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
     if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
     this.debug?.setVisible(wantsDebug);
-    this.art.setWanted(visuals?.sprites === true, () => {
+    this.applyArtMode();
+  }
+
+  /**
+   * Арт включают настройка игрока («Новый облик боя», доступ — по флагу) или
+   * лист разработчика: режим листа работает независимо от настроек игрока.
+   */
+  private applyArtMode(): void {
+    this.art.setWanted(this.graphics?.art === true || this.visuals?.sprites === true, () => {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
