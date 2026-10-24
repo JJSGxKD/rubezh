@@ -51,7 +51,7 @@ batch: 2
 
 # T-0105. Очки заданий: полоса дня и недели и награды за ступени очков
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json)](README.md#значки-статуса) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](T-0104-tasks-pool-rotation-new-kinds.md) [![T-0098](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0098.json&label=T-0098)](T-0098-tasks-open-claimable-tab.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json)](README.md#значки-статуса) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](archive/T-0104-tasks-pool-rotation-new-kinds.md) [![T-0098](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0098.json&label=T-0098)](archive/T-0098-tasks-open-claimable-tab.md)
 
 ## Зачем
 

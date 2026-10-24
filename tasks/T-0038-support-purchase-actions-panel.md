@@ -24,7 +24,7 @@ batch: 2
 
 # T-0038. Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](T-0037-support-refund-and-refulfill-api.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](archive/T-0037-support-refund-and-refulfill-api.md)
 
 ## Зачем
 

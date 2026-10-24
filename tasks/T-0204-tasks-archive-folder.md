@@ -225,8 +225,8 @@ batch: 2
   - проверка реестра на диске читает и `tasks/archive/`.
 - `tasks-file.test.ts`:
   - `relativeTaskLink` — четыре сочетания папок из «Решений»;
-  - `withTaskLinks`: `](T-0002-x.md)` из `tasks/` при архивной T-0002 →
-    `](archive/T-0002-x.md)`; `](../T-0001-x.md#шаги)` из архива при
+  - `withTaskLinks`: `](archive/T-0002-task-cli.md)` из `tasks/` при архивной T-0002 →
+    `](archive/T-0002-task-cli.md)`; `](archive/T-0001-shop-gems-only-bundles.md#шаги)` из архива при
     открытой T-0001 → без изменений; `](T-9999-x.md)` без задачи в реестре →
     без изменений; `](docs/x.md)` → без изменений; повторный вызов ничего
     не меняет.
