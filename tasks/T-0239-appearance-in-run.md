@@ -27,7 +27,7 @@ batch: 4
 
 # T-0239. Облик в забеге — герой кадрами выбранного облика из атласа skins в режиме арта
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0239.json)](README.md#значки-статуса) [![T-0238](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json&label=T-0238)](T-0238-appearance-shell.md) [![T-0229](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json&label=T-0229)](T-0229-enemy-size-field.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](T-0230-draft-art-testers-flag.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0239.json)](README.md#значки-статуса) [![T-0238](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json&label=T-0238)](T-0238-appearance-shell.md) [![T-0229](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json&label=T-0229)](archive/T-0229-enemy-size-field.md) [![T-0230](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0230.json&label=T-0230)](T-0230-draft-art-testers-flag.md)
 
 ## Зачем
 
