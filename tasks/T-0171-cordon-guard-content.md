@@ -3,8 +3,8 @@ id: T-0171
 title: Страж кольца и кольца в таймлайне — контент, гайдбук, калибровка
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0170]
@@ -18,6 +18,7 @@ zones:
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/test/guide.test.ts
+  - packages/core-game/test/spawn-director.test.ts
 shared:
   - docs/05-game-design.md
   - docs/32-balance.md
@@ -278,15 +279,15 @@ T-0171 вместе с сообщением шины и словарём; уби
 
 ## Критерии приёмки
 
-- [ ] `cordon_guard` в контенте, имя и сцена в гайдбуке, карточка показывает его
+- [x] `cordon_guard` в контенте, имя и сцена в гайдбуке, карточка показывает его
   один раз среди обычных врагов.
-- [ ] Кольца на 180 с, 300 с и по событию кривой; все замкнуты, не накладываются
+- [x] Кольца на 180 с, 300 с и по событию кривой; все замкнуты, не накладываются
   друг на друга, не слабеют; `findTimelineProblems` пуст.
-- [ ] Эталоны обновлены, прогоны короче 180 с не изменились; свойства баланса и
+- [x] Эталоны обновлены, прогоны короче 180 с не изменились; свойства баланса и
   коридор калибровки (`docs/32-balance.md` §3.1) зелёные, таблица `pnpm
   balance:sim` до и после — в описании PR и в `docs/32-balance.md`.
-- [ ] Огонёк и кастер на месте и не менялись.
-- [ ] Дифф только в зонах; гейт (`CLAUDE.md`), `pnpm budget` и `pnpm docs:check`
+- [x] Огонёк и кастер на месте и не менялись.
+- [x] Дифф только в зонах; гейт (`CLAUDE.md`), `pnpm budget` и `pnpm docs:check`
   зелёные (красный `budget` — вопрос в PR, не правка порога).
 
 ## PR
