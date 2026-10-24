@@ -3,8 +3,8 @@ id: T-0226
 title: Событие нажатий `ui_clicked` — разметка встроена в кнопки, вкладки и переключатели
 epic: E11
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
