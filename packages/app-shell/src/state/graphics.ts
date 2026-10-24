@@ -1,6 +1,7 @@
 import type { RunGraphicsOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { draftArtAllowed } from "./flags";
 import { createPersistedValue } from "./persisted";
 import { reportError, track, useShell } from "./shell";
 
@@ -14,13 +15,15 @@ import { reportError, track, useShell } from "./shell";
  */
 const GRAPHICS_KEY = "bh.graphics.v1";
 
-// «Живой фон» пришёл позже остальных: у сохранённых раньше его нет, и это не
-// повод сбрасывать выбранное — отсутствие читается как «включён».
+// «Живой фон» и «Новый облик боя» пришли позже остальных: у сохранённых раньше
+// их нет, и это не повод сбрасывать выбранное — отсутствие читается как
+// «включён».
 const schema = z.object({
   telegraphs: z.boolean(),
   weaponEffects: z.boolean(),
   damageNumbers: z.boolean(),
   liveBackground: z.optional(z.boolean()),
+  art: z.optional(z.boolean()),
 });
 
 export interface GraphicsSettings {
@@ -29,10 +32,16 @@ export interface GraphicsSettings {
   damageNumbers: boolean;
   /** живой фон меню, блик «Играть» и блеск редких предметов (Р145) — у устройства */
   liveBackground: boolean;
+  /**
+   * «Новый облик боя»: черновой арт вместо фигур — у устройства. Строка в
+   * «Графике» видна только игроку с доступом (`flags.ts`), а в забег арт
+   * уходит, когда доступ есть и выключатель включён.
+   */
+  art: boolean;
 }
 export type GraphicsKey = keyof GraphicsSettings;
 
-export const DEFAULT_GRAPHICS: GraphicsSettings = { telegraphs: true, weaponEffects: true, damageNumbers: true, liveBackground: true };
+export const DEFAULT_GRAPHICS: GraphicsSettings = { telegraphs: true, weaponEffects: true, damageNumbers: true, liveBackground: true, art: true };
 
 export interface GraphicsStore extends GraphicsSettings {
   hydrate(): void;
@@ -55,7 +64,7 @@ export const useGraphics = create<GraphicsStore>((set, get) => ({
 
   hydrate(): void {
     const stored = value().read();
-    set({ ...stored, liveBackground: stored.liveBackground ?? true });
+    set({ ...stored, liveBackground: stored.liveBackground ?? true, art: stored.art ?? true });
     markLiveBackground(get().liveBackground);
   },
 
@@ -81,6 +90,7 @@ function persist(state: GraphicsSettings): void {
     weaponEffects: state.weaponEffects,
     damageNumbers: state.damageNumbers,
     liveBackground: state.liveBackground,
+    art: state.art,
   });
 }
 
@@ -97,8 +107,10 @@ function markLiveBackground(on: boolean): void {
 
 /** Что передать движку на старте забега. */
 export function runGraphics(): RunGraphicsOptions {
-  const { telegraphs, weaponEffects, damageNumbers } = useGraphics.getState();
-  return { telegraphs, weaponEffects, damageNumbers };
+  const { telegraphs, weaponEffects, damageNumbers, art } = useGraphics.getState();
+  // Без доступа арта нет при любой настройке: сохранённое «включён» — умолчание,
+  // а не выбор игрока.
+  return { telegraphs, weaponEffects, damageNumbers, art: draftArtAllowed() && art };
 }
 
 type StoredGraphics = z.infer<typeof schema>;
