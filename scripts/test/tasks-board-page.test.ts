@@ -187,6 +187,11 @@ describe("страница доски", () => {
   const STREAMS_INTRO =
     "Какие потоки запускать в автопоток (`tasks/README.md`, «Автопоток»): доработка раньше новых задач, п.N — пачка выпуска. Строка `local` — задачи только для потоков на машине разработчика. То же даёт `pnpm task streams`.";
 
+  it("ссылка на архивную задачу в разделе «Готово» ведёт в tasks/archive/ (T-0204)", () => {
+    const archived = { ...board, done: [entry(task("T-0001", { title: "Наборы", owner: "", fileName: "T-0001-sets.md", path: "archive/T-0001-sets.md" }))] };
+    expect(render({ board: archived })).toContain(`[T-0001. Наборы](${BLOB}/archive/T-0001-sets.md)`);
+  });
+
   it("страница целиком", () => {
     expect(render()).toBe(
       [
