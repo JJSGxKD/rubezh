@@ -16,6 +16,8 @@ shared:
   - .claude/skills/take-task/SKILL.md
   - .claude/skills/pre-pr/SKILL.md
   - AGENTS.md
+  - tasks/T-0206-board-work-review-columns.md
+  - tasks/epics.md
 runner: any
 executor: haiku-5.5
 effort: medium
