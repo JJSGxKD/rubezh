@@ -18,6 +18,7 @@ zones:
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/test/guide.test.ts
+  - packages/core-game/test/spawn-director.test.ts
 shared:
   - docs/05-game-design.md
   - docs/32-balance.md
@@ -286,7 +287,7 @@ T-0171 вместе с сообщением шины и словарём; уби
   коридор калибровки (`docs/32-balance.md` §3.1) зелёные, таблица `pnpm
   balance:sim` до и после — в описании PR и в `docs/32-balance.md`.
 - [x] Огонёк и кастер на месте и не менялись.
-- [ ] Дифф только в зонах; гейт (`CLAUDE.md`), `pnpm budget` и `pnpm docs:check`
+- [x] Дифф только в зонах; гейт (`CLAUDE.md`), `pnpm budget` и `pnpm docs:check`
   зелёные (красный `budget` — вопрос в PR, не правка порога).
 
 ## PR
