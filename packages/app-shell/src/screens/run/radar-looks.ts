@@ -28,4 +28,5 @@ export const RADAR_SHAPES = {
   magnet: "ring",
   dynamite: "diamond",
   chest: "square",
+  freeze: "x",
 } as const;

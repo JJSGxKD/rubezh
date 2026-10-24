@@ -6,13 +6,14 @@ import { chestSizeOf, openChest } from "./chests";
 import { killEnemy } from "./combat";
 import { createDirection, randomDirection } from "./directions";
 import { pushSimEvent, SIM_EVENT } from "./events";
+import { MAX_FREEZE_SEC, startFreeze } from "./freeze";
 import { vectorLength } from "./vector";
 import { clampToBounds, TICK_SEC, type World } from "./world";
 import { GEM_SPEED } from "./gems";
 
 /**
  * Подборы — предметы, которые падают с убитых врагов и срабатывают от касания:
- * аптечка, магнит опыта и динамит. Шансы и числа — в контенте
+ * аптечка, магнит опыта, динамит и заморозка. Шансы и числа — в контенте
  * (`content/drops.ts`).
  *
  * - **Аптечка** лечит долю здоровья и подбирается только при неполном
@@ -23,6 +24,8 @@ import { GEM_SPEED } from "./gems";
  * - **Динамит** взрывается вокруг игрока: рядовых врагов в радиусе выкашивает,
  *   элите снимает долю здоровья, но не убивает — контрольная точка сложности
  *   не должна пропускаться одним подбором.
+ * - **Заморозка** останавливает всех врагов на срок из контента (`freeze.ts`):
+ *   передышка без потерь, поэтому выпадает реже динамита.
  *
  * Подбор в радиусе сбора медленно ползёт к игроку и ускоряется, чем ближе:
  * бежать за аптечкой через пол-экрана не нужно, но и сама она в руки не
@@ -36,6 +39,7 @@ export const PICKUP_KIND = {
   chestOne: 3,
   chestThree: 4,
   chestFive: 5,
+  freeze: 6,
 } as const;
 
 export type PickupKind = (typeof PICKUP_KIND)[keyof typeof PICKUP_KIND];
@@ -74,6 +78,7 @@ export function findPickupContentProblems(drops: DropsDef): string[] {
     ["medkits", drops.medkits],
     ["magnets", drops.magnets],
     ["dynamite", drops.dynamite],
+    ["freeze", drops.freeze],
   ] as const;
 
   for (const [name, def] of chances) {
@@ -97,6 +102,12 @@ export function findPickupContentProblems(drops: DropsDef): string[] {
     // Единица и больше убивала бы элиту — ровно то, чего динамит делать не должен.
     problems.push(`drops.dynamite.eliteHpRatio — от 0 до 1, не включая 1, сейчас ${drops.dynamite.eliteHpRatio}`);
   }
+  if (!(drops.freeze.durationSec > 0 && drops.freeze.durationSec <= MAX_FREEZE_SEC)) {
+    problems.push(`drops.freeze.durationSec — больше 0 и не больше ${MAX_FREEZE_SEC}, сейчас ${drops.freeze.durationSec}`);
+  }
+  if (!(drops.freeze.bossDurationRatio >= 0 && drops.freeze.bossDurationRatio <= 1)) {
+    problems.push(`drops.freeze.bossDurationRatio — от 0 до 1, сейчас ${drops.freeze.bossDurationRatio}`);
+  }
   return problems;
 }
 
@@ -112,6 +123,9 @@ export function rollPickups(world: World, x: number, y: number, elite: boolean):
   roll(world, PICKUP_KIND.medkit, drops.medkits, x, y, elite);
   roll(world, PICKUP_KIND.magnet, drops.magnets, x, y, elite);
   roll(world, PICKUP_KIND.dynamite, drops.dynamite, x, y, elite);
+  // После динамита, а не между прежними видами: порядок бросков прежних
+  // подборов не меняется, и забеги без заморозки читают генератор как раньше.
+  roll(world, PICKUP_KIND.freeze, drops.freeze, x, y, elite);
 }
 
 function roll(
@@ -228,6 +242,10 @@ export function updatePickups(world: World): void {
       case PICKUP_KIND.dynamite:
         remove(world, i);
         detonate(world);
+        break;
+      case PICKUP_KIND.freeze:
+        remove(world, i);
+        freezeEnemies(world);
     }
   }
 }
@@ -347,4 +365,21 @@ function detonate(world: World): void {
 function remove(world: World, index: number): void {
   world.pickups.alive[index] = 0;
   world.pickups.aliveCount--;
+}
+
+/**
+ * Заморозка: таймер — на полный срок, повторный подбор не суммируется. Волна
+ * расходится на радиус кольца спавна, как у магнита: она показывает, докуда
+ * достала, а враги за краем экрана замирают тоже.
+ */
+function freezeEnemies(world: World): void {
+  startFreeze(world);
+  world.stats.freezeCollected++;
+  pushSimEvent(world.events, {
+    kind: SIM_EVENT.freeze,
+    x: world.player.x,
+    y: world.player.y,
+    radius: world.config.view.spawnRadius,
+    tick: world.stats.tick,
+  });
 }

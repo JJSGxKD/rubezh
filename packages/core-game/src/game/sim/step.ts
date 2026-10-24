@@ -1,9 +1,10 @@
-import { applyPattern, MAX_PATTERN_RADIUS } from "../patterns";
+import { applyPattern, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
 import { pushPlayerOutOfGuards, updateCordon } from "./cordon";
 import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
+import { isTimeFrozen, tickFreeze } from "./freeze";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
@@ -46,6 +47,7 @@ export function stepWorld(world: World, input: SimInput): void {
   // Неуязвимость после второго шанса тикает вместе с миром: пауза и выбор
   // улучшения её не съедают.
   if (world.player.invulnerableTicks > 0) world.player.invulnerableTicks--;
+  tickFreeze(world);
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
@@ -209,6 +211,13 @@ function updateEnemies(world: World, dt: number): void {
     // Замороженный стоит и не бьёт: паттерн не ходит вовсе, иначе рывок и
     // набег, у которых своя скорость, прошли бы сквозь заморозку.
     if (isFrozen(world, i)) {
+      enemies.vx[i] = 0;
+      enemies.vy[i] = 0;
+      continue;
+    }
+    // Заморозка подбором стоит над паттерном так же: телеграф, фитиль и рывок
+    // не ведутся, а горение и яд уже отработали выше.
+    if (isTimeFrozen(world, isBoss(type))) {
       enemies.vx[i] = 0;
       enemies.vy[i] = 0;
       continue;
