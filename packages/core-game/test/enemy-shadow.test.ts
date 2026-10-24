@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-// Тень врагов убрана на живом тесте (решение участника 1 от 13.10.2026);
+// Тень врагов убрана на живом тесте (решение владельца от 13.10.2026);
 // у героя, кристаллов и подборов она остаётся. Рендер без Phaser не создать,
 // поэтому проверка идёт по исходнику.
 const source = (name: string): string => readFileSync(new URL(`../src/game/render/${name}`, import.meta.url), "utf8");

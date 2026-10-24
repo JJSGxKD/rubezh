@@ -16,7 +16,8 @@ import type {
  * Оплата — VK Pay/VK ID, прямые рубли.
  * Реклама — единственная из трёх мини-апп платформ с нативным rewarded
  * video/interstitial/баннерами "из коробки", см. docs/01-tech-stack.md §6.
- * Владелец пакета — напарник (docs/06-team-and-workflow.md §2), фаза 2.
+ * Площадка второй очереди: порт после лонча в Telegram (docs/02-roadmap.md,
+ * «Приоритет платформ»).
  */
 export class VkAdapter implements PlatformAdapter {
   /**
