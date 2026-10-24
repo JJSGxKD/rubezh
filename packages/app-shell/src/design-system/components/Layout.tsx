@@ -87,7 +87,7 @@ export interface TabBarProps {
   activeId: string | null;
   onSelect(id: string): void;
   /** имя группы для события `ui_clicked`: нажатие пункта — `<track>.<id пункта>` (Р141) */
-  track?: string;
+  track: string;
 }
 
 /**
@@ -255,7 +255,7 @@ export function SegmentedControl(props: {
   /** "s" — для тесных мест: на узком экране подписи сжимаются (segmented-rules.ts). */
   size?: SegmentedSize;
   /** имя группы для события `ui_clicked`: смена пункта — `<track>.<id пункта>` (Р141) */
-  track?: string;
+  track: string;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
