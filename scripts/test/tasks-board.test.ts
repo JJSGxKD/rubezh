@@ -70,11 +70,12 @@ describe("доска задач", () => {
     expect(board.review[0].pr).toBe(21);
   });
 
-  it("PR в черновике — это ещё «в работе»", () => {
+  it("PR в черновике — «на ревью» с ожиданием, «в работе» только ветка без PR", () => {
     const draftPr = [{ number: 21, headRefName: "task/T-0004", isDraft: true }];
     const result = classify(FIXTURE, TAKEN, draftPr, [], EPIC_ORDER);
-    expect(ids(result.review)).toEqual([]);
-    expect(ids(result.inProgress).sort()).toEqual(["T-0004", "T-0005"]);
+    expect(ids(result.review)).toEqual(["T-0004"]);
+    expect(result.review[0].waiting).toEqual({ who: "executor", why: "черновик" });
+    expect(ids(result.inProgress)).toEqual(["T-0005"]);
   });
 
   it("без списка PR (нет gh) «на ревью» сливается с «в работе»", () => {

@@ -156,10 +156,10 @@ describe("влитые PR задач из gh", () => {
 describe("страница доски", () => {
   const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
   const board = {
-    rework: [entry(task("T-0017", { title: "Ответы", status: "ready", effort: "low", fileName: "T-0017-ans.md" }), { pr: 216 })],
+    rework: [entry(task("T-0017", { title: "Ответы", status: "ready", effort: "low", fileName: "T-0017-ans.md" }), { pr: 216, waiting: { who: "executor", why: "доработка" } })],
     free: [entry(task("T-0003", { title: "Деньги | оплата", status: "ready", priority: "P0", size: "M", effort: "extra", epic: "E1", fileName: "T-0003-pay.md" }))],
     inProgress: [entry(task("T-0012", { title: "Палитра", status: "ready", fileName: "T-0012-pal.md" }))],
-    review: [entry(task("T-0016", { title: "Пересчёт", status: "ready", fileName: "T-0016-rec.md" }), { pr: 215 })],
+    review: [entry(task("T-0016", { title: "Пересчёт", status: "ready", fileName: "T-0016-rec.md" }), { pr: 215, waiting: { who: "lead", why: "приёмка" } })],
     blocked: [entry(task("T-0004", { title: "Возвраты", status: "ready", fileName: "T-0004-ref.md" }), { reason: "ждёт T-0003" })],
     done: [
       entry(task("T-0001", { title: "Наборы", owner: "", fileName: "T-0001-sets.md" })),
@@ -185,7 +185,7 @@ describe("страница доски", () => {
 
   const BLOB = "https://github.com/JJSGxKD/rubezh/blob/dev/tasks";
   const STREAMS_INTRO =
-    "Какие потоки запускать в автопоток (`tasks/README.md`, «Автопоток»): доработка раньше новых задач, п.N — пачка выпуска. Строка `local` — задачи только для потоков на машине разработчика. То же даёт `pnpm task streams`.";
+    "Какие потоки запускать в автопоток (`tasks/README.md`, «Автопоток»): доработка раньше новых задач, п.N — пачка выпуска. Строки `local` и `owner` — задачи только для потоков на машине с Docker и на машине владельца. То же даёт `pnpm task streams`.";
 
   it("ссылка на архивную задачу в разделе «Готово» ведёт в tasks/archive/ (T-0204)", () => {
     const archived = { ...board, done: [entry(task("T-0001", { title: "Наборы", owner: "", fileName: "T-0001-sets.md", path: "archive/T-0001-sets.md" }))] };
@@ -198,6 +198,18 @@ describe("страница доски", () => {
         "# Доска задач",
         "",
         "Обновлено 06.10.2026 13:48 МСК. Страницу пересчитывает workflow `task-board.yml` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](https://github.com/JJSGxKD/rubezh/blob/dev/tasks/README.md#как-взять-задачу).",
+        "",
+        "Свободно 1 · в работе 1 · на ревью 1 · на доработке 1 · ждут тимлида 1 · ждут владельца 0 · влито сегодня 0",
+        "",
+        "## Ждут владельца — 0",
+        "",
+        "Пусто.",
+        "",
+        "## Ждут тимлида — 1",
+        "",
+        "| PR | Задача | Почему |",
+        "|---|---|---|",
+        `| [#215](https://github.com/JJSGxKD/rubezh/pull/215) | [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | приёмка |`,
         "",
         "## Потоки сейчас",
         "",
@@ -224,9 +236,19 @@ describe("страница доски", () => {
         "",
         "## Можно брать — 1",
         "",
+        "### В облаке — 1",
+        "",
         "| Задача | Приоритет | Размер | Исполнитель | Эпик |",
         "|---|---|---|---|---|",
         `| [T-0003. Деньги \\| оплата](${BLOB}/T-0003-pay.md) | P0 | M | sonnet-5.5 · extra | E1 |`,
+        "",
+        "### Машина с Docker — 0",
+        "",
+        "Пусто.",
+        "",
+        "### Машина владельца — 0",
+        "",
+        "Пусто.",
         "",
         "## В работе — 1",
         "",
@@ -378,7 +400,7 @@ describe("страница доски: ожидание, счётчики, МС�
     const merged = [{ number: 9, headRefName: "task/T-0001", login: "a", mergedAt: "2026-10-23T21:10:00Z" }];
     const page = render({ mergedPrs: merged, board: { ...board, free: [entry(open("T-0404", "Телефон", { runner: "human" }))] } });
     expect(page).toContain("влито сегодня 1\n");
-    expect(page).not.toContain("пачка");
+    expect(page).not.toMatch(/пачка \d+: осталось/);
   });
 
   it("«Ждут тимлида» — вопрос и приёмка, красный CI и чужие ожидания не входят", () => {
