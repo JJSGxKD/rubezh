@@ -63,7 +63,7 @@ export class CueTracker {
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
-      else if (kind === SIM_EVENT.strike) cues.strikes++;
+      else if (kind === SIM_EVENT.strike || kind === SIM_EVENT.strikeFire) cues.strikes++;
       else if (kind === SIM_EVENT.explosion) {
         cues.explosions++;
         const dx = (events.x[slot] ?? 0) - world.player.x;

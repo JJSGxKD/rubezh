@@ -26,6 +26,8 @@ export const SIM_EVENT = {
   dynamite: 6,
   /** щит буста погасил попадание; `radius` несёт, сколько урона он принял */
   shield: 7,
+  /** огненный удар по площади: рисуется падающим камнем, а не молнией */
+  strikeFire: 8,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];

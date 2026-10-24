@@ -4,6 +4,7 @@ import {
   BicepsFlexed,
   Biohazard,
   Bug,
+  CloudHail,
   CloudLightning,
   Flame,
   Footprints,
@@ -15,6 +16,7 @@ import {
   Magnet,
   Orbit,
   Radius,
+  Rocket,
   Shield,
   Slice,
   Snowflake,
@@ -47,6 +49,10 @@ const WEAPON_ICONS: Readonly<Record<string, LucideIcon>> = {
   frost_crown: Snowflake,
   forge: Anvil,
   viper: Biohazard,
+  // «Метеор» (T-0118): камень с неба — ракета со следом; «Ливень» — градовая туча.
+  // Flame занят «Очагом», Sparkles — «Звездопадом» и запасным значком.
+  meteor: Rocket,
+  fire_rain: CloudHail,
 };
 
 const PASSIVE_ICONS: Readonly<Record<string, LucideIcon>> = {

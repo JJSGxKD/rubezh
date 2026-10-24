@@ -3,8 +3,8 @@ id: T-0118
 title: Седьмое оружие «Метеор» и его эволюция «Огненный ливень»
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-19
 size: M
 depends_on: [T-0102, T-0108]
@@ -18,6 +18,10 @@ zones:
   - packages/core-game/src/game/render/weapon-effects.ts
   - packages/core-game/src/game/render/looks.ts
   - packages/core-game/test/**
+  - backend/api/src/modules/tasks/task-rules.ts
+  - packages/app-shell/src/screens/item-icons.tsx
+  - packages/app-shell/test/evolution-hints.test.ts
+  - packages/app-shell/test/level-unlocks.test.ts
 shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/32-balance.md

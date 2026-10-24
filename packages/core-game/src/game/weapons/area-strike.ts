@@ -1,4 +1,5 @@
 import { damageEnemy } from "../sim/combat";
+import { ELEMENT_FIRE } from "../sim/element-ids";
 import { pushSimEvent, SIM_EVENT } from "../sim/events";
 import { MAX_PATTERN_RADIUS } from "../patterns";
 import type { World } from "../sim/world";
@@ -75,8 +76,9 @@ function strikeAt(
     damageEnemy(world, enemy, level.damage, slot, level.element, level.statusChance);
   }
 
+  // Вид события — только для рендера: молния у грозы, падающий камень у огня.
   pushSimEvent(world.events, {
-    kind: SIM_EVENT.strike,
+    kind: level.element === ELEMENT_FIRE ? SIM_EVENT.strikeFire : SIM_EVENT.strike,
     x,
     y,
     radius: level.areaRadius,

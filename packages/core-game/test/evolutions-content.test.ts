@@ -51,8 +51,8 @@ describe("эволюции в контенте", () => {
   });
 
   it("шесть эволюций стоят после всех базовых, у каждого базового — ровно одна", () => {
-    expect(BASE_WEAPONS).toHaveLength(6);
-    expect(WEAPON_EVOLUTIONS).toHaveLength(6);
+    expect(BASE_WEAPONS).toHaveLength(7);
+    expect(WEAPON_EVOLUTIONS).toHaveLength(7);
     const firstEvolution = WEAPONS.findIndex((weapon) => weapon.evolvedFrom !== undefined);
     expect(WEAPONS.slice(firstEvolution).every((weapon) => weapon.evolvedFrom !== undefined)).toBe(true);
     for (const weapon of BASE_WEAPONS) {
@@ -69,6 +69,7 @@ describe("эволюции в контенте", () => {
       ["wardstone", "lodestone", "frost_crown"],
       ["hearth", "mending", "forge"],
       ["sting", "tempering", "viper"],
+      ["meteor", "reach", "fire_rain"],
     ]);
   });
 
@@ -107,7 +108,7 @@ describe("эволюции в контенте", () => {
       expect(texts[weapon.nameKey] ?? "", weapon.nameKey).not.toBe("");
       expect(texts[weapon.descriptionKey] ?? "", weapon.descriptionKey).not.toBe("");
     }
-    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка"]);
+    expect(WEAPON_EVOLUTIONS.map((weapon) => texts[weapon.nameKey])).toEqual(["Звездопад", "Буря", "Вихрь клинков", "Ледяной венец", "Горн", "Гадюка", "Огненный ливень"]);
   });
 
   it("навыки рецептов не повторяются и пары разведены по категориям: слотов хватает на каждую", () => {
@@ -118,9 +119,11 @@ describe("эволюции в контенте", () => {
       const category = PASSIVES.find((passive) => passive.id === id)?.category ?? "";
       byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
     }
-    expect(byCategory.get("attack")).toBe(2);
+    // «Дальнобойность» (рецепт «Метеора», T-0118) — третья пара атаки
+    expect(byCategory.get("attack")).toBe(3);
     expect(byCategory.get("mobility")).toBe(2);
     expect(byCategory.get("defense")).toBe(2);
+    expect(LOADOUT_LIMITS.passives.attack).toBeLessThan(3);
     // слотов защиты и мобильности меньше, чем пар: игрок выбирает, какую эволюцию строить
     expect(LOADOUT_LIMITS.passives.defense).toBeLessThan(2);
     expect(LOADOUT_LIMITS.passives.mobility).toBeLessThan(2);
@@ -211,7 +214,7 @@ describe("эволюции и таблица открытий", () => {
     }
   });
 
-  it("на последнем уровне открыто всё: двенадцать видов в порядке контента", () => {
+  it("на последнем уровне открыто всё: четырнадцать видов в порядке контента", () => {
     const last = unlocksAt(ACCOUNT_UNLOCKS, Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level)));
     expect(weaponsOpenAt(WEAPONS, last).map((weapon) => weapon.id)).toEqual(WEAPONS.map((weapon) => weapon.id));
   });

@@ -218,6 +218,8 @@ export const WORLD_COLORS = {
   /** блик на грани кристалла */
   gemLight: 0xffffff,
   lightningCore: 0xf3f6fc,
+  /** раскалённое ядро падающего камня «Метеора» */
+  fireCore: 0xfff0c2,
   ground: 0x2b4152,
   groundLine: 0x33495b,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */
