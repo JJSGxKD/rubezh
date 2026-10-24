@@ -3,7 +3,7 @@ id: T-0229
 title: Поле `size` у врага — радиус крупнее или мельче паттерна
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -27,7 +27,7 @@ batch: 3
 
 # T-0229. Поле `size` у врага — радиус крупнее или мельче паттерна
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json)](../README.md#значки-статуса)
 
 ## Зачем
 
@@ -123,10 +123,10 @@ batch: 3
 
 ## Критерии приёмки
 
-- [ ] `size` в контенте меняет хитбокс, рисунок фигуры и кадр арта одинаково.
-- [ ] Вне коридора — понятная ошибка теста контента.
-- [ ] Golden-эталон не менялся.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] `size` в контенте меняет хитбокс, рисунок фигуры и кадр арта одинаково.
+- [x] Вне коридора — понятная ошибка теста контента.
+- [x] Golden-эталон не менялся.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
