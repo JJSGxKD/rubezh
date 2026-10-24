@@ -122,6 +122,7 @@
 | Радар: сколько точек, радиус; размер и вид в HUD | `game/radar.ts` → `MAX_BLIPS`; `app-shell/src/screens/run/Radar.tsx` → `SIZE_PX`, `*_PX`; положение — выбор игрока, `app-shell/src/state/radar-setting.ts` (`bh.radar.v1`, устройство) |
 | Размер клетки сетки коллизий | `game/sim/grid.ts` → `gridCellSize` |
 | Хитбоксы и умолчания паттернов, множители элиты и босса | `game/patterns/enemy-types.ts` → `PATTERN_TRAITS`, `PATTERN_DEFAULTS`, `ELITE_RADIUS_MUL`, `BOSS_RADIUS_MUL` |
+| Размер врага: множитель радиуса поверх паттерна и ранга, коридор | `content/enemies.ts` → `size` у врага; коридор — `game/patterns/enemy-types.ts` → `ENEMY_SIZE_MIN`, `ENEMY_SIZE_MAX` |
 | Фазы боя с боссом: сколько их и по каким долям здоровья | `game/run/boss.ts` → `BOSS_PHASES`, `bossPhase` |
 | Опрос обратной связи: вопросы и варианты | `shared-types` → `FEEDBACK_QUESTIONS`; тексты — ключи `feedback.q.*` в `i18n/ru.json` |
 | Когда звать за отзывом, потолок текста | `app-shell/src/state/feedback.ts` → `ASK_AGAIN_AFTER_RUNS`; `shared-types` → `FEEDBACK_TEXT_MAX` |

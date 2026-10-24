@@ -62,9 +62,9 @@ export function removePrLabel(number, label) {
   return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
 }
 
-/** Открытые PR с метками (по ним видна «Доработка») или `null`, если `gh` нет или он не авторизован. */
+/** Открытые PR с метками (по ним видна «Доработка»), описанием и состоянием проверок (кого ждёт PR) или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,

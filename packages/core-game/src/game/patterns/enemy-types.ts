@@ -38,8 +38,8 @@ export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
 
 /**
  * Во сколько раз крупнее элита и босс. Единственное, чем ранг влияет на
- * хитбокс: размер остаётся свойством поведения, а не свободным числом в
- * контенте (docs/26-stage2-plan.md, WP4.4).
+ * хитбокс (docs/26-stage2-plan.md, WP4.4); дальше размер врага подгоняет
+ * необязательное `size` из контента.
  */
 export const ELITE_RADIUS_MUL = 1.7;
 export const BOSS_RADIUS_MUL = 2.4;
@@ -54,17 +54,27 @@ export function isBoss(type: { rank: EnemyRank | "normal" }): boolean {
   return type.rank === "boss";
 }
 
+/**
+ * Коридор множителя `size` у врага (docs/35-stage4-plan.md, Р144): мельче
+ * 0,7 враг не разглядеть и не поймать оружием, крупнее 2,5 он закрывает
+ * поле и не помещается в кольцо спавна.
+ */
+export const ENEMY_SIZE_MIN = 0.7;
+export const ENEMY_SIZE_MAX = 2.5;
+
 export function rankRadiusMul(rank: EnemyRank | "normal"): number {
   return rank === "boss" ? BOSS_RADIUS_MUL : rank === "elite" ? ELITE_RADIUS_MUL : 1;
 }
 
 /**
  * Самый крупный хитбокс — на него расширяется запрос снаряда к сетке. Считаем
- * по боссу: если взять обычный радиус, снаряды начнут пролетать сквозь
- * крупного врага — запрос к сетке вернёт его не во всех клетках, где он есть.
+ * по боссу с верхом коридора `size`: если взять обычный радиус, снаряды начнут
+ * пролетать сквозь крупного врага — запрос к сетке вернёт его не во всех
+ * клетках, где он есть. Запас только расширяет выборку кандидатов, попадание
+ * по-прежнему решает точное расстояние.
  */
 export const MAX_PATTERN_RADIUS =
-  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL;
+  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX;
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
@@ -210,6 +220,12 @@ export interface EnemyType {
   rank: EnemyRank | "normal";
   pattern: EnemyPattern;
   radius: number;
+  /**
+   * Множитель размера из контента (`size`, не задан — 1). Радиус уже его
+   * учитывает; число хранится отдельно, чтобы кадр арта масштабировался тем же
+   * множителем без пересчёта в кадре.
+   */
+  size: number;
   contactDamage: boolean;
   solid: boolean;
   anchored: boolean;
@@ -269,6 +285,9 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (!(def.xp >= 0)) problems.push(`враг ${def.id}: xp не может быть отрицательным`);
   if (def.threat !== undefined && !(def.threat > 0)) {
     problems.push(`враг ${def.id}: threat должен быть больше нуля`);
+  }
+  if (def.size !== undefined && !(def.size >= ENEMY_SIZE_MIN && def.size <= ENEMY_SIZE_MAX)) {
+    problems.push(`враг ${def.id}: size вне 0,7…2,5`);
   }
   for (const [element, value] of Object.entries(def.resist ?? {})) {
     const known = element !== "physical" && (ELEMENTS as readonly string[]).includes(element);
@@ -413,7 +432,8 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       threat: def.threat ?? defaultThreat(def),
       rank: def.rank ?? "normal",
       pattern: def.pattern,
-      radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * unitScale,
+      radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * (def.size ?? 1) * unitScale,
+      size: def.size ?? 1,
       contactDamage: traits.contactDamage,
       solid: traits.solid,
       anchored: traits.anchored,

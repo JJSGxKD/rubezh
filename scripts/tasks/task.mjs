@@ -19,7 +19,7 @@ import { outOfZone } from "./zones.mjs";
 const USAGE = `Команды:
   pnpm task check                          проверить реестр tasks/ в рабочей копии
   pnpm task board [--all]                  доска из origin/dev (--all — и отменённые)
-  pnpm task next [--runner any|local] [--executor <модель>] [--effort <уровень>]
+  pnpm task next [--runner any|local|owner] [--executor <модель>] [--effort <уровень>]
                                            доработка и свободные задачи, лучшая — первой
   pnpm task streams [--epic E10]           какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди
   pnpm task claim T-NNNN --owner "<аккаунт / модель / уровень>"
@@ -455,6 +455,7 @@ function runStatusJson(flags) {
     credits,
     people: contributions(credits),
     githubAvailable: mergedPrs !== null,
+    mergedPrs,
     now: new Date(),
   });
   writeFileSync(join(flags.out, "README.md"), page);
