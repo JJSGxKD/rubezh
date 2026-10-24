@@ -622,6 +622,11 @@
   background: color-mix(in oklab, var(--widget-tone) 15%, transparent);
 }
 
+/* Та же подложка, но на поверхности, а не прозрачная: под ней лежит свечение. */
+@utility glow-face-solid {
+  background: color-mix(in oklab, var(--widget-tone) 15%, var(--color-surface-raised));
+}
+
 /*
  * Движение виджетов стоит вне экрана и в свёрнутом приложении — сетка ставит
  * метку `data-still` (screens/home-widgets.tsx). «Меньше движения» гасит его

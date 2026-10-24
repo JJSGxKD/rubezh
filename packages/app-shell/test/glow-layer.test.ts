@@ -65,6 +65,16 @@ describe("свечение значка виджета", () => {
     expect(innerOf(tile, "span")).not.toContain("animate-glow");
   });
 
+  // Круглое пятно за квадратной плиткой читалось грязью на экране, а сквозь
+  // полупрозрачную плитку было видно, как оно мигает (design/art/ui-ux.md, U-05).
+  it("повторяет форму плитки, а не круг, и не просвечивает сквозь неё", () => {
+    const halo = face.slice(face.indexOf("<span", 1), face.indexOf("</span>"));
+    expect(halo).not.toContain("rounded-full");
+    expect(halo).toContain("rounded-lg");
+    const tile = face.slice(face.indexOf("widget-face") - 12, face.indexOf(">", face.indexOf("widget-face")));
+    expect(tile).toContain("glow-face-solid");
+  });
+
   it("под переключателем движения, как и раньше", () => {
     expect(face).toContain("widget-motion");
   });

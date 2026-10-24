@@ -144,6 +144,15 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.02, seed: 21, filter: "lowpass", f0: 1800, peak: 0.15, decay: 0.015 },
     ],
   },
+  // Игла «Жала»: шипение и стеклянный щелчок в полосе 3–5 кГц — выше «Искры»
+  // и «Ножа», поэтому в общей подложке оружия его слышно отдельно.
+  sting: {
+    bus: "weapons", level: 0.4, voices: 2, gap: 0.09, send: 0.05, dur: 0.12, variants: 3, pitch: [1, 1.06, 0.94],
+    layers: [
+      { kind: "hiss", dur: 0.09, seed: 31, filter: "bandpass", f0: 5200, f1: 3400, glide: 0.07, q: 2.2, attack: 0.004, peak: 0.3, decay: 0.07 },
+      { kind: "tone", f0: 2900, f1: 3300, glide: 0.03, peak: 0.07, decay: 0.035 },
+    ],
+  },
   storm: {
     bus: "weapons", level: 0.62, voices: 1, gap: 0.4, send: 0.3, dur: 1.15, variants: 3, pitch: [1, 0.95, 1.05],
     layers: [

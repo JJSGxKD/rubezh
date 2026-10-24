@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronRight, Gift, Trophy, Users } from "lucide-react";
+import { ChevronRight, Gift, ListChecks, Trophy, Users } from "lucide-react";
 import { CutFrame, staggerStyle } from "../design-system/components";
 import { CoinIcon } from "../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../design-system/components/ShardIcon";
@@ -269,7 +269,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
         <span className="min-w-0">
           {/* Тихая строка — подсказка без данных: мельче и в две строки, а не обрезанная крупная. */}
           {props.quiet === true ? (
-            <span className="line-clamp-2 text-sm leading-snug text-text-muted">{props.big}</span>
+            <span className="line-clamp-2 text-sm leading-snug text-balance text-text-muted">{props.big}</span>
           ) : (
             <span className="block truncate font-display text-base leading-tight font-bold text-text">{props.big}</span>
           )}
@@ -313,16 +313,20 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
 /** Облик-значок: квадрат тона с иконкой; у широкого — крупнее. */
 export function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
   const box = props.size === "hero" ? "size-12" : props.size === "row" ? "size-10" : "size-7";
+  // У светящейся плитки фон непрозрачный: сквозь полупрозрачный видно, как свечение мигает под значком.
+  // Имена классов — целыми словами: сканер Tailwind склейку вроде `widget-face${…}` не узнаёт.
+  const solid = props.glow === true ? "glow-face-solid" : "";
   const tile = (
-    <span className={`widget-face relative inline-flex ${box} items-center justify-center rounded-md`}>
+    <span className={`widget-face ${solid} relative inline-flex ${box} items-center justify-center rounded-md`}>
       <span className="relative">{props.children}</span>
     </span>
   );
   if (props.glow !== true) return tile;
   // Свечение — соседний слой позади плитки, а не её потомок: потомок рисуется над фоном плитки и мигает на нём.
+  // Форма — плитки, а не круг: круглое пятно за квадратом читается грязью на экране.
   return (
     <span className="relative isolate inline-flex">
-      <span aria-hidden="true" className="widget-motion absolute -inset-2 -z-10 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" />
+      <span aria-hidden="true" className="widget-motion absolute -inset-1.5 -z-10 animate-glow rounded-lg bg-(--widget-daily-glow) opacity-45 blur-md" />
       {tile}
     </span>
   );
@@ -527,7 +531,11 @@ export function TasksView(props: { face: TasksFace; size: WidgetSize }): ReactNo
   }
 }
 
-/** Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри. */
+/**
+ * Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри.
+ * Без числа — до ответа сервера и без заданий суток — внутри значок заданий:
+ * одна пустая дорожка читалась сломанным значком (U-10).
+ */
 function Ring(props: { size: number; done: number; total: number | null }): ReactNode {
   const radius = 16;
   const length = 2 * Math.PI * radius;
@@ -539,7 +547,9 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
         {/* Пустое кольцо — только дорожка: скруглённый конец нулевой дуги рисовал бы точку. */}
         {share === 0 ? null : <circle cx="20" cy="20" r={radius} fill="none" stroke="var(--widget-tone)" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${(share * length).toFixed(2)} ${length.toFixed(2)}`} />}
       </svg>
-      {props.total === null || props.size < 40 ? null : (
+      {props.total === null ? (
+        <ListChecks aria-hidden="true" size={Math.round(props.size * 0.45)} className="absolute text-(--widget-tone)" />
+      ) : props.size < 40 ? null : (
         <span aria-hidden="true" className="absolute font-display text-[11px] font-bold text-text tabular-nums">
           {props.done}/{props.total}
         </span>

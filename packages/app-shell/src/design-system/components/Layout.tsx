@@ -169,7 +169,7 @@ export function TabBar(props: TabBarProps): ReactNode {
                 >
                   {item.icon}
                 </span>
-                {item.badge === undefined ? null : <TabBadge badge={item.badge} />}
+                {item.badge === undefined ? null : <TabBadge badge={item.badge} active={active} />}
               </span>
               <span
                 ref={(node) => {
@@ -196,9 +196,19 @@ export function TabBar(props: TabBarProps): ReactNode {
   );
 }
 
-function TabBadge(props: { badge: string }): ReactNode {
+/**
+ * Счётчик на вкладке. Кольцо цвета панели отделяет его от поднятой оранжевой
+ * плитки: без него красный бейдж сливался с её краем (U-15). У активной
+ * вкладки он вынесен за угол дальше — плитка крупнее и поднята.
+ */
+function TabBadge(props: { badge: string; active: boolean }): ReactNode {
   return (
-    <span className="absolute -top-1 -right-1 min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text">
+    <span
+      className={[
+        "absolute min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text ring-2 ring-surface",
+        props.active ? "-top-2 -right-2" : "-top-1 -right-1",
+      ].join(" ")}
+    >
       {props.badge}
     </span>
   );

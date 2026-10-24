@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   FullscreenButton,
+  IconButton,
   Modal,
   Stat,
 } from "../../design-system/components";
@@ -127,7 +128,7 @@ export interface LevelUpOverlayProps {
     onSkip(): void;
     onBanish(optionId: string): void;
   };
-  /** открыть лист «Характеристики» — плашкой в ряду слотов, без лишней строки */
+  /** открыть лист «Характеристики» — значком в углу окна, без лишней строки */
   onStats?: () => void;
 }
 
@@ -147,26 +148,17 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
     if (action === "choose") props.onChoose(offer.id);
     else if (action === "banish") tools?.onBanish(offer.id);
   };
+  // На узкой панели очередь — «+2» у значка стопки, полностью — для диктора
+  // и на широкой панели: строка слотов не должна переноситься (U-13).
   const slotExtras =
-    props.queued > 0 || props.onStats !== undefined ? (
-      <>
-        {props.queued > 0 ? (
-          <Badge tone="accent">
-            <Layers size={12} aria-hidden="true" />
-            {t("run.levelUp.queued", { count: props.queued })}
-          </Badge>
-        ) : null}
-        {props.onStats === undefined ? null : (
-          <button
-            type="button"
-            onClick={props.onStats}
-            className="surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold text-info"
-          >
-            <ChartColumn size={12} aria-hidden="true" />
-            {t("run.stats.open")}
-          </button>
-        )}
-      </>
+    props.queued > 0 ? (
+      <Badge tone="accent">
+        <Layers size={12} aria-hidden="true" />
+        <span className="@sm:hidden" aria-hidden="true">
+          +{props.queued}
+        </span>
+        <span className="sr-only @sm:not-sr-only">{t("run.levelUp.queued", { count: props.queued })}</span>
+      </Badge>
     ) : null;
 
   return (
@@ -176,6 +168,16 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       size="l"
       cut
     >
+      {/* «Характеристики» — значком в свободном углу окна (срез — слева
+          сверху): в строке слотов плашка с подписью переносила её на вторую
+          строку. Угол не прокручивается вместе с карточками. */}
+      {props.onStats === undefined ? null : (
+        <div className="absolute top-2 right-2 z-10">
+          <IconButton label={t("run.stats.open")} onClick={props.onStats}>
+            <ChartColumn size={20} className="text-info" />
+          </IconButton>
+        </div>
+      )}
       {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
           карточки, а строка нужна третьей карточке. */}
       <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>

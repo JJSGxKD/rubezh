@@ -43,6 +43,7 @@ const WEAPON_SOUNDS: Partial<Record<string, SoundId>> = {
   spark: "spark",
   knife: "knife",
   wardstone: "wardstone",
+  sting: "sting",
 };
 
 const LOW_HP_RATIO = 0.3;
