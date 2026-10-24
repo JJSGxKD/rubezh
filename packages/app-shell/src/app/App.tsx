@@ -142,7 +142,7 @@ export function App(): ReactNode {
           стоит на паузе и дожидается игрока (§5.2). */}
       {expanded ? null : <CompactOverlay onExpand={() => useShell.getState().adapter.ui.expand()} />}
       {showTabs ? (
-        <TabBar
+        <TabBar track="tabs"
           items={tabs}
           activeId={tab}
           onSelect={(id) => useNavigation.getState().resetTo(id as ScreenId)}

@@ -58,7 +58,7 @@ export function TopBar(props: TopBarProps): ReactNode {
       {props.onBack === undefined ? (
         <span className="size-11" />
       ) : (
-        <IconButton label={t("app.back")} feedback="back" onClick={props.onBack}>
+        <IconButton track="back" label={t("app.back")} feedback="back" onClick={props.onBack}>
           <ChevronLeft size={24} />
         </IconButton>
       )}

@@ -207,7 +207,7 @@ export function Modal(props: ModalProps): ReactNode {
       {closable ? (
         <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
           {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
-          <IconButton label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
+          <IconButton track="close" label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
             <X size={22} />
           </IconButton>
         </header>
@@ -421,7 +421,7 @@ export function ErrorState(props: { text: string; onRetry?: () => void }): React
       <h2 className="font-display text-xl font-bold text-danger">{t("error.title")}</h2>
       <p className="max-w-[320px] text-sm text-text-muted">{props.text}</p>
       {props.onRetry === undefined ? null : (
-        <Button onClick={props.onRetry}>{t("app.retry")}</Button>
+        <Button track="retry" onClick={props.onRetry}>{t("app.retry")}</Button>
       )}
     </div>
   );
