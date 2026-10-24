@@ -9,6 +9,7 @@ author: claude-lead2-16
 size: M
 depends_on:
   - T-0105
+  - T-0210
 zones:
   - backend/api/src/modules/achievements/**
   - backend/api/src/modules/tasks/task-rules.ts
@@ -45,7 +46,7 @@ batch: 2
 
 # T-0106. Достижения с престижем: сервер, 49 определений, редкость «есть у N%»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](T-0210-notifications-read-by-action.md)
 
 ## Зачем
 
@@ -86,6 +87,9 @@ batch: 2
 | Друзья, `friends` (лестница `friends`) | `ach_friends_1` 1 «Не один»; `ach_friends_5` 5 «Свои люди»; `ach_friends_10` 10 «Отряд»; `ach_friends_25` 25 «Целый рубеж» | 5/10/20/40 | 100/200/400/800 |
 
 Итого 49 (11 + 13 + 21 + 4), из них девять существующих. Виды `xp_collected`, `weapon_runs`, `element_runs`, `boost_runs`, `difficulty_survive_sec` и фильтры (`filter`) — из T-0104.
+
+Решение `claude-lead-1` от 24.10.2026: задача ждёт T-0210 — обе правят
+`friends.service.ts`, параллельно их не берут.
 
 ## Как сейчас
 
