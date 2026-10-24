@@ -89,7 +89,7 @@ export function hapticForCues(cues: RunCues, nowMs: number = performance.now()):
             ? "hit"
             : cues.eliteKills > 0
               ? "eliteKill"
-              : cues.heal > 0 || cues.magnet > 0
+              : cues.heal > 0 || cues.magnet > 0 || cues.freeze > 0
                 ? "pickup"
                 : null;
   if (event === null) return null;

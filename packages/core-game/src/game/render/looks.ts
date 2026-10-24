@@ -36,6 +36,8 @@ export type ShapeKind =
   | "medkit"
   | "magnet"
   | "dynamite"
+  /** заморозка: ледяной кристалл о шести лучах */
+  | "freeze"
   /** сундук забега: корпус, крышка и замок */
   | "chest";
 
@@ -158,13 +160,13 @@ export const GEM_TIERS: readonly (ShapeLook & { minValue: number; radiusUnits: n
 ];
 
 /**
- * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит и три
- * сундука. Виды различаются силуэтом: крест, подкова, шашка с фитилём,
- * сундук с замком (§4.4). Золотой оттенок сундука крепнет с размером, а сам
+ * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит, три
+ * сундука и заморозка. Виды различаются силуэтом: крест, подкова, шашка с
+ * фитилём, сундук с замком, шестилучевой кристалл (§4.4). Золотой оттенок сундука крепнет с размером, а сам
  * он крупнее прочих подборов: награда должна быть видна издалека.
  */
 export const PICKUP_LOOKS: readonly (ShapeLook & {
-  id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five";
+  id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five" | "freeze";
   key: string;
   size: number;
   /**
@@ -181,6 +183,9 @@ export const PICKUP_LOOKS: readonly (ShapeLook & {
   { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3, aura: 0xff8f3f },
   { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5, aura: 0x46d9c6 },
   { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7, aura: 0xffd15c },
+  // Холодный голубой: на красном поле больше ничего не бывает голубым, кроме
+  // магнита, а от того заморозка отличается силуэтом — лучами, а не подковой.
+  { id: "freeze", key: "bh-freeze-pickup", shape: "freeze", color: 0xa9c8ff, size: 1.25 },
 ];
 
 /**
@@ -202,6 +207,9 @@ export const WORLD_COLORS = {
   heal: 0x8ee86b,
   magnetWave: 0x5ccfff,
   dynamiteWave: 0xffb22e,
+  freezeWave: 0x7fb2ff,
+  /** заливка замерших врагов: бледно-голубая, отличимая и от красного тела, и от тонов состояний */
+  freezeTint: 0xcfe0ff,
   /** вспышка персонажа при попадании */
   hurt: 0xff6b6b,
   /**

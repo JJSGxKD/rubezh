@@ -165,6 +165,12 @@ export interface RunStats {
   magnetsCollected: number;
   /** подобранный динамит */
   dynamiteCollected: number;
+  /** подобранные заморозки */
+  freezeCollected: number;
+  /** сколько тиков заморозка ещё держит врагов; 0 — заморозки нет (`sim/freeze.ts`) */
+  freezeTicks: number;
+  /** полный срок заморозки в тиках: по нему считается, сколько уже стоит босс */
+  freezeTotalTicks: number;
   /** выпавшие сундуки */
   chestsFound: number;
   /** открытые сундуки */

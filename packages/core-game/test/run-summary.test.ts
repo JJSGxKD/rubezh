@@ -37,10 +37,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов и пешими врагами рядом с огоньком. Распределение времени по seed при этом остаётся прежним, поэтому
+ * атаками врагов, пешими врагами рядом с огоньком и подбором «Заморозка».
+ * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 1;
+const GOLDEN_SEED = 3;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -172,36 +173,34 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 29.92,
-      level: 7,
-      xpCollected: 81,
-      enemiesKilled: 60,
+      survivalSec: 29.88,
+      level: 5,
+      xpCollected: 45,
+      enemiesKilled: 44,
       killsByEnemy: {
-        swarm_rat: 23,
-        tank_ghoul: 2,
-        shooter_wisp: 8,
-        bone_walker: 1,
-        mire_shambler: 6,
-        dasher_wolf: 4,
-        circler_crow: 7,
-        bomber_imp: 1,
-        rushing_bats: 5,
-        splitter_slime: 3,
+        swarm_rat: 15,
+        shooter_wisp: 3,
+        bone_walker: 4,
+        mire_shambler: 3,
+        dasher_wolf: 1,
+        circler_crow: 9,
+        bomber_imp: 3,
+        rushing_bats: 6,
       },
-      damageDealt: 1088,
-      damageTaken: 124,
+      damageDealt: 705,
+      damageTaken: 122,
       weapons: [
-        { id: "spark", level: 3, damage: 740 },
-        { id: "meteor", level: 1, damage: 246 },
-        { id: "storm", level: 1, damage: 102 },
+        { id: "spark", level: 1, damage: 527 },
+        { id: "meteor", level: 1, damage: 179 },
       ],
       passives: [
+        { id: "reach", level: 1 },
         { id: "vitality", level: 1 },
-        { id: "lodestone", level: 1 },
+        { id: "haste", level: 1 },
       ],
-      deathCause: "shooter_wisp",
-      distance: 4319,
-      peakEnemies: 30,
+      deathCause: "rushing_bats",
+      distance: 4474,
+      peakEnemies: 28,
     });
   });
 

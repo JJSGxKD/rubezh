@@ -128,6 +128,14 @@ describe("сигналы забега", () => {
     expect(fired.starfall).toBeUndefined();
   });
 
+  it("считает подобранную заморозку отдельным сигналом", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    pushSimEvent(target.events, { kind: SIM_EVENT.freeze, x: 0, y: 0, radius: 500, tick: 1 });
+    expect(tracker.collect()).toMatchObject({ freeze: 1, dynamite: 0, magnet: 0 });
+    expect(tracker.collect()).toBeNull();
+  });
+
   it("считает оба вида удара по площади: молнию и падающий камень", () => {
     const target = world();
     const tracker = new CueTracker(target);

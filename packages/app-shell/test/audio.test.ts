@@ -18,6 +18,7 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     heal: 0,
     magnet: 0,
     dynamite: 0,
+    freeze: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
@@ -98,6 +99,13 @@ describe("план звуков забега", () => {
     const storm = planCueSounds(cues({ weapons: { storm: 1, spark: 1 } }), 0).map((request) => request.id);
     expect(storm).toEqual(["spark"]);
     expect(planCueSounds(cues({ strikes: 1 }), 0).map((request) => request.id)).toEqual(["storm"]);
+  });
+
+  it("заморозка звучит колокольчиками на шине наград, динамит — своим звуком", () => {
+    expect(planCueSounds(cues({ freeze: 1 }), 0).map((request) => request.id)).toEqual(["freeze"]);
+    expect(planCueSounds(cues({ freeze: 1, dynamite: 1 }), 0).map((request) => request.id)).toEqual(["dynamite", "freeze"]);
+    expect(SOUND_RECIPES.freeze.bus).toBe("rewards");
+    expect(SOUND_RECIPES.freeze.layers.filter((layer) => layer.kind === "bell")).toHaveLength(3);
   });
 
   it("«Очаг» тактом ауры не звучит даже при большом счёте; остальное оружие звучит", () => {

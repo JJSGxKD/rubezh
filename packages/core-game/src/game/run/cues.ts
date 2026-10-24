@@ -63,6 +63,7 @@ export class CueTracker {
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
+      else if (kind === SIM_EVENT.freeze) cues.freeze++;
       else if (kind === SIM_EVENT.strike || kind === SIM_EVENT.strikeFire) cues.strikes++;
       else if (kind === SIM_EVENT.explosion) {
         cues.explosions++;
@@ -175,6 +176,7 @@ function emptyCues(): RunCues {
     heal: 0,
     magnet: 0,
     dynamite: 0,
+    freeze: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
@@ -196,6 +198,7 @@ function resetCues(cues: RunCues): void {
   cues.heal = 0;
   cues.magnet = 0;
   cues.dynamite = 0;
+  cues.freeze = 0;
   cues.explosions = 0;
   cues.explosionsNear = 0;
   cues.strikes = 0;

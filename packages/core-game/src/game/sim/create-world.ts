@@ -65,6 +65,7 @@ const FALLBACK_DROPS: DropsDef = {
   medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
   magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
   dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 420, eliteHpRatio: 0.3 },
+  freeze: { chance: 0, eliteChance: 0, maxOnField: 0, durationSec: 10, bossDurationRatio: 0.5 },
 };
 
 /**
@@ -369,6 +370,9 @@ export function createWorld(options: CreateWorldOptions): World {
       medkitsCollected: 0,
       magnetsCollected: 0,
       dynamiteCollected: 0,
+      freezeCollected: 0,
+      freezeTicks: 0,
+      freezeTotalTicks: 0,
       chestsFound: 0,
       chestsOpened: 0,
       distance: 0,
