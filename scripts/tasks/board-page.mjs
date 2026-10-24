@@ -99,7 +99,7 @@ function formatDateTime(date) {
   return `${formatDate(date.toISOString())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
 }
 
-const taskLink = (task) => `[${task.id}. ${task.title.replaceAll("|", "\\|")}](${TASKS_URL}/${task.fileName})`;
+const taskLink = (task) => `[${task.id}. ${task.title.replaceAll("|", "\\|")}](${TASKS_URL}/${task.path ?? task.fileName})`;
 const prLink = (number) => `[#${String(number)}](${GITHUB}/pull/${String(number)})`;
 
 function table(headers, rows) {
@@ -118,7 +118,7 @@ function section(title, count, headers, rows) {
 function streamsSection(streams) {
   const { now, queue } = streamRows(streams);
   const link = (item) => {
-    const text = `[${item.id}](${TASKS_URL}/${item.fileName})`;
+    const text = `[${item.id}](${TASKS_URL}/${item.path ?? item.fileName})`;
     return item.batch === null ? text : `${text} (п.${String(item.batch)})`;
   };
   const intro =
