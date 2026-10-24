@@ -3,7 +3,7 @@ id: T-0204
 title: Архив задач — готовые и отменённые в `tasks/archive/`
 epic: E0
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -41,7 +41,7 @@ batch: 2
 
 # T-0204. Архив задач — готовые и отменённые в `tasks/archive/`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json)](../README.md#значки-статуса)
 
 ## Зачем
 
@@ -225,8 +225,8 @@ batch: 2
   - проверка реестра на диске читает и `tasks/archive/`.
 - `tasks-file.test.ts`:
   - `relativeTaskLink` — четыре сочетания папок из «Решений»;
-  - `withTaskLinks`: `](archive/T-0002-task-cli.md)` из `tasks/` при архивной T-0002 →
-    `](archive/T-0002-task-cli.md)`; `](archive/T-0001-shop-gems-only-bundles.md#шаги)` из архива при
+  - `withTaskLinks`: `](T-0002-task-cli.md)` из `tasks/` при архивной T-0002 →
+    `](T-0002-task-cli.md)`; `](T-0001-shop-gems-only-bundles.md#шаги)` из архива при
     открытой T-0001 → без изменений; `](T-9999-x.md)` без задачи в реестре →
     без изменений; `](docs/x.md)` → без изменений; повторный вызов ничего
     не меняет.
