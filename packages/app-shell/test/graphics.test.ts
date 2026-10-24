@@ -60,10 +60,28 @@ describe("настройки графики", () => {
     expect(runGraphics().weaponEffects).toBe(true);
   });
 
+  it("живой фон включён по умолчанию, выключается на устройстве и переживает перезапуск", () => {
+    expect(useGraphics.getState().liveBackground).toBe(true);
+    useGraphics.getState().toggle("liveBackground");
+    expect(events.at(-1)).toEqual({ event: "settings_changed", payload: { setting: "graphics.liveBackground", value: false, scope: "device" } });
+
+    mount();
+    expect(useGraphics.getState().liveBackground).toBe(false);
+    // В забег он не уходит: фона во время забега нет.
+    expect(runGraphics()).toEqual({ telegraphs: true, weaponEffects: true, damageNumbers: true });
+  });
+
+  it("сохранённое до «Живого фона» не сбрасывается: фон читается включённым", () => {
+    storage.values[KEY] = JSON.stringify({ telegraphs: false, weaponEffects: true, damageNumbers: true });
+    mount();
+    expect(runGraphics().telegraphs).toBe(false);
+    expect(useGraphics.getState().liveBackground).toBe(true);
+  });
+
   it("битое значение в хранилище сбрасывается к умолчанию, а не роняет запуск", () => {
     storage.values[KEY] = JSON.stringify({ telegraphs: "нет" });
     mount();
-    expect(runGraphics()).toEqual(DEFAULT_GRAPHICS);
+    expect(useGraphics.getState()).toMatchObject(DEFAULT_GRAPHICS);
     expect(storage.values[KEY]).toBeUndefined();
   });
 });

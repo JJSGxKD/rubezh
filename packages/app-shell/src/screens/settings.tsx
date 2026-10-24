@@ -114,6 +114,11 @@ export function SettingsScreen(): ReactNode {
             hint={t("settings.graphics.weaponEffects.hint")}
             toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
           />
+          <ListItem
+            title={t("settings.graphics.liveBackground")}
+            hint={t("settings.graphics.liveBackground.hint")}
+            toggle={{ checked: graphics.liveBackground, onChange: () => graphics.toggle("liveBackground") }}
+          />
         </ListGroup>
         <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
 

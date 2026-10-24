@@ -270,6 +270,8 @@
   "settings.graphics.weaponEffects": "Эффекты оружия",
   "settings.graphics.weaponEffects.hint": "Молния «Грозы», граница «Очага», тон горящих и замёрзших",
   "settings.graphics.damageNumbers": "Числа урона",
+  "settings.graphics.liveBackground": "Живой фон",
+  "settings.graphics.liveBackground.hint": "Звёзды и искры за меню, блик «Играть», блеск редких предметов",
   "settings.graphics.warning": "Отключение меняет бой: телеграфы и числа урона не украшение, а способ прочитать, откуда сейчас прилетит.",
   "settings.language": "Язык",
   "settings.language.value": "Русский",
