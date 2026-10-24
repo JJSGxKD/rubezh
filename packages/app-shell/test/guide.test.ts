@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { DROPS, ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
@@ -16,7 +16,8 @@ import {
   weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
-import { EnemyScene } from "../src/screens/guide/scenes";
+import { GuideScreen } from "../src/screens/guide/GuideScreen";
+import { EnemyScene, PickupIcon } from "../src/screens/guide/scenes";
 
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
@@ -42,6 +43,18 @@ describe("гайдбук", () => {
     const shown = [...regularEnemies(), ...eliteEnemies()].map((enemy) => enemy.def.id);
     expect(shown.sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
     expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
+  });
+
+  it("рассказывает про заморозку числами из контента: срок и срок для боссов", () => {
+    expect(DROPS.freeze.durationSec).toBeGreaterThan(0);
+    const markup = renderToStaticMarkup(createElement(GuideScreen));
+    const seconds = Math.round(DROPS.freeze.durationSec);
+    const bossSeconds = Math.round(DROPS.freeze.durationSec * DROPS.freeze.bossDurationRatio);
+    expect(markup).toContain("Заморозка");
+    expect(markup).toContain(`замирают на ${seconds} с`);
+    expect(markup).toContain(`Боссы стоят ${bossSeconds} с`);
+    expect(hasTranslation("guide.pickup.freeze.name")).toBe(true);
+    expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
   });
 
   it("называет стража кольца и показывает его среди обычных врагов один раз, не среди элиты", () => {
