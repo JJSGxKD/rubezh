@@ -19,7 +19,7 @@ import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
-import { findEnemyContentProblems, IMPLEMENTED_PATTERNS } from "../src/game/patterns";
+import { findEnemyContentProblems, IMPLEMENTED_PATTERNS, PATTERN_TRAITS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
 import { findMapContentProblems } from "../src/game/sim/map-types";
 import { MAX_PICKUPS, MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
@@ -28,6 +28,7 @@ import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { xpForLevel } from "../src/game/progression/levels";
 import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
+import { DEFAULT_SIM_CONFIG } from "../src/game/sim/create-world";
 import { createWorld } from "../src/game/sim/world";
 
 // Дешёвые тесты, ловящие опечатки в контенте за миллисекунды
@@ -62,8 +63,7 @@ describe("контент врагов", () => {
 
   it("содержит врага на каждом реализованном паттерне", () => {
     const used = new Set(ENEMIES.map((enemy) => enemy.pattern));
-    // Страж кольца приходит в контент задачей T-0171: до неё движок знает паттерн cordon, а врага на нём нет.
-    for (const pattern of IMPLEMENTED_PATTERNS.filter((candidate) => candidate !== "cordon")) {
+    for (const pattern of IMPLEMENTED_PATTERNS) {
       expect(used, `паттерн ${pattern}`).toContain(pattern);
     }
   });
@@ -246,6 +246,108 @@ describe("контент таймлайна спавна", () => {
       for (const spawn of segment.spawns) expect(elites).not.toContain(spawn.enemy);
     }
     for (const id of ENDLESS_CURVE.pool) expect(elites).not.toContain(id);
+  });
+});
+
+describe("контент стража кольца и колец в таймлайне", () => {
+  const guard = ENEMIES.find((enemy) => enemy.id === "cordon_guard");
+
+  /** Кольцо расписания: секунда, число стражей и параметры строя. */
+  interface RingAt {
+    sec: number;
+    count: number;
+    lifeSec: number;
+    radius: number;
+  }
+
+  /** Кольца по ходу забега: расписанные руками и первые срабатывания события кривой. */
+  function ringsInOrder(curveFirings: number): RingAt[] {
+    const rings: RingAt[] = [];
+    for (const segment of TIMELINE) {
+      for (const event of segment.events ?? []) {
+        if (event.kind === "cordon" && event.ring !== undefined) {
+          rings.push({ sec: segment.fromSec, count: event.count, lifeSec: event.ring.lifeSec, radius: event.ring.radius });
+        }
+      }
+    }
+    const curveEvent = ENDLESS_CURVE.events.find((event) => event.kind === "cordon");
+    if (curveEvent?.ring === undefined) return rings;
+    // Событие кривой срабатывает на отрезках с (шаг + 1) % everySegments === 0 (sim/timeline.ts).
+    let fired = 0;
+    for (let step = 0; fired < curveFirings; step++) {
+      if ((step + 1) % curveEvent.everySegments !== 0) continue;
+      rings.push({
+        sec: ENDLESS_CURVE.fromSec + step * ENDLESS_CURVE.segmentSec,
+        count: curveEvent.count,
+        lifeSec: curveEvent.ring.lifeSec,
+        radius: curveEvent.ring.radius,
+      });
+      fired++;
+    }
+    return rings;
+  }
+
+  it("заводит стража с паттерном cordon: крепкий, медленный, без ранга, стихии и стойкости", () => {
+    expect(guard).toBeDefined();
+    expect(guard?.pattern).toBe("cordon");
+    expect(guard?.rank).toBeUndefined();
+    expect(guard?.hp).toBeGreaterThanOrEqual(60);
+    expect(guard?.speed).toBeLessThanOrEqual(40);
+    expect(guard?.element).toBeUndefined();
+    expect(guard?.resist).toBeUndefined();
+  });
+
+  it("проходит проверку таймлайна целиком", () => {
+    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
+  });
+
+  it("ставит первое кольцо на 180-ю секунду, второе на 300-ю, а воронье окружение не трогает", () => {
+    const early = TIMELINE.filter((segment) => segment.fromSec < 180);
+    for (const segment of early) {
+      expect((segment.events ?? []).map((event) => event.kind), `отрезок на ${segment.fromSec}s`).not.toContain("cordon");
+    }
+    const events = (fromSec: number) => TIMELINE.find((segment) => segment.fromSec === fromSec)?.events ?? [];
+    expect(events(180).filter((event) => event.kind === "cordon")).toHaveLength(1);
+    expect(events(300).filter((event) => event.kind === "cordon")).toHaveLength(1);
+    expect(events(180)).toContainEqual({ kind: "ring", enemy: "circler_crow", count: 16 });
+    expect(ENDLESS_CURVE.events.find((event) => event.kind === "cordon")?.everySegments).toBe(3);
+  });
+
+  it("замыкает каждое кольцо: просвет между соседними стражами уже диаметра игрока", () => {
+    const guardRadius = PATTERN_TRAITS.cordon.radius;
+    const playerRadius = DEFAULT_SIM_CONFIG.player.radius;
+    for (const ring of ringsInOrder(10)) {
+      const gap = (2 * Math.PI * ring.radius) / ring.count - 2 * guardRadius;
+      expect(gap, `кольцо на ${ring.sec}s`).toBeLessThan(2 * playerRadius);
+    }
+  });
+
+  it("не ослабляет кольца по ходу забега: стражей и времени не меньше, чем в предыдущем", () => {
+    const rings = ringsInOrder(10);
+    for (let i = 1; i < rings.length; i++) {
+      expect(rings[i].count, `стражей в кольце на ${rings[i].sec}s`).toBeGreaterThanOrEqual(rings[i - 1].count);
+      expect(rings[i].lifeSec, `lifeSec кольца на ${rings[i].sec}s`).toBeGreaterThanOrEqual(rings[i - 1].lifeSec);
+    }
+  });
+
+  it("не накладывает кольца: между соседними не меньше lifeSec предыдущего и ещё десяти секунд", () => {
+    const rings = ringsInOrder(10);
+    expect(rings.length).toBeGreaterThanOrEqual(12);
+    for (let i = 1; i < rings.length; i++) {
+      expect(rings[i].sec - rings[i - 1].sec, `кольцо на ${rings[i].sec}s`).toBeGreaterThanOrEqual(rings[i - 1].lifeSec + 10);
+    }
+  });
+
+  it("не пускает стража ни в обычный поток, ни в пул кривой", () => {
+    for (const segment of TIMELINE) {
+      for (const spawn of segment.spawns) expect(spawn.enemy, `отрезок на ${segment.fromSec}s`).not.toBe("cordon_guard");
+    }
+    expect(ENDLESS_CURVE.pool).not.toContain("cordon_guard");
+  });
+
+  it("оставляет огонька на месте: его чистит следующая задача", () => {
+    expect(ENEMIES.some((enemy) => enemy.id === "shooter_wisp")).toBe(true);
+    expect(ENDLESS_CURVE.pool).toContain("shooter_wisp");
   });
 });
 

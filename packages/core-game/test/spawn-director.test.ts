@@ -16,6 +16,17 @@ import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 /** Сколько врагов может добавить сверх потолка распад делящегося. */
 const SPLIT_SLACK = 8;
 
+/**
+ * Кольцо стражей потолок живых не проверяет (Р112): строй обязан замкнуться,
+ * а недобор стражей оставил бы в нём дыру. Поэтому над потолком живых может
+ * стоять самое большое кольцо расписания.
+ */
+const CORDON_SLACK = Math.max(
+  0,
+  ...TIMELINE.flatMap((segment) => segment.events ?? []).map((event) => (event.kind === "cordon" ? event.count : 0)),
+  ...ENDLESS_CURVE.events.map((event) => (event.kind === "cordon" ? event.count : 0)),
+);
+
 function makeWorld(seed = 1, difficulty?: DifficultyDef): World {
   return createWorld({
     seed,
@@ -88,9 +99,9 @@ describe("таймлайн спавна", () => {
       peak = Math.max(peak, world.enemies.aliveCount);
       // Запас на распад делящихся: потомки появляются в обход директора, по
       // смерти родителя, и потолок для них — не преграда, иначе механика
-      // молча исчезала бы у потолка.
+      // молча исчезала бы у потолка. Кольцо стражей — тоже в обход потолка.
       expect(world.enemies.aliveCount).toBeLessThanOrEqual(
-        world.difficulty.maxAlive + SPLIT_SLACK,
+        world.difficulty.maxAlive + SPLIT_SLACK + CORDON_SLACK,
       );
     });
 

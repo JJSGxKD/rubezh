@@ -74,7 +74,13 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "shooter_wisp", perSec: 0.35 },
       { enemy: "mire_shambler", perSec: 0.22, burst: 2 },
     ],
-    events: [{ kind: "ring", enemy: "circler_crow", count: 16 }],
+    events: [
+      { kind: "ring", enemy: "circler_crow", count: 16 },
+      // Первое кольцо редкое и слабое: 24 стража на 30 секунд, из них около 14
+      // строй «держит» — стражам нужно время, чтобы дойти. Дальше кольца
+      // крепнут: больше стражей, дольше и быстрее сжимаются.
+      { kind: "cordon", enemy: "cordon_guard", count: 24, ring: { radius: 170, minRadius: 90, shrinkPerSec: 3, lifeSec: 30 } },
+    ],
   },
   {
     // Нетопыри показываются отдельно: поперёк поля идёт стая, и игрок должен
@@ -125,7 +131,10 @@ export const TIMELINE: TimelineSegmentDef[] = [
     ],
     // Первая контрольная точка сложности: элита приходит в назначенную минуту,
     // а не выпадает случайно из смеси.
-    events: [{ kind: "ring", enemy: "elite_ghoul", count: 1 }],
+    events: [
+      { kind: "ring", enemy: "elite_ghoul", count: 1 },
+      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 200, minRadius: 90, shrinkPerSec: 4, lifeSec: 35 } },
+    ],
   },
 ];
 
@@ -169,5 +178,9 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
     { everySegments: 7, kind: "ring", enemy: "boss_seer", count: 1 },
+    // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
+    // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
+    // параметры кольца с отрезка на отрезок не растут.
+    { everySegments: 3, kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 240, minRadius: 100, shrinkPerSec: 5, lifeSec: 45 } },
   ],
 };

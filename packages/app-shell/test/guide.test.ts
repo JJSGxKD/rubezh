@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ENEMIES, LOADOUT_LIMITS, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { hasTranslation } from "../src/i18n";
@@ -14,6 +16,7 @@ import {
   weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
+import { EnemyScene } from "../src/screens/guide/scenes";
 
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
@@ -39,6 +42,25 @@ describe("гайдбук", () => {
     const shown = [...regularEnemies(), ...eliteEnemies()].map((enemy) => enemy.def.id);
     expect(shown.sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
     expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
+  });
+
+  it("называет стража кольца и показывает его среди обычных врагов один раз, не среди элиты", () => {
+    expect(hasTranslation("enemy.cordon_guard.name")).toBe(true);
+    for (const part of ["name", "text", "tip"]) {
+      expect(hasTranslation(`guide.pattern.cordon.${part}`), part).toBe(true);
+    }
+    expect(regularEnemies().filter((enemy) => enemy.def.id === "cordon_guard")).toHaveLength(1);
+    expect(eliteEnemies().map((enemy) => enemy.def.id)).not.toContain("cordon_guard");
+  });
+
+  it("рисует сцену «Строй»: подпись, семь стражей цветом врага и пунктирный просвет", () => {
+    const markup = renderToStaticMarkup(createElement(EnemyScene, { pattern: "cordon", elite: false, label: "Страж кольца" }));
+    expect(markup).toContain('aria-label="Страж кольца"');
+    // Цвет и форма — из облика канвы (ENEMY_LOOKS.cordon): гайдбук не придумывает свой.
+    expect(markup.match(/fill="#b3203f"/g)).toHaveLength(7);
+    expect(markup).toContain('stroke-dasharray="3 3"');
+    // Сцена статичная: новой анимации для неё нет.
+    expect(markup).not.toContain("animate-");
   });
 
   it("называет новых пеших врагов по именам и показывает каждого один раз, элиту — отдельно", () => {
