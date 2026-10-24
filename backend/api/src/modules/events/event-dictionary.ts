@@ -108,6 +108,9 @@ export const EVENT_DICTIONARY = {
   // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
   session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
+  // Нажатие кнопки, вкладки или переключателя дизайн-системы (Р141): `control` — устойчивое
+  // имя по смыслу действия, а не текст кнопки; «группа.пункт» у вкладок и переключателей.
+  ui_clicked: { version: 1, payload: payload({ screen: id, control: z.string().regex(/^[a-z0-9_-]{1,24}(\.[a-z0-9_-]{1,24})?$/) }) },
   // `scope` — чья настройка (docs/35-stage4-plan.md WP29): аккаунта идёт на
   // все его устройства, устройства остаётся здесь. Необязательное: сборки до
   // настроек аккаунта его не шлют.

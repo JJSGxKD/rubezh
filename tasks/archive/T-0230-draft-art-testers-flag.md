@@ -25,6 +25,8 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - apps/web-telegram/vite.config.ts
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: high
