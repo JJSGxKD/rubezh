@@ -85,7 +85,7 @@ export function BonusTrack(props: BonusProps): ReactNode {
       <p className="mt-1.5 text-xs text-text-muted">{t("friends.bonus.counted", { qualified: bonus.qualified })}</p>
       {bonus.readyCoins > 0 ? (
         <div className="mt-2.5">
-          <Button block loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
+          <Button track="claim_bonus" block loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
             {t("friends.bonus.claim", { coins: formatNumber(bonus.readyCoins) })}
           </Button>
         </div>
@@ -172,11 +172,11 @@ export function Invite(props: { api: FriendsApi; withAccount: boolean; variant: 
         </div>
         {props.bonus === undefined ? null : <BonusTrack {...props.bonus} />}
         <div className="mt-2.5 grid grid-cols-2 gap-2">
-          <Button block disabled={botUrl === "" || busy === "copy"} loading={busy === "send"} onClick={() => void send()}>
+          <Button track="invite" block disabled={botUrl === "" || busy === "copy"} loading={busy === "send"} onClick={() => void send()}>
             <Send size={18} aria-hidden="true" />
             {t("friends.invite.action")}
           </Button>
-          <Button variant="secondary" block disabled={botUrl === "" || busy === "send"} loading={busy === "copy"} onClick={() => void copy()}>
+          <Button track="copy_invite" variant="secondary" block disabled={botUrl === "" || busy === "send"} loading={busy === "copy"} onClick={() => void copy()}>
             <Copy size={18} aria-hidden="true" />
             {t("friends.invite.copyShort")}
           </Button>
@@ -196,11 +196,11 @@ export function Invite(props: { api: FriendsApi; withAccount: boolean; variant: 
         <p className="max-w-[320px] text-sm text-text-muted">{t("friends.invite.body")}</p>
       </div>
       <div className="mt-5 grid gap-2">
-        <Button size="l" block glow disabled={botUrl === "" || busy === "copy"} loading={busy === "send"} onClick={() => void send()}>
+        <Button track="invite" size="l" block glow disabled={botUrl === "" || busy === "copy"} loading={busy === "send"} onClick={() => void send()}>
           <Send size={20} aria-hidden="true" />
           {t("friends.invite.action")}
         </Button>
-        <Button variant="secondary" block disabled={botUrl === "" || busy === "send"} loading={busy === "copy"} onClick={() => void copy()}>
+        <Button track="copy_invite" variant="secondary" block disabled={botUrl === "" || busy === "send"} loading={busy === "copy"} onClick={() => void copy()}>
           <Copy size={18} aria-hidden="true" />
           {t("friends.invite.copy")}
         </Button>
@@ -247,7 +247,7 @@ export function Gifts(props: { view: FriendsView; busy: boolean; closed: boolean
             {gifts.claimableToday > 0 ? t("friends.gifts.ready", { count: gifts.claimableToday, coins: formatNumber(gifts.coins) }) : t("friends.gifts.pendingOnly")}
           </p>
           {gifts.claimableToday > 0 ? (
-            <Button loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
+            <Button track="claim_gifts" loading={props.busy} disabled={props.closed} onClick={props.onClaim}>
               {t("friends.gifts.claim")}
             </Button>
           ) : null}
@@ -280,7 +280,7 @@ export function GiftAll(props: { count: number; coins: number; busy: boolean; cl
         <p className="text-sm font-semibold text-text">{t("friends.giftAll.title", { count: props.count })}</p>
         <p className="text-xs text-text-muted">{t("friends.giftAll.hint", { coins: formatNumber(props.coins) })}</p>
       </div>
-      <Button loading={props.busy} disabled={props.closed} onClick={props.onGift}>
+      <Button track="gift_all" loading={props.busy} disabled={props.closed} onClick={props.onGift}>
         {t("friends.giftAll.action")}
       </Button>
     </div>
@@ -308,7 +308,7 @@ export function PeerAction(props: { kind: PeerActionKind; variant: "secondary" |
   const iconOnlyBelow = props.pair === true ? ICON_ONLY_BELOW_540 : ICON_ONLY_BELOW_430;
   const Icon = view.icon === "check" ? Check : view.icon === "x" ? X : Gift;
   return (
-    <Button variant={props.variant} loading={props.loading === true} disabled={props.disabled === true} ariaLabel={label} onClick={props.onClick}>
+    <Button track="peer_action" variant={props.variant} loading={props.loading === true} disabled={props.disabled === true} ariaLabel={label} onClick={props.onClick}>
       <Icon size={16} aria-hidden="true" className={view.iconWithText ? "" : iconOnlyBelow} />
       <span className={textFrom}>{label}</span>
     </Button>

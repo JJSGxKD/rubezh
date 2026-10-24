@@ -91,7 +91,7 @@ export function DailyScreen(): ReactNode {
       onBack={() => navigation.pop()}
       footer={
         dailyAvailable() ? (
-          <Button size="l" block disabled={ready === null || !ready.canClaim} loading={claiming} onClick={() => void claim()}>
+          <Button track="claim_daily" size="l" block disabled={ready === null || !ready.canClaim} loading={claiming} onClick={() => void claim()}>
             {ready !== null && !ready.canClaim ? t("daily.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("daily.claim")}
           </Button>
         ) : undefined

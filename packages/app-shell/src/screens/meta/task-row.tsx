@@ -137,14 +137,14 @@ export function TaskRow(props: {
           прогресса до точки на узком телефоне. */}
       {claimable ? (
         <div className="mt-3">
-          <Button block loading={props.claiming} onClick={props.onClaim}>
+          <Button track="claim" block loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.claim")}
           </Button>
         </div>
       ) : null}
       {opens ? (
         <div className="mt-3">
-          <Button block onClick={() => props.onOpen(link)}>
+          <Button track="open" block onClick={() => props.onOpen(link)}>
             <ExternalLink size={18} aria-hidden="true" />
             {t(task.kind === "bot" ? "tasks.startBot" : "tasks.go")}
           </Button>
@@ -152,10 +152,10 @@ export function TaskRow(props: {
       ) : null}
       {waitsAction && !opens ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button variant="secondary" onClick={() => props.onOpen(link)}>
+          <Button track="subscribe" variant="secondary" onClick={() => props.onOpen(link)}>
             {t("tasks.subscribe")}
           </Button>
-          <Button loading={props.claiming} onClick={props.onClaim}>
+          <Button track="check" loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.check")}
           </Button>
         </div>

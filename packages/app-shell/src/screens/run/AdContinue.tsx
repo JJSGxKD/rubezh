@@ -40,7 +40,7 @@ export function AdContinueView(props: { stage: AdContinueStage; locked: boolean;
   return (
     <>
       {look === null ? null : (
-        <Button block variant={look.variant} loading={look.loading} disabled={look.disabled} ariaLabel={t(look.ariaKey)} onClick={props.onWatch}>
+        <Button track="continue_ad" block variant={look.variant} loading={look.loading} disabled={look.disabled} ariaLabel={t(look.ariaKey)} onClick={props.onWatch}>
           {look.pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
           {/* Рядом с кнопкой звёзд — коротко: колонка экрана смерти узкая, и
               «За рекламу» переносилась на две строки. Одна — целиком. */}

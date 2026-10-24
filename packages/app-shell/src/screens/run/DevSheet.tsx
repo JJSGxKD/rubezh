@@ -48,7 +48,7 @@ export function DevSheet(props: { inRun: boolean; onClose(): void }): ReactNode 
       placement="bottom"
       onDismiss={props.onClose}
       footer={
-        <Button variant="ghost" block onClick={props.onClose}>
+        <Button track="close" variant="ghost" block onClick={props.onClose}>
           {t("app.close")}
         </Button>
       }
@@ -64,7 +64,7 @@ export function DevSheet(props: { inRun: boolean; onClose(): void }): ReactNode 
         ) : null}
       </div>
 
-      <SegmentedControl
+      <SegmentedControl track="tabs"
         label={t("dev.title")}
         items={TABS.map((id) => ({ id, label: t(`dev.tab.${id}`) }))}
         activeId={tab}
@@ -108,7 +108,7 @@ function TimeTab(props: { settings: DevSettings; inRun: boolean }): ReactNode {
   return (
     <>
       <Group title={t("dev.time.speed")}>
-        <SegmentedControl
+        <SegmentedControl track="time_scale"
           label={t("dev.time.speed")}
           items={TIME_SCALES.map((scale) => ({ id: String(scale), label: `×${scale}` }))}
           activeId={String(settings.timeScale)}
@@ -164,7 +164,7 @@ function CheatsTab(props: { settings: DevSettings }): ReactNode {
         />
       </ListGroup>
       <Group title={t("dev.cheat.damageMul")}>
-        <SegmentedControl
+        <SegmentedControl track="damage_mul"
           label={t("dev.cheat.damageMul")}
           items={DAMAGE_MULS.map((value) => ({ id: String(value), label: `×${value}` }))}
           activeId={String(settings.cheats.damageMul)}
@@ -172,7 +172,7 @@ function CheatsTab(props: { settings: DevSettings }): ReactNode {
         />
       </Group>
       <Group title={t("dev.cheat.moveSpeedMul")}>
-        <SegmentedControl
+        <SegmentedControl track="move_speed_mul"
           label={t("dev.cheat.moveSpeedMul")}
           items={MOVE_SPEED_MULS.map((value) => ({ id: String(value), label: `×${value}` }))}
           activeId={String(settings.cheats.moveSpeedMul)}
@@ -226,7 +226,7 @@ function WorldTab(props: { settings: DevSettings; inRun: boolean }): ReactNode {
         </ListGroup>
       </Group>
       <Group title={t("dev.start.minute")}>
-        <SegmentedControl
+        <SegmentedControl track="start_minute"
           label={t("dev.start.minute")}
           items={START_MINUTES.map((minute) => ({ id: String(minute), label: minute === 0 ? "0" : `${minute}` }))}
           activeId={String(settings.start.minute)}
@@ -274,16 +274,16 @@ function WorldTab(props: { settings: DevSettings; inRun: boolean }): ReactNode {
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" block onClick={() => command({ kind: "levelUp", count: 1 })}>
+        <Button track="level_up" variant="secondary" block onClick={() => command({ kind: "levelUp", count: 1 })}>
           {t("dev.world.levelUp")}
         </Button>
-        <Button variant="secondary" block onClick={() => command({ kind: "heal" })}>
+        <Button track="heal" variant="secondary" block onClick={() => command({ kind: "heal" })}>
           {t("dev.world.heal")}
         </Button>
-        <Button variant="danger" block onClick={() => command({ kind: "killAll" })}>
+        <Button track="kill_all" variant="danger" block onClick={() => command({ kind: "killAll" })}>
           {t("dev.world.killAll")}
         </Button>
-        <Button variant="secondary" block onClick={() => command({ kind: "spawnGems", value: 5, count: 20 })}>
+        <Button track="spawn_gems" variant="secondary" block onClick={() => command({ kind: "spawnGems", value: 5, count: 20 })}>
           {t("dev.world.gems")}
         </Button>
       </div>
@@ -312,7 +312,7 @@ function WorldTab(props: { settings: DevSettings; inRun: boolean }): ReactNode {
               ×{value}
             </Chip>
           ))}
-          <Button variant="secondary" onClick={() => command({ kind: "spawnEnemy", id: enemyId, count })}>
+          <Button track="spawn_enemy" variant="secondary" onClick={() => command({ kind: "spawnEnemy", id: enemyId, count })}>
             {t("dev.world.spawn")}
           </Button>
         </div>
@@ -359,10 +359,10 @@ function ItemPicker(props: {
         ))}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <Button variant="secondary" block onClick={() => props.onGive(1)}>
+        <Button track="give_level" variant="secondary" block onClick={() => props.onGive(1)}>
           {t("dev.world.giveLevel", { level: 1 })}
         </Button>
-        <Button variant="secondary" block onClick={() => props.onGive(item?.levels ?? 1)}>
+        <Button track="give_max" variant="secondary" block onClick={() => props.onGive(item?.levels ?? 1)}>
           {t("dev.world.giveMax", { level: item?.levels ?? 1 })}
         </Button>
       </div>

@@ -177,7 +177,7 @@ export function TasksScreen(): ReactNode {
       <ContentColumn>
         <PageTitle>{t("tasks.title")}</PageTitle>
         <div className="mt-2 grid gap-3">
-          <SegmentedControl
+          <SegmentedControl track="view"
             label={t("tasks.title")}
             activeId={view}
             onSelect={(id) => setView(id as TasksView)}

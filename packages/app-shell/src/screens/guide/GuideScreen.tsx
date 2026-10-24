@@ -59,7 +59,7 @@ export function GuideScreen(): ReactNode {
     <Screen title={t("guide.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
         <div className="mt-1 mb-4">
-          <SegmentedControl
+          <SegmentedControl track="tabs"
             label={t("guide.sections")}
             items={TABS.map((id) => ({ id, label: t(`guide.tab.${id}`) }))}
             activeId={tab}

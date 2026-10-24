@@ -108,7 +108,7 @@ export function FriendsScreen(): ReactNode {
         <div className="grid gap-2">
           {view.outgoing.map((request) => (
             <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
-              <Button variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
+              <Button track="cancel_request" variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
                 {t("friends.cancel")}
               </Button>
             </PeerRow>
@@ -207,7 +207,7 @@ export function FriendsScreen(): ReactNode {
           onDismiss={() => setRemoving(null)}
           footer={
             <>
-              <Button
+              <Button track="remove"
                 variant="danger"
                 block
                 onClick={() => {
@@ -218,7 +218,7 @@ export function FriendsScreen(): ReactNode {
               >
                 {t("friends.remove.confirm")}
               </Button>
-              <Button variant="ghost" block onClick={() => setRemoving(null)}>
+              <Button track="cancel" variant="ghost" block onClick={() => setRemoving(null)}>
                 {t("friends.remove.cancel")}
               </Button>
             </>

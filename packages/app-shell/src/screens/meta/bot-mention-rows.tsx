@@ -127,7 +127,7 @@ export function BotMentionCard(props: BotMentionCardProps): ReactNode {
       {status === null ? null : <p className="mt-2 text-xs text-text-muted">{t(status)}</p>}
       {button === null ? null : (
         <div className="mt-3">
-          <Button block loading={props.loading} onClick={props.onPress}>
+          <Button track="bot_action" block loading={props.loading} onClick={props.onPress}>
             {t(button)}
           </Button>
         </div>

@@ -64,7 +64,7 @@ export function OutsideScreen(props: { botUrl: string }): ReactNode {
       <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outside.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outside.text")}</p>
       {props.botUrl === "" ? null : (
-        <Button glow onClick={() => globalThis.open(props.botUrl, "_blank")}>
+        <Button track="open_bot" glow onClick={() => globalThis.open(props.botUrl, "_blank")}>
           <Send size={18} />
           {t("gate.outside.action")}
         </Button>
@@ -109,7 +109,7 @@ export function CompactOverlay(props: { onExpand(): void }): ReactNode {
         </IconEmblem>
         <h1 className="mt-2 font-display text-xl font-bold text-text">{t("gate.compact.title")}</h1>
         <p className="max-w-[320px] text-sm text-text-muted">{t("gate.compact.text")}</p>
-        <Button glow onClick={props.onExpand}>
+        <Button track="expand" glow onClick={props.onExpand}>
           {t("gate.compact.action")}
         </Button>
       </Centered>
@@ -135,7 +135,7 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
             забега, где уже можно купить второй шанс (docs/35-stage4-plan.md WP33). */}
         <p className="max-w-[340px] text-sm font-semibold text-text">{t("gate.firstRun.text")}</p>
         <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.data")}</p>
-        <Button size="l" block glow onClick={props.onAccept}>
+        <Button track="accept" size="l" block glow onClick={props.onAccept}>
           {t("gate.firstRun.action")}
         </Button>
       </div>

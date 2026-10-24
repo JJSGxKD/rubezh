@@ -82,10 +82,10 @@ export function PromoCodeScreen(): ReactNode {
         onBack={() => navigation.pop()}
         footer={
           <div className="flex flex-col gap-2">
-            <Button size="l" block glow onClick={() => navigation.pop()}>
+            <Button track="close" size="l" block glow onClick={() => navigation.pop()}>
               {t("promo.done.ok")}
             </Button>
-            <Button variant="ghost" block onClick={again}>
+            <Button track="enter_another" variant="ghost" block onClick={again}>
               {t("promo.done.more")}
             </Button>
           </div>
@@ -114,7 +114,7 @@ export function PromoCodeScreen(): ReactNode {
       onBack={() => navigation.pop()}
       footer={
         promoAvailable() ? (
-          <Button size="l" block glow disabled={code.trim() === "" || restricted} loading={sending} onClick={() => void submit()}>
+          <Button track="apply" size="l" block glow disabled={code.trim() === "" || restricted} loading={sending} onClick={() => void submit()}>
             {sending ? t("promo.sending") : t("promo.apply")}
           </Button>
         ) : undefined

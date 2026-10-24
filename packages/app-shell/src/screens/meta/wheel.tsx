@@ -182,7 +182,7 @@ export function WheelScreen(): ReactNode {
           <div className="grid gap-2">
             {/* Потраченная бесплатная крутка уступает место и акцент: большая
                 неактивная кнопка спорила бы с той, что доступна сейчас. */}
-            <Button
+            <Button track="spin"
               size={ready?.free === false ? "m" : "l"}
               block
               variant={ready?.free === false ? "secondary" : "primary"}
@@ -194,7 +194,7 @@ export function WheelScreen(): ReactNode {
               {freeButton.label === "next" ? t("wheel.spin.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("wheel.spin.free")}
             </Button>
             {adSpin.kind === "hidden" ? null : (
-              <Button
+              <Button track="spin_ad"
                 variant={adLeads ? "primary" : "secondary"}
                 size={adLeads ? "l" : "m"}
                 block

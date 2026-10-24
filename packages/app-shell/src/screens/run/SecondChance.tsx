@@ -145,11 +145,11 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
       <div className={`mt-3 grid gap-2 ${wide ? "grid-cols-1" : "grid-cols-2"}`}>
         {placeholder ? (
           <>
-            <Button variant="secondary" block disabled ariaLabel={t("run.continue.ad")}>
+            <Button track="continue_ad" variant="secondary" block disabled ariaLabel={t("run.continue.ad")}>
               <Tv size={18} aria-hidden="true" />
               {t("run.continue.ad.short")}
             </Button>
-            <Button variant="secondary" block disabled ariaLabel={t("run.continue.stars.unknown")}>
+            <Button track="continue_stars" variant="secondary" block disabled ariaLabel={t("run.continue.stars.unknown")}>
               <StarsIcon size={18} />
               <span>—</span>
             </Button>
@@ -168,7 +168,7 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
       </div>
       {props.onDevContinue === undefined ? null : (
         <div className="mt-2">
-          <Button block onClick={props.onDevContinue}>
+          <Button track="continue_dev" block onClick={props.onDevContinue}>
             <Wrench size={18} aria-hidden="true" />
             {t("run.continue.dev")}
           </Button>

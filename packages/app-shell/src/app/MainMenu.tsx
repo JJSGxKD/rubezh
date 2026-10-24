@@ -36,7 +36,7 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
       placement="bottom"
       onDismiss={props.onClose}
       footer={
-        <Button variant="ghost" block onClick={props.onClose}>
+        <Button track="close" variant="ghost" block onClick={props.onClose}>
           {t("app.close")}
         </Button>
       }

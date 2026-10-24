@@ -66,7 +66,7 @@ export function PaidContinueView(props: { stage: ContinueStage; locked?: boolean
           оранжевой кнопке фирменная звезда сливалась бы с фоном. Цвет Stars —
           пока покупка идёт или её можно начать; где купить нельзя — обычная
           вторичная, чтобы не звала. */}
-      <Button
+      <Button track="continue_stars"
         block
         variant={busy || stage.kind === "ready" ? "stars" : "secondary"}
         loading={busy}
@@ -81,7 +81,7 @@ export function PaidContinueView(props: { stage: ContinueStage; locked?: boolean
         <div className="order-last col-span-full flex items-center justify-between gap-2 text-xs text-text-muted" role="status">
           <span>{line}</span>
           {stage.kind === "retry" ? (
-            <Button variant="ghost" onClick={props.onRetry}>
+            <Button track="retry" variant="ghost" onClick={props.onRetry}>
               <RotateCw size={14} aria-hidden="true" />
               {t("run.continue.retry")}
             </Button>
