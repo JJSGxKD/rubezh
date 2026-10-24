@@ -68,6 +68,17 @@ describe("радар", () => {
     expect(kinds.sort()).toEqual([RADAR_BLIP.medkit, RADAR_BLIP.magnet, RADAR_BLIP.dynamite].sort());
   });
 
+  it("рисует заморозку отдельной точкой, непохожей на остальные подборы", () => {
+    const world = setup();
+    spawnPickup(world, PICKUP_KIND.medkit, 10, 0);
+    spawnPickup(world, PICKUP_KIND.freeze, 20, 0);
+
+    const snapshot = buildRadarSnapshot(world);
+    const kinds = Array.from({ length: snapshot.count }, (_, i) => blip(snapshot, i)[2]);
+    expect(kinds).toContain(RADAR_BLIP.freeze);
+    expect(new Set(Object.values(RADAR_BLIP)).size).toBe(Object.values(RADAR_BLIP).length);
+  });
+
   it("рисует сундук любого размера особой точкой", () => {
     const world = setup();
     spawnPickup(world, PICKUP_KIND.chestOne, 10, 0);

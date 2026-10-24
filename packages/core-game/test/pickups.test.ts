@@ -39,6 +39,7 @@ function drops(patch: Partial<DropsDef> = {}): DropsDef {
     medkits: { ...NONE, healRatio: 0.3 },
     magnets: NONE,
     dynamite: { ...NONE, radiusUnits: 200, eliteHpRatio: 0.3 },
+    freeze: { ...NONE, durationSec: 10, bossDurationRatio: 0.5 },
     ...patch,
   };
 }
@@ -292,6 +293,19 @@ describe("контент подборов", () => {
     );
     expect(problems).toHaveLength(6);
     expect(problems.join("\n")).toMatch(/eliteHpRatio/);
+  });
+
+  it("ловит заморозку со сроком 0 и 31, долей босса −0,1 и 1,1 и шансом 2", () => {
+    const freeze = (patch: Partial<DropsDef["freeze"]>) =>
+      findPickupContentProblems(drops({ freeze: { ...NONE, durationSec: 10, bossDurationRatio: 0.5, ...patch } })).join("\n");
+
+    expect(freeze({ durationSec: 0 })).toMatch(/freeze\.durationSec/);
+    expect(freeze({ durationSec: 31 })).toMatch(/freeze\.durationSec/);
+    expect(freeze({ bossDurationRatio: -0.1 })).toMatch(/freeze\.bossDurationRatio/);
+    expect(freeze({ bossDurationRatio: 1.1 })).toMatch(/freeze\.bossDurationRatio/);
+    expect(freeze({ chance: 2 })).toMatch(/freeze\.chance/);
+    expect(freeze({ durationSec: 30, bossDurationRatio: 1 })).toBe("");
+    expect(freeze({ bossDurationRatio: 0 })).toBe("");
   });
 
   it("вид подбора на канве и в гайдбуке совпадает с видом в симуляции", () => {

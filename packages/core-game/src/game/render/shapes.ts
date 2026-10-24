@@ -181,6 +181,21 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       graphics.fillStyle(DYNAMITE_SPARK, 1);
       graphics.fillCircle(r * 1.35, r * 0.18, r * 0.2);
       return;
+    case "freeze": {
+      // Ледяной кристалл: три луча через центр и светлые наконечники — шесть
+      // лучей читаются снежинкой, а не крестом аптечки и не подковой. Координаты
+      // литералами: ровно в тех же долях рисует и гайдбук.
+      const rayWidth = Math.max(1.5, r * 0.3);
+      graphics.lineStyle(rayWidth, spec.color, 1);
+      for (const [dx, dy] of FREEZE_RAYS) graphics.lineBetween(r - dx * r * 0.85, r - dy * r * 0.85, r + dx * r * 0.85, r + dy * r * 0.85);
+      graphics.fillStyle(PICKUP_LIGHT, 1);
+      graphics.fillCircle(r, r, r * 0.28);
+      for (const [dx, dy] of FREEZE_RAYS) {
+        graphics.fillCircle(r + dx * r * 0.85, r + dy * r * 0.85, r * 0.16);
+        graphics.fillCircle(r - dx * r * 0.85, r - dy * r * 0.85, r * 0.16);
+      }
+      return;
+    }
     case "chest":
       // Сундук: тёмный кант, цветной корпус, более светлая крышка и замок.
       // Силуэт — широкий прямоугольник с выпуклой крышкой, не крест и не
@@ -250,6 +265,13 @@ function mixLight(color: number): number {
   return (channel(16) << 16) | (channel(8) << 8) | channel(0);
 }
 const DYNAMITE_SPARK = WORLD_COLORS.dynamiteSpark;
+
+/** Направления трёх лучей кристалла заморозки: 90°, 30° и −30° — без тригонометрии. */
+const FREEZE_RAYS: readonly (readonly [number, number])[] = [
+  [0, 1],
+  [0.866, 0.5],
+  [0.866, -0.5],
+];
 
 /** Вершины в долях радиуса относительно центра фигуры. */
 const DIAMOND: readonly (readonly [number, number])[] = [
