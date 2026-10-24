@@ -158,7 +158,7 @@ Zod-схемы `payload` — в словаре сервера
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
 | Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
-| Интерфейс | `screen_viewed`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42) |
+| Интерфейс | `screen_viewed`, `ui_clicked`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); выдача показа — строка `ad_session`, а не событие |
 | Рефералы | `referral_link_created`, `referral_bound`, `referral_activated`, `referral_reward_granted` |
@@ -182,6 +182,7 @@ Zod-схемы `payload` — в словаре сервера
 | `run_paused` | Как часто забег прерывается — вход для решения о длине забега | `reason`: `manual` / `app_inactive`, `elapsedSec` |
 | `run_resumed` | Сколько прерванных забегов игроки продолжают — окупилось ли сохранение и как часто приложение закрывают посреди забега | `seed`, `elapsedSec`, `level` |
 | `screen_viewed` | Путь по интерфейсу; заходы в заглушки — замер интереса к будущим разделам | `screen`, `stub` |
+| `ui_clicked` | Что нажимают на экранах (`35-stage4-plan.md` Р141): рядом с `screen_viewed` показывает, какая кнопка работает, а какую не замечают. Шлёт клиент при нажатии кнопки, вкладки или переключателя дизайн-системы с заданным `track`; выключенная кнопка событие не шлёт. Текста кнопки и личных данных в событии нет | `screen` — экран из навигации; `control` — устойчивое имя по смыслу действия (`buy`, `claim`, `share`), у вкладок и переключателей «группа.пункт» (`tabs.friends`); латиница, цифры, «_» и «-», до 24 знаков на часть |
 | `settings_changed` | Какие настройки меняют — режим экрана, вибрацию, громкость, отображение боя, положение радара (`radar.position`) | `setting`, `value`, `scope`: `account` — настройка идёт на все устройства игрока, `device` — остаётся у этого (`35-stage4-plan.md`, WP29); у смены режима экрана клиентом Telegram — `source: platform` |
 | `diagnostics_mode_changed` | Сколько тестеров включают диагностику | `setting`, `value` |
 | `app_first_open` | Первый запуск на устройстве — знаменатель воронок закрытого теста | без полей: установка и так в конверте |
