@@ -123,14 +123,14 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.buttons")}</SectionTitle>
         <div className="grid gap-2">
-          <Button glow>primary + glow</Button>
-          <Button>primary</Button>
-          <Button variant="secondary">secondary</Button>
-          <Button variant="ghost">ghost</Button>
-          <Button variant="danger">danger</Button>
-          <Button loading>loading</Button>
-          <Button disabled>disabled</Button>
-          <Button size="l" block glow>
+          <Button track="demo_primary_glow" glow>primary + glow</Button>
+          <Button track="demo_primary">primary</Button>
+          <Button track="demo_secondary" variant="secondary">secondary</Button>
+          <Button track="demo_ghost" variant="ghost">ghost</Button>
+          <Button track="demo_danger" variant="danger">danger</Button>
+          <Button track="demo_loading" loading>loading</Button>
+          <Button track="demo_disabled" disabled>disabled</Button>
+          <Button track="demo_large" size="l" block glow>
             large block
           </Button>
         </div>
@@ -186,7 +186,7 @@ export function GalleryScreen(): ReactNode {
         </div>
 
         <SectionTitle>{t("gallery.segmented")}</SectionTitle>
-        <SegmentedControl
+        <SegmentedControl track="segment"
           label={t("gallery.segmented")}
           activeId={segment}
           onSelect={setSegment}
@@ -197,7 +197,7 @@ export function GalleryScreen(): ReactNode {
           ]}
         />
         <p className="mt-3 mb-1 text-xs text-text-muted">{t("gallery.segmented.smallHint")}</p>
-        <SegmentedControl
+        <SegmentedControl track="difficulty"
           size="s"
           label={t("gallery.segmented.small")}
           activeId={difficultySegment}
@@ -295,7 +295,7 @@ function ModalsPreview(props: { pinFooter: boolean; onClose(): void }): ReactNod
         onDismiss={props.onClose}
         pinFooter={props.pinFooter}
         footer={
-          <Button block onClick={() => setNested(true)}>
+          <Button track="nested" block onClick={() => setNested(true)}>
             {t("gallery.modal.nested")}
           </Button>
         }
@@ -328,7 +328,7 @@ function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
         className="absolute top-[calc(0.5rem+var(--app-inset-top))] right-[calc(0.5rem+var(--app-inset-right))] rounded-full bg-bg/80"
         style={{ zIndex: "var(--z-toast)" }}
       >
-        <IconButton label={t("app.close")} onClick={props.onClose}>
+        <IconButton track="close" label={t("app.close")} onClick={props.onClose}>
           <X size={22} />
         </IconButton>
       </div>

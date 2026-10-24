@@ -123,7 +123,7 @@ export function SettingsScreen(): ReactNode {
 
         {/* Радар — настройка устройства (Р113): низа нет, там его закрывает палец. */}
         <SectionTitle>{t("settings.radar")}</SectionTitle>
-        <SegmentedControl
+        <SegmentedControl track="radar"
           label={t("settings.radar.label")}
           activeId={radar}
           items={RADAR_POSITIONS.map((id) => ({ id, label: t(`settings.radar.${id}`) }))}

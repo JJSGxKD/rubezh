@@ -110,10 +110,10 @@ export function HomeBotAccess(): ReactNode {
           </span>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button size="m" block loading={asking} onClick={allow}>
+          <Button track="allow" size="m" block loading={asking} onClick={allow}>
             {t("home.botAccess.allow")}
           </Button>
-          <Button size="m" block variant="ghost" disabled={asking} onClick={() => dismissBotAccess()}>
+          <Button track="later" size="m" block variant="ghost" disabled={asking} onClick={() => dismissBotAccess()}>
             {t("home.botAccess.later")}
           </Button>
         </div>

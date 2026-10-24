@@ -90,11 +90,11 @@ export function DiagnosticsScreen(): ReactNode {
           ))}
         </dl>
         <div className="mt-3 grid gap-2">
-          <Button block disabled={share === "sending" || share === "sent"} onClick={() => void onShare()}>
+          <Button track="share" block disabled={share === "sending" || share === "sent"} onClick={() => void onShare()}>
             {share === "sending" ? t("diagnostics.share.sending") : share === "sent" ? t("diagnostics.share.sent") : t("diagnostics.share")}
           </Button>
           {share === "failed" ? <p className="text-xs text-danger">{t("diagnostics.share.failed")}</p> : null}
-          <Button variant="secondary" block onClick={() => void onCopy()}>
+          <Button track="copy" variant="secondary" block onClick={() => void onCopy()}>
             {copy === "copied" ? t("diagnostics.copied") : t("diagnostics.copy")}
           </Button>
           <p className="text-xs text-text-muted">{t("diagnostics.copy.hint")}</p>
@@ -144,7 +144,7 @@ function RecentReports(): ReactNode {
             <span className="text-text">
               {t("diagnostics.reports.pending", { count: state.pending.length, size: formatSize(pendingBytes) })}
             </span>
-            <Button variant="secondary" onClick={() => void queue.flush("online")}>
+            <Button track="retry_reports" variant="secondary" onClick={() => void queue.flush("online")}>
               {t("diagnostics.reports.retry")}
             </Button>
           </div>

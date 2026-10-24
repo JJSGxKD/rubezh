@@ -131,7 +131,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                       {t(buyError)}
                     </p>
                   )}
-                  <Button size="l" block glow loading={buying} disabled={buying} onClick={() => void start()}>
+                  <Button track="start" size="l" block glow loading={buying} disabled={buying} onClick={() => void start()}>
                     <span className="flex flex-col items-center gap-1 leading-none">
                       <span>{t("boosts.start")}</span>
                       {cost.coins === undefined && cost.gems === undefined ? null : (
@@ -163,7 +163,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
             в крайней колонке, а вбок лист не прокручивается. */}
         <div className="-mx-1 grid grid-cols-1 gap-1.5 overflow-x-hidden px-1">
           {modes.length > 0 ? (
-            <SegmentedControl
+            <SegmentedControl track="mode"
               size="s"
               label={t("weapon.select.screen")}
               activeId={mode}
@@ -178,7 +178,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
           {mode === "stress" ? (
             <>
               <p className="mt-2 text-xs text-text-muted">{t("mode.stress.description")}</p>
-              <Button
+              <Button track="stress"
                 size="l"
                 block
                 onClick={() => {
@@ -208,7 +208,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                 </Card>
               ) : null}
 
-              <SegmentedControl
+              <SegmentedControl track="difficulty"
                 size="s"
                 label={t("difficulty.title")}
                 activeId={meta.lastDifficultyId}
