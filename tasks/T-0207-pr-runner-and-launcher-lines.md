@@ -3,8 +3,8 @@ id: T-0207
 title: Строки «Поток» и «Запустил» в описании PR задачи — проверяет pr-check
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0204]
