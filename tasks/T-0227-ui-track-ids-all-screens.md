@@ -3,8 +3,8 @@ id: T-0227
 title: Имена всех кнопок, вкладок и переключателей оболочки — и `track` обязателен
 epic: E11
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0226]
