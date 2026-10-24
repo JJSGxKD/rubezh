@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { SIZE_POINTS, contributions, freeBadge, renderBoardPage, taskCredits } from "../tasks/board-page.mjs";
+import { SIZE_POINTS, contributions, formatMoscow, freeBadge, moscowDay, renderBoardPage, taskCredits } from "../tasks/board-page.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { parseMergedTaskPrs } from "../tasks/git-io.mjs";
 
@@ -197,7 +197,7 @@ describe("страница доски", () => {
       [
         "# Доска задач",
         "",
-        "Обновлено 06.10.2026 10:48 UTC. Страницу пересчитывает workflow `task-board.yml` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](https://github.com/JJSGxKD/rubezh/blob/dev/tasks/README.md#как-взять-задачу).",
+        "Обновлено 06.10.2026 13:48 МСК. Страницу пересчитывает workflow `task-board.yml` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](https://github.com/JJSGxKD/rubezh/blob/dev/tasks/README.md#как-взять-задачу).",
         "",
         "## Потоки сейчас",
         "",
@@ -329,5 +329,106 @@ describe("страница доски", () => {
 
   it("на странице нет почт и юзернеймов Telegram", () => {
     expect(render()).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.-]+|t\.me/i);
+  });
+});
+
+// Кто кого ждёт, счётчики и время по Москве (T-0205).
+describe("страница доски: ожидание, счётчики, МСК", () => {
+  const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
+  const open = (id: string, title: string, extra: Record<string, unknown> = {}) => task(id, { title, status: "ready", fileName: `${id}-x.md`, ...extra });
+  const board = {
+    rework: [],
+    free: [
+      entry(open("T-0401", "Облако", { batch: "2" })),
+      entry(open("T-0402", "Докер", { runner: "local", batch: "2" })),
+      entry(open("T-0403", "Секреты прода", { runner: "owner", batch: "2" })),
+      entry(open("T-0404", "Проверка на телефоне", { runner: "human" })),
+    ],
+    inProgress: [],
+    review: [
+      entry(open("T-0411", "С вопросом"), { pr: 501, waiting: { who: "lead", why: "вопрос" } }),
+      entry(open("T-0412", "К приёмке"), { pr: 502, waiting: { who: "lead", why: "приёмка" } }),
+      entry(open("T-0413", "Красный"), { pr: 503, waiting: { who: "executor", why: "CI красный" } }),
+      entry(open("T-0414", "Ждёт владельца"), { pr: 504, waiting: { who: "owner", why: "решение владельца" } }),
+    ],
+    blocked: [],
+    done: [],
+    draft: [],
+    cancelled: [],
+  };
+  const render = (patch: Record<string, unknown> = {}): string =>
+    renderBoardPage({ board, owners: new Map(), credits: new Map(), people: [], githubAvailable: true, mergedPrs: [], now: new Date("2026-10-23T21:40:00Z"), ...patch });
+  const BLOB = "https://github.com/JJSGxKD/rubezh/blob/dev/tasks";
+
+  it("moscowDay и formatMoscow сдвигают на три часа", () => {
+    expect(moscowDay(new Date("2026-10-23T21:00:00Z"))).toBe("2026-10-24");
+    expect(moscowDay(new Date("2026-10-23T20:59:00Z"))).toBe("2026-10-23");
+    expect(formatMoscow(new Date("2026-10-24T02:40:00Z"))).toBe("24.10.2026 05:40");
+    expect(formatMoscow(new Date("2026-12-31T21:05:00Z"))).toBe("01.01.2027 00:05");
+  });
+
+  it("вступление — МСК, под ним строка счётчиков", () => {
+    const page = render();
+    expect(page).toContain("Обновлено 24.10.2026 00:40 МСК. Страницу пересчитывает");
+    expect(page).not.toContain("UTC");
+    expect(page).toContain("\n\nСвободно 4 · в работе 0 · на ревью 4 · на доработке 0 · ждут тимлида 2 · ждут владельца 3 · влито сегодня 0 · пачка 2: осталось 3\n");
+  });
+
+  it("влито сегодня — по Москве; пачки нет — последнего пункта нет", () => {
+    const merged = [{ number: 9, headRefName: "task/T-0001", login: "a", mergedAt: "2026-10-23T21:10:00Z" }];
+    const page = render({ mergedPrs: merged, board: { ...board, free: [entry(open("T-0404", "Телефон", { runner: "human" }))] } });
+    expect(page).toContain("влито сегодня 1\n");
+    expect(page).not.toContain("пачка");
+  });
+
+  it("«Ждут тимлида» — вопрос и приёмка, красный CI и чужие ожидания не входят", () => {
+    const page = render();
+    const lead = page.slice(page.indexOf("## Ждут тимлида"), page.indexOf("## Потоки сейчас"));
+    expect(lead).toContain("## Ждут тимлида — 2");
+    expect(lead).toContain("| PR | Задача | Почему |");
+    expect(lead).toContain(`| [#501](https://github.com/JJSGxKD/rubezh/pull/501) | [T-0411. С вопросом](${BLOB}/T-0411-x.md) | вопрос |`);
+    expect(lead).toContain("| приёмка |");
+    expect(lead).not.toContain("T-0413");
+    expect(lead).not.toContain("T-0414");
+  });
+
+  it("«Ждут тимлида» стоит перед «Потоки сейчас»", () => {
+    const page = render();
+    expect(page.indexOf("## Ждут владельца")).toBeLessThan(page.indexOf("## Ждут тимлида"));
+    expect(page.indexOf("## Ждут тимлида")).toBeLessThan(page.indexOf("## Потоки сейчас"));
+  });
+
+  it("«Ждут владельца» — свободные owner и human, PR с меткой; local и any не входят", () => {
+    const page = render();
+    const owner = page.slice(page.indexOf("## Ждут владельца"), page.indexOf("## Ждут тимлида"));
+    expect(owner).toContain("## Ждут владельца — 3");
+    expect(owner).toContain("| Что | Почему |");
+    expect(owner).toContain(`[T-0403. Секреты прода](${BLOB}/T-0403-x.md) | машина владельца |`);
+    expect(owner).toContain(`[T-0404. Проверка на телефоне](${BLOB}/T-0404-x.md) | нужен человек |`);
+    expect(owner).toContain("[#504](https://github.com/JJSGxKD/rubezh/pull/504)");
+    expect(owner).toContain("| решение владельца |");
+    expect(owner).not.toContain("T-0401");
+    expect(owner).not.toContain("T-0402");
+  });
+
+  it("«Можно брать» — три подраздела, local — во втором, human — ни в одном", () => {
+    const page = render();
+    const free = page.slice(page.indexOf("## Можно брать"), page.indexOf("## В работе"));
+    expect(free).toContain("## Можно брать — 3");
+    const cloud = free.indexOf("### В облаке — 1");
+    const docker = free.indexOf("### Машина с Docker — 1");
+    const owner = free.indexOf("### Машина владельца — 1");
+    expect(cloud).toBeGreaterThan(-1);
+    expect(docker).toBeGreaterThan(cloud);
+    expect(owner).toBeGreaterThan(docker);
+    expect(free.slice(cloud, docker)).toContain("T-0401");
+    expect(free.slice(docker, owner)).toContain("T-0402");
+    expect(free.slice(owner)).toContain("T-0403");
+    expect(free).not.toContain("T-0404");
+  });
+
+  it("пустой подраздел «Можно брать» — «Пусто.»", () => {
+    const page = render({ board: { ...board, free: [entry(open("T-0401", "Облако"))] } });
+    expect(page).toContain("### Машина с Docker — 0\n\nПусто.");
   });
 });

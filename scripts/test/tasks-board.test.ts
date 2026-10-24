@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { OWNER_LABEL, boardCounters, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -181,14 +181,16 @@ describe("пачка задачи в порядке выдачи", () => {
   });
 });
 
+const FIXTURE_NEXT = [
+  task("T-0030", { runner: "human" }),
+  task("T-0031", { runner: "local" }),
+  task("T-0032", { runner: "any" }),
+  task("T-0033", { runner: "any", executor: "other-model" }),
+];
+
 describe("следующая задача", () => {
   const free = classify(
-    [
-      task("T-0030", { runner: "human" }),
-      task("T-0031", { runner: "local" }),
-      task("T-0032", { runner: "any" }),
-      task("T-0033", { runner: "any", executor: "other-model" }),
-    ],
+    FIXTURE_NEXT,
     [],
     [],
     [],
@@ -201,6 +203,13 @@ describe("следующая задача", () => {
 
   it("local включает any", () => {
     expect(ids(nextTasks(free, { runner: "local" }))).toEqual(["T-0031", "T-0032", "T-0033"]);
+  });
+
+  it("owner включает any и local, но не human", () => {
+    const withOwner = classify([...FIXTURE_NEXT, task("T-0034", { runner: "owner" })], [], [], [], EPIC_ORDER).free;
+    expect(ids(nextTasks(withOwner, { runner: "owner" }))).toEqual(["T-0031", "T-0032", "T-0033", "T-0034"]);
+    expect(ids(nextTasks(withOwner, { runner: "local" }))).toEqual(["T-0031", "T-0032", "T-0033"]);
+    expect(ids(nextTasks(withOwner, {}))).toEqual(["T-0032", "T-0033"]);
   });
 
   it("--executor оставляет задачи только этого исполнителя", () => {
@@ -495,5 +504,153 @@ describe("потоки", () => {
     it("в эпике ничего нет — просто «нет свободных»", () => {
       expect(epicStreamsBadge([])).toMatchObject({ message: "нет свободных", color: "lightgrey" });
     });
+  });
+});
+
+// Кто кого ждёт (T-0205).
+describe("кого ждёт PR", () => {
+  const label = (name: string) => ({ name });
+  const pr = (patch: Record<string, unknown> = {}) => ({ number: 1, headRefName: "task/T-0001", isDraft: false, labels: [], body: "", statusCheckRollup: [], ...patch });
+
+  it("метка «ждёт владельца» сильнее метки «доработка»", () => {
+    expect(OWNER_LABEL).toBe("ждёт владельца");
+    expect(waitingOn(pr({ labels: [label("доработка"), label(OWNER_LABEL)] }))).toEqual({ who: "owner", why: "решение владельца" });
+  });
+
+  it("метка «доработка» — исполнитель", () => {
+    expect(waitingOn(pr({ labels: [label("доработка")], isDraft: true, body: "## Вопросы\n1." }))).toEqual({ who: "executor", why: "доработка" });
+  });
+
+  it("черновик с разделом «## Вопросы» — тимлид, «вопрос»", () => {
+    expect(waitingOn(pr({ isDraft: true, body: "Описание\n\n## Вопросы\n\n1. Как?" }))).toEqual({ who: "lead", why: "вопрос" });
+  });
+
+  it("черновик без вопросов — исполнитель, «черновик»", () => {
+    expect(waitingOn(pr({ isDraft: true, body: "Пока не готово" }))).toEqual({ who: "executor", why: "черновик" });
+    expect(waitingOn(pr({ isDraft: true, body: "см. ## Вопросы в тексте" }))).toEqual({ who: "executor", why: "черновик" });
+  });
+
+  it("открытый PR с упавшей проверкой — исполнитель, «CI красный»", () => {
+    const rollup = [{ __typename: "CheckRun", conclusion: "FAILURE" }];
+    expect(waitingOn(pr({ statusCheckRollup: rollup }))).toEqual({ who: "executor", why: "CI красный" });
+  });
+
+  it("открытый PR с идущей проверкой — тимлид, «приёмка»", () => {
+    const rollup = [{ __typename: "CheckRun", conclusion: null, status: "IN_PROGRESS" }];
+    expect(waitingOn(pr({ statusCheckRollup: rollup }))).toEqual({ who: "lead", why: "приёмка" });
+    expect(waitingOn(pr())).toEqual({ who: "lead", why: "приёмка" });
+  });
+
+  it("поля нет вовсе — не падает", () => {
+    expect(waitingOn({ number: 1, headRefName: "task/T-0001", isDraft: false })).toEqual({ who: "lead", why: "приёмка" });
+  });
+});
+
+describe("красный CI", () => {
+  it("StatusContext в состоянии ERROR или FAILURE — красный", () => {
+    expect(isCiRed({ statusCheckRollup: [{ __typename: "StatusContext", state: "ERROR" }] })).toBe(true);
+    expect(isCiRed({ statusCheckRollup: [{ __typename: "StatusContext", state: "FAILURE" }] })).toBe(true);
+  });
+
+  it("CheckRun с TIMED_OUT, ACTION_REQUIRED, STARTUP_FAILURE — красный", () => {
+    for (const conclusion of ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"]) {
+      expect(isCiRed({ statusCheckRollup: [{ __typename: "CheckRun", conclusion }] }), conclusion).toBe(true);
+    }
+  });
+
+  it("успех, пропуск, идущая проверка и ожидающий статус — не красный", () => {
+    const rollup = [
+      { __typename: "CheckRun", conclusion: "SUCCESS" },
+      { __typename: "CheckRun", conclusion: "SKIPPED" },
+      { __typename: "CheckRun", conclusion: null },
+      { __typename: "StatusContext", state: "PENDING" },
+    ];
+    expect(isCiRed({ statusCheckRollup: rollup })).toBe(false);
+  });
+
+  it("пустой список, не массив и отсутствие поля — не красный", () => {
+    expect(isCiRed({ statusCheckRollup: [] })).toBe(false);
+    expect(isCiRed({ statusCheckRollup: null })).toBe(false);
+    expect(isCiRed({})).toBe(false);
+  });
+});
+
+describe("классификация PR: кого ждут", () => {
+  it("черновик с вопросами попадает в «На ревью» с waiting, ветка без PR — в «В работе»", () => {
+    const prs = [{ number: 5, headRefName: "task/T-0004", isDraft: true, labels: [], body: "## Вопросы\n1. ?", statusCheckRollup: [] }];
+    const board = classify([task("T-0004"), task("T-0005")], ["T-0004", "T-0005"], prs, [], EPIC_ORDER);
+    expect(ids(board.review)).toEqual(["T-0004"]);
+    expect(board.review[0].waiting).toEqual({ who: "lead", why: "вопрос" });
+    expect(ids(board.inProgress)).toEqual(["T-0005"]);
+  });
+
+  it("доработка тоже несёт waiting", () => {
+    const prs = [{ number: 6, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }], body: "", statusCheckRollup: [] }];
+    const board = classify([task("T-0004")], ["T-0004"], prs, [], EPIC_ORDER);
+    expect(board.rework[0].waiting).toEqual({ who: "executor", why: "доработка" });
+  });
+});
+
+describe("счётчики доски", () => {
+  const NOW = new Date("2026-10-24T07:00:00Z"); // 10:00 МСК
+  const merged = (mergedAt: string) => [{ number: 1, headRefName: "task/T-0001", login: "a", mergedAt }];
+  const empty = classify([], [], [], [], EPIC_ORDER);
+
+  it("влитый в 23:30 UTC 23.10 (02:30 МСК 24.10) — сегодня", () => {
+    expect(boardCounters(empty, merged("2026-10-23T23:30:00Z"), NOW).mergedToday).toBe(1);
+  });
+
+  it("влитый в 20:00 UTC 23.10 (23:00 МСК 23.10) — не сегодня", () => {
+    expect(boardCounters(empty, merged("2026-10-23T20:00:00Z"), NOW).mergedToday).toBe(0);
+  });
+
+  it("список влитых не получен — 0", () => {
+    expect(boardCounters(empty, null, NOW).mergedToday).toBe(0);
+  });
+
+  it("пачка — ближайшая с невыполненными задачами, left — их число", () => {
+    const tasks = [
+      task("T-0101", { batch: "1", status: "done" }),
+      task("T-0102", { batch: "1", status: "cancelled" }),
+      task("T-0103", { batch: "2" }),
+      task("T-0104", { batch: "2" }),
+      task("T-0105", { batch: "2", depends_on: ["T-0104"] }),
+      task("T-0106", { batch: "3" }),
+    ];
+    const board = classify(tasks, [], [], [], EPIC_ORDER);
+    expect(boardCounters(board, [], NOW).batch).toEqual({ number: 2, left: 3 });
+  });
+
+  it("всё сделано — пачки нет", () => {
+    const board = classify([task("T-0101", { batch: "1", status: "done" }), task("T-0102", { status: "ready" })], [], [], [], EPIC_ORDER);
+    expect(boardCounters(board, [], NOW).batch).toBeNull();
+  });
+
+  it("колонки и ожидание: тимлид, владелец (PR с меткой + свободные owner и human)", () => {
+    const prs = [
+      { number: 10, headRefName: "task/T-0201", isDraft: false, labels: [], body: "", statusCheckRollup: [] },
+      { number: 11, headRefName: "task/T-0202", isDraft: false, labels: [{ name: OWNER_LABEL }], body: "", statusCheckRollup: [] },
+      { number: 12, headRefName: "task/T-0203", isDraft: false, labels: [{ name: "доработка" }], body: "", statusCheckRollup: [] },
+    ];
+    const tasks = [
+      task("T-0201"),
+      task("T-0202"),
+      task("T-0203"),
+      task("T-0204", { runner: "owner" }),
+      task("T-0205", { runner: "human" }),
+      task("T-0206"),
+    ];
+    const board = classify(tasks, ["T-0201", "T-0202", "T-0203"], prs, [], EPIC_ORDER);
+    expect(boardCounters(board, [], NOW)).toEqual({ free: 3, inProgress: 0, review: 2, rework: 1, waitLead: 1, waitOwner: 3, mergedToday: 0, batch: null });
+  });
+});
+
+describe("поток owner", () => {
+  it("есть в сводке потоков и подписан «· owner»", () => {
+    const board = classify([task("T-0301", { runner: "owner" }), task("T-0302")], [], [], [], EPIC_ORDER);
+    const { streams } = streamsSummary(board);
+    expect(streams.map((stream: { runner: string }) => stream.runner)).toEqual(["any", "owner"]);
+    expect(renderStreamsText(streams).join("\n")).toContain("sonnet-5.5 / medium · owner");
+    expect(epicStreamsBadge(streams.slice(1)).message).toContain("sonnet·medium·owner");
   });
 });
