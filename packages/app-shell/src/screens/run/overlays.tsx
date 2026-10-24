@@ -53,10 +53,10 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
         onDismiss={() => setConfirming(false)}
         footer={
           <>
-            <Button variant="danger" block onClick={guarded(ready, props.onSurrender)}>
+            <Button track="surrender_confirm" variant="danger" block onClick={guarded(ready, props.onSurrender)}>
               {t("run.surrender.confirm")}
             </Button>
-            <Button variant="ghost" block onClick={() => setConfirming(false)}>
+            <Button track="cancel" variant="ghost" block onClick={() => setConfirming(false)}>
               {t("run.surrender.cancel")}
             </Button>
           </>
@@ -73,29 +73,29 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
       icon={props.restored === true ? <History size={26} /> : <Pause size={26} fill="currentColor" />}
       footer={
         <>
-          <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
+          <Button track="resume" size="l" block glow onClick={guarded(ready, props.onResume)}>
             {t("run.pause.resume")}
           </Button>
           <KeyHint text={t("run.keys.pause")} />
           {/* Характеристики и настройки — в ряд: вторичные действия паузы не
               должны выталкивать «Продолжить» за край в ландшафте. */}
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" block onClick={props.onStats}>
+            <Button track="stats" variant="secondary" block onClick={props.onStats}>
               <ChartColumn size={18} aria-hidden="true" />
               {t("run.stats.open")}
             </Button>
-            <Button variant="secondary" block onClick={props.onSettings}>
+            <Button track="settings" variant="secondary" block onClick={props.onSettings}>
               {t("run.pause.settings")}
             </Button>
           </div>
           {props.onDev === undefined ? null : (
-            <Button variant="secondary" block onClick={props.onDev}>
+            <Button track="dev" variant="secondary" block onClick={props.onDev}>
               <Wrench size={18} aria-hidden="true" />
               {t("dev.title")}
             </Button>
           )}
           {/* Сдача — с подтверждением: случайный тап не должен обнулять забег. */}
-          <Button variant="danger" block onClick={() => setConfirming(true)}>
+          <Button track="surrender" variant="danger" block onClick={() => setConfirming(true)}>
             {t("run.pause.surrender")}
           </Button>
         </>
@@ -178,7 +178,7 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
           вместе с карточками. */}
       {props.onStats === undefined ? null : (
         <div className="absolute top-3 right-3 z-10">
-          <IconButton label={t("run.stats.open")} onClick={props.onStats}>
+          <IconButton track="stats" label={t("run.stats.open")} onClick={props.onStats}>
             <ChartColumn size={20} className="text-info" />
           </IconButton>
         </div>

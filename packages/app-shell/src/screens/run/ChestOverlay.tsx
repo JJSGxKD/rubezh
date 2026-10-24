@@ -135,7 +135,7 @@ export function ChestOverlay(props: ChestOverlayProps): ReactNode {
         )}
       </p>
       <div className="mt-4 grid gap-2 short:mt-2">
-        <Button size="l" block glow onClick={guarded(ready, props.onTake)}>
+        <Button track="take_chest" size="l" block glow onClick={guarded(ready, props.onTake)}>
           {t("run.chest.take")}
         </Button>
       </div>
