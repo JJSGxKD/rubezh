@@ -128,4 +128,9 @@ describe("раздел «Потоки по эпикам»", () => {
     expect(checkEpicCells(text, TASKS)).toEqual([]);
     expect(fixEpicCells(text, TASKS)).toBe(text);
   });
+
+  it("задача в архиве — ссылка ведёт на archive/ (T-0204)", () => {
+    const tasks = [{ id: "T-0002", epic: "E0", fileName: "T-0002-a.md", path: "archive/T-0002-a.md", status: "done" }];
+    expect(epicTasksCell("E0", tasks)).toBe(badge("T-0002", "archive/T-0002-a.md"));
+  });
 });

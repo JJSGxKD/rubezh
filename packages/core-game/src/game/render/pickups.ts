@@ -3,7 +3,15 @@ import { GEM_LAND_TICKS } from "../sim/gems";
 import { PICKUP_KIND, PICKUP_LAND_TICKS, PICKUP_RADIUS_UNITS } from "../sim/pickups";
 import type { World } from "../sim/world";
 import { GEM_TIERS, PICKUP_LOOKS } from "./looks";
+import type { ArtFrame } from "./art-atlas";
 import { ensureShapeTexture, lerp, popScale, triangle } from "./textures";
+
+/** Кадры чернового арта подборов: по ступени кристалла и по виду подбора; `null` — фигура. */
+export interface PickupArt {
+  gems: readonly (ArtFrame | null)[];
+  pickups: readonly (ArtFrame | null)[];
+  scale: number;
+}
 
 /**
  * Рендер того, что лежит на земле и подбирается: кристаллы опыта, аптечки,
@@ -26,6 +34,8 @@ export class PickupRenderer {
   private readonly pickupSprites: Phaser.GameObjects.Image[] = [];
   /** вид подбора, под который сейчас стоит текстура спрайта */
   private readonly pickupSpriteKind: Uint8Array;
+  /** черновой арт (режим разработчика); `null` — фигуры, как обычно */
+  private art: PickupArt | null = null;
   /** ореол сундука по слоту подбора: сияние и столб света; создаётся по первому сундуку в слоте */
   private readonly auras: ({ glow: Phaser.GameObjects.Image; beam: Phaser.GameObjects.Image } | null)[] = [];
 
@@ -45,6 +55,19 @@ export class PickupRenderer {
       ensureShapeTexture(scene, look.key, PICKUP_RADIUS_UNITS * scale * look.size, look.color, look.shape, { shadow: true });
     }
     ensureAuraTextures(scene);
+  }
+
+  /** Включить или выключить черновой арт: текстуры всех слотов назначатся заново. */
+  setArt(art: PickupArt | null): void {
+    this.art = art;
+    this.gemSpriteTier.fill(NO_TIER);
+    this.pickupSpriteKind.fill(NO_TIER);
+    this.gemSpriteScaled.fill(1);
+  }
+
+  /** Масштаб слота: кадр атласа в других пикселях, чем фигура. */
+  private base(sprite: Phaser.GameObjects.Image): number {
+    return this.art !== null && sprite.texture.key.startsWith("art-") ? this.art.scale : 1;
   }
 
   sync(t: number): void {
@@ -68,9 +91,12 @@ export class PickupRenderer {
       // каждый кадр, а текстура меняется только при переходе.
       const tier = gemTier(gems.value[i]);
       if (this.gemSpriteTier[i] !== tier) {
-        sprite.setTexture(gemTextureKey(tier));
+        const art = this.art?.gems[tier] ?? null;
+        if (art !== null) sprite.setTexture(art.texture, art.frame);
+        else sprite.setTexture(gemTextureKey(tier));
         this.gemSpriteTier[i] = tier;
       }
+      const base = this.base(sprite);
       sprite.setVisible(true);
 
       // Шаг, на котором кристалл вылетел, уже прошёл: отсчёт от нуля.
@@ -82,7 +108,7 @@ export class PickupRenderer {
           lerp(gems.originX[i], gems.x[i], eased),
           lerp(gems.originY[i], gems.y[i], eased) - hop * 4 * p * (1 - p),
         );
-        sprite.setScale(popScale(p));
+        sprite.setScale(base * popScale(p));
         this.gemSpriteScaled[i] = 1;
         continue;
       }
@@ -90,10 +116,10 @@ export class PickupRenderer {
       sprite.setPosition(lerp(gems.prevX[i], gems.x[i], t), lerp(gems.prevY[i], gems.y[i], t));
       if (tier >= SHIMMER_TIER) {
         // Крупные кристаллы мерцают — их видно издалека, и за ними хочется идти.
-        sprite.setScale(1 + 0.1 * triangle((tick + i * 7) % SHIMMER_PERIOD_TICKS, SHIMMER_PERIOD_TICKS));
+        sprite.setScale(base * (1 + 0.1 * triangle((tick + i * 7) % SHIMMER_PERIOD_TICKS, SHIMMER_PERIOD_TICKS)));
         this.gemSpriteScaled[i] = 1;
       } else if (this.gemSpriteScaled[i] === 1) {
-        sprite.setScale(1);
+        sprite.setScale(base);
         this.gemSpriteScaled[i] = 0;
       }
     }
@@ -116,9 +142,12 @@ export class PickupRenderer {
       const kind = pickups.kind[i];
       this.syncAura(i, sprite, kind, tick - pickups.bornTick[i] - PICKUP_LAND_TICKS + t, tick);
       if (this.pickupSpriteKind[i] !== kind) {
-        sprite.setTexture(PICKUP_LOOKS[kind]?.key ?? PICKUP_LOOKS[PICKUP_KIND.medkit].key);
+        const art = this.art?.pickups[kind] ?? null;
+        if (art !== null) sprite.setTexture(art.texture, art.frame);
+        else sprite.setTexture(PICKUP_LOOKS[kind]?.key ?? PICKUP_LOOKS[PICKUP_KIND.medkit].key);
         this.pickupSpriteKind[i] = kind;
       }
+      const base = this.base(sprite);
       sprite.setVisible(true);
       const progress = (tick - pickups.bornTick[i] - 1 + t) / PICKUP_LAND_TICKS;
       if (progress < 1) {
@@ -128,11 +157,11 @@ export class PickupRenderer {
           lerp(pickups.originX[i], pickups.x[i], eased),
           lerp(pickups.originY[i], pickups.y[i], eased) - hop * 4 * p * (1 - p),
         );
-        sprite.setScale(popScale(p));
+        sprite.setScale(base * popScale(p));
         continue;
       }
       sprite.setPosition(pickups.x[i], pickups.y[i]);
-      sprite.setScale(1 + 0.12 * triangle((tick + i * 11) % PICKUP_PULSE_TICKS, PICKUP_PULSE_TICKS));
+      sprite.setScale(base * (1 + 0.12 * triangle((tick + i * 11) % PICKUP_PULSE_TICKS, PICKUP_PULSE_TICKS)));
     }
   }
 

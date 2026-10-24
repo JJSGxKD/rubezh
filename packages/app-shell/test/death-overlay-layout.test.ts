@@ -38,7 +38,7 @@ const noop = (): void => undefined;
 
 function render(patch: Partial<DeathOverlayProps> = {}): string {
   return renderToStaticMarkup(
-    createElement(DeathOverlay, { result, isNewRecord: false, diagnostics: false, reward: { status: "pending" }, onDecline: noop, onRestart: noop, onMenu: noop, onShare: noop, ...patch }),
+    createElement(DeathOverlay, { result, isNewRecord: false, diagnostics: false, reward: { status: "pending" }, onDecline: noop, onRestart: noop, onMenu: noop, onShare: () => Promise.resolve(null), ...patch }),
   );
 }
 

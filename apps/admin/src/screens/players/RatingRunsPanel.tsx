@@ -53,7 +53,7 @@ export function RatingRunsPanel({ accountId, ratingClosed, onChanged }: { accoun
                 onClick={() => setPicked(id)}
                 className={`rounded-pill border px-3 py-1 text-xs transition-colors ${difficulty === id ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
               >
-                {capitalize(difficultyTitle(id))} <span className="opacity-70">{runs[id].length}</span>
+                {capitalize(difficultyTitle(id))} <span>{runs[id].length}</span>
               </button>
             ))}
           </div>

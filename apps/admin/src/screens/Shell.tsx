@@ -131,7 +131,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
             ) : (
               <p className="mr-auto flex min-w-0 items-baseline gap-2 text-sm">
                 <span className="shrink-0 text-text-muted">{located.group.title}</span>
-                <span className="shrink-0 text-text-disabled">/</span>
+                <span aria-hidden="true" className="shrink-0 text-text-disabled">/</span>
                 <span className="shrink-0 font-display text-[17px]">{located.section.title}</span>
                 <span className="truncate text-xs text-text-muted">{located.section.hint}</span>
               </p>
@@ -195,13 +195,13 @@ function MenuColumn({
           maxLength={64}
           className="min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-disabled"
         />
-        <kbd className="rounded-sm border border-border-strong px-1 text-[10.5px] leading-4 text-text-disabled max-md:hidden">/</kbd>
+        <kbd className="rounded-sm border border-border-strong px-1 text-[10.5px] leading-4 text-text-muted max-md:hidden">/</kbd>
       </label>
       <nav aria-label="Разделы панели" className="min-h-0 flex-1 overflow-y-auto">
         {shown.length === 0 ? <p className="px-2 pt-3 text-xs text-text-muted">Такого раздела нет</p> : null}
         {shown.map((group) => (
           <section key={group.title} aria-label={group.title} className="flex flex-col gap-0.5 pt-3">
-            <h2 className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-text-disabled">{group.title}</h2>
+            <h2 className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-text-muted">{group.title}</h2>
             {group.sections.map((section) => {
               const active = route?.section === section.id;
               const Icon = section.icon;
@@ -212,7 +212,8 @@ function MenuColumn({
                   title={section.hint}
                   aria-current={active ? "page" : undefined}
                   onClick={onNavigate}
-                  className={`flex h-[30px] items-center gap-2 rounded-sm px-2 text-[13.5px] max-md:h-10 ${
+                  // Меню прокручивается своей колонкой и срезало бы кольцо фокуса по бокам — внутрь.
+                  className={`flex h-[30px] items-center gap-2 rounded-sm px-2 text-[13.5px] focus-visible:-outline-offset-2 max-md:h-10 ${
                     active ? "bg-surface-raised text-text shadow-[inset_2px_0_0_var(--color-accent)]" : "text-text-muted hover:bg-surface-raised/60 hover:text-text"
                   }`}
                 >

@@ -230,16 +230,14 @@ function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps 
 }
 
 /**
- * Шеринг результата — заглушка этапа 2: адаптер о нём знает, но экрана и
- * картинки ещё нет (docs/26-stage2-plan.md §1.2). Кнопка при этом обязана
- * отвечать: молчащая кнопка читается как баг.
+ * Шеринг результата: своей карточки итога ещё нет (docs/24-attribution-and-sharing.md
+ * §7), поэтому итог уходит путём приглашения друга — ссылкой со строкой о
+ * забеге. Кнопка обязана отвечать: молчащая кнопка читается как баг. Модуль —
+ * по нажатию: чанк забега на пределе бюджета.
  */
-function shareRun(): void {
+async function shareRun(): Promise<string | null> {
   const state = useRun.getState();
-  if (state.result === null) return;
-
-  useShell.getState().adapter.share({
-    runScore: Math.round(state.result.survivalSec),
-    runDurationSec: state.result.survivalSec,
-  });
+  if (state.result === null) return null;
+  const { shareRunResult } = await import("../../state/run-share");
+  return await shareRunResult({ survivalSec: state.result.survivalSec, record: state.isNewRecord });
 }

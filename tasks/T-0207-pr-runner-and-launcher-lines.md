@@ -26,7 +26,7 @@ batch: 2
 
 # T-0207. Строки «Поток» и «Запустил» в описании PR задачи — проверяет pr-check
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json)](README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](T-0204-tasks-archive-folder.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json)](README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](archive/T-0204-tasks-archive-folder.md)
 
 ## Зачем
 

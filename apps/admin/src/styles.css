@@ -54,4 +54,22 @@
   table {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Фокус с клавиатуры — то же кольцо, что в игре (docs/27 §4.4), а не
+     обводка браузера, у которой в каждом движке свой вид. Поля и карточки
+     выбора показывают фокус рамкой сами — их утилиты сильнее этого слоя. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-glow);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Плашка тона — непрозрачной подложкой на лунке, как в игре
+ * (docs/27-design-system-and-app-shell.md §4.4): полупрозрачная светлела на
+ * карточке, и цветной текст падал ниже 4,5:1.
+ */
+@utility badge-tinted {
+  color: var(--badge-tone);
+  background: color-mix(in oklab, var(--badge-tone) 15%, var(--color-surface-sunken));
 }

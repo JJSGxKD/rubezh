@@ -35,7 +35,7 @@ batch: 4
 
 # T-0064. Курсы руками — «Обновить сейчас» у источника и запасной ручной курс любой валюты
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0064.json)](README.md#значки-статуса) [![T-0063](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0063.json&label=T-0063)](T-0063-coinmarketcap-and-optional-keys.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0064.json)](README.md#значки-статуса) [![T-0063](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0063.json&label=T-0063)](archive/T-0063-coinmarketcap-and-optional-keys.md)
 
 ## Зачем
 

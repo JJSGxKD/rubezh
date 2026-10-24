@@ -51,7 +51,7 @@ export function FunnelScreen({ focus = null }: { focus?: string | null }) {
   return (
     <div className="flex flex-col gap-4">
       <Panel title="Воронка по источникам" help={HELP.funnel.funnel} actions={<Button onClick={reload}>Обновить</Button>}>
-        <form onSubmit={submit} className="mb-4 flex items-end gap-2">
+        <form onSubmit={submit} className="mb-4 flex flex-wrap items-end gap-2">
           <Field label="С">
             <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
           </Field>

@@ -14,6 +14,7 @@ import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/arsenal";
 import type { ApiFailure } from "../../state/api-request";
+import { devModeAllowed, useDevMode } from "../../state/dev-mode";
 import { useItems } from "../../state/items";
 import {
   loadInventory,
@@ -26,6 +27,7 @@ import { useSession } from "../../state/session";
 import { useWallet } from "../../state/wallet";
 import { loadWallet } from "../../state/wallet-api";
 import { ItemSheet } from "./arsenal-item";
+import { heroPortrait } from "./hero-portrait";
 import {
   CostLabel,
   EquipSlot,
@@ -389,9 +391,13 @@ function StatChip(props: {
 
 /**
  * Персонаж в центре — силуэт из фигур, пока нет ассетов. Цвета — токены через
- * `currentColor`: смена стиля не требует править рисунок.
+ * `currentColor`: смена стиля не требует править рисунок. За флагом
+ * «Черновой арт» — герой-спрайт тем же рисунком, что в забеге.
  */
 function HeroFigure(): ReactNode {
+  const sprites = useDevMode((state) => state.settings.visuals.sprites === true);
+  const portrait = heroPortrait(sprites, devModeAllowed());
+  if (portrait !== null) return <img src={portrait} alt="" className="h-44 w-auto animate-float" />;
   return (
     <svg
       viewBox="0 0 120 160"

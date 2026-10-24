@@ -42,7 +42,7 @@ batch: 4
 
 # T-0065. Прокси для исходящих запросов — список в панели, перебор после неудачи напрямую
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0065.json)](README.md#значки-статуса) [![T-0060](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0060.json&label=T-0060)](T-0060-request-journal-storage.md) [![T-0061](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0061.json&label=T-0061)](T-0061-requests-panel-section.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0065.json)](README.md#значки-статуса) [![T-0060](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0060.json&label=T-0060)](archive/T-0060-request-journal-storage.md) [![T-0061](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0061.json&label=T-0061)](archive/T-0061-requests-panel-section.md)
 
 ## Зачем
 

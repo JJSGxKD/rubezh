@@ -37,7 +37,7 @@ batch: 3
 
 # T-0177. Штраф за отписку — заготовки: списание награды, срочное закрытие, уведомление
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json)](README.md#значки-статуса) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](T-0188-hide-changelog-for-players.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json)](README.md#значки-статуса) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](archive/T-0188-hide-changelog-for-players.md)
 
 ## Зачем
 

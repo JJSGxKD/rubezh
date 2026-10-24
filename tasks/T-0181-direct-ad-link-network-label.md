@@ -46,7 +46,7 @@ batch: 3
 
 # T-0181. Прямая ссылка на Mini App для рекламы AdsGram — метки сети в стартовом параметре и конверсия по запуску
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0181.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](T-0179-start-param-pairs-auto-sources.md) [![T-0180](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json&label=T-0180)](T-0180-links-panel-auto-sources.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0181.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](archive/T-0179-start-param-pairs-auto-sources.md) [![T-0180](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json&label=T-0180)](T-0180-links-panel-auto-sources.md)
 
 ## Зачем
 

@@ -13,6 +13,8 @@ zones:
   - apps/admin/src/api/funnel.ts
   - apps/admin/src/ui/help.ts
   - apps/admin/test/funnel-chart.test.ts
+  - apps/admin/src/ui/period-picker.tsx
+  - apps/admin/test/period-picker.test.ts
 shared:
   - docs/29-admin-panel.md
 runner: any
@@ -25,7 +27,7 @@ batch: 2
 
 # T-0053. Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](T-0049-admin-shell-responsive.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md)
 
 ## Зачем
 
@@ -37,6 +39,15 @@ batch: 2
 
 - **Период** — «7 дней · 30 дней · 90 дней · Свой период». «Свой» — прежние
   два поля дат; по умолчанию — 30 дней, как сейчас.
+- **Выбор периода — общим компонентом** `ui/period-picker.tsx` (решение
+  `claude-lead-1` от 24.10.2026 по аудиту дизайнера AD-02,
+  `design/art/direction-v2.md` §4.6): чипы пресетов над полями «Свой», а
+  выбранный период — подписью `22.09–22.10` в формате `ДД.ММ`, независимо от
+  языка браузера (голые поля даты в браузере с английской локалью показывают
+  `mm/dd/yyyy`). Пресеты — свойством компонента: этот же выбор дальше возьмут
+  «Выгрузки», «Доля флага» и «Игроки». Тест `period-picker.test.ts` — пресет
+  → пара дат; подпись периода; «Свой» с перевёрнутыми датами — ошибка у
+  поля.
 - **«Сравнить с прошлым периодом»** — переключатель. Прошлый период той же
   длины — второй запрос к тому же маршруту: сервер не меняется.
 - **Воронка полосами** — по строке «Все источники» (`funnelTotal`):

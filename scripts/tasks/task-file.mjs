@@ -9,6 +9,7 @@
  * зависимость в этот инструмент не нужны.
  */
 
+import { posix } from "node:path";
 import { minimumReleaseLevel, parsePrTitle } from "../release/pr-check.mjs";
 import { compareReleaseLevels } from "../release/semver.mjs";
 
@@ -200,24 +201,51 @@ function pathProblem(path) {
   return null;
 }
 
-/** Значок задачи в чужой строке значков (зависимость, ячейка эпика): подпись — её id, ссылка — на файл. */
-export function taskBadge(id, fileName) {
-  return `[![${id}](${STATUS_URL}/${id}.json&label=${id})](${fileName})`;
+/** Значок задачи в чужой строке значков (зависимость, ячейка эпика): подпись — её id, ссылка `link` — на файл. */
+export function taskBadge(id, link) {
+  return `[![${id}](${STATUS_URL}/${id}.json&label=${id})](${link})`;
+}
+
+/**
+ * Ссылка из файла `fromPath` на `toPath`: оба — пути от `tasks/` (`T-0001-x.md`,
+ * `archive/T-0001-x.md`), разделитель всегда «/». Из `tasks/` в архив —
+ * `archive/T-…md`, из архива наверх — `../T-…md`, внутри архива — `T-…md`.
+ */
+export function relativeTaskLink(fromPath, toPath) {
+  return posix.relative(posix.dirname(fromPath), toPath);
 }
 
 /**
  * Строка значков под заголовком задачи: статус самой задачи и по значку на
- * каждую зависимость в порядке `depends_on`. Ссылка зависимости ведёт на её
- * файл, поэтому `fileNames` — `{ "T-NNNN": "T-NNNN-slug.md" }` по реестру.
+ * каждую зависимость в порядке `depends_on`. Ссылки считаются от папки файла
+ * задачи (`task.path`), поэтому `paths` — `{ "T-NNNN": "T-NNNN-slug.md" }` или
+ * `"archive/T-NNNN-slug.md"` по реестру.
  */
-export function badgeLine(task, fileNames) {
-  const badges = [`[![статус](${STATUS_URL}/${task.id}.json)](README.md#значки-статуса)`];
+export function badgeLine(task, paths) {
+  const from = task.path ?? paths[task.id] ?? "";
+  const badges = [`[![статус](${STATUS_URL}/${task.id}.json)](${relativeTaskLink(from, "README.md")}#значки-статуса)`];
   for (const id of task.depends_on) {
-    const dependencyFile = fileNames[id];
-    if (dependencyFile === undefined) throw new Error(`badgeLine: для зависимости ${id} не передано имя файла`);
-    badges.push(taskBadge(id, dependencyFile));
+    const dependencyPath = paths[id];
+    if (dependencyPath === undefined) throw new Error(`badgeLine: для зависимости ${id} не передан путь файла`);
+    badges.push(taskBadge(id, relativeTaskLink(from, dependencyPath)));
   }
   return badges.join(" ");
+}
+
+/** Цель ссылки на файл задачи: префикс (пусто, `../`, `archive/`, `../archive/`), имя, необязательный якорь. */
+const TASK_LINK_RE = /\]\(((?:\.\.\/)?(?:archive\/)?)(T-(\d{4}))-[a-z0-9-]+\.md(#[^)]*)?\)/g;
+
+/**
+ * Текст, где каждая ссылка на файл задачи переписана на верный путь по реестру
+ * (`paths`) от файла `fromPath`; якорь сохраняется. Ссылки на чужие пути,
+ * внешние адреса и задачи вне реестра не трогаются.
+ */
+export function withTaskLinks(text, fromPath, paths) {
+  return text.replace(TASK_LINK_RE, (whole, _prefix, id, _digits, anchor) => {
+    const target = paths[id];
+    if (target === undefined) return whole;
+    return `](${relativeTaskLink(fromPath, target)}${anchor ?? ""})`;
+  });
 }
 
 /**
@@ -244,10 +272,10 @@ export function withBadgeLine(text, expected) {
 }
 
 /** Ошибка строки значков или `null`: сразу под заголовком «# T-NNNN. …» должна стоять ровно `badgeLine`. */
-function badgeProblem(data, body, fileNames) {
+function badgeProblem(data, body, paths, path) {
   // Зависимости нет в реестре — файл для ссылки взять негде; об этом скажет проверка реестра.
-  if (data.depends_on.some((id) => fileNames[id] === undefined)) return null;
-  const expected = badgeLine(data, fileNames);
+  if (data.depends_on.some((id) => paths[id] === undefined)) return null;
+  const expected = badgeLine({ ...data, path: path ?? paths[data.id] }, paths);
   const lines = body.split(/\r?\n/).filter((line) => line.trim() !== "");
   if (!new RegExp(`^# ${data.id}\\. .+`).test(lines[0] ?? "")) {
     return `ожидается заголовок «# ${data.id}. …» и под ним строка значков: ${expected}; поправит pnpm task fix`;
@@ -314,8 +342,8 @@ export function checkPrSection(fileName, data, body) {
  * вернул `parseFrontmatter`. Возвращает список ошибок вида
  * `T-0003-x.md: поле priority — ожидается P0, P1, P2 или P3, а не P5`.
  *
- * `context` — `{ body, fileNames }`: текст файла после шапки и имена файлов
- * реестра (см. `badgeLine`). Без него строка значков не проверяется: так
+ * `context` — `{ body, paths, path }`: текст файла после шапки, пути файлов
+ * реестра и путь самой задачи (см. `badgeLine`). Без него строка значков не проверяется: так
  * проверяется шапка отдельно от тела, например при захвате.
  */
 export function validateTask(fileName, data, context) {
@@ -396,7 +424,7 @@ export function validateTask(fileName, data, context) {
   }
 
   if (context !== undefined && errors.length === 0) {
-    const problem = badgeProblem(data, context.body, context.fileNames);
+    const problem = badgeProblem(data, context.body, context.paths ?? context.fileNames, context.path);
     if (problem !== null) errors.push(`${fileName}: ${problem}`);
   }
 

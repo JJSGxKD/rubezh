@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { NEVER_HIT } from "../sim/pools";
+import type { ArtFrame } from "./art-atlas";
 import type { World } from "../sim/world";
 
 /**
@@ -79,6 +80,8 @@ export class CombatFeedback {
   enabled = true;
 
   private readonly bursts: Phaser.GameObjects.Image[] = [];
+  /** кадры развеивания чернового арта; `null` — кольцо вспышки */
+  private deathArt: readonly ArtFrame[] | null = null;
   private readonly burstBornTick: Int32Array = new Int32Array(MAX_BURSTS).fill(-1);
   private readonly burstScale: Float32Array = new Float32Array(MAX_BURSTS);
   private nextBurst = 0;
@@ -250,6 +253,14 @@ export class CombatFeedback {
     }
   }
 
+  /**
+   * Черновой арт гибели — кадры развеивания (`fx/death*`) вместо кольца.
+   * `null` — кольцо, как обычно.
+   */
+  setDeathArt(frames: readonly ArtFrame[] | null): void {
+    this.deathArt = frames !== null && frames.length > 0 ? frames : null;
+  }
+
   private startBurst(x: number, y: number, radius: number, color: number, tick: number): void {
     const b = this.nextBurst;
     this.nextBurst = (this.nextBurst + 1) % MAX_BURSTS;
@@ -261,13 +272,17 @@ export class CombatFeedback {
     }
 
     const sprite = this.bursts[b];
+    const art = this.deathArt?.[0] ?? null;
+    if (art !== null) sprite.setTexture(art.texture, art.frame);
+    else if (sprite.texture.key !== BURST_KEY) sprite.setTexture(BURST_KEY);
     sprite.setPosition(x, y);
     // Белая текстура, окрашенная цветом врага: вспышка того же цвета, что и
     // сам погибший, — видно, кто именно умер.
     sprite.setTint(color);
     sprite.setVisible(true);
     this.burstBornTick[b] = tick;
-    this.burstScale[b] = (radius * BURST_RADIUS_MUL) / (BURST_TEXTURE_UNITS * this.world.config.unitScale);
+    // Кадр развеивания сам разлетается — масштаб у него постоянный, по диаметру вспышки.
+    this.burstScale[b] = art !== null ? (radius * BURST_RADIUS_MUL * 2) / sprite.frame.realWidth : (radius * BURST_RADIUS_MUL) / (BURST_TEXTURE_UNITS * this.world.config.unitScale);
   }
 
   private animateBursts(tick: number): void {
@@ -279,6 +294,14 @@ export class CombatFeedback {
         continue;
       }
       const p = age / BURST_LIFETIME_TICKS;
+      const art = this.deathArt;
+      if (art !== null && sprite.texture.key !== BURST_KEY) {
+        const frame = art[Math.min(art.length - 1, Math.floor(p * art.length))];
+        if (frame !== undefined && sprite.frame.name !== frame.frame) sprite.setFrame(frame.frame);
+        sprite.setScale(this.burstScale[b]);
+        sprite.setAlpha(1);
+        continue;
+      }
       sprite.setScale(this.burstScale[b] * (0.35 + 0.65 * (1 - (1 - p) * (1 - p))));
       sprite.setAlpha(1 - p);
     }

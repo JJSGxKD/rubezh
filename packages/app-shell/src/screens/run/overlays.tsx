@@ -184,8 +184,9 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
         </div>
       )}
       {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
-          карточки, а строка нужна третьей карточке. */}
-      <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>
+          карточки, а строка нужна третьей карточке. Основным текстом: верх
+          реликвии подсвечен тёплым, и серый на нём падал до 4,47:1. */}
+      <p className="-mt-1 mb-2 text-center text-sm text-text short:hidden">{t("run.levelUp.subtitle")}</p>
       <KeyHint text={t("run.keys.choose")} />
       {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
           карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
