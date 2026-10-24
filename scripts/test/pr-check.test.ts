@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { checkSummary, checkTaskLine, checkTrailers, evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
+import { checkSummary, checkRunnerLines, checkTaskLine, checkTrailers, evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
 
 // Формат заголовка — CLAUDE.md, «Коммиты». Проверка PR — docs/09-ci-cd.md §8.1.
 
@@ -218,5 +218,64 @@ describe("checkTrailers", () => {
 
   it("пропускает коммиты без трейлера", () => {
     expect(checkTrailers([{ sha: "b".repeat(40), message: "Заголовок\nбез трейлера\n" }])).toEqual([]);
+  });
+});
+
+describe("checkRunnerLines", () => {
+  const TASK = "Задача: tasks/T-0001-wipe.md";
+  const OK = "Поток: claude-3 / sonnet-5.5 / medium\nЗапустил: владелец";
+
+  it("ветка задачи с обеими верными строками — ошибок нет", () => {
+    expect(checkRunnerLines(`${TASK}\n\n${OK}`, "task/T-0001")).toEqual([]);
+  });
+
+  it("помощник с ником из букв, цифр и подчёркивания — ошибок нет", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: помощник ivan_2`, "task/T-0001")).toEqual([]);
+  });
+
+  it("ник с @ — ошибка", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: помощник @ivan`, "task/T-0001")).toEqual([
+      expect.stringContaining("запустил: в описании нет строки"),
+    ]);
+  });
+
+  it("помощник без ника — ошибка", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: помощник`, "task/T-0001")).toEqual([
+      expect.stringContaining("запустил: в описании нет строки"),
+    ]);
+  });
+
+  it("нет строки «Запустил» — ошибка", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-3 / sonnet-5.5 / medium`, "task/T-0001")).toEqual([
+      expect.stringContaining("запустил: в описании нет строки"),
+    ]);
+  });
+
+  it("нет строки «Поток» — ошибка «поток: в описании нет строки»", () => {
+    expect(checkRunnerLines(`${TASK}\n\nЗапустил: владелец`, "task/T-0001")).toEqual([
+      expect.stringContaining("поток: в описании нет строки"),
+    ]);
+  });
+
+  it("модель не из списка — ошибка", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-3 / gpt-5 / medium\nЗапустил: владелец`, "task/T-0001")).toEqual([
+      expect.stringContaining("модель или уровень не из списка"),
+    ]);
+  });
+
+  it("номер аккаунта не цифры — ошибка", () => {
+    expect(checkRunnerLines(`${TASK}\n\nПоток: claude-x / sonnet-5.5 / medium\nЗапустил: владелец`, "task/T-0001")).toEqual([
+      expect.stringContaining("поток: в описании нет строки"),
+    ]);
+  });
+
+  it("строка «Поток» внутри абзаца, не с начала строки, — как отсутствие", () => {
+    expect(checkRunnerLines(`${TASK}\n\nРабота шла так. Поток: claude-3 / sonnet-5.5 / medium\nЗапустил: владелец`, "task/T-0001")).toEqual([
+      expect.stringContaining("поток: в описании нет строки"),
+    ]);
+  });
+
+  it("ветка не задачи — ошибок нет даже без строк", () => {
+    expect(checkRunnerLines("", "lead/specs")).toEqual([]);
   });
 });
