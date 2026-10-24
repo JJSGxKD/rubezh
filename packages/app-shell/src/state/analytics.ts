@@ -13,6 +13,7 @@ export const ANALYTICS_EVENTS = [
   "user_authenticated",
   "session_started",
   "screen_viewed",
+  "ui_clicked",
   "settings_changed",
   "share_offered",
   "share_completed",
