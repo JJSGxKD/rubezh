@@ -71,6 +71,9 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
   forge: "fire",
   tempest: "lightning",
   viper: "poison",
+  // Седьмое оружие (T-0118) и его эволюция — огонь.
+  meteor: "fire",
+  fire_rain: "fire",
 };
 
 /**
