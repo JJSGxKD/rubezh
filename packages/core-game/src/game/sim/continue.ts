@@ -1,4 +1,5 @@
 import type { ContinueDef } from "@bh/shared-types";
+import { clearFreeze } from "./freeze";
 import { clearPlayerStatuses } from "./player-status";
 import { despawnEnemy, despawnProjectile, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
@@ -42,6 +43,9 @@ export function applyContinue(world: World): boolean {
   // Горение и яд, с которыми игрок умер, не переживают второй шанс: иначе он
   // снова погиб бы от них, едва кончится неуязвимость.
   clearPlayerStatuses(player);
+  // Врагов убрали, поэтому и остаток передышки не нужен: иначе новые, пришедшие
+  // после продолжения, стояли бы без причины.
+  clearFreeze(world);
   world.stats.deathCauseType = -1;
   world.stats.continueTicks[world.stats.continuesUsed] = world.stats.tick;
   world.stats.continuesUsed++;

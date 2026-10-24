@@ -1,6 +1,7 @@
 import type { DropsDef, EnemyDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { applyDevCommand } from "../src/game/run/dev-commands";
+import { DASH_PHASE, EXPLODER_PHASE } from "../src/game/patterns";
 import { applyContinue } from "../src/game/sim/continue";
 import { damagePlayer, createWorld, spawnEnemy, TICK_SEC, type World } from "../src/game/sim/world";
 import { checksumWorld } from "../src/game/sim/checksum";
@@ -117,16 +118,19 @@ describe("заморозка: таймер мира", () => {
     run(world, 2);
     const dashPhase = world.enemies.phase[dasher];
     const bomberPhase = world.enemies.phase[bomber];
-    const dashTimer = world.enemies.timer[dasher];
-    const bomberTimer = world.enemies.timer[bomber];
+    // Телеграф и фитиль уже идут: иначе «таймер не убывает» проверял бы покой.
+    expect(world.enemies.phase[bomber]).toBe(EXPLODER_PHASE.fuse);
+    expect(world.enemies.phase[dasher]).toBe(DASH_PHASE.telegraph);
+    const dashTimer = world.enemies.phaseTimer[dasher];
+    const bomberTimer = world.enemies.phaseTimer[bomber];
 
     startFreeze(world);
     run(world, TOTAL_TICKS - 1);
 
     expect(world.enemies.phase[dasher]).toBe(dashPhase);
-    expect(world.enemies.timer[dasher]).toBe(dashTimer);
+    expect(world.enemies.phaseTimer[dasher]).toBe(dashTimer);
     expect(world.enemies.phase[bomber]).toBe(bomberPhase);
-    expect(world.enemies.timer[bomber]).toBe(bomberTimer);
+    expect(world.enemies.phaseTimer[bomber]).toBe(bomberTimer);
     expect(world.enemies.alive[bomber]).toBe(1);
   });
 
