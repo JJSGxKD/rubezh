@@ -35,7 +35,7 @@ export function ReviewScreen() {
             onClick={() => setFilter(item.id)}
             className={`rounded-pill border px-3 py-1 text-xs transition-colors ${filter === item.id ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
           >
-            {item.title} <span className="opacity-70">{count(item.id)}</span>
+            {item.title} <span>{count(item.id)}</span>
           </button>
         ))}
       </div>
@@ -53,7 +53,7 @@ export function ReviewScreen() {
           { title: "Время", render: (run) => (run.survivalSec === null ? "—" : formatDuration(run.survivalSec)), align: "right" },
           { title: "Уровень", render: (run) => run.level ?? "—", align: "right" },
           { title: "Убийств", render: (run) => (run.enemiesKilled === null ? "—" : formatNumber(run.enemiesKilled)), align: "right" },
-          { title: "Забег", render: (run) => <code className="text-xs text-text-disabled">{run.runId.slice(0, 8)}</code> },
+          { title: "Забег", render: (run) => <code className="text-xs text-text-muted">{run.runId.slice(0, 8)}</code> },
         ]}
       />
     </Panel>
