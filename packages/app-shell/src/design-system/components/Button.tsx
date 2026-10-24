@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { trackClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { CutFrame } from "./CutFrame";
 
@@ -41,6 +42,11 @@ export interface ButtonProps {
    */
   shine?: boolean;
   ariaLabel?: string;
+  /**
+   * Имя кнопки для события `ui_clicked` (Р141): по смыслу действия — `buy`,
+   * `claim`, `share`, — а не по тексту. Экран подставляется сам.
+   */
+  track?: string;
 }
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
@@ -111,6 +117,7 @@ export function Button(props: ButtonProps): ReactNode {
   const handleClick = (): void => {
     if (inactive) return;
     uiFeedback(size === "l" ? "primary" : "tap");
+    if (props.track !== undefined) trackClick(props.track);
     props.onClick?.();
   };
 
@@ -193,12 +200,15 @@ export interface IconButtonProps {
    * лист шуршит на закрытии сам.
    */
   feedback?: "tap" | "back" | null;
+  /** имя кнопки для события `ui_clicked` (см. `ButtonProps.track`) */
+  track?: string;
 }
 
 export function IconButton(props: IconButtonProps): ReactNode {
   const handleClick = (): void => {
     if (props.disabled === true) return;
     if (props.feedback !== null) uiFeedback(props.feedback ?? "tap");
+    if (props.track !== undefined) trackClick(props.track);
     props.onClick?.();
   };
 

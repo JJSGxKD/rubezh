@@ -17,6 +17,9 @@ shared:
   - CLAUDE.md
   - docs/32-balance.md
   - docs/30-configuration-map.md
+  - tasks/T-0120-rubezh-guard-engine.md
+  - tasks/T-0239-appearance-in-run.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: high

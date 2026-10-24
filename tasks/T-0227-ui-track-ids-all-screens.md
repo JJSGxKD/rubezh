@@ -28,7 +28,7 @@ batch: 3
 
 # T-0227. Имена всех кнопок, вкладок и переключателей оболочки — и `track` обязателен
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json)](README.md#значки-статуса) [![T-0226](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json&label=T-0226)](T-0226-ui-clicked-event.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json)](README.md#значки-статуса) [![T-0226](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json&label=T-0226)](archive/T-0226-ui-clicked-event.md)
 
 ## Зачем
 
