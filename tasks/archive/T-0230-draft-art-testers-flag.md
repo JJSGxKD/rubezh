@@ -26,6 +26,8 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
   - apps/web-telegram/vite.config.ts
+  - tasks/T-0238-appearance-shell.md
+  - tasks/T-0239-appearance-in-run.md
   - tasks/epics.md
 runner: any
 executor: sonnet-5.5
