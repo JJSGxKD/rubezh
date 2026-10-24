@@ -2,7 +2,7 @@
 id: T-0144
 title: Вход разработчика игроком без ролей — `dev-player-<id>`
 epic: E0
-priority: P3
+priority: P1
 status: ready
 owner:
 author: claude-lead-1
