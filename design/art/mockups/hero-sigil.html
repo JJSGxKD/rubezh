@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Знак героя</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #1d1c31; color: #f3eee6; font: 14px/1.4 "IBM Plex Sans", system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: #aeaac4; max-width: 70ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; }
+  figure { margin: 0; background: #2b4a52; border-radius: 8px; overflow: hidden; }
+  figcaption { padding: 6px 10px; background: #17162a; font-size: 12px; color: #aeaac4; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<h1>Здоровье героя-спрайта: кольца → знак под ногами</h1>
+<p>Черновой макет (design/art/direction-v2.md §4.1). Кадр героя — из атласа <code>out/atlas-core.png</code>,
+числа знака — из <code>player-sigil.ts</code>. Открывать через статический сервер от корня репозитория.</p>
+<div class="row" id="row"></div>
+<script>
+// Числа — те же, что в packages/core-game/src/game/render/player-sigil.ts.
+const SIGIL = { offsetY: 1.5, rx: 1.75, ry: 0.6, width: 0.22 };
+const HP = { full: "#ff6f90", mid: "#ffc14d", low: "#ff3b5c" };
+const XP = "#b6ff4a";
+const R = 25; // радиус героя в пикселях атласа (10 ед. × 2,5)
+const SCALE = 2;
+
+const panels = [
+  { title: "Было: кольца поверх тела", mode: "rings", hp: 0.7, xp: 0.45 },
+  { title: "Знак: здоровье 100%", mode: "sigil", hp: 1 },
+  { title: "Знак: 55% — тает сзади", mode: "sigil", hp: 0.55 },
+  { title: "Знак: 20% — пульс", mode: "sigil", hp: 0.2, pulse: true },
+  { title: "Новый уровень — вспышка", mode: "sigil", hp: 0.8, flash: 0.35 },
+  { title: "Щит «Эгиды» на 2 удара", mode: "sigil", hp: 0.9, shield: 2 },
+];
+// Числа щита — как SHIELD_RIM и shieldBeads в player-sigil.ts.
+const SHIELD = { scale: 1.22, color: "#fff6c8", step: 0.38 };
+
+const hpColor = (f) => (f > 0.6 ? HP.full : f > 0.3 ? HP.mid : HP.low);
+
+function ellipseArc(ctx, cx, cy, rx, ry, start, end) {
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, start, end);
+  ctx.stroke();
+}
+
+async function main() {
+  const atlas = await (await fetch("../out/atlas-core.json")).json();
+  const image = new Image();
+  image.src = "../out/atlas-core.png";
+  await image.decode();
+  const frame = atlas.frames["hero/idle0"];
+  for (const panel of panels) {
+    const w = 200, h = 220;
+    const canvas = document.createElement("canvas");
+    canvas.width = w * SCALE; canvas.height = h * SCALE;
+    canvas.style.width = `${w}px`; canvas.style.height = `${h}px`;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(SCALE, SCALE);
+    ctx.fillStyle = "#2f4f55"; ctx.fillRect(0, 0, w, h);
+    const cx = w / 2, cy = 100;
+    const s = 1.2; // масштаб показа
+    const r = R * s;
+    if (panel.mode === "sigil") {
+      const sx = cx, sy = cy + r * SIGIL.offsetY, rx = r * SIGIL.rx, ry = r * SIGIL.ry, lw = r * SIGIL.width;
+      ctx.lineWidth = lw * 1.6; ctx.strokeStyle = "rgba(0,0,0,0.28)"; ellipseArc(ctx, sx, sy, rx, ry, 0, Math.PI * 2);
+      const color = hpColor(panel.hp);
+      ctx.lineWidth = lw; ctx.globalAlpha = 0.18; ctx.strokeStyle = color; ellipseArc(ctx, sx, sy, rx, ry, 0, Math.PI * 2);
+      ctx.globalAlpha = panel.pulse ? 0.75 : 0.95;
+      const half = Math.PI * panel.hp;
+      ellipseArc(ctx, sx, sy, rx, ry, Math.PI / 2 - half, Math.PI / 2 + half);
+      if (panel.shield !== undefined) {
+        const srx = rx * SHIELD.scale, sry = ry * SHIELD.scale;
+        ctx.globalAlpha = 0.7; ctx.strokeStyle = SHIELD.color; ctx.lineWidth = lw * 0.45;
+        ellipseArc(ctx, sx, sy, srx, sry, 0, Math.PI * 2);
+        ctx.globalAlpha = 0.95; ctx.fillStyle = SHIELD.color;
+        for (let i = 0; i < panel.shield; i++) {
+          const a = Math.PI / 2 + (i - (panel.shield - 1) / 2) * SHIELD.step;
+          const bx = sx + Math.cos(a) * srx, by = sy + Math.sin(a) * sry, half = lw * 0.7;
+          ctx.beginPath(); ctx.moveTo(bx, by - lw); ctx.lineTo(bx + half, by); ctx.lineTo(bx, by + lw); ctx.lineTo(bx - half, by); ctx.closePath(); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (panel.flash !== undefined) {
+        const t = panel.flash, k = 1 + 1.4 * (1 - (1 - t) * (1 - t));
+        ctx.globalAlpha = 0.9 * (1 - t); ctx.strokeStyle = XP; ctx.lineWidth = lw * 0.8;
+        ellipseArc(ctx, sx, sy, rx * k, ry * k, 0, Math.PI * 2);
+      }
+      ctx.globalAlpha = 1;
+    }
+    const f = frame.frame, src = frame.spriteSourceSize, size = frame.sourceSize;
+    ctx.drawImage(image, f.x, f.y, f.w, f.h, cx - (size.w / 2 - src.x) * s, cy - (size.h / 2 - src.y) * s, f.w * s, f.h * s);
+    if (panel.mode === "rings") {
+      const ring = (radius, width, fill, color) => {
+        ctx.lineWidth = width; ctx.strokeStyle = color; ctx.globalAlpha = 0.18;
+        ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(cx, cy, radius, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * fill); ctx.stroke();
+        ctx.globalAlpha = 1;
+      };
+      ring(r * 1.45, r * 0.32, panel.hp, hpColor(panel.hp));
+      ring(r * 1.72, r * 0.22, panel.xp, XP);
+    }
+    const figure = document.createElement("figure");
+    const caption = document.createElement("figcaption");
+    caption.textContent = panel.title;
+    figure.append(canvas, caption);
+    document.getElementById("row").append(figure);
+  }
+  document.body.dataset.ready = "1";
+}
+main();
+</script>
+</body>
+</html>

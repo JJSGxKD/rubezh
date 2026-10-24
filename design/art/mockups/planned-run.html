@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макеты забега v2</title>
+<style>
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6; --elite: #ffd15c;
+    --weapon: #ffe066; --passive: #c47dff; --hp: #ff6f90; --xp: #b6ff4a; --danger: #ff5d5d; --success: #8ee86b;
+    --ground: #33506a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; }
+  h1 { font: 700 20px/1.2 system-ui, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 90ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .phone { width: 360px; height: 720px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .cap { width: 360px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .cap b { color: var(--text); }
+  .display { font-family: "Russo One", system-ui, sans-serif; letter-spacing: 0.01em; }
+  .scrim { position: absolute; inset: 0; background: rgb(29 28 49 / 0.8); }
+  .run { position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 45%, #3a5a74, var(--ground)); }
+  /* реликвия — как relic-frame в tokens.css */
+  .relic { position: relative; border-radius: 12px; padding: 22px 16px 18px; --tone: var(--elite);
+    background: radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--tone) 24%, transparent), transparent 72%),
+      linear-gradient(180deg, color-mix(in oklab, var(--raised) 85%, var(--tone)), var(--surface) 38%, var(--sunken));
+    border: 1px solid color-mix(in oklab, var(--tone) 60%, var(--border-strong));
+    box-shadow: 0 24px 48px -16px #000, inset 0 0 0 3px color-mix(in oklab, var(--bg) 75%, transparent), inset 0 0 0 4px color-mix(in oklab, var(--tone) 38%, transparent); }
+  .band { position: absolute; left: 32px; right: 32px; height: 10px; background: var(--tone); opacity: .75;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px; }
+  .band.top { top: 4px; } .band.bottom { bottom: 4px; }
+  .ribbon { position: relative; display: inline-flex; padding: 6px 32px; margin: 0 auto; }
+  .ribbon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ribbon span { position: relative; color: var(--on-accent); font: 700 19px/1.2 "Russo One", system-ui; white-space: nowrap; }
+  .center { text-align: center; }
+  .row { position: relative; display: flex; gap: 12px; align-items: center; border-radius: 8px; padding: 8px 12px 8px 14px; background: var(--sunken); overflow: hidden; --row: var(--weapon); }
+  .row.lit { background: linear-gradient(90deg, color-mix(in oklab, var(--row) 18%, transparent), transparent 72%), var(--sunken); box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row) 80%, transparent); }
+  .medal { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 2px var(--row); background: radial-gradient(closest-side, color-mix(in oklab, var(--row) 25%, transparent), transparent), var(--sunken); color: var(--row); font-size: 22px; flex: none; }
+  .name { font: 700 15px/1.2 "Russo One", system-ui; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font: 700 10px/1.5 "Russo One", system-ui; text-transform: uppercase; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 6px; padding: 14px; font: 700 17px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent);
+    background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; padding: 3px 10px; background: var(--sunken); font-size: 12px; }
+  .hud { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+  .bar { height: 8px; border-radius: 4px; background: #ffffff1c; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+</style>
+</head>
+<body>
+<h1>Макеты забега v2 — эволюция, Страж рубежа, итог рубежа</h1>
+<p class="lead">Черновые макеты дизайнера (design/art/direction-v2.md §5.1–5.2) для задач, у которых в спецификации «макета нет»:
+T-0102/0103 (эволюции), T-0120/0124 (рубеж). Материалы — дизайн-система v2: реликвия, лента, медальоны. Числа и тексты — из спецификаций.</p>
+<div class="grid" id="grid"></div>
+
+<template id="evolution">
+  <div class="phone">
+    <div class="run"></div><div class="scrim"></div>
+    <div style="position:absolute; left:0; right:0; top:58px; height:150px; display:grid; place-items:center;">
+      <div style="position:absolute; width:300px; height:300px; border-radius:50%; background: repeating-conic-gradient(from 0deg, color-mix(in oklab, #c47dff 40%, transparent) 0 7deg, transparent 7deg 22deg); -webkit-mask: radial-gradient(closest-side, #000 18%, transparent); mask: radial-gradient(closest-side, #000 18%, transparent);"></div>
+      <div style="position:relative; display:flex; align-items:center; gap:18px;">
+        <div class="medal" style="--row: var(--weapon); width:62px; height:62px; opacity:.55; filter: grayscale(.4);">⚡</div>
+        <div class="display" style="color: var(--elite); font-size: 26px;">➜</div>
+        <div class="medal" style="--row: var(--elite); width:84px; height:84px; font-size:36px; box-shadow: inset 0 0 0 3px var(--elite), 0 0 0 3px #c47dff, 0 0 30px #c47dff88;">✶</div>
+      </div>
+    </div>
+    <div style="position:absolute; left:16px; right:16px; top:220px;">
+      <div class="relic" style="--tone: #c47dff;">
+        <div class="band top"></div><div class="band bottom"></div>
+        <div class="center"><div class="ribbon"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M0 4h200l-12 16 12 16H0l12-16z" fill="#c47dff"/></svg><span>Эволюция!</span></div></div>
+        <p class="center muted small" style="margin:8px 0 12px;">«Искра» на максимуме + «Спешка» — сундук превратил её</p>
+        <div class="row lit" style="--row: #c47dff; padding-top:12px; padding-bottom:12px;">
+          <div class="medal" style="--row: var(--elite); box-shadow: inset 0 0 0 2px var(--elite), 0 0 0 2px #c47dff;">✶</div>
+          <div style="flex:1">
+            <div class="name">Звездопад</div>
+            <div class="small muted">вместо «Искры» · урон <b style="color:var(--success)">×2,4</b>, снаряды <b style="color:var(--success)">8</b></div>
+          </div>
+          <span class="badge" style="position:absolute; top:0; right:0; border-radius:0 0 0 6px; background: linear-gradient(90deg,#c47dff,#ffd15c); color: var(--on-accent);">Эволюция</span>
+        </div>
+        <div class="row lit" style="--row: var(--passive); margin-top:8px;">
+          <div class="medal" style="--row: var(--passive);">✦</div>
+          <div style="flex:1"><div class="name">Мощь <span class="badge" style="background:#c47dff33; color:var(--passive)">уровень 3</span></div><div class="small muted">урон всего оружия +20% → <b style="color:var(--success)">+30%</b></div></div>
+        </div>
+        <div style="margin-top:14px"><button class="btn">Забрать</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="cap"><b>Эволюция в сундуке (T-0102/0103).</b> Самый сильный момент награды — своя сцена: медальон базового оружия гаснет, эволюция встаёт в двойной рамке (золото оружия + фиолет навыка), лучи и лента — фиолетово-золотые. Строка эволюции — первой, с уголком «Эволюция».</div>
+</template>
+
+<template id="guard">
+  <div class="phone">
+    <div class="run"></div>
+    <div class="hud">
+      <div style="flex:1"><div class="bar"><i style="width:72%; background: var(--hp)"></i></div></div>
+      <div class="display" style="background:#17162acc; border-radius:8px; padding:4px 10px; font-size:18px;">10:00</div>
+    </div>
+    <div style="position:absolute; left:14px; right:14px; top:54px; padding:8px 12px 10px; border-radius:10px; background:#17162ae6; box-shadow: inset 0 0 0 1px #ffd15c66;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;"><span class="display" style="font-size:14px; color: var(--elite);">Страж рубежа</span><span class="small muted">фаза 1/3</span></div>
+      <div class="bar" style="margin-top:6px; height:10px; background:#ffffff14; position:relative;"><i style="width:100%; background: linear-gradient(90deg,#ff5d5d,#ffd15c);"></i>
+        <span style="position:absolute; left:33%; top:0; bottom:0; width:2px; background:#17162a"></span><span style="position:absolute; left:66%; top:0; bottom:0; width:2px; background:#17162a"></span></div>
+    </div>
+    <div style="position:absolute; left:0; right:0; top:240px; display:grid; place-items:center;">
+      <div style="position:relative; padding:14px 0; width:100%; text-align:center; background: linear-gradient(90deg, transparent, #17162aee 18%, #17162aee 82%, transparent);">
+        <div style="position:absolute; left:15%; right:15%; top:4px; height:10px; --tone: var(--elite);" class="band"></div>
+        <div style="position:absolute; left:15%; right:15%; bottom:4px; height:10px; --tone: var(--elite);" class="band"></div>
+        <div class="display" style="font-size:28px; color: var(--elite); text-shadow: 0 0 18px #ffd15c88;">Страж рубежа пришёл</div>
+        <div class="small muted" style="margin-top:4px">Убей его — рубеж взят, награда ×2</div>
+      </div>
+    </div>
+    <div style="position:absolute; left:0; right:0; top:420px; display:grid; place-items:center;">
+      <div style="position:relative; padding:12px 0; width:100%; text-align:center; background: linear-gradient(90deg, transparent, #17162aee 18%, #17162aee 82%, transparent);">
+        <div class="display" style="font-size:30px; color: var(--success); text-shadow: 0 0 18px #8ee86b88;">Рубеж взят!</div>
+        <div class="small muted" style="margin-top:4px">Бой продолжается — награда уже ×2</div>
+      </div>
+    </div>
+    <div class="cap" style="position:absolute; bottom:12px; left:16px; width:330px; color:#aeaac4; font-size:11px;">Две плашки показаны вместе для сравнения; в бою — по очереди, каждая ~2,5 с, без паузы мира.</div>
+  </div>
+  <div class="cap"><b>Страж рубежа (T-0124).</b> Плашка-событие во всю ширину — между каймами-оберегами, как реликвия, но прозрачная: бой виден под ней. Полоса босса — золото к красному, деления фаз. «Рубеж взят!» — зелёным: победа, а не угроза.</div>
+</template>
+
+<template id="death">
+  <div class="phone">
+    <div class="scrim" style="background:#1d1c31"></div>
+    <div style="position:absolute; left:16px; right:16px; top:24px;">
+      <div class="relic" style="--tone: var(--success); padding-top:28px;">
+        <div class="band top"></div><div class="band bottom"></div>
+        <div class="center"><div class="ribbon"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M0 4h200l-12 16 12 16H0l12-16z" fill="#8ee86b"/></svg><span>Рубеж взят</span></div></div>
+        <div class="center display" style="font-size:52px; color: var(--accent); margin-top:10px; text-shadow:0 0 24px #ff8f3f66;">12:48</div>
+        <div class="center small muted">Время выживания · Страж пал на 10:41</div>
+        <div style="margin-top:14px; padding:12px; border-radius:8px; background: var(--sunken);">
+          <div style="display:flex; align-items:center; gap:10px;"><span class="display" style="font-size:22px;">🪙 +176</span><span class="badge" style="background: var(--success); color:#0b2a0b">×2 рубеж</span><span class="small" style="color: var(--xp)">+330 опыта</span></div>
+          <div class="bar" style="margin-top:10px; height:6px;"><i style="width:64%; background: var(--xp)"></i></div>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(4,1fr); gap:6px; margin-top:12px;">
+          <div class="center" style="background:var(--sunken); border-radius:8px; padding:8px 2px;"><div class="display" style="font-size:18px">2</div><div class="small muted">боссы</div></div>
+          <div class="center" style="background:var(--sunken); border-radius:8px; padding:8px 2px;"><div class="display" style="font-size:18px">14</div><div class="small muted">элиты</div></div>
+          <div class="center" style="background:var(--sunken); border-radius:8px; padding:8px 2px;"><div class="display" style="font-size:18px">9</div><div class="small muted">сундуки</div></div>
+          <div class="center" style="background:var(--sunken); border-radius:8px; padding:8px 2px;"><div class="display" style="font-size:18px">1,2к</div><div class="small muted">кристаллы</div></div>
+        </div>
+        <div style="margin-top:14px"><button class="btn">Ещё раз</button></div>
+      </div>
+      <div class="relic" style="--tone: var(--border-strong); margin-top:16px; padding:16px;">
+        <div class="center small muted">Если не дошёл:</div>
+        <div class="center display" style="font-size:18px; margin-top:6px;">До рубежа <span style="color: var(--elite)">84 с</span></div>
+        <div class="bar" style="margin-top:8px; height:8px;"><i style="width:86%; background: linear-gradient(90deg, var(--accent), var(--elite));"></i></div>
+        <div class="center small muted" style="margin-top:6px;">или: «Страж почти пал: осталось 12%»</div>
+      </div>
+    </div>
+  </div>
+  <div class="cap"><b>Итог с рубежом (T-0124, T-0125).</b> Победа — реликвия зелёного тона и лента «Рубеж взят», «×2 рубеж» у награды. Счётчики боссов, элит, сундуков и кристаллов (T-0125) — плитками в ряд. Поражение — полоса «до рубежа»: как близко было, — зовёт сыграть ещё.</div>
+</template>
+
+<script>
+for (const id of ["evolution", "guard", "death"]) {
+  const wrap = document.createElement("div");
+  wrap.append(document.getElementById(id).content.cloneNode(true));
+  document.getElementById("grid").append(wrap);
+}
+document.body.dataset.ready = "1";
+</script>
+</body>
+</html>

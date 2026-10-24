@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ПК-раскладка v2</title>
+<!--
+  Макет к design/art/meta-v2.md §9 («ПК-раскладка») и docs/35-stage4-plan.md
+  Р72, WP40: на широком экране — не столбец телефона посередине, а другая
+  компоновка, которая пользуется местом. Главная и арсенал на 1440×900.
+  Снимок — out/preview/desktop-v2.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  :root {
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a; --border: #43425f; --border-strong: #5b5980;
+    --text: #f3eee6; --muted: #aeaac4; --faint: #6f6c8a; --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6;
+    --elite: #ffd15c; --weapon: #ffe066; --passive: #c47dff; --xp: #b6ff4a; --coin: #ffcf33; --gem: #ff4d6a;
+    --common: #b9b6cc; --uncommon: #8ee86b; --rare: #5ccfff; --epic: #c47dff; --legendary: #ffd15c; --mythic: #ff5d6c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f0e1a; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 24px; width: 1488px; }
+  h1 { font: 22px/1.2 "Russo One"; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 16px; max-width: 150ch; }
+  .frame { width: 1440px; height: 900px; position: relative; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 2px #2c2a45, 0 30px 60px -30px #000;
+    background: radial-gradient(60% 50% at 50% -10%, #ff8f3f22, transparent 60%), radial-gradient(80% 60% at 70% 100%, #46d9c614, transparent 60%), var(--bg); display: grid; grid-template-columns: 232px 1fr; }
+  .cap { margin: 10px 0 28px; color: var(--muted); max-width: 150ch; } .cap b { color: var(--text); }
+  .stars { position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(1.5px 1.5px at 12% 18%, #fff8, transparent), radial-gradient(1.5px 1.5px at 38% 9%, #fff6, transparent), radial-gradient(1.5px 1.5px at 66% 22%, #fff7, transparent), radial-gradient(2px 2px at 84% 12%, #fff9, transparent), radial-gradient(1.5px 1.5px at 92% 40%, #fff5, transparent), radial-gradient(1.5px 1.5px at 52% 30%, #fff5, transparent); }
+  .stakes { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; opacity: .55; pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='46'%3E%3Cpath d='M2 46V14L13 2l11 12v32z' fill='%23120d20' stroke='%23ff8f3f' stroke-opacity='.35'/%3E%3C/svg%3E") repeat-x bottom; }
+  .d { font-family: "Russo One", system-ui; }
+  .muted { color: var(--muted); } .small { font-size: 12.5px; } .tiny { font-size: 11.5px; }
+  /* боковая полоса */
+  .rail { position: relative; z-index: 2; padding: 22px 16px; background: linear-gradient(180deg, #17162acc, #17162a99); border-right: 1px solid #ffffff10; display: flex; flex-direction: column; gap: 6px; }
+  .rail .wm { width: 150px; margin: 0 0 18px 6px; }
+  .me { display: flex; gap: 10px; align-items: center; padding: 10px; border-radius: 10px; background: var(--surface); margin-bottom: 14px; }
+  .ava { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: #2c2b46; box-shadow: 0 0 0 2.5px var(--xp) inset, 0 0 0 1px #ffffff14; font: 16px "Russo One"; }
+  .bar { height: 6px; border-radius: 99px; background: var(--sunken); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--xp); border-radius: 99px; }
+  .nav { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 9px; color: var(--muted); font: 15px "Russo One"; }
+  .nav svg { width: 22px; height: 22px; } .nav.on { color: var(--text); background: linear-gradient(90deg, #ff8f3f33, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+  .nav .badge { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 99px; background: var(--accent); color: var(--on-accent); font-size: 12px; text-align: center; }
+  .rail .bottom { margin-top: auto; display: grid; gap: 2px; }
+  /* главная область */
+  .main { position: relative; z-index: 1; padding: 20px 28px 0; display: grid; grid-template-rows: auto 1fr; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .top h2 { font: 30px "Russo One"; margin: 0; }
+  .wallet { display: flex; gap: 10px; align-items: center; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px 0 6px; border-radius: 99px; background: var(--sunken); font: 15px "Russo One"; }
+  .coin { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff2a8, var(--coin) 55%, #b45f00); box-shadow: 0 0 0 1.5px #120f1e; }
+  .gem { width: 20px; height: 20px; background: linear-gradient(160deg, #ff8fa0, var(--gem) 55%, #9e1020); clip-path: polygon(50% 0, 100% 38%, 50% 100%, 0 38%); }
+  .plus { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; margin-left: 4px; font-weight: 700; }
+  .ib { width: 40px; height: 40px; border-radius: 9px; background: var(--surface); display: grid; place-items: center; box-shadow: inset 0 0 0 1px #ffffff12; }
+  .cols { display: grid; grid-template-columns: 1fr 380px; gap: 24px; min-height: 0; }
+  .card { border-radius: 12px; padding: 16px; background: linear-gradient(180deg, var(--raised), var(--surface)); border: 1px solid #ffffff10; box-shadow: inset 0 1px 0 #ffffff0d, 0 14px 30px -18px #000; }
+  .sect { display: flex; align-items: center; gap: 8px; font: 12.5px "Russo One"; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 18px 0 10px; }
+  .sect::before { content: ""; width: 8px; height: 8px; background: var(--accent); transform: rotate(45deg); }
+  .sect::after { content: ""; flex: 1; height: 6px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='6'%3E%3Cpath d='M0 3h4M8 3h4M6 1l2 2-2 2-2-2z' stroke='%235b5980' fill='%235b5980'/%3E%3C/svg%3E") repeat-x; -webkit-mask: linear-gradient(90deg, #000, transparent); }
+  .hero-banner { height: 250px; position: relative; overflow: hidden; padding: 26px 30px; border-radius: 14px; background: url("promo-16x9-bg.jpg") right 58% / 165% auto #1d1c31; box-shadow: inset 0 0 0 1px #ffffff1a; }
+  .hero-banner::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #17162af0 0%, #17162acc 38%, transparent 70%); }
+  .hero-banner > * { position: relative; }
+  .tag { display: inline-block; padding: 3px 9px; border-radius: 6px; background: #ffd15c22; color: var(--elite); font: 11.5px "Russo One"; letter-spacing: .08em; text-transform: uppercase; }
+  .play { position: relative; display: flex; align-items: center; justify-content: center; gap: 12px; height: 76px; margin-top: 16px; font: 26px "Russo One"; letter-spacing: .04em; color: var(--on-accent);
+    background: linear-gradient(180deg, #ffd08f, var(--accent) 48%, #f0782a); clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%); box-shadow: 0 0 40px #ff8f3f55; }
+  .prerun { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+  .chip { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--sunken); }
+  .tile { width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+  .tile svg { width: 22px; height: 22px; } .tw { background: #ffe0661f; color: var(--weapon); } .tp { background: #c47dff22; color: var(--passive); }
+  .widgets { display: grid; gap: 12px; align-content: start; }
+  .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-top: 10px; }
+  .day { height: 54px; border-radius: 8px; background: var(--sunken); display: grid; place-items: center; font: 12px "Russo One"; color: var(--muted); }
+  .day.on { box-shadow: inset 0 0 0 2px var(--accent); color: var(--text); background: #ff8f3f1a; } .day.done { color: var(--success, #8ee86b); }
+  .row { display: flex; align-items: center; gap: 10px; } .between { justify-content: space-between; }
+  .ring { width: 54px; height: 54px; border-radius: 50%; background: conic-gradient(var(--xp) 0 40%, var(--sunken) 0); display: grid; place-items: center; }
+  .ring > span { width: 42px; height: 42px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font: 13px "Russo One"; }
+  .task { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid #ffffff0d; font-size: 13px; }
+  .wheel { width: 76px; height: 76px; border-radius: 50%; background: conic-gradient(#46d9c6 0 12.5%, #353452 0 25%, #ffcf33 0 37.5%, #353452 0 50%, #5ccfff 0 62.5%, #353452 0 75%, #ffcf33 0 87.5%, #353452 0); box-shadow: 0 0 0 4px #ff8f3f, 0 0 20px #ff8f3f55; }
+  .last { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat { padding: 12px; border-radius: 10px; background: var(--sunken); } .stat b { display: block; font: 22px "Russo One"; margin-top: 2px; }
+  /* арсенал */
+  .ars { display: grid; grid-template-columns: 360px minmax(0, 1fr) 300px; gap: 20px; min-height: 0; }
+  .ars > * { min-width: 0; }
+  .slots { position: relative; height: 470px; border-radius: 14px; background: radial-gradient(60% 50% at 50% 60%, #46d9c61f, transparent 70%), linear-gradient(180deg, var(--raised), var(--surface)); border: 1px solid #ffffff10; }
+  .slots img { position: absolute; left: 50%; top: 50%; height: 300px; transform: translate(-50%, -50%); }
+  .slot { position: absolute; width: 64px; height: 64px; border-radius: 10px; border: 1.5px dashed var(--border-strong); display: grid; place-items: center; color: var(--faint); background: #17162a88; }
+  .slot.full { border: 2px solid var(--rare); background: #5ccfff1a; color: var(--rare); box-shadow: 0 0 16px #5ccfff44; }
+  .slot.epic { border-color: var(--epic); background: #c47dff1a; color: var(--epic); box-shadow: 0 0 16px #c47dff55; }
+  .slot svg { width: 30px; height: 30px; }
+  .inv { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .it { aspect-ratio: 1; border-radius: 10px; display: grid; place-items: center; background: var(--sunken); position: relative; box-shadow: inset 0 0 0 2px var(--r); }
+  .it::after { content: attr(data-l); position: absolute; right: 5px; bottom: 3px; font: 11px "Russo One"; color: var(--muted); }
+  .it svg { width: 30px; height: 30px; color: var(--r); }
+  .it.sel { outline: 2px solid var(--text); outline-offset: 2px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; } .f { padding: 7px 12px; border-radius: 99px; background: var(--sunken); color: var(--muted); font-size: 13px; } .f.on { background: var(--accent); color: var(--on-accent); }
+  .btn { height: 44px; border-radius: 8px; display: grid; place-items: center; font: 15px "Russo One"; }
+  .btn.p { background: linear-gradient(180deg, #ffd08f, var(--accent) 48%, #f0782a); color: var(--on-accent); } .btn.s { background: var(--raised); box-shadow: inset 0 0 0 1px #ffffff14; }
+  .kv { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid #ffffff0d; font-size: 13px; } .kv b { font-weight: 600; } .up { color: var(--success, #8ee86b); }
+  .notes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 4px; } .notes span { padding: 9px 11px; border-radius: 8px; background: #28273f; font-size: 12.5px; } .notes b { color: var(--elite); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="g-spark" viewBox="0 0 24 24"><path d="M12 2.5l2 7.5 7.5 2-7.5 2-2 7.5-2-7.5L2.5 12l7.5-2z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z" fill="currentColor"/></symbol>
+    <symbol id="g-knife" viewBox="0 0 24 24"><path d="M20.5 3.5L11 15l-2-2z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M6.5 12.5l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 16l-4 4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="g-ward" viewBox="0 0 24 24"><path d="M12 2.5l7 9.5-7 9.5-7-9.5z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6M12 9v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="g-might" viewBox="0 0 24 24"><path d="M3.5 7.5l6.5-4 4 6.5-6.5 4z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 11.5l7.5 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="g-shield" viewBox="0 0 24 24"><path d="M12 2.5l8 3v6.3c0 4.9-3.4 8.2-8 9.7-4.6-1.5-8-4.8-8-9.7V5.5z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 7.5l3 4.5-3 4.5-3-4.5z" fill="currentColor"/></symbol>
+    <symbol id="g-heart" viewBox="0 0 24 24"><path d="M12 20.5S3.5 15.5 3.5 9.2A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8.5 2.2c0 6.3-8.5 11.3-8.5 11.3z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-sword" viewBox="0 0 24 24"><path d="M14 4h6v6L10 20l-6-6zM4 20l3-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-cup" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3a4 4 0 0 1 0 8M18 14a6 6 0 0 1 4 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM8 7h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<h1>ПК-раскладка v2 — главная и арсенал на 1440×900</h1>
+<p class="lead">Сейчас на широком экране — столбец телефона посередине и пустые поля. Предложение к WP40 (Р72): от 1024 px нижняя панель становится боковой полосой, главное действие — в центре, виджеты — справа, а в арсенале герой, снаряжение и карточка предмета видны сразу, без листов. Компоненты, токены и порядок виджетов — те же, что на телефоне: меняется только раскладка.</p>
+
+<div class="frame">
+  <div class="stars"></div><div class="stakes"></div>
+  <aside class="rail">
+    <img class="wm" src="../out/brand/wordmark.svg" alt="">
+    <div class="me"><div class="ava">Д</div><div style="flex:1"><div class="d" style="font-size:14px">Дизайнер</div><div class="tiny muted" style="margin:2px 0 5px">Уровень 1 · 0 / 150</div><div class="bar"><i style="width:8%"></i></div></div></div>
+    <div class="nav on"><svg><use href="#i-home"/></svg>Главная</div>
+    <div class="nav"><svg><use href="#i-sword"/></svg>Арсенал<span class="badge">2</span></div>
+    <div class="nav"><svg><use href="#i-bag"/></svg>Магазин</div>
+    <div class="nav"><svg><use href="#i-list"/></svg>Задания<span class="badge">1</span></div>
+    <div class="nav"><svg><use href="#i-cup"/></svg>Рейтинг</div>
+    <div class="nav"><svg><use href="#i-users"/></svg>Друзья</div>
+    <div class="bottom"><div class="nav"><svg><use href="#i-book"/></svg>Гайдбук</div><div class="nav"><svg><use href="#i-gear"/></svg>Настройки</div></div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <h2>Рубеж ждёт</h2>
+      <div class="wallet"><span class="pill"><i class="coin"></i>660</span><span class="pill"><i class="gem"></i>10<span class="plus">+</span></span><span class="ib"><svg width="22" height="22"><use href="#i-bell"/></svg></span></div>
+    </div>
+    <div class="cols">
+      <section>
+        <div class="hero-banner">
+          <span class="tag">Слайд карусели · пример</span>
+          <div class="d" style="font-size:34px;margin:12px 0 6px;max-width:440px;line-height:1.1">Ночь Матрёшки</div>
+          <div class="muted" style="max-width:380px">Босс приходит на 5-й минуте. Продержись дольше — в сундуке с босса осколки редкого.</div>
+        </div>
+        <div class="play">▶ ИГРАТЬ</div>
+        <!-- На ПК лист «Перед забегом» не нужен: выбор виден сразу под кнопкой. -->
+        <div class="prerun">
+          <div class="chip"><span class="tile tw"><svg><use href="#g-spark"/></svg></span><div><div class="tiny muted">Стартовое оружие</div><div class="d">Искра</div></div></div>
+          <div class="chip"><span class="tile tp"><svg><use href="#g-shield"/></svg></span><div><div class="tiny muted">Бусты · 1 из 2</div><div class="d">Эгида</div></div></div>
+          <div class="chip"><span class="tile" style="background:#5ccfff1f;color:#5ccfff"><svg viewBox="0 0 24 24"><path d="M12 3a8 8 0 0 0-8 8v2l2 2v3h4v-2h4v2h4v-3l2-2v-2a8 8 0 0 0-8-8z" fill="currentColor" fill-opacity=".28" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="9" cy="11" r="1.6" fill="currentColor"/><circle cx="15" cy="11" r="1.6" fill="currentColor"/></svg></span><div><div class="tiny muted">Сложность</div><div class="d">Лёгкая</div></div></div>
+        </div>
+        <div class="sect">Последний забег</div>
+        <div class="last">
+          <div class="stat"><span class="tiny muted">Время</span><b>1:11</b></div>
+          <div class="stat"><span class="tiny muted">Убито</span><b>142</b></div>
+          <div class="stat"><span class="tiny muted">Уровень</span><b>7</b></div>
+          <div class="stat"><span class="tiny muted">Лучшее оружие</span><b style="color:var(--weapon)">Искра</b></div>
+        </div>
+      </section>
+      <aside class="widgets">
+        <div class="card"><div class="row between"><span class="d">Награда дня</span><span class="tiny muted">до полуночи по МСК</span></div>
+          <div class="days"><div class="day done">✓</div><div class="day on">80</div><div class="day">100</div><div class="day">120</div><div class="day">150</div><div class="day">180</div><div class="day" style="color:var(--elite)">300</div></div>
+          <div class="btn p" style="margin-top:10px;height:38px">Забрать</div></div>
+        <div class="card row" style="gap:16px"><div class="wheel"></div><div style="flex:1"><div class="tiny muted">Колесо удачи</div><div class="d" style="font-size:18px;margin:2px 0 4px">Крутка ждёт</div><div class="small muted">до <i class="coin" style="display:inline-block;width:14px;height:14px;vertical-align:-2px"></i> 1 000</div></div><div class="btn s" style="padding:0 14px;height:36px">Крутить</div></div>
+        <div class="card"><div class="row" style="gap:14px"><div class="ring"><span>2/5</span></div><div><div class="d">Задания дня</div><div class="tiny muted">обновятся через 16 ч</div></div></div>
+          <div class="task" style="margin-top:8px"><span>Продержись 4 мин</span><span class="muted">0:00 / 4:00</span></div>
+          <div class="task"><span>Дорасти до 10-го уровня</span><span class="muted">7 / 10</span></div>
+          <div class="task"><span>2 забега с «Ножом»</span><span style="color:var(--success,#8ee86b)">Забрать</span></div></div>
+        <div class="card"><div class="row between"><span class="d">Друзья</span><span class="tiny muted">подарки друг другу</span></div>
+          <div class="task" style="margin-top:6px"><span>1. Аня</span><span class="d">12:40</span></div><div class="task"><span>2. Ты</span><span class="d">1:11</span></div><div class="task"><span class="muted">+ позвать друга</span><span style="color:var(--accent)">Пригласить</span></div></div>
+      </aside>
+    </div>
+  </main>
+</div>
+<p class="cap"><b>Главная.</b> Боковая полоса: знак, карточка игрока с уровнем, разделы со знаками новых; гайдбук и настройки — внизу, а не в меню. Центр — баннер карусели во всю ширину колонки, «Играть» крупно и выбор забега сразу под ней (оружие, бусты, сложность — без листа «Перед забегом»), итог последнего забега. Справа — виджеты тем же порядком ценности, что на телефоне (`arrangeWidgets`), каждый шире и с подробностями: неделя награды дня целиком, три задания строками, топ друзей.</p>
+
+<div class="frame">
+  <div class="stars"></div><div class="stakes"></div>
+  <aside class="rail">
+    <img class="wm" src="../out/brand/wordmark.svg" alt="">
+    <div class="me"><div class="ava">Д</div><div style="flex:1"><div class="d" style="font-size:14px">Дизайнер</div><div class="tiny muted" style="margin:2px 0 5px">Уровень 1 · 0 / 150</div><div class="bar"><i style="width:8%"></i></div></div></div>
+    <div class="nav"><svg><use href="#i-home"/></svg>Главная</div>
+    <div class="nav on"><svg><use href="#i-sword"/></svg>Арсенал<span class="badge">2</span></div>
+    <div class="nav"><svg><use href="#i-bag"/></svg>Магазин</div>
+    <div class="nav"><svg><use href="#i-list"/></svg>Задания<span class="badge">1</span></div>
+    <div class="nav"><svg><use href="#i-cup"/></svg>Рейтинг</div>
+    <div class="nav"><svg><use href="#i-users"/></svg>Друзья</div>
+    <div class="bottom"><div class="nav"><svg><use href="#i-book"/></svg>Гайдбук</div><div class="nav"><svg><use href="#i-gear"/></svg>Настройки</div></div>
+  </aside>
+  <main class="main">
+    <div class="top">
+      <h2>Арсенал</h2>
+      <div class="wallet"><span class="pill" style="font-size:13px;padding:0 14px">Мощь <b class="d" style="margin-left:6px">48</b></span><span class="pill"><i class="coin"></i>660</span><span class="pill"><i class="gem"></i>10<span class="plus">+</span></span></div>
+    </div>
+    <div class="ars">
+      <section>
+        <div class="slots">
+          <img src="../out/card-hero-keeper.svg" alt="">
+          <div class="slot full" style="left:24px;top:40px"><svg><use href="#g-knife"/></svg></div>
+          <div class="slot epic" style="left:24px;top:200px"><svg><use href="#g-shield"/></svg></div>
+          <div class="slot" style="left:24px;top:360px"><svg><use href="#g-heart"/></svg></div>
+          <div class="slot full" style="right:24px;top:40px"><svg><use href="#g-ward"/></svg></div>
+          <div class="slot" style="right:24px;top:200px"><svg><use href="#g-might"/></svg></div>
+          <div class="slot" style="right:24px;top:360px"><svg><use href="#g-spark"/></svg></div>
+        </div>
+        <div class="small muted" style="margin-top:10px">Предел уровня предметов — 6: растёт с уровнем аккаунта.</div>
+      </section>
+      <section>
+        <div class="filters"><span class="f on">Всё</span><span class="f">Оружие</span><span class="f">Обереги</span><span class="f">Броня</span><span class="f" style="margin-left:auto">↓ Редкость</span><span class="f">Объединить</span></div>
+        <div class="inv">
+          <div class="it sel" style="--r:var(--epic)" data-l="4"><svg><use href="#g-shield"/></svg></div>
+          <div class="it" style="--r:var(--rare)" data-l="3"><svg><use href="#g-knife"/></svg></div>
+          <div class="it" style="--r:var(--rare)" data-l="2"><svg><use href="#g-ward"/></svg></div>
+          <div class="it" style="--r:var(--uncommon)" data-l="2"><svg><use href="#g-heart"/></svg></div>
+          <div class="it" style="--r:var(--uncommon)" data-l="1"><svg><use href="#g-might"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-spark"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-knife"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-heart"/></svg></div>
+          <div class="it" style="--r:var(--legendary)" data-l="5"><svg><use href="#g-spark"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-ward"/></svg></div>
+          <div class="it" style="--r:var(--uncommon)" data-l="2"><svg><use href="#g-shield"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-might"/></svg></div>
+          <div class="it" style="--r:var(--rare)" data-l="3"><svg><use href="#g-heart"/></svg></div>
+          <div class="it" style="--r:var(--common)" data-l="1"><svg><use href="#g-knife"/></svg></div>
+        </div>
+        <div class="sect">Осколки</div>
+        <div class="row" style="gap:18px"><span>⬧ 12 обычных</span><span style="color:var(--uncommon)">⬧ 4 добротных</span><span style="color:var(--rare)">⬧ 1 редкий</span></div>
+      </section>
+      <aside class="card" style="align-self:start">
+        <div class="row" style="gap:14px"><div class="it" style="--r:var(--epic);width:72px"><svg><use href="#g-shield"/></svg></div><div><div class="tiny" style="color:var(--epic)">Эпическое · уровень 4</div><div class="d" style="font-size:20px">Щит дозора</div><div class="tiny muted">броня</div></div></div>
+        <div style="margin-top:12px"><div class="kv"><span class="muted">Броня</span><b>8 <span class="up">→ 10</span></b></div><div class="kv"><span class="muted">Сопротивление холоду</span><b>12% <span class="up">→ 15%</span></b></div><div class="kv"><span class="muted">Мощь</span><b>+14 <span class="up">→ +18</span></b></div></div>
+        <div class="btn p" style="margin-top:14px;display:flex;gap:8px;justify-content:center;align-items:center">Улучшить <i class="coin" style="display:inline-block;width:16px;height:16px"></i> 240</div>
+        <div class="btn s" style="margin-top:8px">Снять</div>
+        <div class="tiny muted" style="margin-top:10px">Наведение на плитку — та же карточка рядом, клик — закрепить. Перетаскивание плитки в слот — надеть.</div>
+      </aside>
+    </div>
+  </main>
+</div>
+<p class="cap"><b>Арсенал.</b> Слева — герой со слотами вокруг, как на телефоне; в центре — весь инвентарь сеткой с фильтрами, без прокрутки до сотни предметов; справа — карточка выбранного предмета с выгодой улучшения «8 → 10», которая на телефоне открывается листом. Мышь получает своё: наведение показывает карточку, перетаскивание надевает.</p>
+
+<div class="notes">
+  <span><b>С 1024 px</b> — боковая полоса вместо нижней; ниже — раскладка телефона как есть. Порог — по ширине окна, а не устройства: окно Mini App в Telegram Desktop бывает узким.</span>
+  <span><b>Забег</b> — канва во весь центр; сборка (оружие, навыки) и время — на боковых полосах, а не поверх поля: на ПК место есть, и HUD не закрывает врагов.</span>
+  <span><b>Листы → панели.</b> «Перед забегом», карточка предмета, состав набора в магазине — панелью рядом, а не листом снизу: снизу на мониторе далеко глазу и мыши.</span>
+  <span><b>Клавиатура</b> — уже есть в забеге (Esc, P, 1–4, Enter); в меню — 1–6 по разделам, Enter — «Играть».</span>
+</div>
+</body>
+</html>

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Первый забег v2</title>
+<!--
+  Раскадровка к design/art/meta-v2.md §4: первый забег — пролог, который
+  кончается победой над Стражем рубежа. Снимок — out/preview/first-run-v2.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  :root { --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a; --border: #43425f; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --secondary: #46d9c6; --elite: #ffd15c; --hp: #ff6f90; --xp: #b6ff4a; --nav: #a06cff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 22px; width: 1620px; }
+  h1 { font: 22px/1.2 "Russo One"; margin: 0 0 4px; } .lead { color: var(--muted); margin: 0 0 16px; max-width: 160ch; }
+  .track { position: relative; display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }
+  .track::before { content: ""; position: absolute; left: 0; right: 0; top: 168px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--secondary), var(--xp) 30%, var(--elite) 55%, var(--accent) 75%, var(--nav) 88%, var(--elite)); opacity: .7; }
+  .beat { position: relative; }
+  .scene { height: 150px; border-radius: 10px; overflow: hidden; position: relative; background: radial-gradient(70% 70% at 50% 55%, #3d5c74, #2c475e); box-shadow: inset 0 0 0 1px #ffffff14; }
+  .scene img { position: absolute; }
+  .dot { position: absolute; left: 50%; top: 162px; width: 18px; height: 18px; margin-left: -9px; transform: rotate(45deg); background: var(--c); box-shadow: 0 0 0 4px #12111f; }
+  .t { margin-top: 30px; font: 20px/1 "Russo One"; color: var(--c); }
+  .n { font: 15px/1.2 "Russo One"; margin-top: 4px; }
+  .w { margin-top: 6px; font-size: 12.5px; }
+  .f { margin-top: 6px; font-size: 12px; color: var(--muted); border-left: 2px solid var(--c); padding-left: 7px; }
+  .rat { width: 16px; height: 12px; border-radius: 50%; background: #7a6a72; position: absolute; }
+  .gem { width: 7px; height: 7px; transform: rotate(45deg); background: var(--xp); position: absolute; }
+  .toast { position: absolute; left: 8px; right: 8px; bottom: 8px; padding: 5px 8px; border-radius: 7px; background: #17162ae6; font-size: 11px; box-shadow: inset 0 0 0 1px #ffffff1c; }
+  .ring { position: absolute; border-radius: 50%; border: 2px dashed #ff5d5d; }
+  .bar { position: absolute; left: 10px; right: 10px; top: 8px; height: 8px; border-radius: 4px; background: #00000055; box-shadow: inset 0 0 0 1px #ffd15c88; } .bar i { display: block; height: 100%; width: 70%; border-radius: 4px; background: #ff5d6c; }
+  .pills { display: flex; gap: 8px; margin-top: 18px; flex-wrap: wrap; } .pills span { padding: 6px 10px; border-radius: 8px; background: var(--surface); font-size: 12.5px; box-shadow: inset 0 0 0 1px #ffffff12; } .pills b { color: var(--elite); }
+</style>
+</head>
+<body>
+<h1>Первый забег v2 — пролог, который кончается победой</h1>
+<p class="lead">Первый забег открывается сразу при первом входе. Его задача — не научить всему, а за 3 минуты дать почувствовать главное: <b>«я сильный, и чем дальше — тем сильнее»</b>, увидеть награду-событие и уйти с победой, а не со смертью. Подсказки — по одной и только когда нужны. Механика и числа — <b>meta-v2.md §4</b>.</p>
+<div class="track">
+
+  <div class="beat" style="--c: var(--secondary)">
+    <div class="scene"><img src="../out/card-hero-keeper.svg" alt="" style="left:58px;top:20px;height:110px"><div class="rat" style="left:16px;top:30px"></div><div class="rat" style="left:150px;top:100px"></div><div class="toast">👆 Веди пальцем — герой идёт следом</div></div>
+    <div class="dot"></div><div class="t">0:00</div><div class="n">Рубеж</div>
+    <div class="w">Без меню: небо, частокол, костёр, хранитель. Одна строка: «Навь идёт к рубежу. Держи его». Крысы — редко и медленно.</div>
+    <div class="f">понятно, что делать, с первой секунды</div>
+  </div>
+
+  <div class="beat" style="--c: var(--xp)">
+    <div class="scene"><img src="../out/card-hero-keeper.svg" alt="" style="left:58px;top:20px;height:110px"><div class="gem" style="left:40px;top:60px"></div><div class="gem" style="left:52px;top:80px"></div><div class="gem" style="left:150px;top:70px"></div><div class="toast">💎 Кристаллы растят уровень</div></div>
+    <div class="dot"></div><div class="t">0:10</div><div class="n">Первая добыча</div>
+    <div class="w">Оружие бьёт само, крысы падают, кристаллы летят к герою — радиус сбора щедрый.</div>
+    <div class="f">«я сильный» — сразу</div>
+  </div>
+
+  <div class="beat" style="--c: var(--xp)">
+    <div class="scene" style="background:radial-gradient(70% 70% at 50% 45%,#3a3460,#1d1733)"><div style="position:absolute;left:14px;right:14px;top:22px;bottom:22px;border-radius:8px;background:#28273f;box-shadow:inset 0 0 0 2px #ffd15c88;display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:20px 6px 6px"><div style="background:#17162a;border-radius:5px;box-shadow:inset 0 0 0 2px #ff8f3f"></div><div style="background:#17162a;border-radius:5px"></div><div style="background:#17162a;border-radius:5px"></div></div><div style="position:absolute;top:28px;left:0;right:0;text-align:center;font:12px 'Russo One';color:#ffd15c">Уровень 2!</div></div>
+    <div class="dot"></div><div class="t">0:20</div><div class="n">Первый выбор</div>
+    <div class="w">Уровень почти сразу. Три карточки, одна светится «Советуем» — второе оружие. Выбор — без таймера.</div>
+    <div class="f">«я решаю, каким быть»</div>
+  </div>
+
+  <div class="beat" style="--c: var(--elite)">
+    <div class="scene"><img src="../out/card-hero-keeper.svg" alt="" style="left:58px;top:20px;height:110px"><div class="rat" style="left:10px;top:20px"></div><div class="rat" style="left:24px;top:40px"></div><div class="rat" style="left:12px;top:64px"></div><div class="rat" style="left:30px;top:90px"></div><div class="rat" style="left:160px;top:24px"></div><div class="rat" style="left:170px;top:50px"></div><div class="rat" style="left:156px;top:84px"></div><div class="rat" style="left:176px;top:110px"></div></div>
+    <div class="dot"></div><div class="t">0:45</div><div class="n">Толпа</div>
+    <div class="w">Поток гуще — герой косит десятками. Второй уровень, третий. Числа урона и звон кристаллов лесенкой.</div>
+    <div class="f">удовольствие от силы</div>
+  </div>
+
+  <div class="beat" style="--c: var(--elite)">
+    <div class="scene"><img src="../out/card-hero-keeper.svg" alt="" style="left:20px;top:28px;height:100px"><div class="ring" style="left:110px;top:30px;width:70px;height:70px"></div><div style="position:absolute;left:128px;top:48px;width:34px;height:34px;border-radius:50%;background:#8a5a6a;box-shadow:0 0 0 3px #ffd15c"></div><div class="toast">⚠ Мигает — сейчас рванёт. Не стой на месте</div></div>
+    <div class="dot"></div><div class="t">1:15</div><div class="n">Первая элита</div>
+    <div class="w">Упырь в золотой кайме, телеграф — кольцом. Подсказка уворота — только сейчас, когда она нужна.</div>
+    <div class="f">опасность читается</div>
+  </div>
+
+  <div class="beat" style="--c: var(--accent)">
+    <div class="scene" style="background:radial-gradient(60% 60% at 50% 50%,#ffb22e55,#1d1733)"><div style="position:absolute;left:50%;top:50%;width:70px;height:46px;margin:-23px 0 0 -35px;border-radius:6px;background:#8a5a34;box-shadow:0 0 0 3px #ffd15c,0 0 40px #ffd15c"></div><div style="position:absolute;top:12px;left:0;right:0;text-align:center;font:13px 'Russo One';color:#ffd15c">Большой сундук!</div></div>
+    <div class="dot"></div><div class="t">1:30</div><div class="n">Сундук-событие</div>
+    <div class="w">С элиты — первый сундук, всегда большой: тряска, вспышка, три награды со звоном. Выгода видна: «урон 7 → 11».</div>
+    <div class="f">«вау» — главный крючок</div>
+  </div>
+
+  <div class="beat" style="--c: var(--nav)">
+    <div class="scene" style="background:radial-gradient(70% 70% at 50% 55%,#3d4a74,#2c2f5e)"><div class="bar"><i></i></div><img src="../out/card-hero-keeper.svg" alt="" style="left:14px;top:40px;height:90px"><div style="position:absolute;right:20px;top:34px;width:66px;height:80px;border-radius:40% 40% 10px 10px;background:#6b4a32;box-shadow:0 0 0 3px #ffd15c"></div></div>
+    <div class="dot"></div><div class="t">2:30</div><div class="n">Страж рубежа</div>
+    <div class="w">Волна Нави кольцом, затем Страж с полосой фаз. Подобран так, что набранной силы хватает на 30–40 с боя.</div>
+    <div class="f">кульминация и страх</div>
+  </div>
+
+  <div class="beat" style="--c: var(--elite)">
+    <div class="scene" style="background:radial-gradient(60% 70% at 50% 40%,#ffd15c44,#1d1733)"><div style="position:absolute;top:16px;left:0;right:0;text-align:center;font:18px 'Russo One';color:#ffd15c">Рубеж удержан!</div><img src="../out/card-hero-keeper.svg" alt="" style="left:72px;top:42px;height:100px"></div>
+    <div class="dot"></div><div class="t">3:10</div><div class="n">Победа</div>
+    <div class="w">Окно-реликвия: время, враги, «Страж повержен». Награды: монеты, окрас «Знахарка», открыта Награда дня и Задания.</div>
+    <div class="f">уходит победителем — и с целью</div>
+  </div>
+
+</div>
+<div class="pills">
+  <span><b>Не умирает:</b> пока идёт пролог, оберег не даёт здоровью упасть ниже 25% — вспыхивает щитом. Ошибка учит, а не наказывает.</span>
+  <span><b>Подсказки</b> — по одной, по событию: идти, собирать, уворачиваться, выбирать. Никаких экранов правил до игры.</span>
+  <span><b>После победы:</b> «Дальше — бесконечный рубеж: сколько продержишься?» — главная с горящей «Играть».</span>
+  <span><b>Аналитика:</b> <code>tutorial_step</code> на каждый шаг — воронка по шагам показывает, где уходят.</span>
+</div>
+</body>
+</html>
