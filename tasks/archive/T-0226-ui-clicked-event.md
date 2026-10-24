@@ -3,8 +3,8 @@ id: T-0226
 title: Событие нажатий `ui_clicked` — разметка встроена в кнопки, вкладки и переключатели
 epic: E11
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -20,6 +20,8 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - tasks/T-0227-ui-track-ids-all-screens.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -30,7 +32,7 @@ batch: 3
 
 # T-0226. Событие нажатий `ui_clicked` — разметка встроена в кнопки, вкладки и переключатели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json)](../README.md#значки-статуса)
 
 ## Зачем
 
