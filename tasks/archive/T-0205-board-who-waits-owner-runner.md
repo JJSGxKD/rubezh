@@ -23,6 +23,8 @@ shared:
   - .claude/skills/review-pr/SKILL.md
   - .claude/skills/task-spec/SKILL.md
   - AGENTS.md
+  - tasks/T-0206-board-work-review-columns.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
