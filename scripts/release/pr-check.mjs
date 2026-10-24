@@ -5,6 +5,7 @@ import { RELEASE_LEVELS, compareReleaseLevels, parseStableTag } from "./semver.m
 import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./git.mjs";
 import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
 import { TEAM_SECTION, extractSection } from "./team-summary.mjs";
+import { EFFORTS, EXECUTORS } from "../tasks/task-file.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -136,6 +137,33 @@ export function checkTaskLine(body, headRefName, taskFiles) {
   return [];
 }
 
+const RUNNER_LINE = /^Поток:\s*claude-\d+\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
+const LAUNCHER_LINE = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u;
+
+/**
+ * Две строки с начала строки в описании PR ветки задачи: `Поток:` — кто
+ * работал (модель и уровень из списков задач), `Запустил:` — кто запустил
+ * поток. По ним доска считает вклад и по потокам, и по людям (T-0207).
+ */
+export function checkRunnerLines(body, headRefName) {
+  if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];
+
+  const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n").map((line) => line.trimEnd());
+  const errors = [];
+
+  const runner = lines.map((line) => RUNNER_LINE.exec(line)).find(Boolean);
+  if (!runner) {
+    errors.push("поток: в описании нет строки «Поток: claude-N / <модель> / <уровень>»");
+  } else if (!EXECUTORS.includes(runner[1]) || !EFFORTS.includes(runner[2])) {
+    errors.push(`поток: «${runner[0]}» — модель или уровень не из списка`);
+  }
+
+  if (!lines.some((line) => LAUNCHER_LINE.test(line))) {
+    errors.push("запустил: в описании нет строки «Запустил: владелец» или «Запустил: помощник <ник>»");
+  }
+  return errors;
+}
+
 /**
  * Трейлер `Co-Authored-By:` сразу под заголовком git склеивает с заголовком:
  * между ними нужна пустая строка.
@@ -226,6 +254,7 @@ function main() {
     errors.push(...checkSummary(pr.body, Number(number)));
     const head = `origin/${pr.headRefName}`;
     errors.push(...checkTaskLine(pr.body, pr.headRefName, taskFilesAt(head)));
+    errors.push(...checkRunnerLines(pr.body, pr.headRefName));
     errors.push(...checkTrailers(prCommitMessages(`origin/${pr.baseRefName}`, head)));
   }
 
