@@ -27,7 +27,8 @@ description: Используй, когда исполнителю нужно в
    - затем свободные задачи, лучшая — первой.
 
    `runner: human` не показывается; `runner: local` — только если есть живые
-   Postgres, Redis, Docker или устройство (`--runner local`). Значок на доске
+   Postgres, Redis или Docker (`--runner local`); `runner: owner` — только
+   поток на машине владельца (`--runner owner`). Значок на доске
    может отставать на 5–10 минут — верь команде.
 2. **Доработка — первой.** `pnpm task resume T-NNNN --owner "<поток>"`, дальше —
    раздел «Доработка» в `tasks/README.md`:

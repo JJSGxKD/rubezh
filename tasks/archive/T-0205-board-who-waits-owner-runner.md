@@ -3,8 +3,8 @@ id: T-0205
 title: Доска — кто кого ждёт, вид `owner` и счётчики сверху
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0204]
@@ -23,6 +23,8 @@ shared:
   - .claude/skills/review-pr/SKILL.md
   - .claude/skills/task-spec/SKILL.md
   - AGENTS.md
+  - tasks/T-0206-board-work-review-columns.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -33,7 +35,7 @@ batch: 2
 
 # T-0205. Доска — кто кого ждёт, вид `owner` и счётчики сверху
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0205.json)](README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](archive/T-0204-tasks-archive-folder.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0205.json)](../README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](T-0204-tasks-archive-folder.md)
 
 ## Зачем
 
