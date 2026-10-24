@@ -144,7 +144,7 @@ export function FlagsScreen() {
                       <Button onClick={() => setRemoving(null)}>Отмена</Button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap justify-end gap-2 md:flex-nowrap">
                       <Button
                         tone={row.enabled ? "danger" : "secondary"}
                         disabled={pending}

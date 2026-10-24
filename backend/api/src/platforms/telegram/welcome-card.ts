@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { formatDuration } from "../../common/card/labels.js";
-import { estimateWidth, PALETTE, rect, renderPng, svgDocument, text } from "../../common/card/svg.js";
+import { HERO_PORTRAITS, PORTRAIT_RATIO, WORDMARK_RATIO, WORDMARK_SVG } from "../../common/card/brand-art.js";
+import { estimateWidth, PALETTE, rect, renderPng, svgDocument, svgImage, text, twilightBackdrop, wrapWords } from "../../common/card/svg.js";
 import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-texts.js";
 
 /**
@@ -12,7 +13,7 @@ import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-
  * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
  * `file_id` Telegram отдаёт так же охотно, как хорошие.
  */
-export const CARD_VERSION = 3;
+export const CARD_VERSION = 4;
 
 const WIDTH = 1200;
 const HEIGHT = 675;
@@ -62,44 +63,51 @@ export function welcomeCacheKey(card: WelcomeCard): string {
   return createHash("sha256").update(payload).digest("hex");
 }
 
+/** Герой справа и колонка текста слева: ширина колонки — то, что осталось от героя. */
+const HERO_WIDTH = 300;
+const COLUMN = WIDTH - PAD * 2 - HERO_WIDTH - 24;
+
 export function renderWelcomeSvg(card: WelcomeCard): string {
   const texts = WELCOME_TEXTS[card.language];
+  // Мир игры: небо, жар очага, частокол — и хранитель перед частоколом. Знак
+  // вместо подписи «РУБЕЖ»: картинка в чате узнаётся по нему.
+  const heroHeight = HERO_WIDTH * PORTRAIT_RATIO;
   const parts: string[] = [
-    // Мягкое свечение акцентом за карточкой: без него тёмный фон в чате
-    // сливается с тёмной темой Telegram.
-    `<defs><radialGradient id="glow" cx="85%" cy="15%" r="70%"><stop offset="0%" stop-color="${PALETTE.accent}" stop-opacity="0.22"/><stop offset="100%" stop-color="${PALETTE.bg}" stop-opacity="0"/></radialGradient></defs>`,
-    rect(0, 0, WIDTH, HEIGHT, { fill: "url(#glow)" }),
-    rect(PAD, PAD - 8, 10, 44, { fill: PALETTE.accent, radius: 3 }),
-    text(PAD + 26, PAD + 26, texts.brand, { size: 30, fill: PALETTE.accent, weight: 800, spacing: 6 }),
+    ...twilightBackdrop(WIDTH, HEIGHT, { starsFrom: (PAD + COLUMN) / WIDTH }),
+    svgImage(HERO_PORTRAITS.keeper ?? "", WIDTH - PAD - HERO_WIDTH + 20, HEIGHT - heroHeight - 6, HERO_WIDTH, heroHeight),
+    svgImage(WORDMARK_SVG, PAD - 12, PAD - 34, 290, 290 * WORDMARK_RATIO),
   ];
 
   const greeting = texts.greeting(card.name);
-  const greetingSize = estimateWidth(greeting, 72) > WIDTH - PAD * 2 ? 56 : 72;
+  const greetingSize = estimateWidth(greeting, 64, true) > COLUMN ? 48 : 64;
   parts.push(text(PAD, PAD + 140, greeting, { size: greetingSize, fill: PALETTE.text, weight: 800 }));
 
   const best = card.progress.best;
   if (best === null) {
-    parts.push(text(PAD, PAD + 200, texts.newcomerLead, { size: 30, fill: PALETTE.muted }));
+    const lead = wrapWords(texts.newcomerLead, 26, COLUMN).slice(0, 2);
+    lead.forEach((line, index) => parts.push(text(PAD, PAD + 192 + index * 34, line, { size: 26, fill: PALETTE.muted })));
     texts.newcomerPoints.forEach((point, index) => {
-      const y = PAD + 290 + index * 64;
+      const y = PAD + 282 + index * 54;
       parts.push(rect(PAD, y - 26, 34, 34, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 10 }));
       parts.push(text(PAD + 17, y - 1, String(index + 1), { size: 22, fill: PALETTE.accent, weight: 700, anchor: "middle" }));
-      parts.push(text(PAD + 56, y, point, { size: 30, fill: PALETTE.text }));
+      parts.push(text(PAD + 56, y, point, { size: estimateWidth(point, 28) > COLUMN - 56 ? 24 : 28, fill: PALETTE.text }));
     });
-    parts.push(text(PAD, HEIGHT - PAD, texts.newcomerCall, { size: 28, fill: PALETTE.faint }));
+    const call = wrapWords(texts.newcomerCall, 28, COLUMN, true);
+    call.forEach((line, index) => parts.push(text(PAD, HEIGHT - PAD - 46 - (call.length - 1 - index) * 36, line, { size: 28, fill: PALETTE.elite, weight: 700 })));
   } else {
-    const panelY = PAD + 190;
-    parts.push(rect(PAD, panelY, WIDTH - PAD * 2, 250, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 28 }));
-    parts.push(text(PAD + 44, panelY + 150, formatDuration(best.survivalSec), { size: 132, fill: PALETTE.accent, weight: 800 }));
-    parts.push(text(PAD + 48, panelY + 208, texts.recordLabel(best.difficulty), { size: 30, fill: PALETTE.muted, spacing: 1 }));
+    const panelY = PAD + 176;
+    parts.push(rect(PAD, panelY, COLUMN, 236, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 24 }));
+    parts.push(text(PAD + 36, panelY + 140, formatDuration(best.survivalSec), { size: 120, fill: PALETTE.accent, weight: 800 }));
+    parts.push(text(PAD + 40, panelY + 196, texts.recordLabel(best.difficulty), { size: 28, fill: PALETTE.muted, spacing: 1 }));
 
-    const right = WIDTH - PAD - 44;
+    const right = PAD + COLUMN - 32;
     const rank = texts.rank(best.rank, best.total);
-    const chipWidth = estimateWidth(rank, 40) + 56;
-    parts.push(rect(right - chipWidth, panelY + 70, chipWidth, 72, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 36 }));
-    parts.push(text(right - chipWidth / 2, panelY + 118, rank, { size: 40, fill: PALETTE.text, weight: 700, anchor: "middle" }));
-    parts.push(text(right, panelY + 196, texts.runs(card.progress.runs), { size: 30, fill: PALETTE.muted, anchor: "end" }));
-    parts.push(text(PAD, HEIGHT - PAD, texts.veteranCall, { size: 34, fill: PALETTE.text, weight: 700 }));
+    const chipWidth = estimateWidth(rank, 36) + 52;
+    parts.push(rect(right - chipWidth, panelY + 64, chipWidth, 64, { fill: PALETTE.raised, stroke: PALETTE.border, radius: 32 }));
+    parts.push(text(right - chipWidth / 2, panelY + 108, rank, { size: 36, fill: PALETTE.text, weight: 700, anchor: "middle" }));
+    parts.push(text(right, panelY + 186, texts.runs(card.progress.runs), { size: 28, fill: PALETTE.muted, anchor: "end" }));
+    const call = wrapWords(texts.veteranCall, 32, COLUMN, true);
+    call.forEach((line, index) => parts.push(text(PAD, HEIGHT - PAD - 46 - (call.length - 1 - index) * 40, line, { size: 32, fill: PALETTE.elite, weight: 700 })));
   }
 
   return svgDocument(WIDTH, HEIGHT, parts);

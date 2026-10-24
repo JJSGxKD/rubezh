@@ -199,7 +199,7 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
           {problem === null || (draft.title === "" && editing === null) ? null : <Notice tone="info">{problem}</Notice>}
         </form>
           {/* Слайд так, как его увидит игрок: тот же компонент в странице клиента (Р83). */}
-          <div className="xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <PhonePreview kind="home-slide" draft={{ title: oneLine(draft.title), text: oneLine(draft.text), imageId: draft.imageId, icon: draft.icon }} height={132} caption="Так увидит игрок — верх главной" />
           </div>
         </div>

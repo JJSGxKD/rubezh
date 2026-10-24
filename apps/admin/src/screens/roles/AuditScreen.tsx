@@ -229,7 +229,7 @@ function ChangesCell({ entry }: { entry: AuditEntry }) {
           )}
         </span>
       ))}
-      {hidden > 0 ? <span className="text-text-disabled">и ещё {hidden} — в записи</span> : null}
+      {hidden > 0 ? <span className="text-text-muted">и ещё {hidden} — в записи</span> : null}
     </span>
   );
 }
@@ -311,7 +311,7 @@ function AuditEntryCard({ entry, onClose, onActor, onTarget }: { entry: AuditEnt
             <Raw title="Было" value={entry.before} />
             <Raw title="Стало" value={entry.after} />
           </div>
-          <p className="mt-2 text-text-disabled">
+          <p className="mt-2 text-text-muted">
             Запись {entry.entryId}
             {entry.target === null ? "" : ` · объект ${entry.target}`}
           </p>
@@ -336,7 +336,7 @@ function ActionLine({ action }: { action: string }) {
   return (
     <span className="flex flex-wrap items-baseline gap-2">
       {actionTitle(action)}
-      {isKnownAction(action) ? <code className="text-xs text-text-disabled">{action}</code> : null}
+      {isKnownAction(action) ? <code className="text-xs text-text-muted">{action}</code> : null}
     </span>
   );
 }

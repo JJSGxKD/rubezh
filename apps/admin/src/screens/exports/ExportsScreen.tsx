@@ -37,7 +37,7 @@ export function ExportsScreen() {
     <div className="flex flex-col gap-4">
       <Panel title="Собрать архив" help={HELP.exports.exports}>
         <div className="flex flex-col gap-3">
-          <div className="flex items-end gap-2">
+          <div className="flex flex-wrap items-end gap-2">
             <Field label="С">
               <Input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
             </Field>

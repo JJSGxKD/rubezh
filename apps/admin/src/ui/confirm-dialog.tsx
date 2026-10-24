@@ -99,7 +99,7 @@ export function ConfirmDialog(props: {
         {rule === undefined ? null : (
           <Field label={rule.label ?? "Причина"} {...(rule.hint === undefined ? {} : { hint: rule.hint })}>
             <TextArea rows={3} maxLength={rule.max} value={reason} onChange={(event) => setReason(event.target.value)} />
-            <span className="text-right text-xs text-text-disabled tabular-nums">
+            <span className="text-right text-xs text-text-muted tabular-nums">
               {reason.length} / {rule.max}
             </span>
           </Field>
