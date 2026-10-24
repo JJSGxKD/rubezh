@@ -82,7 +82,7 @@ export interface PolicyInput {
 export const REPORT_URI_PATH = "/api/v1/csp-reports";
 
 /**
- * Graspil — аналитика Mini App (решение участника 1 от 26.09.2026,
+ * Graspil — аналитика Mini App (решение владельца от 26.09.2026,
  * docs/22-analytics-and-metrics.md §9): скрипт — со своего домена, отчёты
  * уходят POST-запросами на другой. `telegram-web-app.js` не нужен —
  * `Telegram.WebApp` ставит прослойка адаптера.
