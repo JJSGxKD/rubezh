@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Crown, Skull, Sparkles, Trophy, Wrench } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
-import { Badge, Button, staggerStyle } from "../../design-system/components";
+import { Badge, Button, SectionTitle, staggerStyle } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/run";
@@ -271,7 +271,9 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
         <div className="surface-sunken mt-1 grid gap-2 rounded-lg px-3 py-2.5">
           {weapons.length === 0 ? null : (
             <>
-              <h3 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("run.death.weapons")}</h3>
+              <SectionTitle as="h3" spacing="">
+                {t("run.death.weapons")}
+              </SectionTitle>
               <ul className="grid gap-2">
                 {weapons.map((weapon, index) => (
                   <li key={weapon.id} className="flex animate-rise-in items-center gap-2 text-sm" style={staggerStyle(index + 1)}>

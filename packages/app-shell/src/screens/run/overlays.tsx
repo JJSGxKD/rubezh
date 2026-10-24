@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ChartColumn, History, Layers, Pause, Sparkles, Star, Wrench } from "lucide-react";
 import type { CardTools, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
@@ -6,19 +6,21 @@ import {
   Badge,
   Button,
   Card,
+  CornerRibbon,
   FullscreenButton,
   IconButton,
   Modal,
+  RibbonTitle,
   Stat,
 } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
-import { ItemTile, type ItemKind } from "../item-icons";
+import { ItemMedallion, type ItemKind } from "../item-icons";
 import { CardToolsBar } from "./CardTools";
 import { hintForOffer } from "./evolution-hints";
 import { cardTapAction, toolButtons } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
-import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
+import { CategoryLabel, ElementLabel, passiveCategoryOf, SlotSummary, weaponElementOf } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -134,6 +136,7 @@ export interface LevelUpOverlayProps {
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
+  const titleId = useId();
   // Режим изгнания привязан к набору карточек: сменились (переброс, изгнание,
   // новый уровень) — он кончился, следующую карточку игрок выбирает заново.
   const offersKey = props.offers.map((offer) => offer.id).join("|");
@@ -162,17 +165,19 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
     ) : null;
 
   return (
-    <Modal
-      title={t("run.levelUp.title", { level: props.level })}
-      icon={<Star size={28} fill="currentColor" />}
-      size="l"
-      cut
-    >
-      {/* «Характеристики» — значком в свободном углу окна (срез — слева
-          сверху): в строке слотов плашка с подписью переносила её на вторую
-          строку. Угол не прокручивается вместе с карточками. */}
+    <Modal labelledBy={titleId} icon={<Star size={28} fill="currentColor" />} size="l" relic="var(--color-accent)">
+      {/* Новый уровень — награда, и окно говорит языком наград v2
+          (design/art/direction-v2.md §4.4): реликвия и заголовок на ленте. */}
+      <div className="mb-2 flex justify-center short:mb-1">
+        <RibbonTitle id={titleId} tone="var(--color-accent)">
+          {t("run.levelUp.title", { level: props.level })}
+        </RibbonTitle>
+      </div>
+      {/* «Характеристики» — значком в углу окна: в строке слотов плашка с
+          подписью переносила её на вторую строку. Угол не прокручивается
+          вместе с карточками. */}
       {props.onStats === undefined ? null : (
-        <div className="absolute top-2 right-2 z-10">
+        <div className="absolute top-3 right-3 z-10">
           <IconButton label={t("run.stats.open")} onClick={props.onStats}>
             <ChartColumn size={20} className="text-info" />
           </IconButton>
@@ -217,8 +222,9 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
               stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
               onClick={guarded(ready, () => tap(offer))}
             >
+              {isNew(offer) ? <CornerRibbon>{t("run.levelUp.new")}</CornerRibbon> : null}
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <ItemTile kind={kind} id={offer.refId} size="s" />
+                <ItemMedallion kind={kind} id={offer.refId} />
                 <span className="min-w-0 font-display text-base font-bold break-words text-text">
                   {t(offer.nameKey)}
                 </span>
@@ -326,29 +332,27 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
+  const element = offer.kind === "weapon_new" || offer.kind === "weapon_level" ? weaponElementOf(offer.refId) : null;
 
+  // «Новое» — уголком-лентой карточки, как в окне сундука; здесь — эволюция и уровень.
   const badge =
     offer.kind === "weapon_evolve" ? (
       <Badge tone="accent">
         <Sparkles size={12} aria-hidden="true" />
         {t("run.levelUp.evolve")}
       </Badge>
-    ) : offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
-      <Badge tone="accent">
-        <Sparkles size={12} aria-hidden="true" />
-        {t("run.levelUp.new")}
-      </Badge>
-    ) : (
+    ) : isNew(offer) ? null : (
       <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
         {t("run.levelUp.upgrade", { level: offer.level })}
       </Badge>
     );
 
-  if (category === null) return badge;
+  if (category === null && element === null) return badge;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       {badge}
-      <CategoryLabel category={category} />
+      {category === null ? null : <CategoryLabel category={category} />}
+      {element === null ? null : <ElementLabel element={element} />}
     </span>
   );
 }

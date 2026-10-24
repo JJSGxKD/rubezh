@@ -309,21 +309,41 @@ export function PageTitle(props: { children: ReactNode }): ReactNode {
   return <h1 className="mt-2 mb-1 font-display text-2xl font-bold text-text">{props.children}</h1>;
 }
 
-export function SectionTitle(props: { children: ReactNode }): ReactNode {
+/**
+ * Заголовок раздела внутри экрана — с каймой-оберегом (design/art/direction-v2.md
+ * §4.4): ромб перед подписью и затухающая цепь ромбов после неё — тот же
+ * мотив вышивки, что у окон наград, только шёпотом.
+ */
+export function SectionTitle(props: {
+  children: ReactNode;
+  /** `h3` — подзаголовок внутри листа или карточки */
+  as?: "h2" | "h3";
+  /** отступы вокруг; по умолчанию — как у раздела экрана */
+  spacing?: string;
+  /** справа после каймы — счётчик вроде «0 из 3» */
+  end?: ReactNode;
+}): ReactNode {
+  const Tag = props.as ?? "h2";
   return (
-    <h2 className="mt-6 mb-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
-      {props.children}
-    </h2>
+    <Tag className={`${props.spacing ?? "mt-6 mb-2"} flex items-center gap-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase`}>
+      <span aria-hidden="true" className="size-1.5 shrink-0 rotate-45 bg-accent" />
+      <span className="min-w-0">{props.children}</span>
+      <span aria-hidden="true" className="section-rule h-2.5 min-w-6 flex-1" />
+      {props.end === undefined ? null : <span className="shrink-0 font-sans tracking-normal normal-case tabular-nums">{props.end}</span>}
+    </Tag>
   );
 }
+
+const MOTION_CLASS = { forward: "animate-screen-forward", back: "animate-screen-back", rise: "animate-screen-in" } as const;
 
 /**
  * Появление экрана при смене. Ключ — идентификатор экрана: React монтирует
  * новый узел, и анимация проигрывается один раз, без таймеров и состояния.
+ * `motion` — с какой стороны въехать (`screenMotion` в state/navigation.ts).
  */
-export function ScreenTransition(props: { screenKey: string; children: ReactNode }): ReactNode {
+export function ScreenTransition(props: { screenKey: string; motion?: keyof typeof MOTION_CLASS; children: ReactNode }): ReactNode {
   return (
-    <div key={props.screenKey} className="h-full animate-screen-in">
+    <div key={props.screenKey} className={`h-full ${MOTION_CLASS[props.motion ?? "rise"]}`}>
       {props.children}
     </div>
   );

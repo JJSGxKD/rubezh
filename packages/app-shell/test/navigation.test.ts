@@ -3,6 +3,7 @@ import {
   activeTab,
   canGoBack,
   currentScreen,
+  screenMotion,
   useNavigation,
 } from "../src/state/navigation";
 
@@ -65,5 +66,36 @@ describe("стек экранов", () => {
   it("не подсвечивает вкладку, когда корень — не раздел нижней панели", () => {
     useNavigation.getState().resetTo("settings");
     expect(activeTab(useNavigation.getState().stack)).toBeNull();
+  });
+});
+
+describe("сдвиг мира при переходе", () => {
+  beforeEach(() => {
+    useNavigation.setState({ stack: ["lobby"], motion: "rise" });
+  });
+
+  it("вглубь — справа, назад — слева", () => {
+    const navigation = useNavigation.getState();
+    navigation.push("settings");
+    expect(useNavigation.getState().motion).toBe("forward");
+    navigation.pop();
+    expect(useNavigation.getState().motion).toBe("back");
+  });
+
+  it("вкладка правее по панели — справа, левее — слева", () => {
+    const navigation = useNavigation.getState();
+    navigation.resetTo("tasks");
+    expect(useNavigation.getState().motion).toBe("forward");
+    navigation.resetTo("shop");
+    expect(useNavigation.getState().motion).toBe("back");
+  });
+
+  it("замена экрана и выход из глубины на вкладку — проявление", () => {
+    const navigation = useNavigation.getState();
+    navigation.replace("daily");
+    expect(useNavigation.getState().motion).toBe("rise");
+    expect(screenMotion(["lobby", "settings"], ["arsenal"])).toBe("back");
+    expect(screenMotion(["lobby"], ["lobby"])).toBe("rise");
+    expect(screenMotion(["profile"], ["lobby"])).toBe("rise");
   });
 });

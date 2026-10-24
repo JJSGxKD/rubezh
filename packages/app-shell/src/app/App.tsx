@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { ListChecks, Store, Swords, Trophy, Users } from "lucide-react";
 import { ArmorIcon, ModalHostProvider, ScreenTransition, TabBar, type TabItem } from "../design-system/components";
+import { AmbientSky } from "./AmbientSky";
 import { AppHeader } from "./AppHeader";
 import { t } from "../i18n";
 import { useInstall } from "../state/install";
@@ -8,6 +9,7 @@ import {
   activeTab,
   canGoBack,
   currentScreen,
+  TAB_ROOTS,
   useNavigation,
   type ScreenId,
 } from "../state/navigation";
@@ -63,6 +65,7 @@ import {
  */
 export function App(): ReactNode {
   const stack = useNavigation((state) => state.stack);
+  const motion = useNavigation((state) => state.motion);
   const screen = currentScreen(stack);
   const capabilities = useShell((state) => state.capabilities);
   const expanded = usePlatform((state) => state.viewport.expanded);
@@ -104,7 +107,11 @@ export function App(): ReactNode {
           заголовком и кнопкой «назад». Лежит поверх прокрутки, а не над ней:
           содержимое уходит под её стекло (WP30). */}
       {showTabs ? <AppHeader onMenu={() => setMenuOpen(true)} /> : null}
-      <main className="relative min-h-0 flex-1">
+      {/* isolate: живой фон — нижним слоем внутри `main`, под экранами, но над
+          заливкой приложения; частокол встаёт прямо над нижней панелью. */}
+      <main className="relative isolate min-h-0 flex-1 overflow-x-clip">
+        {/* Живой фон — вне забега: под канвой он только жёг бы батарею. */}
+        {screen === "run" ? null : <AmbientSky depth={tab === null ? null : TAB_ROOTS.indexOf(tab)} />}
         {screen === "run" || runUnderneath ? (
           <div
             aria-hidden={runUnderneath}
@@ -123,7 +130,9 @@ export function App(): ReactNode {
           <div className={runUnderneath ? "bg-app absolute inset-0" : "h-full"}>
             <ScreenBoundary key={screen}>
               <Suspense fallback={<ScreenFallback />}>
-                <ScreenTransition screenKey={screen}>{renderScreen(screen)}</ScreenTransition>
+                <ScreenTransition screenKey={screen} motion={motion}>
+                  {renderScreen(screen)}
+                </ScreenTransition>
               </Suspense>
             </ScreenBoundary>
           </div>

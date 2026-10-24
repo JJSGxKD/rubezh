@@ -43,6 +43,8 @@
    * оболочки (§3.3). Длительности — из переменных ниже.
    */
   --animate-screen-in: screen-in var(--duration-base) var(--ease-out) both;
+  --animate-screen-forward: screen-forward var(--duration-base) var(--ease-out) both;
+  --animate-screen-back: screen-back var(--duration-base) var(--ease-out) both;
   --animate-fade-in: fade-in var(--duration-slow) var(--ease-base) both;
   --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
   --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
@@ -68,6 +70,11 @@
   --animate-chest-cover: chest-cover var(--duration-base) var(--ease-out) both;
   /* Забор награды: монеты вылетают веером и осыпаются, сумма всплывает над плиткой. */
   --animate-coin-burst: coin-burst 800ms var(--ease-out) both;
+  /* Живой фон приложения (direction-v2.md §4.4): длительности задаёт раскладка. */
+  --animate-star-twinkle: star-twinkle 4s var(--ease-base) infinite;
+  --animate-ember-rise: ember-rise 10s linear infinite;
+  /* Блик главной кнопки: пробегает за доли секунды, потом пауза — зовёт, а не мигает. */
+  --animate-btn-shine: btn-shine 4.5s var(--ease-out) infinite;
   --animate-reward-float: reward-float 1100ms var(--ease-out) both;
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
@@ -105,6 +112,21 @@
     from {
       opacity: 0;
       transform: translateY(8px);
+    }
+  }
+
+  /* Сдвиг мира при переходе (§4.4 direction-v2): экран въезжает с той стороны, куда шёл игрок. */
+  @keyframes screen-forward {
+    from {
+      opacity: 0;
+      transform: translateX(28px);
+    }
+  }
+
+  @keyframes screen-back {
+    from {
+      opacity: 0;
+      transform: translateX(-28px);
     }
   }
 
@@ -277,6 +299,54 @@
     to {
       opacity: 0;
       transform: translateX(320%) skewX(-18deg);
+    }
+  }
+
+  @keyframes btn-shine {
+    0% {
+      opacity: 0;
+      transform: translateX(-120%) skewX(-20deg);
+    }
+    3% {
+      opacity: 1;
+    }
+    19% {
+      opacity: 0.9;
+    }
+    24% {
+      opacity: 0;
+      transform: translateX(360%) skewX(-20deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(360%) skewX(-20deg);
+    }
+  }
+
+  @keyframes star-twinkle {
+    0%,
+    100% {
+      opacity: 0.15;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes ember-rise {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.6);
+    }
+    15% {
+      opacity: 0.85;
+    }
+    70% {
+      opacity: 0.5;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--ember-drift), -55vh) scale(1);
     }
   }
 
@@ -956,6 +1026,17 @@
 
 /* Оплата звёздами: вторичная кнопка с подсветкой цвета Stars — цена читается
    как оплата в Telegram, но не спорит с главным действием экрана. */
+/*
+ * Выключенная главная кнопка: поверхность вместо заливки акцента. Бледный
+ * оранжевый над тёмным фоном становится бурым и читается как поломка.
+ */
+@utility btn-resting {
+  color: var(--color-text-muted);
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--color-surface));
+  border: 1px solid var(--color-border-strong);
+  box-shadow: inset 0 -3px 0 var(--color-surface-sunken);
+}
+
 @utility btn-stars {
   color: var(--color-text);
   background: linear-gradient(
@@ -1040,4 +1121,99 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: var(--duration-fast) !important;
   }
+}
+
+/*
+ * Выключатель «Живой фон» в «Графике» (docs/35-stage4-plan.md Р145): метку
+ * ставит `state/graphics.ts`. Звёзды и частокол остаются картинкой, блик
+ * «Играть» и блеск редкости прозрачны вне анимации и пропадают, искры
+ * уходят — без подъёма они висели бы точками у нижнего края.
+ */
+:root[data-live-bg="off"] .animate-star-twinkle,
+:root[data-live-bg="off"] .animate-btn-shine {
+  animation: none;
+}
+:root[data-live-bg="off"] .animate-ember-rise {
+  animation: none;
+  visibility: hidden;
+}
+
+/*
+ * Реликвия — материал дизайн-системы v2 (design/art/direction-v2.md §4.4)
+ * для окон наград: сундук, эволюция, достижения, награды сезона. Не плоская
+ * карточка, а вещь мира: сумеречный ларец с кованой каймой-оберегом, свет
+ * яруса падает сверху. Тон — переменная `--relic-tone` (токен палитры).
+ */
+@utility relic-frame {
+  background:
+    radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--relic-tone) 24%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in oklab, var(--color-surface-raised) 85%, var(--relic-tone)), var(--color-surface) 38%, var(--color-surface-sunken));
+  border: 1px solid color-mix(in oklab, var(--relic-tone) 60%, var(--color-border-strong));
+  box-shadow:
+    var(--shadow-panel),
+    inset 0 0 0 3px color-mix(in oklab, var(--color-bg) 75%, transparent),
+    inset 0 0 0 4px color-mix(in oklab, var(--relic-tone) 38%, transparent);
+}
+
+/*
+ * Кайма-оберег: цепь ромбов, большой и малый через перемычку — мотив
+ * вышивки. Узор — маской, цвет — фоном: так кайма берёт тон яруса, а SVG в
+ * data-URI переменных не читает.
+ */
+@utility relic-band {
+  background-color: var(--relic-tone);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E");
+  mask-size: 24px 10px;
+  mask-repeat: repeat-x;
+  mask-position: center;
+  opacity: 0.75;
+}
+
+/*
+ * Строка награды: глубина ларца, а свет вида предмета — отдельным слоем
+ * (`relic-row-glow`), который проявляется, когда награда встала: до этого
+ * цвет выдал бы, что внутри. Тон — `--row-tone`.
+ */
+@utility relic-row {
+  background: var(--color-surface-sunken);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+@utility relic-row-glow {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--row-tone) 18%, transparent), transparent 72%);
+  box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row-tone) 80%, transparent);
+}
+
+/*
+ * Редкость предмета v2 (screens/meta/rarity-look.ts): камень в оправе, а не
+ * плоская заливка. Тон — `--rarity-tone`. Слои кладутся под значок слота
+ * (`-z-1` в плитке с `isolate`), поэтому свет не мутит значок.
+ */
+@utility rarity-glow {
+  background:
+    radial-gradient(90% 70% at 50% 108%, color-mix(in oklab, var(--rarity-tone) 48%, transparent), transparent 72%),
+    linear-gradient(180deg, color-mix(in oklab, var(--rarity-tone) 12%, transparent), transparent 55%);
+}
+
+/* Оправа: тёмный зазор и тонкий ободок тона внутри обводки — как у реликвии. */
+@utility rarity-facets {
+  box-shadow:
+    inset 0 0 0 2px color-mix(in oklab, var(--color-bg) 55%, transparent),
+    inset 0 0 0 3px color-mix(in oklab, var(--rarity-tone) 42%, transparent);
+}
+
+@utility rarity-halo {
+  box-shadow: 0 0 14px -1px color-mix(in oklab, var(--rarity-tone) 60%, transparent);
+}
+
+/*
+ * Кайма заголовка раздела (`SectionTitle`): цепь ромбов каймы-оберега,
+ * мельче и тише, чем у реликвии, и тает вправо — разделитель, а не украшение.
+ */
+@utility section-rule {
+  background: linear-gradient(90deg, var(--color-border-strong), transparent);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='10'%3E%3Cpath d='M0 5 3.5 1.5 7 5 3.5 8.5zM7 5l3.5-2.2L14 5l-3.5 2.2z'/%3E%3Crect y='4.5' width='14' height='1'/%3E%3C/svg%3E");
+  mask-size: 14px 10px;
+  mask-repeat: repeat-x;
+  mask-position: left center;
 }

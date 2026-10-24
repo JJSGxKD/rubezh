@@ -9,6 +9,7 @@ import { CutFrame } from "./CutFrame";
 import { Badge } from "./Data";
 import { useModalHost } from "./modal-host";
 import { modalFooterPlacement, modalMount } from "./modal-rules";
+import { RelicFrame } from "./RelicFrame";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -155,6 +156,11 @@ export interface ModalProps {
    * затемнением.
    */
   hero?: ReactNode;
+  /**
+   * Панель-реликвия v2 тоном из токенов (`RelicFrame`) вместо обычной
+   * панели — у окон наград.
+   */
+  relic?: string;
 }
 
 export function Modal(props: ModalProps): ReactNode {
@@ -186,6 +192,7 @@ export function Modal(props: ModalProps): ReactNode {
   const panel = (
     <Panel
       cut={props.cut === true}
+      relic={props.relic}
       className={[
         wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
         props.hero === undefined ? "" : "min-h-0",
@@ -269,7 +276,14 @@ export function Modal(props: ModalProps): ReactNode {
 }
 
 /** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */
-function Panel(props: { cut: boolean; className: string; children: ReactNode }): ReactNode {
+function Panel(props: { cut: boolean; relic?: string | undefined; className: string; children: ReactNode }): ReactNode {
+  if (props.relic !== undefined) {
+    return (
+      <RelicFrame tone={props.relic} className={props.className}>
+        {props.children}
+      </RelicFrame>
+    );
+  }
   if (props.cut) {
     return (
       <CutFrame tone="panel" size="md" className={`flex max-h-full w-full flex-col overflow-hidden ${props.className}`}>
@@ -375,6 +389,20 @@ export function InfoNotice(props: { text: string }): ReactNode {
     <div className="surface-sunken flex items-start gap-2.5 rounded-lg px-3 py-2.5">
       <Info size={16} aria-hidden="true" className="mt-px shrink-0 text-info" />
       <p className="min-w-0 flex-1 text-xs text-text-muted">{props.text}</p>
+    </div>
+  );
+}
+
+/**
+ * Пустой раздел — знаком и словами посередине, а не сноской сверху: пустой
+ * экран со сноской у края выглядит недогруженным. Знак — тот же медальон, что
+ * над наградой дня и промокодом, только спокойный: пустота — не событие.
+ */
+export function EmptyState(props: { icon: ReactNode; text: string }): ReactNode {
+  return (
+    <div className="flex animate-rise-in flex-col items-center gap-3 px-2 py-10 text-center">
+      <IconEmblem tone="muted">{props.icon}</IconEmblem>
+      <p className="max-w-[300px] text-sm text-text-muted">{props.text}</p>
     </div>
   );
 }

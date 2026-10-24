@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
+import { Newspaper } from "lucide-react";
+import { Button, ContentColumn, EmptyState, ErrorState, InfoNotice, Screen } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/changelog";
 import type { ApiFailure } from "../../state/api-request";
@@ -58,7 +59,7 @@ export function ChangelogScreen(): ReactNode {
         {changelogAvailable() ? null : <InfoNotice text={t("changelog.guest")} />}
         {state.status === "loading" && changelogAvailable() ? <p className="text-sm text-text-muted">{t("changelog.loading")}</p> : null}
         {state.status === "failed" ? <ErrorState text={t("changelog.failed")} onRetry={() => void first()} /> : null}
-        {state.status === "ready" && state.versions.length === 0 ? <InfoNotice text={t("changelog.empty")} /> : null}
+        {state.status === "ready" && state.versions.length === 0 ? <EmptyState icon={<Newspaper size={26} />} text={t("changelog.empty")} /> : null}
         {state.status === "ready" ? (
           <div className="grid gap-3">
             {state.versions.map((version, index) => (

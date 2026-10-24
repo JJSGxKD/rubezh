@@ -30,7 +30,9 @@ import "../i18n/gallery";
 import "../i18n/team";
 import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
+import type { ItemView } from "../state/items-api";
 import { BootScreen } from "./gates";
+import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
 import { ChestOverlay } from "./run/ChestOverlay";
@@ -151,6 +153,9 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.widgets")}</SectionTitle>
         <WidgetsPreview />
+
+        <SectionTitle>{t("gallery.rarity")}</SectionTitle>
+        <RarityPreview />
 
         <SectionTitle>{t("gallery.lists")}</SectionTitle>
         <ListGroup>
@@ -326,6 +331,41 @@ function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
         <IconButton label={t("app.close")} onClick={props.onClose}>
           <X size={22} />
         </IconButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Плитки всех редкостей (design/art/direction-v2.md §4.4): у тестового
+ * аккаунта снаряжения обычно нет, и без витрины рамки не посмотреть вживую.
+ */
+function RarityPreview(): ReactNode {
+  const stat = { stat: "damage", value: 0.1 };
+  const items: ItemView[] = RARITIES.map((rarity, index) => ({
+    itemId: `gallery-${rarity}`,
+    slot: SLOTS[index % SLOTS.length] ?? "weapon",
+    rarity,
+    level: 3 + index,
+    equipped: false,
+    power: 100,
+    main: stat,
+    extras: [],
+    upgrade: null,
+    reroll: null,
+    salvage: 1,
+  }));
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-5 pt-2">
+        {items.map((item) => (
+          <EquipSlot key={item.itemId} slot={item.slot} item={item} onOpen={() => undefined} />
+        ))}
+      </div>
+      <div className="grid grid-cols-6 gap-2">
+        {items.map((item) => (
+          <ItemTile key={item.itemId} item={item} selected={false} dimmed={false} onPress={() => undefined} />
+        ))}
       </div>
     </div>
   );
@@ -530,7 +570,16 @@ const LONG_OFFERS: UpgradeOption[] = [
     descriptionKey: "passive.mending.description",
     changes: [change("upgrade.stat.passive.regenPerSec", null, 0.4, "plus")],
   },
-  KNIFE_NEW,
+  // Оружие со стихией: метка стихии рядом с уровнем — самая длинная строка тегов.
+  {
+    id: "w:sting",
+    kind: "weapon_level",
+    refId: "sting",
+    level: 4,
+    nameKey: "weapon.sting.name",
+    descriptionKey: "weapon.sting.description",
+    changes: [change("upgrade.stat.damage", 8, 9), change("upgrade.stat.pierce", 3, 4)],
+  },
   {
     id: "heal",
     kind: "heal",

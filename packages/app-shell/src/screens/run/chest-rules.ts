@@ -17,6 +17,18 @@ export function chestTitleKey(size: number): string {
 }
 
 export type RewardIcon = "weapon" | "passive" | "heal" | "xp";
+
+/**
+ * Свет строки награды по виду предмета — те же токены, что у плиток
+ * предметов в остальной игре: оружие жёлтое, навык фиолетовый, лечение —
+ * цвета здоровья, опыт — салатовый.
+ */
+export const REWARD_TONE: Record<RewardIcon, string> = {
+  weapon: "var(--color-weapon)",
+  passive: "var(--color-passive)",
+  heal: "var(--color-hp)",
+  xp: "var(--color-xp)",
+};
 export type RewardTag = { kind: "new" } | { kind: "level"; level: number } | null;
 
 export interface RewardView {
