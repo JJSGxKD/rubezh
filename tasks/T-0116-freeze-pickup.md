@@ -3,8 +3,8 @@ id: T-0116
 title: Подбор «Заморозка»: враги на поле замирают на 10 секунд
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: [T-0099]
