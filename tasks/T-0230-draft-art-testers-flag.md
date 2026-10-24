@@ -3,8 +3,8 @@ id: T-0230
 title: Черновой арт — тестерам флагом панели, с выключателем в «Графике»
 epic: E12
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
