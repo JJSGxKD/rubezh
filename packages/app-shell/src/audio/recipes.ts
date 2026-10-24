@@ -274,6 +274,17 @@ export const SOUND_RECIPES = {
       { kind: "tone", t: 0.1, f0: 72, f1: 27, glide: 0.8, attack: 0.01, peak: 0.85, decay: 1 },
     ],
   },
+  // Заморозка: три колокольчика вверх — холодное созвучие — и лёгкий шелест,
+  // уходящий вниз: орда встала. Мягче динамита и ниже по уровню, чем награды.
+  freeze: {
+    bus: "rewards", level: 0.6, voices: 1, gap: 0.3, send: 0.5, dur: 1.6, variants: 1,
+    layers: [
+      { kind: "bell", f: 2093, peak: 0.16, decay: 0.5 },
+      { kind: "bell", f: 2637, t: 0.06, peak: 0.16, decay: 0.5 },
+      { kind: "bell", f: 3136, t: 0.12, peak: 0.16, decay: 0.5 },
+      { kind: "hiss", dur: 0.6, seed: 131, filter: "highpass", f0: 7000, f1: 1500, glide: 0.5, peak: 0.1, decay: 0.5 },
+    ],
+  },
   eliteDown: {
     bus: "rewards", level: 0.62, voices: 1, gap: 0.3, send: 0.45, duck: 0.8, dur: 1.5, variants: 1,
     layers: [

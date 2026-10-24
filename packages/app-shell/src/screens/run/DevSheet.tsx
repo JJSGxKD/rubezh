@@ -34,7 +34,7 @@ const START_MINUTES = [0, 5, 10, 15, 20] as const;
 const STEP_TICKS = [1, 10, 60] as const;
 const JUMP_MINUTES = [3, 5, 10, 15, 20] as const;
 const SPAWN_COUNTS = [1, 5, 20] as const;
-const PICKUPS: readonly RunDevPickup[] = ["medkit", "magnet", "dynamite"];
+const PICKUPS: readonly RunDevPickup[] = ["medkit", "magnet", "dynamite", "freeze"];
 
 export function DevSheet(props: { inRun: boolean; onClose(): void }): ReactNode {
   const [tab, setTab] = useState<Tab>("view");

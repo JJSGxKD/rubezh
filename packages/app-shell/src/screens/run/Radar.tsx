@@ -77,7 +77,7 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
 
   // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми. Подборы
   // различаются и формой, и цветом (§4.4): крест — аптечка, кольцо — магнит,
-  // ромб — динамит, квадрат — сундук, как их силуэты на земле.
+  // ромб — динамит, квадрат — сундук, косой крест — заморозка, как их силуэты на земле.
   for (let i = 0; i < radar.count; i++) {
     const kind = blips[i * 3 + 2];
     const x = center + blips[i * 3] * radius;
@@ -98,6 +98,16 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
     } else if (kind === RADAR_BLIP.dynamite) {
       context.fillStyle = RADAR_COLORS.dynamite;
       diamond(context, x, y, size);
+    } else if (kind === RADAR_BLIP.freeze) {
+      // Холодный тон и косой крест: ни крест аптечки, ни ромб динамита он не повторяет.
+      context.strokeStyle = COLORS.info;
+      context.lineWidth = 1.8 * ratio;
+      context.beginPath();
+      context.moveTo(x - size * 0.7, y - size * 0.7);
+      context.lineTo(x + size * 0.7, y + size * 0.7);
+      context.moveTo(x + size * 0.7, y - size * 0.7);
+      context.lineTo(x - size * 0.7, y + size * 0.7);
+      context.stroke();
     } else if (kind === RADAR_BLIP.chest) {
       context.fillStyle = RADAR_COLORS.chest;
       context.fillRect(x - size * 0.8, y - size * 0.8, size * 1.6, size * 1.6);

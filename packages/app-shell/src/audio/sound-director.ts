@@ -100,6 +100,7 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   // предупреждение, а не атака.
   if (cues.playerHit > 0) add("hurt");
   if (cues.dynamite > 0) add("dynamite");
+  if (cues.freeze > 0) add("freeze");
   // Босс — тоже элита по рангу, но звучит своим рогом: элитный рог здесь
   // только за элит, вышедших вместе с ним.
   if (cues.bossSpawns > 0) add("bossArrive");
