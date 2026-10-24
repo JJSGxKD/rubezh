@@ -52,6 +52,15 @@ shared:
   - packages/core-game/test/balance-properties.test.ts
   - docs/31-audio-and-haptics.md
   - docs/32-balance.md
+  - packages/app-shell/src/screens/run/radar-looks.ts
+  - tasks/T-0190-single-difficulty-shell.md
+  - tasks/T-0192-pressure-after-minute-8.md
+  - tasks/T-0193-longer-run-progression.md
+  - tasks/T-0194-limit-break-offers.md
+  - tasks/T-0195-player-power-pressure-engine.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: high
