@@ -83,7 +83,7 @@ export function HistoryScreen(): ReactNode {
                     <EntryRow key={entry.id} entry={entry} />
                   ))}
                   {state.cursor === null ? null : (
-                    <Button variant="secondary" block loading={more} onClick={() => void loadMore()}>
+                    <Button track="load_more" variant="secondary" block loading={more} onClick={() => void loadMore()}>
                       {t("history.more")}
                     </Button>
                   )}

@@ -80,7 +80,7 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
           )}
           {/* Не хватило самоцветов — дорога к ним в одно касание, а не «ищите сами». */}
           {noGems && props.onNeedGems !== undefined ? (
-            <Button variant="secondary" onClick={props.onNeedGems}>
+            <Button track="to_gems" variant="secondary" onClick={props.onNeedGems}>
               <GemIcon size={18} />
               {t("showcase.toGems")}
             </Button>
@@ -98,10 +98,10 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
           onDismiss={() => setAsking(null)}
           footer={
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => setAsking(null)}>
+              <Button track="cancel" variant="secondary" onClick={() => setAsking(null)}>
                 {t("showcase.confirm.cancel")}
               </Button>
-              <Button onClick={() => void buy(asking)}>{t("showcase.confirm.ok")}</Button>
+              <Button track="confirm" onClick={() => void buy(asking)}>{t("showcase.confirm.ok")}</Button>
             </div>
           }
         >
@@ -160,7 +160,7 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
 
       {offer.sold ? null : (
         <div className="mt-3">
-          <Button
+          <Button track="buy"
             block
             size="s"
             disabled={props.busy !== null}
