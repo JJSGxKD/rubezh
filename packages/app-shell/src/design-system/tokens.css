@@ -70,6 +70,7 @@
   --animate-chest-cover: chest-cover var(--duration-base) var(--ease-out) both;
   /* Забор награды: монеты вылетают веером и осыпаются, сумма всплывает над плиткой. */
   --animate-coin-burst: coin-burst 800ms var(--ease-out) both;
+  --animate-balance-bump: balance-bump 520ms var(--ease-spring) both;
   /* Живой фон приложения (direction-v2.md §4.4): длительности задаёт раскладка. */
   --animate-star-twinkle: star-twinkle 4s var(--ease-base) infinite;
   --animate-ember-rise: ember-rise 10s linear infinite;
@@ -366,6 +367,23 @@
     100% {
       opacity: 0;
       transform: translate(calc(var(--burst-x) * 1.1), calc(var(--burst-y) + 36px)) scale(0.8);
+    }
+  }
+
+  /* Значок валюты в шапке, когда баланс начал набегать: монета подпрыгивает
+     и чуть поворачивается, будто на неё легла ещё одна. */
+  @keyframes balance-bump {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.3) rotate(-8deg);
+    }
+    70% {
+      transform: scale(0.95) rotate(3deg);
+    }
+    100% {
+      transform: scale(1);
     }
   }
 
@@ -871,6 +889,33 @@
     0 0 24px -8px color-mix(in oklab, var(--widget-tone) 70%, transparent);
 }
 
+/* Зона касания не ниже 44 px по высоте при меньшем облике (docs/27 §4.4):
+   переключатель и фильтр — 32 px, точка карусели — 24, а палец на телефоне
+   промахивается. Прозрачный `::after` добирает высоту, раскладка та же; у
+   высокого элемента `min` оставляет зону как есть. По ширине не добираем:
+   соседние точки карусели перекрыли бы друг друга. Предок с `overflow`
+   обрезает зону — ему нужны поля на добор. */
+@utility hit-tall {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: min(0px, calc((100% - 2.75rem) / 2));
+    bottom: min(0px, calc((100% - 2.75rem) / 2));
+    left: 0;
+    right: 0;
+  }
+}
+
+/* Плашка-значок тона: тон поверх лунки непрозрачно, а не полупрозрачно поверх
+   того, что под ней. Полупрозрачная светлела на поднятой и выбранной карточке,
+   и мелкий цветной текст падал ниже 4,5:1 (docs/27 §4.2,
+   design-tokens/test/contrast.test.ts). */
+@utility badge-tinted {
+  color: var(--badge-tone);
+  background: color-mix(in oklab, var(--badge-tone) 15%, var(--color-surface-sunken));
+}
+
 /* Облик виджета — значок, колесо, кольцо — на подложке его тона. */
 @utility widget-face {
   color: var(--widget-tone);
@@ -1051,9 +1096,12 @@
     var(--shadow-button);
 }
 
+/* Подложка — от фона, а не от поверхности: на поверхности красный текст
+   давал 4,3:1 при пороге 4,5 (docs/27 §4.4), на фоне — 5:1, и кромка лунки
+   под кнопкой остаётся видна. */
 @utility btn-danger {
   color: var(--color-danger);
-  background: color-mix(in oklab, var(--color-danger) 8%, var(--color-surface));
+  background: color-mix(in oklab, var(--color-danger) 8%, var(--color-bg));
   border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
   box-shadow: inset 0 -3px 0 var(--color-surface-sunken);
 }
@@ -1106,6 +1154,21 @@ body {
   /* Выделение текста пальцем в игре только мешает: длинное нажатие по кнопке
      не должно подсвечивать надпись. */
   user-select: none;
+}
+
+/*
+ * Фокус с клавиатуры — своё кольцо: светлый акцент с отступом, одинаковый в
+ * Chromium, WebKit и Firefox (docs/27 §4.4). Обводка браузера у каждого
+ * движка своя — на сумерках то двухцветная, то синяя — и в группе строк
+ * срезалась краем. Только `:focus-visible`: касание пальцем кольца не рисует.
+ * В слое base, чтобы утилиты могли его поправить: строка в группе с
+ * `overflow-hidden` уводит кольцо внутрь (`ListItem`).
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-accent-glow);
+    outline-offset: 2px;
+  }
 }
 
 /*

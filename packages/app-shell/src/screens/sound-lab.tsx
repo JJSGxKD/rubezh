@@ -134,7 +134,7 @@ function SoundsTab(props: { director: SoundDirector }): ReactNode {
           </ListGroup>
         </section>
       ))}
-      <p className="mt-2 text-xs text-text-disabled">{t("soundLab.busHint", { weapons: BUSES.weapons.priority, enemies: BUSES.enemies.priority })}</p>
+      <p className="mt-2 text-xs text-text-muted">{t("soundLab.busHint", { weapons: BUSES.weapons.priority, enemies: BUSES.enemies.priority })}</p>
       {editing === null ? null : (
         <RecipeEditor
           director={props.director}

@@ -7,6 +7,7 @@ import "../../i18n/tester";
 import { useBackLayer } from "../../state/back-stack";
 import { claimCompensation, compensationLines, useCompensation } from "../../state/compensation";
 import { useNavigation } from "../../state/navigation";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { TesterBadge } from "./tester-badge";
 
 /**
@@ -41,6 +42,7 @@ export function TesterThanksScreen(): ReactNode {
     setFailed(false);
     const done = await claimCompensation();
     if (done) {
+      rewardFeedback(lines.restoredGems + lines.continueGems + lines.bonusGems > 0 ? "gems" : null);
       navigation.pop();
       return;
     }

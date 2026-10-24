@@ -65,7 +65,8 @@ export function ListItem(props: ListItemProps): ReactNode {
   const className = [
     "flex min-h-14 w-full items-center gap-3 bg-surface px-4 py-3 text-left",
     "transition-colors duration-(--duration-fast) ease-base",
-    interactive ? "active:bg-surface-raised" : "",
+    // Группа строк обрезает всё снаружи строки — кольцо фокуса внутрь.
+    interactive ? "active:bg-surface-raised focus-visible:-outline-offset-2" : "",
     props.disabled === true ? "opacity-50" : "",
   ].join(" ");
 
@@ -102,7 +103,7 @@ export function Toggle(props: ToggleProps): ReactNode {
         props.onChange();
       }}
       className={[
-        "relative h-8 w-13 shrink-0 rounded-pill",
+        "hit-tall h-8 w-13 shrink-0 rounded-pill",
         "transition-colors duration-(--duration-base) ease-base",
         props.checked ? "fill-accent" : "surface-sunken",
         props.disabled === true ? "opacity-40" : "",

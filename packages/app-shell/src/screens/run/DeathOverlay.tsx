@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Crown, Skull } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { Button, Modal } from "../../design-system/components";
@@ -53,7 +53,8 @@ export interface DeathOverlayProps {
   onDecline(): void;
   onRestart(): void;
   onMenu(): void;
-  onShare(): void;
+  /** строка под кнопками — что вышло, когда это не видно само; null — говорить нечего */
+  onShare(): Promise<string | null>;
 }
 
 export function DeathOverlay(props: DeathOverlayProps): ReactNode {
@@ -80,13 +81,25 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
   // Продолжить нечем — шага со вторым шансом нет: забег закрывается смертью,
   // как и когда способы отпали сами. Итоги появятся, когда он закроется.
-  const { onDecline } = props;
+  const { onDecline, onShare } = props;
   const declined = useRef(false);
   useEffect(() => {
     if (!downedWithoutWays || declined.current) return;
     declined.current = true;
     onDecline();
   }, [downedWithoutWays, onDecline]);
+
+  // Ответ площадки ждём на месте: второе нажатие, пока выбор чата
+  // открывается, отправило бы итог дважды.
+  const [share, setShare] = useState<{ busy: boolean; note: string | null }>({ busy: false, note: null });
+  const runShare = (): void => {
+    if (share.busy) return;
+    setShare({ busy: true, note: null });
+    onShare().then(
+      (note) => setShare({ busy: false, note }),
+      () => setShare({ busy: false, note: t("error.title") }),
+    );
+  };
 
   if (step === "chance" && secondChance !== undefined) {
     return (
@@ -106,10 +119,15 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
         <Button variant="secondary" block onClick={props.onMenu}>
           {t("run.death.home")}
         </Button>
-        <Button variant="ghost" block onClick={props.onShare}>
+        <Button variant="ghost" block loading={share.busy} onClick={runShare}>
           {t("run.death.share")}
         </Button>
       </div>
+      {share.note === null ? null : (
+        <p role="status" className="text-center text-xs text-text-muted landscape:col-span-full">
+          {share.note}
+        </p>
+      )}
     </>
   );
 

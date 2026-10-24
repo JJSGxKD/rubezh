@@ -14,7 +14,23 @@ import type { SoundId, SoundRecipe } from "./recipes";
 
 export type SoundScene = "lobby" | "run" | "pause" | "choice" | "finished" | "silent";
 export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record" | "chestDrop" | "chestRattle" | "chestOpen" | "bossPhase";
-export type UiSound = "tap" | "select" | "primary" | "back" | "toggleOn" | "toggleOff" | "sheetOpen" | "sheetClose" | "reward" | "error";
+export type UiSound =
+  | "tap"
+  | "select"
+  | "primary"
+  | "back"
+  | "toggleOn"
+  | "toggleOff"
+  | "sheetOpen"
+  | "sheetClose"
+  | "reward"
+  | "coins"
+  | "gems"
+  | "shards"
+  | "wheelTick"
+  | "tally"
+  | "purchase"
+  | "error";
 
 export interface HudSound {
   hpRatio: number;
@@ -31,6 +47,12 @@ const UI_SOUND_IDS: Record<UiSound, SoundId> = {
   sheetOpen: "uiSheetOpen",
   sheetClose: "uiSheetClose",
   reward: "uiReward",
+  coins: "uiCoins",
+  gems: "uiGems",
+  shards: "uiShards",
+  wheelTick: "uiWheelTick",
+  tally: "uiTally",
+  purchase: "uiPurchase",
   error: "uiError",
 };
 
@@ -154,8 +176,9 @@ export class SoundDirector {
     this.engine.setVolumes(volumes);
   }
 
-  ui(kind: UiSound): void {
-    this.engine.play(UI_SOUND_IDS[kind]);
+  /** `rate` — тон: счёт в шапке поднимает его к концу. */
+  ui(kind: UiSound, rate?: number): void {
+    this.engine.play(UI_SOUND_IDS[kind], rate === undefined ? {} : { rate });
   }
 
   setScene(scene: SoundScene): void {

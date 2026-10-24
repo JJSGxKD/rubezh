@@ -58,8 +58,12 @@ export function zonesOverlap(zonesA, zonesB, repoFiles) {
   return false;
 }
 
-/** Изменённые файлы вне `zones`, `shared` и самого файла задачи (`task.fileName` — имя в `tasks/`). */
+/**
+ * Изменённые файлы вне `zones`, `shared` и самого файла задачи (`task.fileName`
+ * — имя в `tasks/`). Задача, закрытая в своём PR, переезжает в `tasks/archive/`:
+ * оба места — её.
+ */
 export function outOfZone(changed, task) {
-  const allowed = [...task.zones, ...task.shared, `tasks/${task.fileName}`];
+  const allowed = [...task.zones, ...task.shared, `tasks/${task.fileName}`, `tasks/archive/${task.fileName}`];
   return changed.filter((path) => !matches(path, allowed));
 }

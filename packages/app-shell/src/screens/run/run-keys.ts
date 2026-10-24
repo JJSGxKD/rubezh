@@ -31,11 +31,21 @@ export function runKeyAction(code: string, phase: RunPhase, offers: number): Run
   return null;
 }
 
-/** Нажатие в поле ввода, с модификатором или автоповтор клавиши — не команда забегу. */
+/**
+ * Клавиша принадлежит элементу с фокусом, а не забегу: поле ввода берёт любую,
+ * кнопка — Enter и пробел. Иначе Enter на «На главную» жал бы кнопку и тут же
+ * «Ещё раз» (docs/27-design-system-and-app-shell.md §4.4).
+ */
+export function keyOwnedByTarget(code: string, target: { tagName: string; role: string | null; editable: boolean }): boolean {
+  if (target.editable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return true;
+  return CONFIRM.test(code) && (/^(BUTTON|A|SUMMARY)$/.test(target.tagName) || /^(button|switch|tab|link|checkbox)$/.test(target.role ?? ""));
+}
+
+/** Нажатие с модификатором, автоповтор или клавиша элемента с фокусом — не команда забегу. */
 function ignored(event: KeyboardEvent): boolean {
   if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return true;
   const target = event.target;
-  return target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+  return target instanceof HTMLElement && keyOwnedByTarget(event.code, { tagName: target.tagName, role: target.getAttribute("role"), editable: target.isContentEditable });
 }
 
 /** `enabled` — нет открытого листа: у листа своя клавиша Esc — закрыть его. */

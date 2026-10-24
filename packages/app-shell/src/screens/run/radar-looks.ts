@@ -15,3 +15,18 @@ export const RADAR_COLORS = {
   // сундук — фиолетовым токеном предметов, и квадратом, а не точкой или ромбом.
   chest: COLORS.passive,
 } as const;
+
+/**
+ * Форма точки по виду: при дейтеранопии и протанопии красный враг и золотая
+ * элита — одна жёлто-оливковая точка, поэтому вид обязан читаться формой.
+ * Элита — точка с тёмной кромкой и светлым сердцем, рядовой — простая.
+ */
+export const RADAR_SHAPES = {
+  enemy: "dot",
+  elite: "marked",
+  medkit: "cross",
+  magnet: "ring",
+  dynamite: "diamond",
+  chest: "square",
+  freeze: "x",
+} as const;

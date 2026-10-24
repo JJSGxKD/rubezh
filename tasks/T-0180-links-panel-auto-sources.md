@@ -36,7 +36,7 @@ batch: 3
 
 # T-0180. Панель «Ссылки» — автоисточники: пометка «авто», название, скрытие и сводка незнакомых меток
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](T-0179-start-param-pairs-auto-sources.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](archive/T-0179-start-param-pairs-auto-sources.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
 
 ## Зачем
 

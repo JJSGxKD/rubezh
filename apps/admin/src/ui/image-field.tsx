@@ -65,7 +65,7 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
           {value !== null && value === uploaded ? (
             <span className="text-xs text-warning">загружена — нажмите «Сохранить», чтобы игроки её увидели</span>
           ) : (
-            <span className="text-xs text-text-disabled">{value === null ? "нет — у игрока значок" : shownAs}</span>
+            <span className="text-xs text-text-muted">{value === null ? "нет — у игрока значок" : shownAs}</span>
           )}
         </div>
       </div>
@@ -223,7 +223,7 @@ function CropDialog({ source, profile, onClose, onUploaded }: { source: ImageBit
               className="flex-1 accent-accent"
             />
           </label>
-          {zoomLimit <= 1 ? <span className="text-xs text-text-disabled">приближать некуда: короче стороны уже не взять</span> : null}
+          {zoomLimit <= 1 ? <span className="text-xs text-text-muted">приближать некуда: короче стороны уже не взять</span> : null}
         </div>
         <div className="flex flex-col gap-4">
           <Preview canvas={small} side={44} caption={shownAs} />

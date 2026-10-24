@@ -643,6 +643,12 @@ export interface RunDevVisuals {
   effects: boolean;
   /** техническая сводка событием `devInfo` */
   techInfo: boolean;
+  /**
+   * Черновой арт: герой и враги кадрами атласа из design/art вместо фигур.
+   * Атлас грузится по первому включению; до одобрения направления арта —
+   * только в режиме разработчика (design/art/characters.md, «Интеграция»).
+   */
+  sprites: boolean;
 }
 
 export interface RunDevCheats {

@@ -9,7 +9,7 @@ import { loadBadges } from "../../state/badges-api";
 import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyView } from "../../state/daily-api";
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { coinPile, PILE_SPOTS } from "./daily-pile";
@@ -74,7 +74,7 @@ export function DailyScreen(): ReactNode {
       const today = view.days.find((day) => day.today);
       if (today !== undefined) track("daily_reward_claimed", { day: dayOfWeek(today, view.days), week: view.week });
       setNotice(t("daily.got", { what: gotText(response.data.coins, response.data.shards) }));
-      uiFeedback("reward");
+      rewardFeedback(response.data.coins > 0 ? "coins" : response.data.shards > 0 ? "shards" : null);
       // Монеты вылетают из сегодняшней плитки.
       setBurst(burstAt(document.querySelector('[aria-current="date"]'), response.data.coins, "coin"));
       void loadWallet();
@@ -143,11 +143,14 @@ export function DailyScreen(): ReactNode {
 /**
  * Плитка дня. Сегодняшний день подписан так же, как остальные, — «День N»:
  * «СЕГОДНЯ» в узкой плитке на 320 px упиралось в края. «Сегодня» передают
- * рамка, цвет подписи и точка перед ней.
+ * рамка, цвет подписи и точка перед ней. Подпись — бликом акцента: сам акцент
+ * на выбранной карточке ниже 4,5:1. У забранного дня гаснет награда, а не
+ * подпись: приглушённая подпись под прозрачностью тоже падала ниже порога.
  */
 export function DayCell(props: { day: DailyDay; index: number; last: boolean; pile?: number }): ReactNode {
   const { day } = props;
   const label = t("daily.day", { day: props.index + 1 });
+  const past = day.claimed && !day.today;
   return (
     <li
       aria-current={day.today ? "date" : undefined}
@@ -156,19 +159,18 @@ export function DayCell(props: { day: DailyDay; index: number; last: boolean; pi
       className={[
         "relative flex animate-rise-in flex-col items-center justify-between gap-2 overflow-hidden rounded-lg px-1 py-3 text-center",
         day.today ? "surface-card-selected" : "surface-card",
-        day.claimed && !day.today ? "opacity-60" : "",
         props.last ? "col-span-2 landscape:col-span-1" : "",
       ].join(" ")}
     >
-      <span className={["inline-flex items-center gap-1 font-display text-xs font-semibold tracking-wide whitespace-nowrap uppercase", day.today ? "text-accent" : "text-text-muted"].join(" ")}>
+      <span className={["inline-flex items-center gap-1 font-display text-xs font-semibold tracking-wide whitespace-nowrap uppercase", day.today ? "text-accent-glow" : "text-text-muted"].join(" ")}>
         {day.today ? <span aria-hidden="true" data-today-dot="" className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
         {label}
       </span>
-      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-2" : "size-11"}`}>
+      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-2" : "size-11"} ${past ? "opacity-60" : ""}`}>
         {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinPile size={props.pile ?? 1} large={props.last} />}
         {day.shards > 0 && !day.claimed ? <ShardIcon rarity="common" size={22} /> : null}
       </span>
-      <span aria-hidden="true" className="min-h-5 font-display text-sm font-bold tabular-nums text-text">
+      <span aria-hidden="true" className={`min-h-5 font-display text-sm font-bold tabular-nums text-text ${past ? "opacity-60" : ""}`}>
         {formatNumber(day.coins)}
         {day.shards > 0 ? <span className="text-text-muted"> +{day.shards}</span> : null}
       </span>

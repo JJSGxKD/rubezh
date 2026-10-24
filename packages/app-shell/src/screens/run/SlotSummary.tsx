@@ -105,11 +105,11 @@ function SlotChip(props: {
     <li
       className={[
         "surface-sunken inline-flex shrink-0 items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold whitespace-nowrap tabular-nums",
-        full ? "text-text-disabled" : props.tone === "weapon" ? "text-weapon" : "text-passive",
+        full ? "text-text-muted" : props.tone === "weapon" ? "text-weapon" : "text-passive",
       ].join(" ")}
     >
       {props.icon}
-      <span className={["sr-only @sm:not-sr-only", full ? "text-text-disabled" : "text-text"].join(" ")}>{props.label}</span>
+      <span className={["sr-only @sm:not-sr-only", full ? "text-text-muted" : "text-text"].join(" ")}>{props.label}</span>
       <span>
         {props.used}/{props.limit}
       </span>

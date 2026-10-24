@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Bell, Menu, Plus } from "lucide-react";
 import { Avatar } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
@@ -10,6 +10,7 @@ import { useProgress } from "../state/progress";
 import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 import { useWallet } from "../state/wallet";
+import { BalanceValue } from "./BalanceValue";
 
 /**
  * Шапка разделов нижней панели (docs/27-design-system-and-app-shell.md §6,
@@ -43,6 +44,10 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
 
   return (
     <header className="surface-glass absolute inset-x-0 top-0 z-(--z-header) pt-[calc(0.5rem+var(--app-inset-top))] pr-[calc(0.75rem+var(--app-inset-right))] pb-2 pl-[calc(0.75rem+var(--app-inset-left))]">
+      {/* Рамки кнопок и значков — в px, а не в rem: значки в них и так в px,
+          а с крупным шрифтом системы (Android масштабирует текст WebView) рамки
+          росли бы вместе с текстом, и на 320 px при 150 % аватар наезжал на
+          монеты. Растёт только текст — числа баланса. */}
       <div className="@container mx-auto flex w-full max-w-[640px] items-center gap-1.5">
         <button
           type="button"
@@ -51,14 +56,14 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
             uiFeedback("tap");
             useNavigation.getState().push("profile");
           }}
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full transition-transform duration-(--duration-fast) ease-base active:scale-95"
+          className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-full transition-transform duration-(--duration-fast) ease-base active:scale-95"
         >
           <LevelAvatar name={name} url={user?.avatarUrl} />
         </button>
 
         <div className={`flex min-w-0 flex-1 items-center justify-end gap-1.5 transition-opacity duration-(--duration-base) ease-base ${offline ? "opacity-60" : ""}`}>
-          <CurrencyButton icon={<CoinIcon size={20} />} label={t("currency.coins")} value={balances?.coins ?? 0} target="history" />
-          <CurrencyButton icon={<GemIcon size={20} />} label={t("currency.premium")} value={balances?.gems ?? 0} target="shop" buy />
+          <CurrencyButton id="coins" icon={<CoinIcon size={20} />} label={t("currency.coins")} value={balances?.coins ?? null} target="history" />
+          <CurrencyButton id="gems" icon={<GemIcon size={20} />} label={t("currency.premium")} value={balances?.gems ?? null} target="shop" buy />
         </div>
 
         {/* Лента — только с входом: без аккаунта уведомлениям неоткуда взяться.
@@ -71,7 +76,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
               uiFeedback("tap");
               useNavigation.getState().push("notifications");
             }}
-            className="btn-secondary relative hidden size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90 @min-[21.5rem]:inline-flex"
+            className="btn-secondary relative hidden size-[44px] shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90 @min-[21.5rem]:inline-flex"
           >
             <Bell size={22} />
             <CountBadge count={unread} />
@@ -85,7 +90,7 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
             uiFeedback("tap");
             props.onMenu();
           }}
-          className="btn-secondary relative inline-flex size-11 shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"
+          className="btn-secondary relative inline-flex size-[44px] shrink-0 items-center justify-center rounded-md transition-transform duration-(--duration-fast) ease-base active:scale-90"
         >
           <Menu size={22} />
           {/* Знак на меню — только там, где колокольчика в шапке нет: одно и то
@@ -129,8 +134,8 @@ function LevelAvatar(props: { name: string; url: string | null | undefined }): R
   });
 
   return (
-    <span className="relative inline-flex size-11 items-center justify-center">
-      <svg aria-hidden="true" viewBox="0 0 44 44" className="absolute inset-0 size-11 -rotate-90">
+    <span className="relative inline-flex size-[44px] items-center justify-center">
+      <svg aria-hidden="true" viewBox="0 0 44 44" className="absolute inset-0 size-[44px] -rotate-90">
         <circle cx="22" cy="22" r={RING} fill="none" stroke="var(--color-border-strong)" strokeWidth="2.5" />
         {share > 0 ? (
           <circle
@@ -162,22 +167,29 @@ function LevelAvatar(props: { name: string; url: string | null | undefined }): R
  * Валюта — одна кнопка на всю плашку: маленький «плюс» отдельной целью
  * нажатия был бы меньше 44 px (§4.6). Цель нажатия — 44 px в высоту, а
  * плашка — 32: вытянутая на всю цель, она выглядела бы кнопкой-столбиком.
+ *
+ * `null` — кошелёк ещё не пришёл (или сборка без входа): на плашке ноль.
  */
-function CurrencyButton(props: { icon: ReactNode; label: string; value: number; target: ScreenId; buy?: boolean }): ReactNode {
+function CurrencyButton(props: { id: string; icon: ReactNode; label: string; value: number | null; target: ScreenId; buy?: boolean }): ReactNode {
+  const icon = useRef<HTMLSpanElement>(null);
   const open = (): void => {
     uiFeedback("tap");
     if (props.target === "shop") useNavigation.getState().resetTo("shop");
     else useNavigation.getState().push(props.target);
   };
   return (
-    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value)}`} onClick={open} className="group inline-flex min-h-11 shrink-0 items-center">
+    <button type="button" aria-label={`${props.label}: ${formatNumber(props.value ?? 0)}`} onClick={open} className="group inline-flex min-h-[44px] shrink-0 items-center">
       <span
-        className={`surface-sunken inline-flex h-8 items-center gap-1 rounded-pill pl-1 transition-transform duration-(--duration-fast) ease-base group-active:scale-95 ${props.buy === true ? "pr-1" : "pr-2.5"}`}
+        className={`surface-sunken inline-flex h-[32px] items-center gap-1 rounded-pill pl-1 transition-transform duration-(--duration-fast) ease-base group-active:scale-95 ${props.buy === true ? "pr-1" : "pr-2.5"}`}
       >
-        <span className="inline-flex size-6 items-center justify-center">{props.icon}</span>
-        <span className="min-w-6 font-display text-sm font-bold whitespace-nowrap tabular-nums text-text">{formatCompact(props.value)}</span>
+        <span ref={icon} className="inline-flex size-[24px] items-center justify-center">
+          {props.icon}
+        </span>
+        <span className="min-w-6 font-display text-sm font-bold whitespace-nowrap tabular-nums text-text">
+          <BalanceValue id={props.id} value={props.value} format={formatCompact} bump={icon} />
+        </span>
         {props.buy === true ? (
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent text-on-accent">
+          <span className="inline-flex size-[20px] items-center justify-center rounded-full bg-accent text-on-accent">
             <Plus size={14} strokeWidth={3} />
           </span>
         ) : null}

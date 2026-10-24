@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
@@ -6,8 +6,8 @@ import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
 import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
-import { checkRegistry, readTasks } from "./registry.mjs";
-import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine } from "./task-file.mjs";
+import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
+import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
 
 /**
@@ -28,7 +28,7 @@ const USAGE = `Команды:
                                            продолжить PR с меткой «доработка», чей бы он ни был
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
-  pnpm task fix                            поставить строки значков и ячейки «Задачи» в эпиках
+  pnpm task fix                            перенести готовые задачи в tasks/archive/, поставить строки значков, ссылки и ячейки эпиков
   pnpm task claim-check [--base <ref>]     задачу можно было взять: статус, зависимости, зоны
   pnpm task status-json --out <каталог>    значки статуса: <каталог>/status/T-NNNN.json на задачу`;
 
@@ -151,46 +151,77 @@ function ownerFor(task, flags, command) {
   return `${owner.account} / ${owner.executor} / ${owner.effort}`;
 }
 
+/** Файлы рабочей копии `tasks/*.md` и `tasks/archive/*.md`: `[{ name, text }]`, имя — путь от `tasks/`. */
+function readWorkingTasks() {
+  const dir = join(ROOT, "tasks");
+  const list = (sub) => {
+    const folder = join(dir, sub);
+    if (!existsSync(folder)) return [];
+    return readdirSync(folder)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => ({ name: sub === "" ? name : `${sub}/${name}`, text: readFileSync(join(folder, name), "utf8") }));
+  };
+  return [...list(""), ...list(ARCHIVE_DIR)];
+}
+
 function runCheck() {
   const dir = join(ROOT, "tasks");
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".md"))
-    .map((name) => ({ name, text: readFileSync(join(dir, name), "utf8") }));
+  const files = readWorkingTasks();
   const errors = checkRegistry(files, readFileSync(join(dir, "epics.md"), "utf8"));
   if (errors.length > 0) {
     for (const error of errors) console.error(`ошибка  ${error}`);
     process.exit(1);
   }
-  console.log(`Реестр задач в порядке: ${String(files.filter((file) => file.name.startsWith("T-")).length)} задач.`);
+  const all = files.filter((file) => file.name.split("/").at(-1).startsWith("T-"));
+  const archived = all.filter((file) => file.name.startsWith(`${ARCHIVE_DIR}/`)).length;
+  console.log(`Реестр задач в порядке: ${String(all.length)} задач (открытых ${String(all.length - archived)}, в архиве ${String(archived)}).`);
 }
 
+/**
+ * Переносит готовые и отменённые задачи в архив, ставит строки значков, чинит
+ * ссылки на файлы задач и ячейки эпиков (tasks/README.md, T-0204). Повторный
+ * запуск ничего не меняет.
+ */
 function runFix() {
   const dir = join(ROOT, "tasks");
-  const files = readdirSync(dir)
-    .filter((name) => name.endsWith(".md"))
-    .map((name) => ({ name, text: readFileSync(join(dir, name), "utf8") }));
-  const { tasks } = readTasks(files);
-  const fileNames = Object.fromEntries(tasks.map((task) => [task.id, task.fileName]));
-  const changed = [];
+  let files = readWorkingTasks();
+  const moved = [];
 
-  for (const file of files.filter((candidate) => candidate.name.startsWith("T-"))) {
-    const data = tasks.find((task) => task.fileName === file.name);
-    // Битая шапка или зависимость без файла — править нечего: об этом скажет `pnpm task check`.
-    if (data === undefined || data.depends_on.some((id) => fileNames[id] === undefined)) continue;
-    const text = withBadgeLine(file.text, badgeLine(data, fileNames));
-    if (text !== file.text) changed.push({ name: file.name, text });
+  // (а) перенос: путь задачи должен быть равен месту по статусу
+  const { tasks: before } = readTasks(files);
+  for (const task of before) {
+    const target = placementPath(task);
+    if (task.path === target) continue;
+    mkdirSync(join(dir, ARCHIVE_DIR), { recursive: true });
+    renameSync(join(dir, task.path), join(dir, target));
+    moved.push({ from: task.path, to: target });
+    console.log(`перенесено: tasks/${task.path} → tasks/${target}`);
   }
-  const epics = files.find((file) => file.name === "epics.md");
-  if (epics !== undefined) {
-    const text = fixEpicCells(epics.text, tasks);
-    if (text !== epics.text) changed.push({ name: epics.name, text });
+  if (moved.length > 0) files = readWorkingTasks();
+
+  // (б) пути пересчитаны по настоящему расположению
+  const { tasks } = readTasks(files);
+  const paths = Object.fromEntries(tasks.map((task) => [task.id, task.path]));
+  const changed = [];
+  const taskOf = new Map(tasks.map((task) => [task.path, task]));
+
+  for (const file of files) {
+    let text = file.text;
+    const data = taskOf.get(file.name);
+    // Битая шапка или зависимость без файла — править нечего: об этом скажет `pnpm task check`.
+    if (data !== undefined && !data.depends_on.some((id) => paths[id] === undefined)) text = withBadgeLine(text, badgeLine(data, paths));
+    // (в) ссылки на файлы задач — во всех файлах tasks/ и tasks/archive/
+    text = withTaskLinks(text, file.name, paths);
+    // (г) ячейки эпиков
+    if (file.name === "epics.md") text = fixEpicCells(text, tasks);
+    if (text !== file.text) changed.push({ name: file.name, text });
   }
 
   for (const file of changed) {
     writeFileSync(join(dir, file.name), file.text);
     console.log(`поправлено: tasks/${file.name}`);
   }
-  if (changed.length === 0) console.log("Править нечего.");
+  if (changed.length === 0 && moved.length === 0) console.log("Править нечего.");
 }
 
 /** Строки `status` и `owner` в шапке; остальное в файле не трогаем. */
@@ -297,7 +328,9 @@ function runResume(positional, flags) {
     if (!hadLocal) tryGit(["branch", "-D", branch]);
   };
 
-  const file = join(ROOT, "tasks", task.fileName);
+  // В ветке PR, закрывшего задачу, файл уже может лежать в архиве.
+  const taskPath = existsSync(join(ROOT, "tasks", task.fileName)) ? task.fileName : `${ARCHIVE_DIR}/${task.fileName}`;
+  const file = join(ROOT, "tasks", taskPath);
   const before = readFileSync(file, "utf8");
   const updated = withOwner(before, owner);
   const message = `chore(tasks): Продолжить ${id} после ответа`;
@@ -305,7 +338,7 @@ function runResume(positional, flags) {
   if (updated === before) git(["commit", "--quiet", "--allow-empty", "-m", message]);
   else {
     writeFileSync(file, updated);
-    git(["commit", "--quiet", "-m", message, "--", `tasks/${task.fileName}`]);
+    git(["commit", "--quiet", "-m", message, "--", `tasks/${taskPath}`]);
   }
 
   const pushed = tryGit(["push", "origin", `HEAD:refs/heads/${branch}`]);
@@ -345,10 +378,10 @@ function runDiffCheck(flags) {
   const id = match[1];
   const base = flags.base ?? BASE;
 
-  const dir = join(ROOT, "tasks");
-  const fileName = readdirSync(dir).find((name) => name.startsWith(`${id}-`) && name.endsWith(".md"));
-  if (fileName === undefined) fail(`ошибка  ветка ${head}, а файла tasks/${id}-*.md в ней нет`);
-  const parsed = parseFrontmatter(readFileSync(join(dir, fileName), "utf8"));
+  const found = readWorkingTasks().find((file) => file.name.split("/").at(-1).startsWith(`${id}-`) && file.name.endsWith(".md"));
+  if (found === undefined) fail(`ошибка  ветка ${head}, а файла tasks/${id}-*.md или tasks/archive/${id}-*.md в ней нет`);
+  const fileName = found.name.split("/").at(-1);
+  const parsed = parseFrontmatter(found.text);
   const problems = [...parsed.errors, ...validateTask(fileName, parsed.data)];
   if (problems.length > 0) fail(problems.map((problem) => `ошибка  ${fileName}: ${problem}`).join("\n"));
 

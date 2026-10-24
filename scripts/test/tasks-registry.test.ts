@@ -1,9 +1,9 @@
 import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { checkRegistry, parseEpics } from "../tasks/registry.mjs";
+import { checkRegistry, parseEpics, placementPath, readTasks } from "../tasks/registry.mjs";
 
 // Реестр задач проверяется целиком: уникальные id, известные эпики,
 // существующие зависимости, нет циклов.
@@ -17,8 +17,8 @@ const EPICS = ["| Эпик | Цель |", "|---|---|", "| **E0. Процесс**
 function epicsOf(files: { name: string; text: string }[]): string {
   const cell = (epic: string): string => {
     const badges = files
-      .filter((file) => file.name.startsWith("T-") && new RegExp(`^epic: ${epic}$`, "m").test(file.text))
-      .map((file) => ({ id: file.name.slice(0, 6), name: file.name }))
+      .filter((file) => basename(file.name).startsWith("T-") && new RegExp(`^epic: ${epic}$`, "m").test(file.text))
+      .map((file) => ({ id: basename(file.name).slice(0, 6), name: file.name }))
       .sort((a, b) => a.id.localeCompare(b.id))
       .map(({ id, name }) => `[![${id}](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/${id}.json&label=${id})](${name})`);
     return badges.length === 0 ? "—" : badges.join(" ");
@@ -33,15 +33,20 @@ function check(files: { name: string; text: string }[]): string[] {
 const STATUS_URL = "https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status";
 
 // Строка значков под заголовком (T-0011): написана руками, а не через badgeLine, — это независимая сверка формата.
-function badgesOf(id: string, dependsOn: string): string {
+// Где лежит каждая созданная задача (id → путь от tasks/): ссылка зависимости считается от папки файла (T-0204).
+const LOCATIONS = new Map<string, string>();
+
+function badgesOf(id: string, dependsOn: string, from: string): string {
   const deps = dependsOn.replace(/[[\]]/g, "").split(",").map((dep) => dep.trim()).filter((dep) => dep !== "");
+  const link = (to: string): string => posix.relative(posix.dirname(from), to);
   return [
-    `[![статус](${STATUS_URL}/${id}.json)](README.md#значки-статуса)`,
-    ...deps.map((dep) => `[![${dep}](${STATUS_URL}/${dep}.json&label=${dep})](${dep}-x.md)`),
+    `[![статус](${STATUS_URL}/${id}.json)](${link("README.md")}#значки-статуса)`,
+    ...deps.map((dep) => `[![${dep}](${STATUS_URL}/${dep}.json&label=${dep})](${link(LOCATIONS.get(dep) ?? `${dep}-x.md`)})`),
   ].join(" ");
 }
 
-function fileOf(id: string, patch: Record<string, string> = {}, name = `${id}-x.md`): { name: string; text: string } {
+// Готовая и отменённая задача лежит в архиве, открытая — наверху (T-0204).
+function fileOf(id: string, patch: Record<string, string> = {}, name?: string): { name: string; text: string } {
   const fields: Record<string, string> = {
     id,
     title: "Задача",
@@ -60,17 +65,25 @@ function fileOf(id: string, patch: Record<string, string> = {}, name = `${id}-x.
     design: "null",
     ...patch,
   };
+  const settled = fields.status === "done" || fields.status === "cancelled";
+  const path = name ?? `${settled ? "archive/" : ""}${id}-x.md`;
+  LOCATIONS.set(id, path);
   const lines = Object.entries(fields).map(([key, value]) => `${key}:${value === "" ? "" : ` ${value}`}`);
   // Раздел «PR» обязателен у задач ready и in-progress (T-0146): заголовок корректен, метка равна release.
   const pr = ["## PR", "", "- **Заголовок:** `fix(app-shell): Чинить X`", `- **Метка:** \`release: ${fields.release}\``, ""];
-  return { name, text: ["---", ...lines, "---", "", `# ${id}. Задача`, "", badgesOf(id, fields.depends_on), "", ...pr].join("\n") };
+  return { name: path, text: ["---", ...lines, "---", "", `# ${id}. Задача`, "", badgesOf(id, fields.depends_on, path), "", ...pr].join("\n") };
 }
 
 describe("реестр задач", () => {
   it("настоящий реестр tasks/ без ошибок", () => {
-    const files = readdirSync(TASKS_DIR)
-      .filter((name) => name.endsWith(".md"))
-      .map((name) => ({ name, text: readFileSync(join(TASKS_DIR, name), "utf8") }));
+    const files = [
+      ...readdirSync(TASKS_DIR)
+        .filter((name) => name.endsWith(".md"))
+        .map((name) => ({ name, text: readFileSync(join(TASKS_DIR, name), "utf8") })),
+      ...readdirSync(join(TASKS_DIR, "archive"))
+        .filter((name) => name.endsWith(".md"))
+        .map((name) => ({ name: `archive/${name}`, text: readFileSync(join(TASKS_DIR, "archive", name), "utf8") })),
+    ];
     const epics = readFileSync(join(TASKS_DIR, "epics.md"), "utf8");
     expect(checkRegistry(files, epics)).toEqual([]);
   });
@@ -247,5 +260,45 @@ describe("пачки в зависимостях", () => {
     // Задача с битой шапкой в реестр не попадает, поэтому проверка ячейки эпика может добавить своё: смотрим на нужную ошибку.
     const errors = check([fileOf("T-0001", { version: "v0.8" })]).filter((error: string) => error.includes("version"));
     expect(errors).toEqual(["T-0001-x.md: поле version заменено полем batch — пачкой очереди, tasks/README.md"]);
+  });
+});
+
+describe("архив задач (T-0204)", () => {
+  it("готовая задача в archive/ — без ошибок: путь с папкой, fileName — имя файла", () => {
+    const { tasks, errors } = readTasks([fileOf("T-0002", { status: "done" })]);
+    expect(errors).toEqual([]);
+    expect(tasks[0]).toMatchObject({ id: "T-0002", path: "archive/T-0002-x.md", fileName: "T-0002-x.md" });
+    expect(check([fileOf("T-0002", { status: "done" })])).toEqual([]);
+  });
+
+  it("готовая или отменённая задача наверху — ошибка с подсказкой pnpm task fix", () => {
+    for (const status of ["done", "cancelled"]) {
+      const errors = check([fileOf("T-0002", { status }, "T-0002-x.md")]);
+      expect(errors.some((error: string) => error.includes("T-0002-x.md") && error.includes(status) && error.includes("перенесёт pnpm task fix")), status).toBe(true);
+    }
+  });
+
+  it("открытая задача в archive/ — ошибка", () => {
+    const errors = check([fileOf("T-0003", { status: "ready" }, "archive/T-0003-x.md")]);
+    expect(errors.some((error: string) => error.includes("archive/T-0003-x.md") && error.includes("лежит в архиве") && error.includes("pnpm task fix"))).toBe(true);
+  });
+
+  it("другая папка — ошибка о папке", () => {
+    const errors = check([fileOf("T-0004", {}, "old/T-0004-x.md")]);
+    expect(errors.some((error: string) => error.includes("old/T-0004-x.md") && error.includes("tasks/archive/"))).toBe(true);
+  });
+
+  it("ссылки значков считаются от папки файла: открытая → архивная, архивная → открытая", () => {
+    const files = [fileOf("T-0001"), fileOf("T-0002", { status: "done" }), fileOf("T-0005", { depends_on: "[T-0002]" }), fileOf("T-0006", { status: "done", depends_on: "[T-0001]" })];
+    expect(files[2]?.text).toContain("](archive/T-0002-x.md)");
+    expect(files[3]?.text).toContain("](../T-0001-x.md)");
+    expect(files[3]?.text).toContain("](../README.md#значки-статуса)");
+    expect(check(files)).toEqual([]);
+  });
+
+  it("placementPath: готовые и отменённые — в archive/, остальные — наверху", () => {
+    expect(placementPath({ status: "done", fileName: "T-1-x.md" })).toBe("archive/T-1-x.md");
+    expect(placementPath({ status: "cancelled", fileName: "T-1-x.md" })).toBe("archive/T-1-x.md");
+    for (const status of ["draft", "ready", "in-progress"]) expect(placementPath({ status, fileName: "T-1-x.md" }), status).toBe("T-1-x.md");
   });
 });

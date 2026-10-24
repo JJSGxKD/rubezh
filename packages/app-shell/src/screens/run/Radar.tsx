@@ -3,7 +3,7 @@ import { RADAR_BLIP, type RadarSnapshot } from "@bh/core-game";
 import { COLORS } from "../../design-system/tokens";
 import { t } from "../../i18n";
 import "../../i18n/run";
-import { RADAR_COLORS } from "./radar-looks";
+import { RADAR_COLORS, RADAR_SHAPES } from "./radar-looks";
 
 /**
  * Радар забега: враги, элиты и подборы вокруг игрока в пределах кольца спавна
@@ -21,6 +21,13 @@ const SIZE_PX = 88;
 const BLIP_PX = 2.5;
 const ELITE_PX = 4.5;
 const PICKUP_PX = 4;
+
+/** Форма по коду вида из снимка: рисунок решает таблица `RADAR_SHAPES`. */
+const SHAPE_OF_BLIP: readonly (typeof RADAR_SHAPES)[keyof typeof RADAR_SHAPES][] = (() => {
+  const shapes: (typeof RADAR_SHAPES)[keyof typeof RADAR_SHAPES][] = [];
+  for (const [name, code] of Object.entries(RADAR_BLIP) as [keyof typeof RADAR_BLIP, number][]) shapes[code] = RADAR_SHAPES[name];
+  return shapes;
+})();
 
 export const Radar = memo(function Radar(props: { radar: RadarSnapshot }): ReactNode {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,42 +82,52 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
     dot(context, center + blips[i * 3] * radius, center + blips[i * 3 + 1] * radius, BLIP_PX * ratio);
   }
 
-  // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми. Подборы
-  // различаются и формой, и цветом (§4.4): крест — аптечка, кольцо — магнит,
-  // ромб — динамит, квадрат — сундук, косой крест — заморозка, как их силуэты на земле.
+  // Элиты и подборы — поверх роя и крупнее: их важно заметить первыми. Вид
+  // читается и формой, и цветом (§4.4, `RADAR_SHAPES`): элита — точка с кромкой
+  // и светлым сердцем, крест — аптечка, кольцо — магнит, ромб — динамит,
+  // квадрат — сундук, косой крест холодного тона — заморозка, как их силуэты на земле.
   for (let i = 0; i < radar.count; i++) {
-    const kind = blips[i * 3 + 2];
+    const shape = SHAPE_OF_BLIP[blips[i * 3 + 2] ?? RADAR_BLIP.enemy];
     const x = center + blips[i * 3] * radius;
     const y = center + blips[i * 3 + 1] * radius;
     const size = PICKUP_PX * ratio;
-    if (kind === RADAR_BLIP.elite) {
-      context.fillStyle = RADAR_COLORS.elite;
-      dot(context, x, y, ELITE_PX * ratio);
-    } else if (kind === RADAR_BLIP.medkit) {
-      context.fillStyle = RADAR_COLORS.medkit;
-      cross(context, x, y, size);
-    } else if (kind === RADAR_BLIP.magnet) {
-      context.strokeStyle = RADAR_COLORS.magnet;
-      context.lineWidth = 1.6 * ratio;
-      context.beginPath();
-      context.arc(x, y, size * 0.8, 0, Math.PI * 2);
-      context.stroke();
-    } else if (kind === RADAR_BLIP.dynamite) {
-      context.fillStyle = RADAR_COLORS.dynamite;
-      diamond(context, x, y, size);
-    } else if (kind === RADAR_BLIP.freeze) {
-      // Холодный тон и косой крест: ни крест аптечки, ни ромб динамита он не повторяет.
-      context.strokeStyle = COLORS.info;
-      context.lineWidth = 1.8 * ratio;
-      context.beginPath();
-      context.moveTo(x - size * 0.7, y - size * 0.7);
-      context.lineTo(x + size * 0.7, y + size * 0.7);
-      context.moveTo(x + size * 0.7, y - size * 0.7);
-      context.lineTo(x - size * 0.7, y + size * 0.7);
-      context.stroke();
-    } else if (kind === RADAR_BLIP.chest) {
-      context.fillStyle = RADAR_COLORS.chest;
-      context.fillRect(x - size * 0.8, y - size * 0.8, size * 1.6, size * 1.6);
+    switch (shape) {
+      case "marked":
+        marked(context, x, y, ELITE_PX * ratio, ratio);
+        break;
+      case "cross":
+        context.fillStyle = RADAR_COLORS.medkit;
+        cross(context, x, y, size);
+        break;
+      case "ring":
+        context.strokeStyle = RADAR_COLORS.magnet;
+        context.lineWidth = 1.6 * ratio;
+        context.beginPath();
+        context.arc(x, y, size * 0.8, 0, Math.PI * 2);
+        context.stroke();
+        break;
+      case "diamond":
+        context.fillStyle = RADAR_COLORS.dynamite;
+        diamond(context, x, y, size);
+        break;
+      case "square":
+        context.fillStyle = RADAR_COLORS.chest;
+        context.fillRect(x - size * 0.8, y - size * 0.8, size * 1.6, size * 1.6);
+        break;
+      case "x":
+        // Холодный тон и косой крест: ни крест аптечки, ни ромб динамита он не повторяет.
+        context.strokeStyle = COLORS.info;
+        context.lineWidth = 1.8 * ratio;
+        context.beginPath();
+        context.moveTo(x - size * 0.7, y - size * 0.7);
+        context.lineTo(x + size * 0.7, y + size * 0.7);
+        context.moveTo(x + size * 0.7, y - size * 0.7);
+        context.lineTo(x - size * 0.7, y + size * 0.7);
+        context.stroke();
+        break;
+      case "dot":
+      case undefined:
+        break;
     }
   }
 
@@ -123,6 +140,21 @@ function dot(context: CanvasRenderingContext2D, x: number, y: number, radius: nu
   context.beginPath();
   context.arc(x, y, radius, 0, Math.PI * 2);
   context.fill();
+}
+
+/**
+ * Элита — золотой точкой с тёмной кромкой и светлым сердцем
+ * (`RADAR_SHAPES.elite`): без цвета она отличается от роя рисунком, а не
+ * только размером.
+ */
+function marked(context: CanvasRenderingContext2D, x: number, y: number, radius: number, ratio: number): void {
+  context.fillStyle = RADAR_COLORS.elite;
+  dot(context, x, y, radius);
+  context.lineWidth = 1.2 * ratio;
+  context.strokeStyle = COLORS.ink;
+  context.stroke();
+  context.fillStyle = COLORS.text;
+  dot(context, x, y, radius * 0.35);
 }
 
 /** Подбор — крестом, а не только зелёным цветом (§4.4). */

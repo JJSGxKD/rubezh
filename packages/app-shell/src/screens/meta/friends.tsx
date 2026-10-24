@@ -6,6 +6,7 @@ import type { ApiResult } from "../../state/api-request";
 import { loadBadges } from "../../state/badges-api";
 import { createFriendsApi, friendsAvailable, type FriendEntry, type FriendsView } from "../../state/friends-api";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
 import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
@@ -78,10 +79,12 @@ export function FriendsScreen(): ReactNode {
 
   const view = state.status === "ready" ? state.view : null;
   const layout = friendsLayout({ withAccount, status: state.status, friendsCount: view?.friends.length ?? 0 });
-  const bonus =
-    view === null
-      ? undefined
-      : { bonus: view.bonus, busy: busy === "bonus", closed: rewardsClosed, onClaim: () => void act("bonus", () => api.claimBonus(), () => void loadWallet()) };
+  const claimBonus = (): void =>
+    void act("bonus", () => api.claimBonus(), (claim) => {
+      rewardFeedback(claim.coins > 0 ? "coins" : null);
+      void loadWallet();
+    });
+  const bonus = view === null ? undefined : { bonus: view.bonus, busy: busy === "bonus", closed: rewardsClosed, onClaim: claimBonus };
 
   const incoming =
     view === null || view.incoming.length === 0 ? null : (
@@ -125,6 +128,7 @@ export function FriendsScreen(): ReactNode {
             // Монет меньше обещанного — упёрлись в суточный потолок кошелька.
             const promised = claim.claimed * view.gifts.coins;
             setNotice(claim.coins < promised ? t("friends.gifts.capped") : t("friends.gifts.claimed", { count: claim.claimed, coins: formatNumber(claim.coins) }));
+            rewardFeedback(claim.coins > 0 ? "coins" : null);
             void loadWallet();
           })
         }

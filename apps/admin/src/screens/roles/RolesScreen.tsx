@@ -228,7 +228,7 @@ function GrantDialog({ catalog, accountId, onClose, onGranted }: { catalog: Assi
               description: (
                 <span className="flex flex-col gap-1">
                   <span>{rolePurpose(id)}</span>
-                  <span className="text-text-disabled">Разделы: {sectionsOfRole(catalog.find((entry) => entry.role === id)?.permissions ?? [])}</span>
+                  <span className="text-text-muted">Разделы: {sectionsOfRole(catalog.find((entry) => entry.role === id)?.permissions ?? [])}</span>
                 </span>
               ),
             }))}

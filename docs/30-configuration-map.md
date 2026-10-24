@@ -111,6 +111,7 @@
 | Скорость притяжения кристаллов и запас подбора | `game/sim/gems.ts` → `GEM_SPEED`, `PICKUP_SLACK` |
 | Как быстро подборы подползают к игроку в радиусе сбора | `game/sim/pickups.ts` → `PULL_AT_EDGE`, `PULL_AT_PLAYER` |
 | Кольца здоровья и опыта вокруг персонажа: радиусы, толщина, пороги цвета | `game/render/player-rings.ts` |
+| Знак под ногами героя-спрайта: размеры эллипса, толщина, вспышка уровня, ободок щита и число бусин | `game/render/player-sigil.ts` (`SIGIL`, `LEVEL_FLASH_TICKS`, `SHIELD_RIM`, `SHIELD_BEADS_MAX`) |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
 | Формы и цвета мира: враги по паттернам, кристаллы, подборы, снаряды | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS`; рисование фигур — `render/shapes.ts` |
 | Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/looks.ts` → `GEM_TIERS`; `render/pickups.ts` → `GEM_HOP_UNITS`, `SHIMMER_*` |
@@ -161,7 +162,7 @@
 | Цвета шапки и панели Telegram | `app-shell/src/design-system/tokens.ts` → `PLATFORM_COLORS` | визуальный стиль |
 | Файлы шрифтов и подмножества алфавитов | `design-system/fonts.css`; новый алфавит — ещё и бюджет шрифтов ниже, §7 | визуальный стиль |
 | Заставка до загрузки JS: знак, цвета, полоса | `apps/web-*/index.html`, во всех трёх одинаково; цвета — копия токенов числами | визуальный стиль |
-| Знак игры | `design-system/components/Brand.tsx` → `Emblem` и та же фигура в `index.html` | визуальный стиль |
+| Знак игры | рисунок — `design/art/src/logo.mjs` (сетка букв, руна, цвета `BRAND`), он пишет `design-system/brand/*.svg` и `design/art/out/brand/*` (значок приложения, иконка вкладки); вывод — `design-system/components/Brand.tsx`; заставка и иконка вкладки в `apps/web-*/index.html` — тот же SVG вставкой | визуальный стиль |
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | владелец |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | владелец |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | владелец |
@@ -254,6 +255,8 @@
 | Граница игровых суток — Москва, одна на все суточные механики: возвраты D1 и D7 воронки, суточные потолки кошелька, награда дня, бесплатная крутка колеса, ежедневные и недельные задания (`05-game-design.md` §3) | `backend/api/src/common/game-day.ts` → `GAME_DAY_TIME_ZONE` | владелец |
 | Приветствие по `/start`: тексты на двух языках, какие языки читают по-русски | `backend/api/src/platforms/telegram/welcome-texts.ts` → `WELCOME_TEXTS`, `RUSSIAN_READERS` | владелец |
 | Карточка приветствия: раскладка, длина имени, версия шаблона для кэша | `backend/api/src/platforms/telegram/welcome-card.ts` → `CARD_VERSION` (поднять при любой правке вида), `NAME_MAX` | владелец |
+| Картинки бота: палитра, фон «Сумеречного рубежа» (небо, частокол), вставка рисунка | `backend/api/src/common/card/svg.ts` → `PALETTE` (повторяет токены v2), `twilightBackdrop`, `svgImage`, перенос `wrapWords` | визуальный стиль |
+| Рисунок бренда для бота: словесный знак, значок приложения, портреты обликов | `backend/api/src/common/card/brand-art.ts` — **генерируется** `node design/art/src/bot-art.mjs` (после `logo.mjs` и `portraits.mjs`), руками не правится | визуальный стиль |
 | Приветствие: сколько хранить `file_id` карточки, окно двойного нажатия, ожидание прогресса | `backend/api/src/platforms/telegram/welcome.command.ts` → `CARD_CACHE_TTL_SEC`, `START_WINDOW_SEC`, `PROGRESS_TIMEOUT_MS` | владелец |
 | Выгрузка: размер частей, страницы чтения и пауза между ними, колонки таблицы забегов, формат архива | `backend/api/src/modules/export/export.service.ts` → `EXPORT_PART_BYTES`, `EVENTS_PAGE`, `REPORTS_PAGE`, `PAGE_PAUSE_MS`, `RUN_COLUMNS`, `EXPORT_FORMAT` | владелец |
 | Выгрузка через бота: сколько держится лок администратора, пауза между выгрузками, подписи периодов | `backend/api/src/modules/export/export-bot.command.ts` → `LOCK_TTL_SEC`, `COOLDOWN_SEC`, `PERIOD_LABELS` | владелец |
@@ -288,6 +291,7 @@
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
+| `bh.loadingCard.v1` | какая карточка колоды загрузки забега следующая | `screens/run/loading-cards.ts` |
 | `bh.run.v1.save` | снимок прерванного забега; формат мира — `RUN_SNAPSHOT_FORMAT` в `core-game/src/run-api.ts`. Снимок другой сборки не продолжается, а засчитывается брошенным забегом: уходит в очередь итогов (`bh.runs.v1.pending`) и стирается; старше `SETTLE_MAX_AGE_MS` (14 суток, константа в `state/run-interrupted.ts`) — стирается без отправки | `state/run-save.ts`, `state/run-interrupted.ts` |
 | `bh.run.v1.downed` | итог забега, который ждёт решения о втором шансе; брошенный на экране смерти уходит смертью при следующем запуске | `state/downed-run.ts` |
 | `bh.runs.v1.pending` | старты и итоги забегов, ещё не дошедшие до сервера, — по порядку, до 40 записей, старые вытесняются | `state/runs.ts` |
@@ -386,6 +390,7 @@
 | Клиент: как часто и сколько ждать подтверждения оплаты сервером | `packages/app-shell/src/state/continue-purchase.ts` → `CONFIRM_POLL_MS`, `CONFIRM_TIMEOUT_MS` |
 | Клиент: когда покупку второго шанса вообще предлагают | `packages/app-shell/src/state/payments-availability.ts` |
 | Тексты покупки второго шанса — отдельный словарь, едет в чанке экрана смерти | `packages/app-shell/src/i18n/ru-payments.json` |
+| Советы и предания экрана загрузки забега: тексты, сколько их, порядок колоды, когда карточка сменяется | тексты — `packages/app-shell/src/i18n/ru-loading.json` (`run.tip.N`, `run.lore.N`), свой чанк; число и порядок — `app-shell/src/screens/run/loading-cards.ts` → `TIP_COUNT`, `LORE_COUNT`, `BASIC_TIPS`, `loadingDeck`, смена — `CARD_ROTATE_MS`; что словарь и колода сходятся, проверяет тест |
 | Тексты об аккаунте и состоянии входа — отдельный словарь профиля и рейтинга; что сказать на какой отказ входа | `packages/app-shell/src/i18n/ru-account.json`; `state/session-notice.ts` → `KIND_BY_FAILURE` |
 | Сертификат для открытия Mini App без туннеля | `infra/certs/` (не коммитится: в нём закрытый ключ) |
 

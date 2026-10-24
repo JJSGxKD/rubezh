@@ -10,6 +10,7 @@ import { loadRestrictions, RESTRICTED_CODE, recheckRestriction, useRestricted } 
 import { createShopApi, shopAvailable, type ShopItem, type ShopView, type VipView } from "../../state/shop-api";
 import { buy, type BuyRequest } from "../../state/shop-purchase";
 import { track, useShell } from "../../state/shell";
+import { rewardFeedback, uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { ShopBanners } from "./shop-banners";
@@ -107,7 +108,12 @@ export function ShopScreen(): ReactNode {
       return;
     }
     setNotice(noticeOf(outcome, name));
-    if (outcome.kind === "done") void loadWallet();
+    if (outcome.kind === "done") {
+      // Звук покупки — когда сервер её подтвердил, а не на нажатии: окно
+      // оплаты могли закрыть, и звон за несостоявшуюся покупку был бы враньём.
+      uiFeedback("purchase");
+      void loadWallet();
+    }
     // Витрина после покупки другая: разовый куплен, VIP идёт. После отказа —
     // тоже: сервер мог отказать, потому что клиент видел устаревшее.
     if (outcome.kind !== "cancelled") void load(true);
@@ -166,6 +172,7 @@ export function ShopScreen(): ReactNode {
     }
     setState({ ...ready, vip: response.data.view });
     if (response.data.claimed) {
+      rewardFeedback("gems");
       setNotice({ tone: "success", text: t("vip.daily.got", { gems: formatNumber(response.data.gems), n: response.data.gems }) });
       void loadWallet();
     }

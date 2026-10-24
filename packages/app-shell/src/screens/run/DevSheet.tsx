@@ -28,6 +28,7 @@ const VISUAL_KEYS: readonly DevVisualKey[] = [
   "telegraphs",
   "damageNumbers",
   "effects",
+  "sprites",
 ];
 
 const START_MINUTES = [0, 5, 10, 15, 20] as const;
@@ -92,7 +93,7 @@ function ViewTab(props: { settings: DevSettings }): ReactNode {
           key={key}
           title={t(`dev.visual.${key}`)}
           toggle={{
-            checked: props.settings.visuals[key],
+            checked: props.settings.visuals[key] === true,
             onChange: () => update((s) => ({ ...s, visuals: { ...s.visuals, [key]: !s.visuals[key] } })),
           }}
         />
@@ -381,7 +382,7 @@ function Group(props: { title: string; hint?: string | undefined; children: Reac
   return (
     <section>
       <h3 className="mb-1.5 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{props.title}</h3>
-      {props.hint === undefined ? null : <p className="-mt-1 mb-1.5 text-xs text-text-disabled">{props.hint}</p>}
+      {props.hint === undefined ? null : <p className="-mt-1 mb-1.5 text-xs text-text-muted">{props.hint}</p>}
       {props.children}
     </section>
   );

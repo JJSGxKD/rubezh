@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import { checkEpicCells } from "./epics.mjs";
 import { FILE_NAME_RE, batchNumber, parseFrontmatter, validateTask } from "./task-file.mjs";
 
@@ -8,9 +9,20 @@ import { FILE_NAME_RE, batchNumber, parseFrontmatter, validateTask } from "./tas
  * тесты — scripts/test/tasks-registry.test.ts.
  */
 
-/** Задача — это файл `tasks/T-*.md`; остальное в каталоге (README, epics, inbox, шаблон и будущее) не проверяется. */
+/** Папка архива внутри `tasks/`: готовые и отменённые задачи (T-0204). */
+export const ARCHIVE_DIR = "archive";
+
+/**
+ * Задача — это файл `T-*.md` в `tasks/` или `tasks/archive/`; `name` — путь
+ * относительно `tasks/`. Остальное (README, epics, inbox, шаблон) не проверяется.
+ */
 export function isTaskFile(name) {
-  return name.startsWith("T-");
+  return posix.basename(name).startsWith("T-");
+}
+
+/** Готовая и отменённая задача живёт в архиве, остальные — наверху. */
+export function placementPath(task) {
+  return task.status === "done" || task.status === "cancelled" ? `${ARCHIVE_DIR}/${task.fileName}` : task.fileName;
 }
 
 /** Эпики в порядке строк `epics.md`: эпик узнаётся по `**E<число>.` в первой колонке. */
@@ -19,15 +31,21 @@ export function parseEpics(markdown) {
 }
 
 /**
- * Читает файлы каталога `tasks/`: `[{ name, text }]` → `{ tasks, errors }`, где
- * `tasks` — поля задач с добавленным `fileName`. Задача с битой шапкой в
- * `tasks` не попадает: её ошибки уже в списке.
+ * Читает файлы `tasks/` и `tasks/archive/`: `[{ name, text }]`, где `name` —
+ * путь от `tasks/`, → `{ tasks, errors }`. У задачи в `tasks` кроме полей шапки
+ * есть `fileName` (имя без каталога) и `path` (путь от `tasks/`). Задача с
+ * битой шапкой в `tasks` не попадает: её ошибки уже в списке.
  */
 export function readTasks(files) {
   const parsedFiles = [];
   const errors = [];
   for (const file of files.filter((candidate) => isTaskFile(candidate.name))) {
-    if (!FILE_NAME_RE.test(file.name)) {
+    const dir = posix.dirname(file.name);
+    if (dir !== "." && dir !== ARCHIVE_DIR) {
+      errors.push(`${file.name}: задачи лежат только в tasks/ и tasks/archive/`);
+      continue;
+    }
+    if (!FILE_NAME_RE.test(posix.basename(file.name))) {
       errors.push(`${file.name}: имя файла должно быть T-NNNN-slug.md (slug — строчная латиница, цифры, дефис)`);
       continue;
     }
@@ -39,17 +57,18 @@ export function readTasks(files) {
     parsedFiles.push({ name: file.name, ...parsed });
   }
 
-  // Строке значков нужны имена файлов зависимостей, поэтому проверка тела — вторым проходом, когда реестр уже прочитан.
-  const fileNames = {};
-  for (const file of parsedFiles) if (typeof file.data.id === "string") fileNames[file.data.id] = file.name;
+  // Строке значков нужны пути файлов зависимостей, поэтому проверка тела — вторым проходом, когда реестр уже прочитан.
+  const paths = {};
+  for (const file of parsedFiles) if (typeof file.data.id === "string") paths[file.data.id] = file.name;
 
   const tasks = [];
   for (const file of parsedFiles) {
     // Задача с неверной строкой значков остаётся в реестре: поле у неё в порядке, а ячейка эпика
     // без неё дала бы вторую, ложную ошибку.
-    const fieldProblems = validateTask(file.name, file.data);
-    errors.push(...(fieldProblems.length === 0 ? validateTask(file.name, file.data, { body: file.body, fileNames }) : fieldProblems));
-    if (fieldProblems.length === 0) tasks.push({ ...file.data, fileName: file.name });
+    const fileName = posix.basename(file.name);
+    const fieldProblems = validateTask(fileName, file.data);
+    errors.push(...(fieldProblems.length === 0 ? validateTask(fileName, file.data, { body: file.body, paths, path: file.name }) : fieldProblems));
+    if (fieldProblems.length === 0) tasks.push({ ...file.data, fileName, path: file.name });
   }
   return { tasks, errors };
 }
@@ -115,13 +134,24 @@ export function checkBatches(tasks) {
   return errors;
 }
 
+/** Задача лежит там, где ей положено по статусу: иначе `pnpm task fix` её перенесёт. */
+export function checkPlacement(tasks) {
+  const errors = [];
+  for (const task of tasks) {
+    if (task.path === placementPath(task)) continue;
+    const settled = task.status === "done" || task.status === "cancelled";
+    errors.push(`${task.path}: задача в статусе ${task.status} лежит ${settled ? "не в архиве" : "в архиве"} — перенесёт pnpm task fix`);
+  }
+  return errors;
+}
+
 /** Все ошибки реестра: пустой список — реестр в порядке. */
 export function checkRegistry(files, epicsMarkdown) {
   const { tasks, errors } = readTasks(files);
   const epics = new Set(parseEpics(epicsMarkdown));
 
   const byId = new Map();
-  for (const task of tasks) byId.set(task.id, [...(byId.get(task.id) ?? []), task.fileName]);
+  for (const task of tasks) byId.set(task.id, [...(byId.get(task.id) ?? []), task.path]);
   for (const [id, names] of byId) {
     if (names.length > 1) errors.push(`повтор id ${id}: ${names.join(", ")}`);
   }
@@ -135,6 +165,7 @@ export function checkRegistry(files, epicsMarkdown) {
 
   for (const cycle of findCycles(tasks)) errors.push(`цикл в depends_on: ${cycle}`);
   errors.push(...checkBatches(tasks));
+  errors.push(...checkPlacement(tasks));
   errors.push(...checkEpicCells(epicsMarkdown, tasks));
   return errors;
 }

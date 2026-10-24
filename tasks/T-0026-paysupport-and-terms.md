@@ -25,7 +25,7 @@ design: null
 
 # T-0026. Команды /paysupport и /terms в боте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0026.json)](README.md#значки-статуса) [![T-0027](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0027.json&label=T-0027)](T-0027-bot-updates-via-queue.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0026.json)](README.md#значки-статуса) [![T-0027](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0027.json&label=T-0027)](archive/T-0027-bot-updates-via-queue.md)
 
 ## Зачем
 
