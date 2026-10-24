@@ -3,8 +3,8 @@ id: T-0207
 title: Строки «Поток» и «Запустил» в описании PR задачи — проверяет pr-check
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0204]
@@ -16,6 +16,8 @@ shared:
   - .claude/skills/take-task/SKILL.md
   - .claude/skills/pre-pr/SKILL.md
   - AGENTS.md
+  - tasks/T-0206-board-work-review-columns.md
+  - tasks/epics.md
 runner: any
 executor: haiku-5.5
 effort: medium
@@ -26,7 +28,7 @@ batch: 2
 
 # T-0207. Строки «Поток» и «Запустил» в описании PR задачи — проверяет pr-check
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json)](README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](archive/T-0204-tasks-archive-folder.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json)](../README.md#значки-статуса) [![T-0204](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0204.json&label=T-0204)](T-0204-tasks-archive-folder.md)
 
 ## Зачем
 
