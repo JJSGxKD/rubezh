@@ -3,8 +3,8 @@ id: T-0204
 title: Архив задач — готовые и отменённые в `tasks/archive/`
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
