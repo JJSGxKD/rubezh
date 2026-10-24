@@ -85,14 +85,19 @@ export function Stat(props: { label: string; value: string; large?: boolean; ton
 
 export type BadgeTone = "muted" | "accent" | "warning" | "danger" | "info" | "weapon" | "passive";
 
+/**
+ * Тон плашки — непрозрачной подложкой на лунке (`badge-tinted`): полупрозрачная
+ * светлела на поднятой и выбранной карточке, и цветной текст падал ниже 4,5:1
+ * (docs/27-design-system-and-app-shell.md §4.2).
+ */
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   muted: "bg-surface-raised text-text-muted",
-  accent: "bg-accent/15 text-accent",
-  warning: "bg-warning/15 text-warning",
-  danger: "bg-danger/15 text-danger",
-  info: "bg-info/15 text-info",
-  weapon: "bg-weapon/15 text-weapon",
-  passive: "bg-passive/15 text-passive",
+  accent: "badge-tinted [--badge-tone:var(--color-accent)]",
+  warning: "badge-tinted [--badge-tone:var(--color-warning)]",
+  danger: "badge-tinted [--badge-tone:var(--color-danger)]",
+  info: "badge-tinted [--badge-tone:var(--color-info)]",
+  weapon: "badge-tinted [--badge-tone:var(--color-weapon)]",
+  passive: "badge-tinted [--badge-tone:var(--color-passive)]",
 };
 
 export function Badge(props: { children: ReactNode; tone?: BadgeTone }): ReactNode {

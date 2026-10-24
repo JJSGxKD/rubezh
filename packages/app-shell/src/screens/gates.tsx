@@ -48,7 +48,7 @@ export function BootScreen(props: { stage: BootStage; version: string }): ReactN
         />
       </div>
       <p className="min-h-5 text-xs text-text-muted">{t(`boot.stage.${props.stage}`)}</p>
-      <p className="text-xs text-text-disabled">{t("app.version", { version: props.version })}</p>
+      <p className="text-xs text-text-muted">{t("app.version", { version: props.version })}</p>
     </Centered>
   );
 }
@@ -85,7 +85,7 @@ export function OutdatedScreen(props: { version: string | null }): ReactNode {
       <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outdated.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outdated.text")}</p>
       {props.version === null ? null : (
-        <p className="text-xs text-text-disabled">{t("gate.outdated.version", { version: props.version })}</p>
+        <p className="text-xs text-text-muted">{t("gate.outdated.version", { version: props.version })}</p>
       )}
     </Centered>
   );

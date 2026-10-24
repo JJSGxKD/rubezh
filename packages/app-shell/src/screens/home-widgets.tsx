@@ -225,6 +225,9 @@ export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; re
     TONE[props.id],
     SIZE[props.size],
     cut ? "" : props.ready ? "widget-surface-ready" : "widget-surface",
+    // Готовый подкрашен тоном сильнее, и серая подпись на нём падала ниже
+    // 4,5:1 — подпись готового виджета светлая (`Layout`).
+    props.ready ? "[--widget-label:var(--color-text)]" : "",
     // Со срезом поверхность, скругление и поля — у `CutFrame` внутри.
     cut ? "relative flex min-w-0 animate-rise-in text-left" : "relative flex min-w-0 animate-rise-in items-center gap-3 overflow-hidden rounded-lg p-3 text-left",
     "transition-transform duration-(--duration-fast) ease-base",
@@ -263,7 +266,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
     return (
       <span className="flex h-full min-w-0 flex-1 flex-col justify-between">
         <span className="flex h-7 items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-xs font-semibold text-text-muted">{props.label}</span>
+          <span className="min-w-0 truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
           <span className="shrink-0">{props.face}</span>
         </span>
         <span className="min-w-0">
@@ -283,7 +286,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
       <>
         <span className="shrink-0">{props.face}</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-semibold text-text-muted">{props.label}</span>
+          <span className="block truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
           <span className="block truncate font-display text-sm leading-tight font-bold text-text">{props.big}</span>
         </span>
         <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-text-muted" />
@@ -294,7 +297,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
     <>
       <span className="shrink-0">{props.face}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold text-text-muted">{props.label}</span>
+        <span className="block truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
         <span className="mt-0.5 flex min-h-7 items-center justify-between gap-2">
           {/* На 320 px рядом с кнопкой крупная строка на ступень меньше — иначе «Крутка ждёт» обрезалась бы. */}
           <span className="min-w-0 truncate font-display text-base leading-tight font-bold text-text min-[360px]:text-lg">{props.big}</span>

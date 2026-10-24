@@ -148,7 +148,7 @@ export function ProfileScreen(): ReactNode {
                 {seconds > 0 ? (
                   <SurvivalTime seconds={seconds} />
                 ) : (
-                  <span className="font-display text-base text-text-disabled">—</span>
+                  <span className="font-display text-base text-text-muted">—</span>
                 )}
               </li>
             );

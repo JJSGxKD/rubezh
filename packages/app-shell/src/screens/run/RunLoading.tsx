@@ -127,7 +127,7 @@ function StageMark(props: { label: string; state: StageState }): ReactNode {
     <li
       className={[
         "flex items-center gap-1.5 font-display text-xs font-semibold",
-        props.state === "pending" ? "text-text-disabled" : "text-text",
+        props.state === "pending" ? "text-text-muted" : "text-text",
       ].join(" ")}
     >
       <span

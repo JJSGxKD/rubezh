@@ -35,4 +35,14 @@ describe("плитка дня награды", () => {
     expect(coins(renderToStaticMarkup(createElement(DayCell, { day, index: 0, last: false })))).toBe(1);
     expect(coins(renderToStaticMarkup(createElement(DayCell, { day: { ...day, claimed: true }, index: 0, last: false, pile: 3 })))).toBe(0);
   });
+
+  it("подписи читаются: «сегодня» — бликом акцента, у забранного дня гаснет награда, а не подпись", () => {
+    const today = renderToStaticMarkup(createElement(DayCell, { day, index: 0, last: false }));
+    expect(today).toContain("text-accent-glow");
+    const past = renderToStaticMarkup(createElement(DayCell, { day: { ...day, today: false, claimed: true }, index: 0, last: false }));
+    const label = /<span class="([^"]*)">День 1<\/span>/.exec(past)?.[1] ?? "";
+    expect(label).toContain("text-text-muted");
+    expect(past.slice(0, past.indexOf("День 1"))).not.toContain("opacity-60");
+    expect(past.match(/opacity-60/g)?.length).toBe(2);
+  });
 });

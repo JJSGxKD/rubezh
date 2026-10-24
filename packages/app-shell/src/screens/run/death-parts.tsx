@@ -262,7 +262,7 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
         type="button"
         aria-expanded={open}
         onClick={() => props.onToggle(!open)}
-        className="flex h-8 w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-text-muted active:text-text"
+        className="hit-tall flex h-8 w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-text-muted active:text-text"
       >
         {open ? t("run.death.less") : t("run.death.more")}
         {open ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
@@ -301,7 +301,7 @@ export function RunDetails(props: { result: RunResult; open: boolean; diagnostic
           {result.deathCause === null ? null : <p className="text-xs text-text-muted">{t("run.death.cause", { enemy: enemyName(result.deathCause) })}</p>}
           {/* seed и runId видны только в режиме диагностики: с ними баг
               воспроизводится, а обычному игроку они ни о чём не говорят. */}
-          {props.diagnostics ? <p className="font-mono text-xs break-all text-text-disabled">{t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}</p> : null}
+          {props.diagnostics ? <p className="font-mono text-xs break-all text-text-muted">{t("run.death.diagnostics", { seed: result.seed, runId: result.runId })}</p> : null}
         </div>
       ) : null}
     </div>
