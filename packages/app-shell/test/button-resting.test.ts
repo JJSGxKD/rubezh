@@ -7,7 +7,7 @@ import { Button, type ButtonVariant } from "../src/design-system/components";
 // бледная заливка акцента — та над тёмным фоном становится бурой.
 
 function button(props: { variant?: ButtonVariant; cut?: boolean; disabled?: boolean; loading?: boolean }): string {
-  return renderToStaticMarkup(createElement(Button, { ...props, onClick: () => undefined, children: "Пригласить" }));
+  return renderToStaticMarkup(createElement(Button, { track: "test", ...props, onClick: () => undefined, children: "Пригласить" }));
 }
 
 describe("выключенная главная кнопка", () => {

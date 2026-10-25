@@ -69,7 +69,7 @@ describe("Card", () => {
 
 describe("Button", () => {
   it("primary с cut — внутри среза малого размера", () => {
-    const html = renderToStaticMarkup(h(Button, { cut: true }, "Играть"));
+    const html = renderToStaticMarkup(h(Button, { track: "test", cut: true }, "Играть"));
 
     expect(html).toContain("cut-frame");
     expect(html).toContain("cut-primary");
@@ -78,7 +78,7 @@ describe("Button", () => {
   });
 
   it("primary без cut — как раньше", () => {
-    const html = renderToStaticMarkup(h(Button, {}, "Играть"));
+    const html = renderToStaticMarkup(h(Button, { track: "test" }, "Играть"));
 
     expect(html).toContain("btn-primary");
     expect(html).not.toContain("cut-frame");
@@ -86,7 +86,7 @@ describe("Button", () => {
 
   it("secondary с cut — без среза", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const html = renderToStaticMarkup(h(Button, { variant: "secondary", cut: true }, "Назад"));
+    const html = renderToStaticMarkup(h(Button, { track: "test", variant: "secondary", cut: true }, "Назад"));
 
     expect(html).not.toContain("cut-frame");
     expect(html).toContain("btn-secondary");
@@ -94,7 +94,7 @@ describe("Button", () => {
   });
 
   it("свечение у кнопки со срезом остаётся соседним слоем позади", () => {
-    const html = renderToStaticMarkup(h(Button, { cut: true, glow: true, block: true }, "Играть"));
+    const html = renderToStaticMarkup(h(Button, { track: "test", cut: true, glow: true, block: true }, "Играть"));
 
     expect(html.indexOf("halo-accent")).toBeGreaterThanOrEqual(0);
     expect(html.indexOf("halo-accent")).toBeLessThan(html.indexOf("cut-frame"));
