@@ -3,8 +3,8 @@ id: T-0172
 title: Уход огонька и кастера — в бою нет врагов со снарядами
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0171]
