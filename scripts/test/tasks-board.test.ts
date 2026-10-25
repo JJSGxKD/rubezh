@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { OWNER_LABEL, boardCounters, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { checkRunnerLines } from "../release/pr-check.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { OWNER_LABEL, boardCounters, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -653,5 +655,78 @@ describe("поток owner", () => {
     expect(streams.map((stream: { runner: string }) => stream.runner)).toEqual(["any", "owner"]);
     expect(renderStreamsText(streams).join("\n")).toContain("sonnet-5.5 / medium · owner");
     expect(epicStreamsBadge(streams.slice(1)).message).toContain("sonnet·medium·owner");
+  });
+});
+
+// Столбцы «Кругов», «Запустил», «Висит» (T-0206).
+describe("круги доработки", () => {
+  const commit = (messageHeadline: string) => ({ messageHeadline });
+
+  it("считает коммиты «Продолжить T-NNNN после ответа» этой задачи", () => {
+    const pr = {
+      commits: [
+        commit("feat(dev): Что-то"),
+        commit("chore(tasks): Продолжить T-0001 после ответа"),
+        commit("chore(tasks): Продолжить T-0001 после ответа"),
+        commit("chore(tasks): Продолжить T-0002 после ответа"),
+      ],
+    };
+    expect(reworkRounds(pr, "T-0001")).toBe(2);
+    expect(reworkRounds(pr, "T-0002")).toBe(1);
+  });
+
+  it("нет коммитов или поля — ноль", () => {
+    expect(reworkRounds({ commits: [] }, "T-0001")).toBe(0);
+    expect(reworkRounds({}, "T-0001")).toBe(0);
+    expect(reworkRounds(undefined, "T-0001")).toBe(0);
+  });
+});
+
+describe("кто запустил поток", () => {
+  it("значение строки «Запустил:» из описания", () => {
+    expect(launchedBy("Описание\n\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: помощник ivan_2\n")).toBe("помощник ivan_2");
+    expect(launchedBy("Запустил: владелец")).toBe("владелец");
+    expect(launchedBy("a\r\nЗапустил: владелец\r\n")).toBe("владелец");
+  });
+
+  it("строки нет, описания нет или строка не по формату — null", () => {
+    expect(launchedBy("Просто текст")).toBeNull();
+    expect(launchedBy(undefined)).toBeNull();
+    expect(launchedBy(null)).toBeNull();
+    expect(launchedBy("Запустил: помощник @ivan")).toBeNull();
+    expect(launchedBy("в тексте Запустил: владелец")).toBeNull();
+  });
+
+  it("на тех же примерах отвечает так же, как проверка pr-check", () => {
+    const bodies = [
+      "Запустил: владелец",
+      "Запустил: помощник ivan_2",
+      "Запустил: помощник @ivan",
+      "Запустил: помощник",
+      "Запустил: кто-то",
+      "нет строки",
+    ];
+    for (const body of bodies) {
+      const checkOk = !checkRunnerLines(`${body}\nПоток: claude-3 / sonnet-5.5 / medium`, "task/T-0001").some((error: string) => error.startsWith("запустил"));
+      expect(launchedBy(body) !== null, body).toBe(checkOk);
+    }
+  });
+});
+
+describe("сколько висит", () => {
+  const NOW = new Date("2026-10-24T12:00:00Z");
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000).toISOString();
+
+  it("целые сутки: 23 часа — 0, 49 часов — 2", () => {
+    expect(hangingDays(hoursAgo(23), NOW)).toBe(0);
+    expect(hangingDays(hoursAgo(24), NOW)).toBe(1);
+    expect(hangingDays(hoursAgo(49), NOW)).toBe(2);
+  });
+
+  it("даты нет или она битая — null; из будущего — 0", () => {
+    expect(hangingDays(null, NOW)).toBeNull();
+    expect(hangingDays(undefined, NOW)).toBeNull();
+    expect(hangingDays("не дата", NOW)).toBeNull();
+    expect(hangingDays(hoursAgo(-5), NOW)).toBe(0);
   });
 });
