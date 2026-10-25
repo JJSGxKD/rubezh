@@ -3,8 +3,8 @@ id: T-0116
 title: Подбор «Заморозка»: враги на поле замирают на 10 секунд
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: [T-0099]
@@ -39,6 +39,10 @@ zones:
   - packages/app-shell/test/audio.test.ts
   - packages/app-shell/test/haptics.test.ts
   - packages/app-shell/test/guide.test.ts
+  - packages/core-game/test/gem-drops.test.ts
+  - packages/core-game/test/run-summary.test.ts
+  - docs/30-configuration-map.md
+  - docs/27-design-system-and-app-shell.md
 shared:
   - packages/core-game/test/radar.test.ts
   - packages/core-game/test/looks.test.ts
@@ -48,6 +52,15 @@ shared:
   - packages/core-game/test/balance-properties.test.ts
   - docs/31-audio-and-haptics.md
   - docs/32-balance.md
+  - packages/app-shell/src/screens/run/radar-looks.ts
+  - tasks/T-0190-single-difficulty-shell.md
+  - tasks/T-0192-pressure-after-minute-8.md
+  - tasks/T-0193-longer-run-progression.md
+  - tasks/T-0194-limit-break-offers.md
+  - tasks/T-0195-player-power-pressure-engine.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -58,7 +71,7 @@ batch: 2
 
 # T-0116. Подбор «Заморозка»: враги на поле замирают на 10 секунд
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](archive/T-0099-run-chest-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json)](../README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md)
 
 ## Зачем
 
@@ -238,12 +251,12 @@ batch: 2
 
 ## Критерии приёмки
 
-- [ ] Подбор падает, подбирается и замораживает врагов на срок из контента (босса
+- [x] Подбор падает, подбирается и замораживает врагов на срок из контента (босса
   — на долю); горение идёт; новые враги стоят.
-- [ ] Тест повторяемости и `sim-purity` зелёные.
-- [ ] Облик, радар, звук, вибрация и гайдбук есть; эффект под переключателем.
-- [ ] Эталоны и коридоры обновлены, в PR таблица `pnpm balance:sim`.
-- [ ] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`),
+- [x] Тест повторяемости и `sim-purity` зелёные.
+- [x] Облик, радар, звук, вибрация и гайдбук есть; эффект под переключателем.
+- [x] Эталоны и коридоры обновлены, в PR таблица `pnpm balance:sim`.
+- [x] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`),
   `pnpm budget` и `pnpm docs:check` зелёные.
 
 ## PR

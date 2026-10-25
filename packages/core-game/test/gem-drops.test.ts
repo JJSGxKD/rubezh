@@ -19,6 +19,7 @@ const NO_PICKUPS = {
   medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
   magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
   dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 200, eliteHpRatio: 0.3 },
+  freeze: { chance: 0, eliteChance: 0, maxOnField: 0, durationSec: 10, bossDurationRatio: 0.5 },
 };
 
 function setup(seed = 1, maxPerKill = 5): World {

@@ -18,6 +18,7 @@ import { botAccessSupported, useBotAccess } from "../state/bot-access";
 import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
+import { useDraftArtAllowed } from "../state/flags";
 import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
@@ -40,6 +41,7 @@ export function SettingsScreen(): ReactNode {
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const graphics = useGraphics();
+  const artAllowed = useDraftArtAllowed();
   const radar = useRadarSetting((state) => state.position);
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
   // Бот пишет только аккаунту и только там, где у площадки он есть.
@@ -113,6 +115,15 @@ export function SettingsScreen(): ReactNode {
             hint={t("settings.graphics.weaponEffects.hint")}
             toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
           />
+          {/* Строка только у игрока с доступом к новому облику (флаги панели): без
+              доступа выключать нечего. */}
+          {artAllowed ? (
+            <ListItem
+              title={t("settings.graphics.art")}
+              hint={t("settings.graphics.art.hint")}
+              toggle={{ checked: graphics.art, onChange: () => graphics.toggle("art") }}
+            />
+          ) : null}
           <ListItem
             title={t("settings.graphics.liveBackground")}
             hint={t("settings.graphics.liveBackground.hint")}

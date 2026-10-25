@@ -28,6 +28,8 @@ export const SIM_EVENT = {
   shield: 7,
   /** огненный удар по площади: рисуется падающим камнем, а не молнией */
   strikeFire: 8,
+  /** подобрана заморозка; `radius` — докуда расходится волна, как у магнита */
+  freeze: 9,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];

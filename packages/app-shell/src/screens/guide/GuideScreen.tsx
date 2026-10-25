@@ -142,6 +142,13 @@ function Basics(): ReactNode {
             id="dynamite"
             text={t("guide.pickup.dynamite.text", { percent: Math.round(DROPS.dynamite.eliteHpRatio * 100) })}
           />
+          <PickupRow
+            id="freeze"
+            text={t("guide.pickup.freeze.text", {
+              seconds: Math.round(DROPS.freeze.durationSec),
+              bossSeconds: Math.round(DROPS.freeze.durationSec * DROPS.freeze.bossDurationRatio),
+            })}
+          />
           <PickupRow id="chest" text={t("guide.pickup.chest.text")} />
         </ul>
       </Topic>
@@ -203,7 +210,7 @@ function Basics(): ReactNode {
   );
 }
 
-function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "chest"; text: string }): ReactNode {
+function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "chest"; text: string }): ReactNode {
   return (
     <li className="surface-sunken flex items-center gap-3 rounded-md px-3 py-2">
       {/* Сундуков три размера, в списке — средний: размер несут цвет и масштаб, не форма. */}
