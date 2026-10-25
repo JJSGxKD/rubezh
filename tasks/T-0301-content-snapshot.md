@@ -3,8 +3,8 @@ id: T-0301
 title: Снимок контента ContentSnapshot — весь контент одним объектом со схемой, проверки контента чистой функцией, движок и бот принимают снимок
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
