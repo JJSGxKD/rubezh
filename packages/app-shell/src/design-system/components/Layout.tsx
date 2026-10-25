@@ -5,7 +5,7 @@ import { trackGroupClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
-import { segmentFitClass, segmentedLayout, type SegmentedSize } from "./segmented-rules";
+import { edgeFade, edgeFadeMask, segmentFitClass, segmentedLayout, type EdgeFade, type SegmentedSize } from "./segmented-rules";
 import { tabLabelMode, type TabLabelMode } from "./tab-labels";
 
 /**
@@ -240,9 +240,10 @@ export interface SegmentedItem {
  * Подписи не обрезаются: обрезанное «Партнё…» не говорит, что внутри.
  * До трёх сегментов — одной строкой, сегмент не уже своего текста, а
  * свободное место делится поровну; не поместились (экран уже 360) — строка
- * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — сеткой
- * в два столбца: четыре русские подписи со знаками в 328 px не помещаются
- * ни при каком читаемом шрифте, а лента на два экрана прячет половину видов.
+ * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — строка
+ * вкладок без лунки: выбранная подчёркнута полосой акцента, остальные
+ * приглушены, строка листается вбок, а край, за которым есть ещё вкладки,
+ * затухает (Р145; сетка 2×2 читалась как два переключателя друг над другом).
  *
  * `size="s"` — для тесных мест: на узком экране подписи сжимаются
  * (`segmented-rules.ts`), а не уходят за край.
@@ -258,6 +259,10 @@ export function SegmentedControl(props: {
   track: string;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
+  const tabs = segmentedLayout(props.items.length) === "tabs";
+  const [fade, setFade] = useState<EdgeFade>({ left: false, right: false });
+  const [underline, setUnderline] = useState<{ left: number; width: number } | null>(null);
+
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
   useEffect(() => {
     const element = list.current;
@@ -266,18 +271,82 @@ export function SegmentedControl(props: {
     const right = active.offsetLeft + active.offsetWidth;
     if (active.offsetLeft < element.scrollLeft) element.scrollLeft = active.offsetLeft;
     else if (right > element.scrollLeft + element.clientWidth) element.scrollLeft = right - element.clientWidth;
-  }, [props.activeId]);
+    if (tabs) setUnderline((prev) => (prev?.left === active.offsetLeft && prev.width === active.offsetWidth ? prev : { left: active.offsetLeft, width: active.offsetWidth }));
+  }, [props.activeId, props.items.length, tabs]);
+
+  // Затухание у краёв: состояние меняется, только когда меняется пара флагов, а не на каждый пиксель прокрутки.
+  useEffect(() => {
+    const element = list.current;
+    if (!tabs || element === null) return;
+    const update = (): void => {
+      const next = edgeFade(element.scrollLeft, element.clientWidth, element.scrollWidth);
+      setFade((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(element);
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [tabs, props.items.length]);
+
+  const select = (id: string, active: boolean): void => {
+    if (active) return;
+    uiFeedback("select");
+    trackGroupClick(props.track, id);
+    props.onSelect(id);
+  };
+  const badge = (item: SegmentedItem): ReactNode =>
+    item.badge === undefined || item.badge <= 0 ? null : (
+      <span className="ml-1.5 inline-block min-w-5 rounded-pill bg-danger px-1 text-center text-xs font-bold text-text">{item.badge}</span>
+    );
+
+  if (tabs) {
+    return (
+      <div className="relative border-b border-border">
+        <div
+          ref={list}
+          role="tablist"
+          aria-label={props.label}
+          className="relative flex overflow-x-auto [scrollbar-width:none]"
+          style={{ maskImage: edgeFadeMask(fade), WebkitMaskImage: edgeFadeMask(fade) }}
+        >
+          {props.items.map((item) => {
+            const active = item.id === props.activeId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => select(item.id, active)}
+                className={[
+                  "relative inline-flex min-h-11 shrink-0 items-center justify-center px-3 font-display text-sm font-semibold whitespace-nowrap",
+                  "focus-visible:-outline-offset-2",
+                  active ? "text-text" : "text-text-muted",
+                ].join(" ")}
+              >
+                {item.label}
+                {badge(item)}
+              </button>
+            );
+          })}
+          {underline === null ? null : (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-pill bg-accent transition-transform duration-(--duration-fast) ease-base"
+              style={{ width: underline.width, transform: `translateX(${String(underline.left)}px)` }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      ref={list}
-      role="tablist"
-      aria-label={props.label}
-      className={[
-        "surface-sunken relative gap-1 rounded-lg p-1",
-        segmentedLayout(props.items.length) === "grid" ? "grid grid-cols-2" : "flex overflow-x-auto [scrollbar-width:none]",
-      ].join(" ")}
-    >
+    <div ref={list} role="tablist" aria-label={props.label} className="surface-sunken relative flex gap-1 overflow-x-auto rounded-lg p-1 [scrollbar-width:none]">
       {props.items.map((item) => {
         const active = item.id === props.activeId;
         return (
@@ -286,12 +355,7 @@ export function SegmentedControl(props: {
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => {
-              if (active) return;
-              uiFeedback("select");
-              trackGroupClick(props.track, item.id);
-              props.onSelect(item.id);
-            }}
+            onClick={() => select(item.id, active)}
             className={[
               "relative inline-flex min-h-11 flex-1 shrink-0 items-center justify-center rounded-md font-display font-semibold whitespace-nowrap",
               segmentFitClass(props.size ?? "m"),
@@ -300,9 +364,7 @@ export function SegmentedControl(props: {
             ].join(" ")}
           >
             {item.label}
-            {item.badge === undefined || item.badge <= 0 ? null : (
-              <span className="ml-1.5 inline-block min-w-5 rounded-pill bg-danger px-1 text-center text-xs font-bold text-text">{item.badge}</span>
-            )}
+            {badge(item)}
           </button>
         );
       })}
