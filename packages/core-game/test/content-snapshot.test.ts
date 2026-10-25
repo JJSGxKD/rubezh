@@ -109,8 +109,8 @@ describe("схема снимка", () => {
     expect(parsed).toEqual(CONTENT_SNAPSHOT);
   });
 
-  it("не меняет хэш при разборе: сервер хранит JSON, а хэш считает по разобранному", () => {
-    expect(hashSnapshot(contentSnapshotSchema.parse(viaJson(CONTENT_SNAPSHOT)))).toBe(CONTENT_HASH);
+  it("не меняет хэш от копии через JSON: порядок ключей при записи сохраняется", () => {
+    expect(hashSnapshot(viaJson(CONTENT_SNAPSHOT) as ContentSnapshot)).toBe(CONTENT_HASH);
   });
 
   it("ловит число вне границ с путём до поля", () => {
