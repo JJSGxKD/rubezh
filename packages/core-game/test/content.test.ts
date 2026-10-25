@@ -355,11 +355,6 @@ describe("контент стража кольца и колец в таймла
     }
     expect(ENDLESS_CURVE.pool).not.toContain("cordon_guard");
   });
-
-  it("оставляет огонька на месте: его чистит следующая задача", () => {
-    expect(ENEMIES.some((enemy) => enemy.id === "shooter_wisp")).toBe(true);
-    expect(ENDLESS_CURVE.pool).toContain("shooter_wisp");
-  });
 });
 
 describe("боссы бесконечного режима", () => {
