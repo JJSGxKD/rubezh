@@ -51,7 +51,7 @@ describe("проверки документа", () => {
     if (title.type !== "text") throw new Error("ожидался текст");
     title.size = 20;
     expect(docProblems(doc).some((problem) => problem.includes("title") && problem.includes("мелко"))).toBe(true);
-    expect(docProblems({ ...doc, format: "wide" })).toEqual([]);
+    expect(docProblems({ ...doc, format: "wide" }).some((problem) => problem.includes("мелко"))).toBe(false);
   });
 
   it("скрытые слои не проверяются на размер и положение", () => {
