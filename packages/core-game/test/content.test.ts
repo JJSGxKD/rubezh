@@ -86,11 +86,11 @@ describe("контент врагов", () => {
     for (const id of ["bone_walker", "mire_shambler", "elite_grave_knight"]) expect(byId.get(id)?.element, id).toBeUndefined();
   });
 
-  it("оставляет блуждающего огонька в врагах, отрезках и пуле", () => {
-    expect(ENEMIES.map((enemy) => enemy.id)).toContain("shooter_wisp");
+  it("не оставляет блуждающего огонька ни во врагах, ни в отрезках, ни в пуле", () => {
+    expect(ENEMIES.map((enemy) => enemy.id)).not.toContain("shooter_wisp");
     const fromSecs = TIMELINE.filter((segment) => segment.spawns.some((spawn) => spawn.enemy === "shooter_wisp")).map((segment) => segment.fromSec);
-    expect(fromSecs).toEqual([60, 120, 180, 270, 300]);
-    expect(ENDLESS_CURVE.pool).toContain("shooter_wisp");
+    expect(fromSecs).toEqual([]);
+    expect(ENDLESS_CURVE.pool).not.toContain("shooter_wisp");
   });
 
   it("не даёт опыта меньше за более крепкого рядового", () => {
@@ -236,7 +236,18 @@ describe("контент таймлайна спавна", () => {
     const pool = ENDLESS_CURVE.pool;
     expect(pool.indexOf("bone_walker")).toBe(pool.indexOf("tank_ghoul") + 1);
     expect(pool.indexOf("mire_shambler")).toBe(pool.indexOf("tank_ghoul") + 2);
-    expect(pool.indexOf("shooter_wisp")).toBe(4);
+    // Прежние типы идут в прежнем порядке — без огонька, который стоял пятым.
+    expect(pool).toEqual([
+      "swarm_rat",
+      "circler_crow",
+      "rushing_bats",
+      "dasher_wolf",
+      "bomber_imp",
+      "splitter_slime",
+      "tank_ghoul",
+      "bone_walker",
+      "mire_shambler",
+    ]);
   });
 
   it("держит элит вне обычного потока — они приходят событиями", () => {
@@ -348,6 +359,21 @@ describe("контент стража кольца и колец в таймла
   it("оставляет огонька на месте: его чистит следующая задача", () => {
     expect(ENEMIES.some((enemy) => enemy.id === "shooter_wisp")).toBe(true);
     expect(ENDLESS_CURVE.pool).toContain("shooter_wisp");
+  });
+});
+
+describe("боссы бесконечного режима", () => {
+  it("в кривой один босс — Матрёшка, раз в пять отрезков", () => {
+    const bosses = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
+    const onCurve = ENDLESS_CURVE.events.filter((event) => bosses.has(event.enemy));
+    expect(onCurve).toEqual([{ everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 }]);
+  });
+
+  it("смесь и стартовый набор кривой помещаются в пул из девяти врагов", () => {
+    expect(ENDLESS_CURVE.pool).toHaveLength(9);
+    expect(ENDLESS_CURVE.startTypes).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
+    expect(ENDLESS_CURVE.mixSize).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
+    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
   });
 });
 
