@@ -191,13 +191,13 @@ describe("боковое меню", () => {
 
   it("знак счётчика — только у раздела с числом", () => {
     expect(html).toContain(">2<");
-    expect(html.match(/rounded-pill/g)).toHaveLength(1);
+    expect(html.match(/bg-danger/g)).toHaveLength(1);
   });
 
   it("карточка игрока: имя, уровень и опыт полосой", () => {
     expect(html).toContain("Дизайнер");
     expect(html).toContain("3");
-    expect(html).toMatch(/width:\s*40%/);
+    expect(html).toContain("scaleX(0.4)");
   });
 
   it("внизу — настройки и помощь отдельным блоком", () => {
