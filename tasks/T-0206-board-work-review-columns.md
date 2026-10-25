@@ -3,8 +3,8 @@ id: T-0206
 title: Доска — в «В работе» и «На ревью» видно, кто, сколько висит и чего ждёт
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0205, T-0207]
