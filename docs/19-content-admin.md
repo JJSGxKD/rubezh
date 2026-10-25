@@ -92,7 +92,7 @@
 | Тип и снимок по умолчанию `CONTENT_SNAPSHOT` (собран из `content/*`, они остаются источником и эталоном golden-тестов) | `packages/core-game/src/content/snapshot.ts` |
 | Хэш снимка `hashSnapshot`; для умолчания равен `CONTENT_HASH`, считается по полям забега в порядке типа, версия схемы и коридоры в него не входят | там же, `content/hash.ts` |
 | Схема Zod `contentSnapshotSchema` и JSON-схема `contentSnapshotJsonSchema()`: форма, обязательные поля, знак и целость чисел; опечатка в имени поля — ошибка | `content/snapshot-schema.ts` |
-| Проверки контента `findContentProblems(snapshot)` → `[{ path, message }]`; `path` — имя раздела снимка (`enemies`, `timeline`, …), сообщение по-русски; не бросает на неполном снимке | `game/content-problems.ts` (в `game/`: проверки знают код движка, а `content/` о нём знать не должен) |
+| Проверки контента `findContentProblems(snapshot)` → `[{ path, message }]`; `path` — имя раздела снимка (`enemies`, `timeline`, …), сообщение по-русски; не бросает на неполном снимке | `game/content-problems.ts` (в `game/`: проверки знают код движка, а `content/` о нём знать не должен). Из `index.ts` пакета не экспортируется: статический экспорт утащил бы код симуляции в первую загрузку оболочки (+15 КБ при бюджете 185); оболочка получит проверки вместе с движком, отдельным чанком |
 | Движок: `RunOptions.content?`; хэш чужого снимка уходит в итог забега вместо `CONTENT_HASH` | `run-api.ts`, `game/run-world.ts` |
 | Бот калибровки: `BalanceRunOptions.content?` | `game/balance/simulate.ts` |
 

@@ -16,7 +16,6 @@ export * from "./content/waves";
 export * from "./content/maps";
 export * from "./content/hash";
 export * from "./content/snapshot";
-export { findContentProblems, type ContentProblem } from "./game/content-problems";
 export * from "./content/upgrades";
 export * from "./content/weapons";
 export * from "./content/balance-targets";
