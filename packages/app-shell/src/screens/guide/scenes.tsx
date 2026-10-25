@@ -85,13 +85,6 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           fill={fill}
         />
       );
-    case "eye":
-      return (
-        <>
-          <circle r={r * 0.78} fill="none" stroke={fill} strokeWidth={Math.max(1.5, r * 0.22)} />
-          <circle r={r * 0.38} fill={fill} />
-        </>
-      );
     case "mote":
       return (
         <polygon
@@ -350,29 +343,6 @@ export function EnemyScene(props: {
           <At x={96} y={py} className="animate-guide-approach" style={offset(-66, 26)}>
             {enemy}
           </At>
-        </Stage>
-      );
-    case "kite_and_shoot":
-      return (
-        <Stage label={props.label}>
-          <Player x={px} y={py} />
-          <At x={40} y={40}>{enemy}</At>
-          {/* Прицел заполняется к игроку — заполнился, снаряд вылетел. */}
-          <line x1={48} y1={42} x2={px} y2={py} stroke={hex(WORLD_COLORS.enemyProjectile)} strokeOpacity={0.18} strokeWidth={1.5} />
-          <line
-            x1={48}
-            y1={42}
-            x2={px}
-            y2={py}
-            stroke={hex(WORLD_COLORS.enemyProjectile)}
-            strokeWidth={1.5}
-            className={`animate-guide-aim [transform-box:fill-box] origin-left ${MOTION}`}
-          />
-          <At x={48} y={42} className="animate-guide-shot-late" style={offset(64, 5)}>
-            <circle r={3} fill={hex(WORLD_COLORS.enemyProjectile)} />
-          </At>
-          {/* Пунктир — дистанция, которую стрелок держит. */}
-          <line x1={52} y1={py + 18} x2={px - 8} y2={py + 18} stroke={hex(color)} strokeOpacity={0.35} strokeDasharray="3 3" />
         </Stage>
       );
     case "dash":
