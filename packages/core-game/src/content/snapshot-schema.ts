@@ -302,3 +302,11 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   cardToolRules: z.strictObject({ skipXpRatio: num }),
   balanceTargets: balanceTargetsSchema,
 });
+
+/**
+ * JSON-схема снимка для сервера: он проверяет форму правки, не импортируя ни
+ * Zod, ни пакеты игры. Строится из той же схемы, поэтому с ней не расходится.
+ */
+export function contentSnapshotJsonSchema(): Record<string, unknown> {
+  return z.toJSONSchema(contentSnapshotSchema);
+}

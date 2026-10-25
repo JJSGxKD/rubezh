@@ -1,5 +1,17 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { EnemyDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
+import {
+  buildExport,
+  collectNameKeys,
+  NAMES_FILE,
+  readDictionary,
+  SCHEMA_FILE,
+  SNAPSHOT_FILE,
+  writeExport,
+} from "../../../scripts/content/export-snapshot";
 import { CONTENT_HASH } from "../src/content/hash";
 import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/content/snapshot";
 import { contentSnapshotSchema } from "../src/content/snapshot-schema";
@@ -264,5 +276,59 @@ describe("движок и бот принимают снимок", () => {
     const options = { seed: 5, skill: "passive" as const, maxSec: 120 };
     const deadly = { ...CONTENT_SNAPSHOT, enemies: ENEMIES.map((enemy) => ({ ...enemy, damage: enemy.damage * 50 })) };
     expect(simulateBalanceRun({ ...options, content: deadly }).survivalSec).toBeLessThan(simulateBalanceRun(options).survivalSec);
+  });
+});
+
+describe("выгрузка снимка: pnpm content:export", () => {
+  const dictionary = readDictionary();
+
+  it("собирает ключи имён из снимка: враги по соглашению оболочки, остальное — из полей", () => {
+    const keys = collectNameKeys(CONTENT_SNAPSHOT);
+    expect(keys).toContain(`enemy.${ENEMIES[0].id}.name`);
+    expect(keys).toContain(WEAPONS[0].nameKey);
+    expect(keys).toContain(WEAPONS[0].descriptionKey);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("находит в словаре игры тексты для всех врагов, оружия, навыков, бустов и сложностей", () => {
+    const { missingNames } = buildExport(CONTENT_SNAPSHOT, dictionary);
+    // Карта в интерфейсе не показывается, имени у неё может не быть.
+    expect(missingNames.filter((key) => !key.startsWith("map."))).toEqual([]);
+  });
+
+  it("пишет снимок так, что хэш файла равен CONTENT_HASH: сервер заводит по нему версию 0", () => {
+    const { files } = buildExport(CONTENT_SNAPSHOT, dictionary);
+    const stored = JSON.parse(files[SNAPSHOT_FILE]) as ContentSnapshot;
+    expect(hashSnapshot(stored)).toBe(CONTENT_HASH);
+    expect(contentSnapshotSchema.safeParse(stored).success).toBe(true);
+  });
+
+  it("кладёт в файл схемы JSON-схему снимка, а в файл имён — только строки", () => {
+    const { files } = buildExport(CONTENT_SNAPSHOT, dictionary);
+    const schema = JSON.parse(files[SCHEMA_FILE]) as { type: string; required: string[] };
+    expect(schema.type).toBe("object");
+    expect(schema.required).toContain("schemaVersion");
+    const names = JSON.parse(files[NAMES_FILE]) as Record<string, unknown>;
+    expect(Object.values(names).every((value) => typeof value === "string" && value.length > 0)).toBe(true);
+    expect(names[`enemy.${ENEMIES[0].id}.name`]).toBeTypeOf("string");
+  });
+
+  it("не считает отсутствующий текст ошибкой, а называет ключ в списке", () => {
+    const { files, missingNames } = buildExport(CONTENT_SNAPSHOT, {});
+    expect(missingNames).toEqual(collectNameKeys(CONTENT_SNAPSHOT));
+    expect(JSON.parse(files[NAMES_FILE])).toEqual({});
+  });
+
+  it("пишет три файла в каталог, создавая его", () => {
+    const dir = mkdtempSync(join(tmpdir(), "content-export-"));
+    try {
+      const target = join(dir, "nested", "dist");
+      writeExport(target);
+      for (const name of [SNAPSHOT_FILE, SCHEMA_FILE, NAMES_FILE]) {
+        expect(() => JSON.parse(readFileSync(join(target, name), "utf8")), name).not.toThrow();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
