@@ -3,8 +3,8 @@ id: T-0231
 title: Больше трёх вкладок — строкой с прокруткой и подчёркиванием, а не сеткой 2×2
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0227]
