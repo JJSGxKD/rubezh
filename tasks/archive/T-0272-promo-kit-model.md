@@ -17,6 +17,9 @@ shared:
   - pnpm-lock.yaml
   - CLAUDE.md
   - docs/21-diagrams.md
+  - tasks/T-0273-promo-studio-server.md
+  - tasks/T-0274-promo-editor-fabric.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
