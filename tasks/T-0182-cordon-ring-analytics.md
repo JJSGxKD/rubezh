@@ -3,8 +3,8 @@ id: T-0182
 title: Аналитика кольца — событие исхода (прорвался, выстоял, погиб)
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-1
 size: S
 depends_on: [T-0170]
