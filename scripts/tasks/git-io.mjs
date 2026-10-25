@@ -64,7 +64,7 @@ export function removePrLabel(number, label) {
 
 /** Открытые PR с метками (по ним видна «Доработка»), описанием и состоянием проверок (кого ждёт PR) или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup,commits"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
@@ -76,6 +76,15 @@ export function openPrs() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Дата коммита захвата задачи (`chore(tasks): Взять T-NNNN в работу`) в ветке
+ * `origin/task/T-NNNN` — ISO-строка или `null`, если ветки или коммита нет.
+ */
+export function claimedAt(id) {
+  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, `origin/task/${id}`]);
+  return result.ok && result.stdout !== "" ? result.stdout : null;
 }
 
 /**

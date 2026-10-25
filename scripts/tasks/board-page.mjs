@@ -176,6 +176,39 @@ function leadSection(board) {
   );
 }
 
+const WAITING_WHO = { executor: "исполнителя", lead: "тимлида", owner: "владельца" };
+
+/** «Чего ждёт»: владельца — без причины, остальные — «кого · почему»; у «В работе» ожидания нет — ждёт исполнителя. */
+function waitingText(waiting) {
+  if (waiting === undefined) return WAITING_WHO.executor;
+  return waiting.who === "owner" ? WAITING_WHO.owner : `${WAITING_WHO[waiting.who]} · ${waiting.why}`;
+}
+
+/** «Висит»: меньше суток — «сегодня», иначе «N дн», от трёх суток с «⚠️ »; даты нет — «—». */
+function hangingText(days) {
+  if (days === null || days === undefined) return "—";
+  if (days < 1) return "сегодня";
+  return `${days >= 3 ? "⚠️ " : ""}${String(days)} дн`;
+}
+
+/**
+ * Общие столбцы «В работе», «На ревью» и «Доработки»: задача, поток, кто запустил,
+ * сколько висит, кругов доработки, чего ждёт и (у разделов с PR) сам PR.
+ */
+function workSection(title, entries, owners, withPr) {
+  const headers = ["Задача", "Поток", "Запустил", "Висит", "Кругов", "Чего ждёт", ...(withPr ? ["PR"] : [])];
+  const rows = entries.map((entry) => [
+    taskLink(entry.task),
+    entry.owner || owners.get(entry.task.id) || "неизвестно",
+    entry.launchedBy ?? "—",
+    hangingText(entry.days),
+    entry.rounds > 0 ? String(entry.rounds) : "—",
+    waitingText(entry.waiting),
+    ...(withPr ? [prLink(entry.pr)] : []),
+  ]);
+  return section(title, entries.length, headers, rows);
+}
+
 /** «Можно брать» тремя таблицами по месту работы; `human` здесь нет — он в «Ждут владельца». */
 function freeSection(board) {
   const kinds = [
@@ -222,15 +255,10 @@ export function renderBoardPage({ board, owners, credits, people, githubAvailabl
     leadSection(board),
     streamsSection(streamsSummary(board).streams),
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
-    section(
-      "Доработка",
-      board.rework.length,
-      ["Задача", "Исполнитель", "PR", "Вёл"],
-      board.rework.map(({ task, pr }) => [taskLink(task), `${task.executor} · ${task.effort}`, prLink(pr), owners.get(task.id) || "неизвестно"]),
-    ),
+    workSection("Доработка", board.rework, owners, true),
     freeSection(board),
-    section("В работе", board.inProgress.length, ["Задача", "Взял"], board.inProgress.map(({ task }) => [taskLink(task), owners.get(task.id) || "неизвестно"])),
-    section("На ревью", board.review.length, ["Задача", "PR"], board.review.map(({ task, pr }) => [taskLink(task), prLink(pr)])),
+    workSection("В работе", board.inProgress, owners, false),
+    workSection("На ревью", board.review, owners, true),
     section("Ждут", board.blocked.length, ["Задача", "Чего ждёт"], board.blocked.map(({ task, reason }) => [taskLink(task), reason])),
     section(
       "Готово",

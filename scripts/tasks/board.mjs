@@ -422,3 +422,35 @@ export function boardCounters(board, mergedPrs, now) {
     batch: first === null ? null : { number: first, left: left.get(first) },
   };
 }
+
+/**
+ * Сколько кругов доработки прошёл PR: по одному коммиту `chore(tasks): Продолжить
+ * T-NNNN после ответа` на круг (их делает `pnpm task resume`). `pr.commits` — как
+ * в ответе `gh pr list --json commits`; нет поля — ноль.
+ */
+export function reworkRounds(pr, id) {
+  const headline = `chore(tasks): Продолжить ${id} после ответа`;
+  return (pr?.commits ?? []).filter((commit) => commit?.messageHeadline === headline).length;
+}
+
+/**
+ * Значение строки `Запустил:` из описания PR или `null`. Регулярка та же, что в
+ * `scripts/release/pr-check.mjs` (T-0207): `board.mjs` оттуда не импортирует,
+ * поэтому она повторена, а тест сверяет обе на одних примерах.
+ */
+export function launchedBy(body) {
+  const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n");
+  for (const line of lines) {
+    const match = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u.exec(line.trimEnd());
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/** Целые сутки от `since` (ISO-строка) до `now` (`Date`); даты нет или она битая — `null`, из будущего — 0. */
+export function hangingDays(since, now) {
+  if (since === null || since === undefined) return null;
+  const from = new Date(since).getTime();
+  if (Number.isNaN(from)) return null;
+  return Math.max(0, Math.floor((now.getTime() - from) / 86_400_000));
+}

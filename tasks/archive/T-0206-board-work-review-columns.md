@@ -3,7 +3,7 @@ id: T-0206
 title: Доска — в «В работе» и «На ревью» видно, кто, сколько висит и чего ждёт
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
@@ -27,7 +27,7 @@ batch: 2
 
 # T-0206. Доска — в «В работе» и «На ревью» видно, кто, сколько висит и чего ждёт
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0206.json)](README.md#значки-статуса) [![T-0205](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0205.json&label=T-0205)](archive/T-0205-board-who-waits-owner-runner.md) [![T-0207](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json&label=T-0207)](archive/T-0207-pr-runner-and-launcher-lines.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0206.json)](../README.md#значки-статуса) [![T-0205](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0205.json&label=T-0205)](T-0205-board-who-waits-owner-runner.md) [![T-0207](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0207.json&label=T-0207)](T-0207-pr-runner-and-launcher-lines.md)
 
 ## Зачем
 

@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
+import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, hangingDays, launchedBy, nextTasks, reworkRounds, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
 import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
-import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
+import { BASE, ROOT, claimedAt, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
 import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
 import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
@@ -422,18 +422,38 @@ function runClaimCheck(flags) {
   console.log(`Проверка захвата ${found.id}: задачу можно было брать.`);
 }
 
+/**
+ * Поля столбцов страницы для задачи «в работе», «на ревью» или «на доработке»:
+ * поток, кто запустил, сколько висит и сколько кругов. У «В работе» PR нет —
+ * висит с коммита захвата.
+ */
+function boardDetails(entry, columnKey, owner, prsByNumber, now) {
+  const pr = columnKey === "inProgress" ? undefined : prsByNumber.get(entry.pr);
+  return {
+    owner,
+    launchedBy: launchedBy(pr?.body),
+    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task.id) : pr?.createdAt, now),
+    rounds: reworkRounds(pr, entry.task.id),
+  };
+}
+
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
   const { state, board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
   const owners = new Map();
+  const now = new Date();
+  const prsByNumber = new Map((state.prs ?? []).map((pr) => [pr.number, pr]));
   let count = 0;
   for (const column of COLUMNS) {
     for (const entry of board[column.key]) {
       const busy = column.key === "inProgress" || column.key === "review" || column.key === "rework";
       const owner = busy ? ownerOf(entry.task, true) : undefined;
-      if (busy) owners.set(entry.task.id, owner);
+      if (busy) {
+        owners.set(entry.task.id, owner);
+        Object.assign(entry, boardDetails(entry, column.key, owner, prsByNumber, now));
+      }
       const badge = statusBadge({ ...entry, column: column.key, owner });
       writeFileSync(join(dir, `${entry.task.id}.json`), `${JSON.stringify(badge)}\n`);
       count += 1;
@@ -456,7 +476,7 @@ function runStatusJson(flags) {
     people: contributions(credits),
     githubAvailable: mergedPrs !== null,
     mergedPrs,
-    now: new Date(),
+    now,
   });
   writeFileSync(join(flags.out, "README.md"), page);
   console.log(`Значки статуса: ${String(count)} задач и ${String(epics.size)} эпиков → ${dir}`);
