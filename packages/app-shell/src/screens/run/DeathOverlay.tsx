@@ -111,15 +111,15 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
   const actions = (
     <>
-      <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
+      <Button track="restart" size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
         {t("run.death.again")}
       </Button>
       {/* До 360 px подписи пары не помещаются в одну строку при штатных полях и шрифте. */}
       <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm landscape:contents">
-        <Button variant="secondary" block onClick={props.onMenu}>
+        <Button track="home" variant="secondary" block onClick={props.onMenu}>
           {t("run.death.home")}
         </Button>
-        <Button variant="ghost" block loading={share.busy} onClick={runShare}>
+        <Button track="share" variant="ghost" block loading={share.busy} onClick={runShare}>
           {t("run.death.share")}
         </Button>
       </div>

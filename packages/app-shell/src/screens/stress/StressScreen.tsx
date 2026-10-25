@@ -54,7 +54,7 @@ function StressIntro(props: { onStart(): void; onBack(): void }): ReactNode {
       title={t("stress.title")}
       onBack={props.onBack}
       footer={
-        <Button size="l" block glow onClick={props.onStart}>
+        <Button track="start" size="l" block glow onClick={props.onStart}>
           <Activity size={20} />
           {t("stress.start")}
         </Button>
@@ -190,7 +190,7 @@ function StressHud(props: { progress: BenchProgress; onStop(): void }): ReactNod
           />
         </div>
         <div className="pointer-events-auto">
-          <Button variant="secondary" onClick={props.onStop}>
+          <Button track="stop" variant="secondary" onClick={props.onStop}>
             <Square size={16} fill="currentColor" />
             {t("stress.stop")}
           </Button>
@@ -227,11 +227,11 @@ function StressResult(props: {
       icon={found ? <Flame size={26} /> : <CircleCheck size={26} />}
       footer={
         <div className="grid grid-cols-2 gap-3">
-          <Button variant="secondary" block onClick={props.onAgain}>
+          <Button track="again" variant="secondary" block onClick={props.onAgain}>
             <RotateCcw size={18} />
             {t("stress.again")}
           </Button>
-          <Button block glow onClick={props.onDone}>
+          <Button track="done" block glow onClick={props.onDone}>
             {t("stress.done")}
           </Button>
         </div>
@@ -264,7 +264,7 @@ function SendStatus(props: { state: StressSendState; onResend(): void }): ReactN
     return (
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs text-warning">{t("stress.send.failed")}</span>
-        <Button variant="ghost" onClick={props.onResend}>
+        <Button track="resend" variant="ghost" onClick={props.onResend}>
           <Send size={16} />
           {t("stress.send.retry")}
         </Button>

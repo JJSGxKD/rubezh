@@ -64,6 +64,7 @@ describe("нажатие кнопки с track", () => {
 
   it("кнопка без track — события нет, обработчик жив", () => {
     const onClick = vi.fn();
+    // @ts-expect-error — тип не пускает кнопку без track; тест проверяет, что без имени события нет и обработчик жив
     pressFirstButton(Button({ children: "Купить", onClick }));
     expect(onClick).toHaveBeenCalledTimes(1);
     expect(clicks()).toEqual([]);

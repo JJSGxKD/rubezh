@@ -238,7 +238,7 @@ export function ShopScreen(): ReactNode {
 
             <ShopBanners banners={shopBanners(ready.shop, ready.vip, now).filter((banner) => !purchasesClosed || OPEN_BANNERS.includes(banner.kind))} busy={busy} now={now} onAction={onBanner} />
 
-            <SegmentedControl
+            <SegmentedControl track="tabs"
               label={t("shop.tabs")}
               activeId={tab}
               onSelect={(id) => setTab(id as ShopTab)}
@@ -297,10 +297,10 @@ export function ShopScreen(): ReactNode {
           onDismiss={() => setConfirmCancel(false)}
           footer={
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => setConfirmCancel(false)}>
+              <Button track="keep_vip" variant="secondary" onClick={() => setConfirmCancel(false)}>
                 {t("vip.cancel.keep")}
               </Button>
-              <Button
+              <Button track="cancel_vip"
                 variant="danger"
                 onClick={() => {
                   setConfirmCancel(false);
@@ -353,7 +353,7 @@ function Featured(props: {
         </section>
       )}
       {gemPacks(shop).length === 0 ? null : (
-        <Button variant="secondary" onClick={props.onAllGems}>
+        <Button track="all_gems" variant="secondary" onClick={props.onAllGems}>
           <GemIcon size={18} />
           {t("shop.allGems")}
           <ChevronRight size={18} aria-hidden="true" />

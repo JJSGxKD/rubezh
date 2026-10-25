@@ -8,7 +8,7 @@ import { Button } from "../src/design-system/components";
 // прозрачна.
 
 function button(props: { shine?: boolean }, children: ReactNode): string {
-  return renderToStaticMarkup(createElement(Button, { ...props, cut: true, variant: "primary", onClick: () => undefined, children }));
+  return renderToStaticMarkup(createElement(Button, { track: "test", ...props, cut: true, variant: "primary", onClick: () => undefined, children }));
 }
 
 describe("блик кнопки", () => {

@@ -46,7 +46,7 @@ export function ResourceIcon(props: { resource: string; size?: number }): ReactN
 /** Цена кнопкой; по акции — с зачёркнутой ценой каталога перед ней. */
 export function StarsButton(props: { stars: number; full?: number | null; label: string; busy: boolean; disabled: boolean; glow?: boolean; cut?: boolean; block?: boolean; onClick: () => void }): ReactNode {
   return (
-    <Button block={props.block ?? true} variant="stars" glow={props.glow} cut={props.cut} disabled={props.disabled} loading={props.busy} ariaLabel={props.label} onClick={props.onClick}>
+    <Button track="buy_stars" block={props.block ?? true} variant="stars" glow={props.glow} cut={props.cut} disabled={props.disabled} loading={props.busy} ariaLabel={props.label} onClick={props.onClick}>
       <StarsIcon size={18} />
       {props.full === undefined || props.full === null ? null : <s className="tabular-nums opacity-70">{formatNumber(props.full)}</s>}
       <span className="tabular-nums">{formatNumber(props.stars)}</span>
@@ -109,7 +109,7 @@ export function VipCard(props: {
 
       <div className="mt-4 grid gap-2">
         {vip.active ? (
-          <Button
+          <Button track="claim_vip_daily"
             block
             variant={vip.daily.claimed ? "secondary" : "primary"}
             disabled={vip.daily.claimed || busy !== null}
@@ -124,7 +124,7 @@ export function VipCard(props: {
 
         {/* Отменённое нами продление возвращается бесплатно — вторая подписка тут лишняя. */}
         {vip.canOrder && !vip.canResume && stars !== null ? (
-          <Button
+          <Button track="buy_vip"
             block
             variant="stars"
             glow={!vip.active}
@@ -139,12 +139,12 @@ export function VipCard(props: {
         ) : null}
 
         {vip.active && vip.renewal === "on" ? (
-          <Button variant="ghost" disabled={busy !== null} loading={busy === "vip:cancel"} onClick={props.onCancel}>
+          <Button track="cancel_vip" variant="ghost" disabled={busy !== null} loading={busy === "vip:cancel"} onClick={props.onCancel}>
             {t("vip.cancel")}
           </Button>
         ) : null}
         {vip.canResume ? (
-          <Button variant="secondary" disabled={busy !== null} loading={busy === "vip:resume"} onClick={props.onResume}>
+          <Button track="resume_vip" variant="secondary" disabled={busy !== null} loading={busy === "vip:resume"} onClick={props.onResume}>
             {t("vip.resume")}
           </Button>
         ) : null}
@@ -286,7 +286,7 @@ export function TributePlaque(props: { onOpen: () => void }): ReactNode {
         </div>
       </div>
       <div className="mt-3">
-        <Button block variant="secondary" onClick={props.onOpen}>
+        <Button track="tribute" block variant="secondary" onClick={props.onOpen}>
           <ExternalLink size={18} aria-hidden="true" />
           {t("shop.tribute.cta")}
         </Button>

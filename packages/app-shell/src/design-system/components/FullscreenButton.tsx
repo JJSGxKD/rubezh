@@ -22,7 +22,7 @@ export function FullscreenButton(): ReactNode {
   const fullscreen = screenMode === "fullscreen";
 
   return (
-    <IconButton
+    <IconButton track="fullscreen"
       label={supported ? t("settings.fullscreen") : t("settings.fullscreen.unsupported")}
       disabled={!supported}
       onClick={() => {

@@ -44,7 +44,7 @@ export function FeedbackScreen(): ReactNode {
               <MessageSquareHeart size={28} aria-hidden="true" className="text-accent" />
               <h2 className="font-display text-lg font-bold text-text">{t("feedback.thanks.title")}</h2>
               <p className="max-w-[320px] text-sm text-text-muted">{t("feedback.thanks.text")}</p>
-              <Button onClick={() => navigation.pop()}>{t("feedback.thanks.back")}</Button>
+              <Button track="back" onClick={() => navigation.pop()}>{t("feedback.thanks.back")}</Button>
             </div>
           </Card>
         </ContentColumn>
@@ -57,7 +57,7 @@ export function FeedbackScreen(): ReactNode {
       title={t("feedback.title")}
       onBack={() => navigation.pop()}
       footer={
-        <Button
+        <Button track="send"
           size="l"
           block
           glow

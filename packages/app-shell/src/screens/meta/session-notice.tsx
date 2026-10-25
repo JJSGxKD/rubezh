@@ -38,7 +38,7 @@ export function SessionNotice(props: { notice: SessionNoticeView }): ReactNode {
         <p className="text-sm text-text-muted">{notice.text}</p>
         {notice.retry ? (
           <div className="mt-2">
-            <Button variant="secondary" onClick={() => void useSession.getState().signIn()}>
+            <Button track="retry" variant="secondary" onClick={() => void useSession.getState().signIn()}>
               {t("app.retry")}
             </Button>
           </div>

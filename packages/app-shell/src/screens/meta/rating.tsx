@@ -70,7 +70,7 @@ export function RatingScreen(): ReactNode {
         <PageTitle>{t("rating.title")}</PageTitle>
         <p className="mb-3 text-sm text-text-muted">{t("rating.subtitle")}</p>
 
-        <SegmentedControl
+        <SegmentedControl track="difficulty"
           label={t("difficulty.title")}
           items={DIFFICULTY_IDS.map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
           activeId={difficultyId}

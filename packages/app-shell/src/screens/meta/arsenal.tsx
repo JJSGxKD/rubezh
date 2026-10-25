@@ -233,7 +233,7 @@ export function ArsenalScreen(): ReactNode {
 
           <SectionTitle>{t("arsenal.inventory")}</SectionTitle>
           <div className="mb-3 grid grid-cols-2 gap-2">
-            <Button
+            <Button track="sort"
               variant="secondary"
               block
               disabled={bag.length < 2}
@@ -244,7 +244,7 @@ export function ArsenalScreen(): ReactNode {
                 ? t("arsenal.sort.rarity")
                 : t("arsenal.sort.new")}
             </Button>
-            <Button
+            <Button track="merge_mode"
               variant={merging ? "primary" : "secondary"}
               block
               disabled={!merging && bag.length < MERGE_COUNT}
@@ -275,7 +275,7 @@ export function ArsenalScreen(): ReactNode {
                   {error}
                 </p>
               )}
-              <Button
+              <Button track="merge_confirm"
                 block
                 disabled={busy || picked.length !== MERGE_COUNT}
                 onClick={() => void act({ kind: "merge", itemIds: picked })}
