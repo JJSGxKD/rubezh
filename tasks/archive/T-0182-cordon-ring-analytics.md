@@ -3,7 +3,7 @@ id: T-0182
 title: Аналитика кольца — событие исхода (прорвался, выстоял, погиб)
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-1
 size: S
@@ -33,7 +33,7 @@ batch: 2
 
 # T-0182. Аналитика кольца — событие исхода (прорвался, выстоял, погиб)
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json)](README.md#значки-статуса) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](archive/T-0170-cordon-ring-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json)](../README.md#значки-статуса) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](T-0170-cordon-ring-engine.md)
 
 ## Зачем
 
