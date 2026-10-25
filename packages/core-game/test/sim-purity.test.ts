@@ -90,7 +90,7 @@ describe("чистота слоя симуляции", () => {
 
   it("покрывает каждый паттерн поведения — новые файлы не выпадают из проверки", () => {
     const files = sources.map(({ path }) => path.replace(/\\/g, "/"));
-    for (const name of ["swarm", "chase", "kite-and-shoot", "dash", "orbit", "exploder", "splitter"]) {
+    for (const name of ["swarm", "chase", "dash", "orbit", "exploder", "splitter"]) {
       expect(files.some((file) => file.endsWith(`/patterns/${name}.ts`)), name).toBe(true);
     }
   });

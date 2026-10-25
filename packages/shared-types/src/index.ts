@@ -463,12 +463,6 @@ export interface EnemyPatternParams {
     /** насколько быстро доворачивает к игроку, доля скорости в секунду */
     steeringPerSec?: number;
   };
-  kite_and_shoot: {
-    /** дистанция, которую стрелок держит до игрока */
-    preferredDistance?: number;
-    shotIntervalSec?: number;
-    projectileSpeed?: number;
-  };
   dash: {
     /** с какого расстояния до игрока начинается подготовка рывка */
     triggerDistance?: number;
@@ -504,17 +498,6 @@ export interface EnemyPatternParams {
      * один выстрел множит популяцию до конца пула.
      */
     children: { enemy: string; count?: number }[];
-  };
-  caster: {
-    /** дистанция, которую кастер держит до игрока */
-    preferredDistance?: number;
-    /** пауза между кастами в первой фазе боя; дальше он бьёт чаще */
-    castIntervalSec?: number;
-    /** сколько он стоит и светится перед кастом — время игрока уйти с линии */
-    telegraphSec?: number;
-    /** сколько шаров в кольце и в стене на первой фазе */
-    burstCount?: number;
-    projectileSpeed?: number;
   };
   rush: {
     /**
