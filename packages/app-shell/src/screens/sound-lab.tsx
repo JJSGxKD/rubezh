@@ -56,7 +56,7 @@ export function SoundLabScreen(): ReactNode {
         <p className="mt-1 text-xs text-text-muted">{t("soundLab.intro")}</p>
         {director === null ? <p className="mt-3 text-sm text-text-muted">{t("soundLab.waiting")}</p> : <Meters director={director} />}
         <div className="mt-3">
-          <SegmentedControl
+          <SegmentedControl track="tabs"
             label={t("soundLab.title")}
             items={TABS.map((id) => ({ id, label: t(`soundLab.tab.${id}`) }))}
             activeId={tab}
@@ -209,19 +209,19 @@ function RecipeEditor(props: { director: SoundDirector; id: SoundId; edited: boo
       footer={
         <>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" block onClick={() => engine.play(props.id, { force: true })}>
+            <Button track="play" variant="secondary" block onClick={() => engine.play(props.id, { force: true })}>
               <Play size={16} />
               {t("soundLab.play")}
             </Button>
-            <Button block onClick={() => void apply()}>
+            <Button track="apply" block onClick={() => void apply()}>
               {t("soundLab.apply")}
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" block onClick={() => void copy()}>
+            <Button track="copy" variant="ghost" block onClick={() => void copy()}>
               {t("soundLab.copy")}
             </Button>
-            <Button variant="ghost" block disabled={!props.edited} onClick={() => void reset()}>
+            <Button track="reset" variant="ghost" block disabled={!props.edited} onClick={() => void reset()}>
               <RotateCcw size={16} />
               {t("soundLab.reset")}
             </Button>
@@ -272,7 +272,7 @@ function BattleTab(props: { director: SoundDirector }): ReactNode {
   return (
     <>
       <SectionTitle>{t("soundLab.battle.weapons")}</SectionTitle>
-      <SegmentedControl
+      <SegmentedControl track="weapons"
         label={t("soundLab.battle.weapons")}
         items={[1, 2, 3, 4, 5].map((value) => ({ id: String(value), label: String(value) }))}
         activeId={String(weapons)}
@@ -295,7 +295,7 @@ function BattleTab(props: { director: SoundDirector }): ReactNode {
         </ListGroup>
       </div>
       <div className="mt-3">
-        <Button block glow={!running} variant={running ? "secondary" : "primary"} onClick={() => setRunning(!running)}>
+        <Button track="battle_toggle" block glow={!running} variant={running ? "secondary" : "primary"} onClick={() => setRunning(!running)}>
           {running ? <Square size={16} fill="currentColor" /> : <Play size={16} />}
           {running ? t("soundLab.battle.stop") : t("soundLab.battle.start")}
         </Button>

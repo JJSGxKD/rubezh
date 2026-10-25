@@ -69,7 +69,7 @@ export function ChanceStep(props: { result: RunResult; secondChance: SecondChanc
       <h2 className="text-center font-display text-[22px] leading-tight text-text">{t("run.death.downed", { time: formatDuration(result.survivalSec) })}</h2>
       {result.deathCause === null ? null : <p className="-mt-1.5 text-center text-[13px] text-text-muted">{t("run.death.cause", { enemy: enemyName(result.deathCause) })}</p>}
       <SecondChance {...secondChance} variant="prominent" />
-      <Button variant="secondary" block onClick={props.onDecline}>
+      <Button track="decline" variant="secondary" block onClick={props.onDecline}>
         {t("run.death.decline")}
       </Button>
     </div>

@@ -18,7 +18,7 @@ function badgeClass(html: string, text: string): string[] {
 }
 
 describe("бейдж нижней панели", () => {
-  const html = renderToStaticMarkup(createElement(TabBar, { items, activeId: "home", onSelect: () => undefined }));
+  const html = renderToStaticMarkup(createElement(TabBar, { track: "test", items, activeId: "home", onSelect: () => undefined }));
 
   it("отделён от плитки кольцом цвета панели", () => {
     expect(badgeClass(html, "1")).toEqual(expect.arrayContaining(["ring-2", "ring-surface"]));

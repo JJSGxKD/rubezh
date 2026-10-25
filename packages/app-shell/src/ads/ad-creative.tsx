@@ -191,7 +191,7 @@ export function AdCreativeBlock(props: { show: CreativeShow; hooks: CreativeHook
           {t("ads.label", { advertiser: ad.advertiser })}
         </span>
         {viewed ? (
-          <IconButton label={t("ads.close")} feedback="back" onClick={close}>
+          <IconButton track="close" label={t("ads.close")} feedback="back" onClick={close}>
             <X size={22} />
           </IconButton>
         ) : (
@@ -226,7 +226,7 @@ export function AdCreativeBlock(props: { show: CreativeShow; hooks: CreativeHook
               {ad.title === null ? null : <h2 className="line-clamp-2 min-w-0 font-display text-xl font-bold text-text landscape:text-lg">{ad.title}</h2>}
             </div>
             {bodyOf(ad) === null ? null : <p className="line-clamp-4 text-sm text-text-muted">{bodyOf(ad)}</p>}
-            <Button block onClick={open}>
+            <Button track="open" block onClick={open}>
               {ad.button ?? t("ads.open")}
             </Button>
           </div>
@@ -274,7 +274,7 @@ export function AdCreativeCard(props: { ad: AdCreative; onOpen: () => void }): R
         {ad.title === null ? null : <h3 className="truncate font-display text-base font-bold text-text">{ad.title}</h3>}
         {bodyOf(ad) === null ? null : <p className="line-clamp-2 text-xs text-text-muted">{bodyOf(ad)}</p>}
       </div>
-      <Button variant="secondary" onClick={props.onOpen}>
+      <Button track="open" variant="secondary" onClick={props.onOpen}>
         {ad.button ?? t("ads.open")}
       </Button>
     </article>

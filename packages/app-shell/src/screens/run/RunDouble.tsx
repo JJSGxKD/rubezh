@@ -107,7 +107,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
     <>
       {button.kind === "ready" || button.kind === "wait" ? (
         <div className="mt-2 animate-rise-in">
-          <Button variant="secondary" block disabled={button.kind === "wait"} loading={watching} onClick={() => void double()}>
+          <Button track="double" variant="secondary" block disabled={button.kind === "wait"} loading={watching} onClick={() => void double()}>
             {button.pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
             {button.kind === "wait"
               ? t("run.double.next", { time: formatCountdown(button.untilMs - now) })

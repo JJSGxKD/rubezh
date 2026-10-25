@@ -140,16 +140,16 @@ export function FeedRow(props: FeedRowProps): ReactNode {
       {opened ? (
         // В половине ширины «Запустить бота» переносится — второй раз хватит «Открыть».
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button variant="secondary" loading={busy === "open"} disabled={busy === "check"} onClick={() => void open()}>
+          <Button track="reopen" variant="secondary" loading={busy === "open"} disabled={busy === "check"} onClick={() => void open()}>
             {t("tasks.network.reopen")}
           </Button>
-          <Button loading={busy === "check"} disabled={busy === "open"} onClick={() => void check(false)}>
+          <Button track="check" loading={busy === "check"} disabled={busy === "open"} onClick={() => void check(false)}>
             {t("tasks.check")}
           </Button>
         </div>
       ) : (
         <div className="mt-3">
-          <Button block loading={busy === "open"} onClick={() => void open()}>
+          <Button track="open" block loading={busy === "open"} onClick={() => void open()}>
             <ExternalLink size={18} aria-hidden="true" />
             {t(feedActionKey(state.task.action))}
           </Button>

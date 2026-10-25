@@ -60,7 +60,7 @@ export function TesterThanksScreen(): ReactNode {
               {t("tester.failed")}
             </p>
           ) : null}
-          <Button size="l" block glow loading={pending} onClick={() => void claim()}>
+          <Button track="claim" size="l" block glow loading={pending} onClick={() => void claim()}>
             {pending ? t("tester.claiming") : t("tester.claim")}
           </Button>
         </>

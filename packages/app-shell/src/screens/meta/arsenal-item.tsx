@@ -43,13 +43,13 @@ export function ItemSheet(props: {
               {props.error}
             </p>
           )}
-          <Button block disabled={props.busy} onClick={() => props.onAction({ kind: item.equipped ? "unequip" : "equip", itemId: item.itemId })}>
+          <Button track="toggle_equip" block disabled={props.busy} onClick={() => props.onAction({ kind: item.equipped ? "unequip" : "equip", itemId: item.itemId })}>
             {item.equipped ? t("arsenal.item.unequip") : t("arsenal.item.equip")}
           </Button>
           {item.upgrade === null ? <p className="text-center text-xs text-text-muted">{t("arsenal.item.maxLevel")}</p> : null}
           <div className={`grid gap-2 ${item.upgrade !== null && item.reroll !== null ? "grid-cols-2" : "grid-cols-1"}`}>
             {item.upgrade === null ? null : (
-              <Button variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
+              <Button track="upgrade" variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
                 <span className="flex flex-col items-center leading-tight">
                   {t("arsenal.item.upgrade")}
                   <CostLabel cost={item.upgrade} rarity={item.rarity} />
@@ -57,7 +57,7 @@ export function ItemSheet(props: {
               </Button>
             )}
             {item.reroll === null ? null : (
-              <Button variant="secondary" block disabled={props.busy} onClick={() => setRerolling((value) => !value)}>
+              <Button track="reroll" variant="secondary" block disabled={props.busy} onClick={() => setRerolling((value) => !value)}>
                 <span className="flex flex-col items-center leading-tight">
                   {t("arsenal.item.reroll")}
                   <CostLabel cost={item.reroll} rarity={item.rarity} />
@@ -70,7 +70,7 @@ export function ItemSheet(props: {
               {t("arsenal.item.powerNext", { from: formatNumber(item.power), to: formatNumber(item.next.power) })}
             </p>
           )}
-          <Button
+          <Button track="salvage"
             variant={salvaging ? "danger" : "ghost"}
             block
             disabled={props.busy}

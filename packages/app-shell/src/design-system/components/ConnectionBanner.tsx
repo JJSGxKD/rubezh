@@ -52,7 +52,7 @@ export function ConnectionBanner(): ReactNode {
           <p className="mt-0.5 text-xs text-text-muted">{t("connection.offline.text")}</p>
         </div>
         <span className="shrink-0">
-          <Button variant="secondary" size="s" disabled={checking} onClick={() => void retryConnection()}>
+          <Button track="retry" variant="secondary" size="s" disabled={checking} onClick={() => void retryConnection()}>
             {t(checking ? "connection.checking" : "connection.retry")}
           </Button>
         </span>

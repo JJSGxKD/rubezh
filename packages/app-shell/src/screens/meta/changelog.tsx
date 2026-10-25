@@ -66,7 +66,7 @@ export function ChangelogScreen(): ReactNode {
               <VersionCard key={version.version} version={version} index={index} />
             ))}
             {state.cursor === null ? null : (
-              <Button variant="secondary" block loading={more} onClick={() => void next()}>
+              <Button track="load_more" variant="secondary" block loading={more} onClick={() => void next()}>
                 {t("changelog.more")}
               </Button>
             )}

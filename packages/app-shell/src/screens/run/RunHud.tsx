@@ -108,13 +108,13 @@ export function RunHud(props: RunHudProps): ReactNode {
             открывается сразу, без лишнего шага через экран паузы. */}
         {props.onDev === undefined ? null : (
           <div className="pointer-events-auto rounded-full bg-bg/70">
-            <IconButton label={t("dev.title")} onClick={props.onDev}>
+            <IconButton track="dev" label={t("dev.title")} onClick={props.onDev}>
               <Wrench size={20} />
             </IconButton>
           </div>
         )}
         <div className="pointer-events-auto rounded-full bg-bg/70">
-          <IconButton label={t("run.pause")} onClick={props.onPause}>
+          <IconButton track="pause" label={t("run.pause")} onClick={props.onPause}>
             <Pause size={20} fill="currentColor" />
           </IconButton>
         </div>

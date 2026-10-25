@@ -30,7 +30,7 @@ export function TestNoticeScreen(): ReactNode {
       title={t("testNotice.title")}
       onBack={() => navigation.pop()}
       footer={
-        <Button size="l" block glow loading={pending} onClick={() => void accept()}>
+        <Button track="accept" size="l" block glow loading={pending} onClick={() => void accept()}>
           {t("testNotice.accept")}
         </Button>
       }

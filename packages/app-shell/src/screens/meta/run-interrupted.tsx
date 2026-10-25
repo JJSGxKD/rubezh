@@ -36,7 +36,7 @@ export function RunInterruptedScreen(): ReactNode {
       icon={<RefreshCw size={26} aria-hidden="true" />}
       onDismiss={close}
       footer={
-        <Button size="l" block onClick={close}>
+        <Button track="close" size="l" block onClick={close}>
           {t("runInterrupted.ok")}
         </Button>
       }

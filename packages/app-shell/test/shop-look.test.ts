@@ -43,7 +43,7 @@ describe("размер горсти самоцветов", () => {
 
 function button(props: { variant: "stars"; cut?: boolean }): string {
   const children: ReactNode = "50";
-  return renderToStaticMarkup(createElement(Button, { ...props, children }));
+  return renderToStaticMarkup(createElement(Button, { track: "test", ...props, children }));
 }
 
 afterEach(() => {

@@ -46,7 +46,7 @@ export interface ButtonProps {
    * Имя кнопки для события `ui_clicked` (Р141): по смыслу действия — `buy`,
    * `claim`, `share`, — а не по тексту. Экран подставляется сам.
    */
-  track?: string;
+  track: string;
 }
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
@@ -201,7 +201,7 @@ export interface IconButtonProps {
    */
   feedback?: "tap" | "back" | null;
   /** имя кнопки для события `ui_clicked` (см. `ButtonProps.track`) */
-  track?: string;
+  track: string;
 }
 
 export function IconButton(props: IconButtonProps): ReactNode {

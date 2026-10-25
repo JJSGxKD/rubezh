@@ -101,10 +101,10 @@ export function ProfileScreen(): ReactNode {
             <>
               <AccountLevel progress={progress} />
               <div className="mt-3">
-                <Button variant="secondary" block onClick={() => navigation.push("level")}>
+                <Button track="open_level" variant="secondary" block onClick={() => navigation.push("level")}>
                   {t("profile.level.more")}
                 </Button>
-                <Button variant="ghost" block onClick={() => navigation.push("history")}>
+                <Button track="open_history" variant="ghost" block onClick={() => navigation.push("history")}>
                   {t("profile.history")}
                 </Button>
               </div>

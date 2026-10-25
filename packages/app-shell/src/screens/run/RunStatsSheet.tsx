@@ -29,12 +29,12 @@ export function RunStatsSheet(props: { inspection: RunInspection; onClose(): voi
       placement="bottom"
       onDismiss={props.onClose}
       footer={
-        <Button variant="ghost" block onClick={props.onClose}>
+        <Button track="close" variant="ghost" block onClick={props.onClose}>
           {t("app.close")}
         </Button>
       }
     >
-      <SegmentedControl
+      <SegmentedControl track="tabs"
         label={t("run.stats.title")}
         items={TABS.map((id) => ({ id, label: t(`run.stats.tab.${id}`) }))}
         activeId={tab}
