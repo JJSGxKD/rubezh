@@ -4,7 +4,8 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
@@ -167,6 +168,7 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
+    ensureShapeTexture(scene, "bh-freeze", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.freezeWave, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS * scale, WORLD_COLORS.orbiter, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
@@ -252,6 +254,7 @@ export class WorldRenderer {
   setGraphics(graphics: RunGraphicsOptions | null): void {
     this.graphics = graphics;
     this.applyEffectSwitches();
+    this.applyArtMode();
   }
 
   /**
@@ -266,7 +269,15 @@ export class WorldRenderer {
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
     if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
     this.debug?.setVisible(wantsDebug);
-    this.art.setWanted(visuals?.sprites === true, () => {
+    this.applyArtMode();
+  }
+
+  /**
+   * Арт включают настройка игрока («Новый облик боя», доступ — по флагу) или
+   * лист разработчика: режим листа работает независимо от настроек игрока.
+   */
+  private applyArtMode(): void {
+    this.art.setWanted(this.graphics?.art === true || this.visuals?.sprites === true, () => {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
@@ -357,6 +368,10 @@ export class WorldRenderer {
     // Тон состояния — эффект оружия: кто выключил эффекты ради тишины на
     // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
     const statusTones = this.weaponEffects.enabled;
+    // Оттенок замерших — сведения для боя: он включён всегда, а мигание перед
+    // концом — эффект, и без эффектов оттенок просто гаснет в конце.
+    const freezeLeft = this.world.stats.freezeTicks;
+    const frozenLook = statusTones && freezeLeft <= FREEZE_BLINK_TICKS && (freezeLeft >> 3) % 2 === 0 ? LOOK.frozenBlink : LOOK.frozen;
     this.telegraphs.begin();
     this.marks.begin();
 
@@ -390,7 +405,13 @@ export class WorldRenderer {
       } else {
         flashing = tick - enemies.hitTick[i] < HIT_FLASH_TICKS;
       }
-      let look = flashing ? LOOK.hit : lookFor(type.pattern, enemies.phase[i], tick);
+      // Замерший не мигает телеграфом: его таймеры стоят, а мигание по тику
+      // обещало бы удар, которого не будет.
+      let look = flashing
+        ? LOOK.hit
+        : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
+          ? frozenLook
+          : lookFor(type.pattern, enemies.phase[i], tick);
       // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
       // только заморозка. Знак не зависит от вспышки попадания: иначе он
       // мигал бы на каждом ударе по горящему.
@@ -510,7 +531,7 @@ export class WorldRenderer {
     // Фигура строится по радиусу типа, `size` в нём уже есть; кадр атласа рисуется
     // постоянным масштабом, и без множителя хитбокс с рисунком разошлись бы.
     const base = art ? this.art.scale * size : 1;
-    sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
+    sprite.setAlpha(look === LOOK.dim ? 0.35 : look === LOOK.frozenBlink ? 0.6 : 1);
     const hitScale = art ? ART_HIT_SCALE : 1.25;
     sprite.setScale(base * (look === LOOK.hit ? hitScale : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
     // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
@@ -519,6 +540,7 @@ export class WorldRenderer {
     // состояния — тоже заливка: умножение на синий сделало бы красного врага
     // чёрным, а не замёрзшим.
     if (look === LOOK.warning || look === LOOK.hit) sprite.setTintFill(0xffffff);
+    else if (look === LOOK.frozen || look === LOOK.frozenBlink) sprite.setTintFill(WORLD_COLORS.freezeTint);
     else if (look > LOOK.status) sprite.setTintFill(STATUS_TONE_COLORS[look - LOOK.status] ?? 0xffffff);
     else sprite.clearTint();
   }
@@ -566,6 +588,11 @@ export class WorldRenderer {
       }
       if (kind === SIM_EVENT.dynamite) {
         // Динамит: ударная волна на весь радиус взрыва — видно, докуда выкосило.
+        this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
+        continue;
+      }
+      if (kind === SIM_EVENT.freeze) {
+        // Заморозка: волна холода на радиус кольца спавна — достала и тех, кого не видно.
         this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
         continue;
       }
@@ -689,21 +716,25 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.heal]: "bh-heal",
   [SIM_EVENT.magnet]: "bh-magnet",
   [SIM_EVENT.dynamite]: "bh-dynamite",
+  [SIM_EVENT.freeze]: "bh-freeze",
   [SIM_EVENT.shield]: "bh-magnet",
 };
 /** Радиус кольца сработавшего щита, игровые единицы. */
 const SHIELD_RING_UNITS = 60;
 /** Радиус кольца магнита при подборе, игровые единицы. */
 const MAGNET_RING_UNITS = 120;
-/** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */
+/** Волны магнита, динамита и заморозки — крупной текстурой и дольше обычного взрыва. */
 const WAVE_TEXTURE_UNITS = 128;
 const WAVE_LIFETIME_TICKS = 30;
 
 function isWave(kind: number): boolean {
-  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite;
+  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite || kind === SIM_EVENT.freeze;
 }
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
+
+/** За сколько тиков до конца заморозка начинает мигать: две секунды. */
+const FREEZE_BLINK_TICKS = 120;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
@@ -726,6 +757,10 @@ const LOOK = {
   dim: 2,
   /** только что получил урон */
   hit: 3,
+  /** заморожен подбором: бледно-голубая заливка */
+  frozen: 4,
+  /** замерший в последние секунды: тот же тон, прозрачнее — вот-вот пойдёт */
+  frozenBlink: 5,
   /**
    * Основа кодов тона состояния: `status + STATUS_TONE.*`. Сам `status` —
    * тон «нет», тот же обычный вид.

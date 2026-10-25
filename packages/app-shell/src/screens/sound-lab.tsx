@@ -317,6 +317,7 @@ function simulatedCues(weapons: number, density: number): RunCues {
     heal: chance(0.05),
     magnet: chance(0.03),
     dynamite: chance(0.02),
+    freeze: chance(0.02),
     explosions: chance(0.8 * density),
     explosionsNear: chance(0.2 * density),
     strikes: weapons >= 5 ? chance(0.8) : 0,
