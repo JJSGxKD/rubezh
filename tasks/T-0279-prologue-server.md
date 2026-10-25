@@ -80,8 +80,8 @@ batch: 6
 - **Победа** — `result.prologue.won = true` и вердикт перепроверки не
   «отклонён» (`run-verdict.ts`):
   - `prologue_done_at = now()`;
-  - начисление 500 монет и 10 самоцветов (ключи `prologue.reward_coins`,
-    `prologue.reward_gems`);
+  - начисление 500 монет и 10 самоцветов (ключи `prologue.reward-coins`,
+    `prologue.reward-gems`);
   - причина `prologue_reward`, ключ идемпотентности `prologue:<accountId>`.
 
   Всё — одной транзакцией с записью забега. Два запроса разом — одно
@@ -127,7 +127,7 @@ batch: 6
 6. **Закрытые разделы** — проверка в награде дня и заборе задания.
 7. **Профиль** — `prologueDone`.
 8. **Ключи и кошелёк:**
-   - `prologue.reward_coins`, `prologue.reward_gems` в каталоге настроек;
+   - `prologue.reward-coins`, `prologue.reward-gems` в каталоге настроек;
    - причина и потолок.
 9. **Документы** — `docs/30` (ключи), `docs/37` (причина), `docs/21`.
 

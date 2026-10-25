@@ -67,7 +67,7 @@ batch: 5
   Пишется в `clan_week_damage (clan_id, week_key, account_id, damage)` —
   суммой за неделю, в той же транзакции, что запись забега, или очередью
   после неё.
-- **Здоровье босса** = `clan.boss_hp_per_member` (ключ панели, старт 800) ×
+- **Здоровье босса** = `clan.boss-hp-per-member` (ключ панели, старт 800) ×
   число участников на начало недели, не меньше 3 участников по расчёту.
   Неделя — та же, что у сезона (понедельник UTC).
 - **Рейтинг дружин недели** — по суммарному урону; `GET /api/v1/clans/rating`
@@ -75,7 +75,7 @@ batch: 5
 - **Закрытие недели** — задание под локом Redis, по образцу закрытия сезона
   (`seasons-close.service.ts`), идемпотентно по `(clan_id, week_key)` в
   `clan_week`:
-  - победили — каждому, кто нанёс хоть 1 урона, начисление: 500 монет и 10 самоцветов, ключи `clan.boss_reward_coins`, `clan.boss_reward_gems`;
+  - победили — каждому, кто нанёс хоть 1 урона, начисление: 500 монет и 10 самоцветов, ключи `clan.boss-reward-coins`, `clan.boss-reward-gems`;
   - причина `clan_reward`, ключ идемпотентности — `clan:<clan>:<week>:<account>`;
   - уведомление `clan_boss_defeated`.
 
@@ -110,8 +110,8 @@ batch: 5
    кошелька `clan_reward` с потолком.
 6. **Рейтинг** — маршрут.
 7. **Подарки** — правило «участник дружины».
-8. **Ключи панели** — `clan.boss_hp_per_member`, `clan.boss_reward_coins`,
-   `clan.boss_reward_gems`; строки в `docs/30`.
+8. **Ключи панели** — `clan.boss-hp-per-member`, `clan.boss-reward-coins`,
+   `clan.boss-reward-gems`; строки в `docs/30`.
 9. **Очистка** — новые таблицы в `wipe-plan.ts`.
 
 ## Чего не трогаем
