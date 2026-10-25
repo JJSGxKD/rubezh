@@ -15,6 +15,7 @@ shared:
   - packages/app-shell/src/design-system/components/Layout.tsx
   - packages/app-shell/src/design-system/tokens.css
   - docs/27-design-system-and-app-shell.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
