@@ -3,8 +3,8 @@ id: T-0272
 title: Пакет promo-kit — документ промо-материала, форматы, подстановка кода и ссылки, правила правки партнёром
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
