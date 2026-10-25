@@ -25,7 +25,7 @@ batch: 3
 
 # T-0231. Больше трёх вкладок — строкой с прокруткой и подчёркиванием, а не сеткой 2×2
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0231.json)](README.md#значки-статуса) [![T-0227](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json&label=T-0227)](T-0227-ui-track-ids-all-screens.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0231.json)](README.md#значки-статуса) [![T-0227](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json&label=T-0227)](archive/T-0227-ui-track-ids-all-screens.md)
 
 ## Зачем
 

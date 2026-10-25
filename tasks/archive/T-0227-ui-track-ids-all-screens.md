@@ -3,7 +3,7 @@ id: T-0227
 title: Имена всех кнопок, вкладок и переключателей оболочки — и `track` обязателен
 epic: E11
 priority: P3
-status: in-progress
+status: done
 owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: M
@@ -18,6 +18,17 @@ shared:
   - packages/app-shell/src/app/**
   - packages/app-shell/src/design-system/components/**
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/test/button-resting.test.ts
+  - packages/app-shell/test/button-shine.test.ts
+  - packages/app-shell/test/shop-look.test.ts
+  - packages/app-shell/test/tab-badge.test.ts
+  - packages/app-shell/test/cut-frame.test.ts
+  - packages/app-shell/test/glow-layer.test.ts
+  - packages/app-shell/test/ui-clicks.test.ts
+  - tasks/T-0228-ui-clicks-report.md
+  - tasks/T-0231-tabs-row-over-three.md
+  - tasks/epics.md
+  - packages/app-shell/src/ads/ad-creative.tsx
 runner: any
 executor: haiku-5.5
 effort: medium
@@ -28,7 +39,7 @@ batch: 3
 
 # T-0227. Имена всех кнопок, вкладок и переключателей оболочки — и `track` обязателен
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json)](README.md#значки-статуса) [![T-0226](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json&label=T-0226)](archive/T-0226-ui-clicked-event.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json)](../README.md#значки-статуса) [![T-0226](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0226.json&label=T-0226)](T-0226-ui-clicked-event.md)
 
 ## Зачем
 
