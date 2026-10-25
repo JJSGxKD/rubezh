@@ -17,6 +17,8 @@ zones:
   - scripts/test/tasks-board-page.test.ts
 shared:
   - tasks/README.md
+  - tasks/T-0209-flow-prompts-per-account.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
