@@ -3,10 +3,12 @@ import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
 import { trackGroupClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
+import { useWide } from "../../state/wide";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { segmentFitClass, segmentedLayout, type SegmentedSize } from "./segmented-rules";
 import { tabLabelMode, type TabLabelMode } from "./tab-labels";
+import { contentColumnClass, screenColumns } from "./wide-rules";
 
 /**
  * Каркас экрана: верхняя панель, прокручиваемое тело, опциональное дно.
@@ -23,9 +25,17 @@ export interface ScreenProps {
   children: ReactNode;
   /** закреплённое дно: основное действие экрана видно без прокрутки */
   footer?: ReactNode;
+  /**
+   * Вторая колонка справа (T-0298). На wide (с 1024 px) стоит рядом с основным
+   * содержимым, уже — под ним. Экран отдаёт её, когда ему есть что показать
+   * рядом; остальные экраны остаются в одной колонке.
+   */
+  aside?: ReactNode;
 }
 
 export function Screen(props: ScreenProps): ReactNode {
+  const wide = useWide((state) => state.wide);
+  const columns = screenColumns({ wide, hasAside: props.aside !== undefined });
   return (
     <div className="flex h-full min-h-0 flex-col">
       {props.title === undefined && props.onBack === undefined && props.actions === undefined ? null : (
@@ -33,13 +43,22 @@ export function Screen(props: ScreenProps): ReactNode {
       )}
       {/* Под шапкой разделов — отступ её высоты: содержимое начинается под ней,
           а при прокрутке уходит под стекло. Внутри раздела отступ нулевой. */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-[var(--app-header-h)] pb-4">
+      <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[var(--app-header-h)] pb-4 ${wide ? "px-7" : "px-4"}`}>
         <ConnectionBanner />
-        {props.children}
+        {props.aside === undefined ? (
+          props.children
+        ) : (
+          <div className={contentColumnClass(wide)}>
+            <div className={columns === "split" ? "grid grid-cols-[minmax(0,1fr)_var(--aside-width)] items-start gap-6" : "grid grid-cols-1 gap-4"}>
+              <div className="min-w-0">{props.children}</div>
+              <aside className="min-w-0">{props.aside}</aside>
+            </div>
+          </div>
+        )}
       </div>
       {props.footer === undefined ? null : (
-        <div className="px-4 pt-2 pb-[calc(0.75rem+var(--app-inset-bottom))]">
-          <div className="mx-auto w-full max-w-[480px]">{props.footer}</div>
+        <div className={`pt-2 pb-[calc(0.75rem+var(--app-inset-bottom))] ${wide ? "px-7" : "px-4"}`}>
+          <div className={contentColumnClass(wide)}>{props.footer}</div>
         </div>
       )}
     </div>
@@ -312,14 +331,19 @@ export function SegmentedControl(props: {
 
 /** Колонка контента: на широком экране игра не растягивается на весь монитор. */
 export function ContentColumn(props: { children: ReactNode }): ReactNode {
-  return <div className="mx-auto w-full max-w-[480px]">{props.children}</div>;
+  const wide = useWide((state) => state.wide);
+  return <div className={contentColumnClass(wide)}>{props.children}</div>;
 }
 
 /**
  * Заголовок раздела нижней панели. Верхней панели у раздела нет — над ним
  * шапка приложения, — и заголовок живёт в контенте, а не отнимает строку.
+ * На wide название раздела стоит в шапке крупно, и второй раз здесь не
+ * рисуется.
  */
 export function PageTitle(props: { children: ReactNode }): ReactNode {
+  const wide = useWide((state) => state.wide);
+  if (wide) return null;
   return <h1 className="mt-2 mb-1 font-display text-2xl font-bold text-text">{props.children}</h1>;
 }
 
