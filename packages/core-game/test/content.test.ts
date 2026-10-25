@@ -1,31 +1,26 @@
 import {
-  DIFFICULTY_IDS,
-  PASSIVE_CATEGORIES,
   type EnemyDef,
   type PassiveDef,
   type WeaponDef,
 } from "@bh/shared-types";
-import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
+import { DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
 import { describe, expect, it } from "vitest";
-import { BALANCE_TARGETS } from "../src/content/balance-targets";
 import { CHESTS } from "../src/content/chests";
-import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
+import { CONTENT_SNAPSHOT } from "../src/content/snapshot";
+import { findContentProblems } from "../src/game/content-problems";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS, PATTERN_TRAITS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
-import { findMapContentProblems } from "../src/game/sim/map-types";
-import { MAX_PICKUPS, MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
-import { findTimelineProblems } from "../src/game/sim/timeline-content";
+import { MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
-import { xpForLevel } from "../src/game/progression/levels";
 import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
 import { DEFAULT_SIM_CONFIG } from "../src/game/sim/create-world";
@@ -35,31 +30,18 @@ import { createWorld } from "../src/game/sim/world";
 // (docs/17-testing-strategy.md §3.1). Геймдизайнер узнаёт об ошибке из CI
 // через минуту, а не из ручного плейтеста через день.
 
+describe("проверки контента", () => {
+  it("боевой контент проходит их целиком", () => {
+    // Все правила — ссылки на врагов и оружие, паттерны, бюджет угрозы, элиты
+    // только событием, ступени, открытия и слоты, коридоры эволюций — одной
+    // функцией: она же проверяет черновик в песочнице редактора баланса.
+    // Пустой список — контент корректен, иначе в выводе написано, какой раздел
+    // и что в нём не так.
+    expect(findContentProblems(CONTENT_SNAPSHOT)).toEqual([]);
+  });
+});
+
 describe("контент врагов", () => {
-  it("не содержит дублирующихся id", () => {
-    const ids = ENEMIES.map((enemy) => enemy.id);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it("использует только реализованные паттерны поведения", () => {
-    for (const enemy of ENEMIES) {
-      expect(IMPLEMENTED_PATTERNS, `враг ${enemy.id}`).toContain(enemy.pattern);
-    }
-  });
-
-  it("держит числовые поля в осмысленных границах", () => {
-    for (const enemy of ENEMIES) {
-      expect(enemy.hp, `hp врага ${enemy.id}`).toBeGreaterThan(0);
-      expect(enemy.speed, `speed врага ${enemy.id}`).toBeGreaterThan(0);
-      expect(enemy.damage, `damage врага ${enemy.id}`).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it("проходит проверку параметров паттернов целиком", () => {
-    // Сообщения читает геймдизайнер: пустой список — контент корректен,
-    // иначе в выводе теста написано, какой враг и какое поле не так.
-    expect(findEnemyContentProblems(ENEMIES)).toEqual([]);
-  });
 
   it("содержит врага на каждом реализованном паттерне", () => {
     const used = new Set(ENEMIES.map((enemy) => enemy.pattern));
@@ -192,11 +174,6 @@ describe("проверка параметров паттернов", () => {
 });
 
 describe("контент таймлайна спавна", () => {
-  it("проходит проверку целиком", () => {
-    // Сообщения читает геймдизайнер: пустой список — таймлайн корректен,
-    // иначе в выводе написано, какой отрезок и какое поле не так.
-    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
-  });
 
   it("расписывает руками первые минуты, а дальше передаёт кривой", () => {
     // Первую минуту видит каждый игрок, и угадывать её формулой нельзя;
@@ -297,10 +274,6 @@ describe("контент стража кольца и колец в таймла
     expect(guard?.resist).toBeUndefined();
   });
 
-  it("проходит проверку таймлайна целиком", () => {
-    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
-  });
-
   it("ставит первое кольцо на 180-ю секунду, второе на 300-ю, а воронье окружение не трогает", () => {
     const early = TIMELINE.filter((segment) => segment.fromSec < 180);
     for (const segment of early) {
@@ -352,9 +325,6 @@ describe("контент стража кольца и колец в таймла
 });
 
 describe("контент карт", () => {
-  it("проходит проверку целиком", () => {
-    expect(findMapContentProblems(MAPS)).toEqual([]);
-  });
 
   it("содержит ровно одну карту — решение Р8 этапа 2", () => {
     expect(MAPS).toHaveLength(1);
@@ -362,9 +332,6 @@ describe("контент карт", () => {
 });
 
 describe("контент оружия", () => {
-  it("проходит проверку целиком", () => {
-    expect(findWeaponContentProblems(WEAPONS)).toEqual([]);
-  });
 
   it("использует только реализованные поведения", () => {
     for (const weapon of WEAPONS) {
@@ -386,40 +353,7 @@ describe("контент оружия", () => {
   });
 });
 
-describe("контент пассивок и прокачки", () => {
-  it("проходит проверку целиком", () => {
-    expect(findPassiveContentProblems(PASSIVES)).toEqual([]);
-  });
-
-  it("в каждой категории пассивок больше, чем слотов под неё — иначе выбора нет", () => {
-    for (const category of PASSIVE_CATEGORIES) {
-      const inCategory = PASSIVES.filter((passive) => passive.category === category).length;
-      expect(inCategory, category).toBeGreaterThan(LOADOUT_LIMITS.passives[category]);
-    }
-  });
-
-  it("оружия больше, чем слотов под него", () => {
-    expect(WEAPONS.length).toBeGreaterThan(LOADOUT_LIMITS.weapons);
-  });
-
-  it("даёт первый уровень в первые полминуты игры, а дальше дорожает", () => {
-    // Пустая первая минута без решений — самый дешёвый способ потерять игрока.
-    expect(xpForLevel(LEVEL_CURVE, 1)).toBeLessThanOrEqual(8);
-    for (let level = 1; level < 20; level++) {
-      expect(xpForLevel(LEVEL_CURVE, level + 1), `уровень ${level + 1}`).toBeGreaterThan(
-        xpForLevel(LEVEL_CURVE, level),
-      );
-    }
-  });
-});
-
 describe("таблица разблокировок уровня аккаунта", () => {
-  const content = { weapons: BASE_WEAPONS.map((weapon) => weapon.id), passives: new Map(PASSIVES.map((passive) => [passive.id, passive.category])) };
-
-  it("проходит проверку целиком: каждое оружие и навык открываются ровно на одном уровне, слоты не убывают", () => {
-    expect(findUnlockProblems(ACCOUNT_UNLOCKS, content, LOADOUT_LIMITS)).toEqual([]);
-  });
-
   it("на последнем уровне открыто всё, и слоты — потолок контента: golden-тесты идут на этом наборе", () => {
     const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
     const open = unlocksAt(ACCOUNT_UNLOCKS, last);
@@ -516,11 +450,6 @@ describe("проверка контента оружия", () => {
 });
 
 describe("контент уровней сложности", () => {
-  it("проходит проверку целиком и открывает по умолчанию существующий уровень", () => {
-    expect(findDifficultyContentProblems(DIFFICULTIES)).toEqual([]);
-    expect(DIFFICULTIES.map((difficulty) => difficulty.id)).toContain(DEFAULT_DIFFICULTY_ID);
-    expect(DIFFICULTIES.map((difficulty) => difficulty.id)).toEqual([...DIFFICULTY_IDS]);
-  });
 
   it("ловит уровень, который по какой-то оси легче предыдущего", () => {
     const easy = DIFFICULTIES[0];
@@ -536,10 +465,6 @@ describe("контент уровней сложности", () => {
 });
 
 describe("контент ступеней врагов", () => {
-  it("проходит проверку целиком и открывает первую ступень с нулевой секунды", () => {
-    expect(findStageProblems(ENEMY_STAGES)).toEqual([]);
-    expect(ENEMY_STAGES[0].fromSec).toBe(0);
-  });
 
   it("ловит ступень, которая по какой-то оси слабее предыдущей", () => {
     const [base, hardened] = ENEMY_STAGES;
@@ -596,9 +521,6 @@ describe("проверка контента пассивок", () => {
 });
 
 describe("контент сундуков забега", () => {
-  it("проходит проверку целиком", () => {
-    expect(findChestsProblems(CHESTS)).toEqual([]);
-  });
 
   it("ловит размер вне набора 1, 3, 5", () => {
     expect(findChestsProblems({ ...CHESTS, opening: [1, 2 as never] }).join("\n")).toContain("opening");
@@ -635,21 +557,5 @@ describe("контент сундуков забега", () => {
       );
     }
     expect(findChestsProblems({ ...CHESTS, maxOnField: 0 })).toEqual([]);
-  });
-
-  it("кладёт первое событие элиты или босса в коридор первого сундука", () => {
-    const ranked = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
-    const first = TIMELINE.flatMap((segment) =>
-      (segment.events ?? []).filter((event) => ranked.has(event.enemy)).map(() => segment.fromSec),
-    ).sort((a, b) => a - b)[0];
-
-    expect(first).toBeDefined();
-    expect(first).toBeGreaterThanOrEqual(BALANCE_TARGETS.firstChestEventSec.min);
-    expect(first).toBeLessThanOrEqual(BALANCE_TARGETS.firstChestEventSec.max);
-  });
-
-  it("не переполняет пул подборов суммой потолков", () => {
-    const total = DROPS.medkits.maxOnField + DROPS.magnets.maxOnField + DROPS.dynamite.maxOnField + CHESTS.maxOnField;
-    expect(total).toBeLessThanOrEqual(MAX_PICKUPS);
   });
 });

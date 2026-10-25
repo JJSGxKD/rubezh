@@ -1,3 +1,4 @@
+import type { EnemyDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { CONTENT_HASH } from "../src/content/hash";
 import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/content/snapshot";
@@ -128,8 +129,8 @@ describe("схема снимка", () => {
   });
 
   it("ловит неизвестные паттерн врага и поведение оружия", () => {
-    const enemy = { ...ENEMIES[0], pattern: "teleport" };
-    const weapon = { ...WEAPONS[0], behavior: "laser" };
+    const enemy = { ...ENEMIES[0], pattern: "teleport" } as unknown as EnemyDef;
+    const weapon = { ...WEAPONS[0], behavior: "laser" } as unknown as WeaponDef;
     expect(contentSnapshotSchema.safeParse(viaJson({ ...CONTENT_SNAPSHOT, enemies: [enemy] })).success).toBe(false);
     expect(contentSnapshotSchema.safeParse(viaJson({ ...CONTENT_SNAPSHOT, weapons: [weapon] })).success).toBe(false);
   });
@@ -186,6 +187,36 @@ describe("проверки контента одной функцией", () => 
     const tight = { ...CONTENT_SNAPSHOT, balanceTargets: { ...CONTENT_SNAPSHOT.balanceTargets, firstChestEventSec: { min: 1000, max: 2000 } } };
     const problems = findContentProblems(tight);
     expect(problems.some((problem) => problem.path === "timeline" && problem.message.includes("сундук"))).toBe(true);
+  });
+
+  it("ловит слотов не меньше, чем кандидатов: игроку нечего выбирать", () => {
+    const limits = { ...CONTENT_SNAPSHOT.loadoutLimits, weapons: 99, passives: { ...CONTENT_SNAPSHOT.loadoutLimits.passives, defense: 99 } };
+    const messages = findContentProblems({ ...CONTENT_SNAPSHOT, loadoutLimits: limits })
+      .filter((problem) => problem.path === "loadoutLimits")
+      .map((problem) => problem.message);
+    expect(messages.some((message) => message.includes("оружия"))).toBe(true);
+    expect(messages.some((message) => message.includes("«defense»"))).toBe(true);
+  });
+
+  it("ловит кривую опыта, где первый уровень слишком дорог или кривая не растёт", () => {
+    const dear = findContentProblems({ ...CONTENT_SNAPSHOT, levelCurve: { baseXp: 50, growth: 1.2 } });
+    expect(dear).toContainEqual({ path: "levelCurve", message: expect.stringContaining("первый уровень") });
+    const flat = findContentProblems({ ...CONTENT_SNAPSHOT, levelCurve: { baseXp: 5, growth: 1 } });
+    expect(flat).toContainEqual({ path: "levelCurve", message: expect.stringContaining("должна расти") });
+  });
+
+  it("ловит потолки подборов, которые не влезают в пул", () => {
+    const drops = { ...CONTENT_SNAPSHOT.drops, medkits: { ...CONTENT_SNAPSHOT.drops.medkits, maxOnField: 8 }, magnets: { ...CONTENT_SNAPSHOT.drops.magnets, maxOnField: 8 } };
+    expect(findContentProblems({ ...CONTENT_SNAPSHOT, drops })).toContainEqual({
+      path: "chests",
+      message: expect.stringContaining("пул"),
+    });
+  });
+
+  it("ловит таймлайн без элиты и босса: первый сундук не выпадет никогда", () => {
+    const timeline = TIMELINE.map((segment) => ({ ...segment, events: (segment.events ?? []).filter((event) => !CONTENT_SNAPSHOT.enemies.some((enemy) => enemy.id === event.enemy && enemy.rank !== undefined)) }));
+    const problems = findContentProblems({ ...CONTENT_SNAPSHOT, timeline });
+    expect(problems.some((problem) => problem.path === "timeline" && problem.message.includes("первый сундук"))).toBe(true);
   });
 
   it("не бросает исключение на пустом снимке, а возвращает проблемы", () => {
