@@ -3,7 +3,7 @@ id: T-0272
 title: Пакет promo-kit — документ промо-материала, форматы, подстановка кода и ссылки, правила правки партнёром
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -27,7 +27,7 @@ batch: 5
 
 # T-0272. Пакет promo-kit — документ промо-материала, форматы, подстановка кода и ссылки, правила правки партнёром
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json)](../README.md#значки-статуса)
 
 ## Зачем
 

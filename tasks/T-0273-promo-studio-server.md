@@ -38,7 +38,7 @@ batch: 5
 
 # T-0273. Промо — сервер: пресеты команды, картинки для макетов, выдача пресетов партнёрам и журнал выгрузок
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0273.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](T-0272-promo-kit-model.md) [![T-0221](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json&label=T-0221)](T-0221-partner-materials.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0273.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](archive/T-0272-promo-kit-model.md) [![T-0221](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json&label=T-0221)](T-0221-partner-materials.md)
 
 ## Зачем
 
