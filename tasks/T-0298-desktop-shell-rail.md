@@ -3,8 +3,8 @@ id: T-0298
 title: Раскладка для ПК, основа — с 1024 px боковое меню вместо нижнего, шапка с кошельком, две колонки экрана, листы становятся панелями сбоку
 epic: E12
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
