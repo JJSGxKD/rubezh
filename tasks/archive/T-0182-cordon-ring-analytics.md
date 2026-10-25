@@ -23,6 +23,13 @@ shared:
   - packages/app-shell/src/state/analytics.ts
   - docs/22-analytics-and-metrics.md
   - docs/35-stage4-plan.md
+  - tasks/T-0190-single-difficulty-shell.md
+  - tasks/T-0194-limit-break-offers.md
+  - tasks/T-0195-player-power-pressure-engine.md
+  - tasks/T-0196-player-power-pressure-wiring.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
