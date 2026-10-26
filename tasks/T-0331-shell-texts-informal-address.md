@@ -3,8 +3,8 @@ id: T-0331
 title: Тексты оболочки на «ты» — без «вы» и без рода игрока, тест не даёт вернуть «вы»
 epic: E6
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
