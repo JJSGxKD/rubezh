@@ -3,13 +3,13 @@
 <feFlood flood-color="#a08cf0"/><feComposite in2="d" operator="in" result="o"/>
 <feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="34" rx="18" ry="6" fill="#000" opacity="0.32"/><g filter="url(#heroEdge)"><g opacity="1" transform="translate(0 32) scale(1 1) translate(0 -32) rotate(0 0 32)">
 <path d="M-5 32 L-4 18" stroke="#14101f" stroke-width="7" stroke-linecap="round"/><path d="M5 32 L4 18" stroke="#14101f" stroke-width="7" stroke-linecap="round"/>
-<clipPath id="c54"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
+<clipPath id="c60"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></clipPath>
 <g fill="#1f1a33"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g>
-<g clip-path="url(#c54)"><g fill="#2f2848" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
+<g clip-path="url(#c60)"><g fill="#2f2848" transform="translate(-3 -2)"><path d="M-9 -10 Q-18 10 -21 28 Q-4 33 17 27 Q14 8 9 -10 Z"/></g></g>
 <path d="M-14 24 Q-2 28 12 23" fill="none" stroke="#14101f" stroke-width="2" opacity="0.7"/>
-<clipPath id="c55"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></clipPath>
+<clipPath id="c61"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></clipPath>
 <g fill="#1f1a33"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></g>
-<g clip-path="url(#c55)"><g fill="#2f2848" transform="translate(-2 -2)"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></g></g>
+<g clip-path="url(#c61)"><g fill="#2f2848" transform="translate(-2 -2)"><path d="M-14 -14 Q-16 -40 2 -40 Q18 -40 16 -20 Q14 -10 2 -9 Q-10 -8 -14 -14 Z"/></g></g>
 <path d="M0 -30 Q14 -32 14 -20 Q12 -14 2 -15 Q-2 -22 0 -30 Z" fill="#c9b8e8"/>
 <path d="M2 -15 Q8 -14 13 -18" fill="none" stroke="#9d8cc4" stroke-width="2"/>
 <ellipse cx="10" cy="-23" rx="1.7" ry="2.3" fill="#9ffcf0"/><ellipse cx="4" cy="-23" rx="1.5" ry="2.1" fill="#9ffcf0"/>
