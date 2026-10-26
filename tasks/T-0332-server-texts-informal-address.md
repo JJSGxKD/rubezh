@@ -3,8 +3,8 @@ id: T-0332
 title: Тексты сервера и бота для игрока на «ты» — ошибки, ответы оплаты, сообщения бота; тест по исходникам
 epic: E6
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
