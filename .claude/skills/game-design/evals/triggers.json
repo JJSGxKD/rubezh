@@ -1,0 +1,70 @@
+{
+  "skill": "game-design",
+  "note": "Проверка срабатывания по docs/18 §6: на should_trigger=true скилл обязан сработать, на false — нет (сработать должен соседний скилл или никакой).",
+  "queries": [
+    {
+      "query": "Придумай механику для Заставы, чтобы не ломала баланс",
+      "should_trigger": true
+    },
+    {
+      "query": "Не слишком ли сильна эволюция Жатва?",
+      "should_trigger": true
+    },
+    {
+      "query": "Экономика осколков не сломается с батл-пассом?",
+      "should_trigger": true
+    },
+    {
+      "query": "Почему игроки бросают на 3-й минуте?",
+      "should_trigger": true
+    },
+    {
+      "query": "Проверь кривую уровня аккаунта до 100",
+      "should_trigger": true
+    },
+    {
+      "query": "Спланируй плейтест пролога на тестерах",
+      "should_trigger": true
+    },
+    {
+      "query": "Есть ли доминирующая сборка с Вампиризмом и Удачей?",
+      "should_trigger": true
+    },
+    {
+      "query": "Не pay-to-win ли VIP с прибавкой к силе?",
+      "should_trigger": true
+    },
+    {
+      "query": "Как сделать пилу напряжения в бесконечном режиме?",
+      "should_trigger": true
+    },
+    {
+      "query": "Добавь врага fast_wolf в enemies.ts с hp 14",
+      "should_trigger": false
+    },
+    {
+      "query": "Обнови golden после правки waves.ts",
+      "should_trigger": false
+    },
+    {
+      "query": "Напиши текст набора самоцветов для магазина",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай экран выбора улучшения",
+      "should_trigger": false
+    },
+    {
+      "query": "Нарисуй значок навыка Стойкость",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай звук сундука",
+      "should_trigger": false
+    },
+    {
+      "query": "Заведи задачу на второй сундук в кладе",
+      "should_trigger": false
+    }
+  ]
+}
