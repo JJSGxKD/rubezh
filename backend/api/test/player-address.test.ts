@@ -62,7 +62,7 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
 /** Существительные и формы, похожие на повелительное «-ите/-йте», но им не являющиеся. */
 export const NOT_PLURAL_IMPERATIVE: readonly string[] = ["элите", "орбите", "защите", "сайте"];
 
-const YOU_PLURAL = /(?<![\p{L}\p{N}_])(?:вы|вас|вам|вами|ваш\p{L}*|\p{L}+(?:ите|йте))(?![\p{L}\p{N}_])/giu;
+const YOU_PLURAL = /(?<![\p{L}\p{N}_])(?:вы|вас|вам|вами|ваш\p{L}*|\p{L}+(?:ите|йте)(?:сь)?)(?![\p{L}\p{N}_])/giu;
 
 /** Слова обращения на «вы» в тексте; существительные из списка исключений не считаются. */
 export function pluralAddressIn(text: string): string[] {
@@ -136,6 +136,7 @@ describe("игроку — на «ты»", () => {
     it("«попробуйте» ловится, «попробуй» и существительные — нет", () => {
       expect(pluralAddressIn("Слишком часто — попробуйте позже")).toEqual(["попробуйте"]);
       expect(pluralAddressIn("Слишком часто — попробуй позже")).toEqual([]);
+      expect(pluralAddressIn("подпишитесь и нажми, постарайтесь")).toEqual(["подпишитесь", "постарайтесь"]);
       expect(pluralAddressIn("враг на орбите")).toEqual([]);
       expect(pluralAddressIn("в элите и на сайте, при защите")).toEqual([]);
     });

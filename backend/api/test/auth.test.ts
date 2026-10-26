@@ -327,7 +327,7 @@ describe("доступ по токену", () => {
 
       await expect(guard.canActivate(contextWith(`Bearer ${token}`).context)).rejects.toMatchObject({
         status: 401,
-        message: "Сессия завершена — войдите заново",
+        message: "Сессия завершена — войди заново",
       });
     });
 
