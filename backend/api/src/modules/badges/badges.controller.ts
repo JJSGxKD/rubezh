@@ -22,7 +22,7 @@ export class BadgesController {
   @Get()
   async view(@Req() request: unknown): Promise<{ data: BadgesView }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     return { data: await this.badges.view(account) };
   }
 }

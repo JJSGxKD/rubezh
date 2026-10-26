@@ -84,7 +84,7 @@ export class AuthService {
       // заново, остальное — не наш игрок.
       throw new UnauthorizedError(
         check.reason === "expired"
-          ? "Данные запуска устарели — откройте игру заново"
+          ? "Данные запуска устарели — открой игру заново"
           : "Данные запуска не прошли проверку",
       );
     }
@@ -160,12 +160,12 @@ export class AuthService {
     if (taken.status === "reused") {
       await this.refresh.revokeAll(taken.accountId);
       this.logger.warn(`повторное использование токена продления, сессии аккаунта ${taken.accountId} сброшены`);
-      throw new UnauthorizedError("Сессия сброшена — войдите заново");
+      throw new UnauthorizedError("Сессия сброшена — войди заново");
     }
-    if (taken.status !== "ok") throw new UnauthorizedError("Сессия не найдена — войдите заново");
+    if (taken.status !== "ok") throw new UnauthorizedError("Сессия не найдена — войди заново");
 
     const account = await this.accounts.byId(taken.session.accountId);
-    if (account === null) throw new UnauthorizedError("Аккаунт не найден — войдите заново");
+    if (account === null) throw new UnauthorizedError("Аккаунт не найден — войди заново");
     ensureNotBanned(account);
 
     try {

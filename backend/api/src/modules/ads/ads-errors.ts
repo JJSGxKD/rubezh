@@ -21,7 +21,7 @@ export class AdNotCompletedError extends DomainError {
 /** Награда в этом месте уже была недавно — следующая после паузы. */
 export class AdCooldownError extends DomainError {
   constructor(readonly retryAt: Date) {
-    super("ad_cooldown", "Награда за рекламу здесь уже была — загляните позже", 409);
+    super("ad_cooldown", "Награда за рекламу здесь уже была — загляни позже", 409);
   }
 }
 

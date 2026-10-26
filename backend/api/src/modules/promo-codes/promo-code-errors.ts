@@ -18,7 +18,7 @@ export class PromoCodeNotFoundError extends DomainError {
 }
 
 const REFUSAL_MESSAGES: Record<RedeemRefusal, string> = {
-  already: "Награду по этому коду вы уже получили",
+  already: "Награда по этому коду уже получена",
   scheduled: "Код ещё не начал действовать",
   paused: "Код сейчас не действует",
   expired: "Срок действия кода закончился",
