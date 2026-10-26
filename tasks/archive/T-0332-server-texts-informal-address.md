@@ -71,6 +71,7 @@ shared:
   - backend/api/src/modules/wallet/wallet.controller.ts
   - backend/api/src/modules/wheel/wheel.controller.ts
   - backend/api/test/*.test.ts
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
