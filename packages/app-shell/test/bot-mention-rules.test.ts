@@ -99,12 +99,12 @@ describe("тексты", () => {
     expect(texts["botMention.title"]).toBe("Юзернейм бота");
     expect(texts["botMention.name.title"]).toBe("Юзернейм бота в имени");
     expect(texts["botMention.bio.title"]).toBe("Юзернейм бота в bio");
-    expect(texts["botMention.name.hint"]).toBe("Впишите {bot} в имя своего профиля. Награда — за каждые игровые сутки, пока он там стоит.");
-    expect(texts["botMention.bio.hint"]).toBe("Впишите {bot} в раздел «О себе» своего профиля. Награда — за каждые игровые сутки, пока он там стоит.");
-    expect(texts["botMention.auto"]).toBe("Мы сами проверяем раз в игровые сутки — награда придёт без вашего участия.");
+    expect(texts["botMention.name.hint"]).toBe("Впиши {bot} в имя своего профиля. Награда — за каждые игровые сутки, пока он там стоит.");
+    expect(texts["botMention.bio.hint"]).toBe("Впиши {bot} в раздел «О себе» своего профиля. Награда — за каждые игровые сутки, пока он там стоит.");
+    expect(texts["botMention.auto"]).toBe("Мы сами проверяем раз в игровые сутки — награда придёт без твоего участия.");
     expect(texts["botMention.streak"]).toBe("Серия: {n} {n, plural, one {день} few {дня} many {дней} other {дня}}");
     expect(texts["botMention.best"]).toBe("Лучшая серия: {n}");
     expect(texts["botMention.outcome.present"]).toBe("Нашли! Получено: {what}");
-    expect(texts["botMention.status.hidden"]).toBe("Не видим ваше bio: оно пустое или закрыто настройками приватности.");
+    expect(texts["botMention.status.hidden"]).toBe("Не видим твоё bio: оно пустое или закрыто настройками приватности.");
   });
 });
