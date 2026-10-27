@@ -3,7 +3,7 @@ id: T-0301
 title: Снимок контента ContentSnapshot — весь контент одним объектом со схемой, проверки контента чистой функцией, движок и бот принимают снимок
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -11,9 +11,13 @@ depends_on: []
 zones:
   - packages/core-game/src/content/snapshot.ts
   - packages/core-game/src/content/snapshot-schema.ts
-  - packages/core-game/src/content/problems.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/MainScene.ts
+  - packages/core-game/src/engine/run-engine.ts
   - packages/core-game/test/content-snapshot.test.ts
   - scripts/content/export-snapshot.ts
+  - scripts/content/run-export.mjs
 shared:
   - packages/core-game/src/content/hash.ts
   - packages/core-game/src/index.ts
@@ -22,6 +26,8 @@ shared:
   - packages/core-game/src/game/balance/simulate.ts
   - packages/core-game/test/content.test.ts
   - package.json
+  - packages/core-game/package.json
+  - pnpm-lock.yaml
   - docs/19-content-admin.md
   - docs/30-configuration-map.md
 runner: any
@@ -34,7 +40,7 @@ batch: 7
 
 # T-0301. Снимок контента ContentSnapshot — весь контент одним объектом со схемой, проверки контента чистой функцией, движок и бот принимают снимок
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json)](../README.md#значки-статуса)
 
 ## Зачем
 
