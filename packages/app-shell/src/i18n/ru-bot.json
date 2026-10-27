@@ -2,7 +2,7 @@
   "settings.bot": "Сообщения в боте",
   "settings.bot.friendRequest": "Заявки в друзья",
   "settings.bot.friendGift": "Подарки друзей",
-  "settings.bot.friendGift.hint": "Каждый день от каждого друга — поэтому выключено, пока не включите",
+  "settings.bot.friendGift.hint": "Каждый день от каждого друга — поэтому выключено, пока не включишь",
   "settings.bot.teamMessage": "Сообщения команды",
   "settings.bot.allow": "Разрешить боту писать",
   "settings.bot.allow.hint": "Без разрешения бот не сможет прислать ничего из списка ниже",

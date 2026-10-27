@@ -71,7 +71,7 @@ export interface WorldSnapshot {
   /** состояние сундуков; записи для сцены (`founds`, `openings`) не входят */
   chest: { rng: number; dropped: number; opened: number };
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
-  cordon?: CordonState;
+  cordon?: Omit<CordonState, "ended">;
   spawner: unknown;
 }
 
@@ -96,7 +96,8 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     gems: encodeRecord(world.gems, world.gems.count),
     pickups: encodeRecord(world.pickups, world.pickups.count),
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
-    cordon: { ...world.cordon },
+    // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
+    cordon: capturedCordon(world.cordon),
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -143,6 +144,21 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.events.written = 0;
 }
 
+function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
+  return {
+    active: state.active,
+    centerX: state.centerX,
+    centerY: state.centerY,
+    radius: state.radius,
+    minRadius: state.minRadius,
+    shrinkPerSec: state.shrinkPerSec,
+    timeLeftSec: state.timeLeftSec,
+    ringsStarted: state.ringsStarted,
+    startedAtSec: state.startedAtSec,
+    guards: state.guards,
+  };
+}
+
 /**
  * Кольцо стражей. Отсутствие поля — снимок до кольца: версию формата не
  * поднимали, старый снимок читается, и кольца в нём нет.
@@ -161,6 +177,10 @@ function restoreCordon(world: World, input: unknown): void {
     minRadius: asNumber(raw.minRadius, "cordon.minRadius"),
     shrinkPerSec: asNumber(raw.shrinkPerSec, "cordon.shrinkPerSec"),
     timeLeftSec: asNumber(raw.timeLeftSec, "cordon.timeLeftSec"),
+    ringsStarted: raw.ringsStarted === undefined ? 0 : asNumber(raw.ringsStarted, "cordon.ringsStarted"),
+    startedAtSec: raw.startedAtSec === undefined ? 0 : asNumber(raw.startedAtSec, "cordon.startedAtSec"),
+    guards: raw.guards === undefined ? 0 : asNumber(raw.guards, "cordon.guards"),
+    ended: [],
   });
 }
 

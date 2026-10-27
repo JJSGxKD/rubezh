@@ -48,7 +48,7 @@ export class SeasonsController {
   }
 
   private async limit(rule: RateLimit, accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }
 

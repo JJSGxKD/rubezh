@@ -115,8 +115,12 @@
 
 Ещё 24.10.2026: ракурсы — **враги сбоку с зеркалом, герой в 4 стороны**;
 логотип v2 — сразу, для мира — словесный знак **RUBEZH** латиницей с руной
-(Р146); скиллы — два своих, [`ui-design`](../../.claude/skills/ui-design/SKILL.md) и
-[`game-art`](../../.claude/skills/game-art/SKILL.md) (Р148); предложения
+(Р146); скиллы — свои: [`ui-design`](../../.claude/skills/ui-design/SKILL.md),
+[`game-art`](../../.claude/skills/game-art/SKILL.md) (Р148), с 25.10.2026 ещё
+[`game-sound`](../../.claude/skills/game-sound/SKILL.md),
+[`game-design`](../../.claude/skills/game-design/SKILL.md) и
+[`growth`](../../.claude/skills/growth/SKILL.md) со справками из внешних
+источников (Р163); предложения
 `meta-v2.md` — Р149–Р157.
 
 ## Что не сделано и почему

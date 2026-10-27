@@ -44,7 +44,7 @@ describe("разметка", () => {
     expect(html).toContain("Открыть в Telegram");
     expect(html).toContain("Открыть в браузере");
     expect(html).toContain("Открываем Telegram…");
-    expect(html).toContain("Не открылось? Нажмите кнопку");
+    expect(html).toContain("Не открылось? Нажми кнопку");
   });
 
   it("единственный исполняемый скрипт — OPEN_SCRIPT", () => {

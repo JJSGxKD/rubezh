@@ -42,7 +42,7 @@ export class RunsController {
   @Get("leaderboard")
   async leaderboard(@Req() request: unknown, @Query("difficulty") difficulty?: string): Promise<{ data: LeaderboardView }> {
     const { accountId } = accountOf(request);
-    await this.limit(RUNS_LIMITS.leaderboard, accountId, "Слишком часто — попробуйте позже");
+    await this.limit(RUNS_LIMITS.leaderboard, accountId, "Слишком часто — попробуй позже");
     const parsed = parse(() => difficultyQuerySchema.parse(difficulty), "Неизвестная сложность");
     return { data: await this.view.leaderboardFor(accountId, parsed) };
   }
@@ -50,7 +50,7 @@ export class RunsController {
   @Get("me")
   async me(@Req() request: unknown): Promise<{ data: ProfileView }> {
     const { accountId } = accountOf(request);
-    await this.limit(RUNS_LIMITS.profile, accountId, "Слишком часто — попробуйте позже");
+    await this.limit(RUNS_LIMITS.profile, accountId, "Слишком часто — попробуй позже");
     return { data: await this.view.profile(accountId) };
   }
 
@@ -67,7 +67,7 @@ export class RunsController {
   }
 
   /** Лимит — по аккаунту: за адресом мобильного оператора стоят сотни игроков. */
-  private async limit(rule: RateLimit, accountId: string, message = "Слишком много забегов — подождите"): Promise<void> {
+  private async limit(rule: RateLimit, accountId: string, message = "Слишком много забегов — подожди"): Promise<void> {
     if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError(message);
   }
 }

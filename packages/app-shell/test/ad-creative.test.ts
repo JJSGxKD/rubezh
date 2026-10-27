@@ -52,6 +52,6 @@ describe("рекламный блок", () => {
     // Модуль блока уже подгрузил свой словарь — ключ на месте и подставляет сеть.
     expect(hasTranslation("ads.label")).toBe(true);
     expect(t("ads.label", { advertiser: "Taddy" })).toBe("Реклама · Taddy");
-    expect(t("ads.rewardIn", { seconds: 7 })).toBe("Досмотрите — награда через 7 с");
+    expect(t("ads.rewardIn", { seconds: 7 })).toBe("Досмотри — награда через 7 с");
   });
 });

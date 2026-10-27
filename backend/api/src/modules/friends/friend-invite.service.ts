@@ -50,13 +50,13 @@ export class FriendInviteService {
 
   async preparedMessage(actor: AccessTokenClaims): Promise<PreparedInvite> {
     const preparer = this.preparers.for(actor.platform);
-    if (preparer === null) throw new InviteUnavailableError("На этой площадке так позвать нельзя — скопируйте ссылку");
+    if (preparer === null) throw new InviteUnavailableError("На этой площадке так позвать нельзя — скопируй ссылку");
     const { startParam } = await this.friends.link(actor.accountId);
     const url = this.links.launch(actor.platform, startParam);
-    if (url === null) throw new InviteUnavailableError("Ссылка на игру ещё не готова — попробуйте через минуту");
+    if (url === null) throw new InviteUnavailableError("Ссылка на игру ещё не готова — попробуй через минуту");
 
     const prepared = await this.prepare(preparer, actor, url);
-    if (prepared === null) throw new InviteUnavailableError("Для этого аккаунта сообщение не подготовить — скопируйте ссылку");
+    if (prepared === null) throw new InviteUnavailableError("Для этого аккаунта сообщение не подготовить — скопируй ссылку");
     return { messageId: prepared.id, expiresAt: prepared.expiresAt?.toISOString() ?? null };
   }
 
@@ -66,7 +66,7 @@ export class FriendInviteService {
       return await withTimeout(preparer.prepare(actor.platformUserId, inviteMessage(url)), PREPARE_TIMEOUT_MS, "подготовка приглашения");
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "friends", event: "invite_prepare_failed", platform: actor.platform, reason: error instanceof Error ? error.message : "unknown" }));
-      throw new InviteUnavailableError("Не удалось подготовить сообщение — попробуйте ещё раз");
+      throw new InviteUnavailableError("Не удалось подготовить сообщение — попробуй ещё раз");
     }
   }
 }

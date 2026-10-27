@@ -12,7 +12,6 @@ zones:
   - packages/app-shell/src/state/difficulty.ts
   - packages/app-shell/src/state/meta.ts
   - packages/app-shell/src/state/run.ts
-  - packages/app-shell/src/app/App.tsx
   - packages/app-shell/src/screens/pre-run.tsx
   - packages/app-shell/src/screens/run/RunScreen.tsx
   - packages/app-shell/src/screens/run/death-parts.tsx
@@ -44,17 +43,18 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - packages/app-shell/src/app/App.tsx
 runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0190. Одна сложность у игрока — без выбора, первый забег обучающий
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json)](README.md#значки-статуса) [![T-0101](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0101.json&label=T-0101)](archive/T-0101-card-reroll-skip-banish.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0103](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0103.json&label=T-0103)](archive/T-0103-weapon-evolution-recipes-in-game.md) [![T-0107](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0107.json&label=T-0107)](T-0107-achievements-showcase-shell.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](T-0111-weekly-season-screen.md) [![T-0116](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json&label=T-0116)](archive/T-0116-freeze-pickup.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md) [![T-0166](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0166.json&label=T-0166)](archive/T-0166-narrow-screen-leftovers.md) [![T-0182](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json&label=T-0182)](T-0182-cordon-ring-analytics.md) [![T-0185](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0185.json&label=T-0185)](archive/T-0185-modal-layer-above-chrome.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json)](README.md#значки-статуса) [![T-0101](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0101.json&label=T-0101)](archive/T-0101-card-reroll-skip-banish.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0103](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0103.json&label=T-0103)](archive/T-0103-weapon-evolution-recipes-in-game.md) [![T-0107](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0107.json&label=T-0107)](T-0107-achievements-showcase-shell.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](T-0111-weekly-season-screen.md) [![T-0116](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json&label=T-0116)](archive/T-0116-freeze-pickup.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md) [![T-0166](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0166.json&label=T-0166)](archive/T-0166-narrow-screen-leftovers.md) [![T-0182](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json&label=T-0182)](archive/T-0182-cordon-ring-analytics.md) [![T-0185](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0185.json&label=T-0185)](archive/T-0185-modal-layer-above-chrome.md)
 
 ## Зачем
 

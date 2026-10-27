@@ -373,6 +373,11 @@ export interface RunEvents {
    * (аптечка, опыт).
    */
   chestOpened: { index: number; size: ChestSize; rewards: ChestReward[]; fallbacks: number; elapsedSec: number };
+  /**
+   * Кольцо стражей закончилось (аналитика, `ring_ended`): `outcome` — прорвался,
+   * выстоял до конца времени или погиб в кольце; сообщение приходит один раз на кольцо.
+   */
+  ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
   paused: { reason: RunPauseReason; elapsedSec: number };
   resumed: { elapsedSec: number };
   /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */

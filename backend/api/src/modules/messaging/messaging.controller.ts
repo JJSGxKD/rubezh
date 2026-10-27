@@ -23,7 +23,7 @@ export class MessagingController {
   @Get()
   async get(@Req() request: unknown): Promise<{ data: { canMessage: boolean } }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     const state = await this.messaging.state(account.accountId);
     return { data: { canMessage: state?.canMessage ?? false } };
   }

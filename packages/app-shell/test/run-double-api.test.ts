@@ -77,7 +77,7 @@ describe("удвоение за рекламу", () => {
     expect(api.calls).toHaveLength(0);
   });
 
-  it("сервер не удвоил: уже удвоено, окно прошло, кулдаун — экран перечитывается; прочее — «попробуйте ещё раз»", async () => {
+  it("сервер не удвоил: уже удвоено, окно прошло, кулдаун — экран перечитывается; прочее — «попробуй ещё раз»", async () => {
     const session = watched({ kind: "watched", sessionId: "AAAAAAAAAAAAAAAA", source: "ad" });
     for (const code of [RUN_ALREADY_DOUBLED, RUN_DOUBLE_UNAVAILABLE, RUN_DOUBLE_COOLDOWN]) {
       expect(await doubleForAd("run-1", session, fakeApi({ ok: false, failure: "rejected", code }), () => undefined)).toEqual({ kind: "stale", code });

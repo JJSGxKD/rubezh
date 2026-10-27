@@ -46,6 +46,6 @@ export class WheelController {
   }
 
   private async limit(accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }

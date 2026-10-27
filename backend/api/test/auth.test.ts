@@ -8,7 +8,7 @@ import { AuthController } from "../src/modules/auth/auth.controller.js";
 import { AuthGuard, accountOf } from "../src/modules/auth/auth.guard.js";
 import { AuthHooks } from "../src/modules/auth/auth-hooks.js";
 import { AuthService, hashToken } from "../src/modules/auth/auth.service.js";
-import { parseDevUser } from "../src/modules/auth/dev-login.js";
+import { isDeveloperOwner, parseDevUser } from "../src/modules/auth/dev-login.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
 import { launchFor, signInitData } from "./helpers/init-data.js";
 import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
@@ -240,6 +240,19 @@ describe("вход разработчика без Telegram", () => {
     expect(parseDevUser(`dev-1:${"я".repeat(100)}`)?.displayName).toHaveLength(64);
   });
 
+  it("dev-player-<id> — тот же формат входа: принимается, но игроком без ролей", async () => {
+    expect(parseDevUser("dev-player-alex:Игрок")).toEqual({ platformUserId: "dev-player-alex", displayName: "Игрок" });
+    expect(isDeveloperOwner({ platform: "telegram", platformUserId: "dev-alex" })).toBe(true);
+    expect(isDeveloperOwner({ platform: "telegram", platformUserId: "dev-player-alex" })).toBe(false);
+    // Игрок Telegram и чужая площадка владельцами не бывают.
+    expect(isDeveloperOwner({ platform: "telegram", platformUserId: "555" })).toBe(false);
+    expect(isDeveloperOwner({ platform: "vk", platformUserId: "dev-alex" })).toBe(false);
+
+    const service = new AuthService(config(DEV), new MemoryAccountRepository(), new MemoryRefreshStore(), new AuthHooks(), launchVerifiersFor(config(DEV)));
+    const result = await service.loginAsDeveloper("dev-player-alex:Игрок");
+    expect(result.account).toMatchObject({ platformUserId: "dev-player-alex", displayName: "Игрок", created: true });
+  });
+
   it("не принимает то, что может совпасть с игроком или сломать ключ", () => {
     // Числовой ID — это настоящий игрок Telegram: войти за него без подписи
     // нельзя даже на машине разработчика.
@@ -327,7 +340,7 @@ describe("доступ по токену", () => {
 
       await expect(guard.canActivate(contextWith(`Bearer ${token}`).context)).rejects.toMatchObject({
         status: 401,
-        message: "Сессия завершена — войдите заново",
+        message: "Сессия завершена — войди заново",
       });
     });
 

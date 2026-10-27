@@ -23,6 +23,17 @@ export function visibleTasks(view: BotMentionView): BotMentionTask[] {
   return shown;
 }
 
+/**
+ * Серия для свёрнутой строки; `null` — блок остаётся развёрнутым. Сворачиваем,
+ * когда награда за сутки получена у каждого показываемого вида; серия меньше 1
+ * при полученной награде — рассогласование ответа, тогда блок показывается как обычно.
+ */
+export function collapsedStreak(shown: readonly BotMentionTask[]): number | null {
+  if (shown.length === 0 || !shown.every((task) => task.rewardedToday)) return null;
+  const streak = Math.max(...shown.map((task) => task.streak));
+  return streak >= 1 ? streak : null;
+}
+
 /** Строка состояния под описанием; `null` — не начато или проверок не было. */
 export function statusKey(task: BotMentionTask): string | null {
   if (!task.started) return null;

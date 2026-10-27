@@ -18,7 +18,9 @@ import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
-import { advanceRun, checksumWorld, createCordonRun } from "./helpers/scripted-run";
+import { takeCordonEvents } from "../src/game/sim/cordon";
+import { damageEnemy } from "../src/game/sim/combat";
+import { advanceRun, aliveGuards, checksumWorld, createCordonRun } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
 // строку и прочитанный обратно, обязан дать ровно тот же забег, что шёл бы без
@@ -335,6 +337,55 @@ describe("снимок посреди кольца стражей", () => {
     const resumed = createCordonRun({ seed: 3, timeline: [{ fromSec: 0, spawns: [], events: [] }] });
     expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
     expect(resumed.world.cordon.active).toBe(false);
+  });
+
+  it("кольцо, закончившееся после восстановления, несёт верные index, guards и lifeSec", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 6);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as unknown;
+    const resumed = createCordonRun({ seed: 21 });
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.cordon.guards).toBe(40);
+    expect(takeCordonEvents(resumed.world, 0).ended).toEqual([]);
+
+    for (const run of [original, resumed]) {
+      advanceRun(run, 4);
+      for (const index of aliveGuards(run.world)) damageEnemy(run.world, index, 1e9, 0);
+      advanceRun(run, 1);
+    }
+    const [ended, ...rest] = takeCordonEvents(resumed.world, 0).ended;
+    expect(rest).toEqual([]);
+    expect(ended).toMatchObject({ index: 0, outcome: "broken", guards: 40, killed: 40 });
+    expect(ended).toEqual(takeCordonEvents(original.world, 0).ended[0]);
+  });
+
+  it("журнал закончившихся колец в снимок не входит и после восстановления пуст", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 3);
+    for (const index of aliveGuards(original.world)) damageEnemy(original.world, index, 1e9, 0);
+    advanceRun(original, 1);
+    expect(takeCordonEvents(original.world, 0).ended).toHaveLength(1);
+
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    expect(saved.cordon).not.toHaveProperty("ended");
+    const resumed = createCordonRun({ seed: 21 });
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(takeCordonEvents(resumed.world, 0).ended).toEqual([]);
+    expect(resumed.world.cordon.ringsStarted).toBe(original.world.cordon.ringsStarted);
+  });
+
+  it("снимок без новых полей кольца читается: счётчики равны нулю", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 4);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    delete saved.cordon.ringsStarted;
+    delete saved.cordon.startedAtSec;
+    delete saved.cordon.guards;
+
+    const resumed = createCordonRun({ seed: 21 });
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.cordon).toMatchObject({ ringsStarted: 0, startedAtSec: 0, guards: 0, active: true });
   });
 
   it("битое поле cordon — ошибка снимка, а не NaN в мире", () => {

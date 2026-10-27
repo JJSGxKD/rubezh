@@ -45,6 +45,6 @@ export class RunAdContinueController {
   }
 
   private async limit(accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(RUNS_LIMITS.adContinue, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(RUNS_LIMITS.adContinue, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }

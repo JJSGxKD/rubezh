@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0111. Недельный сезон — экран рейтинга: вкладки «Неделя», «Всё время», «Друзья», награды и таймер

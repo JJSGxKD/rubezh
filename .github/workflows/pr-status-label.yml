@@ -1,0 +1,47 @@
+# Метка статуса задачи после ревью (Р172, docs/09-ci-cd.md §8.1): «Request
+# changes» на PR ветки task/T-NNNN переводит его в «доработку», снимая «на
+# ревью» и «в работе». Остальные переходы метки делает шаг PR checks
+# (pr-checks.yml) и сами люди.
+#
+# Логика — в scripts/release/pr-status-label.mjs (тесты —
+# scripts/test/pr-status-label.test.ts). Скрипты берутся с базовой ветки PR, а
+# не из его кода: у джоба права на запись в PR.
+
+name: PR status label
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-status-label-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  status:
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'task/T-') && github.event.pull_request.head.repo.full_name == github.repository && github.event.review.state == 'changes_requested' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - run: node scripts/release/pr-status-label.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          REVIEW_STATE: ${{ github.event.review.state }}
