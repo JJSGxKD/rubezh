@@ -3,7 +3,7 @@ id: T-0151
 title: Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -30,7 +30,7 @@ batch: 3
 
 # T-0151. Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](archive/T-0150-display-name-on-login.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](../README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](T-0150-display-name-on-login.md)
 
 ## Зачем
 
