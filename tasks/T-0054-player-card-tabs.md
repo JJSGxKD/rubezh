@@ -3,8 +3,8 @@ id: T-0054
 title: Карточка игрока вкладками — шапка с действиями, «Сводка» на один взгляд
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0049, T-0050, T-0038]
 zones:
