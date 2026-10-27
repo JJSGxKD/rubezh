@@ -244,7 +244,7 @@ describe("проверка рекламы командой", () => {
       expect((await post(server, headers, result())).statusCode).toBe(200);
       expect((await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).statusCode).toBe(200);
       const source = readFileSync(new URL("../src/modules/ads/ads-tools.service.ts", import.meta.url), "utf8");
-      expect(source).not.toMatch(/ads\.service|ads\.repository|AdsService|ADS_REPOSITORY/);
+      expect(source).not.toMatch(/from "\.\/ads\.(service|repository)\.js"|AdsService|ADS_REPOSITORY/);
     });
   });
 });

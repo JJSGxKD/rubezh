@@ -319,6 +319,20 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Проверка рекламы командой (Р165, tasks/T-0333), не игровой показ: в воронку
+  // рекламы не входит. `live` — боевой показ или тестовый, `ms` — от нажатия до
+  // исхода в миллисекундах, `reason` — код отказа, только при `failed`.
+  ad_tested: {
+    version: 1,
+    payload: payload({
+      network: id,
+      format: z.enum(["rewarded", "interstitial"]),
+      live: z.boolean(),
+      outcome: z.enum(["completed", "closed", "failed"]),
+      reason: id.optional(),
+      ms: seconds,
+    }),
+  },
   // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
   // `downtimeSec` — сколько прошло между потерей и возвращением.
   connection_lost: { version: 1, payload: payload({}) },
