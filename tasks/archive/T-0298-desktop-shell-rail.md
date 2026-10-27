@@ -23,6 +23,8 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - tasks/T-0299-desktop-home.md
+  - tasks/T-0300-desktop-arsenal.md
 runner: any
 executor: sonnet-5.5
 effort: high
