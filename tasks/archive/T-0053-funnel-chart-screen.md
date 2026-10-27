@@ -3,8 +3,8 @@ id: T-0053
 title: Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0049]
 zones:
@@ -17,6 +17,8 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - apps/admin/src/ui/help.ts
+  - tasks/T-0068-partner-funnel.md
+  - tasks/T-0072-telegram-affiliate-mark.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -27,7 +29,7 @@ batch: 3
 
 # T-0053. Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](../README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](T-0049-admin-shell-responsive.md)
 
 ## Зачем
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Bot } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp } from "lucide-react";
 import { Button, Card, SectionTitle } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/tasks";
@@ -8,17 +8,20 @@ import { createBotMentionApi, isKnownOutcome, type BotMentionTask, type BotMenti
 import { track } from "../../state/shell";
 import { tasksAvailable } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
-import { buttonKey, outcomeKey, statusKey, visibleTasks } from "./bot-mention-rules";
+import { buttonKey, collapsedStreak, outcomeKey, statusKey, visibleTasks } from "./bot-mention-rules";
 import { RewardChips, rewardText } from "./task-reward";
 
 /**
- * Задания «юзернейм бота в имени и в bio» — группа внизу вкладки «Ежедневные»
- * (docs/35-stage4-plan.md Р110, tasks/T-0160). Проверку, серию и награду ведёт
+ * Задания «юзернейм бота в имени и в bio» — блок над вкладками экрана «Задания»
+ * (docs/35-stage4-plan.md Р110, Р167, tasks/T-0160, T-0337). Проверку, серию и награду ведёт
  * сервер: клиент показывает ответ и присылает один вид задания.
  *
  * Блок не мешает экрану: пока грузится, а также при ошибке, без входа, на
  * площадке без заданий и при пустом списке он ничего не рисует. Анимаций нет,
- * поэтому нового переключателя настроек блок не требует.
+ * поэтому нового переключателя настроек блок не требует. Получив награду за сутки
+ * у всех видов, блок сворачивается в строку «Серия N дней · завтра снова»;
+ * касание разворачивает, а нажатие кнопки в карточке держит блок развёрнутым до
+ * закрытия экрана — иначе сообщение «Нашли!» исчезло бы непрочитанным.
  */
 
 const api = createBotMentionApi();
@@ -29,6 +32,7 @@ const KIND_HINT: Readonly<Record<string, string>> = { name: "botMention.name.hin
 export function BotMentionRows(): ReactNode {
   const [view, setView] = useState<BotMentionView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<Readonly<Record<string, string>>>({});
   const alive = useRef(true);
   // Замок на нажатие: состояние обновится только после отрисовки, а второе нажатие может прийти раньше.
@@ -56,6 +60,7 @@ export function BotMentionRows(): ReactNode {
   const press = async (task: BotMentionTask): Promise<void> => {
     if (pending.current) return;
     pending.current = true;
+    setExpanded(true);
     setBusy(task.kind);
     const wasStarted = task.started;
     const response = await api.check(task.kind);
@@ -80,12 +85,62 @@ export function BotMentionRows(): ReactNode {
     void loadBadges();
   };
 
+  return <BotMentionBlock botUsername={bot} tasks={shown} expanded={expanded} busyKind={busy} messages={messages} onToggle={() => setExpanded((value) => !value)} onPress={(task) => void press(task)} />;
+}
+
+export interface BotMentionBlockProps {
+  botUsername: string | null;
+  /** показываемые виды (`visibleTasks`) */
+  tasks: readonly BotMentionTask[];
+  /** игрок развернул блок или нажал кнопку в карточке */
+  expanded: boolean;
+  busyKind: string | null;
+  messages: Readonly<Record<string, string>>;
+  onToggle: () => void;
+  onPress: (task: BotMentionTask) => void;
+}
+
+/** Строка-кнопка блока: свёрнутый вид (серия) или заголовок развёрнутого, который можно свернуть. */
+function BlockToggle(props: { open: boolean; children: ReactNode; onToggle: () => void }): ReactNode {
+  const Chevron = props.open ? ChevronUp : ChevronDown;
   return (
-    <section aria-label={t("botMention.title")}>
-      <SectionTitle>{t("botMention.title")}</SectionTitle>
-      <div className="grid gap-2">
-        {shown.map((task) => (
-          <BotMentionCard key={task.kind} botUsername={bot} task={task} loading={busy === task.kind} message={messages[task.kind] ?? null} onPress={() => void press(task)} />
+    <button type="button" aria-expanded={props.open} onClick={props.onToggle} className="flex min-h-11 w-full items-center gap-3 rounded-md bg-surface-raised px-3 text-left">
+      <Bot size={16} aria-hidden="true" className="shrink-0 text-text-muted" />
+      <span className="min-w-0 flex-1 truncate font-display text-sm font-semibold text-text">{props.children}</span>
+      <Chevron size={16} aria-hidden="true" className="shrink-0 text-text-muted" />
+      <span className="sr-only">{props.open ? t("botMention.collapse") : t("botMention.expand")}</span>
+    </button>
+  );
+}
+
+/** Блок без состояния: его рендерят и экран, и тесты. Нет юзернейма бота или видов — ничего не рисует. */
+export function BotMentionBlock(props: BotMentionBlockProps): ReactNode {
+  const { botUsername, tasks } = props;
+  if (botUsername === null || tasks.length === 0) return null;
+  const streak = collapsedStreak(tasks);
+
+  if (streak !== null && !props.expanded) {
+    return (
+      <section aria-label={t("botMention.title")} className="mt-2">
+        <BlockToggle open={false} onToggle={props.onToggle}>
+          {t("botMention.collapsed", { n: streak })}
+        </BlockToggle>
+      </section>
+    );
+  }
+
+  return (
+    <section aria-label={t("botMention.title")} className="mt-2">
+      {streak === null ? (
+        <SectionTitle>{t("botMention.title")}</SectionTitle>
+      ) : (
+        <BlockToggle open onToggle={props.onToggle}>
+          {t("botMention.title")}
+        </BlockToggle>
+      )}
+      <div className="mt-2 grid gap-2">
+        {tasks.map((task) => (
+          <BotMentionCard key={task.kind} botUsername={botUsername} task={task} loading={props.busyKind === task.kind} message={props.messages[task.kind] ?? null} onPress={() => props.onPress(task)} />
         ))}
       </div>
     </section>

@@ -1,3 +1,4 @@
+import { PERIOD_TITLES, SIZE_POINTS } from "./contribution.mjs";
 import { BADGE_CACHE_SECONDS, accountStreams, boardCounters, flowPrompt, knownAccounts, moscowDay, streamLabel, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
 
@@ -7,11 +8,9 @@ import { REPOSITORY } from "./task-file.mjs";
  * снаружи, тесты — scripts/test/tasks-board-page.test.ts.
  */
 
-/** Очки — сумма размеров сделанных задач. Наглядность, а не формула выплат: доли участников — docs/11-revenue-split.md. */
-export const SIZE_POINTS = { S: 1, M: 2 };
+export { SIZE_POINTS };
 
 const UNKNOWN_OWNER = "не указан";
-const NO_PR_LABEL = "без PR задачи";
 const GITHUB = `https://github.com/${REPOSITORY}`;
 const TASKS_URL = `${GITHUB}/blob/dev/tasks`;
 
@@ -49,43 +48,6 @@ export function taskCredits(doneEntries, mergedPrs) {
     });
   }
   return credits;
-}
-
-function byScore(label) {
-  return (a, b) => b.points - a.points || b.tasks - a.tasks || compareLabels(a[label], b[label]);
-}
-
-/** Люди: без автора PR — всегда последними, как бы много очков у них ни было; остальные — по очкам. */
-function byPerson(a, b) {
-  if ((a.login === null) !== (b.login === null)) return a.login === null ? 1 : -1;
-  return byScore("login")(a, b);
-}
-
-/** По алфавиту, пустое (`null`) — в конец. */
-function compareLabels(a, b) {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a.localeCompare(b);
-}
-
-/** Люди по убыванию очков, затем задач, затем логина (`null` — без автора — последним), внутри — исполнители по `owner`. */
-export function contributions(credits) {
-  const people = new Map();
-  for (const credit of credits.values()) {
-    const person = people.get(credit.login) ?? { login: credit.login, tasks: 0, points: 0, lastMergedAt: null, byOwner: new Map() };
-    person.tasks += 1;
-    person.points += credit.points;
-    if (credit.mergedAt !== null && (person.lastMergedAt === null || credit.mergedAt > person.lastMergedAt)) person.lastMergedAt = credit.mergedAt;
-    const executor = person.byOwner.get(credit.owner) ?? { owner: credit.owner, tasks: 0, points: 0 };
-    executor.tasks += 1;
-    executor.points += credit.points;
-    person.byOwner.set(credit.owner, executor);
-    people.set(credit.login, person);
-  }
-  return [...people.values()]
-    .map(({ byOwner, ...person }) => ({ ...person, executors: [...byOwner.values()].sort(byScore("owner")) }))
-    .sort(byPerson);
 }
 
 const pad = (value) => String(value).padStart(2, "0");
@@ -248,29 +210,39 @@ function freeSection(board) {
   return `## Можно брать — ${String(total)}\n\n${parts.join("\n\n")}`;
 }
 
-function contributionSection(credits, people, githubAvailable) {
-  const intro = "Очки — сумма размеров сделанных задач: S — 1, M — 2. Это наглядность, а не формула выплат: доли участников — `docs/11-revenue-split.md`.";
-  if (!githubAvailable) return `## Вклад\n\n${intro}\n\nНет данных GitHub: список влитых PR не получен.`;
-  if (people.length === 0) return `## Вклад\n\n${intro}\n\nПусто.`;
-  const person = (item) => (item.login === null ? NO_PR_LABEL : `[@${item.login}](https://github.com/${item.login})`);
-  const plain = (item) => (item.login === null ? NO_PR_LABEL : `@${item.login}`);
-  const totals = table(
-    ["GitHub", "Задач", "Очков", "Последний мердж"],
-    people.map((item) => [person(item), String(item.tasks), String(item.points), item.lastMergedAt === null ? "—" : formatDate(item.lastMergedAt)]),
+/** Таблица одного периода «Вклада»; пустой — «Пусто.». */
+function contributionTable(rows) {
+  if (rows.length === 0) return "Пусто.";
+  return table(
+    ["Кто", "Задачи", "Очки", "Доработки", "Ревью и ответы", "Спецификации", "PR тимлидов"],
+    rows.map((row) => [row.who, String(row.tasks), String(row.points), String(row.rework), String(row.reviews), String(row.specs), String(row.leadPrs)]),
   );
-  const executors = table(
-    ["GitHub", "Исполнитель", "Задач", "Очков"],
-    people.flatMap((item) => item.executors.map((executor) => [plain(item), executor.owner, String(executor.tasks), String(executor.points)])),
-  );
-  return `## Вклад\n\n${intro}\n\n${totals}\n\n${executors}`;
+}
+
+/** Периоды, открытые на странице; остальные свёрнуты в `<details>`. */
+const OPEN_PERIODS = new Set(["today", "week"]);
+
+/**
+ * «Вклад»: по таблице на период — «Сегодня» и «Неделя» открыты, остальные в `<details>`
+ * (tasks/T-0208). `rows` — результат `contributionRows` или `null` (тогда все периоды пусты).
+ */
+function contributionSection(rows, githubAvailable) {
+  const intro = "Наглядность, а не формула выплат: доли участников проекта назначает владелец (`docs/11-revenue-split.md` §3). Время — МСК.";
+  const note = githubAvailable ? "" : "\n\nНет данных GitHub: список влитых PR не получен — показаны только спецификации.";
+  const blocks = ["today", "yesterday", "week", "month", "all"].map((key) => {
+    const title = PERIOD_TITLES[key];
+    const body = contributionTable(rows?.[key] ?? []);
+    return OPEN_PERIODS.has(key) ? `### ${title}\n\n${body}` : `<details>\n<summary>${title}</summary>\n\n${body}\n\n</details>`;
+  });
+  return `## Вклад\n\n${intro}${note}\n\n${blocks.join("\n\n")}`;
 }
 
 /**
  * Текст страницы доски. `board` — результат `classify`; `owners` — `Map<id, owner>` задач «в работе»
- * и «на ревью»; `credits` и `people` — из `taskCredits` и `contributions`; `now` — `Date`.
+ * и «на ревью»; `credits` — из `taskCredits`, `contribution` — из `contributionRows`; `now` — `Date`.
  * Даты — по Москве; `mergedPrs` — влитые PR задач для счётчика «влито сегодня». Только логины GitHub: ни почт, ни юзернеймов Telegram, ни имён.
  */
-export function renderBoardPage({ board, owners, credits, people, githubAvailable, mergedPrs = [], now }) {
+export function renderBoardPage({ board, owners, credits, contribution = null, githubAvailable, mergedPrs = [], now }) {
   const done = [...board.done].sort((a, b) => b.task.id.localeCompare(a.task.id));
   const sections = [
     ownerSection(board),
@@ -292,7 +264,7 @@ export function renderBoardPage({ board, owners, credits, people, githubAvailabl
         return [taskLink(task), credit?.login ? `@${credit.login} · ${owner}` : owner, credit?.pr ? prLink(credit.pr) : "—"];
       }),
     ),
-    contributionSection(credits, people, githubAvailable),
+    contributionSection(contribution, githubAvailable),
   ];
   const counters = countersLine(boardCounters(board, mergedPrs, now));
   const intro = `Обновлено ${formatMoscow(now)} МСК. Страницу пересчитывает workflow \`task-board.yml\` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](${TASKS_URL}/README.md#как-взять-задачу).`;
