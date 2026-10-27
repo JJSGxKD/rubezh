@@ -28,6 +28,7 @@ shared:
   - package.json
   - packages/core-game/package.json
   - pnpm-lock.yaml
+  - tasks/T-0302-sim-worker.md
   - docs/19-content-admin.md
   - docs/30-configuration-map.md
 runner: any
