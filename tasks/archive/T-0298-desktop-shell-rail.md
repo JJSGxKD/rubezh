@@ -3,8 +3,8 @@ id: T-0298
 title: Раскладка для ПК, основа — с 1024 px боковое меню вместо нижнего, шапка с кошельком, две колонки экрана, листы становятся панелями сбоку
 epic: E12
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -21,7 +21,10 @@ shared:
   - packages/app-shell/src/app/App.tsx
   - packages/app-shell/src/screens/gallery.tsx
   - packages/app-shell/src/i18n/ru.json
+  - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - tasks/T-0299-desktop-home.md
+  - tasks/T-0300-desktop-arsenal.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -32,7 +35,7 @@ batch: 8
 
 # T-0298. Раскладка для ПК, основа — с 1024 px боковое меню вместо нижнего, шапка с кошельком, две колонки экрана, листы становятся панелями сбоку
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json)](../README.md#значки-статуса)
 
 ## Зачем
 

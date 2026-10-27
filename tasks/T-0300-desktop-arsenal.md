@@ -28,7 +28,7 @@ batch: 8
 
 # T-0300. Раскладка для ПК — арсенал: герой со слотами, весь инвентарь и карточка предмета одновременно; наведение и перетаскивание в слот
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0300.json)](README.md#значки-статуса) [![T-0298](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json&label=T-0298)](T-0298-desktop-shell-rail.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0300.json)](README.md#значки-статуса) [![T-0298](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json&label=T-0298)](archive/T-0298-desktop-shell-rail.md)
 
 **Черновик по Р72.** Арсенал ещё меняется: облик (T-0238), Застава (T-0270).
 Владелец переводит задачу в `ready`, когда функционал у игрока почти собран.
