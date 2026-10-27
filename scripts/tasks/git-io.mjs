@@ -88,40 +88,82 @@ export function claimedAt(id) {
 }
 
 /**
- * Влитые в dev PR веток задач из ответа `gh`: `[{ number, headRefName, login, mergedAt }]` или `null`, если
- * ответ не массив. Аккаунт мог быть удалён — тогда `author: null`, и `login` равен `null`, а PR остаётся.
+ * Влитые в dev PR из ответа `gh`: `[{ number, headRefName, baseRefName, login, mergedAt, body, commits,
+ * reviews, comments }]` или `null`, если ответ не массив. Аккаунт мог быть удалён — тогда `author: null`,
+ * и `login` равен `null`, а PR остаётся. Записи без номера или даты слияния отбрасываются; отсутствующие
+ * `body`, `commits`, `reviews` и `comments` — пусты.
  */
-export function parseMergedTaskPrs(parsed) {
+export function parseMergedPrs(parsed) {
   if (!Array.isArray(parsed)) return null;
+  const list = (value) => (Array.isArray(value) ? value : []);
   return parsed
-    .filter(
-      (pr) =>
-        typeof pr?.headRefName === "string" &&
-        /^task\/T-\d{4}$/.test(pr.headRefName) &&
-        typeof pr.number === "number" &&
-        typeof pr.mergedAt === "string",
-    )
+    .filter((pr) => typeof pr?.headRefName === "string" && typeof pr.number === "number" && typeof pr.mergedAt === "string")
     .map((pr) => ({
       number: pr.number,
       headRefName: pr.headRefName,
+      baseRefName: typeof pr.baseRefName === "string" ? pr.baseRefName : "",
       login: typeof pr.author?.login === "string" ? pr.author.login : null,
       mergedAt: pr.mergedAt,
+      body: typeof pr.body === "string" ? pr.body : "",
+      commits: list(pr.commits),
+      reviews: list(pr.reviews),
+      comments: list(pr.comments),
     }));
 }
 
-/** Влитые в dev PR задач или `null`, если `gh` нет или он не авторизован. */
-export function mergedTaskPrs() {
+/** Из влитых PR — только ветки задач `task/T-NNNN` в виде `{ number, headRefName, login, mergedAt }` для `taskCredits`. */
+export function taskPrsOf(prs) {
+  return prs
+    .filter((pr) => /^task\/T-\d{4}$/.test(pr.headRefName))
+    .map(({ number, headRefName, login, mergedAt }) => ({ number, headRefName, login, mergedAt }));
+}
+
+/** Влитые в задачи PR из ответа `gh`; `null`, если ответ не массив. */
+export function parseMergedTaskPrs(parsed) {
+  const prs = parseMergedPrs(parsed);
+  return prs === null ? null : taskPrsOf(prs);
+}
+
+/**
+ * Влитые в dev PR одним вызовом `gh` (раздел «Вклад» и «Готово») или `null`, если `gh` нет, он не авторизован
+ * или ответ не разобрался.
+ */
+export function mergedPrs() {
   const result = spawnSync(
     "gh",
-    ["pr", "list", "--state", "merged", "--base", "dev", "--limit", "1000", "--json", "number,headRefName,author,mergedAt"],
+    ["pr", "list", "--state", "merged", "--base", "dev", "--limit", "1000", "--json", "number,headRefName,baseRefName,author,mergedAt,body,commits,reviews,comments"],
     { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER },
   );
   if (result.status !== 0) return null;
   try {
-    return parseMergedTaskPrs(JSON.parse(result.stdout));
+    return parseMergedPrs(JSON.parse(result.stdout));
   } catch {
     return null;
   }
+}
+
+/**
+ * Добавленные в `origin/dev` файлы задач `tasks/T-NNNN-….md`: `[{ fileName, addedAt }]`, дата — коммита
+ * появления. `--diff-filter=A` вместе с поиском переименований не засчитывает переезд в архив (T-0204)
+ * новым файлом. Нет репозитория или истории — пустой список.
+ */
+export function addedTaskSpecs(base = BASE) {
+  const result = tryGit(["log", base, "--diff-filter=A", "--find-renames", "--name-status", "--format=@%cI", "--", "tasks"]);
+  if (!result.ok) return [];
+  const specs = new Map();
+  let addedAt = "";
+  for (const line of result.stdout.split("\n")) {
+    if (line.startsWith("@")) {
+      addedAt = line.slice(1);
+      continue;
+    }
+    const match = /^A\ttasks\/(?:archive\/)?(T-\d{4}-[^/]+\.md)$/.exec(line);
+    if (match === null) continue;
+    const id = match[1].slice(0, 6);
+    // Коммиты идут от новых к старым: последняя запись по задаче — самая ранняя.
+    specs.set(id, { fileName: match[1], addedAt });
+  }
+  return [...specs.values()];
 }
 
 /** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
