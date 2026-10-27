@@ -20,6 +20,8 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - apps/admin/src/api/audit.ts
+  - backend/api/src/modules/auth/account.repository.ts
+  - backend/api/test/helpers/memory-auth.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
