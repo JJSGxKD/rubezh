@@ -33,7 +33,7 @@ batch: 3
 
 # T-0343. PR задачи не правит epics.md и чужие задачи — перенос в архив уборкой тимлида
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0343.json)](README.md#значки-статуса) [![T-0208](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json&label=T-0208)](T-0208-board-contribution-periods.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0343.json)](README.md#значки-статуса) [![T-0208](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json&label=T-0208)](archive/T-0208-board-contribution-periods.md)
 
 ## Зачем
 
