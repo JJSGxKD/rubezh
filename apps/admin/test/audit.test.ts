@@ -22,6 +22,11 @@ function entry(patch: Partial<AuditEntry>): AuditEntry {
 }
 
 describe("журнал аудита", () => {
+  it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
+    expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
+    expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
+  });
+
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
     const page = { entries: [entry({})], next: "2026-10-01T10:00:00.000Z_e1" };
     const { fetch, calls } = fakeFetch(json(200, { data: page }), json(200, { data: { entries: [], next: null } }));
