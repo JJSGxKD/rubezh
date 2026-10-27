@@ -31,6 +31,7 @@
   "gallery.aside.sideText": "На wide стоит рядом, шириной 380 px; на телефоне идёт под основным содержимым.",
   "rail.label": "Разделы",
   "rail.xp": "Опыт уровня",
+  "rail.level": "Уровень {level}",
   "menu.title": "Меню",
   "currency.coins": "Монеты",
   "currency.premium": "Самоцветы",

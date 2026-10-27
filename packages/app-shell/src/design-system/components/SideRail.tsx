@@ -69,7 +69,7 @@ export function SideRail(props: SideRailProps): ReactNode {
         <span className="min-w-0 flex-1">
           <span className="block truncate font-display text-sm font-bold text-text">{player.name}</span>
           {player.level === null ? null : (
-            <span className="mt-0.5 mb-1.5 block text-xs text-text-muted">{t("profile.level", { level: player.level })}</span>
+            <span className="mt-0.5 mb-1.5 block text-xs text-text-muted">{t("rail.level", { level: player.level })}</span>
           )}
           <ProgressBar value={player.xpShare * 100} max={100} tone="xp" height="thin" label={t("rail.xp")} />
         </span>
