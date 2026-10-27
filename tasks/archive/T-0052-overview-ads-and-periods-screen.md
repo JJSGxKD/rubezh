@@ -14,6 +14,8 @@ zones:
   - apps/admin/test/overview.test.ts
 shared:
   - docs/29-admin-panel.md
+  - tasks/T-0089-vip-ad-pass-mark.md
+  - tasks/T-0203-admin-all-time-summary.md
   - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
