@@ -51,7 +51,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0172. Уход огонька и кастера — в бою нет врагов со снарядами

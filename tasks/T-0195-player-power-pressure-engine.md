@@ -44,7 +44,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0195. Сила игрока и подстройка директора — движок и контент

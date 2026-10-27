@@ -22,7 +22,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0208. «Вклад» на доске — задачи, доработки, ревью, спецификации и PR тимлидов по периодам

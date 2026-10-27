@@ -22,7 +22,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/screens/admin-funnel.html
-batch: 2
+batch: 3
 ---
 
 # T-0053. Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников

@@ -32,7 +32,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0113. Доски рейтинга по зрителю: полная и общая, место и профиль по доске смотрящего

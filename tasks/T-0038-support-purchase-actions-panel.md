@@ -19,7 +19,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0038. Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока

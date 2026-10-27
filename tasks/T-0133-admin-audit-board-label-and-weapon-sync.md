@@ -19,7 +19,7 @@ executor: haiku-5.5
 effort: low
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0133. Панель — подпись «отдельной доски» в журнале и сверка списка оружия с контентом

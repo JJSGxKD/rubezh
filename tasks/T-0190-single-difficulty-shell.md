@@ -49,7 +49,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0190. Одна сложность у игрока — без выбора, первый забег обучающий
