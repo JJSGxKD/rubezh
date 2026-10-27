@@ -3,8 +3,8 @@ id: T-0208
 title: «Вклад» на доске — задачи, доработки, ревью, спецификации и PR тимлидов по периодам
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0209]
