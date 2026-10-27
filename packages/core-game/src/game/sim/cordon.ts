@@ -18,6 +18,19 @@ import { clampToBounds, despawnEnemy, type World } from "./world";
  * движками (docs/26-stage2-plan.md, WP4.5).
  */
 
+/** Чем закончилось кольцо (аналитика, `ring_ended`): прорвался, выстоял до конца времени, погиб. */
+export type CordonOutcome = "broken" | "held" | "died";
+
+/** Запись журнала о закончившемся кольце; `killed` — убитые стражи, а не исчезнувшие по времени. */
+export interface CordonEnd {
+  index: number;
+  outcome: CordonOutcome;
+  guards: number;
+  killed: number;
+  lifeSec: number;
+  elapsedSec: number;
+}
+
 export interface CordonState {
   /** идёт ли кольцо; неактивное в контрольную сумму и в логику шага не входит */
   active: boolean;
@@ -30,10 +43,33 @@ export interface CordonState {
   shrinkPerSec: number;
   /** сколько секунд кольцо ещё живёт */
   timeLeftSec: number;
+  /** сколько колец началось в забеге; номер очередного кольца для аналитики */
+  ringsStarted: number;
+  /** секунда забега, на которой кольцо началось */
+  startedAtSec: number;
+  /** сколько стражей реально вышло в строй */
+  guards: number;
+  /**
+   * Журнал закончившихся колец для аналитики. В снимок и в контрольную сумму не
+   * входит: после восстановления он пуст, поэтому событие не повторяется.
+   */
+  ended: CordonEnd[];
 }
 
 export function createCordonState(): CordonState {
-  return { active: false, centerX: 0, centerY: 0, radius: 0, minRadius: 0, shrinkPerSec: 0, timeLeftSec: 0 };
+  return {
+    active: false,
+    centerX: 0,
+    centerY: 0,
+    radius: 0,
+    minRadius: 0,
+    shrinkPerSec: 0,
+    timeLeftSec: 0,
+    ringsStarted: 0,
+    startedAtSec: 0,
+    guards: 0,
+    ended: [],
+  };
 }
 
 const direction = createDirection();
@@ -73,6 +109,62 @@ export function startCordon(world: World, typeIndex: number, count: number, ring
   state.minRadius = ring.minRadius * scale;
   state.shrinkPerSec = ring.shrinkPerSec * scale;
   state.timeLeftSec = ring.lifeSec;
+  state.startedAtSec = world.stats.elapsedSec;
+  state.guards = spawned;
+}
+
+/** Живые стражи кольца. */
+function countGuards(world: World): number {
+  const enemies = world.enemies;
+  let guards = 0;
+  for (let i = 0; i < enemies.count; i++) {
+    if (enemies.alive[i] === 1 && world.enemyTypes[enemies.type[i]].anchored) guards++;
+  }
+  return guards;
+}
+
+/**
+ * Закрыть кольцо и записать исход в журнал: единственное место, где кольцо
+ * кончается, поэтому на каждое приходится ровно одна запись. `killed` — сколько
+ * из вышедших стражей уже нет к этому моменту (по времени оставшиеся исчезают
+ * позже и убитыми не считаются).
+ */
+function endCordon(world: World, outcome: CordonOutcome): void {
+  const state = world.cordon;
+  const elapsedSec = world.stats.elapsedSec;
+  state.ended.push({
+    index: state.ringsStarted,
+    outcome,
+    guards: state.guards,
+    killed: Math.max(0, state.guards - countGuards(world)),
+    lifeSec: Math.max(0, elapsedSec - state.startedAtSec),
+    elapsedSec,
+  });
+  state.ringsStarted++;
+  state.active = false;
+}
+
+/**
+ * Смерть игрока закрывает активное кольцо исходом `died`; экран «второго шанса»
+ * кольцо не возвращает. Игрок гибнет в конце шага, после `updateCordon`, а сцена
+ * после этого шаги прекращает — поэтому её зовёт и сцена, иначе исход самого
+ * частого случая не дошёл бы до аналитики. Вернуть `true` — кольцо закрыто.
+ */
+export function settleCordonDeath(world: World): boolean {
+  if (!world.cordon.active || world.player.alive) return false;
+  endCordon(world, "died");
+  return true;
+}
+
+export interface CordonEvents {
+  ended: CordonEnd[];
+  cursor: number;
+}
+
+/** Новые записи журнала после курсора и сдвинутый курсор. Мир не меняется. */
+export function takeCordonEvents(world: World, cursor: number): CordonEvents {
+  const { ended } = world.cordon;
+  return { ended: ended.slice(cursor), cursor: ended.length };
 }
 
 /**
@@ -84,24 +176,23 @@ export function updateCordon(world: World, dtSec: number): void {
   const state = world.cordon;
   if (!state.active) return;
 
+  if (settleCordonDeath(world)) return;
+
   state.radius = Math.max(state.minRadius, state.radius - state.shrinkPerSec * dtSec);
   state.timeLeftSec -= dtSec;
 
-  const enemies = world.enemies;
-  let guards = 0;
-  for (let i = 0; i < enemies.count; i++) {
-    if (enemies.alive[i] === 1 && world.enemyTypes[enemies.type[i]].anchored) guards++;
-  }
-  if (guards === 0) {
-    state.active = false;
+  if (countGuards(world) === 0) {
+    endCordon(world, "broken");
     return;
   }
   if (state.timeLeftSec > 0) return;
 
+  // Исход фиксируется до исчезновения стражей: после него живых уже не осталось бы.
+  endCordon(world, "held");
+  const enemies = world.enemies;
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 1 && world.enemyTypes[enemies.type[i]].anchored) despawnEnemy(world, i);
   }
-  state.active = false;
 }
 
 /**

@@ -22,6 +22,7 @@ export class RunBus {
     cardTool: new Set(),
     chestFound: new Set(),
     chestOpened: new Set(),
+    ringEnded: new Set(),
     paused: new Set(),
     resumed: new Set(),
     devInfo: new Set(),

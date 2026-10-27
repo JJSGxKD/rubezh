@@ -20,6 +20,7 @@ import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -143,6 +144,8 @@ export class MainScene extends Phaser.Scene {
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
   /** сколько записей о сундуках сцена уже отдала оболочке; после снимка — с нуля */
   private chestCursor: ChestCursor = { found: 0, opened: 0 };
+  /** сколько записей журнала колец уже ушло наружу */
+  private cordonCursor = 0;
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -169,6 +172,7 @@ export class MainScene extends Phaser.Scene {
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
     this.chestCursor = { found: 0, opened: 0 };
+    this.cordonCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     // Продолженный забег — с тем набором, с которым начался: надетое могло
@@ -289,6 +293,7 @@ export class MainScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
       steps++;
       this.emitChestEvents();
+      this.emitCordonEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
@@ -577,6 +582,7 @@ export class MainScene extends Phaser.Scene {
       this.step(IDLE_INPUT);
       this.probe.stepped(IDLE_CODE, this.world);
       this.emitChestEvents();
+      this.emitCordonEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -681,6 +687,14 @@ export class MainScene extends Phaser.Scene {
     for (const found of events.found) bus.emit("chestFound", found);
     for (const opening of events.opened) bus.emit("chestOpened", opening);
     if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
+  }
+
+  /** Закончившиеся кольца — оболочке, для аналитики. Журнал после восстановления снимка пуст. */
+  private emitCordonEvents(): void {
+    settleCordonDeath(this.world);
+    const events = takeCordonEvents(this.world, this.cordonCursor);
+    this.cordonCursor = events.cursor;
+    for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
   }
 
   /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
