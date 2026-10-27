@@ -77,6 +77,13 @@ describe("журнал аудита", () => {
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
   });
 
+  it("вид ограничения «отдельная доска» — словами, а не ключом separate_board", () => {
+    expect(auditValue("separate_board", "kind")).toBe("отдельная доска");
+    const board = entry({ action: "players.board.set", target: ACCOUNT, targetName: "Оля", after: { kind: "separate_board", endsAt: null } });
+    const [change] = auditChanges(board);
+    expect(auditValue(change?.after, change?.field ?? "kind")).toBe("отдельная доска");
+  });
+
   it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {
     const unranked = entry({ action: "players.run.unrank", target: ACCOUNT, targetName: "Оля", after: { runId: "9a1b2c3d-0000-4000-8000-000000000001", difficulty: "normal", survivalSec: 500, comment: "без урона 8 минут" } });
     expect(actionTitle("players.run.unrank")).toBe("Снятие забега с рейтинга");
