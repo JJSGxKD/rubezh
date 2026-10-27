@@ -3,8 +3,8 @@ id: T-0144
 title: Вход разработчика игроком без ролей — `dev-player-<id>`
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
