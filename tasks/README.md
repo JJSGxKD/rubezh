@@ -680,6 +680,11 @@ PR принимается, если выполнено всё:
 | `backend/api/src/modules/wipe/wipe-plan.ts`, `backend/api/test/wipe-plan.test.ts` | новая модель Prisma — строкой в плане вайпа (`keep` или стирание) и счётчик моделей в тесте; без строки падает `typecheck`. Счётчик при конфликте сводит тот, кто вливается вторым |
 | `apps/web-telegram/vite.config.ts` | префикс прокси — одна строка |
 | `packages/app-shell/src/i18n/ru.json` | новые экраны строк сюда **не добавляют**: у экрана свой ленивый словарь (`i18n/account.ts` — образец) |
+| `apps/admin/src/routes.ts`, `apps/admin/src/screens/sections.tsx` | новый раздел панели — строкой в списке разделов и одной веткой выбора экрана |
+| `apps/admin/src/ui/help.ts` | подсказка — своим ключом, чужие тексты не правятся |
+| `apps/admin/src/api/audit.ts`, `apps/admin/test/audit.test.ts` | подпись нового действия журнала — строкой, в тесте — строкой |
+| `packages/app-shell/src/state/navigation.ts`, `packages/app-shell/src/app/App.tsx`, `packages/app-shell/src/app/lazy-screens.tsx` | новый экран — строкой в `ScreenId`, веткой в выборе экрана, строкой ленивой загрузки |
+| `packages/app-shell/src/state/analytics.ts` | новое событие — строкой в списке, после словаря (`event-dictionary.ts`) |
 | `scripts/bundle-budget.mjs` | пороги с запасом около пятой части поднимают только тимлиды, отдельным PR (`docs/27-design-system-and-app-shell.md` §3.4) |
 | `docs/30-configuration-map.md`, `docs/21-diagrams.md` | строки своей задачи — в конец таблицы своей темы; сущности ER — в конец блока `erDiagram` |
 | `CLAUDE.md`, `README.md` | только строка, которую называет спецификация |

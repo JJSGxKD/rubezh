@@ -12,7 +12,6 @@ zones:
   - packages/app-shell/src/state/difficulty.ts
   - packages/app-shell/src/state/meta.ts
   - packages/app-shell/src/state/run.ts
-  - packages/app-shell/src/app/App.tsx
   - packages/app-shell/src/screens/pre-run.tsx
   - packages/app-shell/src/screens/run/RunScreen.tsx
   - packages/app-shell/src/screens/run/death-parts.tsx
@@ -44,6 +43,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - packages/app-shell/src/app/App.tsx
 runner: any
 executor: sonnet-5.5
 effort: high

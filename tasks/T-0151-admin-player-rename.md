@@ -14,12 +14,12 @@ zones:
   - backend/api/src/modules/admin/admin-player-names.ts
   - backend/api/test/admin-players.test.ts
   - apps/admin/src/api/players.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/screens/players/PlayerActions.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
   - apps/admin/src/screens/players/PlayerList.tsx
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/api/audit.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
