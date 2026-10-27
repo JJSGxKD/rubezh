@@ -1,5 +1,5 @@
 import { api } from "../../services";
-import { fetchPlayerCard, FUNNEL_MILESTONES, purchaseLabel, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
+import { fetchPlayerCard, FUNNEL_MILESTONES, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
 import { BAN_KIND, fetchRestrictions, type Restriction } from "../../api/restrictions";
 import { difficultyTitle } from "../../api/review";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
@@ -10,6 +10,7 @@ import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { PurchasesPanel } from "./PurchasesPanel";
 import { RatingRunsPanel } from "./RatingRunsPanel";
 import { RestrictionsPanel } from "./RestrictionsPanel";
 import { SocialPanel } from "./SocialPanel";
@@ -56,7 +57,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
             {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
           </div>
-          <Purchases card={state.data} />
+          <PurchasesPanel card={state.data} onChanged={reload} />
         </>
       ) : null}
     </div>
@@ -193,32 +194,6 @@ function Wallet({ card }: { card: PlayerCard }) {
           ]}
         />
       </div>
-    </Panel>
-  );
-}
-
-function Purchases({ card }: { card: PlayerCard }) {
-  return (
-    <Panel title="Покупки">
-      {card.purchases === null ? (
-        <p className="text-sm text-text-muted">Скрыто: нет права на аналитику выручки.</p>
-      ) : (
-        <DataTable
-          rows={card.purchases}
-          rowKey={(purchase) => purchase.purchaseId}
-          empty="Покупок нет"
-          columns={[
-            { title: "Счёт", render: (purchase) => formatDateTime(purchase.invoicedAt) },
-            { title: "Статус", render: (purchase) => purchase.status },
-            { title: "Режим", render: (purchase) => purchase.mode },
-            { title: "Что", render: (purchase) => purchaseLabel(purchase) },
-            { title: "Цена, ⭐", render: (purchase) => formatNumber(purchase.priceStars), align: "right" },
-            { title: "Списано, ⭐", render: (purchase) => formatNumber(purchase.chargedStars), align: "right" },
-            { title: "Оплачен", render: (purchase) => formatDateTime(purchase.paidAt) },
-            { title: "Возврат", render: (purchase) => (purchase.refundedAt === null ? "—" : `${formatDateTime(purchase.refundedAt)} (${purchase.refundReason ?? "—"})`) },
-          ]}
-        />
-      )}
     </Panel>
   );
 }

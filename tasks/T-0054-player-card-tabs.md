@@ -30,7 +30,7 @@ batch: 3
 
 # T-0054. Карточка игрока вкладками — шапка с действиями, «Сводка» на один взгляд
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md) [![T-0050](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0050.json&label=T-0050)](archive/T-0050-admin-confirm-and-undo.md) [![T-0038](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json&label=T-0038)](T-0038-support-purchase-actions-panel.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md) [![T-0050](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0050.json&label=T-0050)](archive/T-0050-admin-confirm-and-undo.md) [![T-0038](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json&label=T-0038)](archive/T-0038-support-purchase-actions-panel.md)
 
 ## Зачем
 
