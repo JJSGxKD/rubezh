@@ -9,7 +9,7 @@ import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { PLACE_FORMAT } from "../src/modules/ads/ad-networks.js";
-import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdFunnelRow, type AdNetworkRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdFunnelRow, type AdNetworkRow, type AdPassRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsToolsController } from "../src/modules/ads/ads-tools.controller.js";
 import { AdsToolsService } from "../src/modules/ads/ads-tools.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
@@ -68,6 +68,10 @@ class MemoryCatalog implements AdsCatalogRepository {
 
   async updateBlock(): Promise<boolean> {
     throw new Error("проверка рекламы блоки не правит");
+  }
+
+  async passes(): Promise<AdPassRow[]> {
+    return [];
   }
 
   async funnel(): Promise<AdFunnelRow[]> {
