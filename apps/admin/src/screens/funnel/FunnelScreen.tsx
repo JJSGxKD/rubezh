@@ -67,7 +67,7 @@ export function FunnelScreen({ focus = null }: { focus?: string | null }) {
   const [compare, setCompare] = useState(false);
   const [platform, setPlatform] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<"accounts" | FunnelStep>("accounts");
-  const { state } = useApi(() => loadFunnel(window, compare), [window.from, window.to, compare]);
+  const { state, reload } = useApi(() => loadFunnel(window, compare), [window.from, window.to, compare]);
 
   const choose = (next: PeriodValue) => {
     setValue(next);
@@ -75,7 +75,12 @@ export function FunnelScreen({ focus = null }: { focus?: string | null }) {
     const resolved = windowOf(next);
     if (resolved !== null) setWindow(resolved);
   };
-  const refresh = () => setWindow(windowOf(value) ?? window);
+  // У своего периода окно не меняется, и одна смена окна запрос не повторила
+  // бы: «Обновить» и «Повторить» после ошибки сети молча ничего не делали.
+  const refresh = () => {
+    setWindow(windowOf(value) ?? window);
+    reload();
+  };
 
   const problem = value.preset === "custom" ? customProblem(value.from, value.to) : null;
 
