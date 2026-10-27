@@ -9,9 +9,6 @@ author: claude-lead-1
 size: M
 depends_on: [T-0333]
 zones:
-  - packages/app-shell/src/state/navigation.ts
-  - packages/app-shell/src/app/App.tsx
-  - packages/app-shell/src/app/lazy-screens.tsx
   - packages/app-shell/src/screens/settings.tsx
   - packages/app-shell/src/screens/ads-check.tsx
   - packages/app-shell/src/screens/ads-check-rules.ts
@@ -24,6 +21,9 @@ zones:
   - docs/28-diagnostics.md
 shared:
   - packages/app-shell/src/i18n/ru.json
+  - packages/app-shell/src/state/navigation.ts
+  - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/app/lazy-screens.tsx
 runner: any
 executor: sonnet-5.5
 effort: medium

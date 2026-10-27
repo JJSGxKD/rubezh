@@ -15,11 +15,11 @@ zones:
   - apps/admin/src/screens/players/RestrictDialog.tsx
   - apps/admin/src/screens/players/RestrictionsPanel.tsx
   - apps/admin/src/screens/players/card-rules.ts
-  - apps/admin/src/routes.ts
   - apps/admin/test/card-rules.test.ts
   - apps/admin/test/routes.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/routes.ts
 runner: any
 executor: sonnet-5.5
 effort: high

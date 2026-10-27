@@ -114,6 +114,26 @@ describe("кто что может", () => {
     expect(await local.rolesFor(account("555"))).toEqual([]);
   });
 
+  it("dev-player-<id> входит игроком без ролей; роли из базы у него работают; dev-<id> — владелец", async () => {
+    const env = { NODE_ENV: "development", AUTH_ENABLED: "true", AUTH_DEV_LOGIN: "true", JWT_ACCESS_SECRET: "a".repeat(64), TELEGRAM_BOT_TOKEN: "1:T", DATABASE_URL: "postgresql://localhost/test" };
+    const local = new RolesService(config(env), roles, accounts);
+    const player = account("dev-player-alex");
+
+    expect(await local.rolesFor(account("dev-alex"))).toEqual(["owner"]);
+    expect(await local.rolesFor(player)).toEqual([]);
+    expect(await local.can(player, "players.ban")).toBe(false);
+
+    await roles.grant(player.accountId, "admin", null);
+    expect(await local.rolesFor(player)).toEqual(["admin"]);
+  });
+
+  it("без флага dev-alex получает роли из базы, как любой аккаунт", async () => {
+    const dev = account("dev-alex");
+    expect(await service.rolesFor(dev)).toEqual([]);
+    await roles.grant(dev.accountId, "moderator", null);
+    expect(await service.rolesFor(dev)).toEqual(["moderator"]);
+  });
+
   it("список в окружении даёт владельца, пока владельца нет в базе", async () => {
     expect(await service.rolesFor(account(ADMIN_TELEGRAM_ID))).toEqual(["owner"]);
   });
