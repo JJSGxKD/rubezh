@@ -7,9 +7,9 @@ import { contributionRows } from "./contribution.mjs";
 import { checkClaim } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
-import { ARCHIVE_DIR, checkRegistry } from "./registry.mjs";
+import { ARCHIVE_DIR, awaitingArchiveLine, checkRegistry, readTasks, registrySummary } from "./registry.mjs";
 import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
-import { outOfZone } from "./zones.mjs";
+import { outOfZone, outOfZoneHint } from "./zones.mjs";
 
 /**
  * `pnpm task` — доска задач, захват и проверка зон (tasks/README.md).
@@ -29,7 +29,8 @@ const USAGE = `Команды:
                                            продолжить PR с меткой «доработка», чей бы он ни был
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
-  pnpm task fix                            перенести готовые задачи в tasks/archive/, поставить строки значков, ссылки и ячейки эпиков
+  pnpm task fix                            поставить строки значков, ссылки и ячейки эпиков; файлы не переносит
+  pnpm task archive                        уборка тимлида: закрытые задачи — в tasks/archive/, открытые — обратно, ссылки на них — заново
   pnpm task claim-check [--base <ref>]     задачу можно было взять: статус, зависимости, зоны
   pnpm task status-json --out <каталог>    значки статуса: <каталог>/status/T-NNNN.json на задачу`;
 
@@ -190,9 +191,10 @@ function runCheck() {
     for (const error of errors) console.error(`ошибка  ${error}`);
     process.exit(1);
   }
-  const all = files.filter((file) => file.name.split("/").at(-1).startsWith("T-"));
-  const archived = all.filter((file) => file.name.startsWith(`${ARCHIVE_DIR}/`)).length;
-  console.log(`Реестр задач в порядке: ${String(all.length)} задач (открытых ${String(all.length - archived)}, в архиве ${String(archived)}).`);
+  const { tasks } = readTasks(files);
+  console.log(registrySummary(tasks));
+  const waiting = awaitingArchiveLine(tasks);
+  if (waiting !== null) console.log(waiting);
 }
 
 /**
@@ -214,6 +216,9 @@ function runFix({ archive }) {
     console.log(`поправлено: tasks/${file.name}`);
   }
   if (files.length === 0 && moves.length === 0) console.log("Править нечего.");
+  // Реестр после применения плана: закрытые, что остались наверху (fix их не переносит).
+  const waiting = awaitingArchiveLine(readTasks(readWorkingTasks()).tasks);
+  if (waiting !== null) console.log(waiting);
 }
 
 /** Строки `status` и `owner` в шапке; остальное в файле не трогаем. */
@@ -391,6 +396,8 @@ function runDiffCheck(flags) {
   if (outside.length > 0) {
     console.error(`ошибка  PR задачи ${id} меняет файлы вне её зон (zones, shared и сам файл задачи):`);
     for (const path of outside) console.error(`  ${path}`);
+    const hint = outOfZoneHint(outside, fileName);
+    if (hint !== null) console.error(hint);
     console.error("Понадобился файл вне зон — это вопрос тимлидам: черновик PR с разделом «Вопросы» (tasks/README.md).");
     process.exit(1);
   }
@@ -507,6 +514,8 @@ function main(argv) {
     case "diff-check":
       return runDiffCheck(flags);
     case "fix":
+      return runFix({ archive: false });
+    case "archive":
       return runFix({ archive: true });
     case "claim-check":
       return runClaimCheck(flags);

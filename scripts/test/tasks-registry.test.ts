@@ -310,7 +310,7 @@ describe("архив задач (T-0204)", () => {
   });
 
   it("registrySummary: открытые, архив и ждущие уборки", () => {
-    const base = [fileOf("T-9001"), fileOf("T-9002", { status: "in-progress" }), fileOf("T-9003", { status: "done" }), fileOf("T-9004", { status: "done" }), fileOf("T-9006", { status: "cancelled" })];
+    const base = [fileOf("T-9001"), fileOf("T-9002", { status: "ready" }), fileOf("T-9003", { status: "done" }), fileOf("T-9004", { status: "done" }), fileOf("T-9006", { status: "cancelled" })];
     expect(registrySummary(readTasks(base).tasks)).toBe("Реестр задач в порядке: 5 задач (открытых 2, в архиве 3).");
     const withWaiting = [...base, fileOf("T-9007", { status: "done" }, "T-9007-x.md")];
     expect(registrySummary(readTasks(withWaiting).tasks)).toBe("Реестр задач в порядке: 6 задач (открытых 2, в архиве 3, ждут уборки 1).");
