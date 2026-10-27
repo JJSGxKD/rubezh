@@ -15,6 +15,8 @@ zones:
   - backend/api/test/auth.test.ts
 shared:
   - docs/20-env-and-ports.md
+  - tasks/T-0145-screens-one-command.md
+  - tasks/T-0216-role-levels.md
 runner: any
 executor: sonnet-5.5
 effort: medium
