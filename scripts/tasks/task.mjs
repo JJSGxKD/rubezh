@@ -5,10 +5,10 @@ import { COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStream
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { contributionRows } from "./contribution.mjs";
 import { checkClaim } from "./claim.mjs";
-import { fixEpicCells } from "./epics.mjs";
+import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
-import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
-import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
+import { ARCHIVE_DIR, checkRegistry } from "./registry.mjs";
+import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
 
 /**
@@ -200,46 +200,20 @@ function runCheck() {
  * ссылки на файлы задач и ячейки эпиков (tasks/README.md, T-0204). Повторный
  * запуск ничего не меняет.
  */
-function runFix() {
+function runFix({ archive }) {
   const dir = join(ROOT, "tasks");
-  let files = readWorkingTasks();
-  const moved = [];
+  const { moves, files } = planFix(readWorkingTasks(), { archive });
 
-  // (а) перенос: путь задачи должен быть равен месту по статусу
-  const { tasks: before } = readTasks(files);
-  for (const task of before) {
-    const target = placementPath(task);
-    if (task.path === target) continue;
-    mkdirSync(join(dir, ARCHIVE_DIR), { recursive: true });
-    renameSync(join(dir, task.path), join(dir, target));
-    moved.push({ from: task.path, to: target });
-    console.log(`перенесено: tasks/${task.path} → tasks/${target}`);
+  if (moves.length > 0) mkdirSync(join(dir, ARCHIVE_DIR), { recursive: true });
+  for (const move of moves) {
+    renameSync(join(dir, move.from), join(dir, move.to));
+    console.log(`перенесено: tasks/${move.from} → tasks/${move.to}`);
   }
-  if (moved.length > 0) files = readWorkingTasks();
-
-  // (б) пути пересчитаны по настоящему расположению
-  const { tasks } = readTasks(files);
-  const paths = Object.fromEntries(tasks.map((task) => [task.id, task.path]));
-  const changed = [];
-  const taskOf = new Map(tasks.map((task) => [task.path, task]));
-
   for (const file of files) {
-    let text = file.text;
-    const data = taskOf.get(file.name);
-    // Битая шапка или зависимость без файла — править нечего: об этом скажет `pnpm task check`.
-    if (data !== undefined && !data.depends_on.some((id) => paths[id] === undefined)) text = withBadgeLine(text, badgeLine(data, paths));
-    // (в) ссылки на файлы задач — во всех файлах tasks/ и tasks/archive/
-    text = withTaskLinks(text, file.name, paths);
-    // (г) ячейки эпиков
-    if (file.name === "epics.md") text = fixEpicCells(text, tasks);
-    if (text !== file.text) changed.push({ name: file.name, text });
-  }
-
-  for (const file of changed) {
     writeFileSync(join(dir, file.name), file.text);
     console.log(`поправлено: tasks/${file.name}`);
   }
-  if (changed.length === 0 && moved.length === 0) console.log("Править нечего.");
+  if (files.length === 0 && moves.length === 0) console.log("Править нечего.");
 }
 
 /** Строки `status` и `owner` в шапке; остальное в файле не трогаем. */
@@ -533,7 +507,7 @@ function main(argv) {
     case "diff-check":
       return runDiffCheck(flags);
     case "fix":
-      return runFix();
+      return runFix({ archive: true });
     case "claim-check":
       return runClaimCheck(flags);
     case "status-json":
