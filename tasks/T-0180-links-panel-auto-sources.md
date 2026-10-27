@@ -14,7 +14,6 @@ zones:
   - backend/api/src/modules/links/auto-sources.repository.ts
   - backend/api/src/modules/links/links.repository.ts
   - apps/admin/src/api/links.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/screens/links/LinksScreen.tsx
   - apps/admin/src/screens/links/LinkCard.tsx
   - apps/admin/src/screens/links/UnknownKeys.tsx
@@ -22,10 +21,11 @@ zones:
   - backend/api/test/links.integration.test.ts
   - backend/api/test/admin-links.http.test.ts
   - apps/admin/test/links.test.ts
-  - apps/admin/test/audit.test.ts
 shared:
   - docs/29-admin-panel.md
   - docs/24-attribution-and-sharing.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
 runner: local
 executor: sonnet-5.5
 effort: high

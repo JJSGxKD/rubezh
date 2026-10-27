@@ -125,9 +125,12 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     } else waiting.push(task);
   }
 
+  // Зоны держат только задачи, где ещё пишут код: в работе, черновик PR и
+  // доработка. PR, ждущий ревью, соседей не держит (Р171, docs/35-stage4-plan.md):
+  // кто вливается вторым, перебазируется, конфликт правит тимлид.
   const busy = [
     ...result.inProgress.map((entry) => ({ task: entry.task, where: "в работе" })),
-    ...result.review.map((entry) => ({ task: entry.task, where: "на ревью" })),
+    ...result.review.filter((entry) => openPrs.get(`task/${entry.task.id}`)?.isDraft === true).map((entry) => ({ task: entry.task, where: "черновик PR" })),
     ...result.rework.map((entry) => ({ task: entry.task, where: "на доработке" })),
   ];
 

@@ -9,11 +9,11 @@ author: claude-lead-1
 size: S
 depends_on: []
 zones:
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/api/tasks.ts
-  - apps/admin/test/audit.test.ts
   - apps/admin/test/weapon-titles.test.ts
-shared: []
+shared:
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
 runner: any
 executor: haiku-5.5
 effort: low

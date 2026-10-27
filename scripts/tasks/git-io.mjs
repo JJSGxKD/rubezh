@@ -127,6 +127,7 @@ export function mergedTaskPrs() {
 /** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
 export function loadRegistryState(base = BASE) {
   const files = readOriginTasks(base);
+  const taken = takenIds();
   const { tasks, errors } = readTasks(files);
   const epics = files.find((file) => file.name === "epics.md");
   return {
@@ -134,8 +135,9 @@ export function loadRegistryState(base = BASE) {
     errors,
     epicOrder: epics === undefined ? [] : parseEpics(epics.text),
     repoFiles: readOriginFileList(base),
-    taken: takenIds(),
+    taken,
     prs: openPrs(),
+    claims: Object.fromEntries(taken.map((id) => [id, claimedAt(id)])),
   };
 }
 

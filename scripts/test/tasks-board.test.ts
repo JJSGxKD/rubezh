@@ -106,11 +106,23 @@ describe("пересечение зон на доске", () => {
     expect(result.blocked[0].reason).toContain("T-0004");
   });
 
-  it("пересечение с задачей на ревью тоже блокирует", () => {
+  // Р171: PR, ждущий ревью, соседей не держит; черновик и доработка — держат.
+  it("пересечение с задачей на ревью не блокирует", () => {
     const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
     const prs = [{ number: 7, headRefName: "task/T-0004", isDraft: false }];
     const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
-    expect(ids(result.blocked)).toEqual(["T-0005"]);
+    expect(ids(result.free)).toEqual(["T-0005"]);
+  });
+
+  it("пересечение с черновиком PR или доработкой блокирует", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 7, headRefName: "task/T-0004", isDraft: true },
+      { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }] },
+    ]) {
+      const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
+      expect(ids(result.blocked)).toEqual(["T-0005"]);
+    }
   });
 
   it("пересечение с другой свободной задачей не блокирует: занята только та, у которой есть ветка", () => {
