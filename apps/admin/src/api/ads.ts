@@ -48,14 +48,19 @@ export const SUCCESS_HINTS: Record<AdSuccess, string> = {
 };
 
 /**
- * Строки воронки без сети — пропуски рекламы: VIP получает награду места без
- * ролика (§3.6), и сессия пишется под именем пропуска, а не сети.
+ * Пропуск рекламы: VIP получает награду места без ролика (§3.6, Р99). Это не
+ * сеть и не досмотр — в воронке пропусков нет, у них своя таблица.
  */
-export const PASS_TITLES: Partial<Record<string, string>> = { vip: "VIP без ролика" };
+export const PASS_TITLES: Partial<Record<string, string>> = { vip: "VIP" };
 
-/** Имя сети строки воронки: сеть из каталога, пропуск — своим названием, незнакомое — ключом. */
+/** Подпись пропуска по ключу сервера; незнакомый (сервер новее панели) — ключом. */
+export function passTitle(key: string): string {
+  return PASS_TITLES[key] ?? key;
+}
+
+/** Имя сети строки воронки: сеть из каталога, незнакомое — ключом. */
 export function funnelNetworkTitle(key: string, networks: readonly Pick<AdNetwork, "networkKey" | "name">[]): string {
-  return networks.find((network) => network.networkKey === key)?.name ?? PASS_TITLES[key] ?? key;
+  return networks.find((network) => network.networkKey === key)?.name ?? key;
 }
 
 /** Меньше двух сетей в месте — отказ единственной оставляет место пустым (критерий приёмки WP12). */
@@ -147,10 +152,16 @@ const funnelSchema = z.object({
 });
 export type AdFunnelRow = z.infer<typeof funnelSchema>;
 
+/** Пропуски VIP за окно воронки по месту: сколько выдано, у скольких игроков, сколько наград забрано. */
+const passSchema = z.object({ passName: z.string(), place: z.enum(AD_PLACES), used: z.number(), players: z.number(), claimed: z.number() });
+export type AdPassRow = z.infer<typeof passSchema>;
+
 const viewSchema = z.object({
   networks: z.array(networkSchema),
   blocks: z.array(blockSchema),
   funnel: z.array(funnelSchema),
+  /** сервер до пропусков (Р99) поля не отдавал */
+  passes: z.array(passSchema).default([]),
   days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
   places: z.array(z.enum(AD_PLACES)),
   profiles: z.array(profileSchema).default([]),
