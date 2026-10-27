@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { api } from "../../services";
 import { adjustWallet, messagePlayer, resourceName, TEAM_MESSAGE_MAX, WALLET_RESOURCES, walletAdjustProblem, type PlayerCard } from "../../api/players";
 import { formatDelta, formatNumber } from "../../format";
@@ -41,7 +41,7 @@ export function WalletAdjustDialog({ card, open, onOpenChange, onChanged }: { ca
       onOpenChange={onOpenChange}
       title="Ручная операция с кошельком"
       subject={card.account.displayName}
-      problem={delta === "" ? null : problem}
+      problem={problem}
       changes={
         ready
           ? [
@@ -93,10 +93,9 @@ export function WalletAdjustDialog({ card, open, onOpenChange, onChanged }: { ca
  * игре подписью «Команда»; текст уходит в журнал действий.
  */
 export function MessageDialog({ card, open, onOpenChange }: { card: PlayerCard; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [round, setRound] = useState(0);
-  // Ключ живёт, пока сообщение не ушло: повтор после обрыва сети второй
-  // строки в ленте не заведёт.
-  const idempotencyKey = useMemo(() => newKey(), [round]);
+  // Ключ живёт, пока тот же текст не ушёл: повтор после обрыва сети второй
+  // строки в ленте не заведёт, а исправленный текст — уже другое сообщение.
+  const attempt = useRef<{ text: string; key: string } | null>(null);
 
   return (
     <ConfirmDialog
@@ -112,10 +111,12 @@ export function MessageDialog({ card, open, onOpenChange }: { card: PlayerCard; 
       }}
       action="Отправить"
       onConfirm={async (text) => {
+        const idempotencyKey = attempt.current?.text === text ? attempt.current.key : newKey();
+        attempt.current = { text, key: idempotencyKey };
         const result = await messagePlayer(api, card.account.accountId, { text, idempotencyKey });
         if (!result.ok) return { ok: false, error: result.error.message };
         toast.success(result.data.duplicate ? "Это сообщение уже отправлено" : "Отправлено в ленту игрока");
-        setRound((value) => value + 1);
+        attempt.current = null;
         return { ok: true };
       }}
     />
