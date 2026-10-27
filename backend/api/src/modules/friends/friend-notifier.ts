@@ -23,7 +23,7 @@ const NAME_MAX = 64;
 
 export function requestText(name: string): string {
   const short = name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1)}…` : name;
-  return `${short} зовёт тебя в друзья в «Рубеже». Прими — и сможете каждый день дарить друг другу подарки.`;
+  return `${short} зовёт тебя в друзья в «Рубеже». Прими — и можно будет каждый день дарить друг другу подарки.`;
 }
 
 @Injectable()

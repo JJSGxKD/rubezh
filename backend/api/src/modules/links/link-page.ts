@@ -42,7 +42,7 @@ export function linkPage(options: { url: string | null; target: string | null })
 export function notFoundPage(): string {
   return `<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Ссылка не найдена</title></head>
-<body><p>Такой ссылки нет — проверьте адрес.</p></body></html>
+<body><p>Такой ссылки нет — проверь адрес.</p></body></html>
 `;
 }
 

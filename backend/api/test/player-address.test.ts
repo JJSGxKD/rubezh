@@ -42,6 +42,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/promo-codes/promo-codes.service.ts",
   "modules/changelog/changelog.service.ts",
   "modules/roles/tools.controller.ts",
+  // уведомления в чат администраторов
+  "modules/admin-notify/",
   // слоги имени, а не текст: «вы» — приставка
   "modules/auth/display-name-words.ts",
 ];
@@ -57,12 +59,15 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "promo_code_taken", fragment: "Придумайте другой" },
   { code: "purchase_undeliverable", fragment: "Верните звёзды" },
   { code: "fulfill_failed", fragment: "подробности в логе сервера" },
+  { code: "promo_campaign_used", fragment: "поставьте на паузу" },
+  // ошибка разработчика: потолка начислений нет в коде
+  { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];
 
-/** Существительные и формы, похожие на повелительное «-ите/-йте», но им не являющиеся. */
+/** Существительные и формы, похожие на повелительное «-ите/-йте/-ьте», но им не являющиеся. */
 export const NOT_PLURAL_IMPERATIVE: readonly string[] = ["элите", "орбите", "защите", "сайте"];
 
-const YOU_PLURAL = /(?<![\p{L}\p{N}_])(?:вы|вас|вам|вами|ваш\p{L}*|\p{L}+(?:ите|йте)(?:сь)?)(?![\p{L}\p{N}_])/giu;
+const YOU_PLURAL = /(?<![\p{L}\p{N}_])(?:вы|вас|вам|вами|ваш\p{L}*|\p{L}+(?:ите|йте|ьте)(?:сь)?)(?![\p{L}\p{N}_])/giu;
 
 /** Слова обращения на «вы» в тексте; существительные из списка исключений не считаются. */
 export function pluralAddressIn(text: string): string[] {
@@ -107,7 +112,7 @@ const isTeamPath = (rel: string): boolean => TEAM_PATHS.some((entry) => (entry.e
 describe("игроку — на «ты»", () => {
   const files = walk(SRC);
 
-  it("в текстах для игрока нет «вы», «вас», «вам», «ваш…» и повелительного на «-ите» / «-йте»", () => {
+  it("в текстах для игрока нет «вы», «вас», «вам», «ваш…» и повелительного на «-ите» / «-йте» / «-ьте»", () => {
     const offenders: string[] = [];
     for (const path of files) {
       const rel = posix(path);
@@ -137,6 +142,7 @@ describe("игроку — на «ты»", () => {
       expect(pluralAddressIn("Слишком часто — попробуйте позже")).toEqual(["попробуйте"]);
       expect(pluralAddressIn("Слишком часто — попробуй позже")).toEqual([]);
       expect(pluralAddressIn("подпишитесь и нажми, постарайтесь")).toEqual(["подпишитесь", "постарайтесь"]);
+      expect(pluralAddressIn("проверьте адрес, поставьте на паузу; проверь")).toEqual(["проверьте", "поставьте"]);
       expect(pluralAddressIn("враг на орбите")).toEqual([]);
       expect(pluralAddressIn("в элите и на сайте, при защите")).toEqual([]);
     });

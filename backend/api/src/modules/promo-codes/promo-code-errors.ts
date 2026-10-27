@@ -13,7 +13,7 @@ import type { RedeemRefusal } from "./promo-code-rules.js";
  */
 export class PromoCodeNotFoundError extends DomainError {
   constructor() {
-    super("promo_code_not_found", "Такого кода нет — проверьте, нет ли опечатки", 404);
+    super("promo_code_not_found", "Такого кода нет — проверь, нет ли опечатки", 404);
   }
 }
 
