@@ -3,8 +3,8 @@ id: T-0052
 title: Сводка панели — плитка и панель рекламы, вехи полосами, периоды — экран
 epic: E7
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0051, T-0049]
 zones:
