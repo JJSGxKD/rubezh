@@ -19,7 +19,7 @@ export class FlagsController {
   @Get()
   async mine(@Req() request: unknown): Promise<{ data: { flags: Record<string, boolean> } }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(READ_LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — подождите");
+    if (!(await this.limiter.consume(READ_LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — подожди");
     return { data: { flags: await this.flags.forAccount(account) } };
   }
 }

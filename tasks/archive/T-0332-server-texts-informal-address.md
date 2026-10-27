@@ -3,8 +3,8 @@ id: T-0332
 title: Тексты сервера и бота для игрока на «ты» — ошибки, ответы оплаты, сообщения бота; тест по исходникам
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
@@ -71,6 +71,7 @@ shared:
   - backend/api/src/modules/wallet/wallet.controller.ts
   - backend/api/src/modules/wheel/wheel.controller.ts
   - backend/api/test/*.test.ts
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -81,7 +82,7 @@ batch: 2
 
 # T-0332. Тексты сервера и бота для игрока на «ты» — ошибки, ответы оплаты, сообщения бота; тест по исходникам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0332.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0332.json)](../README.md#значки-статуса)
 
 ## Зачем
 

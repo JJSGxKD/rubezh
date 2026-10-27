@@ -98,7 +98,7 @@ export class ItemsController {
 
   private async limit(rule: RateLimit, request: unknown): Promise<string> {
     const { accountId } = accountOf(request);
-    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     return accountId;
   }
 }

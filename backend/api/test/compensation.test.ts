@@ -380,13 +380,13 @@ describe("маршруты /me/compensation", () => {
     expect(consumed).toEqual([{ rule: { scope: "me:compensation", limit: 10, windowSec: 60 }, key: ACCOUNT }]);
   });
 
-  it("POST claim сверх лимита — 429 «Слишком часто — попробуйте через минуту», сервис не зовётся", async () => {
+  it("POST claim сверх лимита — 429 «Слишком часто — попробуй через минуту», сервис не зовётся", async () => {
     const { controller, service } = build(false);
 
     const attempt = controller.claim(request);
 
     await expect(attempt).rejects.toBeInstanceOf(RateLimitedError);
-    await expect(attempt).rejects.toMatchObject({ message: "Слишком часто — попробуйте через минуту" });
+    await expect(attempt).rejects.toMatchObject({ message: "Слишком часто — попробуй через минуту" });
     expect(service.claim).not.toHaveBeenCalled();
   });
 });

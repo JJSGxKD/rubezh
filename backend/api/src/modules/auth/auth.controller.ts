@@ -136,12 +136,12 @@ export class AuthController {
    */
   private async limit(rule: RateLimit, request: unknown): Promise<void> {
     const allowed = await this.limiter.consume(rule, addressOf(request));
-    if (!allowed) throw new RateLimitedError("Слишком часто — подождите минуту");
+    if (!allowed) throw new RateLimitedError("Слишком часто — подожди минуту");
   }
 
   /** Лимит для открытой сессии — по аккаунту: за адресом оператора стоят сотни игроков. */
   private async limitAccount(rule: RateLimit, accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }
 

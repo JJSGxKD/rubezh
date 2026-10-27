@@ -35,7 +35,7 @@ export class HistoryController {
   @Get()
   async view(@Req() request: unknown, @Query() query: unknown): Promise<{ data: HistoryView }> {
     const { accountId } = accountOf(request);
-    if (!(await this.limiter.consume(LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     const parsed = querySchema.safeParse(query);
     if (!parsed.success) throw new ValidationError("Некорректный запрос истории");
     return { data: await this.history.history(accountId, [...new Set(parsed.data.categories)], parsed.data.cursor, parsed.data.limit) };

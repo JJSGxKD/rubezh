@@ -35,7 +35,7 @@ export class MediaController {
     if (imageId === undefined) throw new ImageNotFoundError();
     const cached = this.media.peek(imageId);
     if (cached !== undefined) return sendImage(reply, cached, request);
-    if (!(await this.limiter.consume(LOOKUPS, ipSchema.parse(request).ip ?? "unknown"))) throw new RateLimitedError("Слишком много запросов — попробуйте позже");
+    if (!(await this.limiter.consume(LOOKUPS, ipSchema.parse(request).ip ?? "unknown"))) throw new RateLimitedError("Слишком много запросов — попробуй позже");
     const image = await this.media.read(imageId);
     if (image === null) throw new ImageNotFoundError();
     sendImage(reply, image, request);
