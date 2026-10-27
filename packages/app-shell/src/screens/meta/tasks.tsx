@@ -176,6 +176,7 @@ export function TasksScreen(): ReactNode {
     <Screen>
       <ContentColumn>
         <PageTitle>{t("tasks.title")}</PageTitle>
+        <BotMentionRows />
         <div className="mt-2 grid gap-3">
           <SegmentedControl track="view"
             label={t("tasks.title")}
@@ -208,7 +209,6 @@ export function TasksScreen(): ReactNode {
               {partner ? <NetworkTasks items={networks} firstIndex={claimable.length} refresh={refresh} onCount={setNetworkRows} /> : null}
               {rest.map((task, index) => row(task, claimable.length + (partner ? networkRows : 0) + index))}
             </div>
-            {view === "daily" ? <BotMentionRows /> : null}
           </div>
         )}
         {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
