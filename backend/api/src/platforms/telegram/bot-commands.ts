@@ -131,7 +131,7 @@ export function helpText(commands: readonly { command: string; description: stri
     lines.push("", "Для администраторов:");
     for (const spec of adminCommands) lines.push(`/${spec.command} — ${spec.description}`);
   }
-  if (!forAdmin) lines.push("", "Вопрос, баг или идея — напишите команде в игре: «Настройки» → «Написать разработчикам». Новости разработки — в канале @KennixDev.");
+  if (!forAdmin) lines.push("", "Вопрос, баг или идея — напиши команде в игре: «Настройки» → «Написать разработчикам». Новости разработки — в канале @KennixDev.");
   return lines.join("\n");
 }
 

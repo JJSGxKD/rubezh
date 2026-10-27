@@ -39,6 +39,6 @@ export class ProgressController {
   }
 
   private async limit(accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(READ_LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(READ_LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }

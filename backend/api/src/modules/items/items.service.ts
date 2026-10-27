@@ -122,7 +122,7 @@ export class ItemsService {
     const outcome = await this.paid(accountId, () =>
       this.items.change(accountId, itemId, scoped(accountId, key), at, (item, account) => {
         const cost = upgradeCost(item, account.level);
-        if (cost === null) throw new ItemRuleError("item_max_level", "Предмет уже на пределе уровня — поднимите уровень аккаунта");
+        if (cost === null) throw new ItemRuleError("item_max_level", "Предмет уже на пределе уровня — подними уровень аккаунта");
         return {
           debit: { lines: lines(cost.coins, shardOf(item.rarity), cost.shards), reason: "item_upgrade" },
           level: item.level + 1,
@@ -203,7 +203,7 @@ export class ItemsService {
   async buy(accountId: string, key: string, purchase: PurchasedItem, at = new Date()): Promise<{ item: ItemView; duplicate: boolean }> {
     const outcome = await this.paid(accountId, () =>
       this.items.create(accountId, key, at, (account) => {
-        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разберите или объедините предметы");
+        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разбери или объедини предметы");
         // Купленное игрок видит сразу — не «новое» на вкладке арсенала.
         return { ...purchase.shape, seen: true, debit: { lines: purchase.price, reason: "shop" } };
       }),

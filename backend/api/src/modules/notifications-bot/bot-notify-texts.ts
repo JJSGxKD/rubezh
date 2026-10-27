@@ -26,11 +26,11 @@ function textOf(kind: string, payload: unknown): string | null {
   switch (kind) {
     case "friend_request": {
       const data = NOTIFICATION_KINDS.friend_request.safeParse(payload);
-      return data.success ? `${data.data.fromName} зовёт вас в друзья в «Рубеже». Принять заявку можно в разделе «Друзья».` : null;
+      return data.success ? `${data.data.fromName} зовёт тебя в друзья в «Рубеже». Принять заявку можно в разделе «Друзья».` : null;
     }
     case "friend_gift": {
       const data = NOTIFICATION_KINDS.friend_gift.safeParse(payload);
-      return data.success ? `${data.data.fromName} дарит вам подарок в «Рубеже» — заберите его в разделе «Друзья».` : null;
+      return data.success ? `${data.data.fromName} дарит тебе подарок в «Рубеже» — забери его в разделе «Друзья».` : null;
     }
     case "team_message": {
       const data = NOTIFICATION_KINDS.team_message.safeParse(payload);

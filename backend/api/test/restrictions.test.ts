@@ -121,7 +121,7 @@ describe("правила ограничений", () => {
       { kind: "all", title: "Всё — блокировка", text: "Аккаунт заблокирован до 4 октября, 15:00 МСК. Причина: Промокоды использовались не по правилам" },
     ]);
     const silent = await s.service.preview(moderator, { kinds: ["ad_rewards", "leaderboard"], endsAt: null, reason: "ad_abuse", notify: false }, NOW);
-    expect(silent.shown.map((item) => item.text)).toEqual(["Сейчас недоступно — попробуйте позже", expect.stringMatching(/^Ничего: в рейтинге игрок видит себя/)]);
+    expect(silent.shown.map((item) => item.text)).toEqual(["Сейчас недоступно — попробуй позже", expect.stringMatching(/^Ничего: в рейтинге игрок видит себя/)]);
     expect((await s.service.preview(moderator, { kinds: ["all"], endsAt: null, reason: "abuse", notify: false }, NOW)).problem).toMatch(/молча не накладывается/);
     expect((await s.service.preview(moderator, { kinds: ["promo_codes"], endsAt: new Date(NOW.getTime() - DAY).toISOString(), reason: "abuse", notify: true }, NOW)).problem).toMatch(/Срок уже прошёл/);
   });

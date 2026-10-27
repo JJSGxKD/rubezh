@@ -24,21 +24,21 @@ export class TaskShapeLockedError extends DomainError {
 /** Площадка не видит игрока в канале — подписки нет или она ещё не дошла. */
 export class TaskNotJoinedError extends DomainError {
   constructor() {
-    super("task_not_joined", "Подписка не найдена — подпишитесь и нажмите ещё раз", 409);
+    super("task_not_joined", "Подписка не найдена — подпишись и нажми ещё раз", 409);
   }
 }
 
 /** Площадка не ответила или задание настроено так, что проверить подписку нечем. */
 export class TaskCheckUnavailableError extends DomainError {
   constructor() {
-    super("task_check_unavailable", "Проверка подписки сейчас недоступна — попробуйте позже", 503);
+    super("task_check_unavailable", "Проверка подписки сейчас недоступна — попробуй позже", 503);
   }
 }
 
 /** Цель засчитывает переход по ссылке, а игрок по ней ещё не переходил. */
 export class TaskNotOpenedError extends DomainError {
   constructor() {
-    super("task_not_opened", "Сначала перейдите по ссылке задания", 409);
+    super("task_not_opened", "Сначала перейди по ссылке задания", 409);
   }
 }
 

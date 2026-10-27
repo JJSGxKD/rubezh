@@ -23,7 +23,7 @@ export class RolesController {
   @UseGuards(AuthGuard)
   async me(@Req() request: unknown): Promise<{ data: { roles: Role[]; permissions: Permission[] } }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(ROLES_LIMITS.me, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(ROLES_LIMITS.me, account.accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     const roles = await this.roles.rolesFor(account);
     return { data: { roles, permissions: [...permissionsOf(roles)] } };
   }

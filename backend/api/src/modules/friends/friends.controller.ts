@@ -113,7 +113,7 @@ export class FriendsController {
   }
 
   private async limit(rule: RateLimit, accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — подождите");
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком часто — подожди");
   }
 }
 
