@@ -3,7 +3,7 @@ id: T-0333
 title: Проверка рекламы командой — каталог SDK-сетей и журнал проверок на сервере
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -34,7 +34,7 @@ batch: 3
 
 # T-0333. Проверка рекламы командой — каталог SDK-сетей и журнал проверок на сервере
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json)](../README.md#значки-статуса)
 
 ## Зачем
 
