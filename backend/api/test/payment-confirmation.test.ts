@@ -149,7 +149,7 @@ describe("предварительная проверка оплаты", () => {
 
     it("текст отказа — для игрока: что случилось и что делать", () => {
       const decision = decideCheckout(view(vip(), false, false, true), query(vip()), NOW, true);
-      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернись в игру." });
     });
   });
 
@@ -232,7 +232,7 @@ describe("подтверждение оплаты", () => {
     purchases.subscriptionLive = true;
 
     await expect(confirmation.answerCheckout(query(subscription), NOW)).resolves.toEqual({ ok: false, reason: "subscription_active" });
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернись в игру." });
 
     purchases.subscriptionLive = false;
     await expect(confirmation.answerCheckout(query(subscription, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
@@ -252,11 +252,11 @@ describe("подтверждение оплаты", () => {
     expect(asked).toEqual([NOW, NOW + 5_000]);
   });
 
-  it("база не ответила — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
+  it("база не ответила — отказ «попробуй ещё раз», а не деньги вслепую", async () => {
     purchases.checkout = async () => Promise.reject(new Error("connect ECONNREFUSED"));
 
     await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуйте ещё раз") });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуй ещё раз") });
   });
 
   it("выдаёт продолжение по подтверждению и записывает, сколько списано на самом деле", async () => {
@@ -770,14 +770,14 @@ describe("предварительная проверка и закрытые п
     await expect(confirmation.answerCheckout(query(first, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
   });
 
-  it("ограничения не прочитались — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
+  it("ограничения не прочитались — отказ «попробуй ещё раз», а не деньги вслепую", async () => {
     restrictions.state.statusFailWith = new Error("redis недоступен");
     const logged: string[] = [];
     vi.spyOn(Logger.prototype, "error").mockImplementation((line: unknown) => void logged.push(String(JSON.parse(String(line)).event)));
 
     await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
 
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуйте ещё раз") });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуй ещё раз") });
     expect(logged).toContain("pre_checkout_failed");
   });
 

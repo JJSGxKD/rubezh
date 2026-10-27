@@ -23,7 +23,7 @@ export class ClientScriptsController {
   @Public()
   @Get("scripts")
   async list(@Req() request: unknown, @Res({ passthrough: true }) reply: FastifyReply): Promise<{ data: { graspil: boolean } }> {
-    if (!(await this.limiter.consume(LIMIT, addressOf(request)))) throw new RateLimitedError("Слишком много запросов — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, addressOf(request)))) throw new RateLimitedError("Слишком много запросов — попробуй позже");
     void reply.header("cache-control", "public, max-age=60");
     return { data: { graspil: this.scripts.graspil() } };
   }

@@ -1,0 +1,70 @@
+{
+  "skill": "growth",
+  "note": "Проверка срабатывания по docs/18 §6: на should_trigger=true скилл обязан сработать, на false — нет (сработать должен соседний скилл или никакой).",
+  "queries": [
+    {
+      "query": "Напиши пост в канал про запуск батл-пасса",
+      "should_trigger": true
+    },
+    {
+      "query": "Подготовь раздел «Пост в канал» для этого PR",
+      "should_trigger": true
+    },
+    {
+      "query": "Как подать «Набор хранителя», чтобы купили, но без давления?",
+      "should_trigger": true
+    },
+    {
+      "query": "Текст приглашения друга с наградой обоим",
+      "should_trigger": true
+    },
+    {
+      "query": "Почему почти никто не покупает второй шанс за звёзды?",
+      "should_trigger": true
+    },
+    {
+      "query": "Описание игры для каталога мини-приложений VK",
+      "should_trigger": true
+    },
+    {
+      "query": "Подпиши промо-картинку «Выбор игроков»",
+      "should_trigger": true
+    },
+    {
+      "query": "Спланируй A/B-тест цены малого набора самоцветов",
+      "should_trigger": true
+    },
+    {
+      "query": "Как вернуть игроков, которые не заходят месяц?",
+      "should_trigger": true
+    },
+    {
+      "query": "Сделай экран магазина по макету",
+      "should_trigger": false
+    },
+    {
+      "query": "Посчитай, не инфлирует ли мягкая валюта",
+      "should_trigger": false
+    },
+    {
+      "query": "Нарисуй промо-картинку 1:1 с Витязем",
+      "should_trigger": false
+    },
+    {
+      "query": "Поправь текст ошибки в окне оплаты",
+      "should_trigger": false
+    },
+    {
+      "query": "Добавь событие purchase_completed в словарь",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай звук покупки",
+      "should_trigger": false
+    },
+    {
+      "query": "Сбалансируй цены бустов во внутренней валюте",
+      "should_trigger": false
+    }
+  ]
+}

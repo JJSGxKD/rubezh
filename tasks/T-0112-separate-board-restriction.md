@@ -3,8 +3,8 @@ id: T-0112
 title: Скрытое ограничение «Отдельная доска»: вид, право, панель
 epic: E16
 priority: P1
-status: in-progress
-owner: claude-1 / sonnet-5.5 / high
+status: ready
+owner:
 author: claude-lead2-18
 size: M
 depends_on: []
@@ -20,22 +20,22 @@ zones:
   - backend/api/test/rating-restrictions.test.ts
   - backend/api/test/helpers/memory-restrictions.ts
   - apps/admin/src/api/restrictions.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/screens/players/RestrictDialog.tsx
   - apps/admin/src/screens/players/RestrictionsPanel.tsx
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/restrictions.test.ts
 shared:
   - backend/api/test/admin-players.test.ts
   - backend/api/test/admin.test.ts
   - docs/29-admin-panel.md
   - backend/api/src/modules/roles/permissions.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
 runner: local
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0112. Скрытое ограничение «Отдельная доска»: вид, право, панель

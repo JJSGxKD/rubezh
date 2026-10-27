@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { checkSummary, checkRunnerLines, checkTaskLine, checkTrailers, evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
+import { checkStatusLabels, checkSummary, checkRunnerLines, checkTaskLine, checkTrailers, evaluateReleaseLabels, hasBreakingSection, minimumReleaseLevel, parsePrTitle, requiresBreakingSection } from "../release/pr-check.mjs";
 
 // Формат заголовка — CLAUDE.md, «Коммиты». Проверка PR — docs/09-ci-cd.md §8.1.
 
@@ -277,5 +277,34 @@ describe("checkRunnerLines", () => {
 
   it("ветка не задачи — ошибок нет даже без строк", () => {
     expect(checkRunnerLines("", "lead/specs")).toEqual([]);
+  });
+});
+
+describe("checkStatusLabels", () => {
+  const HEAD = "task/T-0001";
+
+  it("ровно одна метка статуса — порядок", () => {
+    for (const label of ["в работе", "на ревью", "доработка", "ждёт владельца"]) {
+      expect(checkStatusLabels(["release: patch", label], HEAD)).toEqual([]);
+    }
+  });
+
+  it("метки статуса нет — ошибка со списком меток", () => {
+    expect(checkStatusLabels(["release: patch"], HEAD)).toEqual([
+      "статус: нет метки статуса — поставь одну из: в работе, на ревью, доработка, ждёт владельца",
+    ]);
+    expect(checkStatusLabels([], HEAD)).toHaveLength(1);
+  });
+
+  it("несколько меток статуса — ошибка называет их", () => {
+    expect(checkStatusLabels(["на ревью", "доработка"], HEAD)).toEqual([
+      "статус: меток статуса несколько (на ревью, доработка) — оставь одну",
+    ]);
+  });
+
+  it("ветка не задачи — метки статуса не требуются и не запрещаются", () => {
+    expect(checkStatusLabels([], "feat/x")).toEqual([]);
+    expect(checkStatusLabels(["на ревью", "доработка"], "dev")).toEqual([]);
+    expect(checkStatusLabels([], undefined)).toEqual([]);
   });
 });

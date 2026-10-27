@@ -46,7 +46,7 @@ export class PaymentsController {
   }
 
   private async limit(rule: RateLimit, accountId: string): Promise<void> {
-    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком много запросов оплаты — подождите");
+    if (!(await this.limiter.consume(rule, accountId))) throw new RateLimitedError("Слишком много запросов оплаты — подожди");
   }
 }
 

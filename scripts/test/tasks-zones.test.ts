@@ -86,4 +86,9 @@ describe("выход за зоны", () => {
     expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual([]);
     expect(outOfZone(["tasks/archive/T-0004-y.md"], own)).toEqual(["tasks/archive/T-0004-y.md"]);
   });
+
+  it("ссылку на архив в epics.md правит pnpm task fix — это не выход за зоны", () => {
+    expect(outOfZone(["tasks/epics.md"], task)).toEqual([]);
+    expect(outOfZone(["tasks/README.md"], task)).toEqual(["tasks/README.md"]);
+  });
 });

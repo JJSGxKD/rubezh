@@ -3,20 +3,20 @@ id: T-0156
 title: Панель — сводка заблокированных адресов клиента
 epic: E3
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0155]
 zones:
   - apps/admin/src/api/csp-reports.ts
   - apps/admin/src/screens/csp-reports/**
-  - apps/admin/src/screens/sections.tsx
-  - apps/admin/src/routes.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/csp-reports.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/screens/sections.tsx
+  - apps/admin/src/routes.ts
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: haiku-5.5
 effort: medium
@@ -27,9 +27,9 @@ batch: 3
 
 # T-0156. Панель — сводка заблокированных адресов клиента
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0156.json)](README.md#значки-статуса) [![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](archive/T-0155-csp-reports-intake.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0156.json)](../README.md#значки-статуса) [![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](T-0155-csp-reports-intake.md)
 
-[![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](archive/T-0155-csp-reports-intake.md)
+[![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](T-0155-csp-reports-intake.md)
 
 ## Зачем
 

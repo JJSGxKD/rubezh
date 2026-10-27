@@ -20,21 +20,21 @@ zones:
   - backend/api/test/home.test.ts
   - apps/admin/src/screens/home/HomeSlidesScreen.tsx
   - apps/admin/src/api/home-slides.ts
-  - apps/admin/src/api/audit.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/home-slides.test.ts
-  - apps/admin/test/audit.test.ts
 shared:
   - docs/29-admin-panel.md
   - docs/21-diagrams.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
+  - apps/admin/test/audit.test.ts
 runner: local
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0189. Порядок слайдов главной перетаскиванием в панели

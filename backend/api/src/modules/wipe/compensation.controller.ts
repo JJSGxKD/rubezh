@@ -31,7 +31,7 @@ export class CompensationController {
   @HttpCode(200)
   async claim(@Req() request: unknown): Promise<{ data: ClaimResult }> {
     const { accountId } = accountOf(request);
-    if (!(await this.limiter.consume(CLAIM_LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуйте через минуту");
+    if (!(await this.limiter.consume(CLAIM_LIMIT, accountId))) throw new RateLimitedError("Слишком часто — попробуй через минуту");
     return { data: await this.compensation.claim(accountId) };
   }
 }

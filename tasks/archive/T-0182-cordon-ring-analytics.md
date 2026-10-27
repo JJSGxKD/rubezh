@@ -3,8 +3,8 @@ id: T-0182
 title: Аналитика кольца — событие исхода (прорвался, выстоял, погиб)
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead2-1
 size: S
 depends_on: [T-0170]
@@ -23,6 +23,13 @@ shared:
   - packages/app-shell/src/state/analytics.ts
   - docs/22-analytics-and-metrics.md
   - docs/35-stage4-plan.md
+  - tasks/T-0190-single-difficulty-shell.md
+  - tasks/T-0194-limit-break-offers.md
+  - tasks/T-0195-player-power-pressure-engine.md
+  - tasks/T-0196-player-power-pressure-wiring.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -33,7 +40,7 @@ batch: 2
 
 # T-0182. Аналитика кольца — событие исхода (прорвался, выстоял, погиб)
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json)](README.md#значки-статуса) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](archive/T-0170-cordon-ring-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0182.json)](../README.md#значки-статуса) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](T-0170-cordon-ring-engine.md)
 
 ## Зачем
 

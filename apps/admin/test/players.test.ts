@@ -5,7 +5,13 @@ import { purchaseLabel,
   fetchPlayerCard,
   fetchSocial,
   messagePlayer,
+  fulfillPurchase,
+  PURCHASE_NOTE_MAX,
+  purchaseNoteProblem,
+  purchaseState,
   playerCardSchema,
+  refundPurchase,
+  refundReasonLabel,
   rejectReferral,
   resourceName,
   searchPlayers,
@@ -194,5 +200,75 @@ describe("покупки в карточке игрока", () => {
   it("VIP — отдельно первая оплата подписки и её продления", () => {
     expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: null })).toBe("VIP");
     expect(purchaseLabel({ product: "vip", sku: "vip_month", continueNo: null, renewalOf: "p-1" })).toBe("VIP, продление");
+  });
+});
+
+describe("состояние покупки и действия поддержки", () => {
+  const base = { product: "shop_item", paidAt: AT, fulfilledAt: null, refundRequestedAt: null, refundedAt: null };
+
+  it("не оплачен, пока нет paidAt", () => {
+    expect(purchaseState({ ...base, paidAt: null })).toEqual({ label: "не оплачен", tone: "neutral" });
+  });
+
+  it("возврат сильнее выдачи: выданная и возвращённая — «звёзды возвращены»", () => {
+    expect(purchaseState({ ...base, fulfilledAt: AT, refundedAt: AT })).toEqual({ label: "звёзды возвращены", tone: "neutral" });
+    expect(purchaseState({ ...base, refundRequestedAt: AT, refundedAt: AT }).label).toBe("звёзды возвращены");
+  });
+
+  it("возврат заказан, звёзды в пути — «возврат в пути»", () => {
+    expect(purchaseState({ ...base, fulfilledAt: AT, refundRequestedAt: AT })).toEqual({ label: "возврат в пути", tone: "info" });
+  });
+
+  it("выданная — «выдан»; невыданный товар магазина — «не выдан»", () => {
+    expect(purchaseState({ ...base, fulfilledAt: AT })).toEqual({ label: "выдан", tone: "success" });
+    expect(purchaseState(base)).toEqual({ label: "не выдан", tone: "warning" });
+  });
+
+  it("второй шанс и старый сервер без товара — «оплачен»: выдавать нечего", () => {
+    expect(purchaseState({ ...base, product: "continue_run" })).toEqual({ label: "оплачен", tone: "success" });
+    expect(purchaseState({ paidAt: AT, refundedAt: null })).toEqual({ label: "оплачен", tone: "success" });
+  });
+
+  it("причина возврата — подписью", () => {
+    expect(refundReasonLabel("test_mode")).toBe("тестовая оплата");
+    expect(refundReasonLabel("unused")).toBe("второй шанс не использован");
+    expect(refundReasonLabel("external")).toBe("вернули вне игры");
+    expect(refundReasonLabel("undeliverable")).toBe("товара нет в каталоге");
+    expect(refundReasonLabel("manual")).toBe("вручную, поддержка");
+    expect(refundReasonLabel(null)).toBe("—");
+    expect(refundReasonLabel("foo")).toBe("foo");
+  });
+
+  it("причина действия — от 3 до 200 символов после trim", () => {
+    expect(purchaseNoteProblem("  ок ")).toMatch(/от 3 символов/);
+    expect(purchaseNoteProblem("дубль")).toBeNull();
+    expect(purchaseNoteProblem("а".repeat(PURCHASE_NOTE_MAX))).toBeNull();
+    expect(purchaseNoteProblem("а".repeat(PURCHASE_NOTE_MAX + 1))).toBe("Причина — до 200 символов");
+  });
+
+  it("карточка старого сервера без actions, fulfilledAt и refundRequestedAt разбирается: actions пуст", () => {
+    const card = playerCardSchema.parse({ ...FULL_CARD, purchases: [{ ...FULL_CARD.purchases[0], refundRequestedAt: undefined }] });
+    expect(card.purchases?.[0]?.actions).toEqual([]);
+    expect(card.purchases?.[0]?.fulfilledAt).toBeUndefined();
+  });
+
+  it("действие от сервера новее панели не роняет разбор карточки", () => {
+    const card = playerCardSchema.parse({ ...FULL_CARD, purchases: [{ ...FULL_CARD.purchases[0], fulfilledAt: AT, actions: ["fulfill", "refund", "future"] }] });
+    expect(card.purchases?.[0]?.actions).toEqual(["fulfill", "refund", "future"]);
+  });
+
+  it("возврат и выдача уходят POST с причиной на адрес покупки; ответ разобран", async () => {
+    const purchase = { ...FULL_CARD.purchases[0], refundRequestedAt: AT, actions: [] };
+    for (const [call, path] of [
+      [refundPurchase, "refund"],
+      [fulfillPurchase, "fulfill"],
+    ] as const) {
+      const { fetch, calls } = fakeFetch(json(200, { data: { purchase, actions: [] } }));
+      const result = await call(new AdminApi(fetch), ACCOUNT_ID, "p 1", "по просьбе игрока");
+      expect(result.ok).toBe(true);
+      expect(calls[0]?.url).toContain(`/players/${ACCOUNT_ID}/purchases/p%201/${path}`);
+      expect(calls[0]?.init.method).toBe("POST");
+      expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ note: "по просьбе игрока" });
+    }
   });
 });
