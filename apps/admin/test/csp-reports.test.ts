@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import { cspSummarySchema, directiveGroup, fetchCspSummary, hostTitle, sortEntries, type CspEntry } from "../src/api/csp-reports";
-import { SECTIONS } from "../src/routes";
+import { SECTION_GROUPS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
 const ENTRY: CspEntry = { directive: "script-src", host: "fonts.gstatic.com", count: 3, lastAt: "2026-10-20T10:00:00.000Z" };
@@ -67,7 +67,7 @@ describe("блокировки клиента: порядок", () => {
 
 describe("блокировки клиента: меню", () => {
   it("раздел в группе «Эксплуатация», за правом диагностики, подсказка короткая", () => {
-    const group = SECTIONS.find((item) => item.title === "Эксплуатация");
+    const group = SECTION_GROUPS.find((item) => item.title === "Эксплуатация");
     const section = group?.sections.find((item) => item.id === "csp");
     expect(section?.permission).toBe("diagnostics.view");
     expect(section?.hint.length).toBeLessThanOrEqual(80);
