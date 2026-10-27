@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { SideRail } from "../src/design-system/components/SideRail";
+import { describe, expect, it, vi } from "vitest";
+import { SideRail, WideHeader } from "../src/design-system/components/SideRail";
 import {
   ASIDE_WIDTH_PX,
   RAIL_WIDTH_PX,
@@ -178,7 +178,11 @@ describe("боковое меню", () => {
     { id: "shop", label: "Магазин", icon: createElement("i") },
   ];
   const player = { name: "Дизайнер", avatarUrl: null, level: 3, xpShare: 0.4 };
-  const bottom = [{ id: "settings", label: "Настройки", icon: createElement("i"), onSelect: () => undefined }];
+  const bottom = [
+    { id: "menu", label: "Меню", icon: createElement("i"), onSelect: () => undefined },
+    { id: "guide", label: "Гайдбук", icon: createElement("i"), onSelect: () => undefined },
+    { id: "settings", label: "Настройки", icon: createElement("i"), onSelect: () => undefined },
+  ];
   const html = renderToStaticMarkup(
     createElement(SideRail, { items, activeId: "arsenal", track: "rail", player, bottom, onSelect: () => undefined, onProfile: () => undefined }),
   );
@@ -196,16 +200,117 @@ describe("боковое меню", () => {
 
   it("карточка игрока: имя, уровень и опыт полосой", () => {
     expect(html).toContain("Дизайнер");
-    expect(html).toContain("3");
+    expect(html).toContain("Уровень 3");
     expect(html).toContain("scaleX(0.4)");
   });
 
-  it("внизу — настройки и помощь отдельным блоком", () => {
-    expect(html).toContain("Настройки");
+  it("внизу — меню, гайдбук и настройки отдельным блоком после разделов", () => {
+    for (const label of ["Меню", "Гайдбук", "Настройки"]) expect(html.indexOf(label), label).toBeGreaterThan(html.indexOf("Магазин"));
+    expect(html).toContain("mt-auto");
+  });
+
+  it("без уровня подписи уровня нет", () => {
+    const fresh = renderToStaticMarkup(
+      createElement(SideRail, { items, activeId: null, track: "rail", player: { ...player, level: null }, bottom, onSelect: () => undefined, onProfile: () => undefined }),
+    );
+    expect(fresh).not.toContain("Уровень");
+    expect(fresh).not.toContain("aria-current");
   });
 
   it("это навигация с именем, ширина — из токена", () => {
     expect(html).toMatch(/<nav[^>]*aria-label=/);
     expect(html).toContain("w-(--rail-width)");
+  });
+});
+
+describe("шапка раздела на wide", () => {
+  const base = {
+    title: "Магазин",
+    coinsLabel: "Монеты: 1 200",
+    gemsLabel: "Самоцветы: 15",
+    coins: () => "1,2К",
+    gems: () => "15",
+    onCoins: () => undefined,
+    onGems: () => undefined,
+  };
+
+  it("название раздела, кошелёк и колокольчик с числом непрочитанного", () => {
+    const html = renderToStaticMarkup(createElement(WideHeader, { ...base, bell: { unread: 3, label: "Уведомления: 3 новых", onOpen: () => undefined } }));
+    expect(html).toMatch(/<h1[^>]*>Магазин<\/h1>/);
+    expect(html).toContain('aria-label="Монеты: 1 200"');
+    expect(html).toContain('aria-label="Самоцветы: 15"');
+    expect(html).toContain("1,2К");
+    expect(html).toContain('aria-label="Уведомления: 3 новых"');
+    expect(html).toMatch(/tabular-nums[^>]*>3</);
+  });
+
+  it("без непрочитанного колокольчик без числа; без входа колокольчика нет вовсе", () => {
+    const quiet = renderToStaticMarkup(createElement(WideHeader, { ...base, bell: { unread: 0, label: "Уведомления", onOpen: () => undefined } }));
+    expect(quiet).toContain('aria-label="Уведомления"');
+    expect(quiet).not.toMatch(/tabular-nums[^>]*>0</);
+    const guest = renderToStaticMarkup(createElement(WideHeader, { ...base, bell: null }));
+    expect(guest).not.toContain("Уведомления");
+    expect(guest).toContain('aria-label="Монеты: 1 200"');
+  });
+
+  it("число непрочитанного больше 99 — «99+»", () => {
+    const html = renderToStaticMarkup(createElement(WideHeader, { ...base, bell: { unread: 250, label: "Уведомления", onOpen: () => undefined } }));
+    expect(html).toContain("99+");
+  });
+
+  it("без связи плашки приглушены", () => {
+    expect(renderToStaticMarkup(createElement(WideHeader, { ...base, bell: null, offline: true }))).toContain("opacity-60");
+  });
+});
+
+describe("лист на wide: панель справа без телефонного уплотнения", () => {
+  // Хранилище класса ширины при серверной отрисовке отдаёт начальное значение,
+  // а оно берётся из `matchMedia` при загрузке модуля: окно подставляем до импорта.
+  async function sheet(wide: boolean, props: Record<string, unknown> = {}): Promise<string> {
+    vi.resetModules();
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: wide, addEventListener: () => undefined, removeEventListener: () => undefined }),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    });
+    try {
+      const [{ createElement: h }, { renderToStaticMarkup: render }, { Modal: Sheet }] = await Promise.all([
+        import("react"),
+        import("react-dom/server"),
+        import("../src/design-system/components"),
+      ]);
+      return render(h(Sheet, { title: "Перед забегом", placement: "bottom", onDismiss: () => undefined, footer: h("b", null, "Играть"), ...props }, h("p", null, "Тело")));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it("на wide: панель во всю высоту, въезжает по X, ни short:, ни landscape:", async () => {
+    const html = await sheet(true, { icon: "знак" });
+    expect(html).toContain("animate-panel-in");
+    expect(html).toContain("h-full");
+    expect(html).toContain("justify-end");
+    expect(html).not.toMatch(/\b(short|landscape):/);
+  });
+
+  it("на wide сцена hero не включает ландшафтную обёртку: панель у края и во всю высоту", async () => {
+    const html = await sheet(true, { hero: "Сундук" });
+    expect(html).not.toContain("landscape:flex-row");
+    expect(html).not.toContain("Сундук");
+    expect(html).toContain("animate-panel-in");
+  });
+
+  it("на wide панели со срезом и реликвией тоже во всю высоту", async () => {
+    expect(await sheet(true, { cut: true })).toContain("h-full");
+    expect(await sheet(true, { relic: "gold" })).toContain("h-full");
+  });
+
+  it("уже wide лист остаётся листом снизу с телефонными вариантами, hero — с обёрткой", async () => {
+    const html = await sheet(false, { icon: "знак", hero: "Сундук" });
+    expect(html).toContain("animate-sheet-in");
+    expect(html).toContain("landscape:px-4");
+    expect(html).toContain("landscape:flex-row");
+    expect(html).toContain("Сундук");
+    expect(html).not.toContain("animate-panel-in");
   });
 });

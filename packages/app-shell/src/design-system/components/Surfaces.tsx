@@ -201,13 +201,17 @@ export function Modal(props: ModalProps): ReactNode {
   const headerTitle = closable && props.icon === undefined;
   const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
+  // Вариантов `short:` и `landscape:` у панели сбоку нет: монитор всегда в
+  // ландшафте, и телефонное уплотнение сжало бы её без причины.
+  const dense = (classes: string): string => (side ? "" : classes);
+
   const panel = (
     <Panel
       cut={props.cut === true}
       relic={props.relic}
       side={side}
       className={[
-        side ? "max-w-(--side-panel-width)" : wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
+        side ? "h-full max-w-(--side-panel-width)" : wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
         props.hero === undefined ? "" : "min-h-0",
         side ? "animate-panel-in" : bottom ? "animate-sheet-in" : "animate-pop-in",
       ].join(" ")}
@@ -215,7 +219,7 @@ export function Modal(props: ModalProps): ReactNode {
       {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
           Шапка не прокручивается: крестик виден и в конце длинного листа. */}
       {closable ? (
-        <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
+        <header className={`flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 ${dense("short:pl-4 landscape:pl-4")}`}>
           {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
           <IconButton track="close" label={t("app.close")} feedback={sheet ? null : "back"} onClick={onDismiss}>
             <X size={22} />
@@ -224,23 +228,24 @@ export function Modal(props: ModalProps): ReactNode {
       ) : null}
       <div
         className={[
-          "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
-          footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
-          closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
+          "min-h-0 overflow-y-auto overscroll-contain px-5",
+          dense("short:px-4 landscape:px-4"),
+          footerPlacement === "pinned" ? "" : `pb-5 ${dense("short:pb-4 landscape:pb-4")}`,
+          closable ? "" : `pt-5 ${dense("short:pt-4 landscape:pt-4")}`,
         ].join(" ")}
       >
         {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
             счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
             прокрутку (§5.3). */}
         {props.icon === undefined ? null : (
-          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
+          <div className={`mb-2 flex justify-center ${dense("short:hidden landscape:hidden")}`}>
             <IconEmblem>{props.icon}</IconEmblem>
           </div>
         )}
         {props.title === undefined || headerTitle ? null : (
           <h2
             className={[
-              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
+              `mb-3 font-display text-2xl font-bold text-text ${dense("short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl")}`,
               props.icon === undefined ? "" : "text-center",
             ].join(" ")}
           >
@@ -251,7 +256,7 @@ export function Modal(props: ModalProps): ReactNode {
         {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
       </div>
       {footerPlacement === "pinned" ? (
-        <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+        <div className={`grid shrink-0 gap-2 px-5 pt-5 pb-5 ${dense("short:px-4 short:pb-4 landscape:px-4 landscape:pb-4")}`}>{props.footer}</div>
       ) : null}
     </Panel>
   );
@@ -280,7 +285,8 @@ export function Modal(props: ModalProps): ReactNode {
       style={{ zIndex: "var(--z-modal)" }}
     >
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
-      {props.hero === undefined ? (
+      {props.hero === undefined || side ? (
+        // Сцена над панелью — вид для центра и нижнего листа; панель сбоку идёт во всю высоту без неё.
         panel
       ) : (
         // Сцена и панель — одной колонкой: панель сжимается под прокрутку,
