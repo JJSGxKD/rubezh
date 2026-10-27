@@ -16,6 +16,8 @@ zones:
   - scripts/test/tasks-board-page.test.ts
 shared:
   - tasks/README.md
+  - tasks/T-0208-board-contribution-periods.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
