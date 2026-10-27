@@ -35,7 +35,7 @@ batch: 3
 
 # T-0145. Снимки экранов одной командой — `pnpm screens`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](T-0144-dev-login-as-player.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](archive/T-0144-dev-login-as-player.md)
 
 ## Зачем
 
