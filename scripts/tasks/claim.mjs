@@ -1,4 +1,4 @@
-import { REWORK_LABEL } from "./board.mjs";
+import { prStatus } from "./board.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
 /**
@@ -21,10 +21,11 @@ const BRANCH_RE = /^task\/(T-\d{4})$/;
  * - `claims` — время коммита захвата по id задачи (ISO), если известно.
  *
  * Пересечение зон держит захват, только если соседняя задача взята раньше и
- * ещё в работе: ветка без PR, черновик или PR на доработке (Р171,
- * docs/35-stage4-plan.md). PR, ждущий ревью, соседей не держит — кто
- * вливается вторым, перебазируется, конфликт правит тимлид. Время захвата
- * неизвестно — держит, как раньше.
+ * ещё в работе: ветка без PR, PR со статусом «в работе» или «доработка» (Р171,
+ * Р172, docs/35-stage4-plan.md; статус — метка PR, `prStatus`). PR «на ревью»
+ * и «ждёт владельца» соседей не держат, черновик тоже, если он помечен «на
+ * ревью» — кто вливается вторым, перебазируется, конфликт правит тимлид.
+ * Время захвата неизвестно — держит, как раньше.
  */
 export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {} }) {
   const task = tasks.find((candidate) => candidate.id === id);
@@ -56,15 +57,17 @@ export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {} }) {
     if (waitsForReview(prOf.get(other.id))) continue;
     if (claimTime(claims[other.id], -Infinity) > mine) continue;
     if (zonesOverlap(task.zones, other.zones, repoFiles)) {
-      problems.push(`зоны пересекаются с ${other.id}: она взята раньше и ещё в работе (ветка без PR, черновик или доработка)`);
+      problems.push(`зоны пересекаются с ${other.id}: она взята раньше и ещё в работе (ветка без PR, PR «в работе» или «доработка»)`);
     }
   }
   return problems;
 }
 
-/** PR ждёт ревью: открыт, не черновик и без метки доработки. */
+/** PR ждёт ревью или владельца: код в нём больше не пишут, зоны свободны. */
 function waitsForReview(pr) {
-  return pr !== undefined && pr.isDraft !== true && !(pr.labels ?? []).some((label) => label?.name === REWORK_LABEL);
+  if (pr === undefined) return false;
+  const status = prStatus(pr);
+  return status === "review" || status === "owner";
 }
 
 /** Время захвата в миллисекундах; нет или не разобрать — `fallback`. */
