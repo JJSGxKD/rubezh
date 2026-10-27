@@ -13,7 +13,6 @@ zones:
   - scripts/test/screens.test.ts
   - packages/app-shell/src/state/dev-url.ts
   - packages/app-shell/test/dev-url.test.ts
-  - packages/app-shell/src/state/navigation.ts
   - packages/app-shell/src/state/shell.ts
   - packages/app-shell/src/index.tsx
   - apps/web-telegram/src/main.tsx
@@ -25,6 +24,7 @@ shared:
   - AGENTS.md
   - docs/17-testing-strategy.md
   - docs/20-env-and-ports.md
+  - packages/app-shell/src/state/navigation.ts
 runner: local
 executor: sonnet-5.5
 effort: medium

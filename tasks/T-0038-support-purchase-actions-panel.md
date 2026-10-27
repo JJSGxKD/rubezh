@@ -11,9 +11,9 @@ zones:
   - apps/admin/src/api/players.ts
   - apps/admin/src/screens/players/PurchasesPanel.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/players.test.ts
-shared: []
+shared:
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
 effort: high
