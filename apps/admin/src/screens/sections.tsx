@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
+import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
 import { TasksScreen } from "./tasks/TasksScreen";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
@@ -35,6 +36,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
+  csp: () => <CspReportsScreen />,
   requests: () => <RequestsScreen />,
   exports: () => <ExportsScreen />,
   links: (id) => <LinksScreen id={id} />,
