@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0209]
+depends_on: [T-0209, T-0343]
 zones:
   - scripts/tasks/board-page.mjs
   - scripts/tasks/contribution.mjs
@@ -27,7 +27,7 @@ batch: 3
 
 # T-0208. «Вклад» на доске — задачи, доработки, ревью, спецификации и PR тимлидов по периодам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json)](README.md#значки-статуса) [![T-0209](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json&label=T-0209)](archive/T-0209-flow-prompts-per-account.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json)](README.md#значки-статуса) [![T-0209](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json&label=T-0209)](archive/T-0209-flow-prompts-per-account.md) [![T-0343](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0343.json&label=T-0343)](T-0343-archive-by-cleanup.md)
 
 ## Зачем
 
