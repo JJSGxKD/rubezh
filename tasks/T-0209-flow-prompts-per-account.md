@@ -3,8 +3,8 @@ id: T-0209
 title: Готовые промты потоков с номером аккаунта — на доске и в `pnpm task streams`
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0206]
