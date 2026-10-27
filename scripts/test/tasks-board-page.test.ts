@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { SIZE_POINTS, contributions, formatMoscow, freeBadge, moscowDay, renderBoardPage, taskCredits } from "../tasks/board-page.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { parseMergedTaskPrs } from "../tasks/git-io.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { flowPrompt } from "../tasks/board.mjs";
 
 // Страница доски и счётчик свободных задач (T-0018).
 
@@ -227,6 +229,19 @@ describe("страница доски", () => {
         "| Поток | Ждут | Ближайшая пачка |",
         "|---|---|---|",
         "| sonnet-5.5 / medium | 1 | без пачки |",
+        "",
+        "### Запуск по аккаунтам",
+        "",
+        "Готовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.",
+        "",
+        "<details>",
+        "<summary>claude-2 — запустить 2: sonnet-5.5 / low, sonnet-5.5 / extra</summary>",
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "low", runner: "any" })}\n\`\`\``,
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "extra", runner: "any" })}\n\`\`\``,
+        "",
+        "</details>",
         "",
         "## Доработка — 1",
         "",
@@ -532,7 +547,7 @@ describe("страница доски: запуск по аккаунтам", ()
     });
     const part = page.slice(page.indexOf("### Запуск по аккаунтам"), page.indexOf("## Доработка"));
     expect(part).toContain("<details>");
-    expect(part).toContain("<summary>claude-2 — запустить 3: sonnet-5.5 / medium, sonnet-5.5 / high, sonnet-5.5 / medium · local</summary>");
+    expect(part).toContain("<summary>claude-2 — запустить 3: sonnet-5.5 / medium, sonnet-5.5 / medium · local, sonnet-5.5 / high</summary>");
     expect(part).toContain("поток claude-2 / sonnet-5.5 / medium, запустил: владелец");
     expect(part).toContain("--effort medium --runner local");
     expect(part).toContain("</details>");
