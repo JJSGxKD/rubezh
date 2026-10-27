@@ -1,3 +1,4 @@
+import { REWORK_LABEL } from "./board.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
 /**
@@ -15,10 +16,17 @@ const BRANCH_RE = /^task\/(T-\d{4})$/;
  * - `tasks` — задачи **на базе** PR (`origin/dev`), а не из ветки: иначе PR
  *   мог бы сам поставить себе нужный статус;
  * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
- * - `prs` — открытые PR `{ headRefName }` или `null`, если список не получить;
- * - `repoFiles` — файлы репозитория для пересечения зон.
+ * - `prs` — открытые PR `{ headRefName, isDraft, labels }` или `null`, если список не получить;
+ * - `repoFiles` — файлы репозитория для пересечения зон;
+ * - `claims` — время коммита захвата по id задачи (ISO), если известно.
+ *
+ * Пересечение зон держит захват, только если соседняя задача взята раньше и
+ * ещё в работе: ветка без PR, черновик или PR на доработке (Р171,
+ * docs/35-stage4-plan.md). PR, ждущий ревью, соседей не держит — кто
+ * вливается вторым, перебазируется, конфликт правит тимлид. Время захвата
+ * неизвестно — держит, как раньше.
  */
-export function checkClaim(id, { tasks, taken, prs, repoFiles }) {
+export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {} }) {
   const task = tasks.find((candidate) => candidate.id === id);
   if (task === undefined) return [`задачи ${id} нет в реестре на базе PR: ветку task/${id} заводят под существующую задачу`];
 
@@ -40,12 +48,27 @@ export function checkClaim(id, { tasks, taken, prs, repoFiles }) {
     ...taken,
     ...(prs ?? []).map((pr) => BRANCH_RE.exec(pr.headRefName)?.[1]).filter((value) => value !== undefined),
   ]);
+  const prOf = new Map((prs ?? []).map((pr) => [BRANCH_RE.exec(pr.headRefName)?.[1], pr]));
+  const mine = claimTime(claims[id], Infinity);
   for (const other of tasks) {
     if (other.id === id || task.depends_on.includes(other.id) || !withBranch.has(other.id)) continue;
     if (other.status !== "ready" && other.status !== "in-progress") continue;
+    if (waitsForReview(prOf.get(other.id))) continue;
+    if (claimTime(claims[other.id], -Infinity) > mine) continue;
     if (zonesOverlap(task.zones, other.zones, repoFiles)) {
-      problems.push(`зоны пересекаются с ${other.id}, которая уже в работе или на ревью`);
+      problems.push(`зоны пересекаются с ${other.id}: она взята раньше и ещё в работе (ветка без PR, черновик или доработка)`);
     }
   }
   return problems;
+}
+
+/** PR ждёт ревью: открыт, не черновик и без метки доработки. */
+function waitsForReview(pr) {
+  return pr !== undefined && pr.isDraft !== true && !(pr.labels ?? []).some((label) => label?.name === REWORK_LABEL);
+}
+
+/** Время захвата в миллисекундах; нет или не разобрать — `fallback`. */
+function claimTime(iso, fallback) {
+  const ms = iso === undefined || iso === null ? Number.NaN : Date.parse(iso);
+  return Number.isNaN(ms) ? fallback : ms;
 }
