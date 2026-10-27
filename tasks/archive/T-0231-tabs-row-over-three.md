@@ -3,8 +3,8 @@ id: T-0231
 title: Больше трёх вкладок — строкой с прокруткой и подчёркиванием, а не сеткой 2×2
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0227]
@@ -15,6 +15,7 @@ shared:
   - packages/app-shell/src/design-system/components/Layout.tsx
   - packages/app-shell/src/design-system/tokens.css
   - docs/27-design-system-and-app-shell.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -25,7 +26,7 @@ batch: 3
 
 # T-0231. Больше трёх вкладок — строкой с прокруткой и подчёркиванием, а не сеткой 2×2
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0231.json)](README.md#значки-статуса) [![T-0227](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json&label=T-0227)](archive/T-0227-ui-track-ids-all-screens.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0231.json)](../README.md#значки-статуса) [![T-0227](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0227.json&label=T-0227)](T-0227-ui-track-ids-all-screens.md)
 
 ## Зачем
 
