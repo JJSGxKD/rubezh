@@ -1,4 +1,4 @@
-import { BADGE_CACHE_SECONDS, boardCounters, moscowDay, streamRows, streamsSummary } from "./board.mjs";
+import { BADGE_CACHE_SECONDS, accountStreams, boardCounters, flowPrompt, knownAccounts, moscowDay, streamLabel, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
 
 /**
@@ -122,7 +122,8 @@ function section(title, count, headers, rows) {
  * и уровень — запускать и что ждёт. Заголовок без числа: на него ведёт ссылка
  * из epics.md (`#потоки-сейчас`). Строки те же, что у `pnpm task streams`.
  */
-function streamsSection(streams) {
+function streamsSection(board, credits, at) {
+  const { streams } = streamsSummary(board);
   const { now, queue } = streamRows(streams);
   const link = (item) => {
     const text = `[${item.id}](${TASKS_URL}/${item.path ?? item.fileName})`;
@@ -134,7 +135,27 @@ function streamsSection(streams) {
   const queueRows = queue.map((row) => [row.label, String(row.count), row.batch === null ? "без пачки" : String(row.batch)]);
   const nowPart = nowRows.length === 0 ? "Нечего: ни свободных задач, ни доработки." : table(["Поток", "Свободно", "Доработка", "Ближайшие задачи"], nowRows);
   const queuePart = queueRows.length === 0 ? "Ничего нет." : table(["Поток", "Ждут", "Ближайшая пачка"], queueRows);
-  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}`;
+  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}\n\n${accountsPart(board, streams, credits, at)}`;
+}
+
+/**
+ * «Запуск по аккаунтам»: на каждый известный аккаунт — свёрнутый список готовых промтов
+ * только для потоков, которые на нём не идут. Номер аккаунта уже внутри промта.
+ */
+function accountsPart(board, streams, credits, now) {
+  const heading = "### Запуск по аккаунтам";
+  const accounts = knownAccounts(board, credits, now);
+  if (accounts.length === 0) {
+    return `${heading}\n\nИзвестных аккаунтов нет: промты для своего — \`pnpm task streams --account claude-N\`.`;
+  }
+  const blocks = accounts.map((account) => {
+    const toRun = accountStreams(account, board, streams);
+    if (toRun.length === 0) return `${account} — всё нужное уже работает`;
+    const summary = `${account} — запустить ${String(toRun.length)}: ${toRun.map(streamLabel).join(", ")}`;
+    const prompts = toRun.map((stream) => `\`\`\`\n${flowPrompt({ account, executor: stream.executor, effort: stream.effort, runner: stream.runner })}\n\`\`\``).join("\n\n");
+    return `<details>\n<summary>${summary}</summary>\n\n${prompts}\n\n</details>`;
+  });
+  return `${heading}\n\nГотовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.\n\n${blocks.join("\n\n")}`;
 }
 
 /** Строка счётчиков под заголовком; пачки нет — последнего пункта нет. */
@@ -174,6 +195,39 @@ function leadSection(board) {
     ["PR", "Задача", "Почему"],
     entries.map(({ task, pr, waiting }) => [prLink(pr), taskLink(task), waiting.why]),
   );
+}
+
+const WAITING_WHO = { executor: "исполнителя", lead: "тимлида", owner: "владельца" };
+
+/** «Чего ждёт»: владельца — без причины, остальные — «кого · почему»; у «В работе» ожидания нет — ждёт исполнителя. */
+function waitingText(waiting) {
+  if (waiting === undefined) return WAITING_WHO.executor;
+  return waiting.who === "owner" ? WAITING_WHO.owner : `${WAITING_WHO[waiting.who]} · ${waiting.why}`;
+}
+
+/** «Висит»: меньше суток — «сегодня», иначе «N дн», от трёх суток с «⚠️ »; даты нет — «—». */
+function hangingText(days) {
+  if (days === null || days === undefined) return "—";
+  if (days < 1) return "сегодня";
+  return `${days >= 3 ? "⚠️ " : ""}${String(days)} дн`;
+}
+
+/**
+ * Общие столбцы «В работе», «На ревью» и «Доработки»: задача, поток, кто запустил,
+ * сколько висит, кругов доработки, чего ждёт и (у разделов с PR) сам PR.
+ */
+function workSection(title, entries, owners, withPr) {
+  const headers = ["Задача", "Поток", "Запустил", "Висит", "Кругов", "Чего ждёт", ...(withPr ? ["PR"] : [])];
+  const rows = entries.map((entry) => [
+    taskLink(entry.task),
+    entry.owner || owners.get(entry.task.id) || "неизвестно",
+    entry.launchedBy ?? "—",
+    hangingText(entry.days),
+    entry.rounds > 0 ? String(entry.rounds) : "—",
+    waitingText(entry.waiting),
+    ...(withPr ? [prLink(entry.pr)] : []),
+  ]);
+  return section(title, entries.length, headers, rows);
 }
 
 /** «Можно брать» тремя таблицами по месту работы; `human` здесь нет — он в «Ждут владельца». */
@@ -220,17 +274,12 @@ export function renderBoardPage({ board, owners, credits, people, githubAvailabl
   const sections = [
     ownerSection(board),
     leadSection(board),
-    streamsSection(streamsSummary(board).streams),
+    streamsSection(board, credits, now),
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
-    section(
-      "Доработка",
-      board.rework.length,
-      ["Задача", "Исполнитель", "PR", "Вёл"],
-      board.rework.map(({ task, pr }) => [taskLink(task), `${task.executor} · ${task.effort}`, prLink(pr), owners.get(task.id) || "неизвестно"]),
-    ),
+    workSection("Доработка", board.rework, owners, true),
     freeSection(board),
-    section("В работе", board.inProgress.length, ["Задача", "Взял"], board.inProgress.map(({ task }) => [taskLink(task), owners.get(task.id) || "неизвестно"])),
-    section("На ревью", board.review.length, ["Задача", "PR"], board.review.map(({ task, pr }) => [taskLink(task), prLink(pr)])),
+    workSection("В работе", board.inProgress, owners, false),
+    workSection("На ревью", board.review, owners, true),
     section("Ждут", board.blocked.length, ["Задача", "Чего ждёт"], board.blocked.map(({ task, reason }) => [taskLink(task), reason])),
     section(
       "Готово",

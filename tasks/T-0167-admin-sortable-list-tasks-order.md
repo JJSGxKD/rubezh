@@ -13,13 +13,10 @@ zones:
   - apps/admin/src/ui/sortable-list.tsx
   - apps/admin/src/ui/sortable-order.ts
   - apps/admin/src/ui/kit.tsx
-  - apps/admin/src/ui/help.ts
   - apps/admin/src/screens/tasks/TasksScreen.tsx
   - apps/admin/src/api/tasks.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/test/sortable-order.test.ts
   - apps/admin/test/tasks.test.ts
-  - apps/admin/test/audit.test.ts
   - backend/api/src/modules/admin/admin-tasks.controller.ts
   - backend/api/src/modules/tasks/tasks.service.ts
   - backend/api/src/modules/tasks/tasks.repository.ts
@@ -31,12 +28,15 @@ shared:
   - docs/29-admin-panel.md
   - docs/16-tech-stack-decisions.md
   - pnpm-lock.yaml
+  - apps/admin/src/ui/help.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0167. Порядок заданий перетаскиванием — SortableList в панели и запрос порядка

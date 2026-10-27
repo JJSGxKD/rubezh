@@ -1,0 +1,70 @@
+{
+  "skill": "game-art",
+  "note": "Проверка срабатывания по docs/18 §6: на should_trigger=true скилл обязан сработать, на false — нет (сработать должен соседний скилл или никакой).",
+  "queries": [
+    {
+      "query": "Нарисуй Кикимору для атласа late",
+      "should_trigger": true
+    },
+    {
+      "query": "Пересобери атлас после правки палитры",
+      "should_trigger": true
+    },
+    {
+      "query": "Удар Кистеня не чувствуется, добавь веса",
+      "should_trigger": true
+    },
+    {
+      "query": "Эффекты оружия мешают видеть телеграфы на 400 врагах",
+      "should_trigger": true
+    },
+    {
+      "query": "Сделай облик для Змея Горыныча с тремя головами",
+      "should_trigger": true
+    },
+    {
+      "query": "Нужна картинка бота для итога сезона",
+      "should_trigger": true
+    },
+    {
+      "query": "Промо 16:9 для анонса Ярмарки",
+      "should_trigger": true
+    },
+    {
+      "query": "Новый эффект для эволюции «Ожерелье»",
+      "should_trigger": true
+    },
+    {
+      "query": "Проверь читаемость строя стражей на 320",
+      "should_trigger": true
+    },
+    {
+      "query": "Поправь вёрстку окна уровня",
+      "should_trigger": false
+    },
+    {
+      "query": "Звук попадания по игроку теряется в бою",
+      "should_trigger": false
+    },
+    {
+      "query": "Сколько стоить облику на Ярмарке?",
+      "should_trigger": false
+    },
+    {
+      "query": "Напиши подпись к промо-картинке для канала",
+      "should_trigger": false
+    },
+    {
+      "query": "Добавь врага в waves.ts на 5-й минуте",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай экран батл-пасса",
+      "should_trigger": false
+    },
+    {
+      "query": "Почему golden сдвинулся после правки контента?",
+      "should_trigger": false
+    }
+  ]
+}

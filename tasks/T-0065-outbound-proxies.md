@@ -17,8 +17,6 @@ zones:
   - backend/api/test/proxies.integration.test.ts
   - apps/admin/src/api/proxies.ts
   - apps/admin/src/screens/proxies/**
-  - apps/admin/src/routes.ts
-  - apps/admin/src/screens/sections.tsx
   - apps/admin/test/proxies.test.ts
 shared:
   - backend/api/package.json
@@ -32,6 +30,8 @@ shared:
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
 runner: local
 executor: sonnet-5.5
 effort: extra

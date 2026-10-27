@@ -22,12 +22,12 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0208. «Вклад» на доске — задачи, доработки, ревью, спецификации и PR тимлидов по периодам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json)](README.md#значки-статуса) [![T-0209](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json&label=T-0209)](T-0209-flow-prompts-per-account.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json)](README.md#значки-статуса) [![T-0209](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json&label=T-0209)](archive/T-0209-flow-prompts-per-account.md)
 
 ## Зачем
 

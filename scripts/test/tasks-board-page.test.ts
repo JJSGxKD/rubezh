@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { SIZE_POINTS, contributions, formatMoscow, freeBadge, moscowDay, renderBoardPage, taskCredits } from "../tasks/board-page.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { parseMergedTaskPrs } from "../tasks/git-io.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { flowPrompt } from "../tasks/board.mjs";
 
 // Страница доски и счётчик свободных задач (T-0018).
 
@@ -228,11 +230,24 @@ describe("страница доски", () => {
         "|---|---|---|",
         "| sonnet-5.5 / medium | 1 | без пачки |",
         "",
+        "### Запуск по аккаунтам",
+        "",
+        "Готовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.",
+        "",
+        "<details>",
+        "<summary>claude-2 — запустить 2: sonnet-5.5 / low, sonnet-5.5 / extra</summary>",
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "low", runner: "any" })}\n\`\`\``,
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "extra", runner: "any" })}\n\`\`\``,
+        "",
+        "</details>",
+        "",
         "## Доработка — 1",
         "",
-        "| Задача | Исполнитель | PR | Вёл |",
-        "|---|---|---|---|",
-        `| [T-0017. Ответы](${BLOB}/T-0017-ans.md) | sonnet-5.5 · low | [#216](https://github.com/JJSGxKD/rubezh/pull/216) | claude-2 / sonnet-5.5 / low |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
+        "|---|---|---|---|---|---|---|",
+        `| [T-0017. Ответы](${BLOB}/T-0017-ans.md) | claude-2 / sonnet-5.5 / low | — | — | — | исполнителя · доработка | [#216](https://github.com/JJSGxKD/rubezh/pull/216) |`,
         "",
         "## Можно брать — 1",
         "",
@@ -252,15 +267,15 @@ describe("страница доски", () => {
         "",
         "## В работе — 1",
         "",
-        "| Задача | Взял |",
-        "|---|---|",
-        `| [T-0012. Палитра](${BLOB}/T-0012-pal.md) | claude-3 / sonnet-5.5 |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт |",
+        "|---|---|---|---|---|---|",
+        `| [T-0012. Палитра](${BLOB}/T-0012-pal.md) | claude-3 / sonnet-5.5 | — | — | — | исполнителя |`,
         "",
         "## На ревью — 1",
         "",
-        "| Задача | PR |",
-        "|---|---|",
-        `| [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | [#215](https://github.com/JJSGxKD/rubezh/pull/215) |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
+        "|---|---|---|---|---|---|---|",
+        `| [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | неизвестно | — | — | — | тимлида · приёмка | [#215](https://github.com/JJSGxKD/rubezh/pull/215) |`,
         "",
         "## Ждут — 1",
         "",
@@ -452,5 +467,104 @@ describe("страница доски: ожидание, счётчики, МС�
   it("пустой подраздел «Можно брать» — «Пусто.»", () => {
     const page = render({ board: { ...board, free: [entry(open("T-0401", "Облако"))] } });
     expect(page).toContain("### Машина с Docker — 0\n\nПусто.");
+  });
+});
+
+// Столбцы «В работе», «На ревью» и «Доработка»: поток, запустил, висит, кругов, чего ждёт (T-0206).
+describe("страница доски: кто, сколько висит и чего ждёт", () => {
+  const open = (id: string, title: string) => task(id, { title, status: "ready", fileName: `${id}-x.md` });
+  const empty = { rework: [], free: [], inProgress: [], review: [], blocked: [], done: [], draft: [], cancelled: [] };
+  const render = (board: Record<string, unknown>): string =>
+    renderBoardPage({ board, owners: new Map(), credits: new Map(), people: [], githubAvailable: true, mergedPrs: [], now: new Date("2026-10-24T12:00:00Z") });
+  const BLOB = "https://github.com/JJSGxKD/rubezh/blob/dev/tasks";
+  const PR = "https://github.com/JJSGxKD/rubezh/pull";
+
+  it("«На ревью»: четвёртые сутки, один круг, красный CI — «⚠️ 4 дн», «1», «исполнителя · CI красный»", () => {
+    const page = render({
+      ...empty,
+      review: [
+        {
+          task: open("T-0501", "Висит"),
+          pr: 601,
+          waiting: { who: "executor", why: "CI красный" },
+          owner: "claude-3 / sonnet-5.5 / medium",
+          launchedBy: "помощник ivan_2",
+          days: 4,
+          rounds: 1,
+        },
+      ],
+    });
+    const section = page.slice(page.indexOf("## На ревью"), page.indexOf("## Ждут —"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
+    expect(section).toContain(`| [T-0501. Висит](${BLOB}/T-0501-x.md) | claude-3 / sonnet-5.5 / medium | помощник ivan_2 | ⚠️ 4 дн | 1 | исполнителя · CI красный | [#601](${PR}/601) |`);
+  });
+
+  it("меньше суток — «сегодня», один-два дня — «N дн» без пометки, ноль кругов — «—»", () => {
+    const entry = (id: string, days: number) => ({ task: open(id, id), pr: 700 + days, waiting: { who: "lead", why: "приёмка" }, owner: "x", launchedBy: "владелец", days, rounds: 0 });
+    const page = render({ ...empty, review: [entry("T-0502", 0), entry("T-0503", 2), entry("T-0504", 3)] });
+    expect(page).toContain("| владелец | сегодня | — | тимлида · приёмка |");
+    expect(page).toContain("| владелец | 2 дн | — | тимлида · приёмка |");
+    expect(page).toContain("| владелец | ⚠️ 3 дн | — | тимлида · приёмка |");
+  });
+
+  it("«В работе»: нет коммита захвата — «Висит» «—»; PR нет — колонки PR нет, ждёт исполнителя", () => {
+    const page = render({ ...empty, inProgress: [{ task: open("T-0505", "Без даты"), owner: "claude-4 / sonnet-5.5", launchedBy: null, days: null, rounds: 0 }] });
+    const section = page.slice(page.indexOf("## В работе"), page.indexOf("## На ревью"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт |");
+    expect(section).not.toContain("| PR |");
+    expect(section).toContain(`| [T-0505. Без даты](${BLOB}/T-0505-x.md) | claude-4 / sonnet-5.5 | — | — | — | исполнителя |`);
+  });
+
+  it("PR без строки «Запустил:» — «—» в столбце «Запустил»", () => {
+    const page = render({ ...empty, review: [{ task: open("T-0506", "Без строки"), pr: 801, waiting: { who: "lead", why: "вопрос" }, owner: "x", launchedBy: null, days: 1, rounds: 0 }] });
+    expect(page).toContain("| x | — | 1 дн | — | тимлида · вопрос |");
+  });
+
+  it("«Доработка» — те же столбцы; владелец — «владельца»; поток не прочитан — «неизвестно»", () => {
+    const page = render({
+      ...empty,
+      rework: [{ task: open("T-0507", "Ответили"), pr: 901, waiting: { who: "owner", why: "решение владельца" }, launchedBy: "владелец", days: 5, rounds: 2 }],
+    });
+    const section = page.slice(page.indexOf("## Доработка"), page.indexOf("## Можно брать"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
+    expect(section).toContain("| неизвестно | владелец | ⚠️ 5 дн | 2 | владельца | [#901]");
+  });
+});
+
+// Запуск по аккаунтам (T-0209).
+describe("страница доски: запуск по аккаунтам", () => {
+  const open = (id: string, patch: Record<string, unknown> = {}) => task(id, { title: id, status: "ready", fileName: `${id}-x.md`, ...patch });
+  const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
+  const render = (board: Record<string, unknown>, credits = new Map()): string =>
+    renderBoardPage({ board, owners: new Map(), credits, people: [], githubAvailable: true, mergedPrs: [], now: new Date("2026-10-27T12:00:00Z") });
+  const base = { rework: [], free: [], inProgress: [], review: [], blocked: [], done: [], draft: [], cancelled: [] };
+
+  it("на аккаунт — <details> с промтами блоками кода", () => {
+    const page = render({
+      ...base,
+      free: [entry(open("T-0601")), entry(open("T-0602", { effort: "high" })), entry(open("T-0603", { runner: "local" }))],
+      inProgress: [entry(open("T-0604", { effort: "low", executor: "haiku-5.5" }), { owner: "claude-2 / haiku-5.5 / low" })],
+    });
+    const part = page.slice(page.indexOf("### Запуск по аккаунтам"), page.indexOf("## Доработка"));
+    expect(part).toContain("<details>");
+    expect(part).toContain("<summary>claude-2 — запустить 3: sonnet-5.5 / medium, sonnet-5.5 / medium · local, sonnet-5.5 / high</summary>");
+    expect(part).toContain("поток claude-2 / sonnet-5.5 / medium, запустил: владелец");
+    expect(part).toContain("--effort medium --runner local");
+    expect(part).toContain("</details>");
+  });
+
+  it("аккаунт без свободных потоков — «всё нужное уже работает»", () => {
+    const page = render({
+      ...base,
+      free: [entry(open("T-0601"))],
+      inProgress: [entry(open("T-0605"), { owner: "claude-3 / sonnet-5.5 / medium" })],
+    });
+    expect(page).toContain("claude-3 — всё нужное уже работает");
+  });
+
+  it("аккаунтов нет — подсказка про команду", () => {
+    const page = render({ ...base, free: [entry(open("T-0601"))] });
+    expect(page).toContain("### Запуск по аккаунтам");
+    expect(page).toContain("pnpm task streams --account claude-N");
   });
 });

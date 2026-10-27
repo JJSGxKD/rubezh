@@ -148,6 +148,21 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Кольцо стражей закончилось (tasks/T-0182, Р112): `outcome` — прорвался
+  // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
+  // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
+  // кольцо просуществовало.
+  ring_ended: {
+    version: 1,
+    payload: payload({
+      index: count,
+      outcome: z.enum(["broken", "held", "died"]),
+      guards: count,
+      killed: count,
+      lifeSec: seconds,
+      elapsedSec: seconds,
+    }),
+  },
   // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
   // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
   // сундука забега, `level` — уровень игрока.

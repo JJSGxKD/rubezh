@@ -28,7 +28,7 @@ export class OnlineController {
   @Post("ping")
   async ping(@Req() request: unknown, @Body() body: unknown): Promise<{ data: PingResult }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(PING_LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(PING_LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     const parsed = pingSchema.safeParse(body);
     if (!parsed.success) throw new ValidationError("Нужно поле inRun: true или false");
     return { data: await this.online.ping(account, parsed.data.inRun, new Date()) };

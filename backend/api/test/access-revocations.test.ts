@@ -169,7 +169,7 @@ describe("отзыв токенов на маршруте чужого моду�
     const response = await http.inject({ method: "GET", url: "/api/v1/probe", headers: { authorization: `Bearer ${token}` } });
 
     expect(response.statusCode).toBe(401);
-    expect(response.json()).toMatchObject({ error: { message: "Сессия завершена — войдите заново" } });
+    expect(response.json()).toMatchObject({ error: { message: "Сессия завершена — войди заново" } });
   });
 
   it("без отзыва тот же токен проходит", async () => {

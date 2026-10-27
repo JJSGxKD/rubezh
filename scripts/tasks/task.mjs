@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
+import { COLUMNS, REWORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextTasks, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
-import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
+import { BASE, ROOT, claimedAt, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
 import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
 import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
@@ -21,7 +21,7 @@ const USAGE = `Команды:
   pnpm task board [--all]                  доска из origin/dev (--all — и отменённые)
   pnpm task next [--runner any|local|owner] [--executor <модель>] [--effort <уровень>]
                                            доработка и свободные задачи, лучшая — первой
-  pnpm task streams [--epic E10]           какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди
+  pnpm task streams [--epic E10] [--account claude-2]   какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди; с --account — ещё готовые промты для аккаунта
   pnpm task claim T-NNNN --owner "<аккаунт / модель / уровень>"
                                            захватить задачу веткой task/T-NNNN
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
@@ -105,14 +105,31 @@ function runBoard(flags) {
 
 /** Какие потоки запускать (tasks/README.md, «Автопоток»): свободное и доработка по парам «модель + уровень», ниже — очередь. */
 function runStreams(flags) {
+  const account = flags.account;
+  if (account !== undefined && !/^claude-\d+$/.test(account)) fail("Аккаунт — в виде claude-N");
   const { board } = loadBoard();
+  // Поток «в работе» у аккаунта определяется по полю `owner` в ветке задачи.
+  if (account !== undefined) for (const entry of board.inProgress) entry.owner = ownerOf(entry.task, true);
   const summary = streamsSummary(board);
   const epic = flags.epic;
   if (epic !== undefined && summary.epics[epic] === undefined) {
     console.log(`В эпике ${epic} нет задач для потоков: ни свободных, ни доработки, ни ждущих.`);
     return;
   }
-  for (const line of renderStreamsText(epic === undefined ? summary.streams : summary.epics[epic])) console.log(line);
+  const shown = epic === undefined ? summary.streams : summary.epics[epic];
+  for (const line of renderStreamsText(shown)) console.log(line);
+  if (account === undefined) return;
+
+  const toRun = accountStreams(account, board, shown);
+  console.log("");
+  if (toRun.length === 0) {
+    console.log(`${account} — всё нужное уже работает: новых потоков запускать не надо.`);
+    return;
+  }
+  console.log(`Промты для ${account} — потоки, которым есть что делать и которые на нём не идут:`);
+  for (const stream of toRun) {
+    console.log(`\n--- ${streamLabel(stream)}\n\n${flowPrompt({ account, executor: stream.executor, effort: stream.effort, runner: stream.runner })}`);
+  }
 }
 
 function runNext(flags) {
@@ -422,18 +439,38 @@ function runClaimCheck(flags) {
   console.log(`Проверка захвата ${found.id}: задачу можно было брать.`);
 }
 
+/**
+ * Поля столбцов страницы для задачи «в работе», «на ревью» или «на доработке»:
+ * поток, кто запустил, сколько висит и сколько кругов. У «В работе» PR нет —
+ * висит с коммита захвата.
+ */
+function boardDetails(entry, columnKey, owner, prsByNumber, now) {
+  const pr = columnKey === "inProgress" ? undefined : prsByNumber.get(entry.pr);
+  return {
+    owner,
+    launchedBy: launchedBy(pr?.body),
+    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task.id) : pr?.createdAt, now),
+    rounds: reworkRounds(pr, entry.task.id),
+  };
+}
+
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
   const { state, board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
   const owners = new Map();
+  const now = new Date();
+  const prsByNumber = new Map((state.prs ?? []).map((pr) => [pr.number, pr]));
   let count = 0;
   for (const column of COLUMNS) {
     for (const entry of board[column.key]) {
       const busy = column.key === "inProgress" || column.key === "review" || column.key === "rework";
       const owner = busy ? ownerOf(entry.task, true) : undefined;
-      if (busy) owners.set(entry.task.id, owner);
+      if (busy) {
+        owners.set(entry.task.id, owner);
+        Object.assign(entry, boardDetails(entry, column.key, owner, prsByNumber, now));
+      }
       const badge = statusBadge({ ...entry, column: column.key, owner });
       writeFileSync(join(dir, `${entry.task.id}.json`), `${JSON.stringify(badge)}\n`);
       count += 1;
@@ -456,7 +493,7 @@ function runStatusJson(flags) {
     people: contributions(credits),
     githubAvailable: mergedPrs !== null,
     mergedPrs,
-    now: new Date(),
+    now,
   });
   writeFileSync(join(flags.out, "README.md"), page);
   console.log(`Значки статуса: ${String(count)} задач и ${String(epics.size)} эпиков → ${dir}`);

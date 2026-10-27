@@ -221,8 +221,8 @@ export class FriendsService implements OnModuleInit {
       maxIncoming: FRIENDS_RULES.maxIncomingRequests,
       maxOutgoing: FRIENDS_RULES.maxOutgoingRequests,
     });
-    if (outcome === "incoming_full") throw new FriendLimitError("У игрока слишком много заявок — попробуйте позже");
-    if (outcome === "outgoing_full") throw new FriendLimitError("Слишком много заявок ждут ответа — отмените часть");
+    if (outcome === "incoming_full") throw new FriendLimitError("У игрока слишком много заявок — попробуй позже");
+    if (outcome === "outgoing_full") throw new FriendLimitError("Слишком много заявок ждут ответа — отмени часть");
     // Сообщение — только о новой заявке и мимо ответа: повтор той же заявки
     // не пишет второй раз, а медленный Telegram не держит игрока.
     if (outcome === "sent") {
@@ -239,7 +239,7 @@ export class FriendsService implements OnModuleInit {
     const result = await this.friends.befriend(fromId, actor.accountId, "request", FRIENDS_RULES.maxFriends);
     if (result.outcome === "limit") {
       throw new FriendLimitError(
-        result.accountId === actor.accountId ? `У вас уже ${FRIENDS_RULES.maxFriends} друзей — это потолок` : "У игрока уже потолок друзей",
+        result.accountId === actor.accountId ? `У тебя уже ${FRIENDS_RULES.maxFriends} друзей — это потолок` : "У игрока уже потолок друзей",
       );
     }
     if (result.outcome === "added") this.log("friend_added", { accountId: actor.accountId, friendId: fromId, source: "request" });

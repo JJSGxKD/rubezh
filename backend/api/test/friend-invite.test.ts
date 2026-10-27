@@ -56,13 +56,13 @@ describe("приглашение сообщением", () => {
 
     const stranger = new FakePreparer();
     stranger.answer = null;
-    await expect(service(stranger).preparedMessage(ME)).rejects.toThrow(/скопируйте ссылку/);
+    await expect(service(stranger).preparedMessage(ME)).rejects.toThrow(/скопируй ссылку/);
   });
 
   it("сбой Bot API — отказ с просьбой повторить, а не необработанная ошибка", async () => {
     const broken = new FakePreparer();
     broken.answer = new Error("Bot API savePreparedInlineMessage: 0 сеть недоступна");
-    await expect(service(broken).preparedMessage(ME)).rejects.toThrow(/попробуйте ещё раз/);
+    await expect(service(broken).preparedMessage(ME)).rejects.toThrow(/попробуй ещё раз/);
   });
 });
 

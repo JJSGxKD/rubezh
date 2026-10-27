@@ -90,7 +90,13 @@ const purchaseSchema = z.object({
   invoicedAt: iso,
   paidAt: isoOrNull,
   refundReason: z.string().nullable(),
+  /** когда товар лёг игроку; у второго шанса не бывает никогда — он засчитан в забеге */
+  fulfilledAt: isoOrNull.optional(),
+  /** возврат заказан, звёзды ещё в пути */
+  refundRequestedAt: isoOrNull.optional(),
   refundedAt: isoOrNull,
+  /** что поддержка может сделать сейчас (T-0037); старый сервер поля не отдаёт. Строками: действие новее панели не должно ронять карточку */
+  actions: z.array(z.string()).default([]),
 });
 
 export const playerCardSchema = z.object({
@@ -148,6 +154,60 @@ export function fetchPlayerCard(api: AdminApi, accountId: string): Promise<ApiRe
 
 export function adjustWallet(api: AdminApi, accountId: string, adjust: WalletAdjust): Promise<ApiResult<AdjustResult>> {
   return api.request(`/players/${encodeURIComponent(accountId)}/wallet/adjust`, { method: "POST", body: adjust, schema: adjustResultSchema });
+}
+
+/** Пределы причины действия с покупкой — те же, что у сервера (`purchaseSupportSchema`). */
+export const PURCHASE_NOTE_MIN = 3;
+export const PURCHASE_NOTE_MAX = 200;
+
+/** `null` — причину можно отправлять. */
+export function purchaseNoteProblem(note: string): string | null {
+  const length = note.trim().length;
+  if (length < PURCHASE_NOTE_MIN) return "Причина — от 3 символов: она попадёт в журнал действий и в сообщение команде";
+  if (length > PURCHASE_NOTE_MAX) return "Причина — до 200 символов";
+  return null;
+}
+
+const REFUND_REASONS: Readonly<Record<string, string>> = {
+  test_mode: "тестовая оплата",
+  unused: "второй шанс не использован",
+  external: "вернули вне игры",
+  undeliverable: "товара нет в каталоге",
+  manual: "вручную, поддержка",
+};
+
+export function refundReasonLabel(reason: string | null): string {
+  if (reason === null) return "—";
+  return REFUND_REASONS[reason] ?? reason;
+}
+
+export type PurchaseStateTone = "neutral" | "success" | "warning" | "info";
+
+/** Что с покупкой сейчас — словами для таблицы; порядок проверок важен: возврат сильнее выдачи. */
+export function purchaseState(purchase: Pick<PlayerPurchase, "paidAt" | "refundedAt"> & Partial<Pick<PlayerPurchase, "product" | "fulfilledAt" | "refundRequestedAt">>): { label: string; tone: PurchaseStateTone } {
+  if (purchase.paidAt === null) return { label: "не оплачен", tone: "neutral" };
+  if (purchase.refundedAt !== null) return { label: "звёзды возвращены", tone: "neutral" };
+  if (purchase.refundRequestedAt !== undefined && purchase.refundRequestedAt !== null) return { label: "возврат в пути", tone: "info" };
+  if (purchase.fulfilledAt !== undefined && purchase.fulfilledAt !== null) return { label: "выдан", tone: "success" };
+  if (purchase.product === undefined || purchase.product === "continue_run") return { label: "оплачен", tone: "success" };
+  return { label: "не выдан", tone: "warning" };
+}
+
+const supportResultSchema = z.object({ purchase: purchaseSchema, actions: z.array(z.string()) });
+export type SupportResult = z.infer<typeof supportResultSchema>;
+
+function purchaseAction(api: AdminApi, accountId: string, purchaseId: string, action: "refund" | "fulfill", note: string): Promise<ApiResult<SupportResult>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/purchases/${encodeURIComponent(purchaseId)}/${action}`, { method: "POST", body: { note }, schema: supportResultSchema });
+}
+
+/** Вернуть звёзды; причина попадёт в журнал действий и в поток «Покупки». */
+export function refundPurchase(api: AdminApi, accountId: string, purchaseId: string, note: string): Promise<ApiResult<SupportResult>> {
+  return purchaseAction(api, accountId, purchaseId, "refund", note);
+}
+
+/** Повторить выдачу; у выдачи свой ключ — дважды ничего не начислится. */
+export function fulfillPurchase(api: AdminApi, accountId: string, purchaseId: string, note: string): Promise<ApiResult<SupportResult>> {
+  return purchaseAction(api, accountId, purchaseId, "fulfill", note);
 }
 
 /** Потолок сообщения команды — тот же, что `TEAM_MESSAGE_MAX` на сервере. */

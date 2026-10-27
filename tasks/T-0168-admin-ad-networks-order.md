@@ -11,10 +11,7 @@ depends_on: [T-0167]
 zones:
   - apps/admin/src/screens/ads/NetworkCards.tsx
   - apps/admin/src/api/ads.ts
-  - apps/admin/src/api/audit.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/ads.test.ts
-  - apps/admin/test/audit.test.ts
   - backend/api/src/modules/admin/admin-ads.controller.ts
   - backend/api/src/modules/ads/ads-catalog.service.ts
   - backend/api/src/modules/ads/ads-catalog.repository.ts
@@ -23,12 +20,15 @@ zones:
   - backend/api/test/ads.integration.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
+  - apps/admin/test/audit.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0168. Порядок рекламных сетей в круге — перетаскиванием вместо числа

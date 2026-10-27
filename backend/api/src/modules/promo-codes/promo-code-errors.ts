@@ -13,12 +13,12 @@ import type { RedeemRefusal } from "./promo-code-rules.js";
  */
 export class PromoCodeNotFoundError extends DomainError {
   constructor() {
-    super("promo_code_not_found", "Такого кода нет — проверьте, нет ли опечатки", 404);
+    super("promo_code_not_found", "Такого кода нет — проверь, нет ли опечатки", 404);
   }
 }
 
 const REFUSAL_MESSAGES: Record<RedeemRefusal, string> = {
-  already: "Награду по этому коду вы уже получили",
+  already: "Награда по этому коду уже получена",
   scheduled: "Код ещё не начал действовать",
   paused: "Код сейчас не действует",
   expired: "Срок действия кода закончился",

@@ -104,10 +104,10 @@ export class DiagnosticsService {
   private async enforceLimits(installId: string, platformUserId: string | null): Promise<void> {
     const limits = INGEST_LIMITS.reports;
     if (!(await this.limiter.consume(limits.install, installId))) {
-      throw new RateLimitedError("Слишком много отчётов с устройства, попробуйте позже");
+      throw new RateLimitedError("Слишком много отчётов с устройства, попробуй позже");
     }
     if (platformUserId !== null && !(await this.limiter.consume(limits.user, platformUserId))) {
-      throw new RateLimitedError("Слишком много отчётов, попробуйте позже");
+      throw new RateLimitedError("Слишком много отчётов, попробуй позже");
     }
   }
 }

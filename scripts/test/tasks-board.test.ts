@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { OWNER_LABEL, boardCounters, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { checkRunnerLines } from "../release/pr-check.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { OWNER_LABEL, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -103,11 +106,23 @@ describe("пересечение зон на доске", () => {
     expect(result.blocked[0].reason).toContain("T-0004");
   });
 
-  it("пересечение с задачей на ревью тоже блокирует", () => {
+  // Р171: PR, ждущий ревью, соседей не держит; черновик и доработка — держат.
+  it("пересечение с задачей на ревью не блокирует", () => {
     const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
     const prs = [{ number: 7, headRefName: "task/T-0004", isDraft: false }];
     const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
-    expect(ids(result.blocked)).toEqual(["T-0005"]);
+    expect(ids(result.free)).toEqual(["T-0005"]);
+  });
+
+  it("пересечение с черновиком PR или доработкой блокирует", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 7, headRefName: "task/T-0004", isDraft: true },
+      { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }] },
+    ]) {
+      const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
+      expect(ids(result.blocked)).toEqual(["T-0005"]);
+    }
   });
 
   it("пересечение с другой свободной задачей не блокирует: занята только та, у которой есть ветка", () => {
@@ -653,5 +668,155 @@ describe("поток owner", () => {
     expect(streams.map((stream: { runner: string }) => stream.runner)).toEqual(["any", "owner"]);
     expect(renderStreamsText(streams).join("\n")).toContain("sonnet-5.5 / medium · owner");
     expect(epicStreamsBadge(streams.slice(1)).message).toContain("sonnet·medium·owner");
+  });
+});
+
+// Столбцы «Кругов», «Запустил», «Висит» (T-0206).
+describe("круги доработки", () => {
+  const commit = (messageHeadline: string) => ({ messageHeadline });
+
+  it("считает коммиты «Продолжить T-NNNN после ответа» этой задачи", () => {
+    const pr = {
+      commits: [
+        commit("feat(dev): Что-то"),
+        commit("chore(tasks): Продолжить T-0001 после ответа"),
+        commit("chore(tasks): Продолжить T-0001 после ответа"),
+        commit("chore(tasks): Продолжить T-0002 после ответа"),
+      ],
+    };
+    expect(reworkRounds(pr, "T-0001")).toBe(2);
+    expect(reworkRounds(pr, "T-0002")).toBe(1);
+  });
+
+  it("нет коммитов или поля — ноль", () => {
+    expect(reworkRounds({ commits: [] }, "T-0001")).toBe(0);
+    expect(reworkRounds({}, "T-0001")).toBe(0);
+    expect(reworkRounds(undefined, "T-0001")).toBe(0);
+  });
+});
+
+describe("кто запустил поток", () => {
+  it("значение строки «Запустил:» из описания", () => {
+    expect(launchedBy("Описание\n\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: помощник ivan_2\n")).toBe("помощник ivan_2");
+    expect(launchedBy("Запустил: владелец")).toBe("владелец");
+    expect(launchedBy("a\r\nЗапустил: владелец\r\n")).toBe("владелец");
+  });
+
+  it("строки нет, описания нет или строка не по формату — null", () => {
+    expect(launchedBy("Просто текст")).toBeNull();
+    expect(launchedBy(undefined)).toBeNull();
+    expect(launchedBy(null)).toBeNull();
+    expect(launchedBy("Запустил: помощник @ivan")).toBeNull();
+    expect(launchedBy("в тексте Запустил: владелец")).toBeNull();
+  });
+
+  it("на тех же примерах отвечает так же, как проверка pr-check", () => {
+    const bodies = [
+      "Запустил: владелец",
+      "Запустил: помощник ivan_2",
+      "Запустил: помощник @ivan",
+      "Запустил: помощник",
+      "Запустил: кто-то",
+      "нет строки",
+    ];
+    for (const body of bodies) {
+      const checkOk = !checkRunnerLines(`${body}\nПоток: claude-3 / sonnet-5.5 / medium`, "task/T-0001").some((error: string) => error.startsWith("запустил"));
+      expect(launchedBy(body) !== null, body).toBe(checkOk);
+    }
+  });
+});
+
+describe("сколько висит", () => {
+  const NOW = new Date("2026-10-24T12:00:00Z");
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000).toISOString();
+
+  it("целые сутки: 23 часа — 0, 49 часов — 2", () => {
+    expect(hangingDays(hoursAgo(23), NOW)).toBe(0);
+    expect(hangingDays(hoursAgo(24), NOW)).toBe(1);
+    expect(hangingDays(hoursAgo(49), NOW)).toBe(2);
+  });
+
+  it("даты нет или она битая — null; из будущего — 0", () => {
+    expect(hangingDays(null, NOW)).toBeNull();
+    expect(hangingDays(undefined, NOW)).toBeNull();
+    expect(hangingDays("не дата", NOW)).toBeNull();
+    expect(hangingDays(hoursAgo(-5), NOW)).toBe(0);
+  });
+});
+
+// Промты потоков с номером аккаунта (T-0209).
+describe("промт потока", () => {
+  it("номер аккаунта, модель и уровень подставлены; без --runner для any", () => {
+    const text = flowPrompt({ account: "claude-2", executor: "haiku-5.5", effort: "low", runner: "any" });
+    expect(text).toContain("поток claude-2 / haiku-5.5 / low");
+    expect(text).toContain("pnpm task next --executor haiku-5.5 --effort low");
+    expect(text).toContain('--owner "claude-2 / haiku-5.5 / low"');
+    expect(text).not.toContain("--runner");
+  });
+
+  it("для local и owner добавляется --runner", () => {
+    expect(flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "high", runner: "local" })).toContain("--effort high --runner local");
+    expect(flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "high", runner: "owner" })).toContain("--effort high --runner owner");
+  });
+
+  it("блок «Промт потока» в tasks/README.md равен шаблону из кода", () => {
+    const readme = readFileSync(new URL("../../tasks/README.md", import.meta.url), "utf8");
+    const after = readme.slice(readme.indexOf("**Промт потока**"));
+    const block = /```\n([\s\S]*?)\n```/.exec(after)?.[1];
+    expect(block).toBe(flowPrompt({ account: "claude-N", executor: "sonnet-5.5", effort: "medium", runner: "any" }));
+  });
+});
+
+describe("потоки для аккаунта", () => {
+  const tasks = [
+    task("T-0401", { effort: "medium" }), // свободна: поток sonnet / medium
+    task("T-0402", { effort: "high" }), // свободна: поток sonnet / high
+    task("T-0403", { effort: "medium" }), // в работе у claude-2
+    task("T-0404", { effort: "high" }), // на ревью у claude-2
+  ];
+  const board = classify(tasks, ["T-0403", "T-0404"], [{ number: 7, headRefName: "task/T-0404", isDraft: false }], [], EPIC_ORDER);
+  board.inProgress[0].owner = "claude-2 / sonnet-5.5 / medium";
+  board.review[0].owner = "claude-2 / sonnet-5.5 / high";
+  const { streams } = streamsSummary(board);
+  const labels = (list: { executor: string; effort: string }[]) => list.map((stream) => `${stream.executor}/${stream.effort}`);
+
+  it("поток, который у аккаунта уже идёт, не предлагается; у другого аккаунта — предлагается", () => {
+    expect(labels(accountStreams("claude-2", board, streams))).toEqual(["sonnet-5.5/high"]);
+    expect(labels(accountStreams("claude-3", board, streams))).toEqual(["sonnet-5.5/medium", "sonnet-5.5/high"]);
+  });
+
+  it("задача на ревью поток не занимает", () => {
+    expect(labels(accountStreams("claude-2", board, streams))).toContain("sonnet-5.5/high");
+  });
+
+  it("claude-2 не принимается за claude-20", () => {
+    board.inProgress[0].owner = "claude-20 / sonnet-5.5 / medium";
+    expect(labels(accountStreams("claude-2", board, streams))).toContain("sonnet-5.5/medium");
+    board.inProgress[0].owner = "claude-2 / sonnet-5.5 / medium";
+  });
+});
+
+describe("известные аккаунты", () => {
+  const NOW = new Date("2026-10-27T12:00:00Z");
+  const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
+  const empty = classify([], [], [], [], EPIC_ORDER);
+
+  it("владелец задачи, влитой 20 суток назад, не попадает; 10 суток — попадает", () => {
+    const credits = new Map([
+      ["T-0001", { owner: "claude-5 / sonnet-5.5 / medium", mergedAt: daysAgo(20) }],
+      ["T-0002", { owner: "claude-6 / sonnet-5.5 / medium", mergedAt: daysAgo(10) }],
+    ]);
+    expect(knownAccounts(empty, credits, NOW)).toEqual(["claude-6"]);
+  });
+
+  it("аккаунты из «В работе», «На ревью» и «Доработки»; по номеру, claude-10 после claude-9", () => {
+    const board = { ...empty, inProgress: [{ task: task("T-1"), owner: "claude-10 / sonnet-5.5 / medium" }], review: [{ task: task("T-2"), pr: 1, owner: "claude-9 / haiku-5.5 / low" }], rework: [{ task: task("T-3"), pr: 2, owner: "claude-2 / sonnet-5.5 / high" }] };
+    expect(knownAccounts(board, new Map(), NOW)).toEqual(["claude-2", "claude-9", "claude-10"]);
+  });
+
+  it("владелец не в виде claude-N (пустой, «не указан») и повтор не попадают", () => {
+    const board = { ...empty, inProgress: [{ task: task("T-1"), owner: "" }, { task: task("T-2"), owner: "claude-3 / sonnet-5.5 / medium" }, { task: task("T-3"), owner: "claude-3 / haiku-5.5 / low" }] };
+    const credits = new Map([["T-9", { owner: "не указан", mergedAt: daysAgo(1) }]]);
+    expect(knownAccounts(board, credits, NOW)).toEqual(["claude-3"]);
   });
 });

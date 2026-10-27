@@ -20,6 +20,6 @@ export class VipInactiveError extends DomainError {
  */
 export class VipResumeUnavailableError extends DomainError {
   constructor() {
-    super("vip_resume_unavailable", "Продление не вернуть отсюда — включите его там, где оплачивали, или оформите VIP заново", 409);
+    super("vip_resume_unavailable", "Продление не вернуть отсюда — включи его там, где оплачивали, или оформи VIP заново", 409);
   }
 }

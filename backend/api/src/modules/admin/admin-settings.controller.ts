@@ -13,9 +13,10 @@ import { AdminSettingsService, type SettingView } from "./admin-settings.service
 
 /**
  * Настройки без релиза в панели: список, запись, сброс к окружению. Схему
- * значения знает каталог — здесь только его форма: строка или флажок.
+ * значения знает каталог — здесь только его форма: строка, флажок или число.
+ * Число панель шлёт числом, а каталог число строкой не примет.
  */
-const saveSchema = z.object({ value: z.union([z.string().max(256), z.boolean()]) });
+const saveSchema = z.object({ value: z.union([z.string().max(256), z.boolean(), z.number()]) });
 
 @Controller("admin/settings")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -36,7 +37,7 @@ export class AdminSettingsController {
   async save(@Req() request: unknown, @Param("key") key: string, @Body() body: unknown): Promise<{ data: SettingView }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
-    const { value } = parse(() => saveSchema.parse(body), "Значение — строка или флажок");
+    const { value } = parse(() => saveSchema.parse(body), "Значение — строка, флажок или число");
     return { data: await this.settings.save(actor, keyOf(key), value) };
   }
 

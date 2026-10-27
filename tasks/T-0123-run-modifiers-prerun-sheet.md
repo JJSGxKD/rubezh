@@ -16,13 +16,13 @@ zones:
   - packages/app-shell/src/state/meta.ts
   - packages/app-shell/src/state/runs-api.ts
   - packages/app-shell/src/state/level-unlocks.ts
-  - packages/app-shell/src/state/analytics.ts
   - packages/app-shell/src/state/modifier-choice.ts
   - packages/app-shell/test/**
 shared:
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-account.json
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/state/analytics.ts
 runner: any
 executor: sonnet-5.5
 effort: medium

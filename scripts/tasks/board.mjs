@@ -125,9 +125,12 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     } else waiting.push(task);
   }
 
+  // Зоны держат только задачи, где ещё пишут код: в работе, черновик PR и
+  // доработка. PR, ждущий ревью, соседей не держит (Р171, docs/35-stage4-plan.md):
+  // кто вливается вторым, перебазируется, конфликт правит тимлид.
   const busy = [
     ...result.inProgress.map((entry) => ({ task: entry.task, where: "в работе" })),
-    ...result.review.map((entry) => ({ task: entry.task, where: "на ревью" })),
+    ...result.review.filter((entry) => openPrs.get(`task/${entry.task.id}`)?.isDraft === true).map((entry) => ({ task: entry.task, where: "черновик PR" })),
     ...result.rework.map((entry) => ({ task: entry.task, where: "на доработке" })),
   ];
 
@@ -421,4 +424,100 @@ export function boardCounters(board, mergedPrs, now) {
     mergedToday: (mergedPrs ?? []).filter((pr) => moscowDay(new Date(pr.mergedAt)) === today).length,
     batch: first === null ? null : { number: first, left: left.get(first) },
   };
+}
+
+/**
+ * Сколько кругов доработки прошёл PR: по одному коммиту `chore(tasks): Продолжить
+ * T-NNNN после ответа` на круг (их делает `pnpm task resume`). `pr.commits` — как
+ * в ответе `gh pr list --json commits`; нет поля — ноль.
+ */
+export function reworkRounds(pr, id) {
+  const headline = `chore(tasks): Продолжить ${id} после ответа`;
+  return (pr?.commits ?? []).filter((commit) => commit?.messageHeadline === headline).length;
+}
+
+/**
+ * Значение строки `Запустил:` из описания PR или `null`. Регулярка та же, что в
+ * `scripts/release/pr-check.mjs` (T-0207): `board.mjs` оттуда не импортирует,
+ * поэтому она повторена, а тест сверяет обе на одних примерах.
+ */
+export function launchedBy(body) {
+  const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n");
+  for (const line of lines) {
+    const match = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u.exec(line.trimEnd());
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/** Целые сутки от `since` (ISO-строка) до `now` (`Date`); даты нет или она битая — `null`, из будущего — 0. */
+export function hangingDays(since, now) {
+  if (since === null || since === undefined) return null;
+  const from = new Date(since).getTime();
+  if (Number.isNaN(from)) return null;
+  return Math.max(0, Math.floor((now.getTime() - from) / 86_400_000));
+}
+
+/**
+ * Промт потока (tasks/README.md, «Автопоток», «Промт потока»): один шаблон на доску,
+ * команду и README — тест сверяет блок в README с этим текстом, поэтому правится
+ * только вместе с ним. `runner` `local` и `owner` добавляют `--runner` к `pnpm task next`.
+ */
+export function flowPrompt({ account, executor, effort, runner }) {
+  const runnerFlag = runner === "any" || runner === undefined ? "" : ` --runner ${runner}`;
+  return [
+    `Ты — исполнитель проекта «Рубеж», поток ${account} / ${executor} / ${effort}, запустил: владелец.`,
+    "Сначала git fetch origin и git switch --detach origin/dev, Node — из .nvmrc,",
+    "pnpm install; так же — перед каждой новой задачей. Прочитай AGENTS.md и tasks/README.md, разделы «Автопоток» и «Доработка»,",
+    "и работай по скиллу take-task в режиме автопотока: бери задачи только",
+    `своей модели и уровня — pnpm task next --executor ${executor} --effort ${effort}${runnerFlag},`,
+    "доработку первой (pnpm task resume), иначе pnpm task claim T-NNNN",
+    `--owner "${account} / ${executor} / ${effort}". Делай строго по спецификации,`,
+    "только в ветке task/T-NNNN, в описании PR — строки Поток и Запустил, в dev и main не пушь, PR не вливай — вливают",
+    "тимлиды. Неясно — черновик PR с разделом «Вопросы» и цитатой строки",
+    "спецификации, независимые шаги продолжай. PR открыт — сразу следующая",
+    "задача, ответа не жди: закончит PR тот поток, что первым возьмёт его на",
+    "доработку. Задач не осталось — отчёт и стоп.",
+  ].join("\n");
+}
+
+/** Номер аккаунта из поля `owner` («claude-2 / sonnet-5.5 / medium») или `null`. */
+function accountOf(owner) {
+  return /^(claude-\d+)(?:\s|\/|$)/.exec(owner ?? "")?.[1] ?? null;
+}
+
+/**
+ * Потоки, которые стоит запустить на аккаунте: из `streams` (`streamsSummary`) те, где
+ * есть что делать сейчас, кроме пар «модель + уровень», по которым у аккаунта уже есть задача
+ * «В работе» — поток идёт. Задача «На ревью» поток не занимает: открыв PR, поток берёт следующую.
+ * У записей «В работе» поле `owner` — «аккаунт / модель / уровень» (его кладёт `task.mjs`).
+ */
+export function accountStreams(account, board, streams) {
+  const running = new Set(
+    board.inProgress.filter((entry) => accountOf(entry.owner) === account).map((entry) => `${entry.task.executor}/${entry.task.effort}`),
+  );
+  return streams.filter((stream) => stream.now.length > 0 && !running.has(`${stream.executor}/${stream.effort}`));
+}
+
+/** Сколько суток назад влитая задача ещё приносит аккаунту место в списке. */
+export const ACCOUNT_RECENT_DAYS = 14;
+
+/**
+ * Аккаунты, для которых доска показывает промты: владельцы задач «В работе», «На ревью»,
+ * «Доработки» и влитых за последние `ACCOUNT_RECENT_DAYS` суток (`credits` — результат
+ * `taskCredits`). По возрастанию номера, без повторов.
+ */
+export function knownAccounts(board, credits, now) {
+  const found = new Set();
+  for (const entry of [...board.inProgress, ...board.review, ...board.rework]) {
+    const account = accountOf(entry.owner);
+    if (account !== null) found.add(account);
+  }
+  const since = now.getTime() - ACCOUNT_RECENT_DAYS * 86_400_000;
+  for (const credit of credits.values()) {
+    if (credit.mergedAt === null || credit.mergedAt === undefined || new Date(credit.mergedAt).getTime() < since) continue;
+    const account = accountOf(credit.owner);
+    if (account !== null) found.add(account);
+  }
+  return [...found].sort((a, b) => Number(a.slice(7)) - Number(b.slice(7)));
 }
