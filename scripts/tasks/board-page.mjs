@@ -187,7 +187,8 @@ function workSection(title, entries, owners, withPr) {
     hangingText(entry.days),
     entry.rounds > 0 ? String(entry.rounds) : "—",
     waitingText(entry.waiting),
-    ...(withPr ? [prLink(entry.pr)] : []),
+    // У «В работе» PR бывает не всегда: ветка без PR — ещё не открыт.
+    ...(withPr ? [entry.pr === undefined ? "—" : prLink(entry.pr)] : []),
   ]);
   return section(title, entries.length, headers, rows);
 }
@@ -250,7 +251,7 @@ export function renderBoardPage({ board, owners, credits, contribution = null, g
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
     workSection("Доработка", board.rework, owners, true),
     freeSection(board),
-    workSection("В работе", board.inProgress, owners, false),
+    workSection("В работе", board.inProgress, owners, board.inProgress.some((entry) => entry.pr !== undefined)),
     workSection("На ревью", board.review, owners, true),
     section("Ждут", board.blocked.length, ["Задача", "Чего ждёт"], board.blocked.map(({ task, reason }) => [taskLink(task), reason])),
     section(

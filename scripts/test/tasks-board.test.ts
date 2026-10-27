@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { checkRunnerLines } from "../release/pr-check.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { OWNER_LABEL, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { OWNER_LABEL, REVIEW_LABEL, STATUS_LABELS, WORK_LABEL, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -73,12 +73,33 @@ describe("доска задач", () => {
     expect(board.review[0].pr).toBe(21);
   });
 
-  it("PR в черновике — «на ревью» с ожиданием, «в работе» только ветка без PR", () => {
-    const draftPr = [{ number: 21, headRefName: "task/T-0004", isDraft: true }];
-    const result = classify(FIXTURE, TAKEN, draftPr, [], EPIC_ORDER);
+  it("черновик без метки — «в работе» с номером PR, с меткой «на ревью» — «на ревью» с ожиданием", () => {
+    const draft = { number: 21, headRefName: "task/T-0004", isDraft: true };
+    const unlabeled = classify(FIXTURE, TAKEN, [draft], [], EPIC_ORDER);
+    expect(ids(unlabeled.review)).toEqual([]);
+    expect(unlabeled.inProgress.map((entry: { task: { id: string }; pr?: number }) => [entry.task.id, entry.pr])).toEqual([
+      ["T-0004", 21],
+      ["T-0005", undefined],
+    ]);
+
+    const labeled = classify(FIXTURE, TAKEN, [{ ...draft, labels: [{ name: REVIEW_LABEL }] }], [], EPIC_ORDER);
+    expect(ids(labeled.review)).toEqual(["T-0004"]);
+    expect(labeled.review[0].waiting).toEqual({ who: "executor", why: "черновик" });
+    expect(ids(labeled.inProgress)).toEqual(["T-0005"]);
+  });
+
+  it("PR с меткой «в работе» — в «В работе» с номером, даже если он не черновик", () => {
+    const pr = { number: 21, headRefName: "task/T-0004", isDraft: false, labels: [{ name: WORK_LABEL }] };
+    const result = classify(FIXTURE, TAKEN, [pr], [], EPIC_ORDER);
+    expect(result.inProgress[0]).toMatchObject({ pr: 21 });
+    expect(ids(result.review)).toEqual([]);
+  });
+
+  it("«ждёт владельца» — в «На ревью» с ожиданием владельца", () => {
+    const pr = { number: 21, headRefName: "task/T-0004", isDraft: true, labels: [{ name: OWNER_LABEL }] };
+    const result = classify(FIXTURE, TAKEN, [pr], [], EPIC_ORDER);
     expect(ids(result.review)).toEqual(["T-0004"]);
-    expect(result.review[0].waiting).toEqual({ who: "executor", why: "черновик" });
-    expect(ids(result.inProgress)).toEqual(["T-0005"]);
+    expect(result.review[0].waiting).toEqual({ who: "owner", why: "решение владельца" });
   });
 
   it("без списка PR (нет gh) «на ревью» сливается с «в работе»", () => {
@@ -114,14 +135,27 @@ describe("пересечение зон на доске", () => {
     expect(ids(result.free)).toEqual(["T-0005"]);
   });
 
-  it("пересечение с черновиком PR или доработкой блокирует", () => {
+  it("пересечение с PR «в работе» (меткой или черновиком без метки) и с доработкой блокирует", () => {
     const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
     for (const pr of [
       { number: 7, headRefName: "task/T-0004", isDraft: true },
+      { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: WORK_LABEL }] },
       { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }] },
     ]) {
       const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
       expect(ids(result.blocked)).toEqual(["T-0005"]);
+    }
+  });
+
+  // Р172: решает метка, а не черновик.
+  it("черновик с меткой «на ревью» и PR «ждёт владельца» соседей не держат", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 7, headRefName: "task/T-0004", isDraft: true, labels: [{ name: REVIEW_LABEL }] },
+      { number: 7, headRefName: "task/T-0004", isDraft: true, labels: [{ name: OWNER_LABEL }] },
+    ]) {
+      const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
+      expect(ids(result.free)).toEqual(["T-0005"]);
     }
   });
 
@@ -591,9 +625,43 @@ describe("красный CI", () => {
   });
 });
 
+describe("prStatus: статус задачи по метке PR", () => {
+  const withLabels = (names: string[], isDraft = false) => ({ isDraft, labels: names.map((name) => ({ name })) });
+
+  it("четыре метки статуса — четыре статуса", () => {
+    expect(STATUS_LABELS).toEqual(["в работе", "на ревью", "доработка", "ждёт владельца"]);
+    expect(prStatus(withLabels(["в работе"]))).toBe("work");
+    expect(prStatus(withLabels(["на ревью"]))).toBe("review");
+    expect(prStatus(withLabels(["доработка"]))).toBe("rework");
+    expect(prStatus(withLabels(["ждёт владельца"]))).toBe("owner");
+  });
+
+  it("метка сильнее черновика", () => {
+    expect(prStatus(withLabels(["на ревью"], true))).toBe("review");
+    expect(prStatus(withLabels(["в работе"], false))).toBe("work");
+  });
+
+  it("без метки: черновик — в работе, остальное — на ревью", () => {
+    expect(prStatus(withLabels([], true))).toBe("work");
+    expect(prStatus(withLabels([]))).toBe("review");
+    expect(prStatus({ isDraft: false })).toBe("review");
+    expect(prStatus({})).toBe("review");
+  });
+
+  it("чужие метки статус не задают", () => {
+    expect(prStatus(withLabels(["release: patch"], true))).toBe("work");
+  });
+
+  it("несколько меток — по старшинству: доработка, ждёт владельца, в работе, на ревью", () => {
+    expect(prStatus(withLabels(["на ревью", "в работе", "ждёт владельца", "доработка"]))).toBe("rework");
+    expect(prStatus(withLabels(["на ревью", "в работе", "ждёт владельца"]))).toBe("owner");
+    expect(prStatus(withLabels(["на ревью", "в работе"]))).toBe("work");
+  });
+});
+
 describe("классификация PR: кого ждут", () => {
-  it("черновик с вопросами попадает в «На ревью» с waiting, ветка без PR — в «В работе»", () => {
-    const prs = [{ number: 5, headRefName: "task/T-0004", isDraft: true, labels: [], body: "## Вопросы\n1. ?", statusCheckRollup: [] }];
+  it("черновик с вопросами и меткой «на ревью» попадает в «На ревью» с waiting, ветка без PR — в «В работе»", () => {
+    const prs = [{ number: 5, headRefName: "task/T-0004", isDraft: true, labels: [{ name: REVIEW_LABEL }], body: "## Вопросы\n1. ?", statusCheckRollup: [] }];
     const board = classify([task("T-0004"), task("T-0005")], ["T-0004", "T-0005"], prs, [], EPIC_ORDER);
     expect(ids(board.review)).toEqual(["T-0004"]);
     expect(board.review[0].waiting).toEqual({ who: "lead", why: "вопрос" });

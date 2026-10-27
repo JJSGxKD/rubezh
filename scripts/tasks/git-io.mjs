@@ -56,6 +56,12 @@ export function takenIds() {
     .filter((id) => id !== undefined);
 }
 
+/** Поставить метку на PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
+export function addPrLabel(number, label) {
+  const result = spawnSync("gh", ["pr", "edit", String(number), "--add-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
+  return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
+}
+
 /** Снять метку с PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
 export function removePrLabel(number, label) {
   const result = spawnSync("gh", ["pr", "edit", String(number), "--remove-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
