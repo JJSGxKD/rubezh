@@ -20,6 +20,7 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - apps/admin/src/routes.ts
+  - tasks/T-0072-telegram-affiliate-mark.md
 runner: any
 executor: sonnet-5.5
 effort: high
