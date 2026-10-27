@@ -3,8 +3,8 @@ id: T-0053
 title: Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0049]
 zones:
