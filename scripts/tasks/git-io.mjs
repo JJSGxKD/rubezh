@@ -62,16 +62,31 @@ export function removePrLabel(number, label) {
   return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
 }
 
+/**
+ * Сколько открытых PR читает доска. GraphQL GitHub не пускает запрос дороже
+ * 500 000 узлов, а поле `commits` стоит около 10 000 на PR: при 200 запрос
+ * отклонялся целиком, и все задачи с PR выглядели «в работе». 40 — с запасом.
+ */
+export const OPEN_PRS_LIMIT = 40;
+
 /** Открытые PR с метками (по ним видна «Доработка»), описанием и состоянием проверок (кого ждёт PR) или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup,commits"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", String(OPEN_PRS_LIMIT), "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup,commits"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
   });
-  if (result.status !== 0) return null;
+  if (result.status !== 0) {
+    // Причина — в лог: без неё доска молча сливает «На ревью» с «В работе».
+    const reason = (result.stderr ?? "").split(/\r?\n/).find((line) => line.trim() !== "") ?? `код ${String(result.status)}`;
+    console.error(`предупреждение: gh pr list не ответил — ${reason.trim()}`);
+    return null;
+  }
   try {
     const parsed = JSON.parse(result.stdout);
+    if (Array.isArray(parsed) && parsed.length >= OPEN_PRS_LIMIT) {
+      console.error(`предупреждение: открытых PR не меньше ${String(OPEN_PRS_LIMIT)} — доска видит только их, подними OPEN_PRS_LIMIT`);
+    }
     return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
