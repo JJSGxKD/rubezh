@@ -17,6 +17,8 @@ zones:
 shared:
   - docs/29-admin-panel.md
   - apps/admin/src/ui/help.ts
+  - tasks/T-0068-partner-funnel.md
+  - tasks/T-0072-telegram-affiliate-mark.md
 runner: any
 executor: sonnet-5.5
 effort: high
