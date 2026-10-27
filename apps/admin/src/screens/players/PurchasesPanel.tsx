@@ -124,7 +124,10 @@ function SupportDialog({
   const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  // Пока запрос летит, окно не закрывается: иначе исход возврата не увидеть,
+  // а ошибка всплыла бы при следующем открытии — возможно, у другой покупки.
   const close = () => {
+    if (pending) return;
     setNote("");
     setError(null);
     onClose();
@@ -160,7 +163,9 @@ function SupportDialog({
       description={purchase === null ? "" : `${purchaseLabel(purchase)} · ${formatNumber(purchase.chargedStars)} ⭐ · оплачен ${formatDateTime(purchase.paidAt)}`}
       footer={
         <>
-          <Button onClick={close}>Отмена</Button>
+          <Button disabled={pending} onClick={close}>
+            Отмена
+          </Button>
           <Button tone={action === "refund" ? "danger" : "primary"} disabled={purchaseNoteProblem(note) !== null || pending} onClick={() => void submit()}>
             {pending ? "Отправляем…" : action === "refund" ? `Вернуть ${formatNumber(purchase?.chargedStars ?? 0)} ⭐` : "Выдать"}
           </Button>
