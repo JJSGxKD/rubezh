@@ -67,7 +67,7 @@ export class FeedbackService {
       });
     } catch (error: unknown) {
       this.logger.error(JSON.stringify({ module: "feedback", event: "insert_failed", reason: describeDbError(error) }));
-      throw new UnavailableError("Отзыв не сохранился, попробуйте позже");
+      throw new UnavailableError("Отзыв не сохранился, попробуй позже");
     }
 
     await this.notify(feedback.text.trim(), feedback.answers, feedback.runs, identity.platformUserId, signal);
@@ -85,7 +85,7 @@ export class FeedbackService {
     const byInstall = await this.limiter.consume(limits.install, installId);
     const byUser = platformUserId === null ? true : await this.limiter.consume(limits.user, platformUserId);
     const byAddress = platformUserId !== null ? true : await this.limiter.consume(UNSIGNED_FEEDBACK_LIMITS.ip, identity.ip);
-    if (!byInstall || !byUser || !byAddress) throw new RateLimitedError("Слишком много отзывов, попробуйте позже");
+    if (!byInstall || !byUser || !byAddress) throw new RateLimitedError("Слишком много отзывов, попробуй позже");
   }
 
   private async notify(

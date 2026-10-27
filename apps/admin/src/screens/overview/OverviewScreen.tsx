@@ -1,28 +1,54 @@
-import { useEffect, type ReactNode } from "react";
-import { OVERVIEW_REFRESH_MS, dayTitle, fetchOverview, newAccounts, sourcesLine, versusYesterday, type Overview } from "../../api/overview";
+import { useEffect, useState } from "react";
+import { OVERVIEW_REFRESH_MS, fetchOverview, newAccounts, parsePeriod, periodTitle, shiftDay, sourcesLine, type Overview, type OverviewDays } from "../../api/overview";
+import { completionPct } from "../../api/overview";
 import { formatDuration, formatNumber, formatTime } from "../../format";
-import { hrefOf } from "../../routes";
 import { api } from "../../services";
 import { DailyBars } from "../../ui/daily-bars";
 import { HELP } from "../../ui/help";
-import { Button, ErrorNotice, Help, Loading, Panel } from "../../ui/kit";
+import { Button, ErrorNotice, Loading, Panel } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
+import { AdsPanel, Attention, Chart, FunnelBars, PeriodSwitch, Tile } from "./overview-parts";
 
-const TONE_CLASS = { up: "text-success", down: "text-danger", flat: "text-text-muted" } as const;
+const PERIOD_KEY = "admin.overview.days";
+
+/** Хранилище может не отвечать (приватный режим) — тогда выбор не помнится, но экран работает. */
+function storedPeriod(): OverviewDays {
+  try {
+    return parsePeriod(window.localStorage.getItem(PERIOD_KEY));
+  } catch {
+    return 1;
+  }
+}
+
+function rememberPeriod(days: OverviewDays): void {
+  try {
+    window.localStorage.setItem(PERIOD_KEY, String(days));
+  } catch {
+    // Не запомнится — не страшно.
+  }
+}
+
+const TILE_COLUMNS = { 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" } as const;
 
 /**
- * Сводка — первый экран панели: что ждёт того, кто смотрит, как идёт
- * сегодня против вчера к тому же часу и две недели по суткам. Обновляется
- * сама раз в минуту, пока открыта: это экран, на который смотрят во время
- * поста или стрима.
+ * Сводка — первый экран панели: что ждёт того, кто смотрит, как идёт период
+ * против прошлого такой же длины, реклама по местам и ряд по суткам.
+ * Обновляется сама раз в минуту, пока открыта: это экран, на который смотрят
+ * во время поста или стрима.
  */
 export function OverviewScreen() {
-  const { state, reload } = useApi(() => fetchOverview(api), []);
+  const [days, setDays] = useState<OverviewDays>(storedPeriod);
+  const { state, reload } = useApi(() => fetchOverview(api, days), [days]);
 
   useEffect(() => {
     const timer = window.setInterval(reload, OVERVIEW_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [reload]);
+
+  const choose = (next: OverviewDays) => {
+    rememberPeriod(next);
+    setDays(next);
+  };
 
   if (state.status === "loading") return <Loading />;
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
@@ -31,57 +57,38 @@ export function OverviewScreen() {
   return (
     <div className="flex flex-col gap-4">
       <Attention overview={overview} />
-      <Today overview={overview} onReload={reload} />
+      <Today overview={overview} days={days} onPeriod={choose} onReload={reload} />
+      {overview.ads === null ? null : <AdsPanel ads={overview.ads} days={days} />}
       <Series overview={overview} />
     </div>
   );
 }
 
-function Attention({ overview }: { overview: Overview }) {
-  return (
-    <Panel title="Ждёт вас" help={HELP.overview.attention}>
-      {overview.attention.length === 0 ? (
-        <p className="text-sm text-text-muted">Ничего не ждёт — всё разобрано.</p>
-      ) : (
-        <ul className="flex flex-col divide-y divide-border">
-          {overview.attention.map((item) => (
-            <li key={item.section} className="flex items-center justify-between gap-3 py-2">
-              <span className="flex items-center gap-2 text-sm">
-                <span className="inline-flex min-w-6 justify-center rounded-pill bg-warning/15 px-1.5 text-xs font-semibold text-warning tabular-nums">{formatNumber(item.count)}</span>
-                {item.text}
-              </span>
-              <a href={hrefOf({ section: item.section, id: null })} className="shrink-0 text-sm text-accent hover:underline">
-                Открыть
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
-
-function Today({ overview, onReload }: { overview: Overview; onReload: () => void }) {
-  const { today, yesterday } = overview;
+function Today({ overview, days, onPeriod, onReload }: { overview: Overview; days: OverviewDays; onPeriod: (days: OverviewDays) => void; onReload: () => void }) {
+  const { today, yesterday, ads } = overview;
+  const tiles = 3 + (today.revenue === null ? 0 : 1) + (ads === null ? 0 : 1);
+  const adsPct = ads === null ? null : completionPct(ads.now);
   return (
     <Panel
-      title={`Сегодня, ${dayTitle(overview.day)} — с полуночи по Москве`}
+      title={periodTitle(days, shiftDay(overview.day, -(days - 1)), overview.day)}
       help={HELP.overview.today}
       actions={
-        <span className="flex items-center gap-3">
-          <span className="text-xs text-text-muted">обновлено в {formatTime(overview.at)}, само — раз в минуту</span>
+        <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          <PeriodSwitch value={days} onChange={onPeriod} />
+          <span className="text-xs text-text-muted max-md:hidden">обновлено в {formatTime(overview.at)}, само — раз в минуту</span>
           <Button onClick={onReload}>Обновить</Button>
         </span>
       }
     >
-      <div className={`grid gap-2 ${today.revenue === null ? "grid-cols-3" : "grid-cols-2 xl:grid-cols-4"}`}>
-        <Tile title="Новые игроки" help={HELP.overview.newPlayers} value={newAccounts(today)} before={newAccounts(yesterday)} sub={sourcesLine(today)} />
-        <Tile title="Играли" help={HELP.overview.active} value={today.active} before={yesterday.active} sub={`запусков ${formatNumber(today.sessions)}`} />
+      <div className={`grid grid-cols-2 gap-2 ${TILE_COLUMNS[tiles as 3 | 4 | 5] ?? "lg:grid-cols-5"}`}>
+        <Tile title="Новые игроки" help={HELP.overview.newPlayers} value={newAccounts(today)} before={newAccounts(yesterday)} days={days} sub={sourcesLine(today)} />
+        <Tile title="Играли" help={HELP.overview.active} value={today.active} before={yesterday.active} days={days} sub={`запусков ${formatNumber(today.sessions)}`} />
         <Tile
           title="Забеги"
           help={HELP.overview.runs}
           value={today.runs.finished}
           before={yesterday.runs.finished}
+          days={days}
           sub={`игроков ${formatNumber(today.runs.players)}${today.runs.medianSurvivalSec === null ? "" : ` · медиана ${formatDuration(today.runs.medianSurvivalSec)}`}`}
         />
         {today.revenue === null ? null : (
@@ -90,89 +97,60 @@ function Today({ overview, onReload }: { overview: Overview; onReload: () => voi
             help={HELP.overview.stars}
             value={today.revenue.stars}
             before={yesterday.revenue?.stars ?? 0}
+            days={days}
             sub={`покупок ${formatNumber(today.revenue.purchases)}${today.revenue.refunds === 0 ? "" : ` · возвратов ${formatNumber(today.revenue.refunds)}`}`}
           />
         )}
+        {ads === null ? null : (
+          <Tile
+            title="Реклама"
+            help={HELP.overview.ads}
+            value={ads.now.completed}
+            before={ads.before.completed}
+            days={days}
+            className="col-span-2 lg:col-span-1"
+            sub={`${adsPct === null ? "показов нет" : `досмотрено ${String(adsPct)}%`} · наград ${formatNumber(ads.now.claimed)}`}
+          />
+        )}
       </div>
-      <FunnelLine overview={overview} />
+      <FunnelBars funnel={today.funnel} />
     </Panel>
-  );
-}
-
-function Tile({ title, help, value, before, sub }: { title: string; help: string; value: number; before: number; sub: ReactNode }) {
-  const delta = versusYesterday(value, before);
-  return (
-    <div className="flex flex-col gap-0.5 rounded-sm border border-border bg-surface-sunken px-3 py-2.5">
-      <span className="flex items-center gap-1 text-xs text-text-muted">
-        {title}
-        <Help text={help} />
-      </span>
-      <span className="flex items-baseline gap-2">
-        <span className="font-display text-2xl font-semibold tabular-nums">{formatNumber(value)}</span>
-        <span className={`text-xs ${TONE_CLASS[delta.tone]}`}>{delta.text}</span>
-      </span>
-      <span className="text-xs text-text-muted">{sub}</span>
-    </div>
-  );
-}
-
-/** Шаги воронки за сегодня одной строкой: где новички остановились. */
-function FunnelLine({ overview }: { overview: Overview }) {
-  const { funnel } = overview.today;
-  const steps: [string, number][] = [
-    ["вошли в бота", funnel.entered],
-    ["открыли игру", funnel.appOpened],
-    ["первый забег", funnel.firstRun],
-    ["пятый забег", funnel.runs5],
-    ["первая покупка", funnel.firstPurchase],
-  ];
-  return (
-    <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-      <span>Вехи сегодня:</span>
-      {steps.map(([title, count], index) => (
-        <span key={title} className="whitespace-nowrap">
-          {index === 0 ? null : <span aria-hidden="true" className="mr-2 text-text-disabled">→</span>}
-          {title} <span className="text-text tabular-nums">{formatNumber(count)}</span>
-        </span>
-      ))}
-      <span className="whitespace-nowrap">
-        · вернулись на D1 <span className="text-text tabular-nums">{formatNumber(funnel.returnedD1)}</span>, на D7 <span className="text-text tabular-nums">{formatNumber(funnel.returnedD7)}</span>
-      </span>
-    </p>
   );
 }
 
 function Series({ overview }: { overview: Overview }) {
-  const days = overview.series.length;
+  const length = overview.series.length;
   const of = (pick: (point: Overview["series"][number]) => number | null) => overview.series.map((point) => ({ day: point.day, count: pick(point) ?? 0 }));
   const hasStars = overview.series.every((point) => point.stars !== null);
+  const hasPurchases = overview.series.every((point) => point.purchases !== null);
   return (
-    <Panel title={`За ${String(days)} дней`} help={HELP.overview.series}>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+    <Panel title={`За ${String(length)} дней`} help={HELP.overview.series}>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Chart title="Новые игроки">
-          <DailyBars daily={of((point) => point.newAccounts)} what="новых игроков" days={days} />
+          <DailyBars daily={of((point) => point.newAccounts)} what="новых игроков" days={length} />
         </Chart>
         <Chart title="Играли">
-          <DailyBars daily={of((point) => point.active)} what="игроков" days={days} />
+          <DailyBars daily={of((point) => point.active)} what="игроков" days={length} />
         </Chart>
         <Chart title="Забеги">
-          <DailyBars daily={of((point) => point.finishedRuns)} what="забегов" days={days} />
+          <DailyBars daily={of((point) => point.finishedRuns)} what="забегов" days={length} />
         </Chart>
         {hasStars ? (
           <Chart title="Звёзды">
-            <DailyBars daily={of((point) => point.stars)} what="звёзд" days={days} />
+            <DailyBars daily={of((point) => point.stars)} what="звёзд" days={length} />
           </Chart>
         ) : null}
+        {hasPurchases ? (
+          <Chart title="Покупки">
+            <DailyBars daily={of((point) => point.purchases)} what="покупок" days={length} />
+          </Chart>
+        ) : null}
+        {overview.ads === null ? null : (
+          <Chart title="Показы рекламы">
+            <DailyBars daily={of((point) => point.adsCompleted)} what="показов" days={length} />
+          </Chart>
+        )}
       </div>
     </Panel>
-  );
-}
-
-function Chart({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      {children}
-    </section>
   );
 }

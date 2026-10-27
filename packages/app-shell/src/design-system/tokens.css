@@ -48,6 +48,8 @@
   --animate-fade-in: fade-in var(--duration-slow) var(--ease-base) both;
   --animate-pop-in: pop-in var(--duration-slow) var(--ease-spring) both;
   --animate-sheet-in: sheet-in var(--duration-slow) var(--ease-out) both;
+  /* Лист на широком экране: въезжает справа панелью, а не поднимается снизу. */
+  --animate-panel-in: panel-in var(--duration-slow) var(--ease-out) both;
   --animate-rise-in: rise-in var(--duration-slow) var(--ease-out) both;
   /* «Барабан» сундука: лента из шести плиток по 3rem встаёт на награде. */
   --animate-chest-reel: chest-reel var(--duration-slow) var(--ease-out) both;
@@ -167,6 +169,13 @@
     from {
       opacity: 0;
       transform: translateY(24px);
+    }
+  }
+
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateX(32px);
     }
   }
 
@@ -780,6 +789,17 @@
   --app-header-h: 0px;
   /* Размытие того, что прокручивается под стеклом шапки: при 18 px стекло читалось слабо. */
   --glass-blur: 28px;
+
+  /*
+   * Раскладка для ПК (с 1024 px, §5.3; числа продублированы в
+   * components/wide-rules.ts, тест следит, чтобы они не разошлись): боковое
+   * меню, вторая колонка экрана, колонка контента вместо 480 px телефона и
+   * лист, открытый панелью справа.
+   */
+  --rail-width: 232px;
+  --aside-width: 380px;
+  --wide-column: 1120px;
+  --side-panel-width: 420px;
 
   /* Стабильная высота вьюпорта от площадки, а не 100vh (§5.1). */
   --app-viewport-height: 100dvh;

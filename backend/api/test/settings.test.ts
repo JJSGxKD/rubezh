@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Redis } from "ioredis";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { AdminSettingsController } from "../src/modules/admin/admin-settings.controller.js";
 import { AdminSettingsService } from "../src/modules/admin/admin-settings.service.js";
+import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryRateStore } from "@bh/fx";
 import { FxHooks } from "../src/modules/fx/fx-hooks.js";
@@ -315,6 +317,16 @@ describe("настройки в панели", () => {
     expect(saved).toMatchObject({ value: "-200:4", source: "base", envValue: "-100", kind: "chat" });
     const [entry] = await rolesRepository.recentAudit(10);
     expect(entry).toMatchObject({ action: "settings.save", target: "notify.chat.general", before: { value: "-100", source: "env" }, after: { value: "-200:4", source: "base" } });
+  });
+
+  it("число из панели приходит числом и сохраняется; число строкой — отказ каталога", async () => {
+    const { admin, owner } = await panel();
+    const controller = new AdminSettingsController(admin, { consume: () => Promise.resolve(true) } as unknown as RateLimiter);
+    const request = { account: owner };
+    const { data } = await controller.save(request, "bot-mention.name.coins", { value: 120 });
+    expect(data).toMatchObject({ key: "bot-mention.name.coins", value: 120, source: "base" });
+    await expect(controller.save(request, "bot-mention.name.coins", { value: "120" })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(controller.save(request, "bot-mention.name.coins", { value: [120] })).rejects.toMatchObject({ code: "validation_failed" });
   });
 
   it("сброс без записи в базе — не событие для журнала", async () => {

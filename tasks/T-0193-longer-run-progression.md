@@ -42,7 +42,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0193. Прокачка до 15-й минуты — кривая опыта, уровни навыков, поздние сундуки, слоты

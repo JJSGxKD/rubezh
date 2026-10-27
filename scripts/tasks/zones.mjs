@@ -61,9 +61,11 @@ export function zonesOverlap(zonesA, zonesB, repoFiles) {
 /**
  * Изменённые файлы вне `zones`, `shared` и самого файла задачи (`task.fileName`
  * — имя в `tasks/`). Задача, закрытая в своём PR, переезжает в `tasks/archive/`:
- * оба места — её.
+ * оба места — её. Ссылку на неё в `tasks/epics.md` при переезде правит
+ * `pnpm task fix`, поэтому и он не выход за зоны: ручную правку ячеек всё равно
+ * поймает `pnpm task check`, сверяя их с реестром.
  */
 export function outOfZone(changed, task) {
-  const allowed = [...task.zones, ...task.shared, `tasks/${task.fileName}`, `tasks/archive/${task.fileName}`];
+  const allowed = [...task.zones, ...task.shared, `tasks/${task.fileName}`, `tasks/archive/${task.fileName}`, "tasks/epics.md"];
   return changed.filter((path) => !matches(path, allowed));
 }

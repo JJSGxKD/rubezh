@@ -32,7 +32,7 @@ export class CspReportsController {
   @Post()
   @HttpCode(204)
   async receive(@Req() request: unknown, @Body() body: unknown): Promise<void> {
-    if (!(await this.limiter.consume(REPORT_LIMIT, addressOf(request)))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(REPORT_LIMIT, addressOf(request)))) throw new RateLimitedError("Слишком часто — попробуй позже");
     await this.reports.record(body);
   }
 }

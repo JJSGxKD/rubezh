@@ -86,12 +86,12 @@ export class EventsService {
     const limits = INGEST_LIMITS.events;
     for (const [installId, count] of perInstall) {
       if (!(await this.limiter.consume(limits.install, installId, count))) {
-        throw new RateLimitedError("Слишком много событий с устройства, попробуйте позже");
+        throw new RateLimitedError("Слишком много событий с устройства, попробуй позже");
       }
     }
     if (identity.platformUserId !== null && rows.length > 0) {
       if (!(await this.limiter.consume(limits.user, identity.platformUserId, rows.length))) {
-        throw new RateLimitedError("Слишком много событий, попробуйте позже");
+        throw new RateLimitedError("Слишком много событий, попробуй позже");
       }
     }
   }

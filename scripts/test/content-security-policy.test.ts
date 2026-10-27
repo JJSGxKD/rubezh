@@ -71,7 +71,7 @@ describe("политика источников клиента", () => {
   });
 
   // Р108 (docs/35-stage4-plan.md): цепочки подгрузки SDK и шрифты Google Fonts — только с рекламой.
-  const CHAIN_SCRIPTS = ["https://7ool.net", "https://eu.convers.link", "https://us.convers.link", "https://yandex.ru/ads/system/context.js", "https://yastatic.net/partner-code-bundles/"];
+  const CHAIN_SCRIPTS = ["https://7ool.net", "https://eu.convers.link", "https://us.convers.link", "https://yandex.ru/ads/system/context.js", "https://yastatic.net/partner-code-bundles/", "https://yastatic.net/safeframe-bundles/"];
   // Р122: стили RichAds и шрифт Яндекса — только с рекламой.
   const CHAIN_STYLES = ["https://7ool.net", "https://cdn.adx1.com"];
   const CHAIN_FONTS = ["https://yastatic.net/s3/home/fonts/"];
