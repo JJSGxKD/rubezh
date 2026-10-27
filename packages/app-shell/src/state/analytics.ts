@@ -29,6 +29,7 @@ export const ANALYTICS_EVENTS = [
   "wave_reached",
   "chest_found",
   "chest_opened",
+  "ring_ended",
   "evolution_unlocked",
   "card_rerolled",
   "card_skipped",

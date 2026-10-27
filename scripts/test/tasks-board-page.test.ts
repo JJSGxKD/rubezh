@@ -230,9 +230,9 @@ describe("страница доски", () => {
         "",
         "## Доработка — 1",
         "",
-        "| Задача | Исполнитель | PR | Вёл |",
-        "|---|---|---|---|",
-        `| [T-0017. Ответы](${BLOB}/T-0017-ans.md) | sonnet-5.5 · low | [#216](https://github.com/JJSGxKD/rubezh/pull/216) | claude-2 / sonnet-5.5 / low |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
+        "|---|---|---|---|---|---|---|",
+        `| [T-0017. Ответы](${BLOB}/T-0017-ans.md) | claude-2 / sonnet-5.5 / low | — | — | — | исполнителя · доработка | [#216](https://github.com/JJSGxKD/rubezh/pull/216) |`,
         "",
         "## Можно брать — 1",
         "",
@@ -252,15 +252,15 @@ describe("страница доски", () => {
         "",
         "## В работе — 1",
         "",
-        "| Задача | Взял |",
-        "|---|---|",
-        `| [T-0012. Палитра](${BLOB}/T-0012-pal.md) | claude-3 / sonnet-5.5 |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт |",
+        "|---|---|---|---|---|---|",
+        `| [T-0012. Палитра](${BLOB}/T-0012-pal.md) | claude-3 / sonnet-5.5 | — | — | — | исполнителя |`,
         "",
         "## На ревью — 1",
         "",
-        "| Задача | PR |",
-        "|---|---|",
-        `| [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | [#215](https://github.com/JJSGxKD/rubezh/pull/215) |`,
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
+        "|---|---|---|---|---|---|---|",
+        `| [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | неизвестно | — | — | — | тимлида · приёмка | [#215](https://github.com/JJSGxKD/rubezh/pull/215) |`,
         "",
         "## Ждут — 1",
         "",
@@ -452,5 +452,66 @@ describe("страница доски: ожидание, счётчики, МС�
   it("пустой подраздел «Можно брать» — «Пусто.»", () => {
     const page = render({ board: { ...board, free: [entry(open("T-0401", "Облако"))] } });
     expect(page).toContain("### Машина с Docker — 0\n\nПусто.");
+  });
+});
+
+// Столбцы «В работе», «На ревью» и «Доработка»: поток, запустил, висит, кругов, чего ждёт (T-0206).
+describe("страница доски: кто, сколько висит и чего ждёт", () => {
+  const open = (id: string, title: string) => task(id, { title, status: "ready", fileName: `${id}-x.md` });
+  const empty = { rework: [], free: [], inProgress: [], review: [], blocked: [], done: [], draft: [], cancelled: [] };
+  const render = (board: Record<string, unknown>): string =>
+    renderBoardPage({ board, owners: new Map(), credits: new Map(), people: [], githubAvailable: true, mergedPrs: [], now: new Date("2026-10-24T12:00:00Z") });
+  const BLOB = "https://github.com/JJSGxKD/rubezh/blob/dev/tasks";
+  const PR = "https://github.com/JJSGxKD/rubezh/pull";
+
+  it("«На ревью»: четвёртые сутки, один круг, красный CI — «⚠️ 4 дн», «1», «исполнителя · CI красный»", () => {
+    const page = render({
+      ...empty,
+      review: [
+        {
+          task: open("T-0501", "Висит"),
+          pr: 601,
+          waiting: { who: "executor", why: "CI красный" },
+          owner: "claude-3 / sonnet-5.5 / medium",
+          launchedBy: "помощник ivan_2",
+          days: 4,
+          rounds: 1,
+        },
+      ],
+    });
+    const section = page.slice(page.indexOf("## На ревью"), page.indexOf("## Ждут —"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
+    expect(section).toContain(`| [T-0501. Висит](${BLOB}/T-0501-x.md) | claude-3 / sonnet-5.5 / medium | помощник ivan_2 | ⚠️ 4 дн | 1 | исполнителя · CI красный | [#601](${PR}/601) |`);
+  });
+
+  it("меньше суток — «сегодня», один-два дня — «N дн» без пометки, ноль кругов — «—»", () => {
+    const entry = (id: string, days: number) => ({ task: open(id, id), pr: 700 + days, waiting: { who: "lead", why: "приёмка" }, owner: "x", launchedBy: "владелец", days, rounds: 0 });
+    const page = render({ ...empty, review: [entry("T-0502", 0), entry("T-0503", 2), entry("T-0504", 3)] });
+    expect(page).toContain("| владелец | сегодня | — | тимлида · приёмка |");
+    expect(page).toContain("| владелец | 2 дн | — | тимлида · приёмка |");
+    expect(page).toContain("| владелец | ⚠️ 3 дн | — | тимлида · приёмка |");
+  });
+
+  it("«В работе»: нет коммита захвата — «Висит» «—»; PR нет — колонки PR нет, ждёт исполнителя", () => {
+    const page = render({ ...empty, inProgress: [{ task: open("T-0505", "Без даты"), owner: "claude-4 / sonnet-5.5", launchedBy: null, days: null, rounds: 0 }] });
+    const section = page.slice(page.indexOf("## В работе"), page.indexOf("## На ревью"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт |");
+    expect(section).not.toContain("| PR |");
+    expect(section).toContain(`| [T-0505. Без даты](${BLOB}/T-0505-x.md) | claude-4 / sonnet-5.5 | — | — | — | исполнителя |`);
+  });
+
+  it("PR без строки «Запустил:» — «—» в столбце «Запустил»", () => {
+    const page = render({ ...empty, review: [{ task: open("T-0506", "Без строки"), pr: 801, waiting: { who: "lead", why: "вопрос" }, owner: "x", launchedBy: null, days: 1, rounds: 0 }] });
+    expect(page).toContain("| x | — | 1 дн | — | тимлида · вопрос |");
+  });
+
+  it("«Доработка» — те же столбцы; владелец — «владельца»; поток не прочитан — «неизвестно»", () => {
+    const page = render({
+      ...empty,
+      rework: [{ task: open("T-0507", "Ответили"), pr: 901, waiting: { who: "owner", why: "решение владельца" }, launchedBy: "владелец", days: 5, rounds: 2 }],
+    });
+    const section = page.slice(page.indexOf("## Доработка"), page.indexOf("## Можно брать"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
+    expect(section).toContain("| неизвестно | владелец | ⚠️ 5 дн | 2 | владельца | [#901]");
   });
 });
