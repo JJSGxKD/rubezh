@@ -1,6 +1,9 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { playerCardSchema, type PlayerCard } from "../src/api/players";
 import type { Restriction } from "../src/api/restrictions";
+import { PlayerSummary } from "../src/screens/players/PlayerSummary";
 import { bestRun, CARD_TABS, cardTabOf, MILESTONE_CHAIN, shortId, summaryNumbers, tabCounts } from "../src/screens/players/card-rules";
 
 // Карточка игрока вкладками (tasks/T-0054): что на вкладках, цифры «Сводки».
@@ -155,5 +158,40 @@ describe("«Сводка»", () => {
     expect(shortId("3f2a1b7c9d0e91c0")).toBe("3f2a…91c0");
     expect(shortId(ACCOUNT)).toBe("3f2a…91c0");
     expect(shortId("abc")).toBe("abc");
+  });
+});
+
+describe("разметка «Сводки»", () => {
+  const funnel = { enteredAt: AT, appOpenedAt: AT, firstRunStartedAt: AT, firstRunFinishedAt: null, runsRecorded: 2, runs2At: null, runs5At: null, returnedD1At: null, returnedD7At: null, firstPurchaseAt: null };
+  const recent = [{ difficultyId: "normal", survivalSec: 425, level: 7, startingWeaponId: "spark", at: Date.parse(AT) }];
+  const html = (card: PlayerCard) => renderToStaticMarkup(createElement(PlayerSummary, { card, onTab: () => undefined }));
+
+  it("шесть цифр, цепочка вех, последние покупки и забеги со ссылками «все →»", () => {
+    const out = html(cardOf({ funnel, runs: { runs: 2, totalKills: 1, totalSurvivalSec: 1, best: { normal: { survivalSec: 425, rank: 3 } }, recent }, purchases: [purchase({ purchaseId: "a", fulfilledAt: null })] }));
+    for (const title of ["Профиль", "Вехи воронки", "Откуда пришёл", "Последние покупки", "Последние забеги"]) expect(out).toContain(title);
+    expect(out.match(/все →/g)).toHaveLength(2);
+    expect(out).toContain("не выдан");
+    expect(out.match(/<li[^>]*title="[^"]*: /g)).toHaveLength(6);
+    expect(out).toContain("1-й забег");
+  });
+
+  it("пройденная веха — точкой цвета успеха, непройденная — пустой", () => {
+    const out = html(cardOf({ funnel }));
+    expect(out).toContain("bg-success");
+    expect(out).toContain("bg-surface");
+  });
+
+  it("без права на выручку — без покупок, забеги на всю ширину", () => {
+    const out = html(cardOf({ purchases: null, runs: { runs: 1, totalKills: 1, totalSurvivalSec: 1, best: {}, recent } }));
+    expect(out).not.toContain("Последние покупки");
+    expect(out).toContain("Последние забеги");
+    expect(out).not.toContain("lg:grid-cols-2");
+  });
+
+  it("нет вех и забегов — прежние тексты", () => {
+    const out = html(cardOf());
+    expect(out).toContain("Вех нет: игрок ни разу не входил.");
+    expect(out).toContain("Забегов нет");
+    expect(out).toContain("Покупок нет");
   });
 });
