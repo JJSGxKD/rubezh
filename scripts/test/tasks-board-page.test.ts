@@ -515,6 +515,20 @@ describe("страница доски: кто, сколько висит и че
     expect(section).toContain(`| [T-0505. Без даты](${BLOB}/T-0505-x.md) | claude-4 / sonnet-5.5 | — | — | — | исполнителя |`);
   });
 
+  it("«В работе» с PR (метка «в работе») — столбец PR; у записи без PR в нём «—»", () => {
+    const page = render({
+      ...empty,
+      inProgress: [
+        { task: open("T-0507", "С PR"), pr: 901, owner: "claude-4 / sonnet-5.5", launchedBy: null, days: 1, rounds: 0 },
+        { task: open("T-0508", "Без PR"), owner: "claude-5 / sonnet-5.5", launchedBy: null, days: 1, rounds: 0 },
+      ],
+    });
+    const section = page.slice(page.indexOf("## В работе"), page.indexOf("## На ревью"));
+    expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
+    expect(section).toContain(`| исполнителя | [#901](${PR}/901) |`);
+    expect(section).toContain("| исполнителя | — |");
+  });
+
   it("PR без строки «Запустил:» — «—» в столбце «Запустил»", () => {
     const page = render({ ...empty, review: [{ task: open("T-0506", "Без строки"), pr: 801, waiting: { who: "lead", why: "вопрос" }, owner: "x", launchedBy: null, days: 1, rounds: 0 }] });
     expect(page).toContain("| x | — | 1 дн | — | тимлида · вопрос |");
