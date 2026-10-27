@@ -1,173 +1,89 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { api } from "../../services";
-import type { ApiError } from "../../api/client";
-import {
-  adjustWallet,
-  messagePlayer,
-  renamePlayer,
-  resourceName,
-  TEAM_MESSAGE_MAX,
-  teamMessageProblem,
-  unlockPlayerName,
-  WALLET_RESOURCES,
-  walletAdjustProblem,
-  type PlayerCard,
-} from "../../api/players";
+import { adjustWallet, messagePlayer, renamePlayer, resourceName, TEAM_MESSAGE_MAX, unlockPlayerName, WALLET_RESOURCES, walletAdjustProblem, type PlayerCard } from "../../api/players";
 import { formatDelta, formatNumber } from "../../format";
-import { Button, Field, Input, Notice, Panel, Select, TextArea } from "../../ui/kit";
+import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { HELP } from "../../ui/help";
+import { Field, Input, Select } from "../../ui/kit";
+import { toast } from "../../ui/toast";
 
 /**
- * Действия с игроком — с подтверждением вторым нажатием: начисление и
- * сообщение видны игроку и попадают в аудит, случайный клик тут дорог.
- * Блокировка — ограничение «всё» в `RestrictionsPanel`.
+ * Действия с игроком — окнами подтверждения (`ConfirmDialog`, docs/29-admin-panel.md
+ * §4): начисление и сообщение видны игроку и попадают в аудит, случайный клик
+ * тут дорог. Окна открывает шапка карточки. Блокировка — ограничение «всё»
+ * в `RestrictDialog`.
  */
-
-type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
-
-function OutcomeLine({ outcome }: { outcome: Outcome }) {
-  if (outcome === null) return null;
-  return outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>;
-}
 
 /** Ключ операции: латиница, цифры и дефис — как ждёт сервер. */
 function newKey(): string {
   return `panel-${crypto.randomUUID()}`;
 }
 
-export function WalletAdjustPanel({ card, onChanged }: { card: PlayerCard; onChanged: () => void }) {
+/** Ручная операция с кошельком: ресурс и сумма, «было → станет», причина. */
+export function WalletAdjustDialog({ card, open, onOpenChange, onChanged }: { card: PlayerCard; open: boolean; onOpenChange: (open: boolean) => void; onChanged: () => void }) {
   const [resource, setResource] = useState("coins");
   const [delta, setDelta] = useState("");
-  const [note, setNote] = useState("");
   const [round, setRound] = useState(0);
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome>(null);
 
   const amount = Number(delta);
-  const problem = delta === "" ? "Укажите изменение" : walletAdjustProblem(amount, note);
+  // Причина проверяется самим окном: здесь — только ресурс и сумма.
+  const problem = delta === "" ? "Укажите изменение" : walletAdjustProblem(amount, "···");
   // Ключ живёт, пока форма та же: повтор после обрыва сети не начислит
   // дважды, а другая сумма или ресурс — уже другая операция.
-  const idempotencyKey = useMemo(() => newKey(), [resource, delta, note, round]);
+  const idempotencyKey = useMemo(() => newKey(), [resource, delta, round]);
 
-  const act = async () => {
-    setPending(true);
-    const result = await adjustWallet(api, card.account.accountId, { resource, delta: amount, note: note.trim(), idempotencyKey });
-    setPending(false);
-    setConfirming(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
-    const text = result.data.duplicate
-      ? `Эта операция уже проведена: баланс ${formatNumber(result.data.balance)}`
-      : `${formatDelta(result.data.applied)} — ${resourceName(resource)}, баланс ${formatNumber(result.data.balance)}`;
-    setOutcome({ tone: "success", text });
-    setDelta("");
-    setNote("");
-    setRound((value) => value + 1);
-    onChanged();
-  };
+  const before = card.wallet.balances[resource] ?? 0;
+  const ready = problem === null;
 
   return (
-    <Panel title="Ручная операция с кошельком" help={HELP.players.walletOp}>
-      <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-[1fr_140px] gap-2">
-          <Field label="Ресурс">
-            <Select value={resource} onChange={(event) => setResource(event.target.value)}>
-              {WALLET_RESOURCES.map(([id, name]) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Изменение">
-            <Input value={delta} onChange={(event) => setDelta(event.target.value.trim())} inputMode="numeric" placeholder="50 или -20" />
-          </Field>
-        </div>
-        <Field label="Причина" hint="Попадёт в журнал кошелька и в аудит.">
-          <Input value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} />
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Ручная операция с кошельком"
+      subject={card.account.displayName}
+      problem={problem}
+      changes={
+        ready
+          ? [
+              { label: "Ресурс", value: resourceName(resource) },
+              { label: "Изменение", value: formatDelta(amount) },
+              { label: "Баланс", value: `${formatNumber(before)} → ${formatNumber(before + amount)}` },
+            ]
+          : []
+      }
+      reason={{ min: 3, max: 200, hint: "Попадёт в журнал кошелька и в аудит." }}
+      action={ready ? `Провести ${formatDelta(amount)} — ${resourceName(resource)}` : "Провести"}
+      tone={ready && amount < 0 ? "danger" : "primary"}
+      onConfirm={async (note) => {
+        if (!ready) return { ok: false, error: problem ?? "Укажите изменение" };
+        const result = await adjustWallet(api, card.account.accountId, { resource, delta: amount, note, idempotencyKey });
+        if (!result.ok) return { ok: false, error: result.error.message };
+        toast.success(
+          result.data.duplicate
+            ? `Эта операция уже проведена: баланс ${formatNumber(result.data.balance)}`
+            : `${formatDelta(result.data.applied)} — ${resourceName(resource)}, баланс ${formatNumber(result.data.balance)}`,
+        );
+        setDelta("");
+        setRound((value) => value + 1);
+        onChanged();
+        return { ok: true };
+      }}
+    >
+      <div className="grid grid-cols-[1fr_140px] gap-2">
+        <Field label="Ресурс" help={HELP.players.walletOp}>
+          <Select value={resource} onChange={(event) => setResource(event.target.value)}>
+            {WALLET_RESOURCES.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </Select>
         </Field>
-        <div className="flex items-center gap-2">
-          {confirming && problem === null ? (
-            <>
-              <Button tone="danger" disabled={pending} onClick={() => void act()}>
-                Да: {formatDelta(amount)} — {resourceName(resource)}
-              </Button>
-              <Button onClick={() => setConfirming(false)}>Отмена</Button>
-            </>
-          ) : (
-            <Button tone="primary" disabled={problem !== null} onClick={() => setConfirming(true)}>
-              Провести
-            </Button>
-          )}
-          {problem !== null && delta !== "" ? <span className="text-xs text-text-muted">{problem}</span> : null}
-        </div>
-        <OutcomeLine outcome={outcome} />
-      </div>
-    </Panel>
-  );
-}
-
-/**
- * Ник игрока (tasks/T-0151): смена закрепляет его — вход с площадки больше не
- * перезапишет. Ник проходит ту же чистку, что при входе; причину отказа
- * сервер называет сам. Право — то же, что у блокировки.
- */
-export function NamePanel({ card, onChanged }: { card: PlayerCard; onChanged: () => void }) {
-  const [name, setName] = useState(card.account.displayName);
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome>(null);
-
-  const trimmed = name.trim();
-  const unchanged = trimmed === card.account.displayName && card.account.nameLocked;
-
-  const finish = (result: Awaited<ReturnType<typeof renamePlayer>>, text: string) => {
-    setPending(false);
-    setConfirming(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
-    setName(result.data.account.displayName);
-    setOutcome({ tone: "success", text });
-    onChanged();
-  };
-
-  const save = async () => {
-    setPending(true);
-    finish(await renamePlayer(api, card.account.accountId, trimmed), "Ник сменён и закреплён");
-  };
-
-  const unlock = async () => {
-    setPending(true);
-    finish(await unlockPlayerName(api, card.account.accountId), "Закрепление снято: ник снова с площадки");
-  };
-
-  return (
-    <Panel title="Ник игрока">
-      <div className="flex flex-col gap-3">
-        <Field label="Ник" hint="Проходит ту же проверку, что ник с площадки. После смены закрепляется: вход его не перезапишет.">
-          <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={64} />
+        <Field label="Изменение">
+          <Input value={delta} onChange={(event) => setDelta(event.target.value.trim())} inputMode="numeric" placeholder="50 или -20" />
         </Field>
-        <div className="flex flex-wrap items-center gap-2">
-          {confirming ? (
-            <>
-              <Button tone="primary" disabled={pending} onClick={() => void save()}>
-                Да, сменить и закрепить
-              </Button>
-              <Button onClick={() => setConfirming(false)}>Отмена</Button>
-            </>
-          ) : (
-            <Button tone="primary" disabled={trimmed === "" || unchanged} onClick={() => setConfirming(true)}>
-              Сменить и закрепить
-            </Button>
-          )}
-          {card.account.nameLocked ? (
-            <Button disabled={pending} onClick={() => void unlock()}>
-              Снять закрепление
-            </Button>
-          ) : null}
-        </div>
-        <OutcomeLine outcome={outcome} />
       </div>
-    </Panel>
+    </ConfirmDialog>
   );
 }
 
@@ -176,54 +92,89 @@ export function NamePanel({ card, onChanged }: { card: PlayerCard; onChanged: ()
  * ответ на жалобу, объяснение блокировки или поправки. Игрок увидит его в
  * игре подписью «Команда»; текст уходит в журнал действий.
  */
-export function MessagePanel({ card }: { card: PlayerCard }) {
-  const [text, setText] = useState("");
-  const [round, setRound] = useState(0);
-  const [confirming, setConfirming] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome>(null);
-
-  const problem = teamMessageProblem(text);
-  // Ключ живёт, пока текст тот же: повтор после обрыва сети второй строки в
-  // ленте не заведёт, а исправленный текст — уже другое сообщение.
-  const idempotencyKey = useMemo(() => newKey(), [text, round]);
-
-  const act = async () => {
-    setPending(true);
-    const result = await messagePlayer(api, card.account.accountId, { text: text.trim(), idempotencyKey });
-    setPending(false);
-    setConfirming(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
-    setOutcome({ tone: "success", text: result.data.duplicate ? "Это сообщение уже отправлено" : "Отправлено в ленту игрока" });
-    setText("");
-    setRound((value) => value + 1);
-  };
+export function MessageDialog({ card, open, onOpenChange }: { card: PlayerCard; open: boolean; onOpenChange: (open: boolean) => void }) {
+  // Ключ живёт, пока тот же текст не ушёл: повтор после обрыва сети второй
+  // строки в ленте не заведёт, а исправленный текст — уже другое сообщение.
+  const attempt = useRef<{ text: string; key: string } | null>(null);
 
   return (
-    <Panel title="Сообщение игроку">
-      <div className="flex flex-col gap-3">
-        <Field label="Текст" hint={`До ${String(TEAM_MESSAGE_MAX)} символов, простым текстом. Игрок увидит его в ленте уведомлений; в журнал действий попадёт вместе с тем, кто отправил.`}>
-          <TextArea value={text} onChange={(event) => setText(event.target.value)} maxLength={TEAM_MESSAGE_MAX} rows={4} />
-        </Field>
-        <div className="flex items-center gap-2">
-          {confirming && problem === null ? (
-            <>
-              <Button tone="primary" disabled={pending} onClick={() => void act()}>
-                Да, отправить
-              </Button>
-              <Button onClick={() => setConfirming(false)}>Отмена</Button>
-            </>
-          ) : (
-            <Button tone="primary" disabled={problem !== null} onClick={() => setConfirming(true)}>
-              Отправить
-            </Button>
-          )}
-          <span className="text-xs text-text-muted">
-            {text.trim().length} / {TEAM_MESSAGE_MAX}
-          </span>
-        </div>
-        <OutcomeLine outcome={outcome} />
-      </div>
-    </Panel>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Сообщение игроку"
+      subject={card.account.displayName}
+      reason={{
+        min: 3,
+        max: TEAM_MESSAGE_MAX,
+        label: "Текст",
+        hint: `До ${String(TEAM_MESSAGE_MAX)} символов, простым текстом. Игрок увидит его в ленте уведомлений; в журнал действий попадёт вместе с тем, кто отправил.`,
+      }}
+      action="Отправить"
+      onConfirm={async (text) => {
+        const idempotencyKey = attempt.current?.text === text ? attempt.current.key : newKey();
+        attempt.current = { text, key: idempotencyKey };
+        const result = await messagePlayer(api, card.account.accountId, { text, idempotencyKey });
+        if (!result.ok) return { ok: false, error: result.error.message };
+        toast.success(result.data.duplicate ? "Это сообщение уже отправлено" : "Отправлено в ленту игрока");
+        attempt.current = null;
+        return { ok: true };
+      }}
+    />
+  );
+}
+
+/**
+ * Ник игрока (tasks/T-0151): смена закрепляет его — вход с площадки больше не
+ * перезапишет. Ник проходит ту же чистку, что при входе; причину отказа сервер
+ * называет сам. Право — то же, что у блокировки.
+ */
+export function NameDialog({ card, open, onOpenChange, onChanged }: { card: PlayerCard; open: boolean; onOpenChange: (open: boolean) => void; onChanged: () => void }) {
+  const [name, setName] = useState(card.account.displayName);
+  const trimmed = name.trim();
+  const problem = trimmed === "" ? "Укажите ник" : null;
+
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Ник игрока"
+      subject={card.account.displayName}
+      problem={problem}
+      changes={problem === null ? [{ label: "Ник", value: `${card.account.displayName} → ${trimmed}` }] : []}
+      action="Сменить и закрепить"
+      onConfirm={async () => {
+        const result = await renamePlayer(api, card.account.accountId, trimmed);
+        if (!result.ok) return { ok: false, error: result.error.message };
+        toast.success("Ник сменён и закреплён");
+        setName(result.data.account.displayName);
+        onChanged();
+        return { ok: true };
+      }}
+    >
+      <Field label="Ник" hint="Проходит ту же проверку, что ник с площадки. После смены закрепляется: вход его не перезапишет.">
+        <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={64} />
+      </Field>
+    </ConfirmDialog>
+  );
+}
+
+/** Снять закрепление ника: ник снова берётся с площадки при следующем входе и сразу в карточке. */
+export function UnlockNameDialog({ card, open, onOpenChange, onChanged }: { card: PlayerCard; open: boolean; onOpenChange: (open: boolean) => void; onChanged: () => void }) {
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Снять закрепление ника"
+      subject={card.account.displayName}
+      changes={card.account.platformName === null ? [] : [{ label: "Ник с площадки", value: card.account.platformName }]}
+      action="Снять закрепление"
+      onConfirm={async () => {
+        const result = await unlockPlayerName(api, card.account.accountId);
+        if (!result.ok) return { ok: false, error: result.error.message };
+        toast.success("Закрепление снято: ник снова с площадки");
+        onChanged();
+        return { ok: true };
+      }}
+    />
   );
 }

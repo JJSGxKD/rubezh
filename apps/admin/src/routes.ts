@@ -97,17 +97,25 @@ export interface Route {
   section: string;
   /** объект раздела: игрок, отчёт; `null` — список */
   id: string | null;
+  /** вкладка объекта — третья часть адреса: `#/players/<id>/purchases`; нет — первая */
+  tab?: string;
 }
 
 export function parseRoute(hash: string): Route | null {
   const parts = hash.replace(/^#\/?/, "").split("/").filter((part) => part !== "");
-  const [section, id] = parts;
+  const [section, id, tab] = parts;
   if (section === undefined) return null;
-  return { section: decodeURIComponent(section), id: id === undefined ? null : decodeURIComponent(id) };
+  return {
+    section: decodeURIComponent(section),
+    id: id === undefined ? null : decodeURIComponent(id),
+    ...(tab === undefined ? {} : { tab: decodeURIComponent(tab) }),
+  };
 }
 
 export function hrefOf(route: Route): string {
-  return `#/${encodeURIComponent(route.section)}${route.id === null ? "" : `/${encodeURIComponent(route.id)}`}`;
+  if (route.id === null) return `#/${encodeURIComponent(route.section)}`;
+  const tab = route.tab === undefined || route.tab === "" ? "" : `/${encodeURIComponent(route.tab)}`;
+  return `#/${encodeURIComponent(route.section)}/${encodeURIComponent(route.id)}${tab}`;
 }
 
 export function visibleSections(permissions: readonly string[], sections: readonly Section[] = SECTIONS): Section[] {

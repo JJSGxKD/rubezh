@@ -459,6 +459,33 @@ describe("ник игрока в панели (T-0151)", () => {
     expect(entry?.after).toMatchObject({ displayName: "Путник", nameLocked: false });
   });
 
+  it("вход не перезаписывает закреплённый ник, а после снятия закрепления следующий вход его обновляет", async () => {
+    const target = await player(s.accounts, "500888");
+    await s.service.rename(owner, target.accountId, "Тимур", NOW);
+
+    const entered = await s.accounts.upsert({ platform: "telegram", platformUserId: "500888", displayName: "Новый ник", username: "wanderer", photoUrl: null }, NOW.getTime());
+    expect(entered.displayName).toBe("Тимур");
+    expect(entered.platformName).toBe("Новый ник");
+
+    await s.service.unlockName(owner, target.accountId);
+    const again = await s.accounts.upsert({ platform: "telegram", platformUserId: "500888", displayName: "Новый ник", username: "wanderer", photoUrl: null }, NOW.getTime());
+    expect(again.displayName).toBe("Новый ник");
+  });
+
+  it("старый аккаунт без запомненного ника с площадки: снятие закрепления остаётся при нынешнем нике: другого источника нет", async () => {
+    const target = await s.accounts.upsert({ platform: "telegram", platformUserId: "500889", displayName: "  Старый   ник\u0489  ", username: "old", photoUrl: null }, NOW.getTime());
+    // Аккаунт заведён до запоминания ника с площадки: platformName пуст.
+    const stored = (s.accounts as unknown as { byKey: Map<string, { platformName: string | null }> }).byKey.get("telegram:500889");
+    if (stored === undefined) throw new Error("аккаунт не найден");
+    stored.platformName = null;
+
+    await s.service.rename(owner, target.accountId, "Тимур", NOW);
+    const result = await s.service.unlockName(owner, target.accountId);
+    // Источника ника нет — берётся нынешний, прогнанный через ту же чистку; закрепление снято.
+    expect(result.account).toMatchObject({ displayName: "Тимур", nameLocked: false, platformName: null });
+    expect(s.rolesRepository.entries.find((entry) => entry.action === "players.rename.unlock")?.after).toMatchObject({ displayName: "Тимур", nameLocked: false });
+  });
+
   it("исходный ник с площадки, который чистка исправила, виден в строке", async () => {
     const target = await s.accounts.upsert({ platform: "telegram", platformUserId: "500777", displayName: "  Тимур\u0489  ", username: "timur", photoUrl: null }, NOW.getTime());
     const card = await s.service.card(owner, target.accountId);

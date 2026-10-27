@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, REWORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextTasks, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
-import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextTasks, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
+import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { contributionRows } from "./contribution.mjs";
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
-import { BASE, ROOT, claimedAt, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
+import { BASE, ROOT, addPrLabel, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
 import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
@@ -311,8 +312,9 @@ function withOwner(text, owner) {
 /**
  * Продолжить PR на доработке (tasks/README.md, «Доработка»): ветка задачи с
  * origin, `owner` — новый поток, коммит и push без `--force`. Push — замок:
- * кто продолжил первым, того коммит и лёг; второй получит отказ. Потом с PR
- * снимается метка, и задача уходит из «Доработки».
+ * кто продолжил первым, того коммит и лёг; второй получит отказ. Потом PR
+ * переводится из «доработки» в «в работе» (Р172): зоны снова заняты, задача
+ * уходит из «Доработки».
  */
 function runResume(positional, flags) {
   const id = positional[0];
@@ -365,6 +367,12 @@ function runResume(positional, flags) {
     fail(`Push не удался, ветка ${branch} возвращена как была:\n${pushed.stderr}`);
   }
 
+  // Сначала новая метка: если упадёт вторая операция, на PR останутся две метки
+  // и «доработка» старше — задача не потеряется, а останется на доработке.
+  const labeled = addPrLabel(pr, WORK_LABEL);
+  if (!labeled.ok) {
+    console.error(`Метку «${WORK_LABEL}» на PR #${String(pr)} поставить не удалось — поставь руками: ${labeled.stderr}`);
+  }
   const unlabeled = removePrLabel(pr, REWORK_LABEL);
   if (!unlabeled.ok) {
     console.error(`Метку «${REWORK_LABEL}» с PR #${String(pr)} снять не удалось — сними руками, иначе задачу возьмёт ещё один поток:\n${unlabeled.stderr}`);
@@ -441,11 +449,11 @@ function runClaimCheck(flags) {
 
 /**
  * Поля столбцов страницы для задачи «в работе», «на ревью» или «на доработке»:
- * поток, кто запустил, сколько висит и сколько кругов. У «В работе» PR нет —
- * висит с коммита захвата.
+ * поток, кто запустил, сколько висит и сколько кругов. У «В работе» висит с
+ * коммита захвата; PR там бывает (статус «в работе»), а бывает и нет.
  */
 function boardDetails(entry, columnKey, owner, prsByNumber, now) {
-  const pr = columnKey === "inProgress" ? undefined : prsByNumber.get(entry.pr);
+  const pr = entry.pr === undefined ? undefined : prsByNumber.get(entry.pr);
   return {
     owner,
     launchedBy: launchedBy(pr?.body),
@@ -484,15 +492,20 @@ function runStatusJson(flags) {
   for (const epic of epics) writeFileSync(join(dir, `epic-${epic}.json`), `${JSON.stringify(epicStreamsBadge(summary.epics[epic] ?? []))}\n`);
 
   // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
-  const mergedPrs = mergedTaskPrs();
-  const credits = taskCredits(board.done, mergedPrs);
+  const merged = mergedPrs();
+  const credits = taskCredits(board.done, merged === null ? null : taskPrsOf(merged));
+  // Спецификации считаются и без GitHub: дату появления файла знает сам git.
+  const specs = addedTaskSpecs().map(({ fileName, addedAt }) => {
+    const id = fileName.slice(0, 6);
+    return { id, author: state.tasks.find((task) => task.id === id)?.author ?? null, addedAt };
+  });
   const page = renderBoardPage({
     board,
     owners,
     credits,
-    people: contributions(credits),
-    githubAvailable: mergedPrs !== null,
-    mergedPrs,
+    contribution: contributionRows({ tasks: state.tasks, mergedPrs: merged, specs, now }),
+    githubAvailable: merged !== null,
+    mergedPrs: merged,
     now,
   });
   writeFileSync(join(flags.out, "README.md"), page);

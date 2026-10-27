@@ -1,6 +1,6 @@
 import { ValidationError } from "../../common/domain-error.js";
-import type { Account, AccountRepository } from "../auth/account.repository.js";
-import { cleanName, displayNameFor } from "../auth/display-name.js";
+import { storedNameFor, type Account, type AccountRepository } from "../auth/account.repository.js";
+import { cleanName } from "../auth/display-name.js";
 import type { RolesService, AccountRef } from "../roles/roles.service.js";
 import { AccountNotFoundError } from "./admin-errors.js";
 
@@ -38,12 +38,12 @@ export async function renameAccount(accounts: AccountRepository, roles: RolesSer
   return after;
 }
 
-/** Снять закрепление: ник снова берётся с площадки, через ту же чистку, что при входе. */
+/** Снять закрепление: ник снова берётся с площадки — той же функцией, что при входе (`storedNameFor`), чтобы они не разошлись. */
 export async function unlockAccountName(accounts: AccountRepository, roles: RolesService, actor: AccountRef, accountId: string): Promise<Account> {
   await roles.require(actor, "players.ban");
   const before = await existing(accounts, accountId);
 
-  const restored = displayNameFor(before.platformName ?? before.displayName, before.username, accountId).name;
+  const restored = storedNameFor(before.platformName ?? before.displayName, before.username, accountId).name;
   const after = await accounts.setName(accountId, restored, null);
   if (after === null) throw new AccountNotFoundError();
   await roles.audit({ actorAccountId: actor.accountId, action: "players.rename.unlock", target: accountId, before: nameState(before), after: nameState(after) });

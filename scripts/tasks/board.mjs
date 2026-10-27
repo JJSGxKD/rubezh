@@ -21,6 +21,15 @@ export const REWORK_LABEL = "доработка";
  */
 export const OWNER_LABEL = "ждёт владельца";
 
+/** Метка PR «код ещё пишут» (Р172): зоны задачи заняты, поток её не бросал. */
+export const WORK_LABEL = "в работе";
+
+/** Метка PR «отправлено тимлиду» (Р172): зоны свободны, поток берёт следующую задачу. */
+export const REVIEW_LABEL = "на ревью";
+
+/** Все метки статуса задачи на PR: ровно одна из них на каждом PR ветки `task/T-NNNN` (Р172). */
+export const STATUS_LABELS = [WORK_LABEL, REVIEW_LABEL, REWORK_LABEL, OWNER_LABEL];
+
 const CI_RED_CONCLUSIONS = ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"];
 const CI_RED_STATES = ["FAILURE", "ERROR"];
 
@@ -35,6 +44,23 @@ export function isCiRed(pr) {
 }
 
 const hasLabel = (pr, name) => (pr.labels ?? []).some((label) => label?.name === name);
+
+/**
+ * Статус задачи по метке её PR (Р172): `"work" | "review" | "rework" | "owner"`.
+ * Доска, значки и захват читают метку, а не черновик: черновик с вопросами —
+ * это «на ревью», и поток, отправивший его, уже взял следующую задачу.
+ * Меток несколько — берётся старшая (доработка, ждёт владельца, в работе, на
+ * ревью): проверка PR всё равно покраснеет, но доска не должна гадать. Метки
+ * нет вовсе — запасной путь для PR, открытых до правила: черновик — «в работе»,
+ * остальное — «на ревью».
+ */
+export function prStatus(pr) {
+  if (hasLabel(pr, REWORK_LABEL)) return "rework";
+  if (hasLabel(pr, OWNER_LABEL)) return "owner";
+  if (hasLabel(pr, WORK_LABEL)) return "work";
+  if (hasLabel(pr, REVIEW_LABEL)) return "review";
+  return pr.isDraft === true ? "work" : "review";
+}
 
 /**
  * Кого ждёт открытый PR задачи: `{ who: "owner" | "lead" | "executor", why }`.
@@ -92,9 +118,9 @@ function compareTasks(epicOrder) {
  * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
  * - `prs` — открытые PR `{ number, headRefName, isDraft, labels?, body?, statusCheckRollup? }`
  *   или `null`, если список получить не удалось (нет `gh`): тогда «На ревью» сливается с
- *   «В работе». PR с меткой `REWORK_LABEL` — «Доработка», будь он хоть черновиком; остальные
- *   PR, и черновики тоже, — «На ревью»; «В работе» — только ветка без PR. У записей «На
- *   ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
+ *   «В работе». Колонку PR задаёт `prStatus` (метка, Р172): «в работе» — «В работе» (с номером
+ *   PR), «доработка» — «Доработка», «на ревью» и «ждёт владельца» — «На ревью»; ветка без PR —
+ *   «В работе». У записей «На ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
@@ -116,8 +142,12 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     else if (branches.has(task.id)) {
       const pr = openPrs.get(`task/${task.id}`);
       if (pr === undefined) result.inProgress.push({ task });
-      else if (hasLabel(pr, REWORK_LABEL)) result.rework.push({ task, pr: pr.number, waiting: waitingOn(pr) });
-      else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
+      else {
+        const status = prStatus(pr);
+        if (status === "work") result.inProgress.push({ task, pr: pr.number });
+        else if (status === "rework") result.rework.push({ task, pr: pr.number, waiting: waitingOn(pr) });
+        else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
+      }
     } else if (task.status === "in-progress") {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
       // задачу всё равно считаем занятой — статус в файле говорит, что её взяли.
@@ -125,12 +155,13 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     } else waiting.push(task);
   }
 
-  // Зоны держат только задачи, где ещё пишут код: в работе, черновик PR и
-  // доработка. PR, ждущий ревью, соседей не держит (Р171, docs/35-stage4-plan.md):
-  // кто вливается вторым, перебазируется, конфликт правит тимлид.
+  // Зоны держат только задачи, где ещё пишут код: «В работе» (ветка без PR или
+  // PR со статусом «в работе») и «Доработка». PR, ждущий ревью, соседей не
+  // держит, и черновик с меткой «на ревью» тоже (Р171, Р172,
+  // docs/35-stage4-plan.md): кто вливается вторым, перебазируется, конфликт
+  // правит тимлид.
   const busy = [
     ...result.inProgress.map((entry) => ({ task: entry.task, where: "в работе" })),
-    ...result.review.filter((entry) => openPrs.get(`task/${entry.task.id}`)?.isDraft === true).map((entry) => ({ task: entry.task, where: "черновик PR" })),
     ...result.rework.map((entry) => ({ task: entry.task, where: "на доработке" })),
   ];
 

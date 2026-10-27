@@ -66,10 +66,22 @@ describe("проверка захвата в CI", () => {
     expect(checkClaim("T-0005", { tasks, taken: ["T-0005", "T-0004"], prs, repoFiles: ["a/b.ts"] })).toEqual([]);
   });
 
-  it("пересечение с черновиком или PR на доработке — отказ: там ещё пишут код", () => {
+  // Р172: решает метка — черновик с вопросами, отправленный «на ревью», поток уже оставил.
+  it("зоны пересекаются с черновиком «на ревью» или PR «ждёт владельца» — не отказ", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 9, headRefName: "task/T-0004", isDraft: true, labels: [{ name: "на ревью" }] },
+      { number: 9, headRefName: "task/T-0004", isDraft: true, labels: [{ name: "ждёт владельца" }] },
+    ]) {
+      expect(checkClaim("T-0005", { tasks, taken: ["T-0005", "T-0004"], prs: [pr], repoFiles: ["a/b.ts"] })).toEqual([]);
+    }
+  });
+
+  it("пересечение с PR «в работе», черновиком без метки или PR на доработке — отказ: там ещё пишут код", () => {
     const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
     for (const pr of [
       { number: 9, headRefName: "task/T-0004", isDraft: true, labels: [] },
+      { number: 9, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "в работе" }] },
       { number: 9, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }] },
     ]) {
       const problems = checkClaim("T-0005", { tasks, taken: ["T-0005", "T-0004"], prs: [pr], repoFiles: ["a/b.ts"] });

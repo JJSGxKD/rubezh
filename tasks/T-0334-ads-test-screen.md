@@ -34,7 +34,7 @@ batch: 3
 
 # T-0334. Проверка рекламы командой — экран в игре и debug на вызов в адаптере
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0334.json)](README.md#значки-статуса) [![T-0333](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json&label=T-0333)](T-0333-ads-test-tools-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0334.json)](README.md#значки-статуса) [![T-0333](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json&label=T-0333)](archive/T-0333-ads-test-tools-server.md)
 
 ## Зачем
 

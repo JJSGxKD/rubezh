@@ -1,4 +1,4 @@
-import type { Account, AccountArrival, AccountBan, AccountRepository, RecipientsPage } from "../../src/modules/auth/account.repository.js";
+import { storedNameFor, type Account, type AccountArrival, type AccountBan, type AccountRepository, type RecipientsPage } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -17,8 +17,10 @@ export class MemoryAccountRepository implements AccountRepository {
     const existing = this.byKey.get(key);
 
     if (existing !== undefined) {
-      const { photoUrl, ...rest } = identity;
-      const updated: Account = { ...existing, ...rest, platformName: identity.displayName, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
+      const { photoUrl, displayName, ...rest } = identity;
+      // Как в Prisma-реализации: закреплённый модератором ник вход не перезаписывает.
+      const shown = existing.nameLockedAt != null ? existing.displayName : storedNameFor(displayName, identity.username, existing.accountId).name;
+      const updated: Account = { ...existing, ...rest, displayName: shown, platformName: displayName, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
       this.byKey.set(key, updated);
       return updated;
     }
