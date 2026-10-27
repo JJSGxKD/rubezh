@@ -279,7 +279,7 @@ describe("лист на wide: панель справа без телефонн�
         import("react-dom/server"),
         import("../src/design-system/components"),
       ]);
-      return render(h(Sheet, { title: "Перед забегом", placement: "bottom", onDismiss: () => undefined, footer: h("b", null, "Играть"), ...props }, h("p", null, "Тело")));
+      return render(h(Sheet, { title: "Перед забегом", placement: "bottom", onDismiss: () => undefined, footer: h("b", null, "Играть"), children: h("p", null, "Тело"), ...props }));
     } finally {
       vi.unstubAllGlobals();
     }
