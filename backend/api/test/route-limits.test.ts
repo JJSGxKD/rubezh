@@ -7,6 +7,7 @@ import { AdsgramRewardController } from "../src/modules/ads/adsgram-reward.contr
 import { AuthController } from "../src/modules/auth/auth.controller.js";
 import type { RateLimit } from "../src/modules/ingest/rate-limiter.js";
 import { RolesController } from "../src/modules/roles/roles.controller.js";
+import { AdsToolsController } from "../src/modules/ads/ads-tools.controller.js";
 import { ToolsController } from "../src/modules/roles/tools.controller.js";
 import { RunsController } from "../src/modules/runs/runs.controller.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -99,6 +100,27 @@ const ROUTES: RouteCase[] = [
       const forAccount = vi.fn(ok);
       const controller = new ToolsController({ forAccount } as never, limiter as never);
       return { call: async () => await controller.access(request), service: forAccount };
+    },
+  },
+  {
+    name: "GET /tools/ads/catalog",
+    scope: "ads_tools_catalog",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const catalog = vi.fn(ok);
+      const controller = new AdsToolsController({ catalog } as never, { can: async () => true } as never, limiter as never);
+      return { call: async () => await controller.catalog(request), service: catalog };
+    },
+  },
+  {
+    name: "POST /tools/ads/test-results",
+    scope: "ads_tools_result",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const recordResult = vi.fn(ok);
+      const controller = new AdsToolsController({ recordResult } as never, { can: async () => true } as never, limiter as never);
+      const body = { network: "adsgram", format: "rewarded", blockId: null, live: false, outcome: "completed", ms: 100 };
+      return { call: async () => await controller.testResult(request, body), service: recordResult };
     },
   },
   {

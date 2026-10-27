@@ -2,10 +2,11 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFile
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { COLUMNS, REWORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextTasks, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
-import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { contributionRows } from "./contribution.mjs";
 import { checkClaim } from "./claim.mjs";
 import { fixEpicCells } from "./epics.mjs";
-import { BASE, ROOT, claimedAt, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
+import { BASE, ROOT, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
 import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
 import { outOfZone } from "./zones.mjs";
@@ -484,15 +485,20 @@ function runStatusJson(flags) {
   for (const epic of epics) writeFileSync(join(dir, `epic-${epic}.json`), `${JSON.stringify(epicStreamsBadge(summary.epics[epic] ?? []))}\n`);
 
   // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
-  const mergedPrs = mergedTaskPrs();
-  const credits = taskCredits(board.done, mergedPrs);
+  const merged = mergedPrs();
+  const credits = taskCredits(board.done, merged === null ? null : taskPrsOf(merged));
+  // Спецификации считаются и без GitHub: дату появления файла знает сам git.
+  const specs = addedTaskSpecs().map(({ fileName, addedAt }) => {
+    const id = fileName.slice(0, 6);
+    return { id, author: state.tasks.find((task) => task.id === id)?.author ?? null, addedAt };
+  });
   const page = renderBoardPage({
     board,
     owners,
     credits,
-    people: contributions(credits),
-    githubAvailable: mergedPrs !== null,
-    mergedPrs,
+    contribution: contributionRows({ tasks: state.tasks, mergedPrs: merged, specs, now }),
+    githubAvailable: merged !== null,
+    mergedPrs: merged,
     now,
   });
   writeFileSync(join(flags.out, "README.md"), page);
