@@ -3,7 +3,7 @@ id: T-0053
 title: Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0049]
@@ -27,7 +27,7 @@ batch: 3
 
 # T-0053. Воронка в панели — полосами, сравнение с прошлым периодом, подсветка источников
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json)](../README.md#значки-статуса) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](T-0049-admin-shell-responsive.md)
 
 ## Зачем
 
