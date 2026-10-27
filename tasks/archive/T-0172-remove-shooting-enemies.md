@@ -48,6 +48,13 @@ shared:
   - docs/35-stage4-plan.md
   - docs/39-retention-mechanics.md
   - packages/app-shell/src/i18n/ru.json
+  - tasks/T-0192-pressure-after-minute-8.md
+  - tasks/T-0193-longer-run-progression.md
+  - tasks/T-0197-second-boss-no-projectiles.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/T-0335-cordon-formation-and-elite.md
+  - tasks/T-0342-cordon-numbers-and-guide.md
 runner: any
 executor: sonnet-5.5
 effort: high
