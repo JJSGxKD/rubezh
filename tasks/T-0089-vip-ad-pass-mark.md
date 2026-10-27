@@ -3,8 +3,8 @@ id: T-0089
 title: Пропуск рекламы VIP — отдельной меткой «Пропуск VIP», не досмотр
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-9
 size: M
 depends_on: [T-0052]
