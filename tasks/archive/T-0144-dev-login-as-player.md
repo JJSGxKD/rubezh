@@ -3,7 +3,7 @@ id: T-0144
 title: Вход разработчика игроком без ролей — `dev-player-<id>`
 epic: E0
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
@@ -25,7 +25,7 @@ batch: 3
 
 # T-0144. Вход разработчика игроком без ролей — `dev-player-<id>`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json)](../README.md#значки-статуса)
 
 ## Зачем
 
