@@ -366,6 +366,8 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const from = at(base, -60);
     const to = at(base, 600);
     const catalog = new PrismaAdsCatalogRepository(prisma);
+    // Повторный прогон на той же базе: пропуски прошлого прогона в этом окне не нужны.
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${from} AND created_at < ${to}`;
     const first = await account();
     const second = await account();
 
@@ -384,7 +386,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     await prisma.$executeRaw`UPDATE ad_session SET claimed_at = ${at(base, 8)} WHERE session_id = ${claimedPass}`;
 
     const funnel = (await catalog.funnel(from, to)).filter((row) => row.networkKey === network || row.networkKey === "vip");
-    expect(funnel).toEqual([{ networkKey: network, place: "wheel_spin", offered: 1, shown: 0, clicked: 0, completed: 1, claimed: 0, failed: 0 }]);
+    expect(funnel).toEqual([{ networkKey: network, place: "wheel_spin", offered: 1, shown: 1, clicked: 0, completed: 1, claimed: 0, failed: 0 }]);
 
     expect(await catalog.passes(from, to)).toEqual([
       { passName: "vip", place: "second_chance", used: 1, players: 1, claimed: 0 },
@@ -395,6 +397,7 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
   it("пропуск, записанный до задачи сырым INSERT, считается; граница окна — [from, to)", async () => {
     const base = new Date(Date.UTC(2031, 2, 1, 9));
     const catalog = new PrismaAdsCatalogRepository(prisma);
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${at(base, -60)} AND created_at < ${at(base, 180)}`;
     const me = await account();
     const raw = async (createdAt: Date): Promise<void> => {
       await prisma.$executeRaw`
