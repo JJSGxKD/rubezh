@@ -11,10 +11,10 @@ zones:
   - apps/admin/src/screens/overview/OverviewScreen.tsx
   - apps/admin/src/screens/overview/overview-parts.tsx
   - apps/admin/src/api/overview.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/overview.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
 effort: high

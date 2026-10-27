@@ -13,7 +13,6 @@ zones:
   - scripts/test/screens.test.ts
   - packages/app-shell/src/state/dev-url.ts
   - packages/app-shell/test/dev-url.test.ts
-  - packages/app-shell/src/state/navigation.ts
   - packages/app-shell/src/state/shell.ts
   - packages/app-shell/src/index.tsx
   - apps/web-telegram/src/main.tsx
@@ -25,6 +24,7 @@ shared:
   - AGENTS.md
   - docs/17-testing-strategy.md
   - docs/20-env-and-ports.md
+  - packages/app-shell/src/state/navigation.ts
 runner: local
 executor: sonnet-5.5
 effort: medium
@@ -35,7 +35,7 @@ batch: 3
 
 # T-0145. Снимки экранов одной командой — `pnpm screens`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](T-0144-dev-login-as-player.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](archive/T-0144-dev-login-as-player.md)
 
 ## Зачем
 

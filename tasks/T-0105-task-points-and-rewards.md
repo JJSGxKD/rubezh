@@ -22,7 +22,6 @@ zones:
   - backend/api/test/task-points.integration.test.ts
   - apps/admin/src/api/tasks.ts
   - apps/admin/src/screens/tasks/TasksScreen.tsx
-  - apps/admin/src/ui/help.ts
   - packages/app-shell/src/state/tasks-api.ts
   - packages/app-shell/src/screens/meta/tasks.tsx
   - packages/app-shell/src/screens/meta/task-row.tsx
@@ -41,6 +40,7 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - apps/admin/src/ui/help.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
