@@ -3,8 +3,8 @@ id: T-0151
 title: Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0150]
