@@ -3,8 +3,8 @@ id: T-0038
 title: Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока
 epic: E1
 priority: P0
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 size: S
 depends_on: [T-0037]
 zones:
