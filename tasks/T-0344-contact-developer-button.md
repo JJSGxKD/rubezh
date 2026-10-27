@@ -3,8 +3,8 @@ id: T-0344
 title: Кнопка «Связаться с разработчиком» в меню и настройках — ссылка своя на каждую площадку
 epic: E6
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
