@@ -11,7 +11,7 @@
   "gallery.stub": "Заглушка раздела",
   "gallery.hint": "Подсказка к параметру",
   "gallery.hint.label": "Урон",
-  "gallery.hint.text": "Насколько сильнее бьёт всё ваше оружие",
+  "gallery.hint.text": "Насколько сильнее бьёт всё твоё оружие",
   "gallery.segmented": "Переключатель видов",
   "gallery.segmented.small": "Тесный переключатель",
   "gallery.segmented.smallHint": "Тот же переключатель с size=\"s\": на экране уже 384 px подписи сжимаются, чтобы «Нормальная» и «Сложная» не уходили за край.",

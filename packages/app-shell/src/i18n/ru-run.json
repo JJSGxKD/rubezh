@@ -18,7 +18,7 @@
   "run.death.cause": "Убил: {enemy}",
   "run.death.decline": "Закончить забег",
   "run.death.diagnostics": "seed {seed} · забег {runId}",
-  "run.death.downed": "Вы пали на {time}",
+  "run.death.downed": "Рубеж пал на {time}",
   "run.death.home": "На главную",
   "run.death.killed": "Убито врагов",
   "run.death.less": "Скрыть",

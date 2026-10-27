@@ -3,8 +3,8 @@ id: T-0331
 title: Тексты оболочки на «ты» — без «вы» и без рода игрока, тест не даёт вернуть «вы»
 epic: E6
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
@@ -21,6 +21,7 @@ shared:
   - packages/app-shell/src/i18n/ru-daily.json
   - packages/app-shell/src/i18n/ru-friends.json
   - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/i18n/ru-history.json
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/src/i18n/ru-payments.json
   - packages/app-shell/src/i18n/ru-promo.json
@@ -44,7 +45,7 @@ batch: 2
 
 # T-0331. Тексты оболочки на «ты» — без «вы» и без рода игрока, тест не даёт вернуть «вы»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0331.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0331.json)](../README.md#значки-статуса)
 
 ## Зачем
 
