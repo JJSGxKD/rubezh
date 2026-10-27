@@ -17,6 +17,7 @@ zones:
   - scripts/test/tasks-contribution.test.ts
 shared:
   - tasks/README.md
+  - tasks/T-0343-archive-by-cleanup.md
 runner: any
 executor: sonnet-5.5
 effort: medium
