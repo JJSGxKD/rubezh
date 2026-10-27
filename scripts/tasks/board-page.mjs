@@ -1,4 +1,4 @@
-import { BADGE_CACHE_SECONDS, boardCounters, moscowDay, streamRows, streamsSummary } from "./board.mjs";
+import { BADGE_CACHE_SECONDS, accountStreams, boardCounters, flowPrompt, knownAccounts, moscowDay, streamLabel, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
 
 /**
@@ -122,7 +122,8 @@ function section(title, count, headers, rows) {
  * и уровень — запускать и что ждёт. Заголовок без числа: на него ведёт ссылка
  * из epics.md (`#потоки-сейчас`). Строки те же, что у `pnpm task streams`.
  */
-function streamsSection(streams) {
+function streamsSection(board, credits, at) {
+  const { streams } = streamsSummary(board);
   const { now, queue } = streamRows(streams);
   const link = (item) => {
     const text = `[${item.id}](${TASKS_URL}/${item.path ?? item.fileName})`;
@@ -134,7 +135,27 @@ function streamsSection(streams) {
   const queueRows = queue.map((row) => [row.label, String(row.count), row.batch === null ? "без пачки" : String(row.batch)]);
   const nowPart = nowRows.length === 0 ? "Нечего: ни свободных задач, ни доработки." : table(["Поток", "Свободно", "Доработка", "Ближайшие задачи"], nowRows);
   const queuePart = queueRows.length === 0 ? "Ничего нет." : table(["Поток", "Ждут", "Ближайшая пачка"], queueRows);
-  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}`;
+  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}\n\n${accountsPart(board, streams, credits, at)}`;
+}
+
+/**
+ * «Запуск по аккаунтам»: на каждый известный аккаунт — свёрнутый список готовых промтов
+ * только для потоков, которые на нём не идут. Номер аккаунта уже внутри промта.
+ */
+function accountsPart(board, streams, credits, now) {
+  const heading = "### Запуск по аккаунтам";
+  const accounts = knownAccounts(board, credits, now);
+  if (accounts.length === 0) {
+    return `${heading}\n\nИзвестных аккаунтов нет: промты для своего — \`pnpm task streams --account claude-N\`.`;
+  }
+  const blocks = accounts.map((account) => {
+    const toRun = accountStreams(account, board, streams);
+    if (toRun.length === 0) return `${account} — всё нужное уже работает`;
+    const summary = `${account} — запустить ${String(toRun.length)}: ${toRun.map(streamLabel).join(", ")}`;
+    const prompts = toRun.map((stream) => `\`\`\`\n${flowPrompt({ account, executor: stream.executor, effort: stream.effort, runner: stream.runner })}\n\`\`\``).join("\n\n");
+    return `<details>\n<summary>${summary}</summary>\n\n${prompts}\n\n</details>`;
+  });
+  return `${heading}\n\nГотовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.\n\n${blocks.join("\n\n")}`;
 }
 
 /** Строка счётчиков под заголовком; пачки нет — последнего пункта нет. */
@@ -253,7 +274,7 @@ export function renderBoardPage({ board, owners, credits, people, githubAvailabl
   const sections = [
     ownerSection(board),
     leadSection(board),
-    streamsSection(streamsSummary(board).streams),
+    streamsSection(board, credits, now),
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
     workSection("Доработка", board.rework, owners, true),
     freeSection(board),
