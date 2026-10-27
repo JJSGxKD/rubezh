@@ -3,7 +3,7 @@ id: T-0337
 title: Юзернейм бота — над вкладками «Заданий», после награды сворачивается в строку
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -28,7 +28,7 @@ batch: 3
 
 # T-0337. Юзернейм бота — над вкладками «Заданий», после награды сворачивается в строку
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0337.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0337.json)](../README.md#значки-статуса)
 
 ## Зачем
 
