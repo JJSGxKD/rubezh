@@ -33,9 +33,17 @@ export function createChangelogApi(request: ApiRequest = apiRequest): ChangelogA
   };
 }
 
+/**
+ * Журнал скрыт у игроков до пересмотра того, как его вести (Р125,
+ * docs/35-stage4-plan.md): нет пункта меню, слайда главной и перехода из
+ * уведомления. Двойник серверной константы `CHANGELOG_FOR_PLAYERS` в
+ * `changelog-rules.ts`: вернуть журнал — правка обеих.
+ */
+export const CHANGELOG_FOR_PLAYERS = false;
+
 /** Журнал — только с входом: площадку и «открывал» знает аккаунт. */
 export function changelogAvailable(): boolean {
-  return useShell.getState().capabilities.auth !== undefined;
+  return CHANGELOG_FOR_PLAYERS && useShell.getState().capabilities.auth !== undefined;
 }
 
 /**

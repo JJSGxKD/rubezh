@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { CONTENT_HASH } from "@bh/core-game";
 import {
   ContentColumn,
-  Emblem,
   ListGroup,
   ListItem,
   Screen,
   SectionTitle,
+  SegmentedControl,
   Wordmark,
 } from "../design-system/components";
 import { audio } from "../audio";
@@ -18,10 +18,12 @@ import { botAccessSupported, useBotAccess } from "../state/bot-access";
 import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
 import { useDiagnostics } from "../state/diagnostics";
+import { useDraftArtAllowed } from "../state/flags";
 import { useGraphics } from "../state/graphics";
 import { useHints } from "../state/hints";
 import { useInstall } from "../state/install";
 import { useNavigation } from "../state/navigation";
+import { RADAR_POSITIONS, useRadarSetting } from "../state/radar-setting";
 import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
@@ -39,6 +41,8 @@ export function SettingsScreen(): ReactNode {
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
   const graphics = useGraphics();
+  const artAllowed = useDraftArtAllowed();
+  const radar = useRadarSetting((state) => state.position);
   const supportsFullscreen = useShell((state) => state.adapter.ui.supportsFullscreen);
   // Бот пишет только аккаунту и только там, где у площадки он есть.
   const botAvailable = useShell((state) => state.capabilities.auth !== undefined && state.capabilities.botUrl !== "");
@@ -111,8 +115,36 @@ export function SettingsScreen(): ReactNode {
             hint={t("settings.graphics.weaponEffects.hint")}
             toggle={{ checked: graphics.weaponEffects, onChange: () => graphics.toggle("weaponEffects") }}
           />
+          {/* Строка только у игрока с доступом к новому облику (флаги панели): без
+              доступа выключать нечего. */}
+          {artAllowed ? (
+            <ListItem
+              title={t("settings.graphics.art")}
+              hint={t("settings.graphics.art.hint")}
+              toggle={{ checked: graphics.art, onChange: () => graphics.toggle("art") }}
+            />
+          ) : null}
+          <ListItem
+            title={t("settings.graphics.liveBackground")}
+            hint={t("settings.graphics.liveBackground.hint")}
+            toggle={{ checked: graphics.liveBackground, onChange: () => graphics.toggle("liveBackground") }}
+          />
         </ListGroup>
         <p className="mt-2 text-xs text-text-muted">{t("settings.scope.device")}</p>
+
+        {/* Радар — настройка устройства (Р113): низа нет, там его закрывает палец. */}
+        <SectionTitle>{t("settings.radar")}</SectionTitle>
+        <SegmentedControl track="radar"
+          label={t("settings.radar.label")}
+          activeId={radar}
+          items={RADAR_POSITIONS.map((id) => ({ id, label: t(`settings.radar.${id}`) }))}
+          onSelect={(id) => {
+            const position = RADAR_POSITIONS.find((item) => item === id);
+            if (position !== undefined) useRadarSetting.getState().set(position);
+          }}
+        />
+        <p className="mt-2 text-xs text-text-muted">{t("settings.radar.hint")}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("settings.radar.scope")}</p>
 
         <SectionTitle>{t("settings.language")}</SectionTitle>
         <ListGroup>
@@ -287,7 +319,6 @@ export function AboutScreen(): ReactNode {
       <ContentColumn>
         {/* Бренд — здесь и на заставке, а не на главной (Р76). */}
         <div className="mt-2 mb-5 flex flex-col items-center gap-2 text-center">
-          <Emblem size={64} />
           <Wordmark />
           <p className="max-w-[300px] text-sm text-text-muted">{t("lobby.tagline")}</p>
         </div>

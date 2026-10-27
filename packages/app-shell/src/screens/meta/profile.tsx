@@ -101,10 +101,10 @@ export function ProfileScreen(): ReactNode {
             <>
               <AccountLevel progress={progress} />
               <div className="mt-3">
-                <Button variant="secondary" block onClick={() => navigation.push("level")}>
+                <Button track="open_level" variant="secondary" block onClick={() => navigation.push("level")}>
                   {t("profile.level.more")}
                 </Button>
-                <Button variant="ghost" block onClick={() => navigation.push("history")}>
+                <Button track="open_history" variant="ghost" block onClick={() => navigation.push("history")}>
                   {t("profile.history")}
                 </Button>
               </div>
@@ -148,7 +148,7 @@ export function ProfileScreen(): ReactNode {
                 {seconds > 0 ? (
                   <SurvivalTime seconds={seconds} />
                 ) : (
-                  <span className="font-display text-base text-text-disabled">—</span>
+                  <span className="font-display text-base text-text-muted">—</span>
                 )}
               </li>
             );

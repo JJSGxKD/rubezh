@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { trackClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { CutFrame } from "./CutFrame";
 
@@ -34,7 +35,18 @@ export interface ButtonProps {
    * магазина). У других вариантов игнорируется.
    */
   cut?: boolean;
+  /**
+   * Блик: раз в несколько секунд по кнопке пробегает полоса света — у
+   * главного действия экрана, которое должно звать («Играть»). Только
+   * `transform` и `opacity`; при «меньше движения» блика нет.
+   */
+  shine?: boolean;
   ariaLabel?: string;
+  /**
+   * Имя кнопки для события `ui_clicked` (Р141): по смыслу действия — `buy`,
+   * `claim`, `share`, — а не по тексту. Экран подставляется сам.
+   */
+  track: string;
 }
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
@@ -50,6 +62,19 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
   m: "min-h-12 rounded-md px-5 text-base font-semibold",
   l: "min-h-16 rounded-lg px-6 text-lg font-bold tracking-wide uppercase",
 };
+
+/**
+ * Выключенная главная кнопка — нейтральная, а не бледная оранжевая: заливка
+ * акцента на 45% прозрачности над тёмным фоном становится бурой и читается
+ * как «сломано», а не «пока нельзя». Пока идёт загрузка, кнопка остаётся в
+ * своём цвете — действие уже принято.
+ */
+const RESTING_CLASS = "btn-resting";
+
+/** Варианты с заливкой цвета: у остальных выключенное состояние и так нейтрально. */
+function restsNeutral(variant: ButtonVariant): boolean {
+  return variant === "primary" || variant === "stars";
+}
 
 /** Кнопка со срезом: высота и шрифт те же, что у обычной, а поля и скругление уходят внутрь среза. */
 const CUT_BUTTON_CLASS: Record<ButtonSize, string> = {
@@ -87,10 +112,12 @@ export function Button(props: ButtonProps): ReactNode {
   const { variant = "primary", size = "m", disabled = false, loading = false } = props;
   const inactive = disabled || loading;
   const cut = cutAllowed(variant, props.cut === true);
+  const resting = disabled && !loading && restsNeutral(variant);
 
   const handleClick = (): void => {
     if (inactive) return;
     uiFeedback(size === "l" ? "primary" : "tap");
+    if (props.track !== undefined) trackClick(props.track);
     props.onClick?.();
   };
 
@@ -104,20 +131,22 @@ export function Button(props: ButtonProps): ReactNode {
       className={[
         "relative isolate inline-flex items-center justify-center gap-2 font-display",
         "transition-transform duration-(--duration-fast) ease-base",
-        "active:translate-y-0.5 active:scale-[0.98] disabled:opacity-45 disabled:active:translate-y-0 disabled:active:scale-100",
+        "active:translate-y-0.5 active:scale-[0.98] disabled:active:translate-y-0 disabled:active:scale-100",
+        resting ? "disabled:opacity-70" : "disabled:opacity-45",
         // Заливку, рамку и скругление у среза рисует `CutFrame` внутри кнопки.
-        cut ? "" : VARIANT_CLASS[variant],
+        cut ? (resting ? "text-text-muted" : "") : resting ? RESTING_CLASS : VARIANT_CLASS[variant],
         cut ? CUT_BUTTON_CLASS[size] : SIZE_CLASS[size],
         props.block === true ? "w-full" : "",
       ].join(" ")}
     >
       {cut ? (
         <CutFrame
-          tone={variant === "stars" ? "stars" : "primary"}
+          tone={resting ? "panel" : variant === "stars" ? "stars" : "primary"}
           size="sm"
           className={`flex flex-1 items-center justify-center gap-2 self-stretch ${CUT_PADDING_CLASS[size]}`}
         >
           {loading ? <Spinner /> : props.children}
+          {props.shine === true && !inactive ? <Shine /> : null}
         </CutFrame>
       ) : loading ? (
         <Spinner />
@@ -142,6 +171,23 @@ export function Button(props: ButtonProps): ReactNode {
   );
 }
 
+/**
+ * Полоса света по заливке, под надписью: z-index −1 в слое `CutFrame` — тот
+ * же, что у заливки, но позже в разметке. Над текстом блик бледнил бы его.
+ * Срез `CutFrame` обрезает полосу по форме кнопки.
+ */
+function Shine(): ReactNode {
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 -z-1 overflow-hidden">
+      <span
+        // Прозрачна вне анимации: при «меньше движения» анимация кончается сразу, и полоса не должна застыть на кнопке.
+        className="absolute inset-y-0 left-0 w-1/3 animate-btn-shine opacity-0"
+        style={{ backgroundImage: "linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-text) 55%, transparent), transparent)" }}
+      />
+    </span>
+  );
+}
+
 export interface IconButtonProps {
   children: ReactNode;
   /** подпись для скринридера обязательна: иконка сама по себе ничего не говорит */
@@ -154,12 +200,15 @@ export interface IconButtonProps {
    * лист шуршит на закрытии сам.
    */
   feedback?: "tap" | "back" | null;
+  /** имя кнопки для события `ui_clicked` (см. `ButtonProps.track`) */
+  track: string;
 }
 
 export function IconButton(props: IconButtonProps): ReactNode {
   const handleClick = (): void => {
     if (props.disabled === true) return;
     if (props.feedback !== null) uiFeedback(props.feedback ?? "tap");
+    if (props.track !== undefined) trackClick(props.track);
     props.onClick?.();
   };
 

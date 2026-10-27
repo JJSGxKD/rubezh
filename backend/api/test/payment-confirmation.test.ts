@@ -149,7 +149,7 @@ describe("предварительная проверка оплаты", () => {
 
     it("текст отказа — для игрока: что случилось и что делать", () => {
       const decision = decideCheckout(view(vip(), false, false, true), query(vip()), NOW, true);
-      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+      expect(answerOf(decision)).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернись в игру." });
     });
   });
 
@@ -232,7 +232,7 @@ describe("подтверждение оплаты", () => {
     purchases.subscriptionLive = true;
 
     await expect(confirmation.answerCheckout(query(subscription), NOW)).resolves.toEqual({ ok: false, reason: "subscription_active" });
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернитесь в игру." });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: "VIP уже действует — вторая подписка не нужна. Вернись в игру." });
 
     purchases.subscriptionLive = false;
     await expect(confirmation.answerCheckout(query(subscription, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
@@ -252,11 +252,11 @@ describe("подтверждение оплаты", () => {
     expect(asked).toEqual([NOW, NOW + 5_000]);
   });
 
-  it("база не ответила — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
+  it("база не ответила — отказ «попробуй ещё раз», а не деньги вслепую", async () => {
     purchases.checkout = async () => Promise.reject(new Error("connect ECONNREFUSED"));
 
     await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуйте ещё раз") });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуй ещё раз") });
   });
 
   it("выдаёт продолжение по подтверждению и записывает, сколько списано на самом деле", async () => {
@@ -264,6 +264,30 @@ describe("подтверждение оплаты", () => {
 
     expect(purchases.rows.get(purchase.purchaseId)).toMatchObject({ status: "paid", telegramChargeId: "charge-1", chargedStars: 3, paidAt: new Date(NOW) });
     expect(await purchases.grantedContinues(purchase.runId)).toBe(1);
+  });
+
+  it("событие оплаты несёт вид товара: слушатели отличают донат от покупки (Р109); повтор события не рождает", async () => {
+    const hooks = new PaymentsHooks();
+    const heard: { purchaseId: string; product: string; mode: string }[] = [];
+    hooks.onPaid("test", async (paid) => void heard.push({ purchaseId: paid.purchaseId, product: paid.product, mode: paid.mode }));
+    const listening = new PaymentConfirmation(config(), purchases, starsProviders(api), switchesOf(config()), hooks);
+    const donation: StoredPurchase = { ...pending(), product: "donation", runId: null, continueNo: null, elapsedSec: null, sku: "donation", priceStars: 50, chargedStars: 50 };
+    const shop: StoredPurchase = { ...donation, purchaseId: randomUUID(), product: "shop_item", sku: "gems_60" };
+    for (const row of [donation, shop]) {
+      purchases.rows.set(row.purchaseId, row);
+      purchases.owners.set(row.accountId, String(PLAYER_ID));
+    }
+
+    await listening.confirm(payment({ chargeId: "charge-d", payload: donation.purchaseId, totalAmount: 50 }), NOW);
+    await listening.confirm(payment({ chargeId: "charge-s", payload: shop.purchaseId, totalAmount: 50 }), NOW);
+    await listening.confirm(payment({ chargeId: "charge-d", payload: donation.purchaseId, totalAmount: 50 }), NOW + 1_000);
+    await listening.confirm(payment({ chargeId: "charge-c", payload: purchase.purchaseId }), NOW);
+
+    expect(heard).toEqual([
+      { purchaseId: donation.purchaseId, product: "donation", mode: "live" },
+      { purchaseId: shop.purchaseId, product: "shop_item", mode: "live" },
+      { purchaseId: purchase.purchaseId, product: "continue_run", mode: "live" },
+    ]);
   });
 
   it("повтор подтверждения от Telegram ничего не удваивает", async () => {
@@ -746,14 +770,14 @@ describe("предварительная проверка и закрытые п
     await expect(confirmation.answerCheckout(query(first, { queryId: "q-2" }), NOW)).resolves.toEqual({ ok: true });
   });
 
-  it("ограничения не прочитались — отказ «попробуйте ещё раз», а не деньги вслепую", async () => {
+  it("ограничения не прочитались — отказ «попробуй ещё раз», а не деньги вслепую", async () => {
     restrictions.state.statusFailWith = new Error("redis недоступен");
     const logged: string[] = [];
     vi.spyOn(Logger.prototype, "error").mockImplementation((line: unknown) => void logged.push(String(JSON.parse(String(line)).event)));
 
     await expect(confirmation.answerCheckout(query(purchase), NOW)).resolves.toEqual({ ok: false, reason: "unavailable" });
 
-    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуйте ещё раз") });
+    expect(api.answers[0]?.answer).toEqual({ ok: false, errorMessage: expect.stringContaining("попробуй ещё раз") });
     expect(logged).toContain("pre_checkout_failed");
   });
 

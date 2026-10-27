@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_UNLOCKS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, BASE_WEAPONS, PASSIVES } from "@bh/core-game";
 import "../src/i18n/account";
 import { t } from "../src/i18n";
-import { nextUnlockAfter, nextUnlockLabel, unlockLabel, unlocksGainedAt, unlocksGainedBetween } from "../src/state/level-unlocks";
+import { collectionByLevel, nextUnlockAfter, nextUnlockLabel, unlockLabel, unlocksGainedAt, unlocksGainedBetween } from "../src/state/level-unlocks";
 
 // Что открывает уровень (docs/35-stage4-plan.md Р42): экран уровня и плашка
 // после забега читают ту же таблицу разблокировок, что решает забег, — и
@@ -64,7 +64,9 @@ describe("что откроется дальше", () => {
   });
 
   it("на последнем уровне лестницы и выше — ничего", () => {
-    expect(nextUnlockAfter(14)).toBeNull();
+    // 14-й уровень — «Закалка»; следом идёт «Метеор» на 16-м (T-0118), дальше открытий нет.
+    expect(nextUnlockAfter(14)).toEqual({ level: 16, unlocks: [{ kind: "weapon", id: "meteor" }] });
+    expect(nextUnlockAfter(16)).toBeNull();
     expect(nextUnlockAfter(99)).toBeNull();
   });
 
@@ -73,5 +75,29 @@ describe("что откроется дальше", () => {
     expect(next).not.toBeNull();
     if (next === null) return;
     expect(nextUnlockLabel(next)).toBe(`Дальше: на 4-м уровне — оружие «${t("weapon.storm.name")}»`);
+  });
+});
+
+describe("коллекция на экране уровня", () => {
+  it("всё оружие и все навыки контента — каждый со своим уровнем открытия", () => {
+    const { weapons, passives } = collectionByLevel();
+    expect(weapons.map((item) => item.id).sort()).toEqual(BASE_WEAPONS.map((weapon) => weapon.id).sort());
+    expect(passives.map((item) => item.id).sort()).toEqual(PASSIVES.map((passive) => passive.id).sort());
+    expect(weapons.find((item) => item.id === "spark")?.level).toBe(1);
+    expect(weapons.find((item) => item.id === "hearth")?.level).toBe(2);
+    expect(passives.find((item) => item.id === "tempering")?.level).toBe(14);
+  });
+
+  it("по порядку открытия: что ближе — то раньше в ряду", () => {
+    for (const list of Object.values(collectionByLevel())) {
+      const levels = list.map((item) => item.level);
+      expect(levels).toEqual([...levels].sort((a, b) => a - b));
+    }
+  });
+
+  it("уровень открытия — тот же, что у таблицы забега", () => {
+    for (const { id, level } of collectionByLevel().weapons) {
+      expect(unlocksGainedAt(level).some((unlock) => unlock.kind === "weapon" && unlock.id === id) || level === 1).toBe(true);
+    }
   });
 });

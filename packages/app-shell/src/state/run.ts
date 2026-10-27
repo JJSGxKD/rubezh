@@ -1,6 +1,8 @@
-import { ELEMENTS, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
+  describeEvolution,
   loadRunEngine,
+  WEAPONS,
   type HudSnapshot,
   type RunDevCommand,
   type RunDevInfo,
@@ -12,7 +14,7 @@ import {
 } from "@bh/core-game";
 import { create } from "zustand";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
-import { audio } from "../audio";
+import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
 import { runGraphics } from "./graphics";
@@ -112,6 +114,12 @@ export interface RunStore {
   offers: UpgradeOption[];
   /** сколько уровней ещё ждёт выбора */
   queued: number;
+  /** зарядов переброса, пропуска и изгнания осталось — на выборе улучшения */
+  tools: CardTools;
+  /** зарядов выдано на забег: кнопки вида, которого не было, не рисуются */
+  toolsTotal: CardTools;
+  /** есть ли чем заменить карточки при переброске */
+  canReroll: boolean;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
   level: number;
@@ -144,6 +152,12 @@ export interface RunStore {
   /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
   closeChest(): void;
   choose(optionId: string): void;
+  /** Переброс карточек на выборе улучшения. */
+  reroll(): void;
+  /** Пропуск уровня: без улучшения, за долю опыта. */
+  skip(): void;
+  /** Изгнание предмета карточки из забега. */
+  banish(optionId: string): void;
   restart(): void;
   stop(): void;
   /** характеристики забега для листа «Характеристики»; `null` — забега нет */
@@ -199,9 +213,16 @@ let lastSavedSec = 0;
  * перед `finished`/`abandoned`, итог забирает его и обнуляет.
  */
 let pendingDiagnostics: RunDiagnostics | null = null;
+/**
+ * Шёл ли забег с черновым артом: берётся из опций, с которыми он стартовал, —
+ * настройку игрок мог сменить уже после. `null` — забега нет.
+ */
+let runArt: boolean | null = null;
 
 /** Ошибок клиента к началу забега: запись несёт, сколько случилось за забег. */
 let errorsAtRunStart = 0;
+
+const NO_TOOLS: CardTools = { reroll: 0, skip: 0, banish: 0 };
 
 const IDLE = {
   phase: "idle" as RunPhase,
@@ -209,6 +230,9 @@ const IDLE = {
   hud: null,
   offers: [] as UpgradeOption[],
   queued: 0,
+  tools: NO_TOOLS,
+  toolsTotal: NO_TOOLS,
+  canReroll: false,
   chest: null as OpenedChest | null,
   level: 1,
   result: null,
@@ -299,6 +323,8 @@ export const useRun = create<RunStore>((set, get) => ({
       // через сутки — иначе панель разработчика пропадает по дороге.
       const devRun =
         devModeAllowed() && (useDevMode.getState().armed || resume?.dev === true || resume?.cheats === true);
+      const graphics = runGraphics();
+      runArt = graphics.art;
       // Снаряжение — из подписанного снимка на устройстве: забег без сети
       // начинается с надетым. Продолженный забег берёт набор из своего
       // снимка, а надетое с тех пор могло смениться.
@@ -323,7 +349,7 @@ export const useRun = create<RunStore>((set, get) => ({
           recordRun: diagnostics.enabled && diagnostics.recordRuns,
           fpsOverlay: diagnostics.enabled && diagnostics.fpsOverlay,
         },
-        graphics: runGraphics(),
+        graphics,
         ...(options.pixelRatio === undefined ? {} : { pixelRatio: options.pixelRatio }),
         ...(resume === undefined ? {} : { resume }),
         ...(devRun ? { dev: toRunDev(useDevMode.getState().settings) } : {}),
@@ -428,6 +454,25 @@ export const useRun = create<RunStore>((set, get) => ({
     // Фазу дальше ведёт движок: он пришлёт либо следующий выбор из очереди,
     // либо `resumed`. Своя догадка здесь затирала бы первое вторым.
     session?.chooseUpgrade(optionId);
+  },
+
+  reroll(): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    session?.rerollOffers();
+  },
+
+  skip(): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    // Фазу ведёт движок, как в `choose`: следующий выбор из очереди или `resumed`.
+    session?.skipOffers();
+  },
+
+  banish(optionId: string): void {
+    if (get().phase !== "levelUp") return;
+    audio.runEvent("choose");
+    session?.banishOffer(optionId);
   },
 
   restart(): void {
@@ -543,6 +588,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       // Низкое здоровье — один раз на спуск ниже порога, а не на каждый снимок.
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
+      if (bossPhaseRaised(previous?.boss ?? null, hud.boss)) audio.runEvent("bossPhase");
       audio.hud({
         hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
         weapons: hud.weapons.length,
@@ -556,20 +602,29 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       audio.cues(cues);
     }),
 
-    created.on("levelUp", ({ level, options, queued }) => {
+    created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, refreshed }) => {
       const first = options[0];
       if (get().devRun && useDevMode.getState().settings.autoPickUpgrades && first !== undefined) {
         // Без экрана и без аналитики выбора: это не решение игрока.
         created.chooseUpgrade(first.id);
         return;
       }
-      track("upgrade_offered", { level, count: options.length, queued });
+      // Переброс и изгнание обновляют карточки того же уровня: это не новое
+      // предложение, и считать его в воронку нельзя.
+      if (!refreshed) track("upgrade_offered", { level, count: options.length, queued });
       if (get().phase !== "levelUp") {
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level, chest: null });
+      set({ phase: "levelUp", offers: options, queued, level, chest: null, tools, toolsTotal, canReroll });
       saveRun();
+    }),
+
+    created.on("cardTool", ({ kind, left, level, item }) => {
+      // Только когда движок применил действие: нажатие без заряда в аналитику не идёт.
+      if (kind === "reroll") track("card_rerolled", { level, left });
+      else if (kind === "skip") track("card_skipped", { level, left });
+      else track("card_banished", { level, left, item: item ?? "" });
     }),
 
     created.on("waveReached", ({ index, elapsedSec }) => {
@@ -578,13 +633,21 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
+      audio.runEvent("chestDrop");
+    }),
+
+    created.on("ringEnded", ({ index, outcome, guards, killed, lifeSec, elapsedSec }) => {
+      track("ring_ended", { index, outcome, guards, killed, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
     }),
 
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
-      // Звук и отклик — как у набора уровня: отдельного звука сундука нет.
-      haptic("levelUp");
-      audio.runEvent("levelUp");
+      for (const reward of rewards) {
+        if (reward.kind !== "weapon_evolve") continue;
+        const recipe = describeEvolution(WEAPONS, reward.refId);
+        track("evolution_unlocked", { evolution: reward.refId, weapon: recipe?.weaponId ?? "", passive: recipe?.passiveId ?? "", chest: index, level: get().level, elapsedSec: Math.round(elapsedSec) });
+      }
+      // Звук и отклик вскрытия — у сцены окна: она трясёт сундук перед ним.
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 
@@ -685,7 +748,9 @@ function finishRun(
   track(event, {
     ...outcomeFields(result, isNewRecord),
     ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
+    ...(runArt === null ? {} : { art: runArt }),
   });
+  runArt = null;
 }
 
 /**
@@ -826,6 +891,8 @@ export function preloadRunEngine(): void {
 
   preloading = true;
   void import("./run-loadouts").catch(() => undefined);
+  // Карточка экрана загрузки со своим словарём — отдельным чанком.
+  void import("../screens/run/LoadingCardNote").catch(() => undefined);
   loadRunEngine().catch((error: unknown) => {
     preloading = false;
     reportError("run", `предзагрузка движка не удалась: ${String(error)}`);

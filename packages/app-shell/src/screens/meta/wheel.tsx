@@ -9,7 +9,7 @@ import { loadBadges } from "../../state/badges-api";
 import { useNavigation } from "../../state/navigation";
 import { restrictionRefusal } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback, uiFeedback, type RewardResource } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import type { AdWatchResult } from "../../state/ad-watch";
 import {
@@ -29,9 +29,11 @@ import {
   type WheelSpin,
   type WheelView,
 } from "../../state/wheel-api";
+import { burstAt, RewardBurst, type Burst } from "../reward-burst";
+import { resourceGlyph } from "../reward-burst-rules";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
-import { sectorCenterDeg, spinRotationDeg } from "./wheel-math";
+import { sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg, spinTicks } from "./wheel-math";
 
 /**
  * Колесо удачи (docs/07-monetization-and-ads.md §7, docs/35-stage4-plan.md
@@ -81,8 +83,10 @@ export function WheelScreen(): ReactNode {
   const [phase, setPhase] = useState<WheelPhase>("idle");
   const [rotation, setRotation] = useState(0);
   const [won, setWon] = useState<WheelSpin | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = useRef<WheelSpin | null>(null);
+  const ticks = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [source, setSource] = useState<"free" | "ad">("free");
   const [restricted, setRestricted] = useState(false);
   // То же, что `adsPlayable` потока рекламы: сам поток грузится по нажатию, а не с экраном.
@@ -97,6 +101,23 @@ export function WheelScreen(): ReactNode {
   useEffect(() => {
     if (wheelAvailable()) void load();
   }, []);
+
+  const stopTicks = (): void => {
+    for (const timer of ticks.current) clearTimeout(timer);
+    ticks.current = [];
+  };
+  useEffect(() => stopTicks, []);
+
+  /**
+   * Трещотка: щелчок на каждый сектор под стрелкой, в такт замедлению. При
+   * «меньше движения» колесо встаёт почти сразу, и щелчков нет — остаётся
+   * звон выигрыша.
+   */
+  const startTicks = (from: number, to: number, count: number): void => {
+    stopTicks();
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    ticks.current = spinTicks(from, to, count).map((tick) => setTimeout(() => uiFeedback(tick.slow ? "wheelTickSlow" : "wheelTick"), tick.atMs));
+  };
 
   const spin = async (kind: "free" | "ad"): Promise<void> => {
     if (state.status !== "ready" || phase !== "idle") return;
@@ -122,16 +143,24 @@ export function WheelScreen(): ReactNode {
     pending.current = response.data;
     setState({ status: "ready", view: response.data.view });
     setPhase("spinning");
-    setRotation((current) => spinRotationDeg(current, response.data.sector, response.data.view.sectors.length, SPIN_TURNS));
+    const target = spinRotationDeg(rotation, response.data.sector, response.data.view.sectors.length, SPIN_TURNS);
+    setRotation(target);
+    startTicks(rotation, target, response.data.view.sectors.length);
   };
 
   const onSpinEnd = (event: TransitionEvent<HTMLDivElement>): void => {
     if (event.target !== event.currentTarget || event.propertyName !== "transform") return;
     const result = pending.current;
+    stopTicks();
     setPhase("idle");
     if (result === null) return;
     setWon(result);
-    uiFeedback("reward");
+    rewardFeedback(accrualOf(result.resource));
+    // Приз вылетает из ступицы: колесо встало — награда «выпала» из него.
+    const glyph = resourceGlyph(result.resource);
+    if (glyph !== null) {
+      setBurst(burstAt(document.querySelector("[data-wheel-hub]"), result.credited, glyph.icon, glyph.icon === "shard" ? glyph.rarity : undefined));
+    }
     track("wheel_spun", { source, sector: result.sector, reward: result.resource, amount: result.amount });
     void loadWallet();
     void loadBadges();
@@ -153,7 +182,7 @@ export function WheelScreen(): ReactNode {
           <div className="grid gap-2">
             {/* Потраченная бесплатная крутка уступает место и акцент: большая
                 неактивная кнопка спорила бы с той, что доступна сейчас. */}
-            <Button
+            <Button track="spin"
               size={ready?.free === false ? "m" : "l"}
               block
               variant={ready?.free === false ? "secondary" : "primary"}
@@ -165,7 +194,7 @@ export function WheelScreen(): ReactNode {
               {freeButton.label === "next" ? t("wheel.spin.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("wheel.spin.free")}
             </Button>
             {adSpin.kind === "hidden" ? null : (
-              <Button
+              <Button track="spin_ad"
                 variant={adLeads ? "primary" : "secondary"}
                 size={adLeads ? "l" : "m"}
                 block
@@ -201,7 +230,7 @@ export function WheelScreen(): ReactNode {
                   className="size-full transition-transform duration-(--duration-spin) ease-spin"
                   style={{ transform: `rotate(${rotation}deg)` }}
                 >
-                  <WheelFace sectors={ready.sectors} />
+                  <WheelFace sectors={ready.sectors} rotation={rotation} />
                 </div>
               </div>
               {/* Стрелка и ступица не вращаются: стрелка — точка отсчёта. */}
@@ -212,6 +241,7 @@ export function WheelScreen(): ReactNode {
               </span>
               <span
                 aria-hidden="true"
+                data-wheel-hub=""
                 className="surface-card absolute top-1/2 left-1/2 inline-flex size-14 -translate-1/2 items-center justify-center rounded-full text-accent"
               >
                 <LoaderPinwheel size={26} />
@@ -227,6 +257,7 @@ export function WheelScreen(): ReactNode {
               )}
               {notice === null ? null : <p className="text-sm font-semibold text-text-muted">{notice}</p>}
             </div>
+            {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
             {restricted ? <RestrictedPlaque kinds={AD_RESTRICTION} /> : null}
 
             <SectionTitle>{t("wheel.odds")}</SectionTitle>
@@ -289,10 +320,12 @@ function sectorLabel(sector: Pick<WheelSector, "resource" | "amount">): string {
 
 /** Радиус секторов в единицах viewBox; обод и огни — снаружи него. */
 const R = 108;
+/** Середина подписи от края колеса: вокруг неё подпись переворачивается в нижней половине. */
+const LABEL_FROM_RIM = 53;
 const RIM_LIGHTS = 16;
 
 /** Лицо колеса: сектора, значки наград и обод. Геометрия — в единицах viewBox. */
-function WheelFace(props: { sectors: readonly WheelSector[] }): ReactNode {
+function WheelFace(props: { sectors: readonly WheelSector[]; rotation: number }): ReactNode {
   const count = props.sectors.length;
 
   return (
@@ -321,7 +354,13 @@ function WheelFace(props: { sectors: readonly WheelSector[] }): ReactNode {
           <svg x={-12} y={-R + 16} width={24} height={24} overflow="visible">
             <SectorIcon resource={sector.resource} size={24} />
           </svg>
-          <text y={-R + 58} textAnchor="middle" className="fill-current font-display text-sm font-bold text-text">
+          <text
+            y={-R + LABEL_FROM_RIM}
+            textAnchor="middle"
+            dominantBaseline="central"
+            transform={sectorLabelUpsideDown(index, count, props.rotation) ? `rotate(180 0 ${String(-R + LABEL_FROM_RIM)})` : undefined}
+            className="fill-current font-display text-sm font-bold text-text"
+          >
             {formatNumber(sector.amount)}
           </text>
         </g>
@@ -349,4 +388,10 @@ function arcPath(index: number, count: number, radius: number): string {
   const [x1, y1] = polar(radius, (index * 360) / count);
   const [x2, y2] = polar(radius, ((index + 1) * 360) / count);
   return `M${x1} ${y1}A${radius} ${radius} 0 0 1 ${x2} ${y2}`;
+}
+
+/** Звук начисления по ресурсу сервера: «coins», «gems», «shard_<редкость>». */
+function accrualOf(resource: string): RewardResource | null {
+  if (resource === "coins" || resource === "gems") return resource;
+  return resource.startsWith("shard_") ? "shards" : null;
 }

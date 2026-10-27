@@ -30,12 +30,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0111. Недельный сезон — экран рейтинга: вкладки «Неделя», «Всё время», «Друзья», награды и таймер
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json)](README.md#значки-статуса) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](T-0110-weekly-season-server.md) [![T-0107](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0107.json&label=T-0107)](T-0107-achievements-showcase-shell.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json)](README.md#значки-статуса) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](archive/T-0110-weekly-season-server.md) [![T-0107](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0107.json&label=T-0107)](T-0107-achievements-showcase-shell.md)
 
 ## Зачем
 
@@ -46,6 +46,8 @@ batch: 2
 Решение Р102, `docs/39-retention-mechanics.md` Р1.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Выбора сложности у игрока больше нет: рейтинговая сложность одна — `hard` (T-0190, T-0191). Переключателя сложности на экране сезона **не делать**; пороги и награда показываются для `hard` (`thresholds.hard`, `difficultyMul.hard`), прочие ключи ответа сервера читаются схемой и не показываются. Где ниже говорится о переключателе сложности, — этот шаг пропускается.
 
 - **Вкладки:** «Неделя» (по умолчанию, когда сезоны включены), «Всё время»
   (нынешний рейтинг без изменений), «Друзья» (таблица друзей за текущую
@@ -302,7 +304,7 @@ T-0110); доля дошедших до сезонной таблицы (`docs/3
 
   ❓ **Нужно от команды**
 
-  • @участник1 — включить seasons.startsAt и посмотреть экран на сервере
+  • @владелец — включить seasons.startsAt и посмотреть экран на сервере
   ```
 
 ## Вопросы к тимлиду

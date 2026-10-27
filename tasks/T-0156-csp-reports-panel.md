@@ -27,9 +27,9 @@ batch: 3
 
 # T-0156. Панель — сводка заблокированных адресов клиента
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0156.json)](README.md#значки-статуса) [![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](T-0155-csp-reports-intake.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0156.json)](README.md#значки-статуса) [![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](archive/T-0155-csp-reports-intake.md)
 
-[![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](T-0155-csp-reports-intake.md)
+[![T-0155](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0155.json&label=T-0155)](archive/T-0155-csp-reports-intake.md)
 
 ## Зачем
 
@@ -212,5 +212,5 @@ T-0155 собирает на сервере сводку адресов, кот�
 
   ❓ **Нужно от команды**
 
-  • @участник1 — после выката клиента с отчётами открыть раздел и принести новые адреса RichAds и Яндекса отдельной правкой политики
+  • @владелец — после выката клиента с отчётами открыть раздел и принести новые адреса RichAds и Яндекса отдельной правкой политики
   ```

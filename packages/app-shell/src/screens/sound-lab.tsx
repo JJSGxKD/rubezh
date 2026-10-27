@@ -56,7 +56,7 @@ export function SoundLabScreen(): ReactNode {
         <p className="mt-1 text-xs text-text-muted">{t("soundLab.intro")}</p>
         {director === null ? <p className="mt-3 text-sm text-text-muted">{t("soundLab.waiting")}</p> : <Meters director={director} />}
         <div className="mt-3">
-          <SegmentedControl
+          <SegmentedControl track="tabs"
             label={t("soundLab.title")}
             items={TABS.map((id) => ({ id, label: t(`soundLab.tab.${id}`) }))}
             activeId={tab}
@@ -134,7 +134,7 @@ function SoundsTab(props: { director: SoundDirector }): ReactNode {
           </ListGroup>
         </section>
       ))}
-      <p className="mt-2 text-xs text-text-disabled">{t("soundLab.busHint", { weapons: BUSES.weapons.priority, enemies: BUSES.enemies.priority })}</p>
+      <p className="mt-2 text-xs text-text-muted">{t("soundLab.busHint", { weapons: BUSES.weapons.priority, enemies: BUSES.enemies.priority })}</p>
       {editing === null ? null : (
         <RecipeEditor
           director={props.director}
@@ -209,19 +209,19 @@ function RecipeEditor(props: { director: SoundDirector; id: SoundId; edited: boo
       footer={
         <>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" block onClick={() => engine.play(props.id, { force: true })}>
+            <Button track="play" variant="secondary" block onClick={() => engine.play(props.id, { force: true })}>
               <Play size={16} />
               {t("soundLab.play")}
             </Button>
-            <Button block onClick={() => void apply()}>
+            <Button track="apply" block onClick={() => void apply()}>
               {t("soundLab.apply")}
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" block onClick={() => void copy()}>
+            <Button track="copy" variant="ghost" block onClick={() => void copy()}>
               {t("soundLab.copy")}
             </Button>
-            <Button variant="ghost" block disabled={!props.edited} onClick={() => void reset()}>
+            <Button track="reset" variant="ghost" block disabled={!props.edited} onClick={() => void reset()}>
               <RotateCcw size={16} />
               {t("soundLab.reset")}
             </Button>
@@ -272,7 +272,7 @@ function BattleTab(props: { director: SoundDirector }): ReactNode {
   return (
     <>
       <SectionTitle>{t("soundLab.battle.weapons")}</SectionTitle>
-      <SegmentedControl
+      <SegmentedControl track="weapons"
         label={t("soundLab.battle.weapons")}
         items={[1, 2, 3, 4, 5].map((value) => ({ id: String(value), label: String(value) }))}
         activeId={String(weapons)}
@@ -295,7 +295,7 @@ function BattleTab(props: { director: SoundDirector }): ReactNode {
         </ListGroup>
       </div>
       <div className="mt-3">
-        <Button block glow={!running} variant={running ? "secondary" : "primary"} onClick={() => setRunning(!running)}>
+        <Button track="battle_toggle" block glow={!running} variant={running ? "secondary" : "primary"} onClick={() => setRunning(!running)}>
           {running ? <Square size={16} fill="currentColor" /> : <Play size={16} />}
           {running ? t("soundLab.battle.stop") : t("soundLab.battle.start")}
         </Button>
@@ -317,12 +317,14 @@ function simulatedCues(weapons: number, density: number): RunCues {
     heal: chance(0.05),
     magnet: chance(0.03),
     dynamite: chance(0.02),
+    freeze: chance(0.02),
     explosions: chance(0.8 * density),
     explosionsNear: chance(0.2 * density),
     strikes: weapons >= 5 ? chance(0.8) : 0,
     kills: Math.round(Math.random() * 30 * density * 0.033 * 3),
     eliteKills: chance(0.03),
     eliteSpawns: chance(0.02),
+    bossSpawns: 0,
     xp: chance(6 * density),
     fuses: chance(0.5 * density),
     dashWarns: chance(0.4 * density),

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Картинки бота v2</title>
+<!--
+  Макет к design/art/meta-v2.md §3: картинки к сообщениям бота, шерингу и
+  чату администраторов. Размер карточки — 1200×675 (16:9, Telegram не
+  обрезает), здесь — вдвое меньше. Рисуются на сервере тем же путём, что
+  приветствие: SVG-шаблон + resvg (backend/api/src/common/card), рисунок
+  бренда — brand-art.ts. Снимок — out/preview/bot-images-v2.png.
+-->
+<style>
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-cyrillic-400-normal.woff2") format("woff2"); unicode-range: U+0400-045F; }
+  @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
+  :root { --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a; --border: #43425f; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --secondary: #46d9c6; --elite: #ffd15c; --danger: #ff5d5d; --success: #8ee86b; --info: #5ccfff; --passive: #c47dff; --mythic: #ff5d6c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; width: 1280px; }
+  h1 { font: 22px/1.2 "Russo One", system-ui; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 16px; max-width: 150ch; }
+  .grid { display: grid; grid-template-columns: repeat(2, 600px); gap: 22px 40px; }
+  .cap { margin-top: 6px; color: var(--muted); font-size: 12.5px; } .cap b { color: var(--text); }
+  .card { position: relative; width: 600px; height: 338px; border-radius: 10px; overflow: hidden; background: linear-gradient(180deg, #3a2860, var(--bg) 60%, #120f1e); }
+  .card::after { content: ""; position: absolute; inset: 0; background: radial-gradient(70% 60% at 50% 100%, #ff8f3f55, transparent 70%); pointer-events: none; }
+  .stakes { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; z-index: 1; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='44'%3E%3Cpath d='M1 44V12L11 2L21 12V44Z' fill='%230d0a18' stroke='%23ff8f3f' stroke-opacity='.45' stroke-width='1.3'/%3E%3C/svg%3E") repeat-x bottom/22px 40px; }
+  .wm { position: absolute; left: 22px; top: 14px; width: 130px; z-index: 2; }
+  .hero { position: absolute; bottom: 4px; z-index: 2; filter: drop-shadow(0 4px 6px #000a); }
+  .star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: #fff; opacity: .6; }
+  .c { position: absolute; z-index: 3; }
+  .d { font-family: "Russo One", system-ui; } .muted { color: var(--muted); }
+  .big { font: 54px/1 "Russo One"; } .h2 { font: 26px/1.1 "Russo One"; } .h3 { font: 17px/1.2 "Russo One"; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: #17162acc; box-shadow: inset 0 0 0 1px var(--border); font-size: 13px; }
+  .gift { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: linear-gradient(90deg, #ffd15c33, #17162acc); box-shadow: inset 0 0 0 1px #ffd15c88; }
+  .ax { display: grid; grid-template-columns: 70px 1fr; gap: 6px; align-items: center; font: 11px "Russo One"; margin-bottom: 4px; }
+  .ax i { display: block; height: 7px; border-radius: 4px; background: var(--c); }
+  .panel { border-radius: 10px; padding: 10px 12px; background: #28273fdd; box-shadow: inset 0 0 0 1px var(--border); }
+  .kpi { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .kpi div { border-radius: 8px; padding: 8px; background: var(--sunken); }
+  .kpi b { display: block; font: 20px/1.1 "Russo One"; } .kpi span { font-size: 11px; color: var(--muted); } .kpi em { font-style: normal; font-size: 11px; }
+  .up { color: var(--success); } .down { color: var(--danger); }
+  .tg { width: 600px; border-radius: 10px; padding: 10px 12px; margin-top: 8px; background: #2b2a44; font-size: 13px; }
+  .tg .btns { display: flex; gap: 6px; margin-top: 8px; } .tg .btns span { flex: 1; text-align: center; padding: 7px; border-radius: 7px; background: #3a3956; font-size: 12.5px; }
+</style>
+</head>
+<body>
+<h1>Картинки бота v2 — каждое сообщение — витрина игры</h1>
+<p class="lead">Сообщения бота, шеринг и отчёты в чат админов — с картинкой мира игры: небо, частокол, облик игрока, словесный знак. Рисует сервер (SVG + resvg, `common/card`), кэш по хэшу содержимого (как приветствие). Облик на картинке — облик игрока: картинка рекламирует и его, и игру. Под картинкой — текст сообщения и кнопки, как в Telegram. Решения — <b>meta-v2.md §3</b>.</p>
+
+<div class="grid">
+
+<div>
+<div class="card">
+  <img class="wm" src="../out/brand/wordmark.svg" alt="">
+  <i class="star" style="left:300px;top:30px"></i><i class="star" style="left:420px;top:60px"></i><i class="star" style="left:520px;top:22px"></i>
+  <div class="c" style="left:22px;top:70px;width:340px">
+    <div class="h2">Ярослава зовёт тебя<br>на рубеж</div>
+    <div class="muted" style="margin-top:8px;font-size:14px">Держись против волн Нави — оружие бьёт само, твоё дело не попасться.</div>
+    <div class="gift" style="margin-top:14px"><img src="../out/brand/rune.svg" alt="" style="width:26px"><span><b class="d" style="color:var(--elite)">Подарок новичку</b><br><span style="font-size:12.5px">300 монет и окрас «Знахарка»</span></span></div>
+  </div>
+  <img class="hero" src="../out/card-hero-knyaz.svg" alt="" style="right:40px;height:250px">
+  <div class="stakes"></div>
+</div>
+<div class="tg">Ярослава приглашает тебя в «Рубеж» — забери подарок новичка 🎁<div class="btns"><span>Играть</span></div></div>
+<p class="cap"><b>Приглашение</b> (Р63: сообщение через `savePreparedInlineMessage` → `shareMessage`): облик пригласившего, его имя, подарок новичку. Друг видит не «ещё одну игру», а знакомого человека в красивом облике. Ссылка кнопки несёт реферальную метку.</p>
+</div>
+
+<div>
+<div class="card">
+  <img class="wm" src="../out/brand/wordmark.svg" alt="">
+  <i class="star" style="left:250px;top:40px"></i><i class="star" style="left:360px;top:24px"></i>
+  <div class="c" style="left:22px;top:66px">
+    <div class="pill" style="color:var(--elite)">★ Новый рекорд</div>
+    <div class="big" style="margin-top:8px;color:var(--accent)">21:04</div>
+    <div class="d" style="font-size:20px;margin-top:4px">9 812 очков · № 7 сезона</div>
+    <div class="pill" style="margin-top:10px;color:#46d9c6">▣ Стиль: Стена</div>
+  </div>
+  <div class="c" style="left:290px;top:90px;width:150px">
+    <div class="ax" style="--c:#46d9c6">Стойкость<i style="width:96%"></i></div>
+    <div class="ax" style="--c:#ff8f3f">Натиск<i style="width:70%"></i></div>
+    <div class="ax" style="--c:#ffd15c">Охота<i style="width:64%"></i></div>
+    <div class="ax" style="--c:#5ccfff">Чистота<i style="width:68%"></i></div>
+    <div class="ax" style="--c:#c47dff">Сборка<i style="width:56%"></i></div>
+  </div>
+  <img class="hero" src="../out/card-hero-vityaz.svg" alt="" style="right:20px;height:250px">
+  <div class="stakes"></div>
+</div>
+<div class="tg">Мой рекорд в «Рубеже» — 21:04. Побьёшь? ⚔️<div class="btns"><span>Попробовать</span></div></div>
+<p class="cap"><b>Рекорд и итог забега</b> — «Поделиться» на экране итогов: время, очки и место, стиль, разбор по осям полосами и облик. Друг видит вызов и сразу кнопку «Попробовать» — лучший органический вход.</p>
+</div>
+
+<div>
+<div class="card">
+  <img class="wm" src="../out/brand/wordmark.svg" alt="">
+  <i class="star" style="left:240px;top:34px"></i><i class="star" style="left:330px;top:70px"></i>
+  <img class="hero" src="../out/card-hero-navi.svg" alt="" style="left:30px;height:262px;bottom:6px">
+  <div class="c" style="left:230px;top:64px;width:350px">
+    <div class="row d" style="font-size:28px">Велимир</div>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><span class="pill" style="color:var(--mythic)">Чемпион · сезон 3</span><span class="pill" style="color:var(--elite)">Уровень 41</span></div>
+    <div class="panel" style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+      <div><div class="d" style="font-size:20px">31:48</div><div class="muted" style="font-size:11px">лучший</div></div>
+      <div><div class="d" style="font-size:20px;color:var(--elite)">№ 1</div><div class="muted" style="font-size:11px">сезон 4</div></div>
+      <div><div class="d" style="font-size:20px">214</div><div class="muted" style="font-size:11px">боссов</div></div>
+    </div>
+    <div class="muted" style="margin-top:10px;font-size:12.5px">Облик «Навий страж» — только у топ-10 сезона</div>
+  </div>
+  <div class="stakes"></div>
+</div>
+<div class="tg">Карточка игрока Велимир в «Рубеже»<div class="btns"><span>Открыть карточку</span></div></div>
+<p class="cap"><b>Карточка игрока</b> (Р48: «Поделиться» из карточки): облик целиком, имя, знак, уровень, лучший забег, место, боссы. Престижный облик подписан — откуда он, это реклама престижа.</p>
+</div>
+
+<div>
+<div class="card">
+  <img class="wm" src="../out/brand/wordmark.svg" alt="">
+  <div class="c" style="left:22px;top:66px;width:330px">
+    <div class="h2">Сезон 4 окончен</div>
+    <div class="d" style="font-size:40px;margin-top:6px;background:linear-gradient(180deg,#fff2c2,#ffd15c 50%,#c98a2a);-webkit-background-clip:text;color:transparent">Золото · № 38</div>
+    <div class="muted" style="margin-top:6px">топ-10% из 12 400 игроков</div>
+    <div class="gift" style="margin-top:12px"><span><b class="d" style="color:var(--elite)">Награды</b><br><span style="font-size:12.5px">рамка «Золото» · 300 самоцветов · знак «Топ-10% · сезон 4»</span></span></div>
+  </div>
+  <div class="c" style="right:46px;top:54px;width:150px;height:150px;border-radius:50%;box-shadow:inset 0 0 0 8px #ffd15c,inset 0 0 0 12px #120f1e,0 0 40px #ffd15c66;background:radial-gradient(#4a3d78,#1d1733);overflow:hidden"><img src="../out/avatar-hero-vedunya.svg" alt="" style="width:130px;margin:14px 0 0 10px"></div>
+  <div class="stakes"></div>
+</div>
+<div class="tg">Сезон 4 окончен: ты в золоте — № 38! Награды уже в профиле. Сезон 5 начался.<div class="btns"><span>Забрать награды</span><span>Новый сезон</span></div></div>
+<p class="cap"><b>Итог сезона</b>: дивизион и место крупно, аватар в рамке дивизиона, награды. Отправляется тем, кто сыграл в сезоне; кнопка ведёт сразу к забору — повод вернуться в день сброса.</p>
+</div>
+
+<div>
+<div class="card">
+  <img class="wm" src="../out/brand/wordmark.svg" alt="">
+  <i class="star" style="left:280px;top:30px"></i>
+  <div class="c" style="left:22px;top:70px;width:300px">
+    <div class="h2" style="color:var(--danger)">Мирон обогнал тебя</div>
+    <div class="muted" style="margin-top:6px">в рейтинге друзей — на 12 очков</div>
+    <div class="panel" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between" class="d"><span style="color:var(--elite)">1 · Мирон</span><span>4 217</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px" class="d"><span style="color:var(--muted)">2 · Ты</span><span>4 205</span></div>
+    </div>
+  </div>
+  <img class="hero" src="../out/card-hero-skomoroh.svg" alt="" style="right:150px;height:230px">
+  <img class="hero" src="../out/card-hero-vedunya.svg" alt="" style="right:20px;height:200px;opacity:.85">
+  <div class="stakes"></div>
+</div>
+<div class="tg">Мирон обогнал тебя в рейтинге друзей на 12 очков. Вернёшь первое место?<div class="btns"><span>В бой</span></div></div>
+<p class="cap"><b>Тебя обогнали</b> — самое сильное напоминание: не «зайди в игру», а «друг тебя обошёл». Только друзья и чат, не чаще раза в сутки, по выбору игрока (§3.10 docs/35). Рядом — «Награда дня ждёт: день 5 — 150 монет» (горсть монет из игры) и «Колесо снова крутится».</p>
+</div>
+
+<div>
+<div class="card" style="background:linear-gradient(180deg,#232238,#17162a)">
+  <div class="c" style="left:18px;top:14px;right:18px">
+    <div style="display:flex;align-items:center;gap:10px"><img src="../out/brand/rune-flat.svg" alt="" style="width:26px"><span class="h3">Сводка за 22 октября</span><span class="muted" style="margin-left:auto;font-size:12px">MSK · прод</span></div>
+    <div class="kpi" style="margin-top:10px">
+      <div><b>3 412</b><span>DAU</span> <em class="up">+8%</em></div>
+      <div><b>11 905</b><span>забегов</span> <em class="up">+5%</em></div>
+      <div><b>41,2%</b><span>удержание D1</span> <em class="down">−1,1</em></div>
+      <div><b>18 640 ★</b><span>выручка</span> <em class="up">+22%</em></div>
+    </div>
+    <svg viewBox="0 0 560 120" width="564" height="120" style="margin-top:10px">
+      <g stroke="#43425f" stroke-dasharray="3 4"><path d="M0 30H560M0 70H560M0 110H560"/></g>
+      <polyline points="0,90 40,84 80,88 120,70 160,74 200,60 240,64 280,50 320,56 360,40 400,44 440,30 480,36 520,22 560,26" fill="none" stroke="#ff8f3f" stroke-width="3"/>
+      <polyline points="0,100 40,98 80,96 120,92 160,94 200,88 240,86 280,84 320,80 360,82 400,76 440,74 480,72 520,70 560,66" fill="none" stroke="#46d9c6" stroke-width="3"/>
+      <text x="4" y="16" fill="#ff8f3f" font-size="12" font-family="Russo One">DAU за 14 дней</text><text x="140" y="16" fill="#46d9c6" font-size="12" font-family="Russo One">выручка</text>
+    </svg>
+    <div style="display:flex;gap:8px;margin-top:6px;font-size:12px"><span class="pill">новых 812</span><span class="pill">от партнёров 31%</span><span class="pill" style="color:var(--danger)">ошибок клиента 14</span></div>
+  </div>
+</div>
+<div class="tg">📊 Сводка за 22.10: DAU 3 412 (+8%), забегов 11 905, выручка 18 640 ★ (+22%), удержание D1 41,2% (−1,1)<div class="btns"><span>Открыть панель</span><span>Воронка</span></div></div>
+<p class="cap"><b>Чат админов</b>: сводка дня — четыре числа с изменением к прошлой неделе, тренд за 14 дней, плашки «что заметить». Тёмная, плотная, без героя — это рабочий инструмент, но в том же языке: руна, палитра, шрифт. Тревога (ошибки, платежи) — та же раскладка с красной полосой слева и одним главным числом.</p>
+</div>
+
+</div>
+</body>
+</html>

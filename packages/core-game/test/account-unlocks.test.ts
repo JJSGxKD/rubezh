@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
+import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "../src/content/unlocks";
 import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { BOOSTS } from "../src/content/boosts";
 import { WEAPONS } from "../src/content/weapons";
 import { replayRecording } from "../src/game/diagnostics/replay";
 import { chooseUpgrade, prepareOffers } from "../src/game/progression/levels";
 import { isEmptyLoadout, sanitizeLoadout } from "../src/game/progression/run-loadout";
-import { unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
+import { MAX_CARD_TOOLS } from "../src/game/progression/card-tools";
+import { cardToolsAt, findCardToolProblems, unlockLevelOf, unlocksAt, weaponsOpenAt } from "../src/game/progression/unlocks";
 import { createRunWorld } from "../src/game/run-world";
+import { createWorld } from "../src/game/sim/world";
 import { circling, recordHeadlessRun } from "./helpers/recorded-run";
 
 // Уровень аккаунта открывает оружие, навыки и слоты (docs/35-stage4-plan.md
@@ -37,7 +40,9 @@ describe("мир забега по уровню аккаунта", () => {
   it("первый уровень — стартовый набор и урезанные слоты", () => {
     const first = unlocksAt(ACCOUNT_UNLOCKS, 1);
     const novice = world(1);
-    expect(ids(novice.weaponTypes)).toEqual([...first.weapons].sort());
+    // открыты три базовых и три их эволюции: эволюция идёт вместе с базовым
+    expect(ids(novice.weaponTypes)).toEqual(ids(weaponsOpenAt(WEAPONS, first)));
+    expect(novice.weaponTypes.filter((type) => first.weapons.has(type.id))).toHaveLength(first.weapons.size);
     expect(ids(novice.passiveTypes)).toEqual([...first.passives].sort());
     expect(novice.loadoutLimits).toEqual(first.limits);
   });
@@ -52,6 +57,15 @@ describe("мир забега по уровню аккаунта", () => {
     const before = world(stingLevel - 1, "sting");
     const firstOpen = WEAPONS.find((weapon) => unlocksAt(ACCOUNT_UNLOCKS, stingLevel - 1).weapons.has(weapon.id))?.id;
     expect(before.weaponTypes[before.loadout.weapons[0].typeIndex].id).toBe(firstOpen);
+  });
+
+  it("«Метеор» закрыт на 15-м уровне и открыт на 16-м, эволюция вместе с ним", () => {
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 15).weapons.has("meteor")).toBe(false);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 16).weapons.has("meteor")).toBe(true);
+    expect(ids(world(15).weaponTypes)).not.toContain("meteor");
+    expect(ids(world(16).weaponTypes)).toEqual(expect.arrayContaining(["meteor", "fire_rain"]));
+    expect(ACCOUNT_UNLOCKS.some((row) => row.weapons?.includes("fire_rain"))).toBe(false);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 1).weapons.size).toBe(3);
   });
 
   it("предлагает только открытое и не больше слотов уровня", () => {
@@ -98,5 +112,93 @@ describe("уровень в наборе, записи и повторе", () =>
     const { accountLevel, ...withoutLevel } = recording.loadout ?? { modifiers: {}, boosts: [] };
     expect(accountLevel).toBe(1);
     expect(replayRecording({ ...recording, loadout: withoutLevel }).verdict).not.toBe("match");
+  });
+});
+
+describe("заряды карточек по уровню аккаунта (tasks/T-0101)", () => {
+  const at = (level: number) => cardToolsAt(CARD_TOOL_UNLOCKS, level);
+
+  it("лестница из задачи: итог с уровня, как у слотов", () => {
+    expect(at(1)).toEqual({ reroll: 0, skip: 0, banish: 0 });
+    expect(at(2)).toEqual({ reroll: 0, skip: 0, banish: 0 });
+    expect(at(3)).toEqual({ reroll: 1, skip: 0, banish: 0 });
+    expect(at(5)).toEqual({ reroll: 1, skip: 0, banish: 0 });
+    expect(at(6)).toEqual({ reroll: 1, skip: 1, banish: 0 });
+    expect(at(9)).toEqual({ reroll: 2, skip: 1, banish: 1 });
+    expect(at(14)).toEqual({ reroll: 2, skip: 2, banish: 1 });
+    expect(at(20)).toEqual({ reroll: 3, skip: 2, banish: 2 });
+    expect(at(99)).toEqual(at(20));
+  });
+
+  it("не заданное строкой — как строкой ниже, порядок строк не важен", () => {
+    const table = [{ level: 5, reroll: 2 }, { level: 2, reroll: 1, skip: 1 }];
+    expect(cardToolsAt(table, 1)).toEqual({ reroll: 0, skip: 0, banish: 0 });
+    expect(cardToolsAt(table, 3)).toEqual({ reroll: 1, skip: 1, banish: 0 });
+    expect(cardToolsAt(table, 5)).toEqual({ reroll: 2, skip: 1, banish: 0 });
+  });
+
+  it("контент проходит проверку, награда пропуска — доля от 0 до 1", () => {
+    expect(findCardToolProblems(CARD_TOOL_UNLOCKS)).toEqual([]);
+    expect(CARD_TOOL_RULES.skipXpRatio).toBe(0.3);
+    expect(CARD_TOOL_RULES.skipXpRatio).toBeGreaterThan(0);
+    expect(CARD_TOOL_RULES.skipXpRatio).toBeLessThanOrEqual(1);
+  });
+
+  it("проверка называет строку: дубль уровня, отрицательное, дробное, убывающее, выше потолка", () => {
+    const problems = findCardToolProblems([
+      { level: 1, reroll: 2 },
+      { level: 1, skip: -1 },
+      { level: 2, reroll: 1.5 },
+      { level: 3, reroll: 1 },
+      { level: 0, banish: MAX_CARD_TOOLS + 1 },
+    ]).join("\n");
+    expect(problems).toMatch(/уровень 1 встречается дважды/);
+    expect(problems).toMatch(/skip.*-1/);
+    expect(problems).toMatch(/reroll.*1[.,]5/);
+    expect(problems).toMatch(/уровень 3: .*reroll.*меньше, чем уровнем ниже/);
+    expect(problems).toMatch(/уровень 0/);
+    expect(problems).toMatch(new RegExp(`banish.*${String(MAX_CARD_TOOLS)}`));
+  });
+});
+
+describe("заряды в мире забега", () => {
+  const tools = (accountLevel?: number, boosts: string[] = []) =>
+    createRunWorld({
+      seed: 7,
+      mapId: "",
+      difficultyId: "easy",
+      unitScale: 1,
+      ...(accountLevel === undefined && boosts.length === 0 ? {} : { loadout: { modifiers: {}, boosts, ...(accountLevel === undefined ? {} : { accountLevel }) } }),
+    }).world.progression.tools;
+
+  it("без уровня — нули: на этом наборе идут golden-тесты", () => {
+    expect(tools()).toEqual({ reroll: 0, skip: 0, banish: 0 });
+    expect(tools(undefined, ["control"])).toEqual({ reroll: 1, skip: 1, banish: 1 });
+  });
+
+  it("уровень 1 без буста — нули, а с бустом «Контроль» — 1/1/1", () => {
+    expect(tools(1)).toEqual({ reroll: 0, skip: 0, banish: 0 });
+    expect(tools(1, ["control"])).toEqual({ reroll: 1, skip: 1, banish: 1 });
+  });
+
+  it("уровень 9 с бустом — 3/2/2, уровень 20 — 4/3/3; выданное запоминается", () => {
+    expect(tools(9, ["control"])).toEqual({ reroll: 3, skip: 2, banish: 2 });
+    const rich = createRunWorld({ seed: 7, mapId: "", difficultyId: "easy", unitScale: 1, loadout: { modifiers: {}, boosts: ["control"], accountLevel: 20 } }).world;
+    expect(rich.progression.tools).toEqual({ reroll: 4, skip: 3, banish: 3 });
+    expect(rich.progression.toolsTotal).toEqual({ reroll: 4, skip: 3, banish: 3 });
+  });
+
+  it("сумма каждого вида держится под потолком", () => {
+    const world = createWorld({
+      seed: 1,
+      enemies: [{ id: "g", hp: 1, speed: 1, damage: 0, xp: 1, pattern: "swarm" }],
+      weapons: WEAPONS,
+      passives: PASSIVES,
+      boosts: BOOSTS,
+      maxBoostsPerRun: 3,
+      cardTools: { reroll: 20, skip: 8, banish: 0 },
+      loadout: { modifiers: {}, boosts: ["control"] },
+    });
+    expect(world.progression.tools).toEqual({ reroll: MAX_CARD_TOOLS, skip: MAX_CARD_TOOLS, banish: 1 });
   });
 });

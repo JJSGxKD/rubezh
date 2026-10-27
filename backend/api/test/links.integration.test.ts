@@ -89,6 +89,8 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     await click(null, null);
     // Клик проверки, записанный до отсечения на входе: в базе остаётся, в цифры не идёт.
     await click("check-host.net", "unknown");
+    // Старая запись с портом в хосте Referer: отсекается по хосту без порта.
+    await click("check-host.net:8443", "mobile");
 
     const stats = (await links.list(500)).find((row) => row.code === code);
     expect(stats).toMatchObject({ clicks: 4, clicks30d: 4, devices: { mobile: 2, desktop: 0, web: 0, unknown: 2 } });

@@ -47,6 +47,14 @@ export function checksumWorld(world: World): number {
     fold(world.gems.value[i]);
   }
 
+  // Неактивное кольцо в сумму не входит: суммы забегов без кольца не меняются.
+  if (world.cordon.active) {
+    fold(world.cordon.centerX);
+    fold(world.cordon.centerY);
+    fold(world.cordon.radius);
+    fold(world.cordon.timeLeftSec);
+  }
+
   for (let i = 0; i < world.enemies.count; i++) {
     fold(world.enemies.alive[i]);
     if (world.enemies.alive[i] === 0) continue;

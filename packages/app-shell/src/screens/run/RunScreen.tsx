@@ -152,6 +152,18 @@ export function RunScreen(): ReactNode {
           queued={run.queued}
           {...(run.hud === null ? {} : { loadout: run.hud })}
           onChoose={(optionId) => useRun.getState().choose(optionId)}
+          {...(run.toolsTotal.reroll + run.toolsTotal.skip + run.toolsTotal.banish === 0
+            ? {}
+            : {
+                tools: {
+                  left: run.tools,
+                  total: run.toolsTotal,
+                  canReroll: run.canReroll,
+                  onReroll: () => useRun.getState().reroll(),
+                  onSkip: () => useRun.getState().skip(),
+                  onBanish: (optionId: string) => useRun.getState().banish(optionId),
+                },
+              })}
           onStats={openStats}
         />
       ) : null}
@@ -218,16 +230,14 @@ function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps 
 }
 
 /**
- * Шеринг результата — заглушка этапа 2: адаптер о нём знает, но экрана и
- * картинки ещё нет (docs/26-stage2-plan.md §1.2). Кнопка при этом обязана
- * отвечать: молчащая кнопка читается как баг.
+ * Шеринг результата: своей карточки итога ещё нет (docs/24-attribution-and-sharing.md
+ * §7), поэтому итог уходит путём приглашения друга — ссылкой со строкой о
+ * забеге. Кнопка обязана отвечать: молчащая кнопка читается как баг. Модуль —
+ * по нажатию: чанк забега на пределе бюджета.
  */
-function shareRun(): void {
+async function shareRun(): Promise<string | null> {
   const state = useRun.getState();
-  if (state.result === null) return;
-
-  useShell.getState().adapter.share({
-    runScore: Math.round(state.result.survivalSec),
-    runDurationSec: state.result.survivalSec,
-  });
+  if (state.result === null) return null;
+  const { shareRunResult } = await import("../../state/run-share");
+  return await shareRunResult({ survivalSec: state.result.survivalSec, record: state.isNewRecord });
 }

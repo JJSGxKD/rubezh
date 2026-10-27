@@ -1,5 +1,5 @@
 import type { RunCues } from "../../run-api";
-import { DASH_PHASE, EXPLODER_PHASE, isElite } from "../patterns";
+import { DASH_PHASE, EXPLODER_PHASE, isBoss, isElite } from "../patterns";
 import { SIM_EVENT } from "../sim/events";
 import type { World } from "../sim/world";
 
@@ -63,7 +63,8 @@ export class CueTracker {
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
-      else if (kind === SIM_EVENT.strike) cues.strikes++;
+      else if (kind === SIM_EVENT.freeze) cues.freeze++;
+      else if (kind === SIM_EVENT.strike || kind === SIM_EVENT.strikeFire) cues.strikes++;
       else if (kind === SIM_EVENT.explosion) {
         cues.explosions++;
         const dx = (events.x[slot] ?? 0) - world.player.x;
@@ -97,7 +98,7 @@ export class CueTracker {
     this.xp = xp;
 
     const elitesAlive = this.scanEnemies(cues);
-    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.enemyShots > 0) any = true;
+    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.enemyShots > 0 || cues.bossSpawns > 0) any = true;
     // Появление элиты — это рост числа живых сверх убитых за то же окно.
     const spawned = elitesAlive - this.elitesAlive + cues.eliteKills;
     if (spawned > 0) {
@@ -112,7 +113,9 @@ export class CueTracker {
       if (weapon === undefined) continue;
       // Перезарядка выросла — оружие сработало: после удара она взводится заново.
       if (weapon.cooldown > (this.lastCooldown[slot] ?? 0) + 1e-6) {
-        const id = world.weaponTypes[weapon.typeIndex]?.id ?? "";
+        // Звук эволюции — звук базового: своего у неё нет.
+        const type = world.weaponTypes[weapon.typeIndex];
+        const id = type?.evolvedFrom ?? type?.id ?? "";
         cues.weapons[id] = (cues.weapons[id] ?? 0) + 1;
         any = true;
       }
@@ -132,6 +135,8 @@ export class CueTracker {
    * Один проход по врагам: начала угроз — переход в фазу фитиля, телеграфа
    * или рывка, взведённая перезарядка стрелка — и число живых элит. Сравнение
    * идёт с тем же врагом в слоте: только что появившийся не «начинает» угрозу.
+   * Босс считается по новому слоту, а не по разнице живых: он один на
+   * событие, а элиты рядом с ним могут выйти и пасть в том же окне.
    */
   private scanEnemies(cues: RunCues | null): number {
     const world = this.world;
@@ -146,6 +151,7 @@ export class CueTracker {
       if (alive) {
         const type = world.enemyTypes[typeIndex];
         if (type !== undefined && isElite(type)) elites++;
+        if (!same && cues !== null && type !== undefined && isBoss(type)) cues.bossSpawns++;
         if (same && cues !== null && type !== undefined && phase !== this.enemyPhase[i]) {
           if (type.pattern === "exploder" && phase === EXPLODER_PHASE.fuse) cues.fuses++;
           else if (type.pattern === "dash" && phase === DASH_PHASE.telegraph) cues.dashWarns++;
@@ -170,12 +176,14 @@ function emptyCues(): RunCues {
     heal: 0,
     magnet: 0,
     dynamite: 0,
+    freeze: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
     kills: 0,
     eliteKills: 0,
     eliteSpawns: 0,
+    bossSpawns: 0,
     xp: 0,
     fuses: 0,
     dashWarns: 0,
@@ -190,12 +198,14 @@ function resetCues(cues: RunCues): void {
   cues.heal = 0;
   cues.magnet = 0;
   cues.dynamite = 0;
+  cues.freeze = 0;
   cues.explosions = 0;
   cues.explosionsNear = 0;
   cues.strikes = 0;
   cues.kills = 0;
   cues.eliteKills = 0;
   cues.eliteSpawns = 0;
+  cues.bossSpawns = 0;
   cues.xp = 0;
   cues.fuses = 0;
   cues.dashWarns = 0;

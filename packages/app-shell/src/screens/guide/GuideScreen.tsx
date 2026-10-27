@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Flame, History, Hourglass, Lightbulb, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
-import { DIFFICULTIES, DROPS, LOADOUT_LIMITS } from "@bh/core-game";
+import { DIFFICULTIES, DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
 import {
   Badge,
   Card,
@@ -12,13 +12,19 @@ import {
   SegmentedControl,
 } from "../../design-system/components";
 import { formatDecimal, formatDuration, t } from "../../i18n";
+import "../../i18n/boosts";
 import "../../i18n/guide";
 import { useNavigation } from "../../state/navigation";
+import { useProgress } from "../../state/progress";
+import { boostIcon } from "../boost-icons";
+import { BOOST_RUN_GLYPH, GameGlyph } from "../game-glyphs";
 import { ItemIcon, ItemTile } from "../item-icons";
 import { formatChange } from "../run/upgrade-format";
 import {
   eliteEnemies,
   enemyStages,
+  evolutionRecipes,
+  guideBoosts,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -28,6 +34,7 @@ import {
   unlockLevel,
   weaponElement,
   weaponGrowth,
+  type EvolutionRecipe,
   type GuideEnemy,
 } from "./guide-data";
 import { ElementList, ElementTag, ResistLine } from "./elements";
@@ -52,7 +59,7 @@ export function GuideScreen(): ReactNode {
     <Screen title={t("guide.title")} onBack={() => navigation.pop()}>
       <ContentColumn>
         <div className="mt-1 mb-4">
-          <SegmentedControl
+          <SegmentedControl track="tabs"
             label={t("guide.sections")}
             items={TABS.map((id) => ({ id, label: t(`guide.tab.${id}`) }))}
             activeId={tab}
@@ -135,6 +142,13 @@ function Basics(): ReactNode {
             id="dynamite"
             text={t("guide.pickup.dynamite.text", { percent: Math.round(DROPS.dynamite.eliteHpRatio * 100) })}
           />
+          <PickupRow
+            id="freeze"
+            text={t("guide.pickup.freeze.text", {
+              seconds: Math.round(DROPS.freeze.durationSec),
+              bossSeconds: Math.round(DROPS.freeze.durationSec * DROPS.freeze.bossDurationRatio),
+            })}
+          />
           <PickupRow id="chest" text={t("guide.pickup.chest.text")} />
         </ul>
       </Topic>
@@ -171,12 +185,32 @@ function Basics(): ReactNode {
 
       <Topic index={8} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
 
-      <Topic index={9} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
+      {/* Бусты — после сложности: и то и другое выбирают в листе «Перед забегом». */}
+      <Topic index={9} icon={<GameGlyph glyph={BOOST_RUN_GLYPH} size={20} />} title={t("guide.basics.boosts.title")} text={t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })}>
+        <ul className="grid gap-2">
+          {guideBoosts().map((boost) => {
+            const Icon = boostIcon(boost.id);
+            return (
+              <li key={boost.id} className="surface-sunken flex items-start gap-3 rounded-md px-3 py-2">
+                <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-info/15 text-info">
+                  <Icon size={18} aria-hidden="true" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-sm font-semibold text-text">{t(boost.nameKey)}</span>
+                  <span className="block text-xs text-text-muted">{t(boost.descriptionKey)}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Topic>
+
+      <Topic index={10} icon={<CoinIcon size={20} />} title={t("guide.basics.reward.title")} text={t("guide.basics.reward.text")} />
     </>
   );
 }
 
-function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "chest"; text: string }): ReactNode {
+function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "chest"; text: string }): ReactNode {
   return (
     <li className="surface-sunken flex items-center gap-3 rounded-md px-3 py-2">
       {/* Сундуков три размера, в списке — средний: размер несут цвет и масштаб, не форма. */}
@@ -288,6 +322,8 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
 }
 
 function Weapons(): ReactNode {
+  // Уровень аккаунта: с сервера, а до ответа — из подписанного снимка; без обоих — первый.
+  const level = useProgress((state) => state.progress?.level ?? state.runLevel ?? 1);
   return (
     <>
       <p className="text-sm text-text-muted">{t("guide.weapons.intro")}</p>
@@ -299,7 +335,51 @@ function Weapons(): ReactNode {
       {levelWeapons().map((weapon, index) => (
         <WeaponCard key={weapon.id} weapon={weapon} index={index} />
       ))}
+      <SectionTitle>{t("guide.weapons.evolutions")}</SectionTitle>
+      <p className="text-sm text-text-muted">{t("guide.weapons.evolutionsIntro")}</p>
+      {evolutionRecipes(level).map((recipe, index) => (
+        <EvolutionCard key={recipe.evolution} recipe={recipe} index={index} />
+      ))}
     </>
+  );
+}
+
+/** Рецепт эволюции: оружие + навык → эволюция. Закрытый уровнем аккаунта — под замком, но название и описание видны (К3). */
+function EvolutionCard(props: { recipe: EvolutionRecipe; index: number }): ReactNode {
+  const { recipe } = props;
+  const name = t(`weapon.${recipe.evolution}.name`);
+  return (
+    <Card appearIndex={Math.min(props.index, 6)} stripe="weapon">
+      <div className={recipe.locked ? "opacity-70" : ""}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <ItemTile kind="weapon" id={recipe.weapon} size="s" />
+          <span aria-hidden="true" className="text-text-muted">
+            +
+          </span>
+          <ItemTile kind="passive" id={recipe.passive} size="s" />
+          <span aria-hidden="true" className="text-text-muted">
+            →
+          </span>
+          <ItemTile kind="weapon" id={recipe.evolution} size="s" />
+          <h3 className="min-w-0 font-display text-base font-bold text-text">{name}</h3>
+        </div>
+        <p className="mt-1 text-xs text-text-muted">
+          {t("guide.evolution.recipe", { weapon: t(`weapon.${recipe.weapon}.name`), passive: t(`passive.${recipe.passive}.name`), evolution: name })}
+        </p>
+        <p className="mt-1 text-sm text-text-muted">{t(`weapon.${recipe.evolution}.description`)}</p>
+        <p className="mt-1 text-xs text-text-muted">{t("guide.evolution.power", { ratio: formatDecimal(recipe.powerRatio, 1) })}</p>
+        <div className="mt-2">
+          {recipe.locked ? (
+            <Badge tone="muted">
+              <Lock size={12} aria-hidden="true" />
+              {t("guide.evolution.locked", { level: recipe.unlockLevel })}
+            </Badge>
+          ) : (
+            <UnlockBadge level={recipe.unlockLevel} />
+          )}
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -394,6 +474,7 @@ function Upgrades(): ReactNode {
         </section>
       ))}
       <Topic index={0} icon={<ItemIcon kind="heal" id="" size={20} />} title={t("guide.upgrades.heal.title")} text={t("guide.upgrades.heal.text")} />
+      <Topic index={1} icon={<Shuffle size={20} aria-hidden="true" />} title={t("guide.upgrades.tools.title")} text={t("guide.upgrades.tools.text")} />
     </>
   );
 }

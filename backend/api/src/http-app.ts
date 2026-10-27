@@ -4,6 +4,8 @@ import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
 import { DomainErrorFilter } from "./common/domain-error.filter.js";
 import { API_SECURITY_HEADERS } from "./common/security-headers.js";
 import { ServerErrorAlarm } from "./modules/admin-notify/server-error-alarm.js";
+import { InboundCounter } from "./modules/request-journal/inbound-counter.js";
+import { NO_ROUTE, isServiceRoute } from "./modules/request-journal/journal-rules.js";
 
 /**
  * Сборка HTTP-приложения — одна для `main.ts` и HTTP-тестов: префикс,
@@ -19,6 +21,13 @@ import { ServerErrorAlarm } from "./modules/admin-notify/server-error-alarm.js";
  * границы эндпоинт превращается в приём произвольных объёмов данных.
  */
 export const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
+
+/**
+ * Потолок тела отчёта браузера о заблокированном адресе. Настоящий отчёт —
+ * сотни байт; приёмник открыт без входа, и больше нескольких килобайт ему
+ * присылать незачем.
+ */
+export const CSP_REPORT_BODY_LIMIT_BYTES = 16 * 1024;
 
 type EntryModule = Parameters<typeof NestFactory.create>[0];
 
@@ -51,6 +60,22 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
   // `/r/<код>` — адрес редирект-ссылки в чатах и постах, а не API
   // (docs/24-attribution-and-sharing.md §3.1).
   app.setGlobalPrefix("api/v1", { exclude: ["health", "health/ready", "r/:code"] });
+
+  // Браузер шлёт отчёты политики источников с собственными типами тела —
+  // `application/csp-report` (report-uri) и `application/reports+json`
+  // (report-to); Fastify знает только json и text/plain и ответил бы 415.
+  // Остальные типы по-прежнему отклоняются.
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser(["application/csp-report", "application/reports+json"], { parseAs: "string", bodyLimit: CSP_REPORT_BODY_LIMIT_BYTES }, (_request, body, done) => {
+      try {
+        done(null, JSON.parse(String(body)));
+      } catch {
+        // Текст ошибки разбора не берём: в нём бывают куски тела.
+        done(Object.assign(new Error("Некорректный отчёт"), { statusCode: 400 }), undefined);
+      }
+    });
 
   app.enableCors({
     origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : false,
@@ -87,6 +112,27 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
       .getInstance()
       .addHook("onResponse", async (_request, reply) => {
         if (reply.statusCode >= 500) void counter.record(reply.statusCode);
+      });
+  }
+
+  // Сводка входящих запросов по маршрутам (docs/35-stage4-plan.md Р92,
+  // tasks/T-0060). Считается шаблон маршрута, а не адрес; ответ игроку уже
+  // ушёл, и счётчик его не ждёт. Без модуля журнала хук не ставится.
+  let inbound: InboundCounter | null = null;
+  try {
+    inbound = app.get(InboundCounter, { strict: false });
+  } catch {
+    // Журнала нет в этой сборке — считать нечего.
+  }
+  if (inbound !== null) {
+    const journal = inbound;
+    app
+      .getHttpAdapter()
+      .getInstance()
+      .addHook("onResponse", async (request, reply) => {
+        const route = request.routeOptions.url ?? NO_ROUTE;
+        if (isServiceRoute(route)) return;
+        void journal.count(request.method, route, reply.statusCode, reply.elapsedTime);
       });
   }
 }

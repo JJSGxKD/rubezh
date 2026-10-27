@@ -6,6 +6,7 @@ import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
+import { rewardFeedback } from "../../state/ui-feedback";
 import {
   TASK_LIMIT_REACHED,
   TASK_NOT_DONE,
@@ -23,7 +24,10 @@ import {
   type TaskTab,
 } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
+import { burstAt, RewardBurst, type Burst } from "../reward-burst";
+import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
+import { BotMentionRows } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskRow } from "./task-row";
@@ -61,6 +65,7 @@ export function TasksScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ taskId: string; text: string } | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
   // Цели, места в которых кончились, пока экран открыт: строка остаётся с
   // объяснением, но без кнопок и остатка — со следующим открытием её не будет.
   const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
@@ -116,6 +121,11 @@ export function TasksScreen(): ReactNode {
       if (task.period === "achievement") track("achievement_unlocked", { achievement: task.id, kind: task.kind });
       else track("task_completed", { task: task.id, period: task.period, kind: task.kind });
       setNotice({ taskId: task.id, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
+      // Значки вылетают из награды в строке задания — снимок до перерисовки:
+      // забранное задание уходит вниз списка.
+      const main = mainResource(response.data.credited);
+      rewardFeedback(main === null ? null : ICON_RESOURCE[main.icon]);
+      if (main !== null) setBurst(burstAt(document.querySelector(`[data-task-reward="${CSS.escape(task.id)}"]`), main.amount, main.icon));
       void loadWallet();
     }
     void loadBadges();
@@ -167,7 +177,7 @@ export function TasksScreen(): ReactNode {
       <ContentColumn>
         <PageTitle>{t("tasks.title")}</PageTitle>
         <div className="mt-2 grid gap-3">
-          <SegmentedControl
+          <SegmentedControl track="view"
             label={t("tasks.title")}
             activeId={view}
             onSelect={(id) => setView(id as TasksView)}
@@ -198,8 +208,10 @@ export function TasksScreen(): ReactNode {
               {partner ? <NetworkTasks items={networks} firstIndex={claimable.length} refresh={refresh} onCount={setNetworkRows} /> : null}
               {rest.map((task, index) => row(task, claimable.length + (partner ? networkRows : 0) + index))}
             </div>
+            {view === "daily" ? <BotMentionRows /> : null}
           </div>
         )}
+        {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
       </ContentColumn>
     </Screen>
   );

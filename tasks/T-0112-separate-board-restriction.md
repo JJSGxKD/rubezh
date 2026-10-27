@@ -3,15 +3,14 @@ id: T-0112
 title: Скрытое ограничение «Отдельная доска»: вид, право, панель
 epic: E16
 priority: P1
-status: in-progress
-owner: claude-1 / sonnet-5.5 / high
+status: ready
+owner:
 author: claude-lead2-18
 size: M
 depends_on: []
 zones:
   - backend/api/src/modules/restrictions/**
   - backend/api/src/modules/runs/rating-restrictions.ts
-  - backend/api/src/modules/roles/permissions.ts
   - backend/api/src/modules/roles/roles.service.ts
   - backend/api/src/modules/admin/admin-restrictions.controller.ts
   - backend/api/src/modules/admin/admin-players.service.ts
@@ -30,12 +29,13 @@ shared:
   - backend/api/test/admin-players.test.ts
   - backend/api/test/admin.test.ts
   - docs/29-admin-panel.md
+  - backend/api/src/modules/roles/permissions.ts
 runner: local
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0112. Скрытое ограничение «Отдельная доска»: вид, право, панель
@@ -51,7 +51,7 @@ batch: 2
 
 ## Решения
 
-Р104 (`docs/35-stage4-plan.md`), Р75 (ограничения), решение участника 1 от
+Р104 (`docs/35-stage4-plan.md`), Р75 (ограничения), решение владельца от
 13.10.2026. Исполнитель их не пересматривает.
 
 - **Вид — `separate_board`**, название в панели «Отдельная доска». Игрок не

@@ -165,6 +165,35 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
           <circle cx={r * 0.35} cy={-r * 0.82} r={r * 0.2} fill={hex(WORLD_COLORS.dynamiteSpark)} />
         </>
       );
+    case "freeze": {
+      // Три луча через центр и светлые наконечники — как на канве
+      // (`render/shapes.ts`): шесть лучей читаются снежинкой.
+      const rays = [
+        [0, 1],
+        [0.866, 0.5],
+        [0.866, -0.5],
+      ] as const;
+      return (
+        <>
+          {rays.map(([dx, dy]) => (
+            <line
+              key={`${dx}-${dy}`}
+              x1={-dx * r * 0.85}
+              y1={-dy * r * 0.85}
+              x2={dx * r * 0.85}
+              y2={dy * r * 0.85}
+              stroke={fill}
+              strokeWidth={Math.max(1.5, r * 0.3)}
+            />
+          ))}
+          <circle r={r * 0.28} fill={light} />
+          {rays.flatMap(([dx, dy]) => [
+            <circle key={`a${dx}-${dy}`} cx={dx * r * 0.85} cy={dy * r * 0.85} r={r * 0.16} fill={light} />,
+            <circle key={`b${dx}-${dy}`} cx={-dx * r * 0.85} cy={-dy * r * 0.85} r={r * 0.16} fill={light} />,
+          ])}
+        </>
+      );
+    }
     case "chest": {
       // Те же пропорции, что у текстуры движка (`render/shapes.ts`): тёмный
       // кант, корпус, более светлая крышка и замок.
@@ -421,6 +450,32 @@ export function EnemyScene(props: {
           ))}
         </Stage>
       );
+    case "cordon": {
+      // Строй вокруг игрока: восемь мест через 45°, справа место пустое — там
+      // пробит проход. Сцена статичная: ни одной новой анимации.
+      const cx = VIEW_W / 2;
+      const ringRadius = 34;
+      const slots = Array.from({ length: 8 }, (_, slot) => {
+        const angle = (slot * Math.PI) / 4;
+        return { slot, x: cx + Math.cos(angle) * ringRadius, y: py + Math.sin(angle) * ringRadius };
+      });
+      return (
+        <Stage label={props.label}>
+          <Player x={cx} y={py} />
+          {slots.map(({ slot, x, y }) =>
+            slot === 0 ? (
+              <At key={slot} x={x} y={y}>
+                <circle r={size * 0.8} fill="none" stroke={hex(color)} strokeOpacity={0.35} strokeDasharray="3 3" />
+              </At>
+            ) : (
+              <At key={slot} x={x} y={y}>
+                <WorldShape shape={look.shape} color={color} r={size * 0.8} />
+              </At>
+            ),
+          )}
+        </Stage>
+      );
+    }
     default:
       return (
         <Stage label={props.label}>
@@ -528,7 +583,7 @@ export function WeaponScene(props: { behavior: WeaponBehavior; label: string }):
 }
 
 /** Подбор или кристалл отдельным значком: для списков, без сцены. */
-export function PickupIcon(props: { id: "medkit" | "magnet" | "dynamite" | "chest_three"; size?: number }): ReactNode {
+export function PickupIcon(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "chest_three"; size?: number }): ReactNode {
   const look = PICKUP_LOOKS.find((entry) => entry.id === props.id) ?? PICKUP_LOOKS[0];
   const size = props.size ?? 40;
   return (

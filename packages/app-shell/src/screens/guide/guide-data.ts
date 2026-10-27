@@ -1,6 +1,7 @@
 import {
   ELEMENTS,
   PASSIVE_CATEGORIES,
+  type BoostDef,
   type EnemyDef,
   type EnemyStageDef,
   type PassiveCategory,
@@ -10,7 +11,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, WEAPONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, BOOSTS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -76,12 +77,12 @@ export function unlockLevel(kind: "weapon" | "passive", id: string): number {
 
 /** Оружие первого уровня: с ним приходит новичок, стартовым берётся любое. */
 export function firstLevelWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
+  return BASE_WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) === 1);
 }
 
 /** Оружие, которое открывает уровень аккаунта, — по порядку открытия. */
 export function levelWeapons(): WeaponDef[] {
-  return WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
+  return BASE_WEAPONS.filter((weapon) => unlockLevel("weapon", weapon.id) > 1).sort((a, b) => unlockLevel("weapon", a.id) - unlockLevel("weapon", b.id));
 }
 
 /**
@@ -134,7 +135,7 @@ export function weaponElement(weapon: WeaponDef): StatusElement | null {
  * стихии без оружия гайдбук не описывает: игроку его не наложить.
  */
 export function weaponElements(): StatusElement[] {
-  const used = new Set(WEAPONS.map(weaponElement));
+  const used = new Set(BASE_WEAPONS.map(weaponElement));
   return ELEMENTS.filter((element): element is StatusElement => element !== "physical" && used.has(element));
 }
 
@@ -199,4 +200,58 @@ export function passiveRange(passive: PassiveDef): UpgradeChange | null {
     format: passive.op === "mul" ? "percent" : "plus",
     lowerIsBetter: passive.stat === "cooldown",
   };
+}
+
+export interface EvolutionRecipe {
+  evolution: string;
+  weapon: string;
+  passive: string;
+  /** уровень аккаунта, с которого открыты и оружие, и навык рецепта */
+  unlockLevel: number;
+  locked: boolean;
+  /** во сколько раз эволюция сильнее максимума базового оружия */
+  powerRatio: number;
+}
+
+/**
+ * Сила уровня оружия — урон на число снарядов в секунду, та же формула, что у
+ * `weaponPowerIndex` движка (`game/progression/evolutions.ts`): движок отдаёт
+ * её не из `index.ts`, а оболочка берёт `core-game` только через него.
+ */
+function powerIndex(level: Pick<WeaponLevel, "damage" | "cooldownSec" | "projectiles">): number {
+  return (level.damage * Math.max(level.projectiles ?? 1, 1)) / level.cooldownSec;
+}
+
+/**
+ * Рецепты эволюций в порядке контента. Рецепт открыт с уровня, где открыты и
+ * оружие, и навык; название и описание эволюции видны и под замком (К3).
+ */
+export function evolutionRecipes(accountLevel: number): EvolutionRecipe[] {
+  const recipes: EvolutionRecipe[] = [];
+  for (const evolution of WEAPON_EVOLUTIONS) {
+    if (evolution.evolvedFrom === undefined || evolution.recipe === undefined) continue;
+    const base = BASE_WEAPONS.find((weapon) => weapon.id === evolution.evolvedFrom);
+    const baseMax = base?.levels[base.levels.length - 1];
+    const evolved = evolution.levels[0];
+    if (baseMax === undefined || evolved === undefined) continue;
+    const level = Math.max(unlockLevel("weapon", evolution.evolvedFrom), unlockLevel("passive", evolution.recipe.passive));
+    recipes.push({
+      evolution: evolution.id,
+      weapon: evolution.evolvedFrom,
+      passive: evolution.recipe.passive,
+      unlockLevel: level,
+      locked: accountLevel < level,
+      powerRatio: powerIndex(evolved) / powerIndex(baseMax),
+    });
+  }
+  return recipes;
+}
+
+/**
+ * Бусты для гайдбука — из контента, в его порядке: новый буст, добавленный
+ * данными, сам встаёт в список. Цены здесь нет — её решает сервер, и она видна
+ * в листе «Перед забегом».
+ */
+export function guideBoosts(): readonly BoostDef[] {
+  return BOOSTS;
 }

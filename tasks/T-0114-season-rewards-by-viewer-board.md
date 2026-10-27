@@ -10,8 +10,6 @@ size: M
 depends_on: [T-0110, T-0113]
 zones:
   - backend/api/src/modules/seasons/**
-  - backend/api/prisma/schema.prisma
-  - backend/api/prisma/migrations/**
 shared:
   - backend/api/src/modules/runs/runs.service.ts
   - backend/api/src/modules/runs/rating-restrictions.ts
@@ -19,17 +17,19 @@ shared:
   - backend/api/test/boards-by-viewer.test.ts
   - docs/21-diagrams.md
   - docs/32-balance.md
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0114. Сезон и награды за места по доске зрителя, призы только внутриигровые
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0114.json)](README.md#значки-статуса) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](T-0110-weekly-season-server.md) [![T-0113](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json&label=T-0113)](T-0113-boards-by-viewer.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0114.json)](README.md#значки-статуса) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](archive/T-0110-weekly-season-server.md) [![T-0113](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json&label=T-0113)](T-0113-boards-by-viewer.md)
 
 ## Зачем
 
@@ -40,7 +40,7 @@ batch: 2
 
 ## Решения
 
-Р104, T-0110 («Решения»), решение участника 1 от 13.10.2026. Исполнитель их не
+Р104, T-0110 («Решения»), решение владельца от 13.10.2026. Исполнитель их не
 пересматривает.
 
 - **Две таблицы на сложность.** Общая — рейтинговые аккаунты без ограничения;

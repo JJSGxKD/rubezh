@@ -6,6 +6,7 @@ import type { ApiResult } from "../../state/api-request";
 import { loadBadges } from "../../state/badges-api";
 import { createFriendsApi, friendsAvailable, type FriendEntry, type FriendsView } from "../../state/friends-api";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { friendsLayout, giftAllCount } from "./friends-rules";
 import { GiftAll, Gifts, Invite, PeerAction, PeerRow } from "./friends-parts";
@@ -78,10 +79,12 @@ export function FriendsScreen(): ReactNode {
 
   const view = state.status === "ready" ? state.view : null;
   const layout = friendsLayout({ withAccount, status: state.status, friendsCount: view?.friends.length ?? 0 });
-  const bonus =
-    view === null
-      ? undefined
-      : { bonus: view.bonus, busy: busy === "bonus", closed: rewardsClosed, onClaim: () => void act("bonus", () => api.claimBonus(), () => void loadWallet()) };
+  const claimBonus = (): void =>
+    void act("bonus", () => api.claimBonus(), (claim) => {
+      rewardFeedback(claim.coins > 0 ? "coins" : null);
+      void loadWallet();
+    });
+  const bonus = view === null ? undefined : { bonus: view.bonus, busy: busy === "bonus", closed: rewardsClosed, onClaim: claimBonus };
 
   const incoming =
     view === null || view.incoming.length === 0 ? null : (
@@ -90,8 +93,8 @@ export function FriendsScreen(): ReactNode {
         <div className="grid gap-2">
           {view.incoming.map((request) => (
             <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
-              <PeerAction kind="accept" variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
-              <PeerAction kind="decline" variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
+              <PeerAction kind="accept" pair variant="secondary" loading={busy === `accept:${request.accountId}`} onClick={() => void act(`accept:${request.accountId}`, () => api.accept(request.accountId))} />
+              <PeerAction kind="decline" pair variant="ghost" loading={busy === `decline:${request.accountId}`} onClick={() => void act(`decline:${request.accountId}`, () => api.decline(request.accountId))} />
             </PeerRow>
           ))}
         </div>
@@ -105,7 +108,7 @@ export function FriendsScreen(): ReactNode {
         <div className="grid gap-2">
           {view.outgoing.map((request) => (
             <PeerRow key={request.accountId} name={request.displayName} photoUrl={request.photoUrl} badge={request.tester === true ? <TesterBadge /> : undefined}>
-              <Button variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
+              <Button track="cancel_request" variant="ghost" loading={busy === `cancel:${request.accountId}`} onClick={() => void act(`cancel:${request.accountId}`, () => api.cancel(request.accountId))}>
                 {t("friends.cancel")}
               </Button>
             </PeerRow>
@@ -125,6 +128,7 @@ export function FriendsScreen(): ReactNode {
             // Монет меньше обещанного — упёрлись в суточный потолок кошелька.
             const promised = claim.claimed * view.gifts.coins;
             setNotice(claim.coins < promised ? t("friends.gifts.capped") : t("friends.gifts.claimed", { count: claim.claimed, coins: formatNumber(claim.coins) }));
+            rewardFeedback(claim.coins > 0 ? "coins" : null);
             void loadWallet();
           })
         }
@@ -203,7 +207,7 @@ export function FriendsScreen(): ReactNode {
           onDismiss={() => setRemoving(null)}
           footer={
             <>
-              <Button
+              <Button track="remove"
                 variant="danger"
                 block
                 onClick={() => {
@@ -214,7 +218,7 @@ export function FriendsScreen(): ReactNode {
               >
                 {t("friends.remove.confirm")}
               </Button>
-              <Button variant="ghost" block onClick={() => setRemoving(null)}>
+              <Button track="cancel" variant="ghost" block onClick={() => setRemoving(null)}>
                 {t("friends.remove.cancel")}
               </Button>
             </>

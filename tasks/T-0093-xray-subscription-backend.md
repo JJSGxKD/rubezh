@@ -48,7 +48,7 @@ batch: 4
 
 # T-0093. Подписка Xray для прокси — хранение, обновление, контейнер Xray, раздел панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0093.json)](README.md#значки-статуса) [![T-0092](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0092.json&label=T-0092)](T-0092-proxy-kit-package.md) [![T-0065](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0065.json&label=T-0065)](T-0065-outbound-proxies.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0093.json)](README.md#значки-статуса) [![T-0092](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0092.json&label=T-0092)](archive/T-0092-proxy-kit-package.md) [![T-0065](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0065.json&label=T-0065)](T-0065-outbound-proxies.md)
 
 ## Зачем
 
@@ -366,5 +366,5 @@ dev `—` — staging `—` — production не публикуется, внут
 
   ❓ **Нужно от команды**
 
-  • @участник1 — подключить подписку в панели после выкатки и проверить, что узлы «Работают»
+  • @владелец — подключить подписку в панели после выкатки и проверить, что узлы «Работают»
   ```

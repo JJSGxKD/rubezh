@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, msUntilReset } from "../src/screens/meta/schedule";
-import { sectorCenterDeg, spinRotationDeg } from "../src/screens/meta/wheel-math";
+import { formatCountdown, formatCountdownShort, msUntilReset } from "../src/screens/meta/schedule";
+import { labelUpsideDown, sectorCenterDeg, sectorLabelUpsideDown, spinRotationDeg } from "../src/screens/meta/wheel-math";
 
 // Мета: сброс заданий и поворот колеса
 // (docs/07-monetization-and-ads.md §7, docs/27-design-system-and-app-shell.md §6).
@@ -11,6 +11,8 @@ const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 const utc = (iso: string): number => Date.parse(iso);
+/** Отсчёт пишется с неразрывными пробелами — в ожиданиях они через этот помощник. */
+const nb = (text: string): string => text.replaceAll(" ", "\u00a0");
 
 describe("сброс заданий по московскому времени", () => {
   it("ежедневный — в полночь по Москве, то есть в 21:00 UTC", () => {
@@ -39,20 +41,53 @@ describe("сброс заданий по московскому времени",
 
 describe("обратный отсчёт", () => {
   it("показывает самое крупное и без нулевых хвостов", () => {
-    expect(formatCountdown(3 * DAY + 4 * HOUR + 10 * MINUTE)).toBe("3 д 4 ч");
-    expect(formatCountdown(2 * DAY)).toBe("2 д");
-    expect(formatCountdown(5 * HOUR + 12 * MINUTE)).toBe("5 ч 12 мин");
-    expect(formatCountdown(HOUR)).toBe("1 ч");
-    expect(formatCountdown(12 * MINUTE)).toBe("12 мин");
-    expect(formatCountdown(26 * HOUR)).toBe("1 д 2 ч");
-    expect(formatCountdown(DAY)).toBe("1 д");
+    expect(formatCountdown(3 * DAY + 4 * HOUR + 10 * MINUTE)).toBe(nb("3 д 4 ч"));
+    expect(formatCountdown(2 * DAY)).toBe(nb("2 д"));
+    expect(formatCountdown(5 * HOUR + 12 * MINUTE)).toBe(nb("5 ч 12 мин"));
+    expect(formatCountdown(HOUR)).toBe(nb("1 ч"));
+    expect(formatCountdown(12 * MINUTE)).toBe(nb("12 мин"));
+    expect(formatCountdown(26 * HOUR)).toBe(nb("1 д 2 ч"));
+    expect(formatCountdown(DAY)).toBe(nb("1 д"));
   });
 
   it("округляет вверх и не показывает «0 мин» перед самым сбросом", () => {
-    expect(formatCountdown(59.5 * MINUTE)).toBe("1 ч");
-    expect(formatCountdown(20 * 1000)).toBe("1 мин");
-    expect(formatCountdown(0)).toBe("1 мин");
-    expect(formatCountdown(-5)).toBe("1 мин");
+    expect(formatCountdown(59.5 * MINUTE)).toBe(nb("1 ч"));
+    expect(formatCountdown(20 * 1000)).toBe(nb("1 мин"));
+    expect(formatCountdown(0)).toBe(nb("1 мин"));
+    expect(formatCountdown(-5)).toBe(nb("1 мин"));
+  });
+});
+
+describe("перенос отсчёта", () => {
+  // «Следующая — через 19 ч / 44 мин»: хвост «44 мин» на отдельной строке
+  // читается как другое число. Отсчёт — одно слово: переносится целиком.
+  it("отсчёт не рвётся по строкам — внутри только неразрывные пробелы", () => {
+    for (const ms of [19 * HOUR + 44 * MINUTE, 3 * DAY + 4 * HOUR, 12 * MINUTE, 26 * HOUR]) {
+      expect(formatCountdown(ms)).not.toMatch(/ /);
+      expect(formatCountdownShort(ms)).not.toMatch(/ /);
+    }
+  });
+});
+
+describe("короткий обратный отсчёт для узкой плитки", () => {
+  it("от часа до суток — «часы:минуты» с ведущим нулём у минут", () => {
+    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE)).toBe("23:59");
+    expect(formatCountdownShort(5 * HOUR + 50 * MINUTE)).toBe("5:50");
+    expect(formatCountdownShort(HOUR)).toBe("1:00");
+    expect(formatCountdownShort(HOUR + 5 * MINUTE)).toBe("1:05");
+  });
+
+  it("меньше часа — минутами, секунды округляются вверх", () => {
+    expect(formatCountdownShort(59 * MINUTE)).toBe(nb("59 мин"));
+    expect(formatCountdownShort(30 * 1000)).toBe(nb("1 мин"));
+  });
+
+  it("23 ч 59 мин 30 с округляется вверх до суток, а не до «24:00»", () => {
+    expect(formatCountdownShort(23 * HOUR + 59 * MINUTE + 30 * 1000)).toBe(nb("1 д"));
+  });
+
+  it("от суток — как обычный отсчёт", () => {
+    expect(formatCountdownShort(2 * DAY + 3 * HOUR)).toBe(formatCountdown(2 * DAY + 3 * HOUR));
   });
 });
 
@@ -70,5 +105,37 @@ describe("колесо удачи", () => {
         }
       }
     }
+  });
+});
+
+describe("подписи секторов колеса", () => {
+  // Подпись поворачивается вместе с сектором: в нижней половине без
+  // переворота «150» читается как «051», а «1 000» — как «000 1».
+  it("в нижней половине колеса подпись переворачивается, в верхней — нет", () => {
+    expect(labelUpsideDown(sectorCenterDeg(0, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(1, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(2, 8))).toBe(true);
+    expect(labelUpsideDown(sectorCenterDeg(5, 8))).toBe(true);
+    expect(labelUpsideDown(sectorCenterDeg(6, 8))).toBe(false);
+    expect(labelUpsideDown(sectorCenterDeg(7, 8))).toBe(false);
+  });
+
+  it("сектор ровно сбоку читается без переворота", () => {
+    expect(labelUpsideDown(90)).toBe(false);
+    expect(labelUpsideDown(270)).toBe(false);
+  });
+
+  // После крутки колесо стоит повёрнутым, и переворот по положению в покое
+  // ставил выигрыш под стрелкой вверх ногами — туда, куда смотрит игрок.
+  it("переворот считается от текущего поворота колеса: выигрыш под стрелкой читается прямо", () => {
+    for (const count of [6, 8, 10]) {
+      for (let index = 0; index < count; index++) {
+        const rotation = spinRotationDeg(0, index, count, 5);
+        expect(sectorLabelUpsideDown(index, count, rotation), `${String(count)} секторов, выигрыш ${String(index)}`).toBe(false);
+      }
+    }
+    // В покое — как раньше: верх прямо, низ перевёрнут.
+    expect(sectorLabelUpsideDown(0, 8, 0)).toBe(false);
+    expect(sectorLabelUpsideDown(4, 8, 0)).toBe(true);
   });
 });

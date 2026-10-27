@@ -36,7 +36,9 @@ export function Slider(props: {
         onChange={(event) => props.onChange(Number(event.currentTarget.value))}
         onPointerUp={() => props.onCommit?.()}
         onKeyUp={() => props.onCommit?.()}
-        className="h-8 w-full cursor-pointer accent-accent"
+        // 44 px по высоте — по пальцу (docs/27 §4.4); отрицательные поля
+        // уходят в зазор над дорожкой и отступ строки, и строка не растёт.
+        className="-my-1.5 h-11 w-full cursor-pointer accent-accent"
       />
     </div>
   );

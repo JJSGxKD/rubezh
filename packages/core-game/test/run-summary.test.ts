@@ -37,10 +37,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов и пешими врагами рядом с огоньком. Распределение времени по seed при этом остаётся прежним, поэтому
+ * атаками врагов, пешими врагами рядом с огоньком и подбором «Заморозка».
+ * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 1;
+const GOLDEN_SEED = 3;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -108,8 +109,8 @@ describe("статистика забега", () => {
     const result = resultOf(world, GOLDEN_SEED);
     const byElement = Object.values(result.damageByElement).reduce((sum, damage) => sum + damage, 0);
     expect(byElement).toBeCloseTo(result.damageDealt, 6);
-    // В эталоне есть «Жало»: яд обязан попасть в свою стихию, а не в физический.
-    expect(result.damageByElement.poison ?? 0).toBeGreaterThan(0);
+    // В эталоне есть «Метеор»: огонь и горение обязаны попасть в свою стихию, а не в физический.
+    expect(result.damageByElement.fire ?? 0).toBeGreaterThan(0);
     expect(Object.values(result.damageByElement).every((damage) => damage > 0)).toBe(true);
   });
 
@@ -172,37 +173,34 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 39.43,
-      level: 9,
-      xpCollected: 139,
-      enemiesKilled: 94,
+      survivalSec: 29.88,
+      level: 5,
+      xpCollected: 45,
+      enemiesKilled: 44,
       killsByEnemy: {
-        swarm_rat: 35,
-        tank_ghoul: 5,
-        shooter_wisp: 8,
+        swarm_rat: 15,
+        shooter_wisp: 3,
         bone_walker: 4,
-        mire_shambler: 14,
-        dasher_wolf: 6,
-        circler_crow: 5,
-        bomber_imp: 2,
-        rushing_bats: 9,
-        splitter_slime: 6,
+        mire_shambler: 3,
+        dasher_wolf: 1,
+        circler_crow: 9,
+        bomber_imp: 3,
+        rushing_bats: 6,
       },
-      damageDealt: 1577,
-      damageTaken: 103,
+      damageDealt: 705,
+      damageTaken: 122,
       weapons: [
-        { id: "spark", level: 2, damage: 812 },
-        { id: "sting", level: 1, damage: 470 },
-        { id: "storm", level: 1, damage: 295 },
+        { id: "spark", level: 1, damage: 527 },
+        { id: "meteor", level: 1, damage: 179 },
       ],
       passives: [
-        { id: "ward", level: 2 },
-        { id: "lodestone", level: 1 },
-        { id: "volley", level: 2 },
+        { id: "reach", level: 1 },
+        { id: "vitality", level: 1 },
+        { id: "haste", level: 1 },
       ],
-      deathCause: "shooter_wisp",
-      distance: 5833,
-      peakEnemies: 30,
+      deathCause: "rushing_bats",
+      distance: 4474,
+      peakEnemies: 28,
     });
   });
 

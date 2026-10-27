@@ -8,6 +8,7 @@ import {
   InputLogWriter,
 } from "../src/game/diagnostics/input-log";
 import { replayRecording } from "../src/game/diagnostics/replay";
+import { BANISH_PREFIX, REROLL_COMMAND, SKIP_COMMAND } from "../src/game/progression/card-tools";
 import { CHECKPOINT_TICKS, RunRecorder } from "../src/game/diagnostics/run-recorder";
 import { RunTimeline, TIMELINE_MAX_BUCKETS } from "../src/game/diagnostics/run-timeline";
 import { RunPerfTracker } from "../src/game/diagnostics/run-perf";
@@ -173,6 +174,71 @@ describe("повтор забега по записи", () => {
     expect(outcome.verdict).toBe("mismatch");
     expect(outcome.reason).toContain("not_an_option");
     expect(outcome.divergedAtTick).toBe(tick);
+  });
+
+  describe("действия с карточками (tasks/T-0101)", () => {
+    const loadout = { modifiers: {}, boosts: ["control"], accountLevel: 9 };
+
+    /** Сначала переброс, изгнание и пропуск, потом обычный выбор первой карточки. */
+    function scripted(): RunRecording {
+      const plan: ((offers: readonly { id: string }[]) => string)[] = [
+        () => REROLL_COMMAND,
+        (offers) => `${BANISH_PREFIX}${offers[0].id}`,
+        () => SKIP_COMMAND,
+      ];
+      return recordHeadlessRun({
+        seed: 21,
+        maxTicks: CHECKPOINT_TICKS + 30,
+        steer: circling(150),
+        loadout,
+        choose: (offers) => plan.shift()?.(offers) ?? offers[0].id,
+      });
+    }
+
+    it("переброс, изгнание и пропуск попадают в лог условными id и повторяются «сошлось»", () => {
+      const recording = scripted();
+      const commands = recording.choices.map(([, id]) => id).filter((id) => id.startsWith("~"));
+      expect(commands).toHaveLength(3);
+      expect(commands[0]).toBe(REROLL_COMMAND);
+      expect(commands[1].startsWith(BANISH_PREFIX)).toBe(true);
+      expect(commands[2]).toBe(SKIP_COMMAND);
+
+      const outcome = replayRecording(recording);
+      expect(outcome.reason).toBeNull();
+      expect(outcome.verdict).toBe("match");
+      expect(outcome.actual).toEqual(recording.result);
+    });
+
+    it("команда без заряда в записи — расхождение с названием команды", () => {
+      const recording = scripted();
+      const skipIndex = recording.choices.findIndex(([, id]) => id === SKIP_COMMAND);
+      const [tick] = recording.choices[skipIndex];
+      const doubled: RunRecording = {
+        ...recording,
+        choices: [...recording.choices.slice(0, skipIndex + 1), [tick, SKIP_COMMAND], ...recording.choices.slice(skipIndex + 1)],
+      };
+      const outcome = replayRecording(doubled);
+      expect(outcome.verdict).toBe("mismatch");
+      expect(outcome.reason).toContain(SKIP_COMMAND);
+      expect(outcome.reason).toContain("не ложится на забег");
+    });
+
+    it("изгнание несуществующего предмета и незнакомая команда — расхождение", () => {
+      const recording = scripted();
+      const bad = (id: string): RunRecording => ({
+        ...recording,
+        choices: recording.choices.map(([tick, optionId]) => [tick, optionId.startsWith(BANISH_PREFIX) ? id : optionId]),
+      });
+      expect(replayRecording(bad(`${BANISH_PREFIX}weapon_new:nothing:1`)).verdict).toBe("mismatch");
+      expect(replayRecording(bad("~boom")).verdict).toBe("mismatch");
+    });
+
+    it("без уровня и буста тех же команд не принять: заряды берутся из снимка набора", () => {
+      const recording = scripted();
+      const rest: RunRecording = { ...recording };
+      delete rest.loadout;
+      expect(replayRecording(rest).verdict).not.toBe("match");
+    });
   });
 
   it("неповторимую, чужую по контенту и битую запись не повторяет", () => {

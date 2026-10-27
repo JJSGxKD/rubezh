@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead-1
 size: S
-depends_on: [T-0157]
+depends_on: [T-0157, T-0191, T-0193]
 zones:
   - backend/api/src/modules/auth/account.repository.ts
   - backend/api/src/modules/auth/auth.controller.ts
@@ -31,7 +31,7 @@ batch: 3
 
 # T-0161. Знак «Поддержал проект» в ответах входа, рейтинга и сезонов — сервер
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](T-0157-donations-backend.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](archive/T-0157-donations-backend.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md)
 
 ## Зачем
 

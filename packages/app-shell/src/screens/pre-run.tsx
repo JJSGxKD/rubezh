@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ChevronRight, Lock, Wrench } from "lucide-react";
 import type { DifficultyId } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlockLevelOf, unlocksAt, WEAPONS } from "@bh/core-game";
-import { Button, Card, Modal, SegmentedControl } from "../design-system/components";
+import { ACCOUNT_UNLOCKS, DIFFICULTIES, unlockLevelOf, unlocksAt, BASE_WEAPONS } from "@bh/core-game";
+import { Button, Card, Modal, SectionTitle, SegmentedControl } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
 import "../i18n/boosts";
@@ -86,7 +86,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
   }, []);
 
   const open = unlocksAt(ACCOUNT_UNLOCKS, level).weapons;
-  const weapons = [...WEAPONS].sort((a, b) => (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", a.id) ?? 1) - (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", b.id) ?? 1));
+  const weapons = [...BASE_WEAPONS].sort((a, b) => (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", a.id) ?? 1) - (unlockLevelOf(ACCOUNT_UNLOCKS, "weapon", b.id) ?? 1));
   const selectedId = open.has(meta.lastWeaponId) ? meta.lastWeaponId : (weapons.find((weapon) => open.has(weapon.id))?.id ?? "");
   const selectedWeapon = weapons.find((weapon) => weapon.id === selectedId);
   const cost = catalog === null ? {} : boostCost(boosts, catalog.boosts);
@@ -131,7 +131,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                       {t(buyError)}
                     </p>
                   )}
-                  <Button size="l" block glow loading={buying} disabled={buying} onClick={() => void start()}>
+                  <Button track="start" size="l" block glow loading={buying} disabled={buying} onClick={() => void start()}>
                     <span className="flex flex-col items-center gap-1 leading-none">
                       <span>{t("boosts.start")}</span>
                       {cost.coins === undefined && cost.gems === undefined ? null : (
@@ -163,7 +163,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
             в крайней колонке, а вбок лист не прокручивается. */}
         <div className="-mx-1 grid grid-cols-1 gap-1.5 overflow-x-hidden px-1">
           {modes.length > 0 ? (
-            <SegmentedControl
+            <SegmentedControl track="mode"
               size="s"
               label={t("weapon.select.screen")}
               activeId={mode}
@@ -178,7 +178,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
           {mode === "stress" ? (
             <>
               <p className="mt-2 text-xs text-text-muted">{t("mode.stress.description")}</p>
-              <Button
+              <Button track="stress"
                 size="l"
                 block
                 onClick={() => {
@@ -208,7 +208,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
                 </Card>
               ) : null}
 
-              <SegmentedControl
+              <SegmentedControl track="difficulty"
                 size="s"
                 label={t("difficulty.title")}
                 activeId={meta.lastDifficultyId}
@@ -217,7 +217,7 @@ export function PreRunSheet(props: { onClose: () => void }): ReactNode {
               />
               <p className="text-xs text-text-muted">{t(`difficulty.${meta.lastDifficultyId}.description`)}</p>
 
-              <h2 className="mt-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("weapon.select.title")}</h2>
+              <SectionTitle spacing="mt-2">{t("weapon.select.title")}</SectionTitle>
               <ul className="grid grid-cols-3 gap-1.5">
                 {weapons.map((weapon) => {
                   const unlocked = open.has(weapon.id);

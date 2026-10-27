@@ -7,7 +7,7 @@ status: ready
 owner:
 author: claude-lead2-19
 size: M
-depends_on: [T-0119, T-0122, T-0084, T-0094]
+depends_on: [T-0119, T-0122, T-0084, T-0094, T-0190, T-0193, T-0196]
 zones:
   - packages/app-shell/src/screens/pre-run.tsx
   - packages/app-shell/src/screens/guide/guide-data.ts
@@ -33,7 +33,7 @@ batch: 3
 
 # T-0123. Модификаторы забега: выбор в листе «Перед забегом»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0123.json)](README.md#значки-статуса) [![T-0119](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json&label=T-0119)](T-0119-run-modifiers-hurry-inverse.md) [![T-0122](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0122.json&label=T-0122)](T-0122-run-modifiers-server.md) [![T-0084](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0084.json&label=T-0084)](T-0084-segmented-small.md) [![T-0094](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0094.json&label=T-0094)](T-0094-prerun-no-sideways-scroll.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0123.json)](README.md#значки-статуса) [![T-0119](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0119.json&label=T-0119)](T-0119-run-modifiers-hurry-inverse.md) [![T-0122](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0122.json&label=T-0122)](T-0122-run-modifiers-server.md) [![T-0084](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0084.json&label=T-0084)](archive/T-0084-segmented-small.md) [![T-0094](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0094.json&label=T-0094)](archive/T-0094-prerun-no-sideways-scroll.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0196](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0196.json&label=T-0196)](T-0196-player-power-pressure-wiring.md)
 
 ## Зачем
 
@@ -43,6 +43,8 @@ batch: 3
 Р105, `docs/39-retention-mechanics.md` Б8.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Переключателя сложности в листе «Перед забегом» нет (T-0190): блок модификаторов стоит **под выбором оружия**; модификатор ложится поверх единой сложности (`hard`).
 
 Исполнитель их не пересматривает.
 

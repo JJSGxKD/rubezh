@@ -15,25 +15,31 @@ export interface PatternTraits {
   radius: number;
   /** бьёт ли касанием; стрелок и подрывник наносят урон иначе */
   contactDamage: boolean;
+  /** тело непроходимо для игрока: он выталкивается из него и скользит вдоль */
+  solid: boolean;
+  /** место врага задаёт не расстояние до игрока, а строй: отставшего не уносит вперёд */
+  anchored: boolean;
 }
 
 export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
-  swarm: { radius: 7, contactDamage: true },
-  chase: { radius: 12, contactDamage: true },
-  kite_and_shoot: { radius: 9, contactDamage: false },
-  dash: { radius: 10, contactDamage: true },
-  orbit: { radius: 8, contactDamage: true },
-  exploder: { radius: 9, contactDamage: false },
-  splitter: { radius: 13, contactDamage: true },
-  rush: { radius: 6, contactDamage: true },
+  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false },
+  chase: { radius: 12, contactDamage: true, solid: false, anchored: false },
+  kite_and_shoot: { radius: 9, contactDamage: false, solid: false, anchored: false },
+  dash: { radius: 10, contactDamage: true, solid: false, anchored: false },
+  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false },
+  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false },
+  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false },
+  rush: { radius: 6, contactDamage: true, solid: false, anchored: false },
   // Кастер бьёт заклинаниями, а не телом: касанием урона нет.
-  caster: { radius: 14, contactDamage: false },
+  caster: { radius: 14, contactDamage: false, solid: false, anchored: false },
+  // Страж кольца: тело не пускает игрока, а место в строю он не бросает, куда бы ни ушёл игрок.
+  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true },
 };
 
 /**
  * Во сколько раз крупнее элита и босс. Единственное, чем ранг влияет на
- * хитбокс: размер остаётся свойством поведения, а не свободным числом в
- * контенте (docs/26-stage2-plan.md, WP4.4).
+ * хитбокс (docs/26-stage2-plan.md, WP4.4); дальше размер врага подгоняет
+ * необязательное `size` из контента.
  */
 export const ELITE_RADIUS_MUL = 1.7;
 export const BOSS_RADIUS_MUL = 2.4;
@@ -48,17 +54,27 @@ export function isBoss(type: { rank: EnemyRank | "normal" }): boolean {
   return type.rank === "boss";
 }
 
+/**
+ * Коридор множителя `size` у врага (docs/35-stage4-plan.md, Р144): мельче
+ * 0,7 враг не разглядеть и не поймать оружием, крупнее 2,5 он закрывает
+ * поле и не помещается в кольцо спавна.
+ */
+export const ENEMY_SIZE_MIN = 0.7;
+export const ENEMY_SIZE_MAX = 2.5;
+
 export function rankRadiusMul(rank: EnemyRank | "normal"): number {
   return rank === "boss" ? BOSS_RADIUS_MUL : rank === "elite" ? ELITE_RADIUS_MUL : 1;
 }
 
 /**
  * Самый крупный хитбокс — на него расширяется запрос снаряда к сетке. Считаем
- * по боссу: если взять обычный радиус, снаряды начнут пролетать сквозь
- * крупного врага — запрос к сетке вернёт его не во всех клетках, где он есть.
+ * по боссу с верхом коридора `size`: если взять обычный радиус, снаряды начнут
+ * пролетать сквозь крупного врага — запрос к сетке вернёт его не во всех
+ * клетках, где он есть. Запас только расширяет выборку кандидатов, попадание
+ * по-прежнему решает точное расстояние.
  */
 export const MAX_PATTERN_RADIUS =
-  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL;
+  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX;
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
@@ -144,6 +160,7 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
     burstCount: 8,
     projectileSpeed: 220,
   },
+  cordon: {},
 };
 
 /** Параметры, которые геймдизайнер вправе задать каждому паттерну. */
@@ -157,6 +174,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
   caster: ["preferredDistance", "castIntervalSec", "telegraphSec", "burstCount", "projectileSpeed"],
+  cordon: [],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */
@@ -202,7 +220,15 @@ export interface EnemyType {
   rank: EnemyRank | "normal";
   pattern: EnemyPattern;
   radius: number;
+  /**
+   * Множитель размера из контента (`size`, не задан — 1). Радиус уже его
+   * учитывает; число хранится отдельно, чтобы кадр арта масштабировался тем же
+   * множителем без пересчёта в кадре.
+   */
+  size: number;
   contactDamage: boolean;
+  solid: boolean;
+  anchored: boolean;
   params: ResolvedPatternParams;
   /**
    * Множитель урона по стихиям, по индексу стихии (`sim/elements.ts`):
@@ -259,6 +285,9 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (!(def.xp >= 0)) problems.push(`враг ${def.id}: xp не может быть отрицательным`);
   if (def.threat !== undefined && !(def.threat > 0)) {
     problems.push(`враг ${def.id}: threat должен быть больше нуля`);
+  }
+  if (def.size !== undefined && !(def.size >= ENEMY_SIZE_MIN && def.size <= ENEMY_SIZE_MAX)) {
+    problems.push(`враг ${def.id}: size вне 0,7…2,5`);
   }
   for (const [element, value] of Object.entries(def.resist ?? {})) {
     const known = element !== "physical" && (ELEMENTS as readonly string[]).includes(element);
@@ -403,8 +432,11 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       threat: def.threat ?? defaultThreat(def),
       rank: def.rank ?? "normal",
       pattern: def.pattern,
-      radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * unitScale,
+      radius: traits.radius * rankRadiusMul(def.rank ?? "normal") * (def.size ?? 1) * unitScale,
+      size: def.size ?? 1,
       contactDamage: traits.contactDamage,
+      solid: traits.solid,
+      anchored: traits.anchored,
       params: resolveParams(def, indexById, unitScale),
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
       element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),

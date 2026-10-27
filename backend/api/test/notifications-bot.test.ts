@@ -105,7 +105,7 @@ describe("дубль уведомлений в бота", () => {
     expect(s.messenger.sent).toEqual([
       {
         to: target.platformUserId,
-        message: { text: "Дым зовёт вас в друзья в «Рубеже». Принять заявку можно в разделе «Друзья».", button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-friend_request" } },
+        message: { text: "Дым зовёт тебя в друзья в «Рубеже». Принять заявку можно в разделе «Друзья».", button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-friend_request" } },
       },
     ]);
     expect(s.marks).toEqual([{ notificationId: job.notificationId, outcome: "sent" }]);
@@ -128,7 +128,7 @@ describe("дубль уведомлений в бота", () => {
     expect(await s.sender.deliver(gift, NOW)).toEqual({ status: "skipped", reason: "opted_out" });
     s.settings.set("bot.friendGift", true);
     expect(await s.sender.deliver(gift, NOW)).toEqual({ status: "sent" });
-    expect(s.messenger.sent[0]?.message.text).toBe("Дым дарит вам подарок в «Рубеже» — заберите его в разделе «Друзья».");
+    expect(s.messenger.sent[0]?.message.text).toBe("Дым дарит тебе подарок в «Рубеже» — забери его в разделе «Друзья».");
 
     s.settings.set("bot.friendRequest", false);
     expect(await s.sender.deliver(request(target.accountId), NOW)).toEqual({ status: "skipped", reason: "opted_out" });

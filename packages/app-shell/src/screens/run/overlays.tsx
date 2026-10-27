@@ -1,20 +1,26 @@
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ChartColumn, History, Layers, Pause, Sparkles, Star, Wrench } from "lucide-react";
-import type { UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { CardTools, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import type { RunSlotState } from "@bh/core-game";
 import {
   Badge,
   Button,
   Card,
+  CornerRibbon,
   FullscreenButton,
+  IconButton,
   Modal,
+  RibbonTitle,
   Stat,
 } from "../../design-system/components";
 import { formatDuration, t } from "../../i18n";
 import "../../i18n/run";
-import { ItemTile, type ItemKind } from "../item-icons";
+import { ItemMedallion, type ItemKind } from "../item-icons";
+import { CardToolsBar } from "./CardTools";
+import { hintForOffer } from "./evolution-hints";
+import { cardTapAction, toolButtons } from "./card-tools-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
-import { CategoryLabel, passiveCategoryOf, SlotSummary } from "./SlotSummary";
+import { CategoryLabel, ElementLabel, passiveCategoryOf, SlotSummary, weaponElementOf } from "./SlotSummary";
 import { formatChange } from "./upgrade-format";
 
 /**
@@ -47,10 +53,10 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
         onDismiss={() => setConfirming(false)}
         footer={
           <>
-            <Button variant="danger" block onClick={guarded(ready, props.onSurrender)}>
+            <Button track="surrender_confirm" variant="danger" block onClick={guarded(ready, props.onSurrender)}>
               {t("run.surrender.confirm")}
             </Button>
-            <Button variant="ghost" block onClick={() => setConfirming(false)}>
+            <Button track="cancel" variant="ghost" block onClick={() => setConfirming(false)}>
               {t("run.surrender.cancel")}
             </Button>
           </>
@@ -67,29 +73,29 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
       icon={props.restored === true ? <History size={26} /> : <Pause size={26} fill="currentColor" />}
       footer={
         <>
-          <Button size="l" block glow onClick={guarded(ready, props.onResume)}>
+          <Button track="resume" size="l" block glow onClick={guarded(ready, props.onResume)}>
             {t("run.pause.resume")}
           </Button>
           <KeyHint text={t("run.keys.pause")} />
           {/* Характеристики и настройки — в ряд: вторичные действия паузы не
               должны выталкивать «Продолжить» за край в ландшафте. */}
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="secondary" block onClick={props.onStats}>
+            <Button track="stats" variant="secondary" block onClick={props.onStats}>
               <ChartColumn size={18} aria-hidden="true" />
               {t("run.stats.open")}
             </Button>
-            <Button variant="secondary" block onClick={props.onSettings}>
+            <Button track="settings" variant="secondary" block onClick={props.onSettings}>
               {t("run.pause.settings")}
             </Button>
           </div>
           {props.onDev === undefined ? null : (
-            <Button variant="secondary" block onClick={props.onDev}>
+            <Button track="dev" variant="secondary" block onClick={props.onDev}>
               <Wrench size={18} aria-hidden="true" />
               {t("dev.title")}
             </Button>
           )}
           {/* Сдача — с подтверждением: случайный тап не должен обнулять забег. */}
-          <Button variant="danger" block onClick={() => setConfirming(true)}>
+          <Button track="surrender" variant="danger" block onClick={() => setConfirming(true)}>
             {t("run.pause.surrender")}
           </Button>
         </>
@@ -112,44 +118,75 @@ export interface LevelUpOverlayProps {
   /** текущий набор — показать, сколько слотов каждой категории занято */
   loadout?: { weapons: readonly RunSlotState[]; passives: readonly RunSlotState[] };
   onChoose(optionId: string): void;
-  /** открыть лист «Характеристики» — плашкой в ряду слотов, без лишней строки */
+  /**
+   * Действия с карточками: переброс, пропуск, изгнание. Без поля ряда нет —
+   * экран прежний, как у игрока без зарядов.
+   */
+  tools?: {
+    left: CardTools;
+    total: CardTools;
+    canReroll: boolean;
+    onReroll(): void;
+    onSkip(): void;
+    onBanish(optionId: string): void;
+  };
+  /** открыть лист «Характеристики» — значком в углу окна, без лишней строки */
   onStats?: () => void;
 }
 
 export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
   const ready = useTapGuard();
+  const titleId = useId();
+  // Режим изгнания привязан к набору карточек: сменились (переброс, изгнание,
+  // новый уровень) — он кончился, следующую карточку игрок выбирает заново.
+  const offersKey = props.offers.map((offer) => offer.id).join("|");
+  const [banish, setBanish] = useState({ key: offersKey, on: false });
+  const banishing = banish.on && banish.key === offersKey;
+  const tools = props.tools;
+  const buttons =
+    tools === undefined ? [] : toolButtons({ left: tools.left, total: tools.total, canReroll: tools.canReroll, offers: props.offers });
+  const mode = banishing ? "banish" : "choose";
+  const tap = (offer: UpgradeOption): void => {
+    const action = cardTapAction(mode, offer);
+    if (action === "choose") props.onChoose(offer.id);
+    else if (action === "banish") tools?.onBanish(offer.id);
+  };
+  // На узкой панели очередь — «+2» у значка стопки, полностью — для диктора
+  // и на широкой панели: строка слотов не должна переноситься (U-13).
   const slotExtras =
-    props.queued > 0 || props.onStats !== undefined ? (
-      <>
-        {props.queued > 0 ? (
-          <Badge tone="accent">
-            <Layers size={12} aria-hidden="true" />
-            {t("run.levelUp.queued", { count: props.queued })}
-          </Badge>
-        ) : null}
-        {props.onStats === undefined ? null : (
-          <button
-            type="button"
-            onClick={props.onStats}
-            className="surface-sunken inline-flex items-center gap-1 rounded-pill px-2 py-0.5 font-display text-xs font-semibold text-info"
-          >
-            <ChartColumn size={12} aria-hidden="true" />
-            {t("run.stats.open")}
-          </button>
-        )}
-      </>
+    props.queued > 0 ? (
+      <Badge tone="accent">
+        <Layers size={12} aria-hidden="true" />
+        <span className="@sm:hidden" aria-hidden="true">
+          +{props.queued}
+        </span>
+        <span className="sr-only @sm:not-sr-only">{t("run.levelUp.queued", { count: props.queued })}</span>
+      </Badge>
     ) : null;
 
   return (
-    <Modal
-      title={t("run.levelUp.title", { level: props.level })}
-      icon={<Star size={28} fill="currentColor" />}
-      size="l"
-      cut
-    >
+    <Modal labelledBy={titleId} icon={<Star size={28} fill="currentColor" />} size="l" relic="var(--color-accent)">
+      {/* Новый уровень — награда, и окно говорит языком наград v2
+          (design/art/direction-v2.md §4.4): реликвия и заголовок на ленте. */}
+      <div className="mb-2 flex justify-center short:mb-1">
+        <RibbonTitle id={titleId} tone="var(--color-accent)">
+          {t("run.levelUp.title", { level: props.level })}
+        </RibbonTitle>
+      </div>
+      {/* «Характеристики» — значком в углу окна: в строке слотов плашка с
+          подписью переносила её на вторую строку. Угол не прокручивается
+          вместе с карточками. */}
+      {props.onStats === undefined ? null : (
+        <div className="absolute top-3 right-3 z-10">
+          <IconButton track="stats" label={t("run.stats.open")} onClick={props.onStats}>
+            <ChartColumn size={20} className="text-info" />
+          </IconButton>
+        </div>
+      )}
       {/* На невысоком экране подсказка уходит: что выбирать, говорят сами
-          карточки, а строка нужна третьей карточке. */}
-      <p className="-mt-1 mb-2 text-center text-sm text-text-muted short:hidden">{t("run.levelUp.subtitle")}</p>
+          карточки, а строка нужна третьей карточке. Основным текстом: верх
+          реликвии подсвечен тёплым, и серый на нём падал до 4,47:1. */}
+      <p className="-mt-1 mb-2 text-center text-sm text-text short:hidden">{t("run.levelUp.subtitle")}</p>
       <KeyHint text={t("run.keys.choose")} />
       {/* Сколько выборов ждёт — плашкой в ряду слотов, а не строкой под
           карточками: в ландшафте отдельная строка уводила модалку в прокрутку. */}
@@ -184,10 +221,11 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
               appearIndex={index}
               compact
               stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
-              onClick={guarded(ready, () => props.onChoose(offer.id))}
+              onClick={guarded(ready, () => tap(offer))}
             >
+              {isNew(offer) ? <CornerRibbon>{t("run.levelUp.new")}</CornerRibbon> : null}
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <ItemTile kind={kind} id={offer.refId} size="s" />
+                <ItemMedallion kind={kind} id={offer.refId} />
                 <span className="min-w-0 font-display text-base font-bold break-words text-text">
                   {t(offer.nameKey)}
                 </span>
@@ -201,10 +239,26 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
                 <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
               ) : null}
               <ChangeList changes={offer.changes} />
+              <EvolutionHint offer={offer} loadout={props.loadout} />
             </Card>
           );
         })}
       </div>
+      {tools === undefined ? null : (
+        <>
+          <CardToolsBar
+            buttons={buttons}
+            banishing={banishing}
+            onReroll={guarded(ready, tools.onReroll)}
+            onSkip={guarded(ready, tools.onSkip)}
+            onToggleBanish={guarded(ready, () => setBanish({ key: offersKey, on: !banishing }))}
+          />
+          {/* На невысоком экране подпись уходит: числа на кнопках говорят сами. */}
+          {buttons.length === 0 ? null : (
+            <p className="mt-2 text-center text-xs text-text-muted short:hidden">{t("run.tools.caption")}</p>
+          )}
+        </>
+      )}
     </Modal>
   );
 }
@@ -248,9 +302,27 @@ function ChangeList(props: { changes: readonly UpgradeChange[] }): ReactNode {
   );
 }
 
+/**
+ * Рецепт эволюции одной строкой под изменениями (tasks/T-0103): подсказка
+ * нужна там, где игрок решает, и только когда есть смысл. Текст, без анимации.
+ */
+function EvolutionHint(props: { offer: UpgradeOption; loadout: LevelUpOverlayProps["loadout"] }): ReactNode {
+  const hint = hintForOffer(props.offer, props.loadout ?? { weapons: [], passives: [] });
+  if (hint === null) return null;
+  const params = Object.fromEntries(
+    Object.entries(hint.params).map(([name, id]) => [name, t(name === "passive" ? `passive.${id}.name` : `weapon.${id}.name`)]),
+  );
+  return (
+    <p className="surface-sunken mt-2 flex items-start gap-1.5 rounded-md px-2.5 py-1.5 text-xs text-text-muted">
+      <Sparkles size={12} aria-hidden="true" className="mt-0.5 shrink-0 text-accent" />
+      {t(hint.key, params)}
+    </p>
+  );
+}
+
 function kindOf(offer: UpgradeOption): ItemKind {
   if (offer.kind === "heal") return "heal";
-  return offer.kind === "weapon_new" || offer.kind === "weapon_level" ? "weapon" : "passive";
+  return offer.kind === "weapon_new" || offer.kind === "weapon_level" || offer.kind === "weapon_evolve" ? "weapon" : "passive";
 }
 
 /**
@@ -261,24 +333,27 @@ function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
+  const element = offer.kind === "weapon_new" || offer.kind === "weapon_level" ? weaponElementOf(offer.refId) : null;
 
+  // «Новое» — уголком-лентой карточки, как в окне сундука; здесь — эволюция и уровень.
   const badge =
-    offer.kind === "weapon_new" || offer.kind === "passive_new" ? (
+    offer.kind === "weapon_evolve" ? (
       <Badge tone="accent">
         <Sparkles size={12} aria-hidden="true" />
-        {t("run.levelUp.new")}
+        {t("run.levelUp.evolve")}
       </Badge>
-    ) : (
+    ) : isNew(offer) ? null : (
       <Badge tone={offer.kind === "weapon_level" ? "weapon" : "passive"}>
         {t("run.levelUp.upgrade", { level: offer.level })}
       </Badge>
     );
 
-  if (category === null) return badge;
+  if (category === null && element === null) return badge;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
       {badge}
-      <CategoryLabel category={category} />
+      {category === null ? null : <CategoryLabel category={category} />}
+      {element === null ? null : <ElementLabel element={element} />}
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import { PASSIVES, WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
+import { PASSIVES, BASE_WEAPONS, type RunDevCommand, type RunDevOptions } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
 import { effectiveAccess, useTools } from "./tools";
@@ -26,6 +26,8 @@ const visualsSchema = z.object({
   damageNumbers: z.boolean(),
   effects: z.boolean(),
   techInfo: z.boolean(),
+  /** необязательное: настройки прошлой сборки поля не знают и не должны сбрасываться целиком */
+  sprites: z.optional(z.boolean()),
 });
 
 const cheatsSchema = z.object({
@@ -77,6 +79,7 @@ export const DEFAULT_DEV_SETTINGS: DevSettings = {
     damageNumbers: true,
     effects: true,
     techInfo: true,
+    sprites: false,
   },
   cheats: { godMode: false, oneHitKill: false, damageMul: 1, moveSpeedMul: 1, freezeEnemies: false, spawnPaused: false },
   timeScale: 1,
@@ -122,10 +125,10 @@ export function devModeAllowed(): boolean {
 export function toRunDev(settings: DevSettings): RunDevOptions {
   const start: RunDevCommand[] = [];
   // Уровень 99 движок сводит к последнему уровню каждого предмета.
-  if (settings.start.allWeapons) for (const weapon of WEAPONS) start.push({ kind: "giveWeapon", id: weapon.id, level: 99 });
+  if (settings.start.allWeapons) for (const weapon of BASE_WEAPONS) start.push({ kind: "giveWeapon", id: weapon.id, level: 99 });
   if (settings.start.allPassives) for (const passive of PASSIVES) start.push({ kind: "givePassive", id: passive.id, level: 99 });
   if (settings.start.minute > 0) start.push({ kind: "jumpToMinute", minute: settings.start.minute });
-  return { visuals: { ...settings.visuals }, cheats: { ...settings.cheats }, timeScale: settings.timeScale, start };
+  return { visuals: { ...settings.visuals, sprites: settings.visuals.sprites === true }, cheats: { ...settings.cheats }, timeScale: settings.timeScale, start };
 }
 
 /** Включено ли что-то, что делает забег забегом с читами — для плашки на экранах. */

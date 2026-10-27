@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
+import { createNoopPlatformUi, type PlatformAdapter } from "@bh/shared-types";
 import { useBadges } from "../src/state/badges";
-import { createChangelogApi, entriesByKind, markChangelogSeen, type ChangelogPage } from "../src/state/changelog-api";
+import { initShell } from "../src/state/shell";
+import { changelogAvailable, createChangelogApi, entriesByKind, markChangelogSeen, type ChangelogPage } from "../src/state/changelog-api";
 
 // Клиент журнала обновлений (docs/35-stage4-plan.md WP31): страницы — по
 // курсору-версии, ответ разбирается схемой, открытый журнал отмечается до
@@ -79,5 +81,19 @@ describe("клиент журнала обновлений", () => {
       ["fixed", ["a"]],
       ["teleport", ["c"]],
     ]);
+  });
+});
+
+describe("журнал скрыт у игроков (Р125)", () => {
+  it("недоступен и со входом: ни меню, ни слайду, ни уведомлению он не нужен", () => {
+    initShell({
+      adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
+      capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, auth: { baseUrl: "" } },
+      storage: { get: () => null, set: () => undefined, remove: () => undefined },
+      analytics: () => undefined,
+      build: { version: "test", contentHash: "abcd1234", platform: "web" },
+    });
+
+    expect(changelogAvailable()).toBe(false);
   });
 });

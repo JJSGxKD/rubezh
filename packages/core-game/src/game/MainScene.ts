@@ -17,8 +17,10 @@ import {
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
 import { inspectWorld } from "./run/inspect";
+import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -142,6 +144,8 @@ export class MainScene extends Phaser.Scene {
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
   /** сколько записей о сундуках сцена уже отдала оболочке; после снимка — с нуля */
   private chestCursor: ChestCursor = { found: 0, opened: 0 };
+  /** сколько записей журнала колец уже ушло наружу */
+  private cordonCursor = 0;
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -168,6 +172,7 @@ export class MainScene extends Phaser.Scene {
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
     this.chestCursor = { found: 0, opened: 0 };
+    this.cordonCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     // Продолженный забег — с тем набором, с которым начался: надетое могло
@@ -288,6 +293,7 @@ export class MainScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
       steps++;
       this.emitChestEvents();
+      this.emitCordonEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
@@ -388,6 +394,14 @@ export class MainScene extends Phaser.Scene {
     // Выбор — часть лога ввода: на этом тике повтор применит тот же вариант.
     this.probe.choice(this.world, optionId);
 
+    this.finishChoice();
+  }
+
+  /**
+   * Конец выбора: следующий уровень из очереди или возврат в забег. Общий
+   * хвост для выбора карточки и для пропуска уровня.
+   */
+  private finishChoice(): void {
     this.emitHud();
     // Уровней могло накопиться несколько: пока очередь не пуста, мир стоит и
     // оболочка получает следующий выбор.
@@ -402,6 +416,46 @@ export class MainScene extends Phaser.Scene {
     // бы уже пришедший следующий выбор из очереди: экран пропадает, а мир
     // остаётся стоять.
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
+  }
+
+  /** Переброс карточек: заменить все предложенные новыми (`progression/card-tools.ts`). */
+  rerollOffers(): void {
+    this.applyCardToolCommand(REROLL_COMMAND);
+  }
+
+  /** Пропуск уровня: без улучшения, за долю опыта до следующего. */
+  skipOffers(): void {
+    this.applyCardToolCommand(SKIP_COMMAND);
+  }
+
+  /** Изгнание: предмет карточки пропадает из забега, на его место встаёт новая. */
+  banishOffer(optionId: string): void {
+    this.applyCardToolCommand(`${BANISH_PREFIX}${optionId}`);
+  }
+
+  /**
+   * Общий путь трёх действий. Команда приходит из интерфейса, поэтому мир её
+   * проверяет сам; невозможная — тихий выход, как у неизвестного выбора. Действие
+   * — часть лога ввода: на этом тике повтор применит ту же команду.
+   */
+  private applyCardToolCommand(command: string): void {
+    if (this.phase !== "choosing") return;
+    const level = this.world.progression.level;
+    const outcome = applyCardTool(this.world, command);
+    if (outcome === null) return;
+    this.probe.choice(this.world, command);
+    this.sceneData.bus.emit("cardTool", {
+      kind: outcome.kind,
+      left: outcome.left,
+      level,
+      ...(outcome.item === null ? {} : { item: outcome.item }),
+    });
+    if (outcome.kind === "skip") {
+      this.finishChoice();
+      return;
+    }
+    this.emitHud();
+    this.emitLevelUp(true);
   }
 
   /**
@@ -528,6 +582,7 @@ export class MainScene extends Phaser.Scene {
       this.step(IDLE_INPUT);
       this.probe.stepped(IDLE_CODE, this.world);
       this.emitChestEvents();
+      this.emitCordonEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -634,6 +689,14 @@ export class MainScene extends Phaser.Scene {
     if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
   }
 
+  /** Закончившиеся кольца — оболочке, для аналитики. Журнал после восстановления снимка пуст. */
+  private emitCordonEvents(): void {
+    settleCordonDeath(this.world);
+    const events = takeCordonEvents(this.world, this.cordonCursor);
+    this.cordonCursor = events.cursor;
+    for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
   /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
   private isInChest(): boolean {
     return this.phase === "chest";
@@ -653,9 +716,9 @@ export class MainScene extends Phaser.Scene {
     this.emitLevelUp();
   }
 
-  private emitLevelUp(): void {
+  private emitLevelUp(refreshed = false): void {
     const progression = this.world.progression;
-    this.probe.event(this.world, "level", progression.level);
+    if (!refreshed) this.probe.event(this.world, "level", progression.level);
     this.probe.event(this.world, "offer", progression.offers.map((offer) => offer.id).join(","));
     this.sceneData.bus.emit("levelUp", {
       level: progression.level,
@@ -663,6 +726,10 @@ export class MainScene extends Phaser.Scene {
       // Сколько уровней ещё ждёт выбора: игрок должен понимать, что экран
       // откроется снова, а не гадать (docs/26-stage2-plan.md, WP2).
       queued: Math.max(0, progression.pendingLevelUps - 1),
+      tools: { ...progression.tools },
+      toolsTotal: { ...progression.toolsTotal },
+      canReroll: canReroll(this.world),
+      refreshed,
     });
   }
 

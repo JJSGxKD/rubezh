@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
+import { trackGroupClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
@@ -57,7 +58,7 @@ export function TopBar(props: TopBarProps): ReactNode {
       {props.onBack === undefined ? (
         <span className="size-11" />
       ) : (
-        <IconButton label={t("app.back")} feedback="back" onClick={props.onBack}>
+        <IconButton track="back" label={t("app.back")} feedback="back" onClick={props.onBack}>
           <ChevronLeft size={24} />
         </IconButton>
       )}
@@ -85,6 +86,8 @@ export interface TabBarProps {
   items: readonly TabItem[];
   activeId: string | null;
   onSelect(id: string): void;
+  /** имя группы для события `ui_clicked`: нажатие пункта — `<track>.<id пункта>` (Р141) */
+  track: string;
 }
 
 /**
@@ -140,13 +143,21 @@ export function TabBar(props: TabBarProps): ReactNode {
               aria-label={item.label}
               onClick={() => {
                 if (!active) uiFeedback("select");
+                trackGroupClick(props.track, item.id);
                 props.onSelect(item.id);
               }}
-              className="group relative flex min-h-16 flex-1 flex-col items-center justify-center gap-0.5 pt-1"
+              // Крайние вкладки стоят у края экрана — кольцо фокуса внутрь.
+              // `min-w-0`: без него вкладку распирает её подпись, даже скрытая,
+              // и при крупном шрифте ряд вылезал за экран, а замер режима
+              // подписей сравнивал подпись с вкладкой, которую она же растянула.
+              className="group relative flex min-h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 pt-1 focus-visible:-outline-offset-2"
             >
+              {/* Плитка — в px, а не в rem: значок в ней и так в px, а с крупным
+                  шрифтом системы плитка росла бы вместе с текстом и у крайних
+                  вкладок вылезала за экран. */}
               <span
                 className={[
-                  "relative inline-flex size-11 items-center justify-center rounded-lg",
+                  "relative inline-flex size-[44px] items-center justify-center rounded-lg",
                   "transition-transform duration-(--duration-base) ease-spring",
                   active ? "-translate-y-3 scale-110" : "group-active:scale-90",
                 ].join(" ")}
@@ -169,7 +180,7 @@ export function TabBar(props: TabBarProps): ReactNode {
                 >
                   {item.icon}
                 </span>
-                {item.badge === undefined ? null : <TabBadge badge={item.badge} />}
+                {item.badge === undefined ? null : <TabBadge badge={item.badge} active={active} />}
               </span>
               <span
                 ref={(node) => {
@@ -196,9 +207,19 @@ export function TabBar(props: TabBarProps): ReactNode {
   );
 }
 
-function TabBadge(props: { badge: string }): ReactNode {
+/**
+ * Счётчик на вкладке. Кольцо цвета панели отделяет его от поднятой оранжевой
+ * плитки: без него красный бейдж сливался с её краем (U-15). У активной
+ * вкладки он вынесен за угол дальше — плитка крупнее и поднята.
+ */
+function TabBadge(props: { badge: string; active: boolean }): ReactNode {
   return (
-    <span className="absolute -top-1 -right-1 min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text">
+    <span
+      className={[
+        "absolute min-w-5 rounded-pill bg-danger px-1 text-center font-display text-xs font-bold text-text ring-2 ring-surface",
+        props.active ? "-top-2 -right-2" : "-top-1 -right-1",
+      ].join(" ")}
+    >
       {props.badge}
     </span>
   );
@@ -233,6 +254,8 @@ export function SegmentedControl(props: {
   onSelect(id: string): void;
   /** "s" — для тесных мест: на узком экране подписи сжимаются (segmented-rules.ts). */
   size?: SegmentedSize;
+  /** имя группы для события `ui_clicked`: смена пункта — `<track>.<id пункта>` (Р141) */
+  track: string;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
@@ -266,6 +289,7 @@ export function SegmentedControl(props: {
             onClick={() => {
               if (active) return;
               uiFeedback("select");
+              trackGroupClick(props.track, item.id);
               props.onSelect(item.id);
             }}
             className={[
@@ -299,21 +323,41 @@ export function PageTitle(props: { children: ReactNode }): ReactNode {
   return <h1 className="mt-2 mb-1 font-display text-2xl font-bold text-text">{props.children}</h1>;
 }
 
-export function SectionTitle(props: { children: ReactNode }): ReactNode {
+/**
+ * Заголовок раздела внутри экрана — с каймой-оберегом (design/art/direction-v2.md
+ * §4.4): ромб перед подписью и затухающая цепь ромбов после неё — тот же
+ * мотив вышивки, что у окон наград, только шёпотом.
+ */
+export function SectionTitle(props: {
+  children: ReactNode;
+  /** `h3` — подзаголовок внутри листа или карточки */
+  as?: "h2" | "h3";
+  /** отступы вокруг; по умолчанию — как у раздела экрана */
+  spacing?: string;
+  /** справа после каймы — счётчик вроде «0 из 3» */
+  end?: ReactNode;
+}): ReactNode {
+  const Tag = props.as ?? "h2";
   return (
-    <h2 className="mt-6 mb-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase">
-      {props.children}
-    </h2>
+    <Tag className={`${props.spacing ?? "mt-6 mb-2"} flex items-center gap-2 font-display text-xs font-semibold tracking-widest text-text-muted uppercase`}>
+      <span aria-hidden="true" className="size-1.5 shrink-0 rotate-45 bg-accent" />
+      <span className="min-w-0">{props.children}</span>
+      <span aria-hidden="true" className="section-rule h-2.5 min-w-6 flex-1" />
+      {props.end === undefined ? null : <span className="shrink-0 font-sans tracking-normal normal-case tabular-nums">{props.end}</span>}
+    </Tag>
   );
 }
+
+const MOTION_CLASS = { forward: "animate-screen-forward", back: "animate-screen-back", rise: "animate-screen-in" } as const;
 
 /**
  * Появление экрана при смене. Ключ — идентификатор экрана: React монтирует
  * новый узел, и анимация проигрывается один раз, без таймеров и состояния.
+ * `motion` — с какой стороны въехать (`screenMotion` в state/navigation.ts).
  */
-export function ScreenTransition(props: { screenKey: string; children: ReactNode }): ReactNode {
+export function ScreenTransition(props: { screenKey: string; motion?: keyof typeof MOTION_CLASS; children: ReactNode }): ReactNode {
   return (
-    <div key={props.screenKey} className="h-full animate-screen-in">
+    <div key={props.screenKey} className={`h-full ${MOTION_CLASS[props.motion ?? "rise"]}`}>
       {props.children}
     </div>
   );

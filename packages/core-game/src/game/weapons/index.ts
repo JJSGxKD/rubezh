@@ -9,7 +9,7 @@ import { projectileNearest } from "./projectile-nearest";
 import type { ResolvedWeaponLevel } from "./weapon-types";
 
 /**
- * Реестр поведений оружия. Новое поведение — код участника 1; новое оружие на
+ * Реестр поведений оружия. Новое поведение — код владельца; новое оружие на
  * готовом поведении и все числа — данные геймдизайнера
  * (docs/01-tech-stack.md §9).
  */

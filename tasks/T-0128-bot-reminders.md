@@ -7,10 +7,7 @@ status: ready
 owner:
 author: claude-lead2-21
 size: M
-depends_on:
-  - T-0010
-  - T-0104
-  - T-0110
+depends_on: [T-0010, T-0104, T-0110, T-0191]
 zones:
   - backend/api/src/modules/reminders/**
   - backend/api/src/modules/notifications/notification-kinds.ts
@@ -47,13 +44,15 @@ batch: 3
 
 # T-0128. Напоминания через бота: обогнали в сезоне, сезон закрывается, награда дня
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0128.json)](README.md#значки-статуса) [![T-0010](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0010.json&label=T-0010)](T-0010-bot-write-access.md) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](T-0104-tasks-pool-rotation-new-kinds.md) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](T-0110-weekly-season-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0128.json)](README.md#значки-статуса) [![T-0010](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0010.json&label=T-0010)](archive/T-0010-bot-write-access.md) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](archive/T-0104-tasks-pool-rotation-new-kinds.md) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](archive/T-0110-weekly-season-server.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md)
 
 ## Зачем
 
 Игрок закрыл игру и забыл про неё: у недельного сезона и награды дня нет ничего, что позвало бы обратно. У Telegram есть прямой канал, у конкурентов в отчётах его нет (`docs/39-retention-mechanics.md` П5). После задачи бот пишет три вида напоминаний, не чаще раза в сутки, только тем, кто разрешил себе писать, с кнопкой «Не напоминать» прямо под сообщением.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Напоминание `season_overtaken` — только по доске `hard`; поле `difficulty` в событии и в ключах `reminders:snap` остаётся со значением `hard` (id не сводятся).
 
 - **Ничего нового для доставки: используем ленту и дубль в бота (WP28).** `notifications-bot` уже умеет: очередь BullMQ с лимитером, проверку «можно ли писать» (`MessagingService.state`, T-0010), выбор игрока в настройках аккаунта, потолок вида, исход в `notification.bot_outcome`, блокировку бота. Три вида напоминаний становятся видами уведомлений и получают правила; свою очередь не заводим. Строка ленты у напоминания есть (так уже устроен дубль), знак «непрочитано» на колокольчике она ставит, как и остальные.
 - **Три вида** (`notification-kinds.ts`), у всех свой `dedupeKey`, повтор тика строку не удвоит:
@@ -207,5 +206,5 @@ batch: 3
 
   ❓ **Нужно от команды**
 
-  • @участник1 — включить `reminders.enabled` на деве после просмотра текстов и откалибровать окно и потолок
+  • @владелец — включить `reminders.enabled` на деве после просмотра текстов и откалибровать окно и потолок
   ```

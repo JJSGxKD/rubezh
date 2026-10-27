@@ -7,7 +7,7 @@ status: draft
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0157, T-0161]
+depends_on: [T-0157, T-0161, T-0188, T-0190]
 zones:
   - packages/app-shell/src/state/donations-api.ts
   - packages/app-shell/src/state/shop-purchase.ts
@@ -32,6 +32,9 @@ zones:
   - packages/app-shell/test/session.test.ts
   - packages/app-shell/test/shop.test.ts
 shared:
+  - packages/app-shell/src/state/analytics.ts
+  - backend/api/src/modules/events/event-dictionary.ts
+  - docs/22-analytics-and-metrics.md
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-home.json
   - packages/app-shell/src/i18n/ru-history.json
@@ -46,7 +49,7 @@ batch: 3
 
 # T-0158. Донаты проекту — клиент: лист доната, ссылки Tribute, знак, благодарность, слайд
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0158.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](T-0157-donations-backend.md) [![T-0161](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json&label=T-0161)](T-0161-supporter-badge-api.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0158.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](archive/T-0157-donations-backend.md) [![T-0161](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json&label=T-0161)](T-0161-supporter-badge-api.md) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](archive/T-0188-hide-changelog-for-players.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md)
 
 ## Зачем
 
@@ -281,7 +284,11 @@ batch: 3
 
 - `purchase_initiated` / `purchase_completed` / `purchase_failed` — штатно из `buy()`,
   `product = "donation"`, `sku = "donation"` (событие и поля уже в словаре).
-- `donation_link_clicked { way, place }` — добавляет T-0157 в словарь; здесь
+- `donation_link_clicked { way, place }` — **заводит эта задача целиком** (поправка
+  `claude-lead-1` от 21.10.2026, вопрос #430: тест `scripts/test/event-dictionary.test.ts`
+  требует одновременной правки словаря сервера и списка клиента): сначала строка в
+  `docs/22` §3.3, затем словарь `backend/api/src/modules/events/event-dictionary.ts` и
+  Zod-схема, затем `ANALYTICS_EVENTS` в `packages/app-shell/src/state/analytics.ts`, потом
   отправка: `way` — из ответа сервера (`tribute_telegram` или `tribute_web`), `place` — `about`,
   `profile` или `home`.
 - Слайд — штатные `home_slide_viewed` / `home_slide_clicked` со `slide = "donate"`.
@@ -339,5 +346,5 @@ batch: 3
 
   ❓ **Нужно от команды**
 
-  • @участник1 — вписать ссылки Tribute для Telegram и веба в панель
+  • @владелец — вписать ссылки Tribute для Telegram и веба в панель
   ```

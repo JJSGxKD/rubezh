@@ -1,4 +1,5 @@
-import { PASSIVE_CATEGORIES, type AccountUnlockDef, type LoadoutLimits } from "@bh/shared-types";
+import { PASSIVE_CATEGORIES, type AccountUnlockDef, type CardToolUnlockDef, type CardTools, type LoadoutLimits, type WeaponDef } from "@bh/shared-types";
+import { MAX_CARD_TOOLS } from "./card-tools";
 
 /**
  * Открытое уровнем аккаунта (docs/35-stage4-plan.md Р41, §3.13): движок сам
@@ -37,6 +38,15 @@ export function unlocksAt(table: readonly AccountUnlockDef[], level: number): Ac
     }
   }
   return { weapons, passives, limits };
+}
+
+/**
+ * Оружие, доступное в забеге при открытом наборе: базовое из таблицы и его
+ * эволюция — она открыта вместе с базовым и в таблицу не вносится (Р102,
+ * tasks/T-0102). Порядок — как в контенте.
+ */
+export function weaponsOpenAt(defs: readonly WeaponDef[], open: AccountUnlocks): WeaponDef[] {
+  return defs.filter((def) => open.weapons.has(def.evolvedFrom ?? def.id));
 }
 
 /** На каком уровне открывается оружие или навык; `null` — таблица его не знает. */
@@ -120,6 +130,58 @@ export function findUnlockProblems(
         problems.push(`на последнем уровне слотов «${category}» ${String(previous.passives[category])}, а потолок ${String(ceiling.passives[category])}`);
       }
     }
+  }
+  return problems;
+}
+
+// --- Заряды карточек -----------------------------------------------------------
+
+const CARD_TOOL_KINDS = ["reroll", "skip", "banish"] as const;
+
+/**
+ * Заряды переброса, пропуска и изгнания к уровню аккаунта: значение строки —
+ * итог с её уровня, как у слотов; не заданное — как строкой ниже, иначе 0.
+ */
+export function cardToolsAt(table: readonly CardToolUnlockDef[], level: number): CardTools {
+  const tools: CardTools = { reroll: 0, skip: 0, banish: 0 };
+  for (const row of [...table].sort((a, b) => a.level - b.level)) {
+    if (row.level > level) break;
+    for (const kind of CARD_TOOL_KINDS) {
+      const value = row[kind];
+      if (value !== undefined) tools[kind] = value;
+    }
+  }
+  return tools;
+}
+
+/**
+ * Ошибки таблицы зарядов — сообщением, которое называет строку и поле.
+ * Заряды не убывают с уровнем и не выше потолка движка (`MAX_CARD_TOOLS`).
+ */
+export function findCardToolProblems(table: readonly CardToolUnlockDef[]): string[] {
+  const problems: string[] = [];
+  const rows = [...table].sort((a, b) => a.level - b.level);
+  const levels = new Set<number>();
+  for (const row of rows) {
+    if (!Number.isInteger(row.level) || row.level < 1) problems.push(`уровень ${String(row.level)}: ожидается целое от 1`);
+    if (levels.has(row.level)) problems.push(`уровень ${String(row.level)} встречается дважды`);
+    levels.add(row.level);
+    for (const kind of CARD_TOOL_KINDS) {
+      const value = row[kind];
+      if (value !== undefined && !(Number.isInteger(value) && value >= 0)) {
+        problems.push(`уровень ${String(row.level)}: ${kind} — целое не меньше 0, а не ${String(value)}`);
+      }
+    }
+  }
+
+  let previous: CardTools | null = null;
+  for (const level of [...levels]) {
+    const tools = cardToolsAt(rows, level);
+    for (const kind of CARD_TOOL_KINDS) {
+      if (tools[kind] > MAX_CARD_TOOLS) problems.push(`уровень ${String(level)}: ${kind} ${String(tools[kind])} больше потолка ${String(MAX_CARD_TOOLS)}`);
+      if (previous !== null && tools[kind] < previous[kind]) problems.push(`уровень ${String(level)}: ${kind} меньше, чем уровнем ниже`);
+    }
+    previous = tools;
   }
   return problems;
 }

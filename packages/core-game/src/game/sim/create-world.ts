@@ -1,5 +1,7 @@
 import type {
   BoostDef,
+  CardToolRules,
+  CardTools,
   ChestsDef,
   ContinueDef,
   DifficultyDef,
@@ -19,10 +21,12 @@ import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from ".
 import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
 import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
 import { addWeapon, createLoadout } from "../progression/loadout";
+import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
+import { createCordonState } from "./cordon";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
@@ -61,12 +65,15 @@ const FALLBACK_DROPS: DropsDef = {
   medkits: { chance: 0, eliteChance: 0, healRatio: 0.3, maxOnField: 0 },
   magnets: { chance: 0, eliteChance: 0, maxOnField: 0 },
   dynamite: { chance: 0, eliteChance: 0, maxOnField: 0, radiusUnits: 420, eliteHpRatio: 0.3 },
+  freeze: { chance: 0, eliteChance: 0, maxOnField: 0, durationSec: 10, bossDurationRatio: 0.5 },
 };
 
 /**
  * Сундуков в тестах симуляции нет: `maxOnField: 0` не даёт ни выпасть, ни
  * сдвинуть генератор, и тесты паттернов от сундука не меняются.
  */
+const FALLBACK_CARD_RULES: CardToolRules = { skipXpRatio: 0.3 };
+
 const FALLBACK_CHESTS: ChestsDef = {
   opening: [],
   sizes: [{ size: 1, weight: 1 }],
@@ -146,6 +153,10 @@ export interface CreateWorldOptions {
   drops?: DropsDef;
   /** сундук забега; по умолчанию — без сундуков */
   chests?: ChestsDef;
+  /** заряды карточек от уровня аккаунта; по умолчанию — нули */
+  cardTools?: Partial<CardTools>;
+  /** правила действий с карточками; по умолчанию — пропуск платит 30% пути */
+  cardRules?: CardToolRules;
   /** второй шанс; по умолчанию — одно продолжение */
   continueRules?: ContinueDef;
   /** уровень сложности; по умолчанию — без поправок */
@@ -245,6 +256,12 @@ export function createWorld(options: CreateWorldOptions): World {
   // «Фора»: уровни сразу в очередь выбора — как если бы опыт набрался на
   // первом тике. Порог следующего — уже от нового уровня.
   const startLevel = 1 + boosts.startLevels;
+  // Заряды уровня аккаунта плюс заряды бустов, но не выше страховки движка.
+  const toolsTotal: CardTools = {
+    reroll: Math.min(MAX_CARD_TOOLS, (options.cardTools?.reroll ?? 0) + boosts.cardTools.reroll),
+    skip: Math.min(MAX_CARD_TOOLS, (options.cardTools?.skip ?? 0) + boosts.cardTools.skip),
+    banish: Math.min(MAX_CARD_TOOLS, (options.cardTools?.banish ?? 0) + boosts.cardTools.banish),
+  };
 
   const cellSize = gridCellSize(scale);
   return {
@@ -266,6 +283,9 @@ export function createWorld(options: CreateWorldOptions): World {
       founds: [],
       openings: [],
     },
+    cordon: createCordonState(),
+    cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
+    cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,
     difficultyLevel,
     playerStats,
@@ -281,6 +301,9 @@ export function createWorld(options: CreateWorldOptions): World {
       totalXp: 0,
       pendingLevelUps: boosts.startLevels,
       offers: [],
+      tools: { ...toolsTotal },
+      toolsTotal,
+      banished: [],
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
     // спавна — стенд испытаний, тесты паттернов — она такой и остаётся.
@@ -347,6 +370,9 @@ export function createWorld(options: CreateWorldOptions): World {
       medkitsCollected: 0,
       magnetsCollected: 0,
       dynamiteCollected: 0,
+      freezeCollected: 0,
+      freezeTicks: 0,
+      freezeTotalTicks: 0,
       chestsFound: 0,
       chestsOpened: 0,
       distance: 0,
@@ -387,8 +413,9 @@ function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {
  */
 function findStartingWeapon(types: readonly WeaponType[], requestedId?: string): number {
   if (requestedId !== undefined) {
-    const requested = types.findIndex((type) => type.id === requestedId);
+    // Эволюция стартовым оружием не бывает: её выдаёт сундук.
+    const requested = types.findIndex((type) => type.id === requestedId && type.evolvedFrom === undefined);
     if (requested >= 0) return requested;
   }
-  return types.length > 0 ? 0 : -1;
+  return types.findIndex((type) => type.evolvedFrom === undefined);
 }

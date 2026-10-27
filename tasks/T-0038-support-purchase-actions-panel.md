@@ -19,12 +19,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0038. Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](T-0037-support-refund-and-refulfill-api.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](archive/T-0037-support-refund-and-refulfill-api.md)
 
 ## Зачем
 
@@ -326,5 +326,5 @@ batch: 2
 
   ❓ **Нужно от команды**
 
-  • @участник1 — на тестовой покупке проверить оба действия в панели и сообщение в потоке «Покупки»
+  • @владелец — на тестовой покупке проверить оба действия в панели и сообщение в потоке «Покупки»
   ```

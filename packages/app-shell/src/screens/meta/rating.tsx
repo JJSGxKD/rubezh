@@ -70,7 +70,7 @@ export function RatingScreen(): ReactNode {
         <PageTitle>{t("rating.title")}</PageTitle>
         <p className="mb-3 text-sm text-text-muted">{t("rating.subtitle")}</p>
 
-        <SegmentedControl
+        <SegmentedControl track="difficulty"
           label={t("difficulty.title")}
           items={DIFFICULTY_IDS.map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
           activeId={difficultyId}
@@ -181,21 +181,31 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
             </span>
           ) : null}
         </p>
-        <p className="flex min-w-0 items-center gap-1 text-xs text-text-muted">
-          <span className="shrink-0 text-weapon">
-            <ItemIcon kind="weapon" id={entry.startingWeaponId} size={12} />
-          </span>
-          <span className="truncate">
-            {t("rating.row.meta", {
-              weapon: t(`weapon.${entry.startingWeaponId}.name`),
-              level: entry.level,
-              kills: formatNumber(entry.enemiesKilled),
-            })}
-          </span>
-        </p>
+        <RatingMeta weaponId={entry.startingWeaponId} level={entry.level} kills={entry.enemiesKilled} />
       </div>
       <SurvivalTime seconds={entry.survivalSec} />
     </li>
+  );
+}
+
+/**
+ * Подпись строки: оружие · уровень · убито. Поля — отдельными кусками в
+ * строку высотой в одну строку текста: поле, которому не хватило места,
+ * переносится в скрытую вторую строку целиком, со своей точкой, а не режется
+ * многоточием на полуслове — «убит…» на 320 px читалось обрывком (U-14).
+ */
+export function RatingMeta(props: { weaponId: string; level: number; kills: number }): ReactNode {
+  return (
+    <p className="flex h-lh min-w-0 flex-wrap items-center gap-x-1 overflow-hidden text-xs text-text-muted">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+        <span className="text-weapon">
+          <ItemIcon kind="weapon" id={props.weaponId} size={12} />
+        </span>
+        <span>{t(`weapon.${props.weaponId}.name`)}</span>
+      </span>
+      <span className="shrink-0 whitespace-nowrap">{`· ${t("rating.row.level", { level: props.level })}`}</span>
+      <span className="shrink-0 whitespace-nowrap">{`· ${t("rating.row.kills", { kills: formatNumber(props.kills) })}`}</span>
+    </p>
   );
 }
 

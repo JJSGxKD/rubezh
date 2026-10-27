@@ -14,7 +14,6 @@ depends_on:
   - T-0102
 zones:
   - backend/api/src/modules/tasks/task-rules.ts
-  - backend/api/prisma/migrations/**
   - backend/api/test/tasks.test.ts
   - backend/api/test/tasks.integration.test.ts
   - backend/api/test/achievements.integration.test.ts
@@ -29,17 +28,18 @@ shared:
   - backend/api/prisma/schema.prisma
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
+  - backend/api/prisma/migrations/**
 runner: local
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0126. Задания и достижения: боссы, элиты, сундуки, кристаллы, эволюции
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json)](README.md#значки-статуса) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](T-0104-tasks-pool-rotation-new-kinds.md) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](T-0106-achievements-prestige-server.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](T-0102-weapon-evolutions-data-and-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json)](README.md#значки-статуса) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](archive/T-0104-tasks-pool-rotation-new-kinds.md) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](T-0106-achievements-prestige-server.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md)
 
 ## Зачем
 
@@ -130,7 +130,7 @@ batch: 2
 - Ротацию, квоты, очки и пасс (T-0104, T-0105): только строки данных.
 - Витрину достижений, избранное, редкость (T-0106, T-0107), серверные события.
 - Счётчики и итог забега (`core-game`, `runs`): T-0125; здесь только читаем `counters`.
-- Вид «забег без урона» и фильтры по врагам («убей босса `boss_seer`»): нужны данные, которых в итоге нет.
+- Вид «забег без урона» и фильтры по врагам («убей босса `boss_matryoshka`»): нужны данные, которых в итоге нет.
 - Колонки `task_def`, схему базы, `tasks.service.ts` (его `onRun` отдаёт `run` целиком в `measure`; правка нужна, только если тест покажет, что `counters` не доходит).
 - Имена и описания механик в гайдбуке.
 
@@ -207,5 +207,5 @@ batch: 2
 
   ❓ **Нужно от команды**
 
-  • @участник1 — геймдизайнеру откалибровать цели кристаллов и решить, оставлять ли задания на боссов, пока босс не приходит раньше
+  • @владелец — геймдизайнеру откалибровать цели кристаллов и решить, оставлять ли задания на боссов, пока босс не приходит раньше
   ```

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { badgeLine, checkPrSection, parseFrontmatter, parseOwner, taskBadge, validateTask, withBadgeLine } from "../tasks/task-file.mjs";
+import { badgeLine, checkPrSection, parseFrontmatter, parseOwner, relativeTaskLink, taskBadge, validateTask, withBadgeLine, withTaskLinks } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -137,6 +137,13 @@ describe("проверка одной задачи", () => {
       expect(errors, field).toHaveLength(1);
       expect(errors[0], field).toContain(`T-0003-x.md: поле ${field}`);
     }
+  });
+
+  it("runner: owner проходит, неизвестный вид — ошибка с четырьмя видами", () => {
+    expect(validateTask("T-0003-x.md", { ...valid(), runner: "owner" })).toEqual([]);
+    expect(validateTask("T-0003-x.md", { ...valid(), runner: "robot" })).toEqual([
+      "T-0003-x.md: поле runner — ожидается any, local, owner или human, а не robot",
+    ]);
   });
 
   it("id не совпадает с началом имени файла", () => {
@@ -434,5 +441,53 @@ describe("раздел «PR» против шапки", () => {
 
   it("без тела задачи (захват по шапке) раздел не проверяется", () => {
     expect(validateTask(fileName, { ...valid(), status: "ready", release: "minor" })).toEqual([]);
+  });
+});
+
+// Архив задач (T-0204): ссылки на файлы задач считаются от папки файла, где они стоят.
+
+describe("относительные ссылки на файлы задач", () => {
+  it("relativeTaskLink — четыре сочетания папок", () => {
+    expect(relativeTaskLink("T-0001-a.md", "T-0002-b.md")).toBe("T-0002-b.md");
+    expect(relativeTaskLink("T-0001-a.md", "archive/T-0002-b.md")).toBe("archive/T-0002-b.md");
+    expect(relativeTaskLink("archive/T-0001-a.md", "T-0002-b.md")).toBe("../T-0002-b.md");
+    expect(relativeTaskLink("archive/T-0001-a.md", "archive/T-0002-b.md")).toBe("T-0002-b.md");
+    expect(relativeTaskLink("archive/T-0001-a.md", "README.md")).toBe("../README.md");
+    expect(relativeTaskLink("epics.md", "archive/T-0002-b.md")).toBe("archive/T-0002-b.md");
+  });
+
+  const PATHS = { "T-0001": "T-0001-first.md", "T-0002": "archive/T-0002-second.md" };
+
+  it("badgeLine из архива ведёт на README через «../» и на открытую зависимость через «../»", () => {
+    const line = badgeLine({ id: "T-0003", path: "archive/T-0003-x.md", depends_on: ["T-0001", "T-0002"] }, PATHS);
+    expect(line).toContain("](../README.md#значки-статуса)");
+    expect(line).toContain("](../T-0001-first.md)");
+    expect(line).toContain("](T-0002-second.md)");
+  });
+
+  it("badgeLine сверху ведёт на архивную зависимость через archive/", () => {
+    expect(badgeLine({ id: "T-0003", path: "T-0003-x.md", depends_on: ["T-0002"] }, PATHS)).toContain("](archive/T-0002-second.md)");
+  });
+
+  describe("withTaskLinks", () => {
+    it("ссылка из tasks/ на архивную задачу получает archive/", () => {
+      expect(withTaskLinks("см. [T-0002](T-0002-second.md)", "T-0009-x.md", PATHS)).toBe("см. [T-0002](archive/T-0002-second.md)");
+    });
+
+    it("верная ссылка из архива на открытую — без изменений, якорь сохраняется", () => {
+      expect(withTaskLinks("[шаги](../T-0001-first.md#шаги)", "archive/T-0009-x.md", PATHS)).toBe("[шаги](../T-0001-first.md#шаги)");
+      expect(withTaskLinks("[шаги](T-0001-first.md#шаги)", "archive/T-0009-x.md", PATHS)).toBe("[шаги](../T-0001-first.md#шаги)");
+    });
+
+    it("задачи нет в реестре и чужие пути — без изменений", () => {
+      expect(withTaskLinks("[x](T-9999-x.md) [y](docs/x.md) [z](https://x/T-0002-second.md)", "T-0009-x.md", PATHS)).toBe(
+        "[x](T-9999-x.md) [y](docs/x.md) [z](https://x/T-0002-second.md)",
+      );
+    });
+
+    it("повторный вызов ничего не меняет", () => {
+      const once = withTaskLinks("[a](T-0002-second.md) [b](../archive/T-0002-second.md)", "T-0009-x.md", PATHS);
+      expect(withTaskLinks(once, "T-0009-x.md", PATHS)).toBe(once);
+    });
   });
 });

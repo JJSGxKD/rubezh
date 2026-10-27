@@ -46,7 +46,7 @@ batch: 4
 
 # T-0070. Постбэки в s2s-сети и партнёру — шаблон адреса, click_id и sub1…sub5
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json)](README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](T-0069-postback-destinations-layer.md) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](T-0067-partner-links-and-binding.md) [![T-0058](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0058.json&label=T-0058)](T-0058-redirect-deeplink-page.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json)](README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](archive/T-0069-postback-destinations-layer.md) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](archive/T-0067-partner-links-and-binding.md) [![T-0058](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0058.json&label=T-0058)](archive/T-0058-redirect-deeplink-page.md)
 
 ## Зачем
 
@@ -363,5 +363,5 @@ batch: 4
 
   ❓ **Нужно от команды**
 
-  • @участник1 — проверить на тестовой ссылке: задать адрес-приёмник, убедиться, что регистрация пришла один раз
+  • @владелец — проверить на тестовой ссылке: задать адрес-приёмник, убедиться, что регистрация пришла один раз
   ```

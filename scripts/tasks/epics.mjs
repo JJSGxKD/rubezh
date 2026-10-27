@@ -1,4 +1,4 @@
-import { REPOSITORY, STATUS_URL, taskBadge } from "./task-file.mjs";
+import { REPOSITORY, STATUS_URL, relativeTaskLink, taskBadge } from "./task-file.mjs";
 
 /**
  * Ячейки эпиков в tasks/epics.md (tasks/README.md, «Значки статуса»): «Задачи» —
@@ -27,7 +27,7 @@ export function epicTasksCell(epicId, tasks) {
   const badges = tasks
     .filter((task) => task.epic === epicId)
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((task) => taskBadge(task.id, task.fileName));
+    .map((task) => taskBadge(task.id, relativeTaskLink("epics.md", task.path ?? task.fileName)));
   return badges.length === 0 ? "—" : badges.join(" ");
 }
 

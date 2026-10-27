@@ -8,6 +8,7 @@ import {
   ProgressBar,
   Wordmark,
 } from "../design-system/components";
+import { AmbientSky } from "../app/AmbientSky";
 import { t } from "../i18n";
 
 /**
@@ -24,8 +25,8 @@ export const BOOT_STAGES = ["platform", "fonts", "ready"] as const;
 export type BootStage = (typeof BOOT_STAGES)[number];
 
 /**
- * Заставка запуска. Раскладка повторяет заставку из index.html — знак, имя,
- * слоган, полоса, — поэтому смена статичной разметки на React не видна
+ * Заставка запуска. Раскладка повторяет заставку из index.html — словесный
+ * знак, слоган, полоса, — поэтому смена статичной разметки на React не видна
  * глазом, а полоса продолжает движение с того места, где её оставила
  * разметка. Бренд живёт здесь и в «Об игре», а не на главной (Р76).
  */
@@ -34,7 +35,6 @@ export function BootScreen(props: { stage: BootStage; version: string }): ReactN
 
   return (
     <Centered still>
-      <Emblem size={88} animated />
       <Wordmark size="l" />
       <p className="max-w-[300px] text-sm text-text-muted landscape:hidden">{t("lobby.tagline")}</p>
       <div className="mt-4 w-48">
@@ -48,7 +48,7 @@ export function BootScreen(props: { stage: BootStage; version: string }): ReactN
         />
       </div>
       <p className="min-h-5 text-xs text-text-muted">{t(`boot.stage.${props.stage}`)}</p>
-      <p className="text-xs text-text-disabled">{t("app.version", { version: props.version })}</p>
+      <p className="text-xs text-text-muted">{t("app.version", { version: props.version })}</p>
     </Centered>
   );
 }
@@ -64,7 +64,7 @@ export function OutsideScreen(props: { botUrl: string }): ReactNode {
       <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outside.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outside.text")}</p>
       {props.botUrl === "" ? null : (
-        <Button glow onClick={() => globalThis.open(props.botUrl, "_blank")}>
+        <Button track="open_bot" glow onClick={() => globalThis.open(props.botUrl, "_blank")}>
           <Send size={18} />
           {t("gate.outside.action")}
         </Button>
@@ -85,7 +85,7 @@ export function OutdatedScreen(props: { version: string | null }): ReactNode {
       <h1 className="mt-2 font-display text-2xl font-bold text-text">{t("gate.outdated.title")}</h1>
       <p className="max-w-[320px] text-sm text-text-muted">{t("gate.outdated.text")}</p>
       {props.version === null ? null : (
-        <p className="text-xs text-text-disabled">{t("gate.outdated.version", { version: props.version })}</p>
+        <p className="text-xs text-text-muted">{t("gate.outdated.version", { version: props.version })}</p>
       )}
     </Centered>
   );
@@ -109,7 +109,7 @@ export function CompactOverlay(props: { onExpand(): void }): ReactNode {
         </IconEmblem>
         <h1 className="mt-2 font-display text-xl font-bold text-text">{t("gate.compact.title")}</h1>
         <p className="max-w-[320px] text-sm text-text-muted">{t("gate.compact.text")}</p>
-        <Button glow onClick={props.onExpand}>
+        <Button track="expand" glow onClick={props.onExpand}>
           {t("gate.compact.action")}
         </Button>
       </Centered>
@@ -135,7 +135,7 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
             забега, где уже можно купить второй шанс (docs/35-stage4-plan.md WP33). */}
         <p className="max-w-[340px] text-sm font-semibold text-text">{t("gate.firstRun.text")}</p>
         <p className="max-w-[340px] text-sm text-text-muted">{t("gate.firstRun.data")}</p>
-        <Button size="l" block glow onClick={props.onAccept}>
+        <Button track="accept" size="l" block glow onClick={props.onAccept}>
           {t("gate.firstRun.action")}
         </Button>
       </div>
@@ -143,10 +143,20 @@ export function FirstRunScreen(props: { onAccept(): void }): ReactNode {
   );
 }
 
-/** `still` — без анимации появления: заставка подменяет статичную разметку и не должна мигать. */
+/**
+ * `still` — без анимации появления: заставка подменяет статичную разметку и не должна мигать.
+ *
+ * За экраном — тот же живой фон, что за меню (design/art/direction-v2.md
+ * §4.4): заставка — первое, что видит игрок, и мир начинается с неё.
+ * Статичная заставка `index.html` фона не знает, поэтому он проявляется
+ * плавно, а не вспыхивает при подмене.
+ */
 function Centered(props: { children: ReactNode; still?: boolean }): ReactNode {
   return (
-    <div className="bg-app flex h-full items-center justify-center overflow-y-auto px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
+    <div className="bg-app relative isolate flex h-full items-center justify-center overflow-y-auto px-6 pt-[var(--app-inset-top)] pb-[var(--app-inset-bottom)]">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 animate-fade-in [animation-duration:900ms]">
+        <AmbientSky />
+      </div>
       <ContentColumn>
         <div
           className={[

@@ -11,9 +11,10 @@ import { ensureShapeTexture } from "./textures";
  * - подрывник — кольцо полного радиуса взрыва появляется сразу, а внутри к
  *   нему растёт второе кольцо с заливкой. Сомкнулись — взрыв. Без отсчёта
  *   игрок видел, где рванёт, но не знал, успеет ли выйти;
- * - рывок — полоса во всю длину, по ней от врага заполняется яркая часть.
- *   Дошла до конца — враг сорвался. Направление зафиксировано в начале
- *   телеграфа, поэтому шаг вбок спасает;
+ * - рывок — полоса во всю длину и шириной с тело врага, по ней от врага
+ *   заполняется яркая часть. Дошла до конца — враг сорвался. Направление
+ *   зафиксировано в начале телеграфа, поэтому шаг вбок спасает — и полоса
+ *   показывает, какой ширины шаг нужен: у элиты и босса она шире;
  * - стрелок — перед выстрелом тонкая линия прицела к игроку заполняется от
  *   стрелка. Заполнилась — снаряд вылетел.
  *
@@ -27,12 +28,16 @@ export class Telegraphs {
   private readonly layer: Phaser.GameObjects.Container;
   private readonly pools = new Map<string, { sprites: Phaser.GameObjects.Image[]; used: number }>();
 
+  /** Высота текстуры полосы рывка в пикселях: ширину на экране задаёт масштаб. */
+  private readonly laneTextureHeight: number;
+
   constructor(scene: Phaser.Scene, world: World, layer: Phaser.GameObjects.Container) {
     this.scene = scene;
     this.world = world;
     this.layer = layer;
 
     const scale = world.config.unitScale;
+    this.laneTextureHeight = barTextureHeight(LANE_WIDTH_UNITS * scale);
     ensureShapeTexture(scene, RING_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "ring");
     ensureShapeTexture(scene, FILL_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "circle");
     this.ensureBarTexture(LANE_KEY, LANE_WIDTH_UNITS * scale, WORLD_COLORS.threat);
@@ -59,20 +64,29 @@ export class Telegraphs {
   }
 
   /**
-   * Рывок: полоса на всю длину и заполнение от врага.
+   * Рывок: полоса на всю длину и заполнение от врага. Ширина — тело врага
+   * (`laneWidth`): полоса тоньше тела обещала бы безопасность там, где
+   * рывок ещё бьёт, — у босса втрое тоньше.
    * Поворот через `Math.atan2` допустим: это рендер, а запрет на приближённую
    * математику касается симуляции (CLAUDE.md, «Детерминизм»).
    */
-  lane(x: number, y: number, dirX: number, dirY: number, length: number, progress: number): void {
+  lane(x: number, y: number, dirX: number, dirY: number, length: number, radius: number, progress: number): void {
     const rotation = Math.atan2(dirY, dirX);
     const textureLength = BAR_TEXTURE_UNITS * this.world.config.unitScale;
+    const widthScale = laneWidth(radius) / this.laneTextureHeight;
     const p = clamp01(progress);
 
     const track = this.take(LANE_KEY, 0);
-    track.setPosition(x, y).setRotation(rotation).setScale(length / textureLength, 1).setAlpha(0.22);
+    track.setPosition(x, y).setRotation(rotation).setScale(length / textureLength, widthScale).setAlpha(LANE_TRACK_ALPHA);
 
+    // Заполнение — сердцевиной полосы: во всю ширину у босса оно сплошь
+    // закрасило бы землю, и отсчёт читался бы хуже края.
     const fill = this.take(LANE_KEY, 0);
-    fill.setPosition(x, y).setRotation(rotation).setScale(Math.max(0.001, (length * p) / textureLength), 1).setAlpha(0.7);
+    fill
+      .setPosition(x, y)
+      .setRotation(rotation)
+      .setScale(Math.max(0.001, (length * p) / textureLength), widthScale * LANE_FILL_SHARE)
+      .setAlpha(0.7);
   }
 
   /** Прицел стрелка: линия к игроку, заполняется к выстрелу. */
@@ -120,7 +134,7 @@ export class Telegraphs {
   private ensureBarTexture(key: string, width: number, color: number): void {
     if (this.scene.textures.exists(key)) return;
     const length = Math.ceil(BAR_TEXTURE_UNITS * this.world.config.unitScale);
-    const height = Math.max(2, Math.ceil(width));
+    const height = barTextureHeight(width);
     const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
     const steps = 8;
     for (let s = 0; s < steps; s++) {
@@ -130,6 +144,15 @@ export class Telegraphs {
     graphics.generateTexture(key, length, height);
     graphics.destroy();
   }
+}
+
+/** Ширина полосы рывка — диаметр тела врага: шаг из полосы — это шаг из-под удара. */
+export function laneWidth(radius: number): number {
+  return radius * 2;
+}
+
+function barTextureHeight(width: number): number {
+  return Math.max(2, Math.ceil(width));
 }
 
 /** Сколько секунд до выстрела стрелок показывает прицел. */
@@ -146,5 +169,10 @@ const LANE_KEY = "bh-dash-lane";
 const AIM_KEY = "bh-aim-line";
 /** Длина текстуры полос; на экране они растягиваются до нужной длины. */
 const BAR_TEXTURE_UNITS = 64;
+/** Толщина текстуры полосы рывка; на экране её растягивают до тела врага (`laneWidth`). */
 const LANE_WIDTH_UNITS = 10;
+/** Подложка полосы во всю ширину — бледная: у босса она закрывает много земли. */
+const LANE_TRACK_ALPHA = 0.18;
+/** Доля ширины, которую занимает заполнение-отсчёт. */
+const LANE_FILL_SHARE = 0.45;
 const AIM_WIDTH_UNITS = 3;

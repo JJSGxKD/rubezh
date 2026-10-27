@@ -144,6 +144,15 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.02, seed: 21, filter: "lowpass", f0: 1800, peak: 0.15, decay: 0.015 },
     ],
   },
+  // Игла «Жала»: шипение и стеклянный щелчок в полосе 3–5 кГц — выше «Искры»
+  // и «Ножа», поэтому в общей подложке оружия его слышно отдельно.
+  sting: {
+    bus: "weapons", level: 0.4, voices: 2, gap: 0.09, send: 0.05, dur: 0.12, variants: 3, pitch: [1, 1.06, 0.94],
+    layers: [
+      { kind: "hiss", dur: 0.09, seed: 31, filter: "bandpass", f0: 5200, f1: 3400, glide: 0.07, q: 2.2, attack: 0.004, peak: 0.3, decay: 0.07 },
+      { kind: "tone", f0: 2900, f1: 3300, glide: 0.03, peak: 0.07, decay: 0.035 },
+    ],
+  },
   storm: {
     bus: "weapons", level: 0.62, voices: 1, gap: 0.4, send: 0.3, dur: 1.15, variants: 3, pitch: [1, 0.95, 1.05],
     layers: [
@@ -187,6 +196,28 @@ export const SOUND_RECIPES = {
       { kind: "tone", f0: 62, f1: 40, glide: 0.4, peak: 0.5, decay: 0.5 },
       { kind: "swell", wave: "sawtooth", f0: 110, attack: 0.18, hold: 0.32, release: 0.25, peak: 0.13, detune: [0, 7], filter: { type: "lowpass", f0: 300, f1: 1300, glide: 0.25, q: 1.5 } },
       { kind: "swell", wave: "sawtooth", f0: 73.42, t: 0.55, attack: 0.18, hold: 0.5, release: 0.25, peak: 0.13, detune: [0, 7], filter: { type: "lowpass", f0: 300, f1: 1300, glide: 0.25, q: 1.5 } },
+    ],
+  },
+
+  // Босс — событие забега, а не ещё одна элита: рог ниже и длиннее, с
+  // колоколом в хвосте. Смена фазы — удар и падающий гул: полоса здоровья
+  // сменила деление, и ухо узнаёт об этом раньше, чем глаз найдёт полосу.
+  bossArrive: {
+    bus: "threats", level: 0.62, voices: 1, gap: 3, send: 0.6, duck: 2, dur: 3, variants: 1,
+    layers: [
+      { kind: "tone", f0: 48, f1: 36, glide: 0.3, peak: 0.55, decay: 0.45 },
+      { kind: "tone", f0: 48, f1: 36, glide: 0.3, t: 0.45, peak: 0.5, decay: 0.45 },
+      { kind: "swell", wave: "sawtooth", f0: 73.42, attack: 0.4, hold: 0.8, release: 0.8, peak: 0.12, detune: [0, 6, -6], filter: { type: "lowpass", f0: 250, f1: 1100, glide: 0.6, q: 1.4 } },
+      { kind: "swell", wave: "sawtooth", f0: 110, t: 0.45, attack: 0.4, hold: 0.7, release: 0.8, peak: 0.1, detune: [0, 6], filter: { type: "lowpass", f0: 250, f1: 1300, glide: 0.6, q: 1.4 } },
+      { kind: "bell", f: 293.66, t: 0.9, peak: 0.08, decay: 1.2 },
+    ],
+  },
+  bossPhase: {
+    bus: "threats", level: 0.6, voices: 1, gap: 2, send: 0.45, duck: 0.8, dur: 1.2, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 0.05, seed: 111, filter: "highpass", f0: 1500, peak: 0.4, decay: 0.04 },
+      { kind: "tone", f0: 90, f1: 42, glide: 0.6, peak: 0.4, decay: 0.7 },
+      { kind: "swell", wave: "sawtooth", f0: 55, f1: 49, glide: 0.8, t: 0.05, attack: 0.05, hold: 0.3, release: 0.6, peak: 0.12, detune: [0, 9], filter: { type: "lowpass", f0: 400, f1: 150, glide: 0.8, q: 2 } },
     ],
   },
 
@@ -243,6 +274,17 @@ export const SOUND_RECIPES = {
       { kind: "tone", t: 0.1, f0: 72, f1: 27, glide: 0.8, attack: 0.01, peak: 0.85, decay: 1 },
     ],
   },
+  // Заморозка: три колокольчика вверх — холодное созвучие — и лёгкий шелест,
+  // уходящий вниз: орда встала. Мягче динамита и ниже по уровню, чем награды.
+  freeze: {
+    bus: "rewards", level: 0.6, voices: 1, gap: 0.3, send: 0.5, dur: 1.6, variants: 1,
+    layers: [
+      { kind: "bell", f: 2093, peak: 0.16, decay: 0.5 },
+      { kind: "bell", f: 2637, t: 0.06, peak: 0.16, decay: 0.5 },
+      { kind: "bell", f: 3136, t: 0.12, peak: 0.16, decay: 0.5 },
+      { kind: "hiss", dur: 0.6, seed: 131, filter: "highpass", f0: 7000, f1: 1500, glide: 0.5, peak: 0.1, decay: 0.5 },
+    ],
+  },
   eliteDown: {
     bus: "rewards", level: 0.62, voices: 1, gap: 0.3, send: 0.45, duck: 0.8, dur: 1.5, variants: 1,
     layers: [
@@ -269,6 +311,49 @@ export const SOUND_RECIPES = {
     layers: [
       ...[587.33, 880, 1174.66, 1479.98].map((f, i) => ({ kind: "bell" as const, f, t: i * 0.1, peak: 0.2, decay: 0.5, index: 0.8 })),
       ...[587.33, 739.99, 880, 1174.66].map((f) => ({ kind: "bell" as const, f, t: 0.46, peak: 0.1, decay: 1.4, index: 0.5 })),
+    ],
+  },
+
+  // Сундук: падение — глухой удар с искрой, чтобы сундук заметили в толпе;
+  // открытие — щелчок замка и восходящая россыпь, длиннее уровня: награда
+  // больше одной карточки.
+  chestDrop: {
+    bus: "rewards", level: 0.6, voices: 1, gap: 0.3, send: 0.15, dur: 0.6, variants: 2, pitch: [1, 0.94],
+    layers: [
+      { kind: "tone", f0: 150, f1: 70, glide: 0.08, peak: 0.5, decay: 0.18 },
+      { kind: "hiss", dur: 0.08, seed: 81, filter: "lowpass", f0: 900, peak: 0.35, decay: 0.06 },
+      { kind: "bell", f: 1568, t: 0.06, peak: 0.12, decay: 0.35 },
+      { kind: "bell", f: 2093, t: 0.1, peak: 0.09, decay: 0.3 },
+    ],
+  },
+  // Тряска перед вскрытием: три деревянных стука с бряцанием монет, каждый
+  // громче прежнего — предвкушение, а не просто ожидание.
+  chestRattle: {
+    bus: "rewards", level: 0.5, voices: 1, gap: 0.5, send: 0.1, dur: 0.8, variants: 1,
+    layers: [0, 0.24, 0.46].flatMap((t, i) => [
+      { kind: "tone" as const, t, f0: 210 + i * 20, f1: 120, glide: 0.04, peak: 0.25 + i * 0.08, decay: 0.07 },
+      { kind: "hiss" as const, t, dur: 0.04, seed: 121 + i, filter: "lowpass" as const, f0: 1400, peak: 0.18 + i * 0.05, decay: 0.03 },
+      { kind: "bell" as const, f: 2637 + i * 160, t: t + 0.02, peak: 0.04 + i * 0.015, decay: 0.12 },
+    ]),
+  },
+  // Звон награды: оболочка поднимает его лесенкой (`revealRate`), чтобы
+  // пятая награда звучала выше первой — счёт добычи слышен.
+  chestReveal: {
+    bus: "rewards", level: 0.55, voices: 2, gap: 0.08, send: 0.3, dur: 0.6, variants: 1,
+    layers: [
+      { kind: "bell", f: 1174.66, peak: 0.2, decay: 0.35, index: 0.7 },
+      { kind: "bell", f: 2349.32, t: 0.01, peak: 0.08, decay: 0.2 },
+      { kind: "hiss", dur: 0.05, seed: 131, filter: "highpass", f0: 6000, peak: 0.06, decay: 0.04 },
+    ],
+  },
+  chestOpen: {
+    bus: "rewards", level: 0.62, voices: 1, gap: 0.6, send: 0.35, duck: 0.5, dur: 1.4, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 0.03, seed: 91, filter: "highpass", f0: 3000, peak: 0.3, decay: 0.02 },
+      { kind: "tone", f0: 220, f1: 180, glide: 0.03, peak: 0.25, decay: 0.06 },
+      ...[587.33, 659.26, 783.99, 880].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.07, peak: 0.16, decay: i === 3 ? 0.55 : 0.5 })),
+      { kind: "bell", f: 1174.66, t: 0.38, peak: 0.18, decay: 0.8 },
+      { kind: "hiss", t: 0.3, dur: 0.9, seed: 93, filter: "highpass", f0: 7000, attack: 0.2, peak: 0.035, decay: 0.45 },
     ],
   },
 
@@ -315,6 +400,59 @@ export const SOUND_RECIPES = {
     bus: "ui", level: 0.55, voices: 1, gap: 0.3, send: 0.4, dur: 1, variants: 1,
     layers: [1174.66, 1479.98, 1760, 2349.32].map((f, i) => ({ kind: "bell" as const, f, t: i * 0.06, peak: 0.12, decay: 0.5, index: 0.6 })),
   },
+  // Начисление награды вне забега (design/art/direction-v2.md §7.6): у каждой
+  // валюты свой звук, и на слух понятно, что пришло, ещё до цифры. Монеты —
+  // россыпь металлических звонов, как горсть на столе; самоцвет — хрустальный
+  // перелив вверх; осколок — короткий стеклянный. Звучат поверх общего звона
+  // награды, поэтому тише и начинаются с запаздыванием — когда значки долетели.
+  uiCoins: {
+    bus: "ui", level: 0.5, voices: 1, gap: 0.25, send: 0.2, dur: 0.9, variants: 2, pitch: [1, 1.06],
+    layers: [0.1, 0.17, 0.26, 0.33, 0.43, 0.52, 0.64].flatMap((t, i) => [
+      { kind: "bell" as const, f: [2637, 3136, 2793, 3520, 2960, 3322, 3951][i] ?? 3000, t, peak: 0.09 - i * 0.006, decay: 0.16, index: 1.3 },
+      { kind: "hiss" as const, t, dur: 0.012, seed: 300 + i, filter: "highpass" as const, f0: 7000, peak: 0.04, decay: 0.01 },
+    ]),
+  },
+  uiGems: {
+    bus: "ui", level: 0.5, voices: 1, gap: 0.3, send: 0.45, dur: 1.1, variants: 1,
+    layers: [
+      ...[1760, 2217.46, 2637.02, 3520].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.08, peak: 0.1, decay: 0.5, index: 0.5 })),
+      { kind: "hiss", t: 0.1, dur: 0.5, seed: 311, filter: "highpass", f0: 8000, attack: 0.12, peak: 0.03, decay: 0.3 },
+    ],
+  },
+  uiShards: {
+    bus: "ui", level: 0.45, voices: 1, gap: 0.25, send: 0.3, dur: 0.7, variants: 1,
+    layers: [2093, 2793.83, 3135.96].map((f, i) => ({ kind: "bell" as const, f, t: 0.08 + i * 0.07, peak: 0.09, decay: 0.3, index: 0.9 })),
+  },
+  // Трещотка колеса: щелчок на каждый сектор, прошедший под стрелкой. Короткий
+  // и сухой — на быстром начале щелчки идут часто, длинный звук слился бы в гул.
+  uiWheelTick: {
+    bus: "ui", level: 0.45, voices: 3, gap: 0.025, send: 0, dur: 0.06, variants: 3, pitch: [1, 1.04, 0.97],
+    layers: [
+      { kind: "tone", wave: "triangle", f0: 1900, f1: 1300, glide: 0.01, peak: 0.12, decay: 0.018 },
+      { kind: "hiss", dur: 0.01, seed: 320, filter: "highpass", f0: 4000, peak: 0.06, decay: 0.008 },
+    ],
+  },
+  // Счёт баланса в шапке: монета ложится на монету — короткий звонкий щелчок.
+  // Тон поднимает скорость воспроизведения (`rate`), поэтому вариант один.
+  uiTally: {
+    bus: "ui", level: 0.35, voices: 3, gap: 0.03, send: 0.05, dur: 0.08, variants: 1,
+    layers: [
+      { kind: "bell", f: 3729.31, peak: 0.08, decay: 0.045, index: 1.6 },
+      { kind: "tone", wave: "triangle", f0: 2200, f1: 1700, glide: 0.008, peak: 0.05, decay: 0.012 },
+    ],
+  },
+  // Покупка: глухой стук кошеля, монеты внутри и светлый звон «готово». Глухо
+  // и тепло, чтобы не путаться с начислением наград — те звенят в открытую.
+  uiPurchase: {
+    bus: "ui", level: 0.55, voices: 1, gap: 0.5, send: 0.3, dur: 1, variants: 1,
+    layers: [
+      { kind: "tone", f0: 150, f1: 95, glide: 0.06, peak: 0.3, decay: 0.09 },
+      { kind: "hiss", dur: 0.09, seed: 330, filter: "bandpass", f0: 900, f1: 500, glide: 0.08, q: 1.2, peak: 0.12, decay: 0.06 },
+      ...[0.05, 0.1, 0.16].map((t, i) => ({ kind: "bell" as const, f: [2349.32, 2793.83, 2489.02][i] ?? 2500, t, peak: 0.05, decay: 0.07, index: 1.4 })),
+      { kind: "bell", f: 1567.98, t: 0.24, peak: 0.11, decay: 0.45, index: 0.5 },
+      { kind: "bell", f: 2349.32, t: 0.3, peak: 0.08, decay: 0.55, index: 0.5 },
+    ],
+  },
   uiError: {
     bus: "ui", level: 0.5, voices: 1, gap: 0.2, send: 0.05, dur: 0.32, variants: 1,
     layers: [
@@ -335,5 +473,11 @@ export const UI_SOUNDS: readonly SoundId[] = [
   "uiSheetOpen",
   "uiSheetClose",
   "uiReward",
+  "uiCoins",
+  "uiGems",
+  "uiShards",
+  "uiWheelTick",
+  "uiTally",
+  "uiPurchase",
   "uiError",
 ];

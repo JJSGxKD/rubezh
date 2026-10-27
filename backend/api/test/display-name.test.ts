@@ -114,7 +114,7 @@ describe("мат", () => {
 });
 
 describe("мат рядом с исключением", () => {
-  it.each(["nightnigga", "Night_Nigger", "Сучков сука", "Ebubekir_ebi"])("%s — мат", (name) => {
+  it.each(["nightnigga", "Night_Nigger", "Сучков сука", "Ebubekir_ebat"])("%s — мат", (name) => {
     expect(cleanName(name).verdict).toBe("profanity");
   });
 
@@ -161,5 +161,82 @@ describe("замена ника", () => {
 
   it("id не из шестнадцатеричных цифр не ломает номер", () => {
     expect(displayNameFor("҉", null, "zzzz").name).toMatch(/^Игрок \d{4}$/);
+  });
+});
+
+describe("ссылки и упоминания (tasks/T-0153, Р111)", () => {
+  it("упоминание вырезается; ник из одного упоминания — замена", () => {
+    expect(cleanName("Вася @spam_channel")).toEqual({ name: "Вася", verdict: "symbols" });
+    expect(cleanName("@rubezh_bot")).toEqual({ name: null, verdict: "empty" });
+    expect(cleanName("Вася @ Петя")).toEqual({ name: "Вася Петя", verdict: "symbols" });
+  });
+
+  it.each(["Вася t.me/chan", "Вася https://example.com/x?a=1", "Вася example.com", "Вася www.example.ru", "вася.рф Вася", "a@mail.ru Вася", "Вася T.ME/chan"])(
+    "%s → Вася",
+    (raw) => {
+      expect(cleanName(raw)).toEqual({ name: "Вася", verdict: "symbols" });
+    },
+  );
+
+  it("полноширинная и разорванная невидимым знаком ссылка тоже вырезается", () => {
+    expect(cleanName("ｔ．ｍｅ/chan Вася").name).toBe("Вася");
+    expect(cleanName("t\u200b.me/chan Вася").name).toBe("Вася");
+  });
+
+  it("длинная ссылка перед именем не даёт «trimmed»", () => {
+    expect(cleanName(`Вася https://example.com/${"a".repeat(40)}`)).toEqual({ name: "Вася", verdict: "symbols" });
+  });
+
+  it.each(["Mr.Smith", "Вася.Петя", "P@ssword", "Anna-Maria", "Dr. Who", "Игорь_98", "Vasya.community"])("%s — не трогается", (name) => {
+    expect(cleanName(name)).toEqual({ name, verdict: "ok" });
+  });
+
+  it("точки между буквами по-прежнему прячут мат", () => {
+    expect(cleanName("х.у.й").verdict).toBe("profanity");
+    expect(cleanName("с.у.к.а").verdict).toBe("profanity");
+  });
+
+  it("displayNameFor: ник из одной ссылки — username, упоминание рядом с именем вырезается", () => {
+    expect(displayNameFor("@spam", "tolik", ID)).toEqual({ name: "tolik", verdict: "empty" });
+    expect(displayNameFor("Вася @promo", null, ID)).toEqual({ name: "Вася", verdict: "symbols" });
+    expect(displayNameFor("҉", "@botname", ID).name).toBe("botname");
+  });
+});
+
+describe("словарь мата точнее (tasks/T-0153)", () => {
+  it.each(["huy", "Huy", "nahuy", "xyu", "xuy", "huy Вася", "Уебан", "Заебал", "Наебат", "Выебу", "Дохуе", "Хуесос", "huesos", "Пидарас", "Ебанько", "Ebubekir_ebat"])(
+    "%s — мат",
+    (name) => {
+      expect(cleanName(name)).toEqual({ name: null, verdict: "profanity" });
+    },
+  );
+
+  it.each(["Hue", "Huey", "Dick", "Dick Smith", "Ebi", "Suka", "Suki", "Shitov", "Shitake", "Shiitake", "Lebanon", "Скипидар", "Колебание", "Хлебать", "Usuki", "Nahuel", "Huyen"])(
+    "%s — не мат",
+    (name) => {
+      expect(cleanName(name).verdict).not.toBe("profanity");
+      expect(cleanName(name).name).not.toBeNull();
+    },
+  );
+
+  it("исключение целым словом не пускает кириллицу и не прячет мат", () => {
+    for (const name of ["Сука", "хуе", "Dickhead", "d.i.c.k", "Hue хуй"]) {
+      expect(cleanName(name).verdict, name).toBe("profanity");
+    }
+  });
+});
+
+describe("латинские имена после транслитерации (tasks/T-0201)", () => {
+  it.each(["Thuy", "thuy", "THUY", "Thuya", "Xuyang", "Thuy Linh", "Anh Thuy", "ThuyLinh"])("%s — не мат", (name) => {
+    expect(cleanName(name).verdict, name).not.toBe("profanity");
+    expect(cleanName(name).name, name).not.toBeNull();
+  });
+
+  it.each(["Duy", "Tuy", "Quy", "Suhail", "Nguyen", "Huyen", "Huynh", "Hui", "Khuyen", "Duyen"])("%s — не мат, закреплено", (name) => {
+    expect(cleanName(name).verdict, name).not.toBe("profanity");
+  });
+
+  it.each(["huy", "Huy", "nahuy", "xuy", "xyu", "huy Вася", "Thuy huy", "nahuy Thuy"])("%s — по-прежнему мат", (name) => {
+    expect(cleanName(name).verdict, name).toBe("profanity");
   });
 });

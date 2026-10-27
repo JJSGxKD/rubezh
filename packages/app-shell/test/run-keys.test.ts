@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { runKeyAction } from "../src/screens/run/run-keys";
+import { keyOwnedByTarget, runKeyAction } from "../src/screens/run/run-keys";
 
 // Клавиатура в забеге (docs/35-stage4-plan.md, Р57): пауза, выбор, «Ещё раз» —
 // по физическим клавишам, и ничего — на экране второго шанса.
@@ -23,5 +23,35 @@ describe("клавиши забега", () => {
   it("на итоге Enter — «Ещё раз», а на втором шансе клавиш нет: Enter не купит продолжение", () => {
     expect(runKeyAction("Enter", "finished", 0)).toEqual({ kind: "restart" });
     for (const code of ["Enter", "Space", "Escape", "Digit1"]) expect(runKeyAction(code, "downed", 0)).toBeNull();
+  });
+});
+
+describe("клавиша принадлежит тому, на чём фокус", () => {
+  // Фокус ходит по окнам забега клавишей Tab (docs/27 §4.4): Enter на
+  // «На главную» жал кнопку и тут же «Ещё раз» — забег перезапускался по дороге
+  // на главную; пробел на «Сдаться» открывал подтверждение и снимал паузу.
+  const button = { tagName: "BUTTON", role: null, editable: false };
+  const dialog = { tagName: "DIV", role: "dialog", editable: false };
+  const field = { tagName: "INPUT", role: null, editable: false };
+
+  it("Enter и пробел на кнопке — кнопке, а не забегу", () => {
+    expect(keyOwnedByTarget("Enter", button)).toBe(true);
+    expect(keyOwnedByTarget("Space", button)).toBe(true);
+    expect(keyOwnedByTarget("Space", { tagName: "DIV", role: "switch", editable: false })).toBe(true);
+    expect(keyOwnedByTarget("Enter", { tagName: "A", role: null, editable: false })).toBe(true);
+  });
+
+  it("пауза и цифры выбора на кнопке — по-прежнему забегу", () => {
+    expect(keyOwnedByTarget("Escape", button)).toBe(false);
+    expect(keyOwnedByTarget("Digit1", button)).toBe(false);
+  });
+
+  it("фокус на самом окне — Enter остаётся «Ещё раз»", () => {
+    expect(keyOwnedByTarget("Enter", dialog)).toBe(false);
+  });
+
+  it("поле ввода забирает любую клавишу", () => {
+    expect(keyOwnedByTarget("KeyP", field)).toBe(true);
+    expect(keyOwnedByTarget("Escape", { tagName: "DIV", role: null, editable: true })).toBe(true);
   });
 });

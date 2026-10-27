@@ -65,6 +65,15 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
   hearth: "fire",
   storm: "lightning",
   sting: "poison",
+  // Эволюции (T-0102) наследуют стихию базового: задание «убить огнём» должно
+  // засчитывать и «Горн».
+  frost_crown: "cold",
+  forge: "fire",
+  tempest: "lightning",
+  viper: "poison",
+  // Седьмое оружие (T-0118) и его эволюция — огонь.
+  meteor: "fire",
+  fire_rain: "fire",
 };
 
 /**
@@ -150,7 +159,7 @@ export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const satisfies re
  * Где видна: у канала — одна площадка (`platform`), бот спрашивает
  * подписчиков своей; у ссылки и бота — список площадок (`platforms`), без
  * списка — все. Ссылка партнёра бывает нужна в Telegram и MAX, но не в VK
- * (решение участника 1, 01.10.2026). `platform` у ссылки — запись прошлой
+ * (решение владельца, 01.10.2026). `platform` у ссылки — запись прошлой
  * панели, читается как список из одной. Что обязательно у какого вида —
  * проверяет `taskDefSchema`.
  */

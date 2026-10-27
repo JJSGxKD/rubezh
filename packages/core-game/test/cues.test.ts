@@ -3,6 +3,8 @@ import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
+import { applyEvolution } from "../src/game/progression/evolutions";
+import { addPassive } from "../src/game/progression/loadout";
 import { CueTracker } from "../src/game/run/cues";
 import { killEnemy } from "../src/game/sim/combat";
 import { pushSimEvent, SIM_EVENT } from "../src/game/sim/events";
@@ -62,6 +64,18 @@ describe("сигналы забега", () => {
     expect(cues).toMatchObject({ kills: 2, eliteKills: 1, eliteSpawns: 0, explosions: 2, explosionsNear: 1 });
   });
 
+  // Босс — событие забега, а не ещё одна элита: у него свой рог
+  // (design/art/sound.md, S-03), поэтому его появление считается отдельно.
+  it("появление босса считается отдельно от элиты", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    spawnEnemy(target, typeIndex(target, "boss_seer"), 600, 0);
+    expect(tracker.collect()).toMatchObject({ eliteSpawns: 1, bossSpawns: 1 });
+
+    spawnEnemy(target, typeIndex(target, "elite_ghoul"), -600, 0);
+    expect(tracker.collect()).toMatchObject({ eliteSpawns: 1, bossSpawns: 0 });
+  });
+
   it("отмечает начало угрозы, а не каждый тик её отсчёта", () => {
     const target = world();
     target.loadout.weapons.length = 0;
@@ -94,4 +108,40 @@ describe("сигналы забега", () => {
     }
     expect(fired).toBeGreaterThan(3);
   });
+
+  it("срабатывание эволюции идёт под id базового: у неё нет своего звука", () => {
+    const target = world();
+    const slot = target.loadout.weapons[0];
+    slot.level = 8;
+    addPassive(target.loadout, target.passiveTypes.findIndex((type) => type.id === "haste"));
+    expect(applyEvolution(target, "starfall")).toBe(true);
+    expect(target.weaponTypes[slot.typeIndex].id).toBe("starfall");
+
+    const tracker = new CueTracker(target);
+    spawnEnemy(target, typeIndex(target, "tank_ghoul"), 120, 0);
+    const fired: Record<string, number> = {};
+    for (let tick = 0; tick < 120; tick++) {
+      stepWorld(target, IDLE_INPUT);
+      for (const [id, count] of Object.entries(tracker.collect()?.weapons ?? {})) fired[id] = (fired[id] ?? 0) + count;
+    }
+    expect(fired.spark).toBeGreaterThan(3);
+    expect(fired.starfall).toBeUndefined();
+  });
+
+  it("считает подобранную заморозку отдельным сигналом", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    pushSimEvent(target.events, { kind: SIM_EVENT.freeze, x: 0, y: 0, radius: 500, tick: 1 });
+    expect(tracker.collect()).toMatchObject({ freeze: 1, dynamite: 0, magnet: 0 });
+    expect(tracker.collect()).toBeNull();
+  });
+
+  it("считает оба вида удара по площади: молнию и падающий камень", () => {
+    const target = world();
+    const tracker = new CueTracker(target);
+    pushSimEvent(target.events, { kind: SIM_EVENT.strike, x: 10, y: 10, radius: 80, tick: 1 });
+    pushSimEvent(target.events, { kind: SIM_EVENT.strikeFire, x: 20, y: 10, radius: 90, tick: 1 });
+    expect(tracker.collect()).toMatchObject({ strikes: 2 });
+  });
 });
+

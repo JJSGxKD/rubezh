@@ -7,7 +7,7 @@ import "../../i18n/account";
 import { adsPlayable, trackAdReward, watchAd } from "../../state/ad-watch";
 import { RUN_ALREADY_DOUBLED, RUN_DOUBLE_COOLDOWN, createRunDoubleApi, doubleButton, doubleForAd, type RunDoubleResult, type RunDoubleView } from "../../state/run-double-api";
 import { recheckRestriction } from "../../state/restrictions";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { RestrictedPlaque } from "../meta/restricted-plaque";
 import { formatCountdown, useClock } from "../meta/schedule";
@@ -69,7 +69,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
       case "doubled":
         setDone(outcome.result);
         props.onDoubled(outcome.result.credited);
-        uiFeedback("reward");
+        rewardFeedback("coins");
         void loadWallet();
         return;
       case "stale":
@@ -107,7 +107,7 @@ export function RunDouble(props: RunDoubleProps): ReactNode {
     <>
       {button.kind === "ready" || button.kind === "wait" ? (
         <div className="mt-2 animate-rise-in">
-          <Button variant="secondary" block disabled={button.kind === "wait"} loading={watching} onClick={() => void double()}>
+          <Button track="double" variant="secondary" block disabled={button.kind === "wait"} loading={watching} onClick={() => void double()}>
             {button.pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
             {button.kind === "wait"
               ? t("run.double.next", { time: formatCountdown(button.untilMs - now) })

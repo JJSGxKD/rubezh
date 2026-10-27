@@ -13,8 +13,24 @@ import type { SoundId, SoundRecipe } from "./recipes";
  */
 
 export type SoundScene = "lobby" | "run" | "pause" | "choice" | "finished" | "silent";
-export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record";
-export type UiSound = "tap" | "select" | "primary" | "back" | "toggleOn" | "toggleOff" | "sheetOpen" | "sheetClose" | "reward" | "error";
+export type RunSoundEvent = "levelUp" | "choose" | "death" | "abandon" | "record" | "chestDrop" | "chestRattle" | "chestOpen" | "bossPhase";
+export type UiSound =
+  | "tap"
+  | "select"
+  | "primary"
+  | "back"
+  | "toggleOn"
+  | "toggleOff"
+  | "sheetOpen"
+  | "sheetClose"
+  | "reward"
+  | "coins"
+  | "gems"
+  | "shards"
+  | "wheelTick"
+  | "tally"
+  | "purchase"
+  | "error";
 
 export interface HudSound {
   hpRatio: number;
@@ -31,6 +47,12 @@ const UI_SOUND_IDS: Record<UiSound, SoundId> = {
   sheetOpen: "uiSheetOpen",
   sheetClose: "uiSheetClose",
   reward: "uiReward",
+  coins: "uiCoins",
+  gems: "uiGems",
+  shards: "uiShards",
+  wheelTick: "uiWheelTick",
+  tally: "uiTally",
+  purchase: "uiPurchase",
   error: "uiError",
 };
 
@@ -43,6 +65,7 @@ const WEAPON_SOUNDS: Partial<Record<string, SoundId>> = {
   spark: "spark",
   knife: "knife",
   wardstone: "wardstone",
+  sting: "sting",
 };
 
 const LOW_HP_RATIO = 0.3;
@@ -99,7 +122,11 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   // предупреждение, а не атака.
   if (cues.playerHit > 0) add("hurt");
   if (cues.dynamite > 0) add("dynamite");
-  if (cues.eliteSpawns > 0) add("eliteHorn");
+  if (cues.freeze > 0) add("freeze");
+  // Босс — тоже элита по рангу, но звучит своим рогом: элитный рог здесь
+  // только за элит, вышедших вместе с ним.
+  if (cues.bossSpawns > 0) add("bossArrive");
+  if (cues.eliteSpawns > cues.bossSpawns) add("eliteHorn");
   if (cues.eliteKills > 0) add("eliteDown");
   if (cues.heal > 0) add("heal");
   if (cues.magnet > 0) add("magnet");
@@ -117,6 +144,14 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
 
   for (const note of gemNotes(cues.xp, gemStreak)) add("gem", note.delay === 0 ? { rate: note.rate } : { rate: note.rate, delay: note.delay });
   return plan;
+}
+
+/** Лад звонов сундука — та же пентатоника, что лесенка опыта, до октавы. */
+const REVEAL_STEPS = [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3, 2];
+
+/** Высота звона награды сундука: каждая следующая выше, пятая и дальше — октава. */
+export function revealRate(index: number): number {
+  return REVEAL_STEPS[Math.min(index, REVEAL_STEPS.length - 1)] ?? 1;
 }
 
 export class SoundDirector {
@@ -141,8 +176,9 @@ export class SoundDirector {
     this.engine.setVolumes(volumes);
   }
 
-  ui(kind: UiSound): void {
-    this.engine.play(UI_SOUND_IDS[kind]);
+  /** `rate` — тон: счёт в шапке поднимает его к концу. */
+  ui(kind: UiSound, rate?: number): void {
+    this.engine.play(UI_SOUND_IDS[kind], rate === undefined ? {} : { rate });
   }
 
   setScene(scene: SoundScene): void {
@@ -162,6 +198,15 @@ export class SoundDirector {
     else if (event === "choose") this.engine.play("choose");
     else if (event === "record") this.engine.play("record");
     else if (event === "death") this.engine.play("defeat");
+    // Сундук падает с элиты в тот же миг, что звучит её гибель: удар со
+    // сдвигом не сливается с ней в один звук.
+    else if (event === "chestDrop") this.engine.play("chestDrop", { delay: 0.15 });
+    else if (event === "chestRattle" || event === "chestOpen" || event === "bossPhase") this.engine.play(event);
+  }
+
+  /** Звон награды сундука: лесенкой вверх, по одному на награду. */
+  chestReveal(index: number): void {
+    this.engine.play("chestReveal", { rate: revealRate(index) });
   }
 
   cues(cues: RunCues): void {

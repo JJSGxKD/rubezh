@@ -25,12 +25,12 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0151. Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](T-0150-display-name-on-login.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](archive/T-0150-display-name-on-login.md)
 
 ## Зачем
 

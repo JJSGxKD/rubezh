@@ -4,6 +4,7 @@ import { Button, Modal, SegmentedControl } from "../../design-system/components"
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/run";
 import { ItemIcon, ItemTile } from "../item-icons";
+import { isEvolutionWeapon, slotEvolution } from "./evolution-hints";
 import { RunBoostList } from "./run-boosts-lazy";
 import { CategoryLabel } from "./SlotSummary";
 
@@ -28,12 +29,12 @@ export function RunStatsSheet(props: { inspection: RunInspection; onClose(): voi
       placement="bottom"
       onDismiss={props.onClose}
       footer={
-        <Button variant="ghost" block onClick={props.onClose}>
+        <Button track="close" variant="ghost" block onClick={props.onClose}>
           {t("app.close")}
         </Button>
       }
     >
-      <SegmentedControl
+      <SegmentedControl track="tabs"
         label={t("run.stats.title")}
         items={TABS.map((id) => ({ id, label: t(`run.stats.tab.${id}`) }))}
         activeId={tab}
@@ -105,8 +106,11 @@ function WeaponStats(props: { inspection: RunInspection }): ReactNode {
               <ItemIcon kind="weapon" id={weapon.id} size={18} />
             </span>
             <span className="min-w-0 flex-1 truncate font-display text-base font-bold text-text">{t(`weapon.${weapon.id}.name`)}</span>
-            <span className="text-xs text-text-muted">{t("run.stats.level", { level: weapon.level, max: weapon.maxLevel })}</span>
+            <span className="text-xs text-text-muted">
+              {isEvolutionWeapon(weapon.id) ? t("run.evolution.badge") : t("run.stats.level", { level: weapon.level, max: weapon.maxLevel })}
+            </span>
           </div>
+          <EvolutionRow inspection={props.inspection} weaponId={weapon.id} />
           <Rows rows={weaponRows(weapon)} />
           <div className="grid gap-1">
             <span className="surface-sunken block h-1.5 overflow-hidden rounded-pill">
@@ -127,6 +131,18 @@ function WeaponStats(props: { inspection: RunInspection }): ReactNode {
       ))}
     </ul>
   );
+}
+
+/** Рецепт эволюции под оружием: ждёт или готово; у сделанной и отсутствующей строки нет. */
+function EvolutionRow(props: { inspection: RunInspection; weaponId: string }): ReactNode {
+  const progress = slotEvolution({ weapons: props.inspection.weapons, passives: props.inspection.passives }, props.weaponId);
+  if (progress === null || (progress.state !== "waiting" && progress.state !== "ready")) return null;
+  const evolution = t(`weapon.${progress.evolutionId}.name`);
+  const text =
+    progress.state === "ready"
+      ? t("run.evolution.ready", { evolution })
+      : t("run.evolution.recipe", { evolution, passive: t(`passive.${progress.passiveId}.name`) });
+  return <p className="surface-sunken rounded-md px-2.5 py-1.5 text-xs text-text-muted">{text}</p>;
 }
 
 /** Строки оружия — только осмысленные для его поведения: у ауры нет пробивания. */

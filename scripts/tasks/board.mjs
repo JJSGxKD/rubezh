@@ -14,6 +14,41 @@ import { zonesOverlap } from "./zones.mjs";
  */
 export const REWORK_LABEL = "доработка";
 
+/**
+ * Метка PR «нужно решение или действие владельца» (tasks/README.md, «Приёмка»):
+ * секрет, прод, проверка на телефоне, вопрос продукта. Ставит и снимает
+ * тимлид; скрипт метку не создаёт.
+ */
+export const OWNER_LABEL = "ждёт владельца";
+
+const CI_RED_CONCLUSIONS = ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"];
+const CI_RED_STATES = ["FAILURE", "ERROR"];
+
+/**
+ * Красный ли CI у PR: в `statusCheckRollup` есть упавший `CheckRun` или
+ * `StatusContext`. Идущие проверки (`conclusion` пусто) красными не считаются.
+ */
+export function isCiRed(pr) {
+  const rollup = pr?.statusCheckRollup;
+  if (!Array.isArray(rollup)) return false;
+  return rollup.some((check) => CI_RED_CONCLUSIONS.includes(check?.conclusion) || (check?.__typename === "StatusContext" && CI_RED_STATES.includes(check?.state)));
+}
+
+const hasLabel = (pr, name) => (pr.labels ?? []).some((label) => label?.name === name);
+
+/**
+ * Кого ждёт открытый PR задачи: `{ who: "owner" | "lead" | "executor", why }`.
+ * Порядок проверок важен: метка владельца сильнее доработки, вопрос в
+ * черновике важнее самого факта черновика, красный CI — раньше приёмки.
+ */
+export function waitingOn(pr) {
+  if (hasLabel(pr, OWNER_LABEL)) return { who: "owner", why: "решение владельца" };
+  if (hasLabel(pr, REWORK_LABEL)) return { who: "executor", why: "доработка" };
+  if (pr.isDraft) return /^## Вопросы\s*$/m.test(pr.body ?? "") ? { who: "lead", why: "вопрос" } : { who: "executor", why: "черновик" };
+  if (isCiRed(pr)) return { who: "executor", why: "CI красный" };
+  return { who: "lead", why: "приёмка" };
+}
+
 /** Колонки в порядке показа: сначала то, что исполнителю нужно прямо сейчас. */
 export const COLUMNS = [
   { key: "rework", title: "Доработка" },
@@ -55,9 +90,11 @@ function compareTasks(epicOrder) {
  *
  * - `tasks` — поля задач с `fileName` (как в `readTasks`);
  * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
- * - `prs` — открытые PR `{ number, headRefName, isDraft, labels? }` или `null`, если
- *   список получить не удалось (нет `gh`): тогда «На ревью» сливается с «В работе»;
- *   PR с меткой `REWORK_LABEL` — «Доработка», будь он хоть черновиком;
+ * - `prs` — открытые PR `{ number, headRefName, isDraft, labels?, body?, statusCheckRollup? }`
+ *   или `null`, если список получить не удалось (нет `gh`): тогда «На ревью» сливается с
+ *   «В работе». PR с меткой `REWORK_LABEL` — «Доработка», будь он хоть черновиком; остальные
+ *   PR, и черновики тоже, — «На ревью»; «В работе» — только ветка без PR. У записей «На
+ *   ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
@@ -67,10 +104,7 @@ function compareTasks(epicOrder) {
  */
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   const branches = new Set(taken);
-  const openPrs = new Map((prs ?? []).filter((pr) => !pr.isDraft).map((pr) => [pr.headRefName, pr.number]));
-  const reworkPrs = new Map(
-    (prs ?? []).filter((pr) => (pr.labels ?? []).some((label) => label?.name === REWORK_LABEL)).map((pr) => [pr.headRefName, pr.number]),
-  );
+  const openPrs = new Map((prs ?? []).map((pr) => [pr.headRefName, pr]));
   const byId = new Map(tasks.map((task) => [task.id, task]));
   const result = Object.fromEntries(COLUMNS.map((column) => [column.key, []]));
 
@@ -80,11 +114,10 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     else if (task.status === "cancelled") result.cancelled.push({ task });
     else if (task.status === "draft") result.draft.push({ task });
     else if (branches.has(task.id)) {
-      const rework = reworkPrs.get(`task/${task.id}`);
       const pr = openPrs.get(`task/${task.id}`);
-      if (rework !== undefined) result.rework.push({ task, pr: rework });
-      else if (pr === undefined) result.inProgress.push({ task });
-      else result.review.push({ task, pr });
+      if (pr === undefined) result.inProgress.push({ task });
+      else if (hasLabel(pr, REWORK_LABEL)) result.rework.push({ task, pr: pr.number, waiting: waitingOn(pr) });
+      else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
     } else if (task.status === "in-progress") {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
       // задачу всё равно считаем занятой — статус в файле говорит, что её взяли.
@@ -131,11 +164,11 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
 /**
  * Что показать в `pnpm task next`: задачи колонки (свободные или на
  * доработке) с подходящим `runner` (по умолчанию `any`; `local` включает
- * `any`; `human` — никогда) и, если заданы, только этого `executor` и
+ * `any`; `owner` — `any` и `local`; `human` — никогда) и, если заданы, только этого `executor` и
  * `effort`. Порядок колонки сохраняется.
  */
 export function nextTasks(entries, { runner = "any", executor, effort } = {}) {
-  const runners = runner === "local" ? ["any", "local"] : ["any"];
+  const runners = runner === "owner" ? ["any", "local", "owner"] : runner === "local" ? ["any", "local"] : ["any"];
   return entries.filter(
     (entry) =>
       runners.includes(entry.task.runner) &&
@@ -194,7 +227,7 @@ export function statusBadge(entry) {
 }
 
 /** Задачи `human` делает человек: потоку они не нужны и в сводку потоков не попадают. */
-const STREAM_RUNNERS = ["any", "local"];
+const STREAM_RUNNERS = ["any", "local", "owner"];
 
 /** Сколько задач потока показывают таблица и команда: дальше — «+N». */
 export const STREAM_TASKS_SHOWN = 5;
@@ -207,7 +240,7 @@ function rankIn(list, value) {
   return index === -1 ? list.length : index;
 }
 
-/** Порядок потоков: модель, уровень от лёгкого к тяжёлому, потом `any` перед `local`. */
+/** Порядок потоков: модель, уровень от лёгкого к тяжёлому, потом `any`, `local`, `owner`. */
 function compareStreams(a, b) {
   return (
     rankIn(EXECUTORS, a.executor) - rankIn(EXECUTORS, b.executor) ||
@@ -261,16 +294,16 @@ export function streamsSummary(board) {
   return { streams: sorted(total), epics: Object.fromEntries([...perEpic].map(([epic, map]) => [epic, sorted(map)])) };
 }
 
-/** Имя потока для людей: «sonnet-5.5 / high», для `local` — с пометкой. */
+/** Имя потока для людей: «sonnet-5.5 / high», для `local` и `owner` — с пометкой. */
 export function streamLabel(stream) {
   const base = `${stream.executor} / ${stream.effort}`;
-  return stream.runner === "local" ? `${base} · local` : base;
+  return stream.runner === "any" ? base : `${base} · ${stream.runner}`;
 }
 
 /** Короткое имя для значка: «sonnet·high», версия модели отрезана. */
 function streamShortLabel(stream) {
   const model = stream.executor.replace(/-\d+(?:\.\d+)*$/, "");
-  return `${model}·${stream.effort}${stream.runner === "local" ? "·local" : ""}`;
+  return `${model}·${stream.effort}${stream.runner === "any" ? "" : `·${stream.runner}`}`;
 }
 
 /**
@@ -351,4 +384,73 @@ export function epicStreamsBadge(streams) {
   const shown = active.slice(0, EPIC_BADGE_STREAMS_SHOWN).map((stream) => `${streamShortLabel(stream)} ${String(stream.now.length)}`);
   const rest = active.length - EPIC_BADGE_STREAMS_SHOWN;
   return badge(`сейчас: ${shown.join(", ")}${rest > 0 ? ` +${String(rest)}` : ""}`, "brightgreen");
+}
+
+const MOSCOW_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** День по Москве (UTC+3, без перехода на летнее время) как `YYYY-MM-DD`: сдвиг на три часа, без поясных библиотек. */
+export function moscowDay(date) {
+  return new Date(date.getTime() + MOSCOW_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Счётчики вверху доски. `mergedPrs` — влитые PR задач (`{ mergedAt }`) или `null`,
+ * `now` — `Date`. `waitOwner` — PR с ожиданием владельца плюс свободные `owner` и `human`.
+ * `batch` — ближайшая пачка с невыполненными задачами (не в `done` и не в `cancelled`)
+ * и сколько их осталось; `null` — таких пачек нет.
+ */
+export function boardCounters(board, mergedPrs, now) {
+  const prEntries = [...board.review, ...board.rework];
+  const today = moscowDay(now);
+  const left = new Map();
+  for (const entries of Object.values(board)) {
+    for (const { task } of entries) {
+      const number = batchNumber(task);
+      if (number === null || task.status === "done" || task.status === "cancelled") continue;
+      left.set(number, (left.get(number) ?? 0) + 1);
+    }
+  }
+  const first = left.size === 0 ? null : Math.min(...left.keys());
+  return {
+    free: board.free.length,
+    inProgress: board.inProgress.length,
+    review: board.review.length,
+    rework: board.rework.length,
+    waitLead: prEntries.filter((entry) => entry.waiting?.who === "lead").length,
+    waitOwner: prEntries.filter((entry) => entry.waiting?.who === "owner").length + board.free.filter((entry) => ["owner", "human"].includes(entry.task.runner)).length,
+    mergedToday: (mergedPrs ?? []).filter((pr) => moscowDay(new Date(pr.mergedAt)) === today).length,
+    batch: first === null ? null : { number: first, left: left.get(first) },
+  };
+}
+
+/**
+ * Сколько кругов доработки прошёл PR: по одному коммиту `chore(tasks): Продолжить
+ * T-NNNN после ответа` на круг (их делает `pnpm task resume`). `pr.commits` — как
+ * в ответе `gh pr list --json commits`; нет поля — ноль.
+ */
+export function reworkRounds(pr, id) {
+  const headline = `chore(tasks): Продолжить ${id} после ответа`;
+  return (pr?.commits ?? []).filter((commit) => commit?.messageHeadline === headline).length;
+}
+
+/**
+ * Значение строки `Запустил:` из описания PR или `null`. Регулярка та же, что в
+ * `scripts/release/pr-check.mjs` (T-0207): `board.mjs` оттуда не импортирует,
+ * поэтому она повторена, а тест сверяет обе на одних примерах.
+ */
+export function launchedBy(body) {
+  const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n");
+  for (const line of lines) {
+    const match = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u.exec(line.trimEnd());
+    if (match) return match[1];
+  }
+  return null;
+}
+
+/** Целые сутки от `since` (ISO-строка) до `now` (`Date`); даты нет или она битая — `null`, из будущего — 0. */
+export function hangingDays(since, now) {
+  if (since === null || since === undefined) return null;
+  const from = new Date(since).getTime();
+  if (Number.isNaN(from)) return null;
+  return Math.max(0, Math.floor((now.getTime() - from) / 86_400_000));
 }

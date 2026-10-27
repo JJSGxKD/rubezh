@@ -18,7 +18,7 @@ export class ReferralsController {
   @Get()
   async mine(@Req() request: unknown): Promise<{ data: { referrals: ReferralRow[]; activated: number; rewardCoins: number } }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(REFERRAL_LIMITS.read, account.accountId))) throw new RateLimitedError("Слишком часто — подождите");
+    if (!(await this.limiter.consume(REFERRAL_LIMITS.read, account.accountId))) throw new RateLimitedError("Слишком часто — подожди");
     return { data: await this.referrals.mine(account.accountId) };
   }
 }

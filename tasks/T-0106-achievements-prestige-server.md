@@ -9,6 +9,7 @@ author: claude-lead2-16
 size: M
 depends_on:
   - T-0105
+  - T-0210
 zones:
   - backend/api/src/modules/achievements/**
   - backend/api/src/modules/tasks/task-rules.ts
@@ -16,7 +17,6 @@ zones:
   - backend/api/src/modules/tasks/tasks.repository.ts
   - backend/api/src/modules/friends/friends.repository.ts
   - backend/api/src/modules/friends/friends.service.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/achievements.test.ts
   - backend/api/test/achievements.integration.test.ts
   - backend/api/test/tasks.test.ts
@@ -35,23 +35,26 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0106. Достижения с престижем: сервер, 49 определений, редкость «есть у N%»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](T-0210-notifications-read-by-action.md)
 
 ## Зачем
 
 Достижений десять, это числа без лица: нет категорий, лестниц, скрытых, редкости и очков престижа. После задачи на сервере 49 достижений в четырёх категориях с очками престижа, у каждого видно «есть у N% игроков», у игрока три любимых и сумма престижа. Цель, которая не влияет на баланс (`docs/39-retention-mechanics.md` К1, Р102: награды — престиж и немного мягкой валюты, без боевой силы). Витрину рисует T-0107.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** «Нормальная» новым клиентом не выдаётся, «Лёгкая» — только обучающий первый забег. Лестницы с фильтром `normal` или `easy` (`ach_normal_5` и подобные) переводятся на `hard` с теми же числами, если лестница `hard` с ними не совпадает, иначе — убираются; скрытые на `hard` — как были.
 
 - **Достижения остаются в `task_def` с периодом `achievement`, отдельных таблиц определений нет.** Причина по коду: прогресс по забегу (`onRun`), защита от повтора по `run_id` (`task_run`), забор с идемпотентным начислением, причина `achievement_reward` со своим потолком кошелька, знак меню и редактирование из панели (`tasks.edit`) уже работают на этих таблицах. Вторая пара таблиц дублировала бы всё это. Новое — колонки определения и две таблицы: редкость и избранное, и отдельный модуль `achievements` с витриной, редкостью и избранным.
 - **Лестница — несколько строк с общим `ladder` и номером ступени `rung`.** Каждая ступень считает с нуля независимо (значение строки не больше её цели), как сейчас `ach_survive_*`. Престиж у каждой ступени свой.
@@ -84,6 +87,9 @@ batch: 2
 | Друзья, `friends` (лестница `friends`) | `ach_friends_1` 1 «Не один»; `ach_friends_5` 5 «Свои люди»; `ach_friends_10` 10 «Отряд»; `ach_friends_25` 25 «Целый рубеж» | 5/10/20/40 | 100/200/400/800 |
 
 Итого 49 (11 + 13 + 21 + 4), из них девять существующих. Виды `xp_collected`, `weapon_runs`, `element_runs`, `boost_runs`, `difficulty_survive_sec` и фильтры (`filter`) — из T-0104.
+
+Решение `claude-lead-1` от 24.10.2026: задача ждёт T-0210 — обе правят
+`friends.service.ts`, параллельно их не берут.
 
 ## Как сейчас
 
@@ -166,7 +172,7 @@ batch: 2
 - Подтверждено `claude-lead-1` 13.10.2026: `achievement_unlocked` не меняет смысл (после забора), расширяется полями; серверное событие «открыто» не заводим.
 - Точка разреза, если задача не влезет в M: редкость (шаги 6–7, таблица `achievement_rarity`) выносится отдельной задачей; витрина T-0107 тогда показывает достижения без процента.
 - T-0110 (сезон рейтинга) тоже дописывает `friends.repository.ts` (у него он в `shared`); оба добавляют методы, конфликт решается сохранением обеих сторон.
-- Порог показа процента 100 игроков — на закрытом тесте его не достичь; участник 1 может поставить в панели меньше.
+- Порог показа процента 100 игроков — на закрытом тесте его не достичь; владелец может поставить в панели меньше.
 - Геймдизайнеру: цели лестниц и награды таблицы стартовые.
 
 ## Критерии приёмки
@@ -197,5 +203,5 @@ batch: 2
 
   ❓ **Нужно от команды**
 
-  • @участник1 — геймдизайнеру откалибровать цели, престиж и награды; решить порог показа процента для закрытого теста
+  • @владелец — геймдизайнеру откалибровать цели, престиж и награды; решить порог показа процента для закрытого теста
   ```

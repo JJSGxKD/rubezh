@@ -51,6 +51,7 @@ import { ProgressModule } from "../progress/progress.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { AdminDiagnosticsController } from "./admin-diagnostics.controller.js";
+import { AdminRequestsController } from "./admin-requests.controller.js";
 import { AdminExportsController } from "./admin-exports.controller.js";
 import { AdminExportsService } from "./admin-exports.service.js";
 import { AdminFxController } from "./admin-fx.controller.js";
@@ -64,6 +65,8 @@ import { AdminSessionController } from "./admin-session.controller.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 import { AdminSessionService } from "./admin-session.service.js";
 import { ADMIN_SESSION_STORE, RedisAdminSessionStore } from "./admin-session.store.js";
+import { PrismaRequestJournalRepository, REQUEST_JOURNAL_READER } from "../request-journal/request-journal.repository.js";
+import { RequestJournalService } from "../request-journal/request-journal.service.js";
 import { PanelLoginService } from "./panel-login.service.js";
 import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js";
 import { RoleConfirmations } from "./role-confirmations.js";
@@ -104,6 +107,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
+    AdminRequestsController,
   ],
   providers: [
     AdminSessionService,
@@ -119,7 +123,13 @@ import { RoleConfirmations } from "./role-confirmations.js";
     PanelLoginService,
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },
     RoleConfirmations,
+    // Журнал запросов читает только панель; запись — в глобальном `RequestJournalModule`
+    { provide: REQUEST_JOURNAL_READER, useClass: PrismaRequestJournalRepository },
+    RequestJournalService,
   ],
-  exports: [PanelLoginService, RoleConfirmations],
+  // Гард панели закрывает маршруты модулей, у которых контроллер вне `AdminModule`.
+  // Он экспортируется вместе с сервисом сессий: `@UseGuards(...)` Nest собирает в
+  // модуле контроллера, а не здесь (то же, что у `AuthGuard` в `auth.module.ts`).
+  exports: [PanelLoginService, RoleConfirmations, AdminSessionGuard, AdminSessionService],
 })
 export class AdminModule {}

@@ -233,50 +233,44 @@ describe("что и куда уходит", () => {
   });
 });
 
-describe("упоминания участников", () => {
-  // Юзернеймы живут в секретах: репозиторий публичный. Главное здесь — чтобы
+describe("упоминание владельца", () => {
+  // Юзернейм живёт в секрете: репозиторий публичный. Главное здесь — чтобы
   // юзернейм не утёк туда, где его увидят посторонние, и чтобы ненастроенный
-  // секрет не превращал сводку в «@участник1» без смысла.
-  const usernames = { участник1: "lead_dev", участник3: "game_designer" };
+  // секрет не превращал сводку в «@владелец» без смысла.
+  const usernames = { владелец: "lead_dev" };
 
   it("заглушка становится упоминанием", () => {
-    expect(withMentions("@участник1, проверь на телефоне", usernames).text).toBe("@lead_dev, проверь на телефоне");
-  });
-
-  it("@команда зовёт всех, у кого задан юзернейм", () => {
-    expect(withMentions("@команда — голосуем", usernames).text).toBe("@lead_dev @game_designer — голосуем");
+    expect(withMentions("@владелец, проверь на телефоне", usernames).text).toBe("@lead_dev, проверь на телефоне");
   });
 
   it("юзернейм не задан — имя роли, и сказано, какого секрета не хватило", () => {
-    const { text, missing } = withMentions("@Участник2, нужна проверка", usernames);
+    const { text, missing } = withMentions("@Владелец, нужна проверка", {});
 
-    expect(text).toBe("Участник 2, нужна проверка");
-    expect(missing).toEqual(["TEAM_TELEGRAM_MEMBER_2"]);
+    expect(text).toBe("Владелец, нужна проверка");
+    expect(missing).toEqual(["TEAM_TELEGRAM_OWNER"]);
   });
 
   it("внутри кода заглушка не трогается: там синтаксис описывают, а не зовут", () => {
-    expect(withMentions("пишите <code>@участник1</code>", usernames).text).toBe("пишите <code>@участник1</code>");
+    expect(withMentions("пишите <code>@владелец</code>", usernames).text).toBe("пишите <code>@владелец</code>");
   });
 
-  it("похожее слово заглушкой не считается", () => {
-    expect(withMentions("@участник12 и @командами", usernames).text).toBe("@участник12 и @командами");
+  it("похожее слово и прежние заглушки упоминанием не считаются", () => {
+    expect(withMentions("@владельцы, @участник1 и @команда", usernames).text).toBe("@владельцы, @участник1 и @команда");
   });
 
   it("юзернейм берётся с @ и без, а мусор отбрасывается без показа значения", () => {
-    const { usernames: parsed, invalid } = teamUsernames({
-      TEAM_TELEGRAM_MEMBER_1: "@lead_dev",
-      TEAM_TELEGRAM_MEMBER_2: "https://t.me/partner",
-      TEAM_TELEGRAM_MEMBER_3: " game_designer ",
-    });
+    expect(teamUsernames({ TEAM_TELEGRAM_OWNER: " @lead_dev " }).usernames).toEqual({ владелец: "lead_dev" });
 
-    expect(parsed).toEqual({ участник1: "lead_dev", участник3: "game_designer" });
-    expect(invalid).toEqual(["TEAM_TELEGRAM_MEMBER_2"]);
+    const { usernames: parsed, invalid } = teamUsernames({ TEAM_TELEGRAM_OWNER: "https://t.me/lead_dev" });
+
+    expect(parsed).toEqual({});
+    expect(invalid).toEqual(["TEAM_TELEGRAM_OWNER"]);
   });
 
-  it("в сводке — юзернеймы, в черновике поста — никогда: он уйдёт в публичный канал", () => {
+  it("в сводке — юзернейм, в черновике поста — никогда: он уйдёт в публичный канал", () => {
     const team = parseChatTarget("-1001234567890:57");
     const drafts = parseChatTarget("-1001234567890:142");
-    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@участник1, проверь\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\n@участник1 проверил`;
+    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@владелец, проверь\n\n## ${CHANNEL_SECTION}\n🎮 **ПОСТ**\n\n@владелец проверил`;
 
     const { messages } = plannedMessages(body, { team, drafts }, usernames);
     const text = (target: unknown) =>
@@ -287,15 +281,15 @@ describe("упоминания участников", () => {
 
     expect(text(team)).toContain("@lead_dev, проверь");
     expect(text(drafts)).not.toContain("lead_dev");
-    expect(text(drafts)).toContain("участник 1 проверил");
+    expect(text(drafts)).toContain("владелец проверил");
   });
 
   it("незаданный юзернейм в сводке — предупреждение в прогоне, а не молчание", () => {
-    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@участник2, проверь`;
+    const body = `## ${TEAM_SECTION}\n📋 **СВОДКА**\n\n@владелец, проверь`;
 
-    const { warnings } = plannedMessages(body, { team: parseChatTarget("-100123"), drafts: null }, usernames);
+    const { warnings } = plannedMessages(body, { team: parseChatTarget("-100123"), drafts: null }, {});
 
-    expect(warnings.join(" ")).toContain("TEAM_TELEGRAM_MEMBER_2");
+    expect(warnings.join(" ")).toContain("TEAM_TELEGRAM_OWNER");
   });
 });
 

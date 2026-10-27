@@ -1,8 +1,11 @@
 import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
 import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
+import { Frame, FriendsView, TasksView, WheelView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -138,10 +141,10 @@ describe("рекорд", () => {
 describe("отсчёт в плитке", () => {
   // Одно правило точности со всеми отсчётами (`formatCountdown`): вниз не округляем.
   it("часы не округляются вниз, минуты — вверх, нуля минут нет", () => {
-    expect(formatCountdown(5 * HOUR + 50 * 60_000)).toBe("5 ч 50 мин");
-    expect(formatCountdown(HOUR)).toBe("1 ч");
-    expect(formatCountdown(59.5 * 60_000)).toBe("1 ч");
-    expect(formatCountdown(20 * 1000)).toBe("1 мин");
+    expect(formatCountdown(5 * HOUR + 50 * 60_000)).toBe("5\u00a0ч\u00a050\u00a0мин");
+    expect(formatCountdown(HOUR)).toBe("1\u00a0ч");
+    expect(formatCountdown(59.5 * 60_000)).toBe("1\u00a0ч");
+    expect(formatCountdown(20 * 1000)).toBe("1\u00a0мин");
   });
 
   it("плитка берёт отсчёт у formatCountdown, а грубого правила больше нет", async () => {
@@ -150,5 +153,46 @@ describe("отсчёт в плитке", () => {
     const source = readFileSync(new URL("../src/screens/home-widgets.tsx", import.meta.url), "utf8");
     expect(source).toContain("formatCountdown(ms)");
     expect(source).not.toContain("roughCountdown");
+  });
+});
+
+describe("подсказка тихой плитки главной", () => {
+  // «Подарки друг / другу», «Крутка раз в / день»: без балансировки на 320 px
+  // последнее слово повисало на второй строке (design/art/ui-ux.md, U-07).
+  it("переносится сбалансированно, а не с висячим словом", () => {
+    const tile = renderToStaticMarkup(createElement(FriendsView, { face: { state: "idle" }, size: "tile" }));
+    expect(tile).toContain("Подарки друг другу");
+    expect(tile).toContain("text-balance");
+  });
+});
+
+// Кольцо заданий без числа (design/art/ui-ux.md, U-10): пустая дорожка до
+// ответа сервера читалась сломанным значком. Без числа в кольце — значок
+// заданий, с числом — как раньше.
+describe("кольцо заданий без числа", () => {
+  it("в тихой плитке в кольце значок заданий", () => {
+    const html = renderToStaticMarkup(createElement(TasksView, { face: { state: "idle" }, size: "tile" }));
+    expect(html).toContain("lucide-list-checks");
+  });
+
+  it("с прогрессом значка нет — его место у числа", () => {
+    const html = renderToStaticMarkup(createElement(TasksView, { face: { state: "progress", done: 1, total: 4 }, size: "tile" }));
+    expect(html).not.toContain("lucide-list-checks");
+  });
+});
+
+describe("подпись виджета читается и на готовом", () => {
+  // Готовый виджет подкрашен тоном сильнее (`widget-surface-ready`), и серая
+  // подпись падала до 4,47:1 при пороге 4,5 (design/art/src/contrast-audit.mjs,
+  // ландшафт). Готовый ставит подписи основной текст — он и так зовёт.
+  it("готовый виджет переключает подпись на основной текст, обычный — нет", () => {
+    const frame = (isReady: boolean) => renderToStaticMarkup(createElement(Frame, { id: "wheel", size: "hero", index: 0, ready: isReady, children: "x" }));
+    expect(frame(true)).toContain("[--widget-label:var(--color-text)]");
+    expect(frame(false)).not.toContain("--widget-label");
+  });
+
+  it("подпись берёт цвет из переменной, по умолчанию — приглушённый", () => {
+    const html = renderToStaticMarkup(createElement(WheelView, { face: wheelFace(WHEEL, true, NOW, true), size: "hero", now: NOW }));
+    expect(html).toContain("text-[var(--widget-label,var(--color-text-muted))]");
   });
 });

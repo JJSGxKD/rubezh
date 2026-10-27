@@ -176,22 +176,17 @@ export function splitMessage(text, limit = TELEGRAM_LIMIT) {
 }
 
 /**
- * Участники команды для упоминаний. Юзернеймы — в секретах окружения, а не в
- * репозитории: он публичный, а светить свой юзернейм хотят не все. В описании
- * PR пишется заглушка `@участник1`, бот при отправке подставляет юзернейм.
+ * Кого бот зовёт по имени. Юзернейм — в секрете окружения, а не в
+ * репозитории: он публичный. В описании PR пишется заглушка `@владелец`, бот
+ * при отправке подставляет юзернейм. Решает всё владелец, поэтому и зовут
+ * только его: от помощника действие просят в задаче, а не упоминанием.
  *
- * Упоминание — явная заглушка, а не каждое «участник 1» в тексте: упоминание
+ * Упоминание — явная заглушка, а не каждое «владелец» в тексте: упоминание
  * будит человека уведомлением, и оно нужно там, где от него что-то требуется,
  * а не везде, где он назван.
  */
-export const MEMBERS = [
-  { placeholder: "участник1", role: "участник 1", secret: "TEAM_TELEGRAM_MEMBER_1" },
-  { placeholder: "участник2", role: "участник 2", secret: "TEAM_TELEGRAM_MEMBER_2" },
-  { placeholder: "участник3", role: "участник 3", secret: "TEAM_TELEGRAM_MEMBER_3" },
-];
-/** `@команда` — все, у кого задан юзернейм. */
-const EVERYONE = "команда";
-const MENTION = /@(участник[123]|команда)(?![\p{L}\p{N}_])/giu;
+export const MEMBERS = [{ placeholder: "владелец", role: "владелец", secret: "TEAM_TELEGRAM_OWNER" }];
+const MENTION = /@(владелец)(?![\p{L}\p{N}_])/giu;
 
 /**
  * Юзернеймы из окружения. Значение с `@` или без; то, что не похоже на
@@ -217,22 +212,12 @@ export function teamUsernames(env) {
  */
 export function withMentions(html, usernames) {
   const missing = new Set();
-  const render = (member) => {
+  const replace = (_match, name) => {
+    const member = MEMBERS.find((candidate) => candidate.placeholder === name.toLowerCase());
     const username = usernames[member.placeholder];
     if (username === undefined) missing.add(member.secret);
-    return username === undefined ? member.role : `@${username}`;
-  };
-  const replace = (_match, name) => {
-    const key = name.toLowerCase();
-    let text;
-    if (key === EVERYONE) {
-      const present = MEMBERS.filter((member) => usernames[member.placeholder] !== undefined);
-      for (const member of MEMBERS) if (usernames[member.placeholder] === undefined) missing.add(member.secret);
-      text = present.length > 0 ? present.map(render).join(" ") : EVERYONE;
-    } else {
-      text = render(MEMBERS.find((member) => member.placeholder === key));
-    }
-    // «@Участник1, проверь…» в начале фразы не должно стать «участник 1, проверь…».
+    const text = username === undefined ? member.role : `@${username}`;
+    // «@Владелец, проверь…» в начале фразы не должно стать «владелец, проверь…».
     return name[0] === name[0].toUpperCase() ? text[0].toUpperCase() + text.slice(1) : text;
   };
   const text = html

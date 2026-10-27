@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макеты меты v2</title>
+<style>
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6; --elite: #ffd15c;
+    --weapon: #ffe066; --passive: #c47dff; --hp: #ff6f90; --xp: #b6ff4a; --danger: #ff5d5d; --success: #8ee86b;
+    --ground: #33506a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; }
+  h1 { font: 700 20px/1.2 system-ui, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 90ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .phone { width: 360px; height: 720px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .cap { width: 360px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .cap b { color: var(--text); }
+  .display { font-family: "Russo One", system-ui, sans-serif; letter-spacing: 0.01em; }
+  .scrim { position: absolute; inset: 0; background: rgb(29 28 49 / 0.8); }
+  .run { position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 45%, #3a5a74, var(--ground)); }
+  /* реликвия — как relic-frame в tokens.css */
+  .relic { position: relative; border-radius: 12px; padding: 22px 16px 18px; --tone: var(--elite);
+    background: radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--tone) 24%, transparent), transparent 72%),
+      linear-gradient(180deg, color-mix(in oklab, var(--raised) 85%, var(--tone)), var(--surface) 38%, var(--sunken));
+    border: 1px solid color-mix(in oklab, var(--tone) 60%, var(--border-strong));
+    box-shadow: 0 24px 48px -16px #000, inset 0 0 0 3px color-mix(in oklab, var(--bg) 75%, transparent), inset 0 0 0 4px color-mix(in oklab, var(--tone) 38%, transparent); }
+  .band { position: absolute; left: 32px; right: 32px; height: 10px; background: var(--tone); opacity: .75;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px; }
+  .band.top { top: 4px; } .band.bottom { bottom: 4px; }
+  .ribbon { position: relative; display: inline-flex; padding: 6px 32px; margin: 0 auto; }
+  .ribbon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ribbon span { position: relative; color: var(--on-accent); font: 700 19px/1.2 "Russo One", system-ui; white-space: nowrap; }
+  .center { text-align: center; }
+  .row { position: relative; display: flex; gap: 12px; align-items: center; border-radius: 8px; padding: 8px 12px 8px 14px; background: var(--sunken); overflow: hidden; --row: var(--weapon); }
+  .row.lit { background: linear-gradient(90deg, color-mix(in oklab, var(--row) 18%, transparent), transparent 72%), var(--sunken); box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row) 80%, transparent); }
+  .medal { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 2px var(--row); background: radial-gradient(closest-side, color-mix(in oklab, var(--row) 25%, transparent), transparent), var(--sunken); color: var(--row); font-size: 22px; flex: none; }
+  .name { font: 700 15px/1.2 "Russo One", system-ui; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font: 700 10px/1.5 "Russo One", system-ui; text-transform: uppercase; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 6px; padding: 14px; font: 700 17px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent);
+    background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; padding: 3px 10px; background: var(--sunken); font-size: 12px; }
+  .hud { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+  .bar { height: 8px; border-radius: 4px; background: #ffffff1c; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+  .screen { position:absolute; inset:0; padding: 16px; overflow:hidden; background:
+      radial-gradient(120% 55% at 50% -12%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%), var(--bg); }
+  .title { font: 700 26px/1.1 "Russo One", system-ui; margin: 4px 0 10px; }
+  .card { border-radius: 10px; padding: 12px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 1px 0 #ffffff0d, 0 10px 24px -14px #000; border: 1px solid #ffffff10; }
+  .tabs { display:flex; gap:4px; padding:4px; border-radius:10px; background: var(--sunken); margin-bottom: 10px; }
+  .tabs span { flex:1; text-align:center; padding:8px 4px; border-radius:7px; font: 600 13px/1 "Russo One", system-ui; color: var(--muted); }
+  .tabs span.on { background: linear-gradient(180deg, var(--raised), var(--surface)); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .lb { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background: var(--surface); margin-bottom:6px; }
+  .rank { width:26px; text-align:center; font: 700 15px/1 "Russo One", system-ui; }
+  .ava { width:30px; height:30px; border-radius:50%; background: #43425f; display:grid; place-items:center; font-size:13px; }
+  .tier { flex:1; text-align:center; }
+  .tier .gem { width:34px; height:34px; margin:0 auto 4px; border-radius:8px; display:grid; place-items:center; background: var(--sunken); box-shadow: inset 0 0 0 2px var(--border-strong); font-size:16px; }
+  .tier.ready .gem { box-shadow: inset 0 0 0 2px var(--accent), 0 0 14px #ff8f3f66; }
+  .tier.done .gem { opacity:.5; }
+  .ach { position:relative; border-radius:10px; padding:10px; background: var(--sunken); text-align:center; }
+  .ach .ico { width:44px; height:44px; margin:2px auto 6px; border-radius:50%; display:grid; place-items:center; font-size:20px; background: radial-gradient(closest-side, color-mix(in oklab, var(--r) 30%, transparent), transparent), var(--surface); box-shadow: inset 0 0 0 2px var(--r); }
+  .sil { height:64px; border-radius:10px; background: var(--sunken); display:grid; place-items:center; font-size:30px; }
+</style>
+</head>
+<body>
+<h1>Макеты меты v2 — испытание дня, очки заданий, сезон, кодекс, достижения, лента</h1>
+<p class="lead">Черновые макеты дизайнера (design/art/direction-v2.md §5.3) для задач с пометкой «макета нет»: T-0131, T-0105, T-0111, T-0127,
+T-0107, T-0176. Значки-эмодзи — заглушки вместо значков набора проекта; цвета — токены «Сумеречного рубежа».</p>
+<div class="grid">
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Главная</div>
+  <div class="card" style="position:relative; overflow:hidden; box-shadow: inset 0 0 0 1px #46d9c666, 0 10px 24px -14px #000;">
+    <div style="position:absolute; right:-30px; top:-30px; width:140px; height:140px; border-radius:50%; background: radial-gradient(closest-side, #46d9c644, transparent);"></div>
+    <div class="small" style="color: var(--secondary); font-weight:700; text-transform:uppercase; letter-spacing:.05em;">Испытание дня</div>
+    <div class="display" style="font-size:20px; margin:4px 0 2px;">Нож · Спешка</div>
+    <div class="small muted">Один забег для всех · заходов: 2 · до конца 6 ч 12 мин</div>
+    <div style="display:flex; gap:8px; margin-top:10px; align-items:center;"><span class="chip">🏆 твоё: 4:12 · 37-е место</span></div>
+  </div>
+  <div style="margin-top:14px" class="relic" >
+    <div class="band top"></div><div class="band bottom"></div>
+    <div class="center"><div class="ribbon"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M0 4h200l-12 16 12 16H0l12-16z" fill="#46d9c6"/></svg><span>Испытание дня</span></div></div>
+    <div style="display:flex; gap:8px; justify-content:center; margin:10px 0;">
+      <span class="chip">⚔ Нож</span><span class="chip">⚡ Спешка</span><span class="chip">🌱 seed дня</span>
+    </div>
+    <div style="display:flex; justify-content:center; gap:6px; margin-bottom:10px;"><span class="badge" style="background:#46d9c6; color:#062b26">заход 1</span><span class="badge" style="background:#43425f; color:var(--muted)">заход 2 — за рекламу</span></div>
+    <div class="small muted" style="margin-bottom:6px">Таблица дня</div>
+    <div class="lb"><span class="rank" style="color:var(--elite)">1</span><span class="ava">А</span><span style="flex:1">Аника</span><b class="display">9:31</b></div>
+    <div class="lb"><span class="rank">2</span><span class="ava">Б</span><span style="flex:1">Бажен</span><b class="display">8:02</b></div>
+    <div class="lb" style="box-shadow: inset 0 0 0 1px var(--accent)"><span class="rank">37</span><span class="ava">Т</span><span style="flex:1">Ты</span><b class="display">4:12</b></div>
+    <div style="margin-top:10px"><button class="btn">В бой</button></div>
+  </div>
+</div></div>
+<div class="cap"><b>Испытание дня (T-0131).</b> Виджет главной тоном бирюзы — набор дня, заходы и место. Лист — реликвия бирюзового тона: набор чипами, заходы, таблица дня с тобой в рамке.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Задания</div>
+  <div class="tabs"><span>Партнёры</span><span class="on">День</span><span>Неделя</span><span>Достиж.</span></div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;"><span class="display" style="font-size:15px">Очки дня</span><span class="display" style="color: var(--accent)">50 / 100</span></div>
+    <div class="bar" style="height:10px; margin:10px 0 12px; position:relative;"><i style="width:50%; background: linear-gradient(90deg, #ffb67f, var(--accent));"></i></div>
+    <div style="display:flex; gap:6px;">
+      <div class="tier done"><div class="gem">✓</div><div class="small muted">20</div></div>
+      <div class="tier ready"><div class="gem">🪙</div><div class="small" style="color:var(--accent)">40 · забрать</div></div>
+      <div class="tier"><div class="gem">💎</div><div class="small muted">60</div></div>
+      <div class="tier"><div class="gem">🎁</div><div class="small muted">80</div></div>
+      <div class="tier"><div class="gem" style="box-shadow: inset 0 0 0 2px var(--elite)">👑</div><div class="small muted">100</div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:10px; opacity:.85">
+    <div style="display:flex; justify-content:space-between;"><span>Победи 300 врагов</span><span class="badge" style="background:#ff8f3f22; color: var(--accent)">+10 очков</span></div>
+    <div class="bar" style="margin-top:8px"><i style="width:100%; background: var(--success)"></i></div>
+  </div>
+  <div class="card" style="margin-top:8px; opacity:.85">
+    <div style="display:flex; justify-content:space-between;"><span>Продержись 4 мин</span><span class="badge" style="background:#ff8f3f22; color: var(--accent)">+20 очков</span></div>
+    <div class="bar" style="margin-top:8px"><i style="width:40%; background: var(--accent)"></i></div>
+  </div>
+</div></div>
+<div class="cap"><b>Очки заданий (T-0105).</b> Полоса дня со ступенями-медальонами: готовая светится и подписана «забрать», забранная — галочкой, последняя — золотом. Очки задания — плашкой в строке задания.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Рейтинг</div>
+  <div class="tabs"><span class="on">Неделя</span><span>Всё время</span><span>Друзья</span></div>
+  <div class="relic" style="--tone: var(--elite); padding:14px 12px; margin-bottom:10px;">
+    <div class="band top" style="left:20px; right:20px;"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;"><span class="small">Награда за прошлый сезон: <b>400 🪙 и 25 престижа</b></span><span class="badge" style="background: var(--accent); color: var(--on-accent); padding:4px 8px;">Забрать</span></div>
+  </div>
+  <div style="display:flex; justify-content:space-between; align-items:baseline;"><span class="display" style="font-size:15px">Сезон 2–8 ноября</span><span class="small muted">до конца <b style="color:var(--text)">3 д 4 ч</b></span></div>
+  <div class="small muted" style="margin:2px 0 10px">Твоё лучшее на этой неделе: <b style="color: var(--accent)">4:12</b></div>
+  <div class="lb" style="background: linear-gradient(90deg, #ffd15c22, var(--surface));"><span class="rank" style="color:var(--elite)">1</span><span class="ava">А</span><span style="flex:1">Аника <span class="small muted">· 🏅 120</span></span><b class="display">14:20</b></div>
+  <div class="lb" style="background: linear-gradient(90deg, #d7dcef22, var(--surface));"><span class="rank" style="color:#d7dcef">2</span><span class="ava">Б</span><span style="flex:1">Бажен</span><b class="display">12:58</b></div>
+  <div class="lb" style="background: linear-gradient(90deg, #c9652a33, var(--surface));"><span class="rank" style="color:#ff9f60">3</span><span class="ava">В</span><span style="flex:1">Велимир</span><b class="display">11:07</b></div>
+  <div class="card" style="margin-top:8px">
+    <div class="display" style="font-size:14px; margin-bottom:6px;">Награды недели</div>
+    <div class="small muted">1 место — 💎 50 · 2–3 — 💎 25 · 4–10 — 🪙 800 · топ-50 % — 🪙 200</div>
+    <div class="bar" style="margin-top:8px"><i style="width:68%; background: var(--elite)"></i></div>
+    <div class="small muted" style="margin-top:4px">До порога «топ-50 %» — ещё 0:40 к лучшему</div>
+  </div>
+</div></div>
+<div class="cap"><b>Сезон недели (T-0111).</b> Награда прошлого сезона — реликвией сверху на всех вкладках; таймер и «твоё лучшее»; призовые места — подсветкой золото / серебро / бронза; награды недели — с прогрессом до порога.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Кодекс врагов</div>
+  <div class="card" style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between;"><span class="display" style="font-size:15px">Открыто 7 из 11</span><span class="small" style="color: var(--elite)">за полный — 💎 30</span></div>
+    <div class="bar" style="margin-top:8px; height:8px;"><i style="width:64%; background: var(--elite)"></i></div>
+  </div>
+  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+    <div><div class="sil">🐀</div><div class="small center" style="margin-top:4px">Крыса</div></div>
+    <div><div class="sil">🐺</div><div class="small center" style="margin-top:4px">Волк</div></div>
+    <div><div class="sil">💀</div><div class="small center" style="margin-top:4px">Костяк</div></div>
+    <div><div class="sil">🐦‍⬛</div><div class="small center" style="margin-top:4px">Ворон</div></div>
+    <div><div class="sil">😈</div><div class="small center" style="margin-top:4px">Бес</div></div>
+    <div><div class="sil">🫧</div><div class="small center" style="margin-top:4px">Слизень</div></div>
+    <div><div class="sil" style="box-shadow: inset 0 0 0 2px var(--elite)">🪆</div><div class="small center" style="margin-top:4px; color: var(--elite)">Матрёшка</div></div>
+    <div><div class="sil"><span style="filter: brightness(0) drop-shadow(0 0 1px #5b5980)">🐏</span></div><div class="small center muted" style="margin-top:4px">Неизвестный</div></div>
+    <div><div class="sil"><span style="filter: brightness(0) drop-shadow(0 0 1px #5b5980)">🛡</span></div><div class="small center muted" style="margin-top:4px">Неизвестный</div></div>
+  </div>
+  <div class="small muted center" style="margin-top:10px">Встретьте его в забеге — и запись откроется.</div>
+</div></div>
+<div class="cap"><b>Кодекс врагов (T-0127).</b> Гайдбук как коллекция: открытые — спрайтом v2 в нише, закрытые — чёрным силуэтом того же спрайта (облик уже есть в атласе), боссы — в золотой рамке. Прогресс к награде — сверху.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Достижения</div>
+  <div class="card" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <div><div class="small muted">Престиж</div><div class="display" style="font-size:24px; color: var(--elite);">🏅 145</div></div>
+    <div style="text-align:right"><div class="small muted">Открыто</div><div class="display" style="font-size:18px;">18 / 49</div></div>
+  </div>
+  <div class="small muted" style="margin-bottom:6px">Любимые</div>
+  <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:12px;">
+    <div class="ach" style="--r: #ffd15c"><div class="ico">🐉</div><div class="small">Гроза боссов</div><div class="small" style="color: var(--elite)">эпическое · 3 %</div></div>
+    <div class="ach" style="--r: #c47dff"><div class="ico">⏳</div><div class="small">Десять минут</div><div class="small" style="color: var(--passive)">редкое · 12 %</div></div>
+    <div class="ach" style="--r: #5b5980; border:1px dashed #5b5980; background:transparent"><div class="ico" style="box-shadow:none; background:none; color:var(--muted)">＋</div><div class="small muted">добавить</div></div>
+  </div>
+  <div class="display" style="font-size:14px; margin-bottom:6px;">Бой</div>
+  <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:8px;">
+    <div class="ach" style="--r: #46d9c6"><div class="ico">🗡</div><div class="small">1000 врагов</div><div class="small" style="color: var(--secondary)">обычное · 61 %</div></div>
+    <div class="ach" style="--r: #c47dff"><div class="ico">🔥</div><div class="small">Огонь и лёд</div><div class="small muted">2 / 3</div></div>
+    <div class="ach" style="--r: #43425f"><div class="ico" style="filter: grayscale(1)">🔒</div><div class="small muted">Скрытое</div><div class="small muted">«…рубеж»</div></div>
+  </div>
+</div></div>
+<div class="cap"><b>Достижения с престижем (T-0107).</b> Карточка — медальон в рамке цвета редкости (обычное — бирюза, редкое — фиолет, эпическое — золото) и «есть у N %». Три любимых — сверху, скрытое — замком с подсказкой.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="title">Главная</div>
+  <div class="card" style="height: 360px; opacity:.35; display:grid; place-items:center;"><span class="muted">виджеты главной</span></div>
+  <div style="margin-top:16px"><button class="btn">▶ Играть</button></div>
+  <div style="margin-top:12px; display:flex; align-items:center; gap:8px; justify-content:center;">
+    <span style="width:6px; height:6px; border-radius:50%; background: var(--success); box-shadow: 0 0 8px var(--success);"></span>
+    <span class="small"><b>Бажен</b> <span class="muted">одолел</span> <b style="color: var(--elite)">Матрёшку</b> <span class="muted">· 2 мин назад</span></span>
+  </div>
+  <div class="small muted center" style="margin-top:6px">сменяется через 5–8 с, плавно</div>
+  <div style="margin-top:22px;" class="card">
+    <div class="small muted" style="margin-bottom:8px">Другие строки ленты:</div>
+    <div class="small">● <b>Аника</b> <span class="muted">— 12 мин в одном забеге</span></div>
+    <div class="small" style="margin-top:6px">● <b>Велимир</b> <span class="muted">открыл</span> <b style="color: var(--elite)">большой сундук</b></div>
+    <div class="small" style="margin-top:6px">● <b>Мирослава</b> <span class="muted">— эволюция</span> <b style="color: var(--passive)">«Звездопад»</b></div>
+  </div>
+</div></div>
+<div class="cap"><b>Лента живых событий (T-0176).</b> Строка под «Играть»: живая точка, имя, событие с акцентом цветом события (босс, сундук — золото, эволюция — фиолет), время. Мир живёт и без тебя — повод зайти в забег.</div></div>
+
+</div>
+<script>document.body.dataset.ready = "1";</script>
+</body>
+</html>

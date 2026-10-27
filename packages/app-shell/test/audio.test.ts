@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
-import type { RunCues } from "@bh/core-game";
+import type { BossSnapshot, RunCues } from "@bh/core-game";
 import { volumeCurve } from "../src/audio/audio-engine";
-import { DEFAULT_VOLUMES } from "../src/audio";
+import { DEFAULT_VOLUMES, bossPhaseRaised } from "../src/audio";
 import { LAB_OVERRIDES_KEY, readLabOverrides, recipeSchema } from "../src/audio/lab-overrides";
 import { BUSES, SOUND_RECIPES, UI_SOUNDS } from "../src/audio/recipes";
-import { gemNotes, planCueSounds } from "../src/audio/sound-director";
+import { gemNotes, planCueSounds, revealRate } from "../src/audio/sound-director";
 import { sceneFor } from "../src/state/audio-sync";
 import { useSettings } from "../src/state/settings";
 import { initShell } from "../src/state/shell";
@@ -18,12 +18,14 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     heal: 0,
     magnet: 0,
     dynamite: 0,
+    freeze: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
     kills: 0,
     eliteKills: 0,
     eliteSpawns: 0,
+    bossSpawns: 0,
     xp: 0,
     fuses: 0,
     dashWarns: 0,
@@ -99,13 +101,42 @@ describe("план звуков забега", () => {
     expect(planCueSounds(cues({ strikes: 1 }), 0).map((request) => request.id)).toEqual(["storm"]);
   });
 
+  it("заморозка звучит колокольчиками на шине наград, динамит — своим звуком", () => {
+    expect(planCueSounds(cues({ freeze: 1 }), 0).map((request) => request.id)).toEqual(["freeze"]);
+    expect(planCueSounds(cues({ freeze: 1, dynamite: 1 }), 0).map((request) => request.id)).toEqual(["dynamite", "freeze"]);
+    expect(SOUND_RECIPES.freeze.bus).toBe("rewards");
+    expect(SOUND_RECIPES.freeze.layers.filter((layer) => layer.kind === "bell")).toHaveLength(3);
+  });
+
   it("«Очаг» тактом ауры не звучит даже при большом счёте; остальное оружие звучит", () => {
     expect(planCueSounds(cues({ weapons: { hearth: 3 } }), 0)).toEqual([]);
     expect(planCueSounds(cues({ weapons: { hearth: 1, spark: 1 } }), 0).map((request) => request.id)).toEqual(["spark"]);
-    for (const id of ["spark", "knife", "wardstone"]) {
+    for (const id of ["spark", "knife", "wardstone", "sting"]) {
       const ids = planCueSounds(cues({ weapons: { [id]: 1 } }), 0).map((request) => request.id);
       expect(ids, id).toEqual([id]);
     }
+  });
+
+  it("босс звучит своим рогом, а не рогом элиты; элита рядом с боссом — своим", () => {
+    expect(planCueSounds(cues({ eliteSpawns: 1, bossSpawns: 1 }), 0).map((request) => request.id)).toEqual(["bossArrive"]);
+    expect(planCueSounds(cues({ eliteSpawns: 2, bossSpawns: 1 }), 0).map((request) => request.id)).toEqual(["bossArrive", "eliteHorn"]);
+    expect(planCueSounds(cues({ eliteSpawns: 1 }), 0).map((request) => request.id)).toEqual(["eliteHorn"]);
+  });
+
+  it("смена фазы босса звучит на росте фазы того же босса, а не на его выходе", () => {
+    const boss = (phase: number, enemyId = "boss_seer"): BossSnapshot => ({ enemyId, hp: 100, maxHp: 100, phase, phases: 3 });
+    expect(bossPhaseRaised(null, boss(0))).toBe(false);
+    expect(bossPhaseRaised(boss(0), boss(0))).toBe(false);
+    expect(bossPhaseRaised(boss(0), boss(1))).toBe(true);
+    expect(bossPhaseRaised(boss(1), null)).toBe(false);
+    expect(bossPhaseRaised(boss(2), boss(1, "boss_other"))).toBe(false);
+  });
+
+  it("награды сундука звенят лесенкой вверх и не уходят выше октавы", () => {
+    const rates = [0, 1, 2, 3, 4, 5, 6, 9].map(revealRate);
+    expect(rates[0]).toBe(1);
+    for (let i = 1; i < 6; i++) expect(rates[i] ?? 0).toBeGreaterThan(rates[i - 1] ?? 0);
+    expect(Math.max(...rates)).toBe(2);
   });
 
   it("важное — впереди толпы: при потолке голосов режутся последние", () => {

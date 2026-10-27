@@ -25,6 +25,7 @@ import { installErrorReporting } from "./state/error-reporting";
 import { useFeedback } from "./state/feedback";
 import { useGraphics } from "./state/graphics";
 import { createId } from "./state/ids";
+import { useRadarSetting } from "./state/radar-setting";
 import { REPORT_QUEUE_KEY } from "./state/report-keys";
 
 /**
@@ -110,6 +111,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // (state/run-interrupted.ts).
   settleInterruptedRun();
   useGraphics.getState().hydrate();
+  useRadarSetting.getState().hydrate();
   useFeedback.getState().hydrate();
   useSettings.getState().hydrate(options.adapter.ui.defaultScreenMode);
   // Звук — после настроек: громкость игрока применяется с первого звука.
@@ -159,6 +161,11 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           import("./state/compensation")
             .then(({ syncCompensation }) => syncCompensation())
             .catch((error: unknown) => console.warn("Компенсация тестеру не загрузилась:", error));
+          // Флаги игрока — тогда же, после входа: арт тестерам и дальше все
+          // флаги клиента (docs/35-stage4-plan.md, Р143). Сбой — флаги выключены.
+          import("./state/flags")
+            .then(({ loadFlags }) => loadFlags())
+            .catch((error: unknown) => console.warn("Флаги не загрузились:", error));
           // Знаки меню и колокольчик — тогда же и на каждом возврате в
           // приложение (docs/35-stage4-plan.md §3.17).
           import("./state/badges-api")

@@ -36,6 +36,8 @@ export type ShapeKind =
   | "medkit"
   | "magnet"
   | "dynamite"
+  /** заморозка: ледяной кристалл о шести лучах */
+  | "freeze"
   /** сундук забега: корпус, крышка и замок */
   | "chest";
 
@@ -64,6 +66,9 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   // Кастер стоит в стороне и светится перед ударом: тяжёлая фигура-глаз и самый
   // тёмный оттенок.
   caster: { shape: "eye", color: 0xc2185b },
+  // Страж кольца: временный облик — ромб, который в красной гамме врагов не занят;
+  // рисунок для него должен нарисовать дизайнер.
+  cordon: { shape: "diamond", color: 0xb3203f },
 };
 
 /** Ранг врага на канве: обычный не задан. */
@@ -155,22 +160,32 @@ export const GEM_TIERS: readonly (ShapeLook & { minValue: number; radiusUnits: n
 ];
 
 /**
- * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит и три
- * сундука. Виды различаются силуэтом: крест, подкова, шашка с фитилём,
- * сундук с замком (§4.4). Золотой оттенок сундука крепнет с размером, а сам
+ * Подборы — по индексу вида в симуляции: аптечка, магнит, динамит, три
+ * сундука и заморозка. Виды различаются силуэтом: крест, подкова, шашка с
+ * фитилём, сундук с замком, шестилучевой кристалл (§4.4). Золотой оттенок сундука крепнет с размером, а сам
  * он крупнее прочих подборов: награда должна быть видна издалека.
  */
 export const PICKUP_LOOKS: readonly (ShapeLook & {
-  id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five";
+  id: "medkit" | "magnet" | "dynamite" | "chest_one" | "chest_three" | "chest_five" | "freeze";
   key: string;
   size: number;
+  /**
+   * Тон ореола на земле — только у сундуков. Тот же, что у яруса в окне
+   * вскрытия (`chest-rules.ts` оболочки): малый — жар очага, средний —
+   * бирюза оберегов, большой — золото элиты. Размер награды читается
+   * цветом света издалека, и окно продолжает то, что игрок видел на поле.
+   */
+  aura?: number;
 })[] = [
   { id: "medkit", key: "bh-medkit", shape: "medkit", color: 0xff5d5d, size: 1 },
   { id: "magnet", key: "bh-magnet-pickup", shape: "magnet", color: 0x5ccfff, size: 1.2 },
   { id: "dynamite", key: "bh-dynamite-pickup", shape: "dynamite", color: 0xff5d5d, size: 1.35 },
-  { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3 },
-  { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5 },
-  { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7 },
+  { id: "chest_one", key: "bh-chest-one", shape: "chest", color: 0xd9a441, size: 1.3, aura: 0xff8f3f },
+  { id: "chest_three", key: "bh-chest-three", shape: "chest", color: 0xf0bb3a, size: 1.5, aura: 0x46d9c6 },
+  { id: "chest_five", key: "bh-chest-five", shape: "chest", color: 0xffd44d, size: 1.7, aura: 0xffd15c },
+  // Холодный голубой: на красном поле больше ничего не бывает голубым, кроме
+  // магнита, а от того заморозка отличается силуэтом — лучами, а не подковой.
+  { id: "freeze", key: "bh-freeze-pickup", shape: "freeze", color: 0xa9c8ff, size: 1.25 },
 ];
 
 /**
@@ -192,6 +207,9 @@ export const WORLD_COLORS = {
   heal: 0x8ee86b,
   magnetWave: 0x5ccfff,
   dynamiteWave: 0xffb22e,
+  freezeWave: 0x7fb2ff,
+  /** заливка замерших врагов: бледно-голубая, отличимая и от красного тела, и от тонов состояний */
+  freezeTint: 0xcfe0ff,
   /** вспышка персонажа при попадании */
   hurt: 0xff6b6b,
   /**
@@ -215,6 +233,8 @@ export const WORLD_COLORS = {
   /** блик на грани кристалла */
   gemLight: 0xffffff,
   lightningCore: 0xf3f6fc,
+  /** раскалённое ядро падающего камня «Метеора» */
+  fireCore: 0xfff0c2,
   ground: 0x2b4152,
   groundLine: 0x33495b,
   /** светлые детали подборов: плашка аптечки, полюса магнита, фитиль */

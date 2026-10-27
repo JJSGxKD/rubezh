@@ -98,7 +98,7 @@ function BannerAction(props: { banner: ShopBanner; busy: string | null; now: num
   }
   if (banner.kind === "vip") {
     return (
-      <Button
+      <Button track="vip_order"
         variant="stars"
         glow
         disabled={busy !== null}
@@ -112,7 +112,7 @@ function BannerAction(props: { banner: ShopBanner; busy: string | null; now: num
     );
   }
   return (
-    <Button variant="secondary" onClick={props.onAction}>
+    <Button track="banner" variant="secondary" onClick={props.onAction}>
       {t(`shop.banner.${banner.kind}.cta`)}
     </Button>
   );
@@ -176,7 +176,7 @@ export function ShopBanners(props: {
               aria-label={t("shop.banner.position", { n: index + 1, total })}
               aria-current={index === current}
               onClick={() => scrollToIndex(index)}
-              className="inline-flex size-6 items-center justify-center"
+              className="hit-tall inline-flex size-6 items-center justify-center"
             >
               <span
                 aria-hidden="true"

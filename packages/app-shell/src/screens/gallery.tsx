@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -30,9 +30,12 @@ import "../i18n/gallery";
 import "../i18n/team";
 import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
+import type { ItemView } from "../state/items-api";
 import { BootScreen } from "./gates";
+import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
+import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
@@ -49,7 +52,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -85,6 +88,9 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
+          <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
+          <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
+          <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -117,14 +123,14 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.buttons")}</SectionTitle>
         <div className="grid gap-2">
-          <Button glow>primary + glow</Button>
-          <Button>primary</Button>
-          <Button variant="secondary">secondary</Button>
-          <Button variant="ghost">ghost</Button>
-          <Button variant="danger">danger</Button>
-          <Button loading>loading</Button>
-          <Button disabled>disabled</Button>
-          <Button size="l" block glow>
+          <Button track="demo_primary_glow" glow>primary + glow</Button>
+          <Button track="demo_primary">primary</Button>
+          <Button track="demo_secondary" variant="secondary">secondary</Button>
+          <Button track="demo_ghost" variant="ghost">ghost</Button>
+          <Button track="demo_danger" variant="danger">danger</Button>
+          <Button track="demo_loading" loading>loading</Button>
+          <Button track="demo_disabled" disabled>disabled</Button>
+          <Button track="demo_large" size="l" block glow>
             large block
           </Button>
         </div>
@@ -147,6 +153,9 @@ export function GalleryScreen(): ReactNode {
 
         <SectionTitle>{t("gallery.widgets")}</SectionTitle>
         <WidgetsPreview />
+
+        <SectionTitle>{t("gallery.rarity")}</SectionTitle>
+        <RarityPreview />
 
         <SectionTitle>{t("gallery.lists")}</SectionTitle>
         <ListGroup>
@@ -177,7 +186,7 @@ export function GalleryScreen(): ReactNode {
         </div>
 
         <SectionTitle>{t("gallery.segmented")}</SectionTitle>
-        <SegmentedControl
+        <SegmentedControl track="segment"
           label={t("gallery.segmented")}
           activeId={segment}
           onSelect={setSegment}
@@ -188,7 +197,7 @@ export function GalleryScreen(): ReactNode {
           ]}
         />
         <p className="mt-3 mb-1 text-xs text-text-muted">{t("gallery.segmented.smallHint")}</p>
-        <SegmentedControl
+        <SegmentedControl track="difficulty"
           size="s"
           label={t("gallery.segmented.small")}
           activeId={difficultySegment}
@@ -286,7 +295,7 @@ function ModalsPreview(props: { pinFooter: boolean; onClose(): void }): ReactNod
         onDismiss={props.onClose}
         pinFooter={props.pinFooter}
         footer={
-          <Button block onClick={() => setNested(true)}>
+          <Button track="nested" block onClick={() => setNested(true)}>
             {t("gallery.modal.nested")}
           </Button>
         }
@@ -319,7 +328,7 @@ function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
         className="absolute top-[calc(0.5rem+var(--app-inset-top))] right-[calc(0.5rem+var(--app-inset-right))] rounded-full bg-bg/80"
         style={{ zIndex: "var(--z-toast)" }}
       >
-        <IconButton label={t("app.close")} onClick={props.onClose}>
+        <IconButton track="close" label={t("app.close")} onClick={props.onClose}>
           <X size={22} />
         </IconButton>
       </div>
@@ -327,8 +336,44 @@ function PreviewFrame(props: { preview: Preview; onClose(): void }): ReactNode {
   );
 }
 
+/**
+ * Плитки всех редкостей (design/art/direction-v2.md §4.4): у тестового
+ * аккаунта снаряжения обычно нет, и без витрины рамки не посмотреть вживую.
+ */
+function RarityPreview(): ReactNode {
+  const stat = { stat: "damage", value: 0.1 };
+  const items: ItemView[] = RARITIES.map((rarity, index) => ({
+    itemId: `gallery-${rarity}`,
+    slot: SLOTS[index % SLOTS.length] ?? "weapon",
+    rarity,
+    level: 3 + index,
+    equipped: false,
+    power: 100,
+    main: stat,
+    extras: [],
+    upgrade: null,
+    reroll: null,
+    salvage: 1,
+  }));
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-5 pt-2">
+        {items.map((item) => (
+          <EquipSlot key={item.itemId} slot={item.slot} item={item} onOpen={() => undefined} />
+        ))}
+      </div>
+      <div className="grid grid-cols-6 gap-2">
+        {items.map((item) => (
+          <ItemTile key={item.itemId} item={item} selected={false} dimmed={false} onPress={() => undefined} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
+  const shareNoop = (): Promise<null> => Promise.resolve(null);
 
   switch (preview) {
     case "boot":
@@ -343,6 +388,7 @@ function renderPreview(preview: Preview): ReactNode {
           queued={0}
           loadout={{ weapons: [{ id: "spark", level: 2 }], passives: [{ id: "might", level: 1 }] }}
           onChoose={noop}
+          onStats={noop}
         />
       );
     case "levelUpLong":
@@ -364,8 +410,15 @@ function renderPreview(preview: Preview): ReactNode {
             ],
           }}
           onChoose={noop}
+          onStats={noop}
         />
       );
+    case "chest1":
+    case "chest3":
+    case "chest5": {
+      const size = preview === "chest1" ? 1 : preview === "chest3" ? 3 : 5;
+      return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size) }} onTake={noop} />;
+    }
     case "pause":
       return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} onStats={noop} />;
     case "death":
@@ -378,7 +431,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
     case "chance":
@@ -393,7 +446,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
     default:
@@ -414,7 +467,7 @@ function renderPreview(preview: Preview): ReactNode {
           onDecline={noop}
           onRestart={noop}
           onMenu={noop}
-          onShare={noop}
+          onShare={shareNoop}
         />
       );
   }
@@ -498,6 +551,15 @@ const SAMPLE_OFFERS: UpgradeOption[] = [
   },
 ];
 
+/** Сундук: все виды наград — новое, уровни, лечение и опыт. */
+const SAMPLE_CHEST: ChestReward[] = [
+  { ...SAMPLE_OFFERS[1]!, kind: "weapon_level" },
+  { ...KNIFE_NEW, kind: "weapon_new" },
+  { ...SAMPLE_OFFERS[2]!, kind: "passive_level" },
+  { id: "heal", kind: "heal", refId: "", level: 0, nameKey: "upgrade.heal.name", descriptionKey: "upgrade.heal.description", changes: [] },
+  { id: "xp", kind: "xp", refId: "", level: 0, nameKey: "upgrade.xp.name", descriptionKey: "upgrade.xp.description", changes: [change("upgrade.xp.label", null, 40, "plus")] },
+];
+
 /** Самые длинные тексты словаря — на них вёрстка ломается первой (§4.3). */
 const LONG_OFFERS: UpgradeOption[] = [
   {
@@ -509,7 +571,16 @@ const LONG_OFFERS: UpgradeOption[] = [
     descriptionKey: "passive.mending.description",
     changes: [change("upgrade.stat.passive.regenPerSec", null, 0.4, "plus")],
   },
-  KNIFE_NEW,
+  // Оружие со стихией: метка стихии рядом с уровнем — самая длинная строка тегов.
+  {
+    id: "w:sting",
+    kind: "weapon_level",
+    refId: "sting",
+    level: 4,
+    nameKey: "weapon.sting.name",
+    descriptionKey: "weapon.sting.description",
+    changes: [change("upgrade.stat.damage", 8, 9), change("upgrade.stat.pierce", 3, 4)],
+  },
   {
     id: "heal",
     kind: "heal",

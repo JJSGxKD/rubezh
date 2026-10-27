@@ -1,9 +1,7 @@
 import { Module } from "@nestjs/common";
-import { REDIS } from "../../infra/redis.js";
-import { ONLINE_ACTIVITY, type OnlineActivity } from "../online/online-activity.js";
-import { RedisOnlineRepository } from "../online/online.repository.js";
+import { ONLINE_ACTIVITY } from "../online/online-activity.js";
+import { OnlineCoreModule } from "../online/online-core.module.js";
 import { OnlineService } from "../online/online.service.js";
-import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { AccessRevocations } from "./access-revocations.js";
 import { ACCOUNT_REPOSITORY, PrismaAccountRepository } from "./account.repository.js";
 import { AuthController } from "./auth.controller.js";
@@ -12,7 +10,6 @@ import { AuthGuard } from "./auth.guard.js";
 import { AuthService } from "./auth.service.js";
 import { REFRESH_STORE } from "./refresh.store.js";
 import { RedisRefreshStore } from "./redis-refresh.store.js";
-import type { Redis } from "ioredis";
 
 /**
  * Аккаунты и сессии игроков (docs/34-stage3-plan.md, WP1).
@@ -29,11 +26,14 @@ import type { Redis } from "ioredis";
  * тогда действует только на маршрутах самого `AuthController`. С отметкой
  * активности (`ONLINE_ACTIVITY`) то же самое.
  *
- * Отметка активности нужна гарду, а счётчик онлайна — сам авторизован, поэтому
- * порт собирается здесь, а не импортом `OnlineModule`: так нет цикла. Без
- * настроек (сборка модуля в тесте руками) порта нет, и гард работает как раньше.
+ * Порт отметки активности (`ONLINE_ACTIVITY`) — псевдоним сервиса из
+ * `OnlineCoreModule`: того же экземпляра счётчика, что отвечает на пинг.
+ * `OnlineCoreModule` ничего не импортирует из авторизации, поэтому цикла с
+ * `OnlineModule` нет. Без настроек (сборка модуля в тесте руками) сервиса нет,
+ * порт пуст, и гард работает как раньше.
  */
 @Module({
+  imports: [OnlineCoreModule],
   controllers: [AuthController],
   providers: [
     AuthService,
@@ -42,12 +42,7 @@ import type { Redis } from "ioredis";
     AccessRevocations,
     { provide: ACCOUNT_REPOSITORY, useClass: PrismaAccountRepository },
     { provide: REFRESH_STORE, useClass: RedisRefreshStore },
-    {
-      provide: ONLINE_ACTIVITY,
-      inject: [REDIS, { token: SETTINGS_READER, optional: true }],
-      useFactory: (redis: Redis, settings: SettingsReader | undefined): OnlineActivity | undefined =>
-        settings === undefined ? undefined : new OnlineService(new RedisOnlineRepository(redis), settings),
-    },
+    { provide: ONLINE_ACTIVITY, useExisting: OnlineService },
   ],
   // Хуки входа — сессиям и атрибуции: они слушают вход, но в него не вмешиваются.
   exports: [AuthService, AuthGuard, AccessRevocations, AuthHooks, ACCOUNT_REPOSITORY, ONLINE_ACTIVITY],

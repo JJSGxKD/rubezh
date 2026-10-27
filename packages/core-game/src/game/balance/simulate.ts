@@ -10,7 +10,7 @@ import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../../content/waves";
 import { WEAPONS } from "../../content/weapons";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
-import { unlocksAt } from "../progression/unlocks";
+import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { stepWorld } from "../sim/step";
 import { createWorld, TICK_SEC } from "../sim/world";
@@ -63,6 +63,8 @@ export interface BalanceRunResult {
   chestsFound: number;
   /** сколько сундуков бот открыл за забег */
   chestsOpened: number;
+  /** сколько слотов оружия к концу забега заняли эволюции */
+  evolutions: number;
   /** забег упёрся в аварийный потолок, а не кончился смертью */
   timedOut: boolean;
 }
@@ -74,7 +76,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     seed: options.seed,
     enemies: ENEMIES,
     stages: ENEMY_STAGES,
-    weapons: open === null ? WEAPONS : WEAPONS.filter((weapon) => open.weapons.has(weapon.id)),
+    weapons: open === null ? WEAPONS : weaponsOpenAt(WEAPONS, open),
     passives: open === null ? PASSIVES : PASSIVES.filter((passive) => open.passives.has(passive.id)),
     levelCurve: LEVEL_CURVE,
     loadoutLimits: open?.limits ?? LOADOUT_LIMITS,
@@ -119,6 +121,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     firstLevelUpSec,
     chestsFound: world.stats.chestsFound,
     chestsOpened: world.stats.chestsOpened,
+    evolutions: world.loadout.weapons.filter((slot) => world.weaponTypes[slot.typeIndex]?.evolvedFrom !== undefined).length,
     timedOut: world.player.alive,
   };
 }
@@ -147,6 +150,8 @@ export interface BalanceSummary {
   medianFirstLevelUpSec: number;
   /** медиана открытых сундуков за забег */
   medianChestsOpened: number;
+  /** медиана слотов оружия, занятых эволюциями к концу забега */
+  medianEvolutions: number;
   timedOut: number;
 }
 
@@ -156,6 +161,7 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
   const waves = results.map((run) => run.wave).sort((a, b) => a - b);
   const firstLevelUps = results.map((run) => run.firstLevelUpSec).sort((a, b) => a - b);
   const chests = results.map((run) => run.chestsOpened).sort((a, b) => a - b);
+  const evolutions = results.map((run) => run.evolutions).sort((a, b) => a - b);
 
   return {
     runs: results.length,
@@ -170,6 +176,7 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
     medianWave: quantile(waves, 0.5),
     medianFirstLevelUpSec: quantile(firstLevelUps, 0.5),
     medianChestsOpened: quantile(chests, 0.5),
+    medianEvolutions: quantile(evolutions, 0.5),
     timedOut: results.filter((run) => run.timedOut).length,
   };
 }

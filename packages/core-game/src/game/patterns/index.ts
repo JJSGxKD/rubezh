@@ -3,6 +3,7 @@ import type { World } from "../sim/world";
 import type { PatternBehavior } from "./behavior";
 import { caster } from "./caster";
 import { chase } from "./chase";
+import { cordon } from "./cordon";
 import { dash } from "./dash";
 import { exploder } from "./exploder";
 import { kiteAndShoot } from "./kite-and-shoot";
@@ -13,7 +14,7 @@ import { swarm } from "./swarm";
 
 /**
  * Реестр паттернов поведения врагов. Новый паттерн — это код, его добавляет
- * участник 1. Геймдизайнер выбирает готовый паттерн и крутит его параметры в
+ * владелец. Геймдизайнер выбирает готовый паттерн и крутит его параметры в
  * content/enemies.ts и сюда не заходит (docs/01-tech-stack.md §9).
  *
  * Паттерны работают поверх пулов симуляции и не знают про Phaser: рендер
@@ -30,6 +31,7 @@ export const PATTERNS: Record<EnemyPattern, PatternBehavior> = {
   splitter,
   rush,
   caster,
+  cordon,
 };
 
 export function applyPattern(
@@ -55,6 +57,7 @@ export { ORBIT_PHASE } from "./orbit";
 export { EXPLODER_PHASE } from "./exploder";
 export { RUSH_PHASE } from "./rush";
 export { CASTER_PHASE } from "./caster";
+export { CORDON_PHASE } from "./cordon";
 export {
   BOSS_RADIUS_MUL,
   ELITE_RADIUS_MUL,

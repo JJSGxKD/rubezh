@@ -98,7 +98,7 @@ export function SlideDots(props: { ids: readonly string[]; current: number; onSe
           aria-label={t("home.carousel.position", { n: index + 1, total })}
           aria-current={index === props.current}
           onClick={() => props.onSelect(index)}
-          className="inline-flex size-6 items-center justify-center"
+          className="hit-tall inline-flex size-6 items-center justify-center"
         >
           <span aria-hidden="true" className={`size-1.5 rounded-pill transition-transform duration-(--duration-fast) ease-base ${index === props.current ? "scale-150 bg-accent" : "bg-border-strong"}`} />
         </button>

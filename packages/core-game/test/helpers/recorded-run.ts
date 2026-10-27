@@ -2,6 +2,7 @@ import type { DifficultyId, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import { CONTENT_HASH } from "../../src/content/hash";
 import { RunPerfTracker } from "../../src/game/diagnostics/run-perf";
 import { RunRecorder } from "../../src/game/diagnostics/run-recorder";
+import { applyCardTool, isCardToolCommand } from "../../src/game/progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/levels";
 import { isEmptyLoadout } from "../../src/game/progression/run-loadout";
 import { buildRunResult } from "../../src/game/run/run-result";
@@ -67,7 +68,12 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     }
     if (isAwaitingChoice(world)) {
       const optionId = choose(world.progression.offers);
-      chooseUpgrade(world, optionId);
+      // Действие с карточками (`~reroll`, `~skip`, `~banish:…`) — тоже выбор в логе.
+      if (isCardToolCommand(optionId)) {
+        if (applyCardTool(world, optionId) === null) throw new Error(`команда «${optionId}» не применилась: тест ошибся в сценарии`);
+      } else {
+        chooseUpgrade(world, optionId);
+      }
       recorder.choice(world.stats.tick, optionId);
       continue;
     }

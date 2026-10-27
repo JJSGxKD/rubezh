@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
-import { Bot, Check, Crown, Crosshair, ExternalLink, Hourglass, Megaphone, Play, Sparkles, Target } from "lucide-react";
+import { Bot, Check, Crown, Crosshair, ExternalLink, Hourglass, Megaphone, Play, Skull, Sparkles, Target } from "lucide-react";
+import { ELEMENTS, type StatusElement } from "@bh/shared-types";
 import { Badge, Button, Card, ProgressBar } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
 import { goalFilterParams, isClaimable, isOpenKind, slotsText, tabOf, taskLink, type TaskItem } from "../../state/tasks-api";
+import { ElementMark } from "../element-mark";
+import { BOOST_RUN_GLYPH, GameGlyph, WEAPON_GLYPHS, XP_CRYSTAL_GLYPH } from "../game-glyphs";
 import { formatCountdown, msUntilReset } from "./schedule";
 import { TaskImage } from "./task-image";
 import { RewardChips } from "./task-reward";
@@ -21,10 +24,41 @@ const ICONS: Partial<Record<string, ReactNode>> = {
   survive_sec: <Hourglass size={20} aria-hidden="true" />,
   best_survival_sec: <Crown size={20} aria-hidden="true" />,
   run_level: <Sparkles size={20} aria-hidden="true" />,
+  xp_collected: <GameGlyph glyph={XP_CRYSTAL_GLYPH} size={22} />,
+  boost_runs: <GameGlyph glyph={BOOST_RUN_GLYPH} size={22} />,
   channel: <Megaphone size={20} aria-hidden="true" />,
   link: <ExternalLink size={20} aria-hidden="true" />,
   bot: <Bot size={20} aria-hidden="true" />,
+  difficulty_runs: <Skull size={20} aria-hidden="true" />,
+  difficulty_survive_sec: <Skull size={20} aria-hidden="true" />,
 };
+
+/**
+ * Значок цели с фильтром — тем же знаком, что в забеге и гайдбуке
+ * (design/art/direction-v2.md §4.5): «огонь» в задании узнаётся по огню над
+ * горящим врагом, а «Искра» — по значку в арсенале. Общая мишень не говорила,
+ * каким оружием идти в забег.
+ */
+export function goalIcon(task: Pick<TaskItem, "kind" | "filter">): ReactNode {
+  const filter = task.filter ?? null;
+  if (task.kind === "element_runs") {
+    const element = statusElementOf(filter?.element);
+    if (element !== null) return <ElementMark element={element} size={22} />;
+  }
+  if (task.kind === "weapon_runs" && filter?.weapon !== undefined) {
+    const glyph = WEAPON_GLYPHS[filter.weapon];
+    if (glyph !== undefined) return <GameGlyph glyph={glyph} size={22} />;
+  }
+  return ICONS[task.kind] ?? <Target size={20} aria-hidden="true" />;
+}
+
+/** Стихия из фильтра задания — строка с сервера: незнакомая (из будущего контента) не ломает строку. */
+function statusElementOf(value: string | undefined): StatusElement | null {
+  for (const element of ELEMENTS) {
+    if (element !== "physical" && element === value) return element;
+  }
+  return null;
+}
 
 /** Цели во времени считаются в секундах, а читаются минутами. */
 const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec"]);
@@ -67,7 +101,7 @@ export function TaskRow(props: {
                 task.done ? "bg-accent/15 text-accent" : "bg-surface-raised text-text-muted",
               ].join(" ")}
             >
-              {ICONS[task.kind] ?? <Target size={20} aria-hidden="true" />}
+              {goalIcon(task)}
             </span>
           }
         />
@@ -94,20 +128,23 @@ export function TaskRow(props: {
             </div>
           ) : null}
         </div>
-        <RewardChips reward={task.reward} />
+        {/* Метка — откуда вылетает награда при заборе (`reward-burst.tsx`). */}
+        <span data-task-reward={task.id} className="shrink-0">
+          <RewardChips reward={task.reward} />
+        </span>
       </div>
       {/* Под строкой и во всю ширину: в правой колонке кнопка сжимала полосу
           прогресса до точки на узком телефоне. */}
       {claimable ? (
         <div className="mt-3">
-          <Button block loading={props.claiming} onClick={props.onClaim}>
+          <Button track="claim" block loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.claim")}
           </Button>
         </div>
       ) : null}
       {opens ? (
         <div className="mt-3">
-          <Button block onClick={() => props.onOpen(link)}>
+          <Button track="open" block onClick={() => props.onOpen(link)}>
             <ExternalLink size={18} aria-hidden="true" />
             {t(task.kind === "bot" ? "tasks.startBot" : "tasks.go")}
           </Button>
@@ -115,10 +152,10 @@ export function TaskRow(props: {
       ) : null}
       {waitsAction && !opens ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button variant="secondary" onClick={() => props.onOpen(link)}>
+          <Button track="subscribe" variant="secondary" onClick={() => props.onOpen(link)}>
             {t("tasks.subscribe")}
           </Button>
-          <Button loading={props.claiming} onClick={props.onClaim}>
+          <Button track="check" loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.check")}
           </Button>
         </div>
@@ -150,8 +187,7 @@ function ProgressLine(props: { task: TaskItem }): ReactNode {
  */
 function repeatHint(task: TaskItem): string | null {
   if (tabOf(task) !== "partner" || task.period === "achievement") return null;
-  // Число с единицей — неразрывно: «7 ч» не должно разъехаться по строкам.
-  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)).replace(/(\d) /g, "$1\u00a0") });
+  if (task.claimed) return t("tasks.repeat.next", { time: formatCountdown(msUntilReset(Date.now(), task.period)) });
   return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 

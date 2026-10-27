@@ -19,26 +19,36 @@ export function BossBar(props: { boss: BossSnapshot }): ReactNode {
   const { boss } = props;
   const name = t(`enemy.${boss.enemyId}.name`);
 
+  // Облик v2 (design/art/direction-v2.md §4.4): босс — событие, и полоса
+  // говорит языком окон наград — ромб и кайма-оберег тоном элиты у имени,
+  // ромбы-наконечники у полосы, деления фаз — зарубками-ромбами. Всё
+  // украшение статично: React перерисовывает полосу только с её числом.
   return (
-    <div className="mx-auto w-full max-w-[420px] px-4 pt-2">
+    <div className="mx-auto w-full max-w-[420px] px-6 pt-2">
       <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="size-1.5 shrink-0 rotate-45 bg-elite" />
         <span className="min-w-0 truncate font-display text-xs font-bold tracking-wide text-elite uppercase">{name}</span>
-        <span className="ml-auto shrink-0 font-display text-xs font-bold tabular-nums text-text-muted">
+        <span aria-hidden="true" className="section-rule h-2.5 min-w-4 flex-1" style={{ background: "linear-gradient(90deg, var(--color-elite), transparent)" }} />
+        <span className="shrink-0 font-display text-xs font-bold tabular-nums text-text-muted">
           {t("run.boss.phase", { phase: boss.phase + 1, phases: boss.phases })}
         </span>
       </div>
-      <div className="relative mt-1">
+      <div className="relative mt-1.5">
         <ProgressBar value={boss.hp} max={boss.maxHp} tone="boss" height="thick" label={name} />
         {/* Деления фаз поверх полосы: где босс станет злее, видно заранее. */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
           {Array.from({ length: boss.phases - 1 }, (_, index) => (
             <span
               key={index}
-              className="h-full border-r border-bg/70"
-              style={{ width: `${100 / boss.phases}%` }}
-            />
+              className="absolute inset-y-0 border-r border-bg/70"
+              style={{ left: `${String(((index + 1) * 100) / boss.phases)}%` }}
+            >
+              <span className="absolute -top-1 -left-1 size-2 rotate-45 bg-bg ring-1 ring-elite/80" />
+            </span>
           ))}
         </div>
+        <span aria-hidden="true" className="absolute top-1/2 -left-2 size-3 -translate-y-1/2 rotate-45 bg-elite ring-2 ring-bg" />
+        <span aria-hidden="true" className="absolute top-1/2 -right-2 size-3 -translate-y-1/2 rotate-45 bg-elite ring-2 ring-bg" />
       </div>
     </div>
   );

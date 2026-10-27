@@ -1,7 +1,7 @@
 import { loadTelegramWebAppCompat, type TelegramWebAppCompat } from "@bh/adapter-telegram";
 
 /**
- * Graspil — сторонняя аналитика Mini App (решение участника 1 от 26.09.2026,
+ * Graspil — сторонняя аналитика Mini App (решение владельца от 26.09.2026,
  * docs/22-analytics-and-metrics.md §9).
  *
  * Тот же сниппет, что в кабинете Graspil, только модулем сборки: политика

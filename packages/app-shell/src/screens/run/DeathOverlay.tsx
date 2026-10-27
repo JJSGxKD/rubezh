@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Crown, Skull } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { Button, Modal } from "../../design-system/components";
@@ -53,7 +53,8 @@ export interface DeathOverlayProps {
   onDecline(): void;
   onRestart(): void;
   onMenu(): void;
-  onShare(): void;
+  /** строка под кнопками — что вышло, когда это не видно само; null — говорить нечего */
+  onShare(): Promise<string | null>;
 }
 
 export function DeathOverlay(props: DeathOverlayProps): ReactNode {
@@ -80,13 +81,25 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
   // Продолжить нечем — шага со вторым шансом нет: забег закрывается смертью,
   // как и когда способы отпали сами. Итоги появятся, когда он закроется.
-  const { onDecline } = props;
+  const { onDecline, onShare } = props;
   const declined = useRef(false);
   useEffect(() => {
     if (!downedWithoutWays || declined.current) return;
     declined.current = true;
     onDecline();
   }, [downedWithoutWays, onDecline]);
+
+  // Ответ площадки ждём на месте: второе нажатие, пока выбор чата
+  // открывается, отправило бы итог дважды.
+  const [share, setShare] = useState<{ busy: boolean; note: string | null }>({ busy: false, note: null });
+  const runShare = (): void => {
+    if (share.busy) return;
+    setShare({ busy: true, note: null });
+    onShare().then(
+      (note) => setShare({ busy: false, note }),
+      () => setShare({ busy: false, note: t("error.title") }),
+    );
+  };
 
   if (step === "chance" && secondChance !== undefined) {
     return (
@@ -98,34 +111,41 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
   const actions = (
     <>
-      <Button size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
+      <Button track="restart" size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
         {t("run.death.again")}
       </Button>
       {/* До 360 px подписи пары не помещаются в одну строку при штатных полях и шрифте. */}
-      <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm">
-        <Button variant="secondary" block onClick={props.onMenu}>
+      <div className="grid grid-cols-2 gap-2 max-[22.5rem]:[&>button]:px-3 max-[22.5rem]:[&>button]:text-sm landscape:contents">
+        <Button track="home" variant="secondary" block onClick={props.onMenu}>
           {t("run.death.home")}
         </Button>
-        <Button variant="ghost" block onClick={props.onShare}>
+        <Button track="share" variant="ghost" block loading={share.busy} onClick={runShare}>
           {t("run.death.share")}
         </Button>
       </div>
+      {share.note === null ? null : (
+        <p role="status" className="text-center text-xs text-text-muted landscape:col-span-full">
+          {share.note}
+        </p>
+      )}
     </>
   );
 
   return (
     <Modal
       title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
-      icon={props.isNewRecord ? <Crown size={28} /> : <Skull size={26} />}
+      icon={props.isNewRecord ? <RecordCrown /> : <Skull size={26} />}
       size="l"
       cut
-      // В портрете кнопки — подвал под прокручиваемой частью, в ландшафте — в
-      // правой колонке: «Ещё раз» видна без прокрутки (docs/27-design-system-and-app-shell.md §5.3).
-      footer={<div className="grid gap-2 landscape:hidden">{actions}</div>}
+      pinFooter
+      // Кнопки закреплены внизу окна: при любом числе карточек видны все три.
+      // В портрете «Ещё раз» и пара под ней, в ландшафте — один ряд из трёх
+      // (docs/27-design-system-and-app-shell.md §5.3).
+      footer={<div className="grid gap-2 landscape:grid-cols-[2fr_1fr_1fr]">{actions}</div>}
     >
-      {/* Прокручивается только содержимое: «Ещё раз» остаётся на месте, а
-          окно не выше экрана. Запас — заголовок, подвал с кнопками и поля. */}
-      <div className="max-h-[calc(100dvh-16rem-var(--app-inset-top)-var(--app-inset-bottom))] overflow-y-auto overscroll-contain landscape:max-h-none landscape:overflow-visible">
+      {/* Прокрутка одна — тело модалки: окно не выше экрана, а карточки
+          уходят под неё, не унося за край кнопки. */}
+      <div>
         <div className="grid gap-4 landscape:grid-cols-2">
           <div className="grid content-start gap-3">
             <ResultsHero result={result} isNewRecord={props.isNewRecord} {...(props.rank === undefined ? {} : { rank: props.rank })} {...(props.cheatsCounted === undefined ? {} : { cheatsCounted: props.cheatsCounted })} />
@@ -137,10 +157,33 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
           <div className="grid content-start gap-3">
             <RunStats result={result} />
             <RunDetails result={result} open={detailsOpen} diagnostics={props.diagnostics} onToggle={(open) => useMeta.getState().rememberDeathDetails(open)} />
-            <div className="hidden gap-2 landscape:grid">{actions}</div>
           </div>
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Корона нового рекорда с лучами за ней — тот же веер, что за сундуком
+ * (`effects.md` §6.1): рекорд — награда, и выглядит наградой. Лучи — за
+ * кругом значка, вращается слой целиком (только `transform`).
+ */
+function RecordCrown(): ReactNode {
+  return (
+    <>
+      <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
+        <span className="block size-full animate-chest-rays-in">
+          <span
+            className="block size-full animate-chest-rays-spin rounded-full"
+            style={{
+              backgroundImage: "repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--color-accent) 32%, transparent) 0deg 7deg, transparent 7deg 22deg)",
+              maskImage: "radial-gradient(closest-side, black 30%, transparent 85%)",
+            }}
+          />
+        </span>
+      </span>
+      <Crown size={28} />
+    </>
   );
 }

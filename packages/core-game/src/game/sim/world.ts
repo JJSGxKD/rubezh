@@ -1,9 +1,10 @@
-import type { ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
+import type { CordonState } from "./cordon";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -164,6 +165,12 @@ export interface RunStats {
   magnetsCollected: number;
   /** подобранный динамит */
   dynamiteCollected: number;
+  /** подобранные заморозки */
+  freezeCollected: number;
+  /** сколько тиков заморозка ещё держит врагов; 0 — заморозки нет (`sim/freeze.ts`) */
+  freezeTicks: number;
+  /** полный срок заморозки в тиках: по нему считается, сколько уже стоит босс */
+  freezeTotalTicks: number;
   /** выпавшие сундуки */
   chestsFound: number;
   /** открытые сундуки */
@@ -233,6 +240,12 @@ export interface ProgressionState {
   pendingLevelUps: number;
   /** предложенные варианты; непустой список означает, что мир ждёт выбора */
   offers: UpgradeOption[];
+  /** сколько зарядов переброса, пропуска и изгнания осталось (`progression/card-tools.ts`) */
+  tools: CardTools;
+  /** сколько зарядов выдано на забег — чтобы оболочка рисовала «осталось из» */
+  toolsTotal: CardTools;
+  /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
+  banished: string[];
 }
 
 /**
@@ -268,6 +281,16 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
+  cordon: CordonState;
+  /**
+   * Отдельный поток случайности для новых карточек после переброса и
+   * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется
+   * ни на бит.
+   */
+  cardRng: Rng;
+  /** правила действий с карточками */
+  cardRules: CardToolRules;
   /** второй шанс: сколько раз и с чем игрок возвращается после смерти */
   continueRules: ContinueDef;
   /**

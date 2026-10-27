@@ -54,12 +54,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0125. Итог забега: счётчики боссов, элит, сундуков и кристаллов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](archive/T-0099-run-chest-engine.md)
 
 ## Зачем
 
@@ -190,5 +190,5 @@ batch: 2
 
   ❓ **Нужно от команды**
 
-  • @участник1 — подтвердить, что потеря сохранённых незавершённых забегов при выкате допустима
+  • @владелец — подтвердить, что потеря сохранённых незавершённых забегов при выкате допустима
   ```

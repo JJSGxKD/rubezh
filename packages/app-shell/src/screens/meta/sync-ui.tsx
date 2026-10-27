@@ -25,7 +25,7 @@ export function SyncProblem(props: { failure: ApiFailure; onRetry?: () => void; 
         <p className="text-sm text-text-muted">{t(`sync.failure.${props.failure}`)}</p>
         {retryable && props.onRetry !== undefined ? (
           <div className="mt-2">
-            <Button variant="secondary" onClick={props.onRetry}>
+            <Button track="retry" variant="secondary" onClick={props.onRetry}>
               {t("app.retry")}
             </Button>
           </div>

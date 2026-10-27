@@ -1,11 +1,15 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ENEMIES, LOADOUT_LIMITS, PASSIVES, WEAPONS } from "@bh/core-game";
-import { hasTranslation } from "../src/i18n";
+import { BOOSTS, DROPS, ENEMIES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
 import {
   eliteEnemies,
+  evolutionRecipes,
   enemyResists,
+  guideBoosts,
   passiveCategories,
   passiveRange,
   regularEnemies,
@@ -13,6 +17,8 @@ import {
   weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
+import { GuideScreen } from "../src/screens/guide/GuideScreen";
+import { EnemyScene, PickupIcon } from "../src/screens/guide/scenes";
 
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
@@ -29,7 +35,7 @@ describe("гайдбук", () => {
   });
 
   it("объясняет каждое поведение оружия", () => {
-    for (const weapon of WEAPONS) {
+    for (const weapon of BASE_WEAPONS) {
       expect(hasTranslation(`guide.behavior.${weapon.behavior}`), weapon.behavior).toBe(true);
     }
   });
@@ -38,6 +44,37 @@ describe("гайдбук", () => {
     const shown = [...regularEnemies(), ...eliteEnemies()].map((enemy) => enemy.def.id);
     expect(shown.sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
     expect(eliteEnemies().every((enemy) => enemy.def.rank !== undefined)).toBe(true);
+  });
+
+  it("рассказывает про заморозку числами из контента: срок и срок для боссов", () => {
+    expect(DROPS.freeze.durationSec).toBeGreaterThan(0);
+    const markup = renderToStaticMarkup(createElement(GuideScreen));
+    const seconds = Math.round(DROPS.freeze.durationSec);
+    const bossSeconds = Math.round(DROPS.freeze.durationSec * DROPS.freeze.bossDurationRatio);
+    expect(markup).toContain("Заморозка");
+    expect(markup).toContain(`замирают на ${seconds} с`);
+    expect(markup).toContain(`Боссы стоят ${bossSeconds} с`);
+    expect(hasTranslation("guide.pickup.freeze.name")).toBe(true);
+    expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
+  });
+
+  it("называет стража кольца и показывает его среди обычных врагов один раз, не среди элиты", () => {
+    expect(hasTranslation("enemy.cordon_guard.name")).toBe(true);
+    for (const part of ["name", "text", "tip"]) {
+      expect(hasTranslation(`guide.pattern.cordon.${part}`), part).toBe(true);
+    }
+    expect(regularEnemies().filter((enemy) => enemy.def.id === "cordon_guard")).toHaveLength(1);
+    expect(eliteEnemies().map((enemy) => enemy.def.id)).not.toContain("cordon_guard");
+  });
+
+  it("рисует сцену «Строй»: подпись, семь стражей цветом врага и пунктирный просвет", () => {
+    const markup = renderToStaticMarkup(createElement(EnemyScene, { pattern: "cordon", elite: false, label: "Страж кольца" }));
+    expect(markup).toContain('aria-label="Страж кольца"');
+    // Цвет и форма — из облика канвы (ENEMY_LOOKS.cordon): гайдбук не придумывает свой.
+    expect(markup.match(/fill="#b3203f"/g)).toHaveLength(7);
+    expect(markup).toContain('stroke-dasharray="3 3"');
+    // Сцена статичная: новой анимации для неё нет.
+    expect(markup).not.toContain("animate-");
   });
 
   it("называет новых пеших врагов по именам и показывает каждого один раз, элиту — отдельно", () => {
@@ -68,7 +105,7 @@ describe("гайдбук", () => {
   });
 
   it("показывает рост оружия только по тем числам, что меняются, и подписывает их", () => {
-    for (const weapon of WEAPONS) {
+    for (const weapon of BASE_WEAPONS) {
       const growth = weaponGrowth(weapon);
       expect(growth.length, weapon.id).toBeGreaterThan(0);
       for (const change of growth) {
@@ -104,7 +141,7 @@ describe("гайдбук", () => {
   });
 
   it("показывает рост шанса состояния у стихийного оружия в процентах", () => {
-    for (const weapon of WEAPONS.filter((candidate) => candidate.element !== undefined)) {
+    for (const weapon of BASE_WEAPONS.filter((candidate) => candidate.element !== undefined)) {
       const chance = weaponGrowth(weapon).find((change) => change.labelKey.startsWith("upgrade.stat.statusChance."));
       expect(chance, weapon.id).toBeDefined();
       expect(Number.isInteger(chance?.from) && Number.isInteger(chance?.to), weapon.id).toBe(true);
@@ -124,5 +161,25 @@ describe("гайдбук", () => {
     // Сопротивление — процентами, как на карточке выбора.
     const tempering = PASSIVES.find((passive) => passive.stat === "resist");
     expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 15, to: 60 });
+  });
+
+  it("у каждой эволюции есть строка рецепта, и название с описанием переведены", () => {
+    const recipes = evolutionRecipes(1);
+    for (const weapon of WEAPON_EVOLUTIONS) {
+      expect(recipes.some((recipe) => recipe.evolution === weapon.id), weapon.id).toBe(true);
+      expect(hasTranslation(weapon.nameKey), weapon.nameKey).toBe(true);
+      expect(hasTranslation(weapon.descriptionKey), weapon.descriptionKey).toBe(true);
+    }
+  });
+
+  it("описывает каждый буст из контента и называет, сколько их на забег", async () => {
+    // Тексты бустов — словарь листа «Перед забегом»: гайдбук подтягивает его сам.
+    await import("../src/i18n/boosts");
+    expect(guideBoosts().map((boost) => boost.id)).toEqual(BOOSTS.map((boost) => boost.id));
+    for (const boost of guideBoosts()) {
+      expect(hasTranslation(boost.nameKey), boost.id).toBe(true);
+      expect(hasTranslation(boost.descriptionKey), boost.id).toBe(true);
+    }
+    expect(t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })).toContain(String(MAX_BOOSTS_PER_RUN));
   });
 });

@@ -34,9 +34,12 @@ function listLines(args) {
   return out === "" ? [] : out.split("\n");
 }
 
-/** Файлы каталога tasks/ в `base` (по умолчанию origin/dev): `[{ name, text }]`. */
+/**
+ * Файлы `tasks/` и `tasks/archive/` в `base` (по умолчанию origin/dev):
+ * `[{ name, text }]`, где `name` — путь от `tasks/` (`T-….md` или `archive/T-….md`).
+ */
 export function readOriginTasks(base = BASE) {
-  const names = listLines(["ls-tree", "--name-only", base, "tasks/"])
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/", "tasks/archive/"])
     .map((path) => path.replace(/^tasks\//, ""))
     .filter((name) => name.endsWith(".md") && (isTaskFile(name) || name === "epics.md"));
   return names.map((name) => ({ name, text: git(["show", `${base}:tasks/${name}`]) }));
@@ -59,9 +62,9 @@ export function removePrLabel(number, label) {
   return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
 }
 
-/** Открытые PR с метками (по ним видна «Доработка») или `null`, если `gh` нет или он не авторизован. */
+/** Открытые PR с метками (по ним видна «Доработка»), описанием и состоянием проверок (кого ждёт PR) или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup,commits"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
@@ -73,6 +76,15 @@ export function openPrs() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Дата коммита захвата задачи (`chore(tasks): Взять T-NNNN в работу`) в ветке
+ * `origin/task/T-NNNN` — ISO-строка или `null`, если ветки или коммита нет.
+ */
+export function claimedAt(id) {
+  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, `origin/task/${id}`]);
+  return result.ok && result.stdout !== "" ? result.stdout : null;
 }
 
 /**
@@ -127,8 +139,11 @@ export function loadRegistryState(base = BASE) {
   };
 }
 
-/** Текст файла задачи в ветке `task/T-NNNN` на origin — оттуда видно, кто взял. */
+/** Текст файла задачи в ветке `task/T-NNNN` на origin — оттуда видно, кто взял; файл ищется наверху и в архиве. */
 export function readBranchFile(id, fileName) {
-  const result = tryGit(["show", `origin/task/${id}:tasks/${fileName}`]);
-  return result.ok ? result.stdout : null;
+  for (const path of [`tasks/${fileName}`, `tasks/archive/${fileName}`]) {
+    const result = tryGit(["show", `origin/task/${id}:${path}`]);
+    if (result.ok) return result.stdout;
+  }
+  return null;
 }

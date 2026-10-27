@@ -5,6 +5,7 @@ import { RELEASE_LEVELS, compareReleaseLevels, parseStableTag } from "./semver.m
 import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./git.mjs";
 import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
 import { TEAM_SECTION, extractSection } from "./team-summary.mjs";
+import { EFFORTS, EXECUTORS } from "../tasks/task-file.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -126,13 +127,41 @@ export function checkTaskLine(body, headRefName, taskFiles) {
   if (!branch) return [];
 
   const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
-  const match = /^Задача:\s*`?tasks\/(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
-  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
+  const match = /^Задача:\s*`?tasks\/(?:archive\/)?(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
+  // К PR задача уже закрыта и лежит в архиве; верхняя папка тоже принимается (задача ещё открыта).
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/archive/${branch[1]}-….md»`];
   if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
 
   const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
   if (!taskFiles.includes(file)) return [`задача: файла tasks/${file} нет в ветке PR`];
   return [];
+}
+
+const RUNNER_LINE = /^Поток:\s*claude-\d+\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
+const LAUNCHER_LINE = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u;
+
+/**
+ * Две строки с начала строки в описании PR ветки задачи: `Поток:` — кто
+ * работал (модель и уровень из списков задач), `Запустил:` — кто запустил
+ * поток. По ним доска считает вклад и по потокам, и по людям (T-0207).
+ */
+export function checkRunnerLines(body, headRefName) {
+  if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];
+
+  const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n").map((line) => line.trimEnd());
+  const errors = [];
+
+  const runner = lines.map((line) => RUNNER_LINE.exec(line)).find(Boolean);
+  if (!runner) {
+    errors.push("поток: в описании нет строки «Поток: claude-N / <модель> / <уровень>»");
+  } else if (!EXECUTORS.includes(runner[1]) || !EFFORTS.includes(runner[2])) {
+    errors.push(`поток: «${runner[0]}» — модель или уровень не из списка`);
+  }
+
+  if (!lines.some((line) => LAUNCHER_LINE.test(line))) {
+    errors.push("запустил: в описании нет строки «Запустил: владелец» или «Запустил: помощник <ник>»");
+  }
+  return errors;
 }
 
 /**
@@ -152,8 +181,8 @@ export function checkTrailers(messages) {
 }
 
 function taskFilesAt(ref) {
-  const out = execFileSync("git", ["ls-tree", "--name-only", ref, "tasks/"], { encoding: "utf8" });
-  return out.split("\n").map((line) => line.replace(/^tasks\//, "")).filter((name) => /^T-\d{4}-.+\.md$/.test(name));
+  const out = execFileSync("git", ["ls-tree", "--name-only", ref, "tasks/", "tasks/archive/"], { encoding: "utf8" });
+  return out.split("\n").map((line) => line.replace(/^tasks\//, "")).filter((name) => /^(?:archive\/)?T-\d{4}-.+\.md$/.test(name));
 }
 
 function prCommitMessages(base, head) {
@@ -225,6 +254,7 @@ function main() {
     errors.push(...checkSummary(pr.body, Number(number)));
     const head = `origin/${pr.headRefName}`;
     errors.push(...checkTaskLine(pr.body, pr.headRefName, taskFilesAt(head)));
+    errors.push(...checkRunnerLines(pr.body, pr.headRefName));
     errors.push(...checkTrailers(prCommitMessages(`origin/${pr.baseRefName}`, head)));
   }
 

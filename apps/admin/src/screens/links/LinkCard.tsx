@@ -13,6 +13,8 @@ import {
   LINK_TARGETS,
   NETWORK_NO_DIRECT,
   NETWORK_TITLES,
+  OWNER_HELP,
+  OWNER_TITLES,
   resendConversion,
   retargetLink,
   TARGET_HELP,
@@ -20,6 +22,7 @@ import {
   TARGET_TITLES,
   type Conversion,
   type ConversionSummary,
+  type LinkPartner,
   type LinkRow,
   type LinkTarget,
 } from "../../api/links";
@@ -36,7 +39,8 @@ import { TokenNotice } from "./TokenNotice";
 
 /**
  * Карточка ссылки. У обычной — адрес переходника, прямая ссылка без него и
- * цифры; цель (Mini App, бот, лендинг) меняется здесь же. У ссылки сети главное —
+ * цифры; цель (Mini App, бот, лендинг) меняется здесь же, а владелец —
+ * наша команда или партнёр (T-0067) — только показывается. У ссылки сети главное —
  * адрес с метками для кабинета и путь от клика до конверсии: что вставить в
  * кабинет, что считается регистрацией и покупкой, что ушло в сеть и что нет.
  */
@@ -113,6 +117,7 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
 
       <KeyValue
         items={[
+          ["Чья ссылка", <Owner key="owner" partner={link.partner} />, OWNER_HELP],
           ["Куда ведёт", <TargetEditor key="target" link={link} onChanged={onChanged} />, TARGET_HELP],
           ["Кликов", `${formatNumber(link.clicks)}, за 30 дней — ${formatNumber(link.clicks30d)}`, HELP.links.clicks],
           ["Запусков через переходник", formatNumber(link.launches), HELP.links.launches],
@@ -139,6 +144,19 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </>
       )}
     </div>
+  );
+}
+
+/** Владелец: «Наша» или партнёр, чья карточка открывается по имени. Менять нельзя — клики и привязки уже за ним. */
+function Owner({ partner }: { partner: LinkPartner | null }) {
+  if (partner === null) return <span>{OWNER_TITLES.own}</span>;
+  return (
+    <span className="flex flex-col items-start gap-0.5">
+      <button type="button" className="text-accent hover:underline" onClick={() => navigate({ section: "partners", id: partner.partnerId })}>
+        {partner.name}
+      </button>
+      <span className="text-xs text-text-muted">Пришедшие по ссылке новички записываются за партнёром. Владельца не сменить.</span>
+    </span>
   );
 }
 

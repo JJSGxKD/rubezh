@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Макеты меты v2 — 2</title>
+<style>
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --secondary: #46d9c6; --elite: #ffd15c;
+    --weapon: #ffe066; --passive: #c47dff; --hp: #ff6f90; --xp: #b6ff4a; --danger: #ff5d5d; --success: #8ee86b;
+    --ground: #33506a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.35 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; }
+  h1 { font: 700 20px/1.2 system-ui, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 90ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .phone { width: 360px; height: 720px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .cap { width: 360px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .cap b { color: var(--text); }
+  .display { font-family: "Russo One", system-ui, sans-serif; letter-spacing: 0.01em; }
+  .scrim { position: absolute; inset: 0; background: rgb(29 28 49 / 0.8); }
+  .run { position: absolute; inset: 0; background: radial-gradient(60% 40% at 50% 45%, #3a5a74, var(--ground)); }
+  /* реликвия — как relic-frame в tokens.css */
+  .relic { position: relative; border-radius: 12px; padding: 22px 16px 18px; --tone: var(--elite);
+    background: radial-gradient(120% 55% at 50% 0%, color-mix(in oklab, var(--tone) 24%, transparent), transparent 72%),
+      linear-gradient(180deg, color-mix(in oklab, var(--raised) 85%, var(--tone)), var(--surface) 38%, var(--sunken));
+    border: 1px solid color-mix(in oklab, var(--tone) 60%, var(--border-strong));
+    box-shadow: 0 24px 48px -16px #000, inset 0 0 0 3px color-mix(in oklab, var(--bg) 75%, transparent), inset 0 0 0 4px color-mix(in oklab, var(--tone) 38%, transparent); }
+  .band { position: absolute; left: 32px; right: 32px; height: 10px; background: var(--tone); opacity: .75;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10'%3E%3Cpath d='M0 5 6 0l6 5-6 5zM12 5l6-3.6L24 5l-6 3.6z'/%3E%3Crect y='4.4' width='24' height='1.2'/%3E%3C/svg%3E") repeat-x center / 24px 10px; }
+  .band.top { top: 4px; } .band.bottom { bottom: 4px; }
+  .ribbon { position: relative; display: inline-flex; padding: 6px 32px; margin: 0 auto; }
+  .ribbon svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ribbon span { position: relative; color: var(--on-accent); font: 700 19px/1.2 "Russo One", system-ui; white-space: nowrap; }
+  .center { text-align: center; }
+  .row { position: relative; display: flex; gap: 12px; align-items: center; border-radius: 8px; padding: 8px 12px 8px 14px; background: var(--sunken); overflow: hidden; --row: var(--weapon); }
+  .row.lit { background: linear-gradient(90deg, color-mix(in oklab, var(--row) 18%, transparent), transparent 72%), var(--sunken); box-shadow: inset 3px 0 0 color-mix(in oklab, var(--row) 80%, transparent); }
+  .medal { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 2px var(--row); background: radial-gradient(closest-side, color-mix(in oklab, var(--row) 25%, transparent), transparent), var(--sunken); color: var(--row); font-size: 22px; flex: none; }
+  .name { font: 700 15px/1.2 "Russo One", system-ui; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .badge { display: inline-block; border-radius: 4px; padding: 1px 6px; font: 700 10px/1.5 "Russo One", system-ui; text-transform: uppercase; }
+  .btn { display: block; width: 100%; border: 0; border-radius: 6px; padding: 14px; font: 700 17px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent);
+    background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; border-radius: 999px; padding: 3px 10px; background: var(--sunken); font-size: 12px; }
+  .hud { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+  .bar { height: 8px; border-radius: 4px; background: #ffffff1c; overflow: hidden; }
+  .bar i { display: block; height: 100%; }
+  .screen { position:absolute; inset:0; padding: 16px; overflow:hidden; background:
+      radial-gradient(120% 55% at 50% -12%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 62%), var(--bg); }
+  .title { font: 700 26px/1.1 "Russo One", system-ui; margin: 4px 0 10px; }
+  .card { border-radius: 10px; padding: 12px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 1px 0 #ffffff0d, 0 10px 24px -14px #000; border: 1px solid #ffffff10; }
+  .tabs { display:flex; gap:4px; padding:4px; border-radius:10px; background: var(--sunken); margin-bottom: 10px; }
+  .tabs span { flex:1; text-align:center; padding:8px 4px; border-radius:7px; font: 600 13px/1 "Russo One", system-ui; color: var(--muted); }
+  .tabs span.on { background: linear-gradient(180deg, var(--raised), var(--surface)); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .lb { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:8px; background: var(--surface); margin-bottom:6px; }
+  .rank { width:26px; text-align:center; font: 700 15px/1 "Russo One", system-ui; }
+  .ava { width:30px; height:30px; border-radius:50%; background: #43425f; display:grid; place-items:center; font-size:13px; }
+  .tier { flex:1; text-align:center; }
+  .tier .gem { width:34px; height:34px; margin:0 auto 4px; border-radius:8px; display:grid; place-items:center; background: var(--sunken); box-shadow: inset 0 0 0 2px var(--border-strong); font-size:16px; }
+  .tier.ready .gem { box-shadow: inset 0 0 0 2px var(--accent), 0 0 14px #ff8f3f66; }
+  .tier.done .gem { opacity:.5; }
+  .ach { position:relative; border-radius:10px; padding:10px; background: var(--sunken); text-align:center; }
+  .ach .ico { width:44px; height:44px; margin:2px auto 6px; border-radius:50%; display:grid; place-items:center; font-size:20px; background: radial-gradient(closest-side, color-mix(in oklab, var(--r) 30%, transparent), transparent), var(--surface); box-shadow: inset 0 0 0 2px var(--r); }
+  .sil { height:64px; border-radius:10px; background: var(--sunken); display:grid; place-items:center; font-size:30px; }
+
+  /* Добавлено для меты-2 */
+  .phone.w320 { width: 320px; } .phone.w768 { width: 768px; height: 560px; } .cap.w320 { width: 320px; } .cap.w768 { width: 768px; }
+  .tg { position: absolute; top: 0; left: 0; right: 0; height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 0; z-index: 3; }
+  .tgbtn { height: 30px; border-radius: 15px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; background: #ffffff1f; backdrop-filter: blur(6px); font: 600 13px/1 system-ui; color: #fff; }
+  .online { height: 26px; border-radius: 13px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; background: color-mix(in oklab, var(--sunken) 80%, transparent); box-shadow: inset 0 0 0 1px #ffffff14; font: 600 12px/1 system-ui; color: var(--text); white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 3px color-mix(in oklab, var(--success) 25%, transparent); animation: ping 2s ease-in-out infinite; }
+  @keyframes ping { 50% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--success) 0%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  .header { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 12px; }
+  .coin { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: var(--sunken); font: 700 13px/1 "Russo One", system-ui; }
+  .ib { width: 36px; height: 36px; border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); display: grid; place-items: center; color: var(--muted); }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: #43425f; box-shadow: inset 0 0 0 2px var(--border-strong); display: grid; place-items: center; font-weight: 700; }
+  .subline { text-align: center; padding: 2px 0 6px; }
+  .tile { border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; height: 70px; margin: 0 12px 8px; }
+  .tiles2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 12px 8px; } .tiles2 div { height: 70px; border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; }
+  .play { position: absolute; left: 12px; right: 12px; bottom: 62px; height: 60px; border-radius: 4px; display: grid; place-items: center; align-content: center; color: var(--on-accent); background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a, 0 0 28px -4px #ff8f3f88; clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+  .play b { font: 700 22px/1 "Russo One", system-ui; letter-spacing: .04em; }
+  .play small { font: 600 11.5px/1.2 system-ui; opacity: .8; margin-top: 3px; display: inline-flex; gap: 5px; align-items: center; }
+  .play small i { width: 6px; height: 6px; border-radius: 50%; background: #2b6b1d; }
+  .tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; background: var(--sunken); box-shadow: 0 -1px 0 #ffffff10; display: flex; justify-content: space-around; align-items: center; color: var(--muted); font-size: 18px; }
+  .note { font-size: 12px; color: var(--muted); margin: 6px 0 0; max-width: 760px; }
+  .sect { width: 100%; margin: 26px 0 8px; font: 700 17px/1.2 system-ui; border-top: 1px solid #ffffff14; padding-top: 18px; }
+  .desk { width: 960px; height: 420px; border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45; }
+  .desk .col { width: 480px; margin: 0 auto; position: relative; height: 100%; }
+  .offer { border-radius: 10px; padding: 12px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff12; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; }
+  .limit { --tone: #c47dff; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 55%, transparent), 0 0 18px -8px var(--tone); background: radial-gradient(90% 70% at 0% 50%, color-mix(in oklab, var(--tone) 18%, transparent), transparent 70%), linear-gradient(180deg, var(--raised), var(--surface)); }
+  .ghost { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; border-radius: 6px; padding: 11px; font: 700 14px/1 "Russo One", system-ui; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .supp { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 5px; border-radius: 999px; background: color-mix(in oklab, var(--hp) 18%, transparent); color: var(--hp); font: 700 10.5px/1.6 system-ui; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hp) 45%, transparent); }
+  .amounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .amounts span { border-radius: 8px; padding: 10px 4px; text-align: center; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--border); font: 700 15px/1 "Russo One", system-ui; }
+  .amounts span.on { box-shadow: inset 0 0 0 2px var(--elite); background: color-mix(in oklab, var(--elite) 12%, var(--sunken)); }
+  .mod { flex: 1; border-radius: 10px; padding: 10px; text-align: center; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--border); }
+  .mod.on { box-shadow: inset 0 0 0 2px var(--accent), 0 0 18px -8px var(--accent); background: color-mix(in oklab, var(--accent) 10%, var(--sunken)); }
+  .mod .ico { font-size: 26px; }
+</style>
+</head>
+<body>
+<h1>Макеты меты v2 — счётчик онлайна, донат, переброс за рекламу, «Предел», модификаторы</h1>
+<p class="lead">Черновые макеты дизайнера (design/art/direction-v2.md §5.2–5.3) для задач, у которых в спецификации нет облика:
+T-0148 (открытый вопрос 1 — макет от дизайнера), T-0158/T-0161, T-0199, T-0194, T-0119. Значки-эмодзи — заглушки вместо значков набора
+проекта; цвета — токены «Сумеречного рубежа». Открывать через статический сервер от корня репозитория.</p>
+<div class="grid">
+<div class="sect">T-0148 · Счётчик онлайна</div>
+
+<div><div class="phone "><div class="screen" style="padding:0"><div class="tg"><span class="tgbtn">✕ Закрыть</span><span class="online"><i class="dot"></i>128 онлайн</span><span class="tgbtn">⌄ ⋯</span></div><div style="height:52px"></div><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b><small><i></i>37 в забеге</small></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap "><b>Telegram, полный экран, 390.</b> Плашка — в полосе кнопок Telegram по центру, между «Закрыть» и меню: место, которое иначе пустует. Зелёная точка мягко пульсирует (2 с; «меньше движения» — стоит). «N в забеге» — подписью на «Играть».</div></div>
+<div><div class="phone w320"><div class="screen" style="padding:0"><div class="tg"><span class="tgbtn">✕ Закрыть</span><span class="online"><i class="dot"></i>128</span><span class="tgbtn">⌄ ⋯</span></div><div style="height:52px"></div><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b><small><i></i>37 в забеге</small></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap w320"><b>320.</b> Полоса уже кнопок — плашка без слова: «● 128». Слово возвращается от 360. Подпись на «Играть» та же.</div></div>
+<div><div class="phone "><div class="screen" style="padding:0"><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="subline"><span class="online"><i class="dot"></i>128 онлайн</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b><small><i></i>37 в забеге</small></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap "><b>Без полосы кнопок</b> (MAX, VK, веб, Telegram не во весь экран). Строкой под шапкой по центру — та же плашка, шапку не раздвигает.</div></div>
+<div><div class="phone "><div class="screen" style="padding:0"><div class="tg"><span class="tgbtn">✕ Закрыть</span><span class="online">👥 сегодня играли 3,4 тыс.</span><span class="tgbtn">⌄ ⋯</span></div><div style="height:52px"></div><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap "><b>Онлайн неизвестен</b> (<code>online: null</code>) — «сегодня играли 3,4 тыс.» без точки: точка значит «сейчас». <code>inRun: null</code> — у «Играть» подписи нет, кнопка прежняя.</div></div>
+<div><div class="phone "><div class="screen" style="padding:0"><div class="tg"><span class="tgbtn">✕ Закрыть</span><span class="tgbtn">⌄ ⋯</span></div><div style="height:52px"></div><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap "><b>Чисел нет вовсе</b> (сеть, первый запуск) — плашки нет, место пустое, без заглушки «—»: пустая плашка хуже никакой.</div></div>
+<div><div class="phone w768"><div class="screen" style="padding:0"><div class="tg"><span class="tgbtn">✕ Закрыть</span><span class="online"><i class="dot"></i>128 онлайн</span><span class="tgbtn">⌄ ⋯</span></div><div style="height:52px"></div><div class="header"><span class="avatar">Г</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="tiles2"><div></div><div></div></div><div class="play"><b>▶ ИГРАТЬ</b><small><i></i>37 в забеге</small></div><div class="tabbar">🏪 🛡 ⚔ ☑ 🏆 👥</div></div></div><div class="cap w768"><b>768, планшет.</b> Плашка в полосе по центру экрана, сколько бы места ни было по бокам; подпись на «Играть» та же.</div></div>
+<div><div class="desk"><div class="col"><div class="header"><span class="avatar">Г</span><span style="flex:1;text-align:center"><span class="online"><i class="dot"></i>1,2 тыс. онлайн</span></span><span class="coin">🪙 280</span><span class="coin">💎 0</span><span class="ib">🔔</span><span class="ib">☰</span></div><div class="tile" style="height:64px"></div><div class="tile"></div><div class="tiles2"><div></div><div></div></div><div class="play" style="bottom:20px"><b>▶ ИГРАТЬ</b><small><i></i>214 в забеге</small></div></div></div>
+<div class="cap" style="width:960px"><b>1440, браузер (показано вдвое меньше).</b> Полосы кнопок нет, шапка широкая — плашка встаёт в шапку по центру, между аватаром и валютами. Тысячи — «1,2 тыс.», от десяти тысяч — «12 тыс.».</div></div>
+<div style="width:760px"><p class="note"><b>Тексты (вопрос 3):</b> «{n} онлайн» — слово не склоняется; «сегодня играли {n}»; «{n} в забеге». Числа до тысячи — как есть, «1,2 тыс.» до десяти тысяч, дальше «12 тыс.» (formatCompact). Узкая плашка 320 — только число и точка, полное — в <code>aria-label</code>: «128 игроков онлайн».<br>
+<b>Настройка (вопрос 4):</b> без выключателя — это сведения, а не украшение; движение — одна точка с медленным пульсом, при «меньше движения» стоит.</p></div>
+<div class="sect">T-0158 · Донат проекту · T-0161 · знак «Поддержал проект»</div>
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;border-radius:16px 16px 0 0;padding:18px 16px 22px;background:linear-gradient(180deg,var(--raised),var(--surface));box-shadow:0 -20px 40px -10px #000">
+<div style="width:40px;height:4px;border-radius:2px;background:#ffffff30;margin:0 auto 14px"></div>
+<div class="center" style="font-size:34px">❤️</div>
+<div class="center title" style="font-size:22px">Поддержать проект</div>
+<p class="muted center small" style="margin:0 0 14px">Это не покупка: в игре ничего не прибавится. Донат помогает делать «Рубеж» дальше — спасибо, что вы с нами.</p>
+<div class="amounts"><span>⭐ 50</span><span class="on">⭐ 100</span><span>⭐ 250</span><span>⭐ 500</span><span>⭐ 1000</span><span class="muted">Своя</span></div>
+<div style="height:14px"></div><button class="btn">⭐ Поддержать на 100</button>
+<div style="height:8px"></div><div class="ghost">Через Tribute ↗</div>
+</div></div></div><div class="cap"><b>Лист доната</b> — тёплый, не магазинный: сердце вместо витрины, слово «не покупка» в первом абзаце. Суммы — готовые <code>presets</code> и «Своя»; выбранная — золотой рамкой. Нет звёзд — только Tribute; нет ничего — блока нет.</div></div>
+<div><div class="phone"><div class="screen">
+<div class="title">Рейтинг</div>
+<div class="lb"><span class="rank">1</span><span class="ava">А</span><span style="flex:1"><b>Алёна</b> <span class="supp">❤ поддержала</span><br><span class="muted small">Ур. 14</span></span><b>18:42</b></div>
+<div class="lb"><span class="rank">2</span><span class="ava">М</span><span style="flex:1"><b>Максим</b><br><span class="muted small">Ур. 11</span></span><b>17:03</b></div>
+<div class="lb"><span class="rank">3</span><span class="ava">K</span><span style="flex:1"><b>kotik_777</b> <span class="supp">❤</span><br><span class="muted small">Ур. 9</span></span><b>15:10</b></div>
+<div style="height:20px"></div>
+<div class="card"><div style="display:flex;gap:12px;align-items:center"><span class="avatar" style="width:56px;height:56px;font-size:22px">Г</span><div><b style="font:700 18px/1.2 'Russo One',system-ui">Гость</b><br><span class="supp">❤ Поддержал проект</span></div></div></div>
+</div></div><div class="cap"><b>Знак в рейтинге и профиле.</b> Тон здоровья (сердце), а не золото: золото уже у элиты и рекордов, а знак — благодарность, не ранг. В узкой строке рейтинга — только сердце, полное слово — в профиле и при длинном месте. Рядом с «Тестер» — после него.</div></div>
+<div class="sect">T-0199 · Переброс за рекламу · T-0194 · «Предел»</div>
+<div><div class="phone"><div class="run"></div><div class="scrim"></div><div class="screen" style="background:transparent;padding:70px 16px 16px">
+<div class="relic" style="--tone:var(--accent)"><div class="band top"></div><div class="center"><div class="ribbon"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M0 4h200l-10 16 10 16H0l10-16z" fill="var(--accent)"/></svg><span>Уровень 7</span></div></div><div style="height:12px"></div><div class="offer"><span class="medal" style="--row:var(--weapon)">⚡</span><div style="flex:1"><div class="name">Искра</div><div class="muted small">урон 7 → 8</div></div></div><div class="offer"><span class="medal" style="--row:var(--passive)">💪</span><div style="flex:1"><div class="name">Мощь</div><div class="muted small">урон +10% → +20%</div></div></div><div class="offer"><span class="medal" style="--row:var(--weapon)">🗡</span><div style="flex:1"><div class="name">Нож</div><div class="muted small">снаряды 1 → 2</div></div></div>
+<div class="ghost" style="margin-top:6px">▶ Перебросить за рекламу</div><p class="muted small center" style="margin:6px 0 0">один раз за забег</p><div class="band bottom"></div></div>
+</div></div><div class="cap"><b>Переброс за рекламу</b> — тихой кнопкой под карточками, не главным действием: главное здесь — выбрать карточку. Значок ролика ▶ говорит, что будет реклама; подпись «один раз за забег» снимает вопрос «а ещё?». У VIP — «Перебросить» со знаком короны, без ▶.</div></div>
+<div><div class="phone"><div class="run"></div><div class="scrim"></div><div class="screen" style="background:transparent;padding:70px 16px 16px">
+<div class="relic" style="--tone:#c47dff"><div class="band top"></div><div class="center"><div class="ribbon"><svg viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M0 4h200l-10 16 10 16H0l10-16z" fill="#c47dff"/></svg><span>Уровень 31</span></div></div>
+<p class="muted small center" style="margin:10px 0 10px">Всё взято и на максимуме — дальше только Предел</p><div class="offer limit"><span class="medal" style="--row:#c47dff">∞</span><div style="flex:1"><div class="name">Предел: урон</div><div class="muted small">урон +3% · всего +12%</div></div><span class="badge" style="background:#c47dff33;color:#e3c4ff">×4</span></div><div class="offer limit"><span class="medal" style="--row:#c47dff">∞</span><div style="flex:1"><div class="name">Предел: здоровье</div><div class="muted small">+10 и сразу лечит · всего +30</div></div><span class="badge" style="background:#c47dff33;color:#e3c4ff">×3</span></div><div class="offer"><span class="medal" style="--row:var(--hp)">✚</span><div style="flex:1"><div class="name">Лечение</div><div class="muted small">здоровье +30%</div></div></div><div class="band bottom"></div></div>
+</div></div><div class="cap"><b>«Предел»</b> — свой тон (фиолет пассивок, светлее) и знак ∞ в медальоне вместо значка навыка: игрок видит, что дошёл до конца дерева, а прибавки дальше бесконечны. Счётчик «×4» — сколько раз уже взят этот Предел, «всего +12%» — итог, ради которого берут. Лечение — обычной карточкой последней.</div></div>
+<div class="sect">T-0119 · Модификаторы забега «Спешка» и «Инверсия»</div>
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;border-radius:16px 16px 0 0;padding:18px 16px 22px;background:linear-gradient(180deg,var(--raised),var(--surface))">
+<div class="title" style="font-size:22px">Перед забегом</div>
+<div class="muted small" style="margin-bottom:8px">Модификатор — один на забег</div>
+<div style="display:flex;gap:8px"><div class="mod"><div class="ico">○</div><b>Без</b><div class="muted small">как обычно</div></div>
+<div class="mod on"><div class="ico">⏩</div><b>Спешка</b><div class="small" style="color:var(--success)">награда ×1,25</div><div class="muted small">орда гуще, уровни быстрее</div></div>
+<div class="mod"><div class="ico">🔄</div><b>Инверсия</b><div class="small" style="color:var(--success)">награда ×1,25</div><div class="muted small">врагов мало, но они крепче</div></div></div>
+<div style="height:14px"></div><button class="btn">В бой</button></div></div></div>
+<div class="cap"><b>Выбор в «Перед забегом»</b> — три плитки в ряд, «Без» первой; выбранная — рамкой акцента. Под именем — главное: награда и одной строкой суть. Закрытый уровнем — замок и «с 12 уровня».</div></div>
+<div><div class="phone"><div class="run"></div><div class="screen" style="background:transparent;padding:0">
+<div class="hud"><span class="chip">❤ <div class="bar" style="width:80px"><i style="width:70%;background:var(--hp)"></i></div></span><span style="flex:1"></span><span class="chip" style="font:700 15px/1 'Russo One',system-ui">4:12</span><span class="chip" style="box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)">⏩ Спешка</span></div>
+<div style="position:absolute;left:16px;right:16px;bottom:24px" class="relic"><div class="band top"></div><div class="center title" style="font-size:22px">Забег окончен</div>
+<div class="row lit" style="--row:var(--accent)"><span class="medal" style="--row:var(--accent);width:36px;height:36px;font-size:16px">⏩</span><div style="flex:1"><b>Спешка</b><div class="muted small">награда ×1,25</div></div><b style="color:var(--elite)">+56 🪙</b></div>
+<div class="band bottom"></div></div></div></div>
+<div class="cap"><b>В забеге и на итогах.</b> В HUD — плашка модификатора рядом с таймером: игрок помнит, почему орда такая. На итогах — строка-медальон с прибавкой к награде, как строки сундука: множитель — выгода, а не сноска.</div></div>
+</div>
+</body>
+</html>

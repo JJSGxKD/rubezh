@@ -16,7 +16,7 @@ function innerOf(markup: string, tag: string): string {
 }
 
 describe("свечение кнопки", () => {
-  const glowing = renderToStaticMarkup(createElement(Button, { glow: true, children: "Крутить" }));
+  const glowing = renderToStaticMarkup(createElement(Button, { track: "test", glow: true, children: "Крутить" }));
 
   it("стоит рядом с кнопкой в обёртке isolate, а не внутри неё", () => {
     expect(glowing.startsWith("<span")).toBe(true);
@@ -33,23 +33,23 @@ describe("свечение кнопки", () => {
     const halo = glowing.slice(glowing.indexOf("<span", 1), glowing.indexOf("</span>"));
     expect(halo).not.toContain("rounded-[inherit]");
     expect(halo).toContain("rounded-md");
-    const large = renderToStaticMarkup(createElement(Button, { glow: true, size: "l", children: "Играть" }));
+    const large = renderToStaticMarkup(createElement(Button, { track: "test", glow: true, size: "l", children: "Играть" }));
     expect(large.slice(large.indexOf("<span", 1), large.indexOf("</span>"))).toContain("rounded-lg");
   });
 
   it("без свечения разметка прежняя: корень — кнопка, обёртки нет", () => {
-    const plain = renderToStaticMarkup(createElement(Button, { children: "Играть" }));
+    const plain = renderToStaticMarkup(createElement(Button, { track: "test", children: "Играть" }));
     expect(plain.startsWith("<button")).toBe(true);
     expect(plain).not.toContain("animate-glow");
   });
 
   it("неактивная кнопка не светится и без обёртки", () => {
-    const disabled = renderToStaticMarkup(createElement(Button, { glow: true, disabled: true, children: "Играть" }));
+    const disabled = renderToStaticMarkup(createElement(Button, { track: "test", glow: true, disabled: true, children: "Играть" }));
     expect(disabled.startsWith("<button")).toBe(true);
   });
 
   it("block растягивает обёртку, а кнопка внутри остаётся на всю ширину", () => {
-    const block = renderToStaticMarkup(createElement(Button, { glow: true, block: true, children: "Играть" }));
+    const block = renderToStaticMarkup(createElement(Button, { track: "test", glow: true, block: true, children: "Играть" }));
     expect(block.slice(0, block.indexOf(">"))).toContain("w-full");
     expect(block.slice(block.indexOf("<button"), block.indexOf(">", block.indexOf("<button")))).toContain("w-full");
   });
@@ -63,6 +63,16 @@ describe("свечение значка виджета", () => {
     expect(face.indexOf("animate-glow")).toBeLessThan(face.indexOf("widget-face"));
     const tile = face.slice(face.indexOf("widget-face") - 12);
     expect(innerOf(tile, "span")).not.toContain("animate-glow");
+  });
+
+  // Круглое пятно за квадратной плиткой читалось грязью на экране, а сквозь
+  // полупрозрачную плитку было видно, как оно мигает (design/art/ui-ux.md, U-05).
+  it("повторяет форму плитки, а не круг, и не просвечивает сквозь неё", () => {
+    const halo = face.slice(face.indexOf("<span", 1), face.indexOf("</span>"));
+    expect(halo).not.toContain("rounded-full");
+    expect(halo).toContain("rounded-lg");
+    const tile = face.slice(face.indexOf("widget-face") - 12, face.indexOf(">", face.indexOf("widget-face")));
+    expect(tile).toContain("glow-face-solid");
   });
 
   it("под переключателем движения, как и раньше", () => {

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button, Hint, Modal } from "../../design-system/components";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import type { ItemAction, ItemView } from "../../state/items-api";
-import { CostLabel, rarityName, slotIcon, slotName, statName, statValue, toneOf } from "./arsenal-parts";
+import { CostLabel, RarityGlow, rarityName, slotIcon, slotName, statChange, statName, statValue, toneOf } from "./arsenal-parts";
 
 /**
  * Лист предмета: свойства, мощь против надетого в том же слоте и операции.
@@ -29,7 +29,12 @@ export function ItemSheet(props: {
     <Modal
       placement="bottom"
       title={slotName(item.slot)}
-      icon={<span className={`inline-flex size-14 items-center justify-center rounded-lg ring-2 ${toneOf(item.rarity).tile}`}>{slotIcon(item.slot, 28)}</span>}
+      icon={
+        <span className={`relative isolate inline-flex size-14 items-center justify-center rounded-lg ring-2 ${toneOf(item.rarity).tile}`}>
+          <RarityGlow rarity={item.rarity} seed={item.itemId} />
+          {slotIcon(item.slot, 28)}
+        </span>
+      }
       onDismiss={props.onClose}
       footer={
         <div className="grid gap-2">
@@ -38,13 +43,13 @@ export function ItemSheet(props: {
               {props.error}
             </p>
           )}
-          <Button block disabled={props.busy} onClick={() => props.onAction({ kind: item.equipped ? "unequip" : "equip", itemId: item.itemId })}>
+          <Button track="toggle_equip" block disabled={props.busy} onClick={() => props.onAction({ kind: item.equipped ? "unequip" : "equip", itemId: item.itemId })}>
             {item.equipped ? t("arsenal.item.unequip") : t("arsenal.item.equip")}
           </Button>
           {item.upgrade === null ? <p className="text-center text-xs text-text-muted">{t("arsenal.item.maxLevel")}</p> : null}
           <div className={`grid gap-2 ${item.upgrade !== null && item.reroll !== null ? "grid-cols-2" : "grid-cols-1"}`}>
             {item.upgrade === null ? null : (
-              <Button variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
+              <Button track="upgrade" variant="secondary" block disabled={props.busy} onClick={() => props.onAction({ kind: "upgrade", itemId: item.itemId })}>
                 <span className="flex flex-col items-center leading-tight">
                   {t("arsenal.item.upgrade")}
                   <CostLabel cost={item.upgrade} rarity={item.rarity} />
@@ -52,7 +57,7 @@ export function ItemSheet(props: {
               </Button>
             )}
             {item.reroll === null ? null : (
-              <Button variant="secondary" block disabled={props.busy} onClick={() => setRerolling((value) => !value)}>
+              <Button track="reroll" variant="secondary" block disabled={props.busy} onClick={() => setRerolling((value) => !value)}>
                 <span className="flex flex-col items-center leading-tight">
                   {t("arsenal.item.reroll")}
                   <CostLabel cost={item.reroll} rarity={item.rarity} />
@@ -65,7 +70,7 @@ export function ItemSheet(props: {
               {t("arsenal.item.powerNext", { from: formatNumber(item.power), to: formatNumber(item.next.power) })}
             </p>
           )}
-          <Button
+          <Button track="salvage"
             variant={salvaging ? "danger" : "ghost"}
             block
             disabled={props.busy}
@@ -130,17 +135,18 @@ export function ItemSheet(props: {
  * вложенная кнопка была бы невалидна, поэтому там подсказки нет.
  */
 function StatRow(props: { stat: string; value: number; nextValue?: number | undefined; withHint?: boolean }): ReactNode {
-  const changes = props.nextValue !== undefined && props.nextValue !== props.value;
+  const change = props.nextValue === undefined ? null : statChange(props.stat, props.value, props.nextValue);
   const hintKey = `item.stat.${props.stat}.hint`;
-  const name = <span className="text-text">{statName(props.stat)}</span>;
-  const value = changes ? (
-    <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-x-1 font-semibold tabular-nums">
-      <span className="whitespace-nowrap text-text-muted">{statValue(props.stat, props.value)}</span>
+  const name = <span className="min-w-0 text-text">{statName(props.stat)}</span>;
+  // Значение «было → стало» не переносится: переносится только название.
+  const value = change?.to ? (
+    <span className="flex shrink-0 items-baseline justify-end gap-x-1 whitespace-nowrap font-semibold tabular-nums">
+      <span className="text-text-muted">{change.from}</span>
       <span aria-hidden="true" className="text-text-muted">
         →
       </span>
       <span className="sr-only">{t("arsenal.item.statBecomes")}</span>
-      <span className="whitespace-nowrap text-success">{statValue(props.stat, props.nextValue ?? props.value)}</span>
+      <span className="text-success">{change.to}</span>
     </span>
   ) : (
     <span className="font-semibold tabular-nums text-success">{statValue(props.stat, props.value)}</span>

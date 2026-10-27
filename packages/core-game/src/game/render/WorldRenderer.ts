@@ -4,7 +4,8 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE } from "../patterns";
+import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
@@ -13,15 +14,21 @@ import { PickupRenderer } from "./pickups";
 import { projectileLook, type ProjectileLook } from "./projectile-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
-import { playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
+import { artFlashStart, NO_FLASH } from "./hit-flash";
+import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
+import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
+import { ArtMode, orbiterArtScale } from "./art-atlas";
+import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
 const lookScratch: ProjectileLook = { texture: "", rotation: 0, scaleX: 1, scaleY: 1 };
+/** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
+const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
 /**
  * Рендер состояния симуляции. Отделён от неё полностью: симуляция не знает,
@@ -59,11 +66,31 @@ export class WorldRenderer {
   /** повторяющийся фон: единственное, что даёт почувствовать движение мира */
   private readonly ground: Phaser.GameObjects.TileSprite;
   private readonly enemySprites: Phaser.GameObjects.Image[] = [];
+  /**
+   * Враги — своим подслоем: режиму чернового арта нужен порядок по `y` среди
+   * врагов, и сортировать весь слой с телеграфами и подборами нельзя.
+   */
+  private readonly enemyLayer: Phaser.GameObjects.Container;
+  /** начало прошлой вспышки попадания у спрайта арта — по слоту */
+  private readonly artFlashStart: Int32Array;
+  private readonly markLayer: Phaser.GameObjects.Container;
+  private readonly marks: StatusMarks;
+  private readonly heroMark: StatusMarks;
+  /** черновой арт за флагом разработчика (`RunDevVisuals.sprites`) */
+  private readonly art: ArtMode;
+  /** земля и декор чернового арта; создаются при первом включении режима */
+  private artGround: ArtGround | null = null;
   /** индекс текстуры врага: тип и ступень вместе, см. конструктор */
   private readonly enemySpriteType: Int16Array;
   private readonly stageCount: number;
   /** последний применённый вид спрайта — чтобы не дёргать Phaser каждый кадр */
   private readonly enemySpriteLook: Uint8Array;
+  /**
+   * Размер (`size` типа), с которым спрайт слота поставлен в последний раз: слот
+   * переходит к другому врагу с тем же видом, но другим размером, и по одному
+   * виду этого не узнать.
+   */
+  private readonly enemySpriteSize: Float32Array;
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   /** ключи текстур по паре «тип и ступень»: индекс = тип × число ступеней + ступень */
@@ -99,6 +126,8 @@ export class WorldRenderer {
     this.world = world;
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
+    this.enemySpriteSize = new Float32Array(world.config.maxEnemies);
+    this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
     const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
@@ -139,6 +168,7 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
+    ensureShapeTexture(scene, "bh-freeze", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.freezeWave, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS * scale, WORLD_COLORS.orbiter, "circle");
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
@@ -149,6 +179,13 @@ export class WorldRenderer {
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
     this.layer.add(this.player);
     this.rings = new PlayerRings(scene, world, this.layer);
+    this.enemyLayer = scene.add.container(0, 0);
+    this.layer.add(this.enemyLayer);
+    this.markLayer = scene.add.container(0, 0);
+    this.layer.add(this.markLayer);
+    this.marks = new StatusMarks(scene, this.markLayer);
+    this.heroMark = new StatusMarks(scene, this.markLayer);
+    this.art = new ArtMode(scene, world);
     this.eventsRead = world.events.written;
   }
 
@@ -168,6 +205,7 @@ export class WorldRenderer {
     this.layer.setScale(zoom);
     this.layer.setPosition(width / 2 - x * zoom, height / 2 - y * zoom);
 
+    this.artGround?.update(x, y, width / (2 * zoom), height / (2 * zoom));
     this.ground.setSize(width, height);
     this.ground.setTileScale(zoom, zoom);
     this.ground.setTilePosition(x - width / (2 * zoom), y - height / (2 * zoom));
@@ -195,10 +233,16 @@ export class WorldRenderer {
       lerp(this.world.player.prevX, this.world.player.x, t),
       lerp(this.world.player.prevY, this.world.player.y, t),
     );
+    const hero = this.world.player;
+    const tick = this.world.stats.tick;
+    const hurt = tick - this.playerHitTick < HIT_FLASH_TICKS;
+    if (!this.art.applyHero(this.player, tick, hero.vx, hero.vy, hero.faceX, hurt) && this.player.texture.key !== "bh-player") {
+      this.player.setTexture("bh-player").setFlipX(false);
+    }
     this.player.setVisible(this.world.player.alive);
     this.player.setAlpha(invulnerableAlpha(this.world.player.invulnerableTicks));
     this.applyPlayerFlash();
-    this.rings.draw(this.player.x, this.player.y);
+    this.rings.draw(this.player.x, this.player.y, this.art.on);
 
     if (this.debug !== null && this.visuals !== null) this.debug.draw(this.visuals, t, this.zoom);
   }
@@ -210,6 +254,7 @@ export class WorldRenderer {
   setGraphics(graphics: RunGraphicsOptions | null): void {
     this.graphics = graphics;
     this.applyEffectSwitches();
+    this.applyArtMode();
   }
 
   /**
@@ -224,6 +269,34 @@ export class WorldRenderer {
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
     if (wantsDebug && this.debug === null) this.debug = new DebugOverlay(this.scene, this.world, this.layer);
     this.debug?.setVisible(wantsDebug);
+    this.applyArtMode();
+  }
+
+  /**
+   * Арт включают настройка игрока («Новый облик боя», доступ — по флагу) или
+   * лист разработчика: режим листа работает независимо от настроек игрока.
+   */
+  private applyArtMode(): void {
+    this.art.setWanted(this.graphics?.art === true || this.visuals?.sprites === true, () => {
+      // Режим сменился — кэши вида и текстуры слотов устарели целиком.
+      this.enemySpriteType.fill(-1);
+      this.enemySpriteLook.fill(LOOK_NONE);
+      this.pickups.setArt(this.art.pickupArt());
+      this.feedback.setDeathArt(this.art.deathArt());
+      // Спрайты крупнее фигур, и толпа поверх героя прятала его целиком: в
+      // режиме арта враги под героем, без него — прежний порядок.
+      if (this.art.on) this.layer.moveBelow<Phaser.GameObjects.GameObject>(this.enemyLayer, this.player);
+      else this.layer.bringToTop(this.enemyLayer);
+      // Знаки состояний — сразу над врагами: над головой, но под героем.
+      this.layer.moveAbove<Phaser.GameObjects.GameObject>(this.markLayer, this.enemyLayer);
+      this.marks.setArt(this.art.statusMarkArt(), this.art.scale);
+      this.heroMark.setArt(this.art.statusMarkArt(), this.art.scale);
+      if (this.art.on && this.artGround === null) this.artGround = new ArtGround(this.scene, this.layer, this.world.config.unitScale);
+      this.artGround?.setVisible(this.art.on);
+      // Знак под ногами — на земле: сразу над землёй и декором, под всеми, кто по ней ходит.
+      if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
+      this.ground.setVisible(!this.art.on);
+    });
   }
 
   private applyEffectSwitches(): void {
@@ -242,29 +315,48 @@ export class WorldRenderer {
     const tick = this.world.stats.tick;
     const hitAge = tick - this.playerHitTick;
     const healAge = tick - this.playerHealTick;
+    // У героя-спрайта состояние — знаком над капюшоном, как у врагов: заливка
+    // превращала его в сплошной силуэт цвета стихии. Знак не гаснет на
+    // вспышке попадания — горение не прерывается ударом.
+    const art = this.player.texture.key !== "bh-player";
+    const status = art ? activePlayerStatus(this.world.player) : STATUS_TONE.none;
+    this.heroMark.begin();
+    if (status !== STATUS_TONE.none) {
+      this.heroMark.place(0, this.player.x, this.player.y - this.world.config.player.radius * HERO_MARK_RISE, status, tick);
+    }
+    this.heroMark.end();
 
     // Попадание важнее лечения: если было и то и другое, игрок должен видеть урон.
+    // У спрайта — кадр отдачи и тон умножением: сплошная заливка превращала
+    // героя в красный силуэт, а рисунок и есть то, что игрок узнаёт в толпе.
     if (hitAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(WORLD_COLORS.hurt);
-      this.player.setScale(1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS));
+      if (art) this.player.setTint(HERO_HURT_TINT);
+      else this.player.setTintFill(WORLD_COLORS.hurt);
+      this.player.setScale(this.heroScale() * (1 + 0.25 * (1 - hitAge / HIT_FLASH_TICKS)));
       return;
     }
     if (healAge < HIT_FLASH_TICKS) {
-      this.player.setTintFill(WORLD_COLORS.heal);
-      this.player.setScale(1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS));
+      if (art) this.player.setTint(HERO_HEAL_TINT);
+      else this.player.setTintFill(WORLD_COLORS.heal);
+      this.player.setScale(this.heroScale() * (1 + 0.2 * (1 - healAge / HIT_FLASH_TICKS)));
       return;
     }
     // Тон состояния на персонаже — без переключателя: это его собственное
     // состояние, и без тона непонятно, почему здоровье тает без попаданий
     // (docs/27-design-system-and-app-shell.md §7.1).
-    const tone = playerStatusTone(this.world.player, tick);
+    const tone = art ? STATUS_TONE.none : playerStatusTone(this.world.player, tick);
     if (tone !== STATUS_TONE.none) {
       this.player.setTintFill(STATUS_TONE_COLORS[tone] ?? WORLD_COLORS.hurt);
-      this.player.setScale(1);
+      this.player.setScale(this.heroScale());
       return;
     }
     this.player.clearTint();
-    this.player.setScale(1);
+    this.player.setScale(this.heroScale());
+  }
+
+  /** Масштаб героя: кадр атласа крупнее фигуры в пикселях текстуры. */
+  private heroScale(): number {
+    return this.player.texture.key === "bh-player" ? 1 : this.art.scale;
   }
 
   private syncEnemies(t: number): void {
@@ -276,7 +368,12 @@ export class WorldRenderer {
     // Тон состояния — эффект оружия: кто выключил эффекты ради тишины на
     // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
     const statusTones = this.weaponEffects.enabled;
+    // Оттенок замерших — сведения для боя: он включён всегда, а мигание перед
+    // концом — эффект, и без эффектов оттенок просто гаснет в конце.
+    const freezeLeft = this.world.stats.freezeTicks;
+    const frozenLook = statusTones && freezeLeft <= FREEZE_BLINK_TICKS && (freezeLeft >> 3) % 2 === 0 ? LOOK.frozenBlink : LOOK.frozen;
     this.telegraphs.begin();
+    this.marks.begin();
 
     for (let i = 0; i < enemies.count; i++) {
       const sprite = this.enemySprite(i);
@@ -287,7 +384,9 @@ export class WorldRenderer {
 
       const typeIndex = enemies.type[i];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
-      if (this.enemySpriteType[i] !== texture) {
+      if (this.art.applyEnemy(sprite, i, texture, tick)) {
+        this.enemySpriteType[i] = -1;
+      } else if (this.enemySpriteType[i] !== texture) {
         sprite.setTexture(this.textureKeyByType[texture]);
         this.enemySpriteType[i] = texture;
       }
@@ -296,22 +395,45 @@ export class WorldRenderer {
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
       // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
       // состояние только подсказывает, что с врагом.
-      let look =
-        tick - enemies.hitTick[i] < HIT_FLASH_TICKS
-          ? LOOK.hit
+      // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у
+      // фигуры, и под сплошным огнём не перезапускается каждым ударом.
+      let flashing: boolean;
+      if (this.art.shows(i)) {
+        const start = artFlashStart(tick, enemies.hitTick[i], this.artFlashStart[i]);
+        flashing = start !== null;
+        if (start !== null) this.artFlashStart[i] = start;
+      } else {
+        flashing = tick - enemies.hitTick[i] < HIT_FLASH_TICKS;
+      }
+      // Замерший не мигает телеграфом: его таймеры стоят, а мигание по тику
+      // обещало бы удар, которого не будет.
+      let look = flashing
+        ? LOOK.hit
+        : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
+          ? frozenLook
           : lookFor(type.pattern, enemies.phase[i], tick);
-      if (look === LOOK.normal && statusTones) look = LOOK.status + statusTone(enemies, i, tick);
-      this.applyLook(sprite, i, look);
+      // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
+      // только заморозка. Знак не зависит от вспышки попадания: иначе он
+      // мигал бы на каждом ударе по горящему.
+      const mark = statusTones && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
+      if (look === LOOK.normal && statusTones) {
+        if (!this.art.shows(i)) look = LOOK.status + statusTone(enemies, i, tick);
+        else if (keepsFill(mark)) look = LOOK.status + mark;
+      }
+      this.applyLook(sprite, i, look, type.size);
       sprite.setVisible(true);
 
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
       const y = lerp(enemies.prevY[i], enemies.y[i], t);
       sprite.setPosition(x, y);
+      if (mark !== STATUS_TONE.none) this.marks.place(i, x, y - type.radius * MARK_RISE, mark, tick);
       // Остриё смотрит туда, куда враг идёт, а на замахе — куда ударит: клин,
       // повёрнутый не в ту сторону, читается как чужой враг. Фигуры без
       // острия разворот не трогает — и сбрасывает его, если слот пула достался
       // им от клина.
-      if (ENEMY_LOOKS[type.pattern].shape === "chevron") {
+      if (this.art.shows(i)) {
+        this.art.faceEnemy(sprite, i, enemies.vx[i], enemies.vy[i]);
+      } else if (ENEMY_LOOKS[type.pattern].shape === "chevron") {
         const aimed = enemies.phase[i] === DASH_PHASE.telegraph || enemies.phase[i] === DASH_PHASE.dash;
         const faceX = aimed ? enemies.dirX[i] : enemies.vx[i];
         const faceY = aimed ? enemies.dirY[i] : enemies.vy[i];
@@ -328,7 +450,7 @@ export class WorldRenderer {
       if (type.pattern === "dash" && enemies.phase[i] === DASH_PHASE.telegraph) {
         const length = type.params.dashSpeed * type.params.dashDurationSec;
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
-        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, progress);
+        this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, type.radius, progress);
       }
       if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
         // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
@@ -343,6 +465,8 @@ export class WorldRenderer {
     }
 
     this.telegraphs.end();
+    this.marks.end();
+    this.art.sortEnemies(this.enemyLayer);
   }
 
   private syncProjectiles(t: number): void {
@@ -376,10 +500,16 @@ export class WorldRenderer {
    */
   private syncOrbiters(t: number): void {
     const drawn = orbiterRenderPoints(this.world, t, orbiterPoints);
+    const art = this.art.orbiterArt();
+    // Оберег черновой арта медленно вращается: свет в движении, а не наклейка.
+    const spin = art === null ? 0 : (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
     for (let k = 0; k < drawn; k++) {
       const sprite = this.orbiterSprite(k);
+      if (art === null && sprite.texture.key !== "bh-orbiter") sprite.setTexture("bh-orbiter").setScale(1).setRotation(0);
+      if (art !== null && sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(ORBITER_RADIUS));
       sprite.setVisible(true);
       sprite.setPosition(orbiterPoints[k].x, orbiterPoints[k].y);
+      if (art !== null) sprite.setRotation(spin + k);
     }
 
     for (let i = drawn; i < this.orbiterSprites.length; i++) {
@@ -391,17 +521,26 @@ export class WorldRenderer {
    * Вид спрайта меняется только при смене состояния: вызов setAlpha и
    * setScale на каждого врага каждый кадр — лишняя работа на сотнях объектов.
    */
-  private applyLook(sprite: Phaser.GameObjects.Image, index: number, look: number): void {
-    if (this.enemySpriteLook[index] === look && sprite.visible) return;
-    this.enemySpriteLook[index] = look;
-    sprite.setAlpha(look === LOOK.dim ? 0.35 : 1);
-    sprite.setScale(look === LOOK.hit ? 1.25 : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1);
+  private applyLook(sprite: Phaser.GameObjects.Image, index: number, look: number, size: number): void {
+    // Кадр атласа другого размера, чем фигура: смена «фигура ↔ арт» — тоже смена вида.
+    const art = this.art.shows(index);
+    const key = art ? look + LOOK_ART : look;
+    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && sprite.visible) return;
+    this.enemySpriteLook[index] = key;
+    this.enemySpriteSize[index] = size;
+    // Фигура строится по радиусу типа, `size` в нём уже есть; кадр атласа рисуется
+    // постоянным масштабом, и без множителя хитбокс с рисунком разошлись бы.
+    const base = art ? this.art.scale * size : 1;
+    sprite.setAlpha(look === LOOK.dim ? 0.35 : look === LOOK.frozenBlink ? 0.6 : 1);
+    const hitScale = art ? ART_HIT_SCALE : 1.25;
+    sprite.setScale(base * (look === LOOK.hit ? hitScale : look === LOOK.warning || look === LOOK.dim ? 1.2 : 1));
     // Заливка, а не умножение: белый множитель цвет не меняет вовсе, и
     // телеграф с попаданием читались бы только по размеру спрайта. Заливка
     // перекрашивает спрайт целиком и сохраняет его форму по альфе. Тон
     // состояния — тоже заливка: умножение на синий сделало бы красного врага
     // чёрным, а не замёрзшим.
     if (look === LOOK.warning || look === LOOK.hit) sprite.setTintFill(0xffffff);
+    else if (look === LOOK.frozen || look === LOOK.frozenBlink) sprite.setTintFill(WORLD_COLORS.freezeTint);
     else if (look > LOOK.status) sprite.setTintFill(STATUS_TONE_COLORS[look - LOOK.status] ?? 0xffffff);
     else sprite.clearTint();
   }
@@ -452,10 +591,20 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
         continue;
       }
+      if (kind === SIM_EVENT.freeze) {
+        // Заморозка: волна холода на радиус кольца спавна — достала и тех, кого не видно.
+        this.startBlast(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot], kind);
+        continue;
+      }
       if (kind === SIM_EVENT.strike) {
         // Кольцо площади под молнией рисует сама молния — отдельный взрыв
         // поверх неё превращал бы удар в два эффекта.
         this.weaponEffects.strike(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
+        continue;
+      }
+      if (kind === SIM_EVENT.strikeFire) {
+        // Огненный удар: тот же переключатель, что у молнии, но падает камень.
+        this.weaponEffects.meteor(events.x[slot], events.y[slot], events.radius[slot], events.tick[slot]);
         continue;
       }
       if (kind !== SIM_EVENT.explosion) continue;
@@ -515,7 +664,7 @@ export class WorldRenderer {
    */
   private enemySprite(index: number): Phaser.GameObjects.Image {
     while (this.enemySprites.length <= index) {
-      this.enemySprites.push(this.createHiddenSprite(this.textureKeyByType[0] ?? "bh-player"));
+      this.enemySprites.push(this.createHiddenSprite(this.textureKeyByType[0] ?? "bh-player", this.enemyLayer));
     }
     return this.enemySprites[index];
   }
@@ -528,9 +677,9 @@ export class WorldRenderer {
   }
 
   /** Все объекты мира живут в слое: камера — это его трансформация. */
-  private createHiddenSprite(key: string): Phaser.GameObjects.Image {
+  private createHiddenSprite(key: string, layer: Phaser.GameObjects.Container = this.layer): Phaser.GameObjects.Image {
     const sprite = this.scene.add.image(0, 0, key).setVisible(false).setDepth(1);
-    this.layer.add(sprite);
+    layer.add(sprite);
     return sprite;
   }
 
@@ -567,24 +716,38 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.heal]: "bh-heal",
   [SIM_EVENT.magnet]: "bh-magnet",
   [SIM_EVENT.dynamite]: "bh-dynamite",
+  [SIM_EVENT.freeze]: "bh-freeze",
   [SIM_EVENT.shield]: "bh-magnet",
 };
 /** Радиус кольца сработавшего щита, игровые единицы. */
 const SHIELD_RING_UNITS = 60;
 /** Радиус кольца магнита при подборе, игровые единицы. */
 const MAGNET_RING_UNITS = 120;
-/** Волны магнита и динамита — крупной текстурой и дольше обычного взрыва. */
+/** Волны магнита, динамита и заморозки — крупной текстурой и дольше обычного взрыва. */
 const WAVE_TEXTURE_UNITS = 128;
 const WAVE_LIFETIME_TICKS = 30;
 
 function isWave(kind: number): boolean {
-  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite;
+  return kind === SIM_EVENT.magnet || kind === SIM_EVENT.dynamite || kind === SIM_EVENT.freeze;
 }
 /** Радиус кольца лечения при подборе аптечки, игровые единицы. */
 const HEAL_RING_UNITS = 40;
 
+/** За сколько тиков до конца заморозка начинает мигать: две секунды. */
+const FREEZE_BLINK_TICKS = 120;
+
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
+/** Тон героя-спрайта на попадании и лечении — умножением, рисунок остаётся виден. */
+const HERO_HURT_TINT = 0xff8a8a;
+const HERO_HEAL_TINT = 0xb4ffb0;
+/** Раздувание попадания у спрайта чернового арта (design/art/registry.md, F-06); вспышка — `hit-flash.ts`. */
+const ART_HIT_SCALE = 1.1;
+
+/** Сброшенный вид: следующий кадр обязательно применит вид заново. */
+const LOOK_NONE = 255;
+/** Прибавка к коду вида у слота с кадром атласа: масштаб у него другой. */
+const LOOK_ART = 128;
 
 const LOOK = {
   normal: 0,
@@ -594,6 +757,10 @@ const LOOK = {
   dim: 2,
   /** только что получил урон */
   hit: 3,
+  /** заморожен подбором: бледно-голубая заливка */
+  frozen: 4,
+  /** замерший в последние секунды: тот же тон, прозрачнее — вот-вот пойдёт */
+  frozenBlink: 5,
   /**
    * Основа кодов тона состояния: `status + STATUS_TONE.*`. Сам `status` —
    * тон «нет», тот же обычный вид.

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
+import { PartnerNotFoundError } from "../partners/partner-errors.js";
 import { CHECKER_REFERER_HOSTS } from "./availability-checkers.js";
 import { isLinkNetwork, type LinkNetwork } from "./link-networks.js";
 import { isLinkTarget, type LinkTarget } from "./link-targets.js";
@@ -24,11 +25,36 @@ export interface LinkInput {
   registrationOn: RegistrationOn;
   /** куда ведёт ссылка; не задана — Mini App, как у всех ссылок до целей */
   target?: LinkTarget;
+  /** владелец-партнёр (T-0067); не задан или `null` — ссылка команды. После создания не меняется */
+  partnerId?: string | null;
 }
 
-export interface LinkRecord extends Omit<LinkInput, "target"> {
+/** Владелец ссылки — партнёр, которому записываются пришедшие по ней игроки. */
+export interface LinkOwner {
+  partnerId: string;
+  name: string;
+}
+
+export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   target: LinkTarget;
+  /** `null` — ссылка команды */
+  partner: LinkOwner | null;
   createdAt: Date;
+  /** источник заведён сам по параметру запуска `src-…_cmp-…` (Р116) */
+  auto: boolean;
+  /** канонический набор известных пар; `null` — у ссылок, заведённых командой */
+  autoKey: string | null;
+  /** метка партнёра из пары `prt-…`: к карточке партнёра не привязана (поле `partner` — владелец) */
+  partnerTag: string | null;
+  /** название, которое дали в панели; `null` — показывается кампания */
+  title: string | null;
+  /** скрыт в панели; запуски по нему считаются */
+  hiddenAt: Date | null;
+}
+
+/** Какие ссылки отдать списку: без условий — все. */
+export interface LinkFilter {
+  partnerId?: string;
 }
 
 export interface ClickInput {
@@ -65,10 +91,13 @@ export interface LinkStats extends LinkRecord {
 export const LINKS_REPOSITORY = Symbol("LINKS_REPOSITORY");
 
 export interface LinksRepository {
+  /** Партнёра с таким `partnerId` нет — `PartnerNotFoundError`. */
   create(link: LinkInput): Promise<LinkRecord>;
   byCode(code: string): Promise<LinkRecord | null>;
   recordClick(click: ClickInput): Promise<void>;
-  list(limit: number): Promise<LinkStats[]>;
+  list(limit: number, filter?: LinkFilter): Promise<LinkStats[]>;
+  /** Название партнёра; `null` — партнёра с таким id нет. Нужно, чтобы завести ссылку от его имени. */
+  partnerName(partnerId: string): Promise<string | null>;
   /** Сменить цель; прошлые клики остаются. `null` — ссылки с таким кодом нет. */
   retarget(code: string, target: LinkTarget): Promise<LinkRecord | null>;
 }
@@ -78,17 +107,28 @@ export class PrismaLinksRepository implements LinksRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async create(link: LinkInput): Promise<LinkRecord> {
-    return recordOf(await this.prisma.link.create({ data: link }));
+    try {
+      return recordOf(await this.prisma.link.create({ data: link, include: WITH_OWNER }));
+    } catch (error: unknown) {
+      // Партнёра удалили между проверкой и записью: внешний ключ не пускает ссылку без владельца.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003" && link.partnerId != null) throw new PartnerNotFoundError();
+      throw error;
+    }
+  }
+
+  async partnerName(partnerId: string): Promise<string | null> {
+    const row = await this.prisma.partner.findUnique({ where: { partnerId }, select: { name: true } });
+    return row?.name ?? null;
   }
 
   async byCode(code: string): Promise<LinkRecord | null> {
-    const row = await this.prisma.link.findUnique({ where: { code } });
+    const row = await this.prisma.link.findUnique({ where: { code }, include: WITH_OWNER });
     return row === null ? null : recordOf(row);
   }
 
   async retarget(code: string, target: LinkTarget): Promise<LinkRecord | null> {
     try {
-      return recordOf(await this.prisma.link.update({ where: { code }, data: { target } }));
+      return recordOf(await this.prisma.link.update({ where: { code }, data: { target }, include: WITH_OWNER }));
     } catch (error: unknown) {
       // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
@@ -116,8 +156,13 @@ export class PrismaLinksRepository implements LinksRepository {
     });
   }
 
-  async list(limit: number): Promise<LinkStats[]> {
-    const links = await this.prisma.link.findMany({ orderBy: { createdAt: "desc" }, take: limit });
+  async list(limit: number, filter: LinkFilter = {}): Promise<LinkStats[]> {
+    const links = await this.prisma.link.findMany({
+      where: filter.partnerId === undefined ? {} : { partnerId: filter.partnerId },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: WITH_OWNER,
+    });
     if (links.length === 0) return [];
     const codes = links.map((link) => link.code);
     // Запуски — по сессиям с кодом клика этой ссылки: связь клика с игроком
@@ -140,15 +185,26 @@ export class PrismaLinksRepository implements LinksRepository {
                WHERE s.start_kind = 'click' AND lc.link_code = c.link_code) AS launches
       FROM link_click c
       WHERE c.link_code IN (${Prisma.join(codes)})
-        AND (c.referer_host IS NULL OR c.referer_host NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
+        AND (c.referer_host IS NULL OR split_part(c.referer_host, ':', 1) NOT IN (${Prisma.join(CHECKER_REFERER_HOSTS)}))
       GROUP BY c.link_code`;
     // Прямые запуски — сессии вида `link`, где `start_ref` — сам код ссылки, без кликов;
-    // у ссылки, по которой не кликали ни разу, они всё равно есть.
+    // у ссылки, по которой не кликали ни разу, они всё равно есть. Автоисточник (Р116) ловит ещё и
+    // сессии вида `tagged` с его набором пар: связь идёт по ключу, а не по времени, поэтому запуски
+    // первых игроков, пришедших до заведения источника, считаются сразу. Один игрок по обоим путям —
+    // один запуск.
     const direct = await this.prisma.$queryRaw<{ link_code: string; direct_launches: number }[]>`
-      SELECT s.start_ref AS link_code, count(DISTINCT s.account_id)::int AS direct_launches
-      FROM account_session s
-      WHERE s.start_kind = 'link' AND s.start_ref IN (${Prisma.join(codes)})
-      GROUP BY s.start_ref`;
+      SELECT t.link_code, count(DISTINCT t.account_id)::int AS direct_launches
+      FROM (
+        SELECT s.start_ref AS link_code, s.account_id
+        FROM account_session s
+        WHERE s.start_kind = 'link' AND s.start_ref IN (${Prisma.join(codes)})
+        UNION ALL
+        SELECT l.code AS link_code, s.account_id
+        FROM link l
+        JOIN account_session s ON s.start_kind = 'tagged' AND s.start_ref = l.auto_key
+        WHERE l.code IN (${Prisma.join(codes)})
+      ) t
+      GROUP BY t.link_code`;
     const byCode = new Map(stats.map((row) => [row.link_code, row]));
     const directByCode = new Map(direct.map((row) => [row.link_code, row.direct_launches]));
     return links.map((link) => {
@@ -165,15 +221,22 @@ export class PrismaLinksRepository implements LinksRepository {
   }
 }
 
+/** Владельца ссылки читаем вместе с ней: название нужно и виду ссылки, и карточке партнёра. */
+const WITH_OWNER = { partner: { select: { name: true } } } as const;
+
+type LinkRow = Prisma.LinkGetPayload<{ include: typeof WITH_OWNER }>;
+
 /**
  * Строка базы — в запись: сеть и момент регистрации держит `CHECK`, здесь только сужение типа.
  * Цель, которой код не знает (строка из будущей версии), читается как Mini App — ссылка работает.
  */
-function recordOf(row: Omit<LinkRecord, "network" | "registrationOn" | "target"> & { network: string | null; registrationOn: string; target: string }): LinkRecord {
+function recordOf(row: LinkRow): LinkRecord {
+  const { partner, partnerId, ...rest } = row;
   return {
-    ...row,
+    ...rest,
     network: row.network === null || !isLinkNetwork(row.network) ? null : row.network,
     registrationOn: row.registrationOn === "launch" ? "launch" : "first_run",
     target: isLinkTarget(row.target) ? row.target : "app",
+    partner: partner === null || partnerId === null ? null : { partnerId, name: partner.name },
   };
 }

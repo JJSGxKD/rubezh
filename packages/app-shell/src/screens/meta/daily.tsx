@@ -9,7 +9,10 @@ import { loadBadges } from "../../state/badges-api";
 import { createDailyApi, dailyAvailable, dayOfWeek, type DailyDay, type DailyView } from "../../state/daily-api";
 import { useNavigation } from "../../state/navigation";
 import { track } from "../../state/shell";
+import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
+import { burstAt, RewardBurst, type Burst } from "../reward-burst";
+import { coinPile, PILE_SPOTS } from "./daily-pile";
 import { dailyReloadDelayMs } from "./daily-reload";
 import { formatCountdown, msUntilReset, useClock } from "./schedule";
 
@@ -33,6 +36,7 @@ export function DailyScreen(): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
   const [claiming, setClaiming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [burst, setBurst] = useState<Burst | null>(null);
 
   // silent — перечитывание на смене суток: экран не уходит в «загрузку» и не
   // перерисовывает дни, пока ответ не пришёл.
@@ -70,6 +74,9 @@ export function DailyScreen(): ReactNode {
       const today = view.days.find((day) => day.today);
       if (today !== undefined) track("daily_reward_claimed", { day: dayOfWeek(today, view.days), week: view.week });
       setNotice(t("daily.got", { what: gotText(response.data.coins, response.data.shards) }));
+      rewardFeedback(response.data.coins > 0 ? "coins" : response.data.shards > 0 ? "shards" : null);
+      // Монеты вылетают из сегодняшней плитки.
+      setBurst(burstAt(document.querySelector('[aria-current="date"]'), response.data.coins, "coin"));
       void loadWallet();
     }
     void loadBadges();
@@ -84,7 +91,7 @@ export function DailyScreen(): ReactNode {
       onBack={() => navigation.pop()}
       footer={
         dailyAvailable() ? (
-          <Button size="l" block disabled={ready === null || !ready.canClaim} loading={claiming} onClick={() => void claim()}>
+          <Button track="claim_daily" size="l" block disabled={ready === null || !ready.canClaim} loading={claiming} onClick={() => void claim()}>
             {ready !== null && !ready.canClaim ? t("daily.next", { time: formatCountdown(msUntilReset(now, "daily")) }) : t("daily.claim")}
           </Button>
         ) : undefined
@@ -110,10 +117,20 @@ export function DailyScreen(): ReactNode {
             </div>
             <ol className="mt-3 grid grid-cols-4 gap-2 landscape:grid-cols-7">
               {ready.days.map((day, index) => (
-                <DayCell key={day.day} day={day} index={index} last={index === ready.days.length - 1} />
+                <DayCell
+                  key={day.day}
+                  day={day}
+                  index={index}
+                  last={index === ready.days.length - 1}
+                  pile={coinPile(
+                    day.coins,
+                    ready.days.map((entry) => entry.coins),
+                  )}
+                />
               ))}
             </ol>
             {notice === null ? null : <p className="mt-3 text-center text-sm font-semibold text-success">{notice}</p>}
+            {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
             <p className="mt-4 text-xs text-text-muted">{t("daily.step.hint")}</p>
             {ready.nextStep > ready.step ? <p className="mt-1 text-xs text-text-muted">{t("daily.step.next", { step: formatDecimal(ready.nextStep) })}</p> : null}
           </>
@@ -123,9 +140,17 @@ export function DailyScreen(): ReactNode {
   );
 }
 
-function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactNode {
+/**
+ * Плитка дня. Сегодняшний день подписан так же, как остальные, — «День N»:
+ * «СЕГОДНЯ» в узкой плитке на 320 px упиралось в края. «Сегодня» передают
+ * рамка, цвет подписи и точка перед ней. Подпись — бликом акцента: сам акцент
+ * на выбранной карточке ниже 4,5:1. У забранного дня гаснет награда, а не
+ * подпись: приглушённая подпись под прозрачностью тоже падала ниже порога.
+ */
+export function DayCell(props: { day: DailyDay; index: number; last: boolean; pile?: number }): ReactNode {
   const { day } = props;
-  const label = day.today && !day.claimed ? t("daily.today") : t("daily.day", { day: props.index + 1 });
+  const label = t("daily.day", { day: props.index + 1 });
+  const past = day.claimed && !day.today;
   return (
     <li
       aria-current={day.today ? "date" : undefined}
@@ -134,20 +159,51 @@ function DayCell(props: { day: DailyDay; index: number; last: boolean }): ReactN
       className={[
         "relative flex animate-rise-in flex-col items-center justify-between gap-2 overflow-hidden rounded-lg px-1 py-3 text-center",
         day.today ? "surface-card-selected" : "surface-card",
-        day.claimed && !day.today ? "opacity-60" : "",
         props.last ? "col-span-2 landscape:col-span-1" : "",
       ].join(" ")}
     >
-      <span className={["font-display text-xs font-semibold tracking-wide uppercase", day.today ? "text-accent" : "text-text-muted"].join(" ")}>{label}</span>
-      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-3" : "size-11"}`}>
-        {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinIcon size={props.last ? 28 : 20} />}
+      <span className={["inline-flex items-center gap-1 font-display text-xs font-semibold tracking-wide whitespace-nowrap uppercase", day.today ? "text-accent-glow" : "text-text-muted"].join(" ")}>
+        {day.today ? <span aria-hidden="true" data-today-dot="" className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
+        {label}
+      </span>
+      <span aria-hidden="true" className={`inline-flex items-center justify-center gap-1 rounded-md bg-accent/15 ${props.last ? "h-14 px-2" : "size-11"} ${past ? "opacity-60" : ""}`}>
+        {day.claimed ? <Check size={props.last ? 28 : 20} className="text-success" /> : <CoinPile size={props.pile ?? 1} large={props.last} />}
         {day.shards > 0 && !day.claimed ? <ShardIcon rarity="common" size={22} /> : null}
       </span>
-      <span aria-hidden="true" className="min-h-5 font-display text-sm font-bold tabular-nums text-text">
+      <span aria-hidden="true" className={`min-h-5 font-display text-sm font-bold tabular-nums text-text ${past ? "opacity-60" : ""}`}>
         {formatNumber(day.coins)}
         {day.shards > 0 ? <span className="text-text-muted"> +{day.shards}</span> : null}
       </span>
     </li>
+  );
+}
+
+/**
+ * Горсть монет (U-12): чем щедрее день, тем больше монет — рост награды
+ * виден до того, как прочитаешь число. Монеты — в плитке, без анимации:
+ * неделя на экране и так выезжает лесенкой.
+ */
+function CoinPile(props: { size: number; large: boolean }): ReactNode {
+  const spots = PILE_SPOTS[Math.min(Math.max(props.size, 1), PILE_SPOTS.length) - 1] ?? [];
+  const coin = props.large ? 22 : 18;
+  const spread = props.large ? 1.35 : 1;
+  // Рамка — под самую широкую горсть: раскладка в пределах ±13 × ±8 px
+  // (`PILE_SPOTS`), иначе крайние монеты вылезали за плитку.
+  const width = coin + 26 * spread;
+  const height = coin + 16 * spread;
+  return (
+    <span className="relative inline-block shrink-0" style={{ width, height }}>
+      {spots.map(([x, y], index) => (
+        <span
+          key={index}
+          data-pile-coin=""
+          className="absolute"
+          style={{ left: (width - coin) / 2 + x * spread, top: (height - coin) / 2 + y * spread }}
+        >
+          <CoinIcon size={coin} />
+        </span>
+      ))}
+    </span>
   );
 }
 

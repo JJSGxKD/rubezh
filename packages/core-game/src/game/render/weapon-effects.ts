@@ -39,15 +39,18 @@ export class WeaponEffects {
   /** Удар молнии — вызывается рендером на событие удара из симуляции. */
   strike(x: number, y: number, radius: number, tick: number): void {
     if (!this.enabled) return;
-    while (this.bolts.length < MAX_BOLTS) {
-      const graphics = this.scene.add.graphics().setDepth(4).setVisible(false);
-      this.layer.add(graphics);
-      this.bolts.push({ graphics, startTick: -1 });
-    }
-    const bolt = this.bolts[this.nextBolt];
-    this.nextBolt = (this.nextBolt + 1) % MAX_BOLTS;
+    const bolt = this.nextBoltSlot();
     bolt.startTick = tick;
     drawBolt(bolt.graphics, x, y, radius, tick, this.world.config.unitScale);
+    bolt.graphics.setVisible(true).setAlpha(1);
+  }
+
+  /** Огненный удар: падающий камень в точку удара; гасится тем же переключателем, что и молния. */
+  meteor(x: number, y: number, radius: number, tick: number): void {
+    if (!this.enabled) return;
+    const bolt = this.nextBoltSlot();
+    bolt.startTick = tick;
+    drawMeteor(bolt.graphics, x, y, radius, tick, this.world.config.unitScale);
     bolt.graphics.setVisible(true).setAlpha(1);
   }
 
@@ -74,6 +77,18 @@ export class WeaponEffects {
       // не висящая в воздухе линия.
       bolt.graphics.setAlpha(age < 3 ? 1 : 1 - (age - 3) / (BOLT_LIFETIME_TICKS - 3));
     }
+  }
+
+  /** Следующая графика из общего пула молний и камней: оба эффекта живут столько же и гаснут вместе. */
+  private nextBoltSlot(): { graphics: Phaser.GameObjects.Graphics; startTick: number } {
+    while (this.bolts.length < MAX_BOLTS) {
+      const graphics = this.scene.add.graphics().setDepth(4).setVisible(false);
+      this.layer.add(graphics);
+      this.bolts.push({ graphics, startTick: -1 });
+    }
+    const bolt = this.bolts[this.nextBolt];
+    this.nextBolt = (this.nextBolt + 1) % MAX_BOLTS;
+    return bolt;
   }
 
   private syncAuras(t: number): void {
@@ -160,6 +175,39 @@ function drawBolt(
   graphics.fillCircle(x, y, 5 * scale);
 }
 
+/**
+ * Откуда падает камень: сверху-справа под фиксированным углом, длина пути —
+ * от радиуса удара. Чистая функция от входов: ни генератора, ни часов, поэтому
+ * на паузе камень не перерисовывается, а повтор забега рисует тот же.
+ */
+export function meteorTrail(x: number, y: number, radius: number, tick: number): { fromX: number; fromY: number } {
+  const length = radius * METEOR_TRAIL_RADIUS_MUL;
+  const wobble = ((tick * 37) % 7) - 3;
+  const angle = METEOR_ANGLE + wobble * 0.01;
+  return { fromX: x + Math.sin(angle) * length, fromY: y - Math.cos(angle) * length };
+}
+
+/** Камень с огненным хвостом и вспышка по радиусу площади. */
+function drawMeteor(
+  graphics: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  radius: number,
+  tick: number,
+  scale: number,
+): void {
+  const { fromX, fromY } = meteorTrail(x, y, radius, tick);
+  const tail = [{ x: fromX, y: fromY }, { x, y }];
+
+  graphics.clear();
+  graphics.fillStyle(WORLD_COLORS.aura, 0.22);
+  graphics.fillCircle(x, y, radius);
+  strokePath(graphics, tail, 9 * scale, WORLD_COLORS.aura, 0.35);
+  strokePath(graphics, tail, 3 * scale, WORLD_COLORS.fireCore, 1);
+  graphics.fillStyle(WORLD_COLORS.fireCore, 0.95);
+  graphics.fillCircle(x, y, 6 * scale);
+}
+
 function strokePath(
   graphics: Phaser.GameObjects.Graphics,
   points: readonly { x: number; y: number }[],
@@ -184,3 +232,5 @@ const BOLT_LIFETIME_TICKS = 14;
 const BOLT_HEIGHT_UNITS = 360;
 const BOLT_JITTER_UNITS = 26;
 const BOLT_SEGMENTS = 7;
+const METEOR_ANGLE = 0.5;
+const METEOR_TRAIL_RADIUS_MUL = 4;

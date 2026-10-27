@@ -74,6 +74,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   MediaImage: keep("картинки панели"),
   Link: keep("ссылки кампаний"),
   LinkClick: keep("клики по ссылкам — атрибуция"),
+  StartParamKey: keep("сводка незнакомых ключей параметра запуска — без игроков и значений, нужна команде (Р116)"),
   AdNetwork: keep("настройка рекламных сетей"),
   NetworkTask: keep("настройка заданий сетей"),
   AdBlock: keep("рекламные блоки"),
@@ -96,6 +97,11 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FxManualRate: keep("курсы валют — не данные игрока"),
   FxSnapshot: keep("снимки курсов — на них ссылаются цены и платежи"),
   FxSourceState: keep("состояние источников курсов"),
+  FxSourceLimit: keep("лимиты источников курсов задаёт команда в панели"),
+
+  // --- остаются: журнал запросов сервера ---
+  OutboundCall: keep("журнал исходящих запросов — не данные игрока, сам стирается через 7 суток (Р92)"),
+  InboundMinute: keep("сводка входящих запросов по маршрутам — без игроков, сама стирается через 7 суток (Р92)"),
 
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
@@ -116,6 +122,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
+  BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
 /** Порядок стирания: дочерние раньше родительских. Ровно модели с `action: "wipe"`. */
@@ -138,4 +145,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "WheelSpin",
   "VipDaily",
   "Notification",
+  "BotMentionTask",
 ];

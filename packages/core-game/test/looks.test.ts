@@ -42,7 +42,13 @@ describe("враги в красной гамме", () => {
   it("формы у всех поведений разные: главное различие типа — форма, а не оттенок", () => {
     const shapes = PATTERNS.map((pattern) => ENEMY_LOOKS[pattern].shape);
     expect(new Set(shapes).size).toBe(PATTERNS.length);
-    expect(PATTERNS).toHaveLength(9);
+    expect(PATTERNS).toHaveLength(10);
+  });
+});
+
+describe("кольцо стражей", () => {
+  it("у паттерна cordon есть облик: форма и цвет", () => {
+    expect(ENEMY_LOOKS.cordon).toEqual({ shape: "diamond", color: 0xb3203f });
   });
 });
 
@@ -137,6 +143,28 @@ describe("облик подборов", () => {
     expect(one.size).toBeLessThan(three.size);
     expect(three.size).toBeLessThan(five.size);
     expect(new Set([one.key, three.key, five.key]).size).toBe(3);
+  });
+
+  // Ореол сундука на земле — тон яруса окна вскрытия: размер сундука читается
+  // издалека цветом света, а не только величиной коробки.
+  it("у сундуков ореол своего тона, у прочих подборов ореола нет", () => {
+    const auras = [PICKUP_KIND.chestOne, PICKUP_KIND.chestThree, PICKUP_KIND.chestFive].map((kind) => PICKUP_LOOKS[kind].aura);
+    expect(auras.every((aura) => typeof aura === "number")).toBe(true);
+    expect(new Set(auras).size).toBe(3);
+    for (const kind of [PICKUP_KIND.medkit, PICKUP_KIND.magnet, PICKUP_KIND.dynamite, PICKUP_KIND.freeze]) {
+      expect(PICKUP_LOOKS[kind].aura).toBeUndefined();
+    }
+  });
+
+  it("у заморозки холодный облик крупнее аптечки, а оттенок замерших и волна — холодных тонов", () => {
+    const look = PICKUP_LOOKS[PICKUP_KIND.freeze];
+    expect(look.id).toBe("freeze");
+    expect(look.size).toBe(1.25);
+    expect(look.size).toBeGreaterThan(PICKUP_LOOKS[PICKUP_KIND.medkit].size);
+    for (const color of [look.color, WORLD_COLORS.freezeWave, WORLD_COLORS.freezeTint]) {
+      // Синяя половина круга: красный канал заметно слабее синего.
+      expect((color >> 16) & 0xff, color.toString(16)).toBeLessThan(color & 0xff);
+    }
   });
 
   it("ключи текстур подборов не повторяются", () => {

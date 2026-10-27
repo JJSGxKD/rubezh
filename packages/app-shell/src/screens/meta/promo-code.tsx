@@ -9,7 +9,7 @@ import { useNavigation } from "../../state/navigation";
 import { createPromoApi, errorKey, promoAvailable, rewardLines, type PromoReward, type PromoResult } from "../../state/promo-api";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track } from "../../state/shell";
-import { uiFeedback } from "../../state/ui-feedback";
+import { rewardFeedback, uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
 import { RestrictedPlaque } from "./restricted-plaque";
 
@@ -52,9 +52,9 @@ export function PromoCodeScreen(): ReactNode {
       input.current?.focus();
       return;
     }
-    uiFeedback("reward");
-    setResult(response.data);
     const { credited } = response.data;
+    rewardFeedback(credited.gems > 0 ? "gems" : credited.coins > 0 ? "coins" : credited.shard_common + credited.shard_uncommon > 0 ? "shards" : null);
+    setResult(response.data);
     track("promo_code_applied", {
       campaign: response.data.campaignId,
       kind: response.data.kind,
@@ -82,10 +82,10 @@ export function PromoCodeScreen(): ReactNode {
         onBack={() => navigation.pop()}
         footer={
           <div className="flex flex-col gap-2">
-            <Button size="l" block glow onClick={() => navigation.pop()}>
+            <Button track="close" size="l" block glow onClick={() => navigation.pop()}>
               {t("promo.done.ok")}
             </Button>
-            <Button variant="ghost" block onClick={again}>
+            <Button track="enter_another" variant="ghost" block onClick={again}>
               {t("promo.done.more")}
             </Button>
           </div>
@@ -114,7 +114,7 @@ export function PromoCodeScreen(): ReactNode {
       onBack={() => navigation.pop()}
       footer={
         promoAvailable() ? (
-          <Button size="l" block glow disabled={code.trim() === "" || restricted} loading={sending} onClick={() => void submit()}>
+          <Button track="apply" size="l" block glow disabled={code.trim() === "" || restricted} loading={sending} onClick={() => void submit()}>
             {sending ? t("promo.sending") : t("promo.apply")}
           </Button>
         ) : undefined

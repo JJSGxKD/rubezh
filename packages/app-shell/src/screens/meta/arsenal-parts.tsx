@@ -1,10 +1,11 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Footprints, Gem, Hand, Ribbon, Sword } from "lucide-react";
 import { ArmorIcon } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatDecimal, formatNumber, hasTranslation, t } from "../../i18n";
 import type { ItemCost, ItemView } from "../../state/items-api";
+import { rarityLook, shineDelayMs } from "./rarity-look";
 
 /**
  * Общие части арсенала: тон редкости, значок слота, плитка предмета, подписи
@@ -78,8 +79,22 @@ export function statName(stat: string): string {
 /** Здоровье, восстановление и броня — числом, остальное — прибавкой в процентах. */
 const FLAT_STATS: ReadonlySet<string> = new Set(["maxHp", "regenPerSec", "armor"]);
 
-export function statValue(stat: string, value: number): string {
-  return FLAT_STATS.has(stat) ? `+${formatDecimal(value, 1)}` : `+${formatDecimal(value * 100, 1)}%`;
+export function statValue(stat: string, value: number, digits = 1): string {
+  return FLAT_STATS.has(stat) ? `+${formatDecimal(value, digits)}` : `+${formatDecimal(value * 100, digits)}%`;
+}
+
+/**
+ * «Было → стало» для строки свойства. Малая прибавка на одном знаке после
+ * запятой совпадает с прежней — тогда показываем два знака. Если и на двух
+ * одинаково, свойство не меняется: `to: null`, строка показывает одно значение.
+ */
+export function statChange(stat: string, from: number, to: number): { from: string; to: string | null } {
+  for (const digits of [1, 2]) {
+    const before = statValue(stat, from, digits);
+    const after = statValue(stat, to, digits);
+    if (before !== after) return { from: before, to: after };
+  }
+  return { from: statValue(stat, from), to: null };
 }
 
 export function itemLabel(item: Pick<ItemView, "slot" | "rarity" | "level">): string {
@@ -107,6 +122,52 @@ export function CostLabel(props: { cost: ItemCost; rarity: string }): ReactNode 
   );
 }
 
+/** Четырёхлучевая искра мифической редкости. */
+function Spark(props: { className: string; delayMs: number }): ReactNode {
+  return (
+    <svg viewBox="0 0 10 10" className={`absolute size-2.5 animate-star-twinkle ${props.className}`} style={{ animationDelay: `-${String(props.delayMs)}ms` }}>
+      <path d="M5 0 6 4 10 5 6 6 5 10 4 6 0 5 4 4z" fill="color-mix(in oklab, var(--rarity-tone) 35%, white)" />
+    </svg>
+  );
+}
+
+/**
+ * Слои редкости под значком плитки (rarity-look.ts): свет снизу, оправа,
+ * блеск, ореол, искры. Плитке нужны `relative isolate` и скругление: слои
+ * лежат на `-z-1` и берут скругление через `rounded-[inherit]`. `seed` —
+ * ключ предмета: по нему блеск соседних плиток вспыхивает в разное время.
+ */
+export function RarityGlow(props: { rarity: string; seed: string }): ReactNode {
+  const look = rarityLook(props.rarity);
+  if (!look.glow) return null;
+  const delay = shineDelayMs(props.seed);
+  const style = { "--rarity-tone": look.tone } as CSSProperties;
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 -z-1 rounded-[inherit]" style={style}>
+      {look.halo ? <span className="absolute inset-0 rounded-[inherit] rarity-halo" /> : null}
+      <span className="absolute inset-0 overflow-hidden rounded-[inherit] rarity-glow">
+        {look.facets ? <span className="absolute inset-0 rounded-[inherit] rarity-facets" /> : null}
+        {look.shine ? (
+          <span
+            className="absolute inset-y-0 left-0 w-1/2 animate-btn-shine opacity-0"
+            style={{
+              animationDelay: `-${String(delay)}ms`,
+              backgroundImage: "linear-gradient(90deg, transparent, color-mix(in oklab, var(--rarity-tone) 35%, white 30%), transparent)",
+            }}
+          />
+        ) : null}
+      </span>
+      {look.sparks ? (
+        <>
+          <Spark className="top-0.5 left-0.5" delayMs={delay} />
+          {/* Правый нижний угол занят уровнем плитки — вторая искра слева. */}
+          <Spark className="bottom-0.5 left-0.5" delayMs={delay + 1_300} />
+        </>
+      ) : null}
+    </span>
+  );
+}
+
 /** Слот снаряжения вокруг персонажа: предмет или пустое место под него. */
 export function EquipSlot(props: { slot: string; item: ItemView | undefined; onOpen: (item: ItemView) => void }): ReactNode {
   const { item } = props;
@@ -126,8 +187,9 @@ export function EquipSlot(props: { slot: string; item: ItemView | undefined; onO
       type="button"
       aria-label={itemLabel(item)}
       onClick={() => props.onOpen(item)}
-      className={`relative inline-flex size-16 items-center justify-center rounded-lg ring-2 transition-transform active:scale-95 ${toneOf(item.rarity).tile}`}
+      className={`relative isolate inline-flex size-16 items-center justify-center rounded-lg ring-2 transition-transform active:scale-95 ${toneOf(item.rarity).tile}`}
     >
+      <RarityGlow rarity={item.rarity} seed={item.itemId} />
       {slotIcon(item.slot, 28)}
       <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-pill bg-bg/90 px-1.5 font-display text-xs font-bold whitespace-nowrap tabular-nums text-text">
         {t("arsenal.level", { level: item.level })}
@@ -146,12 +208,13 @@ export function ItemTile(props: { item: ItemView; selected: boolean; dimmed: boo
       aria-pressed={props.selected}
       onClick={() => props.onPress(item)}
       className={[
-        "relative flex aspect-square w-full items-center justify-center rounded-md transition-[transform,opacity] active:scale-95",
+        "relative isolate flex aspect-square w-full items-center justify-center rounded-md transition-[transform,opacity] active:scale-95",
         toneOf(item.rarity).tile,
         props.selected ? "ring-2 ring-accent" : "ring-1",
         props.dimmed ? "opacity-40" : "opacity-100",
       ].join(" ")}
     >
+      <RarityGlow rarity={item.rarity} seed={item.itemId} />
       {slotIcon(item.slot, 22)}
       <span className="absolute right-1 bottom-0.5 font-display text-xs font-bold tabular-nums text-text">{item.level}</span>
       {props.selected ? <span aria-hidden="true" className="absolute top-1 left-1 size-2 rounded-full bg-accent" /> : null}

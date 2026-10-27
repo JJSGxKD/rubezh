@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { Sparkles } from "lucide-react";
 import { BOOSTS } from "@bh/core-game";
 import boosts from "../src/i18n/ru-boosts.json";
-import { boostIcon } from "../src/screens/boost-icons";
+import { BOOST_FALLBACK, boostIcon } from "../src/screens/boost-icons";
 
 // Буст без текста покажет игроку ключ вместо имени: список бустов берётся из
 // контента движка, а тексты живут в словаре оболочки (docs/35-stage4-plan.md, Р39).
@@ -26,7 +25,7 @@ describe("тексты бустов", () => {
   });
 
   it("у каждого буста контента свой значок, общий — только у незнакомого", () => {
-    expect(BOOSTS.filter((boost) => boostIcon(boost.id) === Sparkles).map((boost) => boost.id)).toEqual([]);
-    expect(boostIcon("unknown")).toBe(Sparkles);
+    expect(BOOSTS.filter((boost) => boostIcon(boost.id) === BOOST_FALLBACK).map((boost) => boost.id)).toEqual([]);
+    expect(boostIcon("unknown")).toBe(BOOST_FALLBACK);
   });
 });

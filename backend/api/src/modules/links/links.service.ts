@@ -4,13 +4,14 @@ import { AppLinks } from "../../platforms/ports/app-links.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { classifyClient } from "../attribution/client-class.js";
 import { ipPrefix } from "../attribution/ip-prefix.js";
+import { PartnerNotFoundError } from "../partners/partner-errors.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { checkerOf } from "./availability-checkers.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
 import { macroQuery, networkParamsOf, type LinkNetwork } from "./link-networks.js";
 import { clickDeepTarget, clickTarget, directUrl, type LinkTarget, type LinkTargetBuilders } from "./link-targets.js";
-import { LINKS_REPOSITORY, type LinkRecord, type LinksRepository, type LinkStats, type RegistrationOn } from "./links.repository.js";
+import { LINKS_REPOSITORY, type LinkFilter, type LinkRecord, type LinksRepository, type LinkStats, type RegistrationOn } from "./links.repository.js";
 
 /**
  * Редирект-ссылки (docs/24-attribution-and-sharing.md §3, WP16): команда
@@ -25,6 +26,11 @@ import { LINKS_REPOSITORY, type LinkRecord, type LinksRepository, type LinkStats
  * Куда ведёт переход, решает цель ссылки (Р95): Mini App, чат с ботом или
  * лендинг. Кроме переходника у ссылки без сети есть прямая — сразу в бота или
  * Mini App, без клика (`link-targets.ts`).
+ *
+ * У ссылки может быть владелец-партнёр (docs/35-stage4-plan.md Р96, T-0067):
+ * пришедший по ней новичок записывается за партнёром при первом входе
+ * (`partners/partner-links.ts`). Владелец задаётся при создании и не
+ * меняется — клики и привязки уже записаны за ним.
  */
 
 export interface VisitorInfo {
@@ -59,6 +65,8 @@ export interface NewLink {
   registrationOn?: RegistrationOn;
   /** куда ведёт; не задана — Mini App */
   target?: LinkTarget;
+  /** партнёр-владелец; не задан — ссылка команды */
+  partnerId?: string | null;
 }
 
 /**
@@ -120,8 +128,12 @@ export class LinksService {
 
   async create(actor: AccountRef, input: NewLink): Promise<LinkView> {
     await this.roles.require(actor, "links.manage");
+    const partnerId = input.partnerId ?? null;
+    // Понятный отказ вперёд записи; настоящую гарантию, и под гонкой, даёт внешний ключ.
+    if (partnerId !== null && (await this.links.partnerName(partnerId)) === null) throw new PartnerNotFoundError();
     const link = await this.links.create({
       ...input,
+      partnerId,
       network: input.network ?? null,
       registrationOn: input.registrationOn ?? "first_run",
       target: input.target ?? "app",
@@ -132,7 +144,15 @@ export class LinksService {
       actorAccountId: actor.accountId,
       action: "links.create",
       target: link.code,
-      after: { campaign: link.campaign, source: link.source, platform: link.platform, target: link.target, network: link.network, registrationOn: link.network === null ? null : link.registrationOn },
+      after: {
+        campaign: link.campaign,
+        source: link.source,
+        platform: link.platform,
+        target: link.target,
+        network: link.network,
+        registrationOn: link.network === null ? null : link.registrationOn,
+        partnerId: link.partner?.partnerId ?? null,
+      },
     });
     return this.view(link);
   }
@@ -151,9 +171,9 @@ export class LinksService {
     return this.view(link);
   }
 
-  async list(actor: AccountRef): Promise<LinkView<LinkStats>[]> {
+  async list(actor: AccountRef, filter: LinkFilter = {}): Promise<LinkView<LinkStats>[]> {
     await this.roles.require(actor, "links.manage");
-    return (await this.links.list(200)).map((link) => this.view(link));
+    return (await this.links.list(200, filter)).map((link) => this.view(link));
   }
 
   async byCode(code: string): Promise<LinkRecord | null> {
@@ -204,7 +224,8 @@ export class LinksService {
 export function hostOf(referer: string | null): string | null {
   if (referer === null || referer === "") return null;
   try {
-    return new URL(referer).host.slice(0, 255) || null;
+    // `hostname`, а не `host`: порт в хост не пишем, иначе проверка доступности с нестандартным портом не отсекается.
+    return new URL(referer).hostname.slice(0, 255) || null;
   } catch {
     return null;
   }

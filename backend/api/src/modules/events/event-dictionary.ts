@@ -67,6 +67,10 @@ const runOutcome = payload({
   // следующем запуске (tasks/T-0163). Необязательное: обычный исход поля не
   // несёт, версия прежняя.
   interrupted: id.optional(),
+  // Шёл ли забег с черновым артом («Новый облик боя», tasks/T-0230): по нему
+  // сравнивают кадры с артом и без. Необязательное: сборки до него поля не
+  // шлют, версия прежняя.
+  art: z.boolean().optional(),
   // Сводка производительности (docs/28-diagnostics.md §3.2). Необязательная:
   // сборки до неё её не шлют, а смысл остальных полей она не меняет.
   perfFrames: count.optional(),
@@ -104,6 +108,9 @@ export const EVENT_DICTIONARY = {
   // этим запуском. Сама сессия с подробностями — в таблице `account_session`.
   session_started: { version: 1, payload: payload({ startKind: id, first: z.boolean() }) },
   screen_viewed: { version: 1, payload: payload({ screen: id, stub: z.boolean() }) },
+  // Нажатие кнопки, вкладки или переключателя дизайн-системы (Р141): `control` — устойчивое
+  // имя по смыслу действия, а не текст кнопки; «группа.пункт» у вкладок и переключателей.
+  ui_clicked: { version: 1, payload: payload({ screen: id, control: z.string().regex(/^[a-z0-9_-]{1,24}(\.[a-z0-9_-]{1,24})?$/) }) },
   // `scope` — чья настройка (docs/35-stage4-plan.md WP29): аккаунта идёт на
   // все его устройства, устройства остаётся здесь. Необязательное: сборки до
   // настроек аккаунта его не шлют.
@@ -141,6 +148,34 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Кольцо стражей закончилось (tasks/T-0182, Р112): `outcome` — прорвался
+  // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
+  // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
+  // кольцо просуществовало.
+  ring_ended: {
+    version: 1,
+    payload: payload({
+      index: count,
+      outcome: z.enum(["broken", "held", "died"]),
+      guards: count,
+      killed: count,
+      lifeSec: seconds,
+      elapsedSec: seconds,
+    }),
+  },
+  // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
+  // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
+  // сундука забега, `level` — уровень игрока.
+  evolution_unlocked: {
+    version: 1,
+    payload: payload({ evolution: id, weapon: id, passive: id, chest: count, level: count, elapsedSec: seconds }),
+  },
+  // Действия с карточками на выборе улучшения (docs/39-retention-mechanics.md Б3):
+  // `level` — уровень выбора, `left` — зарядов этого вида осталось, `item` —
+  // изгнанный предмет (`weapon:<id>` / `passive:<id>`).
+  card_rerolled: { version: 1, payload: payload({ level: count, left: count }) },
+  card_skipped: { version: 1, payload: payload({ level: count, left: count }) },
+  card_banished: { version: 1, payload: payload({ level: count, left: count, item: id }) },
   // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
   compensation_claimed: {
     version: 1,
@@ -222,6 +257,14 @@ export const EVENT_DICTIONARY = {
   // по achievement_unlocked; открытие без награды — «не подписался». У
   // задания рекламной сети (WP13, часть 6) — `kind: network` и `network`.
   task_link_opened: { version: 1, payload: payload({ task: id, kind: id, network: id.optional() }) },
+  // Задания «юзернейм бота в имени и в bio» (docs/35-stage4-plan.md Р110, T-0160):
+  // событие шлёт клиент после ответа сервера. Ночные проверки сервера клиент не
+  // видит — их факты в таблице `bot_mention_task` и журнале кошелька (T-0162).
+  bot_mention_started: { version: 1, payload: payload({ kind: z.enum(["name", "bio"]) }) },
+  bot_mention_checked: {
+    version: 1,
+    payload: payload({ kind: z.enum(["name", "bio"]), outcome: z.enum(["present", "absent", "hidden", "unavailable", "retry", "done_today"]) }),
+  },
   // Купил предмет с витрины снаряжения (docs/35-stage4-plan.md §3.6, WP10):
   // какие редкости и слоты берут и за сколько — вход для цен витрины (О1, О9).
   // Списание — журнал кошелька (причина shop), предмет — журнал предметов.

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { BOOSTS } from "@bh/core-game";
+import { SectionTitle } from "../design-system/components";
 import { CoinIcon, GemIcon } from "../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../i18n";
 import "../i18n/boosts";
@@ -61,10 +62,9 @@ export function BoostPicker(props: BoostPickerProps): ReactNode {
 
   return (
     <>
-      <div className="mt-2 flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{t("boosts.title")}</h2>
-        <span className="text-xs text-text-muted tabular-nums">{t("prerun.boosts.count", { count: props.selected.length, max: catalog.maxPerRun })}</span>
-      </div>
+      <SectionTitle spacing="mt-2" end={t("prerun.boosts.count", { count: props.selected.length, max: catalog.maxPerRun })}>
+        {t("boosts.title")}
+      </SectionTitle>
       <ul className="grid grid-cols-3 gap-1.5">
         {BOOSTS.map((boost) => {
           const price = catalog.boosts.find((entry) => entry.id === boost.id);

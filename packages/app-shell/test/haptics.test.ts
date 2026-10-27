@@ -15,12 +15,14 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     heal: 0,
     magnet: 0,
     dynamite: 0,
+    freeze: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
     kills: 0,
     eliteKills: 0,
     eliteSpawns: 0,
+    bossSpawns: 0,
     xp: 0,
     fuses: 0,
     dashWarns: 0,
@@ -69,5 +71,11 @@ describe("вибрация", () => {
     expect(hapticForCues(cues({ playerHit: 3, eliteSpawns: 1 }), 5000)).toBe("eliteSpawn");
     expect(hapticForCues(cues({ kills: 40, xp: 30, weapons: { spark: 5 } }), 9000)).toBeNull();
     expect(felt).toEqual(["heavy", "warning"]);
+  });
+
+  it("заморозка — мягкое подтверждение подбора, а динамит сильнее неё", () => {
+    expect(hapticForCues(cues({ freeze: 1 }), 0)).toBe("pickup");
+    expect(hapticForCues(cues({ freeze: 1, dynamite: 1 }), 5000)).toBe("dynamite");
+    expect(felt).toEqual(["soft", "heavy"]);
   });
 });

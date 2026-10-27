@@ -44,7 +44,7 @@ export function LobbyScreen(): ReactNode {
     <Screen
       footer={
         saved === null ? (
-          <Button size="l" block glow cut onClick={() => setPreRunOpen(true)}>
+          <Button track="play" size="l" block glow cut shine onClick={() => setPreRunOpen(true)}>
             <Play size={22} fill="currentColor" />
             {t("lobby.play")}
           </Button>
@@ -52,7 +52,7 @@ export function LobbyScreen(): ReactNode {
           // Прерванный забег главнее нового: игрок, вернувшийся после звонка,
           // хочет доиграть, а не начинать с нуля.
           <div className="grid gap-1">
-            <Button
+            <Button track="continue_run"
               size="l"
               block
               glow
@@ -65,7 +65,7 @@ export function LobbyScreen(): ReactNode {
               <Play size={22} fill="currentColor" />
               {t("lobby.continue")}
             </Button>
-            <Button variant="ghost" block onClick={() => setConfirmingNewRun(true)}>
+            <Button track="new_run" variant="ghost" block onClick={() => setConfirmingNewRun(true)}>
               {t("lobby.newRun")}
             </Button>
           </div>
@@ -131,7 +131,7 @@ export function LobbyScreen(): ReactNode {
         onDismiss={() => setConfirmingNewRun(false)}
         footer={
           <>
-            <Button
+            <Button track="new_run_confirm"
               variant="danger"
               block
               onClick={() => {
@@ -142,7 +142,7 @@ export function LobbyScreen(): ReactNode {
             >
               {t("lobby.newRun.confirm")}
             </Button>
-            <Button variant="ghost" block onClick={() => setConfirmingNewRun(false)}>
+            <Button track="cancel" variant="ghost" block onClick={() => setConfirmingNewRun(false)}>
               {t("app.cancel")}
             </Button>
           </>

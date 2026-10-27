@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Badge, Button, ErrorState, Modal, Stat, type BadgeTone } from "../../design-system/components";
+import { Badge, Button, ErrorState, Modal, SectionTitle, Stat, type BadgeTone } from "../../design-system/components";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/account";
@@ -7,7 +7,8 @@ import "../../i18n/arsenal";
 import "../../i18n/boosts";
 import { damageShares, loadRunDetail, type RunDetail } from "../../state/run-detail-api";
 import { ItemIcon } from "../item-icons";
-import { itemLabel, slotIcon, toneOf } from "./arsenal-parts";
+import { isEvolutionWeapon } from "../run/evolution-hints";
+import { RarityGlow, itemLabel, slotIcon, toneOf } from "./arsenal-parts";
 
 /**
  * Лист забега из «Последних забегов» профиля (docs/35-stage4-plan.md, WP4;
@@ -48,7 +49,7 @@ export function RunDetailSheet(props: { runId: string; onClose(): void }): React
       placement="bottom"
       onDismiss={props.onClose}
       footer={
-        <Button variant="ghost" block onClick={props.onClose}>
+        <Button track="close" variant="ghost" block onClick={props.onClose}>
           {t("app.close")}
         </Button>
       }
@@ -63,7 +64,9 @@ export function RunDetailSheet(props: { runId: string; onClose(): void }): React
 function Part(props: { title: string; children: ReactNode }): ReactNode {
   return (
     <section className="grid gap-2">
-      <h3 className="font-display text-xs font-semibold tracking-widest text-text-muted uppercase">{props.title}</h3>
+      <SectionTitle as="h3" spacing="">
+        {props.title}
+      </SectionTitle>
       {props.children}
     </section>
   );
@@ -110,7 +113,10 @@ function Body(props: { run: RunDetail }): ReactNode {
               const tone = toneOf(item.rarity);
               return (
                 <li key={`${item.slot}-${index}`} className="flex items-center gap-2 text-sm">
-                  <span className={`inline-flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ${tone.tile}`}>{slotIcon(item.slot, 16)}</span>
+                  <span className={`relative isolate inline-flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ${tone.tile}`}>
+                    <RarityGlow rarity={item.rarity} seed={`${item.slot}-${String(index)}`} />
+                    {slotIcon(item.slot, 16)}
+                  </span>
                   <span className={`min-w-0 ${tone.text}`}>{itemLabel(item)}</span>
                 </li>
               );
@@ -183,7 +189,7 @@ function Weapons(props: { run: RunDetail }): ReactNode {
                   <ItemIcon kind="weapon" id={weapon.id} size={16} />
                 </span>
                 <span className="min-w-0 flex-1 truncate text-text">{nameOf("weapon", weapon.id)}</span>
-                <span className="text-xs text-text-muted">{t("runDetail.weaponLevel", { level: weapon.level })}</span>
+                <span className="text-xs text-text-muted">{isEvolutionWeapon(weapon.id) ? t("runDetail.weaponEvolved") : t("runDetail.weaponLevel", { level: weapon.level })}</span>
               </div>
               {share === null || weapon.damage === null ? null : (
                 <>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Package, Zap } from "lucide-react";
-import { Button, Card, ContentColumn, ErrorState, InfoNotice, Screen } from "../../design-system/components";
+import { Package, ScrollText, Zap } from "lucide-react";
+import { Button, Card, ContentColumn, EmptyState, ErrorState, InfoNotice, Screen } from "../../design-system/components";
 import { CoinIcon, GemIcon } from "../../design-system/components/CurrencyIcons";
 import { ShardIcon, shardRarity } from "../../design-system/components/ShardIcon";
 import { StarsIcon } from "../../design-system/components/StarsIcon";
@@ -55,8 +55,10 @@ export function HistoryScreen(): ReactNode {
           <>
             <p className="text-sm text-text-muted">{t("history.intro")}</p>
             {/* Фильтры — своей прокруткой: на узком экране шесть кнопок не
-                помещаются, а страница вбок не прокручивается. */}
-            <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1" role="tablist" aria-label={t("history.title")}>
+                помещаются, а страница вбок не прокручивается. Поля сверху и
+                снизу — под зону касания фильтров (`hit-tall`): прокрутка
+                обрезала бы её по своему краю. */}
+            <div className="-mx-4 mt-1.5 flex gap-2 overflow-x-auto px-4 py-1.5" role="tablist" aria-label={t("history.title")}>
               {HISTORY_FILTERS.map((id) => (
                 <button
                   key={id}
@@ -64,7 +66,7 @@ export function HistoryScreen(): ReactNode {
                   role="tab"
                   aria-selected={id === filter}
                   onClick={() => setFilter(id)}
-                  className={`shrink-0 rounded-pill px-3 py-1.5 text-sm font-semibold transition-transform active:scale-95 ${id === filter ? "bg-accent text-on-accent" : "surface-sunken text-text-muted"}`}
+                  className={`hit-tall shrink-0 rounded-pill px-3 py-1.5 text-sm font-semibold transition-transform active:scale-95 ${id === filter ? "bg-accent text-on-accent" : "surface-sunken text-text-muted"}`}
                 >
                   {t(`history.filter.${id}`)}
                 </button>
@@ -74,14 +76,14 @@ export function HistoryScreen(): ReactNode {
             <div className="mt-3">
               {state.status === "loading" ? <p className="text-sm text-text-muted">{t("history.loading")}</p> : null}
               {state.status === "failed" ? <ErrorState text={t("history.failed")} onRetry={() => void load(filter)} /> : null}
-              {state.status === "ready" && state.entries.length === 0 ? <InfoNotice text={t("history.empty")} /> : null}
+              {state.status === "ready" && state.entries.length === 0 ? <EmptyState icon={<ScrollText size={26} />} text={t("history.empty")} /> : null}
               {state.status === "ready" ? (
                 <div className="grid gap-2">
                   {state.entries.map((entry) => (
                     <EntryRow key={entry.id} entry={entry} />
                   ))}
                   {state.cursor === null ? null : (
-                    <Button variant="secondary" block loading={more} onClick={() => void loadMore()}>
+                    <Button track="load_more" variant="secondary" block loading={more} onClick={() => void loadMore()}>
                       {t("history.more")}
                     </Button>
                   )}

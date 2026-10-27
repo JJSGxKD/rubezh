@@ -84,7 +84,7 @@ describe("отказ сервера", () => {
     expect(useRestrictions.getState().list).toHaveLength(1);
   });
 
-  it("пока шёл запрос, ограничение сняли — «попробуйте ещё раз»; чужой отказ — не наш", async () => {
+  it("пока шёл запрос, ограничение сняли — «попробуй ещё раз»; чужой отказ — не наш", async () => {
     expect(await restrictionRefusal(refused, ["promo_codes"], fakeApi(ok()), NOW)).toBe("lifted");
     const api = fakeApi(ok(row()));
     expect(await restrictionRefusal({ ok: false, failure: "rejected", code: "promo_code_expired" }, ["promo_codes"], api)).toBeNull();

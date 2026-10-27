@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { ChevronRight, Gift, Trophy, Users } from "lucide-react";
+import { ChevronRight, Gift, ListChecks, Trophy, Users } from "lucide-react";
 import { CutFrame, staggerStyle } from "../design-system/components";
 import { CoinIcon } from "../design-system/components/CurrencyIcons";
 import { ShardIcon } from "../design-system/components/ShardIcon";
@@ -27,7 +27,7 @@ import {
   type WidgetId,
   type WidgetSize,
 } from "./home-widget-rules";
-import { formatCountdown, msUntilReset, useClock } from "./meta/schedule";
+import { formatCountdown, formatCountdownShort, msUntilReset, useClock } from "./meta/schedule";
 
 /**
  * Виджеты главной (docs/35-stage4-plan.md WP42, часть 3, Р76): награда дня,
@@ -225,6 +225,9 @@ export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; re
     TONE[props.id],
     SIZE[props.size],
     cut ? "" : props.ready ? "widget-surface-ready" : "widget-surface",
+    // Готовый подкрашен тоном сильнее, и серая подпись на нём падала ниже
+    // 4,5:1 — подпись готового виджета светлая (`Layout`).
+    props.ready ? "[--widget-label:var(--color-text)]" : "",
     // Со срезом поверхность, скругление и поля — у `CutFrame` внутри.
     cut ? "relative flex min-w-0 animate-rise-in text-left" : "relative flex min-w-0 animate-rise-in items-center gap-3 overflow-hidden rounded-lg p-3 text-left",
     "transition-transform duration-(--duration-fast) ease-base",
@@ -263,13 +266,13 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
     return (
       <span className="flex h-full min-w-0 flex-1 flex-col justify-between">
         <span className="flex h-7 items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-xs font-semibold text-text-muted">{props.label}</span>
+          <span className="min-w-0 truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
           <span className="shrink-0">{props.face}</span>
         </span>
         <span className="min-w-0">
           {/* Тихая строка — подсказка без данных: мельче и в две строки, а не обрезанная крупная. */}
           {props.quiet === true ? (
-            <span className="line-clamp-2 text-sm leading-snug text-text-muted">{props.big}</span>
+            <span className="line-clamp-2 text-sm leading-snug text-balance text-text-muted">{props.big}</span>
           ) : (
             <span className="block truncate font-display text-base leading-tight font-bold text-text">{props.big}</span>
           )}
@@ -283,7 +286,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
       <>
         <span className="shrink-0">{props.face}</span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-semibold text-text-muted">{props.label}</span>
+          <span className="block truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
           <span className="block truncate font-display text-sm leading-tight font-bold text-text">{props.big}</span>
         </span>
         <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-text-muted" />
@@ -294,7 +297,7 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
     <>
       <span className="shrink-0">{props.face}</span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-semibold text-text-muted">{props.label}</span>
+        <span className="block truncate text-xs font-semibold text-[var(--widget-label,var(--color-text-muted))]">{props.label}</span>
         <span className="mt-0.5 flex min-h-7 items-center justify-between gap-2">
           {/* На 320 px рядом с кнопкой крупная строка на ступень меньше — иначе «Крутка ждёт» обрезалась бы. */}
           <span className="min-w-0 truncate font-display text-base leading-tight font-bold text-text min-[360px]:text-lg">{props.big}</span>
@@ -313,16 +316,20 @@ function Layout(props: { size: WidgetSize; face: ReactNode; label: string; big: 
 /** Облик-значок: квадрат тона с иконкой; у широкого — крупнее. */
 export function IconFace(props: { size: WidgetSize; children: ReactNode; glow?: boolean }): ReactNode {
   const box = props.size === "hero" ? "size-12" : props.size === "row" ? "size-10" : "size-7";
+  // У светящейся плитки фон непрозрачный: сквозь полупрозрачный видно, как свечение мигает под значком.
+  // Имена классов — целыми словами: сканер Tailwind склейку вроде `widget-face${…}` не узнаёт.
+  const solid = props.glow === true ? "glow-face-solid" : "";
   const tile = (
-    <span className={`widget-face relative inline-flex ${box} items-center justify-center rounded-md`}>
+    <span className={`widget-face ${solid} relative inline-flex ${box} items-center justify-center rounded-md`}>
       <span className="relative">{props.children}</span>
     </span>
   );
   if (props.glow !== true) return tile;
   // Свечение — соседний слой позади плитки, а не её потомок: потомок рисуется над фоном плитки и мигает на нём.
+  // Форма — плитки, а не круг: круглое пятно за квадратом читается грязью на экране.
   return (
     <span className="relative isolate inline-flex">
-      <span aria-hidden="true" className="widget-motion absolute -inset-2 -z-10 animate-glow rounded-full bg-[radial-gradient(closest-side,var(--widget-daily-glow),transparent)] opacity-60" />
+      <span aria-hidden="true" className="widget-motion absolute -inset-1.5 -z-10 animate-glow rounded-lg bg-(--widget-daily-glow) opacity-45 blur-md" />
       {tile}
     </span>
   );
@@ -352,6 +359,21 @@ function label(id: WidgetId, size: WidgetSize): string {
  */
 function inTime(ms: number): string {
   return t("widget.in", { time: formatCountdown(ms) });
+}
+
+/**
+ * Подпись «через …» для плитки: на окне уже 360 px — короткое «через 23:59»,
+ * от 360 px — полное. Полная подпись помещается в плитку с 360 px, а на 320
+ * (плитка 138 px) обрезалась бы; две формы вместо переноса, чтобы не менять
+ * высоту плиток.
+ */
+function inTimeTile(ms: number): ReactNode {
+  return (
+    <>
+      <span className="min-[360px]:hidden">{t("widget.in", { time: formatCountdownShort(ms) })}</span>
+      <span className="max-[360px]:hidden">{inTime(ms)}</span>
+    </>
+  );
 }
 
 /** Монеты (и осколки, если есть) — значком и числом; словами — для экранного диктора. */
@@ -401,7 +423,7 @@ export function DailyView(props: { face: DailyFace; size: WidgetSize; now: numbe
           big={face.next === null ? t("widget.daily.tomorrow") : <Reward amount={face.next} />}
           // В плитке «завтра, через 23 ч 59 мин» не помещается в строку на 320 px, а две строки — в её высоту:
           // «завтра» уже сказано наградой следующего дня, остаётся «через N», как у колеса.
-          sub={size === "tile" ? inTime(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
+          sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : t("widget.daily.tomorrowIn", { time: inTime(face.untilMs - props.now) })}
         />
       );
     case "idle":
@@ -455,10 +477,10 @@ export function WheelView(props: { face: WheelFace; size: WidgetSize; now: numbe
     case "ad":
       return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={face.vip ? t("widget.wheel.vipHint") : t("widget.wheel.adHint")} />;
     case "cooldown":
-      return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={inTime(face.untilMs - props.now)} />;
+      return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.ad")} sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : inTime(face.untilMs - props.now)} />;
     case "waiting":
       // Ждать до новых суток — крючком остаётся джекпот, отсчёт — мелко.
-      return <Layout size={size} face={wheel} label={label("wheel", size)} big={jackpot(face.jackpot) ?? t("widget.wheel.free")} sub={inTime(face.untilMs - props.now)} />;
+      return <Layout size={size} face={wheel} label={label("wheel", size)} big={jackpot(face.jackpot) ?? t("widget.wheel.free")} sub={size === "tile" ? inTimeTile(face.untilMs - props.now) : inTime(face.untilMs - props.now)} />;
     case "idle":
       return <Layout size={size} face={wheel} label={label("wheel", size)} big={t("widget.wheel.idle")} quiet />;
   }
@@ -512,7 +534,11 @@ export function TasksView(props: { face: TasksFace; size: WidgetSize }): ReactNo
   }
 }
 
-/** Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри. */
+/**
+ * Кольцо прогресса суток: дорожка видна и пустой; в широком — «2/4» внутри.
+ * Без числа — до ответа сервера и без заданий суток — внутри значок заданий:
+ * одна пустая дорожка читалась сломанным значком (U-10).
+ */
 function Ring(props: { size: number; done: number; total: number | null }): ReactNode {
   const radius = 16;
   const length = 2 * Math.PI * radius;
@@ -524,7 +550,9 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
         {/* Пустое кольцо — только дорожка: скруглённый конец нулевой дуги рисовал бы точку. */}
         {share === 0 ? null : <circle cx="20" cy="20" r={radius} fill="none" stroke="var(--widget-tone)" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${(share * length).toFixed(2)} ${length.toFixed(2)}`} />}
       </svg>
-      {props.total === null || props.size < 40 ? null : (
+      {props.total === null ? (
+        <ListChecks aria-hidden="true" size={Math.round(props.size * 0.45)} className="absolute text-(--widget-tone)" />
+      ) : props.size < 40 ? null : (
         <span aria-hidden="true" className="absolute font-display text-[11px] font-bold text-text tabular-nums">
           {props.done}/{props.total}
         </span>

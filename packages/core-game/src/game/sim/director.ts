@@ -6,6 +6,7 @@ import {
   randomRingOffset,
   ringDirection,
 } from "./directions";
+import { startCordon } from "./cordon";
 import { spawnOnRing, spawnRandomOnRing, type Spawner } from "./spawner";
 import { planSegment, segmentStartSec, type SegmentEvent, type SegmentPlan } from "./timeline";
 import type { World } from "./world";
@@ -172,6 +173,11 @@ function atCap(world: World): boolean {
  * запас производительности не отменяется красивой задумкой.
  */
 function applyEvent(world: World, event: SegmentEvent): void {
+  // Кольцо стражей потолок живых не проверяет: оно создаётся целиком, пока есть слоты пула.
+  if (event.kind === "cordon") {
+    if (event.ring !== undefined) startCordon(world, event.typeIndex, event.count, event.ring);
+    return;
+  }
   if (event.kind === "ring") {
     const offset = randomRingOffset(world.rng);
     for (let k = 0; k < event.count; k++) {

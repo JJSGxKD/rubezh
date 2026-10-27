@@ -264,7 +264,7 @@ describe("продление нашей кнопкой", () => {
     ]);
   });
 
-  it("отменённое игроком Telegram вернуть не даёт — это ответ, а не ошибка; сбой сети — «попробуйте ещё раз»", async () => {
+  it("отменённое игроком Telegram вернуть не даёт — это ответ, а не ошибка; сбой сети — «попробуй ещё раз»", async () => {
     ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 400, "Bad Request: SUBSCRIPTION_CANCELED_BY_USER", null);
     expect(await renewal.set(account, first, true)).toBe("rejected");
     ctx.api.renewalFailWith = new TelegramApiError("editUserStarSubscription", 0, "сеть недоступна", null);

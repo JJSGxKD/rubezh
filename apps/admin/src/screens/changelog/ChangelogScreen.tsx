@@ -91,7 +91,7 @@ export function ChangelogScreen() {
     setPending(false);
     setPublishing(null);
     if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
-    setOutcome({ tone: "success", text: `Версия ${group.version} опубликована: строк — ${String(result.data.published)}, уведомление раздаётся` });
+    setOutcome({ tone: "success", text: `Версия ${group.version} опубликована: строк — ${String(result.data.published)}` });
     reload();
   };
 
@@ -108,6 +108,7 @@ export function ChangelogScreen() {
 
   return (
     <div className="flex flex-col gap-4">
+      <Notice tone="warning">Журнал скрыт у игроков (Р125): публикация сохранится, но игроки её не увидят, пока журнал не вернут.</Notice>
       <Panel title={original === null ? "Новая строка" : `Строка в ${original.version}`}>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
@@ -148,7 +149,7 @@ export function ChangelogScreen() {
           {problem !== null && input.text.trim() !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Версия так, как её увидит игрок в «Что нового»: та же карточка в странице клиента (Р83). */}
-          <div className="xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
             <PhonePreview
               kind="changelog-version"
               draft={changelogPreview(input, original, state.status === "ok" ? state.data.entries : [])}

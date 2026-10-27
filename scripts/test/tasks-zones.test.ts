@@ -80,4 +80,15 @@ describe("выход за зоны", () => {
   it("чужой файл задачи — нарушение", () => {
     expect(outOfZone(["tasks/T-0004-y.md"], task)).toEqual(["tasks/T-0004-y.md"]);
   });
+
+  it("закрытая в своём PR задача переезжает в архив — это не выход за зоны (T-0204)", () => {
+    const own = { ...task, id: "T-0003", fileName: "T-0003-x.md" };
+    expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual([]);
+    expect(outOfZone(["tasks/archive/T-0004-y.md"], own)).toEqual(["tasks/archive/T-0004-y.md"]);
+  });
+
+  it("ссылку на архив в epics.md правит pnpm task fix — это не выход за зоны", () => {
+    expect(outOfZone(["tasks/epics.md"], task)).toEqual([]);
+    expect(outOfZone(["tasks/README.md"], task)).toEqual(["tasks/README.md"]);
+  });
 });

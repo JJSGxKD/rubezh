@@ -7,14 +7,13 @@ status: ready
 owner:
 author: claude-lead2-3
 size: M
-depends_on: [T-0053, T-0054]
+depends_on: [T-0053, T-0054, T-0191, T-0199]
 zones:
   - backend/api/src/modules/attribution/source-slot.ts
   - backend/api/src/modules/attribution/telegram-affiliate.repository.ts
   - backend/api/src/modules/attribution/telegram-affiliate.marker.ts
   - backend/api/src/modules/attribution/attribution.module.ts
   - backend/api/src/modules/admin/admin-players.service.ts
-  - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/telegram-affiliate.test.ts
   - backend/api/test/telegram-affiliate.integration.test.ts
   - backend/api/test/helpers/memory-telegram-affiliate.ts
@@ -38,6 +37,7 @@ shared:
   - docs/24-attribution-and-sharing.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
@@ -48,7 +48,7 @@ batch: 4
 
 # T-0072. Метка партнёрки Telegram у игрока — слот источника занят, процент и срок программы в настройках
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0072.json)](README.md#значки-статуса) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md) [![T-0054](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json&label=T-0054)](T-0054-player-card-tabs.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0072.json)](README.md#значки-статуса) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md) [![T-0054](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0054.json&label=T-0054)](T-0054-player-card-tabs.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md) [![T-0199](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0199.json&label=T-0199)](T-0199-reroll-for-ad.md)
 
 ## Зачем
 
@@ -67,6 +67,8 @@ batch: 4
   будущей бухгалтерии (WP50). Деньги в этой задаче не считаются.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 21.10.2026 (приёмка #429, T-0067).** Сейчас первое касание `_tgr_` (`telegram_affiliate`) слот источника не занимает: `source-slot.ts` про него не знает, и игрок из партнёрки Telegram в первые 7 суток может быть привязан и по ссылке партнёра (T-0067), и по промокоду. Эта задача закрывает дыру в `source-slot.ts`; привязчик ссылок партнёра берёт слот через `lockSourceSlot` и подхватит правку сам. В тесты — кейс: аккаунт с первым касанием `_tgr_` не привязывается по ссылке партнёра и по коду.
 
 - **Р97** (`docs/35-stage4-plan.md`, WP49 часть 5, 12.10.2026): игрок по ссылке
   партнёрки Telegram помечается навсегда, слот источника занят ею, реферер и
@@ -598,5 +600,5 @@ batch: 4
 
   ❓ **Нужно от команды**
 
-  • @участник1 — после выката вписать в настройки значения из программы Telegram вашего бота: они понадобятся бухгалтерии
+  • @владелец — после выката вписать в настройки значения из программы Telegram вашего бота: они понадобятся бухгалтерии
   ```

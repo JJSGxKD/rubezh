@@ -6,8 +6,9 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/arsenal";
 import type { ShopApi, ShowcaseOffer, ShowcaseView } from "../../state/shop-api";
 import { track } from "../../state/shell";
+import { uiFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
-import { itemLabel, slotIcon, statName, statValue, toneOf } from "./arsenal-parts";
+import { RarityGlow, itemLabel, slotIcon, statName, statValue, toneOf } from "./arsenal-parts";
 import { formatCountdown, msUntilReset } from "./schedule";
 import { showcaseRefusal, type Notice } from "./shop-texts";
 
@@ -58,6 +59,7 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
     setState({ status: "ready", view: response.data.view });
     setNotice({ tone: "success", text: t("showcase.got", { item: itemLabel(offer) }) });
     track("showcase_bought", { slot: offer.slot, rarity: offer.rarity, level: offer.level, gems: offer.gems });
+    uiFeedback("purchase");
     void loadWallet();
   };
 
@@ -78,7 +80,7 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
           )}
           {/* Не хватило самоцветов — дорога к ним в одно касание, а не «ищите сами». */}
           {noGems && props.onNeedGems !== undefined ? (
-            <Button variant="secondary" onClick={props.onNeedGems}>
+            <Button track="to_gems" variant="secondary" onClick={props.onNeedGems}>
               <GemIcon size={18} />
               {t("showcase.toGems")}
             </Button>
@@ -96,10 +98,10 @@ export function ShowcaseSection(props: { api: ShopApi; appearFrom: number; onNee
           onDismiss={() => setAsking(null)}
           footer={
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="secondary" onClick={() => setAsking(null)}>
+              <Button track="cancel" variant="secondary" onClick={() => setAsking(null)}>
                 {t("showcase.confirm.cancel")}
               </Button>
-              <Button onClick={() => void buy(asking)}>{t("showcase.confirm.ok")}</Button>
+              <Button track="confirm" onClick={() => void buy(asking)}>{t("showcase.confirm.ok")}</Button>
             </div>
           }
         >
@@ -131,7 +133,8 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
     <div className={`flex animate-rise-in rounded-lg ring-1 ${ring} ${offer.sold ? "opacity-60" : ""}`} style={staggerStyle(props.index)}>
     <Card>
       <div className="flex items-start gap-3">
-        <span aria-hidden="true" className={`relative inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
+        <span aria-hidden="true" className={`relative isolate inline-flex size-[52px] shrink-0 items-center justify-center rounded-lg ring-2 ${tone.tile}`}>
+          <RarityGlow rarity={offer.rarity} seed={offer.offerId} />
           {slotIcon(offer.slot, 24)}
           <span className="absolute inset-x-0 bottom-0.5 text-center font-display text-[10px] leading-none font-bold tabular-nums">{offer.level}</span>
         </span>
@@ -157,7 +160,7 @@ function OfferCard(props: { offer: ShowcaseOffer; index: number; busy: string | 
 
       {offer.sold ? null : (
         <div className="mt-3">
-          <Button
+          <Button track="buy"
             block
             size="s"
             disabled={props.busy !== null}

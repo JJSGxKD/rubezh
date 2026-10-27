@@ -64,7 +64,7 @@ export class IngestGuard implements CanActivate {
     if (length > limits.bodyBytes) throw new PayloadTooLargeError("Тело запроса слишком большое");
 
     if (!(await this.limiter.consume(limits.ip, request.ip))) {
-      throw new RateLimitedError("Слишком много запросов, попробуйте позже");
+      throw new RateLimitedError("Слишком много запросов, попробуй позже");
     }
 
     request.ingestIdentity = { platformUserId: this.platformUserId(request), ip: request.ip };

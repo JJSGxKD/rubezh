@@ -1,12 +1,16 @@
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Check, Info, Lock, X } from "lucide-react";
 import { t } from "../../i18n";
 import { useBackLayer } from "../../state/back-stack";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
 import { CutFrame } from "./CutFrame";
+import { useDialogFocus } from "./dialog-focus";
 import { Badge } from "./Data";
-import { modalFooterPlacement } from "./modal-rules";
+import { useModalHost } from "./modal-host";
+import { modalFooterPlacement, modalMount } from "./modal-rules";
+import { RelicFrame } from "./RelicFrame";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -147,12 +151,27 @@ export interface ModalProps {
   onDismiss?: () => void;
   /** срезанный угол панели (design/README.md): у окон выбора и итога забега */
   cut?: boolean;
+  /**
+   * Сцена над панелью, а в ландшафте — слева от неё: сундук с лучами и
+   * искрами. Панель обрезает содержимое, а сцене нужен простор над
+   * затемнением.
+   */
+  hero?: ReactNode;
+  /**
+   * Панель-реликвия v2 тоном из токенов (`RelicFrame`) вместо обычной
+   * панели — у окон наград.
+   */
+  relic?: string;
 }
 
 export function Modal(props: ModalProps): ReactNode {
   const bottom = props.placement === "bottom";
   const wide = props.size === "l";
   const { onDismiss } = props;
+  const host = useModalHost();
+  const mount = modalMount(host);
+  const root = useRef<HTMLDivElement>(null);
+  useDialogFocus(root, mount !== "wait");
 
   // Лист снизу шуршит на открытии и закрытии; модалки забега — уровень,
   // пауза, смерть — звучат своими звуками событий, а не листом.
@@ -173,14 +192,72 @@ export function Modal(props: ModalProps): ReactNode {
   const headerTitle = closable && props.icon === undefined;
   const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
-  return (
+  const panel = (
+    <Panel
+      cut={props.cut === true}
+      relic={props.relic}
+      className={[
+        wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
+        props.hero === undefined ? "" : "min-h-0",
+        bottom ? "animate-sheet-in" : "animate-pop-in",
+      ].join(" ")}
+    >
+      {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
+          Шапка не прокручивается: крестик виден и в конце длинного листа. */}
+      {closable ? (
+        <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
+          {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
+          <IconButton track="close" label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
+            <X size={22} />
+          </IconButton>
+        </header>
+      ) : null}
+      <div
+        className={[
+          "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
+          footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
+          closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
+        ].join(" ")}
+      >
+        {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
+            счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
+            прокрутку (§5.3). */}
+        {props.icon === undefined ? null : (
+          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
+            <IconEmblem>{props.icon}</IconEmblem>
+          </div>
+        )}
+        {props.title === undefined || headerTitle ? null : (
+          <h2
+            className={[
+              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
+              props.icon === undefined ? "" : "text-center",
+            ].join(" ")}
+          >
+            {props.title}
+          </h2>
+        )}
+        {props.children}
+        {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
+      </div>
+      {footerPlacement === "pinned" ? (
+        <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+      ) : null}
+    </Panel>
+  );
+
+  const dialog = (
     <div
+      ref={root}
       role="dialog"
       aria-modal="true"
       aria-label={props.title}
       aria-labelledby={props.labelledBy}
+      // Фокус при открытии ставится на само окно (`useDialogFocus`): кольцо
+      // вокруг всего экрана ничего не говорит — его нет.
+      tabIndex={-1}
       className={[
-        "absolute inset-0 flex px-4",
+        "pointer-events-auto absolute inset-0 flex px-4 focus-visible:outline-none",
         "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
         "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
         bottom ? "items-end justify-center" : "items-center justify-center",
@@ -188,61 +265,32 @@ export function Modal(props: ModalProps): ReactNode {
       style={{ zIndex: "var(--z-modal)" }}
     >
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
-      <Panel
-        cut={props.cut === true}
-        className={[
-          wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
-          bottom ? "animate-sheet-in" : "animate-pop-in",
-        ].join(" ")}
-      >
-        {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
-            Шапка не прокручивается: крестик виден и в конце длинного листа. */}
-        {closable ? (
-          <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
-            {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
-            <IconButton label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
-              <X size={22} />
-            </IconButton>
-          </header>
-        ) : null}
-        <div
-          className={[
-            "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
-            footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
-            closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
-          ].join(" ")}
-        >
-          {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
-              счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
-              прокрутку (§5.3). */}
-          {props.icon === undefined ? null : (
-            <div className="mb-2 flex justify-center short:hidden landscape:hidden">
-              <IconEmblem>{props.icon}</IconEmblem>
-            </div>
-          )}
-          {props.title === undefined || headerTitle ? null : (
-            <h2
-              className={[
-                "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
-                props.icon === undefined ? "" : "text-center",
-              ].join(" ")}
-            >
-              {props.title}
-            </h2>
-          )}
-          {props.children}
-          {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
+      {props.hero === undefined ? (
+        panel
+      ) : (
+        // Сцена и панель — одной колонкой: панель сжимается под прокрутку,
+        // а сцена остаётся целой.
+        <div className="relative flex max-h-full w-full max-w-[420px] flex-col items-center landscape:max-w-[760px] landscape:flex-row">
+          {props.hero}
+          {panel}
         </div>
-        {footerPlacement === "pinned" ? (
-          <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
-        ) : null}
-      </Panel>
+      )}
     </div>
   );
+
+  if (mount === "wait") return null;
+  return mount === "portal" && host ? createPortal(dialog, host) : dialog;
 }
 
 /** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */
-function Panel(props: { cut: boolean; className: string; children: ReactNode }): ReactNode {
+function Panel(props: { cut: boolean; relic?: string | undefined; className: string; children: ReactNode }): ReactNode {
+  if (props.relic !== undefined) {
+    return (
+      <RelicFrame tone={props.relic} className={props.className}>
+        {props.children}
+      </RelicFrame>
+    );
+  }
   if (props.cut) {
     return (
       <CutFrame tone="panel" size="md" className={`flex max-h-full w-full flex-col overflow-hidden ${props.className}`}>
@@ -352,6 +400,20 @@ export function InfoNotice(props: { text: string }): ReactNode {
   );
 }
 
+/**
+ * Пустой раздел — знаком и словами посередине, а не сноской сверху: пустой
+ * экран со сноской у края выглядит недогруженным. Знак — тот же медальон, что
+ * над наградой дня и промокодом, только спокойный: пустота — не событие.
+ */
+export function EmptyState(props: { icon: ReactNode; text: string }): ReactNode {
+  return (
+    <div className="flex animate-rise-in flex-col items-center gap-3 px-2 py-10 text-center">
+      <IconEmblem tone="muted">{props.icon}</IconEmblem>
+      <p className="max-w-[300px] text-sm text-text-muted">{props.text}</p>
+    </div>
+  );
+}
+
 /** Сообщение об ошибке с одним действием: без него игрок упирается в тупик. */
 export function ErrorState(props: { text: string; onRetry?: () => void }): ReactNode {
   return (
@@ -359,7 +421,7 @@ export function ErrorState(props: { text: string; onRetry?: () => void }): React
       <h2 className="font-display text-xl font-bold text-danger">{t("error.title")}</h2>
       <p className="max-w-[320px] text-sm text-text-muted">{props.text}</p>
       {props.onRetry === undefined ? null : (
-        <Button onClick={props.onRetry}>{t("app.retry")}</Button>
+        <Button track="retry" onClick={props.onRetry}>{t("app.retry")}</Button>
       )}
     </div>
   );

@@ -50,7 +50,7 @@ function ReportList() {
 
   return (
     <Panel title="Отчёты диагностики" help={HELP.diagnostics.reports} actions={<Button onClick={() => { setPages([]); reload(); }}>Обновить</Button>}>
-      <div className="mb-4 flex items-end gap-2">
+      <div className="mb-4 flex flex-wrap items-end gap-2">
         <Field label="Вид">
           <Select value={draft.kind ?? ""} onChange={(event) => setDraft({ ...draft, kind: event.target.value === "" ? undefined : (event.target.value as "bench" | "run") })}>
             <option value="">все</option>
