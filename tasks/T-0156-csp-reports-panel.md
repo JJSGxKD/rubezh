@@ -3,8 +3,8 @@ id: T-0156
 title: Панель — сводка заблокированных адресов клиента
 epic: E3
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0155]
