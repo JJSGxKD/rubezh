@@ -3,7 +3,7 @@ id: T-0038
 title: Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока
 epic: E1
 priority: P0
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 size: S
 depends_on: [T-0037]
@@ -13,7 +13,8 @@ zones:
   - apps/admin/src/screens/players/PlayerCardView.tsx
   - apps/admin/src/ui/help.ts
   - apps/admin/test/players.test.ts
-shared: []
+shared:
+  - tasks/T-0054-player-card-tabs.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -24,7 +25,7 @@ batch: 3
 
 # T-0038. Кнопки «Выдать» и «Вернуть звёзды» у покупки в карточке игрока
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](archive/T-0037-support-refund-and-refulfill-api.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0038.json)](../README.md#значки-статуса) [![T-0037](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0037.json&label=T-0037)](T-0037-support-refund-and-refulfill-api.md)
 
 ## Зачем
 
