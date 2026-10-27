@@ -11,7 +11,7 @@ import { z } from "zod/mini";
 
 // `\b` в JavaScript не знает кириллицы, поэтому границы слова — через «не буква».
 const ADDRESS_RE = /(?<!\p{L})(вы|вас|вам|вами|ваш\p{L}*)(?!\p{L})/giu;
-const IMPERATIVE_RE = /(?<!\p{L})\p{L}+(ите|йте)(?!\p{L})/giu;
+const IMPERATIVE_RE = /(?<!\p{L})\p{L}+(ите|йте|ьте)(?!\p{L})/giu;
 
 /**
  * Существительные, которые кончаются как повелительное «-ите»: в тексте они
@@ -25,7 +25,7 @@ const NOT_PLURAL_IMPERATIVE: ReadonlySet<string> = new Set([
   "сайте", // «сайте» — предложный падеж «сайт»: «на сайте»
 ]);
 
-/** Слова-нарушения в строке: местоимения «вы» и глаголы на «-ите» / «-йте» вне исключений. */
+/** Слова-нарушения в строке: местоимения «вы» и глаголы на «-ите» / «-йте» / «-ьте» вне исключений. */
 function addressProblems(value: string): string[] {
   const words = [...value.matchAll(ADDRESS_RE)].map((match) => match[0]);
   for (const match of value.matchAll(IMPERATIVE_RE)) {
@@ -60,6 +60,7 @@ describe("обращение к игроку на «ты»", () => {
 
   it("детектор ловит «Попробуйте позже»", () => {
     expect(addressProblems("Попробуйте позже")).toEqual(["Попробуйте"]);
+    expect(addressProblems("Проверьте связь")).toEqual(["Проверьте"]);
   });
 
   it("детектор пропускает «Попробуй позже» и существительное «орбите»", () => {
