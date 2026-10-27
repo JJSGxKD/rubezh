@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0145. Снимки экранов одной командой — `pnpm screens`

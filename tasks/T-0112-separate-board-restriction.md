@@ -3,8 +3,8 @@ id: T-0112
 title: Скрытое ограничение «Отдельная доска»: вид, право, панель
 epic: E16
 priority: P1
-status: in-progress
-owner: claude-1 / sonnet-5.5 / high
+status: ready
+owner:
 author: claude-lead2-18
 size: M
 depends_on: []
@@ -35,7 +35,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0112. Скрытое ограничение «Отдельная доска»: вид, право, панель

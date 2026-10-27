@@ -46,7 +46,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0105. Очки заданий: полоса дня и недели и награды за ступени очков

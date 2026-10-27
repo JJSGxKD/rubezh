@@ -38,7 +38,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0196. Подстройка под силу — калибровка, слабое устройство в оболочке, аналитика и приём на сервере

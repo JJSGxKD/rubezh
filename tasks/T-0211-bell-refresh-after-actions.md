@@ -20,7 +20,7 @@ executor: haiku-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0211. Колокольчик обновляется сразу после экрана друзей, предмета и журнала
