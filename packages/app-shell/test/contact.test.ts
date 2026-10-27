@@ -22,7 +22,7 @@ beforeEach(() => {
     analytics: (event, payload) => events.push({ event, payload }),
     build: { version: "test", contentHash: "", platform: "web" },
   });
-  useNavigation.setState({ stack: ["home"] });
+  useNavigation.setState({ stack: ["shop"] });
   useContact.setState({ url: null });
 });
 
@@ -43,7 +43,7 @@ describe("openContact", () => {
     useContact.getState().set("https://t.me/dev?direct");
     openContact();
     expect(opened).toEqual(["https://t.me/dev?direct"]);
-    expect(events).toEqual([{ event: "ui_clicked", payload: { screen: "home", control: "contact" } }]);
+    expect(events).toEqual([{ event: "ui_clicked", payload: { screen: "shop", control: "contact" } }]);
   });
 
   it("без ссылки не делает ничего", () => {

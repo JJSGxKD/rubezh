@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type PlatformAdapter } from "@bh/shared-types";
 import { MainMenu } from "../src/app/MainMenu";
 import { t } from "../src/i18n";
@@ -10,6 +10,20 @@ import { initShell } from "../src/state/shell";
 
 // Пункт «Связаться с разработчиком» в меню и настройках (tasks/T-0344):
 // ссылка есть — пункт стоит перед «Помощью в тестировании»; нет — пункта нет.
+
+// Серверная отрисовка читает у zustand начальное состояние, а не текущее, и
+// оболочка, заведённая `initShell`, осталась бы невидимой: хранилища в этом
+// файле читаются по текущему состоянию.
+vi.mock("zustand", async () => {
+  const { createStore } = await import("zustand/vanilla");
+  const { useSyncExternalStore } = await import("react");
+  const make = (initializer: never) => {
+    const api = createStore(initializer);
+    const hook = (select: (state: unknown) => unknown = (state) => state) => useSyncExternalStore(api.subscribe, () => select(api.getState()), () => select(api.getState()));
+    return Object.assign(hook, api);
+  };
+  return { create: (initializer?: never) => (initializer === undefined ? make : make(initializer)) };
+});
 
 beforeEach(() => {
   initShell({

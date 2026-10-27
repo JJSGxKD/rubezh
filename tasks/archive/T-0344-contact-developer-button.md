@@ -3,7 +3,7 @@ id: T-0344
 title: Кнопка «Связаться с разработчиком» в меню и настройках — ссылка своя на каждую площадку
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -14,6 +14,8 @@ zones:
   - packages/app-shell/src/state/badges-api.ts
   - packages/app-shell/src/state/contact.ts
   - packages/app-shell/src/state/contact.test.ts
+  - packages/app-shell/test/contact.test.ts
+  - packages/app-shell/test/contact-menu.test.ts
   - backend/api/src/modules/badges/**
   - backend/api/test/badges.test.ts
   - backend/api/test/settings.test.ts
@@ -31,7 +33,7 @@ batch: 3
 
 # T-0344. Кнопка «Связаться с разработчиком» в меню и настройках
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0344.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0344.json)](../README.md#значки-статуса)
 
 Строку значков и ячейку эпика ставит `pnpm task fix`.
 
