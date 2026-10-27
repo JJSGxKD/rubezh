@@ -3,8 +3,8 @@ id: T-0209
 title: Готовые промты потоков с номером аккаунта — на доске и в `pnpm task streams`
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0206]
@@ -16,6 +16,8 @@ zones:
   - scripts/test/tasks-board-page.test.ts
 shared:
   - tasks/README.md
+  - tasks/T-0208-board-contribution-periods.md
+  - tasks/epics.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -26,7 +28,7 @@ batch: 3
 
 # T-0209. Готовые промты потоков с номером аккаунта — на доске и в `pnpm task streams`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json)](README.md#значки-статуса) [![T-0206](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0206.json&label=T-0206)](archive/T-0206-board-work-review-columns.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0209.json)](../README.md#значки-статуса) [![T-0206](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0206.json&label=T-0206)](T-0206-board-work-review-columns.md)
 
 ## Зачем
 

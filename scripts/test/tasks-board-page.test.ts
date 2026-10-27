@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { SIZE_POINTS, contributions, formatMoscow, freeBadge, moscowDay, renderBoardPage, taskCredits } from "../tasks/board-page.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { parseMergedTaskPrs } from "../tasks/git-io.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { flowPrompt } from "../tasks/board.mjs";
 
 // Страница доски и счётчик свободных задач (T-0018).
 
@@ -227,6 +229,19 @@ describe("страница доски", () => {
         "| Поток | Ждут | Ближайшая пачка |",
         "|---|---|---|",
         "| sonnet-5.5 / medium | 1 | без пачки |",
+        "",
+        "### Запуск по аккаунтам",
+        "",
+        "Готовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.",
+        "",
+        "<details>",
+        "<summary>claude-2 — запустить 2: sonnet-5.5 / low, sonnet-5.5 / extra</summary>",
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "low", runner: "any" })}\n\`\`\``,
+        "",
+        `\`\`\`\n${flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "extra", runner: "any" })}\n\`\`\``,
+        "",
+        "</details>",
         "",
         "## Доработка — 1",
         "",
@@ -513,5 +528,43 @@ describe("страница доски: кто, сколько висит и че
     const section = page.slice(page.indexOf("## Доработка"), page.indexOf("## Можно брать"));
     expect(section).toContain("| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |");
     expect(section).toContain("| неизвестно | владелец | ⚠️ 5 дн | 2 | владельца | [#901]");
+  });
+});
+
+// Запуск по аккаунтам (T-0209).
+describe("страница доски: запуск по аккаунтам", () => {
+  const open = (id: string, patch: Record<string, unknown> = {}) => task(id, { title: id, status: "ready", fileName: `${id}-x.md`, ...patch });
+  const entry = (item: Record<string, unknown>, extra: Record<string, unknown> = {}) => ({ task: item, ...extra });
+  const render = (board: Record<string, unknown>, credits = new Map()): string =>
+    renderBoardPage({ board, owners: new Map(), credits, people: [], githubAvailable: true, mergedPrs: [], now: new Date("2026-10-27T12:00:00Z") });
+  const base = { rework: [], free: [], inProgress: [], review: [], blocked: [], done: [], draft: [], cancelled: [] };
+
+  it("на аккаунт — <details> с промтами блоками кода", () => {
+    const page = render({
+      ...base,
+      free: [entry(open("T-0601")), entry(open("T-0602", { effort: "high" })), entry(open("T-0603", { runner: "local" }))],
+      inProgress: [entry(open("T-0604", { effort: "low", executor: "haiku-5.5" }), { owner: "claude-2 / haiku-5.5 / low" })],
+    });
+    const part = page.slice(page.indexOf("### Запуск по аккаунтам"), page.indexOf("## Доработка"));
+    expect(part).toContain("<details>");
+    expect(part).toContain("<summary>claude-2 — запустить 3: sonnet-5.5 / medium, sonnet-5.5 / medium · local, sonnet-5.5 / high</summary>");
+    expect(part).toContain("поток claude-2 / sonnet-5.5 / medium, запустил: владелец");
+    expect(part).toContain("--effort medium --runner local");
+    expect(part).toContain("</details>");
+  });
+
+  it("аккаунт без свободных потоков — «всё нужное уже работает»", () => {
+    const page = render({
+      ...base,
+      free: [entry(open("T-0601"))],
+      inProgress: [entry(open("T-0605"), { owner: "claude-3 / sonnet-5.5 / medium" })],
+    });
+    expect(page).toContain("claude-3 — всё нужное уже работает");
+  });
+
+  it("аккаунтов нет — подсказка про команду", () => {
+    const page = render({ ...base, free: [entry(open("T-0601"))] });
+    expect(page).toContain("### Запуск по аккаунтам");
+    expect(page).toContain("pnpm task streams --account claude-N");
   });
 });
