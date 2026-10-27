@@ -1,0 +1,70 @@
+{
+  "skill": "ui-design",
+  "note": "Проверка срабатывания по docs/18 §6: на should_trigger=true скилл обязан сработать, на false — нет (сработать должен соседний скилл или никакой).",
+  "queries": [
+    {
+      "query": "Сделай экран Ярмарки по макету",
+      "should_trigger": true
+    },
+    {
+      "query": "На 320 px вылезает подпись в арсенале, поправь",
+      "should_trigger": true
+    },
+    {
+      "query": "Разбери экран магазина: почему игроки не находят наборы?",
+      "should_trigger": true
+    },
+    {
+      "query": "Какой текст поставить на ошибку «нет связи» при заборе награды?",
+      "should_trigger": true
+    },
+    {
+      "query": "Пустой экран друзей выглядит мёртвым, что показать?",
+      "should_trigger": true
+    },
+    {
+      "query": "Проверь контраст окна сундука",
+      "should_trigger": true
+    },
+    {
+      "query": "HUD закрывает врагов сверху, что делать?",
+      "should_trigger": true
+    },
+    {
+      "query": "Аудит интерфейса заданий перед выпуском",
+      "should_trigger": true
+    },
+    {
+      "query": "Как показать загрузку при открытии рейтинга, чтобы не мигало?",
+      "should_trigger": true
+    },
+    {
+      "query": "Нарисуй спрайт Лешего для атласа",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай звук открытия сундука звонче",
+      "should_trigger": false
+    },
+    {
+      "query": "Напиши пост в канал про новый сезон",
+      "should_trigger": false
+    },
+    {
+      "query": "Сбалансируй урон Гуслей",
+      "should_trigger": false
+    },
+    {
+      "query": "Добавь эндпоинт для подарка облика",
+      "should_trigger": false
+    },
+    {
+      "query": "Почему тест layer-boundaries падает?",
+      "should_trigger": false
+    },
+    {
+      "query": "Придумай механику Заставы",
+      "should_trigger": false
+    }
+  ]
+}

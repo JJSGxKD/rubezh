@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0210. Уведомления гаснут своим действием — друзья, подарки, предмет, журнал

@@ -55,7 +55,7 @@ export class AuthGuard implements CanActivate {
     }
 
     if (this.revocations !== undefined && (await this.revocations.isRevoked(check.claims.accountId, check.issuedAtSec))) {
-      throw new UnauthorizedError("Сессия завершена — войдите заново");
+      throw new UnauthorizedError("Сессия завершена — войди заново");
     }
 
     request.account = check.claims;

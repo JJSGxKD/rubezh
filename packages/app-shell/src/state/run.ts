@@ -636,6 +636,10 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       audio.runEvent("chestDrop");
     }),
 
+    created.on("ringEnded", ({ index, outcome, guards, killed, lifeSec, elapsedSec }) => {
+      track("ring_ended", { index, outcome, guards, killed, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
+    }),
+
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
       for (const reward of rewards) {

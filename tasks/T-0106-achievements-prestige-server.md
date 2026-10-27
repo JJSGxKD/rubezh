@@ -22,7 +22,6 @@ zones:
   - backend/api/test/tasks.test.ts
   - apps/admin/src/api/tasks.ts
   - apps/admin/src/screens/tasks/TasksScreen.tsx
-  - apps/admin/src/ui/help.ts
   - packages/app-shell/src/screens/meta/task-row.tsx
   - packages/app-shell/test/tasks-api.test.ts
 shared:
@@ -36,12 +35,13 @@ shared:
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - apps/admin/src/ui/help.ts
 runner: local
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0106. Достижения с престижем: сервер, 49 определений, редкость «есть у N%»

@@ -93,6 +93,6 @@ export class TasksController {
   }
 
   private async limit(accountId: string, limit: RateLimit = LIMIT): Promise<void> {
-    if (!(await this.limiter.consume(limit, accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(limit, accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
   }
 }

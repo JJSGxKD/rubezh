@@ -33,12 +33,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0089. Пропуск рекламы VIP — отдельной меткой «Пропуск VIP», не досмотр
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0089.json)](README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](T-0052-overview-ads-and-periods-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0089.json)](README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](archive/T-0052-overview-ads-and-periods-screen.md)
 
 ## Зачем
 

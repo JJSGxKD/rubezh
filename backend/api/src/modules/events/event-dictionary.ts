@@ -148,6 +148,21 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Кольцо стражей закончилось (tasks/T-0182, Р112): `outcome` — прорвался
+  // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
+  // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
+  // кольцо просуществовало.
+  ring_ended: {
+    version: 1,
+    payload: payload({
+      index: count,
+      outcome: z.enum(["broken", "held", "died"]),
+      guards: count,
+      killed: count,
+      lifeSec: seconds,
+      elapsedSec: seconds,
+    }),
+  },
   // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
   // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
   // сундука забега, `level` — уровень игрока.
@@ -304,6 +319,20 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Проверка рекламы командой (Р165, tasks/T-0333), не игровой показ: в воронку
+  // рекламы не входит. `live` — боевой показ или тестовый, `ms` — от нажатия до
+  // исхода в миллисекундах, `reason` — код отказа, только при `failed`.
+  ad_tested: {
+    version: 1,
+    payload: payload({
+      network: id,
+      format: z.enum(["rewarded", "interstitial"]),
+      live: z.boolean(),
+      outcome: z.enum(["completed", "closed", "failed"]),
+      reason: id.optional(),
+      ms: seconds,
+    }),
+  },
   // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
   // `downtimeSec` — сколько прошло между потерей и возвращением.
   connection_lost: { version: 1, payload: payload({}) },

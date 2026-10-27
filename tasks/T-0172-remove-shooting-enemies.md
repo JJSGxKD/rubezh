@@ -33,6 +33,8 @@ zones:
   - packages/core-game/test/looks.test.ts
   - packages/core-game/test/no-enemy-projectiles.test.ts
   - packages/core-game/test/helpers/scripted-run.ts
+  - packages/core-game/test/sim-purity.test.ts
+  - packages/core-game/test/cues.test.ts
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/test/guide.test.ts
@@ -51,7 +53,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0172. Уход огонька и кастера — в бою нет врагов со снарядами
@@ -69,6 +71,18 @@ batch: 2
 проверяет тест.
 
 ## Решения
+
+> **Поправка claude-lead-1 (27.10.2026, решение владельца Р164).** Коридор
+> калибровки на контенте без стрелков не держится, и это не чинится числами
+> колец (#485). Задача вливается без него: в `balance-properties.test.ts`
+> свойства «пассивный умирает до 90 с» и «медиана уклоняющегося в коридоре»
+> переводятся в `it.fails` с комментарием «ожидаемо красное до T-0192 (Р164):
+> без стрелков давление даёт T-0192»; остальные свойства — зелёные. Числа колец
+> и стража не подбираются. Таблица `pnpm balance:sim` до и после — в описании
+> PR и в `docs/32-balance.md` §3.2 с пометкой, что коридор вернёт T-0192.
+> `sim-purity.test.ts` и `cues.test.ts` добавлены в зоны: в первом удаляется
+> строка `kite-and-shoot`, во втором `boss_seer` заменяется на
+> `boss_matryoshka`.
 
 Р112 («С кольцом из контента уходят стрелок «Огонёк» и снаряды кастера») и
 WP36, «Порядок» (`docs/35-stage4-plan.md`, решение пользователя 18.10.2026):
@@ -294,9 +308,9 @@ WP36, «Порядок» (`docs/35-stage4-plan.md`, решение пользо�
   `kite_and_shoot` и `caster`; `no-enemy-projectiles.test.ts` зелёный.
 - [x] Бюджет угрозы не убывает, пул и события кривой согласованы; гайдбук и
   словари не ссылаются на удалённые ключи.
-- [ ] Коридор калибровки (`docs/32-balance.md` §3.1) и свойства баланса
-  зелёные на контенте без стрелков; таблица `pnpm balance:sim` до и после — в
-  описании PR и в `docs/32-balance.md`.
+- [ ] Свойства баланса зелёные на контенте без стрелков, кроме двух,
+  помеченных `it.fails` до T-0192 (Р164); таблица `pnpm balance:sim` до и
+  после — в описании PR и в `docs/32-balance.md`.
 - [x] Эталоны обновлены и объяснены словами; перф-тесты и `pnpm budget` не хуже.
 - [ ] Дифф только в зонах; гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 

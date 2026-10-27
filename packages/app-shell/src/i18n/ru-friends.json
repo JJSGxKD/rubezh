@@ -1,7 +1,7 @@
 {
   "friends.title": "Друзья",
   "friends.invite.title": "Позови друга",
-  "friends.invite.body": "Друг открывает ссылку — и вы уже друзья: можно каждый день дарить друг другу подарки и сравнивать рекорды.",
+  "friends.invite.body": "Друг открывает ссылку — и он сразу у тебя в друзьях: можно каждый день дарить друг другу подарки и сравнивать рекорды.",
   "friends.invite.action": "Пригласить",
   "friends.invite.copy": "Копировать ссылку",
   "friends.invite.sent": "Приглашение отправлено — ждём друга в игре.",
@@ -15,7 +15,7 @@
   "friends.invite.point.gifts": "Друзья дарят друг другу монеты — раз в день каждому.",
   "friends.guest": "Друзья, подарки и награды за приглашения — с входом через Telegram.",
   "friends.loading": "Загружаем друзей…",
-  "friends.failed": "Не удалось загрузить друзей — проверьте связь",
+  "friends.failed": "Не удалось загрузить друзей — проверь связь",
   "friends.gifts.title": "Подарки",
   "friends.gifts.ready": "{count} {count, plural, one {подарок ждёт} few {подарка ждут} many {подарков ждут} other {подарка ждут}} — по {coins} монет",
   "friends.gifts.pendingOnly": "Подарков на сегодня больше не забрать — остальные подождут до завтра",
@@ -48,5 +48,5 @@
   "friends.giftAll.done": "Всем подарено",
   "friends.giftAll.tomorrow": "Следующие подарки — завтра",
   "friends.giftAll.sent": "Подарено: {sent}",
-  "friends.action.failed": "Не получилось — попробуйте ещё раз"
+  "friends.action.failed": "Не получилось — попробуй ещё раз"
 }

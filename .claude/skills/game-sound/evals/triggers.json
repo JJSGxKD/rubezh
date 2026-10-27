@@ -1,0 +1,70 @@
+{
+  "skill": "game-sound",
+  "note": "Проверка срабатывания по docs/18 §6: на should_trigger=true скилл обязан сработать, на false — нет (сработать должен соседний скилл или никакой).",
+  "queries": [
+    {
+      "query": "Сделай звук для открытия эпического сундука",
+      "should_trigger": true
+    },
+    {
+      "query": "Звук кристалла режет слух на телефоне",
+      "should_trigger": true
+    },
+    {
+      "query": "Не слышно появления элиты в толпе",
+      "should_trigger": true
+    },
+    {
+      "query": "Озвучь подбор заморозки",
+      "should_trigger": true
+    },
+    {
+      "query": "Сделай щелчок кнопки мягче",
+      "should_trigger": true
+    },
+    {
+      "query": "Поправь громкость оружия относительно наград",
+      "should_trigger": true
+    },
+    {
+      "query": "Ревью звуков нового оружия Гусли",
+      "should_trigger": true
+    },
+    {
+      "query": "Нужен звук предупреждения «мало здоровья»",
+      "should_trigger": true
+    },
+    {
+      "query": "Звук смерти слишком длинный, укороти",
+      "should_trigger": true
+    },
+    {
+      "query": "Добавь вибрацию на нажатие вкладки в настройки",
+      "should_trigger": false
+    },
+    {
+      "query": "Нарисуй вспышку удара молнии",
+      "should_trigger": false
+    },
+    {
+      "query": "Напиши текст поста про звуковую лабораторию",
+      "should_trigger": false
+    },
+    {
+      "query": "Почему музыка не играет в меню?",
+      "should_trigger": false
+    },
+    {
+      "query": "Сделай ползунок громкости шире на 320",
+      "should_trigger": false
+    },
+    {
+      "query": "Сбалансируй урон Грозы",
+      "should_trigger": false
+    },
+    {
+      "query": "Пересобери атлас эффектов",
+      "should_trigger": false
+    }
+  ]
+}

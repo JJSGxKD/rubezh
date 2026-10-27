@@ -29,7 +29,7 @@ export class PromoCodesController {
   @HttpCode(200)
   async redeem(@Req() request: unknown, @Body() body: unknown): Promise<{ data: RedeemResult }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком много попыток — попробуйте через несколько минут");
+    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком много попыток — попробуй через несколько минут");
     const parsed = bodySchema.safeParse(body);
     // Неверное тело для игрока — тот же «такого кода нет»: подбирающему незачем знать формат.
     if (!parsed.success) throw new PromoCodeNotFoundError();

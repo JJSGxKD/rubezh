@@ -119,9 +119,11 @@ export const AD_SCRIPT_ORIGINS = [
  * - RichAds подключает скрипт Яндекса: путь указан, потому что `yandex.ru`
  *   целиком слишком широк;
  * - `context.js` Яндекса сам грузит сборки из `yastatic.net/partner-code-bundles/`
- *   (Р122, консоль игрока): источник с путём, а не хост, потому что с этого хоста
- *   Яндекс раздаёт всё подряд, а реклама берёт только этот каталог. Список
- *   дополняется по отчётам о блокировках, а не догадкой.
+ *   (Р122, консоль игрока), а объявление в безопасном фрейме — хост фрейма из
+ *   `yastatic.net/safeframe-bundles/` (консоль игрока на v0.10.1): источники с
+ *   путём, а не хост, потому что с этого хоста Яндекс раздаёт всё подряд, а
+ *   реклама берёт только эти каталоги. Список дополняется по отчётам о
+ *   блокировках, а не догадкой.
  */
 export const AD_CHAIN_SCRIPT_SOURCES = [
   "https://7ool.net",
@@ -129,6 +131,7 @@ export const AD_CHAIN_SCRIPT_SOURCES = [
   "https://us.convers.link",
   "https://yandex.ru/ads/system/context.js",
   "https://yastatic.net/partner-code-bundles/",
+  "https://yastatic.net/safeframe-bundles/",
 ] as const;
 
 /**

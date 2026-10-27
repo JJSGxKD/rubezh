@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, Network, Percent, Send, ScrollText, ShieldAlert, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -77,6 +77,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "secrets", title: "Ключи интеграций", hint: "Токены внешних сервисов: заменить без релиза, значение не показывается", permission: "secrets.view", icon: KeyRound },
       { id: "diagnostics", title: "Диагностика", hint: "Записи забегов и замеры производительности с устройств", permission: "diagnostics.view", icon: Activity },
       { id: "requests", title: "Запросы", hint: "Куда ходит сервер и что к нему приходит: внешние вызовы и сводка маршрутов", permission: "requests.view", icon: Network },
+      { id: "csp", title: "Блокировки клиента", hint: "Какие адреса политика источников клиента заблокировала и сколько раз", permission: "diagnostics.view", icon: ShieldX },
       { id: "exports", title: "Выгрузки", hint: "Архив событий и отчётов диагностики за период", permission: "data.export", icon: Download },
     ],
   },
@@ -96,17 +97,25 @@ export interface Route {
   section: string;
   /** объект раздела: игрок, отчёт; `null` — список */
   id: string | null;
+  /** вкладка объекта — третья часть адреса: `#/players/<id>/purchases`; нет — первая */
+  tab?: string;
 }
 
 export function parseRoute(hash: string): Route | null {
   const parts = hash.replace(/^#\/?/, "").split("/").filter((part) => part !== "");
-  const [section, id] = parts;
+  const [section, id, tab] = parts;
   if (section === undefined) return null;
-  return { section: decodeURIComponent(section), id: id === undefined ? null : decodeURIComponent(id) };
+  return {
+    section: decodeURIComponent(section),
+    id: id === undefined ? null : decodeURIComponent(id),
+    ...(tab === undefined ? {} : { tab: decodeURIComponent(tab) }),
+  };
 }
 
 export function hrefOf(route: Route): string {
-  return `#/${encodeURIComponent(route.section)}${route.id === null ? "" : `/${encodeURIComponent(route.id)}`}`;
+  if (route.id === null) return `#/${encodeURIComponent(route.section)}`;
+  const tab = route.tab === undefined || route.tab === "" ? "" : `/${encodeURIComponent(route.tab)}`;
+  return `#/${encodeURIComponent(route.section)}/${encodeURIComponent(route.id)}${tab}`;
 }
 
 export function visibleSections(permissions: readonly string[], sections: readonly Section[] = SECTIONS): Section[] {
