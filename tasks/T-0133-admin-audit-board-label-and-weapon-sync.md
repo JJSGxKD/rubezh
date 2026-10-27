@@ -3,8 +3,8 @@ id: T-0133
 title: Панель — подпись «отдельной доски» в журнале и сверка списка оружия с контентом
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-15 / haiku-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
