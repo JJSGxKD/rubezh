@@ -3,7 +3,7 @@ id: T-0052
 title: Сводка панели — плитка и панель рекламы, вехи полосами, периоды — экран
 epic: E7
 priority: P1
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 size: M
 depends_on: [T-0051, T-0049]
@@ -25,7 +25,7 @@ batch: 3
 
 # T-0052. Сводка панели — плитка и панель рекламы, вехи полосами, периоды — экран
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json)](README.md#значки-статуса) [![T-0051](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0051.json&label=T-0051)](archive/T-0051-overview-ads-and-periods-api.md) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](archive/T-0049-admin-shell-responsive.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json)](../README.md#значки-статуса) [![T-0051](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0051.json&label=T-0051)](T-0051-overview-ads-and-periods-api.md) [![T-0049](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0049.json&label=T-0049)](T-0049-admin-shell-responsive.md)
 
 ## Зачем
 
