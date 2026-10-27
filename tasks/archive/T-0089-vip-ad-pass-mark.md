@@ -25,6 +25,7 @@ zones:
   - apps/admin/test/overview.test.ts
 shared:
   - apps/admin/src/ui/help.ts
+  - tasks/T-0199-reroll-for-ad.md
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
   - docs/35-stage4-plan.md
