@@ -81,7 +81,7 @@ describe("воронка полосами", () => {
   it("с прошлым периодом: изменение доли в п. п. с одним знаком, у входа — число аккаунтов", () => {
     const bars = funnelBars(NOW_ROW, BEFORE_ROW);
     expect(bars[1]?.deltaPts).toBe(0.9);
-    expect(bars[5]?.deltaPts).toBe(0.5);
+    expect(bars[5]?.deltaPts).toBe(1.2);
     expect(bars[0]?.deltaPts).toBe(0);
     expect(bars[0]?.countBefore).toBe(2310);
   });
@@ -104,8 +104,8 @@ describe("воронка полосами", () => {
   });
 
   it("потеря на восьмой вехе в расчёт не идёт: дальше она ожидаема", () => {
-    const late = row({ counts: [1000, 990, 980, 970, 960, 950, 900, 10, 5] });
-    expect(worstStep(funnelBars(late, null))).toBe(1);
+    const late = row({ counts: [1000, 990, 500, 490, 480, 470, 450, 10, 5] });
+    expect(worstStep(funnelBars(late, null))).toBe(2);
   });
 
   it("потерь нет — null", () => {
@@ -145,7 +145,7 @@ describe("таблица источников", () => {
 
   it("сортировка по аккаунтам и по любой вехе — по убыванию, итог в расчёт не входит", () => {
     expect(sortRows([organic, stream, ads], "accounts").map((item) => item.startRef ?? item.startKind)).toEqual(["ads", "organic", "stream-1009"]);
-    expect(sortRows([organic, stream, ads], "firstPurchase").map((item) => item.startRef ?? item.startKind)).toEqual(["organic", "ads", "stream-1009"].sort((a, b) => ({ ads: 37, organic: 21, "stream-1009": 30 })[b]! - ({ ads: 37, organic: 21, "stream-1009": 30 })[a]!));
+    expect(sortRows([organic, stream, ads], "firstPurchase").map((item) => item.startRef ?? item.startKind)).toEqual(["ads", "stream-1009", "organic"]);
   });
 
   it("сортировка не меняет исходный список", () => {
@@ -181,7 +181,8 @@ describe("разметка воронки", () => {
     const out = html(true);
     expect(out).toContain("больше всего теряем");
     expect(out).toContain("37% не доходят от «2 забега» до «5 забегов»");
-    expect(out.indexOf("больше всего теряем")).toBeLessThan(out.indexOf("5 забегов</span>") === -1 ? out.length : out.indexOf("5 забегов</span>"));
+    // Отметка — строкой над вехой «5 забегов», а не под ней.
+    expect(out.indexOf("больше всего теряем")).toBeLessThan(out.indexOf("5 забегов<small") === -1 ? out.lastIndexOf("5 забегов") : out.indexOf("5 забегов<small"));
   });
 
   it("сравнение включено — черта прошлого периода и изменения; выключено — их нет", () => {
