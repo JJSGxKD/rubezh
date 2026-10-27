@@ -18,7 +18,7 @@ export class MemoryAccountRepository implements AccountRepository {
 
     if (existing !== undefined) {
       const { photoUrl, ...rest } = identity;
-      const updated: Account = { ...existing, ...rest, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
+      const updated: Account = { ...existing, ...rest, platformName: identity.displayName, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
       this.byKey.set(key, updated);
       return updated;
     }
@@ -26,6 +26,8 @@ export class MemoryAccountRepository implements AccountRepository {
     const account: Account = {
       accountId: crypto.randomUUID(),
       ...identity,
+      platformName: identity.displayName,
+      nameLockedAt: null,
       photoUrl: identity.photoUrl ?? null,
       createdAt: new Date(nowMs),
       bannedAt: null,
@@ -72,6 +74,16 @@ export class MemoryAccountRepository implements AccountRepository {
     for (const [key, account] of this.byKey.entries()) {
       if (account.accountId !== accountId) continue;
       const updated: Account = { ...account, bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null, created: false };
+      this.byKey.set(key, updated);
+      return updated;
+    }
+    return null;
+  }
+
+  async setName(accountId: string, displayName: string, lockedAt: Date | null): Promise<Account | null> {
+    for (const [key, account] of this.byKey.entries()) {
+      if (account.accountId !== accountId) continue;
+      const updated: Account = { ...account, displayName, nameLockedAt: lockedAt, created: false };
       this.byKey.set(key, updated);
       return updated;
     }

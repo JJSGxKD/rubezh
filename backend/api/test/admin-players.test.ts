@@ -450,7 +450,7 @@ describe("ник игрока в панели (T-0151)", () => {
   it("снятие закрепления возвращает ник с площадки (через чистку) и пишется в журнал", async () => {
     const target = await player(s.accounts);
     await s.service.rename(owner, target.accountId, "Тимур", NOW);
-    const result = await s.service.unlockName(owner, target.accountId, NOW);
+    const result = await s.service.unlockName(owner, target.accountId);
 
     expect(result.account).toMatchObject({ displayName: "Путник", nameLocked: false });
     expect((await s.accounts.byId(target.accountId))?.nameLockedAt).toBeNull();
@@ -473,9 +473,9 @@ describe("ник игрока в панели (T-0151)", () => {
     const target = await player(s.accounts);
 
     await expect(s.service.rename(marketerRef, target.accountId, "Тимур", NOW)).rejects.toThrow(ForbiddenError);
-    await expect(s.service.unlockName(marketerRef, target.accountId, NOW)).rejects.toThrow(ForbiddenError);
+    await expect(s.service.unlockName(marketerRef, target.accountId)).rejects.toThrow(ForbiddenError);
     await expect(s.service.rename(owner, randomUUID(), "Тимур", NOW)).rejects.toThrow(AccountNotFoundError);
-    await expect(s.service.unlockName(owner, randomUUID(), NOW)).rejects.toThrow(AccountNotFoundError);
+    await expect(s.service.unlockName(owner, randomUUID())).rejects.toThrow(AccountNotFoundError);
     expect((await s.accounts.byId(target.accountId))?.displayName).toBe("Путник");
   });
 });
