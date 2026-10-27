@@ -263,6 +263,14 @@ export function SegmentedControl(props: {
   const [fade, setFade] = useState<EdgeFade>({ left: false, right: false });
   const [underline, setUnderline] = useState<{ left: number; width: number } | null>(null);
 
+  // Полоса — под выбранной вкладкой: её место меняют и выбор, и ширина подписей
+  // (загрузка шрифта, поворот экрана, крупный шрифт системы).
+  const placeUnderline = (element: HTMLElement): void => {
+    const active = element.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!tabs || active === null) return;
+    setUnderline((prev) => (prev?.left === active.offsetLeft && prev.width === active.offsetWidth ? prev : { left: active.offsetLeft, width: active.offsetWidth }));
+  };
+
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
   useEffect(() => {
     const element = list.current;
@@ -271,7 +279,7 @@ export function SegmentedControl(props: {
     const right = active.offsetLeft + active.offsetWidth;
     if (active.offsetLeft < element.scrollLeft) element.scrollLeft = active.offsetLeft;
     else if (right > element.scrollLeft + element.clientWidth) element.scrollLeft = right - element.clientWidth;
-    if (tabs) setUnderline((prev) => (prev?.left === active.offsetLeft && prev.width === active.offsetWidth ? prev : { left: active.offsetLeft, width: active.offsetWidth }));
+    placeUnderline(element);
   }, [props.activeId, props.items.length, tabs]);
 
   // Затухание у краёв: состояние меняется, только когда меняется пара флагов, а не на каждый пиксель прокрутки.
@@ -282,10 +290,16 @@ export function SegmentedControl(props: {
       const next = edgeFade(element.scrollLeft, element.clientWidth, element.scrollWidth);
       setFade((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
     };
+    const resize = (): void => {
+      update();
+      placeUnderline(element);
+    };
     update();
     element.addEventListener("scroll", update, { passive: true });
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    // За кнопками тоже: ширина подписи меняется и без смены ширины ленты.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(element);
+    element.querySelectorAll("[role=tab]").forEach((tab) => observer?.observe(tab));
     return () => {
       element.removeEventListener("scroll", update);
       observer?.disconnect();
@@ -336,7 +350,7 @@ export function SegmentedControl(props: {
           {underline === null ? null : (
             <span
               aria-hidden="true"
-              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-pill bg-accent transition-transform duration-(--duration-fast) ease-base"
+              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-pill bg-accent transition-transform duration-(--duration-fast) ease-base motion-reduce:transition-none"
               style={{ width: underline.width, transform: `translateX(${String(underline.left)}px)` }}
             />
           )}
