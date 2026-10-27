@@ -1,4 +1,7 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { AdsPanel, FunnelBars } from "../src/screens/overview/overview-parts";
 import {
   completionPct,
   dayTitle,
@@ -181,5 +184,57 @@ describe("сводка: вехи полосами и период", () => {
     expect(versusBefore(90, 100, 30).text).toBe("−10% к прошлым 30 дням");
     expect(versusBefore(100, 100, 7).tone).toBe("flat");
     expect(versusBefore(5, 0, 7)).toEqual({ text: "в прошлые 7 дней — 0", tone: "up" });
+  });
+});
+
+describe("сводка: разметка рекламы и вех", () => {
+  const totals = (shown: number, completed: number) => ({ offered: shown + 5, shown, completed, claimed: completed - 2, failed: 3 });
+  const ads = {
+    now: totals(1000, 700),
+    before: totals(900, 600),
+    places: [
+      { place: "second_chance", ...totals(744, 610) },
+      { place: "interstitial", ...totals(100, 40) },
+    ],
+    networks: [
+      { networkKey: "adsgram", completed: 600 },
+      { networkKey: "taddy", completed: 100 },
+    ],
+  };
+
+  it("места — подписями, итог последней строкой, доля ниже порога — предупреждением", () => {
+    const html = renderToStaticMarkup(createElement(AdsPanel, { ads, days: 7 }));
+    expect(html).toContain("Реклама за 7 дней");
+    expect(html).toContain("Второй шанс");
+    expect(html.indexOf("Всего")).toBeGreaterThan(html.indexOf("Между забегами"));
+    expect(html).toContain("82%");
+    expect(html).toMatch(/badge-tinted[^>]*>40%</);
+    expect(html).not.toMatch(/badge-tinted[^>]*>82%</);
+  });
+
+  it("доли сетей и пометка про «Между забегами»", () => {
+    const html = renderToStaticMarkup(createElement(AdsPanel, { ads, days: 1 }));
+    expect(html).toContain("Реклама сегодня");
+    expect(html).toContain("AdsGram");
+    expect(html).toContain("86%");
+    expect(html).toContain("14%");
+    expect(html).toContain("«Между забегами» наград нет");
+    expect(html).toContain("В раздел «Реклама»");
+  });
+
+  it("показов за период не было — пустой текст вместо таблицы", () => {
+    const zero = { offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0 };
+    const html = renderToStaticMarkup(createElement(AdsPanel, { ads: { now: zero, before: zero, places: [], networks: [] }, days: 1 }));
+    expect(html).toContain("Показов за период не было");
+    expect(html).not.toContain("<table");
+  });
+
+  it("вехи: семь полос, у первой «—», у остальных доля от прошлого", () => {
+    const html = renderToStaticMarkup(createElement(FunnelBars, { funnel: FUNNEL }));
+    expect(html.match(/role="img"/g)).toHaveLength(7);
+    expect(html).toContain("Вошли в бота");
+    expect(html).toContain("83% от прошлого");
+    expect(html).toContain("86% от прошлого");
+    expect(html).toContain("—");
   });
 });
