@@ -24,6 +24,7 @@ shared:
   - docs/29-admin-panel.md
   - docs/28-diagnostics.md
   - docs/30-configuration-map.md
+  - tasks/T-0334-ads-test-screen.md
 runner: any
 executor: sonnet-5.5
 effort: medium
