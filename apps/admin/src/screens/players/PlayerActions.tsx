@@ -4,9 +4,11 @@ import type { ApiError } from "../../api/client";
 import {
   adjustWallet,
   messagePlayer,
+  renamePlayer,
   resourceName,
   TEAM_MESSAGE_MAX,
   teamMessageProblem,
+  unlockPlayerName,
   WALLET_RESOURCES,
   walletAdjustProblem,
   type PlayerCard,
@@ -98,6 +100,70 @@ export function WalletAdjustPanel({ card, onChanged }: { card: PlayerCard; onCha
             </Button>
           )}
           {problem !== null && delta !== "" ? <span className="text-xs text-text-muted">{problem}</span> : null}
+        </div>
+        <OutcomeLine outcome={outcome} />
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * Ник игрока (tasks/T-0151): смена закрепляет его — вход с площадки больше не
+ * перезапишет. Ник проходит ту же чистку, что при входе; причину отказа
+ * сервер называет сам. Право — то же, что у блокировки.
+ */
+export function NamePanel({ card, onChanged }: { card: PlayerCard; onChanged: () => void }) {
+  const [name, setName] = useState(card.account.displayName);
+  const [confirming, setConfirming] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [outcome, setOutcome] = useState<Outcome>(null);
+
+  const trimmed = name.trim();
+  const unchanged = trimmed === card.account.displayName && card.account.nameLocked;
+
+  const finish = (result: Awaited<ReturnType<typeof renamePlayer>>, text: string) => {
+    setPending(false);
+    setConfirming(false);
+    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    setName(result.data.account.displayName);
+    setOutcome({ tone: "success", text });
+    onChanged();
+  };
+
+  const save = async () => {
+    setPending(true);
+    finish(await renamePlayer(api, card.account.accountId, trimmed), "Ник сменён и закреплён");
+  };
+
+  const unlock = async () => {
+    setPending(true);
+    finish(await unlockPlayerName(api, card.account.accountId), "Закрепление снято: ник снова с площадки");
+  };
+
+  return (
+    <Panel title="Ник игрока">
+      <div className="flex flex-col gap-3">
+        <Field label="Ник" hint="Проходит ту же проверку, что ник с площадки. После смены закрепляется: вход его не перезапишет.">
+          <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={64} />
+        </Field>
+        <div className="flex flex-wrap items-center gap-2">
+          {confirming ? (
+            <>
+              <Button tone="primary" disabled={pending} onClick={() => void save()}>
+                Да, сменить и закрепить
+              </Button>
+              <Button onClick={() => setConfirming(false)}>Отмена</Button>
+            </>
+          ) : (
+            <Button tone="primary" disabled={trimmed === "" || unchanged} onClick={() => setConfirming(true)}>
+              Сменить и закрепить
+            </Button>
+          )}
+          {card.account.nameLocked ? (
+            <Button disabled={pending} onClick={() => void unlock()}>
+              Снять закрепление
+            </Button>
+          ) : null}
         </div>
         <OutcomeLine outcome={outcome} />
       </div>

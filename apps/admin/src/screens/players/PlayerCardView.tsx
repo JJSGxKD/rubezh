@@ -1,5 +1,6 @@
+import type { ReactNode } from "react";
 import { api } from "../../services";
-import { fetchPlayerCard, FUNNEL_MILESTONES, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
+import { fetchPlayerCard, FUNNEL_MILESTONES, nameDiffers, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
 import { BAN_KIND, fetchRestrictions, type Restriction } from "../../api/restrictions";
 import { difficultyTitle } from "../../api/review";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
@@ -9,7 +10,7 @@ import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from 
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
-import { MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { MessagePanel, NamePanel, WalletAdjustPanel } from "./PlayerActions";
 import { PurchasesPanel } from "./PurchasesPanel";
 import { RatingRunsPanel } from "./RatingRunsPanel";
 import { RestrictionsPanel } from "./RestrictionsPanel";
@@ -54,6 +55,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
               <RatingRunsPanel accountId={accountId} ratingClosed={ratingClosed} onChanged={reload} />
             </div>
             <SocialPanel accountId={accountId} />
+            {can(view, "players.ban") ? <NamePanel key={state.data.account.displayName + String(state.data.account.nameLocked)} card={state.data} onChanged={reload} /> : null}
             {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
             {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
           </div>
@@ -75,6 +77,7 @@ function Header({ card, active }: { card: PlayerCard; active: readonly Restricti
       actions={
         <span className="flex flex-wrap gap-1.5">
           {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map((row) => (row.notify ? row.title : `${row.title} (молча)`)).join(", ")}</Badge>}
+          {account.nameLocked ? <Badge tone="info">ник закреплён</Badge> : null}
           {account.banned === null ? null : <Badge tone="danger">заблокирован {formatDateTime(account.banned.at)}</Badge>}
         </span>
       }
@@ -83,6 +86,7 @@ function Header({ card, active }: { card: PlayerCard; active: readonly Restricti
         <KeyValue
           items={[
             ["Аккаунт", <code className="text-xs">{account.accountId}</code>],
+            ...(nameDiffers(account) ? [["На площадке", <span className="block max-w-[24rem] truncate" title={account.platformName ?? undefined}>{account.platformName}</span>] as [string, ReactNode]] : []),
             ["Площадка", account.platform],
             ["ID на площадке", account.pii?.platformUserId ?? "скрыт — нет права на персональные данные"],
             ["Юзернейм", account.pii === null ? "скрыт" : account.pii.username === null ? "—" : `@${account.pii.username}`],
