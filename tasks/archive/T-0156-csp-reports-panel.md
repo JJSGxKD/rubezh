@@ -11,12 +11,12 @@ depends_on: [T-0155]
 zones:
   - apps/admin/src/api/csp-reports.ts
   - apps/admin/src/screens/csp-reports/**
-  - apps/admin/src/screens/sections.tsx
-  - apps/admin/src/routes.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/csp-reports.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/screens/sections.tsx
+  - apps/admin/src/routes.ts
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: haiku-5.5
 effort: medium

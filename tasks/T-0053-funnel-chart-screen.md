@@ -11,12 +11,12 @@ zones:
   - apps/admin/src/screens/funnel/FunnelScreen.tsx
   - apps/admin/src/screens/funnel/funnel-chart.tsx
   - apps/admin/src/api/funnel.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/funnel-chart.test.ts
   - apps/admin/src/ui/period-picker.tsx
   - apps/admin/test/period-picker.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
 effort: high

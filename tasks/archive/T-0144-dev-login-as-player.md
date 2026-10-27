@@ -3,8 +3,8 @@ id: T-0144
 title: Вход разработчика игроком без ролей — `dev-player-<id>`
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -15,6 +15,8 @@ zones:
   - backend/api/test/auth.test.ts
 shared:
   - docs/20-env-and-ports.md
+  - tasks/T-0145-screens-one-command.md
+  - tasks/T-0216-role-levels.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -25,7 +27,7 @@ batch: 3
 
 # T-0144. Вход разработчика игроком без ролей — `dev-player-<id>`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json)](../README.md#значки-статуса)
 
 ## Зачем
 

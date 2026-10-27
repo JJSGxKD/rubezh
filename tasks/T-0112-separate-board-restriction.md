@@ -20,16 +20,16 @@ zones:
   - backend/api/test/rating-restrictions.test.ts
   - backend/api/test/helpers/memory-restrictions.ts
   - apps/admin/src/api/restrictions.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/screens/players/RestrictDialog.tsx
   - apps/admin/src/screens/players/RestrictionsPanel.tsx
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/restrictions.test.ts
 shared:
   - backend/api/test/admin-players.test.ts
   - backend/api/test/admin.test.ts
   - docs/29-admin-panel.md
   - backend/api/src/modules/roles/permissions.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
 runner: local
 executor: sonnet-5.5
 effort: high
