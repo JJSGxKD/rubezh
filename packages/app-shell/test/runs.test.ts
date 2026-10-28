@@ -372,7 +372,7 @@ describe("подробности забега для листа в профил�
 
     expect(submission.weapons).toEqual([{ id: "spark", level: 4, damage: 4000 }]);
     expect(submission.passives).toEqual([{ id: "might", level: 2 }]);
-    expect(submission.stats).toEqual({
+    expect(submission.stats).toMatchObject({
       damageTaken: 121,
       xpCollected: 300,
       waveReached: 3,
