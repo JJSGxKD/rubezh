@@ -380,7 +380,7 @@ describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)",
   it("ForexRateAPI: ключ в каталоге, шаблон отсекает мусор, проверка — /v1/usage с заголовком", async () => {
     const KEY = "0123456789abcdef0123456789abcdef";
     expect(SECRETS.forexrateapi.key).toBe("fx.forexrateapi");
-    expect(SECRETS.forexrateapi.fromEnv(config())).toBeNull();
+    expect(SECRETS.forexrateapi.fromEnv()).toBeNull();
     expect(secretProblem(SECRETS.forexrateapi, SECRETS.forexrateapi.example)).toBeNull();
     for (const bad of ["", "короткий", "abc123", `${KEY} x`, `${KEY}\n`]) expect(secretProblem(SECRETS.forexrateapi, bad), bad).not.toBeNull();
     const { asked, fetchImpl } = answeringStatus(200);
