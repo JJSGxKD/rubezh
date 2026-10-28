@@ -359,4 +359,56 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const interstitial = await open(null, "interstitial");
     expect(await viewSecOf(interstitial)).toBeNull();
   });
+
+  it("пропуск VIP — не досмотр: воронка его не видит, а passes считает отдельно (Р99)", async () => {
+    // Окно в далёких сутках: чужие тесты в него не попадают, а счёт идёт по времени.
+    const base = new Date(Date.UTC(2031, 1, 1, 9));
+    const from = at(base, -60);
+    const to = at(base, 600);
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    // Повторный прогон на той же базе: пропуски прошлого прогона в этом окне не нужны.
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${from} AND created_at < ${to}`;
+    const first = await account();
+    const second = await account();
+
+    // Настоящий показ своей сети, выполненный через report.
+    const real = await session(first, "view", base);
+    await repository.report(real, first, { kind: "completed" }, at(base, 1));
+
+    const pass = async (accountId: string, place: "wheel_spin" | "second_chance", createdAt: Date): Promise<string> => {
+      const sessionId = randomBytes(12).toString("base64url");
+      await repository.createPassSession({ sessionId, accountId, place, pass: "vip", createdAt, expiresAt: at(createdAt, 30) });
+      return sessionId;
+    };
+    const claimedPass = await pass(first, "wheel_spin", at(base, 5));
+    await pass(second, "wheel_spin", at(base, 6));
+    await pass(first, "second_chance", at(base, 7));
+    await prisma.$executeRaw`UPDATE ad_session SET claimed_at = ${at(base, 8)} WHERE session_id = ${claimedPass}`;
+
+    const funnel = (await catalog.funnel(from, to)).filter((row) => row.networkKey === network || row.networkKey === "vip");
+    expect(funnel).toEqual([{ networkKey: network, place: "wheel_spin", offered: 1, shown: 1, clicked: 0, completed: 1, claimed: 0, failed: 0 }]);
+
+    expect(await catalog.passes(from, to)).toEqual([
+      { passName: "vip", place: "second_chance", used: 1, players: 1, claimed: 0 },
+      { passName: "vip", place: "wheel_spin", used: 2, players: 2, claimed: 1 },
+    ]);
+  });
+
+  it("пропуск, записанный до задачи сырым INSERT, считается; граница окна — [from, to)", async () => {
+    const base = new Date(Date.UTC(2031, 2, 1, 9));
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${at(base, -60)} AND created_at < ${at(base, 180)}`;
+    const me = await account();
+    const raw = async (createdAt: Date): Promise<void> => {
+      await prisma.$executeRaw`
+        INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, completed_at, expires_at)
+        VALUES (${randomBytes(12).toString("base64url")}, ${me}::uuid, 'run_double'::"AdPlace", NULL, 'vip', 'view', 'completed', ${createdAt}, ${createdAt}, ${at(createdAt, 30)})`;
+    };
+    await raw(base);
+    await raw(at(base, 60));
+
+    expect(await catalog.passes(base, at(base, 60))).toEqual([{ passName: "vip", place: "run_double", used: 1, players: 1, claimed: 0 }]);
+    expect(await catalog.passes(at(base, 1), at(base, 61))).toEqual([{ passName: "vip", place: "run_double", used: 1, players: 1, claimed: 0 }]);
+    expect(await catalog.passes(at(base, 61), at(base, 120))).toEqual([]);
+  });
 });
