@@ -15,6 +15,10 @@ export const playerRowSchema = z.object({
   accountId: z.string(),
   platform: z.string(),
   displayName: z.string(),
+  /** ник, как он пришёл с площадки; сервер старее T-0151 поля не отдаёт */
+  platformName: z.string().nullable().default(null),
+  /** ник закреплён модератором: вход его не меняет */
+  nameLocked: z.boolean().default(false),
   photoUrl: z.string().nullable(),
   createdAt: iso,
   banned: z.object({ at: iso, reason: z.string().nullable() }).nullable(),
@@ -154,6 +158,23 @@ export function fetchPlayerCard(api: AdminApi, accountId: string): Promise<ApiRe
 
 export function adjustWallet(api: AdminApi, accountId: string, adjust: WalletAdjust): Promise<ApiResult<AdjustResult>> {
   return api.request(`/players/${encodeURIComponent(accountId)}/wallet/adjust`, { method: "POST", body: adjust, schema: adjustResultSchema });
+}
+
+const nameResultSchema = z.object({ account: playerRowSchema });
+
+/** Сменить ник и закрепить (право `players.ban`): сервер чистит ник, отказ приходит текстом причины. */
+export function renamePlayer(api: AdminApi, accountId: string, name: string): Promise<ApiResult<z.infer<typeof nameResultSchema>>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/name`, { method: "POST", body: { name }, schema: nameResultSchema });
+}
+
+/** Снять закрепление: ник снова берётся с площадки. */
+export function unlockPlayerName(api: AdminApi, accountId: string): Promise<ApiResult<z.infer<typeof nameResultSchema>>> {
+  return api.request(`/players/${encodeURIComponent(accountId)}/name/unlock`, { method: "POST", body: {}, schema: nameResultSchema });
+}
+
+/** Ник с площадки отличается от показываемого — чистка его изменила или модератор сменил вручную. */
+export function nameDiffers(account: Pick<PlayerRow, "displayName" | "platformName">): boolean {
+  return account.platformName !== null && account.platformName.trim() !== account.displayName;
 }
 
 /** Пределы причины действия с покупкой — те же, что у сервера (`purchaseSupportSchema`). */

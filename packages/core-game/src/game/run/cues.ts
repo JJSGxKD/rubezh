@@ -157,9 +157,6 @@ export class CueTracker {
           else if (type.pattern === "dash" && phase === DASH_PHASE.telegraph) cues.dashWarns++;
           else if (type.pattern === "dash" && phase === DASH_PHASE.dash) cues.dashes++;
         }
-        if (same && cues !== null && type?.pattern === "kite_and_shoot" && cooldown > this.enemyCooldown[i] + 1e-6) {
-          cues.enemyShots++;
-        }
       }
       this.enemyAlive[i] = alive ? 1 : 0;
       this.enemyType[i] = typeIndex;

@@ -85,6 +85,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.pii.view": "Просмотр личных данных",
   "players.ban": "Блокировка игрока",
   "players.unban": "Снятие блокировки",
+  "players.rename": "Смена ника",
+  "players.rename.unlock": "Снятие закрепления ника",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
   "players.board.set": "Отдельная доска: наложена",

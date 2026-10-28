@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Пакет берут в другие проекты команды и собранным в бэкенд: ESM с
+    // NodeNext, как у бэкенда, и без DOM — исходники пакетов собранный
+    // бэкенд не импортирует (docs/34-stage3-plan.md, Р6).
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    // Пакет чистый: из Node нужен только глобальный `structuredClone`.
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

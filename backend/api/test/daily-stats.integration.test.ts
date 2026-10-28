@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
@@ -21,6 +21,9 @@ const at = (hhmm: string) => new Date(Date.parse(`${DAY}T${hhmm}:00+03:00`));
 describe.skipIf(DATABASE_URL === "")("ежедневная статистика на живом Postgres", () => {
   let prisma: PrismaClient;
   const accounts: string[] = [];
+  /** своя сеть и блок: сессия без блока — это пропуск VIP, а не досмотр (Р99) */
+  const network = `it_${randomBytes(4).toString("hex")}`;
+  const blockId = randomUUID();
 
   async function account(createdAt: Date, source: "organic" | "click" | null): Promise<string> {
     const accountId = randomUUID();
@@ -46,6 +49,10 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
 
   beforeAll(async () => {
     prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
+    await prisma.$executeRaw`INSERT INTO ad_network (network_key, name, active, priority, updated_at) VALUES (${network}, 'Проверка', true, 5, now())`;
+    await prisma.$executeRaw`
+      INSERT INTO ad_block (block_id, network_key, place, external_id, success, platforms, devices, created_at, updated_at)
+      VALUES (${blockId}::uuid, ${network}, 'second_chance', 'ext-stats', 'view'::"AdSuccess", ARRAY['telegram']::"Platform"[], ARRAY['android']::varchar(16)[], now(), now())`;
     const anna = await account(at("00:05"), "organic");
     const boris = await account(at("23:59"), "click");
     await account(at("12:00"), null);
@@ -73,16 +80,27 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
     // Досмотренные показы: один в сутках, один — ровно за границей ряда (полночь после последних суток).
     const adSession = (accountId: string, completedAt: Date) =>
       prisma.adSession.create({
-        data: { sessionId: randomUUID().replaceAll("-", ""), accountId, place: "second_chance", networkKey: "test", success: "view", status: "completed", createdAt: new Date(completedAt.getTime() - 60_000), expiresAt: new Date(completedAt.getTime() + 3_600_000), completedAt },
+        data: { sessionId: randomUUID().replaceAll("-", ""), accountId, place: "second_chance", blockId, networkKey: network, success: "view", status: "completed", createdAt: new Date(completedAt.getTime() - 60_000), expiresAt: new Date(completedAt.getTime() + 3_600_000), completedAt },
       });
     await adSession(anna, at("12:00"));
     await adSession(anna, new Date(dayWindow("2031-03-15").to.getTime()));
+    // Пропуск VIP — сессия без блока: в досмотры не входит, считается отдельно.
+    const passSession = (accountId: string, completedAt: Date) =>
+      prisma.$executeRaw`
+        INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, completed_at, expires_at)
+        VALUES (${randomUUID().replaceAll("-", "")}, ${accountId}::uuid, 'wheel_spin'::"AdPlace", NULL, 'vip', 'view', 'completed',
+                ${completedAt}, ${completedAt}, ${new Date(completedAt.getTime() + 3_600_000)})`;
+    await passSession(anna, at("13:00"));
+    await passSession(boris, at("14:00"));
     await prisma.accountFunnel.create({ data: { accountId: anna, enteredAt: at("00:05"), appOpenedAt: at("00:06"), firstRunStartedAt: at("10:00"), returnedD1At: at("10:00"), firstPurchaseAt: at("10:31") } });
     await prisma.accountFunnel.create({ data: { accountId: boris, enteredAt: at("23:59"), runs5At: new Date(window.to.getTime() + 60_000) } });
   });
 
   afterAll(async () => {
     await prisma.purchase.deleteMany({ where: { accountId: { in: accounts } } });
+    await prisma.adSession.deleteMany({ where: { accountId: { in: accounts } } });
+    await prisma.$executeRaw`DELETE FROM ad_block WHERE block_id = ${blockId}::uuid`;
+    await prisma.$executeRaw`DELETE FROM ad_network WHERE network_key = ${network}`;
     await prisma.account.deleteMany({ where: { accountId: { in: accounts } } });
     await prisma.$disconnect();
   });
@@ -100,11 +118,11 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
   it("ряд по суткам: те же границы и фильтры, пустые сутки — нулями", async () => {
     const points = await new PrismaDailyStatsRepository(prisma).series(dayWindow("2031-03-13").from, dayWindow("2031-03-15").to);
     expect(points).toEqual([
-      { day: "2031-03-13", newAccounts: 0, active: 0, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0 },
+      { day: "2031-03-13", newAccounts: 0, active: 0, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0, adsPassed: 0 },
       // Как у суток целиком: без читов, тестовая оплата не в счёт, возвращённая оплата — в сутках оплаты;
-      // досмотр за границей ряда в точки не попадает.
-      { day: "2031-03-14", newAccounts: 3, active: 2, finishedRuns: 3, stars: 8, purchases: 2, adsCompleted: 1 },
-      { day: "2031-03-15", newAccounts: 1, active: 1, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0 },
+      // досмотр за границей ряда в точки не попадает; два пропуска VIP — не досмотры.
+      { day: "2031-03-14", newAccounts: 3, active: 2, finishedRuns: 3, stars: 8, purchases: 2, adsCompleted: 1, adsPassed: 2 },
+      { day: "2031-03-15", newAccounts: 1, active: 1, finishedRuns: 0, stars: 0, purchases: 0, adsCompleted: 0, adsPassed: 0 },
     ]);
   });
 

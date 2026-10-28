@@ -172,7 +172,7 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
     } as unknown as Redis;
     const fanout = new ChangelogFanout(config, repository, accounts, notifications, redis);
     const rolesRepository = new MemoryRolesRepository();
-    const service = new ChangelogService(repository, accounts, new RolesService(config, rolesRepository, accounts), fanout);
+    const service = new ChangelogService(repository, accounts, new RolesService(config, rolesRepository, accounts), fanout, notifications);
     const owner = await account("web");
     await rolesRepository.grant(owner, "admin", null);
     const actor = { accountId: owner, platform: "web" as const, platformUserId: "owner" };
@@ -213,7 +213,7 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
     } as unknown as Redis;
     const fanout = new ChangelogFanout(config, repository, accounts, notifications, redis);
     const rolesRepository = new MemoryRolesRepository();
-    const service = new ChangelogService(repository, accounts, new RolesService(config, rolesRepository, accounts), fanout);
+    const service = new ChangelogService(repository, accounts, new RolesService(config, rolesRepository, accounts), fanout, notifications);
     const owner = await account("web");
     await rolesRepository.grant(owner, "admin", null);
     const actor = { accountId: owner, platform: "web" as const, platformUserId: "owner" };

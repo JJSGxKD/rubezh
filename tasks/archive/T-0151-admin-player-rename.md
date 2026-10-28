@@ -3,8 +3,8 @@ id: T-0151
 title: Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0150]
@@ -16,10 +16,13 @@ zones:
   - apps/admin/src/api/players.ts
   - apps/admin/src/screens/players/PlayerActions.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
+  - apps/admin/src/screens/players/PlayerHeader.tsx
   - apps/admin/src/screens/players/PlayerList.tsx
 shared:
   - docs/29-admin-panel.md
   - apps/admin/src/api/audit.ts
+  - backend/api/src/modules/auth/account.repository.ts
+  - backend/api/test/helpers/memory-auth.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -30,7 +33,7 @@ batch: 3
 
 # T-0151. Ник в панели — исходник, ручная смена с закреплением, длинные ники в списке
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](archive/T-0150-display-name-on-login.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0151.json)](../README.md#значки-статуса) [![T-0150](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0150.json&label=T-0150)](T-0150-display-name-on-login.md)
 
 ## Зачем
 

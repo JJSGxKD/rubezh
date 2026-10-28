@@ -3,8 +3,8 @@ id: T-0343
 title: PR задачи не правит epics.md и чужие задачи — перенос в архив уборкой тимлида
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0208]
@@ -33,7 +33,7 @@ batch: 3
 
 # T-0343. PR задачи не правит epics.md и чужие задачи — перенос в архив уборкой тимлида
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0343.json)](README.md#значки-статуса) [![T-0208](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json&label=T-0208)](archive/T-0208-board-contribution-periods.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0343.json)](../README.md#значки-статуса) [![T-0208](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0208.json&label=T-0208)](T-0208-board-contribution-periods.md)
 
 ## Зачем
 
@@ -55,7 +55,7 @@ batch: 3
 
 Решение владельца от 27.10.2026 (PR #517, ответы на три вопроса). Оно
 меняет часть его же решения В1 от 24.10.2026
-([T-0204](archive/T-0204-tasks-archive-folder.md), «Решения»): вместо
+([T-0204](T-0204-tasks-archive-folder.md), «Решения»): вместо
 «переезд файла едет вместе с задачей» — «переезд делает уборка тимлида».
 Остальное из В1 остаётся: две папки, переносит скрипт, а не человек, все
 читатели видят обе папки. Ещё два ответа владельца — когда уборка и кто

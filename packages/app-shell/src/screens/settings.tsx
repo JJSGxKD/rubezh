@@ -17,6 +17,7 @@ import { noteAccountSetting } from "../state/account-settings";
 import { botAccessSupported, useBotAccess } from "../state/bot-access";
 import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
+import { contactHref, openContact, useContact } from "../state/contact";
 import { useDiagnostics } from "../state/diagnostics";
 import { useDraftArtAllowed } from "../state/flags";
 import { useGraphics } from "../state/graphics";
@@ -40,6 +41,7 @@ export function SettingsScreen(): ReactNode {
   const navigation = useNavigation();
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
+  const contact = contactHref(useContact((state) => state.url));
   const graphics = useGraphics();
   const artAllowed = useDraftArtAllowed();
   const radar = useRadarSetting((state) => state.position);
@@ -203,6 +205,7 @@ export function SettingsScreen(): ReactNode {
 
         <SectionTitle>{t("settings.testers")}</SectionTitle>
         <ListGroup>
+          {contact === null ? null : <ListItem title={t("menu.contact")} hint={t("menu.contact.hint")} onClick={openContact} />}
           <ListItem title={t("settings.testers")} onClick={() => navigation.push("testers")} />
           {diagnostics ? (
             <ListItem title={t("diagnostics.title")} onClick={() => navigation.push("diagnostics")} />

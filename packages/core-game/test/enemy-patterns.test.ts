@@ -24,15 +24,6 @@ const FIXTURES: EnemyDef[] = [
   { id: "t_swarm", hp: 10, speed: 100, damage: 1, xp: 1, pattern: "swarm" },
   { id: "t_chase", hp: 10, speed: 100, damage: 1, xp: 1, pattern: "chase" },
   {
-    id: "t_kite",
-    hp: 10,
-    speed: 60,
-    damage: 2,
-    xp: 1,
-    pattern: "kite_and_shoot",
-    params: { preferredDistance: 200, shotIntervalSec: 0.5, projectileSpeed: 300 },
-  },
-  {
     id: "t_dash",
     hp: 10,
     speed: 60,
@@ -212,48 +203,6 @@ describe("преследование", () => {
 
     run(world, 180);
     expect(speedOf(world, slot)).toBeCloseTo(100, 0);
-  });
-});
-
-describe("стрелок", () => {
-  it("выходит на заданную дистанцию и держит её", () => {
-    const world = setup();
-    const slot = place(world, "t_kite", 600, 0);
-
-    run(world, 600);
-
-    const distance = distanceToPlayer(world, slot);
-    expect(distance).toBeGreaterThan(200 - 24 - 2);
-    expect(distance).toBeLessThan(200 + 24 + 2);
-  });
-
-  it("не бьёт касанием, а рой в той же точке бьёт — решает возможность паттерна", () => {
-    const kiteWorld = setup();
-    place(kiteWorld, "t_kite", 0, 0);
-    run(kiteWorld, 60);
-
-    const swarmWorld = setup();
-    place(swarmWorld, "t_swarm", 0, 0);
-    run(swarmWorld, 60);
-
-    expect(kiteWorld.stats.damageTaken).toBe(0);
-    expect(swarmWorld.stats.damageTaken).toBeGreaterThan(0);
-  });
-
-  it("помечает снаряд своим типом, и смерть от него засчитывается стрелку", () => {
-    const world = setup({ maxHp: 1 });
-    place(world, "t_kite", 200, 0);
-
-    run(world, 1);
-    const ownProjectile = Array.from({ length: world.projectiles.count }, (_, p) => p).find(
-      (p) => world.projectiles.alive[p] === 1 && world.projectiles.fromPlayer[p] === 0,
-    );
-    expect(ownProjectile).toBeDefined();
-    expect(world.projectiles.ownerType[ownProjectile ?? 0]).toBe(typeIndex(world, "t_kite"));
-
-    run(world, 120);
-    expect(world.player.alive).toBe(false);
-    expect(world.stats.deathCauseType).toBe(typeIndex(world, "t_kite"));
   });
 });
 
@@ -497,7 +446,7 @@ describe("статистика врагов", () => {
 
   it("не путает снаряд игрока с вражеским: владелец сбрасывается при повторном использовании слота", () => {
     const world = setup({ playerAttacks: true });
-    place(world, "t_kite", 200, 0);
+    place(world, "t_swarm", 200, 0);
 
     run(world, 240);
 
