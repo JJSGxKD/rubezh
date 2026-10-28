@@ -3,8 +3,8 @@ id: T-0125
 title: Итог забега: счётчики боссов, элит, сундуков и кристаллов
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-20
 size: M
 depends_on:
