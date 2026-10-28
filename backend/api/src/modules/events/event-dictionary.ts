@@ -66,6 +66,9 @@ const runOutcome = payload({
   eliteKills: count.optional(),
   chestsOpened: count.optional(),
   crystals: count.optional(),
+  // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
+  noHitSec: count.optional(),
+  noKillSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
