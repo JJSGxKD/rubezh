@@ -49,6 +49,15 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
+  - backend/api/test/admin-notify.test.ts
+  - backend/api/test/payment-confirmation.test.ts
+  - backend/api/test/referrals.test.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/tasks.integration.test.ts
+  - backend/api/test/tasks.test.ts
+  - packages/app-shell/src/state/run-interrupted.ts
+  - packages/app-shell/test/run-interrupted.test.ts
+  - packages/app-shell/test/death-overlay-layout.test.ts
 runner: local
 executor: sonnet-5.5
 effort: high

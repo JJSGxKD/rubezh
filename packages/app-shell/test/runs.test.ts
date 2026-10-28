@@ -372,7 +372,7 @@ describe("подробности забега для листа в профил�
 
     expect(submission.weapons).toEqual([{ id: "spark", level: 4, damage: 4000 }]);
     expect(submission.passives).toEqual([{ id: "might", level: 2 }]);
-    expect(submission.stats).toMatchObject({
+    expect(submission.stats).toEqual({
       damageTaken: 121,
       xpCollected: 300,
       waveReached: 3,
@@ -383,6 +383,10 @@ describe("подробности забега для листа в профил�
         { enemy: "dasher_wolf", count: 40 },
         { enemy: "splitter_slime", count: 15 },
       ],
+      bossKills: 0,
+      eliteKills: 0,
+      chestsOpened: 0,
+      crystals: 0,
     });
   });
 });
