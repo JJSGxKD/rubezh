@@ -97,7 +97,7 @@ export interface FakePublisher {
 }
 
 /** Порт «можно ли» поверх памяти; без Redis — сброс кеша остаётся на этой реплике. */
-export function restrictionsGate(repository = new MemoryRestrictionsRepository()): AccountRestrictions & FakePublisher {
+export function restrictionsGate(repository: RestrictionsRepository = new MemoryRestrictionsRepository()): AccountRestrictions & FakePublisher {
   const published: string[] = [];
   const redis = {
     publish: async (_channel: string, message: string) => {
