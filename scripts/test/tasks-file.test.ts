@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { SELF_MERGE_FORBIDDEN, badgeLine, checkPrSection, parseFrontmatter, parseOwner, relativeTaskLink, taskBadge, validateTask, withBadgeLine, withTaskLinks } from "../tasks/task-file.mjs";
+import { SELF_MERGE_ALLOWED, SELF_MERGE_FORBIDDEN, badgeLine, checkPrSection, parseFrontmatter, parseOwner, relativeTaskLink, selfMergePathProblem, taskBadge, validateTask, withBadgeLine, withTaskLinks } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -492,9 +492,10 @@ describe("относительные ссылки на файлы задач", (
   });
 });
 
-describe("поле merge (Р176)", () => {
+describe("поле merge (Р176): белый список путей", () => {
   const FILE = "T-0003-x.md";
-  const withMerge = (patch: Record<string, unknown>): Record<string, unknown> => ({ ...valid(), merge: "self", ...patch });
+  const SELF_ZONES = ["docs/32-balance.md", "packages/core-game/src/content/enemies.ts"];
+  const withMerge = (patch: Record<string, unknown>): Record<string, unknown> => ({ ...valid(), merge: "self", zones: SELF_ZONES, ...patch });
   const selfErrors = (patch: Record<string, unknown>): string[] => validateTask(FILE, withMerge(patch));
 
   it("необязательно: старая задача без поля проходит", () => {
@@ -508,7 +509,10 @@ describe("поле merge (Р176)", () => {
   });
 
   it("шапка с merge: self разбирается и проходит", () => {
-    const text = headerWith((lines) => lines.splice(lines.indexOf("release: patch") + 1, 0, "merge: self"));
+    const text = headerWith((lines) => {
+      lines.splice(lines.indexOf("release: patch") + 1, 0, "merge: self");
+      lines.splice(lines.indexOf("  - a/b.ts"), 2, "  - docs/32-balance.md");
+    });
     const parsed = parseFrontmatter(text);
     expect(parsed.errors).toEqual([]);
     expect(parsed.data.merge).toBe("self");
@@ -531,21 +535,79 @@ describe("поле merge (Р176)", () => {
     expect(selfErrors({ runner: "local" })).toEqual([]);
   });
 
-  it("зона в миграциях и в экранах игрока запрещает self, путь назван", () => {
-    const migration = selfErrors({ zones: ["backend/api/prisma/migrations/**"] });
-    expect(migration).toHaveLength(1);
-    expect(migration[0]).toContain("backend/api/prisma/migrations/**");
-    const screens = selfErrors({ zones: ["packages/app-shell/src/screens/"] });
-    expect(screens).toHaveLength(1);
-    expect(screens[0]).toContain("packages/app-shell/src/screens/");
+  it("каждый путь белого списка проходит, в zones и в shared", () => {
+    for (const path of [
+      "docs/32-balance.md",
+      "docs/",
+      "design/art/README.md",
+      "packages/core-game/src/content/enemies.ts",
+      "packages/core-game/src/game/sim/rng.ts",
+      "packages/core-game/test/content.test.ts",
+      "packages/app-shell/src/i18n/ru.json",
+      "apps/admin/src/screens/sections.tsx",
+      "apps/admin/test/sections.test.tsx",
+      `tasks/${FILE}`,
+    ]) {
+      expect(selfErrors({ zones: [path] }), path).toEqual([]);
+      expect(selfErrors({ shared: [path] }), `shared ${path}`).toEqual([]);
+    }
   });
 
-  it("запрет ловит и shared, и конкретный файл, и широкую зону над запретной", () => {
-    expect(selfErrors({ shared: ["backend/api/src/modules/payments/payments.service.ts"] })).toHaveLength(1);
-    expect(selfErrors({ zones: ["backend/api/src/platforms/telegram/adapter.ts"] })).toHaveLength(1);
-    expect(selfErrors({ zones: ["backend/**"] })).toHaveLength(1);
-    expect(selfErrors({ zones: ["packages/**"] })).toHaveLength(1);
-    expect(selfErrors({ zones: ["apps/web-telegram/src/main.tsx"] })).toHaveLength(1);
+  it("шаблоны внутри белого списка проходят", () => {
+    expect(selfErrors({ zones: ["docs/**", "packages/core-game/src/content/*.ts", "apps/admin/src/**/*.tsx"] })).toEqual([]);
+  });
+
+  it("всё вне белого списка запрещает self, путь назван", () => {
+    for (const path of [
+      "backend/api/prisma/migrations/**",
+      "backend/api/src/modules/payments/payments.service.ts",
+      "backend/api/src/modules/settings/setting-catalog.ts",
+      "backend/api/src/platforms/telegram/adapter.ts",
+      "packages/app-shell/src/screens/home/home.tsx",
+      "packages/app-shell/src/state/api.ts",
+      "apps/web-telegram/src/main.tsx",
+      "apps/admin/package.json",
+      "packages/adapter-telegram/src/index.ts",
+      "infra/compose.yml",
+      ".github/workflows/ci.yml",
+      ".claude/skills/take-task/SKILL.md",
+      "scripts/tasks/merge.mjs",
+      "scripts/release/pr-check.mjs",
+      "CLAUDE.md",
+      "AGENTS.md",
+      "tasks/README.md",
+      "tasks/T-0004-y.md",
+      "pnpm-lock.yaml",
+      "pnpm-workspace.yaml",
+      "package.json",
+    ]) {
+      const errors = selfErrors({ zones: [path] });
+      expect(errors, path).toHaveLength(1);
+      expect(errors[0], path).toContain(path);
+      expect(selfErrors({ shared: [path] }), `shared ${path}`).toHaveLength(1);
+    }
+  });
+
+  it("шаблон шире белого списка — причина отказа", () => {
+    for (const pattern of ["backend/**", "packages/**", "**/*.ts", "**", "apps/**", "packages/core-game/**", "packages/core-game/src/**", "docs*", "packages/*/src/content/**"]) {
+      expect(selfErrors({ shared: [pattern] }), pattern).toHaveLength(1);
+      expect(selfErrors({ zones: [pattern] }), `zones ${pattern}`).toHaveLength(1);
+    }
+  });
+
+  it("закрыто и внутри белого списка: docs/35, package.json, tsconfig, vitest и eslint", () => {
+    for (const path of [
+      "docs/35-stage4-plan.md",
+      "packages/core-game/src/game/package.json",
+      "apps/admin/src/tsconfig.json",
+      "apps/admin/src/tsconfig.app.json",
+      "packages/core-game/test/vitest.config.ts",
+      "apps/admin/src/eslint.config.js",
+    ]) {
+      const errors = selfErrors({ zones: [path] });
+      expect(errors, path).toHaveLength(1);
+      expect(errors[0], path).toContain(path);
+    }
   });
 
   it("причины складываются в одну ошибку", () => {
@@ -554,23 +616,34 @@ describe("поле merge (Р176)", () => {
     for (const part of ["effort: extra", "runner: owner", "infra/docker/x.yml"]) expect(errors[0]).toContain(part);
   });
 
-  it("каждый шаблон запрета ловит свой путь", () => {
-    expect(SELF_MERGE_FORBIDDEN).toContain("backend/api/prisma/**");
-    for (const module of ["payments", "wallet", "shop", "auth", "ads", "referrals", "partners", "restrictions", "roles", "secrets", "antifraud", "runs"]) {
-      expect(selfErrors({ zones: [`backend/api/src/modules/${module}/${module}.service.ts`] }), module).toHaveLength(1);
-    }
-    for (const path of ["infra/compose.yml", ".github/workflows/ci.yml", "packages/adapter-telegram/src/index.ts", "apps/web-vk/index.html"]) {
-      expect(selfErrors({ zones: [path] }), path).toHaveLength(1);
-    }
-  });
-
-  it("документы, контент и соседний модуль — self проходит", () => {
-    expect(selfErrors({ zones: ["docs/32-balance.md", "packages/core-game/src/content/enemies.ts"] })).toEqual([]);
-    expect(selfErrors({ zones: ["backend/api/src/modules/settings/setting-catalog.ts"], shared: ["packages/app-shell/src/i18n/ru.json"] })).toEqual([]);
-  });
-
-  it("без merge: self запретные зоны не мешают — запрет только на самомердж", () => {
+  it("без merge: self вне белого списка и extra не мешают — запрет только на самомердж", () => {
     expect(validateTask(FILE, { ...valid(), merge: "lead", effort: "extra", zones: ["backend/api/prisma/**"] })).toEqual([]);
     expect(validateTask(FILE, { ...valid(), zones: ["backend/api/prisma/**"] })).toEqual([]);
+  });
+
+  it("списки: белый и чёрный экспортируются", () => {
+    expect(SELF_MERGE_ALLOWED).toContain("docs/**");
+    expect(SELF_MERGE_FORBIDDEN).toContain("docs/35-stage4-plan.md");
+  });
+});
+
+describe("selfMergePathProblem: путь изменённого файла", () => {
+  it("белый список проходит, остальное — причина", () => {
+    expect(selfMergePathProblem("docs/32-balance.md", "T-0003-x.md")).toBeNull();
+    expect(selfMergePathProblem("tasks/T-0003-x.md", "T-0003-x.md")).toBeNull();
+    expect(selfMergePathProblem("tasks/T-0004-y.md", "T-0003-x.md")).toContain("tasks/T-0004-y.md");
+    expect(selfMergePathProblem("backend/api/src/modules/wallet/wallet.service.ts", "T-0003-x.md")).toContain("вне белого списка");
+    expect(selfMergePathProblem("packages/app-shell/src/screens/home.tsx", "T-0003-x.md")).toContain("вне белого списка");
+  });
+
+  it("чёрный список сильнее белого", () => {
+    expect(selfMergePathProblem("docs/35-stage4-plan.md", "T-0003-x.md")).toContain("закрыт");
+    expect(selfMergePathProblem("packages/core-game/src/game/package.json", "T-0003-x.md")).toContain("закрыт");
+    expect(selfMergePathProblem("apps/admin/src/tsconfig.json", "T-0003-x.md")).toContain("закрыт");
+  });
+
+  it("путь в кавычках git и с «..» не проходит", () => {
+    expect(selfMergePathProblem('"docs/\\321\\204.md"', "T-0003-x.md")).not.toBeNull();
+    expect(selfMergePathProblem("docs/../backend/x.ts", "T-0003-x.md")).not.toBeNull();
   });
 });

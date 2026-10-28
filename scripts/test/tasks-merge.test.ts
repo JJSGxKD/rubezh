@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { SELF_CHECK_MIN_ITEMS, checkProblems, mergeArgs, mergeProblems, selfCheckProblems, teamSummary } from "../tasks/merge.mjs";
+import { OUTSIDE_LINES_PER_FILE, OUTSIDE_LINES_TOTAL, SELF_CHECK_MIN_ITEMS, checkProblems, diffProblems, mergeArgs, mergeProblems, parseNumstat, selfCheckProblems, teamSummary } from "../tasks/merge.mjs";
 
 // Команда `pnpm task merge` (T-0349, Р176): чистая проверка, можно ли вливать PR
 // задачи самому потоку. Сеть и git сюда не приходят — всё подаётся готовым.
 
 const HEAD = "a".repeat(40);
 const OTHER_HEAD = "b".repeat(40);
+const FILE_NAME = "T-0500-x.md";
+// Коммит головы лежит раньше самопроверки.
+const COMMITTED_AT = "2026-10-28T10:30:00Z";
+const CHECKED_AT = "2026-10-28T11:00:00Z";
 
 type Json = Record<string, unknown>;
 
@@ -39,19 +43,38 @@ function pr(patch: Json = {}): Json {
     isDraft: false,
     labels: [{ name: "release: patch" }, { name: "на ревью" }],
     statusCheckRollup: [run("check", "SUCCESS"), run("gate", "SUCCESS"), run("board", "SUCCESS")],
+    author: { login: "stream-account" },
+    commits: [{ oid: OTHER_HEAD, committedDate: "2026-10-28T09:00:00Z" }, { oid: HEAD, committedDate: COMMITTED_AT }],
     ...patch,
   };
 }
 
+const CHANGES = [
+  { path: "docs/x.md", added: 40, deleted: 3 },
+  { path: `tasks/${FILE_NAME}`, added: 12, deleted: 2 },
+];
+
 const CHECKLIST = Array.from({ length: SELF_CHECK_MIN_ITEMS }, (_, index) => `- [x] пункт ${String(index + 1)}`);
 
-function selfCheck(patch: { name?: string; head?: string; items?: string[]; first?: string } = {}): Json {
+function selfCheck(patch: { name?: string; head?: string; items?: string[]; first?: string; login?: string; createdAt?: string } = {}): Json {
   const lines = [patch.first ?? `**${patch.name ?? "claude-1"}:** самопроверка по review-pr`, `head: ${patch.head ?? HEAD}`, "", ...(patch.items ?? CHECKLIST)];
-  return { body: lines.join("\n"), createdAt: "2026-10-28T11:00:00Z" };
+  return { body: lines.join("\n"), createdAt: patch.createdAt ?? CHECKED_AT, author: { login: patch.login ?? "stream-account" } };
 }
 
 function problems(patch: Json = {}): string[] {
-  return mergeProblems({ task: devTask(), branchTask: branchTask(), pr: pr(), mergeable: "MERGEABLE", comments: [selfCheck()], headSha: HEAD, ...patch });
+  return mergeProblems({
+    task: devTask(),
+    branchTask: branchTask(),
+    fileName: FILE_NAME,
+    pr: pr(),
+    mergeable: "MERGEABLE",
+    comments: [selfCheck()],
+    headSha: HEAD,
+    changes: CHANGES,
+    upToDate: true,
+    toolsMatchDev: true,
+    ...patch,
+  });
 }
 
 describe("mergeProblems: всё сходится", () => {
@@ -268,7 +291,7 @@ describe("mergeProblems: самопроверка", () => {
   });
 
   it("строки head: нет вовсе — отказ", () => {
-    const comment = { body: ["**claude-1:** самопроверка по review-pr", "", ...CHECKLIST].join("\n") };
+    const comment = { ...selfCheck(), body: ["**claude-1:** самопроверка по review-pr", "", ...CHECKLIST].join("\n") };
     expect(problems({ comments: [comment] }).some((problem) => problem.includes("head:"))).toBe(true);
   });
 
@@ -301,7 +324,7 @@ describe("mergeProblems: самопроверка", () => {
 
   it("CRLF и заглавная X в галочке читаются", () => {
     const body = [`**claude-1:** самопроверка по review-pr`, `head: ${HEAD}`, ...CHECKLIST.map((line) => line.replace("[x]", "[X]"))].join("\r\n");
-    expect(problems({ comments: [{ body }] })).toEqual([]);
+    expect(problems({ comments: [{ ...selfCheck(), body }] })).toEqual([]);
   });
 
   it("selfCheckProblems без комментариев — одна причина", () => {
@@ -318,6 +341,180 @@ describe("mergeProblems: голова PR", () => {
   it("несколько причин собираются вместе", () => {
     const result = problems({ pr: pr({ isDraft: true }), mergeable: "CONFLICTING", comments: [] });
     expect(result.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("mergeProblems: реальный дифф PR", () => {
+  const change = (path: string, added = 1, deleted = 0): Json => ({ path, added, deleted });
+  const withChanges = (changes: Json[], task: Json = devTask()): string[] => problems({ changes, task, branchTask: branchTask({ shared: task.shared }) });
+
+  it("дифф не получен — отказ", () => {
+    expect(problems({ changes: null }).some((problem) => problem.includes("дифф"))).toBe(true);
+    expect(problems({ changes: undefined }).some((problem) => problem.includes("дифф"))).toBe(true);
+  });
+
+  it("файл вне белого списка — отказ с путём, даже если он в зонах задачи", () => {
+    for (const path of [
+      "backend/api/src/modules/wallet/wallet.service.ts",
+      "packages/app-shell/src/screens/home/home.tsx",
+      "scripts/tasks/merge.mjs",
+      ".github/workflows/ci.yml",
+      "CLAUDE.md",
+      "tasks/README.md",
+      "pnpm-lock.yaml",
+    ]) {
+      const result = withChanges([change(path)]);
+      expect(result.some((problem) => problem.includes(path)), path).toBe(true);
+    }
+  });
+
+  it("чёрный список сильнее белого: docs/35, package.json, tsconfig, vitest, eslint", () => {
+    for (const path of ["docs/35-stage4-plan.md", "packages/core-game/src/game/package.json", "apps/admin/src/tsconfig.json", "packages/core-game/test/vitest.config.ts", "apps/admin/src/eslint.config.js"]) {
+      const result = withChanges([change(path)]);
+      expect(result.some((problem) => problem.includes(path) && problem.includes("закрыт")), path).toBe(true);
+    }
+  });
+
+  it("чужой файл задачи — отказ", () => {
+    expect(withChanges([change("tasks/T-0501-y.md")]).some((problem) => problem.includes("tasks/T-0501-y.md"))).toBe(true);
+  });
+
+  it("файл вне зон: до 5 строк проходит, 6 — отказ с предельной формулировкой", () => {
+    expect(withChanges([change("docs/y.md", 3, 2)])).toEqual([]);
+    const result = withChanges([change("docs/y.md", 3, 3)]);
+    expect(result.some((problem) => problem.includes("docs/y.md") && problem.includes("правки вне зон больше предела — нужна приёмка тимлида"))).toBe(true);
+  });
+
+  it("файл вне зон, но в shared задачи из dev, под предел не попадает", () => {
+    const task = devTask({ shared: ["docs/y.md"] });
+    expect(withChanges([change("docs/y.md", 100, 40)], task)).toEqual([]);
+  });
+
+  it("файлы в зонах задачи — без предела, шаблон зоны тоже", () => {
+    const task = devTask({ zones: ["docs/**"] });
+    expect(withChanges([change("docs/a/b.md", 500, 200)], task)).toEqual([]);
+  });
+
+  it("общий предел вне зон: ровно 20 строк проходит, 21 — отказ", () => {
+    const four = (count: number): Json[] => Array.from({ length: count }, (_, index) => change(`docs/o${String(index)}.md`, OUTSIDE_LINES_PER_FILE - 1, 0));
+    expect(OUTSIDE_LINES_TOTAL).toBe(20);
+    expect(withChanges(four(5))).toEqual([]);
+    const over = withChanges([...four(5), change("docs/last.md", 1, 0)]);
+    expect(over.some((problem) => problem.includes("20") && problem.includes("нужна приёмка тимлида"))).toBe(true);
+  });
+
+  it("двоичный файл вне зон — отказ, в зонах — нет", () => {
+    const binary = { path: "docs/y.png", added: null, deleted: null };
+    expect(withChanges([binary]).some((problem) => problem.includes("docs/y.png") && problem.includes("двоичный"))).toBe(true);
+    expect(withChanges([binary], devTask({ zones: ["docs/y.png"] }))).toEqual([]);
+  });
+
+  it("файл самой задачи не считается против предела", () => {
+    expect(withChanges([change(`tasks/${FILE_NAME}`, 90, 30)])).toEqual([]);
+  });
+
+  it("шаблон в shared ветки шире белого — отказ, ссылкой на Р176", () => {
+    for (const pattern of ["backend/api/src/modules/*/*.ts", "backend/api/src/modules/*/wallet.service.ts", "packages/app-shell/src/**/*.tsx", "**/*.ts"]) {
+      const result = problems({ branchTask: branchTask({ shared: [pattern] }) });
+      expect(result.some((problem) => problem.includes("Р176") && problem.includes(pattern)), pattern).toBe(true);
+    }
+  });
+
+  it("каталог вне белого списка в shared ветки — отказ", () => {
+    expect(problems({ branchTask: branchTask({ shared: ["backend/api/src/modules/boosts/"] }) }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("diffProblems: чистая проверка дифф-списка", () => {
+  it("пустой дифф — причин нет", () => {
+    expect(diffProblems([], devTask(), FILE_NAME)).toEqual([]);
+  });
+
+  it("предел на файл — OUTSIDE_LINES_PER_FILE", () => {
+    expect(OUTSIDE_LINES_PER_FILE).toBe(5);
+  });
+});
+
+describe("parseNumstat: вывод git diff --numstat", () => {
+  it("строки разбираются в путь и числа, двоичный — null", () => {
+    const text = ["3\t1\tdocs/a.md", "-\t-\tdocs/b.png", "0\t12\ttasks/T-0500-x.md", ""].join("\n");
+    expect(parseNumstat(text)).toEqual([
+      { path: "docs/a.md", added: 3, deleted: 1 },
+      { path: "docs/b.png", added: null, deleted: null },
+      { path: "tasks/T-0500-x.md", added: 0, deleted: 12 },
+    ]);
+  });
+
+  it("пустой вывод — пустой список", () => {
+    expect(parseNumstat("")).toEqual([]);
+  });
+
+  it("строка без трёх полей — исключение: молча пропустить файл нельзя", () => {
+    expect(() => parseNumstat("мусор")).toThrow();
+    expect(() => parseNumstat("x\ty\tdocs/a.md")).toThrow();
+  });
+
+  it("путь с табуляцией внутри сохраняется целиком", () => {
+    expect(parseNumstat("1\t1\tdocs/a\tb.md")).toEqual([{ path: "docs/a\tb.md", added: 1, deleted: 1 }]);
+  });
+});
+
+describe("mergeProblems: ветка не отстала от dev", () => {
+  it("origin/dev не предок головы — отказ с подсказкой", () => {
+    const result = problems({ upToDate: false });
+    expect(result.some((problem) => problem.includes("влей свежий dev и дождись CI"))).toBe(true);
+  });
+
+  it("неизвестно (не boolean) — отказ", () => {
+    expect(problems({ upToDate: undefined }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("mergeProblems: локальный код команды совпадает с dev", () => {
+  it("scripts/tasks отличается — отказ", () => {
+    expect(problems({ toolsMatchDev: false }).some((problem) => problem.includes("scripts/tasks отличаются от dev"))).toBe(true);
+  });
+
+  it("неизвестно — отказ", () => {
+    expect(problems({ toolsMatchDev: undefined }).length).toBeGreaterThan(0);
+  });
+});
+
+describe("mergeProblems: кто и когда написал самопроверку", () => {
+  it("комментарий чужого аккаунта — отказ с обоими логинами", () => {
+    const result = problems({ comments: [selfCheck({ login: "stranger" })] });
+    expect(result.some((problem) => problem.includes("stranger") && problem.includes("stream-account"))).toBe(true);
+  });
+
+  it("чужой комментарий не мешает своему на той же голове", () => {
+    expect(problems({ comments: [selfCheck({ login: "stranger", items: [] }), selfCheck()] })).toEqual([]);
+  });
+
+  it("комментарий без автора — отказ", () => {
+    const comment = { ...selfCheck(), author: null };
+    expect(problems({ comments: [comment] }).length).toBeGreaterThan(0);
+  });
+
+  it("автор PR не получен — отказ", () => {
+    expect(problems({ pr: pr({ author: null }) }).length).toBeGreaterThan(0);
+  });
+
+  it("комментарий написан раньше коммита головы (отредактированный старый) — отказ", () => {
+    const result = problems({ comments: [selfCheck({ createdAt: "2026-10-28T10:00:00Z" })] });
+    expect(result.some((problem) => problem.includes("раньше коммита головы"))).toBe(true);
+  });
+
+  it("комментарий в ту же секунду, что коммит головы, — проходит", () => {
+    expect(problems({ comments: [selfCheck({ createdAt: COMMITTED_AT })] })).toEqual([]);
+  });
+
+  it("коммита головы нет в списке коммитов PR — отказ", () => {
+    const result = problems({ pr: pr({ commits: [{ oid: OTHER_HEAD, committedDate: "2026-10-28T09:00:00Z" }] }) });
+    expect(result.some((problem) => problem.includes("коммит головы"))).toBe(true);
+  });
+
+  it("selfCheckProblems принимает свежую самопроверку автора", () => {
+    expect(selfCheckProblems([selfCheck()], HEAD, "claude-1", { prAuthor: "stream-account", headCommittedAt: COMMITTED_AT })).toEqual([]);
   });
 });
 
