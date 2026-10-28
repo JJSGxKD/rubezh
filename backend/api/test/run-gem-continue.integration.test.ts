@@ -12,6 +12,8 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
+import { PrismaPurchasesRepository } from "../src/modules/payments/purchases.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { RunGemContinueController } from "../src/modules/runs/run-gem-continue.controller.js";
 import { RunGemContinueService } from "../src/modules/runs/run-gem-continue.service.js";
@@ -24,6 +26,7 @@ import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
@@ -261,6 +264,49 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за самоцве�
     expect(await verdictOf(185)).toMatchObject({ verdict: "suspicious", reasons: ["underpaid_continue"] });
     // Продолжение, за которое не заплачено ни одним способом, — отказ.
     expect(await verdictOf(100, await run(id, 300))).toMatchObject({ verdict: "rejected", reasons: ["unpaid_continue"] });
+  });
+
+  it("номер занят самоцветами — счёт за звёзды на него проверка перед оплатой отклоняет, а оплата, дошедшая всё же, возвращается", async () => {
+    const id = await account();
+    await fund(id, 50);
+    const runId = await run(id);
+    const purchases = new PrismaPurchasesRepository(prisma);
+    const opened = await purchases.openInvoice({
+      purchaseId: randomUUID(),
+      accountId: id,
+      runId,
+      continueNo: 1,
+      elapsedSec: 125,
+      priceStars: 3,
+      chargedStars: 3,
+      mode: "live",
+      invoicedAt: new Date(),
+    });
+    if (opened.kind !== "opened") throw new Error("счёт не открылся");
+    const { purchaseId } = opened.purchase;
+    await expect(purchases.checkout(purchaseId)).resolves.toMatchObject({ runFinished: false, continueTaken: false });
+
+    await buy(id, runId);
+
+    // Номер ушёл самоцветами: Telegram оплату не примет — проверка перед оплатой видит его занятым.
+    await expect(purchases.checkout(purchaseId)).resolves.toMatchObject({ continueTaken: true });
+    // Оплата, пришедшая в обход проверки, помечена занятой и уходит возвратом «не использовано».
+    const chargeId = `charge-${randomUUID()}`;
+    const outcome = await purchases.markPaid({ purchaseId, chargeId, chargedStars: 3, paidAt: new Date() });
+    expect(outcome).toMatchObject({ kind: "paid", continueTaken: true });
+    const payer = await prisma.account.findUniqueOrThrow({ where: { accountId: id }, select: { platformUserId: true } });
+    const orders = await new PaymentRefunds(purchases, starsProviders()).afterConfirm(outcome, {
+      platform: "telegram",
+      chargeId,
+      payload: purchaseId,
+      payerId: payer.platformUserId,
+      currency: "XTR",
+      totalAmount: 3,
+    });
+    expect(orders).toEqual([{ purchaseId, platform: "telegram", chargeId, payerId: payer.platformUserId, reason: "unused" }]);
+    expect(await prisma.purchase.findUniqueOrThrow({ where: { purchaseId }, select: { refundReason: true } })).toEqual({ refundReason: "unused" });
+    // Самоцветы за свой номер остались списанными один раз.
+    expect(await gemsOf(id)).toBe(46);
   });
 
   it("строка уходит каскадом вместе с забегом, а база не примет номер меньше единицы и нулевую цену", async () => {
