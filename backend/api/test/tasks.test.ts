@@ -21,6 +21,7 @@ import {
   TaskNotFoundError,
   TaskNotJoinedError,
   TaskNotOpenedError,
+  TaskOrderMismatchError,
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
@@ -33,12 +34,16 @@ import {
   rewardReason,
   slotsFor,
   taskDefSchema,
+  taskGroup,
+  taskOrderSchema,
+  TASK_PERIODS,
   type PoolTier,
+  type TaskGroup,
   type TaskDef,
   type TaskParticipation,
 } from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
-import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
+import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TaskReorderResult, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService, viewOf } from "../src/modules/tasks/tasks.service.js";
 import { WEAPONS } from "../../../packages/core-game/src/content/weapons";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
@@ -98,9 +103,32 @@ class MemoryTasks implements TasksRepository {
   /** забор игроков — по одному, как под блокировкой строки задания в базе */
   private queue: Promise<unknown> = Promise.resolve();
 
+  /** Как `ORDER BY period, sort, task_id` в базе. */
   async catalog(): Promise<TaskDef[]> {
     this.catalogReads++;
-    return this.defs.map((task) => ({ ...task }));
+    return this.defs
+      .map((task) => ({ ...task }))
+      .sort((a, b) => TASK_PERIODS.indexOf(a.period) - TASK_PERIODS.indexOf(b.period) || a.sort - b.sort || a.taskId.localeCompare(b.taskId));
+  }
+
+  /** Сколько раз порядок реально записывался: повтор того же порядка не пишет. */
+  reorderWrites = 0;
+
+  /** Те же правила, что у настоящего: набор id равен составу списка, `sort` — индекс, пишутся только сдвинувшиеся. */
+  async reorder(group: TaskGroup, ids: readonly string[]): Promise<TaskReorderResult> {
+    const members = this.defs
+      .filter((task) => taskGroup(task) === group)
+      .sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId));
+    const before = members.map((task) => task.taskId);
+    const same = ids.length === before.length && new Set(ids).size === ids.length && ids.every((id) => before.includes(id));
+    if (!same) return { status: "mismatch" };
+    const changed = ids.some((id, index) => before[index] !== id);
+    if (changed) this.reorderWrites++;
+    ids.forEach((id, index) => {
+      const task = this.defs.find((candidate) => candidate.taskId === id);
+      if (task !== undefined) task.sort = index;
+    });
+    return { status: "ok", before, after: [...ids], changed };
   }
 
   async progress(accountId: string, at: Date): Promise<TaskProgressRow[]> {
@@ -875,6 +903,142 @@ describe("каталог из панели", () => {
     expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
+  });
+});
+
+describe("порядок заданий одним запросом (T-0167)", () => {
+  /** Каталог из заданных заданий — без остальных, чтобы порядок был виден целиком. */
+  function onlyDaily(ctx: ReturnType<typeof setup>, ...extra: TaskDef[]): void {
+    ctx.repository.defs.length = 0;
+    ctx.repository.defs.push(def("a", { sort: 0 }), def("b", { sort: 10 }), def("c", { sort: 20 }), ...extra);
+  }
+
+  const sortsOf = async (ctx: ReturnType<typeof setup>, designer: AccountRef) =>
+    Object.fromEntries((await ctx.service.catalog(designer)).tasks.map((task) => [task.taskId, task.sort]));
+
+  it("новый порядок: каталог и игрок видят его сразу, sort — 0, 1, 2", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "601", "game_designer");
+    await ctx.service.view(PLAYER, NOON);
+
+    expect(await ctx.service.reorder(designer, "daily", ["c", "a", "b"])).toEqual({ order: ["c", "a", "b"] });
+
+    expect(await sortsOf(ctx, designer)).toEqual({ c: 0, a: 1, b: 2 });
+    expect((await ctx.service.view(PLAYER, NOON)).map((task) => task.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("в аудит — одна запись «переупорядочено» с прежним и новым порядком", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "602", "game_designer");
+
+    await ctx.service.reorder(designer, "daily", ["c", "a", "b"]);
+
+    const entries = (await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ target: "daily", before: { order: ["a", "b", "c"] }, after: { order: ["c", "a", "b"] }, actorAccountId: designer.accountId });
+  });
+
+  it("повтор того же порядка идемпотентен: тот же ответ, ни записи, ни аудита", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "603", "game_designer");
+    await ctx.service.reorder(designer, "daily", ["c", "a", "b"]);
+    const writes = ctx.repository.reorderWrites;
+
+    expect(await ctx.service.reorder(designer, "daily", ["c", "a", "b"])).toEqual({ order: ["c", "a", "b"] });
+
+    expect(ctx.repository.reorderWrites).toBe(writes);
+    expect((await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder")).toHaveLength(1);
+  });
+
+  it("список изменился — 400 «task_order_mismatch», ничего не записано, аудита нет", async () => {
+    const ctx = setup();
+    onlyDaily(ctx, def("w", { period: "weekly" }));
+    const designer = await person(ctx, "604", "game_designer");
+    const cases: string[][] = [["a", "b"], ["a", "b", "c", "ghost"], ["a", "b", "w"], ["a", "b", "b"]];
+
+    for (const ids of cases) {
+      const failure = await ctx.service.reorder(designer, "daily", ids).catch((error: unknown) => error);
+      expect(failure, ids.join()).toBeInstanceOf(TaskOrderMismatchError);
+      expect(failure).toMatchObject({ code: "task_order_mismatch", status: 400 });
+    }
+    expect(await sortsOf(ctx, designer)).toEqual({ a: 0, b: 10, c: 20, w: 0 });
+    expect((await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder")).toHaveLength(0);
+  });
+
+  it("партнёрская группа переставляется вместе: ссылка, канал и бот; цель забега в составе — несоответствие", async () => {
+    const ctx = setup();
+    ctx.repository.defs.length = 0;
+    const partner = { params: { url: "https://example.org/x" } };
+    ctx.repository.defs.push(
+      def("p_link", { kind: "link", period: "achievement", sort: 0, ...partner }),
+      def("p_channel", { kind: "channel", period: "daily", sort: 10, params: { platform: "telegram", chat: "@x", url: "https://t.me/x" } }),
+      def("p_bot", { kind: "bot", period: "achievement", sort: 20, ...partner }),
+      def("d_runs", { sort: 0 }),
+    );
+    const designer = await person(ctx, "605", "game_designer");
+
+    await expect(ctx.service.reorder(designer, "partner", ["p_bot", "d_runs", "p_link", "p_channel"])).rejects.toBeInstanceOf(TaskOrderMismatchError);
+    expect(await ctx.service.reorder(designer, "partner", ["p_bot", "p_channel", "p_link"])).toEqual({ order: ["p_bot", "p_channel", "p_link"] });
+    expect(await sortsOf(ctx, designer)).toMatchObject({ p_bot: 0, p_channel: 1, p_link: 2, d_runs: 0 });
+  });
+
+  it("выключенное задание входит в порядок своей группы", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    ctx.repository.defs.push(def("off", { sort: 30, active: false }));
+    const designer = await person(ctx, "606", "game_designer");
+
+    await expect(ctx.service.reorder(designer, "daily", ["c", "b", "a"])).rejects.toBeInstanceOf(TaskOrderMismatchError);
+    expect(await ctx.service.reorder(designer, "daily", ["off", "c", "b", "a"])).toEqual({ order: ["off", "c", "b", "a"] });
+  });
+
+  it("без права tasks.edit — тот же отказ, что у сохранения; порядок прежний", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const moderator = await person(ctx, "607", "moderator");
+    const designer = await person(ctx, "608", "game_designer");
+
+    await expect(ctx.service.reorder(moderator, "daily", ["c", "a", "b"])).rejects.toThrow();
+
+    expect(await sortsOf(ctx, designer)).toEqual({ a: 0, b: 10, c: 20 });
+  });
+
+  it("правка существующего задания места не меняет, пришедший sort игнорируется", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "609", "game_designer");
+
+    await ctx.service.save(designer, def("b", { sort: 9999, coins: 250 }));
+
+    expect(await sortsOf(ctx, designer)).toMatchObject({ b: 10 });
+    expect((await ctx.service.catalog(designer)).tasks.find((task) => task.taskId === "b")?.coins).toBe(250);
+  });
+
+  it("новое задание встаёт в конец своей группы; в пустой — на ноль; потолок 10 000 держится", async () => {
+    const ctx = setup();
+    ctx.repository.defs.length = 0;
+    ctx.repository.defs.push(def("a", { sort: 0 }), def("b", { sort: 1 }), def("c", { sort: 2 }));
+    const designer = await person(ctx, "610", "game_designer");
+
+    await ctx.service.save(designer, def("d", { sort: 777 }));
+    await ctx.service.save(designer, def("w1", { period: "weekly", sort: 55 }));
+    expect(await sortsOf(ctx, designer)).toMatchObject({ d: 3, w1: 0 });
+
+    ctx.repository.defs.push(def("top", { period: "achievement", kind: "run_level", sort: 10_000, coins: 0, gems: 5 }));
+    await ctx.service.save(designer, def("late", { period: "achievement", kind: "run_level", coins: 0, gems: 5 }));
+    expect((await sortsOf(ctx, designer)).late).toBe(10_000);
+  });
+
+  it("схема запроса: чужая группа, пустой список, повтор id, id не по шаблону и лишние поля — отказ", () => {
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a", "b"] }).success).toBe(true);
+    expect(taskOrderSchema.safeParse({ group: "other", ids: ["a"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: [] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a", "a"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["A b"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a"], extra: 1 }).success).toBe(false);
   });
 });
 
