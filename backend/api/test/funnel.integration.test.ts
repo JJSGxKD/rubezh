@@ -7,9 +7,19 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { bucketOf } from "../src/modules/flags/flag-rollout.js";
 import { flagSplitReport } from "../src/modules/funnel/flag-split-report.js";
-import { funnelReport } from "../src/modules/funnel/funnel-report.js";
+import { funnelMarked, funnelReport } from "../src/modules/funnel/funnel-report.js";
 import { PrismaFunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
+import { vi } from "vitest";
+import type { Account } from "../src/modules/auth/account.repository.js";
+import { AdminReviewController } from "../src/modules/admin/admin-review.controller.js";
+import { PrismaBoardMarkReader } from "../src/modules/admin/board-mark.reader.js";
+import type { Role } from "../src/modules/roles/permissions.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import type { ReviewRow } from "../src/modules/runs/runs.repository.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
  * Вехи воронки на живом Postgres (docs/17-testing-strategy.md
@@ -224,5 +234,140 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
     expect(early.share.d1Eligible + early.rest.d1Eligible).toBe(24);
     const elsewhere = await flagSplitReport(prisma, { ...rule, platforms: ["vk"] }, new Date(day - HOUR), new Date(day + 2 * HOUR), later, []);
     expect(elsewhere.share.players + elsewhere.rest.players).toBe(0);
+  });
+});
+
+/**
+ * Метка «Отдельная доска» в воронке и разборе забегов (T-0115). Окно — в 2019
+ * году, раньше любых видов соседних тестов; виды этого блока кончаются до 2020.
+ */
+describe.skipIf(DATABASE_URL === "")("метка «Отдельная доска» в воронке и разборе", () => {
+  const FROM = new Date("2019-06-10T00:00:00Z");
+  const TO = new Date("2019-06-11T00:00:00Z");
+  const at = (hours: number) => new Date(FROM.getTime() + hours * HOUR);
+  let prisma: PrismaClient;
+  let reader: PrismaBoardMarkReader;
+  const ids: Record<string, string> = {};
+
+  async function player(name: string, milestones: { entered?: number; appOpened?: number; firstRunStarted?: number; firstPurchase?: number }, view: "active" | "lifted" | null): Promise<void> {
+    const accountId = randomUUID();
+    ids[name] = accountId;
+    await prisma.account.create({ data: { accountId, platform: "telegram", platformUserId: `fm-${accountId.slice(0, 8)}`, displayName: name, createdAt: at(0), lastSeenAt: at(0) } });
+    await prisma.accountFunnel.create({
+      data: {
+        accountId,
+        enteredAt: milestones.entered === undefined ? null : at(milestones.entered),
+        appOpenedAt: milestones.appOpened === undefined ? null : at(milestones.appOpened),
+        firstRunStartedAt: milestones.firstRunStarted === undefined ? null : at(milestones.firstRunStarted),
+        firstPurchaseAt: milestones.firstPurchase === undefined ? null : at(milestones.firstPurchase),
+      },
+    });
+    if (view === null) return;
+    await prisma.accountRestriction.create({
+      data: {
+        accountId,
+        kind: "separate_board",
+        startsAt: new Date("2019-05-01T00:00:00Z"),
+        endsAt: new Date("2019-07-01T00:00:00Z"),
+        liftedAt: view === "lifted" ? new Date("2019-06-01T00:00:00Z") : null,
+        reason: "other",
+        notify: false,
+      },
+    });
+  }
+
+  async function staff(role: Role) {
+    const accounts = new MemoryAccountRepository();
+    const rolesRepository = new MemoryRolesRepository();
+    const roles = new RolesService(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), rolesRepository, accounts);
+    const account: Account = await accounts.upsert({ platform: "telegram", platformUserId: "9", displayName: "Сотрудник", username: null, photoUrl: null }, Date.now());
+    await rolesRepository.grant(account.accountId, role, null);
+    return { roles, request: { account: { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId } } };
+  }
+
+  async function controller(role: Role, rows: ReviewRow[]) {
+    const { roles, request } = await staff(role);
+    const runs = { review: async () => rows };
+    const accounts = { displayNames: async () => new Map<string, string>() };
+    const funnel = new PrismaFunnelRepository(prisma);
+    return { request, controller: new AdminReviewController(runs as never, funnel, accounts as never, {} as never, roles, reader) };
+  }
+
+  const flagged = (name: string, finishedAt: Date): ReviewRow => ({ runId: `fm-${name}`, accountId: ids[name]!, verdict: "suspicious", verdictReasons: [], difficulty: "easy", survivalSec: 60, level: 1, enemiesKilled: 1, finishedAt });
+
+  beforeAll(async () => {
+    prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
+    reader = new PrismaBoardMarkReader(prisma);
+    await player("m1", { entered: 1, appOpened: 1, firstRunStarted: 2 }, "active");
+    await player("m2", { entered: 2, appOpened: 2, firstPurchase: 5 }, "active");
+    // Помечен, но когорта не в окне: первый контакт днём позже.
+    await player("m3", { entered: 30, appOpened: 30 }, "active");
+    await player("p1", { entered: 1, appOpened: 1 }, null);
+    // Вид снят до окна: не помечен.
+    await player("p2", { entered: 3, appOpened: 3 }, "lifted");
+  });
+
+  afterAll(async () => {
+    await prisma.account.deleteMany({ where: { accountId: { in: Object.values(ids) } } });
+    await prisma.$disconnect();
+  });
+
+  it("сводная строка по помеченным: те же числа вех, когорта по первому контакту в окне", async () => {
+    expect(await funnelMarked(prisma, FROM, TO)).toEqual({
+      accounts: 2,
+      entered: 2,
+      appOpened: 2,
+      firstRunStarted: 1,
+      firstRunFinished: 0,
+      runs2: 0,
+      runs5: 0,
+      returnedD1: 0,
+      returnedD7: 0,
+      firstPurchase: 1,
+    });
+  });
+
+  it("окно без помеченных — нули, а не пропавшая строка", async () => {
+    expect(await funnelMarked(prisma, new Date("2018-01-01T00:00:00Z"), new Date("2018-01-02T00:00:00Z"))).toMatchObject({ accounts: 0, entered: 0, firstPurchase: 0 });
+  });
+
+  it("маршрут воронки: `marked` только у держателя права players.board.restrict", async () => {
+    const owner = await controller("owner", []);
+    const query = { from: FROM.toISOString(), to: TO.toISOString() };
+    const full = await owner.controller.funnelReport(owner.request, query);
+    expect(full.data.marked).toMatchObject({ accounts: 2, entered: 2 });
+
+    const analyst = await controller("analyst", []);
+    const plain = await analyst.controller.funnelReport(analyst.request, query);
+    expect("marked" in plain.data).toBe(false);
+    expect(plain.data.rows).toEqual(full.data.rows);
+  });
+
+  it("разбор забегов: `boardMarked` у нужных строк владельцу, одним запросом на страницу; остальным поля нет", async () => {
+    const rows = [flagged("m1", at(3)), flagged("p1", at(4)), flagged("m2", at(5)), flagged("p2", at(6))];
+    const owner = await controller("owner", rows);
+    const spy = vi.spyOn(reader, "ids");
+    const seen = await owner.controller.review(owner.request, undefined);
+    expect(seen.data.runs.map((run) => [run.runId, run.boardMarked])).toEqual([
+      ["fm-m1", true],
+      ["fm-p1", false],
+      ["fm-m2", true],
+      ["fm-p2", false],
+    ]);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    spy.mockClear();
+    const moderator = await controller("moderator", rows);
+    const hidden = await moderator.controller.review(moderator.request, undefined);
+    expect(hidden.data.runs.every((run) => !("boardMarked" in run))).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("отчёт `funnelReport` метки не знает: до и после снятия видов он тот же", async () => {
+    const before = await funnelReport(prisma, FROM, TO);
+    await prisma.accountRestriction.deleteMany({ where: { accountId: { in: Object.values(ids) } } });
+    expect(await funnelReport(prisma, FROM, TO)).toEqual(before);
+    expect(before.reduce((sum, row) => sum + row.accounts, 0)).toBe(4);
   });
 });
