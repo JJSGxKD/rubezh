@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -47,6 +47,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     title: "Привлечение",
     sections: [
       { id: "funnel", title: "Воронка", hint: "Откуда приходят игроки и на каком шаге уходят", permission: "analytics.gameplay.view", icon: Filter },
+      { id: "ui-clicks", title: "Нажатия", hint: "Какие кнопки нажимают на каждом экране и какая доля открывших", permission: "analytics.gameplay.view", icon: MousePointerClick },
       { id: "links", title: "Ссылки", hint: "Ссылки кампаний для постов и рекламы — клики и запуски по каждой", permission: "links.manage", icon: Link },
       { id: "partners", title: "Партнёры", hint: "Блогеры и каналы, которые приводят игроков своими кодами", permission: "partners.view", icon: Handshake },
       { id: "promo-codes", title: "Промокоды", hint: "Подарочные коды для стримов, постов и розыгрышей", permission: "promo.edit", icon: Ticket },

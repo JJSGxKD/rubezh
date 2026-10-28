@@ -7,6 +7,7 @@ import { TasksScreen } from "./tasks/TasksScreen";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
+import { UiClicksScreen } from "./funnel/UiClicks";
 import { FlagsScreen } from "./flags/FlagsScreen";
 import { FxScreen } from "./fx/FxScreen";
 import { HomeSlidesScreen } from "./home/HomeSlidesScreen";
@@ -32,6 +33,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   players: (id) => <PlayersScreen id={id} />,
   review: () => <ReviewScreen />,
   funnel: (id) => <FunnelScreen focus={id} />,
+  "ui-clicks": () => <UiClicksScreen />,
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
