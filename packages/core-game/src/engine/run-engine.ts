@@ -38,6 +38,7 @@ export function createRunEngine(): RunEngine {
         ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
         ...(options.runId === undefined ? {} : { runId: options.runId }),
         ...(options.pauseOnChest === undefined ? {} : { pauseOnChest: options.pauseOnChest }),
+        ...(options.content === undefined ? {} : { content: options.content }),
         bus,
       };
       host.game.scene.add("main", MainScene, true, sceneData);
