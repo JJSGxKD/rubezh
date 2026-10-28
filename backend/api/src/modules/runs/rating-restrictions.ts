@@ -42,6 +42,15 @@ const RATING_KINDS = new Set(["leaderboard", "all"]);
 /** Доска, которую читает игрок: полная (с отдельной доской) или общая, без игроков отдельной доски. */
 export type BoardView = Board;
 
+/**
+ * Доски записи по доске чтения: тот, кто читает полную, пишется только в неё.
+ * Отдельной функцией, чтобы приём забега читал ограничение один раз и писал
+ * туда же, откуда читает ответ.
+ */
+export function boardsOf(board: BoardView): readonly Board[] {
+  return board === "full" ? FULL_ONLY : ALL_BOARDS;
+}
+
 const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
   return redis.call("DEL", KEYS[1])
@@ -104,7 +113,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
    * только в полную, остальным — в обе (лучшее время игрока на досках одно).
    */
   async boardsFor(accountId: string, at = new Date()): Promise<readonly Board[]> {
-    return (await this.boardOf(accountId, at)) === "full" ? FULL_ONLY : ALL_BOARDS;
+    return boardsOf(await this.boardOf(accountId, at));
   }
 
   /** Кому рейтинг закрыт сейчас — пересборка досок их не возвращает. */
