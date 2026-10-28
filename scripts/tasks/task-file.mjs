@@ -58,47 +58,54 @@ export const FIELDS = [
 /** Необязательные поля: задачи, заведённые до них, остаются как были. */
 export const OPTIONAL_FIELDS = new Set(["author", "batch", "merge"]);
 
-const SELF_MERGE_FORBIDDEN_MODULES = ["payments", "wallet", "shop", "auth", "ads", "referrals", "partners", "restrictions", "roles", "secrets", "antifraud", "runs"];
-
 /**
- * Пути, где `merge: self` запрещён (Р176): деньги, авторизация, миграции,
- * конкурентность, антифрод, прод и экраны игрока. Повторяет
- * tasks/README.md, «Самостоятельный мердж»: новый запрет — правка и там, и здесь.
+ * Белый список путей `merge: self` (Р176, поправка claude-lead-1 от 28.10.2026):
+ * задача допустима, только если каждый путь её `zones` и `shared`, а при мердже
+ * и каждый реально изменённый файл PR лежит здесь. Всё остальное — бэкенд,
+ * экраны игрока, `scripts/**`, `.github/**`, `.claude/**`, `CLAUDE.md`,
+ * `AGENTS.md`, `tasks/README.md`, `pnpm-*`, `infra/**`, адаптеры — закрыто тем,
+ * что в списке его нет. Плюс файл самой задачи `tasks/<её файл>`. Повторяет
+ * tasks/README.md, «Самостоятельный мердж»: правка списка — и там, и здесь.
  */
-export const SELF_MERGE_FORBIDDEN = [
-  "backend/api/prisma/**",
-  ...SELF_MERGE_FORBIDDEN_MODULES.map((module) => `backend/api/src/modules/${module}/**`),
-  "backend/api/src/platforms/**",
-  "infra/**",
-  ".github/**",
-  "packages/app-shell/src/screens/**",
-  "apps/web-*/**",
-  "packages/adapter-*/**",
+export const SELF_MERGE_ALLOWED = [
+  "docs/**",
+  "design/**",
+  "packages/core-game/src/content/**",
+  "packages/core-game/src/game/**",
+  "packages/core-game/test/**",
+  "packages/app-shell/src/i18n/**",
+  "apps/admin/src/**",
+  "apps/admin/test/**",
 ];
+
+/** Закрыто даже внутри белого списка: решение о зависимостях и настройке гейта принимает тимлид. */
+export const SELF_MERGE_FORBIDDEN = ["docs/35-stage4-plan.md", "**/package.json", "**/tsconfig*.json", "**/vitest.config.*", "**/eslint.config.*"];
 
 /** Начало текста ошибки `merge: self`; за ним через двоеточие идёт, что именно мешает. */
 export const SELF_MERGE_MESSAGE = "merge: self — только для задач без денег, авторизации, миграций, конкурентности, антифрода, прода и экранов игрока (Р176)";
 
 /**
- * Задевает ли путь или шаблон зоны шаблон запрета. Зона шире запрета
- * (`backend/**`) тоже задевает его, поэтому проверяются оба направления: зона
- * как путь под шаблон запрета и условный путь запрета под шаблон зоны.
- * Подстановка в середине пути (звёздочка вместо имени модуля) может проскользнуть: это
- * страховка, а не замена суждения тимлида.
+ * Что не так с путём или шаблоном для `merge: self`: текст причины или `null`.
+ * `fileName` — файл самой задачи (`T-NNNN-slug.md`), его правка всегда можно.
+ * Шаблон со звёздочками проходит, только если он целиком внутри белого списка:
+ * текст шаблона сверяется с белыми шаблонами как путь, поэтому `docs/**` и
+ * `packages/core-game/src/content/*.ts` проходят, а `backend/**`, `packages/**`
+ * и `**` + `/*.ts` — нет. Закрытый путь внутри шаблона ловит проверка реального
+ * диффа в `pnpm task merge`.
  */
-function touchesForbidden(zone, forbidden) {
-  if (matches(zone, [forbidden])) return true;
-  const sample = forbidden.replaceAll("**", "x").replaceAll("*", "x");
-  if (matches(sample, [zone])) return true;
-  // Каталог без шаблонов и без «/» на конце: `backend/api/prisma`.
-  return !/[*?]/.test(zone) && forbidden.startsWith(`${zone.replace(/\/$/, "")}/`);
+export function selfMergePathProblem(path, fileName) {
+  if (/(^|\/)\.\.(\/|$)/.test(path) || path.includes("\\") || path.includes('"')) return `${path} — путь с «..», обратной чертой или кавычкой не годится`;
+  const forbidden = SELF_MERGE_FORBIDDEN.find((pattern) => matches(path, [pattern]));
+  if (forbidden !== undefined) return `${path} закрыт для merge: self (${forbidden})`;
+  if (path === `tasks/${fileName}` || matches(path, SELF_MERGE_ALLOWED)) return null;
+  return `${path} вне белого списка merge: self (${SELF_MERGE_ALLOWED.join(", ")} и файл самой задачи)`;
 }
 
 /**
  * Что мешает `merge: self` у задачи: список причин, пустой — ничего. Читает
  * `effort`, `runner`, `zones` и `shared`; значение самого `merge` не смотрит.
  */
-export function selfMergeProblems(data) {
+export function selfMergeProblems(data, fileName) {
   const reasons = [];
   if (data.effort === "extra") reasons.push("effort: extra");
   if (data.runner === "owner" || data.runner === "human") reasons.push(`runner: ${data.runner}`);
@@ -106,8 +113,8 @@ export function selfMergeProblems(data) {
     if (!Array.isArray(data[field])) continue;
     for (const path of data[field]) {
       if (typeof path !== "string") continue;
-      const forbidden = SELF_MERGE_FORBIDDEN.find((pattern) => touchesForbidden(path, pattern));
-      if (forbidden !== undefined) reasons.push(`${field}: ${path} задевает ${forbidden}`);
+      const problem = selfMergePathProblem(path, fileName);
+      if (problem !== null) reasons.push(`${field}: ${problem}`);
     }
   }
   return reasons;
@@ -474,7 +481,7 @@ export function validateTask(fileName, data, context) {
   }
 
   if (data.merge === "self") {
-    const reasons = selfMergeProblems(data);
+    const reasons = selfMergeProblems(data, fileName);
     if (reasons.length > 0) errors.push(`${fileName}: ${SELF_MERGE_MESSAGE}: ${reasons.join("; ")}`);
   }
 
