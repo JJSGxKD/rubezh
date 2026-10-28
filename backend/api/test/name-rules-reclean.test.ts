@@ -144,7 +144,7 @@ type Ctx = ReturnType<typeof setup>;
 
 async function person(ctx: Ctx, id: string, role?: "admin" | "moderator"): Promise<AccountRef> {
   const account = await ctx.accounts.upsert({ platform: "telegram", platformUserId: id, displayName: `Игрок ${id}`, username: null, photoUrl: null }, Date.now());
-  if (role !== undefined) await ctx.roles.grant(account.accountId, role, null);
+  if (role !== undefined) await ctx.rolesRepository.grant(account.accountId, role, null);
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 

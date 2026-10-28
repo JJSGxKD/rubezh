@@ -57,6 +57,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перечистка �
   let prisma: PrismaClient;
   let redis: Redis;
   let service: NameRulesRecleanService;
+  let httpService: NameRulesRecleanService | null = null;
   let owner: AccountRef;
   const jobs: RecleanJobData[] = [];
   const accountIds: string[] = [];
@@ -198,7 +199,8 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перечистка �
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
-        { provide: NameRulesRecleanService, useValue: service },
+        // Сервис собирается с правами самого модуля: у него тот же репозиторий ролей, что у сессии.
+        { provide: NameRulesRecleanService, inject: [RolesService], useFactory: (moduleRoles: RolesService) => (httpService = new NameRulesRecleanService(prisma, redis, moduleRoles, { enqueue: async (data) => void jobs.push(data) })) },
         PanelLoginService,
         RateLimiter,
         RolesService,
@@ -243,7 +245,8 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("перечистка �
 
       const stopped = await app.inject({ method: "POST", url: `${url}/stop`, headers });
       expect(stopped.statusCode).toBe(200);
-      await runJob();
+      const job = jobs.at(-1) as RecleanJobData;
+      await httpService?.process(job);
       expect((await app.inject({ method: "POST", url: `${url}/stop`, headers })).statusCode).toBe(409);
     } finally {
       await app.close();
