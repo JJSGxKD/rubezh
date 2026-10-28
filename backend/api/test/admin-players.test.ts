@@ -414,3 +414,95 @@ describe("список игроков и скрытое ограничение (
     expect(l.repository.calls).toHaveLength(1);
   });
 });
+
+describe("ник игрока в панели (T-0151)", () => {
+  let s: ReturnType<typeof setup>;
+
+  beforeEach(() => {
+    s = setup();
+  });
+
+  it("смена: ник чистится, закрепляется, в журнале было → стало", async () => {
+    const target = await player(s.accounts);
+    const result = await s.service.rename(owner, target.accountId, "Тимур", NOW);
+
+    expect(result.account).toMatchObject({ displayName: "Тимур", nameLocked: true });
+    const entry = s.rolesRepository.entries.find((candidate) => candidate.action === "players.rename");
+    expect(entry).toMatchObject({ actorAccountId: owner.accountId, target: target.accountId });
+    expect(entry?.before).toMatchObject({ displayName: "Путник", nameLocked: false });
+    expect(entry?.after).toMatchObject({ displayName: "Тимур", nameLocked: true });
+    expect((await s.accounts.byId(target.accountId))?.nameLockedAt).toEqual(NOW);
+  });
+
+  it("ник из знаков U+0489 не проходит чистку: ошибка с причиной, ник и журнал не тронуты", async () => {
+    const target = await player(s.accounts);
+    await expect(s.service.rename(owner, target.accountId, "\u0489\u0489\u0489", NOW)).rejects.toThrow(ValidationError);
+    await expect(s.service.rename(owner, target.accountId, "\u0489\u0489\u0489", NOW)).rejects.toThrow("Ник не прошёл проверку: empty");
+    expect((await s.accounts.byId(target.accountId))?.displayName).toBe("Путник");
+    expect(s.rolesRepository.entries.filter((entry) => entry.action === "players.rename")).toEqual([]);
+  });
+
+  it("мат не проходит", async () => {
+    const target = await player(s.accounts);
+    await expect(s.service.rename(owner, target.accountId, "Абвгде хуй", NOW)).rejects.toThrow("Ник не прошёл проверку: profanity");
+  });
+
+  it("снятие закрепления возвращает ник с площадки (через чистку) и пишется в журнал", async () => {
+    const target = await player(s.accounts);
+    await s.service.rename(owner, target.accountId, "Тимур", NOW);
+    const result = await s.service.unlockName(owner, target.accountId);
+
+    expect(result.account).toMatchObject({ displayName: "Путник", nameLocked: false });
+    expect((await s.accounts.byId(target.accountId))?.nameLockedAt).toBeNull();
+    const entry = s.rolesRepository.entries.find((candidate) => candidate.action === "players.rename.unlock");
+    expect(entry?.before).toMatchObject({ displayName: "Тимур", nameLocked: true });
+    expect(entry?.after).toMatchObject({ displayName: "Путник", nameLocked: false });
+  });
+
+  it("вход не перезаписывает закреплённый ник, а после снятия закрепления следующий вход его обновляет", async () => {
+    const target = await player(s.accounts, "500888");
+    await s.service.rename(owner, target.accountId, "Тимур", NOW);
+
+    const entered = await s.accounts.upsert({ platform: "telegram", platformUserId: "500888", displayName: "Новый ник", username: "wanderer", photoUrl: null }, NOW.getTime());
+    expect(entered.displayName).toBe("Тимур");
+    expect(entered.platformName).toBe("Новый ник");
+
+    await s.service.unlockName(owner, target.accountId);
+    const again = await s.accounts.upsert({ platform: "telegram", platformUserId: "500888", displayName: "Новый ник", username: "wanderer", photoUrl: null }, NOW.getTime());
+    expect(again.displayName).toBe("Новый ник");
+  });
+
+  it("старый аккаунт без запомненного ника с площадки: снятие закрепления остаётся при нынешнем нике: другого источника нет", async () => {
+    const target = await s.accounts.upsert({ platform: "telegram", platformUserId: "500889", displayName: "  Старый   ник\u0489  ", username: "old", photoUrl: null }, NOW.getTime());
+    // Аккаунт заведён до запоминания ника с площадки: platformName пуст.
+    const stored = (s.accounts as unknown as { byKey: Map<string, { platformName: string | null }> }).byKey.get("telegram:500889");
+    if (stored === undefined) throw new Error("аккаунт не найден");
+    stored.platformName = null;
+
+    await s.service.rename(owner, target.accountId, "Тимур", NOW);
+    const result = await s.service.unlockName(owner, target.accountId);
+    // Источника ника нет — берётся нынешний, прогнанный через ту же чистку; закрепление снято.
+    expect(result.account).toMatchObject({ displayName: "Тимур", nameLocked: false, platformName: null });
+    expect(s.rolesRepository.entries.find((entry) => entry.action === "players.rename.unlock")?.after).toMatchObject({ displayName: "Тимур", nameLocked: false });
+  });
+
+  it("исходный ник с площадки, который чистка исправила, виден в строке", async () => {
+    const target = await s.accounts.upsert({ platform: "telegram", platformUserId: "500777", displayName: "  Тимур\u0489  ", username: "timur", photoUrl: null }, NOW.getTime());
+    const card = await s.service.card(owner, target.accountId);
+    expect(card.account.platformName).toBe("  Тимур\u0489  ");
+    expect(card.account.nameLocked).toBe(false);
+  });
+
+  it("без права players.ban — 403, несуществующий аккаунт — 404; ничего не меняется", async () => {
+    const marketer = await player(s.accounts, "600002");
+    await s.rolesRepository.grant(marketer.accountId, "marketer", null);
+    const marketerRef: AccountRef = { accountId: marketer.accountId, platform: "telegram", platformUserId: marketer.platformUserId };
+    const target = await player(s.accounts);
+
+    await expect(s.service.rename(marketerRef, target.accountId, "Тимур", NOW)).rejects.toThrow(ForbiddenError);
+    await expect(s.service.unlockName(marketerRef, target.accountId)).rejects.toThrow(ForbiddenError);
+    await expect(s.service.rename(owner, randomUUID(), "Тимур", NOW)).rejects.toThrow(AccountNotFoundError);
+    await expect(s.service.unlockName(owner, randomUUID())).rejects.toThrow(AccountNotFoundError);
+    expect((await s.accounts.byId(target.accountId))?.displayName).toBe("Путник");
+  });
+});

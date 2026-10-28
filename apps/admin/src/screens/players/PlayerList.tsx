@@ -189,7 +189,15 @@ export function PlayerList() {
             onRowClick={(player) => navigate({ section: "players", id: player.accountId })}
             empty="Под фильтры никто не подходит"
             columns={[
-              { title: "Имя", render: (player) => player.displayName },
+              {
+                title: "Имя",
+                // Ник-рисунок не должен растягивать строку: одна строка с «…», полное имя — подсказкой.
+                render: (player) => (
+                  <span className="block max-w-[16rem] truncate" title={player.displayName}>
+                    {player.displayName}
+                  </span>
+                ),
+              },
               { title: "Площадка", render: (player) => player.platform },
               { title: "ID на площадке", render: (player) => player.pii?.platformUserId ?? "скрыт" },
               { title: "Уровень", render: (player) => player.level },
