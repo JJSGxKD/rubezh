@@ -32,7 +32,7 @@ batch: 3
 
 # T-0210. Уведомления гаснут своим действием — друзья, подарки, предмет, журнал
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json)](../README.md#значки-статуса)
 
 ## Зачем
 
