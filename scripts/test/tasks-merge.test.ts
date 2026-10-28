@@ -546,3 +546,44 @@ describe("teamSummary: сводка из описания PR", () => {
     expect(teamSummary(undefined)).toBeNull();
   });
 });
+
+// Задел (Р178, T-0351): влить задел до его зависимостей нельзя.
+describe("mergeProblems: зависимости и задел", () => {
+  it("все зависимости влиты (done в dev) — причин нет", () => {
+    expect(problems({ task: devTask({ depends_on: ["T-0498", "T-0499"] }), dependencyStatuses: { "T-0498": "done", "T-0499": "done" } })).toEqual([]);
+  });
+
+  it("зависимость в dev не done — отказ с её номером и статусом", () => {
+    const result = problems({ task: devTask({ depends_on: ["T-0498", "T-0499"] }), dependencyStatuses: { "T-0498": "done", "T-0499": "ready" } });
+    const found = result.filter((problem) => problem.includes("зависимость T-0499 не влита"));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("ready");
+    expect(result.some((problem) => problem.includes("T-0498"))).toBe(false);
+  });
+
+  it("статус зависимости не получен или её нет в реестре — отказ", () => {
+    expect(problems({ task: devTask({ depends_on: ["T-0499"] }), dependencyStatuses: {} }).some((problem) => problem.includes("T-0499"))).toBe(true);
+    expect(problems({ task: devTask({ depends_on: ["T-0499"] }) }).some((problem) => problem.includes("T-0499"))).toBe(true);
+    expect(problems({ task: devTask({ depends_on: ["T-0499"] }), dependencyStatuses: { "T-0499": null } }).some((problem) => problem.includes("T-0499"))).toBe(true);
+  });
+
+  it("зависимостей нет — поле dependencyStatuses не нужно", () => {
+    expect(problems({ task: devTask({ depends_on: [] }) })).toEqual([]);
+  });
+
+  it("метка «задел» — отказ с пояснением", () => {
+    const result = problems({ pr: pr({ labels: [{ name: "release: patch" }, { name: "задел" }] }) });
+    expect(result.some((problem) => problem.includes("«задел»"))).toBe(true);
+  });
+
+  it("задел в виде черновика с незакрытой зависимостью — сразу несколько причин, ни одна не пропадает", () => {
+    const result = problems({
+      task: devTask({ depends_on: ["T-0499"] }),
+      dependencyStatuses: { "T-0499": "ready" },
+      pr: pr({ isDraft: true, labels: [{ name: "задел" }] }),
+    });
+    expect(result.some((problem) => problem.includes("зависимость T-0499 не влита"))).toBe(true);
+    expect(result.some((problem) => problem.includes("черновик"))).toBe(true);
+    expect(result.some((problem) => problem.includes("«задел»"))).toBe(true);
+  });
+});

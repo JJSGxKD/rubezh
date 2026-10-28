@@ -167,6 +167,11 @@ function waitingText(waiting) {
   return waiting.who === "owner" ? WAITING_WHO.owner : `${WAITING_WHO[waiting.who]} · ${waiting.why}`;
 }
 
+/** «Чего ждёт» задел (Р178): созревший ждёт потока, остальной — влития зависимостей. */
+function aheadWaitingText(entry) {
+  return entry.ripe ? `${WAITING_WHO.executor} · задел созрел` : `зависимостей: ${(entry.waitingFor ?? []).join(", ")}`;
+}
+
 /** «Висит»: меньше суток — «сегодня», иначе «N дн», от трёх суток с «⚠️ »; даты нет — «—». */
 function hangingText(days) {
   if (days === null || days === undefined) return "—";
@@ -186,7 +191,7 @@ function workSection(title, entries, owners, withPr) {
     entry.launchedBy ?? "—",
     hangingText(entry.days),
     entry.rounds > 0 ? String(entry.rounds) : "—",
-    waitingText(entry.waiting),
+    entry.ripe === undefined ? waitingText(entry.waiting) : aheadWaitingText(entry),
     // У «В работе» PR бывает не всегда: ветка без PR — ещё не открыт.
     ...(withPr ? [entry.pr === undefined ? "—" : prLink(entry.pr)] : []),
   ]);
@@ -208,6 +213,17 @@ function freeSection(board) {
   });
   const total = board.free.filter(({ task }) => kinds.some(([, runner]) => runner === task.runner)).length;
   return `## Можно брать — ${String(total)}\n\n${parts.join("\n\n")}`;
+}
+
+/** «Можно заделом» (Р178): задачи, чьи зависимости ждут ревью, — их можно начать поверх веток зависимостей. */
+function aheadFreeSection(board) {
+  const entries = board.aheadFree ?? [];
+  return section(
+    "Можно заделом",
+    entries.length,
+    ["Задача", "Поверх", "Исполнитель", "Эпик"],
+    entries.map(({ task, aheadOver }) => [taskLink(task), (aheadOver ?? []).join(", "), `${task.executor} · ${task.effort}`, task.epic]),
+  );
 }
 
 /** Таблица одного периода «Вклада»; пустой — «Пусто.». */
@@ -251,8 +267,10 @@ export function renderBoardPage({ board, owners, credits, contribution = null, g
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
     workSection("Доработка", board.rework, owners, true),
     freeSection(board),
+    aheadFreeSection(board),
     workSection("В работе", board.inProgress, owners, board.inProgress.some((entry) => entry.pr !== undefined)),
     workSection("На ревью", board.review, owners, true),
+    workSection("Задел", board.ahead ?? [], owners, true),
     section("Ждут", board.blocked.length, ["Задача", "Чего ждёт"], board.blocked.map(({ task, reason }) => [taskLink(task), reason])),
     section(
       "Готово",

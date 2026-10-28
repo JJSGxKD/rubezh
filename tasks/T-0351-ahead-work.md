@@ -3,8 +3,8 @@ id: T-0351
 title: Задел — брать задачу до мерджа зависимостей, ветка поверх их веток, метка «задел», доводка первой в очереди
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0349]
@@ -22,6 +22,8 @@ shared:
   - scripts/tasks/git-io.mjs
   - scripts/tasks/merge.mjs
   - scripts/test/tasks-merge.test.ts
+  - scripts/test/pr-check.test.ts
+  - docs/09-ci-cd.md
   - tasks/README.md
   - .claude/skills/take-task/SKILL.md
   - .claude/skills/review-pr/SKILL.md

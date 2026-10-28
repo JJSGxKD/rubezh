@@ -1,5 +1,6 @@
-import { REVIEW_LABEL, STATUS_LABELS } from "./board.mjs";
-import { BASE, diffNumstat, fetchOrigin, gh, hasCommit, isAncestor, readFileAt, taskFileNameAt, toolsMatchBase } from "./git-io.mjs";
+import { AHEAD_LABEL, REVIEW_LABEL, STATUS_LABELS } from "./board.mjs";
+import { BASE, diffNumstat, fetchOrigin, gh, hasCommit, isAncestor, readFileAt, readOriginTasks, taskFileNameAt, toolsMatchBase } from "./git-io.mjs";
+import { readTasks as readRegistryTasks } from "./registry.mjs";
 import { SELF_MERGE_MESSAGE, parseFrontmatter, parseOwner, selfMergePathProblem, selfMergeProblems } from "./task-file.mjs";
 import { matches } from "./zones.mjs";
 
@@ -202,9 +203,12 @@ export function selfCheckProblems(comments, headSha, stream, { prAuthor, headCom
  * - `headSha` — SHA головы PR, прочитанный вместе с остальным;
  * - `changes` — дифф PR от общего предка с `dev` (`parseNumstat`), `null` — не получен;
  * - `upToDate` — `origin/dev` предок головы PR (ветка не отстала);
- * - `toolsMatchDev` — `scripts/tasks` в рабочей копии совпадает с `origin/dev`.
+ * - `toolsMatchDev` — `scripts/tasks` в рабочей копии совпадает с `origin/dev`;
+ * - `dependencyStatuses` — статус каждой зависимости задачи в `origin/dev`
+ *   (`{ "T-0123": "done" }`, `null` — зависимости нет в реестре): задел вливать нельзя,
+ *   пока хоть одна не `done` (Р178). Не передан — статусы не получены, и это отказ.
  */
-export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comments, headSha, changes, upToDate, toolsMatchDev }) {
+export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comments, headSha, changes, upToDate, toolsMatchDev, dependencyStatuses }) {
   const problems = [];
   const id = BRANCH_RE.exec(pr?.headRefName ?? "")?.[1];
   if (id === undefined) problems.push(`ветка PR «${String(pr?.headRefName)}» — не task/T-NNNN: самостоятельно вливаются только PR задач`);
@@ -234,11 +238,19 @@ export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comme
     }
   }
 
+  for (const dependencyId of task?.depends_on ?? []) {
+    const status = dependencyStatuses?.[dependencyId];
+    if (status === "done") continue;
+    const where = status === undefined || status === null ? "статус не получен или её нет в реестре" : `в ${BASE} статус ${status}`;
+    problems.push(`зависимость ${dependencyId} не влита (${where}): задел вливают только после мерджа всех зависимостей (Р178)`);
+  }
+
   if (pr?.state !== undefined && pr.state !== "OPEN") problems.push(`PR не открыт (${String(pr.state)})`);
   if (pr?.isDraft === true) problems.push("PR — черновик: черновик не вливается");
   const statuses = (pr?.labels ?? []).map((label) => label?.name).filter((label) => STATUS_LABELS.includes(label));
   if (statuses.length === 0) problems.push(`нет метки статуса «${REVIEW_LABEL}»`);
   else if (statuses.length > 1) problems.push(`меток статуса несколько (${statuses.map((label) => `«${label}»`).join(", ")}): нужна одна «${REVIEW_LABEL}»`);
+  else if (statuses[0] === AHEAD_LABEL) problems.push(`метка «${AHEAD_LABEL}»: задел не вливают — после мерджа зависимостей его доводят (pnpm task resume) и отправляют «${REVIEW_LABEL}»`);
   else if (statuses[0] !== REVIEW_LABEL) problems.push(`метка статуса «${statuses[0]}», а нужна «${REVIEW_LABEL}»`);
 
   problems.push(...checkProblems(pr?.statusCheckRollup));
@@ -326,6 +338,14 @@ function readTasks(id, headSha) {
   return { fileName, task, branchTask: parse(branchText) };
 }
 
+/** Статусы зависимостей задачи в `origin/dev`: `{ id: статус | null }`; `null` — нет в реестре (Р178). */
+function dependencyStatusesOf(task) {
+  const deps = task?.depends_on ?? [];
+  if (deps.length === 0) return {};
+  const { tasks } = readRegistryTasks(readOriginTasks(BASE));
+  return Object.fromEntries(deps.map((id) => [id, tasks.find((candidate) => candidate.id === id)?.status ?? null]));
+}
+
 /**
  * Команда `pnpm task merge T-NNNN`: проверяет всё, что требует Р176, и вливает
  * PR merge-коммитом с `--match-head-commit`. Отказ — код 1 и список причин.
@@ -358,6 +378,7 @@ export function runMerge(positional) {
     changes,
     upToDate: isAncestor(BASE, headSha),
     toolsMatchDev: toolsMatchBase(BASE),
+    dependencyStatuses: dependencyStatusesOf(task),
   });
   if (problems.length > 0) {
     console.error(`Мердж ${id} (PR #${String(pr.number)}) отклонён, причин: ${String(problems.length)}`);
