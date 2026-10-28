@@ -12,6 +12,7 @@
 import { posix } from "node:path";
 import { minimumReleaseLevel, parsePrTitle } from "../release/pr-check.mjs";
 import { compareReleaseLevels } from "../release/semver.mjs";
+import { matches } from "./zones.mjs";
 
 export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
@@ -26,6 +27,8 @@ export const STATUSES = ["draft", "ready", "in-progress", "done", "cancelled"];
 export const SIZES = ["S", "M"];
 export const RUNNERS = ["any", "local", "owner", "human"];
 export const RELEASES = ["none", "patch", "minor"];
+/** Кто вливает PR задачи: `lead` — тимлид (умолчание), `self` — сам поток (Р176, tasks/README.md, «Самостоятельный мердж»). */
+export const MERGES = ["self", "lead"];
 export const EFFORTS = ["low", "medium", "high", "extra"];
 /** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
 export const EXECUTORS = ["sonnet-5.5", "haiku-5.5"];
@@ -47,12 +50,68 @@ export const FIELDS = [
   "executor",
   "effort",
   "release",
+  "merge",
   "design",
   "batch",
 ];
 
 /** Необязательные поля: задачи, заведённые до них, остаются как были. */
-export const OPTIONAL_FIELDS = new Set(["author", "batch"]);
+export const OPTIONAL_FIELDS = new Set(["author", "batch", "merge"]);
+
+const SELF_MERGE_FORBIDDEN_MODULES = ["payments", "wallet", "shop", "auth", "ads", "referrals", "partners", "restrictions", "roles", "secrets", "antifraud", "runs"];
+
+/**
+ * Пути, где `merge: self` запрещён (Р176): деньги, авторизация, миграции,
+ * конкурентность, антифрод, прод и экраны игрока. Повторяет
+ * tasks/README.md, «Самостоятельный мердж»: новый запрет — правка и там, и здесь.
+ */
+export const SELF_MERGE_FORBIDDEN = [
+  "backend/api/prisma/**",
+  ...SELF_MERGE_FORBIDDEN_MODULES.map((module) => `backend/api/src/modules/${module}/**`),
+  "backend/api/src/platforms/**",
+  "infra/**",
+  ".github/**",
+  "packages/app-shell/src/screens/**",
+  "apps/web-*/**",
+  "packages/adapter-*/**",
+];
+
+/** Начало текста ошибки `merge: self`; за ним через двоеточие идёт, что именно мешает. */
+export const SELF_MERGE_MESSAGE = "merge: self — только для задач без денег, авторизации, миграций, конкурентности, антифрода, прода и экранов игрока (Р176)";
+
+/**
+ * Задевает ли путь или шаблон зоны шаблон запрета. Зона шире запрета
+ * (`backend/**`) тоже задевает его, поэтому проверяются оба направления: зона
+ * как путь под шаблон запрета и условный путь запрета под шаблон зоны.
+ * Подстановка в середине пути (звёздочка вместо имени модуля) может проскользнуть: это
+ * страховка, а не замена суждения тимлида.
+ */
+function touchesForbidden(zone, forbidden) {
+  if (matches(zone, [forbidden])) return true;
+  const sample = forbidden.replaceAll("**", "x").replaceAll("*", "x");
+  if (matches(sample, [zone])) return true;
+  // Каталог без шаблонов и без «/» на конце: `backend/api/prisma`.
+  return !/[*?]/.test(zone) && forbidden.startsWith(`${zone.replace(/\/$/, "")}/`);
+}
+
+/**
+ * Что мешает `merge: self` у задачи: список причин, пустой — ничего. Читает
+ * `effort`, `runner`, `zones` и `shared`; значение самого `merge` не смотрит.
+ */
+export function selfMergeProblems(data) {
+  const reasons = [];
+  if (data.effort === "extra") reasons.push("effort: extra");
+  if (data.runner === "owner" || data.runner === "human") reasons.push(`runner: ${data.runner}`);
+  for (const field of ["zones", "shared"]) {
+    if (!Array.isArray(data[field])) continue;
+    for (const path of data[field]) {
+      if (typeof path !== "string") continue;
+      const forbidden = SELF_MERGE_FORBIDDEN.find((pattern) => touchesForbidden(path, pattern));
+      if (forbidden !== undefined) reasons.push(`${field}: ${path} задевает ${forbidden}`);
+    }
+  }
+  return reasons;
+}
 
 /** Пачка очереди, с которой задача уходит в main (docs/38-release-plan.md): целое число от 1 без ведущих нулей. */
 export const BATCH_RE = /^[1-9]\d*$/;
@@ -384,6 +443,7 @@ export function validateTask(fileName, data, context) {
   expectEnum("executor", EXECUTORS);
   expectEnum("effort", EFFORTS);
   expectEnum("release", RELEASES);
+  expectEnum("merge", MERGES);
 
   if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
   if (Object.hasOwn(data, "batch") && (text("batch") === null || !BATCH_RE.test(data.batch))) {
@@ -411,6 +471,11 @@ export function validateTask(fileName, data, context) {
       const problem = pathProblem(path);
       if (problem !== null) fail(field, `${problem}: ${path}`);
     }
+  }
+
+  if (data.merge === "self") {
+    const reasons = selfMergeProblems(data);
+    if (reasons.length > 0) errors.push(`${fileName}: ${SELF_MERGE_MESSAGE}: ${reasons.join("; ")}`);
   }
 
   const working = data.status === "ready" || data.status === "in-progress";
