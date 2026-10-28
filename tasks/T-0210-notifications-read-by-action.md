@@ -3,8 +3,8 @@ id: T-0210
 title: Уведомления гаснут своим действием — друзья, подарки, предмет, журнал
 epic: E5
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
