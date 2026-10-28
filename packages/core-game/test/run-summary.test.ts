@@ -246,6 +246,23 @@ describe("итог забега", () => {
     expect(result.deathCause).toBe("biter");
   });
 
+  it("несёт счётчики боссов, элит, сундуков и кристаллов из мира", () => {
+    const world = worldWithEnemyAt(DUMMY, 40);
+    world.stats.bossKills = 1;
+    world.stats.eliteKills = 4;
+    world.stats.chestsOpened = 3;
+    world.stats.crystalsCollected = 250;
+
+    const result = buildRunResult(world, {
+      runId: "r3",
+      seed: 42,
+      outcome: "died",
+      startingWeaponId: "spark",
+      contentHash: "test-hash",
+    });
+    expect(result).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 3, crystalsCollected: 250 });
+  });
+
   it("у сдачи нет причины смерти: сдавшийся забег — не убийство", () => {
     const world = worldWithEnemyAt(DUMMY, 40);
     for (let tick = 0; tick < 120; tick++) stepWorld(world, IDLE_INPUT);

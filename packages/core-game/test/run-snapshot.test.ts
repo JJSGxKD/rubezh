@@ -249,11 +249,35 @@ describe("снимок забега", () => {
     );
   });
 
-  it("отказывается читать снимок прежней версии 8: в нём нет зарядов карточек", () => {
+  it("отказывается читать снимок прежней версии: в нём нет счётчиков итога", () => {
     const run = newRun(1);
     const saved = roundTrip(run) as Record<string, unknown>;
-    expect(saved.version).toBe(9);
-    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 8 })).toThrow(SnapshotError);
+    expect(saved.version).toBe(WORLD_SNAPSHOT_VERSION);
+    expect(() =>
+      restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: WORLD_SNAPSHOT_VERSION - 1 }),
+    ).toThrow(SnapshotError);
+  });
+
+  it("снимок без полей счётчиков в stats — SnapshotError, а не нули", () => {
+    const run = newRun(1);
+    const saved = structuredClone(roundTrip(run)) as { stats: { scalars: Record<string, number> } };
+    delete saved.stats.scalars.bossKills;
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, saved)).toThrow(SnapshotError);
+  });
+
+  it("восстанавливает счётчики боссов, элит и кристаллов", () => {
+    const run = newRun(1);
+    run.world.stats.bossKills = 2;
+    run.world.stats.eliteKills = 5;
+    run.world.stats.crystalsCollected = 77;
+    const saved = roundTrip(run);
+
+    const resumed = newRun(1);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.stats.bossKills).toBe(2);
+    expect(resumed.world.stats.eliteKills).toBe(5);
+    expect(resumed.world.stats.crystalsCollected).toBe(77);
   });
 
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
