@@ -365,6 +365,25 @@ describe.skipIf(DATABASE_URL === "")("снаряжение на живом Postg
       expect((await items.inventory(id)).items).toHaveLength(5);
     });
 
+    it("открытый лист гасит редкую добычу этого предмета, другого предмета — нет", async () => {
+      const id = await account();
+      const seen = await give(id, "weapon", "epic");
+      const unseen = await give(id, "belt", "epic");
+      const feedService = new NotificationsService(new PrismaNotificationsRepository(prisma));
+      for (const itemId of [seen, unseen]) {
+        await feedService.notify({ accountId: id, kind: "rare_loot", payload: { itemId, slot: "weapon", rarity: "epic", salvaged: false }, dedupeKey: `rare_loot:${itemId}` });
+      }
+      await feedService.notify({ accountId: id, kind: "team_message", payload: { text: "Привет" }, dedupeKey: "team:1" });
+
+      await items.markSeen(id, [seen]);
+
+      const rows = await prisma.notification.findMany({ where: { accountId: id }, select: { kind: true, readAt: true, payload: true } });
+      const readOf = (kind: string, itemId?: string) => rows.find((row) => row.kind === kind && (itemId === undefined || (row.payload as { itemId?: string }).itemId === itemId))?.readAt;
+      expect(readOf("rare_loot", seen)).not.toBeNull();
+      expect(readOf("rare_loot", unseen)).toBeNull();
+      expect(readOf("team_message")).toBeNull();
+    });
+
     it("новое — выпавшее, пока игрок не открыл лист; собранное своими руками — не новое", async () => {
       const id = await account();
       const other = await account();
