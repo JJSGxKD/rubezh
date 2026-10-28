@@ -23,8 +23,6 @@ export type ShapeKind =
   | "chevron"
   /** четыре тонких луча — пробегающий мимо рой */
   | "mote"
-  /** кольцо со зрачком — кастующий босс */
-  | "eye"
   /** персонаж: светлое тело в тёмном канте */
   | "player"
   /** гранёный кристалл опыта: свет сверху, тень снизу */
@@ -53,7 +51,6 @@ export interface ShapeLook {
 export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   swarm: { shape: "circle", color: 0xff4d5a },
   chase: { shape: "square", color: 0xe0245e },
-  kite_and_shoot: { shape: "triangle", color: 0xff6a6a },
   // Ромб отдан кристаллам опыта: рывковый враг — остриё, и цвет у него
   // тревожный, а не «подбери меня».
   dash: { shape: "chevron", color: 0xff5a2e },
@@ -65,7 +62,6 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   rush: { shape: "mote", color: 0xff9a8a },
   // Кастер стоит в стороне и светится перед ударом: тяжёлая фигура-глаз и самый
   // тёмный оттенок.
-  caster: { shape: "eye", color: 0xc2185b },
   // Страж кольца: временный облик — ромб, который в красной гамме врагов не занят;
   // рисунок для него должен нарисовать дизайнер.
   cordon: { shape: "diamond", color: 0xb3203f },

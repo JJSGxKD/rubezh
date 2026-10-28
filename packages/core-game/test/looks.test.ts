@@ -42,7 +42,7 @@ describe("враги в красной гамме", () => {
   it("формы у всех поведений разные: главное различие типа — форма, а не оттенок", () => {
     const shapes = PATTERNS.map((pattern) => ENEMY_LOOKS[pattern].shape);
     expect(new Set(shapes).size).toBe(PATTERNS.length);
-    expect(PATTERNS).toHaveLength(10);
+    expect(PATTERNS).toHaveLength(8);
   });
 });
 

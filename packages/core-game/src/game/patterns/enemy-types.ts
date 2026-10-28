@@ -13,7 +13,7 @@ import { ELEMENT_PHYSICAL, MAX_RESIST, MIN_RESIST } from "../sim/element-ids";
 export interface PatternTraits {
   /** радиус хитбокса в игровых единицах */
   radius: number;
-  /** бьёт ли касанием; стрелок и подрывник наносят урон иначе */
+  /** бьёт ли касанием; подрывник наносит урон иначе — взрывом */
   contactDamage: boolean;
   /** тело непроходимо для игрока: он выталкивается из него и скользит вдоль */
   solid: boolean;
@@ -24,14 +24,11 @@ export interface PatternTraits {
 export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
   swarm: { radius: 7, contactDamage: true, solid: false, anchored: false },
   chase: { radius: 12, contactDamage: true, solid: false, anchored: false },
-  kite_and_shoot: { radius: 9, contactDamage: false, solid: false, anchored: false },
   dash: { radius: 10, contactDamage: true, solid: false, anchored: false },
   orbit: { radius: 8, contactDamage: true, solid: false, anchored: false },
   exploder: { radius: 9, contactDamage: false, solid: false, anchored: false },
   splitter: { radius: 13, contactDamage: true, solid: false, anchored: false },
   rush: { radius: 6, contactDamage: true, solid: false, anchored: false },
-  // Кастер бьёт заклинаниями, а не телом: касанием урона нет.
-  caster: { radius: 14, contactDamage: false, solid: false, anchored: false },
   // Страж кольца: тело не пускает игрока, а место в строю он не бросает, куда бы ни ушёл игрок.
   cordon: { radius: 14, contactDamage: true, solid: true, anchored: true },
 };
@@ -83,9 +80,6 @@ export const MAX_PATTERN_RADIUS =
  */
 export interface ResolvedPatternParams {
   steeringPerSec: number;
-  preferredDistance: number;
-  shotIntervalSec: number;
-  projectileSpeed: number;
   triggerDistance: number;
   telegraphSec: number;
   dashSpeed: number;
@@ -98,8 +92,6 @@ export interface ResolvedPatternParams {
   blastRadius: number;
   leadSec: number;
   runSec: number;
-  castIntervalSec: number;
-  burstCount: number;
   /** на кого распадается делящийся: индексы типов и сколько каждого */
   children: SplitChild[];
 }
@@ -113,9 +105,6 @@ type NumericParam = Exclude<keyof ResolvedPatternParams, "children">;
 
 const NEUTRAL_PARAMS: ResolvedPatternParams = {
   steeringPerSec: 0,
-  preferredDistance: 0,
-  shotIntervalSec: 0,
-  projectileSpeed: 0,
   triggerDistance: 0,
   telegraphSec: 0,
   dashSpeed: 0,
@@ -128,8 +117,6 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
   blastRadius: 0,
   leadSec: 0,
   runSec: 0,
-  castIntervalSec: 0,
-  burstCount: 0,
   children: [],
 };
 
@@ -141,7 +128,6 @@ const NEUTRAL_PARAMS: ResolvedPatternParams = {
 export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam, number>>> = {
   swarm: {},
   chase: { steeringPerSec: 3.2 },
-  kite_and_shoot: { preferredDistance: 220, shotIntervalSec: 2.2, projectileSpeed: 260 },
   dash: {
     triggerDistance: 160,
     telegraphSec: 0.6,
@@ -153,13 +139,6 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   exploder: { triggerDistance: 40, fuseSec: 0.9, blastRadius: 90 },
   splitter: { steeringPerSec: 3.2 },
   rush: { leadSec: 0.55, runSec: 2.6 },
-  caster: {
-    preferredDistance: 260,
-    castIntervalSec: 3.2,
-    telegraphSec: 0.7,
-    burstCount: 8,
-    projectileSpeed: 220,
-  },
   cordon: {},
 };
 
@@ -167,20 +146,16 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
 const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   swarm: [],
   chase: ["steeringPerSec"],
-  kite_and_shoot: ["preferredDistance", "shotIntervalSec", "projectileSpeed"],
   dash: ["triggerDistance", "telegraphSec", "dashSpeed", "dashDurationSec", "recoverSec"],
   orbit: ["orbitRadius", "shrinkPerSec", "minRadius"],
   exploder: ["triggerDistance", "fuseSec", "blastRadius"],
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
-  caster: ["preferredDistance", "castIntervalSec", "telegraphSec", "burstCount", "projectileSpeed"],
   cordon: [],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */
 const SCALED_PARAMS: readonly NumericParam[] = [
-  "preferredDistance",
-  "projectileSpeed",
   "triggerDistance",
   "dashSpeed",
   "orbitRadius",

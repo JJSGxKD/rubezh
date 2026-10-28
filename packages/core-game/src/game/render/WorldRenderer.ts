@@ -4,7 +4,7 @@ import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
 import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
@@ -17,7 +17,7 @@ import { PlayerRings } from "./player-rings";
 import { artFlashStart, NO_FLASH } from "./hit-flash";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
-import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
+import { Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
@@ -362,8 +362,6 @@ export class WorldRenderer {
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
-    const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
-    const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
     const telegraphsOn = this.visuals?.telegraphs ?? this.graphics?.telegraphs ?? true;
     // Тон состояния — эффект оружия: кто выключил эффекты ради тишины на
     // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
@@ -451,16 +449,6 @@ export class WorldRenderer {
         const length = type.params.dashSpeed * type.params.dashDurationSec;
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
         this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, type.radius, progress);
-      }
-      if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
-        // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
-        // телеграфа, что у фитиля подрывника: круг заполняется — сейчас будет.
-        const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
-        this.telegraphs.ring(x, y, type.params.preferredDistance * 0.35, progress);
-      }
-      if (type.pattern === "kite_and_shoot" && enemies.attackCooldown[i] < AIM_TELEGRAPH_SEC) {
-        const progress = 1 - enemies.attackCooldown[i] / AIM_TELEGRAPH_SEC;
-        this.telegraphs.aim(x, y, playerX, playerY, progress);
       }
     }
 
@@ -779,9 +767,6 @@ function lookFor(pattern: EnemyPattern, phase: number, tick: number): number {
   }
   if (pattern === "exploder" && phase === EXPLODER_PHASE.fuse) {
     return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.dim;
-  }
-  if (pattern === "caster" && phase === CASTER_PHASE.windup) {
-    return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.normal;
   }
   return LOOK.normal;
 }

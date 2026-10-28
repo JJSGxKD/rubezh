@@ -69,7 +69,7 @@ describe("сигналы забега", () => {
   it("появление босса считается отдельно от элиты", () => {
     const target = world();
     const tracker = new CueTracker(target);
-    spawnEnemy(target, typeIndex(target, "boss_seer"), 600, 0);
+    spawnEnemy(target, typeIndex(target, "boss_matryoshka"), 600, 0);
     expect(tracker.collect()).toMatchObject({ eliteSpawns: 1, bossSpawns: 1 });
 
     spawnEnemy(target, typeIndex(target, "elite_ghoul"), -600, 0);

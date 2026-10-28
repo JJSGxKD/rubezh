@@ -3,8 +3,8 @@ id: T-0172
 title: Уход огонька и кастера — в бою нет врагов со снарядами
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0171]
@@ -48,6 +48,13 @@ shared:
   - docs/35-stage4-plan.md
   - docs/39-retention-mechanics.md
   - packages/app-shell/src/i18n/ru.json
+  - tasks/T-0192-pressure-after-minute-8.md
+  - tasks/T-0193-longer-run-progression.md
+  - tasks/T-0197-second-boss-no-projectiles.md
+  - tasks/T-0198-remove-enemy-projectile-code.md
+  - tasks/T-0199-reroll-for-ad.md
+  - tasks/T-0335-cordon-formation-and-elite.md
+  - tasks/T-0342-cordon-numbers-and-guide.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -58,7 +65,7 @@ batch: 3
 
 # T-0172. Уход огонька и кастера — в бою нет врагов со снарядами
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json)](README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](archive/T-0171-cordon-guard-content.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json)](../README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](T-0171-cordon-guard-content.md)
 
 ## Зачем
 
@@ -304,14 +311,14 @@ WP36, «Порядок» (`docs/35-stage4-plan.md`, решение пользо�
 
 ## Критерии приёмки
 
-- [ ] В контенте нет `shooter_wisp`, `boss_seer`; в движке нет паттернов
+- [x] В контенте нет `shooter_wisp`, `boss_seer`; в движке нет паттернов
   `kite_and_shoot` и `caster`; `no-enemy-projectiles.test.ts` зелёный.
-- [ ] Бюджет угрозы не убывает, пул и события кривой согласованы; гайдбук и
+- [x] Бюджет угрозы не убывает, пул и события кривой согласованы; гайдбук и
   словари не ссылаются на удалённые ключи.
 - [ ] Свойства баланса зелёные на контенте без стрелков, кроме двух,
   помеченных `it.fails` до T-0192 (Р164); таблица `pnpm balance:sim` до и
   после — в описании PR и в `docs/32-balance.md`.
-- [ ] Эталоны обновлены и объяснены словами; перф-тесты и `pnpm budget` не хуже.
+- [x] Эталоны обновлены и объяснены словами; перф-тесты и `pnpm budget` не хуже.
 - [ ] Дифф только в зонах; гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR

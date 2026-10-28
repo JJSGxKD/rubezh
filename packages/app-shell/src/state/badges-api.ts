@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 import { useBadges, type Badges } from "./badges";
+import { useContact } from "./contact";
 import { useShell } from "./shell";
 
 /**
@@ -12,7 +13,8 @@ import { useShell } from "./shell";
 
 // `daily`, `wheel` и `tasks` — с наградой дня, колесом и заданиями (WP13),
 // `changelog` — с журналом обновлений (WP31): сервер старее клиента их не
-// пришлёт, и знак просто не горит.
+// пришлёт, и знак просто не горит. `contactUrl` — ссылка кнопки «Связаться с
+// разработчиком» (Р173): нет поля или `null` — кнопки нет.
 const badgesSchema = z.object({
   arsenal: z.number(),
   friends: z.number(),
@@ -21,6 +23,7 @@ const badgesSchema = z.object({
   changelog: z.optional(z.number()),
   wheel: z.optional(z.number()),
   tasks: z.optional(z.number()),
+  contactUrl: z.optional(z.nullable(z.string())),
 });
 
 type BadgesResponse = z.infer<typeof badgesSchema>;
@@ -39,8 +42,9 @@ export async function loadBadges(api?: BadgesApi, now = Date.now()): Promise<voi
   if (api === undefined && useShell.getState().capabilities.auth === undefined) return;
   const response = await (api ?? createBadgesApi()).badges();
   if (response.ok) {
-    const { daily, changelog, wheel, tasks } = response.data;
-    useBadges.setState({ ...response.data, daily: daily ?? 0, changelog: changelog ?? 0, wheel: wheel ?? 0, tasks: tasks ?? 0, loadedAt: now } satisfies Badges);
+    const { daily, changelog, wheel, tasks, contactUrl, ...counts } = response.data;
+    useContact.getState().set(contactUrl ?? null);
+    useBadges.setState({ ...counts, daily: daily ?? 0, changelog: changelog ?? 0, wheel: wheel ?? 0, tasks: tasks ?? 0, loadedAt: now } satisfies Badges);
   }
 }
 

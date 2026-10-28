@@ -58,6 +58,13 @@ describe("гайдбук", () => {
     expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
   });
 
+  it("не держит в словарях ключей удалённых огонька, кастера и их паттернов", () => {
+    for (const key of ["enemy.shooter_wisp.name", "enemy.boss_seer.name"]) expect(hasTranslation(key), key).toBe(false);
+    for (const pattern of ["kite_and_shoot", "caster"]) {
+      for (const part of ["name", "text", "tip"]) expect(hasTranslation(`guide.pattern.${pattern}.${part}`), `${pattern}.${part}`).toBe(false);
+    }
+  });
+
   it("называет стража кольца и показывает его среди обычных врагов один раз, не среди элиты", () => {
     expect(hasTranslation("enemy.cordon_guard.name")).toBe(true);
     for (const part of ["name", "text", "tip"]) {

@@ -114,6 +114,11 @@ const HOME_GROUP = "Главная";
 
 const DONATE_GROUP = "Донаты";
 
+const CONTACT_GROUP = "Связь с разработчиком";
+
+/** Подпись к ссылкам кнопки «Связаться с разработчиком»: у всех четырёх площадок одна. */
+const CONTACT_HINT = "Куда ведёт кнопка «Связаться с разработчиком» у игроков этой площадки — ссылка https://… Для Telegram — сообщения канала разработчика. Пусто — кнопки нет";
+
 /** Готовые суммы доната: от одной до восьми, целые, через запятую (`parseAmounts`). */
 const amountsSchema = z
   .string()
@@ -313,6 +318,46 @@ export const SETTINGS = {
     group: DONATE_GROUP,
     title: "Tribute для веба",
     hint: "То же для игроков в вебе. Пусто — кнопки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlTelegram: {
+    key: "contact.url-telegram",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: Telegram",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlMax: {
+    key: "contact.url-max",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: MAX",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlVk: {
+    key: "contact.url-vk",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: VK",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlWeb: {
+    key: "contact.url-web",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: веб",
+    hint: CONTACT_HINT,
     kind: "url",
     schema: urlSchema,
     fromEnv: () => null,
