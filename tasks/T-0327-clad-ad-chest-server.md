@@ -38,7 +38,7 @@ shared:
   - apps/admin/test/ads.test.ts
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
