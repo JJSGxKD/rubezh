@@ -125,6 +125,11 @@ describe("страница доски", () => {
     free: [entry(task("T-0003", { title: "Деньги | оплата", status: "ready", priority: "P0", size: "M", effort: "extra", epic: "E1", fileName: "T-0003-pay.md" }))],
     inProgress: [entry(task("T-0012", { title: "Палитра", status: "ready", fileName: "T-0012-pal.md" }))],
     review: [entry(task("T-0016", { title: "Пересчёт", status: "ready", fileName: "T-0016-rec.md" }), { pr: 215, waiting: { who: "lead", why: "приёмка" } })],
+    ahead: [
+      entry(task("T-0018", { title: "Задел созрел", status: "ready", effort: "low", epic: "E2", fileName: "T-0018-ripe.md" }), { pr: 217, ripe: true, waitingFor: [] }),
+      entry(task("T-0019", { title: "Задел ждёт", status: "ready", fileName: "T-0019-wait.md" }), { pr: 218, ripe: false, waitingFor: ["T-0016", "T-0003"] }),
+    ],
+    aheadFree: [entry(task("T-0022", { title: "Можно заделом", status: "ready", epic: "E2", fileName: "T-0022-top.md" }), { aheadOver: ["T-0016"] })],
     blocked: [entry(task("T-0004", { title: "Возвраты", status: "ready", fileName: "T-0004-ref.md" }), { reason: "ждёт T-0003" })],
     done: [
       entry(task("T-0001", { title: "Наборы", owner: "", fileName: "T-0001-sets.md" })),
@@ -140,6 +145,7 @@ describe("страница доски", () => {
       owners: new Map([
         ["T-0012", "claude-3 / sonnet-5.5"],
         ["T-0017", "claude-2 / sonnet-5.5 / low"],
+        ["T-0018", "claude-4 / sonnet-5.5 / low"],
       ]),
       credits,
       contribution: CONTRIBUTION,
@@ -184,14 +190,14 @@ describe("страница доски", () => {
         "",
         "| Поток | Свободно | Доработка | Ближайшие задачи |",
         "|---|---|---|---|",
-        `| sonnet-5.5 / low | 0 | 1 | [T-0017](${BLOB}/T-0017-ans.md) |`,
+        `| sonnet-5.5 / low | 1 | 1 | [T-0017](${BLOB}/T-0017-ans.md), [T-0018](${BLOB}/T-0018-ripe.md) |`,
         `| sonnet-5.5 / extra | 1 | 0 | [T-0003](${BLOB}/T-0003-pay.md) |`,
         "",
         "### На очереди",
         "",
         "| Поток | Ждут | Ближайшая пачка |",
         "|---|---|---|",
-        "| sonnet-5.5 / medium | 1 | без пачки |",
+        "| sonnet-5.5 / medium | 2 | без пачки |",
         "",
         "### Запуск по аккаунтам",
         "",
@@ -228,6 +234,12 @@ describe("страница доски", () => {
         "",
         "Пусто.",
         "",
+        "## Можно заделом — 1",
+        "",
+        "| Задача | Поверх | Исполнитель | Эпик |",
+        "|---|---|---|---|",
+        `| [T-0022. Можно заделом](${BLOB}/T-0022-top.md) | T-0016 | sonnet-5.5 · medium | E2 |`,
+        "",
         "## В работе — 1",
         "",
         "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт |",
@@ -239,6 +251,13 @@ describe("страница доски", () => {
         "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
         "|---|---|---|---|---|---|---|",
         `| [T-0016. Пересчёт](${BLOB}/T-0016-rec.md) | неизвестно | — | — | — | тимлида · приёмка | [#215](https://github.com/JJSGxKD/rubezh/pull/215) |`,
+        "",
+        "## Задел — 2",
+        "",
+        "| Задача | Поток | Запустил | Висит | Кругов | Чего ждёт | PR |",
+        "|---|---|---|---|---|---|---|",
+        `| [T-0018. Задел созрел](${BLOB}/T-0018-ripe.md) | claude-4 / sonnet-5.5 / low | — | — | — | исполнителя · задел созрел | [#217](https://github.com/JJSGxKD/rubezh/pull/217) |`,
+        `| [T-0019. Задел ждёт](${BLOB}/T-0019-wait.md) | неизвестно | — | — | — | зависимостей: T-0016, T-0003 | [#218](https://github.com/JJSGxKD/rubezh/pull/218) |`,
         "",
         "## Ждут — 1",
         "",
@@ -346,6 +365,23 @@ describe("страница доски", () => {
 
   it("владелец «в работе» неизвестен — «неизвестно»", () => {
     expect(render({ owners: new Map() })).toContain("| неизвестно |");
+  });
+
+  it("«Задел» стоит между «На ревью» и «Ждут»; «Можно заделом» — сразу после «Можно брать»", () => {
+    const page = render();
+    const at = (title: string) => page.indexOf(`## ${title}`);
+    expect(at("На ревью")).toBeLessThan(at("Задел"));
+    expect(at("Задел")).toBeLessThan(at("Ждут —"));
+    expect(at("Можно брать")).toBeLessThan(at("Можно заделом"));
+    expect(at("Можно заделом")).toBeLessThan(at("В работе"));
+  });
+
+  it("задела нет — оба раздела «Пусто.»; доска без ключей ahead и aheadFree тоже рисуется", () => {
+    const older = { ...board, ahead: undefined, aheadFree: undefined };
+    for (const page of [render({ board: { ...board, ahead: [], aheadFree: [] } }), render({ board: older })]) {
+      expect(page).toContain("## Задел — 0\n\nПусто.");
+      expect(page).toContain("## Можно заделом — 0\n\nПусто.");
+    }
   });
 
   it("список влитых PR не получен — пометка про GitHub, спецификации остаются", () => {
