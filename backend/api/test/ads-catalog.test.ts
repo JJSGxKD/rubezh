@@ -21,7 +21,7 @@ import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
-import type { AdBlockDef, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { AdBlockDef, AdFunnelRow, AdPassRow, AdNetworkEdit, AdNetworkRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsCatalogService, blockEditSchema, networkEditSchema, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
 import { AD_NETWORK_PROFILES } from "../src/modules/ads/ad-networks.js";
 import {
@@ -58,6 +58,8 @@ class MemoryCatalog implements AdsCatalogRepository {
   ];
   blockRows: AdBlockDef[] = [];
   funnelFrom: Date | null = null;
+  passesWindow: [Date, Date] | null = null;
+  funnelWindow: [Date, Date] | null = null;
   private blockNo = 0;
 
   async networks(): Promise<AdNetworkRow[]> {
@@ -89,8 +91,14 @@ class MemoryCatalog implements AdsCatalogRepository {
     return true;
   }
 
-  async funnel(from: Date): Promise<AdFunnelRow[]> {
+  async passes(from: Date, to: Date): Promise<AdPassRow[]> {
+    this.passesWindow = [from, to];
+    return [{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }];
+  }
+
+  async funnel(from: Date, to: Date): Promise<AdFunnelRow[]> {
     this.funnelFrom = from;
+    this.funnelWindow = [from, to];
     return [{ networkKey: "adsgram", place: "wheel_spin", offered: 10, shown: 8, clicked: 1, completed: 7, claimed: 6, failed: 2 }];
   }
 }
@@ -253,6 +261,9 @@ describe("реклама в панели", () => {
     expect(view).toMatchObject({ days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] });
     expect(view.networks.map((network) => network.networkKey)).toEqual(["adsgram", "richads", "taddy"]);
     expect(ctx.repository.funnelFrom).toEqual(new Date(NOON.getTime() - 7 * 86_400_000));
+    // Пропуски VIP — за то же окно, что воронка (Р99).
+    expect(view.passes).toEqual([{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }]);
+    expect(ctx.repository.passesWindow).toEqual(ctx.repository.funnelWindow);
 
     await expect(ctx.service.saveNetwork(designer, { networkKey: "adsgram", active: true, priority: 1 })).rejects.toThrow();
     await expect(ctx.service.saveBlock(designer, block())).rejects.toThrow();
@@ -328,7 +339,7 @@ describe("реклама в панели по HTTP", () => {
 
     const view = await app.inject({ method: "GET", url: "/api/v1/admin/ads?days=30", headers });
     expect(view.statusCode).toBe(200);
-    expect(view.json<{ data: { days: number; funnel: unknown[] } }>().data).toMatchObject({ days: 30, funnel: [expect.objectContaining({ networkKey: "adsgram", offered: 10 })] });
+    expect(view.json<{ data: { days: number; funnel: unknown[]; passes: unknown[] } }>().data).toMatchObject({ days: 30, funnel: [expect.objectContaining({ networkKey: "adsgram", offered: 10 })], passes: [expect.objectContaining({ passName: "vip", used: 3 })] });
     expect((await app.inject({ method: "GET", url: "/api/v1/admin/ads", headers })).json<{ data: { days: number } }>().data.days).toBe(7);
     expect((await app.inject({ method: "GET", url: "/api/v1/admin/ads?days=3", headers })).statusCode).toBe(400);
 

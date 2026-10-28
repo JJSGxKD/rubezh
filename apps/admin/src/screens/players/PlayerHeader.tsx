@@ -2,7 +2,7 @@ import { useState } from "react";
 import { DropdownMenu } from "radix-ui";
 import { ChevronDown } from "lucide-react";
 import { api } from "../../services";
-import type { PlayerCard } from "../../api/players";
+import { nameDiffers, type PlayerCard } from "../../api/players";
 import { BAN_KIND, fetchRestrictionCatalog, type Restriction } from "../../api/restrictions";
 import { formatDateTime } from "../../format";
 import { can } from "../../state/session";
@@ -12,10 +12,10 @@ import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { useNarrow } from "../../ui/use-media";
 import { shortId } from "./card-rules";
-import { MessageDialog, WalletAdjustDialog } from "./PlayerActions";
+import { MessageDialog, NameDialog, UnlockNameDialog, WalletAdjustDialog } from "./PlayerActions";
 import { RestrictDialog } from "./RestrictDialog";
 
-type Dialog = "message" | "wallet" | "restrict" | "ban";
+type Dialog = "message" | "wallet" | "restrict" | "ban" | "name" | "unlock";
 
 /** Скопировать в буфер: успех и отказ браузера — уведомлением, а не молчанием. */
 async function copy(text: string): Promise<void> {
@@ -53,6 +53,8 @@ export function PlayerHeader({ card, active, onChanged }: { card: PlayerCard; ac
     ...(canMessage ? [{ id: "message" as const, title: "Написать" }] : []),
     ...(canRestrict || canBan ? [{ id: "restrict" as const, title: "Ограничить…" }] : []),
     ...(canWallet ? [{ id: "wallet" as const, title: "Кошелёк ±" }] : []),
+    ...(canBan ? [{ id: "name" as const, title: "Ник…" }] : []),
+    ...(canBan && account.nameLocked ? [{ id: "unlock" as const, title: "Снять закрепление ника…" }] : []),
     ...(canBanNow ? [{ id: "ban" as const, title: "Заблокировать…", tone: "danger" as const }] : []),
   ];
 
@@ -66,6 +68,7 @@ export function PlayerHeader({ card, active, onChanged }: { card: PlayerCard; ac
           <div className="flex flex-wrap items-center gap-1.5">
             <h2 className="truncate font-display text-xl">{account.displayName}</h2>
             {paying ? <Badge tone="accent">платящий</Badge> : null}
+            {account.nameLocked ? <Badge tone="info">ник закреплён</Badge> : null}
             {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map((row) => (row.notify ? row.title : `${row.title} (молча)`)).join(", ")}</Badge>}
             {account.banned === null ? null : <Badge tone="danger">заблокирован {formatDateTime(account.banned.at)}</Badge>}
           </div>
@@ -82,6 +85,11 @@ export function PlayerHeader({ card, active, onChanged }: { card: PlayerCard; ac
               </>
             )}
             <span>{account.platform}</span>
+            {nameDiffers(account) ? (
+              <span className="max-w-[24rem] truncate" title={account.platformName ?? undefined}>
+                на площадке: {account.platformName}
+              </span>
+            ) : null}
             <span>с нами с {formatDateTime(account.createdAt)}</span>
             <span className="inline-flex items-center gap-1" title={account.accountId}>
               аккаунт <code>{shortId(account.accountId)}</code>
@@ -123,6 +131,8 @@ export function PlayerHeader({ card, active, onChanged }: { card: PlayerCard; ac
       )}
 
       {canMessage ? <MessageDialog card={card} open={dialog === "message"} onOpenChange={(open) => setDialog(open ? "message" : null)} /> : null}
+      {canBan ? <NameDialog key={account.displayName} card={card} open={dialog === "name"} onOpenChange={(open) => setDialog(open ? "name" : null)} onChanged={onChanged} /> : null}
+      {canBan && account.nameLocked ? <UnlockNameDialog card={card} open={dialog === "unlock"} onOpenChange={(open) => setDialog(open ? "unlock" : null)} onChanged={onChanged} /> : null}
       {canWallet ? <WalletAdjustDialog card={card} open={dialog === "wallet"} onOpenChange={(open) => setDialog(open ? "wallet" : null)} onChanged={onChanged} /> : null}
       {(canRestrict || canBan) && catalog.state.status === "ok" ? (
         <>

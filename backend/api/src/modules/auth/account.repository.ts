@@ -104,6 +104,11 @@ export interface AccountRepository {
   /** Заблокировать или снять блокировку; `null` — аккаунта нет. */
   setBan(accountId: string, ban: AccountBan | null): Promise<Account | null>;
   /**
+   * Ручная смена ника модератором (tasks/T-0151): ник и отметка закрепления одним
+   * обновлением; `lockedAt: null` снимает закрепление. `null` — аккаунта нет.
+   */
+  setName(accountId: string, displayName: string, lockedAt: Date | null): Promise<Account | null>;
+  /**
    * Страница получателей раздачи всем (выход версии, WP31): незаблокированные
    * аккаунты площадок, заходившие не раньше `seenSince`, по возрастанию id
    * после `after`. Курсор — id, а не номер страницы: аккаунты, заведённые
@@ -226,6 +231,11 @@ export class PrismaAccountRepository implements AccountRepository {
       where: { accountId },
       data: { bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null },
     });
+    return updated.count === 0 ? null : await this.byId(accountId);
+  }
+
+  async setName(accountId: string, displayName: string, lockedAt: Date | null): Promise<Account | null> {
+    const updated = await this.prisma.account.updateMany({ where: { accountId }, data: { displayName, nameLockedAt: lockedAt } });
     return updated.count === 0 ? null : await this.byId(accountId);
   }
 

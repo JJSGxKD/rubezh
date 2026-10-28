@@ -3,8 +3,8 @@ id: T-0089
 title: Пропуск рекламы VIP — отдельной меткой «Пропуск VIP», не досмотр
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-9
 size: M
 depends_on: [T-0052]
@@ -25,6 +25,8 @@ zones:
   - apps/admin/test/overview.test.ts
 shared:
   - apps/admin/src/ui/help.ts
+  - backend/api/test/ads-tools.test.ts
+  - tasks/T-0199-reroll-for-ad.md
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
   - docs/35-stage4-plan.md
@@ -38,7 +40,7 @@ batch: 3
 
 # T-0089. Пропуск рекламы VIP — отдельной меткой «Пропуск VIP», не досмотр
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0089.json)](README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](archive/T-0052-overview-ads-and-periods-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0089.json)](../README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](T-0052-overview-ads-and-periods-screen.md)
 
 ## Зачем
 

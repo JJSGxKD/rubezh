@@ -26,7 +26,7 @@ const itemSchema = z.object({
   chargedStars: z.optional(z.nullable(z.number())),
   once: z.boolean(),
   owned: z.boolean(),
-  /** «hit» — от команды, «best» — самый выгодный набор самоцветов; сервер до подачи поля не отдавал */
+  /** «hit» — от команды, «choice» — выбор игроков за 30 дней, «best» — самый выгодный набор самоцветов; сервер до подачи поля не отдавал */
   badge: z.optional(z.nullable(z.string())),
   /** на сколько процентов больше самоцветов за звезду, чем в самом дорогом за самоцвет наборе */
   valuePct: z.optional(z.nullable(z.number())),

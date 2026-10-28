@@ -179,13 +179,13 @@ interface PlatformAdapter {
 export const ENEMIES: EnemyDef[] = [
   { id: "swarm_rat", hp: 5, speed: 90, damage: 3, pattern: "swarm" },
   { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, pattern: "chase" },
-  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, pattern: "kite_and_shoot" },
+  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, pattern: "dash" },
 ];
 
 // content/waves.ts
 export const WAVES: WaveDef[] = [
   { second: 0,  spawns: [{ enemy: "swarm_rat", count: 10 }] },
-  { second: 60, spawns: [{ enemy: "swarm_rat", count: 15 }, { enemy: "shooter_wisp", count: 3 }] },
+  { second: 60, spawns: [{ enemy: "swarm_rat", count: 15 }, { enemy: "dasher_wolf", count: 3 }] },
 ];
 
 // content/upgrades.ts, content/economy.ts — аналогично

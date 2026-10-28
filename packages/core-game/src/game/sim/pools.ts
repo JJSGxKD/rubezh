@@ -48,7 +48,7 @@ export interface EnemyPool {
    * и кольцевой буфер эффектов они вытеснили бы целиком.
    */
   hitTick: Int32Array;
-  /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
+  /** таймер до следующей контактной атаки */
   attackCooldown: Float32Array;
   type: Uint8Array;
   /**

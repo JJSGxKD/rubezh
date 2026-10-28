@@ -44,7 +44,13 @@ export interface FeedCursor {
   notificationId: string;
 }
 
-export const NOTIFICATIONS_REPOSITORY = Symbol("NOTIFICATIONS_REPOSITORY");
+/** Какие строки вида гасить: по полю данных — отправитель подарка, предмет добычи. */
+export interface ReadMatch {
+  key: "fromAccountId" | "itemId";
+  values: readonly string[];
+}
+
+export const NOTIFICATIONS_REPOSITORY =Symbol("NOTIFICATIONS_REPOSITORY");
 
 /** Чем кончился дубль уведомления в бота — перечисление `NotificationBotOutcome` в схеме. */
 export type BotOutcome = "sent" | "blocked" | "failed";
@@ -64,6 +70,11 @@ export interface NotificationsRepository {
   unread(accountId: string): Promise<number>;
   /** прочитать всё не новее `upTo`; `null` — всё */
   markRead(accountId: string, upTo: Date | null, at: Date): Promise<void>;
+  /**
+   * Прочитать непрочитанное вида `kind`; с `match` — только строки, у которых
+   * `payload[match.key]` входит в `match.values`. Сколько погашено.
+   */
+  markReadOf(accountId: string, kind: string, match: ReadMatch | undefined, at: Date): Promise<number>;
   createdAtOf(accountId: string, notificationId: string): Promise<Date | null>;
   /** удалить не больше `limit` строк старше `before`; сколько удалено */
   purge(before: Date, limit: number): Promise<number>;
@@ -136,6 +147,13 @@ export class PrismaNotificationsRepository implements NotificationsRepository {
 
   async markRead(accountId: string, upTo: Date | null, at: Date): Promise<void> {
     await this.prisma.notification.updateMany({ where: { accountId, readAt: null, ...(upTo === null ? {} : { createdAt: { lte: upTo } }) }, data: { readAt: at } });
+  }
+
+  async markReadOf(accountId: string, kind: string, match: ReadMatch | undefined, at: Date): Promise<number> {
+    if (match !== undefined && match.values.length === 0) return 0;
+    const byValue = match === undefined ? {} : { OR: match.values.map((value) => ({ payload: { path: [match.key], equals: value } })) };
+    const result = await this.prisma.notification.updateMany({ where: { accountId, kind, readAt: null, ...byValue }, data: { readAt: at } });
+    return result.count;
   }
 
   async createdAtOf(accountId: string, notificationId: string): Promise<Date | null> {

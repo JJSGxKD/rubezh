@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { globToRegExp, matches, outOfZone, zonesOverlap } from "../tasks/zones.mjs";
+import { globToRegExp, matches, outOfZone, outOfZoneHint, zonesOverlap } from "../tasks/zones.mjs";
 
 // Зоны задач: шаблоны путей, пересечения и выход за зоны.
 
@@ -81,14 +81,21 @@ describe("выход за зоны", () => {
     expect(outOfZone(["tasks/T-0004-y.md"], task)).toEqual(["tasks/T-0004-y.md"]);
   });
 
-  it("закрытая в своём PR задача переезжает в архив — это не выход за зоны (T-0204)", () => {
+  it("файл своей задачи в архиве — выход за зоны (T-0343): в PR задачи он остаётся в tasks/", () => {
     const own = { ...task, id: "T-0003", fileName: "T-0003-x.md" };
-    expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual([]);
+    expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual(["tasks/archive/T-0003-x.md"]);
     expect(outOfZone(["tasks/archive/T-0004-y.md"], own)).toEqual(["tasks/archive/T-0004-y.md"]);
   });
 
-  it("ссылку на архив в epics.md правит pnpm task fix — это не выход за зоны", () => {
-    expect(outOfZone(["tasks/epics.md"], task)).toEqual([]);
-    expect(outOfZone(["tasks/README.md"], task)).toEqual(["tasks/README.md"]);
+  it("tasks/epics.md — выход за зоны: ссылки на задачи правит уборка тимлида", () => {
+    expect(outOfZone(["tasks/epics.md", "tasks/README.md"], task)).toEqual(["tasks/epics.md", "tasks/README.md"]);
+  });
+
+  it("outOfZoneHint: подсказка только про tasks/ и с командой возврата файла", () => {
+    expect(outOfZoneHint(["backend/x.ts"], "T-0003-x.md")).toBeNull();
+    const archived = outOfZoneHint(["tasks/archive/T-0003-x.md"], "T-0003-x.md");
+    expect(archived).toContain("git mv tasks/archive/T-0003-x.md tasks/T-0003-x.md");
+    expect(archived).toContain("pnpm task fix");
+    expect(outOfZoneHint(["tasks/epics.md"], "T-0003-x.md")).not.toBeNull();
   });
 });
