@@ -33,7 +33,7 @@ batch: 7
 
 # T-0302. sim-worker — отдельный процесс со своей сборкой движка: очередь проверки и симуляции черновика контента, отчёт против текущей версии
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json)](README.md#значки-статуса) [![T-0301](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json&label=T-0301)](archive/T-0301-content-snapshot.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json)](README.md#значки-статуса) [![T-0301](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json&label=T-0301)](T-0301-content-snapshot.md)
 
 ## Зачем
 
