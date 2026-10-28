@@ -21,6 +21,7 @@ zones:
 shared:
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - backend/api/test/outbound.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
