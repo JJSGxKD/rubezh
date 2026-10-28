@@ -12,9 +12,10 @@ const BACKREF = "Обратные ссылки не разрешены";
 const LOOKAROUND = "Заглядывание вперёд и назад не разрешено";
 const GROUP = "Повтор группы с повтором или выбором внутри не разрешён";
 const UNBOUNDED = "Не больше трёх повторов без предела";
-const REPEAT = "Предел повтора — не больше 20";
+const REPEAT = "Предел повтора — не больше 10";
+const QUANTIFIERS = "Не больше шести повторов в шаблоне";
 const EMPTY = "Регулярка совпадает с пустой строкой";
-const SLOW = "Регулярка слишком медленная на длинных строках";
+const SLOW = "Шаблон слишком медленный на длинных никах";
 
 describe("checkRegexSafety: отказы", () => {
   it.each([
@@ -41,6 +42,17 @@ describe("checkRegexSafety: отказы", () => {
     ["a+b{2,}c*d+", UNBOUNDED],
     ["a{30}", REPEAT],
     ["a{1,30}", REPEAT],
+    ["a{11}", REPEAT],
+    // «?» внутри группы — квантификатор для правила повтора группы
+    ["(?:жж?)+ю", GROUP],
+    ["(?:a?b)+", GROUP],
+    ["(?:a??b)*", GROUP],
+    ["(a(?:bc)?d)+", GROUP],
+    // не больше шести квантификаторов любого вида
+    [`${"ж?".repeat(30)}ж{20}ж{10}`, QUANTIFIERS],
+    ["a?b?c?d?e?f?g?h", QUANTIFIERS],
+    ["a{1}b{2}c{3}d{1,2}e?f+g", QUANTIFIERS],
+    [`${"a??".repeat(7)}b`, QUANTIFIERS],
     ["a*", EMPTY],
     ["^$", EMPTY],
   ])("%s", (pattern, reason) => {
@@ -61,8 +73,17 @@ describe("checkRegexSafety: принятые", () => {
     String.raw`\p{L}{3,5}x`,
     String.raw`\(x\)+`,
     "x|y",
-    String.raw`a{20}`,
+    String.raw`a{10}`,
     String.raw`\u{1F600}x`,
+    // «?» после «)» правило группы не включает
+    "(?:a|b)?",
+    "(?:a?b|c)?x",
+    "(х|x)(у|y)(й|и)",
+    // ленивый суффикс — часть квантификатора, не новый: шесть квантификаторов
+    `${"a??".repeat(6)}b`,
+    "a+?b{2}?c",
+    // ровно шесть квантификаторов
+    "a?b?c?d?e?f?g",
   ])("%s", (pattern) => {
     expect(checkRegexSafety(pattern)).toEqual({ ok: true });
   });
@@ -73,12 +94,27 @@ describe("checkRegexSafety: принятые", () => {
   });
 });
 
+describe("checkRegexSafety: подсчёт квантификаторов", () => {
+  it("шесть — ещё можно, семь — уже нет", () => {
+    expect(checkRegexSafety("a?b?c?d?e?f?g")).toEqual({ ok: true });
+    expect(checkRegexSafety("a?b?c?d?e?f?g?h")).toEqual({ ok: false, reason: QUANTIFIERS });
+  });
+
+  it("знаки внутри класса и экранированные не считаются", () => {
+    expect(checkRegexSafety(String.raw`[?*+]a\?b\+c\*d`)).toEqual({ ok: true });
+  });
+
+  it("«?» в начале группы — не квантификатор", () => {
+    expect(checkRegexSafety("(?:a)(?:b)(?:c)(?:d)(?:e)(?:f)(?:g)(?<h>i)")).toEqual({ ok: true });
+  });
+});
+
 describe("probeRegex", () => {
   it("быстрые часы — ok", () => {
     expect(probeRegex(String.raw`пример\d{2,4}`, () => 0)).toEqual({ ok: true });
   });
 
-  it("часы, прибавляющие больше 25 мс за прогон, — отказ «слишком медленная»", () => {
+  it("часы, прибавляющие больше 2 мс за строку, — отказ «слишком медленный»", () => {
     let now = 0;
     const slow = () => {
       now += 30;
@@ -87,13 +123,22 @@ describe("probeRegex", () => {
     expect(probeRegex("x+", slow)).toEqual({ ok: false, reason: SLOW });
   });
 
-  it("ровно на пределе — ещё ok", () => {
+  it("ровно на пределе строки — ещё ok", () => {
     let now = 0;
     const edge = () => {
-      now += 25;
+      now += 2;
       return now;
     };
     expect(probeRegex("x+", edge)).toEqual({ ok: true });
+  });
+
+  it("сумма по шаблону больше 30 мс — отказ, хотя каждая строка в пределе", () => {
+    let now = 0;
+    const edge = () => {
+      now += 2;
+      return now;
+    };
+    expect(probeRegex("a+b+c?d?e{0,2}f{1,3}g", edge)).toEqual({ ok: false, reason: SLOW });
   });
 
   it("настоящие часы: обычная регулярка проходит", () => {
@@ -102,5 +147,29 @@ describe("probeRegex", () => {
 
   it("регулярка, которая не разбирается, не роняет прогон", () => {
     expect(probeRegex("(")).toEqual({ ok: false, reason: PARSE });
+  });
+});
+
+describe("probeRegex: настоящие часы на «злых» формах", () => {
+  // Каждую форму сначала пропускает сканер: отказывает именно прогон, и он не виснет.
+  it.each(["ж{0,10}ж{0,10}ж{0,10}ж{0,10}ю", "ж+ж+ж+ю", "[бв]+[бв]+[бв]+г", "(?:а|б)?ж{0,10}ж{0,10}ж{0,10}ж{0,10}ж{0,10}ю"])(
+    "%s",
+    (pattern) => {
+      expect(checkRegexSafety(pattern)).toEqual({ ok: true });
+      const startedAt = performance.now();
+      expect(probeRegex(pattern)).toEqual({ ok: false, reason: SLOW });
+      expect(performance.now() - startedAt).toBeLessThan(1500);
+    },
+    2000,
+  );
+});
+
+describe("probeRegex: разрешённые формы укладываются на всех длинах", () => {
+  /** До трёх замеров: один может испортить пауза сборщика мусора. */
+  const passes = (pattern: string): boolean => [0, 1, 2].some(() => probeRegex(pattern).ok);
+
+  it.each(["х+у+й", "б+л+я+", "(х|x)(у|y)(й|и)", "админ.*", "х.{0,3}й", String.raw`^bot\d+$`, "(?:a|b)?x"])("%s", (pattern) => {
+    expect(checkRegexSafety(pattern)).toEqual({ ok: true });
+    expect(passes(pattern)).toBe(true);
   });
 });

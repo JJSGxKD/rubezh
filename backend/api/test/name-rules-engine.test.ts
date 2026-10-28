@@ -272,16 +272,16 @@ describe("лимиты и детерминизм", () => {
     expect(result.verdict).toBe("trimmed");
   });
 
-  it("правила смотрят только первые 512 знаков", () => {
+  it("правила смотрят только первые 128 знаков", () => {
     const set = rules(def(1, "brand", "exact", "пример-бренд"));
-    const verdict = applyNameRules(set, `${"а".repeat(600)}пример-бренд`);
+    const verdict = applyNameRules(set, `${"а".repeat(200)}пример-бренд`);
     expect(verdict.hits).toEqual([]);
-    expect(verdict.text).toBe(`${"а".repeat(600)}пример-бренд`);
+    expect(verdict.text).toBe(`${"а".repeat(200)}пример-бренд`);
   });
 
-  it("граница 512 знаков не разрывает суррогатную пару", () => {
+  it("граница 128 знаков не разрывает суррогатную пару", () => {
     const set = rules(def(1, "brand", "exact", "пример-бренд"));
-    const text = `${"а".repeat(511)}😀хвост`;
+    const text = `${"а".repeat(127)}😀хвост`;
     expect(applyNameRules(set, text).text).toBe(text);
   });
 
