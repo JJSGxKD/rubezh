@@ -1033,12 +1033,12 @@ describe("порядок заданий одним запросом (T-0167)", (
   });
 
   it("схема запроса: чужая группа, пустой список, повтор id, id не по шаблону и лишние поля — отказ", () => {
-    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a", "b"] }).success).toBe(true);
-    expect(taskOrderSchema.safeParse({ group: "other", ids: ["a"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab", "cd"] }).success).toBe(true);
+    expect(taskOrderSchema.safeParse({ group: "other", ids: ["ab"] }).success).toBe(false);
     expect(taskOrderSchema.safeParse({ group: "daily", ids: [] }).success).toBe(false);
-    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a", "a"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab", "ab"] }).success).toBe(false);
     expect(taskOrderSchema.safeParse({ group: "daily", ids: ["A b"] }).success).toBe(false);
-    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["a"], extra: 1 }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab"], extra: 1 }).success).toBe(false);
   });
 });
 

@@ -395,6 +395,13 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
   describe("порядок списка одним запросом (T-0167)", () => {
     const STAMP = new Date("2026-01-01T00:00:00Z");
 
+    // Свои строки уходят после проверок: соседние проверки читают каталог и не ждут чужих партнёрских целей.
+    const cleanup = async (): Promise<void> => {
+      await prisma.$executeRaw`DELETE FROM task_def WHERE task_id LIKE 'it\_ord\_%'`;
+    };
+    beforeAll(cleanup);
+    afterAll(cleanup);
+
     function partner(taskId: string): TaskDef {
       return {
         taskId,
