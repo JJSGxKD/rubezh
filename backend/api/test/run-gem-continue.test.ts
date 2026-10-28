@@ -164,38 +164,38 @@ async function started(runs: MemoryRunsRepository, runId: string, accountId = ME
 describe("можно ли продолжить за самоцветы", () => {
   it("незнакомый, чужой и без времени старта забег — одинаково «не видел старта»; записанный — «закончен»", async () => {
     const { service, runs } = setup();
-    expect(await service.view(ME, "nope", 120, at(3))).toEqual({ status: "unavailable", reason: "unverified" });
+    expect(await service.view(ME, "nope", 120)).toEqual({ status: "unavailable", reason: "unverified" });
     await started(runs, "foreign", OTHER);
-    expect(await service.view(ME, "foreign", 120, at(3))).toEqual({ status: "unavailable", reason: "unverified" });
+    expect(await service.view(ME, "foreign", 120)).toEqual({ status: "unavailable", reason: "unverified" });
     await started(runs, "no-clock", ME, null);
-    expect(await service.view(ME, "no-clock", 120, at(3))).toEqual({ status: "unavailable", reason: "unverified" });
+    expect(await service.view(ME, "no-clock", 120)).toEqual({ status: "unavailable", reason: "unverified" });
     await started(runs, "done");
     const row = runs.rows.get("done");
     if (row !== undefined) row.status = "finished";
-    expect(await service.view(ME, "done", 120, at(3))).toEqual({ status: "unavailable", reason: "finished" });
+    expect(await service.view(ME, "done", 120)).toEqual({ status: "unavailable", reason: "finished" });
   });
 
   it("свежий забег — первое продолжение с ценой от начатых минут и балансом", async () => {
     const { service, runs } = setup(50);
     await started(runs, "run-1");
-    expect(await service.view(ME, "run-1", 125, at(3))).toEqual({ status: "available", continueNo: 1, priceGems: 4, balance: 50 });
-    expect(await service.view(ME, "run-1", 30, at(3))).toEqual({ status: "available", continueNo: 1, priceGems: 2, balance: 50 });
+    expect(await service.view(ME, "run-1", 125)).toEqual({ status: "available", continueNo: 1, priceGems: 4, balance: 50 });
+    expect(await service.view(ME, "run-1", 30)).toEqual({ status: "available", continueNo: 1, priceGems: 2, balance: 50 });
   });
 
   it("не хватает самоцветов — всё равно «доступно»: кнопка покажет цену и нехватку", async () => {
     const { service, runs } = setup(1);
     await started(runs, "run-1");
-    expect(await service.view(ME, "run-1", 125, at(3))).toEqual({ status: "available", continueNo: 1, priceGems: 4, balance: 1 });
+    expect(await service.view(ME, "run-1", 125)).toEqual({ status: "available", continueNo: 1, priceGems: 4, balance: 1 });
   });
 
   it("продолжение уже взято любым способом — «продолжения кончились»", async () => {
     const { service, runs, others } = setup();
     await started(runs, "stars");
     others.bought.set("stars", [1]);
-    expect(await service.view(ME, "stars", 125, at(3))).toEqual({ status: "unavailable", reason: "used_up" });
+    expect(await service.view(ME, "stars", 125)).toEqual({ status: "unavailable", reason: "used_up" });
     await started(runs, "gems");
     await service.buy(ME, "gems", { continueNo: 1, elapsedSec: 125 }, at(3));
-    expect(await service.view(ME, "gems", 125, at(4))).toEqual({ status: "unavailable", reason: "used_up" });
+    expect(await service.view(ME, "gems", 125)).toEqual({ status: "unavailable", reason: "used_up" });
   });
 });
 

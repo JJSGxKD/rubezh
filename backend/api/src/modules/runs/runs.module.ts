@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
+import { WalletModule } from "../wallet/wallet.module.js";
 import { LEADERBOARD_STORE, RedisLeaderboardStore } from "./leaderboard.store.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunsController } from "./runs.controller.js";
@@ -12,6 +13,9 @@ import { RunAdContinueService } from "./run-ad-continue.service.js";
 import { PrismaRunAdContinuesRepository, RUN_AD_CONTINUES_REPOSITORY } from "./run-ad-continues.repository.js";
 import { RunContinues } from "./run-continues.js";
 import { RunExtras } from "./run-details.js";
+import { RunGemContinueController } from "./run-gem-continue.controller.js";
+import { RunGemContinueService } from "./run-gem-continue.service.js";
+import { PrismaRunGemContinuesRepository, RUN_GEM_CONTINUES_REPOSITORY } from "./run-gem-continues.repository.js";
 import { RunLoadouts } from "./run-loadouts.js";
 import { RunsHooks } from "./runs-hooks.js";
 import { RunsViewService } from "./runs-view.service.js";
@@ -21,23 +25,28 @@ import { RunsViewService } from "./runs-view.service.js";
  *
  * Единственный приём забегов: плейтестовое хранилище снято вместе с
  * переездом клиента. Забег — хозяин места рекламы «второй шанс» (WP11):
- * продолжение за рекламу выдаётся здесь, по сессии модуля рекламы. Сводка плейтеста и уведомления в чат узнают о забегах
- * из `RunsHooks` и читают рейтинг — отсюда экспорт.
+ * продолжение за рекламу выдаётся здесь, по сессии модуля рекламы. Второй
+ * шанс за самоцветы (Р162) — тоже здесь: покупка списывает самоцветы
+ * кошелька и записывает продолжение одной транзакцией. Сводка плейтеста и
+ * уведомления в чат узнают о забегах из `RunsHooks` и читают рейтинг — отсюда
+ * экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule, RestrictionsModule],
-  controllers: [RunsController, RunAdContinueController],
+  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule],
+  controllers: [RunsController, RunAdContinueController, RunGemContinueController],
   providers: [
     RunsService,
     RunsViewService,
     RunsHooks,
     RunContinues,
     RunAdContinueService,
+    RunGemContinueService,
     RunLoadouts,
     RunExtras,
     RatingRestrictions,
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
+    { provide: RUN_GEM_CONTINUES_REPOSITORY, useClass: PrismaRunGemContinuesRepository },
     { provide: LEADERBOARD_STORE, useClass: RedisLeaderboardStore },
   ],
   // Хуки, чтение и рейтинг — сводке плейтеста, карточке `/start` и
