@@ -36,6 +36,7 @@ import { ChangelogService } from "../src/modules/changelog/changelog.service.js"
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
+import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { PLATFORM_IDS, type PlatformId } from "../src/platforms/ports/platform.js";
@@ -153,6 +154,7 @@ interface Setup {
   roles: MemoryRolesRepository;
   repository: MemoryChangelogRepository;
   notifications: MemoryNotificationsRepository;
+  notificationsService: NotificationsService;
   fanout: ChangelogFanout;
   service: ChangelogService;
   locks: Map<string, string>;
@@ -170,7 +172,7 @@ function setup(): Setup {
   } as unknown as Redis;
   const fanout = new ChangelogFanout(config(), repository, accounts, notificationsService, redis);
   const service = new ChangelogService(repository, accounts, new RolesService(config(), roles, accounts), fanout, notificationsService);
-  return { accounts, roles, repository, notifications, fanout, service, locks };
+  return { accounts, roles, repository, notifications, notificationsService, fanout, service, locks };
 }
 
 async function player(s: Setup, platform: PlatformId, id: string, createdAt = T0 - 30 * DAY): Promise<AccountRef> {
@@ -499,6 +501,7 @@ describe("журнал по HTTP", () => {
         { provide: CHANGELOG_REPOSITORY, useValue: s.repository },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: ChangelogFanout, useValue: s.fanout },
+        { provide: NotificationsService, useValue: s.notificationsService },
         ChangelogService,
         PanelLoginService,
         RateLimiter,
