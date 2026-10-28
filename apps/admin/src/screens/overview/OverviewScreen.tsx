@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { OVERVIEW_REFRESH_MS, fetchOverview, newAccounts, parsePeriod, periodTitle, shiftDay, sourcesLine, type Overview, type OverviewDays } from "../../api/overview";
-import { completionPct } from "../../api/overview";
+import { completionPct, passLine } from "../../api/overview";
 import { formatDuration, formatNumber, formatTime } from "../../format";
 import { api } from "../../services";
 import { DailyBars } from "../../ui/daily-bars";
@@ -109,7 +109,7 @@ function Today({ overview, days, onPeriod, onReload }: { overview: Overview; day
             before={ads.before.completed}
             days={days}
             className="col-span-2 lg:col-span-1"
-            sub={`${adsPct === null ? "показов нет" : `досмотрено ${String(adsPct)}%`} · наград ${formatNumber(ads.now.claimed)}`}
+            sub={[adsPct === null ? "показов нет" : `досмотрено ${String(adsPct)}%`, `наград ${formatNumber(ads.now.claimed)}`, passLine(ads.now.passed)].filter((part) => part !== null).join(" · ")}
           />
         )}
       </div>
