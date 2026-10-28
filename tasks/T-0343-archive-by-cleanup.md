@@ -3,8 +3,8 @@ id: T-0343
 title: PR задачи не правит epics.md и чужие задачи — перенос в архив уборкой тимлида
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0208]

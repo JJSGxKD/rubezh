@@ -22,7 +22,15 @@ const periodSchema = z.union([z.literal(1), z.literal(7), z.literal(30)]);
 export type OverviewDays = z.infer<typeof periodSchema>;
 export const OVERVIEW_PERIODS: readonly OverviewDays[] = [1, 7, 30];
 
-const adsTotalsSchema = z.object({ offered: z.number(), shown: z.number(), completed: z.number(), claimed: z.number(), failed: z.number() });
+const adsTotalsSchema = z.object({
+  offered: z.number(),
+  shown: z.number(),
+  completed: z.number(),
+  claimed: z.number(),
+  failed: z.number(),
+  /** пропуски VIP (Р99): награда места без ролика, не досмотр; сервер до пропусков поля не отдавал */
+  passed: z.number().default(0),
+});
 export type AdsTotals = z.infer<typeof adsTotalsSchema>;
 
 const overviewAdsSchema = z.object({
@@ -51,6 +59,8 @@ export const overviewSchema = z.object({
       /** `null` — выручка закрыта; старый сервер поля не отдаёт */
       purchases: z.number().nullable().default(null),
       adsCompleted: z.number().default(0),
+      /** пропуски VIP за сутки — отдельно от досмотров */
+      adsPassed: z.number().default(0),
     }),
   ),
   /** `null` — нет права `ads.view` или чтение рекламы не ответило */
@@ -198,4 +208,9 @@ export function networkShares(networks: readonly { networkKey: string; completed
     left--;
   }
   return networks.map((network, index) => ({ networkKey: network.networkKey, pct: floors[index] ?? 0 }));
+}
+
+/** Пропуски VIP строкой для плитки «Реклама»; их нет — строки нет. */
+export function passLine(passed: number): string | null {
+  return passed > 0 ? `пропусков VIP ${String(passed)}` : null;
 }

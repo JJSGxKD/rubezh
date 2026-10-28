@@ -13,6 +13,7 @@ import {
   coverage,
   fetchAds,
   funnelNetworkTitle,
+  passTitle,
   percent,
   reachLabel,
   type AdBlock,
@@ -54,6 +55,7 @@ export function AdsScreen() {
           <NetworkCards view={state.data} canEdit={canEdit} onSaved={reload} />
           <BlocksPanel view={state.data} canEdit={canEdit} onSaved={reload} />
           <FunnelPanel view={state.data} days={days} onDays={setDays} />
+          <PassPanel view={state.data} />
         </>
       ) : null}
     </div>
@@ -210,6 +212,26 @@ function FunnelPanel({ view, days, onDays }: { view: AdsView; days: FunnelDays; 
           { title: "Выполнено", help: HELP.ads.completed, align: "right", render: (row) => <Ratio part={row.completed} whole={row.offered} /> },
           { title: "Награды", help: HELP.ads.claimed, align: "right", render: (row) => String(row.claimed) },
           { title: "Отказы", help: HELP.ads.failed, align: "right", render: (row) => <Ratio part={row.failed} whole={row.offered} /> },
+        ]}
+      />
+    </Panel>
+  );
+}
+
+/** Пропуск VIP за то же окно, что воронка: награда места без ролика — не показ и не досмотр (Р99). */
+function PassPanel({ view }: { view: AdsView }) {
+  return (
+    <Panel title="Пропуск VIP" help={HELP.ads.passes}>
+      <DataTable
+        rows={view.passes}
+        rowKey={(row) => `${row.place}:${row.passName}`}
+        empty="Пропусков за это время не было"
+        columns={[
+          { title: "Место", render: (row) => PLACE_TITLES[row.place] },
+          { title: "Пропуск", render: (row) => passTitle(row.passName) },
+          { title: "Выдано", align: "right", render: (row) => String(row.used) },
+          { title: "Игроков", align: "right", render: (row) => String(row.players) },
+          { title: "Награды", align: "right", render: (row) => String(row.claimed) },
         ]}
       />
     </Panel>

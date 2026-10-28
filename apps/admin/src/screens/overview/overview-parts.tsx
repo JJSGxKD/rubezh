@@ -169,6 +169,7 @@ export function AdsPanel({ ads, days }: { ads: OverviewAds; days: OverviewDays }
               { title: "Доля досмотра", render: (row) => <CompletionCell totals={row} />, align: "right" },
               { title: "Наград", render: (row) => formatNumber(row.claimed), align: "right", phone: "hide" },
               { title: "Ошибок", render: (row) => formatNumber(row.failed), align: "right", phone: "hide" },
+              ...(ads.now.passed > 0 ? [{ title: "Пропуск VIP", render: (row: AdsRow) => formatNumber(row.passed), align: "right" as const, phone: "hide" as const }] : []),
             ]}
           />
           {shares.length === 0 ? null : (
@@ -181,6 +182,7 @@ export function AdsPanel({ ads, days }: { ads: OverviewAds; days: OverviewDays }
               ))}
             </p>
           )}
+          {ads.now.passed > 0 ? <p className="mt-1 text-xs text-text-muted">Пропуск VIP — награда без ролика у игроков с VIP. В досмотры, доли и сети не входит.</p> : null}
           {ads.places.some((place) => place.place === "interstitial") ? (
             <p className="mt-1 text-xs text-text-muted">У показа «Между забегами» наград нет — в колонке «Наград» у него ноль.</p>
           ) : null}
