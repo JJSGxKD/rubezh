@@ -82,6 +82,34 @@ batch: 3
    отличает комментарий самопроверки), и при дефекте откатывает revert-PR или
    заводит задачу.
 
+### Поправка claude-lead-1 (28.10.2026)
+
+После ревью `claude-review-6` (PR #550 вернулся на доработку) решения тимлида;
+п. 2 выше заменяется п. 1 ниже.
+
+1. **Белый список вместо чёрного.** `merge: self` допустим, только если
+   каждый путь в `zones` и `shared` и каждый реально изменённый файл PR
+   (`git diff --name-only --no-renames origin/dev...<голова>`) совпадает с
+   `SELF_MERGE_ALLOWED` и не совпадает с `SELF_MERGE_FORBIDDEN`.
+   `SELF_MERGE_ALLOWED`: `docs/**`, `design/**`,
+   `packages/core-game/src/content/**`, `packages/core-game/src/game/**`,
+   `packages/core-game/test/**`, `packages/app-shell/src/i18n/**`,
+   `apps/admin/src/**`, `apps/admin/test/**` и файл самой задачи.
+   `SELF_MERGE_FORBIDDEN` (сильнее белого): `docs/35-stage4-plan.md`, любые
+   `package.json`, `tsconfig*.json`, `vitest.config.*`, `eslint.config.*`.
+   Шаблон в `shared`, шире белого, — причина отказа. `effort: extra` и
+   `runner: owner`/`human` по-прежнему закрывают `self`. `pnpm task check`
+   проверяет `zones`/`shared`, `pnpm task merge` — и их, и реальный дифф.
+2. **Предел правок вне зон из `dev`:** файлы вне `zones`+`shared` — не больше
+   5 строк в каждом и 20 всего (`git diff --numstat --no-renames`), двоичный —
+   отказ «правки вне зон больше предела — нужна приёмка тимлида».
+3. **Ветка не отстала от `dev`:** `git merge-base --is-ancestor origin/dev <голова>`,
+   иначе отказ «влей свежий dev и дождись CI».
+4. **Самопроверка:** автор комментария — автор PR, `createdAt` не раньше
+   `committedDate` головы.
+5. **Локальный код команды = `dev`:** `scripts/tasks` в рабочей копии не
+   отличается от `origin/dev`, иначе отказ.
+
 ## Как сейчас
 
 - `scripts/tasks/task-file.mjs:25–56` — перечни значений, `FIELDS`,
