@@ -1,4 +1,5 @@
 import { stripLinksAndMentions } from "./display-name-links.js";
+import { applyNameRules, EMPTY_NAME_RULES, maskSpans, protectedSpans, type NameRuleSet } from "../name-rules/name-rules-engine.js";
 import { hasProfanity } from "./display-name-words.js";
 
 /**
@@ -69,7 +70,17 @@ function graphemes(text: string): string[] {
   return [...new Intl.Segmenter("ru", { granularity: "grapheme" }).segment(text)].map((part) => part.segment);
 }
 
-function clean(raw: string, limit: boolean): { name: string | null; verdict: NameVerdict } {
+/** Что чистка сделала с ником и какие правила из базы в этом участвовали. */
+export interface NameCleanDetail {
+  name: string | null;
+  verdict: NameVerdict;
+  /** id правил, которые вырезали часть ника или заменили его целиком */
+  hits: string[];
+  /** id исключений, которые спасли ник или его часть от правил и встроенного словаря */
+  saved: string[];
+}
+
+function clean(raw: string, limit: boolean, rules: NameRuleSet): NameCleanDetail {
   // Равнозначная запись («e» + знак и «ê») изменением не считается.
   const original = collapseSpaces(raw.normalize("NFC"));
   // Табуляция и перевод строки — управляющие, но по смыслу пробелы.
@@ -77,20 +88,42 @@ function clean(raw: string, limit: boolean): { name: string | null; verdict: Nam
   // Знаки считаются в разложенном виде: «o» с рожком из NFKC — буква с уже одним знаком.
   // Ссылки и упоминания — после чистки знаков (невидимый знак внутри «t.me» уже
   // ушёл, полноширинная запись свёрнута NFKC) и до проверки «нет букв» и обрезки.
-  const name = collapseSpaces(stripLinksAndMentions(stripSymbols(spaced.normalize("NFD")).normalize("NFC")));
-  if (!/[\p{L}\p{N}]/u.test(name)) return { name: null, verdict: "empty" };
-  if (hasProfanity(name)) return { name: null, verdict: "profanity" };
+  const stripped = collapseSpaces(stripLinksAndMentions(stripSymbols(spaced.normalize("NFD")).normalize("NFC")));
+  // Правила из базы — после встроенной чистки знаков и ссылок, до проверки «нет букв»:
+  // вырезанное правилом может оставить пустоту. Пустой набор ничего не меняет.
+  const byRules = applyNameRules(rules, stripped);
+  const name = collapseSpaces(byRules.text);
+  const hits = byRules.hits;
+  const saved = new Set(byRules.saved);
+  if (!/[\p{L}\p{N}]/u.test(name)) return { name: null, verdict: "empty", hits, saved: [...saved] };
+  // Встроенный мат первым; участки исключений маскируются, чтобы слово, которое словарь
+  // считает матом, но команда разрешила, прошло.
+  let builtIn = hasProfanity(name);
+  if (builtIn) {
+    const guard = protectedSpans(rules, name);
+    if (guard.spans.length > 0 && !hasProfanity(maskSpans(name, guard.spans))) {
+      builtIn = false;
+      for (const id of guard.ids) saved.add(id);
+    }
+  }
+  if (builtIn || byRules.profane) return { name: null, verdict: "profanity", hits, saved: [...saved] };
   const parts = graphemes(name);
   if (limit && parts.length > MAX_GRAPHEMES) {
     const cut = `${parts.slice(0, MAX_GRAPHEMES - 1).join("")}…`;
-    return { name: cut, verdict: name === original ? "trimmed" : "symbols" };
+    return { name: cut, verdict: name === original ? "trimmed" : "symbols", hits, saved: [...saved] };
   }
-  return { name, verdict: name === original ? "ok" : "symbols" };
+  return { name, verdict: name === original ? "ok" : "symbols", hits, saved: [...saved] };
+}
+
+/** Чистый ник с подробностями для панели: какие правила сработали и что спасли исключения. */
+export function cleanNameDetailed(raw: string, rules: NameRuleSet = EMPTY_NAME_RULES): NameCleanDetail {
+  return clean(raw, true, rules);
 }
 
 /** Чистый ник; `name: null` — ника нет (пусто после чистки или мат). */
-export function cleanName(raw: string): { name: string | null; verdict: NameVerdict } {
-  return clean(raw, true);
+export function cleanName(raw: string, rules: NameRuleSet = EMPTY_NAME_RULES): { name: string | null; verdict: NameVerdict } {
+  const { name, verdict } = clean(raw, true, rules);
+  return { name, verdict };
 }
 
 /** Постоянный номер для аккаунта: разный у соседей в рейтинге, id площадки не светится. */
@@ -101,11 +134,18 @@ function fallbackName(accountId: string): string {
 
 /**
  * Ник для показа: очищенный, а если его нет — чистый username площадки, а
- * если и его нет — «Игрок NNNN». `verdict` — про исходный ник.
+ * если и его нет — «Игрок NNNN». `verdict` — про исходный ник, `hits` и
+ * `saved` — тоже про него: username в них не входит. Запасной ход чистится
+ * теми же правилами, что и ник.
  */
-export function displayNameFor(raw: string, username: string | null, accountId: string): CleanName {
-  const own = clean(raw, true);
-  if (own.name !== null) return { name: own.name, verdict: own.verdict };
-  const handle = username === null ? null : clean(username.replace(/^@/u, ""), false).name;
-  return { name: handle ?? fallbackName(accountId), verdict: own.verdict };
+export function displayNameDetailed(raw: string, username: string | null, accountId: string, rules: NameRuleSet = EMPTY_NAME_RULES): CleanName & { hits: string[]; saved: string[] } {
+  const own = clean(raw, true, rules);
+  if (own.name !== null) return { name: own.name, verdict: own.verdict, hits: own.hits, saved: own.saved };
+  const handle = username === null ? null : clean(username.replace(/^@/u, ""), false, rules).name;
+  return { name: handle ?? fallbackName(accountId), verdict: own.verdict, hits: own.hits, saved: own.saved };
+}
+
+export function displayNameFor(raw: string, username: string | null, accountId: string, rules: NameRuleSet = EMPTY_NAME_RULES): CleanName {
+  const { name, verdict } = displayNameDetailed(raw, username, accountId, rules);
+  return { name, verdict };
 }

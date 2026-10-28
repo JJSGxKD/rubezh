@@ -1,14 +1,6 @@
 import type { DifficultyId } from "@bh/shared-types";
-import { ENEMIES } from "../../content/enemies";
-import { ENEMY_STAGES } from "../../content/stages";
-import { MAPS } from "../../content/maps";
-import { DEFAULT_DIFFICULTY_ID, findDifficulty } from "../../content/difficulty";
-import { CHESTS } from "../../content/chests";
-import { DROPS } from "../../content/drops";
-import { ACCOUNT_UNLOCKS } from "../../content/unlocks";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../content/upgrades";
-import { ENDLESS_CURVE, TIMELINE } from "../../content/waves";
-import { WEAPONS } from "../../content/weapons";
+import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
+import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
@@ -54,6 +46,12 @@ export interface BalanceRunOptions {
   immortalPlayer?: boolean;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
+  /**
+   * Контент прогона; без поля — боевой `CONTENT_SNAPSHOT`. Песочница редактора
+   * баланса гоняет бота на черновике (docs/19-content-admin.md §3). Коридоры
+   * отчёта лежат в `content.balanceTargets`.
+   */
+  content?: ContentSnapshot;
 }
 
 export interface BalanceRunResult {
@@ -82,19 +80,20 @@ export interface BalanceRunResult {
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
-  const difficulty = findDifficulty(options.difficultyId ?? DEFAULT_DIFFICULTY_ID);
-  const open = options.accountLevel === undefined ? null : unlocksAt(ACCOUNT_UNLOCKS, options.accountLevel);
+  const content = options.content ?? CONTENT_SNAPSHOT;
+  const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? DEFAULT_DIFFICULTY_ID));
+  const open = options.accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, options.accountLevel);
   const world = createWorld({
     seed: options.seed,
-    enemies: ENEMIES,
-    stages: ENEMY_STAGES,
-    weapons: open === null ? WEAPONS : weaponsOpenAt(WEAPONS, open),
-    passives: open === null ? PASSIVES : PASSIVES.filter((passive) => open.passives.has(passive.id)),
-    levelCurve: LEVEL_CURVE,
-    loadoutLimits: open?.limits ?? LOADOUT_LIMITS,
-    drops: DROPS,
-    chests: CHESTS,
-    map: MAPS[0],
+    enemies: content.enemies,
+    stages: content.stages,
+    weapons: open === null ? content.weapons : weaponsOpenAt(content.weapons, open),
+    passives: open === null ? content.passives : content.passives.filter((passive) => open.passives.has(passive.id)),
+    levelCurve: content.levelCurve,
+    loadoutLimits: open?.limits ?? content.loadoutLimits,
+    drops: content.drops,
+    chests: content.chests,
+    map: content.maps[0],
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined
       ? {}
@@ -105,7 +104,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
       ? { config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 } } }
       : {}),
   });
-  const director = createTimelineDirector(TIMELINE, ENDLESS_CURVE);
+  const director = createTimelineDirector(content.timeline, content.endlessCurve);
   const bot = createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 

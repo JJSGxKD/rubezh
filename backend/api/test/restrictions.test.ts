@@ -2,8 +2,8 @@ import "reflect-metadata";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "vitest";
-import { Module } from "@nestjs/common";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Logger, Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { ForbiddenError, ValidationError } from "../src/common/domain-error.js";
@@ -21,8 +21,9 @@ import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
-import { HIDDEN_KINDS, RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_REASONS, isHiddenKind, type RestrictionKind } from "../src/modules/restrictions/restriction-catalog.js";
+import { HIDDEN_KINDS, RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_LIMITS, RESTRICTION_REASONS, isHiddenKind, type RestrictionKind } from "../src/modules/restrictions/restriction-catalog.js";
 import { banMessage, imposeProblem, imposeSchema, playerMessage, shownText, termProblem, untilText } from "../src/modules/restrictions/restriction-rules.js";
+import { REPLACED_COMMENT, type NewRestriction } from "../src/modules/restrictions/restrictions.repository.js";
 import { RestrictionsController } from "../src/modules/restrictions/restrictions.controller.js";
 import { AccountRestrictedError, RestrictionNotFoundError, RestrictionSilentError } from "../src/modules/restrictions/restrictions-errors.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
@@ -380,6 +381,346 @@ describe("ограничение «Покупки» и наложение сис
     await s.service.impose(owner, target.accountId, input({ kinds: ["all"], endsAt: null }), NOW);
 
     expect((await s.gate.status(target.accountId, "purchases", NOW))?.kind).toBe("all");
+  });
+});
+
+describe("наложение системой на срок (T-0177)", () => {
+  const TERM = 30 * DAY;
+  const COMMENT = "Отписка от канала после награды за подписку";
+  const PLAYER_TEXT = "Отписка от канала после награды за подписку";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Что сервис записал в лог строкой JSON: имя события и поля. */
+  function logged(spy: { mock: { calls: unknown[][] } }): Record<string, unknown>[] {
+    return spy.mock.calls.map(([message]) => {
+      try {
+        return JSON.parse(String(message)) as Record<string, unknown>;
+      } catch {
+        return {};
+      }
+    });
+  }
+
+  it("причина `task_unsubscribe` в каталоге и в списке шаблонов панели; панель может выбрать её и при ручном наложении", async () => {
+    expect(RESTRICTION_REASONS.task_unsubscribe).toEqual({ title: "Отписка после награды", player: PLAYER_TEXT });
+    const s = setup();
+    const moderator = await person(s, "701", "moderator");
+    expect((await s.service.catalog(moderator)).reasons).toContainEqual({ reason: "task_unsubscribe", title: "Отписка после награды", player: PLAYER_TEXT });
+    expect(imposeSchema.safeParse(input({ kinds: ["partner_tasks"], reason: "task_unsubscribe" })).success).toBe(true);
+  });
+
+  it("накладывает на срок от имени системы: срок точный, без автора, с сообщением игроку; строка, журнал, кеш и слушатели — как у человека", async () => {
+    const s = setup();
+    const target = await person(s, "702");
+    const imposed: { accountId: string; kinds: readonly string[]; at: Date }[] = [];
+    s.hooks.onImposed("проверка", async (change) => void imposed.push(change));
+    const endsAt = new Date(NOW.getTime() + TERM);
+
+    const result = await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW);
+
+    expect(result).toBe("imposed");
+    expect(s.repository.rows).toHaveLength(1);
+    expect(s.repository.rows[0]).toMatchObject({ accountId: target.accountId, kind: "partner_tasks", startsAt: NOW, endsAt, reason: "task_unsubscribe", comment: COMMENT, notify: true, imposedBy: null, liftedAt: null });
+    expect(s.roles.entries).toHaveLength(1);
+    expect(s.roles.entries[0]).toMatchObject({
+      actorAccountId: null,
+      action: "players.restrict",
+      target: target.accountId,
+      after: { restrictions: [{ kind: "partner_tasks", endsAt: endsAt.toISOString(), reason: "task_unsubscribe", comment: COMMENT, notify: true }] },
+    });
+    expect(s.roles.entries[0]).not.toHaveProperty("before");
+    expect(imposed).toEqual([{ accountId: target.accountId, kinds: ["partner_tasks"], at: NOW }]);
+    expect(s.gate.published).toEqual([target.accountId]);
+  });
+
+  it("закрыто ровно на срок: до последней миллисекунды действует, через срок и минуту — нет; игрок читает причину шаблона", async () => {
+    const s = setup();
+    const target = await person(s, "703");
+    await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW);
+    const endsAt = new Date(NOW.getTime() + TERM);
+
+    expect(await s.gate.status(target.accountId, "partner_tasks", NOW)).not.toBeNull();
+    expect(await s.gate.status(target.accountId, "partner_tasks", new Date(endsAt.getTime() - 1))).not.toBeNull();
+    expect(await s.gate.status(target.accountId, "partner_tasks", endsAt)).toBeNull();
+    expect(await s.gate.status(target.accountId, "partner_tasks", new Date(endsAt.getTime() + 60_000))).toBeNull();
+    // Остальные виды не затронуты.
+    expect(await s.gate.status(target.accountId, "promo_codes", NOW)).toBeNull();
+    await expect(s.gate.ensure(target.accountId, "partner_tasks", NOW)).rejects.toThrow(`Партнёрские задания — закрыто ${untilText(endsAt)}. Причина: ${PLAYER_TEXT}`);
+    expect(await s.gate.visibleFor(target.accountId, NOW)).toMatchObject([{ kind: "partner_tasks", title: "Партнёрские задания" }]);
+  });
+
+  it("в панели это ограничение без автора и с названием шаблона; модератор снимает его правом вида", async () => {
+    const s = setup();
+    const moderator = await person(s, "704", "moderator");
+    const target = await person(s, "705");
+    await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW);
+
+    const [view] = await s.service.history(moderator, target.accountId, NOW);
+    expect(view).toMatchObject({ kind: "partner_tasks", state: "active", reasonTitle: "Отписка после награды", imposedBy: null });
+
+    const lifted = await s.service.lift(moderator, s.repository.rows[0]?.restrictionId ?? "", "разобрались", new Date(NOW.getTime() + HOUR));
+    expect(lifted).toMatchObject({ state: "lifted", kind: "partner_tasks" });
+    expect(await s.gate.status(target.accountId, "partner_tasks", new Date(NOW.getTime() + 2 * HOUR))).toBeNull();
+  });
+
+  it("бессрочное ограничение вида от человека не ослабляется: `kept`, строка цела, записи в журнале и слушателей нет, в лог — `restriction_system_kept`", async () => {
+    const s = setup();
+    const moderator = await person(s, "706", "moderator");
+    const target = await person(s, "707");
+    await s.service.impose(moderator, target.accountId, input({ kinds: ["partner_tasks"], endsAt: null, reason: "abuse" }), NOW);
+    const auditBefore = s.roles.entries.length;
+    const publishedBefore = s.gate.published.length;
+    const imposed: unknown[] = [];
+    s.hooks.onImposed("проверка", async (change) => void imposed.push(change));
+    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+
+    const result = await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW);
+
+    expect(result).toBe("kept");
+    expect(s.repository.rows).toHaveLength(1);
+    expect(s.repository.rows[0]).toMatchObject({ endsAt: null, reason: "abuse", imposedBy: moderator.accountId, liftedAt: null });
+    expect(s.roles.entries).toHaveLength(auditBefore);
+    expect(s.gate.published).toHaveLength(publishedBefore);
+    expect(imposed).toEqual([]);
+    expect(logged(log).filter((line) => line.event === "restriction_system_kept")).toEqual([
+      { module: "restrictions", event: "restriction_system_kept", accountId: target.accountId, kind: "partner_tasks", reason: "task_unsubscribe" },
+    ]);
+  });
+
+  it("ограничение вида на 60 суток и ровно на тот же срок остаётся: `kept`; повтор в тот же момент ничего не меняет", async () => {
+    const s = setup();
+    const moderator = await person(s, "708", "moderator");
+    const longer = await person(s, "709");
+    const same = await person(s, "710");
+    await s.service.impose(moderator, longer.accountId, input({ kinds: ["partner_tasks"], endsAt: new Date(NOW.getTime() + 60 * DAY).toISOString() }), NOW);
+
+    expect(await s.service.imposeBySystemFor(longer.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW)).toBe("kept");
+    expect(s.repository.rows.filter((row) => row.accountId === longer.accountId)).toHaveLength(1);
+
+    // «Не раньше» — значит и равное: свой же повтор в тот же момент второй строки не заводит.
+    expect(await s.service.imposeBySystemFor(same.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW)).toBe("imposed");
+    const auditBefore = s.roles.entries.length;
+    expect(await s.service.imposeBySystemFor(same.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW)).toBe("kept");
+    expect(s.repository.rows.filter((row) => row.accountId === same.accountId)).toHaveLength(1);
+    expect(s.roles.entries).toHaveLength(auditBefore);
+  });
+
+  it("ограничение вида на 10 суток заменяется новым на 30: прежнее снято как заменённое, действующее одно, в журнале — что заменено", async () => {
+    const s = setup();
+    const moderator = await person(s, "711", "moderator");
+    const target = await person(s, "712");
+    await s.service.impose(moderator, target.accountId, input({ kinds: ["partner_tasks"], endsAt: new Date(NOW.getTime() + 10 * DAY).toISOString() }), NOW);
+
+    const result = await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW);
+
+    expect(result).toBe("imposed");
+    const rows = s.repository.rows.filter((row) => row.kind === "partner_tasks");
+    expect(rows).toHaveLength(2);
+    expect(rows.filter((row) => row.liftedAt === null)).toHaveLength(1);
+    expect(rows.find((row) => row.liftedAt !== null)).toMatchObject({ reason: "promo_abuse", liftedAt: NOW, liftComment: REPLACED_COMMENT });
+    expect(rows.find((row) => row.liftedAt === null)).toMatchObject({ endsAt: new Date(NOW.getTime() + TERM), reason: "task_unsubscribe", imposedBy: null });
+    expect(s.roles.entries.at(-1)).toMatchObject({ actorAccountId: null, before: { replaced: [{ kind: "partner_tasks" }] } });
+    // Через 11 суток прежнее бы уже кончилось, а новое держит.
+    expect(await s.gate.status(target.accountId, "partner_tasks", new Date(NOW.getTime() + 11 * DAY))).not.toBeNull();
+  });
+
+  it("блокировка целиком уже стоит — `kept`, и с коротким ограничением того же вида рядом тоже", async () => {
+    const s = setup();
+    const owner = await person(s, OWNER_ID);
+    const moderator = await person(s, "713", "moderator");
+    const banned = await person(s, "714");
+    const both = await person(s, "715");
+    await s.service.impose(owner, banned.accountId, input({ kinds: ["all"], endsAt: null }), NOW);
+    await s.service.impose(moderator, both.accountId, input({ kinds: ["partner_tasks"], endsAt: new Date(NOW.getTime() + 10 * DAY).toISOString() }), NOW);
+    await s.service.impose(owner, both.accountId, input({ kinds: ["all"], endsAt: null }), NOW);
+
+    expect(await s.service.imposeBySystemFor(banned.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW)).toBe("kept");
+    expect(await s.service.imposeBySystemFor(both.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW)).toBe("kept");
+
+    expect(s.repository.rows.filter((row) => row.accountId === banned.accountId)).toHaveLength(1);
+    const bothRows = s.repository.rows.filter((row) => row.accountId === both.accountId);
+    expect(bothRows).toHaveLength(2);
+    expect(bothRows.every((row) => row.liftedAt === null)).toBe(true);
+  });
+
+  it("не мешают: другой вид у того же игрока, то же у другого игрока, истёкшее и снятое ограничение вида", async () => {
+    const s = setup();
+    const moderator = await person(s, "716", "moderator");
+    const withOtherKind = await person(s, "717");
+    const neighbour = await person(s, "718");
+    const withExpired = await person(s, "719");
+    const withLifted = await person(s, "720");
+    await s.service.impose(moderator, withOtherKind.accountId, input({ kinds: ["promo_codes"], endsAt: null }), NOW);
+    await s.service.impose(moderator, neighbour.accountId, input({ kinds: ["partner_tasks"], endsAt: null }), NOW);
+    s.repository.restrict(withExpired.accountId, "partner_tasks", { at: new Date(NOW.getTime() - 5 * DAY), endsAt: new Date(NOW.getTime() - 1) });
+    const lifted = s.repository.restrict(withLifted.accountId, "partner_tasks", { at: new Date(NOW.getTime() - DAY) });
+    lifted.liftedAt = new Date(NOW.getTime() - HOUR);
+
+    for (const target of [withOtherKind, withExpired, withLifted]) {
+      expect(await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", COMMENT, TERM, NOW), target.accountId).toBe("imposed");
+    }
+
+    expect(await s.gate.status(withOtherKind.accountId, "promo_codes", NOW)).not.toBeNull();
+    expect(await s.gate.status(withOtherKind.accountId, "partner_tasks", NOW)).not.toBeNull();
+    // Сосед с бессрочным закрытием не тронут.
+    expect(s.repository.rows.filter((row) => row.accountId === neighbour.accountId)).toHaveLength(1);
+  });
+
+  it("блокировку целиком система не накладывает, срок вне границ и не число — `ValidationError`, ничего не записано и не залогировано", async () => {
+    const s = setup();
+    const target = await person(s, "721");
+    const log = vi.spyOn(Logger.prototype, "log").mockImplementation(() => undefined);
+    const attempt = (kind: RestrictionKind, termMs: number) => s.service.imposeBySystemFor(target.accountId, kind, "task_unsubscribe", COMMENT, termMs, NOW);
+
+    await expect(attempt("all", TERM)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", RESTRICTION_LIMITS.minTermMs - 1)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", RESTRICTION_LIMITS.maxTermMs + 1)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", 0)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", -TERM)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", Number.NaN)).rejects.toBeInstanceOf(ValidationError);
+    await expect(attempt("partner_tasks", Number.POSITIVE_INFINITY)).rejects.toBeInstanceOf(ValidationError);
+
+    expect(s.repository.rows).toEqual([]);
+    expect(s.roles.entries).toEqual([]);
+    expect(s.gate.published).toEqual([]);
+    expect(logged(log)).toEqual([]);
+    expect((await s.accounts.byId(target.accountId))?.bannedAt ?? null).toBeNull();
+  });
+
+  it("границы срока включены: ровно `minTermMs` и ровно `maxTermMs` накладываются", async () => {
+    const s = setup();
+    const shortest = await person(s, "722");
+    const longest = await person(s, "723");
+
+    expect(await s.service.imposeBySystemFor(shortest.accountId, "partner_tasks", "task_unsubscribe", COMMENT, RESTRICTION_LIMITS.minTermMs, NOW)).toBe("imposed");
+    expect(await s.service.imposeBySystemFor(longest.accountId, "partner_tasks", "task_unsubscribe", COMMENT, RESTRICTION_LIMITS.maxTermMs, NOW)).toBe("imposed");
+
+    expect(s.repository.rows.find((row) => row.accountId === shortest.accountId)?.endsAt).toEqual(new Date(NOW.getTime() + RESTRICTION_LIMITS.minTermMs));
+    expect(s.repository.rows.find((row) => row.accountId === longest.accountId)?.endsAt).toEqual(new Date(NOW.getTime() + RESTRICTION_LIMITS.maxTermMs));
+  });
+
+  it("комментарий длиннее предела усечён, как у `imposeBySystem`", async () => {
+    const s = setup();
+    const target = await person(s, "724");
+
+    await s.service.imposeBySystemFor(target.accountId, "partner_tasks", "task_unsubscribe", "я".repeat(RESTRICTION_LIMITS.commentMax + 50), TERM, NOW);
+
+    expect(s.repository.rows[0]?.comment).toHaveLength(RESTRICTION_LIMITS.commentMax);
+  });
+
+  it("`imposeBySystem` не менялся: наложение после возврата оплаты по-прежнему бессрочное", async () => {
+    const s = setup();
+    const target = await person(s, "725");
+
+    await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", "Возврат звёзд за покупку", NOW);
+
+    expect(s.repository.rows[0]).toMatchObject({ kind: "purchases", endsAt: null, imposedBy: null });
+  });
+});
+
+describe("наложение системой: проверка «не слабее» внутри репозитория (T-0345)", () => {
+  const TERM = 30 * DAY;
+  const ONE_ROW_ONLY = "keepIfStanding — только для одной строки";
+
+  const row = (accountId: string, patch: Partial<NewRestriction> = {}): NewRestriction => ({
+    accountId,
+    kind: "partner_tasks",
+    startsAt: NOW,
+    endsAt: new Date(NOW.getTime() + TERM),
+    reason: "task_unsubscribe",
+    comment: null,
+    notify: true,
+    imposedBy: null,
+    ...patch,
+  });
+
+  it("`keepIfStanding` при действующей блокировке целиком: `kept`, строк не прибавилось", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a1", { kind: "all", endsAt: null, imposedBy: "owner" })], NOW);
+
+    const result = await repository.impose([row("a1")], NOW, { keepIfStanding: true });
+
+    expect(result).toEqual({ created: [], replaced: [], kept: true });
+    expect(repository.rows).toHaveLength(1);
+    expect(repository.rows[0]).toMatchObject({ kind: "all", liftedAt: null });
+  });
+
+  it("`keepIfStanding` при более коротком ограничении вида: `kept: false`, короткое снято как заменённое, новое создано", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a2", { endsAt: new Date(NOW.getTime() + 10 * DAY), imposedBy: "moderator" })], NOW);
+
+    const result = await repository.impose([row("a2")], NOW, { keepIfStanding: true });
+
+    expect(result.kept).toBe(false);
+    expect(result.created).toHaveLength(1);
+    expect(result.replaced).toHaveLength(1);
+    expect(result.replaced[0]).toMatchObject({ imposedBy: "moderator", liftedAt: NOW, liftedBy: null, liftComment: REPLACED_COMMENT });
+    expect(repository.rows).toHaveLength(2);
+    expect(repository.rows.filter((item) => item.liftedAt === null)).toHaveLength(1);
+    expect(repository.rows.find((item) => item.liftedAt === null)).toMatchObject({ endsAt: new Date(NOW.getTime() + TERM), imposedBy: null });
+  });
+
+  it("`keepIfStanding` с двумя строками или без строк: ошибка, ничего не записано", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a3", { endsAt: new Date(NOW.getTime() + DAY), imposedBy: "moderator" })], NOW);
+    const before = JSON.stringify(repository.rows);
+
+    await expect(repository.impose([row("a3"), row("a3", { kind: "promo_codes" })], NOW, { keepIfStanding: true })).rejects.toThrow(ONE_ROW_ONLY);
+    await expect(repository.impose([], NOW, { keepIfStanding: true })).rejects.toThrow(ONE_ROW_ONLY);
+
+    expect(JSON.stringify(repository.rows)).toBe(before);
+  });
+
+  it("без опции `kept` всегда `false`, а новое заменяет и более строгое: поведение для людей прежнее", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a4", { endsAt: null, imposedBy: "moderator" })], NOW);
+
+    const shorter = await repository.impose([row("a4")], NOW);
+    const withFalse = await repository.impose([row("a4", { endsAt: null })], NOW, { keepIfStanding: false });
+
+    expect(shorter.kept).toBe(false);
+    expect(shorter.replaced).toHaveLength(1);
+    expect(withFalse.kept).toBe(false);
+    expect(withFalse.replaced).toHaveLength(1);
+    expect(repository.rows.filter((item) => item.liftedAt === null)).toHaveLength(1);
+  });
+
+  it("держат: бессрочное и равное по сроку того же вида; не держат: другой вид, чужой игрок, истёкшее и снятое", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("holds-forever", { endsAt: null, imposedBy: "moderator" })], NOW);
+    await repository.impose([row("holds-equal", { imposedBy: "moderator" })], NOW);
+    await repository.impose([row("other-kind", { kind: "promo_codes", endsAt: null, imposedBy: "moderator" })], NOW);
+    await repository.impose([row("neighbour", { endsAt: null, imposedBy: "moderator" })], NOW);
+    repository.restrict("expired", "partner_tasks", { at: new Date(NOW.getTime() - 5 * DAY), endsAt: new Date(NOW.getTime() - 1) });
+    repository.restrict("lifted", "partner_tasks").liftedAt = new Date(NOW.getTime() - 1);
+
+    const attempt = async (accountId: string) => (await repository.impose([row(accountId)], NOW, { keepIfStanding: true })).kept;
+
+    expect(await attempt("holds-forever")).toBe(true);
+    expect(await attempt("holds-equal")).toBe(true);
+    expect(await attempt("other-kind")).toBe(false);
+    expect(await attempt("fresh")).toBe(false);
+    expect(await attempt("expired")).toBe(false);
+    expect(await attempt("lifted")).toBe(false);
+    // Сосед с бессрочным закрытием не тронут чужим наложением.
+    expect(repository.rows.filter((item) => item.accountId === "neighbour")).toHaveLength(1);
+  });
+
+  it("`imposeBySystemFor` не читает действующие строки вне наложения: проверка «не слабее» внутри `impose`, и при `kept`, и при `imposed`", async () => {
+    const s = setup();
+    const moderator = await person(s, "730", "moderator");
+    const held = await person(s, "731");
+    const free = await person(s, "732");
+    await s.service.impose(moderator, held.accountId, input({ kinds: ["partner_tasks"], endsAt: null, reason: "abuse" }), NOW);
+    s.repository.reads = 0;
+
+    expect(await s.service.imposeBySystemFor(held.accountId, "partner_tasks", "task_unsubscribe", "комментарий", TERM, NOW)).toBe("kept");
+    expect(await s.service.imposeBySystemFor(free.accountId, "partner_tasks", "task_unsubscribe", "комментарий", TERM, NOW)).toBe("imposed");
+
+    expect(s.repository.reads).toBe(0);
   });
 });
 

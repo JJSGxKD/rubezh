@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionTitle, auditChanges, auditMode, auditObject, auditValue, fetchAudit, fieldTitle, NO_AUDIT_FILTER, type AuditEntry } from "../src/api/audit";
+import { actionTitle, AUDIT_AREAS, auditChanges, auditMode, auditObject, auditValue, fetchAudit, fieldTitle, NO_AUDIT_FILTER, type AuditEntry } from "../src/api/audit";
 import { AdminApi } from "../src/api/client";
 import { formatDateTime, formatNumber } from "../src/format";
 import { fakeFetch, json } from "./helpers";
@@ -25,6 +25,14 @@ describe("журнал аудита", () => {
   it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
     expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
+  });
+
+  it("правила фильтра имён: подписи, область «Поддержка» и объект «правило» (T-0338)", () => {
+    expect(actionTitle("names.rule.create")).toBe("Новое правило фильтра имён");
+    expect(actionTitle("names.rule.update")).toBe("Правка правила фильтра имён");
+    expect(actionTitle("names.rule.delete")).toBe("Удаление правила фильтра имён");
+    expect(AUDIT_AREAS.find((area) => area.id === "support")?.prefixes).toContain("names.");
+    expect(auditObject(entry({ action: "names.rule.create", target: "00000000-0000-4000-8000-000000000001" }))).toEqual({ kind: "правило", label: "00000000", route: { section: "names", id: null } });
   });
 
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
@@ -80,6 +88,31 @@ describe("журнал аудита", () => {
     expect(shown).toMatchObject({ kind: "блокировка целиком", reason: "оскорбления или спам", comment: "разобрались" });
     // Свободная причина других действий — как записана.
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
+  });
+
+  it("вид ограничения «отдельная доска» — словами, а не ключом separate_board", () => {
+    expect(auditValue("separate_board", "kind")).toBe("отдельная доска");
+    const board = entry({ action: "players.board.set", target: ACCOUNT, targetName: "Оля", after: { kind: "separate_board", endsAt: null } });
+    const [change] = auditChanges(board);
+    expect(auditValue(change?.after, change?.field ?? "kind")).toBe("отдельная доска");
+  });
+
+  it("закрытие партнёрских заданий за отписку (система, без автора): причина читается словами, а не ключом", () => {
+    const imposed = entry({
+      actorAccountId: null,
+      actorName: null,
+      action: "players.restrict",
+      target: ACCOUNT,
+      targetName: "Оля",
+      after: {
+        restrictions: [{ restrictionId: "r1", kind: "partner_tasks", endsAt: "2026-11-27T10:00:00.000Z", reason: "task_unsubscribe", comment: "Отписка от канала после награды за подписку", notify: true }],
+      },
+    });
+
+    const [restrictions] = auditChanges(imposed);
+
+    expect(auditValue(restrictions?.after, "restrictions", 400)).toBe(`партнёрские задания до ${formatDateTime("2026-11-27T10:00:00.000Z")} — отписка после награды`);
+    expect(auditValue("task_unsubscribe", "reason")).toBe("отписка после награды");
   });
 
   it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {

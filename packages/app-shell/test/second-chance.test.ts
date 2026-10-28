@@ -40,6 +40,10 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     damageDealt: 5000,
     damageTaken: 200,
     damageByElement: {},
+    bossKills: 0,
+    eliteKills: 0,
+    chestsOpened: 0,
+    crystalsCollected: 0,
     weapons: [{ id: "spark", level: 4, damage: 5000 }],
     passives: [],
     deathCause: "swarm_rat",
@@ -218,6 +222,30 @@ describe("экран смерти со вторым шансом", () => {
     expect(useMeta.getState().best.normal).toBe(250);
     expect(storage.values[DOWNED_KEY]).toBe("null");
     expect(events.filter((event) => event === "run_finished")).toHaveLength(1);
+  });
+
+  it("итог, брошенный на экране смерти, несёт счётчики итога в событие закрытия (T-0125)", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    await useRun.getState().start(OPTIONS);
+    fake.emit("downed", { result: result({ bossKills: 1, eliteKills: 3, chestsOpened: 2, crystalsCollected: 420 }), continuesLeft: 1 });
+    useRun.setState({ phase: "idle" });
+    recoverDownedRun();
+
+    const finished = payloads.find((entry) => entry.event === "run_finished");
+    expect(finished?.payload).toMatchObject({ bossKills: 1, eliteKills: 3, chestsOpened: 2, crystals: 420 });
+  });
+
+  it("итог прошлой сборки без счётчиков разбирается: в событие идут нули", () => {
+    const legacy: Record<string, unknown> = { ...result({ runId: "run-old" }) };
+    for (const key of ["bossKills", "eliteKills", "chestsOpened", "crystalsCollected"]) delete legacy[key];
+    storage.set(DOWNED_KEY, JSON.stringify({ result: legacy, countInRating: false }));
+
+    recoverDownedRun();
+
+    expect(useMeta.getState().runs).toBe(1);
+    const finished = payloads.find((entry) => entry.event === "run_finished");
+    expect(finished?.payload).toMatchObject({ bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0 });
   });
 
   it("где окна оплаты нет, второй шанс — только в забеге разработчика: купить его негде", async () => {

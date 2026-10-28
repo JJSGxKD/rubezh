@@ -140,6 +140,13 @@ export interface RunStats {
   elapsedSec: number;
   enemiesSpawned: number;
   enemiesKilled: number;
+  /**
+   * Убитые игроком боссы и элиты — для заданий и достижений. Потомки
+   * делящегося босса рядовые и сюда не идут; растёт только в `killEnemy`,
+   * рядом с `enemiesKilled`, поэтому сумма не превышает общего числа убитых.
+   */
+  bossKills: number;
+  eliteKills: number;
   /** убийства игроком по индексу типа врага */
   killsByType: Uint32Array;
   damageTaken: number;
@@ -159,6 +166,11 @@ export interface RunStats {
   /** нанесённый урон по индексу стихии (`sim/element-ids.ts`) */
   damageByElement: Float64Array;
   xpCollected: number;
+  /**
+   * Подобранные кристаллы опыта: слитый с соседним — один, улетевший за радиус
+   * удержания и запасной опыт сундука не считаются.
+   */
+  crystalsCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
   /** подобранные магниты */

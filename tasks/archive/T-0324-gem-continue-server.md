@@ -3,8 +3,8 @@ id: T-0324
 title: Второй шанс за самоцветы — сервер: цена от начатых минут по курсу звёзд, списание и выдача одной транзакцией, книга продолжений; реклама — одно продолжение в сутки
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
@@ -35,6 +35,9 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
+  - backend/api/src/modules/payments/purchases.repository.ts
+  - packages/app-shell/src/i18n/ru-history.json
+  - docs/35-stage4-plan.md
 runner: local
 executor: sonnet-5.5
 effort: extra
@@ -45,7 +48,7 @@ batch: 3
 
 # T-0324. Второй шанс за самоцветы — сервер: цена от начатых минут по курсу звёзд, списание и выдача одной транзакцией, книга продолжений; реклама — одно продолжение в сутки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json)](../README.md#значки-статуса)
 
 ## Зачем
 
@@ -200,10 +203,10 @@ MAX и VK звёзд нет вовсе. После задачи:
 
 ## Критерии приёмки
 
-- [ ] Второй шанс за самоцветы: цена от начатых минут по курсу звёзд, списание и выдача — один раз.
-- [ ] Итог забега с продолжением за самоцветы сверяется, как со звёздами.
-- [ ] За рекламу — одно продолжение в сутки, VIP — пять; оба числа — в панели.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Второй шанс за самоцветы: цена от начатых минут по курсу звёзд, списание и выдача — один раз.
+- [x] Итог забега с продолжением за самоцветы сверяется, как со звёздами.
+- [x] За рекламу — одно продолжение в сутки, VIP — пять; оба числа — в панели.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

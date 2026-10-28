@@ -107,6 +107,8 @@ erDiagram
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
     RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
     ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
+    RUN ||--o{ RUN_GEM_CONTINUE : "продолжен за самоцветы"
+    ACCOUNT ||--o{ RUN_GEM_CONTINUE : "продолжения за самоцветы"
     ACCOUNT ||--o{ VIP_SUBSCRIPTION : "подписки VIP"
     PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
     VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
@@ -145,7 +147,7 @@ erDiagram
         int level "nullable"
         int enemies_killed "nullable"
         json weapons "nullable: id, уровень и урон к концу"
-        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов — лист забега"
+        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов, счётчики итога (боссы, элиты, сундуки, кристаллы) — лист забега и задания"
         boolean cheats
         float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok, без читов, рейтинг игроку не закрыт"
@@ -334,7 +336,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update, task_unsubscribed"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -807,6 +809,15 @@ erDiagram
         datetime granted_at
     }
 
+    RUN_GEM_CONTINUE {
+        string run_id PK "FK на run (каскад); вместе с continue_no"
+        int continue_no PK "какое по счёту продолжение забега, от 1"
+        uuid account_id FK "каскад с аккаунтом"
+        float elapsed_sec "секунда забега, по которой посчитана цена; по ней итог сверяется с оплатой (Р5.2)"
+        int price_gems "списано самоцветов, больше нуля; списание — запись wallet_entry с причиной continue в той же транзакции"
+        datetime granted_at
+    }
+
     VIP_SUBSCRIPTION {
         uuid subscription_id PK,FK "первая покупка: по её счёту площадка списывает периоды"
         uuid account_id FK
@@ -1031,6 +1042,18 @@ erDiagram
         datetime first_at
         datetime last_at
     }
+
+    NAME_RULE {
+        uuid rule_id PK "правила фильтра имён, Р168: что убирается из ников игроков"
+        enum category "profanity, brand, ads, other, allow; действие задаёт категория"
+        enum kind "exact, word, regex"
+        string pattern "до 100 знаков; UNIQUE вместе с category и kind"
+        bool active
+        string note "nullable, до 200 знаков"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable: кто менял последним, без внешнего ключа"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1200,7 +1223,24 @@ erDiagram
   Итог забега сверяется с обеими книгами, а счёт за продолжение, уже взятое
   за рекламу, предварительная проверка оплаты не пропускает. Суточный
   потолок — счёт строк игрока с полуночи по Москве по индексу
-  `(account_id, granted_at)`.
+  `(account_id, granted_at)`, порознь для рекламы (`network_key` — сеть) и
+  VIP (`network_key = 'vip'`, Р162); счёт и запись — под одной блокировкой на
+  аккаунт, поэтому два параллельных забора потолок не пробивают.
+- **`RUN_GEM_CONTINUE` — второй шанс за самоцветы** (`35-stage4-plan.md` Р162,
+  T-0324): третья книга продолжений забега рядом с `PURCHASE` (звёзды) и
+  `RUN_AD_CONTINUE` (реклама). Цена в самоцветах — цена в звёздах от начатых
+  минут по курсу 6 к 5 (`payments/continue-price.ts`). Покупка — одна
+  транзакция: строка книги и списание самоцветов в `WALLET_ENTRY` (причина
+  `continue`, ключ `continue:<run_id>:<continue_no>:gems`); не хватило
+  самоцветов — откатывается и строка. Ключ `(run_id, continue_no)` не даёт
+  купить одно продолжение дважды, а повтор запроса возвращает прежний ответ без
+  второго списания. Один номер двумя способами не берётся: покупка и выдача
+  рекламного продолжения берут одну блокировку на аккаунт и смотрят в таблицу
+  друг друга внутри транзакции, а проверка перед оплатой звёздами
+  (`checkout`) видит номер, взятый самоцветами, так же, как взятый рекламой.
+  Суточного потолка у покупки нет — только число
+  продолжений за забег. Вайп стирает забеги, строки уходят каскадом
+  (`WIPE_PLAN` — «оставляем», своего шага стирания нет).
 - **`TESTER_COMPENSATION` — снимок перед вайпом** (`35-stage4-plan.md` Р87,
   T-0040). Вайп стирает кошелёк, журнал покупок в нём и уровень, поэтому «кому
   что вернуть» записывается заранее — в той же транзакции, что вайп. Таблица
@@ -1851,6 +1891,7 @@ flowchart LR
 
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
+        NAME_RULES["name-rules<br/>правила фильтра имён: кэш в памяти,<br/>правка из панели, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
         PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, довыдача, реализовано"]
@@ -1986,6 +2027,9 @@ flowchart LR
 
     AUTH --> PG
     AUTH --> REDIS
+    AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
+    NAME_RULES --> PG
+    NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
     ATTR --> REDIS
     ATTR --> QUEUE

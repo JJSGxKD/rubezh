@@ -48,8 +48,11 @@ export const EARN_REASONS = [
  */
 export const EXCHANGE_REASONS = ["purchase", "salvage", "boost_refund", "wipe_compensation"] as const;
 
-/** На что тратят. */
-export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_reroll", "item_merge", "boost", "shop"] as const;
+/**
+ * На что тратят. `continue` — второй шанс за самоцветы (Р162): трата, а не
+ * начисление, поэтому суточного потолка ей не нужно.
+ */
+export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_reroll", "item_merge", "boost", "shop", "continue"] as const;
 
 /** Ручная операция из панели: под правом, с причиной и записью в аудит. */
 export const ADMIN_REASON = "admin_adjust";
@@ -60,11 +63,22 @@ export const ADMIN_REASON = "admin_adjust";
  */
 export const REVOKE_REASON = "refund_revoke";
 
+/**
+ * Списание награды за задание, когда игрок отписался от канала (Р115,
+ * tasks/T-0177). Тот же отзыв начисленного, что и при возврате звёзд, но в
+ * журнале и в истории игрока он не «возврат звёзд за покупку» — отдельная
+ * причина, которая остаётся среди валюты и осколков, а не среди покупок.
+ */
+export const TASK_REVOKE_REASON = "task_revoke";
+
+/** Причины, с которыми можно отзывать начисленное: от них зависит и проверка повтора ключа. */
+export type RevokeReason = typeof REVOKE_REASON | typeof TASK_REVOKE_REASON;
+
 export type EarnReason = (typeof EARN_REASONS)[number];
 export type ExchangeReason = (typeof EXCHANGE_REASONS)[number];
 export type SpendReason = (typeof SPEND_REASONS)[number];
 export type GrantReason = EarnReason | ExchangeReason | typeof ADMIN_REASON;
-export type WalletReason = GrantReason | SpendReason | typeof REVOKE_REASON;
+export type WalletReason = GrantReason | SpendReason | RevokeReason;
 
 export type Balances = Record<WalletResource, number>;
 

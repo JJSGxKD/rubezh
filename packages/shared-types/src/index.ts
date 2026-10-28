@@ -1290,6 +1290,13 @@ export interface RunResult {
   level: number;
   xpCollected: number;
   enemiesKilled: number;
+  /** убитые игроком боссы и элиты: потомки делящегося босса рядовые и не в счёте */
+  bossKills: number;
+  eliteKills: number;
+  /** открытые сундуки забега */
+  chestsOpened: number;
+  /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
+  crystalsCollected: number;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
   damageDealt: number;
@@ -1395,6 +1402,14 @@ export interface RunFinishStats {
   waveReached: number;
   /** кого больше всего убил — пятёрка по убыванию */
   topKills: { enemy: string; count: number }[];
+  /**
+   * Счётчики для заданий и достижений (tasks/T-0125). Необязательные: сборки
+   * и записи очереди до них полей не знают.
+   */
+  bossKills?: number;
+  eliteKills?: number;
+  chestsOpened?: number;
+  crystals?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";

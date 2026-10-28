@@ -138,6 +138,7 @@ function run(account: Account, patch: Partial<RecordedRun> = {}): RecordedRun {
     weapons: [],
     boosts: [],
     xpCollected: null,
+    counters: null,
     deathCause: null,
     cheats: false,
     continues: 0,

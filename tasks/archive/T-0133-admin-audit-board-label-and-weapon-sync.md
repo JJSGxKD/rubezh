@@ -3,8 +3,8 @@ id: T-0133
 title: Панель — подпись «отдельной доски» в журнале и сверка списка оружия с контентом
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-15 / haiku-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
@@ -24,7 +24,7 @@ batch: 3
 
 # T-0133. Панель — подпись «отдельной доски» в журнале и сверка списка оружия с контентом
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0133.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0133.json)](../README.md#значки-статуса)
 
 ## Зачем
 

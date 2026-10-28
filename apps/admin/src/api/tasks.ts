@@ -54,7 +54,7 @@ export const FILTER_KEYS: Record<string, FilterKey> = {
 export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
 
 /** Русские имена для выбора фильтра: панель движка не знает, список сверяет только глаз команды. */
-export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало" };
+export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало", meteor: "Метеор" };
 export const ELEMENT_TITLES: Record<string, string> = { fire: "Огонь", cold: "Холод", lightning: "Молния", poison: "Яд" };
 export const DIFFICULTY_TITLES: Record<string, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
 export const FILTER_OPTIONS: Record<FilterKey, Record<string, string>> = { weapon: WEAPON_TITLES, element: ELEMENT_TITLES, difficulty: DIFFICULTY_TITLES };

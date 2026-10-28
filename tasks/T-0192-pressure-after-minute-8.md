@@ -15,6 +15,7 @@ zones:
   - packages/core-game/src/content/balance-targets.ts
   - packages/core-game/src/game/balance/simulate.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/content/snapshot-schema.ts
   - scripts/balance/balance-sim.ts
   - packages/core-game/test/content.test.ts
   - packages/core-game/test/balance-properties.test.ts

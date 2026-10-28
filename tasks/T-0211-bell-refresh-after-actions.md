@@ -3,8 +3,8 @@ id: T-0211
 title: Колокольчик обновляется сразу после экрана друзей, предмета и журнала
 epic: E5
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0210]
@@ -25,7 +25,7 @@ batch: 3
 
 # T-0211. Колокольчик обновляется сразу после экрана друзей, предмета и журнала
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0211.json)](README.md#значки-статуса) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](T-0210-notifications-read-by-action.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0211.json)](README.md#значки-статуса) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](archive/T-0210-notifications-read-by-action.md)
 
 ## Зачем
 

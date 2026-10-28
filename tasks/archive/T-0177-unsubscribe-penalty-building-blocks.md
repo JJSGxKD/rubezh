@@ -3,8 +3,8 @@ id: T-0177
 title: Штраф за отписку — заготовки: списание награды, срочное закрытие, уведомление
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0188]
@@ -37,7 +37,7 @@ batch: 3
 
 # T-0177. Штраф за отписку — заготовки: списание награды, срочное закрытие, уведомление
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json)](README.md#значки-статуса) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](archive/T-0188-hide-changelog-for-players.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json)](../README.md#значки-статуса) [![T-0188](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0188.json&label=T-0188)](T-0188-hide-changelog-for-players.md)
 
 ## Зачем
 

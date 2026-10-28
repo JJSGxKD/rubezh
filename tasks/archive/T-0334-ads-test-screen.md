@@ -3,8 +3,8 @@ id: T-0334
 title: Проверка рекламы командой — экран в игре и debug на вызов в адаптере
 epic: E1
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0333]
@@ -34,7 +34,7 @@ batch: 3
 
 # T-0334. Проверка рекламы командой — экран в игре и debug на вызов в адаптере
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0334.json)](README.md#значки-статуса) [![T-0333](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json&label=T-0333)](archive/T-0333-ads-test-tools-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0334.json)](../README.md#значки-статуса) [![T-0333](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0333.json&label=T-0333)](T-0333-ads-test-tools-server.md)
 
 ## Зачем
 

@@ -3,28 +3,30 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
 import { AdsService } from "../ads/ads.service.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { AdContinueDailyCapError, AdContinueUnavailableError, ContinueRunUnverifiedError, ContinueTakenError } from "./run-continue-errors.js";
 import { RunContinues, type ContinueCheck, type ContinueLedger } from "./run-continues.js";
 import { CONTINUES_PER_RUN } from "./run-rules.js";
-import { RUN_AD_CONTINUES_REPOSITORY, type RunAdContinuesRepository } from "./run-ad-continues.repository.js";
+import { RUN_AD_CONTINUES_REPOSITORY, continueScopeOf, type ContinueScope, type RunAdContinuesRepository } from "./run-ad-continues.repository.js";
 import { RUNS_REPOSITORY, type RunsRepository, type StoredRun } from "./runs.repository.js";
 
 /**
- * Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4): забег — хозяин
- * места `second_chance`. Модуль рекламы ручается за показ, здесь решается,
- * можно ли этим показом продолжить забег, и продолжение записывается рядом
- * с покупками — итог забега сверяется с обеими книгами (`run-continues.ts`).
+ * Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4, Р162): забег —
+ * хозяин места `second_chance`. Модуль рекламы ручается за показ, здесь
+ * решается, можно ли этим показом продолжить забег, и продолжение
+ * записывается рядом с покупками — итог забега сверяется со всеми книгами
+ * (`run-continues.ts`).
  *
  * У VIP ролика нет: выдача показа отдаёт пропуск, и он забирается здесь так
  * же, как досмотренная сессия (§3.6).
+ *
+ * Сколько продолжений в игровые сутки — ключи панели `continue.ad-per-day`
+ * (по умолчанию одно) и `continue.vip-per-day` (по умолчанию пять). Дальше —
+ * самоцветы или звёзды: иначе продолжение за ролик обесценило бы платное для
+ * тех, кто играет весь день. VIP платит за «без ролика», поэтому его число
+ * своё, а счёт продолжений ведётся порознь.
  */
-
-/**
- * **Рабочее число (Р4, Р31):** продолжений за рекламу в игровые сутки.
- * Дальше — только звёзды: иначе продолжение за ролик обесценило бы
- * продолжение за звёзды для тех, кто играет весь день.
- */
-export const AD_CONTINUES_PER_DAY = 5;
 
 /** Какие по счёту продолжения забега берутся за рекламу (Р4): только первое, дальше — звёзды. */
 export const AD_CONTINUE_NUMBERS: readonly number[] = [1];
@@ -60,6 +62,7 @@ export class RunAdContinueService implements ContinueLedger, OnModuleInit {
     @Inject(RUN_AD_CONTINUES_REPOSITORY) private readonly repository: RunAdContinuesRepository,
     private readonly ads: AdsService,
     private readonly continues: RunContinues,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   onModuleInit(): void {
@@ -75,8 +78,9 @@ export class RunAdContinueService implements ContinueLedger, OnModuleInit {
     const continueNo = (await this.continues.taken(runId)).size + 1;
     const numberRefusal = numberRefusalOf(continueNo);
     if (numberRefusal !== null) return { status: "unavailable", reason: numberRefusal };
-    const [today, ready] = await Promise.all([this.db(this.repository.todayCount(player.accountId, at)), this.ads.readiness(player, "second_chance", at)]);
-    if (today >= AD_CONTINUES_PER_DAY) return { status: "unavailable", reason: "daily_cap" };
+    const ready = await this.ads.readiness(player, "second_chance", at);
+    const scope = scopeOf(ready.pass);
+    if ((await this.db(this.repository.todayCount(player.accountId, at, scope))) >= this.perDay(scope)) return { status: "unavailable", reason: "daily_cap" };
     if (!ready.available) return { status: "unavailable", reason: "no_ads" };
     return { status: "available", continueNo, pass: ready.pass };
   }
@@ -100,11 +104,18 @@ export class RunAdContinueService implements ContinueLedger, OnModuleInit {
     if (refusal === "finished") throw new AdContinueUnavailableError("Забег уже закончен");
     const continueNo = (await this.continues.taken(runId)).size + 1;
     if (numberRefusalOf(continueNo) !== null) throw new AdContinueUnavailableError("Это продолжение — не за рекламу");
-    // Потолок не атомарен: два параллельных продолжения могут пройти оба. Цена — одно лишнее за сутки.
-    if ((await this.db(this.repository.todayCount(player.accountId, at))) >= AD_CONTINUES_PER_DAY) throw new AdContinueDailyCapError();
+    // Проверка до забора бережёт досмотренную сессию; окончательно потолок держит запись в базе.
+    const scope = scopeOf((await this.ads.readiness(player, "second_chance", at)).pass);
+    if ((await this.db(this.repository.todayCount(player.accountId, at, scope))) >= this.perDay(scope)) throw capError(scope);
 
     const { session } = await this.ads.claim(player.accountId, sessionId, "second_chance", at);
-    const outcome = await this.db(this.repository.grant({ runId, continueNo, accountId: player.accountId, sessionId, networkKey: session.networkKey, grantedAt: at }));
+    // Вид — по записи сессии: потолок обязан быть тем, под который ляжет строка. Параллельный
+    // забор, опередивший проверку выше, получит здесь «потолок», а его сессия уже забрана.
+    const grantScope = continueScopeOf(session.networkKey);
+    const outcome = await this.db(
+      this.repository.grant({ runId, continueNo, accountId: player.accountId, sessionId, networkKey: session.networkKey, grantedAt: at }, this.perDay(grantScope)),
+    );
+    if (outcome === "capped") throw capError(grantScope);
     if (outcome === "taken") throw new ContinueTakenError();
     if (outcome === "granted") {
       this.logger.log(JSON.stringify({ module: "runs", event: "run_ad_continued", accountId: player.accountId, runId, continueNo, network: session.networkKey }));
@@ -121,9 +132,22 @@ export class RunAdContinueService implements ContinueLedger, OnModuleInit {
     return await this.db(this.repository.numbers(runId));
   }
 
+  private perDay(scope: ContinueScope): number {
+    return this.settings.get(scope === "vip" ? SETTINGS.continueVipPerDay : SETTINGS.continueAdPerDay);
+  }
+
   private async db<T>(promise: Promise<T>): Promise<T> {
     return await withTimeout(promise, DB_TIMEOUT_MS, "второй шанс за рекламу");
   }
+}
+
+/** Вид продолжения по пропуску: есть пропуск — продолжение без ролика (VIP), нет — за рекламу. */
+function scopeOf(pass: string | null): ContinueScope {
+  return pass === null ? "ad" : continueScopeOf(pass);
+}
+
+function capError(scope: ContinueScope): AdContinueDailyCapError {
+  return scope === "vip" ? new AdContinueDailyCapError("Продолжения без ролика на сегодня закончились") : new AdContinueDailyCapError();
 }
 
 /**

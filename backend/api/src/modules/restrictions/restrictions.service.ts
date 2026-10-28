@@ -106,6 +106,36 @@ export class RestrictionsService {
     await this.afterImposed(null, accountId, created, replaced, at);
   }
 
+  /**
+   * Наложить от имени системы на срок (Р115, tasks/T-0177): как `imposeBySystem`
+   * — без права и без автора, с сообщением игроку, — но конечный срок, и
+   * наложение не ослабляет то, что уже стоит. Не накладывается ничего (`"kept"`),
+   * если у игрока действует блокировка целиком или ограничение этого же вида,
+   * бессрочное или кончающееся не раньше нового срока: иначе короткое системное
+   * закрытие заменило бы решение человека. Короче новое — прежнее заменяется, как у
+   * человека. Что стоит у игрока, проверяется внутри самого наложения, под блокировкой
+   * аккаунта, под которой пишут модераторы (`keepIfStanding`, T-0345): прочитанное до неё
+   * могло устареть к записи, и система заменила бы своим, коротким, более строгое решение
+   * человека, наложенное между чтением и записью. Из кеша порта «можно ли» не читается
+   * тем более: он живёт полминуты.
+   */
+  async imposeBySystemFor(accountId: string, kind: RestrictionKind, reason: RestrictionReason, comment: string, termMs: number, at = new Date()): Promise<"imposed" | "kept"> {
+    if (kind === "all") throw new ValidationError("Систему блокировать целиком не просим: блокировка — решение человека");
+    if (!Number.isFinite(termMs) || termMs < RESTRICTION_LIMITS.minTermMs || termMs > RESTRICTION_LIMITS.maxTermMs) {
+      throw new ValidationError("Срок ограничения от системы — от десяти минут до пяти лет");
+    }
+    const endsAt = new Date(at.getTime() + termMs);
+
+    const row: NewRestriction = { accountId, kind, startsAt: at, endsAt, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
+    const { created, replaced, kept } = await this.db(this.repository.impose([row], at, { keepIfStanding: true }));
+    if (kept) {
+      this.log("restriction_system_kept", { accountId, kind, reason });
+      return "kept";
+    }
+    await this.afterImposed(null, accountId, created, replaced, at);
+    return "imposed";
+  }
+
   /** Что идёт за записью строк: сведение заменённых, кеш, слушатели, журнал аудита и лог. `actorId` — `null`: система. */
   private async afterImposed(actorId: string | null, accountId: string, created: readonly RestrictionRow[], replaced: readonly RestrictionRow[], at: Date): Promise<void> {
     // Заменённые снимаются без своих последствий: новое ограничение того же

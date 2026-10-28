@@ -25,6 +25,14 @@ export const NOTIFICATION_KINDS = {
   rare_loot: z.object({ itemId: z.string().uuid(), slot: id, rarity: id, salvaged: z.boolean() }),
   /** бусты вернулись: забег так и не начался */
   boosts_refunded: z.object({ runId: id, boosts: z.array(id).max(8), coins: z.number().int().nonnegative(), gems: z.number().int().nonnegative() }),
+  /** отписка от канала после награды: награда списана, при повторе задания закрыты */
+  task_unsubscribed: z.object({
+    title: z.string().min(1).max(120).nullable(),
+    coins: z.number().int().nonnegative(),
+    gems: z.number().int().nonnegative(),
+    shards: z.number().int().nonnegative(),
+    closedUntil: z.iso.datetime().nullable(),
+  }),
   /** сообщение команды из панели — простой текст: разметка из панели ломает строку ленты */
   team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
   /** вышла версия — что нового, в журнале обновлений (WP31) */

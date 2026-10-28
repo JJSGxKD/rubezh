@@ -45,6 +45,7 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
   loadout_stale: "снаряжение сменилось после выдачи снимка",
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
+  counters_implausible: "счётчики забега не сходятся с ходом боя",
 };
 
 export function reasonTitle(code: string): string {

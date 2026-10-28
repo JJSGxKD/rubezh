@@ -3,8 +3,8 @@ id: T-0336
 title: Стоящий враг не шагает — кадр шага по движению, как у героя
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -23,7 +23,7 @@ batch: 3
 
 # T-0336. Стоящий враг не шагает — кадр шага по движению, как у героя
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0336.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0336.json)](../README.md#значки-статуса)
 
 ## Зачем
 

@@ -3,8 +3,8 @@ id: T-0125
 title: Итог забега: счётчики боссов, элит, сундуков и кристаллов
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead2-20
 size: M
 depends_on:
@@ -49,6 +49,15 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
+  - backend/api/test/admin-notify.test.ts
+  - backend/api/test/payment-confirmation.test.ts
+  - backend/api/test/referrals.test.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/tasks.integration.test.ts
+  - backend/api/test/tasks.test.ts
+  - packages/app-shell/src/state/run-interrupted.ts
+  - packages/app-shell/test/run-interrupted.test.ts
+  - packages/app-shell/test/death-overlay-layout.test.ts
 runner: local
 executor: sonnet-5.5
 effort: high
@@ -59,7 +68,7 @@ batch: 3
 
 # T-0125. Итог забега: счётчики боссов, элит, сундуков и кристаллов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](archive/T-0099-run-chest-engine.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json)](../README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](T-0099-run-chest-engine.md)
 
 ## Зачем
 

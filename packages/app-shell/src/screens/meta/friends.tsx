@@ -53,6 +53,8 @@ export function FriendsScreen(): ReactNode {
   const load = async (): Promise<void> => {
     const response = await api.view();
     setState(response.ok ? { status: "ready", view: response.data } : { status: "failed" });
+    // Экран открыт — сервер погасил уведомления про друзей: знаки перечитываем после ответа, один раз.
+    if (response.ok) void loadBadges();
   };
 
   useEffect(() => {
@@ -72,8 +74,6 @@ export function FriendsScreen(): ReactNode {
       if (refusal !== "restricted") setNotice(t(refusal === "lifted" ? "restricted.lifted" : "friends.action.failed"));
     }
     await load();
-    // Знак на вкладке гаснет вместе с тем, что его зажгло.
-    void loadBadges();
     setBusy(null);
   };
 
