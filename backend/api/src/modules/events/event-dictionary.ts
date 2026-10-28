@@ -49,6 +49,8 @@ const purchaseFields = {
   sku: id.optional(),
   // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
   promoPct: count.optional(),
+  // Метка набора на витрине в момент покупки: продаёт ли «Хит», «Выбор игроков», «Лучшая цена».
+  badge: z.enum(["hit", "choice", "best"]).optional(),
 };
 
 const runOutcome = payload({
