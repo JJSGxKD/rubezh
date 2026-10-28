@@ -21,7 +21,7 @@ shared:
   - backend/api/prisma/migrations/
   - docs/21-diagrams.md
   - docs/07-monetization-and-ads.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

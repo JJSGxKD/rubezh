@@ -20,7 +20,7 @@ shared:
   - package.json
   - docs/32-balance.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: patch

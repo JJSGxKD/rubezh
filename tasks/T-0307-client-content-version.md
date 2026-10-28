@@ -29,7 +29,7 @@ shared:
   - docs/19-content-admin.md
   - docs/20-env-and-ports.md
   - docs/27-design-system-and-app-shell.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

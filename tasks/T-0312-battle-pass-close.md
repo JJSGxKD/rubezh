@@ -21,7 +21,7 @@ shared:
   - backend/api/src/modules/notifications-bot/bot-notify-texts.ts
   - backend/api/src/modules/vip/vip.repository.ts
   - docs/37-accounting.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

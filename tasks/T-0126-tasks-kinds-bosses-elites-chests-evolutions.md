@@ -29,7 +29,7 @@ shared:
   - docs/39-retention-mechanics.md
   - backend/api/prisma/migrations/**
   - apps/admin/src/ui/help.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
