@@ -377,7 +377,7 @@ describe("страница доски", () => {
   });
 
   it("задела нет — оба раздела «Пусто.»; доска без ключей ahead и aheadFree тоже рисуется", () => {
-    const older = { ...board, ahead: undefined, aheadFree: undefined };
+    const older = Object.fromEntries(Object.entries(board).filter(([key]) => key !== "ahead" && key !== "aheadFree"));
     for (const page of [render({ board: { ...board, ahead: [], aheadFree: [] } }), render({ board: older })]) {
       expect(page).toContain("## Задел — 0\n\nПусто.");
       expect(page).toContain("## Можно заделом — 0\n\nПусто.");
