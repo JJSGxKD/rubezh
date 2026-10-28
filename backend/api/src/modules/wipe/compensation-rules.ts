@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONTINUE_RATE, starsToGems } from "../payments/continue-price.js";
 import { WALLET_RESOURCES, type WalletResource } from "../wallet/wallet-types.js";
 
 /**
@@ -20,15 +21,14 @@ export function bonusGems(level: number): number {
 }
 
 /**
- * Курс компенсации второго шанса (Р87): самоцветов за звёзды. РАБОЧЕЕ ЗНАЧЕНИЕ
- * до решения О43 — по набору «60 самоцветов за 50 ⭐». Парой целых, а не 1.2:
- * дробный множитель даёт шум плавающей точки в округлении вверх.
+ * Курс второго шанса — правило товара, оно живёт рядом с ценой
+ * (`payments/continue-price.ts`, Р162); компенсация берёт его оттуда.
  */
-export const CONTINUE_RATE = { gems: 6, stars: 5 } as const;
+export { CONTINUE_RATE };
 
-/** Звёзды второго шанса → самоцветы, вверх до целого: 10 ⭐ → 12, 3 ⭐ → 4. */
+/** Звёзды второго шанса → самоцветы по курсу товара, вверх до целого: 10 ⭐ → 12, 3 ⭐ → 4. */
 export function continueGems(stars: number): number {
-  return Math.ceil((stars * CONTINUE_RATE.gems) / CONTINUE_RATE.stars);
+  return starsToGems(stars);
 }
 
 /** Что начислила покупка — одна строка журнала кошелька. */

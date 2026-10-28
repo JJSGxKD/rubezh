@@ -41,6 +41,12 @@ describe("план вайпа: полнота", () => {
     expect(actions.filter((action) => action === "keep")).toHaveLength(64);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(19);
   });
+
+  it("второй шанс за самоцветы уходит каскадом вместе с забегом, своего шага стирания у него нет", () => {
+    expect(plan.RunGemContinue?.action).toBe("keep");
+    expect(plan.RunGemContinue?.why).toContain("каскад");
+    expect(order).not.toContain("RunGemContinue");
+  });
 });
 
 describe("план вайпа: компенсации тестерам", () => {
