@@ -148,7 +148,7 @@ describe("правила фильтра имён в панели по HTTP", () 
     const dangerous = await app.inject({ method: "POST", url: "/api/v1/admin/name-rules", headers, payload: { category: "ads", kind: "regex", pattern: "(a+)+" } });
     expect(dangerous.statusCode).toBe(400);
     expect(dangerous.json<{ error: { code: string } }>().error.code).toBe("name_rule_invalid");
-    expect((await app.inject({ method: "POST", url: "/api/v1/admin/name-rules", headers, payload: { category: "brand", kind: "exact", pattern: "пример", лишнее: 1 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/name-rules", headers, payload: { category: "brand", kind: "exact", pattern: "пример", extra: 1 } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: "/api/v1/admin/name-rules", headers, payload: { category: "spam", kind: "exact", pattern: "пример" } })).statusCode).toBe(400);
 
     const created = await app.inject({ method: "POST", url: "/api/v1/admin/name-rules", headers, payload: { category: "brand", kind: "exact", pattern: "пример-бренд", note: "чужой бренд" } });

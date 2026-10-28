@@ -41,7 +41,7 @@ export const AUDIT_PAGE = 50;
  * началам имён действий.
  */
 export const AUDIT_AREAS = [
-  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals.", "payments."] },
+  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals.", "payments.", "names."] },
   { id: "growth", title: "Привлечение", prefixes: ["links.", "partner.", "promo."] },
   { id: "revenue", title: "Доход", prefixes: ["shop.", "ads.", "fx."] },
   { id: "engagement", title: "Вовлечение", prefixes: ["tasks.", "broadcast.", "changelog."] },
@@ -141,6 +141,9 @@ const ACTION_TITLES: Record<string, string> = {
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
   "ads.test": "Проверка рекламы командой",
+  "names.rule.create": "Новое правило фильтра имён",
+  "names.rule.update": "Правка правила фильтра имён",
+  "names.rule.delete": "Удаление правила фильтра имён",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
 };
@@ -226,6 +229,8 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
       return action.startsWith("ads.network.")
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
+    case "names":
+      return { kind: "правило", label: short(target), route: { section: "names", id: null } };
     case "fx":
       // Цель лимита и счётчика — код источника, а заданного курса — пара «валюта:назначение».
       return action === "fx.limit.set" || action === "fx.limit.reset" || action === "fx.used.correct"
