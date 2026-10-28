@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
 import { useBadges } from "./badges";
+import { loadBadges } from "./badges-api";
 import { useShell } from "./shell";
 
 /**
@@ -51,10 +52,13 @@ export function changelogAvailable(): boolean {
  * который игрок видел: версия, вышедшая, пока журнал открыт, останется новой.
  * Знак меню гаснет по ответу сервера, а не наугад.
  */
-export async function markChangelogSeen(page: ChangelogPage, api: ChangelogApi): Promise<void> {
+export async function markChangelogSeen(page: ChangelogPage, api: ChangelogApi, refresh: () => Promise<void> = loadBadges): Promise<void> {
   if (page.latestAt === null) return;
   const response = await api.seen(page.latestAt);
-  if (response.ok) useBadges.setState({ changelog: response.data.badge });
+  if (!response.ok) return;
+  useBadges.setState({ changelog: response.data.badge });
+  // Сервер погасил уведомления про журнал: знаки перечитываем после его ответа.
+  void refresh();
 }
 
 /** Порядок видов внутри версии — как на сервере; незнакомый вид — в конце. */
