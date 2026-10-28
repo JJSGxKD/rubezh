@@ -3,7 +3,7 @@ id: T-0216
 title: Уровни ролей — администратор выдаёт роли ниже своей
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -18,6 +18,9 @@ zones:
   - apps/admin/src/screens/roles/RolesScreen.tsx
 shared:
   - backend/api/src/modules/roles/permissions.ts
+  - apps/admin/test/roles.test.ts
+  - backend/api/test/admin.test.ts
+  - backend/api/test/player-address.test.ts
   - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
@@ -152,11 +155,11 @@ batch: 3
 
 ## Критерии приёмки
 
-- [ ] Администратор выдаёт и снимает только роли ниже своей и только у
+- [x] Администратор выдаёт и снимает только роли ниже своей и только у
   аккаунтов ниже себя; владелец — любые.
-- [ ] Обход панели запросом даёт тот же отказ.
-- [ ] Панель не предлагает недоступных ролей.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Обход панели запросом даёт тот же отказ.
+- [x] Панель не предлагает недоступных ролей.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
