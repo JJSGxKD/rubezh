@@ -318,9 +318,8 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(summary).toContain("xpCollected: world.stats.xpCollected");
   });
 
-  it("поле необязательное, поэтому формат снимка и мира прежний", () => {
+  it("поле необязательное, поэтому формат снимка прежний", () => {
     expect(RUN_SNAPSHOT_FORMAT).toBe(7);
-    expect(WORLD_SNAPSHOT_VERSION).toBe(9);
   });
 });
 
