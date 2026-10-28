@@ -297,6 +297,13 @@ export function TestersScreen(): ReactNode {
                 onClick={() => navigation.push("soundLab")}
               />
             ) : null}
+            {access.admin ? (
+              <ListItem
+                title={t("testers.adsCheck")}
+                hint={t("testers.adsCheck.hint")}
+                onClick={() => navigation.push("adsCheck")}
+              />
+            ) : null}
             {/* Сведения об устройстве — всем (Р56): поделиться ими с командой
                 может любой игрок, а не только включивший диагностику. */}
             <ListItem title={t("testers.device")} hint={t("testers.device.hint")} onClick={() => navigation.push("diagnostics")} />
