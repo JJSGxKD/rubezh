@@ -27,8 +27,15 @@ export const WORK_LABEL = "в работе";
 /** Метка PR «отправлено тимлиду» (Р172): зоны свободны, поток берёт следующую задачу. */
 export const REVIEW_LABEL = "на ревью";
 
-/** Все метки статуса задачи на PR: ровно одна из них на каждом PR ветки `task/T-NNNN` (Р172). */
-export const STATUS_LABELS = [WORK_LABEL, REVIEW_LABEL, REWORK_LABEL, OWNER_LABEL];
+/**
+ * Метка PR «задел» (Р178): задачу начали поверх веток её незакрытых
+ * зависимостей, пока те ждут ревью. PR задела — всегда черновик, зон не держит
+ * и до мерджа зависимостей не вливается.
+ */
+export const AHEAD_LABEL = "задел";
+
+/** Все метки статуса задачи на PR: ровно одна из них на каждом PR ветки `task/T-NNNN` (Р172, Р178). */
+export const STATUS_LABELS = [WORK_LABEL, REVIEW_LABEL, REWORK_LABEL, OWNER_LABEL, AHEAD_LABEL];
 
 const CI_RED_CONCLUSIONS = ["FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"];
 const CI_RED_STATES = ["FAILURE", "ERROR"];
@@ -46,19 +53,22 @@ export function isCiRed(pr) {
 const hasLabel = (pr, name) => (pr.labels ?? []).some((label) => label?.name === name);
 
 /**
- * Статус задачи по метке её PR (Р172): `"work" | "review" | "rework" | "owner"`.
+ * Статус задачи по метке её PR (Р172, Р178): `"work" | "review" | "rework" | "owner" | "ahead"`.
  * Доска, значки и захват читают метку, а не черновик: черновик с вопросами —
  * это «на ревью», и поток, отправивший его, уже взял следующую задачу.
  * Меток несколько — берётся старшая (доработка, ждёт владельца, в работе, на
- * ревью): проверка PR всё равно покраснеет, но доска не должна гадать. Метки
- * нет вовсе — запасной путь для PR, открытых до правила: черновик — «в работе»,
- * остальное — «на ревью».
+ * ревью, задел): проверка PR всё равно покраснеет, но доска не должна гадать.
+ * «Задел» младшая: рядом с ней «в работе» значит, что задел только что взяли
+ * на доводку, а «на ревью» — что его уже довели. Метки нет вовсе — запасной
+ * путь для PR, открытых до правила: черновик — «в работе», остальное — «на
+ * ревью».
  */
 export function prStatus(pr) {
   if (hasLabel(pr, REWORK_LABEL)) return "rework";
   if (hasLabel(pr, OWNER_LABEL)) return "owner";
   if (hasLabel(pr, WORK_LABEL)) return "work";
   if (hasLabel(pr, REVIEW_LABEL)) return "review";
+  if (hasLabel(pr, AHEAD_LABEL)) return "ahead";
   return pr.isDraft === true ? "work" : "review";
 }
 
@@ -79,8 +89,10 @@ export function waitingOn(pr) {
 export const COLUMNS = [
   { key: "rework", title: "Доработка" },
   { key: "free", title: "Свободно" },
+  { key: "aheadFree", title: "Можно заделом" },
   { key: "inProgress", title: "В работе" },
   { key: "review", title: "На ревью" },
+  { key: "ahead", title: "Задел" },
   { key: "blocked", title: "Заблокировано" },
   { key: "draft", title: "Черновики" },
   { key: "done", title: "Готово" },
@@ -112,6 +124,57 @@ function compareTasks(epicOrder) {
 }
 
 /**
+ * Причина, по которой на этой незакрытой зависимости нельзя строить задел, или
+ * `null`, если можно (Р178): у зависимости открыт PR со статусом «на ревью»,
+ * «ждёт владельца» или «доработка», и сама она не задел — одна ступень.
+ */
+function aheadDependencyProblem(id, dependency, pr, prsKnown) {
+  if (dependency === undefined) return `зависимости ${id} нет в реестре`;
+  if (dependency.status === "cancelled") return `зависимость ${id} закрыта без мерджа (cancelled)`;
+  if (dependency.status === "draft") return `зависимость ${id} ещё черновик спецификации`;
+  if (!prsKnown) return `список открытых PR не получен: статус зависимости ${id} неизвестен`;
+  if (pr === undefined) return `у зависимости ${id} нет открытого PR: заделом можно брать только поверх PR на ревью`;
+  const status = prStatus(pr);
+  if (status === "ahead") return `зависимость ${id} сама задел: поверх задела брать нельзя, дождись её мерджа`;
+  if (status === "work") return `зависимость ${id} ещё в работе: заделом можно брать только поверх PR, отправленного на ревью`;
+  return null;
+}
+
+/**
+ * Можно ли начать задачу заделом (Р178): `{ unclosed, problems }`. `unclosed` —
+ * зависимости задачи, которые не `done` (в порядке `depends_on`); `problems` —
+ * по причине на каждую из них, на которой строить нельзя. Пусто в `problems` и
+ * непусто в `unclosed` — задел возможен; пусто в `unclosed` — задел не нужен.
+ * `tasks` — реестр с базы (`origin/dev`), `prs` — открытые PR или `null`.
+ */
+export function aheadCheck(task, tasks, prs) {
+  const byId = new Map(tasks.map((candidate) => [candidate.id, candidate]));
+  const prByBranch = new Map((prs ?? []).map((pr) => [pr.headRefName, pr]));
+  const unclosed = [];
+  const problems = [];
+  for (const id of task.depends_on) {
+    const dependency = byId.get(id);
+    if (dependency?.status === "done") continue;
+    unclosed.push(id);
+    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(`task/${id}`), prs !== null);
+    if (problem !== null) problems.push(problem);
+  }
+  return { unclosed, problems };
+}
+
+/**
+ * Зависимость закрыта без мерджа: отменена или её ветку отдали (`pnpm task
+ * release`) вместе с PR, не влив (Р178, п. 7). Задел поверх неё держится на
+ * коммитах, которых в `dev` не будет.
+ */
+function closedWithoutMerge(dependency, branches, openPrs) {
+  if (dependency === undefined || dependency.status === "done") return false;
+  if (dependency.status === "cancelled") return true;
+  const live = branches.has(dependency.id) || openPrs.has(`task/${dependency.id}`);
+  return (dependency.status === "ready" || dependency.status === "in-progress") && !live;
+}
+
+/**
  * Раскладывает задачи по колонкам.
  *
  * - `tasks` — поля задач с `fileName` (как в `readTasks`);
@@ -119,14 +182,20 @@ function compareTasks(epicOrder) {
  * - `prs` — открытые PR `{ number, headRefName, isDraft, labels?, body?, statusCheckRollup? }`
  *   или `null`, если список получить не удалось (нет `gh`): тогда «На ревью» сливается с
  *   «В работе». Колонку PR задаёт `prStatus` (метка, Р172): «в работе» — «В работе» (с номером
- *   PR), «доработка» — «Доработка», «на ревью» и «ждёт владельца» — «На ревью»; ветка без PR —
- *   «В работе». У записей «На ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
+ *   PR), «доработка» — «Доработка», «на ревью» и «ждёт владельца» — «На ревью», «задел» — «Задел»;
+ *   ветка без PR — «В работе». У записей «На ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `epicOrder` — эпики в порядке `epics.md`.
  *
  * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
  * внутри колонки порядок: пачка, приоритет, эпик, id. У заблокированных `waitingFor` —
  * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
+ *
+ * Задел (Р178): PR с меткой «задел» — колонка `ahead`, у записи `ripe` (все зависимости
+ * `done`) и `waitingFor` (ещё не влитые); зон такой PR не держит. Ждущая задача, у которой
+ * каждая незакрытая зависимость годится для задела (`aheadCheck`), а зоны свободны, — колонка
+ * `aheadFree` с `aheadOver` (поверх каких зависимостей). Задел, чью зависимость закрыли без
+ * мерджа, уходит в `blocked` с причиной.
  */
 export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   const branches = new Set(taken);
@@ -146,7 +215,14 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
         const status = prStatus(pr);
         if (status === "work") result.inProgress.push({ task, pr: pr.number });
         else if (status === "rework") result.rework.push({ task, pr: pr.number, waiting: waitingOn(pr) });
-        else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
+        else if (status === "ahead") {
+          const gone = task.depends_on.filter((id) => closedWithoutMerge(byId.get(id), branches, openPrs));
+          const waitingFor = task.depends_on.filter((id) => byId.get(id)?.status !== "done");
+          if (gone.length > 0) {
+            const reason = gone.map((id) => `зависимость ${id} закрыта без мерджа`).join("; ");
+            result.blocked.push({ task, pr: pr.number, reason, waitingFor: gone, busyWith: [] });
+          } else result.ahead.push({ task, pr: pr.number, ripe: waitingFor.length === 0, waitingFor });
+        } else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
       }
     } else if (task.status === "in-progress") {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
@@ -187,7 +263,10 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
       }
     }
     if (reasons.length === 0) result.free.push({ task });
-    else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith });
+    else if (busyWith.length === 0 && waitingFor.length > 0 && aheadCheck(task, tasks, prs).problems.length === 0) {
+      // Все зависимости ждут ревью, зоны свободны: задачу можно начать заделом (Р178).
+      result.aheadFree.push({ task, aheadOver: waitingFor });
+    } else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith });
   }
 
   const compare = compareTasks(epicOrder);
@@ -209,6 +288,23 @@ export function nextTasks(entries, { runner = "any", executor, effort } = {}) {
       (executor === undefined || entry.task.executor === executor) &&
       (effort === undefined || entry.task.effort === effort),
   );
+}
+
+/**
+ * Что показать в `pnpm task next` по порядку (Р178): доработка, созревший задел
+ * (все зависимости влиты — доводит любой поток той же модели и уровня), свободные
+ * задачи, затем те, что можно начать заделом. Не созревший задел не предлагается:
+ * его зависимости ещё ждут ревью. Фильтры — как у `nextTasks`. Возвращает
+ * `[{ kind: "rework" | "ripe" | "free" | "ahead", entry }]`.
+ */
+export function nextOrder(board, filters = {}) {
+  const group = (kind, entries) => nextTasks(entries ?? [], filters).map((entry) => ({ kind, entry }));
+  return [
+    ...group("rework", board.rework),
+    ...group("ripe", (board.ahead ?? []).filter((entry) => entry.ripe)),
+    ...group("free", board.free),
+    ...group("ahead", board.aheadFree),
+  ];
 }
 
 /** Сколько номеров показывает значок: длинный список не влезает в картинку, остаток — «+N». */
@@ -238,6 +334,10 @@ export function statusBadge(entry) {
       return badge(`доработка · #${String(entry.pr)}`, "yellow");
     case "free":
       return badge("можно брать", "brightgreen");
+    case "aheadFree":
+      return badge("можно заделом", "teal");
+    case "ahead":
+      return entry.ripe === true ? badge(`задел готов · #${String(entry.pr)}`, "yellowgreen") : badge(`задел · #${String(entry.pr)}`, "blueviolet");
     case "inProgress": {
       const account = (entry.owner ?? "").split(" / ")[0].trim();
       return badge(account === "" ? "в работе" : `в работе · ${account}`, "orange");
@@ -321,8 +421,11 @@ export function streamsSummary(board) {
   };
 
   for (const entry of board.rework) place(entry, "now", { rework: true });
+  // Созревший задел — работа сразу, как свободная; ждущий зависимостей в потоки не входит (Р178).
+  for (const entry of (board.ahead ?? []).filter((candidate) => candidate.ripe)) place(entry, "now", { rework: false });
   for (const entry of board.free) place(entry, "now", { rework: false });
   for (const entry of board.blocked) place(entry, "queue", {});
+  for (const entry of board.aheadFree ?? []) place(entry, "queue", {});
 
   const sorted = (map) => [...map.values()].sort(compareStreams);
   return { streams: sorted(total), epics: Object.fromEntries([...perEpic].map(([epic, map]) => [epic, sorted(map)])) };

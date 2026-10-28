@@ -984,8 +984,9 @@ describe("задел: доска", () => {
     });
 
     it("зоны заняты задачей «в работе» — заделом нельзя, задача заблокирована зоной", () => {
-      const busy = task("T-0012", { zones: ["zones/T-0011/**"] });
-      const result = board([dep, top, busy], [pr(21, "T-0010", [REVIEW_LABEL])], ["T-0010", "T-0012"]);
+      const sharedTop = task("T-0011", { depends_on: ["T-0010"], zones: ["a/b.ts"] });
+      const busy = task("T-0012", { zones: ["a/b.ts"] });
+      const result = board([dep, sharedTop, busy], [pr(21, "T-0010", [REVIEW_LABEL])], ["T-0010", "T-0012"]);
       expect(ids(result.aheadFree)).toEqual([]);
       expect(ids(result.blocked)).toEqual(["T-0011"]);
       expect(result.blocked[0].busyWith).toEqual(["T-0012"]);
@@ -1016,8 +1017,9 @@ describe("задел: доска", () => {
     });
 
     it("зон не держит: соседняя задача с пересекающимися зонами свободна", () => {
-      const neighbour = task("T-0020", { zones: ["zones/T-0011/**"] });
-      const result = board([dep, top, neighbour], [pr(21, "T-0010", [REVIEW_LABEL]), aheadPr], ["T-0010", "T-0011"]);
+      const sharedTop = task("T-0011", { depends_on: ["T-0010"], zones: ["a/b.ts"] });
+      const neighbour = task("T-0020", { zones: ["a/b.ts"] });
+      const result = board([dep, sharedTop, neighbour], [pr(21, "T-0010", [REVIEW_LABEL]), aheadPr], ["T-0010", "T-0011"]);
       expect(ids(result.free)).toEqual(["T-0020"]);
     });
 
