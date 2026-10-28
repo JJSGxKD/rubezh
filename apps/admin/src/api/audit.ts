@@ -395,6 +395,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
  */
 const RESTRICTION_KINDS: Record<string, string> = {
   leaderboard: "рейтинг",
+  separate_board: "отдельная доска",
   referral_rewards: "награды за друзей",
   friend_gifts: "подарки друзьям",
   ad_rewards: "награды за рекламу",
