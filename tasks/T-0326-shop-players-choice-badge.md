@@ -3,7 +3,7 @@ id: T-0326
 title: «Выбор игроков» в магазине — метка у набора, который за 30 дней купило больше всего разных игроков; считается сервером, ниже порога не показывается
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
