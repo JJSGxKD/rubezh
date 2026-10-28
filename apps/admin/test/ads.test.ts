@@ -12,6 +12,7 @@ import {
   networkFormOf,
   networkFormSchema,
   networkPlatforms,
+  passTitle,
   percent,
   placeOptions,
   reachLabel,
@@ -101,7 +102,7 @@ function block(patch: Partial<AdBlock> = {}): AdBlock {
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
-  return { networks: NETWORKS, blocks: [], funnel: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
+  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
 }
 
 function form(patch: Partial<BlockForm> = {}): BlockForm {
@@ -280,8 +281,26 @@ describe("реклама в панели: мелочи", () => {
     expect(reachLabel(view(), block({ platforms: ["telegram"], devices: ["android", "ios"] }))).toBe("Telegram; Android, iOS");
     // Пустой список площадок — там, где работает сеть, а не «все площадки».
     expect(reachLabel(view(), block())).toBe("Telegram; все устройства");
-    expect(funnelNetworkTitle("vip", NETWORKS)).toBe("VIP без ролика");
+    // Пропуск VIP — не сеть: из подписей воронки он ушёл, у него своя таблица (Р99).
+    expect(funnelNetworkTitle("vip", NETWORKS)).toBe("vip");
     expect(funnelNetworkTitle("adsgram", NETWORKS)).toBe("AdsGram");
     expect(funnelNetworkTitle("monetag", NETWORKS)).toBe("monetag");
+  });
+});
+
+describe("реклама в панели: пропуск VIP", () => {
+  it("подпись пропуска по ключу; незнакомый — ключом", () => {
+    expect(passTitle("vip")).toBe("VIP");
+    expect(passTitle("gold")).toBe("gold");
+  });
+
+  it("ответ с пропусками разбирается; без поля (сервер старее панели) — пусто", async () => {
+    const base = { networks: [], blocks: [], funnel: [], days: 7, places: ["second_chance"] };
+    const withPasses = fakeFetch(json(200, { data: { ...base, passes: [{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }] } }));
+    const loaded = await fetchAds(new AdminApi(withPasses.fetch), 7);
+    expect(loaded.ok && loaded.data.passes).toEqual([{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }]);
+    const old = fakeFetch(json(200, { data: base }));
+    const legacy = await fetchAds(new AdminApi(old.fetch), 7);
+    expect(legacy.ok && legacy.data.passes).toEqual([]);
   });
 });

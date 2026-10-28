@@ -20,7 +20,11 @@ export function isTaskFile(name) {
   return posix.basename(name).startsWith("T-");
 }
 
-/** Готовая и отменённая задача живёт в архиве, остальные — наверху. */
+/**
+ * Место задачи по статусу — туда её переносит `pnpm task archive` (уборка
+ * тимлида): готовая и отменённая в архив, остальные наверх. Закрытая задача
+ * наверху — не ошибка, а «ждёт уборки» (T-0343).
+ */
 export function placementPath(task) {
   return task.status === "done" || task.status === "cancelled" ? `${ARCHIVE_DIR}/${task.fileName}` : task.fileName;
 }
@@ -134,15 +138,38 @@ export function checkBatches(tasks) {
   return errors;
 }
 
-/** Задача лежит там, где ей положено по статусу: иначе `pnpm task fix` её перенесёт. */
+/**
+ * Открытая задача в архиве — ошибка: её вернёт наверх `pnpm task archive`. Закрытая
+ * наверху ошибкой не считается: в PR задача закрывается на месте, а в архив её
+ * переносит уборка тимлида (`awaitingArchive`).
+ */
 export function checkPlacement(tasks) {
   const errors = [];
   for (const task of tasks) {
-    if (task.path === placementPath(task)) continue;
-    const settled = task.status === "done" || task.status === "cancelled";
-    errors.push(`${task.path}: задача в статусе ${task.status} лежит ${settled ? "не в архиве" : "в архиве"} — перенесёт pnpm task fix`);
+    if (task.path === placementPath(task) || isSettled(task)) continue;
+    errors.push(`${task.path}: задача в статусе ${task.status} лежит в архиве — вернёт наверх pnpm task archive`);
   }
   return errors;
+}
+
+/** Закрытые задачи наверху: ждут уборки в архив, по возрастанию `id`. */
+export function awaitingArchive(tasks) {
+  return tasks.filter((task) => isSettled(task) && task.path !== placementPath(task)).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** Строка о ждущих уборки для `pnpm task check` и `fix`; `null` — таких нет. */
+export function awaitingArchiveLine(tasks) {
+  const waiting = awaitingArchive(tasks);
+  if (waiting.length === 0) return null;
+  return `Ждут уборки в архив: ${String(waiting.length)} — ${waiting.map((task) => task.id).join(", ")}. Перенесёт pnpm task archive — уборка тимлида (tasks/README.md, «Уборка архива»).`;
+}
+
+/** Итог проверки реестра: всего, открытых, в архиве и ждущих уборки (часть про них — только когда они есть). */
+export function registrySummary(tasks) {
+  const archived = tasks.filter((task) => task.path.startsWith(`${ARCHIVE_DIR}/`)).length;
+  const open = tasks.filter((task) => !isSettled(task)).length;
+  const waiting = awaitingArchive(tasks).length;
+  return `Реестр задач в порядке: ${String(tasks.length)} задач (открытых ${String(open)}, в архиве ${String(archived)}${waiting > 0 ? `, ждут уборки ${String(waiting)}` : ""}).`;
 }
 
 /** Все ошибки реестра: пустой список — реестр в порядке. */
