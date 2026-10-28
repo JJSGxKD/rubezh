@@ -3,8 +3,8 @@ id: T-0325
 title: Второй шанс за самоцветы — экран смерти: кнопка с ценой и балансом, нехватка видна до нажатия, ролик раз в сутки
 epic: E1
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0324]
