@@ -113,9 +113,11 @@ export class RestrictionsService {
    * если у игрока действует блокировка целиком или ограничение этого же вида,
    * бессрочное или кончающееся не раньше нового срока: иначе короткое системное
    * закрытие заменило бы решение человека. Короче новое — прежнее заменяется, как у
-   * человека. Что стоит у игрока, читается из базы, а не из кеша порта «можно
-   * ли»: кеш живёт полминуты, и по устаревшему ответу система ослабила бы
-   * более строгое решение человека.
+   * человека. Что стоит у игрока, проверяется внутри самого наложения, под блокировкой
+   * аккаунта, под которой пишут модераторы (`keepIfStanding`, T-0345): прочитанное до неё
+   * могло устареть к записи, и система заменила бы своим, коротким, более строгое решение
+   * человека, наложенное между чтением и записью. Из кеша порта «можно ли» не читается
+   * тем более: он живёт полминуты.
    */
   async imposeBySystemFor(accountId: string, kind: RestrictionKind, reason: RestrictionReason, comment: string, termMs: number, at = new Date()): Promise<"imposed" | "kept"> {
     if (kind === "all") throw new ValidationError("Систему блокировать целиком не просим: блокировка — решение человека");
@@ -124,15 +126,12 @@ export class RestrictionsService {
     }
     const endsAt = new Date(at.getTime() + termMs);
 
-    const standing = await this.db(this.repository.active(accountId, at));
-    const holds = standing.some((row) => row.kind === "all" || (row.kind === kind && (row.endsAt === null || row.endsAt.getTime() >= endsAt.getTime())));
-    if (holds) {
+    const row: NewRestriction = { accountId, kind, startsAt: at, endsAt, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
+    const { created, replaced, kept } = await this.db(this.repository.impose([row], at, { keepIfStanding: true }));
+    if (kept) {
       this.log("restriction_system_kept", { accountId, kind, reason });
       return "kept";
     }
-
-    const row: NewRestriction = { accountId, kind, startsAt: at, endsAt, reason, comment: comment.slice(0, RESTRICTION_LIMITS.commentMax), notify: true, imposedBy: null };
-    const { created, replaced } = await this.db(this.repository.impose([row], at));
     await this.afterImposed(null, accountId, created, replaced, at);
     return "imposed";
   }

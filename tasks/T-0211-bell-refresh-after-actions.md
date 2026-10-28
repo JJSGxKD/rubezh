@@ -25,7 +25,7 @@ batch: 3
 
 # T-0211. Колокольчик обновляется сразу после экрана друзей, предмета и журнала
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0211.json)](README.md#значки-статуса) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](T-0210-notifications-read-by-action.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0211.json)](README.md#значки-статуса) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](archive/T-0210-notifications-read-by-action.md)
 
 ## Зачем
 
