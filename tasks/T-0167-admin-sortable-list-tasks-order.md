@@ -3,7 +3,7 @@ id: T-0167
 title: Порядок заданий перетаскиванием — SortableList в панели и запрос порядка
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
