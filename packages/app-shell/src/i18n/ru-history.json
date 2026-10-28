@@ -45,6 +45,7 @@
   "history.reason.item_merge": "Объединение предметов",
   "history.reason.boost": "Бусты на забег",
   "history.reason.shop": "Магазин",
+  "history.reason.continue": "Второй шанс",
   "history.reason.admin_adjust": "Поправка команды",
   "history.reason.other": "Движение",
   "history.item.obtained": "Получен предмет",
