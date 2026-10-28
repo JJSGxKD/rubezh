@@ -196,17 +196,17 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   it("доска: место того, кого в ней нет, — по строго лучшим; убрать — из всех сложностей разом", async () => {
     const [fast, slow, gone] = [await account(), await account(), await account()];
-    await board.submit("normal", fast, 500, ALL_BOARDS);
-    await board.submit("normal", slow, 300, ALL_BOARDS);
-    await board.submit("normal", gone, 400, ALL_BOARDS);
-    await board.submit("hard", gone, 100, ALL_BOARDS);
+    await board.submit("normal", fast, 500, COMMON_ONLY);
+    await board.submit("normal", slow, 300, COMMON_ONLY);
+    await board.submit("normal", gone, 400, COMMON_ONLY);
+    await board.submit("hard", gone, 100, COMMON_ONLY);
 
     expect(await board.countAbove("normal", 400, "common")).toBe(1);
     expect(await board.countAbove("normal", 300, "common")).toBe(2);
-    expect(await board.remove([gone, "никого-нет"], ALL_BOARDS)).toBe(2);
+    expect(await board.remove([gone, "никого-нет"], COMMON_ONLY)).toBe(2);
     expect(await board.best("normal", gone, "common")).toBeNull();
     expect(await board.best("hard", gone, "common")).toBeNull();
-    expect(await board.remove([], ALL_BOARDS)).toBe(0);
+    expect(await board.remove([], COMMON_ONLY)).toBe(0);
   });
 
   it("снять с рейтинга модератором: только рейтинговый, вернуть — только снятый им; два нажатия разом меняют однажды", async () => {

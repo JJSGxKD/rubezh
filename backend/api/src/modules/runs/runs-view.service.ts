@@ -110,10 +110,10 @@ export class RunsViewService {
 
   async leaderboardFor(accountId: string, difficulty: Difficulty): Promise<LeaderboardView> {
     const [top, total, rank, best, hold] = await Promise.all([
-      this.leaderboard.top(difficulty, LEADERBOARD_LIMIT),
-      this.leaderboard.count(difficulty),
-      this.leaderboard.rank(difficulty, accountId),
-      this.leaderboard.best(difficulty, accountId),
+      this.leaderboard.top(difficulty, LEADERBOARD_LIMIT, "common"),
+      this.leaderboard.count(difficulty, "common"),
+      this.leaderboard.rank(difficulty, accountId, "common"),
+      this.leaderboard.best(difficulty, accountId, "common"),
       this.rating.hold(accountId),
     ]);
 
@@ -161,7 +161,7 @@ export class RunsViewService {
     const players = view.totalPlayers - (view.me === null ? 0 : 1);
     if (mine === null) return { ...view, entries: others, me: null, totalPlayers: players };
 
-    const rank = (await this.leaderboard.countAbove(difficulty, mine.survivalSec)) + 1;
+    const rank = (await this.leaderboard.countAbove(difficulty, mine.survivalSec, "common")) + 1;
     const own = {
       rank,
       name: mine.displayName,
@@ -207,8 +207,8 @@ export class RunsViewService {
 
   /** Сколько игроков в доске глазами игрока: в тени он видит в ней и себя. */
   async boardSize(accountId: string, difficulty: Difficulty): Promise<number> {
-    const [total, hold] = await Promise.all([this.leaderboard.count(difficulty), this.rating.hold(accountId)]);
-    if (hold !== "silent" || (await this.leaderboard.best(difficulty, accountId)) !== null) return total;
+    const [total, hold] = await Promise.all([this.leaderboard.count(difficulty, "common"), this.rating.hold(accountId)]);
+    if (hold !== "silent" || (await this.leaderboard.best(difficulty, accountId, "common")) !== null) return total;
     return (await this.runs.bestRunOf(accountId, difficulty, true)) === null ? total : total + 1;
   }
 
@@ -221,14 +221,14 @@ export class RunsViewService {
   }
 
   private async boardBest(accountId: string, difficulty: Difficulty): Promise<{ survivalSec: number; rank: number } | null> {
-    const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, accountId), this.leaderboard.rank(difficulty, accountId)]);
+    const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, accountId, "common"), this.leaderboard.rank(difficulty, accountId, "common")]);
     return best === null || rank === null ? null : { survivalSec: best, rank };
   }
 
   private async shadowBest(accountId: string, difficulty: Difficulty): Promise<{ survivalSec: number; rank: number } | null> {
     const mine = await this.runs.bestRunOf(accountId, difficulty, true);
     if (mine === null) return null;
-    return { survivalSec: mine.survivalSec, rank: (await this.leaderboard.countAbove(difficulty, mine.survivalSec)) + 1 };
+    return { survivalSec: mine.survivalSec, rank: (await this.leaderboard.countAbove(difficulty, mine.survivalSec, "common")) + 1 };
   }
 
   async detail(accountId: string, runId: string): Promise<RunDetailView> {

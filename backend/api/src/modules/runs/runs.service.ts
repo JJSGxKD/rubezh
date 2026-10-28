@@ -4,8 +4,8 @@ import { DomainError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { RolesService } from "../roles/roles.service.js";
 import type { RunFinish, RunStart } from "./dto/runs.dto.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
-import { rebuildLeaderboard } from "./leaderboard-rebuild.js";
+import { ALL_BOARDS, LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
+import { rebuildLeaderboard, type BoardCounts } from "./leaderboard-rebuild.js";
 import { countersOf } from "./run-counters.js";
 import type { Difficulty } from "./run-rules.js";
 import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
@@ -175,8 +175,9 @@ export class RunsService {
    * Пересобрать рейтинг из базы. Проекция в Redis — кеш: потерялась или
    * разошлась с базой — эта команда возвращает её к источнику истины.
    */
-  async rebuildLeaderboard(): Promise<Record<string, number>> {
-    return await rebuildLeaderboard(this.runs, this.leaderboard, new Set(await this.rating.excluded()));
+  async rebuildLeaderboard(): Promise<Record<string, BoardCounts>> {
+    const [excluded, separate] = await Promise.all([this.rating.excluded(), this.rating.separate()]);
+    return await rebuildLeaderboard(this.runs, this.leaderboard, new Set(excluded), new Set(separate));
   }
 
   /**
@@ -195,10 +196,10 @@ export class RunsService {
 
     if ((await this.rating.hold(changed.accountId)) === null) {
       const best = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
-      await this.leaderboard.set(changed.difficulty, changed.accountId, best?.survivalSec ?? null);
+      await this.leaderboard.set(changed.difficulty, changed.accountId, best?.survivalSec ?? null, ALL_BOARDS);
       // Забег, сданный между чтением и записью, затёрт точной записью; итог пишет базу раньше доски — второе чтение его видит.
       const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
-      if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec);
+      if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec, ALL_BOARDS);
     }
     // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
     await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
@@ -242,10 +243,10 @@ export class RunsService {
     // остался бы в базе рейтинговым, а в рейтинге отсутствовал бы до ручной
     // пересборки. Повтор безопасен сам по себе: `ZADD GT` не меняет равное
     // время и не отвечает на него «новым рекордом».
-    const improved = ranked && hold === null ? (await this.leaderboard.submit(difficulty, account.accountId, survivalSec)).improved : false;
+    const improved = ranked && hold === null ? (await this.leaderboard.submit(difficulty, account.accountId, survivalSec, ALL_BOARDS)).improved : false;
     const [best, rank] = await Promise.all([
-      this.leaderboard.best(difficulty, account.accountId),
-      this.leaderboard.rank(difficulty, account.accountId),
+      this.leaderboard.best(difficulty, account.accountId, "common"),
+      this.leaderboard.rank(difficulty, account.accountId, "common"),
     ]);
     return { recorded: ranked, verdict, bestSurvivalSec: best ?? 0, isNewBest: improved, rank };
   }
@@ -258,7 +259,7 @@ export class RunsService {
    */
   private async shadowResult(account: AccountRef, difficulty: Difficulty, survivalSec: number, verdict: RunVerdict, shadowBefore: number | null | undefined): Promise<FinishResult> {
     const best = Math.max(survivalSec, (await this.runs.bestRunOf(account.accountId, difficulty, true))?.survivalSec ?? 0);
-    const rank = (await this.leaderboard.countAbove(difficulty, best)) + 1;
+    const rank = (await this.leaderboard.countAbove(difficulty, best, "common")) + 1;
     const isNewBest = shadowBefore !== undefined && (shadowBefore === null || survivalSec > shadowBefore);
     return { recorded: true, verdict, bestSurvivalSec: best, isNewBest, rank };
   }

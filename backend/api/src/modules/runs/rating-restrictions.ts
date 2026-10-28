@@ -6,7 +6,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsHooks, type RestrictionChange } from "../restrictions/restrictions-hooks.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
+import { ALL_BOARDS, LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
 import { DIFFICULTIES } from "./run-rules.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
 
@@ -96,6 +96,11 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     return await this.restrictions.restrictedAccounts("leaderboard", at);
   }
 
+  /** У кого сейчас отдельная доска — пересборка кладёт их только в полную. */
+  async separate(at = new Date()): Promise<string[]> {
+    return await this.restrictions.restrictedAccounts("separate_board", at);
+  }
+
   /** Одна проверка обхода; `null` — не запускался: идёт предыдущий, лок у другой реплики или Redis недоступен. */
   async tick(at = new Date()): Promise<number | null> {
     if (this.running) return null;
@@ -119,7 +124,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
   /** Убрать из досок всех, кому рейтинг закрыт; возвращает, сколько мест сняло — обычно ноль. */
   async sweep(at = new Date()): Promise<number> {
     const restricted = await this.excluded(at);
-    const removed = await this.redisCall(this.leaderboard.remove(restricted));
+    const removed = await this.redisCall(this.leaderboard.remove(restricted, ALL_BOARDS));
     // Не ноль — ограниченный успел вернуться в доску гонкой с наложением.
     if (removed > 0) this.log("log", "rating_restricted_swept", { removed });
     return removed;
@@ -127,7 +132,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
 
   private async imposed(change: RestrictionChange): Promise<void> {
     if (!change.kinds.some((kind) => RATING_KINDS.has(kind))) return;
-    await this.redisCall(this.leaderboard.remove([change.accountId]));
+    await this.redisCall(this.leaderboard.remove([change.accountId], ALL_BOARDS));
     this.log("log", "rating_restricted", { accountId: change.accountId });
   }
 
@@ -140,7 +145,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
       // Лучший рейтинговый: сданные под ограничением рейтинговыми не стали.
       const best = await withTimeout(this.runs.bestRunOf(change.accountId, difficulty, false), DB_TIMEOUT_MS, "runs: база");
       if (best === null) continue;
-      await this.redisCall(this.leaderboard.submit(difficulty, change.accountId, best.survivalSec));
+      await this.redisCall(this.leaderboard.submit(difficulty, change.accountId, best.survivalSec, ALL_BOARDS));
       restored += 1;
     }
     this.log("log", "rating_restored", { accountId: change.accountId, boards: restored });
