@@ -36,10 +36,16 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 63 модели, стирается 19", () => {
+  it("остаётся 64 модели, стирается 19", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(63);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(64);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(19);
+  });
+
+  it("второй шанс за самоцветы уходит каскадом вместе с забегом, своего шага стирания у него нет", () => {
+    expect(plan.RunGemContinue?.action).toBe("keep");
+    expect(plan.RunGemContinue?.why).toContain("каскад");
+    expect(order).not.toContain("RunGemContinue");
   });
 });
 
