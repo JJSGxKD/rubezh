@@ -3,8 +3,8 @@ id: T-0335
 title: Кольцо стражей — строй сразу со вспышкой, элита и босс внутри (движок)
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0172]
