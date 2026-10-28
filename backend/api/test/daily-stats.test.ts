@@ -68,6 +68,11 @@ describe("текст отчёта", () => {
     expect(statsText("2026-09-28", BUSY, BUSY)).toContain("Активных: 45 (=)");
   });
 
+  it("текст и цифры суток метки «Отдельная доска» не знают (T-0115)", () => {
+    expect(Object.keys(BUSY)).not.toContain("boardMark");
+    expect(statsText("2026-09-28", BUSY, EMPTY)).not.toMatch(/доск/i);
+  });
+
   it("идущие сутки — без разницы: неполный день против полного соврал бы", () => {
     const text = statsText("2026-09-29", BUSY, null);
     expect(text).toContain("📊 Сегодня, 29 сентября (вт), с полуночи");
@@ -116,7 +121,7 @@ function reporter(locks: DailyStatsLocks, options: { cfg?: AppConfig; fail?: () 
       return sent.length;
     },
   };
-  const repository: DailyStatsRepository = { day: async () => BUSY, series: async () => [] };
+  const repository: DailyStatsRepository = { day: async () => BUSY, series: async () => [], boardMark: async () => ({ marked: 3, active: 2, newAccounts: 1, runs: 9 }) };
   const router = new BotRouter();
   const roles = new RolesService(cfg, new MemoryRolesRepository(), new MemoryAccountRepository());
   const instance = new DailyStatsReporter(cfg, targetsOf(cfg), router, repository, locks, api, roles);

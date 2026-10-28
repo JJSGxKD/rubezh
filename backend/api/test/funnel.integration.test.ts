@@ -270,6 +270,7 @@ describe.skipIf(DATABASE_URL === "")("метка «Отдельная доска
         startsAt: new Date("2019-05-01T00:00:00Z"),
         endsAt: new Date("2019-07-01T00:00:00Z"),
         liftedAt: view === "lifted" ? new Date("2019-06-01T00:00:00Z") : null,
+        liftComment: view === "lifted" ? "снято" : null,
         reason: "other",
         notify: false,
       },

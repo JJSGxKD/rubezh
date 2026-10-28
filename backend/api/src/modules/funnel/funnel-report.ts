@@ -1,4 +1,5 @@
 import type { PrismaClient } from "../../generated/prisma/client.js";
+import { markedAccountIds } from "../restrictions/board-mark.js";
 
 /**
  * Воронка по источнику первого касания (docs/35-stage4-plan.md, Р30): сколько
@@ -108,4 +109,51 @@ export async function funnelReport(prisma: PrismaClient, from: Date, to: Date): 
     returnedD7: Number(row.returned_d7),
     firstPurchase: Number(row.first_purchase),
   }));
+}
+
+/** Сводная строка воронки: числа вех без разреза по источнику. */
+export type FunnelMarked = Omit<FunnelRow, "platform" | "startKind" | "startRef" | "startSource">;
+
+const NO_MARKED: FunnelMarked = { accounts: 0, entered: 0, appOpened: 0, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0 };
+
+type RawMarked = Omit<RawRow, "platform" | "start_kind" | "start_ref" | "start_source">;
+
+/**
+ * Воронка по аккаунтам с видом «Отдельная доска» (T-0115): одна строка с теми
+ * же вехами и той же когортой — первый контакт в окне, — что `funnelReport`.
+ * Отчёт по источникам от метки не зависит: помеченные в нём считаются, как все.
+ */
+export async function funnelMarked(prisma: PrismaClient, from: Date, to: Date): Promise<FunnelMarked> {
+  const ids = await markedAccountIds(prisma, from, to);
+  if (ids.length === 0) return NO_MARKED;
+  const [row] = await prisma.$queryRaw<RawMarked[]>`
+    SELECT
+      count(*) AS accounts,
+      count(f.entered_at) AS entered,
+      count(f.app_opened_at) AS app_opened,
+      count(f.first_run_started_at) AS first_run_started,
+      count(f.first_run_finished_at) AS first_run_finished,
+      count(f.runs_2_at) AS runs_2,
+      count(f.runs_5_at) AS runs_5,
+      count(f.returned_d1_at) AS returned_d1,
+      count(f.returned_d7_at) AS returned_d7,
+      count(f.first_purchase_at) AS first_purchase
+    FROM account_funnel f
+    WHERE f.account_id = ANY(${ids}::uuid[])
+      AND LEAST(f.entered_at, f.app_opened_at) >= ${from}
+      AND LEAST(f.entered_at, f.app_opened_at) < ${to}
+  `;
+  if (row === undefined) return NO_MARKED;
+  return {
+    accounts: Number(row.accounts),
+    entered: Number(row.entered),
+    appOpened: Number(row.app_opened),
+    firstRunStarted: Number(row.first_run_started),
+    firstRunFinished: Number(row.first_run_finished),
+    runs2: Number(row.runs_2),
+    runs5: Number(row.runs_5),
+    returnedD1: Number(row.returned_d1),
+    returnedD7: Number(row.returned_d7),
+    firstPurchase: Number(row.first_purchase),
+  };
 }

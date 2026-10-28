@@ -31,7 +31,7 @@ describe.skipIf(DATABASE_URL === "")("метка «Отдельная доска
 
   async function restrict(accountId: string, patch: { kind?: string; startsAt: Date; endsAt?: Date | null; liftedAt?: Date | null; settledAt?: Date | null }): Promise<void> {
     await prisma.accountRestriction.create({
-      data: { accountId, kind: patch.kind ?? "separate_board", startsAt: patch.startsAt, endsAt: patch.endsAt ?? null, liftedAt: patch.liftedAt ?? null, settledAt: patch.settledAt ?? null, reason: "other", notify: false },
+      data: { accountId, kind: patch.kind ?? "separate_board", startsAt: patch.startsAt, endsAt: patch.endsAt ?? null, liftedAt: patch.liftedAt ?? null, settledAt: patch.settledAt ?? null, liftComment: patch.liftedAt === undefined || patch.liftedAt === null ? null : "снято", reason: "other", notify: false },
     });
   }
 
