@@ -410,6 +410,7 @@ const RESTRICTION_REASONS: Record<string, string> = {
   promo_abuse: "злоупотребление промокодами",
   abuse: "оскорбления или спам",
   payment_refund: "возврат оплаты",
+  task_unsubscribe: "отписка после награды",
   other: "другое",
 };
 
