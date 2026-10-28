@@ -55,7 +55,6 @@ shared:
   - tasks/T-0199-reroll-for-ad.md
   - tasks/T-0335-cordon-formation-and-elite.md
   - tasks/T-0342-cordon-numbers-and-guide.md
-  - tasks/archive/T-0172-remove-shooting-enemies.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -66,7 +65,7 @@ batch: 3
 
 # T-0172. Уход огонька и кастера — в бою нет врагов со снарядами
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json)](../README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](T-0171-cordon-guard-content.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json)](README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](archive/T-0171-cordon-guard-content.md)
 
 ## Зачем
 
