@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { checkRunnerLines } from "../release/pr-check.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { OWNER_LABEL, boardCounters, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { OWNER_LABEL, REVIEW_LABEL, STATUS_LABELS, WORK_LABEL, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -72,12 +73,33 @@ describe("доска задач", () => {
     expect(board.review[0].pr).toBe(21);
   });
 
-  it("PR в черновике — «на ревью» с ожиданием, «в работе» только ветка без PR", () => {
-    const draftPr = [{ number: 21, headRefName: "task/T-0004", isDraft: true }];
-    const result = classify(FIXTURE, TAKEN, draftPr, [], EPIC_ORDER);
+  it("черновик без метки — «в работе» с номером PR, с меткой «на ревью» — «на ревью» с ожиданием", () => {
+    const draft = { number: 21, headRefName: "task/T-0004", isDraft: true };
+    const unlabeled = classify(FIXTURE, TAKEN, [draft], [], EPIC_ORDER);
+    expect(ids(unlabeled.review)).toEqual([]);
+    expect(unlabeled.inProgress.map((entry: { task: { id: string }; pr?: number }) => [entry.task.id, entry.pr])).toEqual([
+      ["T-0004", 21],
+      ["T-0005", undefined],
+    ]);
+
+    const labeled = classify(FIXTURE, TAKEN, [{ ...draft, labels: [{ name: REVIEW_LABEL }] }], [], EPIC_ORDER);
+    expect(ids(labeled.review)).toEqual(["T-0004"]);
+    expect(labeled.review[0].waiting).toEqual({ who: "executor", why: "черновик" });
+    expect(ids(labeled.inProgress)).toEqual(["T-0005"]);
+  });
+
+  it("PR с меткой «в работе» — в «В работе» с номером, даже если он не черновик", () => {
+    const pr = { number: 21, headRefName: "task/T-0004", isDraft: false, labels: [{ name: WORK_LABEL }] };
+    const result = classify(FIXTURE, TAKEN, [pr], [], EPIC_ORDER);
+    expect(result.inProgress[0]).toMatchObject({ pr: 21 });
+    expect(ids(result.review)).toEqual([]);
+  });
+
+  it("«ждёт владельца» — в «На ревью» с ожиданием владельца", () => {
+    const pr = { number: 21, headRefName: "task/T-0004", isDraft: true, labels: [{ name: OWNER_LABEL }] };
+    const result = classify(FIXTURE, TAKEN, [pr], [], EPIC_ORDER);
     expect(ids(result.review)).toEqual(["T-0004"]);
-    expect(result.review[0].waiting).toEqual({ who: "executor", why: "черновик" });
-    expect(ids(result.inProgress)).toEqual(["T-0005"]);
+    expect(result.review[0].waiting).toEqual({ who: "owner", why: "решение владельца" });
   });
 
   it("без списка PR (нет gh) «на ревью» сливается с «в работе»", () => {
@@ -105,11 +127,36 @@ describe("пересечение зон на доске", () => {
     expect(result.blocked[0].reason).toContain("T-0004");
   });
 
-  it("пересечение с задачей на ревью тоже блокирует", () => {
+  // Р171: PR, ждущий ревью, соседей не держит; черновик и доработка — держат.
+  it("пересечение с задачей на ревью не блокирует", () => {
     const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
     const prs = [{ number: 7, headRefName: "task/T-0004", isDraft: false }];
     const result = classify(tasks, ["T-0004"], prs, ["a/b.ts"], EPIC_ORDER);
-    expect(ids(result.blocked)).toEqual(["T-0005"]);
+    expect(ids(result.free)).toEqual(["T-0005"]);
+  });
+
+  it("пересечение с PR «в работе» (меткой или черновиком без метки) и с доработкой блокирует", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 7, headRefName: "task/T-0004", isDraft: true },
+      { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: WORK_LABEL }] },
+      { number: 7, headRefName: "task/T-0004", isDraft: false, labels: [{ name: "доработка" }] },
+    ]) {
+      const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
+      expect(ids(result.blocked)).toEqual(["T-0005"]);
+    }
+  });
+
+  // Р172: решает метка, а не черновик.
+  it("черновик с меткой «на ревью» и PR «ждёт владельца» соседей не держат", () => {
+    const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+    for (const pr of [
+      { number: 7, headRefName: "task/T-0004", isDraft: true, labels: [{ name: REVIEW_LABEL }] },
+      { number: 7, headRefName: "task/T-0004", isDraft: true, labels: [{ name: OWNER_LABEL }] },
+    ]) {
+      const result = classify(tasks, ["T-0004"], [pr], ["a/b.ts"], EPIC_ORDER);
+      expect(ids(result.free)).toEqual(["T-0005"]);
+    }
   });
 
   it("пересечение с другой свободной задачей не блокирует: занята только та, у которой есть ветка", () => {
@@ -578,9 +625,43 @@ describe("красный CI", () => {
   });
 });
 
+describe("prStatus: статус задачи по метке PR", () => {
+  const withLabels = (names: string[], isDraft = false) => ({ isDraft, labels: names.map((name) => ({ name })) });
+
+  it("четыре метки статуса — четыре статуса", () => {
+    expect(STATUS_LABELS).toEqual(["в работе", "на ревью", "доработка", "ждёт владельца"]);
+    expect(prStatus(withLabels(["в работе"]))).toBe("work");
+    expect(prStatus(withLabels(["на ревью"]))).toBe("review");
+    expect(prStatus(withLabels(["доработка"]))).toBe("rework");
+    expect(prStatus(withLabels(["ждёт владельца"]))).toBe("owner");
+  });
+
+  it("метка сильнее черновика", () => {
+    expect(prStatus(withLabels(["на ревью"], true))).toBe("review");
+    expect(prStatus(withLabels(["в работе"], false))).toBe("work");
+  });
+
+  it("без метки: черновик — в работе, остальное — на ревью", () => {
+    expect(prStatus(withLabels([], true))).toBe("work");
+    expect(prStatus(withLabels([]))).toBe("review");
+    expect(prStatus({ isDraft: false })).toBe("review");
+    expect(prStatus({})).toBe("review");
+  });
+
+  it("чужие метки статус не задают", () => {
+    expect(prStatus(withLabels(["release: patch"], true))).toBe("work");
+  });
+
+  it("несколько меток — по старшинству: доработка, ждёт владельца, в работе, на ревью", () => {
+    expect(prStatus(withLabels(["на ревью", "в работе", "ждёт владельца", "доработка"]))).toBe("rework");
+    expect(prStatus(withLabels(["на ревью", "в работе", "ждёт владельца"]))).toBe("owner");
+    expect(prStatus(withLabels(["на ревью", "в работе"]))).toBe("work");
+  });
+});
+
 describe("классификация PR: кого ждут", () => {
-  it("черновик с вопросами попадает в «На ревью» с waiting, ветка без PR — в «В работе»", () => {
-    const prs = [{ number: 5, headRefName: "task/T-0004", isDraft: true, labels: [], body: "## Вопросы\n1. ?", statusCheckRollup: [] }];
+  it("черновик с вопросами и меткой «на ревью» попадает в «На ревью» с waiting, ветка без PR — в «В работе»", () => {
+    const prs = [{ number: 5, headRefName: "task/T-0004", isDraft: true, labels: [{ name: REVIEW_LABEL }], body: "## Вопросы\n1. ?", statusCheckRollup: [] }];
     const board = classify([task("T-0004"), task("T-0005")], ["T-0004", "T-0005"], prs, [], EPIC_ORDER);
     expect(ids(board.review)).toEqual(["T-0004"]);
     expect(board.review[0].waiting).toEqual({ who: "lead", why: "вопрос" });
@@ -728,5 +809,82 @@ describe("сколько висит", () => {
     expect(hangingDays(undefined, NOW)).toBeNull();
     expect(hangingDays("не дата", NOW)).toBeNull();
     expect(hangingDays(hoursAgo(-5), NOW)).toBe(0);
+  });
+});
+
+// Промты потоков с номером аккаунта (T-0209).
+describe("промт потока", () => {
+  it("номер аккаунта, модель и уровень подставлены; без --runner для any", () => {
+    const text = flowPrompt({ account: "claude-2", executor: "haiku-5.5", effort: "low", runner: "any" });
+    expect(text).toContain("поток claude-2 / haiku-5.5 / low");
+    expect(text).toContain("pnpm task next --executor haiku-5.5 --effort low");
+    expect(text).toContain('--owner "claude-2 / haiku-5.5 / low"');
+    expect(text).not.toContain("--runner");
+  });
+
+  it("для local и owner добавляется --runner", () => {
+    expect(flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "high", runner: "local" })).toContain("--effort high --runner local");
+    expect(flowPrompt({ account: "claude-2", executor: "sonnet-5.5", effort: "high", runner: "owner" })).toContain("--effort high --runner owner");
+  });
+
+  it("блок «Промт потока» в tasks/README.md равен шаблону из кода", () => {
+    const readme = readFileSync(new URL("../../tasks/README.md", import.meta.url), "utf8");
+    const after = readme.slice(readme.indexOf("**Промт потока**"));
+    const block = /```\n([\s\S]*?)\n```/.exec(after)?.[1];
+    expect(block).toBe(flowPrompt({ account: "claude-N", executor: "sonnet-5.5", effort: "medium", runner: "any" }));
+  });
+});
+
+describe("потоки для аккаунта", () => {
+  const tasks = [
+    task("T-0401", { effort: "medium" }), // свободна: поток sonnet / medium
+    task("T-0402", { effort: "high" }), // свободна: поток sonnet / high
+    task("T-0403", { effort: "medium" }), // в работе у claude-2
+    task("T-0404", { effort: "high" }), // на ревью у claude-2
+  ];
+  const board = classify(tasks, ["T-0403", "T-0404"], [{ number: 7, headRefName: "task/T-0404", isDraft: false }], [], EPIC_ORDER);
+  board.inProgress[0].owner = "claude-2 / sonnet-5.5 / medium";
+  board.review[0].owner = "claude-2 / sonnet-5.5 / high";
+  const { streams } = streamsSummary(board);
+  const labels = (list: { executor: string; effort: string }[]) => list.map((stream) => `${stream.executor}/${stream.effort}`);
+
+  it("поток, который у аккаунта уже идёт, не предлагается; у другого аккаунта — предлагается", () => {
+    expect(labels(accountStreams("claude-2", board, streams))).toEqual(["sonnet-5.5/high"]);
+    expect(labels(accountStreams("claude-3", board, streams))).toEqual(["sonnet-5.5/medium", "sonnet-5.5/high"]);
+  });
+
+  it("задача на ревью поток не занимает", () => {
+    expect(labels(accountStreams("claude-2", board, streams))).toContain("sonnet-5.5/high");
+  });
+
+  it("claude-2 не принимается за claude-20", () => {
+    board.inProgress[0].owner = "claude-20 / sonnet-5.5 / medium";
+    expect(labels(accountStreams("claude-2", board, streams))).toContain("sonnet-5.5/medium");
+    board.inProgress[0].owner = "claude-2 / sonnet-5.5 / medium";
+  });
+});
+
+describe("известные аккаунты", () => {
+  const NOW = new Date("2026-10-27T12:00:00Z");
+  const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
+  const empty = classify([], [], [], [], EPIC_ORDER);
+
+  it("владелец задачи, влитой 20 суток назад, не попадает; 10 суток — попадает", () => {
+    const credits = new Map([
+      ["T-0001", { owner: "claude-5 / sonnet-5.5 / medium", mergedAt: daysAgo(20) }],
+      ["T-0002", { owner: "claude-6 / sonnet-5.5 / medium", mergedAt: daysAgo(10) }],
+    ]);
+    expect(knownAccounts(empty, credits, NOW)).toEqual(["claude-6"]);
+  });
+
+  it("аккаунты из «В работе», «На ревью» и «Доработки»; по номеру, claude-10 после claude-9", () => {
+    const board = { ...empty, inProgress: [{ task: task("T-1"), owner: "claude-10 / sonnet-5.5 / medium" }], review: [{ task: task("T-2"), pr: 1, owner: "claude-9 / haiku-5.5 / low" }], rework: [{ task: task("T-3"), pr: 2, owner: "claude-2 / sonnet-5.5 / high" }] };
+    expect(knownAccounts(board, new Map(), NOW)).toEqual(["claude-2", "claude-9", "claude-10"]);
+  });
+
+  it("владелец не в виде claude-N (пустой, «не указан») и повтор не попадают", () => {
+    const board = { ...empty, inProgress: [{ task: task("T-1"), owner: "" }, { task: task("T-2"), owner: "claude-3 / sonnet-5.5 / medium" }, { task: task("T-3"), owner: "claude-3 / haiku-5.5 / low" }] };
+    const credits = new Map([["T-9", { owner: "не указан", mergedAt: daysAgo(1) }]]);
+    expect(knownAccounts(board, credits, NOW)).toEqual(["claude-3"]);
   });
 });

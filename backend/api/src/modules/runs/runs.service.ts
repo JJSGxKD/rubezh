@@ -6,6 +6,7 @@ import { RolesService } from "../roles/roles.service.js";
 import type { RunFinish, RunStart } from "./dto/runs.dto.js";
 import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
 import { rebuildLeaderboard } from "./leaderboard-rebuild.js";
+import { countersOf } from "./run-counters.js";
 import type { Difficulty } from "./run-rules.js";
 import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
@@ -90,8 +91,10 @@ export class RunsService {
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
     ]);
+    const counters = countersOf(run.stats);
     const judged = judgeRun(
       {
+        counters,
         survivalSec: run.survivalSec,
         level: run.level,
         enemiesKilled: run.enemiesKilled,
@@ -155,6 +158,8 @@ export class RunsService {
       weapons: run.weapons.map((weapon) => ({ id: weapon.id, level: weapon.level })),
       boosts: boosts === "paid" ? [...run.boosts] : [],
       xpCollected: run.stats?.xpCollected ?? null,
+      // Неправдоподобные счётчики в задания и достижения не идут.
+      counters: judged.reasons.includes("counters_implausible") ? null : counters,
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues.length,

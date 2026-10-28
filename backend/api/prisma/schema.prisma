@@ -447,7 +447,7 @@ model Run {
   enemiesKilled    Int?        @map("enemies_killed")
   /// оружие, уровни и нанесённый урон к концу забега: `[{ id, level, damage? }]`
   weapons          Json?
-  /// подробности для листа забега: `{ passives, damageTaken, xpCollected, waveReached, topKills }`; `null` — сборка до листа
+  /// подробности для листа забега: `{ passives, damageTaken, xpCollected, waveReached, topKills, bossKills, eliteKills, chestsOpened, crystals }` (счётчики итога, T-0125: строка без ключей читается как `null`); `null` — сборка до листа
   details          Json?
   deathCause       String?     @map("death_cause") @db.VarChar(64)
   /// в забеге включали читы режима разработчика

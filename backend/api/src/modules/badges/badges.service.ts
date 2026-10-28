@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { ChangelogService } from "../changelog/changelog.service.js";
 import { DailyService } from "../daily/daily.service.js";
@@ -6,8 +6,10 @@ import { FriendsService } from "../friends/friends.service.js";
 import { ItemsService } from "../items/items.service.js";
 import { NotificationsService } from "../notifications/notifications.service.js";
 import type { AccountRef } from "../roles/roles.service.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { TasksService } from "../tasks/tasks.service.js";
 import { WheelService } from "../wheel/wheel.service.js";
+import { contactUrlFor } from "./contact-url.js";
 
 /**
  * Знаки меню одним ответом (docs/35-stage4-plan.md Р50, §3.17): новые
@@ -36,6 +38,8 @@ export interface BadgesView {
   wheel: number;
   /** выполненные задания и достижения, награду которых ещё не забрали */
   tasks: number;
+  /** ссылка кнопки «Связаться с разработчиком» площадки игрока; `null` — кнопки нет */
+  contactUrl: string | null;
 }
 
 @Injectable()
@@ -48,6 +52,7 @@ export class BadgesService {
     private readonly changelog: ChangelogService,
     private readonly wheel: WheelService,
     private readonly tasks: TasksService,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   async view(account: Pick<AccountRef, "accountId" | "platform">): Promise<BadgesView> {
@@ -65,6 +70,6 @@ export class BadgesService {
       DB_TIMEOUT_MS,
       "знаки меню",
     );
-    return { arsenal, friends, notifications, daily, changelog, wheel, tasks };
+    return { arsenal, friends, notifications, daily, changelog, wheel, tasks, contactUrl: contactUrlFor(account.platform, this.settings) };
   }
 }

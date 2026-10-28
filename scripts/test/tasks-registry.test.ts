@@ -3,7 +3,7 @@ import { basename, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { checkRegistry, parseEpics, placementPath, readTasks } from "../tasks/registry.mjs";
+import { awaitingArchive, awaitingArchiveLine, checkRegistry, parseEpics, placementPath, readTasks, registrySummary } from "../tasks/registry.mjs";
 
 // Реестр задач проверяется целиком: уникальные id, известные эпики,
 // существующие зависимости, нет циклов.
@@ -271,16 +271,13 @@ describe("архив задач (T-0204)", () => {
     expect(check([fileOf("T-0002", { status: "done" })])).toEqual([]);
   });
 
-  it("готовая или отменённая задача наверху — ошибка с подсказкой pnpm task fix", () => {
-    for (const status of ["done", "cancelled"]) {
-      const errors = check([fileOf("T-0002", { status }, "T-0002-x.md")]);
-      expect(errors.some((error: string) => error.includes("T-0002-x.md") && error.includes(status) && error.includes("перенесёт pnpm task fix")), status).toBe(true);
-    }
+  it("готовая или отменённая задача наверху — не ошибка, ждёт уборки (T-0343)", () => {
+    for (const status of ["done", "cancelled"]) expect(check([fileOf("T-0002", { status }, "T-0002-x.md")]), status).toEqual([]);
   });
 
   it("открытая задача в archive/ — ошибка", () => {
     const errors = check([fileOf("T-0003", { status: "ready" }, "archive/T-0003-x.md")]);
-    expect(errors.some((error: string) => error.includes("archive/T-0003-x.md") && error.includes("лежит в архиве") && error.includes("pnpm task fix"))).toBe(true);
+    expect(errors.some((error: string) => error.includes("archive/T-0003-x.md") && error.includes("лежит в архиве") && error.includes("pnpm task archive"))).toBe(true);
   });
 
   it("другая папка — ошибка о папке", () => {
@@ -294,6 +291,33 @@ describe("архив задач (T-0204)", () => {
     expect(files[3]?.text).toContain("](../T-0001-x.md)");
     expect(files[3]?.text).toContain("](../README.md#значки-статуса)");
     expect(check(files)).toEqual([]);
+  });
+
+  it("awaitingArchive: закрытые наверху по возрастанию id; в архиве и открытые не входят", () => {
+    const { tasks } = readTasks([
+      fileOf("T-9005", { status: "done" }, "T-9005-x.md"),
+      fileOf("T-9002", { status: "cancelled" }, "T-9002-x.md"),
+      fileOf("T-9003", { status: "done" }),
+      fileOf("T-9004", { status: "ready" }),
+    ]);
+    expect(awaitingArchive(tasks).map((task: { id: string }) => task.id)).toEqual(["T-9002", "T-9005"]);
+  });
+
+  it("awaitingArchiveLine: null без закрытых наверху, иначе строка с числом и номерами", () => {
+    expect(awaitingArchiveLine(readTasks([fileOf("T-9003", { status: "done" })]).tasks)).toBeNull();
+    const { tasks } = readTasks([fileOf("T-9005", { status: "done" }, "T-9005-x.md"), fileOf("T-9002", { status: "done" }, "T-9002-x.md")]);
+    expect(awaitingArchiveLine(tasks)).toBe("Ждут уборки в архив: 2 — T-9002, T-9005. Перенесёт pnpm task archive — уборка тимлида (tasks/README.md, «Уборка архива»).");
+  });
+
+  it("registrySummary: открытые, архив и ждущие уборки", () => {
+    const base = [fileOf("T-9001"), fileOf("T-9002", { status: "ready" }), fileOf("T-9003", { status: "done" }), fileOf("T-9004", { status: "done" }), fileOf("T-9006", { status: "cancelled" })];
+    expect(registrySummary(readTasks(base).tasks)).toBe("Реестр задач в порядке: 5 задач (открытых 2, в архиве 3).");
+    const withWaiting = [...base, fileOf("T-9007", { status: "done" }, "T-9007-x.md")];
+    expect(registrySummary(readTasks(withWaiting).tasks)).toBe("Реестр задач в порядке: 6 задач (открытых 2, в архиве 3, ждут уборки 1).");
+  });
+
+  it("ячейка эпика ссылается на закрытую задачу наверху — реестр без ошибок", () => {
+    expect(check([fileOf("T-9002", { status: "done" }, "T-9002-x.md")])).toEqual([]);
   });
 
   it("placementPath: готовые и отменённые — в archive/, остальные — наверху", () => {

@@ -107,7 +107,7 @@ A/B-данных по отдельным механикам в источник�
 | Оружие | 6 штук (spark, knife, wardstone, hearth, storm, sting), около 8 уровней, 5 поведений, стихии | `packages/core-game/src/content/weapons.ts` |
 | Пассивки, слоты | 10 пассивок в 3 категориях; слоты: 3 оружия, пассивок 2/1/1 | `content/upgrades.ts` |
 | Эволюции, объединения, переброс/пропуск/изгнание, сундуки | Нет. Запланированы: Р69, WP36–37, О38 (`docs/35-stage4-plan.md`); переброс — «после данных теста» (`docs/26-stage2-plan.md`) | — |
-| Враги | 15: 11 обычных, 2 элиты, 2 босса; страж кольца и кольца в таймлайне (T-0171); `shooter_wisp` остаётся до T-0172 (Р69), пешие враги добавлены (T-0117) | `content/enemies.ts` |
+| Враги | 13: 10 обычных, 2 элиты, 1 босс; страж кольца и кольца в таймлайне (T-0171); огонёк и кастер убраны (T-0172, Р69), пешие враги добавлены (T-0117) | `content/enemies.ts` |
 | Ступени, таймлайн | 3 ступени (0, 150, 330 с); ручные отрезки 0–300 с, дальше `ENDLESS_CURVE`; события — кольцо и фланг | `content/stages.ts`, `content/waves.ts` |
 | Подборы | Кристаллы, аптечка, магнит, динамит | `content/drops.ts` |
 | Карты, сложности | Одна карта `frontier`; 3 сложности | `content/maps.ts`, `content/difficulty.ts` |
@@ -118,6 +118,7 @@ A/B-данных по отдельным механикам в источник�
 | Награда дня, колесо | Есть | `modules/daily`, `modules/wheel` |
 | Задания | Вкладки: ежедневные, недельные, достижения, партнёрские. Каталог в базе, правится из панели. Пул с ротацией по дням и неделям: 20 дневных и 12 недельных, игрок видит 5 и 6, набор считается от даты (`task-pool.ts`); достижений 10; 11 видов цели: `runs`, `kills`, `survive_sec`, `best_survival_sec`, `run_level`, `xp_collected`, `weapon_runs`, `element_runs`, `difficulty_runs`, `difficulty_survive_sec`, `boost_runs` | `backend/api/src/modules/tasks/task-rules.ts`, `task-pool.ts`, `packages/app-shell/src/screens/meta/tasks.tsx` |
 | Достижения | Только период `achievement` в той же таблице; редкости, витрины, «есть у N%» нет | там же |
+| Счётчики итога забега | Четыре числа в `stats` итога: `bossKills`, `eliteKills` (убийства игроком боссов и элит), `chestsOpened`, `crystals` (подобранные кристаллы). Считает движок (`killEnemy`, `collect` в `gems.ts`), сервер кладёт в `run.details` без миграции и проверяет правдоподобие структурно (бюджет рангов по таймлайну, сундуки не больше убитых элит и боссов); неправдоподобные получают причину `counters_implausible` без смены вердикта и в задания и достижения не идут. Забег без счётчиков (старая сборка) приходит слушателям с `counters: null`. Виды цели по ним — T-0126 | `game/sim/combat.ts`, `backend/api/src/modules/runs/run-counters.ts` |
 | Рейтинг | Лучшее время по сложностям; сезонов и дивизионов нет, хотя Р48 про дивизионы пишет | `backend/api/src/modules/runs/leaderboard.store.ts`, `screens/meta/rating.tsx` |
 | Арсенал | 6 слотов, 6 редкостей, 19 свойств; улучшение, перековка, слияние, разбор | `modules/items`, `screens/meta/arsenal.tsx` |
 | Друзья, VIP, магазин | Есть | `modules/friends`, `modules/vip`, `modules/shop` |

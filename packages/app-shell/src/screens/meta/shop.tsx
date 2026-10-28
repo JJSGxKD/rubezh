@@ -130,6 +130,7 @@ export function ShopScreen(): ReactNode {
       chargedStars: item.chargedStars ?? price.stars,
       mode: view.mode ?? "live",
       ...(price.promo === null ? {} : { promoPct: price.promo.percent }),
+      ...(item.badge === "hit" || item.badge === "choice" || item.badge === "best" ? { badge: item.badge } : {}),
       order: () => api.order(item.sku),
     });
   };

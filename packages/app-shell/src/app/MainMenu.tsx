@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Bell, BookOpen, Gift, History, Info, MessageSquareWarning, Newspaper, Settings } from "lucide-react";
+import { Bell, BookOpen, Gift, History, Info, MessageCircle, MessageSquareWarning, Newspaper, Settings } from "lucide-react";
 import { Avatar, Button, ListGroup, ListItem, Modal } from "../design-system/components";
 import { t } from "../i18n";
 import { badgeText, useBadges } from "../state/badges";
 import { changelogAvailable } from "../state/changelog-api";
+import { contactHref, openContact, useContact } from "../state/contact";
 import { useNavigation, type ScreenId } from "../state/navigation";
 import { useProgress } from "../state/progress";
 import { useSettings } from "../state/settings";
@@ -23,6 +24,7 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
   const name = user?.displayName ?? t("profile.guest");
   const level = useProgress((state) => state.progress?.level ?? state.runLevel);
   const unread = useBadges((state) => state.notifications);
+  const contact = contactHref(useContact((state) => state.url));
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
 
   const open = (screen: ScreenId): void => {
@@ -89,6 +91,9 @@ export function MainMenu(props: { onClose(): void }): ReactNode {
 
       <div className="mt-3">
         <ListGroup>
+          {contact === null ? null : (
+            <ListItem icon={<MessageCircle size={18} />} title={t("menu.contact")} hint={t("menu.contact.hint")} onClick={openContact} />
+          )}
           <ListItem
             icon={<MessageSquareWarning size={18} />}
             title={t("settings.testers")}

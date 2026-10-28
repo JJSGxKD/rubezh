@@ -145,7 +145,7 @@ erDiagram
         int level "nullable"
         int enemies_killed "nullable"
         json weapons "nullable: id, уровень и урон к концу"
-        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов — лист забега"
+        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов, счётчики итога (боссы, элиты, сундуки, кристаллы) — лист забега и задания"
         boolean cheats
         float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok, без читов, рейтинг игроку не закрыт"
@@ -1681,6 +1681,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
+    PRK["packages/promo-kit<br/>модель промо-материала: форматы, слои, подстановка,<br/>правила правки партнёром: ядро без игры, Nest, Prisma и Fabric"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
 

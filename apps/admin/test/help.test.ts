@@ -34,6 +34,8 @@ describe("пояснения панели", () => {
   it("причины разбора — словами; незнакомый код новее панели — как есть", () => {
     expect(reasonTitle("unverified_time")).toBe("старт не дошёл — время забега не проверено");
     expect(reasonTitle("boost_unpaid")).toBe("буст не куплен на этот забег");
+    // Без чисел: цифра в подписи подсказала бы читеру предел (Р7).
+    expect(reasonTitle("counters_implausible")).toBe("счётчики забега не сходятся с ходом боя");
     expect(reasonTitle("something_new")).toBe("something_new");
   });
 });

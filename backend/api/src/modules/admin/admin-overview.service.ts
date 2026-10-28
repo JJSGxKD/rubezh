@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { dayWindow, teamDay, type DayStats } from "../admin-notify/daily-stats.js";
 import { DAILY_STATS_REPOSITORY, type DailyStatsRepository, type DayPoint } from "../admin-notify/daily-stats.repository.js";
-import { ADS_CATALOG_REPOSITORY, type AdFunnelRow, type AdsCatalogRepository } from "../ads/ads-catalog.repository.js";
+import { ADS_CATALOG_REPOSITORY, type AdFunnelRow, type AdPassRow, type AdsCatalogRepository } from "../ads/ads-catalog.repository.js";
 import { AD_PLACES } from "../ads/ads-rules.js";
 import { BroadcastsService } from "../broadcasts/broadcasts.service.js";
 import { CHANGELOG_FOR_PLAYERS } from "../changelog/changelog-rules.js";
@@ -50,6 +50,8 @@ export interface AdsTotals {
   completed: number;
   claimed: number;
   failed: number;
+  /** пропуски VIP (Р99): награда места без ролика; в досмотры, доли и сети не входят */
+  passed: number;
 }
 
 /**
@@ -132,16 +134,20 @@ export class AdminOverviewService {
   /** Реклама за окно и за прошлое; не ответила — сводка без неё, а не без сводки. */
   private async adsOverview(now: { from: Date; to: Date }, before: { from: Date; to: Date }): Promise<OverviewAds | null> {
     try {
-      const [current, previous] = await Promise.all([
+      const [current, previous, currentPasses, previousPasses] = await Promise.all([
         withTimeout(this.ads.funnel(now.from, now.to), READ_TIMEOUT_MS, "сводка: реклама"),
         withTimeout(this.ads.funnel(before.from, before.to), READ_TIMEOUT_MS, "сводка: реклама до"),
+        withTimeout(this.ads.passes(now.from, now.to), READ_TIMEOUT_MS, "сводка: пропуски рекламы"),
+        withTimeout(this.ads.passes(before.from, before.to), READ_TIMEOUT_MS, "сводка: пропуски рекламы до"),
       ]);
       return {
-        now: totalsOf(current),
-        before: totalsOf(previous),
+        now: totalsOf(current, currentPasses),
+        before: totalsOf(previous, previousPasses),
+        // Место входит, если по нему есть показы или пропуски.
         places: AD_PLACES.flatMap((place) => {
           const rows = current.filter((row) => row.place === place);
-          return rows.length === 0 ? [] : [{ place, ...totalsOf(rows) }];
+          const used = currentPasses.filter((pass) => pass.place === place);
+          return rows.length === 0 && used.length === 0 ? [] : [{ place, ...totalsOf(rows, used) }];
         }),
         networks: networksOf(current),
       };
@@ -198,8 +204,9 @@ export class AdminOverviewService {
   }
 }
 
-function totalsOf(rows: readonly AdFunnelRow[]): AdsTotals {
-  const totals: AdsTotals = { offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0 };
+function totalsOf(rows: readonly AdFunnelRow[], passes: readonly AdPassRow[]): AdsTotals {
+  const totals: AdsTotals = { offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0, passed: 0 };
+  for (const pass of passes) totals.passed += pass.used;
   for (const row of rows) {
     totals.offered += row.offered;
     totals.shown += row.shown;

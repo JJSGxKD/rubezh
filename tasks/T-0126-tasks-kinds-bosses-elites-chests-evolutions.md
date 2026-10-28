@@ -19,7 +19,6 @@ zones:
   - backend/api/test/achievements.integration.test.ts
   - apps/admin/src/api/tasks.ts
   - apps/admin/src/screens/tasks/TasksScreen.tsx
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/tasks.test.ts
   - packages/app-shell/src/screens/meta/task-row.tsx
   - packages/app-shell/src/i18n/ru-tasks.json
@@ -29,6 +28,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
   - backend/api/prisma/migrations/**
+  - apps/admin/src/ui/help.ts
 runner: local
 executor: sonnet-5.5
 effort: high

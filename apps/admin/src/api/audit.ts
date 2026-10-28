@@ -85,6 +85,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.pii.view": "Просмотр личных данных",
   "players.ban": "Блокировка игрока",
   "players.unban": "Снятие блокировки",
+  "players.rename": "Смена ника",
+  "players.rename.unlock": "Снятие закрепления ника",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
   "players.board.set": "Отдельная доска: наложена",
@@ -140,6 +142,7 @@ const ACTION_TITLES: Record<string, string> = {
   "ads.network.update": "Правка рекламной сети",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
+  "ads.test": "Проверка рекламы командой",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
 };
@@ -220,6 +223,8 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
         ? { kind: "версия", label: target, route: { section: "changelog", id: null } }
         : { kind: "строка версии", label: named(entry, "version") ?? short(target), route: { section: "changelog", id: null } };
     case "ads":
+      // Проверка показа командой: цель — «сеть:формат» (tasks/T-0333).
+      if (action === "ads.test") return { kind: "проверка", label: target.replace(":", " · "), route: { section: "ads", id: null } };
       return action.startsWith("ads.network.")
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
@@ -406,6 +411,7 @@ const RESTRICTION_REASONS: Record<string, string> = {
   promo_abuse: "злоупотребление промокодами",
   abuse: "оскорбления или спам",
   payment_refund: "возврат оплаты",
+  task_unsubscribe: "отписка после награды",
   other: "другое",
 };
 

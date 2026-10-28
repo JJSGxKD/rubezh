@@ -2,10 +2,12 @@ import type { ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
+import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
 import { TasksScreen } from "./tasks/TasksScreen";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
+import { UiClicksScreen } from "./funnel/UiClicks";
 import { FlagsScreen } from "./flags/FlagsScreen";
 import { FxScreen } from "./fx/FxScreen";
 import { HomeSlidesScreen } from "./home/HomeSlidesScreen";
@@ -31,10 +33,12 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   players: (id) => <PlayersScreen id={id} />,
   review: () => <ReviewScreen />,
   funnel: (id) => <FunnelScreen focus={id} />,
+  "ui-clicks": () => <UiClicksScreen />,
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
+  csp: () => <CspReportsScreen />,
   requests: () => <RequestsScreen />,
   exports: () => <ExportsScreen />,
   links: (id) => <LinksScreen id={id} />,

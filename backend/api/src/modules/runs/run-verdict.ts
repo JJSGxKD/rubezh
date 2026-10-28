@@ -1,4 +1,5 @@
 import type { AppConfig } from "../../config/app-config.js";
+import { countersPlausible, type RunCounters } from "./run-counters.js";
 import type { BoostStatus, LoadoutStatus } from "./run-loadouts.js";
 import { MAX_WEAPONS } from "./run-rules.js";
 
@@ -51,7 +52,12 @@ export type VerdictReason =
   /** уровень снимка выше уровня аккаунта: открыто то, что игроку не положено */
   | "loadout_level_ahead"
   /** буст не куплен на этот забег или возвращён */
-  | "boost_unpaid";
+  | "boost_unpaid"
+  /**
+   * счётчики итога не сходятся с ходом боя: вердикт не меняет (как
+   * `unverified_time`), но счётчики не идут в задания и достижения
+   */
+  | "counters_implausible";
 
 export interface VerdictInput {
   survivalSec: number;
@@ -77,6 +83,8 @@ export interface VerdictInput {
   loadout: LoadoutStatus;
   /** заявленные бусты против покупок на забег */
   boosts: BoostStatus;
+  /** счётчики итога; `null` — итог без них (старая сборка) */
+  counters: RunCounters | null;
 }
 
 export interface Verdict {
@@ -121,6 +129,12 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   if (input.loadout === "stale") reasons.push("loadout_stale");
   if (input.loadout === "level_ahead") reasons.push("loadout_level_ahead");
   if (input.boosts === "unpaid") reasons.push("boost_unpaid");
+
+  // Ни отказ, ни подозрение: рейтинг на счётчиках не строится, и ложное
+  // срабатывание не должно выбивать честный забег из него.
+  if (input.counters !== null && !countersPlausible(input.counters, { survivalSec: input.survivalSec, enemiesKilled: input.enemiesKilled })) {
+    reasons.push("counters_implausible");
+  }
 
   return { verdict: verdictOf(reasons), reasons };
 }

@@ -33,6 +33,7 @@ function run(patch: Partial<VerdictInput> = {}): VerdictInput {
     cheats: false,
     loadout: "none",
     boosts: "none",
+    counters: null,
     ...patch,
   };
 }
@@ -153,5 +154,35 @@ describe("снаряжение в вердикте", () => {
   it("буст, не купленный на забег, — отказ: без оплаты честный клиент его не применит", () => {
     expect(judgeRun(run({ boosts: "unpaid" }), limits)).toEqual({ verdict: "rejected", reasons: ["boost_unpaid"] });
     expect(judgeRun(run({ boosts: "paid" }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+});
+
+describe("счётчики в вердикте (tasks/T-0125)", () => {
+  const plausible = { bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 100 };
+  const implausible = { bossKills: 50, eliteKills: 0, chestsOpened: 0, crystals: 0 };
+
+  it("правдоподобные счётчики и забег без них — без замечаний", () => {
+    expect(judgeRun(run({ counters: plausible }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ counters: null }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("неправдоподобные дают причину, но вердикт остаётся прежним", () => {
+    expect(judgeRun(run({ counters: implausible }), limits)).toEqual({ verdict: "ok", reasons: ["counters_implausible"] });
+  });
+
+  it("причина не делает подозрительный забег отказным и не лечит отказной", () => {
+    const suspicious = judgeRun(run({ enemiesKilled: 3001, counters: implausible }), limits);
+    expect(suspicious.verdict).toBe("suspicious");
+    expect(suspicious.reasons).toEqual(expect.arrayContaining(["kill_rate", "counters_implausible"]));
+
+    const rejected = judgeRun(run({ weaponCount: 5, counters: implausible }), limits);
+    expect(rejected.verdict).toBe("rejected");
+  });
+
+  it("счётчики сверяются с убитыми и временем самого забега", () => {
+    const counters = { bossKills: 1, eliteKills: 0, chestsOpened: 0, crystals: 0 };
+    const long = { survivalSec: 600, finishedAtMs: START + 700_000 };
+    expect(judgeRun(run({ counters, enemiesKilled: 0, ...long }), limits).reasons).toContain("counters_implausible");
+    expect(judgeRun(run({ counters, enemiesKilled: 10, ...long }), limits).reasons).not.toContain("counters_implausible");
   });
 });

@@ -130,6 +130,24 @@ describe("каталог настроек", () => {
   });
 });
 
+describe("ссылки «Связаться с разработчиком»", () => {
+  const keys = [SETTINGS.contactUrlTelegram, SETTINGS.contactUrlMax, SETTINGS.contactUrlVk, SETTINGS.contactUrlWeb];
+
+  it("ключи по соглашению каталога, умолчание — пусто", () => {
+    expect(keys.map((setting) => setting.key)).toEqual(["contact.url-telegram", "contact.url-max", "contact.url-vk", "contact.url-web"]);
+    for (const setting of keys) expect(setting.fallback).toBe("");
+  });
+
+  it("https проходит, пусто допустимо, http и javascript: отклоняются", () => {
+    for (const setting of keys) {
+      expect(setting.schema.safeParse("https://t.me/x?direct").success, setting.key).toBe(true);
+      expect(setting.schema.safeParse("").success, setting.key).toBe(true);
+      expect(setting.schema.safeParse("http://t.me/x").success, setting.key).toBe(false);
+      expect(setting.schema.safeParse("javascript:alert(1)").success, setting.key).toBe(false);
+    }
+  });
+});
+
 describe("порядок значений", () => {
   it("база → окружение → умолчание", async () => {
     const { repository, service } = setup({ ADMIN_CHAT_ID: "-100" });

@@ -206,6 +206,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       weapons: record.weapons,
       boosts: [],
       xpCollected: null,
+      counters: null,
       deathCause: record.deathCause,
       cheats: record.cheats,
       continues: 0,

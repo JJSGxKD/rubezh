@@ -1,3 +1,4 @@
+import type { ContentSnapshot } from "./content/snapshot";
 import type { CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
@@ -289,6 +290,13 @@ export interface RunOptions {
    * награды приходят событием `chestOpened`.
    */
   pauseOnChest?: boolean;
+  /**
+   * Контент забега (docs/19-content-admin.md §3). Без поля — боевой
+   * `CONTENT_SNAPSHOT`, и забег побитно прежний; песочница редактора баланса
+   * подаёт сюда черновик. Хэш чужого снимка уходит в итог забега вместо
+   * `CONTENT_HASH`.
+   */
+  content?: ContentSnapshot;
 }
 
 /**

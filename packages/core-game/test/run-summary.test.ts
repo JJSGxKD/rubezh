@@ -37,7 +37,7 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов, пешими врагами рядом с огоньком и подбором «Заморозка».
+ * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка» и уходом стрелков.
  * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
@@ -173,34 +173,36 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 29.88,
-      level: 5,
-      xpCollected: 45,
-      enemiesKilled: 44,
+      survivalSec: 66.68,
+      level: 11,
+      xpCollected: 194,
+      enemiesKilled: 109,
       killsByEnemy: {
-        swarm_rat: 15,
-        shooter_wisp: 3,
-        bone_walker: 4,
-        mire_shambler: 3,
-        dasher_wolf: 1,
-        circler_crow: 9,
-        bomber_imp: 3,
-        rushing_bats: 6,
+        swarm_rat: 35,
+        tank_ghoul: 2,
+        bone_walker: 9,
+        mire_shambler: 19,
+        dasher_wolf: 9,
+        circler_crow: 12,
+        bomber_imp: 6,
+        rushing_bats: 14,
+        splitter_slime: 3,
       },
-      damageDealt: 705,
-      damageTaken: 122,
+      damageDealt: 1790,
+      damageTaken: 159,
       weapons: [
-        { id: "spark", level: 1, damage: 527 },
-        { id: "meteor", level: 1, damage: 179 },
+        { id: "spark", level: 2, damage: 1159 },
+        { id: "hearth", level: 1, damage: 405 },
+        { id: "wardstone", level: 3, damage: 226 },
       ],
       passives: [
-        { id: "reach", level: 1 },
+        { id: "reach", level: 3 },
         { id: "vitality", level: 1 },
         { id: "haste", level: 1 },
       ],
-      deathCause: "rushing_bats",
-      distance: 4474,
-      peakEnemies: 28,
+      deathCause: "dasher_wolf",
+      distance: 10057,
+      peakEnemies: 30,
     });
   });
 
@@ -244,6 +246,23 @@ describe("итог забега", () => {
     expect(world.player.alive).toBe(false);
     expect(result.outcome).toBe("died");
     expect(result.deathCause).toBe("biter");
+  });
+
+  it("несёт счётчики боссов, элит, сундуков и кристаллов из мира", () => {
+    const world = worldWithEnemyAt(DUMMY, 40);
+    world.stats.bossKills = 1;
+    world.stats.eliteKills = 4;
+    world.stats.chestsOpened = 3;
+    world.stats.crystalsCollected = 250;
+
+    const result = buildRunResult(world, {
+      runId: "r3",
+      seed: 42,
+      outcome: "died",
+      startingWeaponId: "spark",
+      contentHash: "test-hash",
+    });
+    expect(result).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 3, crystalsCollected: 250 });
   });
 
   it("у сдачи нет причины смерти: сдавшийся забег — не убийство", () => {
@@ -327,6 +346,10 @@ describe("локальный рекорд", () => {
       level: 1,
       xpCollected: 0,
       enemiesKilled: 0,
+      bossKills: 0,
+      eliteKills: 0,
+      chestsOpened: 0,
+      crystalsCollected: 0,
       killsByEnemy: {},
       damageDealt: 0,
       damageTaken: 0,

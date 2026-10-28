@@ -52,7 +52,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -91,6 +91,7 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
+          <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -371,11 +372,41 @@ function RarityPreview(): ReactNode {
   );
 }
 
+/**
+ * Экран со второй колонкой (T-0298): на wide (с 1024 px) `aside` стоит справа,
+ * уже — под основным содержимым. Без `aside` экран — обычная одна колонка, как
+ * сама витрина.
+ */
+function AsidePreview(): ReactNode {
+  return (
+    <Screen
+      title={t("gallery.preview.aside")}
+      aside={
+        <Card>
+          <h3 className="font-display text-base font-bold text-text">{t("gallery.aside.side")}</h3>
+          <p className="mt-1 text-sm text-text-muted">{t("gallery.aside.sideText")}</p>
+        </Card>
+      }
+    >
+      <SectionTitle>{t("gallery.aside.main")}</SectionTitle>
+      <div className="grid gap-2">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Card key={index}>
+            <span className="text-sm text-text">{t("gallery.modal.line", { n: index + 1 })}</span>
+          </Card>
+        ))}
+      </div>
+    </Screen>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
   const shareNoop = (): Promise<null> => Promise.resolve(null);
 
   switch (preview) {
+    case "aside":
+      return <AsidePreview />;
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":
@@ -609,6 +640,10 @@ const SAMPLE_RESULT: RunResult = {
   damageDealt: 48210,
   damageTaken: 930,
   damageByElement: { physical: 9400, fire: 2100, cold: 800, lightning: 1600 },
+  bossKills: 1,
+  eliteKills: 6,
+  chestsOpened: 3,
+  crystalsCollected: 640,
   weapons: [
     { id: "spark", level: 5, damage: 21840 },
     { id: "wardstone", level: 3, damage: 15320 },

@@ -24,6 +24,7 @@ import type { WalletEntryRow } from "../wallet/wallet.repository.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { Balances } from "../wallet/wallet-types.js";
 import { AccountNotFoundError } from "./admin-errors.js";
+import { renameAccount, unlockAccountName } from "./admin-player-names.js";
 import { AdminSessionService } from "./admin-session.service.js";
 
 /**
@@ -44,6 +45,10 @@ export interface PlayerRow {
   accountId: string;
   platform: Account["platform"];
   displayName: string;
+  /** ник, как он пришёл с площадки; `null` — не запомнен (аккаунт заведён до T-0150) */
+  platformName: string | null;
+  /** ник закреплён модератором: вход его не меняет */
+  nameLocked: boolean;
   photoUrl: string | null;
   createdAt: string;
   banned: { at: string; reason: string | null } | null;
@@ -197,6 +202,16 @@ export class AdminPlayersService {
     return rowOf(account, true);
   }
 
+  /** Сменить ник и закрепить (tasks/T-0151); право и чистка — в `admin-player-names.ts`. */
+  async rename(actor: AccountRef, accountId: string, name: string, now = new Date()): Promise<{ account: PlayerRow }> {
+    return { account: rowOf(await renameAccount(this.accounts, this.roles, actor, accountId, name, now), true) };
+  }
+
+  /** Снять закрепление ника: ник снова берётся с площадки. */
+  async unlockName(actor: AccountRef, accountId: string): Promise<{ account: PlayerRow }> {
+    return { account: rowOf(await unlockAccountName(this.accounts, this.roles, actor, accountId), true) };
+  }
+
   /**
    * Сообщение команды в ленту игрока (docs/35-stage4-plan.md Р51). Ключ
    * задаёт кнопка панели: повтор после обрыва сети ни второй строки в ленте,
@@ -218,6 +233,8 @@ function rowOf(account: Account, withPii: boolean): PlayerRow {
     accountId: account.accountId,
     platform: account.platform,
     displayName: account.displayName,
+    platformName: account.platformName ?? null,
+    nameLocked: account.nameLockedAt != null,
     photoUrl: account.photoUrl,
     createdAt: account.createdAt.toISOString(),
     banned: account.bannedAt === null ? null : { at: account.bannedAt.toISOString(), reason: account.banReason },

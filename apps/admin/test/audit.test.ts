@@ -22,6 +22,11 @@ function entry(patch: Partial<AuditEntry>): AuditEntry {
 }
 
 describe("журнал аудита", () => {
+  it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
+    expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
+    expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
+  });
+
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
     const page = { entries: [entry({})], next: "2026-10-01T10:00:00.000Z_e1" };
     const { fetch, calls } = fakeFetch(json(200, { data: page }), json(200, { data: { entries: [], next: null } }));
@@ -82,6 +87,24 @@ describe("журнал аудита", () => {
     const board = entry({ action: "players.board.set", target: ACCOUNT, targetName: "Оля", after: { kind: "separate_board", endsAt: null } });
     const [change] = auditChanges(board);
     expect(auditValue(change?.after, change?.field ?? "kind")).toBe("отдельная доска");
+  });
+
+  it("закрытие партнёрских заданий за отписку (система, без автора): причина читается словами, а не ключом", () => {
+    const imposed = entry({
+      actorAccountId: null,
+      actorName: null,
+      action: "players.restrict",
+      target: ACCOUNT,
+      targetName: "Оля",
+      after: {
+        restrictions: [{ restrictionId: "r1", kind: "partner_tasks", endsAt: "2026-11-27T10:00:00.000Z", reason: "task_unsubscribe", comment: "Отписка от канала после награды за подписку", notify: true }],
+      },
+    });
+
+    const [restrictions] = auditChanges(imposed);
+
+    expect(auditValue(restrictions?.after, "restrictions", 400)).toBe(`партнёрские задания до ${formatDateTime("2026-11-27T10:00:00.000Z")} — отписка после награды`);
+    expect(auditValue("task_unsubscribe", "reason")).toBe("отписка после награды");
   });
 
   it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {

@@ -343,6 +343,95 @@ describe("лента уведомлений", () => {
   });
 });
 
+describe("уведомления гаснут действием (Р135)", () => {
+  /** Уведомление получателю от отправителя, как его пишет `notice`. */
+  async function notice(kind: "friend_request" | "friend_gift", to: Account, from: Account): Promise<void> {
+    await notices.service.notify({ accountId: to.accountId, kind, payload: { fromAccountId: from.accountId, fromName: from.displayName }, dedupeKey: `${kind}:${from.accountId}:seed` });
+  }
+  /** Прочитано ли уведомление `kind` от `from`; `undefined` — такого нет. */
+  const isRead = (to: Account, kind: string, from: Account): boolean | undefined => {
+    const row = notices.repository.rows.find((candidate) => candidate.accountId === to.accountId && candidate.kind === kind && (candidate.payload as { fromAccountId: string }).fromAccountId === from.accountId);
+    return row === undefined ? undefined : row.readAt !== null;
+  };
+
+  async function befriend(a: Account, b: Account): Promise<void> {
+    await service.request(claims(a), b.accountId);
+    await service.accept(claims(b), a.accountId);
+  }
+
+  it("экран друзей гасит заявки, подарок остаётся непрочитанным", async () => {
+    const [ann, bob, cid] = [await player("1"), await player("2"), await player("3")];
+    await notice("friend_request", bob, ann);
+    await notice("friend_request", bob, cid);
+    await notice("friend_gift", bob, ann);
+
+    await service.view(bob.accountId);
+
+    expect(isRead(bob, "friend_request", ann)).toBe(true);
+    expect(isRead(bob, "friend_request", cid)).toBe(true);
+    expect(isRead(bob, "friend_gift", ann)).toBe(false);
+  });
+
+  it("принятие гасит заявку этого игрока, чужая остаётся", async () => {
+    const [ann, bob, cid] = [await player("1"), await player("2"), await player("3")];
+    await service.request(claims(ann), bob.accountId);
+    await service.request(claims(cid), bob.accountId);
+    await notice("friend_request", bob, ann);
+    await notice("friend_request", bob, cid);
+
+    await service.accept(claims(bob), ann.accountId);
+
+    expect(isRead(bob, "friend_request", ann)).toBe(true);
+    expect(isRead(bob, "friend_request", cid)).toBe(false);
+  });
+
+  it("отклонение гасит заявку, даже если отклонять было нечего", async () => {
+    const [ann, bob] = [await player("1"), await player("2")];
+    await notice("friend_request", bob, ann);
+
+    expect(await service.decline(claims(bob), ann.accountId)).toEqual({ declined: false });
+
+    expect(isRead(bob, "friend_request", ann)).toBe(true);
+  });
+
+  it("забор гасит подарки только тех, чьи подарки забраны", async () => {
+    const receiver = await player("receiver");
+    const givers: Account[] = [];
+    for (let index = 0; index < GIFT_RULES.maxClaimsPerDay + 1; index++) {
+      const giver = await player(`g${index}`);
+      givers.push(giver);
+      await befriend(giver, receiver);
+      await service.sendGift(claims(giver), receiver.accountId);
+      await notice("friend_gift", receiver, giver);
+    }
+
+    const { claimed } = await service.claimGifts(claims(receiver));
+
+    expect(claimed).toBe(GIFT_RULES.maxClaimsPerDay);
+    const taken = new Set([...wallet.grants.values()].map((grant) => grant.source));
+    expect(givers.filter((giver) => isRead(receiver, "friend_gift", giver))).toHaveLength(claimed);
+    for (const giver of givers) expect(isRead(receiver, "friend_gift", giver)).toBe(taken.has(`friend:${giver.accountId}`));
+  });
+
+  it("ничего не забрано — уведомление остаётся", async () => {
+    const [ann, bob] = [await player("1"), await player("2")];
+    await notice("friend_gift", bob, ann);
+    expect(await service.claimGifts(claims(bob))).toEqual({ claimed: 0, coins: 0 });
+    expect(isRead(bob, "friend_gift", ann)).toBe(false);
+  });
+
+  it("сбой отметки не отменяет действие", async () => {
+    const [ann, bob] = [await player("1"), await player("2")];
+    await service.request(claims(ann), bob.accountId);
+    notices.repository.markReadOf = async () => {
+      throw new Error("база недоступна");
+    };
+
+    expect(await service.accept(claims(bob), ann.accountId)).toEqual({ status: "friends" });
+    expect(await repository.areFriends(ann.accountId, bob.accountId)).toBe(true);
+  });
+});
+
 describe("знак на вкладке друзей", () => {
   it("заявки и подарки, которые можно забрать сегодня; забранное и принятое гаснет", async () => {
     const ann = await player("1");

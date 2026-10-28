@@ -3,8 +3,8 @@ id: T-0177
 title: Штраф за отписку — заготовки: списание награды, срочное закрытие, уведомление
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0188]
@@ -15,18 +15,18 @@ zones:
   - backend/api/src/modules/restrictions/restriction-catalog.ts
   - backend/api/src/modules/restrictions/restrictions.service.ts
   - backend/api/src/modules/notifications/notification-kinds.ts
-  - apps/admin/src/api/audit.ts
   - packages/app-shell/src/screens/meta/notifications.tsx
   - packages/app-shell/src/i18n/ru-account.json
   - packages/app-shell/src/i18n/ru-history.json
   - backend/api/test/wallet.integration.test.ts
   - backend/api/test/restrictions.test.ts
   - backend/api/test/notifications.test.ts
-  - apps/admin/test/audit.test.ts
   - packages/app-shell/test/notifications.test.ts
 shared:
   - docs/35-stage4-plan.md
   - docs/22-analytics-and-metrics.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
 runner: local
 executor: sonnet-5.5
 effort: extra

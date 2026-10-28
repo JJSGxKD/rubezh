@@ -49,6 +49,8 @@ const purchaseFields = {
   sku: id.optional(),
   // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
   promoPct: count.optional(),
+  // Метка набора на витрине в момент покупки: продаёт ли «Хит», «Выбор игроков», «Лучшая цена».
+  badge: z.enum(["hit", "choice", "best"]).optional(),
 };
 
 const runOutcome = payload({
@@ -57,6 +59,13 @@ const runOutcome = payload({
   level: count,
   wave: count,
   enemiesKilled: count,
+  // Счётчики итога для заданий и дашбордов (docs/22-analytics-and-metrics.md
+  // §3.3, tasks/T-0125). Необязательные: сборки до них полей не шлют, версия
+  // прежняя.
+  bossKills: count.optional(),
+  eliteKills: count.optional(),
+  chestsOpened: count.optional(),
+  crystals: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -319,6 +328,20 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Проверка рекламы командой (Р165, tasks/T-0333), не игровой показ: в воронку
+  // рекламы не входит. `live` — боевой показ или тестовый, `ms` — от нажатия до
+  // исхода в миллисекундах, `reason` — код отказа, только при `failed`.
+  ad_tested: {
+    version: 1,
+    payload: payload({
+      network: id,
+      format: z.enum(["rewarded", "interstitial"]),
+      live: z.boolean(),
+      outcome: z.enum(["completed", "closed", "failed"]),
+      reason: id.optional(),
+      ms: seconds,
+    }),
+  },
   // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
   // `downtimeSec` — сколько прошло между потерей и возвращением.
   connection_lost: { version: 1, payload: payload({}) },

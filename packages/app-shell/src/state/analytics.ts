@@ -66,6 +66,7 @@ export const ANALYTICS_EVENTS = [
   "ad_failed",
   "ad_clicked",
   "ad_reward_claimed",
+  "ad_tested",
   "connection_lost",
   "connection_restored",
   "client_error",

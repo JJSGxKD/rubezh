@@ -235,6 +235,7 @@ function run(patch: Partial<RecordedRun> = {}): RecordedRun {
     weapons: [{ id: "spark", level: 3 }],
     boosts: [],
     xpCollected: null,
+    counters: null,
     deathCause: null,
     cheats: false,
     continues: 0,

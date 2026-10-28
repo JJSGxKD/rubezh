@@ -338,6 +338,9 @@ importers:
       phaser:
         specifier: 3.90.0
         version: 3.90.0
+      zod:
+        specifier: 4.6.4
+        version: 4.6.4
 
   packages/design-tokens: {}
 
@@ -346,6 +349,16 @@ importers:
       decimal.js:
         specifier: 10.6.0
         version: 10.6.0
+      zod:
+        specifier: 4.6.4
+        version: 4.6.4
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.2
+        version: 22.20.2
+
+  packages/promo-kit:
+    dependencies:
       zod:
         specifier: 4.6.4
         version: 4.6.4

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
+import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
 import { RunProbe } from "../engine/run-probe";
 import {
@@ -108,6 +109,8 @@ export interface MainSceneData {
   runId?: string;
   /** останавливать забег на открытом сундуке до `closeChest` */
   pauseOnChest?: boolean;
+  /** контент забега; без поля — боевой `CONTENT_SNAPSHOT` (песочница редактора баланса) */
+  content?: ContentSnapshot;
 }
 
 /**
@@ -133,6 +136,8 @@ export class MainScene extends Phaser.Scene {
   };
   private phase: RunPhase = "running";
   private runId = "";
+  /** отпечаток контента этого забега: чужой снимок пишет в итог свой хэш, а не `CONTENT_HASH` */
+  private contentHash = CONTENT_HASH;
   private seed = 1;
   private accumulatorMs = 0;
   private hudTimerMs = 0;
@@ -163,6 +168,7 @@ export class MainScene extends Phaser.Scene {
     const resume = data.resume;
     this.seed = resume?.seed ?? data.seed;
     this.runId = resume?.runId ?? data.runId ?? createUuid();
+    this.contentHash = data.content === undefined ? CONTENT_HASH : hashSnapshot(data.content);
     this.accumulatorMs = 0;
     this.hudTimerMs = 0;
     this.reportedWave = -1;
@@ -185,6 +191,7 @@ export class MainScene extends Phaser.Scene {
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
+      ...(data.content === undefined ? {} : { content: data.content }),
     });
     this.world = world;
     this.spawner = spawner;
@@ -220,7 +227,7 @@ export class MainScene extends Phaser.Scene {
               mapId: world.mapId,
               difficultyId: world.difficultyLevel.id,
               startingWeaponId: this.startingWeaponId(),
-              contentHash: CONTENT_HASH,
+              contentHash: this.contentHash,
               unitScale: data.unitScale,
               // Продолженный забег не повторить с начала, а в забеге
               // разработчика читы и команды в лог не пишутся.
@@ -529,7 +536,7 @@ export class MainScene extends Phaser.Scene {
     const world = this.world;
     return {
       format: RUN_SNAPSHOT_FORMAT,
-      contentHash: CONTENT_HASH,
+      contentHash: this.contentHash,
       runId: this.runId,
       seed: this.seed,
       mapId: world.mapId,
@@ -645,7 +652,7 @@ export class MainScene extends Phaser.Scene {
       if (snapshot.format !== RUN_SNAPSHOT_FORMAT) {
         throw new SnapshotError(`формат ${snapshot.format}, ожидался ${RUN_SNAPSHOT_FORMAT}`);
       }
-      if (snapshot.contentHash !== CONTENT_HASH) {
+      if (snapshot.contentHash !== this.contentHash) {
         throw new SnapshotError("снят на другой версии контента");
       }
       restoreWorld(this.world, this.spawner, snapshot.world);
@@ -762,7 +769,7 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       outcome,
       startingWeaponId: this.startingWeaponId(),
-      contentHash: CONTENT_HASH,
+      contentHash: this.contentHash,
       cheats: this.cheatsUsed,
     });
   }
