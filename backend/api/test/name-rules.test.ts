@@ -164,7 +164,7 @@ describe("view", () => {
     const view = await ctx.service.view(admin);
 
     expect(view.rules).toEqual([{ ruleId: expect.any(String), category: "brand", kind: "exact", pattern: "пример-бренд", active: true, note: "заметка", updatedAt: "2026-10-27T10:00:00.000Z", updatedBy: admin.accountId }]);
-    expect(view.limits).toEqual({ patternMax: 100, noteMax: 200, rulesMax: 2000, samplesMax: 20, sampleMax: 256 });
+    expect(view.limits).toEqual({ patternMax: 100, noteMax: 200, rulesMax: 2000, regexRulesMax: 100, samplesMax: 20, sampleMax: 256 });
   });
 });
 
