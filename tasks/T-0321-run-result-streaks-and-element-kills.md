@@ -3,8 +3,8 @@ id: T-0321
 title: Итог забега — самая долгая серия без попаданий и без убийств, убийства по стихиям; приём и проверка правдоподобия на сервере
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0125]
