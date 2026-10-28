@@ -41,7 +41,6 @@ export class Telegraphs {
     ensureShapeTexture(scene, RING_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "ring");
     ensureShapeTexture(scene, FILL_KEY, RING_TEXTURE_UNITS * scale, WORLD_COLORS.threat, "circle");
     this.ensureBarTexture(LANE_KEY, LANE_WIDTH_UNITS * scale, WORLD_COLORS.threat);
-    this.ensureBarTexture(AIM_KEY, AIM_WIDTH_UNITS * scale, WORLD_COLORS.enemyProjectile);
   }
 
   begin(): void {
@@ -87,23 +86,6 @@ export class Telegraphs {
       .setRotation(rotation)
       .setScale(Math.max(0.001, (length * p) / textureLength), widthScale * LANE_FILL_SHARE)
       .setAlpha(0.7);
-  }
-
-  /** Прицел стрелка: линия к игроку, заполняется к выстрелу. */
-  aim(x: number, y: number, targetX: number, targetY: number, progress: number): void {
-    const dx = targetX - x;
-    const dy = targetY - y;
-    const length = Math.sqrt(dx * dx + dy * dy);
-    if (length < 1) return;
-    const rotation = Math.atan2(dy, dx);
-    const textureLength = BAR_TEXTURE_UNITS * this.world.config.unitScale;
-    const p = clamp01(progress);
-
-    const track = this.take(AIM_KEY, 0);
-    track.setPosition(x, y).setRotation(rotation).setScale(length / textureLength, 1).setAlpha(0.12 + 0.1 * p);
-
-    const fill = this.take(AIM_KEY, 0);
-    fill.setPosition(x, y).setRotation(rotation).setScale(Math.max(0.001, (length * p) / textureLength), 1).setAlpha(0.55);
   }
 
   end(): void {
@@ -155,9 +137,6 @@ function barTextureHeight(width: number): number {
   return Math.max(2, Math.ceil(width));
 }
 
-/** Сколько секунд до выстрела стрелок показывает прицел. */
-export const AIM_TELEGRAPH_SEC = 0.5;
-
 function clamp01(value: number): number {
   return value < 0 ? 0 : value > 1 ? 1 : value;
 }
@@ -166,7 +145,6 @@ const RING_KEY = "bh-telegraph";
 const FILL_KEY = "bh-telegraph-fill";
 const RING_TEXTURE_UNITS = 32;
 const LANE_KEY = "bh-dash-lane";
-const AIM_KEY = "bh-aim-line";
 /** Длина текстуры полос; на экране они растягиваются до нужной длины. */
 const BAR_TEXTURE_UNITS = 64;
 /** Толщина текстуры полосы рывка; на экране её растягивают до тела врага (`laneWidth`). */
@@ -175,4 +153,3 @@ const LANE_WIDTH_UNITS = 10;
 const LANE_TRACK_ALPHA = 0.18;
 /** Доля ширины, которую занимает заполнение-отсчёт. */
 const LANE_FILL_SHARE = 0.45;
-const AIM_WIDTH_UNITS = 3;

@@ -26,7 +26,7 @@ export interface ScriptedRunOptions {
   immortalPlayer?: boolean;
   /**
    * Доли паттернов в популяции. По умолчанию — смесь стенда испытаний этапа 1
-   * (рой, преследование, стрелок): на ней сравниваются сборки между собой.
+   * (рой, преследование): на ней сравниваются сборки между собой.
    */
   weights?: Partial<Record<EnemyPattern, number>>;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
@@ -42,12 +42,10 @@ export interface ScriptedRunOptions {
 export const ALL_PATTERNS_WEIGHTS: Record<EnemyPattern, number> = {
   swarm: 4,
   chase: 1,
-  kite_and_shoot: 2,
   dash: 1,
   orbit: 2,
   exploder: 1,
   rush: 2,
-  caster: 1,
   splitter: 1,
   // Одинокий страж в обычной популяции бессмыслен: он держит место в строю кольца.
   cordon: 0,

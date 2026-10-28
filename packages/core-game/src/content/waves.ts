@@ -31,7 +31,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 60,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.2 },
-      { enemy: "shooter_wisp", perSec: 0.3, burst: 2 },
       { enemy: "bone_walker", perSec: 0.5, burst: 4 },
     ],
   },
@@ -51,7 +50,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.4 },
       { enemy: "circler_crow", perSec: 0.9 },
-      { enemy: "shooter_wisp", perSec: 0.25 },
       { enemy: "bone_walker", perSec: 0.4 },
       { enemy: "tank_ghoul", perSec: 0.12, burst: 1 },
     ],
@@ -71,7 +69,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.6 },
       { enemy: "circler_crow", perSec: 1.6 },
-      { enemy: "shooter_wisp", perSec: 0.35 },
       { enemy: "mire_shambler", perSec: 0.22, burst: 2 },
     ],
     events: [
@@ -112,7 +109,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 2.8 },
       { enemy: "circler_crow", perSec: 1.1 },
       { enemy: "rushing_bats", perSec: 0.8 },
-      { enemy: "shooter_wisp", perSec: 0.3 },
       { enemy: "mire_shambler", perSec: 0.2 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
@@ -125,7 +121,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 3 },
       { enemy: "circler_crow", perSec: 1.8 },
       { enemy: "rushing_bats", perSec: 1 },
-      { enemy: "shooter_wisp", perSec: 0.45 },
       { enemy: "bone_walker", perSec: 0.7 },
       { enemy: "dasher_wolf", perSec: 0.4 },
     ],
@@ -161,7 +156,6 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     "circler_crow",
     "rushing_bats",
     "dasher_wolf",
-    "shooter_wisp",
     "bomber_imp",
     "splitter_slime",
     "tank_ghoul",
@@ -177,7 +171,6 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
-    { everySegments: 7, kind: "ring", enemy: "boss_seer", count: 1 },
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
     // параметры кольца с отрезка на отрезок не растут.

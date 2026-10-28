@@ -204,7 +204,6 @@ export function rampTargetAt(options: RampOptions, elapsedSec: number): number {
 const DEFAULT_WEIGHTS: Partial<Record<EnemyPattern, number>> = {
   swarm: 7,
   chase: 2,
-  kite_and_shoot: 1,
 };
 
 function createPopulationSpawner(
