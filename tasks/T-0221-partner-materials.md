@@ -30,7 +30,7 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

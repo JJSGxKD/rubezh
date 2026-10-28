@@ -16,7 +16,7 @@ shared:
   - backend/api/src/modules/tasks/task-rules.ts
   - CLAUDE.md
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

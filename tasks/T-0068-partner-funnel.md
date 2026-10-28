@@ -21,7 +21,7 @@ zones:
   - apps/admin/test/partners.test.ts
 shared:
   - docs/23-referral-and-partner-program.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

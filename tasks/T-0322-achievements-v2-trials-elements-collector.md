@@ -28,7 +28,7 @@ shared:
   - packages/app-shell/src/i18n/ru-tasks.json
   - packages/app-shell/test/tasks-api.test.ts
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

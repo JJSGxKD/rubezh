@@ -28,7 +28,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

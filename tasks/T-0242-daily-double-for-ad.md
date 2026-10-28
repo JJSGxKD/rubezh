@@ -34,7 +34,7 @@ shared:
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

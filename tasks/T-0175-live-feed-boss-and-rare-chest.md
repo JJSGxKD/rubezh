@@ -37,7 +37,7 @@ shared:
   - packages/shared-types/src/index.ts
   - docs/39-retention-mechanics.md
   - docs/22-analytics-and-metrics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

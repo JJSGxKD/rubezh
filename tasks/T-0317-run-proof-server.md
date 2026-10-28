@@ -24,7 +24,7 @@ shared:
   - backend/api/test/wipe-plan.test.ts
   - docs/21-diagrams.md
   - docs/28-diagnostics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

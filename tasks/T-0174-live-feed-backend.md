@@ -21,7 +21,7 @@ shared:
   - docs/21-diagrams.md
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/app.module.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

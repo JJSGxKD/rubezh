@@ -36,7 +36,7 @@ shared:
   - docs/23-referral-and-partner-program.md
   - docs/24-attribution-and-sharing.md
   - docs/35-stage4-plan.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

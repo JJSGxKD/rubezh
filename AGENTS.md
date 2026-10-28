@@ -5,7 +5,7 @@ Claude, Codex, Gemini и других.
 
 Работа берётся только из реестра задач — [`tasks/README.md`](tasks/README.md):
 
-1. Выбрать задачу своей модели и уровня: `pnpm task next --executor <модель> --effort <уровень>` (`--runner local` — если есть Docker, `--runner owner` — на машине владельца).
+1. Выбрать задачу своей модели и уровня: `pnpm task next --executor <модель> --effort <уровень>` (`--runner local` — если можешь запустить приложение: dev-сервер, браузер, Docker, `--runner owner` — на машине владельца).
    PR на доработке — первыми.
 2. Захватить её веткой `task/T-NNNN` (`pnpm task claim`) или продолжить PR на
    доработке (`pnpm task resume`).
