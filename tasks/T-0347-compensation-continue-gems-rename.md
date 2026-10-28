@@ -3,8 +3,8 @@ id: T-0347
 title: Компенсация тестерам — своё имя пересчёта звёзд второго шанса в самоцветы
 epic: E1
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-15 / haiku-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: [T-0324]
