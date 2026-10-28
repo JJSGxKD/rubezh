@@ -1,4 +1,5 @@
-import { PASSIVE_CATEGORIES } from "@bh/shared-types";
+import { DIFFICULTY_IDS, PASSIVE_CATEGORIES } from "@bh/shared-types";
+import { DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
 import type { ContentSnapshot } from "../content/snapshot";
 import { findPassiveContentProblems } from "./progression/passives";
 import { findBoostProblems } from "./progression/boosts";
@@ -70,10 +71,28 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("chests", findChestsProblems(content.chests));
   add("chests", findPickupPoolProblems(content));
   add("difficulties", findDifficultyContentProblems(content.difficulties));
+  add("difficulties", findDifficultySetProblems(content));
   add("continueRules", findContinueProblems(content.continueRules));
   add("boosts", findBoostProblems(content.boosts));
   add("maxBoostsPerRun", findBoostLimitProblems(content));
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
+  return problems;
+}
+
+/**
+ * Набор уровней целиком: уровень по умолчанию есть (иначе забег стартует без
+ * сложности молча) и порядок совпадает с `DIFFICULTY_IDS` — по нему строятся
+ * переключатель и рейтинг.
+ */
+function findDifficultySetProblems(content: ContentSnapshot): string[] {
+  const problems: string[] = [];
+  const ids = content.difficulties.map((level) => level.id);
+  if (!ids.includes(DEFAULT_DIFFICULTY_ID)) {
+    problems.push(`difficulties: нет уровня по умолчанию «${DEFAULT_DIFFICULTY_ID}» — забег пошёл бы без сложности`);
+  }
+  if (ids.join() !== DIFFICULTY_IDS.join()) {
+    problems.push(`difficulties: порядок уровней ${ids.join(", ")} не равен ${DIFFICULTY_IDS.join(", ")}`);
+  }
   return problems;
 }
 

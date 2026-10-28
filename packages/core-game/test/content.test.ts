@@ -6,6 +6,7 @@ import {
 import { DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
+import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
 import { ENEMIES } from "../src/content/enemies";
