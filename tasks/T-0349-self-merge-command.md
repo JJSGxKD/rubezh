@@ -3,8 +3,8 @@ id: T-0349
 title: Самостоятельный мердж — поле merge в задаче, команды pnpm task merge и pnpm task holds, правила для потоков
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
