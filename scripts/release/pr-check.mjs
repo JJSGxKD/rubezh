@@ -129,8 +129,8 @@ export function checkTaskLine(body, headRefName, taskFiles) {
 
   const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
   const match = /^Задача:\s*`?tasks\/(?:archive\/)?(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
-  // К PR задача уже закрыта и лежит в архиве; верхняя папка тоже принимается (задача ещё открыта).
-  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/archive/${branch[1]}-….md»`];
+  // Задача закрывается в PR на месте, в `tasks/`; путь в архив тоже принимается — файл ищется в обеих папках ветки.
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
   if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
 
   const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
