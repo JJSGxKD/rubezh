@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { createNoopPlatformUi, type PlatformAdapter } from "@bh/shared-types";
 import { useBadges } from "../src/state/badges";
@@ -63,6 +63,16 @@ describe("клиент журнала обновлений", () => {
     await markChangelogSeen(PAGE, createChangelogApi(server(calls, { "/api/v1/changelog/seen": { badge: 1 } })));
     expect(calls).toEqual([{ path: "/api/v1/changelog/seen", method: "POST", body: { upTo: "2026-09-30T10:00:00.000Z" } }]);
     expect(useBadges.getState().changelog).toBe(1);
+  });
+
+  it("отметка журнала, которую сервер принял, перечитывает знаки; пустой журнал и сбой — нет", async () => {
+    const calls: Call[] = [];
+    const refresh = vi.fn(async () => undefined);
+    await markChangelogSeen(PAGE, createChangelogApi(server(calls, { "/api/v1/changelog/seen": { badge: 1 } })), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await markChangelogSeen({ ...PAGE, versions: [], latestAt: null }, createChangelogApi(server(calls, {})), refresh);
+    await markChangelogSeen(PAGE, createChangelogApi(server(calls, {})), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("пустой журнал отмечать нечего; сбой сети знак не трогает", async () => {

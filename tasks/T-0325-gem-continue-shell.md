@@ -34,7 +34,7 @@ batch: 3
 
 # T-0325. Второй шанс за самоцветы — экран смерти: кнопка с ценой и балансом, нехватка видна до нажатия, ролик раз в сутки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0325.json)](README.md#значки-статуса) [![T-0324](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json&label=T-0324)](T-0324-gem-continue-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0325.json)](README.md#значки-статуса) [![T-0324](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json&label=T-0324)](archive/T-0324-gem-continue-server.md)
 
 ## Зачем
 

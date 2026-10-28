@@ -23,7 +23,7 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
 import { HIDDEN_KINDS, RESTRICTION_CATALOG, RESTRICTION_KINDS, RESTRICTION_LIMITS, RESTRICTION_REASONS, isHiddenKind, type RestrictionKind } from "../src/modules/restrictions/restriction-catalog.js";
 import { banMessage, imposeProblem, imposeSchema, playerMessage, shownText, termProblem, untilText } from "../src/modules/restrictions/restriction-rules.js";
-import { REPLACED_COMMENT } from "../src/modules/restrictions/restrictions.repository.js";
+import { REPLACED_COMMENT, type NewRestriction } from "../src/modules/restrictions/restrictions.repository.js";
 import { RestrictionsController } from "../src/modules/restrictions/restrictions.controller.js";
 import { AccountRestrictedError, RestrictionNotFoundError, RestrictionSilentError } from "../src/modules/restrictions/restrictions-errors.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
@@ -618,6 +618,109 @@ describe("наложение системой на срок (T-0177)", () => {
     await s.service.imposeBySystem(target.accountId, "purchases", "payment_refund", "Возврат звёзд за покупку", NOW);
 
     expect(s.repository.rows[0]).toMatchObject({ kind: "purchases", endsAt: null, imposedBy: null });
+  });
+});
+
+describe("наложение системой: проверка «не слабее» внутри репозитория (T-0345)", () => {
+  const TERM = 30 * DAY;
+  const ONE_ROW_ONLY = "keepIfStanding — только для одной строки";
+
+  const row = (accountId: string, patch: Partial<NewRestriction> = {}): NewRestriction => ({
+    accountId,
+    kind: "partner_tasks",
+    startsAt: NOW,
+    endsAt: new Date(NOW.getTime() + TERM),
+    reason: "task_unsubscribe",
+    comment: null,
+    notify: true,
+    imposedBy: null,
+    ...patch,
+  });
+
+  it("`keepIfStanding` при действующей блокировке целиком: `kept`, строк не прибавилось", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a1", { kind: "all", endsAt: null, imposedBy: "owner" })], NOW);
+
+    const result = await repository.impose([row("a1")], NOW, { keepIfStanding: true });
+
+    expect(result).toEqual({ created: [], replaced: [], kept: true });
+    expect(repository.rows).toHaveLength(1);
+    expect(repository.rows[0]).toMatchObject({ kind: "all", liftedAt: null });
+  });
+
+  it("`keepIfStanding` при более коротком ограничении вида: `kept: false`, короткое снято как заменённое, новое создано", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a2", { endsAt: new Date(NOW.getTime() + 10 * DAY), imposedBy: "moderator" })], NOW);
+
+    const result = await repository.impose([row("a2")], NOW, { keepIfStanding: true });
+
+    expect(result.kept).toBe(false);
+    expect(result.created).toHaveLength(1);
+    expect(result.replaced).toHaveLength(1);
+    expect(result.replaced[0]).toMatchObject({ imposedBy: "moderator", liftedAt: NOW, liftedBy: null, liftComment: REPLACED_COMMENT });
+    expect(repository.rows).toHaveLength(2);
+    expect(repository.rows.filter((item) => item.liftedAt === null)).toHaveLength(1);
+    expect(repository.rows.find((item) => item.liftedAt === null)).toMatchObject({ endsAt: new Date(NOW.getTime() + TERM), imposedBy: null });
+  });
+
+  it("`keepIfStanding` с двумя строками или без строк: ошибка, ничего не записано", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a3", { endsAt: new Date(NOW.getTime() + DAY), imposedBy: "moderator" })], NOW);
+    const before = JSON.stringify(repository.rows);
+
+    await expect(repository.impose([row("a3"), row("a3", { kind: "promo_codes" })], NOW, { keepIfStanding: true })).rejects.toThrow(ONE_ROW_ONLY);
+    await expect(repository.impose([], NOW, { keepIfStanding: true })).rejects.toThrow(ONE_ROW_ONLY);
+
+    expect(JSON.stringify(repository.rows)).toBe(before);
+  });
+
+  it("без опции `kept` всегда `false`, а новое заменяет и более строгое: поведение для людей прежнее", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("a4", { endsAt: null, imposedBy: "moderator" })], NOW);
+
+    const shorter = await repository.impose([row("a4")], NOW);
+    const withFalse = await repository.impose([row("a4", { endsAt: null })], NOW, { keepIfStanding: false });
+
+    expect(shorter.kept).toBe(false);
+    expect(shorter.replaced).toHaveLength(1);
+    expect(withFalse.kept).toBe(false);
+    expect(withFalse.replaced).toHaveLength(1);
+    expect(repository.rows.filter((item) => item.liftedAt === null)).toHaveLength(1);
+  });
+
+  it("держат: бессрочное и равное по сроку того же вида; не держат: другой вид, чужой игрок, истёкшее и снятое", async () => {
+    const repository = new MemoryRestrictionsRepository();
+    await repository.impose([row("holds-forever", { endsAt: null, imposedBy: "moderator" })], NOW);
+    await repository.impose([row("holds-equal", { imposedBy: "moderator" })], NOW);
+    await repository.impose([row("other-kind", { kind: "promo_codes", endsAt: null, imposedBy: "moderator" })], NOW);
+    await repository.impose([row("neighbour", { endsAt: null, imposedBy: "moderator" })], NOW);
+    repository.restrict("expired", "partner_tasks", { at: new Date(NOW.getTime() - 5 * DAY), endsAt: new Date(NOW.getTime() - 1) });
+    repository.restrict("lifted", "partner_tasks").liftedAt = new Date(NOW.getTime() - 1);
+
+    const attempt = async (accountId: string) => (await repository.impose([row(accountId)], NOW, { keepIfStanding: true })).kept;
+
+    expect(await attempt("holds-forever")).toBe(true);
+    expect(await attempt("holds-equal")).toBe(true);
+    expect(await attempt("other-kind")).toBe(false);
+    expect(await attempt("fresh")).toBe(false);
+    expect(await attempt("expired")).toBe(false);
+    expect(await attempt("lifted")).toBe(false);
+    // Сосед с бессрочным закрытием не тронут чужим наложением.
+    expect(repository.rows.filter((item) => item.accountId === "neighbour")).toHaveLength(1);
+  });
+
+  it("`imposeBySystemFor` не читает действующие строки вне наложения: проверка «не слабее» внутри `impose`, и при `kept`, и при `imposed`", async () => {
+    const s = setup();
+    const moderator = await person(s, "730", "moderator");
+    const held = await person(s, "731");
+    const free = await person(s, "732");
+    await s.service.impose(moderator, held.accountId, input({ kinds: ["partner_tasks"], endsAt: null, reason: "abuse" }), NOW);
+    s.repository.reads = 0;
+
+    expect(await s.service.imposeBySystemFor(held.accountId, "partner_tasks", "task_unsubscribe", "комментарий", TERM, NOW)).toBe("kept");
+    expect(await s.service.imposeBySystemFor(free.accountId, "partner_tasks", "task_unsubscribe", "комментарий", TERM, NOW)).toBe("imposed");
+
+    expect(s.repository.reads).toBe(0);
   });
 });
 

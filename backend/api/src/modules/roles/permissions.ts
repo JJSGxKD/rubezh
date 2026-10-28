@@ -103,6 +103,9 @@ export const PERMISSIONS = [
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
   "tools.dev",
+  // Правила фильтра имён (Р168): слова и регулярки, которые убираются из ников игроков —
+  // поэтому не «настройки»; кто видит экран, тот и правит
+  "names.edit",
   // Роли и журнал
   "roles.assign",
   "audit.view",
@@ -170,6 +173,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "requests.view",
     "data.export",
     "tools.dev",
+    "names.edit",
     "audit.view",
   ],
 
@@ -192,7 +196,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   ],
 
   // Игроки без платёжных данных, жалобы, блокировки, очередь антифрода.
-  moderator: ["players.view", "players.ban", "players.restrict", "players.message"],
+  moderator: ["players.view", "players.ban", "players.restrict", "players.message", "names.edit"],
 
   // Привлечение, рассылки, акции магазина, промокоды и слайды главной;
   // партнёры без выплат.

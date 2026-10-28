@@ -25,6 +25,8 @@ import { AdminRestrictionsController } from "./admin-restrictions.controller.js"
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
+import { AdminNameRulesController } from "./admin-name-rules.controller.js";
+import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
 import { AdminOverviewController } from "./admin-overview.controller.js";
@@ -81,7 +83,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -105,6 +107,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminRestrictionsController,
     AdminPurchasesController,
     AdminAdsController,
+    AdminNameRulesController,
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,

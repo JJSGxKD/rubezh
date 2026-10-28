@@ -2415,3 +2415,37 @@ model StartParamKey {
 
   @@map("start_param_key")
 }
+
+// Правила фильтра имён (Р168, T-0338): что убирается из ников игроков. Встроенный словарь
+// остаётся в коде, правила его дополняют; правит команда в панели без релиза.
+enum NameRuleCategory {
+  profanity
+  brand
+  ads
+  other
+  allow
+}
+
+enum NameRuleKind {
+  exact
+  word
+  regex
+}
+
+/// Правило фильтра имён: категория задаёт действие, вид — как искать шаблон.
+model NameRule {
+  ruleId    String           @id @map("rule_id") @db.Uuid
+  category  NameRuleCategory
+  kind      NameRuleKind
+  pattern   String           @db.VarChar(100)
+  active    Boolean          @default(true)
+  note      String?          @db.VarChar(200)
+  createdAt DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime         @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy String?          @map("updated_by") @db.Uuid
+
+  @@unique([category, kind, pattern])
+  @@index([active])
+  @@map("name_rule")
+}

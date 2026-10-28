@@ -1042,6 +1042,18 @@ erDiagram
         datetime first_at
         datetime last_at
     }
+
+    NAME_RULE {
+        uuid rule_id PK "правила фильтра имён, Р168: что убирается из ников игроков"
+        enum category "profanity, brand, ads, other, allow; действие задаёт категория"
+        enum kind "exact, word, regex"
+        string pattern "до 100 знаков; UNIQUE вместе с category и kind"
+        bool active
+        string note "nullable, до 200 знаков"
+        datetime created_at
+        datetime updated_at
+        uuid updated_by "nullable: кто менял последним, без внешнего ключа"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1879,6 +1891,7 @@ flowchart LR
 
     subgraph api["backend/api"]
         AUTH["auth<br/>initData → JWT, роли, реализовано"]
+        NAME_RULES["name-rules<br/>правила фильтра имён: кэш в памяти,<br/>правка из панели, реализовано"]
         ATTR["attribution<br/>сессии, первое и последнее<br/>касание, реализовано"]
         RUNS["runs<br/>приём забегов, антифрод,<br/>рейтинг, реализовано"]
         PAY["payments<br/>второй шанс, товары и подписка за Stars: цена,<br/>счёт, подтверждение, продления, возвраты, выдача, довыдача, реализовано"]
@@ -2014,6 +2027,9 @@ flowchart LR
 
     AUTH --> PG
     AUTH --> REDIS
+    AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
+    NAME_RULES --> PG
+    NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
     ATTR --> REDIS
     ATTR --> QUEUE

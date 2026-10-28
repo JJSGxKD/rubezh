@@ -1,8 +1,10 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { NAME_RULES, type NameRulesSource } from "../name-rules/name-rules-source.js";
+import type { NameRuleSet } from "../name-rules/name-rules-engine.js";
 import type { AccountPlatform } from "./access-token.js";
-import { displayNameFor, type CleanName } from "./display-name.js";
+import { displayNameDetailed, type CleanName } from "./display-name.js";
 
 /**
  * Аккаунты игроков (docs/34-stage3-plan.md, WP1). Запрос к базе живёт здесь,
@@ -25,10 +27,17 @@ function cutChars(text: string, max: number): string {
  * Ник, как он лежит в базе: очищенный и умещённый в столбец. Вход и команда
  * `names:clean` считают его одной функцией — иначе на длинной склейке эмодзи
  * они разошлись бы, и команда переписывала бы тот же ник при каждом запуске.
+ * Правила фильтра имён (Р168) передаются набором: вход берёт его из кэша
+ * процесса, команда — читает из базы сама.
  */
-export function storedNameFor(raw: string, username: string | null, accountId: string): CleanName {
-  const clean = displayNameFor(raw, username, accountId);
-  return { name: cutChars(clean.name, DISPLAY_NAME_MAX), verdict: clean.verdict };
+export function storedNameDetailed(raw: string, username: string | null, accountId: string, rules?: NameRuleSet): CleanName & { hits: string[]; saved: string[] } {
+  const clean = displayNameDetailed(raw, username, accountId, rules);
+  return { name: cutChars(clean.name, DISPLAY_NAME_MAX), verdict: clean.verdict, hits: clean.hits, saved: clean.saved };
+}
+
+export function storedNameFor(raw: string, username: string | null, accountId: string, rules?: NameRuleSet): CleanName {
+  const { name, verdict } = storedNameDetailed(raw, username, accountId, rules);
+  return { name, verdict };
 }
 
 export interface AccountIdentity {
@@ -123,10 +132,20 @@ export interface AccountBan {
 
 @Injectable()
 export class PrismaAccountRepository implements AccountRepository {
-  constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+  /**
+   * Правила имён необязательны: тест, собравший хранилище руками, обходится
+   * без них, а процесс без базы получает пустой набор.
+   */
+  constructor(
+    @Inject(PRISMA) private readonly prisma: PrismaClient,
+    @Optional() @Inject(NAME_RULES) private readonly rules?: NameRulesSource,
+  ) {}
 
   async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
     const now = new Date(nowMs);
+    // Набор берётся один раз: правка, прилетевшая между двумя запросами, не должна
+    // дать аккаунту один ник при создании и другой сразу после.
+    const rules = this.rules?.current();
     const key = { platform: identity.platform, platformUserId: identity.platformUserId };
 
     const platformName = cutChars(identity.displayName, PLATFORM_NAME_MAX);
@@ -140,7 +159,7 @@ export class PrismaAccountRepository implements AccountRepository {
       create: {
         accountId: newAccountId,
         ...key,
-        displayName: storedNameFor(identity.displayName, identity.username, newAccountId).name,
+        displayName: storedNameFor(identity.displayName, identity.username, newAccountId, rules).name,
         platformName,
         username: identity.username,
         photoUrl: identity.photoUrl,
@@ -161,7 +180,7 @@ export class PrismaAccountRepository implements AccountRepository {
     // два запроса, а не один. Закрепление проверяет сам UPDATE ... WHERE: сверка
     // с прочитанной строкой пропустила бы закрепление, поставленное в панели
     // между чтением и записью. Менять нечего — второго запроса нет.
-    const cleanName = storedNameFor(identity.displayName, identity.username, row.accountId).name;
+    const cleanName = storedNameFor(identity.displayName, identity.username, row.accountId, rules).name;
     if (row.nameLockedAt !== null || row.displayName === cleanName) return toAccount(row, created);
     const renamed = await this.prisma.account.updateMany({ where: { accountId: row.accountId, nameLockedAt: null }, data: { displayName: cleanName } });
     // Ноль строк — модератор закрепил ник в эту самую минуту: остаётся прежний.
