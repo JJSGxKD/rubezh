@@ -256,6 +256,14 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  shopChoiceMinBuyers: integer(
+    "shop.choice-min-buyers",
+    SHOP_GROUP,
+    "«Выбор игроков»: покупателей для метки",
+    "Сколько разных игроков должно купить набор самоцветов за 30 дней, чтобы у лидера появилась метка «Выбор игроков». Меньше — метки нет",
+    { min: 1, max: 10_000, unit: ["игрок", "игрока", "игроков"] },
+    20,
+  ),
   /**
    * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
    * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа

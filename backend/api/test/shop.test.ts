@@ -29,6 +29,7 @@ import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
 import { ShopService } from "../src/modules/shop/shop.service.js";
 import { ShowcaseService } from "../src/modules/shop/showcase.service.js";
 import { badgesOf, gemValuePct, recommendedSku } from "../src/modules/shop/shop-marketing.js";
+import type { ShopChoice } from "../src/modules/shop/shop-choice.js";
 import type { ItemsService } from "../src/modules/items/items.service.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
@@ -104,6 +105,8 @@ async function codeOf(promise: Promise<unknown>): Promise<string> {
 class Context {
   equipped = 0;
   tribute = "";
+  /** сколько разных игроков купило набор за 30 дней — то, что считает `ShopChoice` по базе */
+  buyers = new Map<string, number>();
 }
 
 /** `register: false` — выдачу и отзыв зарегистрирует сам Nest при старте модуля: вручную дважды реестр отзыва не примет. */
@@ -121,7 +124,8 @@ function setup(settings = config(), register = true) {
   const promos = new ShopPromoService(promoRows, new RolesService(settings, new MemoryRolesRepository(), new MemoryAccountRepository()));
   const revocation = new PurchaseRevocation();
   const restrictions = new MemoryRestrictionsRepository();
-  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation, restrictionsGate(restrictions));
+  const choice = { counts: async () => context.buyers } as unknown as ShopChoice;
+  const shop = new ShopService(payments, fulfillment, wallet as unknown as WalletService, items as unknown as ItemsService, promos, reader, revocation, restrictionsGate(restrictions), choice);
   if (register) shop.onModuleInit();
   const confirmation = new PaymentConfirmation(settings, purchases, providers, switchesOf(settings), new PaymentsHooks(), revocation);
   const queue = new PaymentsQueue(settings, confirmation, new PaymentRefunds(purchases, providers, new PurchaseRevocation()), new RunsHooks(), providers, fulfillment, purchases);
@@ -383,6 +387,32 @@ describe("подача товара — только правда", () => {
   it("площадка без цены — ни выгоды, ни лучшей цены: обещать нечего", () => {
     expect(gemValuePct(SHOP_SKUS, () => null).size).toBe(0);
     expect([...badgesOf(SHOP_SKUS, () => null).values()]).toEqual(["hit"]);
+  });
+
+  it("«Выбор игроков» сильнее «Лучшей цены» и не отдаёт её другому набору; «Хит» команды сильнее выбора", () => {
+    const withChoice = badgesOf(SHOP_SKUS, price, "gems_700");
+    expect(withChoice.get("gems_700")).toBe("choice");
+    expect([...withChoice.values()]).not.toContain("best");
+    const other = badgesOf(SHOP_SKUS, price, "gems_60");
+    expect(other.get("gems_60")).toBe("choice");
+    expect(other.get("gems_700")).toBe("best");
+    const hit = badgesOf(SHOP_SKUS, price, "gems_330");
+    expect(hit.get("gems_330")).toBe("hit");
+    expect([...hit.values()]).not.toContain("choice");
+  });
+
+  it("витрина ставит «Выбор игроков» набору с покупателями выше порога и не ставит ниже", async () => {
+    const ctx = setup();
+    ctx.context.buyers = new Map([["gems_60", 25]]);
+    let view = await ctx.shop.view(player());
+    expect(view.items.find((item) => item.sku === "gems_60")?.badge).toBe("choice");
+    expect(view.items.find((item) => item.sku === "gems_700")?.badge).toBe("best");
+
+    const low = setup();
+    low.context.buyers = new Map([["gems_60", 19]]);
+    view = await low.shop.view(player());
+    expect(view.items.find((item) => item.sku === "gems_60")?.badge).toBeNull();
+    expect(view.items.find((item) => item.sku === "gems_700")?.badge).toBe("best");
   });
 
   it("первым — под игрока: новичку стартовый, остальным — самоцветы по лучшей цене", () => {

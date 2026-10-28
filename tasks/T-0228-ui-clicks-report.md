@@ -3,8 +3,8 @@ id: T-0228
 title: Отчёт «Нажатия» в панели — что нажимают на каждом экране
 epic: E11
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0227]
@@ -18,6 +18,7 @@ zones:
 shared:
   - backend/api/src/modules/admin/admin.module.ts
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
@@ -117,9 +118,9 @@ batch: 3
 
 ## Критерии приёмки
 
-- [ ] По каждому экрану видны кнопки, нажатия, игроки и доля от открывших.
-- [ ] Ни `install_id`, ни других идентификаторов в ответе нет.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] По каждому экрану видны кнопки, нажатия, игроки и доля от открывших.
+- [x] Ни `install_id`, ни других идентификаторов в ответе нет.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

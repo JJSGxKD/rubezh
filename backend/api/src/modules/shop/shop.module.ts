@@ -8,6 +8,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { ShopController } from "./shop.controller.js";
 import { PrismaShopPromoRepository, SHOP_PROMO_REPOSITORY } from "./shop-promo.repository.js";
 import { ShopPromoService } from "./shop-promo.service.js";
+import { ShopChoice } from "./shop-choice.js";
 import { ShopService } from "./shop.service.js";
 import { PrismaShowcaseRepository, SHOWCASE_REPOSITORY } from "./showcase.repository.js";
 import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
@@ -23,6 +24,7 @@ import { SHOWCASE_SEEDS, ShowcaseService } from "./showcase.service.js";
   controllers: [ShopController],
   providers: [
     ShopService,
+    ShopChoice,
     ShopPromoService,
     { provide: SHOP_PROMO_REPOSITORY, useClass: PrismaShopPromoRepository },
     ShowcaseService,
