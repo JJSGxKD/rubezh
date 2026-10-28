@@ -41,6 +41,10 @@ const resultSchema = z.object({
   // Забег, брошенный на экране смерти до сборки со стихиями, урона по ним не
   // несёт — и не должен из-за этого пропасть.
   damageByElement: z._default(z.partialRecord(z.enum(ELEMENTS), z.number()), {}),
+  // Серии (tasks/T-0321): запись прошлой сборки их не знает — читается нулями.
+  noHitSec: z._default(z.number(), 0),
+  noKillSec: z._default(z.number(), 0),
+  killsByElement: z._default(z.partialRecord(z.enum(ELEMENTS), z.number()), {}),
   weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.number() })),
   passives: z.array(z.object({ id: z.string(), level: z.number() })),
   deathCause: z.nullable(z.string()),
