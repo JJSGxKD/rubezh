@@ -52,6 +52,7 @@ import {
   SettingsScreen,
   ShopScreen,
   SoundLabScreen,
+  AdsCheckScreen,
   StressScreen,
   TasksScreen,
   TestersScreen,
@@ -315,6 +316,8 @@ function renderScreen(screen: ScreenId): ReactNode {
       return <GuideScreen />;
     case "soundLab":
       return <SoundLabScreen />;
+    case "adsCheck":
+      return <AdsCheckScreen />;
     default:
       return <AboutScreen />;
   }

@@ -3,7 +3,7 @@ id: T-0334
 title: Проверка рекламы командой — экран в игре и debug на вызов в адаптере
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M

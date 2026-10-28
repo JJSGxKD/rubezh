@@ -30,6 +30,7 @@ export type ScreenId =
   | "guide"
   | "feedback"
   | "soundLab"
+  | "adsCheck"
   | "about"
   | "testNotice"
   | "testerThanks"
