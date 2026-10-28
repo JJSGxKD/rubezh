@@ -82,6 +82,13 @@ describe("журнал аудита", () => {
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
   });
 
+  it("вид ограничения «отдельная доска» — словами, а не ключом separate_board", () => {
+    expect(auditValue("separate_board", "kind")).toBe("отдельная доска");
+    const board = entry({ action: "players.board.set", target: ACCOUNT, targetName: "Оля", after: { kind: "separate_board", endsAt: null } });
+    const [change] = auditChanges(board);
+    expect(auditValue(change?.after, change?.field ?? "kind")).toBe("отдельная доска");
+  });
+
   it("закрытие партнёрских заданий за отписку (система, без автора): причина читается словами, а не ключом", () => {
     const imposed = entry({
       actorAccountId: null,
