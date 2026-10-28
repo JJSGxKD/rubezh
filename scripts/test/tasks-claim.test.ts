@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { checkAheadPr, checkClaim, withoutDependencyFiles } from "../tasks/claim.mjs";
+import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "../tasks/claim.mjs";
+// @ts-expect-error — утилита на чистом JS, типов у неё нет
+import { outOfZone } from "../tasks/zones.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { dependencyChangedFiles, mergeDependencyBranches } from "../tasks/git-io.mjs";
 
@@ -283,6 +285,33 @@ describe("вычитание файлов зависимостей из дифф
 
   it("зависимостей нет — дифф как был", () => {
     expect(withoutDependencyFiles(["a.ts"], [])).toEqual(["a.ts"]);
+  });
+});
+
+describe("зависимости для вычитания берутся с базы, а не из ветки PR", () => {
+  const base = [task("T-0001", { status: "done" }), task("T-0002"), task("T-0003", { depends_on: ["T-0001", "T-0002"] }), task("T-0004")];
+
+  it("незакрытые зависимости задачи на базе, в порядке depends_on", () => {
+    expect(unclosedDependenciesOnBase("T-0003", base)).toEqual(["T-0002"]);
+  });
+
+  it("зависимость, которой нет в реестре базы, считается незакрытой", () => {
+    expect(unclosedDependenciesOnBase("T-0005", [task("T-0005", { depends_on: ["T-0099"] })])).toEqual(["T-0099"]);
+  });
+
+  it("задачи нет на базе или зависимостей нет — вычитать нечего", () => {
+    expect(unclosedDependenciesOnBase("T-0009", base)).toEqual([]);
+    expect(unclosedDependenciesOnBase("T-0004", base)).toEqual([]);
+  });
+
+  // PR дописал в ветке чужую задачу в depends_on: на базе её нет, файлы не вычитаются, diff-check красный.
+  it("зависимость, дописанная только в ветке, не вычитает файлы: они остаются вне зон", () => {
+    const branchTask = task("T-0004", { depends_on: ["T-0002"] });
+    expect(branchTask.depends_on).toEqual(["T-0002"]);
+    const unclosed = unclosedDependenciesOnBase("T-0004", base);
+    expect(unclosed).toEqual([]);
+    const changed = withoutDependencyFiles(["zones/T-0004/a.ts", "other/b.ts"], unclosed.length === 0 ? [] : ["other/b.ts"]);
+    expect(outOfZone(changed, branchTask)).toEqual(["other/b.ts"]);
   });
 });
 
