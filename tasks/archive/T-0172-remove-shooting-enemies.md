@@ -55,6 +55,7 @@ shared:
   - tasks/T-0199-reroll-for-ad.md
   - tasks/T-0335-cordon-formation-and-elite.md
   - tasks/T-0342-cordon-numbers-and-guide.md
+  - tasks/archive/T-0172-remove-shooting-enemies.md
 runner: any
 executor: sonnet-5.5
 effort: high
