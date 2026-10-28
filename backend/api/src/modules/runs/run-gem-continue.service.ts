@@ -104,7 +104,12 @@ export class RunGemContinueService implements ContinueLedger, OnModuleInit {
     }
 
     const taken = await this.db(this.continues.taken(runId));
-    if (taken.has(continueNo)) throw new ContinueTakenError();
+    if (taken.has(continueNo)) {
+      // Параллельный повтор: пока шли проверки, этот же запрос другой копией уже записал строку.
+      const raced = await this.db(this.repository.find(runId, continueNo));
+      if (raced !== null && raced.accountId === accountId) return await this.receipt(raced);
+      throw new ContinueTakenError();
+    }
     // Второе продолжение — только после взятого первого: иначе номер ничего не значил бы.
     if (continueNo > 1 && taken.size < continueNo - 1) throw new ValidationError("Некорректное продолжение");
 

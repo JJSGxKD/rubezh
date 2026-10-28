@@ -168,7 +168,8 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за рекламу 
     const player = { accountId, platform: "telegram" as const };
     const offer = await parts.ads.offer({ ...player, device: "android" }, "second_chance", at(minutes));
     if (!offer.available) throw new Error(`показа нет: ${offer.reason}`);
-    await parts.ads.report(accountId, offer.sessionId, { kind: "completed" }, at(minutes));
+    // Пропуск VIP выдаётся уже завершённым: ролика нет, и отчёт о досмотре ему не нужен.
+    if (offer.pass === null) await parts.ads.report(accountId, offer.sessionId, { kind: "completed" }, at(minutes));
     return { runId, ...(await parts.service.claim(player, runId, offer.sessionId, at(minutes))) };
   }
 

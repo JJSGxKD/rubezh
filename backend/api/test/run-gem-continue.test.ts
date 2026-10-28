@@ -223,6 +223,19 @@ describe("покупка продолжения за самоцветы", () => 
     expect(repository.gems).toBe(46);
   });
 
+  it("параллельный повтор, которого ещё не было видно в начале, получает прежний ответ, а не «уже взято»", async () => {
+    const { service, runs, repository } = setup(50);
+    await started(runs, "run-1");
+    const first = await service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3));
+
+    // Копия запроса проверила «нет ли уже» до записи первой, а дальше увидела номер в книге.
+    const real = repository.find.bind(repository);
+    let calls = 0;
+    repository.find = async (runId, continueNo) => (calls++ === 0 ? null : await real(runId, continueNo));
+    expect(await service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3))).toEqual(first);
+    expect(repository.charged).toBe(4);
+  });
+
   it("номер уже взят звёздами или рекламой — 409 continue_taken, баланс не тронут", async () => {
     const { service, runs, repository, others } = setup(50);
     await started(runs, "stars");
