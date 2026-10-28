@@ -29,6 +29,9 @@ export function orbiterArtScale(orbiterRadius: number): number {
 /** Кадров шага у врага и героя. */
 export const ART_WALK_FRAMES = 4;
 
+/** Скорость ниже порога — стоит; тот же порог, что у героя. */
+export const ART_MOVING_EPSILON = 1e-3;
+
 /** Сколько тиков симуляции держится кадр шага — около восьми кадров в секунду. */
 const TICKS_PER_FRAME = 8;
 
@@ -65,6 +68,22 @@ export interface ArtFrame {
  */
 export function walkFrame(tick: number, slot: number): number {
   return Math.floor((tick + slot * 7) / TICKS_PER_FRAME) % ART_WALK_FRAMES;
+}
+
+/** Движется ли тело: скорость ниже порога — стоит. */
+export function isMoving(vx: number, vy: number): boolean {
+  return Math.abs(vx) + Math.abs(vy) > ART_MOVING_EPSILON;
+}
+
+/**
+ * Кадр шага врага. Идёт — по времени, как `walkFrame`; стоит — держит
+ * последний показанный кадр: стоящий враг (заморозка, строй, фитиль,
+ * телеграф) не должен шагать на месте. `lastFrame < 0` — слот ещё ничего не
+ * показывал: кадр 0.
+ */
+export function frameForEnemy(tick: number, slot: number, moving: boolean, lastFrame: number): number {
+  if (moving) return walkFrame(tick, slot);
+  return lastFrame >= 0 ? lastFrame : 0;
 }
 
 /**
@@ -170,6 +189,8 @@ export class ArtMode {
   private statusMarkFrames: StatusMarkArt = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
   private readonly shown: Int16Array;
+  /** последний кадр шага у слота — где враг остановился; −1 — слот свободен */
+  private readonly lastFrame: Int8Array;
   private readonly left: Uint8Array;
   private heroLeft = false;
   /** масштаб кадра атласа к игровым единицам на экране */
@@ -180,6 +201,7 @@ export class ArtMode {
     this.world = world;
     this.stageCount = world.stages.length;
     this.shown = new Int16Array(world.config.maxEnemies).fill(-1);
+    this.lastFrame = new Int8Array(world.config.maxEnemies).fill(-1);
     this.left = new Uint8Array(world.config.maxEnemies);
     this.scale = world.config.unitScale / ART_PPU;
   }
@@ -204,6 +226,7 @@ export class ArtMode {
     this.enabled = on;
     if (on && this.frames.length === 0) this.buildFrames();
     this.shown.fill(-1);
+    this.lastFrame.fill(-1);
     onChange();
   }
 
@@ -261,8 +284,10 @@ export class ArtMode {
    * Поставить врагу кадр атласа. `false` — арта у него нет или режим
    * выключен: рендер рисует фигуру, как обычно.
    */
-  applyEnemy(sprite: Phaser.GameObjects.Image, slot: number, textureIndex: number, tick: number): boolean {
-    const index = this.enabled ? textureIndex * ART_WALK_FRAMES + walkFrame(tick, slot) : -1;
+  applyEnemy(sprite: Phaser.GameObjects.Image, slot: number, textureIndex: number, tick: number, vx: number, vy: number): boolean {
+    const frameNo = frameForEnemy(tick, slot, isMoving(vx, vy), this.lastFrame[slot]);
+    this.lastFrame[slot] = frameNo;
+    const index = this.enabled ? textureIndex * ART_WALK_FRAMES + frameNo : -1;
     const frame = index >= 0 ? (this.frames[index] ?? null) : null;
     if (frame === null) {
       if (this.shown[slot] >= 0) {
@@ -276,6 +301,11 @@ export class ArtMode {
       this.shown[slot] = index;
     }
     return true;
+  }
+
+  /** Слот врага освободился: следующий в нём начнёт с кадра 0, а не унаследует чужой. */
+  releaseEnemy(slot: number): void {
+    this.lastFrame[slot] = -1;
   }
 
   /** Показан ли у слота кадр атласа — от этого зависит масштаб спрайта. */
@@ -304,7 +334,7 @@ export class ArtMode {
   applyHero(sprite: Phaser.GameObjects.Image, tick: number, vx: number, vy: number, faceX: number, hurt = false): boolean {
     const frames = this.enabled ? this.heroFrames : null;
     if (frames === null) return false;
-    const moving = Math.abs(vx) + Math.abs(vy) > 1e-3;
+    const moving = isMoving(vx, vy);
     const pose = heroPose(moving, hurt && frames.hurt !== null);
     const list = pose === "walk" ? frames.walk : frames.idle;
     const frame = pose === "hurt" ? frames.hurt : list[pose === "walk" ? walkFrame(tick, 0) % list.length : Math.floor(tick / 40) % list.length];
