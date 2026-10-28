@@ -143,10 +143,10 @@ describe("уведомление об отписке от канала (T-0177)"
     return describeNotification({ id: "n3", kind: "task_unsubscribed", data, createdAt: AT, read: false });
   }
 
-  it("награда списана: «Вы отписались от канала «Рубеж»: награда за подписку списана — 100 монет.»; никуда не ведёт, иконка есть", () => {
+  it("награда списана: «Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.»; никуда не ведёт, иконка есть", () => {
     const described = unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: null });
 
-    expect(described?.text).toBe("Вы отписались от канала «Рубеж»: награда за подписку списана — 100 монет.");
+    expect(described?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.");
     expect(described?.target).toBeNull();
     expect(described?.icon).toBeDefined();
     expect(described?.title).toBeUndefined();
@@ -155,21 +155,21 @@ describe("уведомление об отписке от канала (T-0177)"
   it("все суммы нули — награда уже потрачена, списывать нечего", () => {
     const described = unsubscribed({ title: "Рубеж", coins: 0, gems: 0, shards: 0, closedUntil: null });
 
-    expect(described?.text).toBe("Вы отписались от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего.");
+    expect(described?.text).toBe("Отписка от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего.");
   });
 
   it("срок закрытия задан — строка заканчивается фразой «Партнёрские задания закрыты до …» с датой, а не словом «только что»", () => {
     const taken = unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL });
     const spent = unsubscribed({ title: "Рубеж", coins: 0, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL });
 
-    expect(taken?.text).toBe("Вы отписались от канала «Рубеж»: награда за подписку списана — 100 монет. Партнёрские задания закрыты до 27 ноября.");
-    expect(spent?.text).toBe("Вы отписались от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.");
+    expect(taken?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет. Партнёрские задания закрыты до 27 ноября.");
+    expect(spent?.text).toBe("Отписка от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.");
   });
 
-  it("без названия: «Вы отписались от канала партнёра: …»", () => {
-    expect(unsubscribed({ title: null, coins: 100, gems: 0, shards: 0, closedUntil: null })?.text).toBe("Вы отписались от канала партнёра: награда за подписку списана — 100 монет.");
+  it("без названия: «Отписка от канала партнёра: …»", () => {
+    expect(unsubscribed({ title: null, coins: 100, gems: 0, shards: 0, closedUntil: null })?.text).toBe("Отписка от канала партнёра: награда за подписку списана — 100 монет.");
     expect(unsubscribed({ title: null, coins: 0, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL })?.text).toBe(
-      "Вы отписались от канала партнёра: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.",
+      "Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.",
     );
   });
 
@@ -190,17 +190,17 @@ describe("уведомление об отписке от канала (T-0177)"
   it("данные другого вида не роняют ленту: строка вместо числа — нуль, не-дата и не-строка — как «не заданы»", () => {
     expect(() => unsubscribed({ title: 5, coins: "100", gems: null, shards: Number.NaN, closedUntil: 12 })).not.toThrow();
     expect(unsubscribed({ title: 5, coins: "100", gems: null, shards: Number.NaN, closedUntil: 12 })?.text).toBe(
-      "Вы отписались от канала партнёра: награда за подписку уже потрачена, списывать нечего.",
+      "Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего.",
     );
-    expect(unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: "не дата" })?.text).toBe("Вы отписались от канала «Рубеж»: награда за подписку списана — 100 монет.");
-    expect(unsubscribed({})?.text).toBe("Вы отписались от канала партнёра: награда за подписку уже потрачена, списывать нечего.");
+    expect(unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: "не дата" })?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.");
+    expect(unsubscribed({})?.text).toBe("Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего.");
     expect(unsubscribed({ coins: -5, gems: 1.5, shards: Number.POSITIVE_INFINITY })?.text).toContain("уже потрачена");
   });
 
   it("лишние поля игнорируются, а название со скобками подстановки читается как текст", () => {
     const described = unsubscribed({ title: "{returned} {closed}", coins: 100, gems: 0, shards: 0, closedUntil: null, extra: "лишнее" });
 
-    expect(described?.text).toBe("Вы отписались от канала «{returned} {closed}»: награда за подписку списана — 100 монет.");
+    expect(described?.text).toBe("Отписка от канала «{returned} {closed}»: награда за подписку списана — 100 монет.");
   });
 
   it("подпись причины в истории игрока — «Списание награды за отписку»", () => {
