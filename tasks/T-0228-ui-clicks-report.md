@@ -3,8 +3,8 @@ id: T-0228
 title: Отчёт «Нажатия» в панели — что нажимают на каждом экране
 epic: E11
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0227]
