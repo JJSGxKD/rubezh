@@ -3,7 +3,7 @@ id: T-0336
 title: Стоящий враг не шагает — кадр шага по движению, как у героя
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
