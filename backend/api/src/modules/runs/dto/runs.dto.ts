@@ -81,6 +81,11 @@ export const runFinishSchema = z
         xpCollected: z.number().int().min(0).max(1e9),
         waveReached: z.number().int().min(0).max(10_000),
         topKills: z.array(z.object({ enemy: weaponId, count: z.number().int().min(0).max(1_000_000) })).max(8),
+        // Счётчики для заданий (tasks/T-0125): потолки формы, а не правила игры. Старые сборки полей не шлют.
+        bossKills: z.number().int().min(0).max(1_000_000).optional(),
+        eliteKills: z.number().int().min(0).max(1_000_000).optional(),
+        chestsOpened: z.number().int().min(0).max(1_000_000).optional(),
+        crystals: z.number().int().min(0).max(10_000_000).optional(),
       })
       .optional(),
   })

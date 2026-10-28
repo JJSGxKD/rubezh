@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import type { RunCounters } from "./run-counters.js";
 import type { Difficulty } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
@@ -27,6 +28,12 @@ export interface RecordedRun {
   boosts: string[];
   /** собранный опыт из статистики итога; итог без статистики — `null` */
   xpCollected: number | null;
+  /**
+   * Боссы, элиты, сундуки и кристаллы забега (tasks/T-0125). `null` — итог без
+   * счётчиков (старая сборка) или они не сошлись с ходом боя: в задания и
+   * достижения такие числа не идут.
+   */
+  counters: RunCounters | null;
   deathCause: string | null;
   cheats: boolean;
   /** сколько вторых шансов взято: оплаченные сверх этого числа не использованы */
