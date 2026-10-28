@@ -1,3 +1,4 @@
+import { probeInputs } from "./name-rules-probe-inputs.js";
 import { NAME_RULE_LIMITS } from "./name-rules-limits.js";
 
 /**
@@ -8,9 +9,10 @@ import { NAME_RULE_LIMITS } from "./name-rules-limits.js";
  * проверок не ставим: подмножество маленькое, а проверка — один проход.
  *
  * Запрещено то, что даёт экспоненциальный перебор: повтор группы, внутри
- * которой есть повтор или выбор, обратные ссылки и заглядывание. Остаётся
- * полиномиальный перебор от соседних повторов — его ограничивают число
- * повторов без предела и прогон по «злым» строкам при сохранении.
+ * которой есть повтор (в том числе «?») или выбор, обратные ссылки и
+ * заглядывание. Остаётся полиномиальный перебор от соседних повторов — его
+ * ограничивают число повторов без предела, общее число квантификаторов,
+ * предел повтора и прогон по «злым» строкам при сохранении.
  */
 
 export type SafetyResult = { ok: true } | { ok: false; reason: string };
@@ -22,9 +24,10 @@ export const REGEX_REASONS = {
   lookaround: "Заглядывание вперёд и назад не разрешено",
   groupRepeat: "Повтор группы с повтором или выбором внутри не разрешён",
   unbounded: "Не больше трёх повторов без предела",
-  repeat: "Предел повтора — не больше 20",
+  repeat: "Предел повтора — не больше 10",
+  quantifiers: "Не больше шести повторов в шаблоне",
   empty: "Регулярка совпадает с пустой строкой",
-  slow: "Регулярка слишком медленная на длинных строках",
+  slow: "Шаблон слишком медленный на длинных никах",
 } as const;
 
 const fail = (reason: string): SafetyResult => ({ ok: false, reason });
@@ -55,13 +58,21 @@ function bracesAt(pattern: string, index: number): { min: number; max: number | 
 function scan(pattern: string): SafetyResult {
   const stack: Group[] = [];
   let unbounded = 0;
+  let quantifiers = 0;
+  let lastWasQuantifier = false;
   let index = 0;
-  const markQuantifier = (): void => {
+  /** Учитывает квантификатор: он есть у охватывающей группы и в общем счёте шаблона. */
+  const countQuantifier = (): void => {
+    quantifiers += 1;
+    lastWasQuantifier = true;
     const top = stack.at(-1);
     if (top !== undefined) top.quantifier = true;
   };
   while (index < pattern.length) {
     const char = pattern[index];
+    // «?» сразу за квантификатором — ленивый суффикс, часть того же квантификатора
+    const afterQuantifier = lastWasQuantifier;
+    lastWasQuantifier = false;
     if (char === "\\") {
       const next = pattern[index + 1];
       if (next !== undefined && next >= "1" && next <= "9") return fail(REGEX_REASONS.backref);
@@ -114,17 +125,21 @@ function scan(pattern: string): SafetyResult {
       if (top !== undefined) top.alternation = true;
     } else if (char === "*" || char === "+") {
       unbounded += 1;
-      markQuantifier();
+      countQuantifier();
+    } else if (char === "?") {
+      if (!afterQuantifier) countQuantifier();
     } else if (char === "{") {
       const braces = bracesAt(pattern, index);
       if (braces !== null) {
-        markQuantifier();
+        countQuantifier();
         if (braces.max === null) unbounded += 1;
         else if (braces.max > NAME_RULE_LIMITS.repeatMax) return fail(REGEX_REASONS.repeat);
+        if (quantifiers > NAME_RULE_LIMITS.quantifierMax) return fail(REGEX_REASONS.quantifiers);
         index += braces.length;
         continue;
       }
     }
+    if (quantifiers > NAME_RULE_LIMITS.quantifierMax) return fail(REGEX_REASONS.quantifiers);
     index += 1;
   }
   return unbounded > NAME_RULE_LIMITS.unboundedMax ? fail(REGEX_REASONS.unbounded) : { ok: true };
@@ -145,12 +160,21 @@ export function checkRegexSafety(pattern: string): SafetyResult {
   return compiled.test("") ? fail(REGEX_REASONS.empty) : { ok: true };
 }
 
-/** Строки, на которых плохая регулярка тормозит: длинные повторы, почти совпадения, пробелы, кириллица, цифры. */
-const EVIL_INPUTS: readonly string[] = [`${"a".repeat(256)}!`, "ab".repeat(128), `${" ".repeat(256)}x`, `${"х".repeat(256)}-`, `${"1".repeat(255)}я`];
+/** Замер больше этой доли бюджета — не помеха сборщика мусора, а настоящая медленность: повторять незачем. */
+const RECHECK_MAX_FACTOR = 10;
+
+function measure(compiled: RegExp, input: string, now: () => number): number {
+  const startedAt = now();
+  compiled.test(input);
+  return now() - startedAt;
+}
 
 /**
- * Прогон по «злым» строкам: дольше бюджета на любой — отказ. Часы — параметр,
- * чтобы тест не зависел от скорости машины.
+ * Прогон по «злым» строкам и по знакам самого шаблона, длиной по нарастающей:
+ * дольше бюджета на любой строке или на шаблоне в целом — отказ, и более
+ * длинные строки уже не гоняются. Превысившая строка замеряется второй раз:
+ * один замер бывает испорчен паузой сборщика мусора. Часы — параметр, чтобы
+ * тест не зависел от скорости машины.
  */
 export function probeRegex(pattern: string, now: () => number = () => performance.now()): SafetyResult {
   let compiled: RegExp;
@@ -159,10 +183,15 @@ export function probeRegex(pattern: string, now: () => number = () => performanc
   } catch {
     return fail(REGEX_REASONS.parse);
   }
-  for (const input of EVIL_INPUTS) {
-    const startedAt = now();
-    compiled.test(input);
-    if (now() - startedAt > NAME_RULE_LIMITS.probeBudgetMs) return fail(REGEX_REASONS.slow);
+  const budget = NAME_RULE_LIMITS.probeBudgetMs;
+  let total = 0;
+  for (const input of probeInputs(pattern)) {
+    let spent = measure(compiled, input, now);
+    if (spent > budget && spent <= budget * RECHECK_MAX_FACTOR) spent = measure(compiled, input, now);
+    if (spent > budget) return fail(REGEX_REASONS.slow);
+    total += spent;
+    if (total > NAME_RULE_LIMITS.probeTotalMs) return fail(REGEX_REASONS.slow);
   }
   return { ok: true };
 }
+

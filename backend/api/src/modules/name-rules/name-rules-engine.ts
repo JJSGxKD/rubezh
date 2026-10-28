@@ -85,9 +85,9 @@ function compileOne(def: NameRuleDef): { rule: CompiledRule } | { reason: string
     const safety = checkRegexSafety(def.pattern);
     if (!safety.ok) return { reason: safety.reason };
     // Прогон по «злым» строкам — второй раз после сохранения: правило могли записать мимо панели.
-    // Один замер бывает испорчен паузой сборщика мусора, поэтому отказ подтверждается повтором.
+    // Повторный замер перед отказом делает сам прогон.
     const probe = probeRegex(def.pattern);
-    if (!probe.ok && !probeRegex(def.pattern).ok) return { reason: probe.reason };
+    if (!probe.ok) return { reason: probe.reason };
     return { rule: { ruleId: def.ruleId, category: def.category, kind: def.kind, folded: "", regex: new RegExp(def.pattern, "giu") } };
   }
   const folded = foldForRules(def.pattern);

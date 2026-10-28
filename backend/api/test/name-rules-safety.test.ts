@@ -51,7 +51,7 @@ describe("checkRegexSafety: отказы", () => {
     // не больше шести квантификаторов любого вида
     [`${"ж?".repeat(30)}ж{20}ж{10}`, QUANTIFIERS],
     ["a?b?c?d?e?f?g?h", QUANTIFIERS],
-    ["a{1}b{2}c{3}d{1,2}e?f+g", QUANTIFIERS],
+    ["a{1}b{2}c{3}d{1,2}e?f+g*", QUANTIFIERS],
     [`${"a??".repeat(7)}b`, QUANTIFIERS],
     ["a*", EMPTY],
     ["^$", EMPTY],
@@ -76,7 +76,7 @@ describe("checkRegexSafety: принятые", () => {
     String.raw`a{10}`,
     String.raw`\u{1F600}x`,
     // «?» после «)» правило группы не включает
-    "(?:a|b)?",
+    "(?:a|b)?c",
     "(?:a?b|c)?x",
     "(х|x)(у|y)(й|и)",
     // ленивый суффикс — часть квантификатора, не новый: шесть квантификаторов

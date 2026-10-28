@@ -206,9 +206,9 @@ describe("create", () => {
     const ctx = setup();
     const admin = await person(ctx, "808", "admin");
     // Три повтора без предела разбор пропускает, а на длинной строке «aaaa…!» они ползут.
-    await expect(ctx.service.create(admin, { category: "ads", kind: "regex", pattern: "a*a*a*b" })).rejects.toThrow(/слишком медленная/u);
+    await expect(ctx.service.create(admin, { category: "ads", kind: "regex", pattern: "a*a*a*b" })).rejects.toThrow(/слишком медленный/u);
     expect(ctx.repository.rows.size).toBe(0);
-  }, 30_000);
+  }, 5_000);
 
   it("дубль — в другом регистре и с «ё»/«е» — NameRuleConflictError; та же фраза в другой категории или виде — не дубль", async () => {
     const ctx = setup();
