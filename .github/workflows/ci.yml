@@ -74,6 +74,10 @@ jobs:
       # сервиса выше, тем же `migrate deploy`, что и в проде.
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter backend-api prisma:deploy
+      # Миграции обязаны давать ровно схему: поток без базы собирает миграцию
+      # сравнением двух схем (`prisma migrate diff`), и расхождение должно
+      # ломать сборку здесь, а не всплыть при выкате (код 2 — есть разница).
+      - run: pnpm --filter backend-api exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
       - run: pnpm typecheck
       - run: pnpm lint
