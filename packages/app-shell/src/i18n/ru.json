@@ -204,7 +204,7 @@
   "run.continue.gems": "Продолжить за {amount} {amount, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",
   "run.continue.gems.action": "Продолжить",
   "run.continue.gems.unknown": "Продолжить за самоцветы",
-  "run.continue.gems-balance": "У вас {amount}",
+  "run.continue.gems-balance": "У тебя {amount}",
   "run.continue.gems-short": "Не хватает {amount} {amount, plural, one {самоцвета} few {самоцветов} many {самоцветов} other {самоцветов}}",
   "run.continue.gems-offline": "Нет связи — нажми ещё раз, самоцветы не спишутся дважды",
   "run.continue.gems-gone.insufficient_funds": "Самоцветов не хватило — второй шанс за них недоступен",

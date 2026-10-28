@@ -177,7 +177,7 @@ describe("второй шанс за самоцветы", () => {
 
     const markup = renderToStaticMarkup(createElement(GemContinueView, { stage, locked: false, primary: true, onBuy: () => undefined }));
     expect(markup).toContain("Не хватает 2");
-    expect(markup).toContain("У вас 3");
+    expect(markup).toContain("У тебя 3");
     expect(markup).toMatch(/<button[^>]*\sdisabled=""/);
 
     await useGemContinue.getState().buy();
@@ -190,7 +190,7 @@ describe("второй шанс за самоцветы", () => {
 
     const markup = renderToStaticMarkup(createElement(GemContinueView, { stage: useGemContinue.getState().stage, locked: false, primary: true, onBuy: () => undefined }));
     expect(markup).toContain("Продолжить");
-    expect(markup).toContain("У вас 12");
+    expect(markup).toContain("У тебя 12");
     expect(markup).not.toContain("Не хватает");
     expect(markup).not.toMatch(/<button[^>]*\sdisabled=""/);
   });

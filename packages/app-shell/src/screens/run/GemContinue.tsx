@@ -97,7 +97,7 @@ export function GemContinueView(props: { stage: GemContinueStage; locked: boolea
 }
 
 /**
- * Баланс и нехватка под кнопкой. На 320 px «У вас N» и «Не хватает M» в одну
+ * Баланс и нехватка под кнопкой. На 320 px «У тебя N» и «Не хватает M» в одну
  * строку не влезают, поэтому они всегда идут столбцом, а не рядом.
  */
 function GemBalance(props: { offer: GemOffer; shortfall: number; offline: boolean }): ReactNode {
