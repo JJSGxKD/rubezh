@@ -3,8 +3,8 @@ id: T-0324
 title: Второй шанс за самоцветы — сервер: цена от начатых минут по курсу звёзд, списание и выдача одной транзакцией, книга продолжений; реклама — одно продолжение в сутки
 epic: E1
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
