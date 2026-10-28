@@ -101,8 +101,17 @@ describe("mergeProblems: пометка читается из dev", () => {
     expect(result.some((problem) => problem.includes("zones") && problem.includes("отличается от origin/dev"))).toBe(true);
   });
 
-  it("поток поменял shared, effort, runner или merge в ветке — отказ", () => {
-    for (const patch of [{ shared: ["docs/y.md"] }, { effort: "low" }, { runner: "local" }, { merge: "lead" }]) {
+  it("вынужденный файл, дописанный в shared ветки, не мешает", () => {
+    expect(problems({ branchTask: branchTask({ shared: ["docs/y.md"] }) })).toEqual([]);
+  });
+
+  it("запретный путь, дописанный в shared ветки, — отказ с причиной Р176", () => {
+    const result = problems({ branchTask: branchTask({ shared: ["backend/api/prisma/schema.prisma"] }) });
+    expect(result.some((problem) => problem.includes("Р176") && problem.includes("backend/api/prisma/schema.prisma"))).toBe(true);
+  });
+
+  it("поток поменял effort, runner или merge в ветке — отказ", () => {
+    for (const patch of [{ effort: "low" }, { runner: "local" }, { merge: "lead" }]) {
       const field = Object.keys(patch)[0];
       const result = problems({ branchTask: branchTask(patch) });
       expect(result.some((problem) => problem.includes(field) && problem.includes("отличается от origin/dev")), field).toBe(true);

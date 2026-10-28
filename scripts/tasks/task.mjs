@@ -7,6 +7,7 @@ import { contributionRows } from "./contribution.mjs";
 import { checkClaim } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
+import { runMerge } from "./merge.mjs";
 import { ARCHIVE_DIR, awaitingArchiveLine, checkRegistry, readTasks, registrySummary } from "./registry.mjs";
 import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
 import { outOfZone, outOfZoneHint, tasksHolding } from "./zones.mjs";
@@ -27,7 +28,8 @@ const USAGE = `Команды:
                                            захватить задачу веткой task/T-NNNN
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
                                            продолжить PR с меткой «доработка», чей бы он ни был
-  pnpm task holds <путь>                   какие задачи «в работе» и «доработка» держат файл или каталог, с номером PR
+  pnpm task merge T-NNNN                   влить PR задачи с пометкой merge: self в dev (Р176): пометка из origin/dev, метка «на ревью», CI, самопроверка с head:
+  pnpm task holds <путь>                  какие задачи «в работе» и «доработка» держат файл или каталог, с номером PR
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
   pnpm task fix                            поставить строки значков, ссылки и ячейки эпиков; файлы не переносит
@@ -532,6 +534,8 @@ function main(argv) {
       return runClaim(positional, flags);
     case "resume":
       return runResume(positional, flags);
+    case "merge":
+      return runMerge(positional);
     case "holds":
       return runHolds(positional);
     case "release":

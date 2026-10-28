@@ -56,6 +56,37 @@ export function takenIds() {
     .filter((id) => id !== undefined);
 }
 
+/** Сколько ждать ответа `gh`, мс: сеть бывает мертва, а зависшая команда мерджа хуже отказа. */
+export const GH_TIMEOUT_MS = 60_000;
+
+/**
+ * `gh` с таймаутом: `{ ok, stdout, stderr, timedOut }` — без исключения, решает
+ * вызывающий. Аргументы массивом, как у `git`. Зависший процесс убивается.
+ */
+export function gh(args, timeoutMs = GH_TIMEOUT_MS) {
+  const result = spawnSync("gh", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER, timeout: timeoutMs, killSignal: "SIGKILL" });
+  const timedOut = result.error?.code === "ETIMEDOUT";
+  const stderr = timedOut ? `gh не ответил за ${String(Math.round(timeoutMs / 1000))} с` : (result.stderr ?? "").trim();
+  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr, timedOut };
+}
+
+/** Текст файла по пути в коммите `ref` (SHA или ветка) или `null`, если коммита или файла нет. */
+export function readFileAt(ref, path) {
+  const result = tryGit(["show", `${ref}:${path}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** Есть ли коммит `sha` в локальном репозитории. */
+export function hasCommit(sha) {
+  return tryGit(["cat-file", "-e", `${sha}^{commit}`]).ok;
+}
+
+/** Имя файла задачи `T-NNNN-<slug>.md` наверху `tasks/` в `base` или `null`. */
+export function taskFileNameAt(base, id) {
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/"]).map((path) => path.replace(/^tasks\//, ""));
+  return names.find((name) => name.startsWith(`${id}-`) && name.endsWith(".md")) ?? null;
+}
+
 /** Поставить метку на PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
 export function addPrLabel(number, label) {
   const result = spawnSync("gh", ["pr", "edit", String(number), "--add-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
