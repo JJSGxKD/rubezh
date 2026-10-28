@@ -12,6 +12,7 @@ import {
   SNAPSHOT_FILE,
   writeExport,
 } from "../../../scripts/content/export-snapshot";
+import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { CONTENT_HASH } from "../src/content/hash";
 import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/content/snapshot";
 import { contentSnapshotSchema } from "../src/content/snapshot-schema";
@@ -229,6 +230,22 @@ describe("проверки контента одной функцией", () => 
     const timeline = TIMELINE.map((segment) => ({ ...segment, events: (segment.events ?? []).filter((event) => !CONTENT_SNAPSHOT.enemies.some((enemy) => enemy.id === event.enemy && enemy.rank !== undefined)) }));
     const problems = findContentProblems({ ...CONTENT_SNAPSHOT, timeline });
     expect(problems.some((problem) => problem.path === "timeline" && problem.message.includes("первый сундук"))).toBe(true);
+  });
+
+  it("ловит снимок без уровня сложности по умолчанию: забег пошёл бы без сложности", () => {
+    const difficulties = CONTENT_SNAPSHOT.difficulties.filter((level) => level.id !== DEFAULT_DIFFICULTY_ID);
+    expect(findContentProblems({ ...CONTENT_SNAPSHOT, difficulties })).toContainEqual({
+      path: "difficulties",
+      message: expect.stringContaining(`«${DEFAULT_DIFFICULTY_ID}»`),
+    });
+  });
+
+  it("ловит уровни сложности не в порядке DIFFICULTY_IDS: от порядка зависят выбор и рейтинг", () => {
+    const reversed = [...CONTENT_SNAPSHOT.difficulties].reverse();
+    const problems = findContentProblems({ ...CONTENT_SNAPSHOT, difficulties: reversed });
+    expect(problems).toContainEqual({ path: "difficulties", message: expect.stringContaining("порядок") });
+    const lost = findContentProblems({ ...CONTENT_SNAPSHOT, difficulties: CONTENT_SNAPSHOT.difficulties.slice(0, 2) });
+    expect(lost).toContainEqual({ path: "difficulties", message: expect.stringContaining("порядок") });
   });
 
   it("не бросает исключение на пустом снимке, а возвращает проблемы", () => {
