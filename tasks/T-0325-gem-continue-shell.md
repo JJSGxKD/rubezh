@@ -12,6 +12,10 @@ zones:
   - packages/app-shell/src/state/gem-continue.ts
   - packages/app-shell/src/screens/run/GemContinue.tsx
   - packages/app-shell/test/gem-continue.test.ts
+  - packages/app-shell/src/state/run.ts
+  - packages/app-shell/src/state/payments-availability.ts
+  - packages/app-shell/src/screens/run/RunScreen.tsx
+  - packages/app-shell/test/death-rules.test.ts
 shared:
   - packages/app-shell/src/screens/run/SecondChance.tsx
   - packages/app-shell/src/screens/run/DeathOverlay.tsx

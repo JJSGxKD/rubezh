@@ -178,7 +178,7 @@ describe("второй шанс за самоцветы", () => {
     const markup = renderToStaticMarkup(createElement(GemContinueView, { stage, locked: false, primary: true, onBuy: () => undefined }));
     expect(markup).toContain("Не хватает 2");
     expect(markup).toContain("У вас 3");
-    expect(markup).toContain("disabled");
+    expect(markup).toMatch(/<button[^>]*\sdisabled=""/);
 
     await useGemContinue.getState().buy();
     expect(server.asked).toEqual(["view:run-gem-1:300.4"]);
@@ -192,7 +192,7 @@ describe("второй шанс за самоцветы", () => {
     expect(markup).toContain("Продолжить");
     expect(markup).toContain("У вас 12");
     expect(markup).not.toContain("Не хватает");
-    expect(markup).not.toMatch(/<button[^>]*disabled/);
+    expect(markup).not.toMatch(/<button[^>]*\sdisabled=""/);
   });
 
   it("пока спрашиваем сервер — заглушка той же кнопки, а не пустое место", () => {
