@@ -1,5 +1,6 @@
 import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
 import { continueSeconds } from "../sim/continue";
+import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
 import type { World } from "../sim/world";
 
 /**
@@ -47,6 +48,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     eliteKills: stats.eliteKills,
     chestsOpened: stats.chestsOpened,
     crystalsCollected: stats.crystalsCollected,
+    secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
     killsByEnemy: killsByEnemy(world),
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,
