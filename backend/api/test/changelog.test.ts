@@ -36,6 +36,7 @@ import { ChangelogService } from "../src/modules/changelog/changelog.service.js"
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
+import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { PLATFORM_IDS, type PlatformId } from "../src/platforms/ports/platform.js";
@@ -153,6 +154,7 @@ interface Setup {
   roles: MemoryRolesRepository;
   repository: MemoryChangelogRepository;
   notifications: MemoryNotificationsRepository;
+  notificationsService: NotificationsService;
   fanout: ChangelogFanout;
   service: ChangelogService;
   locks: Map<string, string>;
@@ -169,8 +171,8 @@ function setup(): Setup {
     eval: async (_script: string, _keys: number, key: string) => (locks.delete(key) ? 1 : 0),
   } as unknown as Redis;
   const fanout = new ChangelogFanout(config(), repository, accounts, notificationsService, redis);
-  const service = new ChangelogService(repository, accounts, new RolesService(config(), roles, accounts), fanout);
-  return { accounts, roles, repository, notifications, fanout, service, locks };
+  const service = new ChangelogService(repository, accounts, new RolesService(config(), roles, accounts), fanout, notificationsService);
+  return { accounts, roles, repository, notifications, notificationsService, fanout, service, locks };
 }
 
 async function player(s: Setup, platform: PlatformId, id: string, createdAt = T0 - 30 * DAY): Promise<AccountRef> {
@@ -278,6 +280,20 @@ describe("журнал в сервисе", () => {
     expect(s.repository.seen.get(me.accountId)).toEqual(new Date(T0));
     await s.service.markSeen(me.accountId, new Date(T0 - DAY), new Date(T0 + DAY));
     expect(s.repository.seen.get(me.accountId)).toEqual(new Date(T0));
+  });
+
+  it("открыл журнал — выход версии гаснет, сообщение команды остаётся", async () => {
+    const me = await player(s, "telegram", "14");
+    const other = await player(s, "telegram", "15");
+    await s.notifications.insert({ accountId: me.accountId, kind: "app_update", payload: { version: "0.6.0" }, dedupeKey: "app_update:0.6.0", at: new Date(T0) });
+    await s.notifications.insert({ accountId: me.accountId, kind: "team_message", payload: { text: "Привет" }, dedupeKey: "team:1", at: new Date(T0) });
+    await s.notifications.insert({ accountId: other.accountId, kind: "app_update", payload: { version: "0.6.0" }, dedupeKey: "app_update:0.6.0", at: new Date(T0) });
+
+    await s.service.markSeen(me.accountId, new Date(T0), new Date(T0));
+
+    const unread = (accountId: string) => s.notifications.rows.filter((row) => row.accountId === accountId && row.readAt === null).map((row) => row.kind);
+    expect(unread(me.accountId)).toEqual(["team_message"]);
+    expect(unread(other.accountId)).toEqual(["app_update"]);
   });
 
   it("опубликованное читается из базы раз в полминуты, а не на каждый знак", async () => {
@@ -485,6 +501,7 @@ describe("журнал по HTTP", () => {
         { provide: CHANGELOG_REPOSITORY, useValue: s.repository },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: ChangelogFanout, useValue: s.fanout },
+        { provide: NotificationsService, useValue: s.notificationsService },
         ChangelogService,
         PanelLoginService,
         RateLimiter,

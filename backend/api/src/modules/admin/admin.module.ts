@@ -52,6 +52,7 @@ import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { AdminDiagnosticsController } from "./admin-diagnostics.controller.js";
 import { AdminRequestsController } from "./admin-requests.controller.js";
+import { AdminUiClicksController } from "./admin-ui-clicks.controller.js";
 import { AdminExportsController } from "./admin-exports.controller.js";
 import { AdminExportsService } from "./admin-exports.service.js";
 import { AdminFxController } from "./admin-fx.controller.js";
@@ -108,6 +109,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminPromoCodesController,
     AdminPartnersController,
     AdminRequestsController,
+    AdminUiClicksController,
   ],
   providers: [
     AdminSessionService,

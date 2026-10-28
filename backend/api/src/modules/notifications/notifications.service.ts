@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { NOTIFICATION_KINDS, isNotificationKind, type NotificationKind, type NotificationPayload } from "./notification-kinds.js";
-import { NOTIFICATIONS_REPOSITORY, type BotOutcome, type FeedCursor, type NotificationsRepository } from "./notifications.repository.js";
+import { NOTIFICATIONS_REPOSITORY, type BotOutcome, type FeedCursor, type NotificationsRepository, type ReadMatch } from "./notifications.repository.js";
 
 /**
  * Уведомления игрока (docs/35-stage4-plan.md Р51, §3.17) — порт для
@@ -155,6 +155,23 @@ export class NotificationsService {
     }
     const last = page[page.length - 1];
     return { items, nextCursor: rows.length > size && last !== undefined ? encodeCursor({ createdAt: last.createdAt, notificationId: last.notificationId }) : null, unread };
+  }
+
+  /**
+   * Погасить уведомления вида `kind`, о которых игрок сделал дело (Р135):
+   * принял заявку, забрал подарок, открыл лист предмета, журнал. Без `match` —
+   * все непрочитанные этого вида. Зовётся после успешного действия и не
+   * бросает: сбой отметки не отменяет действие, худший исход — лишняя единица
+   * на колокольчике до ленты. Ждёт базу, чтобы знаки, перечитанные клиентом
+   * сразу после действия, уже были верными.
+   */
+  async readFor(accountId: string, kind: NotificationKind, match?: ReadMatch): Promise<void> {
+    if (match !== undefined && match.values.length === 0) return;
+    try {
+      await withTimeout(this.repository.markReadOf(accountId, kind, match, new Date()), DB_TIMEOUT_MS, "уведомления прочитаны действием");
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "notifications", event: "read_by_action_failed", kind, reason: error instanceof Error ? error.message : "unknown" }));
+    }
   }
 
   async unread(accountId: string): Promise<number> {
