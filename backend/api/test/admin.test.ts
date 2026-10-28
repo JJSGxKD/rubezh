@@ -256,6 +256,28 @@ describe("панель по HTTP", () => {
     expect((await server.inject({ method: "GET", url: "/api/v1/admin/runs/review", headers: { cookie: `${ADMIN_SESSION_COOKIE}=mod` } })).statusCode).toBe(200);
   });
 
+  it("администратор раздаёт роли ниже своей: список с флагами, маркетолог — 201, администратор и владелец — 403 (T-0216)", async () => {
+    const server = await start();
+    await login(server);
+    const boss = await accounts.upsert({ platform: "telegram", platformUserId: "600010", displayName: "Босс", username: null, photoUrl: null }, Date.now());
+    await roles.grant(boss.accountId, "admin", null);
+    await store.put(hashSessionToken("adm"), { accountId: boss.accountId, platform: "telegram", platformUserId: "600010", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    const headers = { cookie: `${ADMIN_SESSION_COOKIE}=adm`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    await accounts.upsert({ platform: "telegram", platformUserId: "600011", displayName: "Новенький", username: null, photoUrl: null }, Date.now());
+
+    const list = await server.inject({ method: "GET", url: "/api/v1/admin/roles", headers });
+    expect(list.statusCode).toBe(200);
+    const catalog = list.json().data.roles as { role: string; grantable: boolean }[];
+    expect(catalog.filter((entry) => entry.grantable).map((entry) => entry.role)).toEqual(["game_designer", "moderator", "marketer", "analyst"]);
+
+    const marketer = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600011", role: "marketer" } });
+    expect(marketer.statusCode).toBe(201);
+    for (const role of ["admin", "owner", "finance"]) {
+      const denied = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600011", role } });
+      expect(denied.statusCode, role).toBe(403);
+    }
+  });
+
   it("выдача и отзыв роли из панели: снятая последняя роль гасит сессии панели", async () => {
     const server = await start();
     const cookie = await login(server);
