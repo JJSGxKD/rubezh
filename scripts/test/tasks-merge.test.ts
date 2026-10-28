@@ -143,7 +143,7 @@ describe("mergeProblems: пометка читается из dev", () => {
 
   it("порядок зон не важен", () => {
     const task = devTask({ zones: ["docs/a.md", "docs/b.md"] });
-    expect(problems({ task, branchTask: branchTask({ zones: ["docs/b.md", "docs/a.md"] }) })).toEqual([]);
+    expect(problems({ task, changes: [{ path: "docs/a.md", added: 9, deleted: 1 }], branchTask: branchTask({ zones: ["docs/b.md", "docs/a.md"] }) })).toEqual([]);
   });
 });
 
@@ -346,7 +346,7 @@ describe("mergeProblems: голова PR", () => {
 
 describe("mergeProblems: реальный дифф PR", () => {
   const change = (path: string, added = 1, deleted = 0): Json => ({ path, added, deleted });
-  const withChanges = (changes: Json[], task: Json = devTask()): string[] => problems({ changes, task, branchTask: branchTask({ shared: task.shared }) });
+  const withChanges = (changes: Json[], task: Json = devTask()): string[] => problems({ changes, task, branchTask: branchTask({ zones: task.zones, shared: task.shared }) });
 
   it("дифф не получен — отказ", () => {
     expect(problems({ changes: null }).some((problem) => problem.includes("дифф"))).toBe(true);
