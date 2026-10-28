@@ -38,7 +38,7 @@ export { MemoryRateStore } from "./memory-store.js";
 export { refreshRates, takeSnapshot, type RateAlerts, type RefreshReport } from "./refresh.js";
 export type { RateStore, SourceState, StoredRate } from "./store.js";
 export { fetchBytes, fetchJson, retryAfterMs, type FetchLike } from "./sources/http.js";
-export { CBR_CURRENCIES, ECB_CURRENCIES, ERAPI_CURRENCIES, ERAPI_TARIFFS, createCbrSource, createEcbSource, createErApiSource, parseCbr, parseEcb } from "./sources/fiat.js";
+export { CBR_CURRENCIES, ECB_CURRENCIES, ERAPI_CURRENCIES, ERAPI_TARIFFS, FOREXRATEAPI_CURRENCIES, FOREXRATEAPI_TARIFF, createCbrSource, createEcbSource, createErApiSource, createForexRateApiSource, parseCbr, parseEcb, parseForexRateApi } from "./sources/fiat.js";
 export {
   BINANCE_CURRENCIES,
   COINGECKO_CURRENCIES,
