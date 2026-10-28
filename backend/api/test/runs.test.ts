@@ -13,6 +13,7 @@ import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 /**
@@ -141,7 +142,7 @@ describe("приём забегов", () => {
     const forged = await service.finish(me, finish(runId, { survivalSec: 5000 }));
 
     expect(forged.bestSurvivalSec).toBe(60);
-    expect(await board.best("normal", me.accountId)).toBe(60);
+    expect(await board.best("normal", me.accountId, "common")).toBe(60);
   });
 
   it("чужой ключ забега не принимается", async () => {
@@ -221,13 +222,36 @@ describe("приём забегов", () => {
     const [first, second] = [account("1"), account("2")];
     await service.finish(first, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
     await service.finish(second, finish(randomUUID(), { survivalSec: 300, level: 12, enemiesKilled: 900 }));
-    await board.replace("normal", []);
+    for (const side of ALL_BOARDS) await board.replace("normal", side, []);
 
     const counts = await service.rebuildLeaderboard();
 
-    expect(counts.normal).toBe(2);
-    expect(await board.rank("normal", second.accountId)).toBe(1);
-    expect(await board.rank("normal", first.accountId)).toBe(2);
+    expect(counts.normal).toEqual({ full: 2, common: 2 });
+    expect(await board.rank("normal", second.accountId, "common")).toBe(1);
+    expect(await board.rank("normal", first.accountId, "common")).toBe(2);
+  });
+
+  it("забег аккаунта с отдельной доской пишется в полную доску и не в общую; повтор итога доски не меняет (T-0113)", async () => {
+    const rating = ratingRestrictions(runs, board);
+    const own = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
+    const [separate, plain] = [account("1"), account("2")];
+    rating.restrictions.restrict(separate.accountId, "separate_board", { notify: false });
+
+    const first = randomUUID();
+    expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: true, bestSurvivalSec: 300, rank: 1 });
+    expect(await board.best("normal", separate.accountId, "full")).toBe(300);
+    expect(await board.best("normal", separate.accountId, "common")).toBeNull();
+    expect(await board.count("normal", "common")).toBe(0);
+
+    // Повтор итога из очереди — тот же ответ, доски те же.
+    expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: false, bestSurvivalSec: 300, rank: 1 });
+    expect([await board.count("normal", "full"), await board.count("normal", "common")]).toEqual([1, 0]);
+
+    // Обычный игрок пишется в обе, и его место общей доски не сдвинуто забегом чужой.
+    expect(await own.finish(plain, finish(randomUUID(), { survivalSec: 100 }))).toMatchObject({ recorded: true, isNewBest: true, rank: 1 });
+    expect(await board.best("normal", plain.accountId, "full")).toBe(100);
+    expect(await board.best("normal", plain.accountId, "common")).toBe(100);
+    expect(await board.rank("normal", plain.accountId, "full")).toBe(2);
   });
 });
 
@@ -266,7 +290,7 @@ describe("второй шанс в итоге забега", () => {
 
     expect(result).toMatchObject({ verdict: "rejected", recorded: false });
     expect(recorded[0]).toMatchObject({ continues: 1, reasons: expect.arrayContaining(["unpaid_continue"]) });
-    expect(await board.best("normal", me.accountId)).toBeNull();
+    expect(await board.best("normal", me.accountId, "common")).toBeNull();
   });
 
   it("оплаченное продолжение — обычный забег в рейтинге", async () => {
@@ -325,7 +349,7 @@ describe("снаряжение в итоге забега", () => {
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
     check.answer = "stale";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "suspicious" });
-    expect(await board.best("normal", me.accountId)).toBeNull();
+    expect(await board.best("normal", me.accountId, "common")).toBeNull();
 
     check.answer = "valid";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
