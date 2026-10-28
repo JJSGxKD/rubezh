@@ -52,6 +52,12 @@ describe("перечень прав и состав ролей", () => {
     }
   });
 
+  it("правила фильтра имён names.edit — у владельца, администратора и модератора, у остальных ролей нет (T-0338)", () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role].includes("names.edit"), role).toBe(role === "owner" || role === "admin" || role === "moderator");
+    }
+  });
+
   it("у администратора нет бухгалтерии и раздачи ролей", () => {
     const granted = permissionsOf(["admin"]);
 
