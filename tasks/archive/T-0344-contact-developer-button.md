@@ -33,7 +33,7 @@ batch: 3
 
 # T-0344. Кнопка «Связаться с разработчиком» в меню и настройках
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0344.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0344.json)](../README.md#значки-статуса)
 
 Строку значков и ячейку эпика ставит `pnpm task fix`.
 
