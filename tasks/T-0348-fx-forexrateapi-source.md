@@ -3,8 +3,8 @@ id: T-0348
 title: Курсы фиата — ForexRateAPI ещё одним голосом рубля и евро, включается ключом из панели
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
