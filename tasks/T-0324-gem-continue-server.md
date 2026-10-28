@@ -35,6 +35,9 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
+  - backend/api/src/modules/payments/purchases.repository.ts
+  - packages/app-shell/src/i18n/ru-history.json
+  - docs/35-stage4-plan.md
 runner: local
 executor: sonnet-5.5
 effort: extra
