@@ -2,7 +2,16 @@ import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import { loadAppConfig } from "../../src/config/app-config.js";
 import { AccountRestrictions } from "../../src/modules/restrictions/account-restrictions.js";
-import { REPLACED_COMMENT, type NewRestriction, type RestrictionRow, type RestrictionsRepository } from "../../src/modules/restrictions/restrictions.repository.js";
+import {
+  KEEP_IF_STANDING_ONE_ROW,
+  REPLACED_COMMENT,
+  holdsNewRestriction,
+  type ImposeOptions,
+  type ImposeResult,
+  type NewRestriction,
+  type RestrictionRow,
+  type RestrictionsRepository,
+} from "../../src/modules/restrictions/restrictions.repository.js";
 import { AUTH_ENV } from "./auth-env.js";
 
 /** Ограничения в памяти — тот же смысл «действует», что у базы: не снято и срок не вышел. */
@@ -11,7 +20,14 @@ export class MemoryRestrictionsRepository implements RestrictionsRepository {
   /** сколько раз спросили действующие — для проверки кеша */
   reads = 0;
 
-  async impose(rows: readonly NewRestriction[], at: Date): Promise<{ created: RestrictionRow[]; replaced: RestrictionRow[] }> {
+  async impose(rows: readonly NewRestriction[], at: Date, options?: ImposeOptions): Promise<ImposeResult> {
+    const keepIfStanding = options?.keepIfStanding === true;
+    if (keepIfStanding && rows.length !== 1) throw new Error(KEEP_IF_STANDING_ONE_ROW);
+    const first = rows[0];
+    // Без await: в памяти проверка и запись неделимы, как под блокировкой аккаунта в базе.
+    if (keepIfStanding && first !== undefined && this.rows.some((row) => row.accountId === first.accountId && active(row, at) && holdsNewRestriction(row, first))) {
+      return { created: [], replaced: [], kept: true };
+    }
     const kinds = new Set(rows.map((row) => row.kind));
     const replaced: RestrictionRow[] = [];
     for (const row of this.rows) {
@@ -22,7 +38,7 @@ export class MemoryRestrictionsRepository implements RestrictionsRepository {
     }
     const created = rows.map((row) => ({ ...row, restrictionId: randomUUID(), liftedAt: null, liftedBy: null, liftComment: null, settledAt: null }));
     this.rows.push(...created.map((row) => ({ ...row })));
-    return { created, replaced };
+    return { created, replaced, kept: false };
   }
 
   async lift(restrictionId: string, liftedBy: string, comment: string, at: Date): Promise<RestrictionRow | null> {
