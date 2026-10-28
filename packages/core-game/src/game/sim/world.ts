@@ -246,7 +246,7 @@ export interface ChestState {
  */
 export interface SecretSite {
   kind: SecretKind;
-  /** номер кольца от старта, с нуля */
+  /** номер кольца от старта, с нуля; у огонька −1: он не принадлежит кольцу */
   ring: number;
   x: number;
   y: number;

@@ -28,8 +28,12 @@ export function findSecretsProblems(def: SecretsDef): string[] {
     }
     if (ring.kinds.length === 0) problems.push(`${path}.kinds — нужен хотя бы один вид`);
     ring.kinds.forEach((entry, k) => {
-      if (!SECRET_KINDS.includes(entry.kind)) {
-        problems.push(`${path}.kinds[${k}].kind — один из ${SECRET_KINDS.join(", ")}, сейчас ${String(entry.kind)}`);
+      // Тип узок (место на земле), но данные приходят с границы: сверяемся по полному перечню.
+      const kind = entry.kind as SecretKind;
+      if (kind === "wisp") {
+        problems.push(`${path}.kinds[${k}].kind — огонёк не вид кольца: он один на забег и появляется у игрока`);
+      } else if (!SECRET_KINDS.includes(kind)) {
+        problems.push(`${path}.kinds[${k}].kind — один из ${SECRET_KINDS.join(", ")}, сейчас ${String(kind)}`);
       }
       if (!positive(entry.weight)) problems.push(`${path}.kinds[${k}].weight — больше 0, сейчас ${entry.weight}`);
     });

@@ -82,9 +82,21 @@ describe("данные тайников", () => {
     expect(SECRETS.shrine.offers).toBe(3);
   });
 
-  it("виды колец известны движку, а веса больше нуля", () => {
+  it("виды колец — места на земле, а веса больше нуля", () => {
     for (const ring of SECRETS.rings) {
-      for (const entry of ring.kinds) expect(entry.weight).toBeGreaterThan(0);
+      for (const entry of ring.kinds) {
+        expect(entry.kind).not.toBe("wisp");
+        expect(entry.weight).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("в дальних кольцах клад 3 и камень 1", () => {
+    for (const ring of SECRETS.rings.slice(1)) {
+      expect(ring.kinds).toEqual([
+        { kind: "hoard", weight: 3 },
+        { kind: "stone", weight: 1 },
+      ]);
     }
   });
 });
@@ -112,6 +124,14 @@ describe("проверка данных тайников называет пол
     expect(problemsOf(patched({ rings: none }))).toContain("secrets.rings[1].kinds");
     const zero = SECRETS.rings.map((ring, i) => (i === 1 ? { ...ring, kinds: [{ kind: "hoard" as const, weight: 0 }] } : ring));
     expect(problemsOf(patched({ rings: zero }))).toContain("secrets.rings[1].kinds[0].weight");
+  });
+
+  it("огонёк — не вид кольца: он один на забег", () => {
+    const rings = SECRETS.rings.map((ring, i) =>
+      i === 1 ? { ...ring, kinds: [{ kind: "wisp" as unknown as "hoard", weight: 1 }] } : ring,
+    );
+    expect(problemsOf(patched({ rings }))).toContain("secrets.rings[1].kinds[0].kind");
+    expect(problemsOf(patched({ rings }))).toContain("огонёк");
   });
 
   it("неизвестный вид тайника", () => {

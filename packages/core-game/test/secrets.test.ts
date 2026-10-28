@@ -46,12 +46,11 @@ const STONE_AND_HOARDS = rules({
     { ...RING_TWO, count: 2, kinds: [{ kind: "hoard", weight: 1 }] },
   ],
 });
-/** Капище, клад и огонёк: огонёк должен выбирать из двух неоткрытых ближайший. */
+/** Капище и клад: огонёк (он один на забег) должен выбирать из двух неоткрытых ближайший. */
 const WISP_RULES = rules({
   rings: [
     { ...RING_ONE, count: 1, kinds: [{ kind: "shrine", weight: 1 }] },
     { ...RING_TWO, count: 1, kinds: [{ kind: "hoard", weight: 1 }] },
-    { minRadius: 2_800, maxRadius: 4_000, count: 1, kinds: [{ kind: "wisp", weight: 1 }] },
   ],
 });
 
@@ -98,6 +97,12 @@ function layoutOf(world: World): [string, number, number][] {
 
 const TICKS_PER_SEC = 60;
 
+function wispOf(world: World): SecretSite {
+  const wisp = world.secrets.sites.find((site) => site.kind === "wisp");
+  if (wisp === undefined) throw new Error("в раскладке нет огонька");
+  return wisp;
+}
+
 describe("поток случайности тайников", () => {
   it("соль потока не совпадает с сундуками и карточками", () => {
     expect(STREAM_SALT.secret).not.toBe(STREAM_SALT.chest);
@@ -140,9 +145,38 @@ describe("размещение по кольцам", () => {
     expect(layouts.size).toBeGreaterThan(1);
   });
 
-  it("всего пять тайников: 1, 2 и 2 по кольцам, номер кольца записан", () => {
-    const sites = setup(SECRETS, 4).secrets.sites;
-    expect(sites.map((site) => site.ring)).toEqual([0, 1, 1, 2, 2]);
+  it("мест на карте всегда пять — 1, 2 и 2 по кольцам, на любом seed", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const places = setup(SECRETS, seed).secrets.sites.filter((site) => site.kind !== "wisp");
+      expect(places.map((site) => site.ring), `seed ${seed}`).toEqual([0, 1, 1, 2, 2]);
+    }
+  });
+
+  it("огонёк один на забег, последний в списке и без кольца", () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const sites = setup(SECRETS, seed).secrets.sites;
+      const wisps = sites.filter((site) => site.kind === "wisp");
+      expect(wisps, `seed ${seed}`).toHaveLength(1);
+      expect(sites.at(-1)).toBe(wisps[0]);
+      expect(wisps[0].ring).toBe(-1);
+      expect(wisps[0].active).toBe(false);
+    }
+  });
+
+  it("без колец нет и огонька", () => {
+    expect(setup(rules({ rings: [] }), 3).secrets.sites).toHaveLength(0);
+  });
+
+  it("в дальних кольцах только клад и камень, оба встречаются", () => {
+    const seen = new Set<string>();
+    for (let seed = 1; seed <= 30; seed++) {
+      for (const site of setup(SECRETS, seed).secrets.sites) {
+        if (site.ring < 1) continue;
+        expect(["hoard", "stone"], `seed ${seed}`).toContain(site.kind);
+        seen.add(site.kind);
+      }
+    }
+    expect([...seen].sort()).toEqual(["hoard", "stone"]);
   });
 
   it("первое кольцо — капище на 700–1100 единиц от старта, на любом масштабе", () => {
@@ -161,10 +195,10 @@ describe("размещение по кольцам", () => {
     for (const seed of [1, 2, 3, 4, 5, 6]) {
       const sites = setup(SECRETS, seed).secrets.sites;
       sites.forEach((site) => {
+        // У огонька ни кольца, ни места: он появится у игрока.
+        if (site.kind === "wisp") return;
         const ring = SECRETS.rings[site.ring];
         expect(ring.kinds.map((entry) => entry.kind)).toContain(site.kind);
-        // У огонька места нет: он появится у игрока.
-        if (site.kind === "wisp") return;
         const distance = distanceFromStart(site);
         expect(distance).toBeGreaterThanOrEqual(ring.minRadius - 1e-6);
         expect(distance).toBeLessThanOrEqual(ring.maxRadius + 1e-6);
@@ -454,7 +488,10 @@ describe("камень-указатель", () => {
     standOn(world, stone, SECRETS.stone.radius - 1);
     run(world, 1);
 
-    expect(world.secrets.sites.every((site) => site.visible)).toBe(true);
+    const places = world.secrets.sites.filter((site) => site.kind !== "wisp");
+    expect(places.every((site) => site.visible)).toBe(true);
+    // Огонька до 90-й секунды на карте нет, показывать на радаре нечего.
+    expect(wispOf(world).visible).toBe(false);
     expect(stone.used).toBe(true);
     expect(others.every((site) => !site.found)).toBe(true);
   });
@@ -514,12 +551,6 @@ describe("найденный тайник", () => {
 
 describe("огонёк", () => {
   const APPEAR_TICKS = 90 * TICKS_PER_SEC;
-
-  function wispOf(world: World): SecretSite {
-    const wisp = world.secrets.sites.find((site) => site.kind === "wisp");
-    if (wisp === undefined) throw new Error("в раскладке нет огонька");
-    return wisp;
-  }
 
   function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
     return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);

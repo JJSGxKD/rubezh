@@ -1,4 +1,4 @@
-import type { SecretsDef } from "@bh/shared-types";
+import type { SecretKind, SecretsDef } from "@bh/shared-types";
 import { drawWeighted } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import type { WorldBounds } from "./map-types";
@@ -30,32 +30,24 @@ export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, 
   def.rings.forEach((ring, ringIndex) => {
     for (let slot = 0; slot < ring.count; slot++) {
       const kind = ring.kinds[drawWeighted(rng, ring.kinds)].kind;
-      // Огоньку места на карте нет: слот кольца лишь решает, что он будет в этом забеге.
-      const site: SecretSite = {
-        kind,
-        ring: ringIndex,
-        x: 0,
-        y: 0,
-        active: kind !== "wisp",
-        visible: false,
-        found: false,
-        used: false,
-        holdTicks: 0,
-      };
-      if (site.active) {
-        const margin = radiusOf(def, kind) * unitScale;
-        for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
-          randomDirection(rng, scratch);
-          const distance = rng.nextRange(ring.minRadius, ring.maxRadius) * unitScale;
-          // Граница карты, если она есть, не выпускает тайник за край.
-          site.x = clampToBounds(scratch.x * distance, Math.max(0, bounds.halfWidth - margin));
-          site.y = clampToBounds(scratch.y * distance, Math.max(0, bounds.halfHeight - margin));
-          if (isClear(sites, site.x, site.y, gap)) break;
-        }
+      const site = newSite(kind, ringIndex, true);
+      const margin = radiusOf(def, kind) * unitScale;
+      for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
+        randomDirection(rng, scratch);
+        const distance = rng.nextRange(ring.minRadius, ring.maxRadius) * unitScale;
+        // Граница карты, если она есть, не выпускает тайник за край.
+        site.x = clampToBounds(scratch.x * distance, Math.max(0, bounds.halfWidth - margin));
+        site.y = clampToBounds(scratch.y * distance, Math.max(0, bounds.halfHeight - margin));
+        if (isClear(sites, site.x, site.y, gap)) break;
       }
       sites.push(site);
     }
   });
+
+  // Огонёк — свойство забега, а не вид кольца: он один, ведёт к местам, и без
+  // них ему вести некуда. Места у него нет — он появится у игрока, поэтому он
+  // спит, не бросает позицию и не тратит поток.
+  if (sites.length > 0) sites.push(newSite("wisp", WISP_RING, false));
 
   return {
     rng,
@@ -67,6 +59,13 @@ export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, 
     usedLog: [],
     blessingLog: [],
   };
+}
+
+/** Номер кольца огонька: он не принадлежит ни одному. */
+const WISP_RING = -1;
+
+function newSite(kind: SecretKind, ring: number, active: boolean): SecretSite {
+  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0 };
 }
 
 function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {

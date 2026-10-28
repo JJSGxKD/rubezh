@@ -1142,9 +1142,15 @@ export const SECRET_KINDS = ["shrine", "hoard", "stone", "wisp"] as const;
 
 export type SecretKind = (typeof SECRET_KINDS)[number];
 
+/**
+ * Виды, которые бывают местом на карте. Огонёк к ним не относится: он один на
+ * забег, появляется у игрока и места в кольце не занимает.
+ */
+export type SecretPlaceKind = Exclude<SecretKind, "wisp">;
+
 /** Вес вида при выборе того, что окажется на месте тайника кольца. */
 export interface SecretKindWeight {
-  kind: SecretKind;
+  kind: SecretPlaceKind;
   /** больше нуля */
   weight: number;
 }
@@ -1157,7 +1163,7 @@ export interface SecretKindWeight {
 export interface SecretRingDef {
   minRadius: number;
   maxRadius: number;
-  /** сколько тайников в кольце — целое, не меньше 1 */
+  /** сколько мест в кольце — целое, не меньше 1; мест на карте всегда ровно столько, сколько в кольцах */
   count: number;
   /** виды по весам; в первом кольце — только капище, найти его должен каждый */
   kinds: readonly SecretKindWeight[];
@@ -1190,7 +1196,7 @@ export interface SecretsDef {
   hoard: { radius: number; holdSec: number; chestSize: ChestSize };
   /** камень-указатель: коснуться — все тайники видны на радаре */
   stone: { radius: number };
-  /** огонёк: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому тайнику */
+  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
   wisp: { appearSec: number; speed: number };
   /** набор благословений капища */
   blessings: readonly BlessingDef[];
