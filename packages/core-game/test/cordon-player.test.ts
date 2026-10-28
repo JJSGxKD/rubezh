@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CORDON_FORM_SEC } from "../src/game/patterns";
 import { damageEnemy } from "../src/game/sim/combat";
 import { pushPlayerOutOfGuards } from "../src/game/sim/cordon";
 import { vectorLength } from "../src/game/sim/vector";
@@ -138,8 +139,8 @@ describe("сжатие толкает игрока", () => {
   it("игрок у кромки: строй сжимается, игрока теснит к центру, в тело страж не входит", () => {
     const ring = { radius: 300, minRadius: 80, shrinkPerSec: 6, lifeSec: 120 };
     const run = createCordonRun({ ring });
-    // строй собран, но ещё не сжат до предела: впереди не меньше десяти секунд сжатия
-    advanceRun(run, (run.world.config.view.spawnRadius + 48 - ring.radius) / (40 - ring.shrinkPerSec) + 3);
+    // строй собран сразу, но ещё не сжат до предела: впереди не меньше десяти секунд сжатия
+    advanceRun(run, CORDON_FORM_SEC + 0.2);
     expect(aliveGuards(run.world)).toHaveLength(40);
     const radius = run.world.cordon.radius;
     expect(radius - 10 * ring.shrinkPerSec).toBeGreaterThan(ring.minRadius);
