@@ -69,6 +69,14 @@ describe("данные тайников", () => {
     }
   });
 
+  it("в наборе шесть благословений владельца", () => {
+    expect(SECRETS.blessings.map((blessing) => blessing.id)).toEqual(["fury", "wind", "harvest", "fortress", "keen", "flame"]);
+  });
+
+  it("«Зоркость» — перезарядка на 8 % короче", () => {
+    expect(SECRETS.blessings.find((blessing) => blessing.id === "keen")?.modifiers).toEqual({ cooldown: 0.08 });
+  });
+
   it("на выбор хватает благословений", () => {
     expect(SECRETS.blessings.length).toBeGreaterThanOrEqual(SECRETS.shrine.offers);
     expect(SECRETS.shrine.offers).toBe(3);

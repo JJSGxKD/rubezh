@@ -72,6 +72,9 @@ export const SECRETS: SecretsDef = {
     // Здоровье у снаряжения — число, а не доля: +10 при базовых 100 это ровно
     // «здоровье +10 %».
     { id: "fortress", nameKey: "blessing.fortress", modifiers: { maxHp: 10 } },
+    // «Зоркость» — перезарядка на 8 % короче (решение владельца): снарядов у
+    // снаряжения нет, а перезарядка — то же «больше выстрелов», только честнее.
+    { id: "keen", nameKey: "blessing.keen", modifiers: { cooldown: 0.08 } },
     { id: "flame", nameKey: "blessing.flame", modifiers: { statusChance: 0.1 } },
   ],
 };

@@ -339,6 +339,21 @@ describe("капище", () => {
     expect(world.playerStats.damageMul).toBeCloseTo(1.1, 9);
   });
 
+  it("выбор «Зоркости» — перезарядка оружия на 8 % короче", () => {
+    const keenRules = rules({
+      rings: ONLY_SHRINE.rings,
+      blessings: ["keen", "wind", "harvest"].map((id) => SECRETS.blessings.find((blessing) => blessing.id === id)!),
+    });
+    const world = setup(keenRules, 1);
+    world.secrets.manualBlessing = true;
+    standOn(world, world.secrets.sites[0]);
+    run(world, 3 * TICKS_PER_SEC);
+    expect(world.playerStats.cooldownMul).toBeCloseTo(1, 9);
+
+    expect(chooseBlessing(world, "keen")).toBe(true);
+    expect(world.playerStats.cooldownMul).toBeCloseTo(0.92, 9);
+  });
+
   it("чужой выбор не принимается: неизвестный id, вне предложенных, без предложения", () => {
     const { world, site } = shrineWorld();
     expect(chooseBlessing(world, "fury")).toBe(false);
