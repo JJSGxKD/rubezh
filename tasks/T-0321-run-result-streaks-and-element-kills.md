@@ -3,7 +3,7 @@ id: T-0321
 title: Итог забега — самая долгая серия без попаданий и без убийств, убийства по стихиям; приём и проверка правдоподобия на сервере
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -31,6 +31,10 @@ shared:
   - backend/api/src/modules/runs/dto/runs.dto.ts
   - backend/api/test/run-counters.test.ts
   - backend/api/test/runs.test.ts
+  - backend/api/test/runs.integration.test.ts
+  - backend/api/test/run-verdict.test.ts
+  - packages/app-shell/src/state/run-interrupted.ts
+  - packages/core-game/src/game/sim/streaks.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
@@ -207,10 +211,10 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] Итог забега несёт серии без попаданий и без убийств и убийства по стихиям; продолжение из снимка их сохраняет.
-- [ ] Щит буста и тик стихии рвут серию; хвост без убийств до смерти не считается.
-- [ ] Сервер принимает поля, неправдоподобные — `counters_implausible` без смены вердикта; golden не сдвинулись.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Итог забега несёт серии без попаданий и без убийств и убийства по стихиям; продолжение из снимка их сохраняет.
+- [x] Щит буста и тик стихии рвут серию; хвост без убийств до смерти не считается.
+- [x] Сервер принимает поля, неправдоподобные — `counters_implausible` без смены вердикта; golden не сдвинулись.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
