@@ -1,6 +1,7 @@
 import { REVIEW_LABEL, STATUS_LABELS } from "./board.mjs";
-import { BASE, fetchOrigin, gh, hasCommit, readFileAt, taskFileNameAt } from "./git-io.mjs";
-import { SELF_MERGE_MESSAGE, parseFrontmatter, parseOwner, selfMergeProblems } from "./task-file.mjs";
+import { BASE, diffNumstat, fetchOrigin, gh, hasCommit, isAncestor, readFileAt, taskFileNameAt, toolsMatchBase } from "./git-io.mjs";
+import { SELF_MERGE_MESSAGE, parseFrontmatter, parseOwner, selfMergePathProblem, selfMergeProblems } from "./task-file.mjs";
+import { matches } from "./zones.mjs";
 
 /**
  * `pnpm task merge T-NNNN` — самостоятельный мердж задачи с пометкой
@@ -33,6 +34,62 @@ export const SELF_CHECK_MIN_ITEMS = 7;
 /** Первая строка самопроверки: `**claude-1:** самопроверка по review-pr`. */
 const SELF_CHECK_TITLE_RE = /^\*\*([a-z][a-z0-9]*(?:-[a-z0-9]+)+):\*\* самопроверка по review-pr$/;
 const SELF_CHECK_FORMAT = "первая строка «**<кодовое имя потока>:** самопроверка по review-pr», вторая «head: <полный SHA головы PR>», дальше чек-лист «Приёмки» с отметками «- [x]»";
+
+/**
+ * Предел правок вне `zones` и `shared` задачи из `origin/dev` (Р176, поправка
+ * claude-lead-1): вынужденное следствие — одна-две строки на файл.
+ */
+export const OUTSIDE_LINES_PER_FILE = 5;
+export const OUTSIDE_LINES_TOTAL = 20;
+const OVER_LIMIT = "правки вне зон больше предела — нужна приёмка тимлида";
+
+/**
+ * Разбор вывода `git diff --numstat`: `[{ path, added, deleted }]`; двоичный
+ * файл (`-\t-\t…`) — `added` и `deleted` равны `null`. Строка не по формату —
+ * исключение: молча пропустить файл PR нельзя.
+ */
+export function parseNumstat(text) {
+  return String(text)
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => {
+      const match = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
+      if (match === null) throw new Error(`git diff --numstat: не разобралась строка «${line}»`);
+      const binary = match[1] === "-" || match[2] === "-";
+      return { path: match[3], added: binary ? null : Number(match[1]), deleted: binary ? null : Number(match[2]) };
+    });
+}
+
+/**
+ * Причины отказа по реальному диффу PR. Каждый изменённый файл — по пути, не
+ * по шаблону — обязан лежать в белом списке `merge: self` и не в чёрном; файлы
+ * вне `zones` и `shared` задачи из `dev` (кроме файла самой задачи) —
+ * не больше `OUTSIDE_LINES_PER_FILE` строк в каждом и `OUTSIDE_LINES_TOTAL`
+ * всего, двоичные вне зон не допускаются.
+ */
+export function diffProblems(changes, task, fileName) {
+  const own = `tasks/${fileName}`;
+  const held = [...(task?.zones ?? []), ...(task?.shared ?? [])];
+  const problems = [];
+  let total = 0;
+  for (const change of changes) {
+    const pathProblem = selfMergePathProblem(change.path, fileName);
+    if (pathProblem !== null) {
+      problems.push(`PR меняет файл вне допустимого для merge: self: ${pathProblem}`);
+      continue;
+    }
+    if (change.path === own || matches(change.path, held)) continue;
+    if (change.added === null) {
+      problems.push(`файл ${change.path} вне зон задачи двоичный: ${OVER_LIMIT}`);
+      continue;
+    }
+    const lines = change.added + change.deleted;
+    total += lines;
+    if (lines > OUTSIDE_LINES_PER_FILE) problems.push(`файл ${change.path} вне зон задачи: изменено ${String(lines)} строк при пределе ${String(OUTSIDE_LINES_PER_FILE)} на файл — ${OVER_LIMIT}`);
+  }
+  if (total > OUTSIDE_LINES_TOTAL) problems.push(`вне зон задачи изменено ${String(total)} строк при общем пределе ${String(OUTSIDE_LINES_TOTAL)} — ${OVER_LIMIT}`);
+  return problems;
+}
 
 /**
  * Поля шапки, которые поток в своей ветке менять не вправе: они решают, можно
@@ -93,21 +150,34 @@ function parseSelfCheck(comment) {
   const headLine = lines.map((line) => /^head:\s*([0-9a-fA-F]{40})\s*$/.exec(line)).find((match) => match !== null);
   const checked = lines.filter((line) => /^\s*[-*]\s+\[[xXхХ]\]/.test(line)).length;
   const unchecked = lines.filter((line) => /^\s*[-*]\s+\[ \]/.test(line)).length;
-  return { name: title[1], head: headLine === undefined ? null : headLine[1].toLowerCase(), checked, unchecked };
+  const login = comment?.author?.login;
+  return { name: title[1], head: headLine === undefined ? null : headLine[1].toLowerCase(), checked, unchecked, author: typeof login === "string" ? login : null, createdAt: comment?.createdAt };
 }
 
 /**
  * Причины, по которым самопроверка не принимается. `stream` — кодовое имя
  * потока из `owner` файла задачи в ветке, `null` — не определён. Берётся
  * последний комментарий самопроверки на текущей голове: после нового коммита
- * проверку делают заново.
+ * проверку делают заново. Репозиторий публичный, поэтому комментарий обязан
+ * принадлежать автору PR (`prAuthor`) и быть написан не раньше коммита головы
+ * (`headCommittedAt`): отредактированный старый комментарий с новым `head:`
+ * сохраняет старую дату создания и не годится.
  */
-export function selfCheckProblems(comments, headSha, stream) {
+export function selfCheckProblems(comments, headSha, stream, { prAuthor, headCommittedAt } = {}) {
   const signed = (comments ?? []).map(parseSelfCheck).filter((check) => check !== null);
   if (signed.length === 0) return [`нет комментария самопроверки в PR: ${SELF_CHECK_FORMAT}`];
-  const onHead = signed.filter((check) => check.head !== null && check.head === String(headSha).toLowerCase());
+  const trusted = signed.filter((check) => check.author !== null && check.author === prAuthor);
+  if (trusted.length === 0) {
+    const authors = [...new Set(signed.map((check) => check.author ?? "автор неизвестен"))].join(", ");
+    return [`самопроверку написал ${authors}, а PR открыл ${String(prAuthor)}: самопроверка — комментарий автора PR`];
+  }
+  const fresh = trusted.filter((check) => Date.parse(check.createdAt) >= Date.parse(headCommittedAt));
+  if (fresh.length === 0) {
+    return [`самопроверка написана раньше коммита головы PR (${String(headCommittedAt)}): после последнего коммита напиши новую, отредактированный старый комментарий не годится`];
+  }
+  const onHead = fresh.filter((check) => check.head !== null && check.head === String(headSha).toLowerCase());
   if (onHead.length === 0) {
-    const last = signed.filter((check) => check.head !== null).at(-1);
+    const last = fresh.filter((check) => check.head !== null).at(-1);
     if (last === undefined) return [`в самопроверке нет строки «head: <полный SHA головы PR>» (40 знаков): ${SELF_CHECK_FORMAT}`];
     return [`самопроверка относится к другой голове PR (head: ${last.head}), а голова сейчас ${String(headSha)}: после новых коммитов самопроверка делается заново`];
   }
@@ -125,12 +195,16 @@ export function selfCheckProblems(comments, headSha, stream) {
  *
  * - `task` — шапка задачи из `origin/dev` (`null`, если файла там нет);
  * - `branchTask` — шапка задачи в голове PR (`null`, если файла нет);
- * - `pr` — `{ headRefName, state, isDraft, labels, statusCheckRollup }`;
+ * - `fileName` — файл задачи `T-NNNN-slug.md`: его правка в PR допустима всегда;
+ * - `pr` — `{ headRefName, state, isDraft, labels, statusCheckRollup, author, commits }`;
  * - `mergeable` — `MERGEABLE`, `CONFLICTING` или `UNKNOWN` из GitHub;
- * - `comments` — комментарии PR `[{ body }]`;
- * - `headSha` — SHA головы PR, прочитанный вместе с остальным.
+ * - `comments` — комментарии PR `[{ body, createdAt, author }]`;
+ * - `headSha` — SHA головы PR, прочитанный вместе с остальным;
+ * - `changes` — дифф PR от общего предка с `dev` (`parseNumstat`), `null` — не получен;
+ * - `upToDate` — `origin/dev` предок головы PR (ветка не отстала);
+ * - `toolsMatchDev` — `scripts/tasks` в рабочей копии совпадает с `origin/dev`.
  */
-export function mergeProblems({ task, branchTask, pr, mergeable, comments, headSha }) {
+export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comments, headSha, changes, upToDate, toolsMatchDev }) {
   const problems = [];
   const id = BRANCH_RE.exec(pr?.headRefName ?? "")?.[1];
   if (id === undefined) problems.push(`ветка PR «${String(pr?.headRefName)}» — не task/T-NNNN: самостоятельно вливаются только PR задач`);
@@ -140,15 +214,15 @@ export function mergeProblems({ task, branchTask, pr, mergeable, comments, headS
   else {
     if (task.merge !== "self") problems.push(`в ${BASE} у ${name} нет «merge: self» (там ${task.merge ?? "поля нет — это lead"}): пометка — из ${BASE}, дописать её в ветке PR нельзя`);
     else {
-      const forbidden = selfMergeProblems(task);
+      const forbidden = selfMergeProblems(task, fileName);
       if (forbidden.length > 0) problems.push(`${SELF_MERGE_MESSAGE}: ${forbidden.join("; ")}`);
     }
   }
 
   if (branchTask === null || branchTask === undefined) problems.push(`в ветке PR нет файла задачи ${name}`);
   else {
-    // Дописанный в ветке `shared` не должен вести в запретные пути: иначе запрет обошли бы через него.
-    const branchForbidden = selfMergeProblems(branchTask).filter((reason) => reason.startsWith("shared:"));
+    // Дописанный в ветке `shared` обязан лежать в белом списке: иначе запрет обошли бы через него.
+    const branchForbidden = selfMergeProblems(branchTask, fileName).filter((reason) => reason.startsWith("shared:"));
     if (branchForbidden.length > 0) problems.push(`${SELF_MERGE_MESSAGE}: в ветке PR ${branchForbidden.join("; ")}`);
     if (branchTask.status !== "done") problems.push(`в ветке PR файл задачи в статусе ${String(branchTask.status)}, а нужен status: done`);
     if (task !== null && task !== undefined) {
@@ -173,8 +247,24 @@ export function mergeProblems({ task, branchTask, pr, mergeable, comments, headS
   else if (mergeable === "UNKNOWN") problems.push("GitHub ещё не посчитал, можно ли влить PR: повтори команду через минуту");
   else if (mergeable !== "MERGEABLE") problems.push(`GitHub не подтвердил, что PR можно влить (mergeable: ${String(mergeable)})`);
 
-  if (typeof headSha !== "string" || !FULL_SHA_RE.test(headSha)) problems.push("не получен SHA головы PR");
-  else problems.push(...selfCheckProblems(comments, headSha, branchTask === null || branchTask === undefined ? null : (parseOwner(branchTask.owner)?.account ?? null)));
+  if (upToDate !== true) problems.push(upToDate === false ? `ветка отстала от ${BASE}: влей свежий dev и дождись CI, затем напиши самопроверку заново` : `не удалось проверить, что ветка не отстала от ${BASE}`);
+  if (toolsMatchDev !== true) problems.push(toolsMatchDev === false ? "scripts/tasks отличаются от dev: команда исполняется кодом рабочей копии, верни его к origin/dev (влей свежий dev, свои правки в scripts/tasks убери)" : "не удалось сверить scripts/tasks с origin/dev");
+
+  if (!Array.isArray(changes)) problems.push(`не удалось получить дифф PR (git diff --numstat ${BASE}...голова): реальные изменения проверить нечем`);
+  else problems.push(...diffProblems(changes, task, fileName));
+
+  if (typeof headSha !== "string" || !FULL_SHA_RE.test(headSha)) {
+    problems.push("не получен SHA головы PR");
+    return problems;
+  }
+  const prAuthor = pr?.author?.login;
+  const headCommit = (pr?.commits ?? []).find((commit) => String(commit?.oid).toLowerCase() === headSha.toLowerCase());
+  if (typeof prAuthor !== "string") problems.push("не получен автор PR");
+  if (headCommit === undefined) problems.push(`коммит головы PR (${headSha}) не найден в списке коммитов PR: самопроверку не с чем сравнить по времени`);
+  if (typeof prAuthor === "string" && headCommit !== undefined) {
+    const stream = branchTask === null || branchTask === undefined ? null : (parseOwner(branchTask.owner)?.account ?? null);
+    problems.push(...selfCheckProblems(comments, headSha, stream, { prAuthor, headCommittedAt: headCommit.committedDate }));
+  }
   return problems;
 }
 
@@ -197,7 +287,7 @@ export function teamSummary(body) {
   return text === "" ? null : text;
 }
 
-const PR_FIELDS = "number,headRefName,headRefOid,state,isDraft,labels,body,mergeable,statusCheckRollup,comments";
+const PR_FIELDS = "number,headRefName,headRefOid,state,isDraft,labels,body,mergeable,statusCheckRollup,comments,author,commits";
 const UNKNOWN_RETRY_MS = 10_000;
 
 function sleep(ms) {
@@ -233,7 +323,7 @@ function readTasks(id, headSha) {
   const task = fileName === null ? null : parse(readFileAt(BASE, `tasks/${fileName}`));
   const name = fileName ?? "";
   const branchText = name === "" ? null : (readFileAt(headSha, `tasks/${name}`) ?? readFileAt(headSha, `tasks/archive/${name}`));
-  return { task, branchTask: parse(branchText) };
+  return { fileName, task, branchTask: parse(branchText) };
 }
 
 /**
@@ -249,8 +339,26 @@ export function runMerge(positional) {
   if (!FULL_SHA_RE.test(headSha) || !hasCommit(headSha)) {
     throw new Error(`Голова PR #${String(pr.number)} (${headSha || "SHA не получен"}) не получена локально: повтори команду, если поток только что пушил.`);
   }
-  const { task, branchTask } = readTasks(id, headSha);
-  const problems = mergeProblems({ task, branchTask, pr, mergeable: pr.mergeable, comments: pr.comments, headSha });
+  const { fileName, task, branchTask } = readTasks(id, headSha);
+  const numstat = diffNumstat(BASE, headSha);
+  let changes = null;
+  try {
+    changes = numstat === null ? null : parseNumstat(numstat);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+  }
+  const problems = mergeProblems({
+    task,
+    branchTask,
+    fileName: fileName ?? "",
+    pr,
+    mergeable: pr.mergeable,
+    comments: pr.comments,
+    headSha,
+    changes,
+    upToDate: isAncestor(BASE, headSha),
+    toolsMatchDev: toolsMatchBase(BASE),
+  });
   if (problems.length > 0) {
     console.error(`Мердж ${id} (PR #${String(pr.number)}) отклонён, причин: ${String(problems.length)}`);
     for (const problem of problems) console.error(`  - ${problem}`);

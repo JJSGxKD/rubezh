@@ -81,6 +81,24 @@ export function hasCommit(sha) {
   return tryGit(["cat-file", "-e", `${sha}^{commit}`]).ok;
 }
 
+/** Вывод `git diff --numstat --no-renames base...head` (изменения PR от общего предка) или `null`, если дифф не получился. */
+export function diffNumstat(base, head) {
+  const result = tryGit(["-c", "core.quotepath=off", "diff", "--numstat", "--no-renames", `${base}...${head}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** `base` — предок `head`: ветка не отстала от базы. Любой сбой git — «нет». */
+export function isAncestor(base, head) {
+  return tryGit(["merge-base", "--is-ancestor", base, head]).ok;
+}
+
+/** Код команд в `scripts/tasks` рабочей копии совпадает с `base`: нет ни правок, ни новых файлов. */
+export function toolsMatchBase(base) {
+  if (!tryGit(["diff", "--quiet", base, "--", "scripts/tasks"]).ok) return false;
+  const untracked = tryGit(["ls-files", "--others", "--exclude-standard", "--", "scripts/tasks"]);
+  return untracked.ok && untracked.stdout === "";
+}
+
 /** Имя файла задачи `T-NNNN-<slug>.md` наверху `tasks/` в `base` или `null`. */
 export function taskFileNameAt(base, id) {
   const names = listLines(["ls-tree", "--name-only", base, "tasks/"]).map((path) => path.replace(/^tasks\//, ""));
