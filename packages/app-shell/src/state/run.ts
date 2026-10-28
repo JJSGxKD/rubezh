@@ -55,8 +55,8 @@ export interface OpenedChest {
 export type RunLoadingStage = "engine" | "world";
 
 /** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
-/** Чем продолжен забег: звёзды, ролик, VIP без ролика или чит разработчика. */
-export type ContinueSource = "dev" | "premium" | "ad" | "pass";
+/** Чем продолжен забег: звёзды, самоцветы, ролик, VIP без ролика или чит разработчика. */
+export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
