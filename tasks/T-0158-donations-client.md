@@ -39,7 +39,7 @@ shared:
   - packages/app-shell/src/i18n/ru-home.json
   - packages/app-shell/src/i18n/ru-history.json
   - docs/27-design-system-and-app-shell.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
