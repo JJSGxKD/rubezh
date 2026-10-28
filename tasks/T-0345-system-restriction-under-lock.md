@@ -3,7 +3,7 @@ id: T-0345
 title: Системное ограничение не ослабляет решение человека и в гонке — проверка под блокировкой аккаунта
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: S
