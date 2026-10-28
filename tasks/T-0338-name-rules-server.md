@@ -30,6 +30,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/roles.test.ts
+  - backend/api/test/admin-session.test.ts
   - apps/admin/src/api/audit.ts
   - apps/admin/test/audit.test.ts
   - docs/21-diagrams.md
