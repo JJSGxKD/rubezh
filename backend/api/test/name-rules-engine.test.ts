@@ -88,7 +88,7 @@ describe("вырезание: brand, ads, other", () => {
     expect(cleanNameDetailed("пример-один Вася пример-два", two)).toMatchObject({ name: "Вася", hits: [id(1), id(2)] });
 
     const overlap = rules(def(1, "brand", "exact", "аа бб"), def(2, "brand", "exact", "бб вв"));
-    expect(applyNameRules(overlap, "х аа бб вв у").text).toBe("х  у");
+    expect(applyNameRules(overlap, "х аа бб вв у").text).toBe("х   у");
     expect(cleanName("х аа бб вв у", overlap).name).toBe("х у");
   });
 
@@ -255,7 +255,8 @@ describe("вспомогательные функции движка", () => {
       { start: 3, end: 5 },
       { start: 6, end: 8 },
     ]);
-    expect(previewMatches(def(1, "ads", "regex", "x*"), "axb")).toEqual([{ start: 1, end: 2 }]);
+    expect(previewMatches(def(1, "ads", "regex", "x+"), "axb")).toEqual([{ start: 1, end: 2 }]);
+    expect(previewMatches(def(1, "ads", "regex", String.raw`\b`), "ab")).toEqual([]);
     expect(previewMatches(def(1, "ads", "regex", "("), "abc")).toEqual([]);
   });
 });

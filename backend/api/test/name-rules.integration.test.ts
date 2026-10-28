@@ -20,11 +20,11 @@ import { testPrisma } from "./helpers/test-prisma.js";
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 4);
-const RUN = randomUUID().slice(0, 8);
-const BRAND = `пример-бренд-${RUN}`;
-const BAD_WORD = `примерслово-${RUN}`;
-const CUT = `пример-${RUN}`;
-const KEPT = `пример-${RUN}-два`;
+const RUN = randomUUID().slice(0, 4);
+const BRAND = `бренд-${RUN}`;
+const BAD_WORD = `слово-${RUN}`;
+const CUT = `пр-${RUN}`;
+const KEPT = `пр-${RUN}-два`;
 const TIMEOUT_MS = 30_000;
 
 describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("правила фильтра имён на живых Postgres и Redis", () => {
@@ -103,6 +103,9 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("правила фил�
 
     expect(invalid).toContain(broken.ruleId);
     expect(cleanName(`Вася ${good.pattern}`, set).name).toBe("Вася");
+    // Битое правило не оставляем: оно мешало бы соседним тестам предупреждением в логе.
+    await repository.remove(broken.ruleId);
+    await repository.remove(good.ruleId);
   });
 
   it(
