@@ -30,6 +30,7 @@ import {
   ADS_CATALOG_REPOSITORY,
   type AdBlockDef,
   type AdFunnelRow,
+  type AdPassRow,
   type AdNetworkEdit,
   type AdNetworkRow,
   type AdsCatalogRepository,
@@ -103,6 +104,8 @@ export interface AdsCatalogView {
   networks: AdNetworkView[];
   blocks: AdBlockView[];
   funnel: AdFunnelRow[];
+  /** пропуск VIP за то же окно — не досмотр, в воронку не входит (Р99) */
+  passes: AdPassRow[];
   days: FunnelDays;
   places: readonly AdPlace[];
   /** что каждая сеть умеет и что ей нужно — по ним панель строит формы */
@@ -126,15 +129,18 @@ export class AdsCatalogService {
 
   async view(actor: AccountRef, days: FunnelDays, at = new Date()): Promise<AdsCatalogView> {
     await this.roles.require(actor, "ads.view");
-    const [networks, blocks, funnel] = await Promise.all([
+    const from = new Date(at.getTime() - days * DAY_MS);
+    const [networks, blocks, funnel, passes] = await Promise.all([
       this.db(this.repository.networks()),
       this.db(this.repository.blocks()),
-      this.db(this.repository.funnel(new Date(at.getTime() - days * DAY_MS), at)),
+      this.db(this.repository.funnel(from, at)),
+      this.db(this.repository.passes(from, at)),
     ]);
     return {
       networks: networks.map((network) => networkView(network)),
       blocks: blocks.map((block) => ({ ...block, problem: blockShapeProblem(block) })),
       funnel,
+      passes,
       days,
       places: AD_PLACES,
       profiles: AD_NETWORK_PROFILES,

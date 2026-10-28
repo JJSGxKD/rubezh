@@ -76,6 +76,11 @@ const RULES: Rule[] = [
     why: "пакет проксирования переиспользуется в других проектах: ни игры, ни Nest, ни Prisma",
   },
   {
+    from: "packages/promo-kit/src",
+    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma|["']fabric["']/,
+    why: "модель промо-материала переиспользуется панелью, кабинетом партнёра и другими проектами: ни игры, ни Nest, ни Prisma, ни Fabric (docs/35-stage4-plan.md, Р106, Р159)",
+  },
+  {
     from: "apps/admin/src",
     forbidden: /["']@bh\/(core-game|app-shell|adapter-)|["']phaser["']/i,
     why: "панель — отдельное приложение команды: ни движка, ни оболочки игры, ни площадок; с игрой её роднят только токены дизайна (docs/29-admin-panel.md §4)",

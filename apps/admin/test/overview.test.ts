@@ -13,6 +13,7 @@ import {
   networkTitle,
   overviewSchema,
   parsePeriod,
+  passLine,
   periodTitle,
   shiftDay,
   sourcesLine,
@@ -115,6 +116,26 @@ describe("сводка: реклама", () => {
     expect(old.series[0]).toMatchObject({ purchases: null, adsCompleted: 0 });
   });
 
+  it("пропуск VIP: строка в плитке только при их наличии; в схеме без поля — ноль", () => {
+    expect(passLine(0)).toBeNull();
+    expect(passLine(25)).toBe("пропусков VIP 25");
+    const totals = { offered: 10, shown: 9, completed: 8, claimed: 7, failed: 1 };
+    const overview = overviewSchema.parse({
+      day: "2026-10-07",
+      from: "2026-10-06T21:00:00.000Z",
+      at: "2026-10-07T12:00:00.000Z",
+      today: DAY,
+      yesterday: DAY,
+      attention: [],
+      series: [{ day: "2026-10-07", newAccounts: 1, active: 1, finishedRuns: 1, stars: 1, purchases: 1, adsCompleted: 5 }],
+      ads: { now: { ...totals, passed: 4 }, before: totals, places: [{ place: "wheel_spin", ...totals }], networks: [] },
+    });
+    expect(overview.ads?.now.passed).toBe(4);
+    expect(overview.ads?.before.passed).toBe(0);
+    expect(overview.ads?.places[0]?.passed).toBe(0);
+    expect(overview.series[0]?.adsPassed).toBe(0);
+  });
+
   it("ответ с рекламой: итоги, места и сети", () => {
     const totals = { offered: 10, shown: 9, completed: 8, claimed: 7, failed: 1 };
     const overview = overviewSchema.parse({
@@ -188,13 +209,13 @@ describe("сводка: вехи полосами и период", () => {
 });
 
 describe("сводка: разметка рекламы и вех", () => {
-  const totals = (shown: number, completed: number) => ({ offered: shown + 5, shown, completed, claimed: completed - 2, failed: 3 });
+  const totals = (shown: number, completed: number, passed = 0) => ({ offered: shown + 5, shown, completed, claimed: completed - 2, failed: 3, passed });
   const ads = {
-    now: totals(1000, 700),
+    now: totals(1000, 700, 25),
     before: totals(900, 600),
     places: [
-      { place: "second_chance", ...totals(744, 610) },
-      { place: "interstitial", ...totals(100, 40) },
+      { place: "second_chance", ...totals(744, 610, 20) },
+      { place: "interstitial", ...totals(100, 40, 5) },
     ],
     networks: [
       { networkKey: "adsgram", completed: 600 },
@@ -222,8 +243,23 @@ describe("сводка: разметка рекламы и вех", () => {
     expect(html).toContain("В раздел «Реклама»");
   });
 
+  it("пропуск VIP — колонкой по месту и суммой в «Всего», с пометкой под таблицей", () => {
+    const html = renderToStaticMarkup(createElement(AdsPanel, { ads, days: 7 }));
+    expect(html).toContain("Пропуск VIP");
+    expect(html).toContain("Пропуск VIP — награда без ролика у игроков с VIP. В досмотры, доли и сети не входит.");
+    // В «Всего» — сумма пропусков окна; доля досмотра их не знает: 700 / 1000 = 70%.
+    expect(html).toContain("25");
+    expect(html).toContain("70%");
+  });
+
+  it("пропусков нет — ни колонки, ни пометки", () => {
+    const quiet = { ...ads, now: { ...ads.now, passed: 0 }, places: ads.places.map((place) => ({ ...place, passed: 0 })) };
+    const html = renderToStaticMarkup(createElement(AdsPanel, { ads: quiet, days: 7 }));
+    expect(html).not.toContain("Пропуск VIP");
+  });
+
   it("показов за период не было — пустой текст вместо таблицы", () => {
-    const zero = { offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0 };
+    const zero = { offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0, passed: 0 };
     const html = renderToStaticMarkup(createElement(AdsPanel, { ads: { now: zero, before: zero, places: [], networks: [] }, days: 1 }));
     expect(html).toContain("Показов за период не было");
     expect(html).not.toContain("<table");

@@ -171,6 +171,13 @@ describe("checkTaskLine", () => {
     expect(checkTaskLine("Задача: tasks/T-0042-wipe.md\n\nтекст", "task/T-0042", files)).toEqual([]);
   });
 
+  it("первая строка просит путь в tasks/ — без архива (T-0343)", () => {
+    const errors = checkTaskLine("Задача: что-то", "task/T-0042", []);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("«Задача: tasks/T-0042-….md»");
+    expect(errors[0]).not.toContain("archive/");
+  });
+
   it("архивный путь принимается, когда файл лежит в архиве ветки (T-0204)", () => {
     const archived = ["archive/T-0042-wipe.md", "T-0043-other.md"];
     expect(checkTaskLine("Задача: tasks/archive/T-0042-wipe.md", "task/T-0042", archived)).toEqual([]);
