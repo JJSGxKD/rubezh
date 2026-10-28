@@ -377,6 +377,19 @@ describe("ключи курсов: CoinMarketCap, tonapi, erapi (tasks/T-0063)",
     await expect(SECRETS.erapi.check(ERAPI, answeringStatus(429).fetchImpl)).resolves.toMatchObject({ ok: false, message: expect.stringContaining("ключ не проверен") });
   });
 
+  it("ForexRateAPI: ключ в каталоге, шаблон отсекает мусор, проверка — /v1/usage с заголовком", async () => {
+    const KEY = "0123456789abcdef0123456789abcdef";
+    expect(SECRETS.forexrateapi.key).toBe("fx.forexrateapi");
+    expect(SECRETS.forexrateapi.fromEnv(config())).toBeNull();
+    expect(secretProblem(SECRETS.forexrateapi, SECRETS.forexrateapi.example)).toBeNull();
+    for (const bad of ["", "короткий", "abc123", `${KEY} x`, `${KEY}\n`]) expect(secretProblem(SECRETS.forexrateapi, bad), bad).not.toBeNull();
+    const { asked, fetchImpl } = answeringStatus(200);
+    await expect(SECRETS.forexrateapi.check(KEY, fetchImpl)).resolves.toMatchObject({ ok: true });
+    expect(asked[0]?.url).toBe("https://api.forexrateapi.com/v1/usage");
+    expect(asked[0]?.url).not.toContain(KEY);
+    expect(asked[0]?.headers).toMatchObject({ "X-API-KEY": KEY });
+  });
+
   it("проверка tonapi — запросом курса с заголовком Bearer", async () => {
     const { asked, fetchImpl } = answeringStatus(200);
     await expect(SECRETS.tonapi.check(TONAPI, fetchImpl)).resolves.toEqual({ ok: true, message: "tonapi принял ключ" });
