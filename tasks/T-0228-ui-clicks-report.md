@@ -18,6 +18,7 @@ zones:
 shared:
   - backend/api/src/modules/admin/admin.module.ts
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
