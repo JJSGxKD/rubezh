@@ -20,8 +20,9 @@ const BRANCH_RE = /^task\/(T-\d{4})$/;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `claims` — время коммита захвата по id задачи (ISO), если известно;
  * - `ahead` — задача взята заделом (Р178): у PR метка «задел». Тогда незакрытые
- *   зависимости допустимы, если у каждой открыт PR «на ревью», «ждёт владельца» или
- *   «доработка» и сама она не задел (`aheadCheck`); без `ahead` любая не `done` — отказ.
+ *   зависимости допустимы, если у каждой открыт PR и сама она не задел (`aheadCheck`, в CI
+ *   без требования «на ревью»: зависимость могли вернуть в работу уже после захвата);
+ *   без `ahead` любая не `done` — отказ.
  *
  * Пересечение зон держит захват, только если соседняя задача взята раньше и
  * ещё в работе: ветка без PR, PR со статусом «в работе» или «доработка» (Р171,
@@ -39,7 +40,7 @@ export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahea
     problems.push(`задача ${id} на базе в статусе ${task.status}: брать можно только ready`);
   }
 
-  if (ahead) problems.push(...aheadCheck(task, tasks, prs).problems);
+  if (ahead) problems.push(...aheadCheck(task, tasks, prs, { atClaim: false }).problems);
   else {
     const byId = new Map(tasks.map((candidate) => [candidate.id, candidate]));
     for (const dependencyId of task.depends_on) {

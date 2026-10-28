@@ -189,14 +189,14 @@ describe("захват заделом: checkClaim с ahead", () => {
     expect(problems[0]).toContain("не сделана");
   });
 
-  it("с ahead: зависимость «в работе» — отказ с её номером", () => {
-    const problems = run([pr("T-0004", ["в работе"])], { ahead: true });
-    expect(problems).toHaveLength(1);
-    expect(problems[0]).toContain("T-0004");
+  // Зависимость после захвата вернули на доработку и продолжили: PR задела не должен краснеть на каждом пуше.
+  it("с ahead: зависимость «в работе» — не отказ, захват уже состоялся", () => {
+    expect(run([pr("T-0004", ["в работе"])], { ahead: true })).toEqual([]);
+    expect(run([pr("T-0004", [], { isDraft: true })], { ahead: true })).toEqual([]);
   });
 
-  it("с ahead: зависимость без PR, с PR-черновиком без метки или сама задел — отказ", () => {
-    for (const prs of [[], [pr("T-0004", [], { isDraft: true })], [pr("T-0004", ["задел"], { isDraft: true })], null]) {
+  it("с ahead: зависимость без PR или сама задел — отказ", () => {
+    for (const prs of [[], [pr("T-0004", ["задел"], { isDraft: true })], null]) {
       const problems = run(prs, { ahead: true });
       expect(problems, JSON.stringify(prs)).toHaveLength(1);
       expect(problems[0]).toContain("T-0004");
@@ -208,10 +208,10 @@ describe("захват заделом: checkClaim с ahead", () => {
     expect(run([], { ahead: true }, [tasks[1]])).toHaveLength(1);
   });
 
-  it("с ahead: две зависимости, одна done, другая на ревью — не отказ; другая в работе — отказ", () => {
+  it("с ahead: две зависимости, одна done, другая на ревью — не отказ; у другой нет PR — отказ", () => {
     const list = [task("T-0003", { status: "done" }), task("T-0004"), task("T-0005", { depends_on: ["T-0003", "T-0004"] })];
     expect(run([pr("T-0004", ["на ревью"])], { ahead: true }, list)).toEqual([]);
-    expect(run([pr("T-0004", ["в работе"])], { ahead: true }, list)).toHaveLength(1);
+    expect(run([], { ahead: true }, list)).toHaveLength(1);
   });
 
   it("с ahead все зависимости done — не отказ", () => {

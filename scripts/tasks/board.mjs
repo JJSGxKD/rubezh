@@ -128,7 +128,7 @@ function compareTasks(epicOrder) {
  * `null`, если можно (Р178): у зависимости открыт PR со статусом «на ревью»,
  * «ждёт владельца» или «доработка», и сама она не задел — одна ступень.
  */
-function aheadDependencyProblem(id, dependency, pr, prsKnown) {
+function aheadDependencyProblem(id, dependency, pr, prsKnown, atClaim) {
   if (dependency === undefined) return `зависимости ${id} нет в реестре`;
   if (dependency.status === "cancelled") return `зависимость ${id} закрыта без мерджа (cancelled)`;
   if (dependency.status === "draft") return `зависимость ${id} ещё черновик спецификации`;
@@ -136,7 +136,7 @@ function aheadDependencyProblem(id, dependency, pr, prsKnown) {
   if (pr === undefined) return `у зависимости ${id} нет открытого PR: заделом можно брать только поверх PR на ревью`;
   const status = prStatus(pr);
   if (status === "ahead") return `зависимость ${id} сама задел: поверх задела брать нельзя, дождись её мерджа`;
-  if (status === "work") return `зависимость ${id} ещё в работе: заделом можно брать только поверх PR, отправленного на ревью`;
+  if (status === "work" && atClaim) return `зависимость ${id} ещё в работе: заделом можно брать только поверх PR, отправленного на ревью`;
   return null;
 }
 
@@ -146,8 +146,12 @@ function aheadDependencyProblem(id, dependency, pr, prsKnown) {
  * по причине на каждую из них, на которой строить нельзя. Пусто в `problems` и
  * непусто в `unclosed` — задел возможен; пусто в `unclosed` — задел не нужен.
  * `tasks` — реестр с базы (`origin/dev`), `prs` — открытые PR или `null`.
+ *
+ * `atClaim: false` — проверка уже взятого задела в CI: зависимость, которую после захвата
+ * вернули на доработку и продолжили («в работе»), не нарушение — иначе PR задела краснел бы
+ * на каждом пуше, пока зависимость дорабатывают. Нужны открытый PR и «не задел».
  */
-export function aheadCheck(task, tasks, prs) {
+export function aheadCheck(task, tasks, prs, { atClaim = true } = {}) {
   const byId = new Map(tasks.map((candidate) => [candidate.id, candidate]));
   const prByBranch = new Map((prs ?? []).map((pr) => [pr.headRefName, pr]));
   const unclosed = [];
@@ -156,7 +160,7 @@ export function aheadCheck(task, tasks, prs) {
     const dependency = byId.get(id);
     if (dependency?.status === "done") continue;
     unclosed.push(id);
-    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(`task/${id}`), prs !== null);
+    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(`task/${id}`), prs !== null, atClaim);
     if (problem !== null) problems.push(problem);
   }
   return { unclosed, problems };
