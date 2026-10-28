@@ -3,8 +3,8 @@ id: T-0338
 title: Фильтр имён — правила в базе, чистка ников по ним и ручки панели
 epic: E7
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
