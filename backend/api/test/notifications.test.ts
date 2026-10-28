@@ -163,6 +163,98 @@ describe("лента", () => {
   });
 });
 
+describe("уведомление об отписке от канала (T-0177)", () => {
+  const UNSUBSCRIBED = { title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: null };
+  const CLOSED_UNTIL = "2026-11-27T10:00:00.000Z";
+
+  it("с суммами и без срока закрытия записывается и читается из ленты теми же данными", async () => {
+    const { service, repository } = memoryNotifications();
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: UNSUBSCRIBED, dedupeKey: "task_unsubscribed:t1:2026-10-20" })).toBe(true);
+
+    expect(repository.of(ME)).toHaveLength(1);
+    const feed = await service.feed(ME, undefined, 10);
+    expect(feed.items.map((item) => [item.kind, item.data])).toEqual([["task_unsubscribed", UNSUBSCRIBED]]);
+  });
+
+  it("со сроком закрытия в формате ISO записывается", async () => {
+    const { service, repository } = memoryNotifications();
+    const payload = { title: "Рубеж", coins: 100, gems: 5, shards: 2, closedUntil: CLOSED_UNTIL };
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload, dedupeKey: "k1" })).toBe(true);
+
+    expect(repository.of(ME)[0]?.payload).toEqual(payload);
+  });
+
+  it("название задания может быть пустым значением `null`, а награда — потраченной: все суммы нули", async () => {
+    const { service } = memoryNotifications();
+    const payload = { title: null, coins: 0, gems: 0, shards: 0, closedUntil: null };
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload, dedupeKey: "k1" })).toBe(true);
+
+    expect((await service.feed(ME, undefined, 10)).items[0]?.data).toEqual(payload);
+  });
+
+  it("название ровно в 120 знаков проходит, в 121 — нет", async () => {
+    const { service, repository } = memoryNotifications();
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: { ...UNSUBSCRIBED, title: "я".repeat(120) }, dedupeKey: "k120" })).toBe(true);
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: { ...UNSUBSCRIBED, title: "я".repeat(121) }, dedupeKey: "k121" })).toBe(false);
+    expect(repository.of(ME)).toHaveLength(1);
+  });
+
+  it.each([
+    ["отрицательная сумма монет", { coins: -1 }],
+    ["отрицательная сумма самоцветов", { gems: -5 }],
+    ["дробная сумма", { shards: 1.5 }],
+    ["сумма не числом", { coins: "100" }],
+    ["сумма NaN", { coins: Number.NaN }],
+    ["пустое название", { title: "" }],
+    ["название не строкой", { title: 5 }],
+    ["срок закрытия не датой", { closedUntil: "завтра" }],
+    ["срок закрытия датой без времени", { closedUntil: "2026-11-27" }],
+    ["срок закрытия числом", { closedUntil: 1_790_000_000_000 }],
+  ])("данные не по схеме не пишутся и не роняют вызывающего: %s", async (_name, patch) => {
+    const { service, repository } = memoryNotifications();
+    const broken = { ...UNSUBSCRIBED, ...patch } as unknown as typeof UNSUBSCRIBED;
+
+    await expect(service.notify({ accountId: ME, kind: "task_unsubscribed", payload: broken, dedupeKey: "k" })).resolves.toBe(false);
+    expect(() => service.post({ accountId: ME, kind: "task_unsubscribed", payload: broken, dedupeKey: "k" })).not.toThrow();
+
+    expect(repository.of(ME)).toEqual([]);
+  });
+
+  it("не хватает поля — не пишется; `deliver` говорит об этом ошибкой, `notify` — нет", async () => {
+    const { service, repository } = memoryNotifications();
+    const broken = { title: "Рубеж", coins: 100, gems: 0, closedUntil: null } as unknown as typeof UNSUBSCRIBED;
+
+    await expect(service.deliver({ accountId: ME, kind: "task_unsubscribed", payload: broken, dedupeKey: "k" })).rejects.toThrow("не по схеме");
+    await expect(service.notify({ accountId: ME, kind: "task_unsubscribed", payload: broken, dedupeKey: "k" })).resolves.toBe(false);
+
+    expect(repository.of(ME)).toEqual([]);
+  });
+
+  it("лишних полей в выдаче нет: чужое поле отбрасывается при записи", async () => {
+    const { service, repository } = memoryNotifications();
+    const withExtra = { ...UNSUBSCRIBED, closedUntil: CLOSED_UNTIL, accountId: "чужой", note: "лишнее" } as unknown as typeof UNSUBSCRIBED;
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: withExtra, dedupeKey: "k" })).toBe(true);
+
+    expect(repository.of(ME)[0]?.payload).toEqual({ ...UNSUBSCRIBED, closedUntil: CLOSED_UNTIL });
+    expect((await service.feed(ME, undefined, 10)).items[0]?.data).toEqual({ ...UNSUBSCRIBED, closedUntil: CLOSED_UNTIL });
+  });
+
+  it("повтор события с тем же ключом строку не удваивает; другое задание — отдельная строка", async () => {
+    const { service, repository } = memoryNotifications();
+
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: UNSUBSCRIBED, dedupeKey: "task_unsubscribed:t1:2026-10-20" })).toBe(true);
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: UNSUBSCRIBED, dedupeKey: "task_unsubscribed:t1:2026-10-20" })).toBe(false);
+    expect(await service.notify({ accountId: ME, kind: "task_unsubscribed", payload: UNSUBSCRIBED, dedupeKey: "task_unsubscribed:t2:2026-10-20" })).toBe(true);
+
+    expect(repository.of(ME)).toHaveLength(2);
+  });
+});
+
 describe("срок хранения", () => {
   it("чистка удаляет старше 90 дней пачками, под локом, и молчит, если лок у другой реплики", async () => {
     const { service, repository } = memoryNotifications();

@@ -82,6 +82,24 @@ describe("журнал аудита", () => {
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
   });
 
+  it("закрытие партнёрских заданий за отписку (система, без автора): причина читается словами, а не ключом", () => {
+    const imposed = entry({
+      actorAccountId: null,
+      actorName: null,
+      action: "players.restrict",
+      target: ACCOUNT,
+      targetName: "Оля",
+      after: {
+        restrictions: [{ restrictionId: "r1", kind: "partner_tasks", endsAt: "2026-11-27T10:00:00.000Z", reason: "task_unsubscribe", comment: "Отписка от канала после награды за подписку", notify: true }],
+      },
+    });
+
+    const [restrictions] = auditChanges(imposed);
+
+    expect(auditValue(restrictions?.after, "restrictions", 400)).toBe(`партнёрские задания до ${formatDateTime("2026-11-27T10:00:00.000Z")} — отписка после награды`);
+    expect(auditValue("task_unsubscribe", "reason")).toBe("отписка после награды");
+  });
+
   it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {
     const unranked = entry({ action: "players.run.unrank", target: ACCOUNT, targetName: "Оля", after: { runId: "9a1b2c3d-0000-4000-8000-000000000001", difficulty: "normal", survivalSec: 500, comment: "без урона 8 минут" } });
     expect(actionTitle("players.run.unrank")).toBe("Снятие забега с рейтинга");
