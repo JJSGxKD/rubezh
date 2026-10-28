@@ -24,7 +24,7 @@ batch: 3
 
 # T-0347. Компенсация тестерам — своё имя пересчёта звёзд второго шанса в самоцветы
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0347.json)](README.md#значки-статуса) [![T-0324](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json&label=T-0324)](T-0324-gem-continue-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0347.json)](README.md#значки-статуса) [![T-0324](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0324.json&label=T-0324)](archive/T-0324-gem-continue-server.md)
 
 ## Зачем
 

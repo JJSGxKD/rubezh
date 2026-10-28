@@ -38,7 +38,7 @@ batch: 3
 
 # T-0326. «Выбор игроков» в магазине — метка у набора, который за 30 дней купило больше всего разных игроков; считается сервером, ниже порога не показывается
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0326.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0326.json)](../README.md#значки-статуса)
 
 ## Зачем
 
