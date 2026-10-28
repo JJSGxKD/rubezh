@@ -40,7 +40,7 @@ batch: 2
 
 # T-0112. Скрытое ограничение «Отдельная доска»: вид, право, панель
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json)](../README.md#значки-статуса)
 
 ## Зачем
 
