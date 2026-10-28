@@ -18,6 +18,8 @@ const { recoverDownedRun, useRun } = await import("../src/state/run");
 const { useMeta } = await import("../src/state/meta");
 const { useSavedRun } = await import("../src/state/run-save");
 const { initShell } = await import("../src/state/shell");
+const { closeOffer, expectOffers } = await import("../src/state/second-chance-offers");
+const { continueOfferedPayload, visibleWays, wayOrder } = await import("../src/screens/run/SecondChance");
 
 const DOWNED_KEY = "bh.run.v1.downed";
 const SAVE_KEY = "bh.run.v1.save";
@@ -254,5 +256,87 @@ describe("экран смерти со вторым шансом", () => {
     await useRun.getState().start(OPTIONS);
 
     expect(fake.started[0]?.continues).toBe(false);
+  });
+});
+
+describe("способы второго шанса: самоцветы (Р162)", () => {
+  const AD_READY = { kind: "ready", pass: false, notice: null } as const;
+  const AD_VIP = { kind: "ready", pass: true, notice: null } as const;
+  const AD_GONE = { kind: "unavailable", reason: "daily_cap" } as const;
+  const STARS_READY = { kind: "ready", offer: { continueNo: 1, priceStars: 7, chargedStars: 7, mode: "live" } } as const;
+  const STARS_GONE = { kind: "unavailable", reason: "used_up" } as const;
+  const GEMS_READY = { kind: "ready", offer: { continueNo: 1, priceGems: 5, balance: 12 }, notice: null } as const;
+  const GEMS_GONE = { kind: "unavailable", reason: "used_up" } as const;
+
+  afterEach(() => useRun.getState().stop());
+
+  beforeEach(() => {
+    engine.load.mockReset();
+    storage = memoryStorage();
+    initShell({
+      adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
+      capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false },
+      storage,
+      analytics: () => undefined,
+      build: { version: "test", contentHash: "", platform: "web" },
+    });
+    useMeta.getState().hydrate();
+    useSavedRun.getState().hydrate();
+  });
+
+  it("есть ролик — он первый, самоцветы и звёзды второй строкой", () => {
+    const ways = visibleWays({ adStage: AD_READY, paidStage: STARS_READY, gemStage: GEMS_READY });
+    expect(ways).toEqual({ ad: true, gems: true, stars: true, vip: false });
+    expect(wayOrder(ways)).toEqual(["ad", "gems", "stars"]);
+  });
+
+  it("ролика нет — самоцветы первые, звёзды вторые", () => {
+    const ways = visibleWays({ adStage: AD_GONE, paidStage: STARS_READY, gemStage: GEMS_READY });
+    expect(ways).toEqual({ ad: false, gems: true, stars: true, vip: false });
+    expect(wayOrder(ways)).toEqual(["gems", "stars"]);
+  });
+
+  it("VIP — одна кнопка: ни самоцветов, ни звёзд", () => {
+    const ways = visibleWays({ adStage: AD_VIP, paidStage: STARS_READY, gemStage: GEMS_READY });
+    expect(ways).toEqual({ ad: false, gems: false, stars: false, vip: true });
+    expect(wayOrder(ways)).toEqual(["vip"]);
+  });
+
+  it("сервер ответил «недоступно» по самоцветам — кнопки нет", () => {
+    const ways = visibleWays({ adStage: AD_READY, paidStage: STARS_READY, gemStage: GEMS_GONE });
+    expect(ways.gems).toBe(false);
+    expect(wayOrder(ways)).toEqual(["ad", "stars"]);
+  });
+
+  it("звёзд нет, а самоцветы есть — недоступный блок звёзд не занимает место", () => {
+    const ways = visibleWays({ adStage: AD_GONE, paidStage: STARS_GONE, gemStage: GEMS_READY });
+    expect(wayOrder(ways)).toEqual(["gems"]);
+  });
+
+  it("отпали все три способа — забег закрыт смертью ровно один раз", async () => {
+    const fake = fakeEngine();
+    engine.load.mockResolvedValue(fake.engine);
+    await useRun.getState().start(OPTIONS);
+    fake.emit("downed", { result: result(), continuesLeft: 1 });
+    expectOffers(["ad", "gems", "stars"]);
+
+    closeOffer("gems");
+    closeOffer("stars");
+    expect(fake.calls).toEqual([]);
+    closeOffer("ad");
+
+    expect(fake.calls).toEqual(["decline"]);
+    expect(useRun.getState().phase).toBe("finished");
+  });
+
+  it("continue_offered несёт gems", () => {
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY, gemStage: GEMS_READY }, 311.6)).toEqual({ ad: true, gems: true, stars: true, vip: false, elapsedSec: 312 });
+    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_READY, gemStage: GEMS_GONE }, 50)).toEqual({ ad: false, gems: false, stars: true, vip: false, elapsedSec: 50 });
+    expect(continueOfferedPayload({ adStage: AD_VIP, paidStage: STARS_READY, gemStage: GEMS_READY }, 90)).toEqual({ ad: false, gems: false, stars: false, vip: true, elapsedSec: 90 });
+  });
+
+  it("пока самоцветы спрашивают сервер, событие не уходит; все отпали — события нет", () => {
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY, gemStage: { kind: "loading" } }, 100)).toBeNull();
+    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_GONE, gemStage: GEMS_GONE }, 100)).toBeNull();
   });
 });
