@@ -92,7 +92,14 @@ export class NameRulesCache implements NameRulesSource, OnModuleInit, OnModuleDe
    * команды не принимает. Не вышло — остаётся опрос раз в минуту.
    */
   private async subscribe(): Promise<void> {
-    const subscriber = this.redis.duplicate();
+    let subscriber: Redis;
+    try {
+      subscriber = this.redis.duplicate();
+    } catch (error: unknown) {
+      // Redis без второго соединения не должен останавливать запуск: вход работает по опросу.
+      this.log("name_rules_not_subscribed", { reason: reasonOf(error) });
+      return;
+    }
     subscriber.on("message", () => void this.refresh());
     // Сообщения, пропущенные за обрыв, не придут: после переподключения правила перечитываются.
     let down = false;

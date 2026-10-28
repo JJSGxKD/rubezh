@@ -239,7 +239,7 @@ describe("create", () => {
 
     const error = await ctx.service.create(admin, brand("ещё-один")).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(NameRuleConflictError);
-    expect((error as NameRuleConflictError).message).toBe("Правил уже 2000 — удалите лишние");
+    expect((error as NameRuleConflictError).message).toBe("Правил уже 2000 — нужно удалить лишние");
   });
 
   it("сбой рассылки не роняет запись и не отменяет аудит", async () => {

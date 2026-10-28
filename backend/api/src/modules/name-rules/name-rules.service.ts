@@ -100,7 +100,7 @@ export class NameRulesService {
   async create(actor: AccountRef, input: NameRuleInput, at = new Date()): Promise<NameRuleView> {
     await this.roles.require(actor, "names.edit");
     const checked = checkedRule({ active: true, note: null, ...input });
-    if ((await this.db(this.repository.count())) >= NAME_RULE_LIMITS.rulesMax) throw new NameRuleConflictError(`Правил уже ${String(NAME_RULE_LIMITS.rulesMax)} — удалите лишние`);
+    if ((await this.db(this.repository.count())) >= NAME_RULE_LIMITS.rulesMax) throw new NameRuleConflictError(`Правил уже ${String(NAME_RULE_LIMITS.rulesMax)} — нужно удалить лишние`);
     this.ensureUnique(checked, await this.db(this.repository.list()), null);
 
     const row: StoredNameRule = { ruleId: randomUUID(), ...checked, createdAt: at, updatedAt: at, updatedBy: actor.accountId };
