@@ -168,7 +168,7 @@ describe("клиент с меткой сервиса", () => {
 describe("каталог сервисов", () => {
   it("все сервисы из решения T-0059", () => {
     expect([...OUTBOUND_SERVICES].sort()).toEqual(
-      ["ads.creatives", "ads.postback", "fx.binance", "fx.cbr", "fx.coingecko", "fx.coinmarketcap", "fx.ecb", "fx.erapi", "fx.tonapi", "secrets.check", "taddy.api", "taddy.exchange", "telegram.bot"].sort(),
+      ["ads.creatives", "ads.postback", "fx.binance", "fx.cbr", "fx.coingecko", "fx.coinmarketcap", "fx.ecb", "fx.erapi", "fx.forexrateapi", "fx.tonapi", "secrets.check", "taddy.api", "taddy.exchange", "telegram.bot"].sort(),
     );
   });
 });

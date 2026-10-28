@@ -143,6 +143,13 @@ describe("источники из окружения", () => {
     expect(keyed.indexOf("coinmarketcap")).toBe(keyed.indexOf("coingecko") + 1);
   });
 
+  it("ForexRateAPI: без ключа его нет, с ключом — сразу после erapi", () => {
+    const ids = (values: Record<string, string>) => fxSources({ get: (secret) => values[secret.key] ?? null }).map((source) => source.id);
+    expect(ids({})).toEqual(["cbr", "ecb", "erapi", "coingecko", "tonapi", "binance"]);
+    const keyed = ids({ "fx.forexrateapi": "0123456789abcdef0123456789abcdef" });
+    expect(keyed.indexOf("forexrateapi")).toBe(keyed.indexOf("erapi") + 1);
+  });
+
   it("tonapi и erapi: без ключей — прежние тарифы, с ключами — свои", () => {
     const tariffs = (values: Record<string, string>) => {
       const sources = fxSources({ get: (secret) => values[secret.key] ?? null });
