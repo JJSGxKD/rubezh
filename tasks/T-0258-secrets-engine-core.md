@@ -3,8 +3,8 @@ id: T-0258
 title: Тайники рубежа — движок: размещение по кольцам, капище, клад, камень-указатель, огонёк
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0125]
