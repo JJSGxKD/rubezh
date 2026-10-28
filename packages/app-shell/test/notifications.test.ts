@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { badgeText, useBadges } from "../src/state/badges";
@@ -108,6 +108,17 @@ describe("знаки меню и уведомления на клиенте", ()
 
     await markItemsSeen(["a", "c"], api);
     expect(useBadges.getState().arsenal).toBe(1);
+  });
+
+  it("отметка, которую сервер принял, перечитывает знаки один раз; сбой и пустой список — нет", async () => {
+    const calls: Call[] = [];
+    const refresh = vi.fn(async () => undefined);
+    await markItemsSeen(["a"], createItemsApi(server(calls, { "/api/v1/items/seen": { marked: 1 } })), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await markItemsSeen(["a"], createItemsApi(server(calls, {})), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await markItemsSeen([], createItemsApi(server(calls, { "/api/v1/items/seen": { marked: 1 } })), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 
   it("сборка без входа ничего не спрашивает", async () => {
