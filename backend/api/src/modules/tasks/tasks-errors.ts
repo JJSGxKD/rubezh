@@ -24,7 +24,7 @@ export class TaskShapeLockedError extends DomainError {
 /** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
 export class TaskOrderMismatchError extends DomainError {
   constructor() {
-    super("task_order_mismatch", "Список изменился — обновите страницу и переставьте ещё раз", 400);
+    super("task_order_mismatch", "Список изменился — обнови страницу и переставь ещё раз", 400);
   }
 }
 
