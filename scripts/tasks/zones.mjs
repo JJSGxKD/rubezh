@@ -58,6 +58,43 @@ export function zonesOverlap(zonesA, zonesB, repoFiles) {
   return false;
 }
 
+/** Путь из командной строки в вид зон: без `./`, с `/` вместо `\` (Windows), без лишних `/` по краям. */
+function normalizePath(path) {
+  return path.replaceAll("\\", "/").replace(/^(?:\.\/)+/, "").replace(/\/+$/, "");
+}
+
+/**
+ * Шаблон из `zones` или `shared`, по которому задача держит путь, или `null`.
+ * Путь — файл (попадает под шаблон) или каталог, внутри которого лежит зона
+ * задачи: `backend/api/src/modules` держит задача с зоной
+ * `backend/api/src/modules/shop/**`.
+ */
+export function holdingPattern(path, task) {
+  const normalized = normalizePath(path);
+  const patterns = [...task.zones, ...task.shared];
+  const direct = patterns.find((pattern) => matches(normalized, [pattern]) || matches(`${normalized}/`, [pattern]));
+  if (direct !== undefined) return direct;
+  return patterns.find((pattern) => pattern.startsWith(`${normalized}/`)) ?? null;
+}
+
+/**
+ * Задачи, державшие путь, — `pnpm task holds`: колонки «В работе» и
+ * «Доработка» доски (`inProgress`, `rework`); остальные зоны не держат
+ * (tasks/README.md, «Состояния»). Запись — `{ ...entry, pattern, where }`.
+ */
+export function tasksHolding(path, board) {
+  const columns = [
+    { entries: board.inProgress, where: "в работе" },
+    { entries: board.rework, where: "доработка" },
+  ];
+  return columns.flatMap(({ entries, where }) =>
+    entries.flatMap((entry) => {
+      const pattern = holdingPattern(path, entry.task);
+      return pattern === null ? [] : [{ ...entry, pattern, where }];
+    }),
+  );
+}
+
 /**
  * Изменённые файлы вне `zones`, `shared` и самого файла задачи (`task.fileName`
  * — имя в `tasks/`). Задача закрывается в своём PR на месте; в архив её и ссылки на

@@ -9,7 +9,7 @@ import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergedPrs, readBranchFile, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { ARCHIVE_DIR, awaitingArchiveLine, checkRegistry, readTasks, registrySummary } from "./registry.mjs";
 import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
-import { outOfZone, outOfZoneHint } from "./zones.mjs";
+import { outOfZone, outOfZoneHint, tasksHolding } from "./zones.mjs";
 
 /**
  * `pnpm task` — доска задач, захват и проверка зон (tasks/README.md).
@@ -27,6 +27,7 @@ const USAGE = `Команды:
                                            захватить задачу веткой task/T-NNNN
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
                                            продолжить PR с меткой «доработка», чей бы он ни был
+  pnpm task holds <путь>                   какие задачи «в работе» и «доработка» держат файл или каталог, с номером PR
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
   pnpm task fix                            поставить строки значков, ссылки и ячейки эпиков; файлы не переносит
@@ -360,6 +361,28 @@ function runResume(positional, flags) {
   console.log("Дальше — ответы и замечания в PR, затем перебазирование на dev, если он ушёл вперёд (tasks/README.md, «Доработка»).");
 }
 
+/**
+ * Кто держит файл (tasks/README.md, «Что исполнитель решает сам», п. 2): задачи
+ * колонок «В работе» и «Доработка», у которых путь попадает в `zones` или
+ * `shared`. Править такой файл вне зон своей задачи нельзя.
+ */
+function runHolds(positional) {
+  const path = positional[0];
+  if (path === undefined || path.trim() === "") fail("Укажи путь: pnpm task holds <путь>");
+  const { board } = loadBoard();
+  const holders = tasksHolding(path, board);
+  if (holders.length === 0) {
+    console.log("Файл не держит ни одна задача в работе");
+    return;
+  }
+  console.log(`Путь ${path} держат (${String(holders.length)}):`);
+  for (const holder of holders) {
+    const pr = holder.pr === undefined ? "" : `, PR #${String(holder.pr)}`;
+    console.log(`  ${holder.task.id}  ${holder.where}${pr}  ${holder.task.title}`);
+    console.log(`${" ".repeat(10)}↳ по шаблону ${holder.pattern}; взял: ${ownerOf(holder.task)}`);
+  }
+}
+
 function runRelease(positional, flags) {
   const id = positional[0];
   if (id === undefined || !TASK_ID_RE.test(id)) fail("Укажи задачу: pnpm task release T-NNNN --yes");
@@ -509,6 +532,8 @@ function main(argv) {
       return runClaim(positional, flags);
     case "resume":
       return runResume(positional, flags);
+    case "holds":
+      return runHolds(positional);
     case "release":
       return runRelease(positional, flags);
     case "diff-check":
