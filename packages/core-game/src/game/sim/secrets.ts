@@ -1,20 +1,17 @@
-import { LOADOUT_STATS, SECRET_KINDS, type BlessingDef, type LoadoutStat, type SecretKind, type SecretsDef } from "@bh/shared-types";
+import { SECRET_KINDS, type BlessingDef, type SecretKind, type SecretsDef } from "@bh/shared-types";
 import { combineModifiers } from "../progression/boosts";
-import { drawWeighted, refreshPlayerStats } from "../progression/levels";
-import { LOADOUT_BOUNDS } from "../progression/run-loadout";
+import { refreshPlayerStats } from "../progression/levels";
 import { openChest } from "./chests";
-import { createDirection, randomDirection } from "./directions";
-import type { WorldBounds } from "./map-types";
+import { createDirection } from "./directions";
 import type { Rng } from "./rng";
+import { radiusOf } from "./secrets-rules";
 import { vectorLength } from "./vector";
 import {
-  clampToBounds,
   TICK_HZ,
   TICK_SEC,
   type BlessingOffered,
   type SecretFound,
   type SecretSite,
-  type SecretState,
   type SecretUsed,
   type World,
 } from "./world";
@@ -35,167 +32,13 @@ import {
  * `Math.sqrt`: приближённая математика расходится между JS-движками.
  */
 
-// --- Контент ------------------------------------------------------------------
-
-const ALLOWED_CHEST_SIZES: readonly number[] = [1, 3, 5];
-
-export function findSecretsProblems(def: SecretsDef): string[] {
-  const problems: string[] = [];
-  const positive = (value: number): boolean => Number.isFinite(value) && value > 0;
-
-  let previousEnd = 0;
-  def.rings.forEach((ring, i) => {
-    const path = `secrets.rings[${i}]`;
-    if (!positive(ring.minRadius) || ring.minRadius <= previousEnd) {
-      problems.push(`${path}.minRadius — больше конца прошлого кольца (${previousEnd}), сейчас ${ring.minRadius}`);
-    }
-    if (!(Number.isFinite(ring.maxRadius) && ring.maxRadius > ring.minRadius)) {
-      problems.push(`${path}.maxRadius — больше minRadius (${ring.minRadius}), сейчас ${ring.maxRadius}`);
-    }
-    previousEnd = Number.isFinite(ring.maxRadius) ? ring.maxRadius : previousEnd;
-
-    if (!Number.isInteger(ring.count) || ring.count < 1) {
-      problems.push(`${path}.count — целое не меньше 1, сейчас ${ring.count}`);
-    }
-    if (ring.kinds.length === 0) problems.push(`${path}.kinds — нужен хотя бы один вид`);
-    ring.kinds.forEach((entry, k) => {
-      if (!SECRET_KINDS.includes(entry.kind)) {
-        problems.push(`${path}.kinds[${k}].kind — один из ${SECRET_KINDS.join(", ")}, сейчас ${String(entry.kind)}`);
-      }
-      if (!positive(entry.weight)) problems.push(`${path}.kinds[${k}].weight — больше 0, сейчас ${entry.weight}`);
-    });
-  });
-
-  if (!(Number.isFinite(def.minGapUnits) && def.minGapUnits >= 0)) {
-    problems.push(`secrets.minGapUnits — не меньше 0, сейчас ${def.minGapUnits}`);
-  }
-
-  for (const key of ["shrine", "hoard"] as const) {
-    if (!positive(def[key].radius)) problems.push(`secrets.${key}.radius — больше 0, сейчас ${def[key].radius}`);
-    if (!positive(def[key].holdSec)) problems.push(`secrets.${key}.holdSec — больше 0, сейчас ${def[key].holdSec}`);
-  }
-  if (!Number.isInteger(def.shrine.offers) || def.shrine.offers < 1 || def.shrine.offers > def.blessings.length) {
-    problems.push(`secrets.shrine.offers — целое от 1 до числа благословений (${def.blessings.length}), сейчас ${def.shrine.offers}`);
-  }
-  if (!ALLOWED_CHEST_SIZES.includes(def.hoard.chestSize)) {
-    problems.push(`secrets.hoard.chestSize — размер 1, 3 или 5, сейчас ${def.hoard.chestSize}`);
-  }
-  if (!positive(def.stone.radius)) problems.push(`secrets.stone.radius — больше 0, сейчас ${def.stone.radius}`);
-  if (!(Number.isFinite(def.wisp.appearSec) && def.wisp.appearSec >= 0)) {
-    problems.push(`secrets.wisp.appearSec — не меньше 0, сейчас ${def.wisp.appearSec}`);
-  }
-  if (!positive(def.wisp.speed)) problems.push(`secrets.wisp.speed — больше 0, сейчас ${def.wisp.speed}`);
-
-  const seen = new Set<string>();
-  def.blessings.forEach((blessing, i) => {
-    const path = `secrets.blessings[${i}]`;
-    if (seen.has(blessing.id)) problems.push(`${path}.id — повторяется: ${blessing.id}`);
-    seen.add(blessing.id);
-    if (blessing.nameKey === "") problems.push(`${path}.nameKey — нужен ключ названия`);
-
-    const entries = Object.entries(blessing.modifiers);
-    if (entries.length === 0) problems.push(`${path}.modifiers — нужен хотя бы один параметр`);
-    for (const [stat, value] of entries) {
-      if (!(LOADOUT_STATS as readonly string[]).includes(stat)) {
-        problems.push(`${path}.modifiers.${stat} — неизвестный параметр`);
-        continue;
-      }
-      const bound = LOADOUT_BOUNDS[stat as LoadoutStat];
-      if (!(typeof value === "number" && value > 0 && value <= bound)) {
-        problems.push(`${path}.modifiers.${stat} — от 0 (не включая) до ${bound}, сейчас ${String(value)}`);
-      }
-    }
-  });
-  return problems;
-}
-
-// --- Раскладка ----------------------------------------------------------------
-
-/**
- * Сколько раз пробуется новое место, прежде чем смириться с соседством.
- * Конечное число: цикл в симуляции не должен зависеть от удачи генератора.
- */
-const MAX_PLACE_ATTEMPTS = 12;
+export { createSecretState } from "./secrets-layout";
+export { findSecretsProblems } from "./secrets-rules";
 
 const scratch = createDirection();
 
-/** Радиус круга вида, единицы; у огонька круга нет. */
-function radiusOf(def: SecretsDef, kind: SecretKind): number {
-  switch (kind) {
-    case "shrine":
-      return def.shrine.radius;
-    case "hoard":
-      return def.hoard.radius;
-    case "stone":
-      return def.stone.radius;
-    case "wisp":
-      return 0;
-  }
-}
-
 function holdTicksOf(holdSec: number): number {
   return Math.round(holdSec * TICK_HZ);
-}
-
-/**
- * Бросить раскладку тайников. Поток приходит снаружи — создание мира заводит
- * его от `deriveSeed(seed, STREAM_SALT.secret)`; без колец поток не тратится.
- */
-export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, bounds: WorldBounds): SecretState {
-  const sites: SecretSite[] = [];
-  const gap = def.minGapUnits * unitScale;
-
-  def.rings.forEach((ring, ringIndex) => {
-    for (let slot = 0; slot < ring.count; slot++) {
-      const kind = ring.kinds[drawWeighted(rng, ring.kinds)].kind;
-      // Огоньку места на карте нет: слот кольца лишь решает, что он будет в этом забеге.
-      const site: SecretSite = {
-        kind,
-        ring: ringIndex,
-        x: 0,
-        y: 0,
-        active: kind !== "wisp",
-        visible: false,
-        found: false,
-        used: false,
-        holdTicks: 0,
-      };
-      if (site.active) {
-        const margin = radiusOf(def, kind) * unitScale;
-        for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
-          randomDirection(rng, scratch);
-          const distance = rng.nextRange(ring.minRadius, ring.maxRadius) * unitScale;
-          // Граница карты, если она есть, не выпускает тайник за край.
-          site.x = clampToBounds(scratch.x * distance, Math.max(0, bounds.halfWidth - margin));
-          site.y = clampToBounds(scratch.y * distance, Math.max(0, bounds.halfHeight - margin));
-          if (isClear(sites, site.x, site.y, gap)) break;
-        }
-      }
-      sites.push(site);
-    }
-  });
-
-  return {
-    rng,
-    sites,
-    manualBlessing: false,
-    offer: null,
-    blessings: [],
-    foundLog: [],
-    usedLog: [],
-    blessingLog: [],
-  };
-}
-
-function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {
-  const gapSq = gap * gap;
-  for (const other of sites) {
-    if (!other.active) continue;
-    const dx = other.x - x;
-    const dy = other.y - y;
-    if (dx * dx + dy * dy < gapSq) return false;
-  }
-  return true;
 }
 
 // --- Шаг ----------------------------------------------------------------------

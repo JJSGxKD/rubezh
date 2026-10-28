@@ -112,13 +112,15 @@ describe("поток случайности тайников", () => {
     expect(world.secrets.rng.getState()).toBe(createRng(deriveSeed(5, STREAM_SALT.secret)).getState());
   });
 
-  it("в secrets.ts нет обращений к world.rng — только к собственному потоку", () => {
-    const path = fileURLToPath(new URL("../src/game/sim/secrets.ts", import.meta.url));
-    const source = readFileSync(path, "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/\/\/.*/g, " ");
-    expect(source).not.toMatch(/world\.rng/);
-    expect(source).toMatch(/world\.secrets\.rng/);
+  it("в файлах тайников нет обращений к world.rng — только к собственному потоку", () => {
+    const read = (name: string): string =>
+      readFileSync(fileURLToPath(new URL(`../src/game/sim/${name}`, import.meta.url)), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/\/\/.*/g, " ");
+    for (const name of ["secrets.ts", "secrets-layout.ts", "secrets-rules.ts"]) {
+      expect(read(name), name).not.toMatch(/world\.rng/);
+    }
+    expect(read("secrets.ts")).toMatch(/world\.secrets\.rng/);
   });
 
   it("весь путь капища не сдвигает world.rng", () => {

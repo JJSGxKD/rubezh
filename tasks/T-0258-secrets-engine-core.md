@@ -11,6 +11,8 @@ depends_on: [T-0125]
 zones:
   - packages/core-game/src/content/secrets.ts
   - packages/core-game/src/game/sim/secrets.ts
+  - packages/core-game/src/game/sim/secrets-layout.ts
+  - packages/core-game/src/game/sim/secrets-rules.ts
   - packages/core-game/test/secrets.test.ts
   - packages/core-game/test/secrets-content.test.ts
 shared:
