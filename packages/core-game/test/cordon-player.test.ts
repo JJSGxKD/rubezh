@@ -83,7 +83,8 @@ describe("кольцо держит игрока", () => {
 
   it("выталкивание: скорость вглубь тела гасится, вдоль — остаётся, игрок встаёт на сумму радиусов", () => {
     const run = createCordonRun({ count: 1 });
-    stepRun(run);
+    // вспышка строя погасла: пока она горит, страж игрока не толкает
+    advanceRun(run, CORDON_FORM_SEC + 0.1);
     const [guard] = aliveGuards(run.world);
     if (guard === undefined) throw new Error("нет стража");
     run.world.enemies.x[guard] = 50;
@@ -102,7 +103,8 @@ describe("кольцо держит игрока", () => {
 
   it("выталкивание: совпавшие центры не дают деления на ноль, скорость от стража не гасится", () => {
     const run = createCordonRun({ count: 1 });
-    stepRun(run);
+    // вспышка строя погасла: пока она горит, страж игрока не толкает
+    advanceRun(run, CORDON_FORM_SEC + 0.1);
     const [guard] = aliveGuards(run.world);
     if (guard === undefined) throw new Error("нет стража");
     run.world.enemies.x[guard] = 10;

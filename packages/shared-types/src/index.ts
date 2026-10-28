@@ -725,7 +725,7 @@ export type TimelineEventKind = "ring" | "flank" | "cordon";
  * на плотность экрана. Границы допустимого проверяет `findTimelineProblems`.
  */
 export interface CordonRingDef {
-  /** на каком расстоянии от центра стражи встают в строй: меньше расстояния спавна, чтобы приходили снаружи экрана */
+  /** на каком расстоянии от центра стражи встают в строй сразу, со вспышкой */
   radius: number;
   /** до какого радиуса строй сжимается и дальше не идёт: иначе игрока раздавит стенкой */
   minRadius: number;
@@ -733,6 +733,18 @@ export interface CordonRingDef {
   shrinkPerSec: number;
   /** сколько секунд кольцо живёт, если строй не пробили: потом стражи исчезают */
   lifeSec: number;
+  /** кто появляется внутри строя с телеграфом: элита и босс, не стражи */
+  inner?: CordonInnerDef[];
+}
+
+/** Элита или босс внутри кольца (Р166, tasks/T-0335). */
+export interface CordonInnerDef {
+  /** id элиты или босса из контента */
+  enemy: string;
+  /** сколько их, от 1 до 4 */
+  count: number;
+  /** с какой секунды забега запись действует; не задано — с любой */
+  fromSec?: number;
 }
 
 export interface TimelineEventDef {
