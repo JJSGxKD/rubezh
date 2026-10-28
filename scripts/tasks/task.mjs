@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { contributionRows } from "./contribution.mjs";
-import { checkAheadPr, checkClaim, withoutDependencyFiles } from "./claim.mjs";
+import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, dependencyChangedFiles, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergeDependencyBranches, mergedPrs, readBranchFile, readOriginTasks, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { runMerge } from "./merge.mjs";
@@ -469,14 +469,12 @@ function runRelease(positional, flags) {
 /**
  * Дифф задела без файлов его незакрытых зависимостей (Р178, п. 6): ветка задела
  * содержит ветки зависимостей, и их файлы проверяет PR самой зависимости.
- * Зависимость «не закрыта», если на базе она не `done`. Нет ветки зависимости —
+ * Зависимости и их статус — с базы, не из ветки PR (`unclosedDependenciesOnBase`). Нет ветки зависимости —
  * предупреждение: её файлы вычесть нечем, и они попадут в проверку зон.
  */
-function withoutOpenDependencyFiles(changed, data, base) {
-  const dependencies = data.depends_on ?? [];
-  if (dependencies.length === 0) return changed;
+function withoutOpenDependencyFiles(changed, id, base) {
   const { tasks } = readTasks(readOriginTasks(base));
-  const unclosed = dependencies.filter((dependencyId) => tasks.find((candidate) => candidate.id === dependencyId)?.status !== "done");
+  const unclosed = unclosedDependenciesOnBase(id, tasks);
   if (unclosed.length === 0) return changed;
   // Ветки зависимостей могли обновиться после последнего fetch; нет сети — берём что есть.
   for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/task/${dependencyId}:refs/remotes/origin/task/${dependencyId}`, "--quiet"]);
@@ -504,7 +502,7 @@ function runDiffCheck(flags) {
 
   // Без поиска переименований: переименование — это и удаление старого пути, а он тоже должен быть в зонах.
   const diff = git(["diff", "--name-only", "--no-renames", `${base}...HEAD`]);
-  const changed = withoutOpenDependencyFiles(diff === "" ? [] : diff.split("\n"), parsed.data, base);
+  const changed = withoutOpenDependencyFiles(diff === "" ? [] : diff.split("\n"), id, base);
   const outside = outOfZone(changed, { ...parsed.data, fileName });
   if (outside.length > 0) {
     console.error(`ошибка  PR задачи ${id} меняет файлы вне её зон (zones, shared и сам файл задачи):`);

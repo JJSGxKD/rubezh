@@ -103,6 +103,18 @@ export function checkAheadPr(pr, task, tasks) {
 }
 
 /**
+ * Незакрытые зависимости задачи `id` по реестру **базы** (`tasks` — задачи с `origin/dev`),
+ * в порядке `depends_on`. Список зависимостей берётся с базы, как в `claim-check`: иначе PR
+ * дописал бы себе в ветке чужую задачу, `diff-check` вычел бы её файлы, а `claim-check` не
+ * потребовал бы черновика задела. Задачи нет на базе — вычитать нечего.
+ */
+export function unclosedDependenciesOnBase(id, tasks) {
+  const task = tasks.find((candidate) => candidate.id === id);
+  if (task === undefined) return [];
+  return task.depends_on.filter((dependencyId) => tasks.find((candidate) => candidate.id === dependencyId)?.status !== "done");
+}
+
+/**
  * Дифф задела без файлов его незакрытых зависимостей (Р178, п. 6): их меняют
  * PR самих зависимостей, и зоны проверяются там. `dependencyFiles` — файлы,
  * изменённые ветками зависимостей относительно базы.
