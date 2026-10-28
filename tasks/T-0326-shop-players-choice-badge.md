@@ -26,6 +26,8 @@ shared:
   - packages/app-shell/src/i18n/ru-shop.json
   - docs/07-monetization-and-ads.md
   - docs/30-configuration-map.md
+  - packages/app-shell/src/screens/meta/shop.tsx
+  - packages/app-shell/test/shop.test.ts
 runner: local
 executor: sonnet-5.5
 effort: medium
