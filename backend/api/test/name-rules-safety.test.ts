@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { patternRepresentatives } from "../src/modules/name-rules/name-rules-probe-inputs.js";
 import { checkRegexSafety, probeRegex } from "../src/modules/name-rules/name-rules-safety.js";
 
 /**
@@ -124,11 +125,9 @@ describe("probeRegex", () => {
   });
 
   it("ровно на пределе строки — ещё ok", () => {
-    let now = 0;
-    const edge = () => {
-      now += 2;
-      return now;
-    };
+    // первая строка занимает ровно 2 мс, остальные — нисколько: сумма по шаблону здесь не проверяется
+    let calls = 0;
+    const edge = () => (++calls >= 2 ? 2 : 0);
     expect(probeRegex("x+", edge)).toEqual({ ok: true });
   });
 
@@ -183,5 +182,29 @@ describe("probeRegex: разрешённые формы укладываются
   it.each(["х+у+й", "б+л+я+", "(х|x)(у|y)(й|и)", "админ.*", "х.{0,3}й", String.raw`^bot\d+$`, "(?:a|b)?x"])("%s", (pattern) => {
     expect(checkRegexSafety(pattern)).toEqual({ ok: true });
     expect(passes(pattern)).toBe(true);
+  });
+});
+
+describe("patternRepresentatives", () => {
+  it("литералы, члены классов и обе границы диапазонов, без дублей", () => {
+    const reps = patternRepresentatives("[бв]+[а-д]+ю[в-е]");
+    expect(reps).toEqual(expect.arrayContaining(["б", "в", "а", "д", "ю", "е"]));
+    expect(new Set(reps).size).toBe(reps.length);
+  });
+
+  it("запасные знаки и знак, которого в шаблоне нет", () => {
+    expect(patternRepresentatives(".+х")).toEqual(expect.arrayContaining(["а", "a", "1", " ", "!"]));
+  });
+
+  it("число представителей ограничено длиной шаблона", () => {
+    const pattern = `[${Array.from({ length: 98 }, (_, index) => String.fromCodePoint(0x4e00 + index)).join("")}]`;
+    expect(patternRepresentatives(pattern).length).toBeLessThanOrEqual(100);
+  });
+
+  it("шаблон из ста разных знаков прогоняется быстро", () => {
+    const pattern = Array.from({ length: 100 }, (_, index) => String.fromCodePoint(0x4e00 + index)).join("");
+    const startedAt = performance.now();
+    expect(probeRegex(pattern)).toEqual({ ok: true });
+    expect(performance.now() - startedAt).toBeLessThan(500);
   });
 });

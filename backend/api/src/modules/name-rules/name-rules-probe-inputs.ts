@@ -3,16 +3,22 @@ import { NAME_RULE_LIMITS } from "./name-rules-limits.js";
 /**
  * Строки для прогона регулярки правила (docs/35-stage4-plan.md, Р168).
  * Перебор растёт на строке из знаков, которые шаблон сам умеет повторять, а не
- * на случайных, поэтому строки строятся из «представителей» квантифицированных
- * атомов шаблона, а завершающий знак подбирается такой, которого в шаблоне нет:
- * тогда совпадение не складывается и движок обязан перебрать всё.
+ * на случайных. Опасно пересечение соседних атомов: общий знак может оказаться
+ * не первым ни в одном из классов или диапазонов, поэтому строки строятся из
+ * всех знаков шаблона (литералы, все члены классов, обе границы каждого
+ * диапазона: пересечение двух диапазонов всегда содержит границу одного из
+ * них), а завершающий знак подбирается такой, которого в шаблоне нет: тогда
+ * совпадение не складывается и движок обязан перебрать всё.
  */
 
 /** Длины строк по нарастающей: опасный шаблон упрётся в бюджет на короткой, до зависания. */
 const PROBE_LENGTHS: readonly number[] = [16, 32, 64, NAME_RULE_LIMITS.inputMax];
 
-/** Завершающий знак: первый из этих, которого нет в шаблоне. */
-const TERMINATORS: readonly string[] = ["!", "~", "§", "\u0001"];
+/** Знаки, которых может не быть в шаблоне: первый отсутствующий — завершающий и запасной представитель. */
+const ABSENT_CANDIDATES: readonly string[] = ["!", "~", "§", "\u0001"];
+
+/** Запасные представители для `.`, `\w`, `\d`, `\s` и отрицательных классов. */
+const FALLBACKS: readonly string[] = ["а", "a", "1", " "];
 
 /** Знаки для отрицательных классов и `\W`: первый, который класс пропускает. */
 const OUTSIDERS: readonly string[] = ["a", "1", "ж", "!", "~", " "];
@@ -42,66 +48,75 @@ function escapeAt(pattern: string, index: number): { rep: string; length: number
   return { rep: SIMPLE_ESCAPES[next] ?? next, length: 2 };
 }
 
-/** Представитель класса `[...]` с позиции `[`: и сколько знаков шаблона он занял. */
-function classAt(pattern: string, index: number): { rep: string; length: number } {
+/** Один знак тела класса с позиции `index`: сам знак (или представитель экранирования) и сколько знаков занял. */
+function classItemAt(body: string, index: number): { rep: string; length: number } {
+  if (body[index] === "\\") return escapeAt(body, index);
+  const code = body.codePointAt(index) ?? 97;
+  return { rep: String.fromCodePoint(code), length: code > 0xffff ? 2 : 1 };
+}
+
+/** Все знаки класса `[...]` с позиции `[`: члены и обе границы диапазонов, и сколько знаков шаблона класс занял. */
+function classAt(pattern: string, index: number): { reps: string[]; length: number } {
   let cursor = index + 1;
   while (cursor < pattern.length && pattern[cursor] !== "]") cursor += pattern[cursor] === "\\" ? 2 : 1;
   const length = Math.min(cursor + 1, pattern.length) - index;
   const source = pattern.slice(index, index + length);
   const body = source.slice(1, source.endsWith("]") ? -1 : undefined);
-  if (body.startsWith("^")) {
-    try {
-      const negated = new RegExp(source, "iu");
-      return { rep: OUTSIDERS.find((candidate) => negated.test(candidate)) ?? "a", length };
-    } catch {
-      return { rep: "a", length };
+  const reps: string[] = [];
+  const negated = body.startsWith("^");
+  let position = negated ? 1 : 0;
+  while (position < body.length) {
+    const item = classItemAt(body, position);
+    position += item.length;
+    if (item.rep !== "") reps.push(item.rep);
+    // «-» между двумя знаками — диапазон: нужна и вторая граница
+    if (body[position] === "-" && position + 1 < body.length) {
+      const end = classItemAt(body, position + 1);
+      position += 1 + end.length;
+      if (end.rep !== "") reps.push(end.rep);
     }
   }
-  if (body === "") return { rep: "a", length };
-  return { rep: body[0] === "\\" ? escapeAt(body, 0).rep || "a" : (String.fromCodePoint(body.codePointAt(0) ?? 97)), length };
+  if (negated) {
+    try {
+      const compiled = new RegExp(source, "iu");
+      reps.push(OUTSIDERS.find((candidate) => compiled.test(candidate)) ?? "a");
+    } catch {
+      reps.push("a");
+    }
+  }
+  return { reps, length };
 }
 
-interface Frame {
-  /** представители атомов первой альтернативы группы */
-  items: string[];
-  /** встретился `|`: остальные альтернативы в представителя группы не входят */
-  stopped: boolean;
+/** Длина квантификатора `{n}`, `{n,}`, `{n,m}` с позиции `{`; 0 — это не квантификатор, а буквальная скобка. */
+function bracesLength(pattern: string, index: number): number {
+  return /^\{\d{1,9}(?:,\d{0,9})?\}/u.exec(pattern.slice(index, index + 24))?.[0].length ?? 0;
+}
+
+/** Первый знак из кандидатов, которого в шаблоне нет. */
+function absentChar(pattern: string): string {
+  return ABSENT_CANDIDATES.find((candidate) => !pattern.includes(candidate)) ?? "\u0001";
 }
 
 /**
- * Представители атомов, за которыми стоит квантификатор: они и повторяются в
- * опасном перебое. Шаблон уже прошёл разбор, но функция не падает и на
- * неразобранном — вернёт то, что успела.
+ * Представители знаков шаблона: литералы, все члены классов, обе границы
+ * диапазонов, представители экранирований; к ним запасные — для `.`, `\w`,
+ * `\d`, `\s` и отрицательных классов. Дублей нет, число ограничено длиной
+ * шаблона. Шаблон уже прошёл разбор, но функция не падает и на неразобранном.
  */
-export function quantifiedRepresentatives(pattern: string): string[] {
+export function patternRepresentatives(pattern: string): string[] {
   const found = new Set<string>();
-  const frames: Frame[] = [{ items: [], stopped: false }];
-  let last = "";
-  let lastWasQuantifier = false;
   let index = 0;
-  const atom = (rep: string): void => {
-    last = rep;
-    const top = frames.at(-1);
-    if (top !== undefined && !top.stopped && rep !== "") top.items.push(rep);
-  };
-  const quantifier = (): void => {
-    if (last !== "") found.add(last);
-  };
   while (index < pattern.length) {
     const char = pattern[index] ?? "";
-    const wasQuantifier = lastWasQuantifier;
-    lastWasQuantifier = false;
     if (char === "\\") {
       const escaped = escapeAt(pattern, index);
-      atom(escaped.rep);
+      if (escaped.rep !== "") found.add(escaped.rep);
       index += escaped.length;
     } else if (char === "[") {
       const parsed = classAt(pattern, index);
-      atom(parsed.rep);
+      for (const rep of parsed.reps) found.add(rep);
       index += parsed.length;
     } else if (char === "(") {
-      frames.push({ items: [], stopped: false });
-      last = "";
       index += 1;
       if (pattern[index] === "?") {
         index += 1;
@@ -110,49 +125,19 @@ export function quantifiedRepresentatives(pattern: string): string[] {
           index = close === -1 ? pattern.length : close + 1;
         } else index += 1;
       }
-    } else if (char === ")") {
-      const frame = frames.length > 1 ? frames.pop() : undefined;
-      index += 1;
-      atom((frame?.items ?? []).join(""));
-    } else if (char === "|") {
-      const top = frames.at(-1);
-      if (top !== undefined) top.stopped = true;
-      last = "";
-      index += 1;
-    } else if (char === "*" || char === "+") {
-      quantifier();
-      lastWasQuantifier = true;
-      index += 1;
-    } else if (char === "?") {
-      // «?» за квантификатором — ленивый суффикс, а не новый повтор
-      if (!wasQuantifier) {
-        quantifier();
-        lastWasQuantifier = true;
-      }
-      index += 1;
-    } else if (char === "{") {
-      const braces = /^\{\d{1,9}(?:,\d{0,9})?\}/u.exec(pattern.slice(index, index + 24));
-      if (braces === null) {
-        atom("{");
-        index += 1;
-      } else {
-        quantifier();
-        lastWasQuantifier = true;
-        index += braces[0].length;
-      }
-    } else if (char === "^" || char === "$") {
-      last = "";
-      index += 1;
-    } else if (char === ".") {
-      atom("a");
+    } else if (char === "{" && bracesLength(pattern, index) > 0) {
+      index += bracesLength(pattern, index);
+    } else if (char === ")" || char === "|" || char === "*" || char === "+" || char === "?" || char === "^" || char === "$" || char === ".") {
       index += 1;
     } else {
       const code = pattern.codePointAt(index) ?? 97;
-      atom(String.fromCodePoint(code));
+      found.add(String.fromCodePoint(code));
       index += code > 0xffff ? 2 : 1;
     }
   }
-  return [...found];
+  for (const fallback of FALLBACKS) found.add(fallback);
+  found.add(absentChar(pattern));
+  return [...found].slice(0, NAME_RULE_LIMITS.patternMax);
 }
 
 /** Строка заданной длины из повторов `parts` по кругу, с завершающим знаком в конце. */
@@ -167,17 +152,16 @@ function build(parts: readonly string[], length: number, terminator: string): st
 /**
  * Строки прогона по возрастанию длины: прежние фиксированные (длинные повторы,
  * почти совпадения, пробелы, кириллица, цифры) и строки из знаков самого
- * шаблона — по одной на квантифицированный атом и общая по кругу.
+ * шаблона — по одной на каждого представителя и общая по кругу.
  */
 export function probeInputs(pattern: string): string[] {
   const max = NAME_RULE_LIMITS.inputMax;
   const inputs: string[] = [`${"a".repeat(max - 1)}!`, "ab".repeat(max / 2), `${" ".repeat(max - 1)}x`, `${"х".repeat(max - 1)}-`, `${"1".repeat(max - 1)}я`];
-  const atoms = quantifiedRepresentatives(pattern);
-  if (atoms.length === 0) return inputs;
-  const terminator = TERMINATORS.find((candidate) => !pattern.includes(candidate)) ?? "\u0001";
+  const representatives = patternRepresentatives(pattern);
+  const terminator = absentChar(pattern);
   for (const length of PROBE_LENGTHS) {
-    for (const atom of atoms) inputs.push(build([atom], length, terminator));
-    if (atoms.length > 1) inputs.push(build(atoms, length, terminator));
+    for (const representative of representatives) inputs.push(build([representative], length, terminator));
+    inputs.push(build(representatives, length, terminator));
   }
   // Короткие первыми (сортировка устойчива): опасный шаблон отказывает на короткой строке, не дойдя до длинной.
   return inputs.sort((a, b) => a.length - b.length);
