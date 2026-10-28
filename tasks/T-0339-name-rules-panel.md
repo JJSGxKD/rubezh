@@ -3,8 +3,8 @@ id: T-0339
 title: Фильтр имён — экран в панели, проверка на примерах и перечистка ников
 epic: E7
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0338]
