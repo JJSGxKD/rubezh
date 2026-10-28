@@ -35,11 +35,6 @@ const range = z.strictObject({ min: num, max: num });
 const patternParams = {
   swarm: z.strictObject({}),
   chase: z.strictObject({ steeringPerSec: num.optional() }),
-  kite_and_shoot: z.strictObject({
-    preferredDistance: num.optional(),
-    shotIntervalSec: num.optional(),
-    projectileSpeed: num.optional(),
-  }),
   dash: z.strictObject({
     triggerDistance: num.optional(),
     telegraphSec: num.optional(),
@@ -50,13 +45,6 @@ const patternParams = {
   orbit: z.strictObject({ orbitRadius: num.optional(), shrinkPerSec: num.optional(), minRadius: num.optional() }),
   exploder: z.strictObject({ triggerDistance: num.optional(), fuseSec: num.optional(), blastRadius: num.optional() }),
   splitter: z.strictObject({ children: z.array(z.strictObject({ enemy: text, count: num.optional() })) }),
-  caster: z.strictObject({
-    preferredDistance: num.optional(),
-    castIntervalSec: num.optional(),
-    telegraphSec: num.optional(),
-    burstCount: num.optional(),
-    projectileSpeed: num.optional(),
-  }),
   rush: z.strictObject({ leadSec: num.optional(), runSec: num.optional() }),
   cordon: z.strictObject({}),
 } satisfies Record<EnemyPattern, z.ZodType>;
@@ -92,12 +80,10 @@ function enemyOf<P extends EnemyPattern>(pattern: P, params: z.ZodType<EnemyPatt
 const enemySchema = z.discriminatedUnion("pattern", [
   enemyOf("swarm", patternParams.swarm, false),
   enemyOf("chase", patternParams.chase, false),
-  enemyOf("kite_and_shoot", patternParams.kite_and_shoot, false),
   enemyOf("dash", patternParams.dash, false),
   enemyOf("orbit", patternParams.orbit, false),
   enemyOf("exploder", patternParams.exploder, false),
   enemyOf("splitter", patternParams.splitter, true),
-  enemyOf("caster", patternParams.caster, false),
   enemyOf("rush", patternParams.rush, false),
   enemyOf("cordon", patternParams.cordon, false),
 ]);
