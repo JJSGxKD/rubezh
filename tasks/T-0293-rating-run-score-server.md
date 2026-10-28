@@ -28,7 +28,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

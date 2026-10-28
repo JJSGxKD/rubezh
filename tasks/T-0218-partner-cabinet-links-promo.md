@@ -25,7 +25,7 @@ shared:
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
   - apps/admin/src/routes.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

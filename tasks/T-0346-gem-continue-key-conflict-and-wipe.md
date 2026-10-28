@@ -18,7 +18,7 @@ zones:
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/wipe-runner.integration.test.ts
 shared: []
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: patch

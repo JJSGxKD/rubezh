@@ -29,7 +29,7 @@ shared:
   - apps/admin/src/api/audit.ts
   - apps/admin/src/ui/help.ts
   - apps/admin/test/audit.test.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

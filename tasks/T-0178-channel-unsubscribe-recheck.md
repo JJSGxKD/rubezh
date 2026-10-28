@@ -25,7 +25,7 @@ shared:
   - docs/35-stage4-plan.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

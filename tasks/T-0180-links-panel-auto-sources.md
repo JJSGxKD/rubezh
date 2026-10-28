@@ -26,7 +26,7 @@ shared:
   - docs/24-attribution-and-sharing.md
   - apps/admin/src/api/audit.ts
   - apps/admin/test/audit.test.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

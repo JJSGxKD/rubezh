@@ -27,7 +27,7 @@ shared:
   - backend/api/test/admin.test.ts
   - docs/14-scalability.md
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

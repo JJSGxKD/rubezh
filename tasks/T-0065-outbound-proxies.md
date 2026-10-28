@@ -32,7 +32,7 @@ shared:
   - docs/30-configuration-map.md
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/sections.tsx
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
