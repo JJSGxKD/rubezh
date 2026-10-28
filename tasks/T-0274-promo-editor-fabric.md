@@ -28,7 +28,7 @@ batch: 5
 
 # T-0274. Редактор промо на Fabric.js — холст, слои, текст, картинки, QR, отмена и выгрузка PNG/JPEG
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0274.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](T-0272-promo-kit-model.md) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0274.json)](README.md#значки-статуса) [![T-0272](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0272.json&label=T-0272)](archive/T-0272-promo-kit-model.md) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md)
 
 ## Зачем
 

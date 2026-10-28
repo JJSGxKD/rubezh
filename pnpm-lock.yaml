@@ -354,6 +354,16 @@ importers:
         specifier: 22.20.2
         version: 22.20.2
 
+  packages/promo-kit:
+    dependencies:
+      zod:
+        specifier: 4.6.4
+        version: 4.6.4
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.2
+        version: 22.20.2
+
   packages/proxy-kit:
     dependencies:
       zod:
