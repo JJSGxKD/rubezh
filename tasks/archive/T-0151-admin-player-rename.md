@@ -16,6 +16,7 @@ zones:
   - apps/admin/src/api/players.ts
   - apps/admin/src/screens/players/PlayerActions.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
+  - apps/admin/src/screens/players/PlayerHeader.tsx
   - apps/admin/src/screens/players/PlayerList.tsx
 shared:
   - docs/29-admin-panel.md
