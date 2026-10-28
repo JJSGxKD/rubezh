@@ -367,7 +367,11 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
 комментарий команды остаётся в них же и в аналитику не идёт. В лог сервера
 пишутся наложение и снятие теми же именами, отказ в момент действия —
 `restriction_refused` (вид и молча ли), удержанная награда —
-`referral_reward_withheld` и `network_task_reward_withheld`. Рейтинг —
+`referral_reward_withheld` и `network_task_reward_withheld`. Наложение
+системой на срок (Р115, `tasks/T-0177`), когда более строгое ограничение
+осталось, — `restriction_system_kept` (аккаунт, вид, причина); отзыв
+начисленного кошельком — `wallet_revoked` с полем `reason`: `task_revoke` у
+награды за задание при отписке, `refund_revoke` у возврата звёзд. Рейтинг —
 `rating_restricted` и `rating_restored` (из досок и обратно) и
 `rating_restricted_swept`, если обход убрал вернувшегося гонкой; забег,
 сданный под ограничением, помечен в `run.rating_restricted`. Забег, снятый
