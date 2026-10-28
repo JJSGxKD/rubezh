@@ -48,8 +48,11 @@ export const EARN_REASONS = [
  */
 export const EXCHANGE_REASONS = ["purchase", "salvage", "boost_refund", "wipe_compensation"] as const;
 
-/** На что тратят. */
-export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_reroll", "item_merge", "boost", "shop"] as const;
+/**
+ * На что тратят. `continue` — второй шанс за самоцветы (Р162): трата, а не
+ * начисление, поэтому суточного потолка ей не нужно.
+ */
+export const SPEND_REASONS = ["unlock", "meta_upgrade", "item_upgrade", "item_reroll", "item_merge", "boost", "shop", "continue"] as const;
 
 /** Ручная операция из панели: под правом, с причиной и записью в аудит. */
 export const ADMIN_REASON = "admin_adjust";
