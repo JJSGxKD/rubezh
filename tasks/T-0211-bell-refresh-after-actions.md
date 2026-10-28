@@ -3,8 +3,8 @@ id: T-0211
 title: Колокольчик обновляется сразу после экрана друзей, предмета и журнала
 epic: E5
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-16 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0210]
