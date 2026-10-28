@@ -3,8 +3,8 @@ id: T-0177
 title: Штраф за отписку — заготовки: списание награды, срочное закрытие, уведомление
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0188]

@@ -377,12 +377,13 @@ export class WorldRenderer {
       const sprite = this.enemySprite(i);
       if (enemies.alive[i] === 0) {
         if (sprite.visible) sprite.setVisible(false);
+        this.art.releaseEnemy(i);
         continue;
       }
 
       const typeIndex = enemies.type[i];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
-      if (this.art.applyEnemy(sprite, i, texture, tick)) {
+      if (this.art.applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])) {
         this.enemySpriteType[i] = -1;
       } else if (this.enemySpriteType[i] !== texture) {
         sprite.setTexture(this.textureKeyByType[texture]);

@@ -220,7 +220,7 @@ describe("забег, прерванный обновлением", () => {
   });
 
   it("забег с тем же runId уже в очереди — вторая запись не добавляется", () => {
-    const result = { runId: "run-interrupt-1", outcome: "abandoned", difficultyId: "hard", startingWeaponId: "spark", mapId: "frontier", seed: 5, contentHash: "other-build", waveReached: 0, survivalSec: 184.5, level: 9, xpCollected: 0, enemiesKilled: 41, killsByEnemy: {}, damageDealt: 0, damageTaken: 0, damageByElement: {}, weapons: [], passives: [], deathCause: null, distance: 0, peakEnemies: 0, cheats: false, continues: [] } as RunResult;
+    const result = { runId: "run-interrupt-1", outcome: "abandoned", difficultyId: "hard", startingWeaponId: "spark", mapId: "frontier", seed: 5, contentHash: "other-build", waveReached: 0, survivalSec: 184.5, level: 9, xpCollected: 0, enemiesKilled: 41, bossKills: 0, eliteKills: 0, chestsOpened: 0, crystalsCollected: 0, killsByEnemy: {}, damageDealt: 0, damageTaken: 0, damageByElement: {}, weapons: [], passives: [], deathCause: null, distance: 0, peakEnemies: 0, cheats: false, continues: [] } as RunResult;
     storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...toSubmission(result) }]));
     useRuns.getState().hydrate();
 

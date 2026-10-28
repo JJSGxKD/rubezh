@@ -33,6 +33,10 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     damageDealt: 5000,
     damageTaken: 120,
     damageByElement: {},
+    bossKills: 0,
+    eliteKills: 0,
+    chestsOpened: 0,
+    crystalsCollected: 0,
     weapons: [{ id: "spark", level: 4, damage: 4000 }],
     passives: [{ id: "might", level: 2 }],
     deathCause: "swarm_rat",
@@ -182,7 +186,7 @@ describe("очередь забегов", () => {
       deathCause: "swarm_rat",
       continues: [],
       passives: [{ id: "might", level: 2 }],
-      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] },
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0 },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -247,6 +251,21 @@ describe("очередь забегов", () => {
     expect(queue.every((entry) => entry.kind === "finish")).toBe(true);
     expect(storage.values[LEGACY_QUEUE_KEY]).toBeUndefined();
     expect(useRuns.getState().pending).toBe(3);
+  });
+
+  it("запись очереди прошлой сборки без счётчиков итога разбирается и уходит на сервер как есть (T-0125)", async () => {
+    const legacy = toSubmission(result("run-old-0001"));
+    const stats: Record<string, unknown> = { ...legacy.stats };
+    for (const key of ["bossKills", "eliteKills", "chestsOpened", "crystals"]) delete stats[key];
+    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
+
+    reply = async () => json(200, FINISHED);
+    mount();
+    await useRuns.getState().flush("launch");
+
+    expect(requests).toHaveLength(1);
+    const sent = requests[0]?.body as { stats: Record<string, unknown> };
+    expect(sent.stats).toEqual({ damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] });
   });
 
   it("рекорд с другого устройства приходит в лобби и в хранилище устройства", async () => {
@@ -337,6 +356,15 @@ describe("второй шанс в итоге забега", () => {
   });
 });
 
+describe("счётчики итога забега (T-0125)", () => {
+  it("боссы, элиты, сундуки и кристаллы уходят в stats; кристаллы округляются", () => {
+    const submission = toSubmission(result("run-00000001", { bossKills: 2, eliteKills: 5, chestsOpened: 3, crystalsCollected: 411.6 }));
+
+    expect(submission.stats).toMatchObject({ bossKills: 2, eliteKills: 5, chestsOpened: 3, crystals: 412 });
+  });
+
+});
+
 describe("подробности забега для листа в профиле", () => {
   it("уходят с итогом: урон оружия, навыки, полученный урон, опыт, отрезок и пятёрка врагов по убыванию", () => {
     const kills = { swarm_rat: 200, dasher_wolf: 40, elite_ghoul: 2, orbiter_bat: 90, splitter_slime: 15, kite_archer: 60 };
@@ -355,6 +383,10 @@ describe("подробности забега для листа в профил�
         { enemy: "dasher_wolf", count: 40 },
         { enemy: "splitter_slime", count: 15 },
       ],
+      bossKills: 0,
+      eliteKills: 0,
+      chestsOpened: 0,
+      crystals: 0,
     });
   });
 });

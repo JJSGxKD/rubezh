@@ -59,6 +59,13 @@ const runOutcome = payload({
   level: count,
   wave: count,
   enemiesKilled: count,
+  // Счётчики итога для заданий и дашбордов (docs/22-analytics-and-metrics.md
+  // §3.3, tasks/T-0125). Необязательные: сборки до них полей не шлют, версия
+  // прежняя.
+  bossKills: count.optional(),
+  eliteKills: count.optional(),
+  chestsOpened: count.optional(),
+  crystals: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,

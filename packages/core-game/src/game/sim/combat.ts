@@ -94,6 +94,8 @@ export function killEnemy(world: World, index: number): void {
 
   world.stats.enemiesKilled++;
   world.stats.killsByType[typeIndex]++;
+  if (type.rank === "boss") world.stats.bossKills++;
+  else if (type.rank === "elite") world.stats.eliteKills++;
 
   const x = world.enemies.x[index];
   const y = world.enemies.y[index];

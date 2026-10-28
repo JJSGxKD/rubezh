@@ -29,6 +29,12 @@ const resultSchema = z.object({
   level: z.number(),
   xpCollected: z.number(),
   enemiesKilled: z.number(),
+  // Забег, брошенный на экране смерти до сборки со счётчиками итога, их не
+  // несёт — и не должен из-за этого пропасть (tasks/T-0125).
+  bossKills: z._default(z.number(), 0),
+  eliteKills: z._default(z.number(), 0),
+  chestsOpened: z._default(z.number(), 0),
+  crystalsCollected: z._default(z.number(), 0),
   killsByEnemy: z.record(z.string(), z.number()),
   damageDealt: z.number(),
   damageTaken: z.number(),

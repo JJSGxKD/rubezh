@@ -145,6 +145,11 @@ function resultOf(
     level: figures.level,
     xpCollected: figures.xpCollected,
     enemiesKilled: figures.enemiesKilled,
+    // Счётчиков итога в сохранении нет: они остаются нулями и в событие не идут.
+    bossKills: 0,
+    eliteKills: 0,
+    chestsOpened: 0,
+    crystalsCollected: 0,
     killsByEnemy: {},
     damageDealt: 0,
     damageTaken: 0,

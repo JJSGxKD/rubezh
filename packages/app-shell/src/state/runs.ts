@@ -70,6 +70,11 @@ const finishFields = {
       xpCollected: z.number(),
       waveReached: z.number(),
       topKills: z.array(z.object({ enemy: z.string(), count: z.number() })),
+      // Счётчики для заданий (T-0125): записи прошлых сборок их не знают.
+      bossKills: z.optional(z.number()),
+      eliteKills: z.optional(z.number()),
+      chestsOpened: z.optional(z.number()),
+      crystals: z.optional(z.number()),
     }),
   ),
 };
@@ -291,6 +296,10 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
         .map(([enemy, count]) => ({ enemy, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, TOP_KILLS),
+      bossKills: result.bossKills,
+      eliteKills: result.eliteKills,
+      chestsOpened: result.chestsOpened,
+      crystals: Math.round(result.crystalsCollected),
     },
   };
 }
