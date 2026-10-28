@@ -3,8 +3,8 @@ id: T-0115
 title: Метка «Отдельная доска» в сводке, воронке и разборе забегов в панели
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: [T-0112]
