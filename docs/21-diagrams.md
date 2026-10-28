@@ -147,7 +147,7 @@ erDiagram
         int level "nullable"
         int enemies_killed "nullable"
         json weapons "nullable: id, уровень и урон к концу"
-        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов — лист забега"
+        json details "nullable: навыки, получено урона, опыт, отрезок, пятёрка врагов, счётчики итога (боссы, элиты, сундуки, кристаллы) — лист забега и задания"
         boolean cheats
         float[] continues "секунда каждого второго шанса"
         boolean ranked "в рейтинге: вердикт ok, без читов, рейтинг игроку не закрыт"

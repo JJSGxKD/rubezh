@@ -63,11 +63,22 @@ export const ADMIN_REASON = "admin_adjust";
  */
 export const REVOKE_REASON = "refund_revoke";
 
+/**
+ * Списание награды за задание, когда игрок отписался от канала (Р115,
+ * tasks/T-0177). Тот же отзыв начисленного, что и при возврате звёзд, но в
+ * журнале и в истории игрока он не «возврат звёзд за покупку» — отдельная
+ * причина, которая остаётся среди валюты и осколков, а не среди покупок.
+ */
+export const TASK_REVOKE_REASON = "task_revoke";
+
+/** Причины, с которыми можно отзывать начисленное: от них зависит и проверка повтора ключа. */
+export type RevokeReason = typeof REVOKE_REASON | typeof TASK_REVOKE_REASON;
+
 export type EarnReason = (typeof EARN_REASONS)[number];
 export type ExchangeReason = (typeof EXCHANGE_REASONS)[number];
 export type SpendReason = (typeof SPEND_REASONS)[number];
 export type GrantReason = EarnReason | ExchangeReason | typeof ADMIN_REASON;
-export type WalletReason = GrantReason | SpendReason | typeof REVOKE_REASON;
+export type WalletReason = GrantReason | SpendReason | RevokeReason;
 
 export type Balances = Record<WalletResource, number>;
 
