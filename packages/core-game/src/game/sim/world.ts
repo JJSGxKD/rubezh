@@ -16,6 +16,7 @@ import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool
 import { pushSimEvent, SIM_EVENT } from "./events";
 import { isElite } from "../patterns";
 import { pickStage, type EnemyStage } from "./stages";
+import { registerPlayerHit } from "./streaks";
 
 export type { EnemyType } from "../patterns/enemy-types";
 export { findStageProblems, pickStage, resolveStages, stageOf, MAX_STAGES, type EnemyStage } from "./stages";
@@ -150,6 +151,24 @@ export interface RunStats {
   /** убийства игроком по индексу типа врага */
   killsByType: Uint32Array;
   damageTaken: number;
+  /**
+   * Серии для достижений (Р161, tasks/T-0321) — в тиках: пауза и ожидание
+   * решения о втором шансе тиков не двигают, и серия по ним не растёт.
+   * Без попаданий: тик последнего попадания и самая долгая закрытая серия;
+   * попаданием считается любой урон, дошедший до игрока сквозь неуязвимость, —
+   * в том числе в щит буста, до брони и сопротивления.
+   */
+  lastHitTick: number;
+  longestNoHitTicks: number;
+  /**
+   * Без убийств: тик последнего убийства и самая долгая серия, закрытая
+   * убийством. Хвост от последнего убийства до конца забега не считается —
+   * иначе «отбежать минуту и сдаться» давало бы «Пацифиста».
+   */
+  lastKillTick: number;
+  longestNoKillTicks: number;
+  /** убийства по стихии добивающего удара (индекс — `sim/element-ids.ts`); динамит и прочее без стихии — физическое */
+  killsByElement: Float64Array;
   /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
   deathCauseType: number;
   shotsFired: number;
@@ -471,6 +490,10 @@ export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
+
+  // Попадание засчитано до щита, брони и бессмертия разработчика: купленный
+  // щит не облегчает «Без единой царапины».
+  registerPlayerHit(world);
 
   // Щит буста гасит попадание целиком — вместе со стихией: игрок должен
   // понять, что его спасло, а не гадать, почему урон вышел меньше. Короткая
