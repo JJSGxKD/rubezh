@@ -1,4 +1,4 @@
-import { applyPattern, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
+import { applyPattern, CORDON_PHASE, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
@@ -237,6 +237,8 @@ function updateEnemies(world: World, dt: number): void {
     // Бьёт ли касанием — возможность паттерна, а не проверка его имени: у
     // стрелка таймер занят перезарядкой выстрела, подрывник бьёт взрывом.
     if (!type.contactDamage) continue;
+    // Пока горит вспышка строя, страж не кусает.
+    if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) continue;
 
     const dx = player.x - enemies.x[i];
     const dy = player.y - enemies.y[i];
