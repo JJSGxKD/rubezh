@@ -74,6 +74,9 @@ const CURVE = {
     { everySegments: 4, rank: "elite", count: 2 },
     { everySegments: 6, rank: "elite", count: 1 },
     { everySegments: 5, rank: "boss", count: 1 },
+    { everySegments: 7, rank: "elite", count: 3 },
+    { everySegments: 8, rank: "boss", count: 1 },
+    { everySegments: 9, rank: "elite", count: 2 },
   ],
 } as const;
 
