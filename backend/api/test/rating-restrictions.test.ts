@@ -557,9 +557,12 @@ describe("доска зрителя: `boardOf` (T-0112)", () => {
     await service.finish(target, finish({ survivalSec: 300 }));
     await restrictions.impose(boss, target.accountId, input({ kinds: ["separate_board"], notify: false }));
 
-    expect(await board.best("normal", target.accountId, "common")).toBe(300);
+    // Рейтинг не закрыт: из полной доски игрок не пропадает, из общей уходит (T-0113).
+    expect(await board.best("normal", target.accountId, "full")).toBe(300);
+    expect(await board.best("normal", target.accountId, "common")).toBeNull();
     const run = finish({ survivalSec: 400 });
     expect(await service.finish(target, run)).toMatchObject({ recorded: true, verdict: "ok", isNewBest: true, rank: 1 });
+    expect(await board.best("normal", target.accountId, "full")).toBe(400);
     expect(runs.rows.get(run.runId)).toMatchObject({ ranked: true });
     expect(runs.rows.get(run.runId)?.ratingRestricted ?? null).toBeNull();
     expect((await view.detail(target.accountId, run.runId)).rating).toBe("ranked");
