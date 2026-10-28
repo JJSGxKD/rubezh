@@ -253,6 +253,7 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за самоцве�
           cheats: false,
           loadout: "none",
           boosts: "none",
+          counters: null,
         },
         config.runs,
       );
