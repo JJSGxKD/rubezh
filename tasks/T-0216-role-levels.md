@@ -3,8 +3,8 @@ id: T-0216
 title: Уровни ролей — администратор выдаёт роли ниже своей
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0112, T-0144]
