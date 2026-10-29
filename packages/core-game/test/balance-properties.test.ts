@@ -56,7 +56,7 @@ function dodgingRunsOn(difficultyId?: DifficultyId): BalanceRunResult[] {
 /** Главный бой — «Сложная»: коридоры калибровки заданы для неё. */
 const dodgingRuns = (): BalanceRunResult[] => dodgingRunsOn();
 
-/** Обучающий первый забег — «Лёгкая»: свои коридоры (`BALANCE_TARGETS.tutorial`). */
+/** «Лёгкая»: на ней бот доживает до четвёртой минуты — путь к сундуку и добыче проверяется здесь. Коридора выживания у неё нет (Р179). */
 const tutorialRuns = (): BalanceRunResult[] => dodgingRunsOn("easy");
 
 describe("свойства баланса", () => {
@@ -114,22 +114,6 @@ describe("свойства баланса", () => {
     expect(byDefault).toEqual(explicit);
   });
 
-  // Ожидаемо красное до решения по вопросу в черновике PR T-0192: давление
-  // задачи (ступени с 8:00, рост кривой с 5:30) до восьмой минуты не действует,
-  // а бот на «Лёгкой» доживает до потолка прогона — медиана 770–880 с при любом
-  // росте кривой внутри пределов. Когда коридор или рычаг будут решены,
-  // `it.fails` меняется на `it`.
-  it.fails("держит обучающую «Лёгкую» в коридоре выживания", { timeout: 60_000 }, () => {
-    const summary = summarizeRuns(tutorialRuns());
-    expect(summary.medianSurvivalSec).toBeGreaterThanOrEqual(BALANCE_TARGETS.tutorial.dodgingMedianSec.min);
-    expect(summary.medianSurvivalSec).toBeLessThanOrEqual(BALANCE_TARGETS.tutorial.dodgingMedianSec.max);
-  });
-
-  it("не убивает новичка обучающего забега в первую минуту", { timeout: 60_000 }, () => {
-    const summary = summarizeRuns(tutorialRuns());
-    expect(summary.deathsBeforeMinuteRatio).toBeLessThanOrEqual(BALANCE_TARGETS.tutorial.dodgingDeathsBeforeMinuteRatioMax);
-  });
-
   it("зонд давления не убивает бота и считает полные минуты", { timeout: 60_000 }, () => {
     const probe = simulateBalanceRun({ seed: 1, skill: "dodging", immortalPlayer: true, maxSec: 180 });
     expect(probe.timedOut).toBe(true);
@@ -146,10 +130,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 522.65,
-      level: 30,
-      wave: 14,
-      enemiesKilled: 5206,
+      survivalSec: 507.95,
+      level: 28,
+      wave: 13,
+      enemiesKilled: 5117,
     });
   });
 

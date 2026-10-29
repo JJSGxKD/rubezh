@@ -54,9 +54,6 @@ interface Scenario {
  */
 const BASE_DIFFICULTY_ID: DifficultyId = "hard";
 
-/** Обучающий первый забег: коридоры блока `tutorial`. */
-const TUTORIAL_DIFFICULTY_ID: DifficultyId = "easy";
-
 /** Зонд давления: seed на оружие, потолок прогона и ширина окна урона. */
 const PRESSURE_SEEDS = 10;
 const PRESSURE_MAX_SEC = 1020;
@@ -173,29 +170,6 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
       dodgingSummary.medianFirstLevelUpSec >= target.firstLevelUpSec.min &&
         dodgingSummary.medianFirstLevelUpSec <= target.firstLevelUpSec.max,
       `${fixed(dodgingSummary.medianFirstLevelUpSec)} с`,
-    ),
-  );
-
-  lines.push("", "## Обучающая «Лёгкая»", "");
-  const tutorial: BalanceRunResult[] = [];
-  for (const [name, runs] of byScenario) {
-    if (name.endsWith(` / ${TUTORIAL_DIFFICULTY_ID}`)) tutorial.push(...runs);
-  }
-  const tutorialSummary = summarizeRuns(tutorial);
-  const tutorialTarget = target.tutorial;
-  lines.push(
-    verdict(
-      `медиана уклоняющегося в ${tutorialTarget.dodgingMedianSec.min}–${tutorialTarget.dodgingMedianSec.max} с`,
-      tutorialSummary.medianSurvivalSec >= tutorialTarget.dodgingMedianSec.min &&
-        tutorialSummary.medianSurvivalSec <= tutorialTarget.dodgingMedianSec.max,
-      `${fixed(tutorialSummary.medianSurvivalSec)} с`,
-    ),
-  );
-  lines.push(
-    verdict(
-      `смертей до минуты не больше ${percent(tutorialTarget.dodgingDeathsBeforeMinuteRatioMax)}`,
-      tutorialSummary.deathsBeforeMinuteRatio <= tutorialTarget.dodgingDeathsBeforeMinuteRatioMax,
-      percent(tutorialSummary.deathsBeforeMinuteRatio),
     ),
   );
 

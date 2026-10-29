@@ -263,7 +263,6 @@ const balanceTargetsSchema = z.strictObject({
   dodgingDeathsBeforeMinuteRatioMax: num,
   firstLevelUpSec: range,
   firstChestEventSec: range,
-  tutorial: z.strictObject({ dodgingMedianSec: range, dodgingDeathsBeforeMinuteRatioMax: num }),
   latePressure: z.strictObject({
     fromSec: num,
     toSec: num,
