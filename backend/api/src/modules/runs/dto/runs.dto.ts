@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ELEMENT_KEYS } from "../run-counters.js";
 import { DIFFICULTIES } from "../run-rules.js";
 
 /**
@@ -86,6 +87,11 @@ export const runFinishSchema = z
         eliteKills: z.number().int().min(0).max(1_000_000).optional(),
         chestsOpened: z.number().int().min(0).max(1_000_000).optional(),
         crystals: z.number().int().min(0).max(10_000_000).optional(),
+        // Серии и убийства по стихиям для достижений (tasks/T-0321): потолок — сутки, как у секунд забега;
+        // физических убийств в словаре нет. Старые сборки полей не шлют.
+        noHitSec: z.number().int().min(0).max(86_400).optional(),
+        noKillSec: z.number().int().min(0).max(86_400).optional(),
+        killsByElement: z.partialRecord(z.enum(ELEMENT_KEYS), z.number().int().min(0).max(1_000_000)).optional(),
       })
       .optional(),
   })

@@ -41,7 +41,7 @@ shared:
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
   - apps/admin/src/ui/help.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

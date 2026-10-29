@@ -18,10 +18,15 @@ export function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+/** Без исключения, в заданном каталоге: `{ ok, stdout, stderr }`. */
+function tryGitIn(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: MAX_BUFFER });
+  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr: (result.stderr ?? "").trim() };
+}
+
 /** То же, но без исключения: `{ ok, stdout, stderr }` — по тексту отказа решает вызывающий. */
 export function tryGit(args) {
-  const result = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
-  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr: (result.stderr ?? "").trim() };
+  return tryGitIn(ROOT, args);
 }
 
 export function fetchOrigin() {
@@ -54,6 +59,98 @@ export function takenIds() {
   return listLines(["ls-remote", "--heads", "origin", "task/*"])
     .map((line) => /refs\/heads\/task\/(T-\d{4})$/.exec(line)?.[1])
     .filter((id) => id !== undefined);
+}
+
+/** Сколько ждать ответа `gh`, мс: сеть бывает мертва, а зависшая команда мерджа хуже отказа. */
+export const GH_TIMEOUT_MS = 60_000;
+
+/**
+ * `gh` с таймаутом: `{ ok, stdout, stderr, timedOut }` — без исключения, решает
+ * вызывающий. Аргументы массивом, как у `git`. Зависший процесс убивается.
+ */
+export function gh(args, timeoutMs = GH_TIMEOUT_MS) {
+  const result = spawnSync("gh", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER, timeout: timeoutMs, killSignal: "SIGKILL" });
+  const timedOut = result.error?.code === "ETIMEDOUT";
+  const stderr = timedOut ? `gh не ответил за ${String(Math.round(timeoutMs / 1000))} с` : (result.stderr ?? "").trim();
+  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr, timedOut };
+}
+
+/** Текст файла по пути в коммите `ref` (SHA или ветка) или `null`, если коммита или файла нет. */
+export function readFileAt(ref, path) {
+  const result = tryGit(["show", `${ref}:${path}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** Есть ли коммит `sha` в локальном репозитории. */
+export function hasCommit(sha) {
+  return tryGit(["cat-file", "-e", `${sha}^{commit}`]).ok;
+}
+
+/** Вывод `git diff --numstat --no-renames base...head` (изменения PR от общего предка) или `null`, если дифф не получился. */
+export function diffNumstat(base, head) {
+  const result = tryGit(["-c", "core.quotepath=off", "diff", "--numstat", "--no-renames", `${base}...${head}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** `base` — предок `head`: ветка не отстала от базы. Любой сбой git — «нет». */
+export function isAncestor(base, head) {
+  return tryGit(["merge-base", "--is-ancestor", base, head]).ok;
+}
+
+/** Код команд в `scripts/tasks` рабочей копии совпадает с `base`: нет ни правок, ни новых файлов. */
+export function toolsMatchBase(base) {
+  if (!tryGit(["diff", "--quiet", base, "--", "scripts/tasks"]).ok) return false;
+  const untracked = tryGit(["ls-files", "--others", "--exclude-standard", "--", "scripts/tasks"]);
+  return untracked.ok && untracked.stdout === "";
+}
+
+/**
+ * Влить в текущую ветку ветки зависимостей `<remote>/task/T-NNNN` по порядку
+ * `deps` (Р178, сборка ветки задела). Перемотка допустима, редактор сообщения не
+ * открывается. Первая неудача останавливает сборку и откатывает недовлитое
+ * слияние (`merge --abort`); уже влитые зависимости остаются — ветку целиком
+ * откатывает вызывающий. Возвращает `{ ok: true }` или `{ ok: false, dependency,
+ * missing, conflicts, stderr }`: `missing` — ветки зависимости нет на `remote`,
+ * `conflicts` — файлы с конфликтом.
+ */
+export function mergeDependencyBranches(deps, { cwd = ROOT, remote = "origin" } = {}) {
+  for (const id of deps) {
+    const ref = `${remote}/task/${id}`;
+    if (!tryGitIn(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).ok) {
+      return { ok: false, dependency: id, missing: true, conflicts: [], stderr: `ветки ${ref} нет` };
+    }
+    const merged = tryGitIn(cwd, ["merge", "--no-edit", ref]);
+    if (merged.ok) continue;
+    const conflicts = tryGitIn(cwd, ["diff", "--name-only", "--diff-filter=U"]).stdout.split("\n").filter((line) => line !== "");
+    tryGitIn(cwd, ["merge", "--abort"]);
+    return { ok: false, dependency: id, missing: false, conflicts, stderr: merged.stderr || merged.stdout };
+  }
+  return { ok: true };
+}
+
+/**
+ * Файлы, которые меняют ветки зависимостей относительно `base` (Р178, п. 6):
+ * `{ files, missing }`, `files` — без повторов, `missing` — зависимости, чьей
+ * ветки на `remote` нет (их файлы неизвестны).
+ */
+export function dependencyChangedFiles(deps, { base, cwd = ROOT, remote = "origin" }) {
+  const files = new Set();
+  const missing = [];
+  for (const id of deps) {
+    const result = tryGitIn(cwd, ["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...${remote}/task/${id}`]);
+    if (!result.ok) {
+      missing.push(id);
+      continue;
+    }
+    for (const path of result.stdout.split("\n")) if (path !== "") files.add(path);
+  }
+  return { files: [...files], missing };
+}
+
+/** Имя файла задачи `T-NNNN-<slug>.md` наверху `tasks/` в `base` или `null`. */
+export function taskFileNameAt(base, id) {
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/"]).map((path) => path.replace(/^tasks\//, ""));
+  return names.find((name) => name.startsWith(`${id}-`) && name.endsWith(".md")) ?? null;
 }
 
 /** Поставить метку на PR: `{ ok, stderr }` — без исключения, решает вызывающий. */

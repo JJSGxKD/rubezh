@@ -1,4 +1,5 @@
 import { ELEMENT_COLD, ELEMENT_FIRE, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, ELEMENT_POISON } from "./element-ids";
+import { registerPlayerHit } from "./streaks";
 import type { PlayerState, World } from "./world";
 
 /**
@@ -140,7 +141,10 @@ export function tickPlayerStatuses(world: World, dt: number): void {
 
 function inflictPlayerDot(world: World, amount: number, source: number): void {
   const player = world.player;
-  if (player.invulnerableTicks > 0 || world.cheats.godMode) return;
+  if (player.invulnerableTicks > 0) return;
+  // Тик горения и яда — попадание; бессмертие разработчика серию не спасает.
+  registerPlayerHit(world);
+  if (world.cheats.godMode) return;
   player.hp -= amount;
   world.stats.damageTaken += amount;
   if (player.hp <= 0) {

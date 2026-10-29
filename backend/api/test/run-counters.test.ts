@@ -12,7 +12,7 @@ import { countersOf, countersPlausible, GEMS_PER_KILL_CEILING, rankBudget, type 
  * этот тест — единственное, что не даёт ей разойтись с таймлайном.
  */
 
-const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0 };
+const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
 
 describe("countersOf", () => {
   it("без stats — null", () => {
@@ -24,11 +24,12 @@ describe("countersOf", () => {
   });
 
   it("часть полей — остальные нули", () => {
-    expect(countersOf({ bossKills: 2, crystals: 40 })).toEqual({ bossKills: 2, eliteKills: 0, chestsOpened: 0, crystals: 40 });
+    expect(countersOf({ bossKills: 2, crystals: 40 })).toEqual({ ...ZERO, bossKills: 2, crystals: 40 });
   });
 
   it("все четыре поля передаются как есть", () => {
     expect(countersOf({ bossKills: 1, eliteKills: 2, chestsOpened: 3, crystals: 4 })).toEqual({
+      ...ZERO,
       bossKills: 1,
       eliteKills: 2,
       chestsOpened: 3,

@@ -23,7 +23,7 @@ shared:
   - docs/30-configuration-map.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

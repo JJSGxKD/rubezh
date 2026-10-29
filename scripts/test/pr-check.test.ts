@@ -291,14 +291,14 @@ describe("checkStatusLabels", () => {
   const HEAD = "task/T-0001";
 
   it("ровно одна метка статуса — порядок", () => {
-    for (const label of ["в работе", "на ревью", "доработка", "ждёт владельца"]) {
+    for (const label of ["в работе", "на ревью", "доработка", "ждёт владельца", "задел"]) {
       expect(checkStatusLabels(["release: patch", label], HEAD)).toEqual([]);
     }
   });
 
   it("метки статуса нет — ошибка со списком меток", () => {
     expect(checkStatusLabels(["release: patch"], HEAD)).toEqual([
-      "статус: нет метки статуса — поставь одну из: в работе, на ревью, доработка, ждёт владельца",
+      "статус: нет метки статуса — поставь одну из: в работе, на ревью, доработка, ждёт владельца, задел",
     ]);
     expect(checkStatusLabels([], HEAD)).toHaveLength(1);
   });

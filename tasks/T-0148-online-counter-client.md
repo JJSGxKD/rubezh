@@ -25,7 +25,7 @@ shared:
   - apps/admin/src/ui/help.ts
   - docs/27-design-system-and-app-shell.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

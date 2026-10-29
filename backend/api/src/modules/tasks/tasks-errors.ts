@@ -21,6 +21,13 @@ export class TaskShapeLockedError extends DomainError {
   }
 }
 
+/** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
+export class TaskOrderMismatchError extends DomainError {
+  constructor() {
+    super("task_order_mismatch", "Список изменился — обнови страницу и переставь ещё раз", 400);
+  }
+}
+
 /** Площадка не видит игрока в канале — подписки нет или она ещё не дошла. */
 export class TaskNotJoinedError extends DomainError {
   constructor() {
