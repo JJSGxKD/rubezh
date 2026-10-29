@@ -3,8 +3,8 @@ id: T-0065
 title: Прокси для исходящих запросов — список в панели, перебор после неудачи напрямую
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0060, T-0061]
