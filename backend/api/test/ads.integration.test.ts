@@ -226,16 +226,50 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
       VALUES ('it-pass-open', ${me}::uuid, 'wheel_spin', NULL, 'vip', 'view', now(), now() + interval '1 minute')`).rejects.toThrow();
   });
 
+  it("порядок сетей: priority переписывается только у сдвинувшихся строк, параллельные запросы дают перестановку без дублей, неполный набор — mismatch", async () => {
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    const original = await catalog.networks();
+    const keys = original.map((row) => row.networkKey);
+    const stamps = async () => new Map((await prisma.$queryRaw<{ network_key: string; priority: number; updated_at: Date }[]>`SELECT network_key, priority, updated_at FROM ad_network`).map((row) => [row.network_key, row]));
+    try {
+      // Нумерация 0…n−1 ставится первой, чтобы дальше менялись только переставленные.
+      await catalog.reorderNetworks(keys, NOON);
+      const base = await stamps();
+      const swapped = [...keys];
+      [swapped[0], swapped[1]] = [swapped[1] ?? "", swapped[0] ?? ""];
+      const later = at(NOON, 5);
+      expect(await catalog.reorderNetworks(swapped, later)).toEqual({ status: "ok", before: keys, after: swapped, changed: true });
+      const after = await stamps();
+      for (const key of keys.slice(2)) expect(after.get(key)?.updated_at).toEqual(base.get(key)?.updated_at);
+      expect(after.get(swapped[0] ?? "")?.priority).toBe(0);
+
+      expect(await catalog.reorderNetworks(swapped, later)).toMatchObject({ status: "ok", changed: false });
+
+      const reversed = [...keys].reverse();
+      const results = await Promise.all([catalog.reorderNetworks(reversed, later), catalog.reorderNetworks(keys, later)]);
+      expect(results.every((result) => result.status === "ok")).toBe(true);
+      const priorities = [...(await stamps()).values()].map((row) => row.priority).sort((a, b) => a - b);
+      expect(priorities).toEqual(keys.map((_, index) => index));
+
+      const before = await stamps();
+      expect(await catalog.reorderNetworks(keys.slice(1), later)).toEqual({ status: "mismatch" });
+      expect(await catalog.reorderNetworks([...keys.slice(1), "it_unknown"], later)).toEqual({ status: "mismatch" });
+      expect([...(await stamps()).values()].map((row) => row.priority)).toEqual([...before.values()].map((row) => row.priority));
+    } finally {
+      for (const row of original) await prisma.$executeRaw`UPDATE ad_network SET priority = ${row.priority} WHERE network_key = ${row.networkKey}`;
+    }
+  });
+
   it("каталог панели: ключи сети и блок с площадками и устройствами заводятся и правятся, блок чужой сети — нет, воронка — за окно", async () => {
     const catalog = new PrismaAdsCatalogRepository(prisma);
     const actor = await account();
     expect((await catalog.networks()).find((row) => row.networkKey === network)).toEqual({ networkKey: network, name: "Проверка", active: true, priority: 5, keys: {} });
-    expect(await catalog.updateNetwork({ networkKey: network, active: true, priority: 6, keys: { pubId: "792361", appId: "1396" } }, NOON)).toBe(true);
+    expect(await catalog.updateNetwork({ networkKey: network, active: true, keys: { pubId: "792361", appId: "1396" } }, NOON)).toBe(true);
     expect((await catalog.networks()).find((row) => row.networkKey === network)?.keys).toEqual({ pubId: "792361", appId: "1396" });
-    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, priority: 6, keys: {} }, NOON)).toBe(false);
+    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, keys: {} }, NOON)).toBe(false);
     // Ключи доходят до выдачи показа вместе с блоком — их ждёт SDK.
     expect((await repository.activeBlocks()).find((row) => row.blockId === blockOf("view").blockId)?.networkKeys).toEqual({ pubId: "792361", appId: "1396" });
-    await catalog.updateNetwork({ networkKey: network, active: true, priority: 5, keys: {} }, NOON);
+    await catalog.updateNetwork({ networkKey: network, active: true, keys: {} }, NOON);
     // Формат без блока в кабинете — `null`, пустая строка вместо него база не примет.
     const unitless = await catalog.insertBlock({ networkKey: network, place: "interstitial", externalId: null, success: "view", active: false, platforms: [], devices: [] }, actor, NOON);
     expect((await catalog.blocks()).find((row) => row.blockId === unitless?.blockId)?.externalId).toBeNull();
