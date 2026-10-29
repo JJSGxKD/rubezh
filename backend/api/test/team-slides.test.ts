@@ -21,7 +21,9 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import {
   TEAM_SLIDE_LIMITS,
   inAudience,
+  teamSlideGroup,
   teamSlideInputSchema,
+  teamSlideOrderSchema,
   teamSlidePeriodProblem,
   teamSlidesFor,
   teamSlideState,
@@ -87,7 +89,7 @@ function input(patch: Partial<TeamSlideInput> = {}): TeamSlideInput {
 }
 
 function row(patch: Partial<TeamSlideRow> = {}): TeamSlideRow {
-  return { slideId: randomUUID(), ...input(), createdAt: NOW, createdBy: "x", updatedAt: NOW, updatedBy: "x", archivedAt: null, archivedBy: null, ...patch };
+  return { slideId: randomUUID(), ...input(), position: 0, createdAt: NOW, createdBy: "x", updatedAt: NOW, updatedBy: "x", archivedAt: null, archivedBy: null, ...patch };
 }
 
 const facts = (patch: Partial<AudienceFacts> = {}): AudienceFacts => ({ platform: "telegram", createdAt: at(-30 * DAY), payer: false, vip: false, ...patch });
@@ -164,6 +166,48 @@ describe("аудитория слайда", () => {
     const archived = row({ title: "снятый", archivedAt: NOW });
     expect(teamSlidesFor([older, newer, pinned, future, archived], facts(), NOW).map((slide) => slide.title)).toEqual(["закреплённый", "новый"]);
   });
+
+  it("внутри группы — по месту в списке, а не по началу; равные места — позже начатый, затем по id", () => {
+    const first = row({ title: "второй по началу", position: 1, startsAt: at(-DAY) });
+    const second = row({ title: "первый по месту", position: 0, startsAt: at(-2 * DAY) });
+    expect(teamSlidesFor([first, second], facts(), NOW).map((slide) => slide.title)).toEqual(["первый по месту", "второй по началу"]);
+
+    const early = row({ title: "рано", startsAt: at(-2 * DAY) });
+    const late = row({ title: "поздно", startsAt: at(-DAY) });
+    expect(teamSlidesFor([early, late], facts(), NOW).map((slide) => slide.title)).toEqual(["поздно", "рано"]);
+
+    const a = row({ slideId: "00000000-0000-4000-8000-000000000001", title: "a" });
+    const b = row({ slideId: "00000000-0000-4000-8000-000000000002", title: "b" });
+    expect(teamSlidesFor([b, a], facts(), NOW).map((slide) => slide.title)).toEqual(["a", "b"]);
+  });
+
+  it("закреплённые идут перед остальными, какое бы место ни было; из трёх идущих игрок получает два верхних", () => {
+    const regular = row({ title: "обычный", position: 0 });
+    const pinned = row({ title: "закреплённый", pinned: true, position: 5 });
+    const third = row({ title: "третий", position: 1 });
+    expect(teamSlidesFor([third, regular, pinned], facts(), NOW).map((slide) => slide.title)).toEqual(["закреплённый", "обычный"]);
+    expect(teamSlideGroup(pinned)).toBe("pinned");
+    expect(teamSlideGroup(regular)).toBe("regular");
+  });
+});
+
+describe("запрос порядка слайдов", () => {
+  const ids = [randomUUID(), randomUUID()];
+
+  it("группа и id без повторов; принимается ровно то, что нужно", () => {
+    expect(teamSlideOrderSchema.parse({ group: "regular", ids })).toEqual({ group: "regular", ids });
+    expect(teamSlideOrderSchema.safeParse({ group: "pinned", ids: [ids[0]] }).success).toBe(true);
+  });
+
+  it("чужая группа, пустой список, повтор, не UUID, лишнее поле и больше 200 id — отказ", () => {
+    expect(teamSlideOrderSchema.safeParse({ group: "other", ids }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids: [] }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids: [ids[0], ids[0]] }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids: ["не-uuid"] }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids, extra: 1 }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids: Array.from({ length: 201 }, () => randomUUID()) }).success).toBe(false);
+    expect(teamSlideOrderSchema.safeParse({ group: "regular", ids: Array.from({ length: 200 }, () => randomUUID()) }).success).toBe(true);
+  });
 });
 
 function setup(config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv)) {
@@ -234,15 +278,15 @@ describe("слайды команды в панели", () => {
     expect(ctx.required).toEqual([`home_slide:${IMAGE}`, `home_slide:${"b".repeat(64)}`]);
   });
 
-  it("список для панели — с состоянием, поздние первыми, с пределами и списками для формы", async () => {
+  it("список для панели — с состоянием и местом, в порядке списка, с пределами и списками для формы", async () => {
     const ctx = setup();
     const admin = await person(ctx, "500", "admin");
     await ctx.service.create(admin, input({ title: "прошлый", startsAt: at(0), endsAt: at(HOUR) }), NOW);
     await ctx.service.create(admin, input({ title: "будущий", startsAt: at(DAY), endsAt: at(2 * DAY) }), NOW);
     const view = await ctx.service.catalog(admin, at(2 * HOUR));
-    expect(view.slides.map((slide) => [slide.title, slide.state])).toEqual([
-      ["будущий", "scheduled"],
-      ["прошлый", "ended"],
+    expect(view.slides.map((slide) => [slide.title, slide.state, slide.position])).toEqual([
+      ["прошлый", "ended", 0],
+      ["будущий", "scheduled", 1],
     ]);
     expect(view.limits).toEqual(TEAM_SLIDE_LIMITS);
     expect(view.screens).toContain("rating");
@@ -257,6 +301,144 @@ describe("слайды команды в панели", () => {
     expect(ctx.repository.currentCalls).toBe(1);
     await ctx.service.create(admin, input(), at(2_000));
     expect((await ctx.service.forPlayer(facts(), at(3_000))).map((slide) => slide.title)).toEqual(["Турнир выходного дня"]);
+  });
+});
+
+describe("порядок слайдов в панели", () => {
+  async function three(ctx: ReturnType<typeof setup>, admin: AccountRef, patch: Partial<TeamSlideInput> = {}) {
+    const a = await ctx.service.create(admin, input({ title: "A", ...patch }), NOW);
+    const b = await ctx.service.create(admin, input({ title: "B", ...patch }), NOW);
+    const c = await ctx.service.create(admin, input({ title: "C", ...patch }), NOW);
+    return [a.slideId, b.slideId, c.slideId] as const;
+  }
+  const titles = async (ctx: ReturnType<typeof setup>, admin: AccountRef) => (await ctx.service.catalog(admin, NOW)).slides.map((slide) => [slide.title, slide.position]);
+
+  it("новый слайд встаёт последним в своей группе; в пустой группе — с нуля; группы считаются отдельно", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "700", "admin");
+    expect((await ctx.service.create(admin, input({ title: "Р1" }), NOW)).position).toBe(0);
+    expect((await ctx.service.create(admin, input({ title: "Р2" }), NOW)).position).toBe(1);
+    expect((await ctx.service.create(admin, input({ title: "З1", pinned: true }), NOW)).position).toBe(0);
+    expect((await ctx.service.create(admin, input({ title: "Р3" }), NOW)).position).toBe(2);
+  });
+
+  it("снятые при подсчёте места не считаются", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "701", "admin");
+    await ctx.service.create(admin, input({ title: "Р1" }), NOW);
+    const second = await ctx.service.create(admin, input({ title: "Р2" }), NOW);
+    await ctx.service.archive(admin, second.slideId, NOW);
+    expect((await ctx.service.create(admin, input({ title: "Р3" }), NOW)).position).toBe(1);
+  });
+
+  it("поля места во входе нет: слой схемы отвергает лишнее", () => {
+    expect(teamSlideInputSchema.safeParse({ ...input(), position: 3, startsAt: NOW.toISOString(), endsAt: at(DAY).toISOString() }).success).toBe(false);
+  });
+
+  it("правка текста место не трогает; смена закрепления переводит слайд в конец другой группы", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "702", "admin");
+    const [a, b] = await three(ctx, admin);
+    await ctx.service.create(admin, input({ title: "З", pinned: true }), NOW);
+    await ctx.service.update(admin, a, input({ title: "A1", text: "Другой текст" }), NOW);
+    expect(await titles(ctx, admin)).toEqual([["З", 0], ["A1", 0], ["B", 1], ["C", 2]]);
+
+    const moved = await ctx.service.update(admin, b, input({ title: "B", pinned: true }), NOW);
+    expect(moved.position).toBe(1);
+    expect(await titles(ctx, admin)).toEqual([["З", 0], ["B", 1], ["A1", 0], ["C", 2]]);
+  });
+
+  it("перестановка отдаёт новый порядок и места 0, 1, 2; игрок видит его сразу — кэш идущих сброшен", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "703", "admin");
+    const [a, b, c] = await three(ctx, admin);
+    expect((await ctx.service.forPlayer(facts(), NOW)).map((slide) => slide.title)).toEqual(["A", "B"]);
+    const calls = ctx.repository.currentCalls;
+
+    const result = await ctx.service.reorder(admin, "regular", [c, a, b], at(1_000));
+    expect(result).toEqual({ order: [c, a, b] });
+    expect(await titles(ctx, admin)).toEqual([["C", 0], ["A", 1], ["B", 2]]);
+    expect((await ctx.service.forPlayer(facts(), at(2_000))).map((slide) => slide.title)).toEqual(["C", "A"]);
+    expect(ctx.repository.currentCalls).toBeGreaterThan(calls);
+  });
+
+  it("одна запись аудита с названиями до и после; цель — группа", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "704", "admin");
+    const [a, b, c] = await three(ctx, admin);
+    const before = ctx.roles.entries.length;
+    await ctx.service.reorder(admin, "regular", [c, a, b], at(1_000));
+    expect(ctx.roles.entries).toHaveLength(before + 1);
+    expect(ctx.roles.entries.at(-1)).toMatchObject({
+      actorAccountId: admin.accountId,
+      action: "home.slides.reorder",
+      target: "regular",
+      before: { order: ["A", "B", "C"] },
+      after: { order: ["C", "A", "B"] },
+    });
+  });
+
+  it("тот же порядок повторно: ответ тот же, аудита нет, ничего не записано", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "705", "admin");
+    const [a, b, c] = await three(ctx, admin);
+    const updatedAt = ctx.repository.rows.map((row) => row.updatedAt);
+    const before = ctx.roles.entries.length;
+    expect(await ctx.service.reorder(admin, "regular", [a, b, c], at(HOUR))).toEqual({ order: [a, b, c] });
+    expect(ctx.roles.entries).toHaveLength(before);
+    expect(ctx.repository.rows.map((row) => row.updatedAt)).toEqual(updatedAt);
+    await ctx.service.reorder(admin, "regular", [c, b, a], at(HOUR));
+    const second = ctx.roles.entries.length;
+    await ctx.service.reorder(admin, "regular", [c, b, a], at(2 * HOUR));
+    expect(ctx.roles.entries).toHaveLength(second);
+  });
+
+  it("не тот состав — 400 «team_slide_order_mismatch», ничего не записано и аудита нет", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "706", "admin");
+    const [a, b, c] = await three(ctx, admin);
+    const pinned = await ctx.service.create(admin, input({ title: "З", pinned: true }), NOW);
+    const archived = await ctx.service.create(admin, input({ title: "Снятый" }), NOW);
+    await ctx.service.archive(admin, archived.slideId, NOW);
+    const entries = ctx.roles.entries.length;
+
+    const bad: [string, string[]][] = [
+      ["не хватает одного", [c, a]],
+      ["неизвестный id", [c, a, randomUUID()]],
+      ["слайд другой группы", [c, a, pinned.slideId]],
+      ["снятый слайд", [c, a, b, archived.slideId]],
+      ["повтор", [c, c, a]],
+      ["лишний", [c, a, b, randomUUID()]],
+    ];
+    for (const [name, ids] of bad) {
+      expect(await codeOf(ctx.service.reorder(admin, "regular", ids, at(HOUR))), name).toBe("team_slide_order_mismatch");
+    }
+    expect(await titles(ctx, admin)).toEqual([["З", 0], ["A", 0], ["B", 1], ["C", 2], ["Снятый", 3]]);
+    expect(ctx.roles.entries).toHaveLength(entries);
+    expect(await codeOf(ctx.service.reorder(admin, "pinned", [a], at(HOUR)))).toBe("team_slide_order_mismatch");
+  });
+
+  it("кончившийся и будущий слайды входят в порядок своей группы", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "707", "admin");
+    const now = at(10 * DAY);
+    const ended = row({ title: "кончился", startsAt: at(0), endsAt: at(DAY), position: 0 });
+    const future = row({ title: "будет", startsAt: at(20 * DAY), endsAt: at(21 * DAY), position: 1 });
+    const active = row({ title: "идёт", startsAt: at(9 * DAY), endsAt: at(12 * DAY), position: 2 });
+    ctx.repository.rows.push(ended, future, active);
+    const result = await ctx.service.reorder(admin, "regular", [active.slideId, future.slideId, ended.slideId], now);
+    expect(result.order).toEqual([active.slideId, future.slideId, ended.slideId]);
+    expect((await ctx.service.catalog(admin, now)).slides.map((slide) => slide.title)).toEqual(["идёт", "будет", "кончился"]);
+  });
+
+  it("без home.edit — тот же отказ, что у заведения, и порядок прежний", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "708", "admin");
+    const [a, b, c] = await three(ctx, admin);
+    const outsider = await person(ctx, "709", "moderator");
+    expect(await codeOf(ctx.service.create(outsider, input(), NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.service.reorder(outsider, "regular", [c, b, a], NOW))).toBe("forbidden");
+    expect(await titles(ctx, admin)).toEqual([["A", 0], ["B", 1], ["C", 2]]);
   });
 });
 
@@ -318,6 +500,26 @@ describe("слайды команды по HTTP панели", () => {
     expect(updated.statusCode).toBe(201);
     expect(updated.json<{ data: { title: string } }>().data.title).toBe("Турнир");
     expect((await app.inject({ method: "POST", url: `${url}/не-uuid`, headers, payload })).statusCode).toBe(400);
+
+    // Порядок: «order» — не id слайда, неполный набор — 400, без права — 403.
+    const secondId = (await app.inject({ method: "POST", url, headers, payload: { ...payload, title: "Конкурс" } })).json<{ data: { slideId: string } }>().data.slideId;
+    const orderUrl = `${url}/order`;
+    const reordered = await app.inject({ method: "POST", url: orderUrl, headers, payload: { group: "regular", ids: [secondId, slideId] } });
+    expect(reordered.statusCode).toBe(201);
+    expect(reordered.json<{ data: { order: string[] } }>().data.order).toEqual([secondId, slideId]);
+    const listed = await app.inject({ method: "GET", url, headers });
+    expect(listed.json<{ data: { slides: { slideId: string; position: number }[] } }>().data.slides.map((slide) => [slide.slideId, slide.position])).toEqual([[secondId, 0], [slideId, 1]]);
+    const partial = await app.inject({ method: "POST", url: orderUrl, headers, payload: { group: "regular", ids: [secondId] } });
+    expect(partial.statusCode).toBe(400);
+    expect(partial.json<{ error: { code: string } }>().error.code).toBe("team_slide_order_mismatch");
+    expect((await app.inject({ method: "POST", url: orderUrl, headers, payload: { group: "other", ids: [secondId] } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: orderUrl, headers: { cookie }, payload: { group: "regular", ids: [secondId, slideId] } })).statusCode).toBe(403);
+    // Роль без home.edit: сессия есть, права нет.
+    await person(ctx, "910", "moderator");
+    const outsiderLogin = await app.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: "dev-910:Модератор" } });
+    const outsiderCookie = `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(outsiderLogin.headers["set-cookie"]))?.[1] ?? ""}`;
+    const outsider = await app.inject({ method: "POST", url: orderUrl, headers: { cookie: outsiderCookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE }, payload: { group: "regular", ids: [secondId, slideId] } });
+    expect(outsider.statusCode).toBe(403);
 
     const archived = await app.inject({ method: "POST", url: `${url}/${slideId}/archive`, headers });
     expect(archived.statusCode).toBe(201);

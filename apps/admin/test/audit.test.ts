@@ -32,6 +32,15 @@ describe("журнал аудита", () => {
     expect(auditValue(changes[0]?.after, "order")).toBe("c, a, b");
   });
 
+  it("перестановка слайдов главной (T-0189): название действия, одна правка «порядок» с названиями слайдов", () => {
+    expect(actionTitle("home.slides.reorder")).toBe("Порядок слайдов главной");
+    const reordered = entry({ action: "home.slides.reorder", target: "regular", before: { order: ["Турнир", "Конкурс"] }, after: { order: ["Конкурс", "Турнир"] } });
+    const changes = auditChanges(reordered);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ field: "order" });
+    expect(auditValue(changes[0]?.after, "order")).toBe("Конкурс, Турнир");
+  });
+
   it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
     expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });

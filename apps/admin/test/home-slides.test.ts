@@ -10,8 +10,11 @@ import {
   draftProblem,
   emptyDraft,
   fetchSlides,
+  reorderSlides,
+  slideGroups,
   slideRequest,
   targetLabel,
+  slideSchema,
   updateSlide,
   type SlideDraft,
   type SlideLimits,
@@ -45,6 +48,7 @@ function slide(patch: Partial<TeamSlide> = {}): TeamSlide {
     platforms: ["telegram", "vk"],
     audience: "newbies",
     pinned: false,
+    position: 0,
     startsAt: NOW.toISOString(),
     endsAt: new Date(NOW.getTime() + 3 * DAY).toISOString(),
     createdAt: NOW.toISOString(),
@@ -81,12 +85,47 @@ describe("слайды команды в панели", () => {
       startsAt: NOW.toISOString(),
       platforms: ["telegram", "max", "vk", "web"],
     });
+    // Место слайда уходит только запросом порядка: ни в заведении, ни в правке его нет.
+    expect(JSON.parse(String(calls[1]?.init.body))).not.toHaveProperty("position");
 
     await updateSlide(api, ID, draft(), NOW);
+    expect(JSON.parse(String(calls[2]?.init.body))).not.toHaveProperty("position");
     expect([calls[2]?.url, calls[2]?.init.method]).toEqual([`/api/v1/admin/home/slides/${ID}`, "POST"]);
     const archived = await archiveSlide(api, ID);
     expect(archived.ok && archived.data.state).toBe("archived");
     expect(calls[3]?.url).toBe(`/api/v1/admin/home/slides/${ID}/archive`);
+  });
+
+  it("ответ списка несёт место слайда; без него — не слайд", () => {
+    expect(slideSchema.safeParse(slide({ position: 3 })).success).toBe(true);
+    const { position: _position, ...without } = slide();
+    expect(slideSchema.safeParse(without).success).toBe(false);
+  });
+
+  it("новый порядок: POST /home/slides/order с группой и id, ответ разобран; ответ другой формы — ошибка", async () => {
+    const { fetch, calls } = fakeFetch(json(201, { data: { order: ["b", "a"] } }), json(201, { data: { order: "b,a" } }));
+    const api = new AdminApi(fetch);
+    const ok = await reorderSlides(api, "regular", ["b", "a"]);
+    expect(ok.ok && ok.data.order).toEqual(["b", "a"]);
+    expect([calls[0]?.url, calls[0]?.init.method]).toEqual(["/api/v1/admin/home/slides/order", "POST"]);
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ group: "regular", ids: ["b", "a"] });
+    expect((await reorderSlides(api, "pinned", ["a"])).ok).toBe(false);
+  });
+
+  it("группы списка: закреплённые, остальные и снятые; порядок как в ответе; кончившийся остаётся в своей группе", () => {
+    const list = [
+      slide({ slideId: "p1", pinned: true }),
+      slide({ slideId: "r1" }),
+      slide({ slideId: "e1", state: "ended" }),
+      slide({ slideId: "p2", pinned: true, state: "scheduled" }),
+      slide({ slideId: "x1", state: "archived", archivedAt: NOW.toISOString() }),
+      slide({ slideId: "x2", pinned: true, state: "archived", archivedAt: NOW.toISOString() }),
+    ];
+    const groups = slideGroups(list);
+    expect(groups.pinned.map((item) => item.slideId)).toEqual(["p1", "p2"]);
+    expect(groups.regular.map((item) => item.slideId)).toEqual(["r1", "e1"]);
+    expect(groups.archived.map((item) => item.slideId)).toEqual(["x1", "x2"]);
+    expect(slideGroups([])).toEqual({ pinned: [], regular: [], archived: [] });
   });
 
   it("правка начинается с сохранённого: время — в часах браузера, цель и площадки — как были", () => {
