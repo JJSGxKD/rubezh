@@ -3,8 +3,8 @@ id: T-0180
 title: Панель «Ссылки» — автоисточники: пометка «авто», название, скрытие и сводка незнакомых меток
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0179, T-0167]
