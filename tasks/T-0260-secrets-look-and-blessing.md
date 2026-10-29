@@ -100,7 +100,7 @@ batch: 4
      - `"blessing.wind": "Ветер"`;
      - `"blessing.harvest": "Жатва"`;
      - `"blessing.fortress": "Крепость"`;
-     - `"blessing.sight": "Зоркость"`;
+     - `"blessing.keen": "Зоркость"` (перезарядка на 8% короче — T-0258, решение владельца 28.10.2026);
      - `"blessing.flame": "Пламя"`;
    - имена тайников (`secret.<kind>.name`):
      - `shrine` — «Капище»;
