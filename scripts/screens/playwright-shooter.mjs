@@ -4,7 +4,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { contextOptions, openJob, runSteps } from "./steps.mjs";
+import { contextOptions, openSeededPage, runSteps } from "./steps.mjs";
 
 /** Пауза после последнего шага: анимации выключены, но экран ещё дорисовывается. */
 const SETTLE_MS = 400;
@@ -29,12 +29,12 @@ export async function createPlaywrightShooter({ browser: channel }) {
       const context = await browser.newContext(contextOptions(job));
       const consoleErrors = [];
       try {
-        const page = await context.newPage();
-        page.on("console", (message) => {
-          if (message.type() === "error") consoleErrors.push(message.text());
+        const page = await openSeededPage(context, job, (opened) => {
+          opened.on("console", (message) => {
+            if (message.type() === "error") consoleErrors.push(message.text());
+          });
+          opened.on("pageerror", (error) => consoleErrors.push(error.message));
         });
-        page.on("pageerror", (error) => consoleErrors.push(error.message));
-        await openJob(page, job);
         await runSteps(page, job.scenario);
         // Сеть успокаивается не всегда (внешние скрипты), поэтому ждём недолго и не падаем.
         await page.waitForLoadState("networkidle", { timeout: IDLE_WAIT_MS }).catch(() => undefined);

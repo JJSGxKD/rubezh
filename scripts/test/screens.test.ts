@@ -4,7 +4,7 @@ import { parseArgs, shotPlan, run, tlsOptionsFor, DEFAULT_SIZES, AS_USERS, DEFAU
 // @ts-expect-error — то же
 import { SCENARIOS } from "../screens/scenarios.mjs";
 // @ts-expect-error — то же
-import { runSteps, contextOptions, openJob, isLocalUrl } from "../screens/steps.mjs";
+import { runSteps, contextOptions, openJob, isLocalUrl, parseInstallKeys, readInstallKeys, seedConsent, openSeededPage } from "../screens/steps.mjs";
 
 // Команда нужна живым API и браузеру, поэтому в гейт не входит; здесь —
 // всё, что проверяется без браузера: флаги, план снимков, адреса, отказ при
@@ -259,5 +259,55 @@ describe("openJob", () => {
       },
     };
     await expect(openJob(page, { url: "https://x/", scenario: { id: "lobby" } })).rejects.toThrow(/lobby.*не открылся/);
+  });
+});
+
+describe("согласие первого запуска", () => {
+  const INSTALL_TS = [
+    "export const TEST_NOTICE_VERSION = 7;",
+    'const ACCEPTED_KEY = "bh.install.v1.accepted";',
+    'const NOTICE_KEY = "bh.install.v1.testNotice";',
+  ].join("\n");
+
+  it("ключи и версия читаются из install.ts, а не дублируются", () => {
+    expect(parseInstallKeys(INSTALL_TS)).toEqual({ accepted: "bh.install.v1.accepted", notice: "bh.install.v1.testNotice", version: "7" });
+    const real = readInstallKeys();
+    expect(real.accepted).toBe("bh.install.v1.accepted");
+    expect(real.notice).toBe("bh.install.v1.testNotice");
+    expect(Number(real.version)).toBeGreaterThan(0);
+  });
+
+  it.each(["ACCEPTED_KEY", "NOTICE_KEY", "TEST_NOTICE_VERSION"])("нет %s в install.ts — понятная ошибка", (name) => {
+    const broken = INSTALL_TS.split("\n").filter((line) => !line.includes(name)).join("\n");
+    expect(() => parseInstallKeys(broken)).toThrow(new RegExp(name));
+  });
+
+  it("seedConsent кладёт оба ключа с версией из файла", async () => {
+    const seen: Array<{ script: (arg: Record<string, string>) => void; arg: Record<string, string> }> = [];
+    const context = { addInitScript: async (script: (arg: Record<string, string>) => void, arg: Record<string, string>) => void seen.push({ script, arg }) };
+    await seedConsent(context, { accepted: "a", notice: "n", version: "7" });
+    expect(seen).toHaveLength(1);
+    const store = new Map<string, string>();
+    (globalThis as { localStorage?: unknown }).localStorage = { setItem: (k: string, v: string) => void store.set(k, v) };
+    try {
+      seen[0]?.script(seen[0].arg);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
+    expect(Object.fromEntries(store)).toEqual({ a: "1", n: "7" });
+  });
+
+  it("согласие засеяно до goto", async () => {
+    const order: string[] = [];
+    const page = { goto: async () => void order.push("goto") };
+    const context = {
+      addInitScript: async () => void order.push("addInitScript"),
+      newPage: async () => {
+        order.push("newPage");
+        return page;
+      },
+    };
+    await openSeededPage(context, { url: "https://localhost:5173/", scenario: { id: "lobby" } }, () => order.push("attach"));
+    expect(order).toEqual(["addInitScript", "newPage", "attach", "goto"]);
   });
 });
