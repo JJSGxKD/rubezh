@@ -5,6 +5,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.repository.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { PrismaAutoSourcesRepository, UNKNOWN_KEYS_MAX } from "../src/modules/links/auto-sources.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
 
@@ -123,5 +124,85 @@ describe.skipIf(DATABASE_URL === "")("ссылки на живом Postgres", ()
     expect(await links.retarget(code, "landing")).toMatchObject({ code, target: "landing" });
     expect(await links.byCode(code)).toMatchObject({ target: "landing" });
     expect(await links.retarget(newLinkCode(), "bot")).toBeNull();
+  });
+  describe("автоисточники: название, скрытие, сводка ключей (T-0180)", () => {
+    const run = randomUUID().replaceAll("-", "").slice(0, 6);
+    const autoSources = () => new PrismaAutoSourcesRepository(prisma);
+
+    async function autoSource(tag: string): Promise<string> {
+      const autoKey = `src-t${run}${tag}`;
+      await autoSources().ensure({ autoKey, source: `t${run}${tag}`, campaign: "oct", medium: null, partnerTag: null, platform: "telegram", now: new Date(), cap: 1_000_000 });
+      const row = await prisma.link.findUnique({ where: { autoKey }, select: { code: true } });
+      if (row === null) throw new Error("автоисточник не заведён");
+      return row.code;
+    }
+
+    afterAll(async () => {
+      await prisma.link.deleteMany({ where: { autoKey: { startsWith: `src-t${run}` } } });
+      await prisma.startParamKey.deleteMany({ where: { key: { startsWith: `t${run}` } } });
+    });
+
+    it("setDisplay: название и скрытие только у автоисточника; ручная ссылка — null, ничего не меняется", async () => {
+      const code = await autoSource("a");
+      const now = new Date();
+      expect(await links.setDisplay(code, { title: "Посев в Канале N" }, now)).toMatchObject({ code, title: "Посев в Канале N", hiddenAt: null, campaign: "oct", source: `t${run}a` });
+      expect(await links.setDisplay(code, { hidden: true }, now)).toMatchObject({ title: "Посев в Канале N", hiddenAt: now });
+      // Скрытие название не трогает, а название — скрытие.
+      expect(await links.setDisplay(code, { title: null }, now)).toMatchObject({ title: null, hiddenAt: now });
+      expect(await links.setDisplay(code, { hidden: false }, now)).toMatchObject({ hiddenAt: null });
+
+      const manual = newLinkCode();
+      await links.create({ code: manual, platform: "telegram", campaign: "manual", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run" });
+      expect(await links.setDisplay(manual, { title: "Имя" }, now)).toBeNull();
+      expect(await links.setDisplay(newLinkCode(), { hidden: true }, now)).toBeNull();
+      expect(await links.byCode(manual)).toMatchObject({ title: null, hiddenAt: null });
+    });
+
+    it("скрытый источник остаётся в list со счётом запусков и hiddenAt; повторный ensure его не заводит заново", async () => {
+      const code = await autoSource("b");
+      const accounts = new PrismaAccountRepository(prisma);
+      const account = await accounts.upsert({ platform: "telegram", platformUserId: String(950_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Пришёл по метке", username: null, photoUrl: null }, Date.now());
+      await new PrismaSessionsRepository(prisma).record({
+        sessionId: randomUUID(),
+        accountId: account.accountId,
+        platform: "telegram",
+        place: "miniapp",
+        startKind: "tagged",
+        startParam: `src-t${run}b`,
+        startRef: `src-t${run}b`,
+        clientPlatform: "android",
+        clientVersion: "8.0",
+        deviceClass: "mobile",
+        os: "android",
+        ipPrefix: "198.51.100.0/24",
+        startedAt: new Date().toISOString(),
+      });
+
+      const hiddenAt = new Date();
+      await links.setDisplay(code, { hidden: true }, hiddenAt);
+      expect((await links.list(500)).find((row) => row.code === code)).toMatchObject({ auto: true, hiddenAt, directLaunches: 1 });
+
+      const outcome = await autoSources().ensure({ autoKey: `src-t${run}b`, source: `t${run}b`, campaign: "oct", medium: null, partnerTag: null, platform: "telegram", now: new Date(), cap: 1_000_000 });
+      expect(outcome).toBe("existing");
+      expect(await links.byCode(code)).toMatchObject({ hiddenAt });
+    });
+
+    it("unknownKeys: по убыванию последнего раза и не больше потолка", async () => {
+      const at = (offset: number) => new Date(Date.UTC(2026, 9, 20) + offset);
+      await prisma.startParamKey.createMany({
+        data: [
+          { key: `t${run}old`, hits: 3, firstAt: at(0), lastAt: at(1_000) },
+          { key: `t${run}new`, hits: 14, firstAt: at(0), lastAt: at(9_000_000_000) },
+          { key: `t${run}mid`, hits: 1, firstAt: at(0), lastAt: at(5_000_000) },
+        ],
+      });
+      const rows = await autoSources().unknownKeys();
+      expect(rows.length).toBeLessThanOrEqual(UNKNOWN_KEYS_MAX);
+      expect(rows.map((row) => row.key).filter((key) => key.startsWith(`t${run}`))).toEqual([`t${run}new`, `t${run}mid`, `t${run}old`]);
+      expect(rows.find((row) => row.key === `t${run}new`)).toMatchObject({ hits: 14, firstAt: at(0), lastAt: at(9_000_000_000) });
+      // По убыванию «последнего раза» вся выдача, а не только наши строки.
+      expect(rows.map((row) => row.lastAt.getTime())).toEqual([...rows.map((row) => row.lastAt.getTime())].sort((a, b) => b - a));
+      expect(await autoSources().unknownKeys(2)).toHaveLength(2);
+    });
   });
 });
