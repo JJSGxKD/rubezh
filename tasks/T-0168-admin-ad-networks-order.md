@@ -3,8 +3,8 @@ id: T-0168
 title: Порядок рекламных сетей в круге — перетаскиванием вместо числа
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0167]
