@@ -89,12 +89,8 @@ describe("порядок попыток", () => {
 });
 
 describe("что считается неудачей", () => {
-  it.each([
-    [{ status: null, error: "network" }, "сетевой сбой"],
-    [{ status: null, error: "timeout" }, "таймаут попытки"],
-    [{ status: 403, error: null }, "403 — отказ по стране"],
-    [{ status: 451, error: null }, "451 — недоступно по закону"],
-  ])("%j (%s) — к следующей попытке", (outcome) => {
+  // Сетевой сбой, таймаут попытки, 403 (отказ по стране) и 451 (недоступно по закону).
+  it.each([[{ status: null, error: "network" }], [{ status: null, error: "timeout" }], [{ status: 403, error: null }], [{ status: 451, error: null }]])("%j — к следующей попытке", (outcome) => {
     expect(shouldFallBack(outcome)).toBe(true);
   });
 

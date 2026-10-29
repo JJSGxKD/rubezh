@@ -26,6 +26,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
 import { AdminNameRulesController } from "./admin-name-rules.controller.js";
+import { AdminProxiesController } from "./admin-proxies.controller.js";
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
@@ -108,6 +109,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminPurchasesController,
     AdminAdsController,
     AdminNameRulesController,
+    AdminProxiesController,
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,

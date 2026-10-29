@@ -403,12 +403,12 @@ describe("прокси в панели по HTTP", () => {
   });
 
   describe("правка и сообщение репликам", () => {
-    it("создание, правка, проверка и смена режима шлют сообщение в канал прокси", async () => {
+    it("создание, правка и смена режима шлют сообщение в канал прокси, проверка — нет: маршруты она не меняет", async () => {
       const id = await idOf();
       await call("PATCH", `/${id}`, "own", { enabled: false });
       await call("POST", `/${id}/check`, "own");
       await call("PUT", "/modes/fx.cbr", "own", { mode: "proxy_only" });
-      expect(publish.mock.calls.map((args) => args[0])).toEqual([PROXIES_CHANNEL, PROXIES_CHANNEL, PROXIES_CHANNEL, PROXIES_CHANNEL]);
+      expect(publish.mock.calls.map((args) => args[0])).toEqual([PROXIES_CHANNEL, PROXIES_CHANNEL, PROXIES_CHANNEL]);
     });
 
     it("недоступный Redis не мешает правке", async () => {
