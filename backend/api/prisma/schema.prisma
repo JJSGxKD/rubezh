@@ -468,6 +468,7 @@ model Run {
   purchases    Purchase[]
   adContinues  RunAdContinue[]
   gemContinues RunGemContinue[]
+  proof        RunProof?
 
   // Профиль игрока: его забеги, свежие первыми.
   @@index([accountId, finishedAt])
@@ -534,6 +535,27 @@ model RunGemContinue {
   // Продолжения игрока по времени: каскад с аккаунта и разбор покупок.
   @@index([accountId, grantedAt])
   @@map("run_gem_continue")
+}
+
+/// Запись забега для проверки (docs/35-stage4-plan.md WP5, tasks/T-0317):
+/// сжатый gzip-ом `RunProof` — всё, что задаёт исход, и ничего лишнего. По ней
+/// сервер повторяет забег (T-0318, T-0319). Одна запись на забег; обычная живёт
+/// неделю (`keep_until`), у забегов из верха и с редкой добычей — полгода.
+/// Очистка раз в час удаляет просроченные пачками; вайп — вместе с забегами
+/// (каскад).
+model RunProof {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  /// gzip от JSON записи: до 64 КБ, распакованная — до 512 КБ
+  proof      Bytes
+  sizeBytes  Int      @map("size_bytes")
+  receivedAt DateTime @map("received_at") @db.Timestamptz(3)
+  keepUntil  DateTime @map("keep_until") @db.Timestamptz(3)
+
+  run Run @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  // Очистка: просроченные, самые давние первыми.
+  @@index([keepUntil])
+  @@map("run_proof")
 }
 
 // Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
