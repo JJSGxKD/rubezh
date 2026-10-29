@@ -189,6 +189,8 @@ const hang: Responder = (_input, init) =>
   new Promise<Response>((_resolve, reject) => {
     const signal = init?.signal;
     if (signal === undefined || signal === null) return;
+    // Как живой fetch: сигнал, отменённый до начала, отказывает сразу.
+    if (signal.aborted) reject(signal.reason);
     signal.addEventListener("abort", () => reject(signal.reason), { once: true });
   });
 
