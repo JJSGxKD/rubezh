@@ -14,6 +14,7 @@ shared:
   - pnpm-workspace.yaml
   - pnpm-lock.yaml
   - tsconfig.json
+  - tsconfig.tests.json
   - vitest.config.ts
   - docker-compose.yml
   - infra/**
