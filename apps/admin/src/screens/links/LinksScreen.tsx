@@ -279,7 +279,7 @@ export function LinksScreen({ id }: { id: string | null }) {
                 render: (row) => (row.partner === null ? <span className="text-text-muted">{ownerLabel(null)}</span> : <Badge tone="info">{ownerLabel(row.partner)}</Badge>),
               },
               { title: "Источник", render: (row) => row.source ?? "—" },
-              { title: "Адрес", render: (row) => <code className="text-xs">{row.url}</code> },
+              { title: "Адрес", render: (row) => <code className="text-xs break-all">{row.url}</code> },
               { title: "Кликов", render: (row) => formatNumber(row.clicks), align: "right" },
               { title: "За 30 дней", render: (row) => formatNumber(row.clicks30d), align: "right" },
               { title: "Запусков", help: LAUNCHES_HELP, render: (row) => <span className="whitespace-nowrap">{launchesLabel(row)}</span>, align: "right" },
