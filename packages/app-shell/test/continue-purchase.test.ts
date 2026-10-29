@@ -140,7 +140,7 @@ let invoiceStatus: InvoiceStatus;
 let opened: string[];
 let events: { event: string; payload: Record<string, unknown> }[];
 
-function mount(adapterPatch: Partial<PlatformAdapter> = {}): void {
+function mount(adapterPatch: Partial<PlatformAdapter> = {}, withAuth = true): void {
   initShell({
     adapter: {
       ui: createNoopPlatformUi(),
@@ -151,7 +151,7 @@ function mount(adapterPatch: Partial<PlatformAdapter> = {}): void {
       },
       ...adapterPatch,
     } as unknown as PlatformAdapter,
-    capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, auth: { baseUrl: "" } },
+    capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, ...(withAuth ? { auth: { baseUrl: "" } } : {}) },
     storage: memoryStorage(),
     analytics: (event, payload) => void events.push({ event, payload: payload ?? {} }),
     build: { version: "test", contentHash: "abc", platform: "telegram" },
@@ -197,7 +197,14 @@ describe("покупка второго шанса", () => {
     expect(withPayments.started[0]?.continues).toBe(true);
     useRun.getState().stop();
 
+    // Окна оплаты нет, но есть вход в аккаунт — остаются самоцветы (Р162).
     mount({ openInvoice: undefined });
+    const gemsOnly = await downed();
+    expect(gemsOnly.started[0]?.continues).toBe(true);
+    useRun.getState().stop();
+
+    // Ни окна оплаты, ни входа — второго шанса нет вовсе.
+    mount({ openInvoice: undefined }, false);
     const without = await downed();
     expect(without.started[0]?.continues).toBe(false);
     useRun.getState().stop();

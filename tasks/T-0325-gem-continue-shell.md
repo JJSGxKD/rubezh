@@ -3,8 +3,8 @@ id: T-0325
 title: Второй шанс за самоцветы — экран смерти: кнопка с ценой и балансом, нехватка видна до нажатия, ролик раз в сутки
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0324]
@@ -12,6 +12,11 @@ zones:
   - packages/app-shell/src/state/gem-continue.ts
   - packages/app-shell/src/screens/run/GemContinue.tsx
   - packages/app-shell/test/gem-continue.test.ts
+  - packages/app-shell/src/state/run.ts
+  - packages/app-shell/src/state/payments-availability.ts
+  - packages/app-shell/src/screens/run/RunScreen.tsx
+  - packages/app-shell/test/death-rules.test.ts
+  - packages/app-shell/test/continue-purchase.test.ts
 shared:
   - packages/app-shell/src/screens/run/SecondChance.tsx
   - packages/app-shell/src/screens/run/DeathOverlay.tsx

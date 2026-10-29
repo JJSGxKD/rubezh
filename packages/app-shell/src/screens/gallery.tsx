@@ -39,6 +39,7 @@ import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
+import type { GemContinueStage } from "../state/gem-continue";
 import type { ContinueStage } from "../state/continue-purchase";
 
 /**
@@ -224,6 +225,11 @@ export function GalleryScreen(): ReactNode {
           ))}
           {AD_STAGES.map(([ad, paid], index) => (
             <SecondChance key={`ad-${String(index)}`} adPreview={ad} {...(paid === null ? {} : { paidPreview: paid })} />
+          ))}
+          {/* Самоцветы (Р162): с роликом он главный, без ролика главные самоцветы;
+              нехватка — выключенная кнопка с подписью. */}
+          {GEM_STAGES.map(([gems, ad, paid], index) => (
+            <SecondChance key={`gems-${String(index)}`} gemsPreview={gems} {...(ad === null ? {} : { adPreview: ad })} {...(paid === null ? {} : { paidPreview: paid })} />
           ))}
         </div>
 
@@ -528,6 +534,23 @@ const AD_STAGES: readonly (readonly [AdContinueStage, ContinueStage | null])[] =
   [{ kind: "ready", pass: false, notice: "closed" }, { kind: "ready", offer: LIVE_OFFER }],
   [{ kind: "ready", pass: false, notice: "claim_failed" }, null],
   [{ kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+];
+
+const GEM_OFFER = { continueNo: 1, priceGems: 5, balance: 12 } as const;
+
+/**
+ * Второй шанс за самоцветы: цена и баланс, нехватка, загрузка, обрыв сети,
+ * отпавший способ — рядом с роликом и звёздами и без них.
+ */
+const GEM_STAGES: readonly (readonly [GemContinueStage, AdContinueStage | null, ContinueStage | null])[] = [
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: "offline" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "loading" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "buying", offer: GEM_OFFER }, AD_READY, null],
+  [{ kind: "unavailable", reason: "insufficient_funds" }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
 ];
 
 function change(
