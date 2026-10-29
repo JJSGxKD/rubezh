@@ -50,6 +50,7 @@
 | Кабинет партнёра | `PARTNER_CABINET_PORT` | `5177` | через Caddy | через Caddy, отдельный поддомен |
 | PostgreSQL | `POSTGRES_PORT` | `127.0.0.1:5432` | `127.0.0.1:5532` | **не публикуется** |
 | Redis | `REDIS_PORT` | `127.0.0.1:6379` | `127.0.0.1:6479` | **не публикуется** |
+| Воркер симуляции `sim-worker` (метрики Prometheus и `/health`) | `SIM_WORKER_METRICS_PORT` | `4010` | `127.0.0.1:4110` | не публикуется: метрики берёт Prometheus из сети compose (`35-stage4-plan.md`, Р15, `tasks/T-0302`) |
 | Prometheus | `PROMETHEUS_PORT` | `9090` | `9190` | не публикуется |
 | Grafana | `GRAFANA_PORT` | `3001` | `3101` | через Caddy, поддомен |
 | Caddy | `HTTP_PORT` / `HTTPS_PORT` | — | `80` / `443` | `80` / `443` |
@@ -646,6 +647,19 @@ staging не хватит, а данные закрытого теста не с
 | `LOG_LEVEL` | `debug` | `info` |
 | `COOKIE_SECURE` | `false` | `true` |
 | CORS | localhost-адреса | только реальные домены мини-приложений |
+
+**Воркер симуляции** (`apps/sim-worker`, `35-stage4-plan.md` Р15) — второй
+образ релиза рядом с API: `ghcr.io/jjsgxkd/rubezh-sim-worker` под тем же
+номером версии, тот же образ Node с той же версией и digest. В образе один
+файл — движок, BullMQ, ioredis и Zod собраны внутрь, `node_modules` и
+исходников монорепо там нет. Воркер ходит в один Redis, поэтому в проде живёт
+в сети `data` (без выхода наружу) под профилем `sim-worker`; на процессор и
+память у него потолок (`cpus: 1`, `mem_limit: 768m`) — прогон занимает ядро
+целиком и не должен отнять его у API и Postgres. Включается, когда сервер
+начнёт ставить задания (`tasks/T-0303`): `SIM_WORKER_TAG` в `.env` и
+`COMPOSE_PROFILES=sim-worker`; `deploy.sh` его пока не раскатывает. Переменные
+воркера — `REDIS_URL` и `SIM_WORKER_METRICS_PORT`, остальное — константы в
+`apps/sim-worker/src/limits.ts` (`docs/30-configuration-map.md`).
 
 Порядок выката (подробно — `09-ci-cd.md` §10):
 

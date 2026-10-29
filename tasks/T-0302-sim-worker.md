@@ -24,6 +24,7 @@ shared:
   - docs/01-tech-stack.md
   - docs/20-env-and-ports.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
