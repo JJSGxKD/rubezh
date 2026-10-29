@@ -175,7 +175,10 @@ describe.skipIf(DATABASE_URL === "")("слайды команды на живо�
     it("reorder переписывает места 0…n−1 и только у сдвинувшихся строк", async () => {
       const group: TeamSlideGroup = "regular";
       await scratch(3, { pinned: false, endsAt: at(5 * DAY) });
+      // Места группы выравниваются запросом в прежнем порядке — дальше сдвигаются только переставленные.
+      await slides.reorder(group, (await wholeGroup(false)).map((slide) => slide.slideId), by, at(HOUR));
       const before = await wholeGroup(false);
+      expect(before.map((slide) => slide.position)).toEqual(before.map((_, index) => index));
       const ids = before.map((slide) => slide.slideId);
       const swapped = [ids[1] as string, ids[0] as string, ...ids.slice(2)];
       const result = await slides.reorder(group, swapped, by, at(2 * HOUR));

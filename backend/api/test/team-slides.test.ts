@@ -515,8 +515,8 @@ describe("слайды команды по HTTP панели", () => {
     expect((await app.inject({ method: "POST", url: orderUrl, headers, payload: { group: "other", ids: [secondId] } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: orderUrl, headers: { cookie }, payload: { group: "regular", ids: [secondId, slideId] } })).statusCode).toBe(403);
     // Роль без home.edit: сессия есть, права нет.
-    await person(ctx, "910", "moderator");
-    const outsiderLogin = await app.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: "dev-910:Модератор" } });
+    await person(ctx, "dev-player-910", "moderator");
+    const outsiderLogin = await app.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: "dev-player-910:Модератор" } });
     const outsiderCookie = `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(outsiderLogin.headers["set-cookie"]))?.[1] ?? ""}`;
     const outsider = await app.inject({ method: "POST", url: orderUrl, headers: { cookie: outsiderCookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE }, payload: { group: "regular", ids: [secondId, slideId] } });
     expect(outsider.statusCode).toBe(403);
