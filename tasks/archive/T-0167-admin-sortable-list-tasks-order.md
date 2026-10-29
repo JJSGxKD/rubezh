@@ -41,7 +41,7 @@ batch: 3
 
 # T-0167. Порядок заданий перетаскиванием — SortableList в панели и запрос порядка
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json)](../README.md#значки-статуса)
 
 ## Зачем
 
