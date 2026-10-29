@@ -2123,6 +2123,51 @@ model IntegrationSecret {
   @@map("integration_secret")
 }
 
+/// Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, T-0065).
+/// Схема, порт, страна и «пароль заполнен целиком или не заполнен вовсе» держатся CHECK в миграции.
+model OutboundProxy {
+  proxyId       String    @id @map("proxy_id") @db.Uuid
+  name          String    @db.VarChar(60)
+  /// `http`, `https` или `socks5`
+  scheme        String    @db.VarChar(8)
+  /// домен или IP без схемы и порта
+  host          String    @db.VarChar(255)
+  port          Int
+  username      String?   @db.VarChar(128)
+  /// пароль — шифртекстом SecretCipher; отпечаток ключа — для перешифровки
+  passwordIv    Bytes?    @map("password_iv")
+  passwordTag   Bytes?    @map("password_tag")
+  passwordCt    Bytes?    @map("password_ct")
+  passwordKeyId String?   @map("password_key_id") @db.VarChar(16)
+  /// ISO-код из двух заглавных букв — вводится руками
+  country       String    @db.VarChar(2)
+  enabled       Boolean
+  /// чем меньше, тем раньше в переборе
+  priority      Int
+  note          String?   @db.VarChar(200)
+  lastCheckAt   DateTime? @map("last_check_at") @db.Timestamptz(3)
+  lastCheckOk   Boolean?  @map("last_check_ok")
+  lastCheckNote String?   @map("last_check_note") @db.VarChar(200)
+  /// кто менял последним; без внешнего ключа — прокси переживает аккаунт
+  updatedBy     String    @map("updated_by") @db.Uuid
+  updatedAt     DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@index([enabled, priority])
+  @@map("outbound_proxy")
+}
+
+/// Режим сервиса клиента исходящих (Р91): строки нет — умолчание из кода (`infra/outbound/outbound-route.ts`).
+model OutboundServiceMode {
+  /// `fx.cbr`, `telegram.bot` — из каталога `OUTBOUND_SERVICES`
+  service   String   @id @db.VarChar(32)
+  /// `direct_first`, `proxy_only` или `direct_only`
+  mode      String   @db.VarChar(16)
+  updatedBy String   @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("outbound_service_mode")
+}
+
 /// Картинка из панели (docs/35-stage4-plan.md О42): в базе до CDN. id — SHA-256
 /// содержимого: одинаковый файл — одна строка, адрес не меняется, поэтому
 /// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат

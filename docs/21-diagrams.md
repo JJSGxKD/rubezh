@@ -942,6 +942,35 @@ erDiagram
         datetime updated_at
     }
 
+    OUTBOUND_PROXY {
+        uuid proxy_id PK
+        string name
+        string scheme "http, https или socks5"
+        string host "домен или IP без схемы и порта"
+        int port "1…65535"
+        string username "nullable"
+        bytes password_iv "nullable: 12 байт; четыре колонки пароля заполнены все или ни одна"
+        bytes password_tag "nullable: 16 байт подписи GCM"
+        bytes password_ct "nullable: пароль только шифртекстом"
+        string password_key_id "nullable: отпечаток ключа шифрования"
+        string country "ISO-код из двух заглавных букв, вводится руками"
+        boolean enabled
+        int priority "меньше — раньше в переборе"
+        string note "nullable"
+        datetime last_check_at "nullable: последняя проверка"
+        boolean last_check_ok "nullable"
+        string last_check_note "nullable: внешний адрес и время ответа или причина сбоя"
+        uuid updated_by "без внешнего ключа"
+        datetime updated_at
+    }
+
+    OUTBOUND_SERVICE_MODE {
+        string service PK "из каталога OUTBOUND_SERVICES: fx.cbr, telegram.bot…"
+        string mode "direct_first, proxy_only или direct_only"
+        uuid updated_by "без внешнего ключа"
+        datetime updated_at
+    }
+
     ACCOUNT_RESTRICTION {
         uuid restriction_id PK
         uuid account_id FK "удалённый аккаунт уносит свои строки"
@@ -1432,6 +1461,14 @@ erDiagram
   имя ключа подписано вместе со шифртекстом, и строку не переложить под
   другой ключ. `key_id` — отпечаток ключа шифрования: при его смене прежний
   читает старые строки. Длины IV и подписи держит база.
+- **`OUTBOUND_PROXY` и `OUTBOUND_SERVICE_MODE` — прокси для исходящих
+  запросов** (Р91, T-0065, поток — §4.30). Список прокси из панели и режим
+  каждого сервиса клиента исходящих; строки режима нет — работает умолчание
+  из кода (`infra/outbound/outbound-route.ts`). Пароль прокси — только
+  шифртекстом тем же `SecretCipher`, что ключи интеграций; имя шифртекста —
+  `proxy:<id>`, поэтому строку не переложить под другой прокси. Ни связей с
+  аккаунтом, ни внешних ключей: «кто менял» переживает человека. При вайпе
+  таблицы остаются — это настройка команды, а не данные игрока.
 - **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
   §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
   забег, ни оплата: проход раз в минуту выводит их из фактов — первого
