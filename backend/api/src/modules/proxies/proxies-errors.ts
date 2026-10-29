@@ -24,6 +24,6 @@ export class ProxyLimitError extends DomainError {
 /** Пароль прокси хранится шифртекстом, а ключа шифрования нет — как с ключами интеграций (Р53). */
 export class ProxyPasswordStorageDisabledError extends DomainError {
   constructor() {
-    super("secrets_disabled", "Пароль прокси хранится зашифрованным: задайте SECRETS_ENCRYPTION_KEY в окружении сервера (openssl rand -base64 32)", 409);
+    super("secrets_disabled", "Пароль прокси хранится зашифрованным, а в окружении сервера нет SECRETS_ENCRYPTION_KEY (его даёт openssl rand -base64 32)", 409);
   }
 }

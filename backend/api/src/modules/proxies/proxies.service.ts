@@ -151,7 +151,7 @@ export class ProxiesService {
     if (row === null) throw new ProxyNotFoundError();
 
     const proxy = this.connection(row);
-    const outcome = proxy === null ? { ok: false, note: "Пароль прокси не расшифровывается — задайте его заново" } : await runProxyCheck(this.proxyFetch, proxy);
+    const outcome = proxy === null ? { ok: false, note: "Пароль прокси не расшифровывается: его нужно задать заново" } : await runProxyCheck(this.proxyFetch, proxy);
     const saved = await this.repository.saveCheck(proxyId, { at, ok: outcome.ok, note: outcome.note });
     if (saved === null) throw new ProxyNotFoundError();
     await this.roles.audit({ actorAccountId: actor.accountId, action: "proxies.check", target: proxyId, after: { name: row.name, scheme: row.scheme, host: row.host, port: row.port, ok: outcome.ok, note: outcome.note } });
