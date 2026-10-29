@@ -3,8 +3,8 @@ id: T-0064
 title: Курсы руками — «Обновить сейчас» у источника и запасной ручной курс любой валюты
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0063]
