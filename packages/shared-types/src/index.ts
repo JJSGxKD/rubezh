@@ -1403,6 +1403,19 @@ export interface RunResult {
    * не попадают — как враги без убийств в `killsByEnemy`.
    */
   damageByElement: Partial<Record<ElementId, number>>;
+  /**
+   * Самая долгая серия без попадания, целые секунды вниз (Р161, tasks/T-0321):
+   * лучшая из закрытых попаданием и текущей на конец забега. Попадание — любой
+   * урон, дошедший до игрока сквозь неуязвимость, и удар в щит буста тоже.
+   */
+  noHitSec: number;
+  /**
+   * Самая долгая серия без убийства, целые секунды вниз: только закрытые
+   * убийством — хвост до смерти или сдачи не считается.
+   */
+  noKillSec: number;
+  /** убийства по стихии добивающего удара; физических в словаре нет, стихии без убийств не попадают */
+  killsByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */
@@ -1506,6 +1519,10 @@ export interface RunFinishStats {
   eliteKills?: number;
   chestsOpened?: number;
   crystals?: number;
+  /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
+  noHitSec?: number;
+  noKillSec?: number;
+  killsByElement?: Partial<Record<ElementId, number>>;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";

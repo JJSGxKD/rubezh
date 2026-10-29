@@ -1,7 +1,7 @@
 import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
 import { continueSeconds } from "../sim/continue";
 import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
-import type { World } from "../sim/world";
+import { TICK_HZ, type World } from "../sim/world";
 
 /**
  * Итог забега: то, что видит игрок на экране смерти и что оболочка отправляет
@@ -53,6 +53,11 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,
     damageByElement: damageByElement(world),
+    // Серии идут в итог целыми секундами вниз: без попаданий — лучшая из закрытых и текущей на конец забега
+    // (кто выстоял десять минут и сдался, свою серию прошёл), без убийств — только закрытые убийством.
+    noHitSec: Math.floor(Math.max(stats.longestNoHitTicks, stats.tick - stats.lastHitTick) / TICK_HZ),
+    noKillSec: Math.floor(stats.longestNoKillTicks / TICK_HZ),
+    killsByElement: killsByElement(world),
     weapons: weaponSummaries(world),
     passives: passiveSummaries(world),
     // Сдача — это не смерть: причина смерти у неё пустая, иначе в аналитике
@@ -77,6 +82,16 @@ function killsByEnemy(world: World): Record<string, number> {
     const count = world.stats.killsByType[typeIndex];
     if (count > 0) kills[world.enemyTypes[typeIndex].id] = count;
   }
+  return kills;
+}
+
+/** Убийства по стихиям; физических в словаре нет, стихии без убийств не попадают. */
+function killsByElement(world: World): Partial<Record<ElementId, number>> {
+  const kills: Partial<Record<ElementId, number>> = {};
+  ELEMENTS.forEach((element, index) => {
+    const count = world.stats.killsByElement[index] ?? 0;
+    if (count > 0 && element !== "physical") kills[element] = count;
+  });
   return kills;
 }
 
