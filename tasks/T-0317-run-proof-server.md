@@ -3,8 +3,8 @@ id: T-0317
 title: Сервер принимает запись для проверки — PUT к своему забегу, проверка формы и размера, хранение 7 дней, дольше — у проверенных
 epic: E11
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
