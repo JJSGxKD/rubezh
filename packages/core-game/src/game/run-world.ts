@@ -58,6 +58,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     loadoutLimits: open?.limits ?? content.loadoutLimits,
     drops: content.drops,
     chests: content.chests,
+    secrets: content.secrets,
     continueRules: content.continueRules,
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
