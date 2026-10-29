@@ -98,7 +98,7 @@ describe("слайды команды в панели", () => {
 
   it("ответ списка несёт место слайда; без него — не слайд", () => {
     expect(slideSchema.safeParse(slide({ position: 3 })).success).toBe(true);
-    const { position: _position, ...without } = slide();
+    const without = Object.fromEntries(Object.entries(slide()).filter(([key]) => key !== "position"));
     expect(slideSchema.safeParse(without).success).toBe(false);
   });
 
