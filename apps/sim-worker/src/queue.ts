@@ -3,7 +3,7 @@ import type { Redis } from "ioredis";
 import { runCheck, type BaseRunCache, type CheckDeps, type CheckResult } from "./check";
 import { checkJobSchema, jsonBytes, type CheckJobInput } from "./job";
 import { CONTENT_CHECK_QUEUE, QUEUE_BUSY_MESSAGE, QUEUE_MAX_WAITING, SNAPSHOT_MAX_BYTES, SNAPSHOT_TOO_LARGE } from "./limits";
-import { logEvent } from "./log";
+import { logEvent, logThrottled } from "./log";
 import type { Metrics, Outcome } from "./metrics";
 
 /**
@@ -94,6 +94,6 @@ export function createCheckWorker(options: CheckWorkerOptions): Worker<CheckJobI
   );
   worker.on("failed", (job, error) => logEvent("warn", "check_failed", { jobId: job?.id ?? null, reason: error.name }));
   // Без обработчика ошибка соединения воркера роняла бы процесс.
-  worker.on("error", (error) => logEvent("warn", "worker_error", { reason: error.message }));
+  worker.on("error", (error) => logThrottled("warn", "worker_error", { reason: error.message }));
   return worker;
 }

@@ -1,6 +1,6 @@
 import { Redis } from "ioredis";
 import { loadConfig } from "./config";
-import { logEvent } from "./log";
+import { logEvent, logThrottled } from "./log";
 import { Metrics, startMetricsServer } from "./metrics";
 import { createCheckWorker } from "./queue";
 
@@ -13,6 +13,8 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const metrics = new Metrics();
   const connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null });
+  // Без обработчика ошибка соединения — необработанное событие; клиент переподключается сам.
+  connection.on("error", (error: Error) => logThrottled("warn", "redis_error", { reason: error.message }));
   const server = await startMetricsServer(config.metricsPort, config.metricsHost, metrics);
   const worker = createCheckWorker({ connection, metrics });
   logEvent("log", "started", { metricsPort: server.port });
