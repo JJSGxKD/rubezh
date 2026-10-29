@@ -27,7 +27,7 @@ shared:
   - docs/12-ip-and-licensing.md
   - docs/21-diagrams.md
   - docs/24-attribution-and-sharing.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

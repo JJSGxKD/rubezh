@@ -44,12 +44,15 @@ export function planStatusLabels({ headRef, eventName, action, labels, labelName
   if (eventName !== "pull_request") return none;
 
   if (action === "opened" || action === "reopened") {
+    // Любая поставленная метка (в том числе «задел») — решение потока, её не меняем.
     return statuses.length === 0 ? { add: [REVIEW_LABEL], remove: [] } : none;
   }
 
   if (action === "ready_for_review") {
-    // Вышел из черновика — значит отправлен. Но «доработка» и «ждёт владельца» не затираем:
-    // там уже решили, чего ждёт PR, а «на ревью» поверх них дало бы две метки.
+    // Вышел из черновика — значит отправлен. Но «доработка», «ждёт владельца» и «задел» не затираем:
+    // там уже решили, чего ждёт PR, а «на ревью» поверх них дало бы две метки. Задел с невлитыми
+    // зависимостями бот не спасает: красным его сделает claim-check, а метку «на ревью» поставит
+    // поток после доводки (tasks/README.md, «Задел»).
     const others = statuses.filter((label) => label !== WORK_LABEL);
     return {
       add: others.length === 0 ? [REVIEW_LABEL] : [],

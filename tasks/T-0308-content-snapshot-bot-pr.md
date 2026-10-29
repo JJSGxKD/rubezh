@@ -22,7 +22,7 @@ shared:
   - backend/api/src/infra/outbound/outbound-services.ts
   - docs/19-content-admin.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

@@ -18,7 +18,7 @@ shared:
   - packages/app-shell/src/screens/meta/pass.tsx
   - packages/app-shell/src/i18n/ru.json
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

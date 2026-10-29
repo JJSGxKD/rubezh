@@ -36,7 +36,7 @@ shared:
   - docs/33-telegram-mini-app-pitfalls.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

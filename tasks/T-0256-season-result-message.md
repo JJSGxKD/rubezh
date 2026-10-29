@@ -23,7 +23,7 @@ shared:
   - packages/app-shell/src/i18n/ru-bot.json
   - packages/app-shell/src/screens/meta/notifications.tsx
   - docs/35-stage4-plan.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

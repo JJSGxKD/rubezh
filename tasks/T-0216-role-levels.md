@@ -19,7 +19,7 @@ zones:
 shared:
   - backend/api/src/modules/roles/permissions.ts
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

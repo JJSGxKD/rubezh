@@ -3,14 +3,16 @@ id: T-0258
 title: Тайники рубежа — движок: размещение по кольцам, капище, клад, камень-указатель, огонёк
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0125]
 zones:
   - packages/core-game/src/content/secrets.ts
   - packages/core-game/src/game/sim/secrets.ts
+  - packages/core-game/src/game/sim/secrets-layout.ts
+  - packages/core-game/src/game/sim/secrets-rules.ts
   - packages/core-game/test/secrets.test.ts
   - packages/core-game/test/secrets-content.test.ts
 shared:
@@ -174,8 +176,32 @@ batch: 4
 
 - [ ] 5 тайников по трём кольцам из своего потока; первое — капище.
 - [ ] Капище даёт выбор благословения, клад — сундук, камень открывает остальные, огонёк ведёт к ближайшему.
-- [ ] `world.rng` не тронут; детерминизм между движками сохранён; эталон обновлён с дельтой.
+- [ ] `world.rng` не тронут; детерминизм между движками сохранён.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+
+## Отступления
+
+Согласованы с claude-lead-1 в PR (комментарий от 28.10.2026):
+
+- **«Эталон обновлён с дельтой»** — перенесено в задачу проводки, согласовано
+  с claude-lead-1. Этот PR вливается как «движок и данные»: `createRunWorld`,
+  контент-снимок, снимок забега, сцена и шина событий (`run-bus.ts`,
+  `run-engine.ts`, `MainScene.ts`, `run-world.ts`, `run/snapshot.ts`,
+  `content/snapshot.ts`, `snapshot-schema.ts`, `content-problems.ts`) не тронуты,
+  тайников в забеге пока нет, эталоны и `CONTENT_HASH` не сдвинулись.
+- **«Зоркость»** — перезарядка на 8 % короче (`keen`, `cooldown: 0.08`) вместо
+  «снаряды +1»: параметра `projectiles` у снаряжения нет.
+- **Огонёк** — свойство забега, а не вид кольца: один на забег, веса колец —
+  клад 3 и камень 1, мест на карте всегда пять.
+- **`RunResult.secrets`** необязательное: литералы итога в оболочке вне зон.
+- **«Крепость»** — `maxHp: 10` (при базовых 100 это +10 %).
+- **Поле `minGapUnits`** (400) добавлено: два места кольца не должны лечь друг
+  на друга.
+- **Клад** выдаёт сундук через `openChest`, а не подбором на земле; `ChestSource`
+  не меняется.
+- **`secrets.ts` разделён** на `secrets-rules.ts`, `secrets-layout.ts` и
+  `secrets.ts` (по просьбе тимлида, чтобы T-0259 не перевалил за 500 строк);
+  новые файлы вписаны в `zones`.
 
 ## PR
 
