@@ -120,6 +120,7 @@ const ACTION_TITLES: Record<string, string> = {
   "home.slide.create": "Новый слайд главной",
   "home.slide.update": "Правка слайда главной",
   "home.slide.archive": "Снятие слайда главной",
+  "home.slides.reorder": "Порядок слайдов главной",
   "links.create": "Новая ссылка",
   "links.retarget": "Смена цели ссылки",
   "links.conversion.send": "Повторная отправка конверсии в сеть",
