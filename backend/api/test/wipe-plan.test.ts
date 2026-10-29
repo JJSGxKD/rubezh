@@ -36,9 +36,9 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 65 моделей, стирается 19", () => {
+  it("остаётся 66 моделей, стирается 19", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(65);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(66);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(19);
   });
 
@@ -46,6 +46,12 @@ describe("план вайпа: полнота", () => {
     expect(plan.RunGemContinue?.action).toBe("keep");
     expect(plan.RunGemContinue?.why).toContain("каскад");
     expect(order).not.toContain("RunGemContinue");
+  });
+
+  it("запись забега для проверки уходит каскадом вместе с забегом (T-0317), своего шага стирания у неё нет", () => {
+    expect(plan.RunProof?.action).toBe("keep");
+    expect(plan.RunProof?.why).toContain("каскад");
+    expect(order).not.toContain("RunProof");
   });
 });
 
