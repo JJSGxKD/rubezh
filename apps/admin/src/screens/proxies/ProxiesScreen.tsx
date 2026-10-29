@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { checkProxy, checkSummary, fetchProxies, proxyAddress, type ProxyRow } from "../../api/proxies";
-import { formatDateTime } from "../../format";
+import { checkProxy, fetchProxies, type ProxyRow } from "../../api/proxies";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel, type Column } from "../../ui/kit";
+import { Button, ErrorNotice, Loading, Notice, Panel } from "../../ui/kit";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { ModesPanel } from "./ModesPanel";
+import { ProxyCard } from "./ProxyCard";
 import { ProxyDialog } from "./ProxyDialog";
 
 /**
@@ -40,66 +40,6 @@ export function ProxiesScreen() {
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
   const { enabled, proxies } = state.data;
 
-  const columns: Column<ProxyRow>[] = [
-    {
-      title: "Название",
-      primary: true,
-      render: (row) => (
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex flex-wrap items-center gap-2 font-medium">
-            {row.name}
-            {row.enabled ? null : <Badge>Выключен</Badge>}
-          </span>
-          {row.note === null ? null : <span className="text-xs text-text-muted">{row.note}</span>}
-        </div>
-      ),
-    },
-    {
-      title: "Адрес",
-      render: (row) => (
-        <div className="flex flex-col gap-0.5">
-          <code className="font-mono text-xs">{proxyAddress(row)}</code>
-          {row.username === null ? null : (
-            <span className="text-xs text-text-muted">
-              {row.username}
-              {row.passwordSet ? " · пароль задан" : ""}
-            </span>
-          )}
-        </div>
-      ),
-    },
-    { title: "Страна", render: (row) => row.country },
-    { title: "Порядок", help: HELP.proxies.priority, align: "right", render: (row) => row.priority },
-    {
-      title: "Состояние",
-      help: HELP.proxies.check,
-      render: (row) => {
-        const look = checkSummary(row);
-        return (
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <Badge tone={look.tone}>{look.label}</Badge>
-            <span className="max-w-xs text-xs text-text-muted">
-              {look.detail}
-              {row.lastCheck === null || row.passwordUnreadable ? "" : ` · ${formatDateTime(row.lastCheck.at)}`}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      title: "",
-      render: (row) =>
-        canEdit ? (
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button onClick={() => void check(row)} disabled={checking.has(row.proxyId) || row.passwordUnreadable}>
-              {checking.has(row.proxyId) ? "Проверяю…" : "Проверить"}
-            </Button>
-            <Button onClick={() => setEditing(row)}>Изменить</Button>
-          </div>
-        ) : null,
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-4">
       {enabled ? null : (
@@ -122,7 +62,15 @@ export function ProxiesScreen() {
           </>
         }
       >
-        <DataTable columns={columns} rows={proxies} rowKey={(row) => row.proxyId} empty="Прокси нет — сервер ходит ко всем внешним API напрямую" />
+        {proxies.length === 0 ? (
+          <p className="text-sm text-text-muted">Прокси нет — сервер ходит ко всем внешним API напрямую</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-border">
+            {proxies.map((row) => (
+              <ProxyCard key={row.proxyId} row={row} editable={canEdit} checking={checking.has(row.proxyId)} onCheck={() => void check(row)} onEdit={() => setEditing(row)} />
+            ))}
+          </div>
+        )}
       </Panel>
       <ModesPanel canEdit={canEdit} />
       {canEdit ? null : <p className="text-xs text-text-muted">Заводить, менять и проверять прокси может только владелец. Вам видно, какие прокси есть и как они ответили.</p>}
