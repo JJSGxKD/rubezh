@@ -3,7 +3,7 @@ id: T-0169
 title: Порядок заданий у игрока — по состоянию, внутри по порядку из панели
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
