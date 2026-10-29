@@ -27,6 +27,8 @@ zones:
 shared:
   - packages/app-shell/test/**
   - docs/32-balance.md
+  - CLAUDE.md
+  - packages/core-game/src/game/balance/simulate.ts
 runner: any
 executor: sonnet-5.5
 effort: high
