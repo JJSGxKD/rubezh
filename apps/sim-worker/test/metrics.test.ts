@@ -1,4 +1,3 @@
-import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { Metrics, startMetricsServer } from "../src/metrics";
 
@@ -59,7 +58,7 @@ describe("сервер метрик", () => {
     metrics.observe("content-check", "ok", 1);
     const server = await startMetricsServer(0, "127.0.0.1", metrics);
     closers.push(server.close);
-    const base = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
+    const base = `http://127.0.0.1:${String(server.port)}`;
 
     const scraped = await fetch(`${base}/metrics`);
     expect(scraped.status).toBe(200);
