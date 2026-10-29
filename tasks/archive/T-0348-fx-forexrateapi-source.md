@@ -32,7 +32,7 @@ batch: 4
 
 # T-0348. Курсы фиата — ForexRateAPI ещё одним голосом рубля и евро, включается ключом из панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0348.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0348.json)](../README.md#значки-статуса)
 
 ## Зачем
 

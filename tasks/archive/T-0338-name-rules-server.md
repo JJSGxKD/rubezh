@@ -47,7 +47,7 @@ batch: 3
 
 # T-0338. Фильтр имён — правила в базе, чистка ников по ним и ручки панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json)](../README.md#значки-статуса)
 
 ## Зачем
 

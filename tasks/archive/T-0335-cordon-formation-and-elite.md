@@ -39,7 +39,7 @@ batch: 3
 
 # T-0335. Кольцо стражей — строй сразу со вспышкой, элита и босс внутри (движок)
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0335.json)](README.md#значки-статуса) [![T-0172](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json&label=T-0172)](archive/T-0172-remove-shooting-enemies.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0335.json)](../README.md#значки-статуса) [![T-0172](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json&label=T-0172)](T-0172-remove-shooting-enemies.md)
 
 ## Зачем
 
