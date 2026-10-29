@@ -91,13 +91,19 @@ describe("данные тайников", () => {
     }
   });
 
-  it("в дальних кольцах клад 3 и камень 1", () => {
-    for (const ring of SECRETS.rings.slice(1)) {
-      expect(ring.kinds).toEqual([
-        { kind: "hoard", weight: 3 },
-        { kind: "stone", weight: 1 },
-      ]);
-    }
+  it("в дальних кольцах клад 3, камень 1 и древо 1; разлом Нави — только в третьем (T-0259)", () => {
+    const [, second, third] = SECRETS.rings;
+    expect(second.kinds).toEqual([
+      { kind: "hoard", weight: 3 },
+      { kind: "stone", weight: 1 },
+      { kind: "tree", weight: 1 },
+    ]);
+    expect(third.kinds).toEqual([
+      { kind: "hoard", weight: 3 },
+      { kind: "stone", weight: 1 },
+      { kind: "tree", weight: 1 },
+      { kind: "rift", weight: 1 },
+    ]);
   });
 });
 

@@ -7,7 +7,7 @@ import { WEAPONS } from "../src/content/weapons";
 import { damageEnemy } from "../src/game/sim/combat";
 import { findSecretsProblems, secretKindsFound, secretKindsUsed, takeSecretEvents } from "../src/game/sim/secrets";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
-import { createWorld, NO_OWNER_TYPE, TICK_SEC, type SecretSite, type World } from "../src/game/sim/world";
+import { createWorld, NO_OWNER_TYPE, type SecretSite, type World } from "../src/game/sim/world";
 
 // Древо-оберег и разлом Нави (docs/35-stage4-plan.md, Р153; tasks/T-0259):
 // два тайника дальних колец с выбором «рискнуть или нет». Древо лечит и раз в
@@ -74,7 +74,8 @@ function kill(world: World, slot: number): void {
 }
 
 describe("древо-оберег", () => {
-  const radius = (): number => ONLY_TREE.tree.radius * 1;
+  // Масштаб мира в этих тестах единичный: радиус из контента равен радиусу в мире.
+  const radius = (): number => ONLY_TREE.tree.radius;
 
   it("в радиусе лечит долей здоровья в секунду; вне радиуса не лечит", () => {
     const world = setup(ONLY_TREE);
@@ -147,7 +148,8 @@ describe("древо-оберег", () => {
     run(world, 4 * 60 * TICKS_PER_SEC);
     expect(world.player.hp).toBeGreaterThan(before);
     expect(tree.used).toBe(false);
-    expect(secretKindsFound(world)).toEqual(["tree"]);
+    // Огонёк на 90-й секунде тоже «найден»: он появился у игрока.
+    expect(secretKindsFound(world)).toEqual(["tree", "wisp"]);
     expect(secretKindsUsed(world)).toEqual([]);
   });
 });
@@ -284,8 +286,8 @@ describe("правила и контент древа и разлома", () => 
     expect(kindsOf(1)).not.toContain("rift");
     expect(kindsOf(2)).toContain("tree");
     expect(kindsOf(2)).toContain("rift");
-    for (const kinds of [kindsOf(1), kindsOf(2)]) {
-      for (const entry of SECRETS.rings[kinds === kindsOf(1) ? 1 : 2].kinds) {
+    for (const ring of [1, 2]) {
+      for (const entry of SECRETS.rings[ring].kinds) {
         if (entry.kind === "tree" || entry.kind === "rift") expect(entry.weight).toBe(1);
       }
     }
@@ -325,6 +327,5 @@ describe("правила и контент древа и разлома", () => 
     run(world, 5 * TICKS_PER_SEC);
     const after = Math.hypot((wisp?.x ?? 0) - tree.x, (wisp?.y ?? 0) - tree.y);
     expect(after).toBeLessThan(before);
-    expect(TICK_SEC).toBeGreaterThan(0);
   });
 });

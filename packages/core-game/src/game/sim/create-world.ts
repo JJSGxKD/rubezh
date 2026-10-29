@@ -97,6 +97,8 @@ const FALLBACK_SECRETS: SecretsDef = {
   shrine: { radius: 60, holdSec: 3, offers: 1 },
   hoard: { radius: 40, holdSec: 2, chestSize: 3 },
   stone: { radius: 30 },
+  tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
+  rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5 },
   wisp: { appearSec: 90, speed: 80 },
   blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };

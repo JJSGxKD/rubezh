@@ -65,7 +65,7 @@ export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, 
 const WISP_RING = -1;
 
 function newSite(kind: SecretKind, ring: number, active: boolean): SecretSite {
-  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0 };
+  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [] };
 }
 
 function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {
