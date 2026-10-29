@@ -3,8 +3,8 @@ id: T-0145
 title: Снимки экранов одной командой — `pnpm screens`
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0144]
