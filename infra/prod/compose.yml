@@ -163,12 +163,14 @@ services:
   # занимает процессор целиком, поэтому процессору и памяти — потолок: воркер
   # не должен отнять у API и Postgres то, ради чего сервер стоит. Живёт только
   # в сети data (она без выхода наружу — ему нужен один Redis) и под профилем:
-  # включается `COMPOSE_PROFILES=sim-worker` и тегом в SIM_WORKER_TAG, пока сервер
-  # не ставит задания (tasks/T-0303).
+  # включается `COMPOSE_PROFILES=sim-worker`, когда сервер начнёт ставить задания
+  # (tasks/T-0303). deploy.sh его пока не обновляет: после выката API —
+  # `docker compose pull sim-worker && docker compose up -d sim-worker`.
   sim-worker:
     logging: *logging
     profiles: [sim-worker]
-    image: ghcr.io/jjsgxkd/rubezh-sim-worker:${SIM_WORKER_TAG:-}
+    # Тот же номер версии, что у API: релиз публикует оба образа вместе.
+    image: ghcr.io/jjsgxkd/rubezh-sim-worker:${API_TAG}
     restart: unless-stopped
     environment:
       REDIS_URL: redis://redis:6379

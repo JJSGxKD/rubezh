@@ -656,8 +656,10 @@ staging не хватит, а данные закрытого теста не с
 в сети `data` (без выхода наружу) под профилем `sim-worker`; на процессор и
 память у него потолок (`cpus: 1`, `mem_limit: 768m`) — прогон занимает ядро
 целиком и не должен отнять его у API и Postgres. Включается, когда сервер
-начнёт ставить задания (`tasks/T-0303`): `SIM_WORKER_TAG` в `.env` и
-`COMPOSE_PROFILES=sim-worker`; `deploy.sh` его пока не раскатывает. Переменные
+начнёт ставить задания (`tasks/T-0303`): `COMPOSE_PROFILES=sim-worker` в
+`.env`, тег образа — тот же `API_TAG`; `deploy.sh` его пока не обновляет —
+после выката API: `docker compose pull sim-worker && docker compose up -d
+sim-worker`. Переменные
 воркера — `REDIS_URL` и `SIM_WORKER_METRICS_PORT`, остальное — константы в
 `apps/sim-worker/src/limits.ts` (`docs/30-configuration-map.md`).
 
