@@ -5,6 +5,7 @@ import { findDifficulty } from "../src/content/difficulty";
 import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
+import { SECRETS } from "../src/content/secrets";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
@@ -14,10 +15,11 @@ import { captureWorld, restoreWorld, SnapshotError, WORLD_SNAPSHOT_VERSION } fro
 import { RUN_SNAPSHOT_FORMAT } from "../src/run-api";
 import { readSnapshotCounters } from "../src/snapshot-counters";
 import { dropChest, openChest } from "../src/game/sim/chests";
+import { chooseBlessing, isAwaitingBlessing } from "../src/game/sim/secrets";
 import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
-import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
+import { createWorld, TICK_SEC, type CreateWorldOptions, type SecretSite, type World } from "../src/game/sim/world";
 import { takeCordonEvents } from "../src/game/sim/cordon";
 import { damageEnemy } from "../src/game/sim/combat";
 import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
@@ -320,6 +322,153 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
 
   it("поле необязательное, поэтому формат снимка прежний", () => {
     expect(RUN_SNAPSHOT_FORMAT).toBe(7);
+  });
+});
+
+describe("снимок с тайниками (tasks/T-0352)", () => {
+  const WITH_SECRETS = { secrets: SECRETS };
+
+  /** Игрок прямо на месте тайника: скорость нулевая, шаг его не сдвинет. */
+  function standOn(world: World, site: SecretSite): void {
+    const player = world.player;
+    player.x = site.x;
+    player.y = site.y;
+    player.prevX = site.x;
+    player.prevY = site.y;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  const shrineOf = (world: World): SecretSite => {
+    const shrine = world.secrets.sites.find((site) => site.kind === "shrine");
+    if (shrine === undefined) throw new Error("в раскладке нет капища");
+    return shrine;
+  };
+
+  const idle: SimInput = { moveX: 0, moveY: 0 };
+  const hold = (world: World, sec: number): void => {
+    for (let i = 0; i < Math.round(sec / TICK_SEC); i++) stepWorld(world, idle);
+  };
+
+  it("снимок несёт состояние тайников, а журналы для сцены в него не входят", () => {
+    const run = newRun(4, WITH_SECRETS);
+    standOn(run.world, shrineOf(run.world));
+    hold(run.world, 1);
+    expect(run.world.secrets.foundLog).toHaveLength(1);
+
+    const saved = roundTrip(run) as { secrets?: Record<string, unknown> };
+    expect(saved.secrets).toBeDefined();
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("foundLog");
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("usedLog");
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("blessingLog");
+  });
+
+  it("восстанавливает места, стояние в круге, найденное и взятые благословения", () => {
+    const original = newRun(4, WITH_SECRETS);
+    const shrine = shrineOf(original.world);
+    standOn(original.world, shrine);
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    expect(original.world.secrets.blessings).toHaveLength(1);
+    // Игрок отошёл, и в круге его ждёт ещё не стоявшее место: найденное и ненайденное в одном снимке.
+    const saved = roundTrip(original);
+
+    const resumed = newRun(4, WITH_SECRETS);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.secrets.sites).toEqual(original.world.secrets.sites);
+    expect(resumed.world.secrets.blessings).toEqual(original.world.secrets.blessings);
+    expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+    expect(resumed.world.loadoutModifiers).toEqual(original.world.loadoutModifiers);
+    expect(resumed.world.playerStats).toEqual(original.world.playerStats);
+    expect(resumed.world.secrets.foundLog).toEqual([]);
+    expect(resumed.world.secrets.usedLog).toEqual([]);
+    expect(resumed.world.secrets.blessingLog).toEqual([]);
+  });
+
+  it("продолжает посреди стояния: хватает оставшегося, чтобы капище сработало вместе с оригиналом", () => {
+    const original = newRun(8, WITH_SECRETS);
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec / 2);
+    expect(original.world.secrets.sites.some((site) => site.holdTicks > 0)).toBe(true);
+    expect(original.world.secrets.blessings).toHaveLength(0);
+
+    const resumed = newRun(8, WITH_SECRETS);
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    hold(original.world, SECRETS.shrine.holdSec);
+    hold(resumed.world, SECRETS.shrine.holdSec);
+
+    expect(original.world.secrets.blessings).toHaveLength(1);
+    expect(resumed.world.secrets.blessings).toEqual(original.world.secrets.blessings);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+  });
+
+  it("сохраняет забег, остановленный на выборе благословения, и после выбора идёт так же", () => {
+    const make = (): Run => {
+      const run = newRun(8, WITH_SECRETS);
+      run.world.secrets.manualBlessing = true;
+      return run;
+    };
+    const original = make();
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    expect(isAwaitingBlessing(original.world)).toBe(true);
+
+    const resumed = make();
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    expect(isAwaitingBlessing(resumed.world)).toBe(true);
+    expect(resumed.world.secrets.offer).toEqual(original.world.secrets.offer);
+
+    const picked = original.world.secrets.offer?.options[1] ?? "";
+    expect(chooseBlessing(original.world, picked)).toBe(true);
+    expect(chooseBlessing(resumed.world, picked)).toBe(true);
+    hold(original.world, 5);
+    hold(resumed.world, 5);
+    expect(resumed.world.secrets.blessings).toEqual([picked]);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.playerStats).toEqual(original.world.playerStats);
+  });
+
+  it("снимок без поля тайников — SnapshotError: версия формата та же, а поле обязательное", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as Record<string, unknown>;
+    delete saved.secrets;
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, saved)).toThrow(SnapshotError);
+  });
+
+  it("снимок с чужой раскладкой — SnapshotError: число или вид мест не совпадает", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { sites: Record<string, unknown>[] } };
+    const fewer = { ...saved, secrets: { ...saved.secrets, sites: saved.secrets.sites.slice(1) } };
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, fewer)).toThrow(SnapshotError);
+
+    const otherKind = structuredClone(saved);
+    otherKind.secrets.sites[0].kind = otherKind.secrets.sites[0].kind === "shrine" ? "hoard" : "shrine";
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, otherKind)).toThrow(SnapshotError);
+  });
+
+  it("битое поле тайников — SnapshotError, а не мир с NaN", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { rng: unknown; sites: Record<string, unknown>[]; blessings: unknown; offer: unknown } };
+    const broken = [
+      { ...saved, secrets: { ...saved.secrets, rng: "много" } },
+      { ...saved, secrets: { ...saved.secrets, blessings: "fury" } },
+      { ...saved, secrets: { ...saved.secrets, blessings: [1] } },
+      { ...saved, secrets: { ...saved.secrets, offer: { siteIndex: 99, options: ["fury"] } } },
+      { ...saved, secrets: { ...saved.secrets, sites: saved.secrets.sites.map((site, index) => (index === 0 ? { ...site, x: null } : site)) } },
+    ];
+    for (const input of broken) {
+      expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, input)).toThrow(SnapshotError);
+    }
+  });
+
+  it("незнакомое благословение из снимка пропускается: забег идёт без прибавки, а не падает", () => {
+    const original = newRun(4, WITH_SECRETS);
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    const saved = structuredClone(roundTrip(original)) as { secrets: { blessings: string[] } };
+    saved.secrets.blessings = ["нет-такого-благословения"];
+
+    const resumed = newRun(4, WITH_SECRETS);
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.secrets.blessings).toEqual([]);
   });
 });
 
