@@ -146,18 +146,20 @@ describe("схема снимка", () => {
 
   it("тайники в схеме: принимает умолчание, ловит число вне границ и лишнее поле с путём до него", () => {
     expect(contentSnapshotSchema.safeParse(viaJson(CONTENT_SNAPSHOT)).success).toBe(true);
-    const brokenShrine = viaJson({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, shrine: { ...SECRETS.shrine, holdSec: "долго" } } });
+    // Правка из панели приходит JSON-ом, а не типизированным объектом: поля могут быть чем угодно.
+    const raw = (secrets: Record<string, unknown>): unknown => JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets }));
+    const brokenShrine = raw({ ...SECRETS, shrine: { ...SECRETS.shrine, holdSec: "долго" } });
     const parsed = contentSnapshotSchema.safeParse(brokenShrine);
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues.map((issue) => issue.path.join("."))).toContain("secrets.shrine.holdSec");
 
-    const extra = viaJson({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, lootbox: true } });
+    const extra = raw({ ...SECRETS, lootbox: true });
     expect(contentSnapshotSchema.safeParse(extra).success).toBe(false);
     const { secrets: _secrets, ...withoutSecrets } = CONTENT_SNAPSHOT;
     void _secrets;
     expect(contentSnapshotSchema.safeParse(withoutSecrets).success).toBe(false);
     // Вид тайника в весах кольца — только из мест: огонёк в кольцо не бросается.
-    const wispRing = viaJson({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] } });
+    const wispRing = raw({ ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] });
     expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
   });
 

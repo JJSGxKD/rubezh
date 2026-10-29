@@ -35,7 +35,7 @@ function contentWith(secrets: SecretsDef): ContentSnapshot {
 }
 
 function runWorld(secrets: SecretsDef = SECRETS, seed = 1): World {
-  return createRunWorld({ seed, unitScale: 1, content: contentWith(secrets) }).world;
+  return createRunWorld({ seed, mapId: "", difficultyId: "normal", unitScale: 1, content: contentWith(secrets) }).world;
 }
 
 function standOn(world: World, site: SecretSite): void {
