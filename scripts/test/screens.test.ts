@@ -187,6 +187,24 @@ describe("runSteps", () => {
     expect(calls).toEqual(["click:Играть", "wait:text=Перед забегом"]);
   });
 
+  it("clickIfShown: показано — нажимает, не показано — идёт дальше без ошибки", async () => {
+    const calls: string[] = [];
+    const pageWith = (shown: boolean) => ({
+      getByText: (text: string) => ({
+        waitFor: async () => {
+          if (!shown) throw new Error("timeout");
+        },
+        click: async () => void calls.push(`click:${text}`),
+      }),
+      waitForSelector: async (sel: string) => void calls.push(`wait:${sel}`),
+    });
+    await runSteps(pageWith(true), { id: "lobby", steps: [{ clickIfShown: "Понятно, играем" }, { waitText: "Играть" }] });
+    expect(calls).toEqual(["click:Понятно, играем", "wait:text=Играть"]);
+    calls.length = 0;
+    await runSteps(pageWith(false), { id: "lobby", steps: [{ clickIfShown: "Понятно, играем" }, { waitText: "Играть" }] });
+    expect(calls).toEqual(["wait:text=Играть"]);
+  });
+
   it("сломавшийся шаг называет сценарий и шаг", async () => {
     const page = {
       getByText: () => ({

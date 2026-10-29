@@ -2,9 +2,12 @@
 // поддельной странице без браузера (scripts/test/screens.test.ts).
 
 const STEP_TIMEOUT_MS = 10_000;
+/** Сколько ждать необязательное окно: его либо показывают сразу после загрузки, либо нет вовсе. */
+const OPTIONAL_STEP_TIMEOUT_MS = 3_000;
 
 function describeStep(step) {
   if ("click" in step) return `нажать «${step.click}»`;
+  if ("clickIfShown" in step) return `нажать «${step.clickIfShown}», если показано`;
   return `дождаться «${step.waitText}»`;
 }
 
@@ -16,6 +19,12 @@ export async function runSteps(page, scenario) {
   for (const step of scenario.steps ?? []) {
     try {
       if ("click" in step) await page.getByText(step.click, { exact: true }).click({ timeout: STEP_TIMEOUT_MS });
+      else if ("clickIfShown" in step) {
+        // Окно первого запуска у свежего пользователя есть, у вернувшегося — нет: не показалось — шаг пропускается.
+        const target = page.getByText(step.clickIfShown, { exact: true });
+        const shown = await target.waitFor({ state: "visible", timeout: OPTIONAL_STEP_TIMEOUT_MS }).then(() => true, () => false);
+        if (shown) await target.click({ timeout: STEP_TIMEOUT_MS });
+      }
       else await page.waitForSelector(`text=${step.waitText}`, { timeout: STEP_TIMEOUT_MS });
     } catch (error) {
       const reason = error instanceof Error ? error.message.split("\n")[0] : String(error);
