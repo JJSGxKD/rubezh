@@ -29,6 +29,7 @@ shared:
   - apps/admin/src/api/audit.ts
   - apps/admin/src/ui/help.ts
   - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
