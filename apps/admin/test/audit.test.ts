@@ -22,6 +22,16 @@ function entry(patch: Partial<AuditEntry>): AuditEntry {
 }
 
 describe("журнал аудита", () => {
+  it("перестановка заданий (T-0167): название, поле «порядок», порядок через запятую", () => {
+    expect(actionTitle("tasks.reorder")).toBe("Порядок заданий");
+    expect(fieldTitle("order")).toBe("порядок");
+    const reordered = entry({ action: "tasks.reorder", target: "daily", before: { order: ["a", "b", "c"] }, after: { order: ["c", "a", "b"] } });
+    const changes = auditChanges(reordered);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ field: "order" });
+    expect(auditValue(changes[0]?.after, "order")).toBe("c, a, b");
+  });
+
   it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
     expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
