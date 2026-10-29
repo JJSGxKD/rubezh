@@ -156,6 +156,8 @@ function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
     ringsStarted: state.ringsStarted,
     startedAtSec: state.startedAtSec,
     guards: state.guards,
+    pending: state.pending.map((entry) => ({ ...entry })),
+    pendingLeftSec: state.pendingLeftSec,
   };
 }
 
@@ -180,6 +182,19 @@ function restoreCordon(world: World, input: unknown): void {
     ringsStarted: raw.ringsStarted === undefined ? 0 : asNumber(raw.ringsStarted, "cordon.ringsStarted"),
     startedAtSec: raw.startedAtSec === undefined ? 0 : asNumber(raw.startedAtSec, "cordon.startedAtSec"),
     guards: raw.guards === undefined ? 0 : asNumber(raw.guards, "cordon.guards"),
+    // Снимок до Р166 внутренних врагов не знал: «никого не ждём».
+    pending:
+      raw.pending === undefined
+        ? []
+        : asArray(raw.pending, "cordon.pending").map((entry, i) => {
+            const item = asRecord(entry, `cordon.pending[${i}]`);
+            return {
+              typeIndex: asIndex(item.typeIndex, world.enemyTypes.length, `cordon.pending[${i}].typeIndex`),
+              x: asNumber(item.x, `cordon.pending[${i}].x`),
+              y: asNumber(item.y, `cordon.pending[${i}].y`),
+            };
+          }),
+    pendingLeftSec: raw.pendingLeftSec === undefined ? 0 : asNumber(raw.pendingLeftSec, "cordon.pendingLeftSec"),
     ended: [],
   });
 }
