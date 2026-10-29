@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { parseArgs, shotPlan, run, DEFAULT_SIZES, AS_USERS, DEFAULT_BASE } from "../screens/shoot.mjs";
+import { parseArgs, shotPlan, run, tlsOptionsFor, DEFAULT_SIZES, AS_USERS, DEFAULT_BASE } from "../screens/shoot.mjs";
 // @ts-expect-error — то же
 import { SCENARIOS } from "../screens/scenarios.mjs";
 // @ts-expect-error — то же
-import { runSteps } from "../screens/steps.mjs";
+import { runSteps, contextOptions, openJob, isLocalUrl } from "../screens/steps.mjs";
 
 // Команда нужна живым API и браузеру, поэтому в гейт не входит; здесь —
 // всё, что проверяется без браузера: флаги, план снимков, адреса, отказ при
@@ -71,7 +71,7 @@ describe("parseArgs", () => {
 });
 
 describe("shotPlan", () => {
-  const ctx = { base: "http://localhost:5173", devUser: "dev-shots:Снимки" };
+  const ctx = { base: "https://localhost:5173", devUser: "dev-shots:Снимки" };
 
   it("даёт имя файла, ширину и высоту", () => {
     const prerun = SCENARIOS.find((s: { id: string }) => s.id === "prerun");
@@ -90,7 +90,7 @@ describe("shotPlan", () => {
   it("адрес несёт screen и dev-user, закодированные", () => {
     const plan = shotPlan([{ id: "tasks", screen: "tasks" }], [{ width: 390, height: 844 }], "o", ctx);
     const url = new URL(plan[0].url);
-    expect(url.origin).toBe("http://localhost:5173");
+    expect(url.origin).toBe("https://localhost:5173");
     expect(url.searchParams.get("screen")).toBe("tasks");
     expect(url.searchParams.get("dev-user")).toBe("dev-shots:Снимки");
   });
@@ -135,7 +135,7 @@ describe("run", () => {
     });
     expect(code).toBe(1);
     expect(launched).toBe(false);
-    expect(lines.join("\n")).toContain("Клиент на http://localhost:5173 не отвечает — запустите pnpm dev");
+    expect(lines.join("\n")).toContain("Клиент на https://localhost:5173 не отвечает — запустите pnpm dev");
   });
 
   it("все снимки сделаны — код 0, ошибки консоли печатаются списком, но код не меняют", async () => {
@@ -197,5 +197,49 @@ describe("runSteps", () => {
       waitForSelector: async () => undefined,
     };
     await expect(runSteps(page, { id: "prerun", steps: [{ click: "Играть" }] })).rejects.toThrow(/prerun.*Играть/);
+  });
+});
+
+describe("самоподписанный сертификат", () => {
+  it("умолчание — https://localhost:5173", () => {
+    expect(DEFAULT_BASE).toBe("https://localhost:5173");
+  });
+
+  it("локальные адреса доверяют сертификату, чужие — нет", () => {
+    expect(isLocalUrl("https://localhost:5173")).toBe(true);
+    expect(isLocalUrl("https://127.0.0.1:5173")).toBe(true);
+    expect(isLocalUrl("https://localhost.evil.example")).toBe(false);
+    expect(isLocalUrl("https://dev-tg.example")).toBe(false);
+    expect(isLocalUrl("не адрес")).toBe(false);
+  });
+
+  it("проверка доступности: отключение проверки только для локального адреса", () => {
+    expect(tlsOptionsFor("https://localhost:5173")).toEqual({ rejectUnauthorized: false });
+    expect(tlsOptionsFor("https://dev-tg.example")).toEqual({ rejectUnauthorized: true });
+  });
+
+  it("контекст браузера: ignoreHTTPSErrors только для локального адреса", () => {
+    const job = (url: string) => ({ url, width: 390, height: 844 });
+    expect(contextOptions(job("https://localhost:5173/")).ignoreHTTPSErrors).toBe(true);
+    expect(contextOptions(job("https://dev-tg.example/")).ignoreHTTPSErrors).toBe(false);
+    expect(contextOptions(job("https://localhost:5173/"))).toMatchObject({ reducedMotion: "reduce", deviceScaleFactor: 1 });
+  });
+});
+
+describe("openJob", () => {
+  it("goto ждёт domcontentloaded, а не load", async () => {
+    const calls: Array<{ url: string; options: { waitUntil: string } }> = [];
+    const page = { goto: async (url: string, options: { waitUntil: string }) => void calls.push({ url, options }) };
+    await openJob(page, { url: "https://localhost:5173/", scenario: { id: "lobby" } });
+    expect(calls[0]?.options.waitUntil).toBe("domcontentloaded");
+  });
+
+  it("не открывшийся адрес называет сценарий", async () => {
+    const page = {
+      goto: async () => {
+        throw new Error("net::ERR");
+      },
+    };
+    await expect(openJob(page, { url: "https://x/", scenario: { id: "lobby" } })).rejects.toThrow(/lobby.*не открылся/);
   });
 });

@@ -23,3 +23,42 @@ export async function runSteps(page, scenario) {
     }
   }
 }
+
+const NAVIGATION_TIMEOUT_MS = 30_000;
+const LOCAL_HOSTS = ["localhost", "127.0.0.1"];
+
+/**
+ * Самоподписанному сертификату dev-сервера доверяем только на локальном
+ * хосте: для остальных адресов проверка сертификата обычная.
+ */
+export function isLocalUrl(url) {
+  try {
+    return LOCAL_HOSTS.includes(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Настройки контекста браузера для снимка. */
+export function contextOptions(job) {
+  return {
+    viewport: { width: job.width, height: job.height },
+    deviceScaleFactor: 1,
+    reducedMotion: "reduce",
+    ignoreHTTPSErrors: isLocalUrl(job.url),
+  };
+}
+
+/**
+ * Открывает адрес снимка. Ждём `domcontentloaded`, а не `load`: внешний
+ * скрипт может не дать `load` наступить, а готовность экрана дальше
+ * проверяют шаги сценария.
+ */
+export async function openJob(page, job) {
+  try {
+    await page.goto(job.url, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT_MS });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.split("\n")[0] : String(error);
+    throw new Error(`сценарий ${job.scenario.id}: адрес ${job.url} не открылся: ${reason}`);
+  }
+}

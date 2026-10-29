@@ -4,11 +4,11 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { runSteps } from "./steps.mjs";
+import { contextOptions, openJob, runSteps } from "./steps.mjs";
 
 /** Пауза после последнего шага: анимации выключены, но экран ещё дорисовывается. */
 const SETTLE_MS = 400;
-const NAVIGATION_TIMEOUT_MS = 30_000;
+const IDLE_WAIT_MS = 5_000;
 
 function firstLine(error) {
   return error instanceof Error ? error.message.split("\n")[0] : String(error);
@@ -26,11 +26,7 @@ export async function createPlaywrightShooter({ browser: channel }) {
   return {
     // Возвращает ошибки консоли страницы; сломанный шаг или адрес — исключение.
     async shoot(job) {
-      const context = await browser.newContext({
-        viewport: { width: job.width, height: job.height },
-        deviceScaleFactor: 1,
-        reducedMotion: "reduce",
-      });
+      const context = await browser.newContext(contextOptions(job));
       const consoleErrors = [];
       try {
         const page = await context.newPage();
@@ -38,13 +34,10 @@ export async function createPlaywrightShooter({ browser: channel }) {
           if (message.type() === "error") consoleErrors.push(message.text());
         });
         page.on("pageerror", (error) => consoleErrors.push(error.message));
-        try {
-          await page.goto(job.url, { waitUntil: "networkidle", timeout: NAVIGATION_TIMEOUT_MS });
-        } catch (error) {
-          throw new Error(`сценарий ${job.scenario.id}: адрес ${job.url} не открылся: ${firstLine(error)}`);
-        }
+        await openJob(page, job);
         await runSteps(page, job.scenario);
-        await page.waitForLoadState("networkidle");
+        // Сеть успокаивается не всегда (внешние скрипты), поэтому ждём недолго и не падаем.
+        await page.waitForLoadState("networkidle", { timeout: IDLE_WAIT_MS }).catch(() => undefined);
         await page.evaluate(() => document.fonts.ready);
         await page.waitForTimeout(SETTLE_MS);
         mkdirSync(dirname(job.file), { recursive: true });

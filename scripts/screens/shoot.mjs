@@ -6,9 +6,11 @@ import { mkdir } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { request } from "node:https";
 import { SCENARIOS } from "./scenarios.mjs";
+import { isLocalUrl } from "./steps.mjs";
 
-export const DEFAULT_BASE = "http://localhost:5173";
+export const DEFAULT_BASE = "https://localhost:5173";
 export const DEFAULT_OUT = "var/screens";
 export const DEFAULT_SIZES = [
   [320, 568],
@@ -103,8 +105,24 @@ export function shotPlan(scenarios, sizes, out, { base, devUser }) {
   return plan;
 }
 
-async function defaultFetchClient(base) {
-  return fetch(base, { signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) });
+/** Параметры TLS проверки клиента: самоподписанный сертификат — только на локальном хосте. */
+export function tlsOptionsFor(base) {
+  return { rejectUnauthorized: !isLocalUrl(base) };
+}
+
+/** Глобальный NODE_TLS_REJECT_UNAUTHORIZED не трогаем: ослабляется один запрос. */
+function defaultFetchClient(base) {
+  const url = new URL(base);
+  if (url.protocol !== "https:") return fetch(base, { signal: AbortSignal.timeout(CLIENT_TIMEOUT_MS) });
+  return new Promise((resolve, reject) => {
+    const req = request(url, { method: "GET", timeout: CLIENT_TIMEOUT_MS, ...tlsOptionsFor(base) }, (res) => {
+      res.resume();
+      resolve({ ok: res.statusCode !== undefined && res.statusCode < 400, status: res.statusCode });
+    });
+    req.on("timeout", () => req.destroy(new Error("таймаут")));
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 async function defaultCreateShooter(options) {
