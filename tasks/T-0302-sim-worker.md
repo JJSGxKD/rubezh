@@ -3,8 +3,8 @@ id: T-0302
 title: sim-worker — отдельный процесс со своей сборкой движка: очередь проверки и симуляции черновика контента, отчёт против текущей версии
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0301]
