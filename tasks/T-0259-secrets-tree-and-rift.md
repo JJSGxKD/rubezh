@@ -3,8 +3,8 @@ id: T-0259
 title: Тайники рубежа — древо-оберег и разлом Нави
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0258]
