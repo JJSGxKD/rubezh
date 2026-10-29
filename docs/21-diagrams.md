@@ -108,6 +108,7 @@ erDiagram
     RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
     ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
     RUN ||--o{ RUN_GEM_CONTINUE : "продолжен за самоцветы"
+    RUN ||--o| RUN_PROOF : "запись для проверки (T-0317)"
     ACCOUNT ||--o{ RUN_GEM_CONTINUE : "продолжения за самоцветы"
     ACCOUNT ||--o{ VIP_SUBSCRIPTION : "подписки VIP"
     PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
@@ -816,6 +817,14 @@ erDiagram
         float elapsed_sec "секунда забега, по которой посчитана цена; по ней итог сверяется с оплатой (Р5.2)"
         int price_gems "списано самоцветов, больше нуля; списание — запись wallet_entry с причиной continue в той же транзакции"
         datetime granted_at
+    }
+
+    RUN_PROOF {
+        string run_id PK,FK "FK на run (каскад): одна запись на забег"
+        bytea proof "gzip от JSON записи run-proof-v1: до 64 КБ сжатой, до 512 КБ распакованной"
+        int size_bytes "сжатые байты, от 1 до 65536"
+        datetime received_at
+        datetime keep_until "received_at + 7 дней; у проверенных верхних и с редкой добычей — 180 (T-0319); очистка раз в час удаляет просроченные пачками по 1000"
     }
 
     VIP_SUBSCRIPTION {
