@@ -3,7 +3,7 @@ id: T-0234
 title: Музыка в игре — лобби, пульс забега, слой босса и регулятор громкости
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -23,6 +23,10 @@ shared:
   - docs/31-audio-and-haptics.md
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
+  - packages/app-shell/src/i18n/ru-team.json
+  - packages/app-shell/src/state/run.ts
+  - packages/app-shell/test/audio-routing.test.ts
+  - packages/app-shell/test/audio.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
