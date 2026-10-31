@@ -11,6 +11,7 @@ depends_on: [T-0281]
 zones:
   - packages/core-game/test/passives-defense-v2.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/upgrades.ts
   - packages/core-game/src/content/unlocks.ts
@@ -108,7 +109,9 @@ batch: 6
    `shared-types`; база обоих — 0 (навыка нет).
 3. **Лечение** — при убийстве, с окном-потолком.
 4. **Щит Стойкости** — таймер в `step.ts`, в снимке.
-5. **Данные** — два навыка, открытия, тексты, значки, подписи карточки.
+5. **Данные** — два навыка, открытия, тексты, значки (готовы: `vampirism` и
+   `steadfast` из `PLANNED_PASSIVE_GLYPHS` в `game-glyphs.tsx` переезжают в
+   `PASSIVE_GLYPHS`), подписи карточки.
 6. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 7. **Документы:**
    - `CLAUDE.md` — новые `stat` в «Как добавить оружие или пассивку»;

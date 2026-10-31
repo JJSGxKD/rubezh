@@ -13,6 +13,7 @@ zones:
   - packages/core-game/src/game/sim/knockback.ts
   - packages/core-game/test/cone-weapon.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -94,7 +95,8 @@ batch: 6
 - **Тексты:**
   - `weapon.gusli.name` — «Гусли», `.description` — «Волна звука по ходу — бьёт и отталкивает»;
   - `weapon.bayan_song.name` — «Песнь Баяна», `.description` — «Волна во все стороны».
-- **Значок** — `item-icons.tsx`; задания с фильтром оружия — `gusli`, если
+- **Значок** готов: `gusli` и `bayan_song` из `PLANNED_WEAPON_GLYPHS`
+  (`screens/game-glyphs.tsx`) переезжают в `WEAPON_GLYPHS`; задания с фильтром оружия — `gusli`, если
   список есть.
 
 ## Как сейчас

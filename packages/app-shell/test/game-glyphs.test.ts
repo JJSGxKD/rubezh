@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BOOSTS, PASSIVES, WEAPONS } from "@bh/core-game";
 import { boostIcon } from "../src/screens/boost-icons";
-import { BOOST_GLYPHS, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "../src/screens/game-glyphs";
+import { BOOST_GLYPHS, GameGlyph, HEAL_GLYPH, PASSIVE_GLYPHS, PLANNED_PASSIVE_GLYPHS, PLANNED_WEAPON_GLYPHS, WEAPON_GLYPHS } from "../src/screens/game-glyphs";
 import { ItemIcon } from "../src/screens/item-icons";
 
 // Свои значки оружия и навыков (design/art/direction-v2.md §4.5). Полноту не
@@ -18,6 +18,21 @@ describe("значки оружия и навыков", () => {
     const passives = new Set(PASSIVES.map((passive) => passive.id));
     for (const id of Object.keys(WEAPON_GLYPHS)) expect(weapons.has(id), id).toBe(true);
     for (const id of Object.keys(PASSIVE_GLYPHS)) expect(passives.has(id), id).toBe(true);
+  });
+
+  it("значки нового контента ждут своего оружия: пришло в контент — переезжают в рабочую карту", () => {
+    const weapons = new Set(WEAPONS.map((def) => def.id));
+    const passives = new Set(PASSIVES.map((def) => def.id));
+    for (const id of Object.keys(PLANNED_WEAPON_GLYPHS)) expect(weapons.has(id), `${id} уже в контенте — перенеси значок в WEAPON_GLYPHS`).toBe(false);
+    for (const id of Object.keys(PLANNED_PASSIVE_GLYPHS)) expect(passives.has(id), `${id} уже в контенте — перенеси значок в PASSIVE_GLYPHS`).toBe(false);
+  });
+
+  it("значки нового контента рисуются тем же языком", () => {
+    for (const glyph of [...Object.values(PLANNED_WEAPON_GLYPHS), ...Object.values(PLANNED_PASSIVE_GLYPHS)]) {
+      const html = renderToStaticMarkup(createElement(GameGlyph, { glyph, size: 20 }));
+      expect(html).toContain('viewBox="0 0 24 24"');
+      expect(html).toContain('stroke="currentColor"');
+    }
   });
 
   it("значок красится цветом плитки и скрыт от скринридера", () => {

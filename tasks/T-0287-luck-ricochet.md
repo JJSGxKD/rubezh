@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/sim/crit.ts
   - packages/core-game/test/passives-attack-v2.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/upgrades.ts
   - packages/core-game/src/content/unlocks.ts
@@ -119,7 +120,9 @@ batch: 6
 4. **Сундуки** — веса с Удачей.
 5. **Рикошет** — в снарядах.
 6. **Облик и звук** крита.
-7. **Данные** — навыки, открытия, тексты, значки, подписи.
+7. **Данные** — навыки, открытия, тексты, значки (готовы: `luck` и
+   `ricochet` из `PLANNED_PASSIVE_GLYPHS` в `game-glyphs.tsx` переезжают в
+   `PASSIVE_GLYPHS`), подписи.
 8. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 9. **Документы:**
    - `CLAUDE.md` — новые `stat`;
