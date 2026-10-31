@@ -722,3 +722,27 @@ describe("HTTP раздела друзей", () => {
     expect(refused.json()).toMatchObject({ error: { code: "invite_unavailable" } });
   });
 });
+
+describe("друзья и доски рейтинга (T-0113)", () => {
+  async function befriend(a: Account, b: Account): Promise<void> {
+    await service.request(claims(a), b.accountId);
+    await service.accept(claims(b), a.accountId);
+  }
+
+  it("друг с отдельной доской остаётся в списке обычного игрока, и ответ того же вида", async () => {
+    const [ann, bob, cat] = [await player("1"), await player("2"), await player("3")];
+    await befriend(ann, bob);
+    await befriend(ann, cat);
+    restrictions.restrict(bob.accountId, "separate_board", { notify: false });
+
+    const view = await service.view(ann.accountId);
+
+    expect(view.friends.map((friend) => friend.accountId).sort()).toEqual([bob.accountId, cat.accountId].sort());
+    const keys = (row: object) => Object.keys(row).sort();
+    const [restricted, plain] = [view.friends.find((friend) => friend.accountId === bob.accountId), view.friends.find((friend) => friend.accountId === cat.accountId)];
+    expect(keys(restricted ?? {})).toEqual(keys(plain ?? {}));
+    // Сам игрок с отдельной доской видит друзей так же, как все.
+    expect((await service.view(bob.accountId)).friends.map((friend) => friend.accountId)).toEqual([ann.accountId]);
+    expect(JSON.stringify(view)).not.toMatch(/board|separate/i);
+  });
+});
