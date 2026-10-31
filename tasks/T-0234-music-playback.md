@@ -3,8 +3,8 @@ id: T-0234
 title: Музыка в игре — лобби, пульс забега, слой босса и регулятор громкости
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0233]
