@@ -51,7 +51,7 @@ batch: 4
 - **Атлас облика** — у каждого свой: `design/art/out/atlas-skin-<id>.png/json`
   (поправка `claude-lead-1` от 31.10.2026: общий пак на 15 обликов весил 3,7 МБ
   видеопамяти и рос бы с каждым окрасом пасса, а нужен игроку один; атлас
-  облика — 0,2–0,3 МБ). Карта id → адреса — `import.meta.glob` по
+  облика — 0,9–1,0 МБ вместе с видами спереди и спиной). Карта id → адреса — `import.meta.glob` по
   `atlas-skin-*.png` и `*.json` с `query: "?url"`, `eager: true` — Vite кладёт
   их ассетами с хэшем, как остальные атласы. Ключ текстуры — `art-skin`.
   Грузится **по требованию**: при включении арта и облике не `keeper`; облика
@@ -71,8 +71,10 @@ batch: 4
 - `run-api.ts` — `RunGraphicsOptions`; после T-0230 там `art: boolean`.
 - `WorldRenderer.ts` — `this.art.setWanted(…)`.
 - `state/graphics.ts` — `runGraphics()` (T-0230: `art`).
-- Кадры обликов — по шесть на облик, каждый облик в своём атласе
-  `atlas-skin-<id>`: список id — `HERO_SKINS` в `design/art/src/hero.mjs`.
+- Кадры обликов — каждый облик в своём атласе `atlas-skin-<id>`: шесть
+  кадров бока (`hero-<id>/idle*`, `walk*`) — эта задача; ещё по шесть
+  спереди и спиной (`hero-<id>/front/…`, `back/…`) — их берёт T-0353.
+  Список id — `HERO_SKINS` в `design/art/src/hero.mjs`.
 
 ## Шаги по порядку
 
