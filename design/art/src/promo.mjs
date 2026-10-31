@@ -61,12 +61,18 @@ function rng(seed) {
   };
 }
 
-/** Спрайт врага кадром атласа: та же палитра v2 и свечение Нави, что в игре. */
+/**
+ * Спрайт врага кадром атласа: та же палитра v2 и свечение Нави, что в игре.
+ * Кадр с запасом (`pad`) шире клетки — его размер в кадре промо умножается на
+ * `boxOf(id)`, чтобы тело осталось того же размера.
+ */
 function enemy(id, stage = 0, t = 0) {
   const art = ENEMY_ART.find((a) => a.id === id);
   const palette = creaturePalette(enemyBody(art.pattern, art.rank, stage, art.id, 2), enemyEye(stage, 2));
-  return { svg: svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style: "C", hostile: true }), radius: art.radius };
+  return { svg: svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style: "C", hostile: true, pad: art.pad }), radius: art.radius };
 }
+
+const boxOf = (id) => ENEMY_ART.find((a) => a.id === id).pad ?? 1;
 
 function hero(skinId, state = "walk", frame = 1) {
   const skin = HERO_SKINS.find((s) => s.id === skinId);
@@ -131,7 +137,7 @@ export function page(format, variantId = "power", opts = {}) {
     const stage = rand() < 0.2 ? 1 : 0;
     const key = use(`${kind.id}-${stage}-${k % 3}`, enemy(kind.id, stage, (k % 3) / 3).svg);
     const art = ENEMY_ART.find((a) => a.id === kind.id);
-    const size = art.radius * 2 * 1.25 * (1.4 + d * 4.2) * unit * 1.9;
+    const size = art.radius * 2 * 1.25 * (1.4 + d * 4.2) * unit * 1.9 * boxOf(kind.id);
     items.push({ key, x, y, size, z: y, dim: 0.55 + d * 0.45, flip: false });
   }
   // Вороны — над толпой, крупные пятна на небе.
@@ -139,7 +145,7 @@ export function page(format, variantId = "power", opts = {}) {
     const key = use(`crow-${k % 2}`, enemy("circler_crow", 0, k % 2 ? 0.5 : 0).svg);
     const x = (L.horde[0] + (L.horde[1] - L.horde[0]) * rand()) * w;
     const y = horizonY * (0.45 + rand() * 0.45);
-    items.push({ key, x, y, size: 70 * unit * (0.8 + rand() * 0.6), z: y - 2000, dim: 0.8 });
+    items.push({ key, x, y, size: 70 * unit * (0.8 + rand() * 0.6) * boxOf("circler_crow"), z: y - 2000, dim: 0.8 });
   }
   // Элиты — ближе к герою, в золотой кайме.
   // У награды элиты уже пали: на месте ближней стоит сундук.
@@ -149,7 +155,7 @@ export function page(format, variantId = "power", opts = {}) {
     const art = ENEMY_ART.find((a) => a.id === id);
     const x = (L.heroX + dx + 0.06) * w;
     const y = horizonY + dd * (floorY - horizonY) * 0.9;
-    items.push({ key, x, y, size: art.radius * 2 * 1.25 * (1.4 + dd * 4.2) * unit * 1.9, z: y, dim: 1 });
+    items.push({ key, x, y, size: art.radius * 2 * 1.25 * (1.4 + dd * 4.2) * unit * 1.9 * boxOf(id), z: y, dim: 1 });
   }
   // Босс — силуэт в глубине справа, крупно.
   const bossKey = use("boss", enemy("boss_matryoshka", 0, 0.2).svg);
