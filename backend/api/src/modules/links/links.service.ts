@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ValidationError } from "../../common/domain-error.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { AppLinks } from "../../platforms/ports/app-links.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
@@ -6,6 +7,7 @@ import { classifyClient } from "../attribution/client-class.js";
 import { ipPrefix } from "../attribution/ip-prefix.js";
 import { PartnerNotFoundError } from "../partners/partner-errors.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { AUTO_SOURCES_REPOSITORY, UNKNOWN_KEYS_MAX, type AutoSourcesRepository, type UnknownKeyRow } from "./auto-sources.repository.js";
 import { checkerOf } from "./availability-checkers.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
@@ -84,6 +86,7 @@ export class LinksService {
     @Inject(LINKS_REPOSITORY) private readonly links: LinksRepository,
     private readonly appLinks: AppLinks,
     private readonly roles: RolesService,
+    @Inject(AUTO_SOURCES_REPOSITORY) private readonly autoSources: AutoSourcesRepository,
   ) {}
 
   async visit(code: string, visitor: VisitorInfo, now = new Date()): Promise<Visit> {
@@ -171,6 +174,44 @@ export class LinksService {
     return this.view(link);
   }
 
+  /**
+   * Дать автоисточнику название: меняется только `title`, а `campaign` и `source` остаются —
+   * по ним идут разрезы аналитики. Пустое название сбрасывает: в списке снова кампания.
+   * `null` — ссылки с таким кодом нет.
+   */
+  async rename(actor: AccountRef, code: string, title: string | null): Promise<LinkView | null> {
+    await this.roles.require(actor, "links.manage");
+    const before = await this.autoSourceOf(code);
+    if (before === null) return null;
+    const next = title === null || title.trim() === "" ? null : title.trim();
+    if (next === before.title) return this.view(before);
+    const link = await this.links.setDisplay(code, { title: next }, new Date());
+    if (link === null) return null;
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "links.rename", target: code, before: { title: before.title }, after: { title: link.title } });
+    return this.view(link);
+  }
+
+  /**
+   * Скрыть автоисточник из списка панели или вернуть. Запуски по нему считаются как раньше, а
+   * повторный запуск по той же метке не заводит нового источника. Повтор того же — без записи в аудит.
+   */
+  async setHidden(actor: AccountRef, code: string, hidden: boolean): Promise<LinkView | null> {
+    await this.roles.require(actor, "links.manage");
+    const before = await this.autoSourceOf(code);
+    if (before === null) return null;
+    if ((before.hiddenAt !== null) === hidden) return this.view(before);
+    const link = await this.links.setDisplay(code, { hidden }, new Date());
+    if (link === null) return null;
+    await this.roles.audit({ actorAccountId: actor.accountId, action: hidden ? "links.hide" : "links.unhide", target: code, before: { hidden: !hidden }, after: { hidden } });
+    return this.view(link);
+  }
+
+  /** Сводка ключей параметра запуска, которых нет в списке: только чтение. */
+  async unknownKeys(actor: AccountRef): Promise<{ keys: UnknownKeyRow[]; limit: number }> {
+    await this.roles.require(actor, "links.manage");
+    return { keys: await this.autoSources.unknownKeys(), limit: UNKNOWN_KEYS_MAX };
+  }
+
   async list(actor: AccountRef, filter: LinkFilter = {}): Promise<LinkView<LinkStats>[]> {
     await this.roles.require(actor, "links.manage");
     return (await this.links.list(200, filter)).map((link) => this.view(link));
@@ -178,6 +219,14 @@ export class LinksService {
 
   async byCode(code: string): Promise<LinkRecord | null> {
     return await this.links.byCode(code);
+  }
+
+  /** Автоисточник по коду; `null` — ссылки нет. Ручная ссылка названия и скрытия не имеет — отказ. */
+  private async autoSourceOf(code: string): Promise<LinkRecord | null> {
+    const link = await this.links.byCode(code);
+    if (link === null) return null;
+    if (!link.auto) throw new ValidationError("Переименовать и скрыть можно только источники, заведённые автоматически");
+    return link;
   }
 
   private view<T extends LinkRecord>(link: T): LinkView<T> {

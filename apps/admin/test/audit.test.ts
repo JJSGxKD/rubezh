@@ -32,6 +32,14 @@ describe("журнал аудита", () => {
     expect(auditValue(changes[0]?.after, "order")).toBe("c, a, b");
   });
 
+  it("автоисточники в «Ссылках» (T-0180): названия действий и правка названия «было → стало»", () => {
+    expect(actionTitle("links.rename")).toBe("Название источника");
+    expect(actionTitle("links.hide")).toBe("Скрытие источника");
+    expect(actionTitle("links.unhide")).toBe("Возврат источника в список");
+    const renamed = entry({ action: "links.rename", target: "AutoCode001", before: { title: null }, after: { title: "Посев в Канале N" } });
+    expect(auditChanges(renamed)).toHaveLength(1);
+  });
+
   it("перестановка слайдов главной (T-0189): название действия, одна правка «порядок» с названиями слайдов", () => {
     expect(actionTitle("home.slides.reorder")).toBe("Порядок слайдов главной");
     const reordered = entry({ action: "home.slides.reorder", target: "regular", before: { order: ["Турнир", "Конкурс"] }, after: { order: ["Конкурс", "Турнир"] } });
