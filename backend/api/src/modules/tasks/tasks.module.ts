@@ -8,6 +8,8 @@ import { WalletModule } from "../wallet/wallet.module.js";
 import { TasksController } from "./tasks.controller.js";
 import { NETWORK_TASKS_REPOSITORY, PrismaNetworkTasksRepository } from "./network-tasks.repository.js";
 import { NetworkTasksService } from "./network-tasks.service.js";
+import { PrismaTaskPointsRepository, TASK_POINTS_REPOSITORY } from "./task-points.repository.js";
+import { TaskPointsService } from "./task-points.service.js";
 import { PrismaTasksRepository, TASKS_REPOSITORY } from "./tasks.repository.js";
 import { TasksService } from "./tasks.service.js";
 
@@ -15,6 +17,9 @@ import { TasksService } from "./tasks.service.js";
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): каталог в базе,
  * прогресс от записанных забегов, награда — кошельком по ключу задания и
  * срока. Сервис экспортируется знакам меню и панели.
+ *
+ * Очки заданий (T-0105) — `TaskPointsService`: полоса дня и недели и награды
+ * за ступени; знак меню берёт готовые ступени через фасад `TasksService`.
  *
  * Задания рекламных сетей (WP13, часть 6) — `NetworkTasksService`: модуль
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
@@ -25,8 +30,10 @@ import { TasksService } from "./tasks.service.js";
   controllers: [TasksController],
   providers: [
     TasksService,
+    TaskPointsService,
     NetworkTasksService,
     { provide: TASKS_REPOSITORY, useClass: PrismaTasksRepository },
+    { provide: TASK_POINTS_REPOSITORY, useClass: PrismaTaskPointsRepository },
     { provide: NETWORK_TASKS_REPOSITORY, useClass: PrismaNetworkTasksRepository },
   ],
   exports: [TasksService, NetworkTasksService],

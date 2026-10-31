@@ -122,10 +122,13 @@ describe.skipIf(DATABASE_URL === "")("очки заданий на живом Po
     const [first] = idsOf("daily", NOON);
     await complete(me.accountId, [first ?? ""], NOON);
     expect((await points.view(me.accountId, NOON)).daily.total).toBe(pointsOf([first ?? ""]));
-    // Выполнено, но не доведено до цели — очков нет.
+    // Не доведено до цели — очков нет. Берём задание, где до цели можно не дойти: у части целей она равна единице.
     const other = await person();
-    const task = catalog.find((candidate) => candidate.taskId === first);
-    await tasks.applyRun({ runId: runId(), accountId: other.accountId, at: NOON, deltas: [{ taskId: first ?? "", period: "daily", target: task?.target ?? 1, op: "sum", amount: Math.max(1, (task?.target ?? 2) - 1) }] });
+    const task = idsOf("daily", NOON)
+      .map((id) => catalog.find((candidate) => candidate.taskId === id))
+      .find((candidate) => (candidate?.target ?? 0) >= 2);
+    expect(task, "в наборе дня есть задание с целью больше единицы").toBeDefined();
+    await tasks.applyRun({ runId: runId(), accountId: other.accountId, at: NOON, deltas: [{ taskId: task?.taskId ?? "", period: "daily", target: task?.target ?? 2, op: "sum", amount: (task?.target ?? 2) - 1 }] });
     expect((await points.view(other.accountId, NOON)).daily.total).toBe(0);
   });
 
