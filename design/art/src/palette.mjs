@@ -86,6 +86,11 @@ export const SPECIES_COLOR = {
   rubezh_guard: 0x9a7350, // Чур — старое дерево
   cordon_guard: 0x7f8796, // латы щитоносца
   boss_ram: 0x6b5446, // тёмная шерсть Тарана
+  ice_spirit: 0xa9dcf5, // лёд — светлее земли, холоднее огонька
+  bog_lurker: 0x6f8a46, // топь — темнее увальня
+  kikimora: 0x6a9a86, // болотная зелень с сизым
+  leshy: 0x6b5a3a, // кора
+  boss_gorynych: 0x4f7f4a, // змеиная зелень; головы — тоном стихии фазы
 };
 
 /**

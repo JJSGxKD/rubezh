@@ -394,6 +394,148 @@ ${glowEye(36, -10 + bob, 2.4, P)}
 
 // ───────────────────────── каталог ─────────────────────────
 
+// ───────────────────── новый контент Р157 (T-0281…T-0285) ─────────────────────
+
+/**
+ * Ледяной дух (T-0281, orbit) — кристалл с осколками-крыльями и хвостом
+ * позёмки: кружит, как ворон, но читается холодом, а не тенью.
+ */
+function iceSpirit(t, P) {
+  const w = Math.sin(t * TAU);
+  const bob = w * 3;
+  const flap = Math.sin(t * TAU * 2) * 4;
+  const body = `<path d="M0 ${f(-38 + bob)} L17 ${f(-12 + bob)} L11 ${f(20 + bob)} L0 ${f(30 + bob)} L-11 ${f(20 + bob)} L-17 ${f(-12 + bob)} Z"/>`;
+  const shard = (s) => `<path d="M${17 * s} ${f(-12 + bob)} L${f((34 + flap) * s)} ${f(-26 + bob)} L${22 * s} ${f(4 + bob)} Z"/>`;
+  return `
+<ellipse cx="0" cy="44" rx="${f(12 - bob)}" ry="3" fill="${P.body}" opacity="0.25"/>
+<path d="M-7 ${f(26 + bob)} Q${f(-10 + w * 4)} 40 ${f(2 + w * 5)} 46 Q${f(8 + w * 3)} 38 6 ${f(26 + bob)}" fill="${P.light}" opacity="0.55"/>
+${twoTone(shard(1) + shard(-1), P.light, P.body, -1, -2)}
+${twoTone(body, P.body, P.shade, -3, -2)}
+<path d="M0 ${f(-38 + bob)} L-6 ${f(-14 + bob)} L0 ${f(24 + bob)}" fill="none" stroke="${P.light}" stroke-width="2.2" stroke-linejoin="round" opacity="0.9"/>
+${glowEye(-6, -4 + bob, 2.4, P)}${glowEye(6, -4 + bob, 2.4, P)}
+<path d="M-4 ${f(-30 + bob)} L0 ${f(-43 + bob)} L4 ${f(-30 + bob)} M-12 ${f(-24 + bob)} L-10 ${f(-34 + bob)} M12 ${f(-24 + bob)} L10 ${f(-34 + bob)}" fill="none" stroke="${P.light}" stroke-width="2.4" stroke-linecap="round"/>`;
+}
+
+/**
+ * Болотник (T-0282, chase) — приземистый водяной с жабьим ртом и камышом на
+ * макушке; с него капает — следом остаются ядовитые лужи. От болотного
+ * увальня (куча тины, один глаз) отличается ростом, ртом и парой глаз.
+ */
+function bogLurker(t, P) {
+  const w = Math.sin(t * TAU);
+  const bob = -Math.abs(w) * 2;
+  const drip = (x, phase) => {
+    const p = (t + phase) % 1;
+    return `<ellipse cx="${x}" cy="${f(20 + p * 18 + bob)}" rx="2" ry="${f(2.6 + p * 1.5)}" fill="${P.light}" opacity="${f(0.85 - p * 0.7)}"/>`;
+  };
+  const body = `<path d="M-30 ${f(26 + bob)} Q-34 ${f(-6 + bob)} -16 ${f(-22 + bob)} Q0 ${f(-30 + bob)} 16 ${f(-22 + bob)} Q34 ${f(-6 + bob)} 30 ${f(26 + bob)} Q0 ${f(34 + bob)} -30 ${f(26 + bob)} Z"/>`;
+  return `
+${leg(-16, 24 + bob, w * 0.4, 14, 9, P.deep)}${leg(14, 24 + bob, -w * 0.4, 14, 9, P.shade)}
+${twoTone(body, P.body, P.shade, -3, -3)}
+<path d="M-8 ${f(-26 + bob)} L-11 ${f(-38 + bob)} M0 ${f(-28 + bob)} L1 ${f(-41 + bob)} M8 ${f(-26 + bob)} L12 ${f(-37 + bob)}" stroke="${P.deep}" stroke-width="3" stroke-linecap="round"/>
+<ellipse cx="1" cy="${f(-41 + bob)}" rx="2.4" ry="4" fill="${P.light}"/>
+<circle cx="-12" cy="${f(-20 + bob)}" r="7" fill="${P.light}"/><circle cx="12" cy="${f(-20 + bob)}" r="7" fill="${P.light}"/>
+${eye(-12, -20 + bob, 4.4, P)}${eye(12, -20 + bob, 4.4, P)}
+<path d="M-22 ${f(0 + bob)} Q0 ${f(14 + bob)} 22 ${f(0 + bob)}" fill="none" stroke="${P.pupil}" stroke-width="3.4" stroke-linecap="round"/>
+<path d="M-26 ${f(10 + bob)} Q-20 ${f(16 + bob)} -24 ${f(22 + bob)} M24 ${f(8 + bob)} Q20 ${f(16 + bob)} 25 ${f(22 + bob)}" fill="none" stroke="${P.light}" stroke-width="2.4" stroke-linecap="round" opacity="0.8"/>
+${drip(-18, 0)}${drip(4, 0.33)}${drip(20, 0.66)}`;
+}
+
+/**
+ * Кикимора (T-0283, blink) — сгорбленная болотная старуха: копна спутанных
+ * волос до земли, длинные руки-коряги, глаза из-под чёлки. Узкий высокий
+ * силуэт — его ищут глазами, когда она появляется рядом.
+ */
+function kikimora(t, P) {
+  const w = Math.sin(t * TAU);
+  const sway = w * 3;
+  const hair = `<path d="M${f(-4 + sway)} -44 Q18 -42 18 -14 Q20 14 16 38 L10 30 L6 40 L0 30 L-6 40 L-10 30 L-16 38 Q-20 14 -18 -14 Q${f(-20 + sway)} -40 ${f(-4 + sway)} -44 Z"/>`;
+  return `
+<ellipse cx="0" cy="43" rx="14" ry="3" fill="${P.deep}" opacity="0.3"/>
+${leg(-5, 30, w * 0.3, 12, 4, P.deep)}${leg(5, 30, -w * 0.3, 12, 4, P.deep)}
+${twoTone(hair, P.body, P.shade, -2, -3)}
+<path d="M-12 -20 Q-14 0 -10 24 M0 -24 Q-2 4 0 28 M10 -20 Q14 2 10 24" fill="none" stroke="${P.shade}" stroke-width="2" opacity="0.7"/>
+<ellipse cx="${f(sway * 0.4)}" cy="-18" rx="9" ry="10" fill="${P.bone}"/>
+<path d="M${f(-11 + sway * 0.4)} -24 Q${f(sway * 0.4)} -30 ${f(11 + sway * 0.4)} -24 L${f(9 + sway * 0.4)} -17 Q${f(sway * 0.4)} -21 ${f(-9 + sway * 0.4)} -17 Z" fill="${P.body}"/>
+${glowEye(-4 + sway * 0.4, -16, 1.8, P)}${glowEye(4 + sway * 0.4, -16, 1.8, P)}
+<path d="M${f(sway * 0.4)} -14 L${f(2 + sway * 0.4)} -8" stroke="${P.deep}" stroke-width="2" stroke-linecap="round"/>
+<path d="M-14 -6 Q${f(-30 - w * 4)} 6 ${f(-28 - w * 4)} 20 M-28 20 l-4 4 M-28 20 l1 6 M14 -6 Q${f(30 + w * 4)} 4 ${f(30 + w * 4)} 18 M30 18 l4 4 M30 18 l-1 6" fill="none" stroke="${P.deep}" stroke-width="3" stroke-linecap="round"/>`;
+}
+
+/**
+ * Леший (T-0284, элита, roots) — хозяин леса: кора вместо тела, рога-ветви,
+ * борода мха, листья. Корни из земли под игроком — его удар, поэтому руки
+ * уходят вниз, в землю.
+ */
+function leshy(t, P) {
+  const w = Math.sin(t * TAU);
+  const bob = -Math.abs(w) * 1.5;
+  const trunk = `<path d="M-20 ${f(36 + bob)} L-22 ${f(-14 + bob)} Q-20 ${f(-34 + bob)} 0 ${f(-36 + bob)} Q20 ${f(-34 + bob)} 22 ${f(-14 + bob)} L20 ${f(36 + bob)} Q0 ${f(42 + bob)} -20 ${f(36 + bob)} Z"/>`;
+  const antler = (s) => `M${8 * s} ${f(-32 + bob)} L${15 * s} ${f(-42 + bob)} L${24 * s} ${f(-44 + bob)} M${15 * s} ${f(-42 + bob)} L${13 * s} ${f(-48 + bob)} M${11 * s} ${f(-37 + bob)} L${20 * s} ${f(-37 + bob)}`;
+  const leaf = (x, y, r) => `<path d="M${f(x)} ${f(y + bob)} q4 -6 8 0 q-4 6 -8 0 Z" fill="${P.light}" transform="rotate(${f(r)} ${f(x)} ${f(y + bob)})"/>`;
+  return `
+<path d="M-18 ${f(30 + bob)} Q-28 36 -34 40 M18 ${f(30 + bob)} Q28 36 34 39 M0 ${f(38 + bob)} L-2 42" fill="none" stroke="${P.deep}" stroke-width="5" stroke-linecap="round"/>
+<path d="${antler(1)} ${antler(-1)}" fill="none" stroke="${P.deep}" stroke-width="3.6" stroke-linecap="round"/>
+${twoTone(trunk, P.body, P.shade, -3, -3)}
+<path d="M-14 ${f(-20 + bob)} Q-12 ${f(4 + bob)} -16 ${f(30 + bob)} M10 ${f(-10 + bob)} Q14 ${f(10 + bob)} 12 ${f(32 + bob)}" fill="none" stroke="${P.deep}" stroke-width="2" opacity="0.6"/>
+${glowEye(-7, -18 + bob, 2.6, P)}${glowEye(7, -18 + bob, 2.6, P)}
+<path d="M-12 ${f(-8 + bob)} Q-10 ${f(14 + bob)} 0 ${f(22 + bob)} Q10 ${f(14 + bob)} 12 ${f(-8 + bob)} Q0 ${f(-2 + bob)} -12 ${f(-8 + bob)} Z" fill="${P.light}" opacity="0.85"/>
+<path d="M-22 ${f(-6 + bob)} Q${f(-34 - w * 3)} ${f(10 + bob)} ${f(-30 - w * 3)} ${f(30 + bob)} M22 ${f(-6 + bob)} Q${f(34 + w * 3)} ${f(10 + bob)} ${f(30 + w * 3)} ${f(30 + bob)}" fill="none" stroke="${P.shade}" stroke-width="5" stroke-linecap="round"/>
+${leaf(17, -36, -20)}${leaf(-25, -38, 30)}${leaf(24, -24, 50)}${leaf(-30, -20, -40)}`;
+}
+
+/**
+ * Змей Горыныч (T-0285, босс трёх фаз) — три головы на длинных шеях, крылья,
+ * гребень. Голова фазы — тоном её стихии: огонь, холод, затем ярость. Пройденная
+ * фаза — голова гаснет и опускается: полоса здоровья и облик говорят одно.
+ * `phase` — номер кадра-«ступени» 0…2 (`boss_gorynych/s<фаза>/walk<k>`).
+ */
+const GORYNYCH_HEADS = [
+  { glow: "#ff8f3f", light: "#ffd08f" }, // огонь — фаза 1
+  { glow: "#8fd8ff", light: "#e3f6ff" }, // холод — фаза 2
+  { glow: "#ff3b5c", light: "#ffb0bd" }, // ярость — фаза 3
+];
+function gorynych(t, P, phase = 0) {
+  const w = Math.sin(t * TAU);
+  const bob = w * 2;
+  const wing = Math.sin(t * TAU) * 6;
+  const body = `<path d="M-30 ${f(32 + bob)} Q-36 ${f(6 + bob)} -20 ${f(-4 + bob)} Q0 ${f(-12 + bob)} 20 ${f(-4 + bob)} Q36 ${f(6 + bob)} 30 ${f(32 + bob)} Q0 ${f(42 + bob)} -30 ${f(32 + bob)} Z"/>`;
+  const wings = `<path d="M-18 ${f(-2 + bob)} L-46 ${f(-22 + wing)} L-40 ${f(-6 + wing)} L-46 ${f(6 + wing)} L-26 ${f(12 + bob)} Z M18 ${f(-2 + bob)} L46 ${f(-22 + wing)} L40 ${f(-6 + wing)} L46 ${f(6 + wing)} L26 ${f(12 + bob)} Z"/>`;
+  // Шеи: левая — фаза 1, средняя — фаза 2, правая — фаза 3. Голова — крупно:
+  // по ней игрок считает, сколько боя осталось.
+  const necks = [
+    { x: -27, y: -30, root: -12, turn: -1 },
+    { x: 0, y: -38, root: 0, turn: 1 },
+    { x: 27, y: -30, root: 12, turn: 1 },
+  ];
+  const headShape = `<path d="M-9 4 Q-10 -8 0 -9 Q12 -8 13 2 L6 8 Q-4 10 -9 4 Z"/>`;
+  const heads = necks
+    .map((n, k) => {
+      const done = k < phase;
+      const active = k === phase;
+      const tone = GORYNYCH_HEADS[k];
+      const hx = n.x * (done ? 1.12 : 1);
+      const hy = n.y + (done ? 16 : 0) + (active ? bob * 1.5 : bob);
+      const neck = `<path d="M${n.root} ${f(-2 + bob)} Q${f((n.root + hx) / 2)} ${f((hy + bob) / 2 - 8)} ${f(hx)} ${f(hy + 6)}" fill="none" stroke="${done ? P.deep : P.shade}" stroke-width="10" stroke-linecap="round"/>`;
+      const halo = active ? `<circle cx="${f(hx)}" cy="${f(hy)}" r="17" fill="${tone.glow}" opacity="0.25"/>` : "";
+      const inner = `${twoTone(headShape, done ? P.deep : P.body, done ? P.deep : P.shade, -2, -2)}
+<path d="M-4 -8 L-8 -16 M4 -8 L6 -16" stroke="${done ? P.shade : P.bone}" stroke-width="2.4" stroke-linecap="round"/>
+<circle cx="3" cy="-2" r="${done ? 1.2 : 2.4}" fill="${done ? P.shade : tone.glow}"/>
+${active ? `<path d="M13 2 q6 2 10 -2 q-2 6 4 8" fill="none" stroke="${tone.light}" stroke-width="2.2" stroke-linecap="round" opacity="0.9"/>` : ""}`;
+      return `${neck}${halo}<g transform="translate(${f(hx)} ${f(hy)}) scale(${n.turn * 1.3} 1.3)">${inner}</g>`;
+    })
+    .join("");
+  // Масштаб 0,8: тело — в хитбокс (клетка 1,75 радиуса), головы и пламя — в
+  // клетку без большого запаса: кадров у босса 12, каждый лишний пиксель
+  // множится на видеопамять.
+  return `<g transform="scale(0.8) translate(0 4)">
+${leg(-16, 32 + bob, w * 0.3, 12, 8, P.deep)}${leg(16, 32 + bob, -w * 0.3, 12, 8, P.deep)}
+${twoTone(wings, P.shade, P.deep, -2, -2)}
+${twoTone(body, P.body, P.shade, -3, -3)}
+<path d="M-20 ${f(8 + bob)} Q0 ${f(2 + bob)} 20 ${f(8 + bob)} M-22 ${f(18 + bob)} Q0 ${f(12 + bob)} 22 ${f(18 + bob)}" fill="none" stroke="${P.light}" stroke-width="2.4" opacity="0.6"/>
+${heads}</g>`;
+}
+
 /**
  * Каталог по id врага из `content/enemies.ts`. Облик — по врагу, а не по
  * паттерну: костяной ходок и упырь делят паттерн «chase», но не тело.
@@ -422,4 +564,12 @@ export const ENEMY_ART = [
   { id: "rubezh_guard", pattern: "rush", rank: "boss", radius: 6 * 2.4, draw: rubezhGuard, pad: 1.26, planned: "T-0120" },
   { id: "cordon_guard", pattern: "chase", radius: 14, draw: cordonGuard, pad: 1.11, planned: "T-0171" },
   { id: "boss_ram", pattern: "dash", rank: "boss", radius: 10 * 2.4, draw: ram, pad: 1.1, planned: "T-0197" },
+  // Новый контент Р157: облик раньше задач, радиус — паттерна и ранга из задачи,
+  // кадры — в своём паке `atlas-r157`. У Горыныча кадры по фазам (`phases`):
+  // номер «ступени» кадра — фаза боя.
+  { id: "ice_spirit", pattern: "orbit", radius: 8, draw: iceSpirit, pad: 1.06, pack: "r157", planned: "T-0281" },
+  { id: "bog_lurker", pattern: "chase", radius: 12, draw: bogLurker, pack: "r157", planned: "T-0282" },
+  { id: "kikimora", pattern: "chase", radius: 11, draw: kikimora, pack: "r157", planned: "T-0283" },
+  { id: "leshy", pattern: "chase", rank: "elite", radius: 12 * 1.7, draw: leshy, pad: 1.09, pack: "r157", planned: "T-0284" },
+  { id: "boss_gorynych", pattern: "caster", rank: "boss", radius: 14 * 2.4, draw: gorynych, pad: 1.07, phases: 3, pack: "r157", planned: "T-0285" },
 ];
