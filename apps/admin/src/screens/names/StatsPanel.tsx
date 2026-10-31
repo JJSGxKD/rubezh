@@ -2,7 +2,7 @@ import { DEFAULT_WINDOW, STATS_WINDOWS, WINDOW_TITLES, topLine, topRules, tracke
 import type { NameRule } from "../../api/name-rules";
 import { formatNumber } from "../../format";
 import { HELP } from "../../ui/help";
-import { Button, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Button, Help, Loading, Notice, Panel, Select } from "../../ui/kit";
 
 /** Состояние статистики для экрана: список правил от неё не зависит, и загрузка или сбой его не блокируют. */
 export type StatsState = { status: "loading" } | { status: "error"; retry: () => void } | { status: "ok"; stats: NameRuleStats };
@@ -77,6 +77,7 @@ export function StatsPanel({
             <Button onClick={() => onOnlyUnused(!onlyUnused)} aria-pressed={onlyUnused}>
               Не срабатывали: {String(unused.length)}
             </Button>
+            <Help text={HELP.names.unused} />
             <span className="text-xs text-text-muted">{onlyUnused ? "в списке только они, нажмите ещё раз — вернуть все" : "действующие правила без единого срабатывания за окно"}</span>
           </div>
           {note === null ? null : <Notice tone="info">{note}</Notice>}
