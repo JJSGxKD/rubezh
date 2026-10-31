@@ -1,4 +1,5 @@
 import { DIFFICULTY_REWARD_MUL } from "../progress/progress-rules.js";
+import type { Board } from "../runs/leaderboard.store.js";
 import type { Difficulty } from "../runs/run-rules.js";
 
 /**
@@ -138,6 +139,69 @@ export const BOARD_TTL_AFTER_END_MS = 21 * DAY_MS;
 export interface Reward {
   coins: number;
   prestige: number;
+}
+
+/**
+ * Что можно получить за сезон: монеты и престиж, больше ничего (Р104, T-0114). Ни звёзд, ни TON, ни
+ * подарков площадки, ни выплат, ни реферальных и партнёрских начислений. Тип награды — выбор из этого
+ * списка: добавить поле награде, не тронув его, не соберётся.
+ */
+export const SEASON_REWARD_KEYS = ["coins", "prestige"] as const;
+export type SeasonRewardKey = (typeof SEASON_REWARD_KEYS)[number];
+export type InGameReward = Pick<Reward, SeasonRewardKey>;
+
+/**
+ * Страховка перед начислением: награда — ровно монеты и престиж, целые и неотрицательные. Тип этого не
+ * видит, когда награду собирают из строки базы или JSON.
+ */
+export function assertInGameReward(reward: Record<string, unknown>): asserts reward is InGameReward & Record<string, unknown> {
+  const allowed: readonly string[] = SEASON_REWARD_KEYS;
+  for (const key of Object.keys(reward)) {
+    if (!allowed.includes(key)) throw new Error(`Награда сезона — только внутриигровая (монеты и престиж), лишнее поле: ${key}`);
+  }
+  for (const key of SEASON_REWARD_KEYS) {
+    const value = reward[key];
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+      throw new Error(`Награда сезона: ${key} — целое не меньше нуля, сейчас ${String(value)}`);
+    }
+  }
+}
+
+/** Лучшее время аккаунта за неделю на одной сложности — вход в `standings`. */
+export interface StandingEntry {
+  accountId: string;
+  bestSec: number;
+  /** когда показано лучшее время: при равном времени выше тот, кто показал его раньше */
+  firstAt: Date;
+}
+
+export interface Standing {
+  accountId: string;
+  bestSec: number;
+  place: number;
+  /** сколько игроков в таблице этого аккаунта */
+  boardSize: number;
+}
+
+export type SeasonBoard = Board;
+
+/**
+ * Две таблицы сложности (Р104, T-0114). Общая — без аккаунтов из `separate` (скрытое ограничение
+ * «Отдельная доска»), полная — все; каждая считает места и размер по себе, поэтому обычный игрок
+ * получает место «как будто аккаунтов с ограничением нет». Время по убыванию, при равенстве выше тот,
+ * кто показал его раньше; равные оба — одно место, следующее через них, как `rank()` в закрытии.
+ *
+ * Эталон для закрытия: SQL считает то же самое в базе, а эта функция — модель, с которой его сверяют.
+ */
+export function standings(entries: readonly StandingEntry[], separate: ReadonlySet<string>): { common: Standing[]; full: Standing[] } {
+  const rank = (table: readonly StandingEntry[]): Standing[] => {
+    const sorted = [...table].sort((left, right) => right.bestSec - left.bestSec || left.firstAt.getTime() - right.firstAt.getTime() || (left.accountId < right.accountId ? -1 : left.accountId > right.accountId ? 1 : 0));
+    return sorted.map((entry) => {
+      const first = sorted.findIndex((other) => other.bestSec === entry.bestSec && other.firstAt.getTime() === entry.firstAt.getTime());
+      return { accountId: entry.accountId, bestSec: entry.bestSec, place: first + 1, boardSize: sorted.length };
+    });
+  };
+  return { common: rank(entries.filter((entry) => !separate.has(entry.accountId))), full: rank(entries) };
 }
 
 export function thresholdReached(difficulty: Difficulty, bestSec: number): boolean {

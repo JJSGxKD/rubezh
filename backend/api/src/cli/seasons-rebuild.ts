@@ -4,7 +4,10 @@ import { closeRedis, createRedis } from "../infra/redis.js";
 import { AccountRestrictions } from "../modules/restrictions/account-restrictions.js";
 import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
 import { RestrictionsHooks } from "../modules/restrictions/restrictions-hooks.js";
+import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
+import { RatingRestrictions } from "../modules/runs/rating-restrictions.js";
 import { RunsHooks } from "../modules/runs/runs-hooks.js";
+import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
 import { RedisSeasonBoardStore } from "../modules/seasons/season-board.store.js";
 import { SeasonSchedule } from "../modules/seasons/seasons-schedule.js";
 import { SeasonsProjection } from "../modules/seasons/seasons-projection.js";
@@ -34,7 +37,10 @@ async function main(): Promise<void> {
     const settings = new SettingsService(config, new PrismaSettingsRepository(prisma), redis);
     await settings.refresh();
     const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
-    const projection = new SeasonsProjection(new SeasonSchedule(settings), new RedisSeasonBoardStore(redis), new PrismaSeasonsRepository(prisma), new RunsHooks(), new RestrictionsHooks(), restrictions);
+    // Нужны только доски аккаунта и кому отдельная доска: обход и слушатели рейтинга здесь не запускаются.
+    const hooks = new RestrictionsHooks();
+    const rating = new RatingRestrictions(config, redis, new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, hooks);
+    const projection = new SeasonsProjection(new SeasonSchedule(settings), new RedisSeasonBoardStore(redis), new PrismaSeasonsRepository(prisma), new RunsHooks(), hooks, restrictions, rating);
     const counts = await projection.rebuild();
     const entries = Object.entries(counts);
     console.log(entries.length === 0 ? "сезонов сейчас нет — пересобирать нечего" : `таблицы недели пересобраны: ${entries.map(([difficulty, count]) => `${difficulty} — ${String(count)}`).join(", ")}`);

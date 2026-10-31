@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
-import { rewardFor, type Season } from "./season-rules.js";
+import { assertInGameReward, rewardFor, type Season } from "./season-rules.js";
 
 /**
  * Закрытие недельного сезона в Postgres (tasks/T-0110): итоги, места и
@@ -18,6 +18,12 @@ import { rewardFor, type Season } from "./season-rules.js";
  * Места считает одна оконная функция: время по убыванию, при равенстве выше
  * тот, кто показал его раньше. Источник — таблица `run`, а не Redis, поэтому
  * снятие забега модератором до закрытия учтено само.
+ *
+ * Таблиц две на сложность (Р104, T-0114). Аккаунт со скрытым ограничением
+ * «Отдельная доска» на момент закрытия ранжируется в полной таблице среди
+ * всех, остальные — в общей, где таких аккаунтов нет, и каждый берёт место и
+ * размер таблицы по своей доске (`season_result.board`). Принадлежность
+ * определяется правилом живой таблицы: ограничение не снято и срок не вышел.
  */
 
 /** Аккаунтов в одной пачке наград: память держит пачку, а не весь сезон. */
@@ -70,21 +76,35 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
         if (created === 0) return null;
 
         await tx.$executeRaw`
-          INSERT INTO season_result (season_key, account_id, difficulty, best_sec, place, board_size)
-          SELECT ${season.key}, ranked.account_id, ranked.difficulty, ranked.best_sec, ranked.place, ranked.board_size
-          FROM (
-            SELECT best.account_id, best.difficulty, best.best_sec,
-                   rank() OVER (PARTITION BY best.difficulty ORDER BY best.best_sec DESC, best.first_at ASC) AS place,
-                   count(*) OVER (PARTITION BY best.difficulty) AS board_size
-            FROM (
-              SELECT DISTINCT ON (r.account_id, r.difficulty) r.account_id, r.difficulty, r.survival_sec AS best_sec, r.finished_at AS first_at
-              FROM run r
-              WHERE r.status = 'finished' AND r.ranked AND r.survival_sec IS NOT NULL
-                AND r.finished_at >= ${season.startsAt} AND r.finished_at < ${season.endsAt}
-                AND NOT (r.account_id = ANY(${[...excluded]}::uuid[]))
-              ORDER BY r.account_id, r.difficulty, r.survival_sec DESC, r.finished_at ASC
-            ) best
-          ) ranked
+          INSERT INTO season_result (season_key, account_id, difficulty, best_sec, place, board_size, board)
+          WITH best AS (
+            SELECT DISTINCT ON (r.account_id, r.difficulty) r.account_id, r.difficulty, r.survival_sec AS best_sec, r.finished_at AS first_at,
+                   EXISTS (
+                     SELECT 1 FROM account_restriction s
+                     WHERE s.account_id = r.account_id AND s.kind = 'separate_board'
+                       AND s.lifted_at IS NULL AND (s.ends_at IS NULL OR s.ends_at > ${now})
+                   ) AS separate
+            FROM run r
+            WHERE r.status = 'finished' AND r.ranked AND r.survival_sec IS NOT NULL
+              AND r.finished_at >= ${season.startsAt} AND r.finished_at < ${season.endsAt}
+              AND NOT (r.account_id = ANY(${[...excluded]}::uuid[]))
+            ORDER BY r.account_id, r.difficulty, r.survival_sec DESC, r.finished_at ASC
+          ),
+          common AS (
+            SELECT b.account_id, b.difficulty, b.best_sec,
+                   rank() OVER (PARTITION BY b.difficulty ORDER BY b.best_sec DESC, b.first_at ASC) AS place,
+                   count(*) OVER (PARTITION BY b.difficulty) AS board_size
+            FROM best b WHERE NOT b.separate
+          ),
+          complete AS (
+            SELECT b.account_id, b.difficulty, b.best_sec, b.separate,
+                   rank() OVER (PARTITION BY b.difficulty ORDER BY b.best_sec DESC, b.first_at ASC) AS place,
+                   count(*) OVER (PARTITION BY b.difficulty) AS board_size
+            FROM best b
+          )
+          SELECT ${season.key}, c.account_id, c.difficulty, c.best_sec, c.place, c.board_size, 'common' FROM common c
+          UNION ALL
+          SELECT ${season.key}, f.account_id, f.difficulty, f.best_sec, f.place, f.board_size, 'full' FROM complete f WHERE f.separate
           ON CONFLICT DO NOTHING`;
 
         await this.assignRewards(tx, season.key);
@@ -120,8 +140,12 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
       for (const row of rows) byAccount.set(row.accountId, [...(byAccount.get(row.accountId) ?? []), row]);
 
       const prizes = ids.flatMap((accountId) => {
+        // Места и размер — своей доски аккаунта: в его строках все результаты с одной доской.
         const prize = rewardFor((byAccount.get(accountId) ?? []).map((row) => ({ difficulty: row.difficulty, bestSec: row.bestSec, place: row.place, boardSize: row.boardSize })));
-        return prize === null ? [] : [{ account_id: accountId, coins: prize.coins, prestige: prize.prestige, difficulty: prize.difficulty, place: prize.place, kind: prize.kind }];
+        if (prize === null) return [];
+        // Только внутриигровое: монеты и престиж, больше ничего не выдаётся ни на одной доске.
+        assertInGameReward({ coins: prize.coins, prestige: prize.prestige });
+        return [{ account_id: accountId, coins: prize.coins, prestige: prize.prestige, difficulty: prize.difficulty, place: prize.place, kind: prize.kind }];
       });
       if (prizes.length > 0) {
         // JSON, а не массивы по колонкам: у награды за порог сложность и место пусты.
