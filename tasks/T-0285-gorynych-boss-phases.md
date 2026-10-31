@@ -23,6 +23,7 @@ shared:
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/guide/guide-data.ts
@@ -102,8 +103,17 @@ batch: 6
   - тон текущей головы — стихия фазы;
   - третья фаза — тон опасности.
 
-  Без арта — фигура босса плюс три круга-головы (`looks.ts`). Кадры —
-  пункт 16 очереди; облик Горыныча — и для промо.
+  Без арта — фигура босса плюс три круга-головы (`looks.ts`).
+- **Кадры арта** готовы (31.10.2026): `boss_gorynych/s<фаза>/walk<k>`, фаза
+  0…2, в паке `atlas-r157` (`design/art/src/creatures.mjs`, `gorynych`). У
+  босса ступеней нет, поэтому номер «ступени» кадра здесь — фаза: в первой
+  горят три головы, дальше пройденные гаснут и опускаются, текущая светится
+  тоном стихии. В `art-atlas.ts` кадры врага с `phases` берутся по фазе
+  (`enemyFrameName(id, phase, k)`), у остальных боссов — `s0`, как сейчас.
+  Пак `atlas-r157` движок ещё не грузит: первая из задач T-0281…T-0285
+  добавляет в `ATLASES` (`render/art-atlas.ts`) строку `art-r157` по образцу
+  `art-late`, остальные её уже застают.
+  Облик Горыныча — и для промо.
 - **Тексты:**
   - `enemy.boss_gorynych.name` — «Змей Горыныч»;
   - гайдбук: «Три головы — три боя: огонь издали, холод под ногами, последняя
