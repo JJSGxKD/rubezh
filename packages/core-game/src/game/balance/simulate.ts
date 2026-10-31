@@ -1,9 +1,11 @@
 import type { DifficultyId } from "@bh/shared-types";
+import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { stepWorld } from "../sim/step";
+import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 
@@ -22,7 +24,10 @@ const DEFAULT_MAX_SEC = 900;
 export interface BalanceRunOptions {
   seed: number;
   skill: BotSkill;
-  /** уровень сложности; по умолчанию — «Лёгкая»: коридоры калибровки заданы для неё */
+  /**
+   * уровень сложности; по умолчанию — «Сложная»: главный бой, коридоры
+   * калибровки заданы для неё; обучающая «Лёгкая» меряется отдельно
+   */
   difficultyId?: DifficultyId;
   /** чем начинать забег; по умолчанию — первое открытое оружие контента */
   startingWeaponId?: string;
@@ -33,6 +38,12 @@ export interface BalanceRunOptions {
    */
   accountLevel?: number;
   maxSec?: number;
+  /**
+   * Зонд давления: игрок почти неуязвим, и бот идёт до `maxSec`, а не до
+   * смерти — так видно, сколько урона несёт поздний бой, до которого
+   * настоящий бот не доживает.
+   */
+  immortalPlayer?: boolean;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
   /**
@@ -64,11 +75,13 @@ export interface BalanceRunResult {
   evolutions: number;
   /** забег упёрся в аварийный потолок, а не кончился смертью */
   timedOut: boolean;
+  /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
+  damageTakenByMinute: number[];
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
   const content = options.content ?? CONTENT_SNAPSHOT;
-  const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? "easy"));
+  const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? DEFAULT_DIFFICULTY_ID));
   const open = options.accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, options.accountLevel);
   const world = createWorld({
     seed: options.seed,
@@ -86,11 +99,18 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),
+    // Здоровье на миллион, как в нагрузочных прогонах: игрок не умирает, но
+    // каждое попадание по-прежнему считается в `damageTaken`.
+    ...(options.immortalPlayer === true
+      ? { config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 } } }
+      : {}),
   });
   const director = createTimelineDirector(content.timeline, content.endlessCurve);
   const bot = createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
+  const damageTakenByMinute: number[] = [];
+  let damageAtMinuteStart = 0;
   let firstLevelUpSec = 0;
   let tick = 0;
   while (tick < maxTicks && world.player.alive) {
@@ -105,6 +125,13 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     director.update(world, TICK_SEC);
     stepWorld(world, bot.input(world));
     tick++;
+
+    // Минута закрывается, когда забег её прошёл целиком: урон считается по
+    // границам, а не по таймеру внутри мира.
+    if (Math.floor(world.stats.elapsedSec / 60) > damageTakenByMinute.length) {
+      damageTakenByMinute.push(world.stats.damageTaken - damageAtMinuteStart);
+      damageAtMinuteStart = world.stats.damageTaken;
+    }
   }
 
   return {
@@ -122,6 +149,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     chestsOpened: world.stats.chestsOpened,
     evolutions: world.loadout.weapons.filter((slot) => world.weaponTypes[slot.typeIndex]?.evolvedFrom !== undefined).length,
     timedOut: world.player.alive,
+    damageTakenByMinute,
   };
 }
 

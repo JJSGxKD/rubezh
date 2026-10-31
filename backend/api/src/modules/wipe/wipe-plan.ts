@@ -104,11 +104,10 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   OutboundCall: keep("журнал исходящих запросов — не данные игрока, сам стирается через 7 суток (Р92)"),
   InboundMinute: keep("сводка входящих запросов по маршрутам — без игроков, сама стирается через 7 суток (Р92)"),
 
-  // --- уходят каскадом вместе с забегом: своего шага стирания у них нет ---
-  RunGemContinue: keep("второй шанс за самоцветы (Р162): строки уходят каскадом вместе с забегом (ON DELETE CASCADE) — отдельного шага стирания нет"),
-
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
+  RunGemContinue: wipe("второй шанс за самоцветы (Р162) — часть забега: свой шаг, а не каскад с забегом"),
+  RunProof: wipe("запись забега для проверки (T-0317) — часть забега: свой шаг, а не каскад с забегом"),
   RunReward: wipe("награда за забег"),
   RunBoost: wipe("бусты на забег"),
   TaskRun: wipe("забеги, засчитанные заданиям"),
@@ -132,6 +131,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 /** Порядок стирания: дочерние раньше родительских. Ровно модели с `action: "wipe"`. */
 export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "RunAdContinue",
+  "RunGemContinue",
+  "RunProof",
   "RunReward",
   "RunBoost",
   "TaskRun",

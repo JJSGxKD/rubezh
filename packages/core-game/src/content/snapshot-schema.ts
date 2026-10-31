@@ -284,6 +284,14 @@ const balanceTargetsSchema = z.strictObject({
   dodgingDeathsBeforeMinuteRatioMax: num,
   firstLevelUpSec: range,
   firstChestEventSec: range,
+  latePressure: z.strictObject({
+    fromSec: num,
+    toSec: num,
+    strengthGrowthPer3Min: range,
+    rankEventsPerMinuteMin: num,
+    rankEventsDensityRatioMin: num,
+    hardMaxAliveMulMax: num,
+  }),
   evolutionPowerRatio: range,
 });
 

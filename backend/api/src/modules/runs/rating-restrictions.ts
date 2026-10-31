@@ -6,7 +6,7 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsHooks, type RestrictionChange } from "../restrictions/restrictions-hooks.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
+import { ALL_BOARDS, COMMON_ONLY, FULL_ONLY, LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { DIFFICULTIES } from "./run-rules.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
 
@@ -23,6 +23,12 @@ import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./r
  * - обход раз в минуту под локом убирает из досок всех, кому рейтинг закрыт:
  *   итог забега, принятый в ту же секунду, что наложение, или упавший Redis
  *   не оставят ограниченного в доске дольше минуты.
+ *
+ * Досок две (docs/35-stage4-plan.md, Р104, T-0113). Закрытый рейтинг убирает
+ * аккаунт из обеих. Скрытая «Отдельная доска» оставляет его в полной и убирает
+ * из общей: слушатель `board` переносит его туда и обратно, обход добирает
+ * гонку «забег принят в ту же секунду, что наложение» — она живёт не дольше
+ * минуты.
  */
 
 const LOCK_KEY = "runs:rating-restrictions:lock";
@@ -34,7 +40,16 @@ const REDIS_TIMEOUT_MS = 2_000;
 const RATING_KINDS = new Set(["leaderboard", "all"]);
 
 /** Доска, которую читает игрок: полная (с отдельной доской) или общая, без игроков отдельной доски. */
-export type BoardView = "full" | "common";
+export type BoardView = Board;
+
+/**
+ * Доски записи по доске чтения: тот, кто читает полную, пишется только в неё.
+ * Отдельной функцией, чтобы приём забега читал ограничение один раз и писал
+ * туда же, откуда читает ответ.
+ */
+export function boardsOf(board: BoardView): readonly Board[] {
+  return board === "full" ? FULL_ONLY : ALL_BOARDS;
+}
 
 const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
@@ -61,6 +76,8 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
   onModuleInit(): void {
     this.hooks.onImposed("rating", async (change) => await this.imposed(change));
     this.hooks.onSettled("rating", async (change) => await this.settled(change));
+    this.hooks.onImposed("board", async (change) => await this.separated(change));
+    this.hooks.onSettled("board", async (change) => await this.unseparated(change));
   }
 
   onApplicationBootstrap(): void {
@@ -91,9 +108,22 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     return row?.kind === "separate_board" ? "full" : "common";
   }
 
+  /**
+   * В какие доски писать результат аккаунта: аккаунту с отдельной доской —
+   * только в полную, остальным — в обе (лучшее время игрока на досках одно).
+   */
+  async boardsFor(accountId: string, at = new Date()): Promise<readonly Board[]> {
+    return boardsOf(await this.boardOf(accountId, at));
+  }
+
   /** Кому рейтинг закрыт сейчас — пересборка досок их не возвращает. */
   async excluded(at = new Date()): Promise<string[]> {
     return await this.restrictions.restrictedAccounts("leaderboard", at);
+  }
+
+  /** У кого сейчас отдельная доска — пересборка кладёт их только в полную. */
+  async separate(at = new Date()): Promise<string[]> {
+    return await this.restrictions.restrictedAccounts("separate_board", at);
   }
 
   /** Одна проверка обхода; `null` — не запускался: идёт предыдущий, лок у другой реплики или Redis недоступен. */
@@ -116,10 +146,13 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     }
   }
 
-  /** Убрать из досок всех, кому рейтинг закрыт; возвращает, сколько мест сняло — обычно ноль. */
+  /**
+   * Убрать из досок всех, кому рейтинг закрыт, а из общей — ещё и тех, у кого
+   * отдельная доска; возвращает, сколько мест сняло, — обычно ноль.
+   */
   async sweep(at = new Date()): Promise<number> {
-    const restricted = await this.excluded(at);
-    const removed = await this.redisCall(this.leaderboard.remove(restricted));
+    const [restricted, separate] = [await this.excluded(at), await this.separate(at)];
+    const removed = (await this.redisCall(this.leaderboard.remove(restricted, ALL_BOARDS))) + (await this.redisCall(this.leaderboard.remove(separate, COMMON_ONLY)));
     // Не ноль — ограниченный успел вернуться в доску гонкой с наложением.
     if (removed > 0) this.log("log", "rating_restricted_swept", { removed });
     return removed;
@@ -127,7 +160,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
 
   private async imposed(change: RestrictionChange): Promise<void> {
     if (!change.kinds.some((kind) => RATING_KINDS.has(kind))) return;
-    await this.redisCall(this.leaderboard.remove([change.accountId]));
+    await this.redisCall(this.leaderboard.remove([change.accountId], ALL_BOARDS));
     this.log("log", "rating_restricted", { accountId: change.accountId });
   }
 
@@ -135,15 +168,42 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     if (!change.kinds.some((kind) => RATING_KINDS.has(kind))) return;
     // Сняли ограничение рейтинга, а блокировка ещё держит — или наоборот: в доску рано.
     if ((await this.hold(change.accountId, change.at)) !== null) return;
+    // Отдельная доска могла остаться при снятии закрытого рейтинга — тогда назад только в полную.
+    const restored = await this.restoreInto(change.accountId, await this.boardsFor(change.accountId, change.at));
+    this.log("log", "rating_restored", { accountId: change.accountId, boards: restored });
+  }
+
+  /** Отдельная доска наложена: из общей — сразу, во всех сложностях; полная не трогается. */
+  private async separated(change: RestrictionChange): Promise<void> {
+    if (!change.kinds.includes("separate_board")) return;
+    await this.redisCall(this.leaderboard.remove([change.accountId], COMMON_ONLY));
+    this.log("log", "rating_board_separated", { accountId: change.accountId });
+  }
+
+  /**
+   * Отдельная доска снята или вышла: в общую назад — лучший рейтинговый забег
+   * каждой сложности. Выйти, если доска по-прежнему отдельная (второе
+   * наложение) или рейтинг закрыт: тогда в общую рано, а в полную вернёт
+   * слушатель закрытого рейтинга.
+   */
+  private async unseparated(change: RestrictionChange): Promise<void> {
+    if (!change.kinds.includes("separate_board")) return;
+    if ((await this.boardOf(change.accountId, change.at)) === "full" || (await this.hold(change.accountId, change.at)) !== null) return;
+    const restored = await this.restoreInto(change.accountId, COMMON_ONLY);
+    this.log("log", "rating_board_restored", { accountId: change.accountId, boards: restored });
+  }
+
+  /** Вернуть в доски лучший рейтинговый забег каждой сложности; сколько сложностей вернулось. */
+  private async restoreInto(accountId: string, boards: readonly Board[]): Promise<number> {
     let restored = 0;
     for (const difficulty of DIFFICULTIES) {
       // Лучший рейтинговый: сданные под ограничением рейтинговыми не стали.
-      const best = await withTimeout(this.runs.bestRunOf(change.accountId, difficulty, false), DB_TIMEOUT_MS, "runs: база");
+      const best = await withTimeout(this.runs.bestRunOf(accountId, difficulty, false), DB_TIMEOUT_MS, "runs: база");
       if (best === null) continue;
-      await this.redisCall(this.leaderboard.submit(difficulty, change.accountId, best.survivalSec));
+      await this.redisCall(this.leaderboard.submit(difficulty, accountId, best.survivalSec, boards));
       restored += 1;
     }
-    this.log("log", "rating_restored", { accountId: change.accountId, boards: restored });
+    return restored;
   }
 
   private async redisCall<T>(promise: Promise<T>): Promise<T> {

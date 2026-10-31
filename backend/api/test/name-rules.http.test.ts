@@ -57,6 +57,10 @@ class MemoryNameRules implements NameRulesRepository {
     return this.rows.size;
   }
 
+  async countRegex(): Promise<number> {
+    return [...this.rows.values()].filter((row) => row.active && row.kind === "regex").length;
+  }
+
   async insert(row: StoredNameRule): Promise<void> {
     this.rows.set(row.ruleId, { ...row });
   }
