@@ -98,7 +98,8 @@ describe.skipIf(DATABASE_URL === "")("очки заданий на живом Po
     const tiered = catalog.filter((task) => task.tier !== null && (task.period === "daily" || task.period === "weekly"));
     expect(tiered.length).toBeGreaterThanOrEqual(32);
     for (const task of tiered) expect(task.passPoints, task.taskId).toBe(expected[task.period as "daily" | "weekly"][task.tier ?? "easy"]);
-    for (const task of catalog.filter((candidate) => candidate.tier === null)) expect(task.passPoints, task.taskId).toBe(0);
+    // Строки других интеграционных тестов (`it_…`) заводят в общей базе свои очки — каталог миграции они не меняют.
+    for (const task of catalog.filter((candidate) => candidate.tier === null && !candidate.taskId.startsWith("it_"))) expect(task.passPoints, task.taskId).toBe(0);
   });
 
   it("полный набор дня даёт 100 очков, недели — 240; недельная полоса включает и ежедневные", async () => {
