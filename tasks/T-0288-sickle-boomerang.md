@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/weapons/boomerang.ts
   - packages/core-game/test/boomerang.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -95,7 +96,8 @@ batch: 6
 - **Тексты:**
   - `weapon.sickle.name` — «Серп», `.description` — «Летит к врагу и возвращается — режет на обоих путях»;
   - `weapon.harvest.name` — «Жатва», `.description` — «Четыре серпа крестом».
-- **Значок** — `item-icons.tsx`. Задания с фильтром оружия — `sickle` в
+- **Значок** готов: `sickle` и `harvest` из `PLANNED_WEAPON_GLYPHS`
+  (`screens/game-glyphs.tsx`) переезжают в `WEAPON_GLYPHS`. Задания с фильтром оружия — `sickle` в
   список, если он есть (`tasks/task-rules.ts`).
 
 ## Как сейчас
