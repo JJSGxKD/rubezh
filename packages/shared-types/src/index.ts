@@ -1150,7 +1150,7 @@ export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKin
  * открывает остальные тайники на радаре, огонёк летит к ближайшему неоткрытому.
  * Порядок — канонический: в итоге забега и в кодексе виды идут по нему.
  */
-export const SECRET_KINDS = ["shrine", "hoard", "stone", "wisp"] as const;
+export const SECRET_KINDS = ["shrine", "hoard", "stone", "tree", "rift", "wisp"] as const;
 
 export type SecretKind = (typeof SECRET_KINDS)[number];
 
@@ -1208,6 +1208,16 @@ export interface SecretsDef {
   hoard: { radius: number; holdSec: number; chestSize: ChestSize };
   /** камень-указатель: коснуться — все тайники видны на радаре */
   stone: { radius: number };
+  /**
+   * древо-оберег: пока игрок в круге, лечит `healPerSec` долей максимума здоровья в секунду и раз в
+   * `shieldEverySec` секунд даёт щит на одно попадание; не исчезает, отошёл — прекращается
+   */
+  tree: { radius: number; healPerSec: number; shieldEverySec: number };
+  /**
+   * разлом Нави: войти в круг — выходит волна из `elites` элит кольцом `ringRadius` вокруг разлома,
+   * мимо потолка живых; убиты все — сундук размера `chestSize`; ушёл дальше кольца, не добив, — разлом закрыт
+   */
+  rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize };
   /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
   wisp: { appearSec: number; speed: number };
   /** набор благословений капища */

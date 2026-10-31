@@ -1,12 +1,15 @@
 import { SECRET_KINDS, type BlessingDef, type SecretKind, type SecretsDef } from "@bh/shared-types";
 import { combineModifiers } from "../progression/boosts";
 import { refreshPlayerStats } from "../progression/levels";
+import { isElite } from "../patterns/enemy-types";
 import { openChest } from "./chests";
-import { createDirection } from "./directions";
+import { createDirection, randomRingOffset, ringDirection } from "./directions";
 import type { Rng } from "./rng";
 import { radiusOf } from "./secrets-rules";
 import { vectorLength } from "./vector";
 import {
+  clampToBounds,
+  spawnEnemy,
   TICK_HZ,
   TICK_SEC,
   type BlessingOffered,
@@ -23,6 +26,8 @@ import {
  * - **капище** — постоять в круге, выбрать одно из благословений на забег;
  * - **клад** — постоять в круге, получить сундук;
  * - **камень-указатель** — коснуться, и все тайники видны на радаре;
+ * - **древо-оберег** — рядом лечит и раз в минуту даёт щит, но не отпускает: оно не исчезает;
+ * - **разлом Нави** — вошёл, и выходит волна элит; выдержал — большой сундук;
  * - **огонёк** — появляется у игрока и летит к ближайшему неоткрытому тайнику.
  *
  * Раскладка бросается один раз при создании мира: по кольцам от старта, из
@@ -81,6 +86,11 @@ function updateSite(world: World, index: number, elapsedSec: number): void {
   if (site.used) return;
 
   const rules = world.secretRules;
+  // Разлом, из которого вышла волна, следит за ней и вне круга: игрок уходит драться.
+  if (site.kind === "rift" && site.opened) {
+    updateRiftWave(world, index, elapsedSec);
+    return;
+  }
   if (!inCircle(world, site, radiusOf(rules, site.kind))) {
     // Вышел из круга — стояние начинается заново. Урон его не сбрасывает: риск
     // в том, что стоишь в толпе.
@@ -100,6 +110,13 @@ function updateSite(world: World, index: number, elapsedSec: number): void {
     case "hoard":
       site.holdTicks++;
       if (site.holdTicks >= holdTicksOf(rules.hoard.holdSec)) digHoard(world, index, elapsedSec);
+      return;
+    case "tree":
+      site.holdTicks++;
+      tendTree(world, site);
+      return;
+    case "rift":
+      openRift(world, index);
       return;
     case "wisp":
       return;
@@ -132,6 +149,81 @@ function touchStone(world: World, index: number, elapsedSec: number): void {
 function digHoard(world: World, index: number, elapsedSec: number): void {
   recordUsed(world, index, "opened", elapsedSec);
   openChest(world, world.secretRules.hoard.chestSize);
+}
+
+// --- Древо-оберег ---------------------------------------------------------------
+
+/**
+ * Игрок в круге древа: лечение долей максимума здоровья за тик и щит раз в период. Отсчёт щита идёт по
+ * непрерывному стоянию — ушёл, и накопленное сгорает. Щит не копится: непотраченный остаётся одним.
+ */
+function tendTree(world: World, site: SecretSite): void {
+  const rules = world.secretRules.tree;
+  const player = world.player;
+  if (player.hp < player.maxHp) {
+    player.hp = Math.min(player.maxHp, player.hp + player.maxHp * rules.healPerSec * TICK_SEC);
+  }
+  const period = holdTicksOf(rules.shieldEverySec);
+  if (site.holdTicks % period === 0 && player.shieldHits < 1) player.shieldHits = 1;
+}
+
+// --- Разлом Нави ----------------------------------------------------------------
+
+/**
+ * Вход в круг разлома: выпустить волну. Состав и места — из потока тайников, как и вся раскладка, а не
+ * из `world.rng`; потолок живых волна не спрашивает — спавн упирается только в ёмкость пула. Нет элит в
+ * контенте или нет места в пуле — волны нет, и разлом закрывается без награды.
+ */
+function openRift(world: World, index: number): void {
+  const site = world.secrets.sites[index];
+  const rules = world.secretRules.rift;
+  site.opened = true;
+
+  const pool: number[] = [];
+  world.enemyTypes.forEach((type, typeIndex) => {
+    if (isElite(type)) pool.push(typeIndex);
+  });
+  if (pool.length === 0) {
+    site.used = true;
+    return;
+  }
+
+  const rng = world.secrets.rng;
+  const offset = randomRingOffset(rng);
+  const radius = rules.ringRadius * world.config.unitScale;
+  const bounds = world.config.bounds;
+  for (let k = 0; k < rules.elites; k++) {
+    const type = pool[rng.nextInt(0, pool.length)];
+    ringDirection(offset, k, rules.elites, scratch);
+    const slot = spawnEnemy(world, type, clampToBounds(site.x + scratch.x * radius, bounds.halfWidth), clampToBounds(site.y + scratch.y * radius, bounds.halfHeight));
+    if (slot >= 0) site.wave.push({ slot, type });
+  }
+  if (site.wave.length === 0) site.used = true;
+}
+
+/**
+ * Волна идёт: все убиты — сундук у разлома и разлом закрывается; игрок ушёл дальше кольца, не добив, —
+ * закрывается без награды. Слот считается своим, пока в нём живёт элита того же типа: убитая вышла из
+ * пула, а переиспользованный слот чужого типа в волну не входит.
+ */
+function updateRiftWave(world: World, index: number, elapsedSec: number): void {
+  const site = world.secrets.sites[index];
+  const rules = world.secretRules.rift;
+  const enemies = world.enemies;
+  site.wave = site.wave.filter((entry) => enemies.alive[entry.slot] === 1 && enemies.type[entry.slot] === entry.type);
+
+  if (site.wave.length === 0) {
+    recordUsed(world, index, "cleared", elapsedSec);
+    openChest(world, rules.chestSize);
+    return;
+  }
+  const dx = world.player.x - site.x;
+  const dy = world.player.y - site.y;
+  const away = rules.ringRadius * world.config.unitScale;
+  if (dx * dx + dy * dy > away * away) {
+    site.wave = [];
+    recordUsed(world, index, "left", elapsedSec);
+  }
 }
 
 // --- Капище и благословения -----------------------------------------------------
