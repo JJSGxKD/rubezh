@@ -24,7 +24,7 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

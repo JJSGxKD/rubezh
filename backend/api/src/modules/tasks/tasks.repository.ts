@@ -3,7 +3,7 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { POOL_TIERS, TASK_KIND_IDS, TASK_PERIODS, runFilterSchema, taskParamsSchema, type TaskDef, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
+import { POOL_TIERS, TASK_KIND_IDS, TASK_PERIODS, runFilterSchema, taskGroup, taskParamsSchema, type TaskDef, type TaskGroup, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
@@ -32,6 +32,9 @@ export interface TaskDelta {
   amount: number;
 }
 
+/** Итог перестановки списка: состав не совпал, или записано — и тогда прежний и новый порядок. */
+export type TaskReorderResult = { status: "mismatch" } | { status: "ok"; before: string[]; after: string[]; changed: boolean };
+
 export const TASKS_REPOSITORY = Symbol("TASKS_REPOSITORY");
 
 export interface TasksRepository {
@@ -59,8 +62,15 @@ export interface TasksRepository {
   completions(): Promise<Map<string, number>>;
   /** завести строку каталога; `false` — такой id уже есть */
   insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
-  /** поправить строку каталога — всё, кроме срока и вида; `false` — строки нет */
+  /** поправить строку каталога — всё, кроме срока, вида и места; `false` — строки нет */
   update(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean>;
+  /**
+   * Новый порядок списка одной транзакцией под блокировкой каталога: `ids` —
+   * ровно члены списка в нужном порядке, иначе `mismatch` и ничего не пишется.
+   * Место (`sort`) становится 0, 1, 2… по порядку; пишутся только строки,
+   * у которых оно поменялось. Порядок уже такой — `changed: false`, записей нет.
+   */
+  reorder(group: TaskGroup, ids: readonly string[], actorAccountId: string, at: Date): Promise<TaskReorderResult>;
 }
 
 /**
@@ -95,6 +105,8 @@ const defSchema = z.object({
   tier: z.enum(POOL_TIERS).nullable(),
   filter: z.unknown(),
 });
+
+const orderRowSchema = z.object({ task_id: z.string(), period: z.enum(TASK_PERIODS), kind: z.string(), sort: z.number().int() });
 
 const progressSchema = z.object({ task_id: z.string(), period_start: z.string(), value: z.number().int(), done: z.boolean(), claimed: z.boolean() });
 
@@ -213,10 +225,35 @@ export class PrismaTasksRepository implements TasksRepository {
     return (
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
-          pass_points = ${task.passPoints}, sort = ${task.sort}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
+          pass_points = ${task.passPoints}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
           completion_limit = ${task.limit}, image_id = ${task.image}, tier = ${task.tier}, filter = ${filterJson(task)}::jsonb, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
+  }
+
+  async reorder(group: TaskGroup, ids: readonly string[], actorAccountId: string, at: Date): Promise<TaskReorderResult> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Весь каталог — под блокировкой: второй запрос на тот же список ждёт здесь и
+      // читает уже новый порядок. Порядок по месту без срока: партнёрский список
+      // собирает цели разных сроков, как его видит игрок.
+      const rows = await tx.$queryRaw<unknown[]>`
+        SELECT task_id, period::text, kind, sort FROM task_def ORDER BY sort, task_id FOR UPDATE`;
+      // Строка с видом, которого сервер не знает, в список не входит и не переписывается — как в `catalog()`.
+      const members = rows.map((raw) => orderRowSchema.parse(raw)).filter((row) => isKind(row.kind) && taskGroup({ kind: row.kind, period: row.period }) === group);
+      const before = members.map((row) => row.task_id);
+      const known = new Set(before);
+      if (ids.length !== before.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) return { status: "mismatch" };
+
+      if (!ids.some((id, index) => before[index] !== id)) return { status: "ok", before, after: [...ids], changed: false };
+
+      const current = new Map(members.map((row) => [row.task_id, row.sort]));
+      const moving = ids.flatMap((id, index) => (current.get(id) === index ? [] : [{ id, sort: index }]));
+      await tx.$executeRaw`
+        UPDATE task_def SET sort = u.sort, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+        FROM unnest(${moving.map((row) => row.id)}::text[], ${moving.map((row) => row.sort)}::int[]) AS u(task_id, sort)
+        WHERE task_def.task_id = u.task_id`;
+      return { status: "ok", before, after: [...ids], changed: true };
+    });
   }
 
   async complete(accountId: string, task: Pick<TaskDef, "taskId" | "period" | "target">, at: Date, graceSince: Date): Promise<TaskProgressRow | null> {

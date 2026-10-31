@@ -25,7 +25,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

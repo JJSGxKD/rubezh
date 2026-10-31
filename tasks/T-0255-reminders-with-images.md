@@ -24,7 +24,7 @@ shared:
   - packages/app-shell/src/i18n/ru-bot.json
   - docs/35-stage4-plan.md
   - docs/22-analytics-and-metrics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

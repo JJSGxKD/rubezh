@@ -19,7 +19,7 @@ shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - docs/23-referral-and-partner-program.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

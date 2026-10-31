@@ -34,7 +34,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -44,7 +44,7 @@ batch: 3
 
 # T-0340. Фильтр имён — статистика срабатываний правил
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0340.json)](README.md#значки-статуса) [![T-0338](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json&label=T-0338)](T-0338-name-rules-server.md) [![T-0339](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0339.json&label=T-0339)](T-0339-name-rules-panel.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0340.json)](README.md#значки-статуса) [![T-0338](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json&label=T-0338)](archive/T-0338-name-rules-server.md) [![T-0339](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0339.json&label=T-0339)](T-0339-name-rules-panel.md)
 
 ## Зачем
 

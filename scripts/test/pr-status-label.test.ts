@@ -76,6 +76,37 @@ describe("labeled: меток статуса стало несколько", () 
   });
 });
 
+// Задел (Р178, T-0351): метка «задел» — статус; бот её не заменяет «на ревью».
+describe("метка «задел»", () => {
+  it("opened и reopened: стоит «задел» — метки не меняются", () => {
+    expect(plan({ action: "opened", labels: ["задел", "release: patch"] })).toEqual(NOTHING);
+    expect(plan({ action: "reopened", labels: ["задел"] })).toEqual(NOTHING);
+  });
+
+  it("ready_for_review: «задел» не заменяется на «на ревью» и не снимается", () => {
+    expect(plan({ action: "ready_for_review", labels: ["задел"] })).toEqual(NOTHING);
+  });
+
+  it("ready_for_review: «в работе» рядом с «задел» снимается, «на ревью» не ставится", () => {
+    expect(plan({ action: "ready_for_review", labels: ["задел", "в работе"] })).toEqual({ add: [], remove: ["в работе"] });
+  });
+
+  it("labeled: «задел» поставили поверх другой метки статуса — остаётся только она", () => {
+    expect(plan({ action: "labeled", labelName: "задел", labels: ["на ревью", "задел"] })).toEqual({ add: [], remove: ["на ревью"] });
+  });
+
+  it("labeled: «в работе» поставили поверх «задел» (resume) — остаётся «в работе»", () => {
+    expect(plan({ action: "labeled", labelName: "в работе", labels: ["задел", "в работе"] })).toEqual({ add: [], remove: ["задел"] });
+  });
+
+  it("Request changes на PR задела: «доработка» вытесняет «задел»", () => {
+    expect(planStatusLabels({ headRef: HEAD, eventName: "pull_request_review", action: "submitted", reviewState: "changes_requested", labels: ["задел"] })).toEqual({
+      add: ["доработка"],
+      remove: ["задел"],
+    });
+  });
+});
+
 describe("pull_request_review", () => {
   const review = (patch: Record<string, unknown>) => plan({ eventName: "pull_request_review", action: "submitted", reviewState: "changes_requested", ...patch });
 

@@ -28,7 +28,7 @@ shared:
   - pnpm-lock.yaml
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

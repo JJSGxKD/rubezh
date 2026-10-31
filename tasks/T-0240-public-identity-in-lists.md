@@ -23,7 +23,7 @@ shared:
   - backend/api/src/modules/friends/friends.module.ts
   - packages/shared-types/src/index.ts
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

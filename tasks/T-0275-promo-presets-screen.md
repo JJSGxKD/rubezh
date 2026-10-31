@@ -18,7 +18,7 @@ shared:
   - apps/admin/src/api/media.ts
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

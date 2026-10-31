@@ -87,28 +87,28 @@ describe("лучшее оружие", () => {
 
 describe("какие способы второго шанса видны", () => {
   it("VIP — одна кнопка: ни ролика, ни звёзд", () => {
-    expect(visibleWays({ adStage: { kind: "ready", pass: true, notice: null }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, stars: false, vip: true });
-    expect(visibleWays({ adStage: { kind: "watching", pass: true }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, stars: false, vip: true });
+    expect(visibleWays({ adStage: { kind: "ready", pass: true, notice: null }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, gems: false, stars: false, vip: true });
+    expect(visibleWays({ adStage: { kind: "watching", pass: true }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, gems: false, stars: false, vip: true });
   });
 
   it("ролик недоступен — только звёзды", () => {
-    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, stars: true, vip: false });
+    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: false, gems: false, stars: true, vip: false });
   });
 
   it("звёзды недоступны, а ролик есть — только ролик", () => {
-    expect(visibleWays({ adStage: { kind: "ready", pass: false, notice: null }, paidStage: { kind: "unavailable", reason: "used_up" } })).toEqual({ ad: true, stars: false, vip: false });
+    expect(visibleWays({ adStage: { kind: "ready", pass: false, notice: null }, paidStage: { kind: "unavailable", reason: "used_up" } })).toEqual({ ad: true, gems: false, stars: false, vip: false });
   });
 
   it("оба способа есть — видны оба", () => {
-    expect(visibleWays({ adStage: { kind: "ready", pass: false, notice: null }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: true, stars: true, vip: false });
+    expect(visibleWays({ adStage: { kind: "ready", pass: false, notice: null }, paidStage: { kind: "ready", offer: OFFER } })).toEqual({ ad: true, gems: false, stars: true, vip: false });
   });
 
   it("оба недоступны — блок звёзд остаётся и сам объясняет, почему купить нельзя (правило прежнее)", () => {
-    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "unavailable", reason: "not_offered" } })).toEqual({ ad: false, stars: true, vip: false });
+    expect(visibleWays({ adStage: { kind: "unavailable", reason: "no_fill" }, paidStage: { kind: "unavailable", reason: "not_offered" } })).toEqual({ ad: false, gems: false, stars: true, vip: false });
   });
 
   it("способов не заведено вовсе — ничего", () => {
-    expect(visibleWays({ adStage: null, paidStage: null })).toEqual({ ad: false, stars: false, vip: false });
+    expect(visibleWays({ adStage: null, paidStage: null })).toEqual({ ad: false, gems: false, stars: false, vip: false });
   });
 });
 
@@ -151,19 +151,19 @@ describe("событие continue_offered", () => {
   });
 
   it("обычный игрок: ролик и звёзды по ответам", () => {
-    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY }, 311.6)).toEqual({ ad: true, stars: true, vip: false, elapsedSec: 312 });
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_READY }, 311.6)).toEqual({ ad: true, gems: false, stars: true, vip: false, elapsedSec: 312 });
   });
 
   it("VIP — одна кнопка", () => {
-    expect(continueOfferedPayload({ adStage: AD_VIP, paidStage: STARS_READY }, 90)).toEqual({ ad: false, stars: false, vip: true, elapsedSec: 90 });
+    expect(continueOfferedPayload({ adStage: AD_VIP, paidStage: STARS_READY }, 90)).toEqual({ ad: false, gems: false, stars: false, vip: true, elapsedSec: 90 });
   });
 
   it("ролика нет — только звёзды", () => {
-    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_READY }, 50)).toEqual({ ad: false, stars: true, vip: false, elapsedSec: 50 });
+    expect(continueOfferedPayload({ adStage: AD_GONE, paidStage: STARS_READY }, 50)).toEqual({ ad: false, gems: false, stars: true, vip: false, elapsedSec: 50 });
   });
 
   it("звёзд нет — только ролик", () => {
-    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_GONE }, 50)).toEqual({ ad: true, stars: false, vip: false, elapsedSec: 50 });
+    expect(continueOfferedPayload({ adStage: AD_READY, paidStage: STARS_GONE }, 50)).toEqual({ ad: true, gems: false, stars: false, vip: false, elapsedSec: 50 });
   });
 
   it("все способы отпали — предлагать нечего, события нет", () => {
@@ -175,7 +175,7 @@ describe("событие continue_offered", () => {
   });
 
   it("только звёзды", () => {
-    expect(continueOfferedPayload({ adStage: null, paidStage: STARS_READY }, 70)).toEqual({ ad: false, stars: true, vip: false, elapsedSec: 70 });
+    expect(continueOfferedPayload({ adStage: null, paidStage: STARS_READY }, 70)).toEqual({ ad: false, gems: false, stars: true, vip: false, elapsedSec: 70 });
   });
 
   it("секунда забега округляется", () => {

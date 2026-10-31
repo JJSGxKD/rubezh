@@ -58,7 +58,7 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

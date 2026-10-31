@@ -32,7 +32,7 @@ shared:
   - backend/api/test/partners.integration.test.ts
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

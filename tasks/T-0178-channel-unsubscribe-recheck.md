@@ -25,7 +25,7 @@ shared:
   - docs/35-stage4-plan.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -35,7 +35,7 @@ batch: 3
 
 # T-0178. Отписка от канала после награды — перепроверка 7 суток, списание, закрытие заданий
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json)](README.md#значки-статуса) [![T-0177](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json&label=T-0177)](archive/T-0177-unsubscribe-penalty-building-blocks.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md) [![T-0169](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0169.json&label=T-0169)](T-0169-player-tasks-panel-order.md) [![T-0345](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0345.json&label=T-0345)](T-0345-system-restriction-under-lock.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json)](README.md#значки-статуса) [![T-0177](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json&label=T-0177)](archive/T-0177-unsubscribe-penalty-building-blocks.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md) [![T-0169](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0169.json&label=T-0169)](T-0169-player-tasks-panel-order.md) [![T-0345](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0345.json&label=T-0345)](archive/T-0345-system-restriction-under-lock.md)
 
 ## Зачем
 

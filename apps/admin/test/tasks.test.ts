@@ -10,10 +10,12 @@ import {
   groupByPeriod,
   networkTaskProblem,
   networkTaskState,
+  reorderTasks,
   rewardLabel,
   saveNetworkTask,
   saveTask,
   targetLabel,
+  taskGroupOf,
   taskPreview,
   taskProblem,
   withKind,
@@ -335,5 +337,43 @@ describe("ротация пула и фильтр цели", () => {
     const { fetch } = fakeFetch(json(200, { data: { tasks: [task()], kinds: ["runs"], periods: ["daily"], rotation } }));
     const list = await fetchTasks(new AdminApi(fetch));
     expect(list.ok && list.data.rotation).toEqual(rotation);
+  });
+});
+
+describe("порядок заданий перетаскиванием (T-0167)", () => {
+  it("группа задания: партнёрские виды — всегда «партнёрские», какой бы ни был срок", () => {
+    for (const kind of ["link", "bot", "channel"]) {
+      for (const period of ["daily", "weekly", "achievement"] as const) expect(taskGroupOf({ kind, period }), `${kind}/${period}`).toBe("partner");
+    }
+    expect(taskGroupOf({ kind: "runs", period: "weekly" })).toBe("weekly");
+    expect(taskGroupOf({ kind: "runs", period: "achievement" })).toBe("achievement");
+  });
+
+  it("группы каталога по-прежнему идут по месту, при равных — по id", () => {
+    const groups = groupByPeriod([task({ taskId: "b", sort: 20 }), task({ taskId: "a", sort: 20 }), task({ taskId: "c", sort: 5 })]);
+    expect(groups[0]?.tasks.map((item) => item.taskId)).toEqual(["c", "a", "b"]);
+  });
+
+  it("новый порядок уходит одним запросом: группа и id; ответ разобран, чужая форма — ошибка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { order: ["b", "a"] } }), json(200, { data: { surprise: true } }));
+    const api = new AdminApi(fetch);
+
+    const ok = await reorderTasks(api, "daily", ["b", "a"]);
+    expect(ok.ok && ok.data.order).toEqual(["b", "a"]);
+    expect(calls[0]?.url).toBe("/api/v1/admin/tasks/order");
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ group: "daily", ids: ["b", "a"] });
+
+    expect((await reorderTasks(api, "daily", ["a", "b"])).ok).toBe(false);
+  });
+
+  it("сохранение задания не шлёт порядок: его меняет только запрос порядка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }));
+    await saveTask(new AdminApi(fetch), task({ sort: 40 }));
+    expect(JSON.parse(String(calls[0]?.init.body))).not.toHaveProperty("sort");
+  });
+
+  it("поля «Порядок» в форме нет, и проверять в нём нечего", () => {
+    expect(taskProblem(task({ taskId: "x_1", sort: -5 }), true, [])).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { checkRunnerLines } from "../release/pr-check.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { OWNER_LABEL, REVIEW_LABEL, STATUS_LABELS, WORK_LABEL, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { AHEAD_LABEL, COLUMNS, OWNER_LABEL, REVIEW_LABEL, REWORK_LABEL, STATUS_LABELS, WORK_LABEL, aheadCheck, nextOrder, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -628,12 +628,13 @@ describe("красный CI", () => {
 describe("prStatus: статус задачи по метке PR", () => {
   const withLabels = (names: string[], isDraft = false) => ({ isDraft, labels: names.map((name) => ({ name })) });
 
-  it("четыре метки статуса — четыре статуса", () => {
-    expect(STATUS_LABELS).toEqual(["в работе", "на ревью", "доработка", "ждёт владельца"]);
+  it("пять меток статуса — пять статусов", () => {
+    expect(STATUS_LABELS).toEqual(["в работе", "на ревью", "доработка", "ждёт владельца", "задел"]);
     expect(prStatus(withLabels(["в работе"]))).toBe("work");
     expect(prStatus(withLabels(["на ревью"]))).toBe("review");
     expect(prStatus(withLabels(["доработка"]))).toBe("rework");
     expect(prStatus(withLabels(["ждёт владельца"]))).toBe("owner");
+    expect(prStatus(withLabels(["задел"]))).toBe("ahead");
   });
 
   it("метка сильнее черновика", () => {
@@ -886,5 +887,251 @@ describe("известные аккаунты", () => {
     const board = { ...empty, inProgress: [{ task: task("T-1"), owner: "" }, { task: task("T-2"), owner: "claude-3 / sonnet-5.5 / medium" }, { task: task("T-3"), owner: "claude-3 / haiku-5.5 / low" }] };
     const credits = new Map([["T-9", { owner: "не указан", mergedAt: daysAgo(1) }]]);
     expect(knownAccounts(board, credits, NOW)).toEqual(["claude-3"]);
+  });
+});
+
+// Задел (Р178, T-0351): задачу можно начать поверх веток зависимостей, пока те ждут ревью.
+
+describe("задел: доска", () => {
+  const label = (...names: string[]) => names.map((name) => ({ name }));
+  const pr = (number: number, id: string, names: string[], extra: Record<string, unknown> = {}) => ({
+    number,
+    headRefName: `task/${id}`,
+    isDraft: false,
+    labels: label(...names),
+    ...extra,
+  });
+  const dep = task("T-0010");
+  const top = task("T-0011", { depends_on: ["T-0010"] });
+
+  function board(tasks: Record<string, unknown>[], prs: unknown[] | null, taken: string[] = []) {
+    return classify(tasks, taken, prs, [], EPIC_ORDER);
+  }
+
+  it("метка «задел» — пятая в STATUS_LABELS, колонка «Задел» идёт после «На ревью»", () => {
+    expect(AHEAD_LABEL).toBe("задел");
+    expect(STATUS_LABELS.at(-1)).toBe("задел");
+    const keys = COLUMNS.map((column: { key: string }) => column.key);
+    expect(keys.indexOf("ahead")).toBe(keys.indexOf("review") + 1);
+    expect(COLUMNS.find((column: { key: string }) => column.key === "ahead").title).toBe("Задел");
+    expect(keys).toContain("aheadFree");
+  });
+
+  it("prStatus: «задел» — ahead, но «в работе», «на ревью» и «доработка» рядом с ней старше", () => {
+    expect(prStatus(pr(1, "T-0011", ["задел"]))).toBe("ahead");
+    expect(prStatus(pr(1, "T-0011", ["задел", "в работе"]))).toBe("work");
+    expect(prStatus(pr(1, "T-0011", ["задел", "на ревью"]))).toBe("review");
+    expect(prStatus(pr(1, "T-0011", ["задел", "доработка"]))).toBe("rework");
+    expect(prStatus(pr(1, "T-0011", ["задел", "ждёт владельца"]))).toBe("owner");
+  });
+
+  describe("можно ли начать заделом", () => {
+    it("зависимость «на ревью», «ждёт владельца» или «доработка» — задача в aheadFree, а не в blocked", () => {
+      for (const status of [REVIEW_LABEL, OWNER_LABEL, REWORK_LABEL]) {
+        const result = board([dep, top], [pr(21, "T-0010", [status])], ["T-0010"]);
+        expect(ids(result.aheadFree), status).toEqual(["T-0011"]);
+        expect(ids(result.blocked), status).toEqual([]);
+        expect(ids(result.free), status).toEqual([]);
+        expect(result.aheadFree[0].aheadOver, status).toEqual(["T-0010"]);
+      }
+    });
+
+    it("зависимость «в работе» (метка) или ветка без PR — задача заблокирована", () => {
+      const working = board([dep, top], [pr(21, "T-0010", [WORK_LABEL])], ["T-0010"]);
+      expect(ids(working.blocked)).toEqual(["T-0011"]);
+      expect(ids(working.aheadFree)).toEqual([]);
+      const noPr = board([dep, top], [], ["T-0010"]);
+      expect(ids(noPr.blocked)).toEqual(["T-0011"]);
+      expect(noPr.blocked[0].waitingFor).toEqual(["T-0010"]);
+    });
+
+    it("зависимость без ветки и PR — задача заблокирована", () => {
+      const result = board([dep, top], [], []);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+      expect(ids(result.aheadFree)).toEqual([]);
+    });
+
+    it("список PR не получен (нет gh) — задача заблокирована: решать нечем", () => {
+      const result = board([dep, top], null, ["T-0010"]);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+    });
+
+    it("зависимость сама задел — одна ступень: задача заблокирована", () => {
+      const base = task("T-0009");
+      const middle = task("T-0010", { depends_on: ["T-0009"] });
+      const result = board([base, middle, top], [pr(20, "T-0009", [REVIEW_LABEL]), pr(21, "T-0010", [AHEAD_LABEL], { isDraft: true })], ["T-0009", "T-0010"]);
+      expect(ids(result.ahead)).toEqual(["T-0010"]);
+      expect(ids(result.aheadFree)).toEqual([]);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+    });
+
+    it("две зависимости: одна done, другая в доработке — aheadFree, и поверх только незакрытой", () => {
+      const done = task("T-0009", { status: "done" });
+      const both = task("T-0011", { depends_on: ["T-0009", "T-0010"] });
+      const result = board([done, dep, both], [pr(21, "T-0010", [REWORK_LABEL])], ["T-0010"]);
+      expect(ids(result.aheadFree)).toEqual(["T-0011"]);
+      expect(result.aheadFree[0].aheadOver).toEqual(["T-0010"]);
+    });
+
+    it("две незакрытые зависимости на ревью — aheadFree поверх обеих; одна из них не на ревью — blocked", () => {
+      const other = task("T-0009");
+      const both = task("T-0011", { depends_on: ["T-0009", "T-0010"] });
+      const ok = board([other, dep, both], [pr(20, "T-0009", [REVIEW_LABEL]), pr(21, "T-0010", [REVIEW_LABEL])], ["T-0009", "T-0010"]);
+      expect(ids(ok.aheadFree)).toEqual(["T-0011"]);
+      expect(ok.aheadFree[0].aheadOver).toEqual(["T-0009", "T-0010"]);
+      const bad = board([other, dep, both], [pr(21, "T-0010", [REVIEW_LABEL])], ["T-0010"]);
+      expect(ids(bad.blocked)).toEqual(["T-0011"]);
+    });
+
+    it("зоны заняты задачей «в работе» — заделом нельзя, задача заблокирована зоной", () => {
+      const sharedTop = task("T-0011", { depends_on: ["T-0010"], zones: ["a/b.ts"] });
+      const busy = task("T-0012", { zones: ["a/b.ts"] });
+      const result = board([dep, sharedTop, busy], [pr(21, "T-0010", [REVIEW_LABEL])], ["T-0010", "T-0012"]);
+      expect(ids(result.aheadFree)).toEqual([]);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+      expect(result.blocked[0].busyWith).toEqual(["T-0012"]);
+    });
+
+    it("зависимость закрыта без мерджа (cancelled) — задача заблокирована", () => {
+      const cancelled = task("T-0010", { status: "cancelled" });
+      const result = board([cancelled, top], [], []);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+      expect(ids(result.aheadFree)).toEqual([]);
+    });
+  });
+
+  describe("PR задела", () => {
+    const aheadPr = pr(31, "T-0011", [AHEAD_LABEL], { isDraft: true });
+
+    it("лежит в колонке «Задел» с номером PR и признаком ripe: false, пока зависимость не влита", () => {
+      const result = board([dep, top], [pr(21, "T-0010", [REVIEW_LABEL]), aheadPr], ["T-0010", "T-0011"]);
+      expect(ids(result.ahead)).toEqual(["T-0011"]);
+      expect(result.ahead[0]).toMatchObject({ pr: 31, ripe: false, waitingFor: ["T-0010"] });
+      expect(ids(result.inProgress)).toEqual([]);
+      expect(ids(result.review)).toEqual(["T-0010"]);
+    });
+
+    it("все зависимости done — ripe: true", () => {
+      const result = board([task("T-0010", { status: "done" }), top], [aheadPr], ["T-0011"]);
+      expect(result.ahead[0]).toMatchObject({ pr: 31, ripe: true, waitingFor: [] });
+    });
+
+    it("зон не держит: соседняя задача с пересекающимися зонами свободна", () => {
+      const sharedTop = task("T-0011", { depends_on: ["T-0010"], zones: ["a/b.ts"] });
+      const neighbour = task("T-0020", { zones: ["a/b.ts"] });
+      const result = board([dep, sharedTop, neighbour], [pr(21, "T-0010", [REVIEW_LABEL]), aheadPr], ["T-0010", "T-0011"]);
+      expect(ids(result.free)).toEqual(["T-0020"]);
+    });
+
+    it("зависимость задела закрыли без мерджа — задел в «Заблокировано» с причиной", () => {
+      const result = board([task("T-0010", { status: "cancelled" }), top], [aheadPr], ["T-0011"]);
+      expect(ids(result.ahead)).toEqual([]);
+      expect(ids(result.blocked)).toEqual(["T-0011"]);
+      expect(result.blocked[0].reason).toContain("зависимость T-0010 закрыта без мерджа");
+    });
+
+    it("зависимость вернулась «в работе» — задел остаётся в «Задел», но не созрел", () => {
+      const result = board([dep, top], [pr(21, "T-0010", [WORK_LABEL]), aheadPr], ["T-0010", "T-0011"]);
+      expect(ids(result.ahead)).toEqual(["T-0011"]);
+      expect(result.ahead[0].ripe).toBe(false);
+    });
+
+    it("ни одна задача не пропала и не задвоилась", () => {
+      const tasks = [task("T-0001", { status: "done" }), dep, top, task("T-0012", { depends_on: ["T-0010"] }), task("T-0013")];
+      const result = board(tasks, [pr(21, "T-0010", [REVIEW_LABEL]), aheadPr], ["T-0010", "T-0011"]);
+      const all = Object.values(result).flat() as { task: { id: string } }[];
+      expect(ids(all).sort()).toEqual(tasks.map((item) => item.id as string).sort());
+    });
+  });
+
+  describe("aheadCheck", () => {
+    it("нет незакрытых зависимостей — пусто и без причин", () => {
+      expect(aheadCheck(task("T-0011", { depends_on: ["T-0010"] }), [task("T-0010", { status: "done" })], [])).toEqual({ unclosed: [], problems: [] });
+    });
+
+    it("называет каждую зависимость, на которой заделом брать нельзя, и причину", () => {
+      const tasks = [task("T-0008"), task("T-0009"), task("T-0010"), task("T-0007", { status: "cancelled" })];
+      const prs = [pr(1, "T-0008", [WORK_LABEL]), pr(2, "T-0009", [AHEAD_LABEL])];
+      const top5 = task("T-0011", { depends_on: ["T-0007", "T-0008", "T-0009", "T-0010", "T-0099"] });
+      const { unclosed, problems } = aheadCheck(top5, tasks, prs);
+      expect(unclosed).toEqual(["T-0007", "T-0008", "T-0009", "T-0010", "T-0099"]);
+      expect(problems).toHaveLength(5);
+      for (const id of unclosed) expect(problems.some((problem: string) => problem.includes(id)), id).toBe(true);
+    });
+
+    it("зависимость на ревью, ждёт владельца или на доработке — причин нет", () => {
+      const tasks = [task("T-0008"), task("T-0009"), task("T-0010")];
+      const prs = [pr(1, "T-0008", [REVIEW_LABEL]), pr(2, "T-0009", [OWNER_LABEL]), pr(3, "T-0010", [REWORK_LABEL])];
+      const result = aheadCheck(task("T-0011", { depends_on: ["T-0008", "T-0009", "T-0010"] }), tasks, prs);
+      expect(result.problems).toEqual([]);
+      expect(result.unclosed).toEqual(["T-0008", "T-0009", "T-0010"]);
+    });
+  });
+});
+
+describe("задел: порядок в pnpm task next", () => {
+  const entry = (id: string, extra: Record<string, unknown> = {}) => ({ task: task(id), ...extra });
+  const kinds = (order: { kind: string; entry: { task: { id: string } } }[]) => order.map((item) => [item.kind, item.entry.task.id]);
+
+  it("доработка, созревший задел, свободные, затем «можно заделом»; не созревший задел не предлагается", () => {
+    const board = {
+      rework: [entry("T-0001", { pr: 11 })],
+      ahead: [entry("T-0002", { pr: 12, ripe: false }), entry("T-0003", { pr: 13, ripe: true })],
+      free: [entry("T-0004")],
+      aheadFree: [entry("T-0005", { aheadOver: ["T-0001"] })],
+    };
+    expect(kinds(nextOrder(board, {}))).toEqual([
+      ["rework", "T-0001"],
+      ["ripe", "T-0003"],
+      ["free", "T-0004"],
+      ["ahead", "T-0005"],
+    ]);
+  });
+
+  it("фильтры модели, уровня и runner действуют на все четыре группы", () => {
+    const board = {
+      rework: [{ task: task("T-0001", { executor: "haiku-5.5" }) }],
+      ahead: [{ task: task("T-0003", { effort: "high" }), pr: 1, ripe: true }],
+      free: [{ task: task("T-0004", { runner: "local" }) }, entry("T-0006")],
+      aheadFree: [{ task: task("T-0005", { executor: "haiku-5.5" }), aheadOver: [] }, entry("T-0007")],
+    };
+    const order = nextOrder(board, { runner: "any", executor: "sonnet-5.5", effort: "medium" });
+    expect(order.map((item: { entry: { task: { id: string } } }) => item.entry.task.id)).toEqual(["T-0006", "T-0007"]);
+  });
+
+  it("доска без ключей ahead и aheadFree (старые вызовы) — как раньше", () => {
+    expect(nextOrder({ rework: [], free: [entry("T-0004")] }, {}).map((item: { kind: string }) => item.kind)).toEqual(["free"]);
+  });
+});
+
+describe("задел: значки статуса", () => {
+  it("«задел · #N», готовый — «задел готов · #N», можно заделом — «можно заделом»", () => {
+    expect(statusBadge({ column: "ahead", pr: 31, ripe: false }).message).toBe("задел · #31");
+    expect(statusBadge({ column: "ahead", pr: 31, ripe: true }).message).toBe("задел готов · #31");
+    expect(statusBadge({ column: "aheadFree" }).message).toBe("можно заделом");
+  });
+
+  it("у каждой колонки доски есть значок", () => {
+    for (const column of COLUMNS) {
+      expect(() => statusBadge({ column: column.key, pr: 1 }), column.key).not.toThrow();
+    }
+  });
+});
+
+describe("задел: потоки", () => {
+  it("созревший задел — работа «сейчас», «можно заделом» — в очереди, как было у blocked", () => {
+    const board = {
+      rework: [],
+      ahead: [
+        { task: task("T-0003"), pr: 1, ripe: true },
+        { task: task("T-0002"), pr: 2, ripe: false },
+      ],
+      free: [],
+      aheadFree: [{ task: task("T-0004"), aheadOver: ["T-0001"] }],
+      blocked: [],
+    };
+    const [stream] = streamsSummary(board).streams;
+    expect(stream.now.map((item: { id: string }) => item.id)).toEqual(["T-0003"]);
+    expect(stream.queue.map((item: { id: string }) => item.id)).toEqual(["T-0004"]);
   });
 });

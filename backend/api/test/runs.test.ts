@@ -532,7 +532,7 @@ describe("счётчики итога забега (tasks/T-0125)", () => {
   it("слушатели получают правдоподобные счётчики, без stats или без полей — null", async () => {
     const { service, recorded } = setup();
     await service.finish(account(), finish(randomUUID(), { survivalSec: 300, stats: { ...baseStats, eliteKills: 1, chestsOpened: 1, crystals: 50 } }));
-    expect(recorded[0]?.counters).toEqual({ bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 50 });
+    expect(recorded[0]?.counters).toEqual({ bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 50, noHitSec: 0, noKillSec: 0, killsByElement: {} });
 
     await service.finish(account(), finish(randomUUID(), { survivalSec: 300 }));
     expect(recorded[1]?.counters).toBeNull();

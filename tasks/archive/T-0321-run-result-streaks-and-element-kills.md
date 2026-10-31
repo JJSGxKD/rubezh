@@ -3,8 +3,8 @@ id: T-0321
 title: Итог забега — самая долгая серия без попаданий и без убийств, убийства по стихиям; приём и проверка правдоподобия на сервере
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0125]
@@ -31,6 +31,10 @@ shared:
   - backend/api/src/modules/runs/dto/runs.dto.ts
   - backend/api/test/run-counters.test.ts
   - backend/api/test/runs.test.ts
+  - backend/api/test/runs.integration.test.ts
+  - backend/api/test/run-verdict.test.ts
+  - packages/app-shell/src/state/run-interrupted.ts
+  - packages/core-game/src/game/sim/streaks.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
@@ -44,7 +48,7 @@ batch: 4
 
 # T-0321. Итог забега — самая долгая серия без попаданий и без убийств, убийства по стихиям; приём и проверка правдоподобия на сервере
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0321.json)](README.md#значки-статуса) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](archive/T-0125-run-result-rank-chest-crystal-counters.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0321.json)](../README.md#значки-статуса) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md)
 
 ## Зачем
 
@@ -207,10 +211,10 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] Итог забега несёт серии без попаданий и без убийств и убийства по стихиям; продолжение из снимка их сохраняет.
-- [ ] Щит буста и тик стихии рвут серию; хвост без убийств до смерти не считается.
-- [ ] Сервер принимает поля, неправдоподобные — `counters_implausible` без смены вердикта; golden не сдвинулись.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Итог забега несёт серии без попаданий и без убийств и убийства по стихиям; продолжение из снимка их сохраняет.
+- [x] Щит буста и тик стихии рвут серию; хвост без убийств до смерти не считается.
+- [x] Сервер принимает поля, неправдоподобные — `counters_implausible` без смены вердикта; golden не сдвинулись.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

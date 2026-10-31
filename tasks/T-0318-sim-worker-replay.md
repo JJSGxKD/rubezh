@@ -18,7 +18,7 @@ shared:
   - packages/core-game/src/index.ts
   - docs/28-diagnostics.md
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: patch

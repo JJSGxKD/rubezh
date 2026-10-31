@@ -2,9 +2,10 @@ import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
 import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
+import { CORDON_INNER_SEC } from "../sim/cordon";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
 import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
@@ -451,6 +452,18 @@ export class WorldRenderer {
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
         this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, type.radius, progress);
       }
+      if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) {
+        this.telegraphs.flash(x, y, type.radius * CORDON_FLASH_RADIUS_MUL, 1 - enemies.phaseTimer[i] / CORDON_FORM_SEC);
+      }
+    }
+
+    // Места элиты и босса внутри строя: кольцо замыкается, пока они не вышли.
+    const cordon = this.world.cordon;
+    if (telegraphsOn && cordon.active) {
+      const progress = 1 - cordon.pendingLeftSec / CORDON_INNER_SEC;
+      for (const entry of cordon.pending) {
+        this.telegraphs.ring(entry.x, entry.y, this.world.enemyTypes[entry.typeIndex].radius * CORDON_INNER_RING_MUL, progress);
+      }
     }
 
     this.telegraphs.end();
@@ -724,6 +737,11 @@ const HEAL_RING_UNITS = 40;
 
 /** За сколько тиков до конца заморозка начинает мигать: две секунды. */
 const FREEZE_BLINK_TICKS = 120;
+
+/** Во сколько раз вспышка строя шире тела стража: вокруг стража, а не поверх него. */
+const CORDON_FLASH_RADIUS_MUL = 2.4;
+/** Во сколько раз кольцо места внутреннего врага шире его тела. */
+const CORDON_INNER_RING_MUL = 2.2;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;

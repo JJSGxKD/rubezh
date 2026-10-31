@@ -25,7 +25,7 @@ batch: 3
 
 # T-0345. Системное ограничение не ослабляет решение человека и в гонке — проверка под блокировкой аккаунта
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0345.json)](README.md#значки-статуса) [![T-0177](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json&label=T-0177)](archive/T-0177-unsubscribe-penalty-building-blocks.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0345.json)](../README.md#значки-статуса) [![T-0177](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0177.json&label=T-0177)](T-0177-unsubscribe-penalty-building-blocks.md)
 
 ## Зачем
 
