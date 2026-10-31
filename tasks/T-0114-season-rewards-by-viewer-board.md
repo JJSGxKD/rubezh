@@ -19,6 +19,10 @@ shared:
   - docs/32-balance.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/modules/runs/runs.module.ts
+  - backend/api/src/cli/seasons-rebuild.ts
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/seasons.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
