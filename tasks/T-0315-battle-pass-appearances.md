@@ -3,7 +3,7 @@ id: T-0315
 title: Батл-пасс — облики в наградах: окрасы на 10-й и 20-й бесплатной ленты, окрасы и облик сезона в VIP-ленте
 epic: E16
 priority: P3
-status: draft
+status: ready
 owner:
 author: claude-lead-1
 size: S
@@ -22,7 +22,7 @@ runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
-design: design/art/backlog.md
+design: design/art/mockups/pass-v2.html
 batch: 8
 ---
 
@@ -30,11 +30,10 @@ batch: 8
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0315.json)](README.md#значки-статуса) [![T-0313](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0313.json&label=T-0313)](T-0313-battle-pass-ribbons-panel.md) [![T-0245](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json&label=T-0245)](T-0245-keeper-set-server.md)
 
-**Черновик.** Ждёт:
-- таблицу владения обликами `appearance_grant` (T-0245);
-- окрасы месяца от дизайнера (пункт 17 очереди, `design/art/backlog.md`).
-
-Владелец переводит задачу в `ready`, когда первые окрасы нарисованы.
+**Облики первого месяца готовы** (дизайнер, 31.10.2026, п. 17 очереди) —
+задача в `ready`; таблица владения `appearance_grant` приходит с T-0245
+(в `depends_on`). Кадры — `design/art/out/atlas-skin-<id>`, портреты —
+`portrait-`, `card-`, `avatar-hero-<id>.svg`, портрет бота — `brand-art.ts`.
 
 ## Зачем
 
@@ -61,7 +60,24 @@ batch: 8
 - **Панель** (T-0313) — у ячейки ступени вид «Облик» с выбором из каталога
   и портретом.
 - **Экран** (T-0314) — у ступени с обликом портрет вместо значка, тап —
-  крупно.
+  крупно (макет `pass-v2.html`, разделы 2).
+
+Решения `claude-lead-1` (за дизайнера) от 31.10.2026 — **облики месяца
+«Листопад»**, строки каталога T-0237 с источником `{ kind: "pass" }`:
+
+| Ступень | Лента | id | Название | Архетип | Редкость |
+|---|---|---|---|---|---|
+| 10 | бесплатная | `leaf_fall` | Хранитель · листопад | keeper | `uncommon` |
+| 20 | бесплатная | `pine_wood` | Хранитель · бор | keeper | `uncommon` |
+| 10 | VIP | `maple` | Хранитель · клён | keeper | `rare` |
+| 20 | VIP | `pine_mist` | Хранитель · туман бора | keeper | `rare` |
+| 30 | VIP | `listven` | Листвень — облик сезона | listven | `legendary` |
+
+- **Окрасы — хранителя:** окрас заработанного архетипа в пассе выдавал бы
+  сам архетип, как и на Ярмарке.
+- **Облик сезона — новый архетип** со своей головой и посохом
+  (`leafhood`, `branch` в `design/art/src/hero.mjs`); следующий месяц —
+  новые строки каталога и кадры дизайнера.
 
 ## Как сейчас
 
