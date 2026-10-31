@@ -53,6 +53,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Воркер симуляции (docs/35-stage4-plan.md, Р15; tasks/T-0302): проверка
+  # черновика контента ботом калибровки. API в dev живёт на хосте, и воркер
+  # тоже можно запускать на хосте (`pnpm --filter sim-worker build`, затем
+  # `start`); в compose он — под профилем: образ собирается дольше остальных и
+  # нужен не каждому. `docker compose --profile sim-worker up -d sim-worker`.
+  # Метрики — только на 127.0.0.1, как порты базы и Redis.
+  sim-worker:
+    profiles: [sim-worker]
+    build:
+      context: .
+      dockerfile: apps/sim-worker/Dockerfile
+    container_name: rubezh-sim-worker-dev
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      SIM_WORKER_METRICS_PORT: ${SIM_WORKER_METRICS_PORT:-4010}
+    ports:
+      - "127.0.0.1:${SIM_WORKER_METRICS_PORT:-4010}:${SIM_WORKER_METRICS_PORT:-4010}"
+    depends_on:
+      redis: { condition: service_healthy }
+
 volumes:
   postgres-data:
   redis-data:

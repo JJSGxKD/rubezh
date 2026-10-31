@@ -158,6 +158,28 @@ services:
     networks: [data, backup-egress]
     mem_limit: 256m
 
+  # Воркер симуляции (docs/35-stage4-plan.md, Р15; tasks/T-0302): проверка
+  # черновика контента ботом калибровки из очереди content-check. Прогон
+  # занимает процессор целиком, поэтому процессору и памяти — потолок: воркер
+  # не должен отнять у API и Postgres то, ради чего сервер стоит. Живёт только
+  # в сети data (она без выхода наружу — ему нужен один Redis) и под профилем:
+  # включается `COMPOSE_PROFILES=sim-worker`, когда сервер начнёт ставить задания
+  # (tasks/T-0303). deploy.sh его пока не обновляет: после выката API —
+  # `docker compose pull sim-worker && docker compose up -d sim-worker`.
+  sim-worker:
+    logging: *logging
+    profiles: [sim-worker]
+    # Тот же номер версии, что у API: релиз публикует оба образа вместе.
+    image: ghcr.io/jjsgxkd/rubezh-sim-worker:${API_TAG}
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [data]
+    cpus: 1
+    mem_limit: 768m
+
   # Туннели разработчиков (docs/20-env-and-ports.md §4): Caddy принимает
   # frpc по WebSocket на frp.<домен> и отдаёт dev-адреса в vhost frps.
   frps:

@@ -2007,6 +2007,7 @@ flowchart LR
         PG[("PostgreSQL<br/>источник истины")]
         REDIS[("Redis<br/>кеш, локи, ZSET, очереди")]
         QUEUE["BullMQ<br/>воркеры"]
+        SIMWORKER["sim-worker<br/>отдельный процесс со своей сборкой движка:<br/>очередь content-check, проверка и симуляция<br/>черновика контента, реализовано"]
     end
 
     CDN["CDN<br/>статика игры + снапшоты конфигурации"]
@@ -2118,6 +2119,7 @@ flowchart LR
 
     QUEUE --> PG
     QUEUE --> REDIS
+    SIMWORKER -- "очередь content-check: задание и отчёт тем же заданием" --> REDIS
 
     PANEL["apps/admin<br/>панель команды,<br/>свой поддомен"] -- "/api/v1/admin, cookie" --> CADDY
     CADDY --> ADMINAPI
@@ -4015,6 +4017,51 @@ sequenceDiagram
 
 ---
 
+### 4.33 Проверка черновика контента в sim-worker (этап 4, реализован воркер)
+
+Редактор баланса (`19-content-admin.md` §4.3, Р160) прогоняет черновик ботом
+калибровки до того, как его увидят игроки. Собранный бэкенд исходники
+`core-game` не импортирует (Р15), поэтому прогон идёт в отдельном процессе со
+своей сборкой движка. Задания ставит сервер (`tasks/T-0303`), воркер — этот
+поток.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Сервер (T-0303)
+    participant R as Redis, очередь content-check
+    participant W as sim-worker
+    participant E as Движок и бот (внутри сборки)
+    participant M as Prometheus
+
+    S->>R: submitCheck: форма, снимки до 2 МБ, ждущих меньше пяти
+    Note over S,R: шестое ждущее — отказ «Проверка уже идёт, дождитесь»
+    R->>W: задание {checkId, snapshot, baseSnapshot, scenarios, seeds}, конкурентность 1
+    W->>W: размер, затем схема снимка (черновик и база)
+    alt снимок не по схеме
+        W-->>R: {schemaProblems, contentProblems: [], report: null}
+    else схема в порядке
+        W->>W: findContentProblems(черновик)
+        loop сценарий, затем зёрна 1…N
+            W->>E: simulateBalanceRun на черновике
+            W->>E: то же на базе (прогоны базы — из кэша; черновик = база — один раз)
+            W->>W: отдать управление циклу событий, проверить предел 120 с
+        end
+        W-->>R: {schemaProblems: [], contentProblems, report: медианы, дельты, коридоры, timeout}
+    end
+    R-->>S: событие завершения задания, результат в returnvalue
+    M->>W: GET /metrics: sim_jobs_total{queue,outcome}, sim_job_seconds{queue}
+```
+
+- **Прогон один на процесс.** Конкурентность 1: бот занимает процессор целиком,
+  а между прогонами воркер отдаёт управление циклу событий — иначе очередь
+  сочла бы задание зависшим и отдала бы его второй раз (блокировка — минута).
+- **Предел 120 с** проверяется перед каждым прогоном; вышел — `timeout: true`,
+  посчитанные сценарии остаются, остальные помечены `skipped`.
+- **Отчёт по умолчанию — свод калибровки:** те же сценарии, зёрна и функции, что у
+  `pnpm balance:sim`; черновик и база сравниваются по медианам и по коридорам
+  `balance-targets` своего снимка.
+
 ## 5. Топология развёртывания
 
 ```mermaid
@@ -4024,9 +4071,11 @@ flowchart TB
         DA["API :4000"]
         DPG[("Postgres<br/>127.0.0.1:5432")]
         DR[("Redis<br/>127.0.0.1:6379")]
+        DSW["sim-worker<br/>метрики 127.0.0.1:4010"]
         DV --> DA
         DA --> DPG
         DA --> DR
+        DSW --> DR
     end
 
     subgraph vps["VPS 2 vCPU / 4 ГБ — только production"]
@@ -4035,6 +4084,7 @@ flowchart TB
         PAPI["API + воркеры BullMQ<br/>порт не публикуется"]
         PPG[("Postgres")]
         PR[("Redis")]
+        PSW["sim-worker (профиль sim-worker)<br/>1 ядро, 768 МБ, только сеть data,<br/>порт метрик не публикуется"]
         FRPS["frps<br/>туннели разработчиков"]
         BAK["backup.sh раз в сутки<br/>дамп → age ключом владельца"]
         SPOOL[("очередь журнала<br/>том wal-spool")]
@@ -4046,6 +4096,7 @@ flowchart TB
         CAD --> FRPS
         PAPI --> PPG
         PAPI --> PR
+        PSW --> PR
         BAK -.дамп.-> PPG
         PPG -.archive_command.-> SPOOL
         SPOOL --> PITR
