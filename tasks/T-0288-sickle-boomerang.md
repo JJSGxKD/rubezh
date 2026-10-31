@@ -13,6 +13,7 @@ zones:
   - packages/core-game/test/boomerang.test.ts
 shared:
   - packages/app-shell/src/screens/game-glyphs.tsx
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -117,6 +118,9 @@ batch: 6
 2. **`weapons/boomerang.ts`**, поле `range`, реестр.
 3. **Облик и звук.**
 4. **Данные** — Серп, «Жатва», открытие, тексты, значок.
+   Кадры снаряда готовы (31.10.2026, пак `atlas-r157`): `fx/proj_sickle0…1` и у «Жатвы» `fx/proj_harvest0…1` — два кадра поворота. Пак
+   движок подключает строкой `art-r157` в `ATLASES`, если её ещё нет
+   (`render/art-atlas.ts`).
 5. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 6. **Документы:**
    - `CLAUDE.md` — строка `boomerang` в таблице поведений;

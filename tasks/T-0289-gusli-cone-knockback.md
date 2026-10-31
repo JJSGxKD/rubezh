@@ -14,6 +14,7 @@ zones:
   - packages/core-game/test/cone-weapon.test.ts
 shared:
   - packages/app-shell/src/screens/game-glyphs.tsx
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -114,6 +115,9 @@ batch: 6
 3. **`sim/knockback.ts`** — импульс и его затухание, в снимке.
 4. **Облик и звук.**
 5. **Данные** — Гусли, «Песнь Баяна», открытие, тексты, значок.
+   Кадры снаряда готовы (31.10.2026, пак `atlas-r157`): `fx/wave_gusli0…2` — дуга волны конусом 64°, растёт за три кадра; у «Песни Баяна» `fx/wave_bayan_song0…2` — кольцо с нотами. Пак
+   движок подключает строкой `art-r157` в `ATLASES`, если её ещё нет
+   (`render/art-atlas.ts`).
 6. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 7. **Документы:**
    - `CLAUDE.md` — строка `cone` в таблице поведений;
