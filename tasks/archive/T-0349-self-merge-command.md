@@ -35,7 +35,7 @@ batch: 3
 
 # T-0349. Самостоятельный мердж — поле merge в задаче, команды pnpm task merge и pnpm task holds, правила для потоков
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0349.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0349.json)](../README.md#значки-статуса)
 
 ## Зачем
 

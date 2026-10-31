@@ -52,7 +52,7 @@ export { DASH_PHASE } from "./dash";
 export { ORBIT_PHASE } from "./orbit";
 export { EXPLODER_PHASE } from "./exploder";
 export { RUSH_PHASE } from "./rush";
-export { CORDON_PHASE } from "./cordon";
+export { CORDON_FORM_SEC, CORDON_PHASE } from "./cordon";
 export {
   BOSS_RADIUS_MUL,
   ELITE_RADIUS_MUL,

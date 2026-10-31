@@ -3,8 +3,8 @@ id: T-0350
 title: Фильтр имён — потолок регулярок, прогон один раз на шаблон, медленное правило видно в логе, NFKC до правил закреплён тестом
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0338]
@@ -18,6 +18,8 @@ zones:
   - backend/api/test/name-rules.integration.test.ts
   - backend/api/test/display-names-clean.test.ts
 shared:
+  - backend/api/src/modules/name-rules/name-rules-cache.service.ts
+  - backend/api/test/name-rules.http.test.ts
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
 runner: any
@@ -30,7 +32,7 @@ batch: 4
 
 # T-0350. Фильтр имён — потолок регулярок, прогон один раз на шаблон, медленное правило видно в логе, NFKC до правил закреплён тестом
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0350.json)](README.md#значки-статуса) [![T-0338](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json&label=T-0338)](T-0338-name-rules-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0350.json)](README.md#значки-статуса) [![T-0338](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0338.json&label=T-0338)](archive/T-0338-name-rules-server.md)
 
 ## Зачем
 

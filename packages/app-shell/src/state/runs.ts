@@ -1,5 +1,6 @@
 import {
   DIFFICULTY_IDS,
+  ELEMENTS,
   type DifficultyId,
   type Leaderboard,
   type RunFinishResult,
@@ -75,6 +76,10 @@ const finishFields = {
       eliteKills: z.optional(z.number()),
       chestsOpened: z.optional(z.number()),
       crystals: z.optional(z.number()),
+      // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
+      noHitSec: z.optional(z.number()),
+      noKillSec: z.optional(z.number()),
+      killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
     }),
   ),
 };
@@ -300,6 +305,9 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       eliteKills: result.eliteKills,
       chestsOpened: result.chestsOpened,
       crystals: Math.round(result.crystalsCollected),
+      noHitSec: result.noHitSec,
+      noKillSec: result.noKillSec,
+      killsByElement: result.killsByElement,
     },
   };
 }

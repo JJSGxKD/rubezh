@@ -1,9 +1,9 @@
 import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
@@ -24,6 +24,7 @@ import { judgeRun } from "../src/modules/runs/run-verdict.js";
 import { RUNS_LIMITS } from "../src/modules/runs/runs-limits.js";
 import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
+import { debitWithin } from "../src/modules/wallet/wallet-ledger.js";
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { starsProviders } from "./helpers/fake-stars-api.js";
@@ -162,6 +163,28 @@ describe.skipIf(DATABASE_URL === "")("второй шанс за самоцве�
     expect(await gemsOf(id)).toBe(50);
     expect(await rowsOf(runId)).toEqual([]);
     expect(await spent(id)).toEqual([]);
+  });
+
+  it("ключ списания занят, а строки продолжения нет — 409 continue_taken: ни строки, ни второго списания, баланс прежний, в логе предупреждение", async () => {
+    const id = await account();
+    await fund(id, 50);
+    const runId = await run(id);
+    // Проводка первого продолжения лежит в журнале, а строки нет: забеги почистили без журнала.
+    await prisma.$transaction((tx) => debitWithin(tx, { accountId: id, lines: [{ resource: "gems", amount: 4 }], reason: "continue", source: `run:${runId}`, idempotencyKey: `continue:${runId}:1`, at: new Date() }));
+    expect(await gemsOf(id)).toBe(46);
+    const warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+
+    try {
+      await expect(buy(id, runId)).rejects.toMatchObject({ code: "continue_taken", status: 409 });
+
+      expect(await rowsOf(runId)).toEqual([]);
+      expect(await gemsOf(id)).toBe(46);
+      expect(await spent(id)).toHaveLength(1);
+      const logged = warn.mock.calls.map((call) => JSON.parse(String(call[0])) as Record<string, unknown>).find((entry) => entry.event === "gem_continue_key_conflict");
+      expect(logged).toEqual({ module: "runs", event: "gem_continue_key_conflict", runId, continueNo: 1, accountId: id });
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("мало самоцветов — 409 insufficient_funds, ни строки, ни проводки: транзакция откатилась целиком", async () => {

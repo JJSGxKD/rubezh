@@ -44,7 +44,7 @@ batch: 4
 
 # T-0328. Второй сундук в кладе за ролик — движок и окно: кнопка «Ещё сундук за ролик» в окне сундука клада, команда в записи забега, сундук из своего потока
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0328.json)](README.md#значки-статуса) [![T-0327](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0327.json&label=T-0327)](T-0327-clad-ad-chest-server.md) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](T-0258-secrets-engine-core.md) [![T-0260](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json&label=T-0260)](T-0260-secrets-look-and-blessing.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0328.json)](README.md#значки-статуса) [![T-0327](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0327.json&label=T-0327)](T-0327-clad-ad-chest-server.md) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](archive/T-0258-secrets-engine-core.md) [![T-0260](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json&label=T-0260)](T-0260-secrets-look-and-blessing.md)
 
 ## Зачем
 

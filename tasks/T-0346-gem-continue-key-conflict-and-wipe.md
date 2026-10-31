@@ -3,8 +3,8 @@ id: T-0346
 title: Второй шанс за самоцветы — отказ при занятом ключе списания без строки и свой шаг стирания в вайпе
 epic: E1
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: S
 depends_on: [T-0324]

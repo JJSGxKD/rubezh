@@ -33,6 +33,9 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     damageDealt: 5000,
     damageTaken: 120,
     damageByElement: {},
+    noHitSec: 0,
+    noKillSec: 0,
+    killsByElement: {},
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
@@ -186,7 +189,7 @@ describe("очередь забегов", () => {
       deathCause: "swarm_rat",
       continues: [],
       passives: [{ id: "might", level: 2 }],
-      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0 },
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -256,7 +259,7 @@ describe("очередь забегов", () => {
   it("запись очереди прошлой сборки без счётчиков итога разбирается и уходит на сервер как есть (T-0125)", async () => {
     const legacy = toSubmission(result("run-old-0001"));
     const stats: Record<string, unknown> = { ...legacy.stats };
-    for (const key of ["bossKills", "eliteKills", "chestsOpened", "crystals"]) delete stats[key];
+    for (const key of ["bossKills", "eliteKills", "chestsOpened", "crystals", "noHitSec", "noKillSec", "killsByElement"]) delete stats[key];
     storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
 
     reply = async () => json(200, FINISHED);
@@ -387,6 +390,9 @@ describe("подробности забега для листа в профил�
       eliteKills: 0,
       chestsOpened: 0,
       crystals: 0,
+      noHitSec: 0,
+      noKillSec: 0,
+      killsByElement: {},
     });
   });
 });

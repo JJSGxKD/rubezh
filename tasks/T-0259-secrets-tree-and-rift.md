@@ -29,7 +29,7 @@ batch: 4
 
 # T-0259. Тайники рубежа — древо-оберег и разлом Нави
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json)](README.md#значки-статуса) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](T-0258-secrets-engine-core.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json)](README.md#значки-статуса) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](archive/T-0258-secrets-engine-core.md)
 
 ## Зачем
 

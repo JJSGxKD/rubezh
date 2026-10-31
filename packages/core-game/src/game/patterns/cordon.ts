@@ -2,8 +2,14 @@ import { vectorLength } from "../sim/vector";
 import type { PatternBehavior } from "./behavior";
 import { enemySpeed, stopEnemy } from "./steering";
 
-/** Фаза стража: идёт к месту или стоит на нём. */
-export const CORDON_PHASE = { arriving: 0, holding: 1 } as const;
+/**
+ * Фаза стража: идёт к месту, стоит на нём или только что встал в строй и ещё
+ * горит вспышкой (Р166) — такой страж стоит, не бьёт и не толкает игрока.
+ */
+export const CORDON_PHASE = { arriving: 0, holding: 1, forming: 2 } as const;
+
+/** Сколько секунд горит вспышка строя, пока страж не начал держать место. */
+export const CORDON_FORM_SEC = 0.8;
 
 /** Ближе этого к месту страж считается стоящим в строю. */
 const HOLD_DISTANCE_UNITS = 4;
@@ -27,6 +33,19 @@ export const cordon: PatternBehavior = {
     const enemies = world.enemies;
     const placeX = state.centerX + enemies.dirX[index] * state.radius;
     const placeY = state.centerY + enemies.dirY[index] * state.radius;
+
+    // Вспышка: страж уже на месте и ждёт, пока она погаснет. Место уходит внутрь
+    // вместе со сжатием, поэтому страж следует за ним, не двигаясь сам, — иначе
+    // после вспышки строй вышел бы неровным.
+    if (enemies.phase[index] === CORDON_PHASE.forming) {
+      enemies.x[index] = placeX;
+      enemies.y[index] = placeY;
+      stopEnemy(world, index);
+      enemies.phaseTimer[index] -= dtSec;
+      if (enemies.phaseTimer[index] > 0) return;
+      enemies.phase[index] = CORDON_PHASE.holding;
+    }
+
     const dx = placeX - enemies.x[index];
     const dy = placeY - enemies.y[index];
     const distance = vectorLength(dx, dy);
