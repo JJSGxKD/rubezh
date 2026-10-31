@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
+import type { FunnelRow, Period } from "./funnel";
 import { LINK_NETWORKS, LINK_TARGETS } from "./links";
 
 /**
@@ -193,6 +194,51 @@ export function fetchPartners(api: AdminApi): Promise<ApiResult<PartnerCatalog>>
 
 export function fetchPartner(api: AdminApi, partnerId: string): Promise<ApiResult<PartnerDetail>> {
   return api.request(`/partners/${encodeURIComponent(partnerId)}`, { schema: detailSchema });
+}
+
+/** Вехи игроков партнёра в одном срезе: те же, что в отчёте «Воронка», без разреза. */
+const funnelCountsSchema = z.object({
+  accounts: z.number(),
+  entered: z.number(),
+  appOpened: z.number(),
+  firstRunStarted: z.number(),
+  firstRunFinished: z.number(),
+  runs2: z.number(),
+  runs5: z.number(),
+  returnedD1: z.number(),
+  returnedD7: z.number(),
+  firstPurchase: z.number(),
+});
+export type PartnerFunnelCounts = z.infer<typeof funnelCountsSchema>;
+
+/**
+ * Воронка игроков партнёра (Р96, T-0068): привязанные к нему за период по дате привязки — все вместе,
+ * по ссылке или коду и по площадке. Вид источника, которого панель не знает, — ошибка разбора: молча
+ * пустая таблица спрятала бы игроков.
+ */
+export const partnerFunnelSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  total: funnelCountsSchema,
+  sources: z.array(z.object({ via: z.enum(["link", "code"]), name: z.string().nullable(), ref: z.string().nullable(), counts: funnelCountsSchema })),
+  platforms: z.array(z.object({ platform: z.string(), counts: funnelCountsSchema })),
+});
+export type PartnerFunnel = z.infer<typeof partnerFunnelSchema>;
+export type PartnerFunnelSource = PartnerFunnel["sources"][number];
+
+export function fetchPartnerFunnel(api: AdminApi, partnerId: string, period: Period): Promise<ApiResult<PartnerFunnel>> {
+  return api.request(`/partners/${encodeURIComponent(partnerId)}/funnel`, { query: { from: period.from, to: period.to }, schema: partnerFunnelSchema });
+}
+
+/** Вехи партнёра — строкой отчёта «Воронка»: полосы и «где теряем» считаются теми же функциями, что на том экране. */
+export function funnelRowOf(counts: PartnerFunnelCounts, label: string): FunnelRow {
+  return { platform: "все", startKind: "все", startRef: label, startSource: null, ...counts };
+}
+
+/** Как назвать источник привязки: ссылка — кампания и код, код — название кампании промокода; удалённое называется честно. */
+export function sourceTitle(source: Pick<PartnerFunnelSource, "via" | "name" | "ref">): string {
+  if (source.via === "link") return source.name === null ? `ссылка ${source.ref ?? ""}`.trim() : `ссылка ${source.name} · ${source.ref ?? ""}`.replace(/ · $/, "");
+  return source.name === null ? "код (кампании больше нет)" : `код «${source.name}»`;
 }
 
 export function createPartner(api: AdminApi, form: PartnerForm): Promise<ApiResult<Partner>> {
