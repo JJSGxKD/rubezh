@@ -81,6 +81,7 @@ Chromium → атлас Phaser. Так ступени, ранги и окрас�
 | Листы концепций, бестиария, героя | `node design/art/src/previews.mjs` | листы в `out/` |
 | Логотип → портреты → бренд бота | `node design/art/src/logo.mjs`, затем `portraits.mjs`, затем `bot-art.mjs` | знак, `avatar-hero-*`, `card-hero-*`, модуль бэкенда |
 | Промо 1:1, 16:9, 21:9 и набор площадок | `node design/art/src/promo.mjs`, затем `platform-kit.mjs` | `out/promo/`, значки |
+| Стартовые пресеты генератора промо (Р159) | `node design/art/src/promo-presets.mjs` | `apps/admin/src/screens/promo/art-starters/`: фоны и документы `promo-kit` |
 | Звуки рецептами игры → OGG | `pnpm dev:telegram`, затем `node design/art/src/render-sounds.mjs` | `design/art/audio/*.ogg` |
 
 Чтобы добавить нового врага, нужны функция рисунка в `src/creatures.mjs` и
