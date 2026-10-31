@@ -148,6 +148,7 @@ node design/art/src/portraits.mjs      # портреты героя векто�
 node design/art/src/logo.mjs           # логотип v2: словесный знак, руна, значок приложения, иконка вкладки → out/brand и оболочка
 node design/art/src/bot-art.mjs        # бренд для картинок бота → backend/api/src/common/card/brand-art.ts (после logo.mjs и portraits.mjs)
 node design/art/src/promo.mjs          # промо 1:1, 16:9, 21:9: сила, награда, вызов → out/promo/*.png и mockups/promo-*.html
+node design/art/src/prologue-board.mjs # раскадровка пролога: 11 кадров на 320 из спрайтов игры → mockups/prologue-v2.html
 node design/art/src/promo-presets.mjs  # стартовые пресеты генератора промо: фоны WebP и документы promo-kit → apps/admin/src/screens/promo/art-starters, mockups/promo-presets-v2.html
 node design/art/src/platform-kit.mjs   # значки площадок 16…1024 и превью Mini App 640×360 → out/platform (после logo.mjs и promo.mjs)
 python3 design/art/src/cvd.py кадр.png -o полоса.png  # кадр глазами дейтеранопа, протанопа и тританопа — проверка нового цвета
