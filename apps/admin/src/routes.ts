@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -41,6 +41,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     sections: [
       { id: "players", title: "Игроки", hint: "Найти игрока и открыть карточку: забеги, покупки, кошелёк, ограничения", permission: "players.view", icon: Users },
       { id: "review", title: "Разбор забегов", hint: "Забеги, которые антифрод счёл подозрительными или отклонил", permission: "players.view", icon: ShieldAlert },
+      { id: "names", title: "Фильтр имён", hint: "Слова и фразы, которые убираются из ников игроков, и перечистка старых", permission: "names.edit", icon: Eraser },
     ],
   },
   {

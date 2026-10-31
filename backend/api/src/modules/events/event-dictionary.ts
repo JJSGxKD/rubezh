@@ -66,6 +66,9 @@ const runOutcome = payload({
   eliteKills: count.optional(),
   chestsOpened: count.optional(),
   crystals: count.optional(),
+  // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
+  noHitSec: count.optional(),
+  noKillSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -191,12 +194,17 @@ export const EVENT_DICTIONARY = {
     payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
   },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
-  // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
-  // на какой секунде и волне забега.
+  // (бесплатно в забеге разработчика), `premium` (за Stars), `gems` (за
+  // самоцветы, Р162), `ad` (за ролик), `pass` (с VIP); на какой секунде и
+  // волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
   // Шаг второго шанса показан (tasks/T-0045): сколько раз предложили и чем —
-  // ролик, звёзды, VIP. Доля `continue_used` от этого — конверсия второго шанса.
-  continue_offered: { version: 1, payload: payload({ ad: z.boolean(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }) },
+  // ролик, самоцветы, звёзды, VIP. Доля `continue_used` от этого — конверсия
+  // второго шанса. `gems` необязателен: сборки до Р162 его не шлют.
+  continue_offered: {
+    version: 1,
+    payload: payload({ ad: z.boolean(), gems: z.boolean().optional(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }),
+  },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.

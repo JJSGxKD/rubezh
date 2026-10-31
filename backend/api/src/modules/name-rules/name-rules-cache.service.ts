@@ -32,6 +32,8 @@ export class NameRulesCache implements NameRulesSource, OnModuleInit, OnModuleDe
   private set: NameRuleSet = EMPTY_NAME_RULES;
   /** битое правило называется в логе один раз, а не на каждой пересборке */
   private readonly warned = new Set<string>();
+  /** о медленном правиле пишем один раз за жизнь процесса: ник у него каждый раз новый */
+  private readonly slowWarned = new Set<string>();
   private lastFailureLogAt = 0;
   private timer: NodeJS.Timeout | null = null;
   private subscriber: Redis | null = null;
@@ -69,6 +71,13 @@ export class NameRulesCache implements NameRulesSource, OnModuleInit, OnModuleDe
         this.warned.add(def.ruleId);
         // Шаблон в лог не идёт: он может быть чужим брендом или матом.
         this.log("name_rule_invalid", { ruleId: def.ruleId });
+      }, {
+        onSlow: (ruleId, ms) => {
+          if (this.slowWarned.has(ruleId)) return;
+          this.slowWarned.add(ruleId);
+          // Шаблон и ник в лог не идут; правило работает дальше.
+          this.log("name_rule_slow", { ruleId, ms: Math.round(ms * 10) / 10 });
+        },
       });
     } catch (error: unknown) {
       const now = Date.now();

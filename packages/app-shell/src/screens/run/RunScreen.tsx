@@ -8,7 +8,7 @@ import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
-import { canOfferPaidContinue } from "../../state/payments-availability";
+import { canOfferGemContinue, canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
 import { useRuns } from "../../state/runs";
 import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
@@ -216,8 +216,9 @@ export function RunScreen(): ReactNode {
 
 /**
  * Что можно на экране смерти: купить продолжение звёздами — где площадка
- * умеет оплату, — взять за рекламу или с VIP — где она показывает ролики и
- * есть вход (WP11), — а в забеге разработчика ещё и бесплатно.
+ * умеет оплату, — взять за самоцветы — где есть вход (Р162), — за рекламу или
+ * с VIP — где площадка показывает ролики и есть вход (WP11), — а в забеге
+ * разработчика ещё и бесплатно.
  */
 function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
   const { adapter, capabilities } = useShell.getState();
@@ -226,6 +227,7 @@ function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps 
     ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
     ...(canOfferPaidContinue() ? { paidFor: result } : {}),
     ...(ads ? { adFor: result } : {}),
+    ...(canOfferGemContinue() ? { gemsFor: result } : {}),
   };
 }
 

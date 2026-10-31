@@ -55,8 +55,8 @@ export interface OpenedChest {
 export type RunLoadingStage = "engine" | "world";
 
 /** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
-/** Чем продолжен забег: звёзды, ролик, VIP без ролика или чит разработчика. */
-export type ContinueSource = "dev" | "premium" | "ad" | "pass";
+/** Чем продолжен забег: звёзды, самоцветы, ролик, VIP без ролика или чит разработчика. */
+export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
@@ -792,6 +792,9 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     eliteKills: result.eliteKills,
     chestsOpened: result.chestsOpened,
     crystals: Math.round(result.crystalsCollected),
+    // Серии для достижений (T-0321): по ним видно, насколько трудны испытания.
+    noHitSec: result.noHitSec,
+    noKillSec: result.noKillSec,
     weapon: result.startingWeaponId,
     map: result.mapId,
     difficulty: result.difficultyId,

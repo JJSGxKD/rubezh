@@ -38,7 +38,7 @@ batch: 3
 
 # T-0351. Задел — брать задачу до мерджа зависимостей, ветка поверх их веток, метка «задел», доводка первой в очереди
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0351.json)](README.md#значки-статуса) [![T-0349](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0349.json&label=T-0349)](T-0349-self-merge-command.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0351.json)](../README.md#значки-статуса) [![T-0349](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0349.json&label=T-0349)](T-0349-self-merge-command.md)
 
 ## Зачем
 

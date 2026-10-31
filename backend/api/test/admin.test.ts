@@ -27,6 +27,7 @@ import { FlagsService } from "../src/modules/flags/flags.service.js";
 import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
+import { BOARD_MARK_READER } from "../src/modules/admin/board-mark.reader.js";
 import { FUNNEL_REPOSITORY } from "../src/modules/funnel/funnel.repository.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -134,6 +135,8 @@ describe("панель по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
+        // Метка «Отдельная доска» (T-0115): здесь её нет, её проверяют `funnel.integration.test.ts` и `board-mark.test.ts`.
+        { provide: BOARD_MARK_READER, useValue: { ids: async () => [], funnel: async () => ({ accounts: 0, entered: 0, appOpened: 0, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0 }) } },
         { provide: FLAGS_REPOSITORY, useValue: flags },
         FlagsService,
         { provide: RUNS_REPOSITORY, useValue: runs },
