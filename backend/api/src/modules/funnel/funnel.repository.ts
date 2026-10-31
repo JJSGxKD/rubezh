@@ -4,7 +4,7 @@ import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { PRISMA } from "../../infra/database.js";
 import type { FlagRule } from "../flags/flag-rollout.js";
 import { flagSplitReport, type FlagSplit } from "./flag-split-report.js";
-import { funnelReport, type FunnelRow } from "./funnel-report.js";
+import { funnelReport, partnerFunnelReport, type FunnelRow, type PartnerFunnelRow } from "./funnel-report.js";
 
 /**
  * Вехи воронки аккаунта (docs/35-stage4-plan.md, Р30, §3.10). Каждая веха —
@@ -15,6 +15,17 @@ import { funnelReport, type FunnelRow } from "./funnel-report.js";
  */
 
 export const FUNNEL_REPOSITORY = Symbol("FUNNEL_REPOSITORY");
+
+export const PARTNER_FUNNEL = Symbol("PARTNER_FUNNEL");
+
+/**
+ * Воронка игроков партнёра (Р96, T-0068). Отдельным портом, а не методом `FunnelRepository`: её читает
+ * только карточка партнёра, и подделки воронки в чужих тестах не обязаны её знать.
+ */
+export interface PartnerFunnelSource {
+  /** Игроки, привязанные к партнёру в окне `[from, to)` по дате привязки: площадка и источник — вехи числами. */
+  partnerReport(partnerId: string, from: Date, to: Date): Promise<PartnerFunnelRow[]>;
+}
 
 /** Вехи одного аккаунта — карточка игрока в панели; `null` у вехи — ещё не случилось. */
 export interface FunnelMilestones {
@@ -48,8 +59,12 @@ export interface FunnelRepository {
 }
 
 @Injectable()
-export class PrismaFunnelRepository implements FunnelRepository {
+export class PrismaFunnelRepository implements FunnelRepository, PartnerFunnelSource {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
+
+  async partnerReport(partnerId: string, from: Date, to: Date): Promise<PartnerFunnelRow[]> {
+    return await partnerFunnelReport(this.prisma, partnerId, from, to);
+  }
 
   async entered(accountId: string, at: Date): Promise<void> {
     await this.prisma.$executeRaw`

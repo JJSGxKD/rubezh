@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
+import { partnerFunnelView, type PartnerFunnelView } from "../funnel/funnel-report.js";
+import { PARTNER_FUNNEL, type PartnerFunnelSource } from "../funnel/funnel.repository.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { PartnerNotFoundError, PartnerTelegramTakenError } from "./partner-errors.js";
@@ -43,6 +45,15 @@ export interface PartnerDetail {
   rules: typeof PARTNER_RULES;
 }
 
+/** Воронка партнёра за период: как у остальных отчётов панели, не длиннее года. */
+const FUNNEL_MAX_DAYS = 366;
+const DAY_MS = 86_400_000;
+
+export interface PartnerFunnel extends PartnerFunnelView {
+  from: string;
+  to: string;
+}
+
 const DB_TIMEOUT_MS = 3_000;
 const LIST_LIMIT = 500;
 const DAILY_DAYS = 30;
@@ -54,12 +65,14 @@ export class PartnersService {
 
   /**
    * `partnerLinks` — источник ссылок для карточки. Необязателен: сервис партнёров живёт и без модуля
-   * ссылок, карточка тогда показывает пустой блок.
+   * ссылок, карточка тогда показывает пустой блок. `funnel` — источник воронки игроков партнёра (T-0068),
+   * так же необязателен: без него воронка пустая.
    */
   constructor(
     @Inject(PARTNERS_REPOSITORY) private readonly repository: PartnersRepository,
     private readonly roles: RolesService,
     @Optional() @Inject(PARTNER_LINKS) private readonly partnerLinks: PartnerLinksSource | null = null,
+    @Optional() @Inject(PARTNER_FUNNEL) private readonly funnelSource: PartnerFunnelSource | null = null,
   ) {}
 
   async catalog(actor: AccountRef, at = new Date()): Promise<{ partners: PartnerView[]; rules: typeof PARTNER_RULES }> {
@@ -84,6 +97,19 @@ export class PartnersService {
       linkBound: linked.bound,
       rules: PARTNER_RULES,
     };
+  }
+
+  /**
+   * Воронка игроков партнёра (Р96, T-0068): привязанные к нему в окне `[from, to)` по дате привязки — все вместе,
+   * по ссылке или коду и по площадке. Партнёра нет — 404 до обращения к воронке.
+   */
+  async funnel(actor: AccountRef, partnerId: string, from: Date, to: Date, at = new Date()): Promise<PartnerFunnel> {
+    await this.roles.require(actor, "partners.view");
+    if (!(from < to)) throw new ValidationError("Начало периода должно быть раньше конца");
+    if (to.getTime() - from.getTime() > FUNNEL_MAX_DAYS * DAY_MS) throw new ValidationError("Период не длиннее года");
+    if ((await this.db(this.repository.byId(partnerId, at))) === null) throw new PartnerNotFoundError();
+    const rows = this.funnelSource === null ? [] : await this.db(this.funnelSource.partnerReport(partnerId, from, to));
+    return { from: from.toISOString(), to: to.toISOString(), ...partnerFunnelView(rows) };
   }
 
   /** Новый партнёр — активный: заявки заводит команда, статус меняется после, с причиной. */
