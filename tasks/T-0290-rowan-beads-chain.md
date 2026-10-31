@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/weapons/chain.ts
   - packages/core-game/test/chain-weapon.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
@@ -91,7 +92,8 @@ batch: 6
 - **Тексты:**
   - `weapon.rowan_beads.name` — «Рябиновые бусы», `.description` — «Ягода перескакивает между врагами и травит»;
   - `weapon.necklace.name` — «Ожерелье», `.description` — «Длинная цепь ягод».
-- **Значок** — `item-icons.tsx`; задания с фильтром оружия — `rowan_beads`,
+- **Значок** готов: `rowan_beads` и `necklace` из `PLANNED_WEAPON_GLYPHS`
+  (`screens/game-glyphs.tsx`) переезжают в `WEAPON_GLYPHS`; задания с фильтром оружия — `rowan_beads`,
   если список есть.
 - **`docs/35`** — у Р157 отметка «сделано: T-0281–T-0290».
 

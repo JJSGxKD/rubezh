@@ -11,6 +11,7 @@ depends_on: [T-0120]
 zones:
   - packages/core-game/test/new-content-wave1.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
   - packages/core-game/src/game/render/art-atlas.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
@@ -109,7 +110,9 @@ batch: 6
   Кадры кистеня готовы там же: `fx/orbiter_flail0`, у «Круговерти» —
   `fx/orbiter_whirl0` (шар с шипами и обрывком цепи; цепь к игроку рисует
   рендер орбиты).
-- **Значок оружия** — `screens/item-icons.tsx`, тем же языком, что другие.
+- **Значок оружия** готов (п. 5 очереди дизайнера): `flail` и `whirl` из
+  `PLANNED_WEAPON_GLYPHS` (`screens/game-glyphs.tsx`) переезжают в
+  `WEAPON_GLYPHS` — тест значков требует этого, как только оружие в контенте.
 - **Звук** — удар кистеня: рецепт в `audio/recipes.ts` — глухой тяжёлый
   удар, не громче удара оберега (`docs/31`).
 - **Задания** — если у задания с фильтром оружия есть список id
