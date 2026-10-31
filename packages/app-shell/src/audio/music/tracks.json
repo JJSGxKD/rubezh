@@ -1,0 +1,23 @@
+{
+  "lobby": {
+    "seconds": 64,
+    "bpm": 60,
+    "bars": 16,
+    "beatsPerBar": 4,
+    "firstBeatSec": 0
+  },
+  "run": {
+    "seconds": 64,
+    "bpm": 90,
+    "bars": 24,
+    "beatsPerBar": 4,
+    "firstBeatSec": 63.1667
+  },
+  "boss": {
+    "seconds": 64,
+    "bpm": 90,
+    "bars": 24,
+    "beatsPerBar": 4,
+    "firstBeatSec": 63.1667
+  }
+}

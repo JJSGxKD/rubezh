@@ -37,3 +37,5 @@ infra/certs/
 design/art/out/preview/*
 !design/art/out/preview/ui-*.png
 design/art/out/promo/
+# Черновые WAV музыки: в git — только OGG и M4A в packages/app-shell/src/audio/music.
+design/art/out/music/
