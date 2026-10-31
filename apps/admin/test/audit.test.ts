@@ -40,8 +40,18 @@ describe("журнал аудита", () => {
     expect(auditChanges(renamed)).toHaveLength(1);
   });
 
+  it("перестановка слайдов главной (T-0189): название действия, одна правка «порядок» с названиями слайдов", () => {
+    expect(actionTitle("home.slides.reorder")).toBe("Порядок слайдов главной");
+    const reordered = entry({ action: "home.slides.reorder", target: "regular", before: { order: ["Турнир", "Конкурс"] }, after: { order: ["Конкурс", "Турнир"] } });
+    const changes = auditChanges(reordered);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ field: "order" });
+    expect(auditValue(changes[0]?.after, "order")).toBe("Конкурс, Турнир");
+  });
+
   it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
     expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
+    expect(actionTitle("ads.networks.reorder")).toBe("Порядок рекламных сетей");
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
   });
 
@@ -51,6 +61,13 @@ describe("журнал аудита", () => {
     expect(actionTitle("names.rule.delete")).toBe("Удаление правила фильтра имён");
     expect(AUDIT_AREAS.find((area) => area.id === "support")?.prefixes).toContain("names.");
     expect(auditObject(entry({ action: "names.rule.create", target: "00000000-0000-4000-8000-000000000001" }))).toEqual({ kind: "правило", label: "00000000", route: { section: "names", id: null } });
+  });
+
+  it("перечистка ников: подписи трёх действий и объект «перечистка» (T-0339)", () => {
+    expect(actionTitle("names.reclean.start")).toBe("Запуск перечистки ников");
+    expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
+    expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");
+    expect(auditObject(entry({ action: "names.reclean.start", target: "00000000-0000-4000-8000-000000000009" }))).toEqual({ kind: "перечистка", label: "00000000", route: { section: "names", id: null } });
   });
 
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {

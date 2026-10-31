@@ -3,8 +3,8 @@ id: T-0317
 title: Сервер принимает запись для проверки — PUT к своему забегу, проверка формы и размера, хранение 7 дней, дольше — у проверенных
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
@@ -21,7 +21,12 @@ shared:
   - backend/api/src/modules/runs/runs.module.ts
   - backend/api/src/modules/runs/runs-limits.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/test/http-app.test.ts
+  - backend/api/test/route-limits.test.ts
+  - docs/30-configuration-map.md
   - docs/21-diagrams.md
   - docs/28-diagnostics.md
 runner: any
@@ -126,9 +131,9 @@ batch: 8
 
 ## Критерии приёмки
 
-- [ ] Сервер принимает запись для проверки только к своему забегу, с проверкой формы, размера и хэша контента, без дублей.
-- [ ] Обычные записи живут 7 дней, у проверенных верхних — 180.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Сервер принимает запись для проверки только к своему забегу, с проверкой формы, размера и хэша контента, без дублей.
+- [x] Обычные записи живут 7 дней, у проверенных верхних — 180.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

@@ -147,10 +147,10 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   fromSec: 330,
   segmentSec: 60,
   threatPerSec: 14.4,
-  threatGrowth: 1.18,
+  threatGrowth: 1.22,
   maxAlive: 240,
-  hpGrowth: 1.12,
-  damageGrowth: 1.06,
+  hpGrowth: 1.14,
+  damageGrowth: 1.08,
   pool: [
     "swarm_rat",
     "circler_crow",
@@ -171,6 +171,12 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+    // После 8-й минуты элиты и Матрёшка приходят каждую-вторую минуту, а не раз
+    // в пять; второй босс — отдельная задача, поэтому «больше боссов» здесь
+    // значит больше событий той же Матрёшки.
+    { everySegments: 7, kind: "ring", enemy: "elite_ghoul", count: 3 },
+    { everySegments: 8, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+    { everySegments: 9, kind: "flank", enemy: "elite_grave_knight", count: 2 },
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
     // параметры кольца с отрезка на отрезок не растут.

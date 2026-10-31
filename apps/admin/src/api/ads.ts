@@ -190,7 +190,14 @@ export function fetchAds(api: AdminApi, days: FunnelDays): Promise<ApiResult<Ads
 
 export function saveNetwork(api: AdminApi, networkKey: string, form: NetworkForm): Promise<ApiResult<AdNetwork>> {
   const keys = Object.fromEntries(Object.entries(form.keys).map(([key, value]) => [key, value.trim()]));
-  return api.request("/ads/networks", { method: "POST", body: { networkKey, active: form.active, priority: form.priority, keys }, schema: networkSchema });
+  return api.request("/ads/networks", { method: "POST", body: { networkKey, active: form.active, keys }, schema: networkSchema });
+}
+
+const orderSchema = z.object({ order: z.array(z.string()) });
+
+/** Новый порядок сетей в круге одним запросом: ключи всех сетей в нужном порядке. */
+export function reorderNetworks(api: AdminApi, ids: readonly string[]): Promise<ApiResult<{ order: string[] }>> {
+  return api.request("/ads/networks/order", { method: "POST", body: { ids }, schema: orderSchema });
 }
 
 export function saveBlock(api: AdminApi, block: AdBlockInput): Promise<ApiResult<AdBlock>> {
@@ -304,16 +311,15 @@ function matches(field: AdField, value: string): boolean {
   return new RegExp(field.pattern).test(value);
 }
 
-/** Форма сети: ключи по профилю, место в круге и включённость. */
+/** Форма сети: ключи по профилю и включённость; место в круге меняет только перестановка. */
 export interface NetworkForm {
   active: boolean;
-  priority: number;
   keys: Record<string, string>;
 }
 
 export function networkFormOf(network: AdNetwork, profile: AdNetworkProfile | undefined): NetworkForm {
   const keys = Object.fromEntries((profile?.keys ?? []).map((field) => [field.key, network.keys[field.key] ?? ""]));
-  return { active: network.active, priority: network.priority, keys };
+  return { active: network.active, keys };
 }
 
 /**
@@ -325,7 +331,6 @@ export function networkFormSchema(profile: AdNetworkProfile | undefined) {
   return z
     .object({
       active: z.boolean(),
-      priority: z.number({ error: "Место в круге — число" }).int("Место в круге — целое").min(0, "Не меньше 0").max(PRIORITY_MAX, `Не больше ${String(PRIORITY_MAX)}`),
       keys: z.record(z.string(), z.string()),
     })
     .superRefine((form, ctx) => {

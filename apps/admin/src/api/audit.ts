@@ -120,6 +120,7 @@ const ACTION_TITLES: Record<string, string> = {
   "home.slide.create": "Новый слайд главной",
   "home.slide.update": "Правка слайда главной",
   "home.slide.archive": "Снятие слайда главной",
+  "home.slides.reorder": "Порядок слайдов главной",
   "links.create": "Новая ссылка",
   "links.retarget": "Смена цели ссылки",
   "links.rename": "Название источника",
@@ -144,12 +145,16 @@ const ACTION_TITLES: Record<string, string> = {
   "promo.resume": "Промокод снова действует",
   "promo.remove": "Удаление промокода",
   "ads.network.update": "Правка рекламной сети",
+  "ads.networks.reorder": "Порядок рекламных сетей",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
   "ads.test": "Проверка рекламы командой",
   "names.rule.create": "Новое правило фильтра имён",
   "names.rule.update": "Правка правила фильтра имён",
   "names.rule.delete": "Удаление правила фильтра имён",
+  "names.reclean.start": "Запуск перечистки ников",
+  "names.reclean.stop": "Остановка перечистки ников",
+  "names.reclean.finish": "Итог перечистки ников",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
 };
@@ -236,7 +241,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
     case "names":
-      return { kind: "правило", label: short(target), route: { section: "names", id: null } };
+      return { kind: action.startsWith("names.reclean.") ? "перечистка" : "правило", label: short(target), route: { section: "names", id: null } };
     case "fx":
       // Цель лимита и счётчика — код источника, а заданного курса — пара «валюта:назначение».
       return action === "fx.limit.set" || action === "fx.limit.reset" || action === "fx.used.correct"

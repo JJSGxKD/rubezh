@@ -1231,6 +1231,20 @@ describe("новые виды цели", () => {
     expect(taskDefSchema.parse(old)).toMatchObject({ tier: null, filter: null });
   });
 
+  it("порядок ответа — по sort из панели, а не по сроку; равный sort — по taskId; defs не меняется (Р118)", () => {
+    const defs = [def("weekly_a", { period: "weekly", sort: 0 }), def("daily_b", { sort: 20 }), def("daily_c", { sort: 10 })];
+    const copy = [...defs];
+    expect(viewOf(defs, [], new Map(), NOON).map((view) => view.id)).toEqual(["weekly_a", "daily_c", "daily_b"]);
+    expect(defs).toEqual(copy);
+    expect(viewOf([def("b_task", { sort: 5 }), def("a_task", { sort: 5 })], [], new Map(), NOON).map((view) => view.id)).toEqual(["a_task", "b_task"]);
+  });
+
+  it("партнёрская вкладка: ежедневная подписка с меньшим sort стоит перед достижением", () => {
+    const daily = { ...channelTask(), taskId: "daily_channel", period: "daily" as const, sort: 0 };
+    const achievement = { ...channelTask(), taskId: "ach_channel", period: "achievement" as const, sort: 1 };
+    expect(viewOf([achievement, daily], [], new Map(), NOON).map((view) => view.id)).toEqual(["daily_channel", "ach_channel"]);
+  });
+
   it("у цели с фильтром категория — срок, а не «партнёры»", () => {
     const weapon = def("daily_weapon_spark", { kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" });
     const [view] = viewOf([weapon], [], new Map(), NOON);
