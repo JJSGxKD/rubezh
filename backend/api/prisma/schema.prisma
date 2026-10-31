@@ -2515,7 +2515,23 @@ model NameRule {
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт
   updatedBy String?          @map("updated_by") @db.Uuid
 
+  hitDays NameRuleHitDay[]
+
   @@unique([category, kind, pattern])
   @@index([active])
   @@map("name_rule")
+}
+
+/// Суточные счётчики срабатываний правил фильтра имён (Р168, T-0340):
+/// только id правила и сутки UTC — ни ников, ни id игроков.
+model NameRuleHitDay {
+  ruleId String   @map("rule_id") @db.Uuid
+  day    DateTime @db.Date
+  hits   Int
+
+  rule NameRule @relation(fields: [ruleId], references: [ruleId], onDelete: Cascade)
+
+  @@id([ruleId, day])
+  @@index([day])
+  @@map("name_rule_hit_day")
 }
