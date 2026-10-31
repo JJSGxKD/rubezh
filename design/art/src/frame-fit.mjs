@@ -107,7 +107,7 @@ const OUT = join(dirname(fileURLToPath(import.meta.url)), "../out");
 
 /** Кадры врагов и обликов из собранных атласов, обрезанные вплотную к краю. */
 export function atlasContacts() {
-  const files = readdirSync(OUT).filter((f) => /^atlas-(core|late|skin-.+)\.json$/.test(f));
+  const files = readdirSync(OUT).filter((f) => /^atlas-(core|late|r157|skin-.+)\.json$/.test(f));
   const found = [];
   for (const file of files) {
     const { frames } = JSON.parse(readFileSync(join(OUT, file), "utf8"));

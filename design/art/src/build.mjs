@@ -89,11 +89,14 @@ export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile 
 }
 
 function enemyFrames(art, stage, style = "C", version = 2) {
-  const body = enemyBody(art.pattern, art.rank, stage, art.id, version);
+  // У босса с фазами (`phases`) номер «ступени» кадра — фаза боя: тон тела
+  // прежний, меняется рисунок (у Горыныча гаснут головы).
+  const tint = art.phases === undefined ? stage : 0;
+  const body = enemyBody(art.pattern, art.rank, tint, art.id, version);
   const palette =
-    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(stage, version));
+    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(tint, version));
   const hostile = version === 2 && style === "C";
-  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style, hostile, pad: art.pad }));
+  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette, stage), { rank: art.rank, radius: art.radius, style, hostile, pad: art.pad }));
 }
 
 export { CELL_K };
@@ -104,7 +107,10 @@ export function cellSize(radius, k = CELL_K) {
 
 /** Все кадры атласов: имя → { svg, size }. */
 export function collectFrames() {
-  const packs = { core: [], late: [], env: decorFrames(PPU) };
+  // `r157` — новый контент Р157 (T-0281…T-0285): свой пак, чтобы `late` не
+  // перерос 2048 px по высоте и видеопамять не росла, пока этих врагов нет в
+  // забеге. Движок подключит пак вместе с контентом.
+  const packs = { core: [], late: [], r157: [], env: decorFrames(PPU) };
   // Тайники — в паке мира рядом с декором: грузятся вместе с землёй, а их
   // кадров немного. Имя — `secret/<вид>/<состояние>`, вид — как `SecretKind`
   // в движке; центр кадра — центр тайника (T-0260).
@@ -140,9 +146,9 @@ export function collectFrames() {
     packs[`skin-${skin.id}`] = frames;
   }
   for (const art of ENEMY_ART) {
-    const pack = CORE_ENEMIES.has(art.id) ? packs.core : packs.late;
+    const pack = CORE_ENEMIES.has(art.id) ? packs.core : art.pack === "r157" ? packs.r157 : packs.late;
     // Ступени — только у рядовых: элита и боссы ступеней не получают (content/stages.ts).
-    const stages = art.rank === undefined ? STAGES.length : 1;
+    const stages = art.rank === undefined ? STAGES.length : (art.phases ?? 1);
     for (let stage = 0; stage < stages; stage++) {
       enemyFrames(art, stage).forEach((svg, k) => {
         pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius * (art.pad ?? 1)) });
