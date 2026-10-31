@@ -6,6 +6,7 @@ import { addLabel, latestStableTag, listComments, postComment, viewPr } from "./
 import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
 import { TEAM_SECTION, extractSection } from "./team-summary.mjs";
 import { EFFORTS, EXECUTORS } from "../tasks/task-file.mjs";
+import { STATUS_LABELS } from "../tasks/board.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -128,8 +129,8 @@ export function checkTaskLine(body, headRefName, taskFiles) {
 
   const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
   const match = /^Задача:\s*`?tasks\/(?:archive\/)?(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
-  // К PR задача уже закрыта и лежит в архиве; верхняя папка тоже принимается (задача ещё открыта).
-  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/archive/${branch[1]}-….md»`];
+  // Задача закрывается в PR на месте, в `tasks/`; путь в архив тоже принимается — файл ищется в обеих папках ветки.
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
   if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
 
   const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
@@ -162,6 +163,19 @@ export function checkRunnerLines(body, headRefName) {
     errors.push("запустил: в описании нет строки «Запустил: владелец» или «Запустил: помощник <ник>»");
   }
   return errors;
+}
+
+/**
+ * Метка статуса задачи на PR ветки `task/T-NNNN` (Р172): ровно одна из
+ * `STATUS_LABELS`. По ней читают доска, значки и захват, поэтому без метки
+ * или с двумя PR не проходит. Остальные ветки метки статуса не несут.
+ */
+export function checkStatusLabels(labelNames, headRefName) {
+  if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];
+  const present = STATUS_LABELS.filter((name) => labelNames.includes(name));
+  if (present.length === 0) return [`статус: нет метки статуса — поставь одну из: ${STATUS_LABELS.join(", ")}`];
+  if (present.length > 1) return [`статус: меток статуса несколько (${present.join(", ")}) — оставь одну`];
+  return [];
 }
 
 /**
@@ -255,6 +269,7 @@ function main() {
     const head = `origin/${pr.headRefName}`;
     errors.push(...checkTaskLine(pr.body, pr.headRefName, taskFilesAt(head)));
     errors.push(...checkRunnerLines(pr.body, pr.headRefName));
+    errors.push(...checkStatusLabels(labelNames, pr.headRefName));
     errors.push(...checkTrailers(prCommitMessages(`origin/${pr.baseRefName}`, head)));
   }
 

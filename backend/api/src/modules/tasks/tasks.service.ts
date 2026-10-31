@@ -15,6 +15,7 @@ import {
   TaskNotFoundError,
   TaskNotJoinedError,
   TaskNotOpenedError,
+  TaskOrderMismatchError,
   TaskShapeLockedError,
 } from "./tasks-errors.js";
 import {
@@ -23,16 +24,19 @@ import {
   TASK_KIND_IDS,
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
+  TASK_SORT_MAX,
   countsForTasks,
   isCheckedKind,
   isRunKind,
   rewardReason,
   slotsFor,
+  taskGroup,
   visibleOn,
   type PoolTier,
   type RunFilter,
   type TaskCategory,
   type TaskDef,
+  type TaskGroup,
   type TaskKind,
   type TaskParticipation,
   type TaskPeriod,
@@ -269,12 +273,16 @@ export class TasksService implements OnModuleInit {
 
   /**
    * Строка каталога из панели: новый id — новое задание, известный — правка
-   * цели, награды, текста, места и включённости. Срок и вид после создания
-   * не меняются. Каждое изменение — в аудит.
+   * цели, награды, текста и включённости. Срок и вид после создания не
+   * меняются. Место в списке правкой не задаётся: новое задание встаёт в конец
+   * своего списка, у существующего остаётся прежнее — его меняет только
+   * `reorder`. Каждое изменение — в аудит.
    */
-  async save(actor: AccountRef, task: TaskDef, at = new Date()): Promise<TaskDef> {
+  async save(actor: AccountRef, input: TaskDef, at = new Date()): Promise<TaskDef> {
     await this.roles.require(actor, "tasks.edit");
-    const before = (await this.db(this.repository.catalog())).find((candidate) => candidate.taskId === task.taskId) ?? null;
+    const catalog = await this.db(this.repository.catalog());
+    const before = catalog.find((candidate) => candidate.taskId === input.taskId) ?? null;
+    const task: TaskDef = { ...input, sort: before === null ? endOfList(catalog, input) : before.sort };
     // Картинка — загруженная и того вида, что нужен строке задания: квадрат, а
     // не слайд. Прежнюю не перепроверяем — она уже у игроков.
     if (task.image !== null && task.image !== before?.image) await this.media.require(task.image, "task");
@@ -289,6 +297,24 @@ export class TasksService implements OnModuleInit {
     this.forgetCatalog();
     this.logger.log(JSON.stringify({ module: "tasks", event: before === null ? "task_created" : "task_updated", taskId: task.taskId, actor: actor.accountId }));
     return task;
+  }
+
+  /**
+   * Новый порядок списка из панели (Р52, T-0167): `ids` — ровно члены группы в
+   * нужном порядке. Одной транзакцией, повтор того же порядка ничего не пишет и
+   * в аудит не идёт. Состав не совпал — список изменился у другого администратора,
+   * и панель просят обновиться, а не молча перезаписывают.
+   */
+  async reorder(actor: AccountRef, group: TaskGroup, ids: readonly string[], at = new Date()): Promise<{ order: string[] }> {
+    await this.roles.require(actor, "tasks.edit");
+    const result = await this.db(this.repository.reorder(group, ids, actor.accountId, at));
+    if (result.status === "mismatch") throw new TaskOrderMismatchError();
+    if (result.changed) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.reorder", target: group, before: { order: result.before }, after: { order: result.after } });
+      this.forgetCatalog();
+      this.logger.log(JSON.stringify({ module: "tasks", event: "tasks_reordered", group, actor: actor.accountId }));
+    }
+    return { order: result.after };
   }
 
   /**
@@ -338,6 +364,13 @@ export class TasksService implements OnModuleInit {
   }
 }
 
+/** Место нового задания: после последнего в своём списке, не выше потолка схемы; в пустом — ноль. */
+function endOfList(catalog: readonly TaskDef[], task: Pick<TaskDef, "kind" | "period">): number {
+  const group = taskGroup(task);
+  const sorts = catalog.filter((candidate) => taskGroup(candidate) === group).map((candidate) => candidate.sort);
+  return sorts.length === 0 ? 0 : Math.min(TASK_SORT_MAX, Math.max(...sorts) + 1);
+}
+
 /** Начало мягкого часа: переход раньше — место уже не держится. */
 function graceSince(at: Date): Date {
   return new Date(at.getTime() - TASK_LIMIT_GRACE_MIN * 60_000);
@@ -350,12 +383,17 @@ function withCompleted(participation: ReadonlyMap<string, TaskParticipation>, ta
 }
 
 /**
- * Цели в порядке каталога: срок, место, id. Не двигавшаяся цель — с нулём.
+ * Цели в порядке панели: место (`sort`), при равном — id. Каталог отдаёт их
+ * по сроку, а порядок задаёт геймдизайнер перетаскиванием, в том числе
+ * на вкладке «Партнёры», где лежат задания разных сроков (Р118). Не
+ * двигавшаяся цель — с нулём.
  * Цель с исчерпанным лимитом, к которой игрок не переходил, не показывается.
  */
 export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[], participation: ReadonlyMap<string, TaskParticipation> = new Map(), at = new Date()): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
-  return defs.flatMap((def) => {
+  // Сравнение строк, а не `localeCompare`: порядок не должен зависеть от локали сервера.
+  const ordered = [...defs].sort((a, b) => a.sort - b.sort || (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0));
+  return ordered.flatMap((def) => {
     const place = slotsFor(def.limit, participation.get(def.taskId) ?? null, at);
     if (!place.visible) return [];
     const row = byTask.get(def.taskId);

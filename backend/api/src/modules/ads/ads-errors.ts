@@ -21,7 +21,7 @@ export class AdNotCompletedError extends DomainError {
 /** Награда в этом месте уже была недавно — следующая после паузы. */
 export class AdCooldownError extends DomainError {
   constructor(readonly retryAt: Date) {
-    super("ad_cooldown", "Награда за рекламу здесь уже была — загляните позже", 409);
+    super("ad_cooldown", "Награда за рекламу здесь уже была — загляни позже", 409);
   }
 }
 
@@ -67,5 +67,12 @@ export class AdBlockInvalidError extends DomainError {
 export class AdBlockLimitError extends DomainError {
   constructor(message: string) {
     super("ad_block_limit", message, 409);
+  }
+}
+
+/** Порядок сетей пришёл для другого набора: кто-то завёл или убрал сеть, пока список был открыт. */
+export class AdNetworkOrderMismatchError extends DomainError {
+  constructor() {
+    super("ad_network_order_mismatch", "Список сетей изменился — обнови страницу и переставь ещё раз", 400);
   }
 }

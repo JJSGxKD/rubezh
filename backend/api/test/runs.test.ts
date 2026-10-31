@@ -6,13 +6,14 @@ import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dt
 import { RunsService } from "../src/modules/runs/runs.service.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
-import { detailsOf, RunExtras, TOP_KILLS_SHOWN } from "../src/modules/runs/run-details.js";
+import { detailsOf, RunExtras, storedDetailsSchema, TOP_KILLS_SHOWN } from "../src/modules/runs/run-details.js";
 import { RunLoadouts, type LoadoutCheck, type SignedLoadout } from "../src/modules/runs/run-loadouts.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import type { AccountRef } from "../src/modules/roles/roles.service.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
 
 /**
@@ -141,7 +142,7 @@ describe("приём забегов", () => {
     const forged = await service.finish(me, finish(runId, { survivalSec: 5000 }));
 
     expect(forged.bestSurvivalSec).toBe(60);
-    expect(await board.best("normal", me.accountId)).toBe(60);
+    expect(await board.best("normal", me.accountId, "common")).toBe(60);
   });
 
   it("чужой ключ забега не принимается", async () => {
@@ -221,13 +222,36 @@ describe("приём забегов", () => {
     const [first, second] = [account("1"), account("2")];
     await service.finish(first, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
     await service.finish(second, finish(randomUUID(), { survivalSec: 300, level: 12, enemiesKilled: 900 }));
-    await board.replace("normal", []);
+    for (const side of ALL_BOARDS) await board.replace("normal", side, []);
 
     const counts = await service.rebuildLeaderboard();
 
-    expect(counts.normal).toBe(2);
-    expect(await board.rank("normal", second.accountId)).toBe(1);
-    expect(await board.rank("normal", first.accountId)).toBe(2);
+    expect(counts.normal).toEqual({ full: 2, common: 2 });
+    expect(await board.rank("normal", second.accountId, "common")).toBe(1);
+    expect(await board.rank("normal", first.accountId, "common")).toBe(2);
+  });
+
+  it("забег аккаунта с отдельной доской пишется в полную доску и не в общую; повтор итога доски не меняет (T-0113)", async () => {
+    const rating = ratingRestrictions(runs, board);
+    const own = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
+    const [separate, plain] = [account("1"), account("2")];
+    rating.restrictions.restrict(separate.accountId, "separate_board", { notify: false });
+
+    const first = randomUUID();
+    expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: true, bestSurvivalSec: 300, rank: 1 });
+    expect(await board.best("normal", separate.accountId, "full")).toBe(300);
+    expect(await board.best("normal", separate.accountId, "common")).toBeNull();
+    expect(await board.count("normal", "common")).toBe(0);
+
+    // Повтор итога из очереди — тот же ответ, доски те же.
+    expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: false, bestSurvivalSec: 300, rank: 1 });
+    expect([await board.count("normal", "full"), await board.count("normal", "common")]).toEqual([1, 0]);
+
+    // Обычный игрок пишется в обе, и его место общей доски не сдвинуто забегом чужой.
+    expect(await own.finish(plain, finish(randomUUID(), { survivalSec: 100 }))).toMatchObject({ recorded: true, isNewBest: true, rank: 1 });
+    expect(await board.best("normal", plain.accountId, "full")).toBe(100);
+    expect(await board.best("normal", plain.accountId, "common")).toBe(100);
+    expect(await board.rank("normal", plain.accountId, "full")).toBe(2);
   });
 });
 
@@ -266,7 +290,7 @@ describe("второй шанс в итоге забега", () => {
 
     expect(result).toMatchObject({ verdict: "rejected", recorded: false });
     expect(recorded[0]).toMatchObject({ continues: 1, reasons: expect.arrayContaining(["unpaid_continue"]) });
-    expect(await board.best("normal", me.accountId)).toBeNull();
+    expect(await board.best("normal", me.accountId, "common")).toBeNull();
   });
 
   it("оплаченное продолжение — обычный забег в рейтинге", async () => {
@@ -325,7 +349,7 @@ describe("снаряжение в итоге забега", () => {
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
     check.answer = "stale";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "suspicious" });
-    expect(await board.best("normal", me.accountId)).toBeNull();
+    expect(await board.best("normal", me.accountId, "common")).toBeNull();
 
     check.answer = "valid";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
@@ -486,5 +510,83 @@ describe("итог забега для слушателей: оружие, бу�
     const unpaid = setup("unpaid");
     await unpaid.service.finish(account(), finish(randomUUID(), { survivalSec: 300, boosts: ["fury"] }));
     expect(unpaid.recorded[0]).toMatchObject({ boosts: [], verdict: "rejected" });
+  });
+});
+
+describe("счётчики итога забега (tasks/T-0125)", () => {
+  const baseStats = { damageTaken: 10, xpCollected: 100, waveReached: 3, topKills: [] };
+
+  function setup() {
+    const runs = new MemoryRunsRepository();
+    const board = new MemoryLeaderboardStore();
+    const hooks = new RunsHooks();
+    const recorded: RecordedRun[] = [];
+    hooks.onRecorded("test", async (run) => void recorded.push(run));
+    const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
+    const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    return { service, recorded, runs };
+  }
+
+  it("схема принимает итог без новых полей (старый клиент) и с ними", () => {
+    const base = { ...finish(randomUUID()), passives: undefined };
+    expect(runFinishSchema.safeParse({ ...base, stats: baseStats }).success).toBe(true);
+    const withCounters = { ...baseStats, bossKills: 1, eliteKills: 2, chestsOpened: 3, crystals: 400 };
+    expect(runFinishSchema.parse({ ...base, stats: withCounters }).stats).toMatchObject({ bossKills: 1, crystals: 400 });
+  });
+
+  it("отрицательное и дробное — отказ", () => {
+    const base = { ...finish(randomUUID()), passives: undefined };
+    for (const field of ["bossKills", "eliteKills", "chestsOpened", "crystals"]) {
+      expect(runFinishSchema.safeParse({ ...base, stats: { ...baseStats, [field]: -1 } }).success, `${field} < 0`).toBe(false);
+      expect(runFinishSchema.safeParse({ ...base, stats: { ...baseStats, [field]: 1.5 } }).success, `${field} дробное`).toBe(false);
+    }
+  });
+
+  it("detailsOf кладёт пришедшие счётчики; не пришли — null", () => {
+    const stored = detailsOf({ passives: [], stats: { ...baseStats, bossKills: 1, eliteKills: 2, chestsOpened: 3, crystals: 40 } });
+    expect(stored).toMatchObject({ bossKills: 1, eliteKills: 2, chestsOpened: 3, crystals: 40 });
+    expect(detailsOf({ passives: [], stats: baseStats })).toMatchObject({ bossKills: null, eliteKills: null, chestsOpened: null, crystals: null });
+  });
+
+  it("запись details прошлой сборки без ключей читается: счётчики null", () => {
+    const old = { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [] };
+    expect(storedDetailsSchema.parse(old)).toMatchObject({ bossKills: null, eliteKills: null, chestsOpened: null, crystals: null });
+  });
+
+  it("слушатели получают правдоподобные счётчики, без stats или без полей — null", async () => {
+    const { service, recorded } = setup();
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 300, stats: { ...baseStats, eliteKills: 1, chestsOpened: 1, crystals: 50 } }));
+    expect(recorded[0]?.counters).toEqual({ bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 50, noHitSec: 0, noKillSec: 0, killsByElement: {} });
+
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 300 }));
+    expect(recorded[1]?.counters).toBeNull();
+
+    await service.finish(account(), finish(randomUUID(), { survivalSec: 300, stats: baseStats }));
+    expect(recorded[2]?.counters).toBeNull();
+  });
+
+  it("повтор того же итога из очереди не зовёт слушателей второй раз", async () => {
+    const { service, recorded } = setup();
+    const me = account();
+    const body = finish(randomUUID(), { survivalSec: 300, stats: { ...baseStats, eliteKills: 1 } });
+    await service.finish(me, body);
+    await service.finish(me, body);
+
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.counters).toMatchObject({ eliteKills: 1 });
+  });
+
+  it("неправдоподобные: причина записана, вердикт прежний, слушатели получают null, details хранит как пришло", async () => {
+    const { service, recorded, runs } = setup();
+    const me = account();
+    const runId = randomUUID();
+    // Десять боссов за две минуты: таймлайн столько не приводит.
+    const result = await service.finish(me, finish(runId, { survivalSec: 120, stats: { ...baseStats, bossKills: 10 } }));
+
+    expect(result.verdict).toBe("ok");
+    expect(result.recorded).toBe(true);
+    expect(recorded[0]).toMatchObject({ verdict: "ok", counters: null });
+    expect(recorded[0]?.reasons).toContain("counters_implausible");
+    expect((await runs.detail(me.accountId, runId))?.details).toMatchObject({ bossKills: 10 });
   });
 });

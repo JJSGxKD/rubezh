@@ -1,16 +1,6 @@
 import type { DifficultyId, MapDef, RunLoadout } from "@bh/shared-types";
-import { findDifficulty, DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
-import { BOOSTS, MAX_BOOSTS_PER_RUN } from "../content/boosts";
-import { CONTINUE } from "../content/continue";
-import { CHESTS } from "../content/chests";
-import { DROPS } from "../content/drops";
-import { ENEMIES } from "../content/enemies";
-import { ENEMY_STAGES } from "../content/stages";
-import { DEFAULT_MAP_ID, findMap, MAPS } from "../content/maps";
-import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "../content/unlocks";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../content/upgrades";
-import { ENDLESS_CURVE, TIMELINE } from "../content/waves";
-import { WEAPONS } from "../content/weapons";
+import { DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
+import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../content/snapshot";
 import { cardToolsAt, unlocksAt, weaponsOpenAt } from "./progression/unlocks";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
@@ -35,6 +25,11 @@ export interface RunWorldOptions {
    * попадают вовсе, слоты — по уровню (docs/35-stage4-plan.md §3.13).
    */
   loadout?: RunLoadout;
+  /**
+   * Контент забега; без поля — боевой `CONTENT_SNAPSHOT`. Песочница редактора
+   * баланса подаёт сюда черновик (docs/19-content-admin.md §3).
+   */
+  content?: ContentSnapshot;
 }
 
 export interface RunWorld {
@@ -44,32 +39,37 @@ export interface RunWorld {
 }
 
 export function createRunWorld(options: RunWorldOptions): RunWorld {
-  const difficulty = findDifficulty(options.difficultyId) ?? findDifficulty(DEFAULT_DIFFICULTY_ID);
-  const map = findMap(options.mapId) ?? findMap(DEFAULT_MAP_ID) ?? MAPS[0];
+  const content = options.content ?? CONTENT_SNAPSHOT;
+  const difficulties = content.difficulties;
+  const difficulty =
+    difficulties.find((level) => level.id === options.difficultyId) ??
+    difficulties.find((level) => level.id === DEFAULT_DIFFICULTY_ID);
+  const map = content.maps.find((candidate) => candidate.id === options.mapId) ?? content.maps[0];
   // Без уровня — открыто всё: запись и снимок прошлой сборки, стенд, тесты.
   const level = options.loadout?.accountLevel;
-  const open = level === undefined ? null : unlocksAt(ACCOUNT_UNLOCKS, level);
+  const open = level === undefined ? null : unlocksAt(content.accountUnlocks, level);
   const world = createWorld({
     seed: options.seed,
-    enemies: ENEMIES,
-    stages: ENEMY_STAGES,
-    weapons: open === null ? WEAPONS : weaponsOpenAt(WEAPONS, open),
-    passives: open === null ? PASSIVES : PASSIVES.filter((passive) => open.passives.has(passive.id)),
-    levelCurve: LEVEL_CURVE,
-    loadoutLimits: open?.limits ?? LOADOUT_LIMITS,
-    drops: DROPS,
-    chests: CHESTS,
-    continueRules: CONTINUE,
-    boosts: BOOSTS,
-    maxBoostsPerRun: MAX_BOOSTS_PER_RUN,
+    enemies: content.enemies,
+    stages: content.stages,
+    weapons: open === null ? content.weapons : weaponsOpenAt(content.weapons, open),
+    passives: open === null ? content.passives : content.passives.filter((passive) => open.passives.has(passive.id)),
+    levelCurve: content.levelCurve,
+    loadoutLimits: open?.limits ?? content.loadoutLimits,
+    drops: content.drops,
+    chests: content.chests,
+    secrets: content.secrets,
+    continueRules: content.continueRules,
+    boosts: content.boosts,
+    maxBoostsPerRun: content.maxBoostsPerRun,
     // Без уровня зарядов нет: на этом наборе идут golden-тесты и запись прошлой сборки.
-    ...(level === undefined ? {} : { cardTools: cardToolsAt(CARD_TOOL_UNLOCKS, level) }),
-    cardRules: CARD_TOOL_RULES,
+    ...(level === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, level) }),
+    cardRules: content.cardToolRules,
     map,
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
     config: { unitScale: options.unitScale },
   });
-  return { world, spawner: createTimelineDirector(TIMELINE, ENDLESS_CURVE), map };
+  return { world, spawner: createTimelineDirector(content.timeline, content.endlessCurve), map };
 }

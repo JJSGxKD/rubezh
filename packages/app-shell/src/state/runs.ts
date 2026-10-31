@@ -1,5 +1,6 @@
 import {
   DIFFICULTY_IDS,
+  ELEMENTS,
   type DifficultyId,
   type Leaderboard,
   type RunFinishResult,
@@ -70,6 +71,15 @@ const finishFields = {
       xpCollected: z.number(),
       waveReached: z.number(),
       topKills: z.array(z.object({ enemy: z.string(), count: z.number() })),
+      // Счётчики для заданий (T-0125): записи прошлых сборок их не знают.
+      bossKills: z.optional(z.number()),
+      eliteKills: z.optional(z.number()),
+      chestsOpened: z.optional(z.number()),
+      crystals: z.optional(z.number()),
+      // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
+      noHitSec: z.optional(z.number()),
+      noKillSec: z.optional(z.number()),
+      killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
     }),
   ),
 };
@@ -291,6 +301,13 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
         .map(([enemy, count]) => ({ enemy, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, TOP_KILLS),
+      bossKills: result.bossKills,
+      eliteKills: result.eliteKills,
+      chestsOpened: result.chestsOpened,
+      crystals: Math.round(result.crystalsCollected),
+      noHitSec: result.noHitSec,
+      noKillSec: result.noKillSec,
+      killsByElement: result.killsByElement,
     },
   };
 }

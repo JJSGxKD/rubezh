@@ -55,8 +55,8 @@ export interface OpenedChest {
 export type RunLoadingStage = "engine" | "world";
 
 /** Откуда второй шанс: бесплатно в забеге разработчика или оплачен звёздами. */
-/** Чем продолжен забег: звёзды, ролик, VIP без ролика или чит разработчика. */
-export type ContinueSource = "dev" | "premium" | "ad" | "pass";
+/** Чем продолжен забег: звёзды, самоцветы, ролик, VIP без ролика или чит разработчика. */
+export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
 
 /**
  * С чем игрок пришёл на экран забега: начать новый или продолжить
@@ -636,6 +636,10 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       audio.runEvent("chestDrop");
     }),
 
+    created.on("ringEnded", ({ index, outcome, guards, killed, lifeSec, elapsedSec }) => {
+      track("ring_ended", { index, outcome, guards, killed, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
+    }),
+
     created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
       for (const reward of rewards) {
@@ -784,6 +788,13 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     level: result.level,
     wave: result.waveReached,
     enemiesKilled: result.enemiesKilled,
+    bossKills: result.bossKills,
+    eliteKills: result.eliteKills,
+    chestsOpened: result.chestsOpened,
+    crystals: Math.round(result.crystalsCollected),
+    // Серии для достижений (T-0321): по ним видно, насколько трудны испытания.
+    noHitSec: result.noHitSec,
+    noKillSec: result.noKillSec,
     weapon: result.startingWeaponId,
     map: result.mapId,
     difficulty: result.difficultyId,

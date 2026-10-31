@@ -21,7 +21,7 @@ zones:
   - backend/api/test/auth.test.ts
   - backend/api/test/runs.integration.test.ts
 shared: []
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

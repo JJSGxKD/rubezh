@@ -48,14 +48,19 @@ export const SUCCESS_HINTS: Record<AdSuccess, string> = {
 };
 
 /**
- * Строки воронки без сети — пропуски рекламы: VIP получает награду места без
- * ролика (§3.6), и сессия пишется под именем пропуска, а не сети.
+ * Пропуск рекламы: VIP получает награду места без ролика (§3.6, Р99). Это не
+ * сеть и не досмотр — в воронке пропусков нет, у них своя таблица.
  */
-export const PASS_TITLES: Partial<Record<string, string>> = { vip: "VIP без ролика" };
+export const PASS_TITLES: Partial<Record<string, string>> = { vip: "VIP" };
 
-/** Имя сети строки воронки: сеть из каталога, пропуск — своим названием, незнакомое — ключом. */
+/** Подпись пропуска по ключу сервера; незнакомый (сервер новее панели) — ключом. */
+export function passTitle(key: string): string {
+  return PASS_TITLES[key] ?? key;
+}
+
+/** Имя сети строки воронки: сеть из каталога, незнакомое — ключом. */
 export function funnelNetworkTitle(key: string, networks: readonly Pick<AdNetwork, "networkKey" | "name">[]): string {
-  return networks.find((network) => network.networkKey === key)?.name ?? PASS_TITLES[key] ?? key;
+  return networks.find((network) => network.networkKey === key)?.name ?? key;
 }
 
 /** Меньше двух сетей в месте — отказ единственной оставляет место пустым (критерий приёмки WP12). */
@@ -147,10 +152,16 @@ const funnelSchema = z.object({
 });
 export type AdFunnelRow = z.infer<typeof funnelSchema>;
 
+/** Пропуски VIP за окно воронки по месту: сколько выдано, у скольких игроков, сколько наград забрано. */
+const passSchema = z.object({ passName: z.string(), place: z.enum(AD_PLACES), used: z.number(), players: z.number(), claimed: z.number() });
+export type AdPassRow = z.infer<typeof passSchema>;
+
 const viewSchema = z.object({
   networks: z.array(networkSchema),
   blocks: z.array(blockSchema),
   funnel: z.array(funnelSchema),
+  /** сервер до пропусков (Р99) поля не отдавал */
+  passes: z.array(passSchema).default([]),
   days: z.union([z.literal(1), z.literal(7), z.literal(30)]),
   places: z.array(z.enum(AD_PLACES)),
   profiles: z.array(profileSchema).default([]),
@@ -179,7 +190,14 @@ export function fetchAds(api: AdminApi, days: FunnelDays): Promise<ApiResult<Ads
 
 export function saveNetwork(api: AdminApi, networkKey: string, form: NetworkForm): Promise<ApiResult<AdNetwork>> {
   const keys = Object.fromEntries(Object.entries(form.keys).map(([key, value]) => [key, value.trim()]));
-  return api.request("/ads/networks", { method: "POST", body: { networkKey, active: form.active, priority: form.priority, keys }, schema: networkSchema });
+  return api.request("/ads/networks", { method: "POST", body: { networkKey, active: form.active, keys }, schema: networkSchema });
+}
+
+const orderSchema = z.object({ order: z.array(z.string()) });
+
+/** Новый порядок сетей в круге одним запросом: ключи всех сетей в нужном порядке. */
+export function reorderNetworks(api: AdminApi, ids: readonly string[]): Promise<ApiResult<{ order: string[] }>> {
+  return api.request("/ads/networks/order", { method: "POST", body: { ids }, schema: orderSchema });
 }
 
 export function saveBlock(api: AdminApi, block: AdBlockInput): Promise<ApiResult<AdBlock>> {
@@ -293,16 +311,15 @@ function matches(field: AdField, value: string): boolean {
   return new RegExp(field.pattern).test(value);
 }
 
-/** Форма сети: ключи по профилю, место в круге и включённость. */
+/** Форма сети: ключи по профилю и включённость; место в круге меняет только перестановка. */
 export interface NetworkForm {
   active: boolean;
-  priority: number;
   keys: Record<string, string>;
 }
 
 export function networkFormOf(network: AdNetwork, profile: AdNetworkProfile | undefined): NetworkForm {
   const keys = Object.fromEntries((profile?.keys ?? []).map((field) => [field.key, network.keys[field.key] ?? ""]));
-  return { active: network.active, priority: network.priority, keys };
+  return { active: network.active, keys };
 }
 
 /**
@@ -314,7 +331,6 @@ export function networkFormSchema(profile: AdNetworkProfile | undefined) {
   return z
     .object({
       active: z.boolean(),
-      priority: z.number({ error: "Место в круге — число" }).int("Место в круге — целое").min(0, "Не меньше 0").max(PRIORITY_MAX, `Не больше ${String(PRIORITY_MAX)}`),
       keys: z.record(z.string(), z.string()),
     })
     .superRefine((form, ctx) => {

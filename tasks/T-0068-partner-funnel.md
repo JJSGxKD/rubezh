@@ -21,7 +21,7 @@ zones:
   - apps/admin/test/partners.test.ts
 shared:
   - docs/23-referral-and-partner-program.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -31,7 +31,7 @@ batch: 4
 
 # T-0068. Воронка партнёра — по его ссылкам, кодам и площадкам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0068.json)](README.md#значки-статуса) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](archive/T-0067-partner-links-and-binding.md) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0068.json)](README.md#значки-статуса) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](archive/T-0067-partner-links-and-binding.md) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](archive/T-0053-funnel-chart-screen.md)
 
 ## Зачем
 

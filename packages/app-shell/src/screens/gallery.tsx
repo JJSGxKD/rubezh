@@ -39,6 +39,7 @@ import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
+import type { GemContinueStage } from "../state/gem-continue";
 import type { ContinueStage } from "../state/continue-purchase";
 
 /**
@@ -52,7 +53,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -91,6 +92,7 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
+          <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -223,6 +225,11 @@ export function GalleryScreen(): ReactNode {
           ))}
           {AD_STAGES.map(([ad, paid], index) => (
             <SecondChance key={`ad-${String(index)}`} adPreview={ad} {...(paid === null ? {} : { paidPreview: paid })} />
+          ))}
+          {/* Самоцветы (Р162): с роликом он главный, без ролика главные самоцветы;
+              нехватка — выключенная кнопка с подписью. */}
+          {GEM_STAGES.map(([gems, ad, paid], index) => (
+            <SecondChance key={`gems-${String(index)}`} gemsPreview={gems} {...(ad === null ? {} : { adPreview: ad })} {...(paid === null ? {} : { paidPreview: paid })} />
           ))}
         </div>
 
@@ -371,11 +378,41 @@ function RarityPreview(): ReactNode {
   );
 }
 
+/**
+ * Экран со второй колонкой (T-0298): на wide (с 1024 px) `aside` стоит справа,
+ * уже — под основным содержимым. Без `aside` экран — обычная одна колонка, как
+ * сама витрина.
+ */
+function AsidePreview(): ReactNode {
+  return (
+    <Screen
+      title={t("gallery.preview.aside")}
+      aside={
+        <Card>
+          <h3 className="font-display text-base font-bold text-text">{t("gallery.aside.side")}</h3>
+          <p className="mt-1 text-sm text-text-muted">{t("gallery.aside.sideText")}</p>
+        </Card>
+      }
+    >
+      <SectionTitle>{t("gallery.aside.main")}</SectionTitle>
+      <div className="grid gap-2">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Card key={index}>
+            <span className="text-sm text-text">{t("gallery.modal.line", { n: index + 1 })}</span>
+          </Card>
+        ))}
+      </div>
+    </Screen>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
   const shareNoop = (): Promise<null> => Promise.resolve(null);
 
   switch (preview) {
+    case "aside":
+      return <AsidePreview />;
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":
@@ -499,6 +536,23 @@ const AD_STAGES: readonly (readonly [AdContinueStage, ContinueStage | null])[] =
   [{ kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
 ];
 
+const GEM_OFFER = { continueNo: 1, priceGems: 5, balance: 12 } as const;
+
+/**
+ * Второй шанс за самоцветы: цена и баланс, нехватка, загрузка, обрыв сети,
+ * отпавший способ — рядом с роликом и звёздами и без них.
+ */
+const GEM_STAGES: readonly (readonly [GemContinueStage, AdContinueStage | null, ContinueStage | null])[] = [
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: "offline" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "loading" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "buying", offer: GEM_OFFER }, AD_READY, null],
+  [{ kind: "unavailable", reason: "insufficient_funds" }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+];
+
 function change(
   labelKey: string,
   from: number | null,
@@ -609,6 +663,13 @@ const SAMPLE_RESULT: RunResult = {
   damageDealt: 48210,
   damageTaken: 930,
   damageByElement: { physical: 9400, fire: 2100, cold: 800, lightning: 1600 },
+  noHitSec: 0,
+  noKillSec: 0,
+  killsByElement: {},
+  bossKills: 1,
+  eliteKills: 6,
+  chestsOpened: 3,
+  crystalsCollected: 640,
   weapons: [
     { id: "spark", level: 5, damage: 21840 },
     { id: "wardstone", level: 3, damage: 15320 },

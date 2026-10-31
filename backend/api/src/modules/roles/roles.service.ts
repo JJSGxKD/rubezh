@@ -3,7 +3,8 @@ import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import type { AccountPlatform } from "../auth/access-token.js";
-import { isDeveloperAccount } from "../auth/dev-login.js";
+import { isDeveloperOwner } from "../auth/dev-login.js";
+import { manageDenial } from "./role-levels.js";
 import { HIDDEN_AUDIT_PREFIX, permissionsOf, type Permission, type Role } from "./permissions.js";
 import { ROLES_REPOSITORY, type AuditEntry, type AuditQuery, type AuditRecord, type RoleAssignment, type RolesRepository } from "./roles.repository.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
@@ -47,7 +48,8 @@ export class RolesService {
     // Разработчик на своей машине — владелец: инструменты команды в браузере
     // открываются без выдачи ролей руками, как раньше при входе заголовком
     // плейтеста. Вне development флага не бывает — процесс с ним не стартует.
-    if (this.config.auth.devLogin && isDeveloperAccount(account)) return ["owner"];
+    // `dev-player-<id>` владельцем не становится — это вход игроком без ролей.
+    if (this.config.auth.devLogin && isDeveloperOwner(account)) return ["owner"];
     const roles = await this.repository.rolesOf(account.accountId);
     if (roles.length > 0) return roles;
     return (await this.isBreakGlassOwner(account)) ? ["owner"] : [];
@@ -86,6 +88,7 @@ export class RolesService {
   async grant(actor: AccountRef, accountId: string, role: Role): Promise<boolean> {
     await this.require(actor, "roles.assign");
     ensureNotSelf(actor, accountId, "Выдать роль себе нельзя");
+    await this.ensureLevel(actor, accountId, role, "выдать");
 
     const granted = await this.repository.grant(accountId, role, actor.accountId);
     if (granted) await this.audit({ actorAccountId: actor.accountId, action: "roles.assign", target: accountId, after: { role } });
@@ -95,10 +98,22 @@ export class RolesService {
   async revoke(actor: AccountRef, accountId: string, role: Role): Promise<boolean> {
     await this.require(actor, "roles.assign");
     ensureNotSelf(actor, accountId, "Отозвать роль у себя нельзя");
+    await this.ensureLevel(actor, accountId, role, "снять");
 
     const revoked = await this.repository.revoke(accountId, role);
     if (revoked) await this.audit({ actorAccountId: actor.accountId, action: "roles.revoke", target: accountId, before: { role } });
     return revoked;
+  }
+
+  /**
+   * Уровни ролей (T-0216): менять можно роль ниже своей и только у аккаунта
+   * ниже себя. Обход панели запросом даёт тот же отказ, что и сама панель, а
+   * подтверждение выдачи в Telegram проходит через этот же `grant`.
+   */
+  async ensureLevel(actor: AccountRef, accountId: string, role: Role, verb: "выдать" | "снять"): Promise<void> {
+    const denial = manageDenial(await this.rolesFor(actor), await this.repository.rolesOf(accountId), role);
+    if (denial === "role") throw new ForbiddenError(`Эту роль может ${verb} только тот, у кого роль выше`);
+    if (denial === "account") throw new ForbiddenError("У этого аккаунта роль не ниже вашей — менять её роли нельзя");
   }
 
   /** Все выданные роли — раздел ролей в панели; читать их вправе тот, кто их раздаёт. */

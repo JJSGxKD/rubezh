@@ -47,7 +47,7 @@ export class PurchaseNotFoundError extends DomainError {
 /** Telegram не выставил счёт: сеть или сам Bot API. Повтор безопасен. */
 export class PaymentsUnavailableError extends DomainError {
   constructor() {
-    super("payments_unavailable", "Оплата временно недоступна — попробуйте ещё раз", 503);
+    super("payments_unavailable", "Оплата временно недоступна — попробуй ещё раз", 503);
   }
 }
 

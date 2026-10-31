@@ -1,14 +1,16 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { COLUMNS, REWORK_LABEL, classify, epicStreamsBadge, nextTasks, renderStreamsText, statusBadge, streamsSummary } from "./board.mjs";
-import { contributions, freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
-import { checkClaim } from "./claim.mjs";
-import { fixEpicCells } from "./epics.mjs";
-import { BASE, ROOT, fetchOrigin, git, loadRegistryState, mergedTaskPrs, readBranchFile, removePrLabel, tryGit } from "./git-io.mjs";
-import { ARCHIVE_DIR, checkRegistry, placementPath, readTasks } from "./registry.mjs";
-import { badgeLine, batchNumber, parseFrontmatter, parseOwner, validateTask, withBadgeLine, withTaskLinks } from "./task-file.mjs";
-import { outOfZone } from "./zones.mjs";
+import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
+import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { contributionRows } from "./contribution.mjs";
+import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
+import { planFix } from "./fix.mjs";
+import { BASE, ROOT, addPrLabel, claimedAt, dependencyChangedFiles, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergeDependencyBranches, mergedPrs, readBranchFile, readOriginTasks, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
+import { runMerge } from "./merge.mjs";
+import { ARCHIVE_DIR, awaitingArchiveLine, checkRegistry, readTasks, registrySummary } from "./registry.mjs";
+import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
+import { outOfZone, outOfZoneHint, tasksHolding } from "./zones.mjs";
 
 /**
  * `pnpm task` — доска задач, захват и проверка зон (tasks/README.md).
@@ -20,20 +22,25 @@ const USAGE = `Команды:
   pnpm task check                          проверить реестр tasks/ в рабочей копии
   pnpm task board [--all]                  доска из origin/dev (--all — и отменённые)
   pnpm task next [--runner any|local|owner] [--executor <модель>] [--effort <уровень>]
-                                           доработка и свободные задачи, лучшая — первой
-  pnpm task streams [--epic E10]           какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди
+                                           доработка, созревший задел, свободные задачи, затем «можно заделом»; лучшая — первой
+  pnpm task streams [--epic E10] [--account claude-2]   какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди; с --account — ещё готовые промты для аккаунта
   pnpm task claim T-NNNN --owner "<аккаунт / модель / уровень>"
                                            захватить задачу веткой task/T-NNNN
+  pnpm task claim T-NNNN --ahead --owner "<аккаунт / модель / уровень>"
+                                           взять заделом (Р178): зависимости на ревью, ветка — поверх их веток, PR — черновик с меткой «задел»
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
-                                           продолжить PR с меткой «доработка», чей бы он ни был
+                                           продолжить PR с меткой «доработка» или созревший задел (зависимости влиты, dev вливается в ветку), чей бы он ни был
+  pnpm task merge T-NNNN                   влить PR задачи с пометкой merge: self в dev (Р176): пометка из origin/dev, метка «на ревью», CI, самопроверка с head:
+  pnpm task holds <путь>                  какие задачи «в работе» и «доработка» держат файл или каталог, с номером PR
   pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
-  pnpm task fix                            перенести готовые задачи в tasks/archive/, поставить строки значков, ссылки и ячейки эпиков
+  pnpm task fix                            поставить строки значков, ссылки и ячейки эпиков; файлы не переносит
+  pnpm task archive                        уборка тимлида: закрытые задачи — в tasks/archive/, открытые — обратно, ссылки на них — заново
   pnpm task claim-check [--base <ref>]     задачу можно было взять: статус, зависимости, зоны
   pnpm task status-json --out <каталог>    значки статуса: <каталог>/status/T-NNNN.json на задачу`;
 
 const TASK_ID_RE = /^T-\d{4}$/;
-const BOOLEAN_FLAGS = new Set(["yes", "all"]);
+const BOOLEAN_FLAGS = new Set(["yes", "all", "ahead"]);
 
 function fail(message) {
   console.error(message);
@@ -61,12 +68,14 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function taskLine({ task, reason, pr }, owner) {
+function taskLine({ task, reason, pr, aheadOver, ripe }, owner) {
   const batch = batchNumber(task);
   const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
   if (owner !== undefined) notes.push(`взял: ${owner}`);
   if (pr !== undefined) notes.push(`PR ${String(pr)}`);
+  if (ripe === true) notes.push("задел созрел: зависимости влиты");
+  if (aheadOver !== undefined) notes.push(`заделом поверх ${aheadOver.join(", ")}`);
   if (reason !== undefined) notes.push(reason);
   return `  ${parts.join("  ")}${notes.length > 0 ? `\n${" ".repeat(10)}↳ ${notes.join("; ")}` : ""}`;
 }
@@ -98,40 +107,61 @@ function runBoard(flags) {
     if (column.key === "cancelled" && flags.all !== true) continue;
     const entries = board[column.key];
     console.log(`\n${column.title} (${String(entries.length)})`);
-    const busy = column.key === "inProgress" || column.key === "review" || column.key === "rework";
+    const busy = ["inProgress", "review", "rework", "ahead"].includes(column.key);
     for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined));
   }
 }
 
 /** Какие потоки запускать (tasks/README.md, «Автопоток»): свободное и доработка по парам «модель + уровень», ниже — очередь. */
 function runStreams(flags) {
+  const account = flags.account;
+  if (account !== undefined && !/^claude-\d+$/.test(account)) fail("Аккаунт — в виде claude-N");
   const { board } = loadBoard();
+  // Поток «в работе» у аккаунта определяется по полю `owner` в ветке задачи.
+  if (account !== undefined) for (const entry of board.inProgress) entry.owner = ownerOf(entry.task, true);
   const summary = streamsSummary(board);
   const epic = flags.epic;
   if (epic !== undefined && summary.epics[epic] === undefined) {
     console.log(`В эпике ${epic} нет задач для потоков: ни свободных, ни доработки, ни ждущих.`);
     return;
   }
-  for (const line of renderStreamsText(epic === undefined ? summary.streams : summary.epics[epic])) console.log(line);
+  const shown = epic === undefined ? summary.streams : summary.epics[epic];
+  for (const line of renderStreamsText(shown)) console.log(line);
+  if (account === undefined) return;
+
+  const toRun = accountStreams(account, board, shown);
+  console.log("");
+  if (toRun.length === 0) {
+    console.log(`${account} — всё нужное уже работает: новых потоков запускать не надо.`);
+    return;
+  }
+  console.log(`Промты для ${account} — потоки, которым есть что делать и которые на нём не идут:`);
+  for (const stream of toRun) {
+    console.log(`\n--- ${streamLabel(stream)}\n\n${flowPrompt({ account, executor: stream.executor, effort: stream.effort, runner: stream.runner })}`);
+  }
 }
 
 function runNext(flags) {
   const { board } = loadBoard();
   const filters = { runner: flags.runner ?? "any", executor: flags.executor, effort: flags.effort };
-  const rework = nextTasks(board.rework, filters);
-  const free = nextTasks(board.free, filters);
-  if (rework.length === 0 && free.length === 0) {
+  const order = nextOrder(board, filters);
+  if (order.length === 0) {
     console.log("Задач с такими условиями нет. Всё занято или заблокировано — `pnpm task board`.");
     return;
   }
-  // Доработка — раньше новых: ответ уже дан, и PR ждёт только исполнителя.
-  if (rework.length > 0) {
-    console.log("На доработке — сначала их, командой pnpm task resume:");
-    for (const entry of rework) console.log(taskLine(entry, ownerOf(entry.task)));
-  }
-  if (free.length > 0) {
-    console.log("Свободные задачи, лучшая — первой:");
-    for (const entry of free) console.log(taskLine(entry));
+  // Доработка — раньше новых: ответ уже дан, и PR ждёт только исполнителя. Созревший задел — следом:
+  // зависимости влиты, и он ждёт только потока (Р178). «Можно заделом» — последним: это опережение.
+  const groups = [
+    ["rework", "На доработке — сначала их, командой pnpm task resume:", true],
+    ["ripe", "Задел созрел (зависимости влиты) — доведи его командой pnpm task resume:", true],
+    ["free", "Свободные задачи, лучшая — первой:", false],
+    ["ahead", "Можно начать заделом, пока зависимости на ревью — pnpm task claim T-NNNN --ahead:", false],
+  ];
+  for (const [kind, title, withOwner] of groups) {
+    const entries = order.filter((item) => item.kind === kind).map((item) => item.entry);
+    if (entries.length === 0) continue;
+    console.log(title);
+    for (const entry of entries) console.log(taskLine(entry, withOwner ? ownerOf(entry.task) : undefined));
   }
 }
 
@@ -172,9 +202,10 @@ function runCheck() {
     for (const error of errors) console.error(`ошибка  ${error}`);
     process.exit(1);
   }
-  const all = files.filter((file) => file.name.split("/").at(-1).startsWith("T-"));
-  const archived = all.filter((file) => file.name.startsWith(`${ARCHIVE_DIR}/`)).length;
-  console.log(`Реестр задач в порядке: ${String(all.length)} задач (открытых ${String(all.length - archived)}, в архиве ${String(archived)}).`);
+  const { tasks } = readTasks(files);
+  console.log(registrySummary(tasks));
+  const waiting = awaitingArchiveLine(tasks);
+  if (waiting !== null) console.log(waiting);
 }
 
 /**
@@ -182,46 +213,23 @@ function runCheck() {
  * ссылки на файлы задач и ячейки эпиков (tasks/README.md, T-0204). Повторный
  * запуск ничего не меняет.
  */
-function runFix() {
+function runFix({ archive }) {
   const dir = join(ROOT, "tasks");
-  let files = readWorkingTasks();
-  const moved = [];
+  const { moves, files } = planFix(readWorkingTasks(), { archive });
 
-  // (а) перенос: путь задачи должен быть равен месту по статусу
-  const { tasks: before } = readTasks(files);
-  for (const task of before) {
-    const target = placementPath(task);
-    if (task.path === target) continue;
-    mkdirSync(join(dir, ARCHIVE_DIR), { recursive: true });
-    renameSync(join(dir, task.path), join(dir, target));
-    moved.push({ from: task.path, to: target });
-    console.log(`перенесено: tasks/${task.path} → tasks/${target}`);
+  if (moves.length > 0) mkdirSync(join(dir, ARCHIVE_DIR), { recursive: true });
+  for (const move of moves) {
+    renameSync(join(dir, move.from), join(dir, move.to));
+    console.log(`перенесено: tasks/${move.from} → tasks/${move.to}`);
   }
-  if (moved.length > 0) files = readWorkingTasks();
-
-  // (б) пути пересчитаны по настоящему расположению
-  const { tasks } = readTasks(files);
-  const paths = Object.fromEntries(tasks.map((task) => [task.id, task.path]));
-  const changed = [];
-  const taskOf = new Map(tasks.map((task) => [task.path, task]));
-
   for (const file of files) {
-    let text = file.text;
-    const data = taskOf.get(file.name);
-    // Битая шапка или зависимость без файла — править нечего: об этом скажет `pnpm task check`.
-    if (data !== undefined && !data.depends_on.some((id) => paths[id] === undefined)) text = withBadgeLine(text, badgeLine(data, paths));
-    // (в) ссылки на файлы задач — во всех файлах tasks/ и tasks/archive/
-    text = withTaskLinks(text, file.name, paths);
-    // (г) ячейки эпиков
-    if (file.name === "epics.md") text = fixEpicCells(text, tasks);
-    if (text !== file.text) changed.push({ name: file.name, text });
-  }
-
-  for (const file of changed) {
     writeFileSync(join(dir, file.name), file.text);
     console.log(`поправлено: tasks/${file.name}`);
   }
-  if (changed.length === 0 && moved.length === 0) console.log("Править нечего.");
+  if (files.length === 0 && moves.length === 0) console.log("Править нечего.");
+  // Реестр после применения плана: закрытые, что остались наверху (fix их не переносит).
+  const waiting = awaitingArchiveLine(readTasks(readWorkingTasks()).tasks);
+  if (waiting !== null) console.log(waiting);
 }
 
 /** Строки `status` и `owner` в шапке; остальное в файле не трогаем. */
@@ -245,8 +253,15 @@ function runClaim(positional, flags) {
   const all = COLUMNS.flatMap((column) => board[column.key].map((entry) => ({ ...entry, column })));
   const found = all.find((entry) => entry.task.id === id);
   if (found === undefined) fail(`Задачи ${id} нет в ${BASE}.`);
-  if (found.column.key !== "free") {
-    fail(`Задача ${id} не свободна: колонка «${found.column.title}»${found.reason === undefined ? "" : ` — ${found.reason}`}.`);
+  const ahead = flags.ahead === true;
+  const expected = ahead ? "aheadFree" : "free";
+  if (found.column.key !== expected) {
+    const detail = found.reason === undefined ? "" : ` — ${found.reason}`;
+    if (ahead && found.column.key === "free") fail(`Задача ${id} свободна: бери её без --ahead.`);
+    if (!ahead && found.column.key === "aheadFree") {
+      fail(`Задача ${id} ждёт ${found.aheadOver.join(", ")}, но их PR уже на ревью: её можно взять заделом — pnpm task claim ${id} --ahead --owner "…" (tasks/README.md, «Задел»).`);
+    }
+    fail(`Задача ${id} не ${ahead ? "годится для задела" : "свободна"}: колонка «${found.column.title}»${detail}.`);
   }
   const { task } = found;
   const owner = ownerFor(task, flags, "claim");
@@ -263,6 +278,18 @@ function runClaim(positional, flags) {
   };
 
   git(["switch", "-c", branch, BASE]);
+  if (ahead) {
+    // Ветка задела: dev плюс ветки незакрытых зависимостей по порядку depends_on (Р178, п. 2).
+    const built = mergeDependencyBranches(found.aheadOver);
+    if (!built.ok) {
+      returnBack();
+      if (built.missing) fail(`Ветки зависимости ${built.dependency} нет на origin: заделом её не взять — возьми другую задачу.`);
+      if (built.conflicts.length > 0) {
+        fail(`Ветки зависимостей конфликтуют друг с другом (на ${built.dependency}: ${built.conflicts.join(", ")}) — возьми другую задачу.`);
+      }
+      fail(`Не удалось влить ветку зависимости ${built.dependency}, ветка ${branch} убрана локально:\n${built.stderr}`);
+    }
+  }
   const file = join(ROOT, "tasks", task.fileName);
   const updated = withClaim(readFileSync(file, "utf8"), owner);
   const parsed = parseFrontmatter(updated);
@@ -281,7 +308,13 @@ function runClaim(positional, flags) {
     fail(`Push не удался, ветка ${branch} убрана локально:\n${pushed.stderr}`);
   }
 
-  console.log(`Задача ${id} взята: ветка ${branch}, владелец «${owner}».`);
+  if (ahead) {
+    console.log(`Задача ${id} взята заделом поверх ${found.aheadOver.join(", ")}: ветка ${branch} содержит их ветки, владелец «${owner}».`);
+    console.log(`Открой черновик PR сразу, с меткой «${AHEAD_LABEL}» (ровно одна метка статуса, tasks/README.md, «Задел»):`);
+    console.log(`  gh pr create --draft --base dev --label "${AHEAD_LABEL}" --title "<заголовок из раздела «PR» спецификации>" --body-file <описание>`);
+    console.log("Зон задел не держит. Влить его и снять с черновика нельзя, пока зависимости не влиты: claim-check в CI и pnpm task merge откажут.");
+    console.log(`Влиты зависимости — задел встанет в pnpm task next сразу после доработки; доводит его pnpm task resume ${id}.`);
+  } else console.log(`Задача ${id} взята: ветка ${branch}, владелец «${owner}».`);
   console.log(`Уровень effort в сессии — ${task.effort}. Дальше — тесты первым коммитом (tasks/README.md, шаг 5).`);
 }
 
@@ -292,10 +325,13 @@ function withOwner(text, owner) {
 }
 
 /**
- * Продолжить PR на доработке (tasks/README.md, «Доработка»): ветка задачи с
- * origin, `owner` — новый поток, коммит и push без `--force`. Push — замок:
- * кто продолжил первым, того коммит и лёг; второй получит отказ. Потом с PR
- * снимается метка, и задача уходит из «Доработки».
+ * Продолжить PR на доработке (tasks/README.md, «Доработка») или довести
+ * созревший задел (Р178, «Задел»): ветка задачи с origin, `owner` — новый
+ * поток, коммит и push без `--force`. Push — замок: кто продолжил первым, того
+ * коммит и лёг; второй получит отказ. Потом PR переводится из «доработки»
+ * (у задела — из «задел») в «в работе» (Р172): зоны снова заняты, задача уходит
+ * из своей колонки. У задела дальше в ветку вливается свежий dev; конфликты
+ * решает поток.
  */
 function runResume(positional, flags) {
   const id = positional[0];
@@ -304,8 +340,16 @@ function runResume(positional, flags) {
   if (git(["status", "--porcelain"]) !== "") fail("Рабочая копия не чистая: закоммить или убери изменения, потом продолжай задачу.");
 
   const { board } = loadBoard();
-  const found = board.rework.find((entry) => entry.task.id === id);
-  if (found === undefined) fail(`Задача ${id} не на доработке: у её PR нет метки «${REWORK_LABEL}». Что можно взять — pnpm task next.`);
+  const reworked = board.rework.find((entry) => entry.task.id === id);
+  const found = reworked ?? board.ahead.find((entry) => entry.task.id === id);
+  if (found === undefined) {
+    fail(`Задача ${id} не на доработке и не созревший задел: у её PR нет метки «${REWORK_LABEL}» или «${AHEAD_LABEL}». Что можно взять — pnpm task next.`);
+  }
+  // Задел доводят, когда все зависимости влиты (Р178); до тех пор его ветка собрана поверх чужих.
+  const fromAhead = reworked === undefined;
+  if (fromAhead && !found.ripe) {
+    fail(`Задел ${id} ещё не созрел: ждёт влития ${found.waitingFor.join(", ")}. Доводить его можно, когда все зависимости в dev.`);
+  }
   const { task, pr } = found;
   const owner = ownerFor(task, flags, "resume");
 
@@ -333,7 +377,8 @@ function runResume(positional, flags) {
   const file = join(ROOT, "tasks", taskPath);
   const before = readFileSync(file, "utf8");
   const updated = withOwner(before, owner);
-  const message = `chore(tasks): Продолжить ${id} после ответа`;
+  // Раунд доработки считается по заголовку «Продолжить … после ответа» (reworkRounds), доводка задела — не раунд.
+  const message = fromAhead ? `chore(tasks): Довести ${id} после мерджа зависимостей` : `chore(tasks): Продолжить ${id} после ответа`;
   // Тот же поток вернулся к своему PR — менять в файле нечего, но замку нужен коммит.
   if (updated === before) git(["commit", "--quiet", "--allow-empty", "-m", message]);
   else {
@@ -348,12 +393,65 @@ function runResume(positional, flags) {
     fail(`Push не удался, ветка ${branch} возвращена как была:\n${pushed.stderr}`);
   }
 
-  const unlabeled = removePrLabel(pr, REWORK_LABEL);
-  if (!unlabeled.ok) {
-    console.error(`Метку «${REWORK_LABEL}» с PR #${String(pr)} снять не удалось — сними руками, иначе задачу возьмёт ещё один поток:\n${unlabeled.stderr}`);
+  // Сначала новая метка: если упадёт вторая операция, на PR останутся две метки
+  // и «доработка» старше — задача не потеряется, а останется на доработке.
+  const labeled = addPrLabel(pr, WORK_LABEL);
+  if (!labeled.ok) {
+    console.error(`Метку «${WORK_LABEL}» на PR #${String(pr)} поставить не удалось — поставь руками: ${labeled.stderr}`);
   }
-  console.log(`Задача ${id} продолжается: ветка ${branch}, PR #${String(pr)}, владелец «${owner}».`);
-  console.log("Дальше — ответы и замечания в PR, затем перебазирование на dev, если он ушёл вперёд (tasks/README.md, «Доработка»).");
+  const oldLabel = fromAhead ? AHEAD_LABEL : REWORK_LABEL;
+  const unlabeled = removePrLabel(pr, oldLabel);
+  if (!unlabeled.ok) {
+    console.error(`Метку «${oldLabel}» с PR #${String(pr)} снять не удалось — сними руками, иначе задачу возьмёт ещё один поток:\n${unlabeled.stderr}`);
+  }
+  if (!fromAhead) {
+    console.log(`Задача ${id} продолжается: ветка ${branch}, PR #${String(pr)}, владелец «${owner}».`);
+    console.log("Дальше — ответы и замечания в PR, затем перебазирование на dev, если он ушёл вперёд (tasks/README.md, «Доработка»).");
+    return;
+  }
+
+  // Зависимости влиты в dev: ветка задела получает свежий dev (merge, не rebase — в ветке есть чужие коммиты).
+  console.log(`Задел ${id} доводится: ветка ${branch}, PR #${String(pr)}, владелец «${owner}», метка «${AHEAD_LABEL}» заменена на «${WORK_LABEL}».`);
+  const withDev = tryGit(["merge", "--no-edit", BASE]);
+  if (!withDev.ok) {
+    const conflicts = tryGit(["diff", "--name-only", "--diff-filter=U"]).stdout.split("\n").filter((line) => line !== "");
+    if (conflicts.length === 0) {
+      console.error(`Влить ${BASE} в ${branch} не удалось:\n${withDev.stderr || withDev.stdout}`);
+    } else {
+      console.error(`Слияние ${BASE} в ${branch} остановилось на конфликтах — реши их сам:`);
+      for (const path of conflicts) console.error(`  ${path}`);
+      console.error("Дальше: поправь файлы, git add, git commit, git push; затем доделай задачу (tasks/README.md, «Задел»).");
+    }
+    process.exit(1);
+  }
+  const pushedMerge = tryGit(["push", "origin", `HEAD:refs/heads/${branch}`]);
+  if (!pushedMerge.ok) {
+    console.error(`dev влит в ${branch} локально, но push не удался — запушь сам: git push origin HEAD:refs/heads/${branch}\n${pushedMerge.stderr}`);
+    process.exit(1);
+  }
+  console.log(`${BASE} влит в ${branch}. Дальше — доделать, гейт, gh pr ready ${String(pr)}, затем заменить «${WORK_LABEL}» на «на ревью» (tasks/README.md, «Задел»).`);
+}
+
+/**
+ * Кто держит файл (tasks/README.md, «Что исполнитель решает сам», п. 2): задачи
+ * колонок «В работе» и «Доработка», у которых путь попадает в `zones` или
+ * `shared`. Править такой файл вне зон своей задачи нельзя.
+ */
+function runHolds(positional) {
+  const path = positional[0];
+  if (path === undefined || path.trim() === "") fail("Укажи путь: pnpm task holds <путь>");
+  const { board } = loadBoard();
+  const holders = tasksHolding(path, board);
+  if (holders.length === 0) {
+    console.log("Файл не держит ни одна задача в работе");
+    return;
+  }
+  console.log(`Путь ${path} держат (${String(holders.length)}):`);
+  for (const holder of holders) {
+    const pr = holder.pr === undefined ? "" : `, PR #${String(holder.pr)}`;
+    console.log(`  ${holder.task.id}  ${holder.where}${pr}  ${holder.task.title}`);
+    console.log(`${" ".repeat(10)}↳ по шаблону ${holder.pattern}; взял: ${ownerOf(holder.task)}`);
+  }
 }
 
 function runRelease(positional, flags) {
@@ -366,6 +464,23 @@ function runRelease(positional, flags) {
   }
   git(["push", "origin", "--delete", branch]);
   console.log(`Ветка ${branch} удалена на origin, задача ${id} свободна. Закрой PR, если он был, с причиной в комментарии.`);
+}
+
+/**
+ * Дифф задела без файлов его незакрытых зависимостей (Р178, п. 6): ветка задела
+ * содержит ветки зависимостей, и их файлы проверяет PR самой зависимости.
+ * Зависимости и их статус — с базы, не из ветки PR (`unclosedDependenciesOnBase`). Нет ветки зависимости —
+ * предупреждение: её файлы вычесть нечем, и они попадут в проверку зон.
+ */
+function withoutOpenDependencyFiles(changed, id, base) {
+  const { tasks } = readTasks(readOriginTasks(base));
+  const unclosed = unclosedDependenciesOnBase(id, tasks);
+  if (unclosed.length === 0) return changed;
+  // Ветки зависимостей могли обновиться после последнего fetch; нет сети — берём что есть.
+  for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/task/${dependencyId}:refs/remotes/origin/task/${dependencyId}`, "--quiet"]);
+  const { files, missing } = dependencyChangedFiles(unclosed, { base });
+  if (missing.length > 0) console.error(`предупреждение: веток зависимостей ${missing.join(", ")} на origin нет — их файлы из диффа не вычтены`);
+  return withoutDependencyFiles(changed, files);
 }
 
 function runDiffCheck(flags) {
@@ -387,11 +502,13 @@ function runDiffCheck(flags) {
 
   // Без поиска переименований: переименование — это и удаление старого пути, а он тоже должен быть в зонах.
   const diff = git(["diff", "--name-only", "--no-renames", `${base}...HEAD`]);
-  const changed = diff === "" ? [] : diff.split("\n");
+  const changed = withoutOpenDependencyFiles(diff === "" ? [] : diff.split("\n"), id, base);
   const outside = outOfZone(changed, { ...parsed.data, fileName });
   if (outside.length > 0) {
     console.error(`ошибка  PR задачи ${id} меняет файлы вне её зон (zones, shared и сам файл задачи):`);
     for (const path of outside) console.error(`  ${path}`);
+    const hint = outOfZoneHint(outside, fileName);
+    if (hint !== null) console.error(hint);
     console.error("Понадобился файл вне зон — это вопрос тимлидам: черновик PR с разделом «Вопросы» (tasks/README.md).");
     process.exit(1);
   }
@@ -412,7 +529,13 @@ function runClaimCheck(flags) {
   const base = flags.base ?? BASE;
   const state = loadRegistryState(base);
   for (const error of state.errors) console.error(`предупреждение: в реестре на ${base} ошибка — ${error}`);
-  const problems = checkClaim(found.id, state);
+  // Задел определяет метка на PR; незакрытые зависимости без неё и без черновика — отказ (Р178, п. 5).
+  const own = (state.prs ?? []).find((pr) => pr.headRefName === found.head);
+  const ahead = own !== undefined && (own.labels ?? []).some((label) => label?.name === AHEAD_LABEL);
+  const problems = checkClaim(found.id, { ...state, ahead });
+  const task = state.tasks.find((candidate) => candidate.id === found.id);
+  // Без списка PR (нет gh) про черновик и метку ничего не известно — проверять нечего.
+  if (task !== undefined && state.prs !== null) problems.push(...checkAheadPr(own, task, state.tasks));
   if (problems.length > 0) {
     console.error(`ошибка  PR ветки ${found.head} взят в обход порядка (tasks/README.md, «Как взять задачу»):`);
     for (const problem of problems) console.error(`  ${problem}`);
@@ -422,18 +545,38 @@ function runClaimCheck(flags) {
   console.log(`Проверка захвата ${found.id}: задачу можно было брать.`);
 }
 
+/**
+ * Поля столбцов страницы для задачи «в работе», «на ревью» или «на доработке»:
+ * поток, кто запустил, сколько висит и сколько кругов. У «В работе» висит с
+ * коммита захвата; PR там бывает (статус «в работе»), а бывает и нет.
+ */
+function boardDetails(entry, columnKey, owner, prsByNumber, now) {
+  const pr = entry.pr === undefined ? undefined : prsByNumber.get(entry.pr);
+  return {
+    owner,
+    launchedBy: launchedBy(pr?.body),
+    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task.id) : pr?.createdAt, now),
+    rounds: reworkRounds(pr, entry.task.id),
+  };
+}
+
 function runStatusJson(flags) {
   if (flags.out === undefined) fail("Укажи каталог: pnpm task status-json --out <каталог>");
   const { state, board } = loadBoard();
   const dir = join(flags.out, "status");
   mkdirSync(dir, { recursive: true });
   const owners = new Map();
+  const now = new Date();
+  const prsByNumber = new Map((state.prs ?? []).map((pr) => [pr.number, pr]));
   let count = 0;
   for (const column of COLUMNS) {
     for (const entry of board[column.key]) {
-      const busy = column.key === "inProgress" || column.key === "review" || column.key === "rework";
+      const busy = ["inProgress", "review", "rework", "ahead"].includes(column.key);
       const owner = busy ? ownerOf(entry.task, true) : undefined;
-      if (busy) owners.set(entry.task.id, owner);
+      if (busy) {
+        owners.set(entry.task.id, owner);
+        Object.assign(entry, boardDetails(entry, column.key, owner, prsByNumber, now));
+      }
       const badge = statusBadge({ ...entry, column: column.key, owner });
       writeFileSync(join(dir, `${entry.task.id}.json`), `${JSON.stringify(badge)}\n`);
       count += 1;
@@ -447,16 +590,21 @@ function runStatusJson(flags) {
   for (const epic of epics) writeFileSync(join(dir, `epic-${epic}.json`), `${JSON.stringify(epicStreamsBadge(summary.epics[epic] ?? []))}\n`);
 
   // Один вызов gh: от него зависят и раздел «Вклад», и его пометка «нет данных».
-  const mergedPrs = mergedTaskPrs();
-  const credits = taskCredits(board.done, mergedPrs);
+  const merged = mergedPrs();
+  const credits = taskCredits(board.done, merged === null ? null : taskPrsOf(merged));
+  // Спецификации считаются и без GitHub: дату появления файла знает сам git.
+  const specs = addedTaskSpecs().map(({ fileName, addedAt }) => {
+    const id = fileName.slice(0, 6);
+    return { id, author: state.tasks.find((task) => task.id === id)?.author ?? null, addedAt };
+  });
   const page = renderBoardPage({
     board,
     owners,
     credits,
-    people: contributions(credits),
-    githubAvailable: mergedPrs !== null,
-    mergedPrs,
-    now: new Date(),
+    contribution: contributionRows({ tasks: state.tasks, mergedPrs: merged, specs, now }),
+    githubAvailable: merged !== null,
+    mergedPrs: merged,
+    now,
   });
   writeFileSync(join(flags.out, "README.md"), page);
   console.log(`Значки статуса: ${String(count)} задач и ${String(epics.size)} эпиков → ${dir}`);
@@ -478,12 +626,18 @@ function main(argv) {
       return runClaim(positional, flags);
     case "resume":
       return runResume(positional, flags);
+    case "merge":
+      return runMerge(positional);
+    case "holds":
+      return runHolds(positional);
     case "release":
       return runRelease(positional, flags);
     case "diff-check":
       return runDiffCheck(flags);
     case "fix":
-      return runFix();
+      return runFix({ archive: false });
+    case "archive":
+      return runFix({ archive: true });
     case "claim-check":
       return runClaimCheck(flags);
     case "status-json":

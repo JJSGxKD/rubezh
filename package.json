@@ -8,6 +8,7 @@
     "node": ">=22.22.3"
   },
   "scripts": {
+    "screens": "node scripts/screens/shoot.mjs",
     "dev": "pnpm --parallel --filter backend-api --filter web-telegram run dev",
     "dev:all": "pnpm --parallel --filter backend-api --filter \"web-*\" run dev",
     "tunnel": "frpc -c infra/frpc/frpc.local.toml",
@@ -25,6 +26,7 @@
     "balance:sim": "vitest run --config vitest.balance.config.ts",
     "budget": "node scripts/bundle-budget.mjs",
     "docs:check": "node scripts/docs-check.mjs",
+    "content:export": "node scripts/content/run-export.mjs",
     "task": "node scripts/tasks/task.mjs",
     "closed-test:export": "pnpm --filter backend-api export",
     "replay": "node scripts/replay.mjs"
@@ -33,6 +35,7 @@
     "@typescript-eslint/eslint-plugin": "8.70.0",
     "@typescript-eslint/parser": "8.70.0",
     "eslint": "10.10.0",
+    "playwright-core": "1.64.1",
     "typescript": "5.9.3",
     "vite": "8.3.0",
     "vitest": "5.0.0"

@@ -22,7 +22,6 @@ zones:
   - backend/api/test/tasks.test.ts
   - apps/admin/src/api/tasks.ts
   - apps/admin/src/screens/tasks/TasksScreen.tsx
-  - apps/admin/src/ui/help.ts
   - packages/app-shell/src/screens/meta/task-row.tsx
   - packages/app-shell/test/tasks-api.test.ts
 shared:
@@ -36,17 +35,18 @@ shared:
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
   - backend/api/src/modules/wipe/wipe-plan.ts
-runner: local
+  - apps/admin/src/ui/help.ts
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0106. Достижения с престижем: сервер, 49 определений, редкость «есть у N%»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](T-0210-notifications-read-by-action.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md) [![T-0210](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0210.json&label=T-0210)](archive/T-0210-notifications-read-by-action.md)
 
 ## Зачем
 

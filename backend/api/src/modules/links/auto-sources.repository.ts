@@ -38,6 +38,14 @@ export interface AutoSourceInput {
   cap: number;
 }
 
+/** Строка сводки незнакомых ключей: сколько раз встретился и когда впервые и в последний раз. */
+export interface UnknownKeyRow {
+  key: string;
+  hits: number;
+  firstAt: Date;
+  lastAt: Date;
+}
+
 /** `existing` — источник с таким ключом уже есть (в том числе скрытый); `capped` — потолок суток. */
 export type AutoSourceOutcome = "created" | "existing" | "capped";
 
@@ -54,6 +62,8 @@ export interface AutoSourcesRepository {
    * добавляются, пока в сводке меньше `UNKNOWN_KEYS_MAX`; значений пар сводка не хранит.
    */
   noteUnknownKeys(keys: string[], now: Date): Promise<void>;
+  /** Сводка для панели: по убыванию «последнего раза», не больше `UNKNOWN_KEYS_MAX`. */
+  unknownKeys(): Promise<UnknownKeyRow[]>;
 }
 
 @Injectable()
@@ -119,6 +129,11 @@ export class PrismaAutoSourcesRepository implements AutoSourcesRepository {
           ON CONFLICT (key) DO UPDATE SET hits = start_param_key.hits + 1, last_at = GREATEST(start_param_key.last_at, EXCLUDED.last_at)`;
       }
     }, TRANSACTION);
+  }
+
+  async unknownKeys(limit = UNKNOWN_KEYS_MAX): Promise<UnknownKeyRow[]> {
+    const rows = await this.prisma.startParamKey.findMany({ orderBy: [{ lastAt: "desc" }, { key: "asc" }], take: Math.min(limit, UNKNOWN_KEYS_MAX) });
+    return rows.map(({ key, hits, firstAt, lastAt }) => ({ key, hits, firstAt, lastAt }));
   }
 
   private async exists(autoKey: string): Promise<boolean> {

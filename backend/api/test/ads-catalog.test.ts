@@ -21,8 +21,8 @@ import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
-import type { AdBlockDef, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
-import { AdsCatalogService, blockEditSchema, networkEditSchema, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
+import type { AdBlockDef, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdNetworksReorderResult, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import { AdsCatalogService, blockEditSchema, networkEditSchema, networkOrderSchema, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
 import { AD_NETWORK_PROFILES } from "../src/modules/ads/ad-networks.js";
 import {
   AdBlockInvalidError,
@@ -31,6 +31,7 @@ import {
   AdCatalogNotFoundError,
   AdNetworkIncompleteError,
   AdNetworkKeysError,
+  AdNetworkOrderMismatchError,
 } from "../src/modules/ads/ads-errors.js";
 import type { AdsService } from "../src/modules/ads/ads.service.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
@@ -58,6 +59,8 @@ class MemoryCatalog implements AdsCatalogRepository {
   ];
   blockRows: AdBlockDef[] = [];
   funnelFrom: Date | null = null;
+  passesWindow: [Date, Date] | null = null;
+  funnelWindow: [Date, Date] | null = null;
   private blockNo = 0;
 
   async networks(): Promise<AdNetworkRow[]> {
@@ -71,8 +74,21 @@ class MemoryCatalog implements AdsCatalogRepository {
   async updateNetwork(edit: AdNetworkEdit): Promise<boolean> {
     const row = this.networksRows.find((network) => network.networkKey === edit.networkKey);
     if (row === undefined) return false;
-    Object.assign(row, { active: edit.active, priority: edit.priority, keys: { ...edit.keys } });
+    Object.assign(row, { active: edit.active, keys: { ...edit.keys } });
     return true;
+  }
+
+  async reorderNetworks(ids: readonly string[]): Promise<AdNetworksReorderResult> {
+    const sorted = [...this.networksRows].sort((a, b) => a.priority - b.priority || (a.networkKey < b.networkKey ? -1 : 1));
+    const before = sorted.map((row) => row.networkKey);
+    const known = new Set(before);
+    if (ids.length !== before.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) return { status: "mismatch" };
+    if (!ids.some((id, index) => before[index] !== id)) return { status: "ok", before, after: [...ids], changed: false };
+    for (const [index, id] of ids.entries()) {
+      const row = this.networksRows.find((network) => network.networkKey === id);
+      if (row !== undefined) row.priority = index;
+    }
+    return { status: "ok", before, after: [...ids], changed: true };
   }
 
   async insertBlock(block: Omit<AdBlockDef, "blockId">): Promise<AdBlockDef | null> {
@@ -89,8 +105,14 @@ class MemoryCatalog implements AdsCatalogRepository {
     return true;
   }
 
-  async funnel(from: Date): Promise<AdFunnelRow[]> {
+  async passes(from: Date, to: Date): Promise<AdPassRow[]> {
+    this.passesWindow = [from, to];
+    return [{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }];
+  }
+
+  async funnel(from: Date, to: Date): Promise<AdFunnelRow[]> {
     this.funnelFrom = from;
+    this.funnelWindow = [from, to];
     return [{ networkKey: "adsgram", place: "wheel_spin", offered: 10, shown: 8, clicked: 1, completed: 7, claimed: 6, failed: 2 }];
   }
 }
@@ -135,7 +157,7 @@ describe("реклама в панели", () => {
       networkKey: "adsgram",
       name: "AdsGram",
       active: true,
-      priority: 5,
+      priority: 10,
       keys: {},
       missing: [],
       problem: null,
@@ -167,7 +189,7 @@ describe("реклама в панели", () => {
     });
     expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 30, keys: RICHADS_KEYS })).toMatchObject({ active: true, keys: RICHADS_KEYS, missing: [] });
     // Без ключей в запросе — ключи прежние: место в круге меняют, не трогая их.
-    expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 3 })).toMatchObject({ priority: 3, keys: RICHADS_KEYS });
+    expect(await ctx.service.saveNetwork(admin, { networkKey: "richads", active: true, priority: 3 })).toMatchObject({ priority: 30, keys: RICHADS_KEYS });
     await expect(ctx.service.saveNetwork(admin, { networkKey: "taddy", active: true, priority: 40, keys: { pubId: "14cbeb980853dd416003462ca4db7c12" } })).resolves.toMatchObject({ active: true });
   });
 
@@ -253,6 +275,9 @@ describe("реклама в панели", () => {
     expect(view).toMatchObject({ days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] });
     expect(view.networks.map((network) => network.networkKey)).toEqual(["adsgram", "richads", "taddy"]);
     expect(ctx.repository.funnelFrom).toEqual(new Date(NOON.getTime() - 7 * 86_400_000));
+    // Пропуски VIP — за то же окно, что воронка (Р99).
+    expect(view.passes).toEqual([{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }]);
+    expect(ctx.repository.passesWindow).toEqual(ctx.repository.funnelWindow);
 
     await expect(ctx.service.saveNetwork(designer, { networkKey: "adsgram", active: true, priority: 1 })).rejects.toThrow();
     await expect(ctx.service.saveBlock(designer, block())).rejects.toThrow();
@@ -280,6 +305,75 @@ describe("реклама в панели", () => {
     expect(networkEditSchema.safeParse({ networkKey: "adsgram", active: true, priority: 1, name: "X" }).success).toBe(false);
     expect(networkEditSchema.safeParse({ networkKey: "richads", active: true, priority: 1, keys: { pubId: 792361 } }).success).toBe(false);
     expect(networkEditSchema.parse({ networkKey: "richads", active: true, priority: 1, keys: { pubId: " 792361 " } }).keys).toEqual({ pubId: "792361" });
+  });
+});
+
+describe("порядок рекламных сетей (T-0168)", () => {
+  const ORDER = ["taddy", "adsgram", "richads"];
+
+  it("перестановка пишет priority 0, 1, 2…, одну запись аудита и сбрасывает запас блоков", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "720", "admin");
+
+    expect(await ctx.service.reorderNetworks(admin, ORDER)).toEqual({ order: ORDER });
+    expect((await ctx.repository.networks()).sort((a, b) => a.priority - b.priority).map((row) => [row.networkKey, row.priority])).toEqual([["taddy", 0], ["adsgram", 1], ["richads", 2]]);
+    const audit = (await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "ads.networks.reorder");
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ target: "networks", before: { order: ["adsgram", "richads", "taddy"] }, after: { order: ORDER } });
+    expect(ctx.forgotten()).toBe(1);
+  });
+
+  it("повтор того же порядка: тот же ответ, второй записи аудита и сброса нет", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "721", "admin");
+    await ctx.service.reorderNetworks(admin, ORDER);
+    expect(await ctx.service.reorderNetworks(admin, ORDER)).toEqual({ order: ORDER });
+    expect((await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "ads.networks.reorder")).toHaveLength(1);
+    expect(ctx.forgotten()).toBe(1);
+  });
+
+  it.each([
+    ["нет одной сети", ["adsgram", "richads"]],
+    ["неизвестный id", ["adsgram", "richads", "monetag"]],
+    ["повтор id", ["adsgram", "adsgram", "richads"]],
+  ])("%s — 400, ничего не записано", async (_name, ids) => {
+    const ctx = setup();
+    const admin = await person(ctx, "722", "admin");
+    const error = await ctx.service.reorderNetworks(admin, ids).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AdNetworkOrderMismatchError);
+    expect(error).toMatchObject({ code: "ad_network_order_mismatch", status: 400 });
+    expect((await ctx.repository.networks()).map((row) => row.priority)).toEqual([10, 30, 40]);
+    expect(await ctx.roles.recentAudit(10)).toHaveLength(0);
+  });
+
+  it("без ads.edit — тот же отказ, что у сохранения сети; порядок прежний", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "723", "game_designer");
+    const error = await ctx.service.reorderNetworks(designer, ORDER).catch((caught: unknown) => caught);
+    const saveError = await ctx.service.saveNetwork(designer, { networkKey: "adsgram", active: true }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code: (saveError as { code: string }).code });
+    expect((await ctx.repository.networks()).map((row) => row.priority)).toEqual([10, 30, 40]);
+  });
+
+  it("сеть, чьего профиля нет в коде, тоже переставляется", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "724", "admin");
+    ctx.repository.networksRows.push({ networkKey: "monetag", name: "Monetag", active: false, priority: 50, keys: {} });
+    expect(await ctx.service.reorderNetworks(admin, ["monetag", ...ORDER])).toEqual({ order: ["monetag", ...ORDER] });
+  });
+
+  it("схема запроса: пустой список, повтор, лишние поля и больше 100 id — отказ", () => {
+    expect(networkOrderSchema.safeParse({ ids: ORDER }).success).toBe(true);
+    expect(networkOrderSchema.safeParse({ ids: [] }).success).toBe(false);
+    expect(networkOrderSchema.safeParse({ ids: ["adsgram", "adsgram"] }).success).toBe(false);
+    expect(networkOrderSchema.safeParse({ ids: ORDER, extra: 1 }).success).toBe(false);
+    expect(networkOrderSchema.safeParse({ ids: Array.from({ length: 101 }, (_, index) => `n${String(index)}`) }).success).toBe(false);
+  });
+
+  it("priority в схеме правки сети необязателен: вкладка со старой сборкой не получит 400", () => {
+    expect(networkEditSchema.safeParse({ networkKey: "adsgram", active: true }).success).toBe(true);
+    expect(networkEditSchema.safeParse({ networkKey: "adsgram", active: true, priority: 5 }).success).toBe(true);
   });
 });
 
@@ -328,7 +422,7 @@ describe("реклама в панели по HTTP", () => {
 
     const view = await app.inject({ method: "GET", url: "/api/v1/admin/ads?days=30", headers });
     expect(view.statusCode).toBe(200);
-    expect(view.json<{ data: { days: number; funnel: unknown[] } }>().data).toMatchObject({ days: 30, funnel: [expect.objectContaining({ networkKey: "adsgram", offered: 10 })] });
+    expect(view.json<{ data: { days: number; funnel: unknown[]; passes: unknown[] } }>().data).toMatchObject({ days: 30, funnel: [expect.objectContaining({ networkKey: "adsgram", offered: 10 })], passes: [expect.objectContaining({ passName: "vip", used: 3 })] });
     expect((await app.inject({ method: "GET", url: "/api/v1/admin/ads", headers })).json<{ data: { days: number } }>().data.days).toBe(7);
     expect((await app.inject({ method: "GET", url: "/api/v1/admin/ads?days=3", headers })).statusCode).toBe(400);
 
@@ -353,6 +447,16 @@ describe("реклама в панели по HTTP", () => {
     const missing = await app.inject({ method: "POST", url: "/api/v1/admin/ads/blocks", headers, payload: block({ networkKey: "monetag" }) });
     expect(missing.statusCode).toBe(404);
     expect(missing.json<{ error: { code: string } }>().error.code).toBe("ad_network_not_found");
+
+    const order = ["taddy", "adsgram", "richads"];
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/ads/networks/order", headers: { cookie }, payload: { ids: order } })).statusCode).toBe(403);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/ads/networks/order", headers, payload: { ids: [] } })).statusCode).toBe(400);
+    const mismatch = await app.inject({ method: "POST", url: "/api/v1/admin/ads/networks/order", headers, payload: { ids: ["adsgram"] } });
+    expect(mismatch.statusCode).toBe(400);
+    expect(mismatch.json<{ error: { code: string } }>().error.code).toBe("ad_network_order_mismatch");
+    const reordered = await app.inject({ method: "POST", url: "/api/v1/admin/ads/networks/order", headers, payload: { ids: order } });
+    expect(reordered.statusCode).toBe(201);
+    expect(reordered.json<{ data: { order: string[] } }>().data.order).toEqual(order);
 
     const moderator = await person(ctx, "705", "moderator");
     await store.put(hashSessionToken("mod"), { ...moderator, issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });

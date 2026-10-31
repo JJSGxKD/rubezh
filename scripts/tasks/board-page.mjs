@@ -1,4 +1,5 @@
-import { BADGE_CACHE_SECONDS, boardCounters, moscowDay, streamRows, streamsSummary } from "./board.mjs";
+import { PERIOD_TITLES, SIZE_POINTS } from "./contribution.mjs";
+import { BADGE_CACHE_SECONDS, accountStreams, boardCounters, flowPrompt, knownAccounts, moscowDay, streamLabel, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
 
 /**
@@ -7,11 +8,9 @@ import { REPOSITORY } from "./task-file.mjs";
  * снаружи, тесты — scripts/test/tasks-board-page.test.ts.
  */
 
-/** Очки — сумма размеров сделанных задач. Наглядность, а не формула выплат: доли участников — docs/11-revenue-split.md. */
-export const SIZE_POINTS = { S: 1, M: 2 };
+export { SIZE_POINTS };
 
 const UNKNOWN_OWNER = "не указан";
-const NO_PR_LABEL = "без PR задачи";
 const GITHUB = `https://github.com/${REPOSITORY}`;
 const TASKS_URL = `${GITHUB}/blob/dev/tasks`;
 
@@ -51,43 +50,6 @@ export function taskCredits(doneEntries, mergedPrs) {
   return credits;
 }
 
-function byScore(label) {
-  return (a, b) => b.points - a.points || b.tasks - a.tasks || compareLabels(a[label], b[label]);
-}
-
-/** Люди: без автора PR — всегда последними, как бы много очков у них ни было; остальные — по очкам. */
-function byPerson(a, b) {
-  if ((a.login === null) !== (b.login === null)) return a.login === null ? 1 : -1;
-  return byScore("login")(a, b);
-}
-
-/** По алфавиту, пустое (`null`) — в конец. */
-function compareLabels(a, b) {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a.localeCompare(b);
-}
-
-/** Люди по убыванию очков, затем задач, затем логина (`null` — без автора — последним), внутри — исполнители по `owner`. */
-export function contributions(credits) {
-  const people = new Map();
-  for (const credit of credits.values()) {
-    const person = people.get(credit.login) ?? { login: credit.login, tasks: 0, points: 0, lastMergedAt: null, byOwner: new Map() };
-    person.tasks += 1;
-    person.points += credit.points;
-    if (credit.mergedAt !== null && (person.lastMergedAt === null || credit.mergedAt > person.lastMergedAt)) person.lastMergedAt = credit.mergedAt;
-    const executor = person.byOwner.get(credit.owner) ?? { owner: credit.owner, tasks: 0, points: 0 };
-    executor.tasks += 1;
-    executor.points += credit.points;
-    person.byOwner.set(credit.owner, executor);
-    people.set(credit.login, person);
-  }
-  return [...people.values()]
-    .map(({ byOwner, ...person }) => ({ ...person, executors: [...byOwner.values()].sort(byScore("owner")) }))
-    .sort(byPerson);
-}
-
 const pad = (value) => String(value).padStart(2, "0");
 
 export { moscowDay };
@@ -122,7 +84,8 @@ function section(title, count, headers, rows) {
  * и уровень — запускать и что ждёт. Заголовок без числа: на него ведёт ссылка
  * из epics.md (`#потоки-сейчас`). Строки те же, что у `pnpm task streams`.
  */
-function streamsSection(streams) {
+function streamsSection(board, credits, at) {
+  const { streams } = streamsSummary(board);
   const { now, queue } = streamRows(streams);
   const link = (item) => {
     const text = `[${item.id}](${TASKS_URL}/${item.path ?? item.fileName})`;
@@ -134,7 +97,27 @@ function streamsSection(streams) {
   const queueRows = queue.map((row) => [row.label, String(row.count), row.batch === null ? "без пачки" : String(row.batch)]);
   const nowPart = nowRows.length === 0 ? "Нечего: ни свободных задач, ни доработки." : table(["Поток", "Свободно", "Доработка", "Ближайшие задачи"], nowRows);
   const queuePart = queueRows.length === 0 ? "Ничего нет." : table(["Поток", "Ждут", "Ближайшая пачка"], queueRows);
-  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}`;
+  return `## Потоки сейчас\n\n${intro}\n\n### Запускать сейчас\n\n${nowPart}\n\n### На очереди\n\n${queuePart}\n\n${accountsPart(board, streams, credits, at)}`;
+}
+
+/**
+ * «Запуск по аккаунтам»: на каждый известный аккаунт — свёрнутый список готовых промтов
+ * только для потоков, которые на нём не идут. Номер аккаунта уже внутри промта.
+ */
+function accountsPart(board, streams, credits, now) {
+  const heading = "### Запуск по аккаунтам";
+  const accounts = knownAccounts(board, credits, now);
+  if (accounts.length === 0) {
+    return `${heading}\n\nИзвестных аккаунтов нет: промты для своего — \`pnpm task streams --account claude-N\`.`;
+  }
+  const blocks = accounts.map((account) => {
+    const toRun = accountStreams(account, board, streams);
+    if (toRun.length === 0) return `${account} — всё нужное уже работает`;
+    const summary = `${account} — запустить ${String(toRun.length)}: ${toRun.map(streamLabel).join(", ")}`;
+    const prompts = toRun.map((stream) => `\`\`\`\n${flowPrompt({ account, executor: stream.executor, effort: stream.effort, runner: stream.runner })}\n\`\`\``).join("\n\n");
+    return `<details>\n<summary>${summary}</summary>\n\n${prompts}\n\n</details>`;
+  });
+  return `${heading}\n\nГотовые промты с номером аккаунта; потоки, которые на нём уже идут, не предлагаются.\n\n${blocks.join("\n\n")}`;
 }
 
 /** Строка счётчиков под заголовком; пачки нет — последнего пункта нет. */
@@ -176,6 +159,45 @@ function leadSection(board) {
   );
 }
 
+const WAITING_WHO = { executor: "исполнителя", lead: "тимлида", owner: "владельца" };
+
+/** «Чего ждёт»: владельца — без причины, остальные — «кого · почему»; у «В работе» ожидания нет — ждёт исполнителя. */
+function waitingText(waiting) {
+  if (waiting === undefined) return WAITING_WHO.executor;
+  return waiting.who === "owner" ? WAITING_WHO.owner : `${WAITING_WHO[waiting.who]} · ${waiting.why}`;
+}
+
+/** «Чего ждёт» задел (Р178): созревший ждёт потока, остальной — влития зависимостей. */
+function aheadWaitingText(entry) {
+  return entry.ripe ? `${WAITING_WHO.executor} · задел созрел` : `зависимостей: ${(entry.waitingFor ?? []).join(", ")}`;
+}
+
+/** «Висит»: меньше суток — «сегодня», иначе «N дн», от трёх суток с «⚠️ »; даты нет — «—». */
+function hangingText(days) {
+  if (days === null || days === undefined) return "—";
+  if (days < 1) return "сегодня";
+  return `${days >= 3 ? "⚠️ " : ""}${String(days)} дн`;
+}
+
+/**
+ * Общие столбцы «В работе», «На ревью» и «Доработки»: задача, поток, кто запустил,
+ * сколько висит, кругов доработки, чего ждёт и (у разделов с PR) сам PR.
+ */
+function workSection(title, entries, owners, withPr) {
+  const headers = ["Задача", "Поток", "Запустил", "Висит", "Кругов", "Чего ждёт", ...(withPr ? ["PR"] : [])];
+  const rows = entries.map((entry) => [
+    taskLink(entry.task),
+    entry.owner || owners.get(entry.task.id) || "неизвестно",
+    entry.launchedBy ?? "—",
+    hangingText(entry.days),
+    entry.rounds > 0 ? String(entry.rounds) : "—",
+    entry.ripe === undefined ? waitingText(entry.waiting) : aheadWaitingText(entry),
+    // У «В работе» PR бывает не всегда: ветка без PR — ещё не открыт.
+    ...(withPr ? [entry.pr === undefined ? "—" : prLink(entry.pr)] : []),
+  ]);
+  return section(title, entries.length, headers, rows);
+}
+
 /** «Можно брать» тремя таблицами по месту работы; `human` здесь нет — он в «Ждут владельца». */
 function freeSection(board) {
   const kinds = [
@@ -193,44 +215,62 @@ function freeSection(board) {
   return `## Можно брать — ${String(total)}\n\n${parts.join("\n\n")}`;
 }
 
-function contributionSection(credits, people, githubAvailable) {
-  const intro = "Очки — сумма размеров сделанных задач: S — 1, M — 2. Это наглядность, а не формула выплат: доли участников — `docs/11-revenue-split.md`.";
-  if (!githubAvailable) return `## Вклад\n\n${intro}\n\nНет данных GitHub: список влитых PR не получен.`;
-  if (people.length === 0) return `## Вклад\n\n${intro}\n\nПусто.`;
-  const person = (item) => (item.login === null ? NO_PR_LABEL : `[@${item.login}](https://github.com/${item.login})`);
-  const plain = (item) => (item.login === null ? NO_PR_LABEL : `@${item.login}`);
-  const totals = table(
-    ["GitHub", "Задач", "Очков", "Последний мердж"],
-    people.map((item) => [person(item), String(item.tasks), String(item.points), item.lastMergedAt === null ? "—" : formatDate(item.lastMergedAt)]),
+/** «Можно заделом» (Р178): задачи, чьи зависимости ждут ревью, — их можно начать поверх веток зависимостей. */
+function aheadFreeSection(board) {
+  const entries = board.aheadFree ?? [];
+  return section(
+    "Можно заделом",
+    entries.length,
+    ["Задача", "Поверх", "Исполнитель", "Эпик"],
+    entries.map(({ task, aheadOver }) => [taskLink(task), (aheadOver ?? []).join(", "), `${task.executor} · ${task.effort}`, task.epic]),
   );
-  const executors = table(
-    ["GitHub", "Исполнитель", "Задач", "Очков"],
-    people.flatMap((item) => item.executors.map((executor) => [plain(item), executor.owner, String(executor.tasks), String(executor.points)])),
+}
+
+/** Таблица одного периода «Вклада»; пустой — «Пусто.». */
+function contributionTable(rows) {
+  if (rows.length === 0) return "Пусто.";
+  return table(
+    ["Кто", "Задачи", "Очки", "Доработки", "Ревью и ответы", "Спецификации", "PR тимлидов"],
+    rows.map((row) => [row.who, String(row.tasks), String(row.points), String(row.rework), String(row.reviews), String(row.specs), String(row.leadPrs)]),
   );
-  return `## Вклад\n\n${intro}\n\n${totals}\n\n${executors}`;
+}
+
+/** Периоды, открытые на странице; остальные свёрнуты в `<details>`. */
+const OPEN_PERIODS = new Set(["today", "week"]);
+
+/**
+ * «Вклад»: по таблице на период — «Сегодня» и «Неделя» открыты, остальные в `<details>`
+ * (tasks/T-0208). `rows` — результат `contributionRows` или `null` (тогда все периоды пусты).
+ */
+function contributionSection(rows, githubAvailable) {
+  const intro = "Наглядность, а не формула выплат: доли участников проекта назначает владелец (`docs/11-revenue-split.md` §3). Время — МСК.";
+  const note = githubAvailable ? "" : "\n\nНет данных GitHub: список влитых PR не получен — показаны только спецификации.";
+  const blocks = ["today", "yesterday", "week", "month", "all"].map((key) => {
+    const title = PERIOD_TITLES[key];
+    const body = contributionTable(rows?.[key] ?? []);
+    return OPEN_PERIODS.has(key) ? `### ${title}\n\n${body}` : `<details>\n<summary>${title}</summary>\n\n${body}\n\n</details>`;
+  });
+  return `## Вклад\n\n${intro}${note}\n\n${blocks.join("\n\n")}`;
 }
 
 /**
  * Текст страницы доски. `board` — результат `classify`; `owners` — `Map<id, owner>` задач «в работе»
- * и «на ревью»; `credits` и `people` — из `taskCredits` и `contributions`; `now` — `Date`.
+ * и «на ревью»; `credits` — из `taskCredits`, `contribution` — из `contributionRows`; `now` — `Date`.
  * Даты — по Москве; `mergedPrs` — влитые PR задач для счётчика «влито сегодня». Только логины GitHub: ни почт, ни юзернеймов Telegram, ни имён.
  */
-export function renderBoardPage({ board, owners, credits, people, githubAvailable, mergedPrs = [], now }) {
+export function renderBoardPage({ board, owners, credits, contribution = null, githubAvailable, mergedPrs = [], now }) {
   const done = [...board.done].sort((a, b) => b.task.id.localeCompare(a.task.id));
   const sections = [
     ownerSection(board),
     leadSection(board),
-    streamsSection(streamsSummary(board).streams),
+    streamsSection(board, credits, now),
     // Доработку заканчивает любой поток с тем же исполнителем и уровнем, не только тот, кто вёл.
-    section(
-      "Доработка",
-      board.rework.length,
-      ["Задача", "Исполнитель", "PR", "Вёл"],
-      board.rework.map(({ task, pr }) => [taskLink(task), `${task.executor} · ${task.effort}`, prLink(pr), owners.get(task.id) || "неизвестно"]),
-    ),
+    workSection("Доработка", board.rework, owners, true),
     freeSection(board),
-    section("В работе", board.inProgress.length, ["Задача", "Взял"], board.inProgress.map(({ task }) => [taskLink(task), owners.get(task.id) || "неизвестно"])),
-    section("На ревью", board.review.length, ["Задача", "PR"], board.review.map(({ task, pr }) => [taskLink(task), prLink(pr)])),
+    aheadFreeSection(board),
+    workSection("В работе", board.inProgress, owners, board.inProgress.some((entry) => entry.pr !== undefined)),
+    workSection("На ревью", board.review, owners, true),
+    workSection("Задел", board.ahead ?? [], owners, true),
     section("Ждут", board.blocked.length, ["Задача", "Чего ждёт"], board.blocked.map(({ task, reason }) => [taskLink(task), reason])),
     section(
       "Готово",
@@ -242,7 +282,7 @@ export function renderBoardPage({ board, owners, credits, people, githubAvailabl
         return [taskLink(task), credit?.login ? `@${credit.login} · ${owner}` : owner, credit?.pr ? prLink(credit.pr) : "—"];
       }),
     ),
-    contributionSection(credits, people, githubAvailable),
+    contributionSection(contribution, githubAvailable),
   ];
   const counters = countersLine(boardCounters(board, mergedPrs, now));
   const intro = `Обновлено ${formatMoscow(now)} МСК. Страницу пересчитывает workflow \`task-board.yml\` после захвата, PR и мерджа — руками не править. Как брать задачу — [tasks/README.md](${TASKS_URL}/README.md#как-взять-задачу).`;

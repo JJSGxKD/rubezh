@@ -3,8 +3,8 @@ id: T-0169
 title: Порядок заданий у игрока — по состоянию, внутри по порядку из панели
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0167]
@@ -20,12 +20,12 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0169. Порядок заданий у игрока — по состоянию, внутри по порядку из панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0169.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0169.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md)
 
 ## Зачем
 

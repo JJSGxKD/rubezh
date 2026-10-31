@@ -1,6 +1,7 @@
 import type { EnemyPattern } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
-import { ENEMY_LOOKS, enemyColor, enemyRim, GEM_TIERS, PICKUP_LOOKS, WORLD_COLORS } from "../src/game/render/looks";
+import { ENEMY_STAGES } from "../src/content/stages";
+import { ENEMY_LOOKS, enemyColor, enemyRim, GEM_TIERS, PICKUP_LOOKS, stageColor, stageCore, STAGE_LOOKS, WORLD_COLORS } from "../src/game/render/looks";
 import { PICKUP_KIND } from "../src/game/sim/pickups";
 
 // Облик боя «Сумеречный рубеж» (design/README.md, «Вид боя»; tasks/T-0014):
@@ -42,7 +43,7 @@ describe("враги в красной гамме", () => {
   it("формы у всех поведений разные: главное различие типа — форма, а не оттенок", () => {
     const shapes = PATTERNS.map((pattern) => ENEMY_LOOKS[pattern].shape);
     expect(new Set(shapes).size).toBe(PATTERNS.length);
-    expect(PATTERNS).toHaveLength(10);
+    expect(PATTERNS).toHaveLength(8);
   });
 });
 
@@ -170,5 +171,23 @@ describe("облик подборов", () => {
   it("ключи текстур подборов не повторяются", () => {
     const keys = PICKUP_LOOKS.map((look) => look.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("облик ступеней врагов", () => {
+  it("описывает каждую ступень контента: за пределом массива взялась бы последняя запись", () => {
+    expect(STAGE_LOOKS.length).toBeGreaterThanOrEqual(ENEMY_STAGES.length);
+  });
+
+  it("даёт светлое ядро каждой ступени, кроме первой, и ядра попарно различны", () => {
+    const cores = ENEMY_STAGES.slice(1).map((_, index) => stageCore(index + 1));
+    expect(cores.every((core) => core !== null)).toBe(true);
+    expect(new Set(cores).size).toBe(cores.length);
+    expect(stageCore(0)).toBeNull();
+  });
+
+  it("красит одного и того же врага в разный цвет на каждой из ступеней", () => {
+    const colors = ENEMY_STAGES.map((_, index) => stageColor(0xcc3333, index));
+    expect(new Set(colors).size).toBe(ENEMY_STAGES.length);
   });
 });

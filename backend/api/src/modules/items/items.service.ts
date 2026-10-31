@@ -100,7 +100,11 @@ export class ItemsService {
 
   /** Открытые листы — больше не новые; чужие и убранные пропускаются. */
   async markSeen(accountId: string, itemIds: readonly string[], at = new Date()): Promise<number> {
-    return await this.items.markSeen(accountId, [...new Set(itemIds)], at);
+    const unique = [...new Set(itemIds)];
+    const marked = await this.items.markSeen(accountId, unique, at);
+    // Лист открыт — редкая добыча этого предмета больше не новость (Р135).
+    await this.notifications.readFor(accountId, "rare_loot", { key: "itemId", values: unique });
+    return marked;
   }
 
   /** Сколько новых предметов у игрока — число на вкладке арсенала. */
@@ -122,7 +126,7 @@ export class ItemsService {
     const outcome = await this.paid(accountId, () =>
       this.items.change(accountId, itemId, scoped(accountId, key), at, (item, account) => {
         const cost = upgradeCost(item, account.level);
-        if (cost === null) throw new ItemRuleError("item_max_level", "Предмет уже на пределе уровня — поднимите уровень аккаунта");
+        if (cost === null) throw new ItemRuleError("item_max_level", "Предмет уже на пределе уровня — подними уровень аккаунта");
         return {
           debit: { lines: lines(cost.coins, shardOf(item.rarity), cost.shards), reason: "item_upgrade" },
           level: item.level + 1,
@@ -203,7 +207,7 @@ export class ItemsService {
   async buy(accountId: string, key: string, purchase: PurchasedItem, at = new Date()): Promise<{ item: ItemView; duplicate: boolean }> {
     const outcome = await this.paid(accountId, () =>
       this.items.create(accountId, key, at, (account) => {
-        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разберите или объедините предметы");
+        if (account.alive >= INVENTORY_CAP) throw new ItemRuleError("inventory_full", "Инвентарь полон — разбери или объедини предметы");
         // Купленное игрок видит сразу — не «новое» на вкладке арсенала.
         return { ...purchase.shape, seen: true, debit: { lines: purchase.price, reason: "shop" } };
       }),

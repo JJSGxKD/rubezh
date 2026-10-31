@@ -5,6 +5,7 @@ import { findDifficulty } from "../src/content/difficulty";
 import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
+import { SECRETS } from "../src/content/secrets";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
@@ -14,11 +15,14 @@ import { captureWorld, restoreWorld, SnapshotError, WORLD_SNAPSHOT_VERSION } fro
 import { RUN_SNAPSHOT_FORMAT } from "../src/run-api";
 import { readSnapshotCounters } from "../src/snapshot-counters";
 import { dropChest, openChest } from "../src/game/sim/chests";
+import { chooseBlessing, isAwaitingBlessing } from "../src/game/sim/secrets";
 import { createTimelineDirector } from "../src/game/sim/director";
 import type { Spawner } from "../src/game/sim/spawner";
 import { stepWorld, type SimInput } from "../src/game/sim/step";
-import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
-import { advanceRun, checksumWorld, createCordonRun } from "./helpers/scripted-run";
+import { createWorld, TICK_SEC, type CreateWorldOptions, type SecretSite, type World } from "../src/game/sim/world";
+import { takeCordonEvents } from "../src/game/sim/cordon";
+import { damageEnemy } from "../src/game/sim/combat";
+import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
 // строку и прочитанный обратно, обязан дать ровно тот же забег, что шёл бы без
@@ -247,11 +251,35 @@ describe("снимок забега", () => {
     );
   });
 
-  it("отказывается читать снимок прежней версии 8: в нём нет зарядов карточек", () => {
+  it("отказывается читать снимок прежней версии: в нём нет счётчиков итога", () => {
     const run = newRun(1);
     const saved = roundTrip(run) as Record<string, unknown>;
-    expect(saved.version).toBe(9);
-    expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: 8 })).toThrow(SnapshotError);
+    expect(saved.version).toBe(WORLD_SNAPSHOT_VERSION);
+    expect(() =>
+      restoreWorld(newRun(1).world, newRun(1).director, { ...saved, version: WORLD_SNAPSHOT_VERSION - 1 }),
+    ).toThrow(SnapshotError);
+  });
+
+  it("снимок без полей счётчиков в stats — SnapshotError, а не нули", () => {
+    const run = newRun(1);
+    const saved = structuredClone(roundTrip(run)) as { stats: { scalars: Record<string, number> } };
+    delete saved.stats.scalars.bossKills;
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, saved)).toThrow(SnapshotError);
+  });
+
+  it("восстанавливает счётчики боссов, элит и кристаллов", () => {
+    const run = newRun(1);
+    run.world.stats.bossKills = 2;
+    run.world.stats.eliteKills = 5;
+    run.world.stats.crystalsCollected = 77;
+    const saved = roundTrip(run);
+
+    const resumed = newRun(1);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.stats.bossKills).toBe(2);
+    expect(resumed.world.stats.eliteKills).toBe(5);
+    expect(resumed.world.stats.crystalsCollected).toBe(77);
   });
 
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
@@ -292,9 +320,155 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(summary).toContain("xpCollected: world.stats.xpCollected");
   });
 
-  it("поле необязательное, поэтому формат снимка и мира прежний", () => {
+  it("поле необязательное, поэтому формат снимка прежний", () => {
     expect(RUN_SNAPSHOT_FORMAT).toBe(7);
-    expect(WORLD_SNAPSHOT_VERSION).toBe(9);
+  });
+});
+
+describe("снимок с тайниками (tasks/T-0352)", () => {
+  const WITH_SECRETS = { secrets: SECRETS };
+
+  /** Игрок прямо на месте тайника: скорость нулевая, шаг его не сдвинет. */
+  function standOn(world: World, site: SecretSite): void {
+    const player = world.player;
+    player.x = site.x;
+    player.y = site.y;
+    player.prevX = site.x;
+    player.prevY = site.y;
+    player.vx = 0;
+    player.vy = 0;
+  }
+
+  const shrineOf = (world: World): SecretSite => {
+    const shrine = world.secrets.sites.find((site) => site.kind === "shrine");
+    if (shrine === undefined) throw new Error("в раскладке нет капища");
+    return shrine;
+  };
+
+  const idle: SimInput = { moveX: 0, moveY: 0 };
+  const hold = (world: World, sec: number): void => {
+    for (let i = 0; i < Math.round(sec / TICK_SEC); i++) stepWorld(world, idle);
+  };
+
+  it("снимок несёт состояние тайников, а журналы для сцены в него не входят", () => {
+    const run = newRun(4, WITH_SECRETS);
+    standOn(run.world, shrineOf(run.world));
+    hold(run.world, 1);
+    expect(run.world.secrets.foundLog).toHaveLength(1);
+
+    const saved = roundTrip(run) as { secrets?: Record<string, unknown> };
+    expect(saved.secrets).toBeDefined();
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("foundLog");
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("usedLog");
+    expect(Object.keys(saved.secrets ?? {})).not.toContain("blessingLog");
+  });
+
+  it("восстанавливает места, стояние в круге, найденное и взятые благословения", () => {
+    const original = newRun(4, WITH_SECRETS);
+    const shrine = shrineOf(original.world);
+    standOn(original.world, shrine);
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    expect(original.world.secrets.blessings).toHaveLength(1);
+    // Игрок отошёл, и в круге его ждёт ещё не стоявшее место: найденное и ненайденное в одном снимке.
+    const saved = roundTrip(original);
+
+    const resumed = newRun(4, WITH_SECRETS);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.secrets.sites).toEqual(original.world.secrets.sites);
+    expect(resumed.world.secrets.blessings).toEqual(original.world.secrets.blessings);
+    expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+    expect(resumed.world.loadoutModifiers).toEqual(original.world.loadoutModifiers);
+    expect(resumed.world.playerStats).toEqual(original.world.playerStats);
+    expect(resumed.world.secrets.foundLog).toEqual([]);
+    expect(resumed.world.secrets.usedLog).toEqual([]);
+    expect(resumed.world.secrets.blessingLog).toEqual([]);
+  });
+
+  it("продолжает посреди стояния: хватает оставшегося, чтобы капище сработало вместе с оригиналом", () => {
+    const original = newRun(8, WITH_SECRETS);
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec / 2);
+    expect(original.world.secrets.sites.some((site) => site.holdTicks > 0)).toBe(true);
+    expect(original.world.secrets.blessings).toHaveLength(0);
+
+    const resumed = newRun(8, WITH_SECRETS);
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    hold(original.world, SECRETS.shrine.holdSec);
+    hold(resumed.world, SECRETS.shrine.holdSec);
+
+    expect(original.world.secrets.blessings).toHaveLength(1);
+    expect(resumed.world.secrets.blessings).toEqual(original.world.secrets.blessings);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+  });
+
+  it("сохраняет забег, остановленный на выборе благословения, и после выбора идёт так же", () => {
+    const make = (): Run => {
+      const run = newRun(8, WITH_SECRETS);
+      run.world.secrets.manualBlessing = true;
+      return run;
+    };
+    const original = make();
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    expect(isAwaitingBlessing(original.world)).toBe(true);
+
+    const resumed = make();
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    expect(isAwaitingBlessing(resumed.world)).toBe(true);
+    expect(resumed.world.secrets.offer).toEqual(original.world.secrets.offer);
+
+    const picked = original.world.secrets.offer?.options[1] ?? "";
+    expect(chooseBlessing(original.world, picked)).toBe(true);
+    expect(chooseBlessing(resumed.world, picked)).toBe(true);
+    hold(original.world, 5);
+    hold(resumed.world, 5);
+    expect(resumed.world.secrets.blessings).toEqual([picked]);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.playerStats).toEqual(original.world.playerStats);
+  });
+
+  it("снимок без поля тайников — SnapshotError: версия формата та же, а поле обязательное", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as Record<string, unknown>;
+    delete saved.secrets;
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, saved)).toThrow(SnapshotError);
+  });
+
+  it("снимок с чужой раскладкой — SnapshotError: число или вид мест не совпадает", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { sites: Record<string, unknown>[] } };
+    const fewer = { ...saved, secrets: { ...saved.secrets, sites: saved.secrets.sites.slice(1) } };
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, fewer)).toThrow(SnapshotError);
+
+    const otherKind = structuredClone(saved);
+    otherKind.secrets.sites[0].kind = otherKind.secrets.sites[0].kind === "shrine" ? "hoard" : "shrine";
+    expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, otherKind)).toThrow(SnapshotError);
+  });
+
+  it("битое поле тайников — SnapshotError, а не мир с NaN", () => {
+    const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { rng: unknown; sites: Record<string, unknown>[]; blessings: unknown; offer: unknown } };
+    const broken = [
+      { ...saved, secrets: { ...saved.secrets, rng: "много" } },
+      { ...saved, secrets: { ...saved.secrets, blessings: "fury" } },
+      { ...saved, secrets: { ...saved.secrets, blessings: [1] } },
+      { ...saved, secrets: { ...saved.secrets, offer: { siteIndex: 99, options: ["fury"] } } },
+      { ...saved, secrets: { ...saved.secrets, sites: saved.secrets.sites.map((site, index) => (index === 0 ? { ...site, x: null } : site)) } },
+    ];
+    for (const input of broken) {
+      expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, input)).toThrow(SnapshotError);
+    }
+  });
+
+  it("незнакомое благословение из снимка пропускается: забег идёт без прибавки, а не падает", () => {
+    const original = newRun(4, WITH_SECRETS);
+    standOn(original.world, shrineOf(original.world));
+    hold(original.world, SECRETS.shrine.holdSec + 1);
+    const saved = structuredClone(roundTrip(original)) as { secrets: { blessings: string[] } };
+    saved.secrets.blessings = ["нет-такого-благословения"];
+
+    const resumed = newRun(4, WITH_SECRETS);
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.secrets.blessings).toEqual([]);
   });
 });
 
@@ -337,6 +511,55 @@ describe("снимок посреди кольца стражей", () => {
     expect(resumed.world.cordon.active).toBe(false);
   });
 
+  it("кольцо, закончившееся после восстановления, несёт верные index, guards и lifeSec", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 6);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as unknown;
+    const resumed = createCordonRun({ seed: 21 });
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.cordon.guards).toBe(40);
+    expect(takeCordonEvents(resumed.world, 0).ended).toEqual([]);
+
+    for (const run of [original, resumed]) {
+      advanceRun(run, 4);
+      for (const index of aliveGuards(run.world)) damageEnemy(run.world, index, 1e9, 0);
+      advanceRun(run, 1);
+    }
+    const [ended, ...rest] = takeCordonEvents(resumed.world, 0).ended;
+    expect(rest).toEqual([]);
+    expect(ended).toMatchObject({ index: 0, outcome: "broken", guards: 40, killed: 40 });
+    expect(ended).toEqual(takeCordonEvents(original.world, 0).ended[0]);
+  });
+
+  it("журнал закончившихся колец в снимок не входит и после восстановления пуст", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 3);
+    for (const index of aliveGuards(original.world)) damageEnemy(original.world, index, 1e9, 0);
+    advanceRun(original, 1);
+    expect(takeCordonEvents(original.world, 0).ended).toHaveLength(1);
+
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    expect(saved.cordon).not.toHaveProperty("ended");
+    const resumed = createCordonRun({ seed: 21 });
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(takeCordonEvents(resumed.world, 0).ended).toEqual([]);
+    expect(resumed.world.cordon.ringsStarted).toBe(original.world.cordon.ringsStarted);
+  });
+
+  it("снимок без новых полей кольца читается: счётчики равны нулю", () => {
+    const original = createCordonRun({ seed: 21 });
+    advanceRun(original, 4);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    delete saved.cordon.ringsStarted;
+    delete saved.cordon.startedAtSec;
+    delete saved.cordon.guards;
+
+    const resumed = createCordonRun({ seed: 21 });
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.cordon).toMatchObject({ ringsStarted: 0, startedAtSec: 0, guards: 0, active: true });
+  });
+
   it("битое поле cordon — ошибка снимка, а не NaN в мире", () => {
     const run = createCordonRun({ seed: 3 });
     advanceRun(run, 1);
@@ -346,3 +569,64 @@ describe("снимок посреди кольца стражей", () => {
   });
 });
 
+describe("снимок посреди формирования и ожидания внутренних", () => {
+  const INNER_RING = { ...CORDON_RING, inner: [{ enemy: "elite_test", count: 2 }] };
+  const options = { seed: 21, ring: INNER_RING, enemies: [ELITE] };
+
+  /** Снимок после `before` секунд, восстановленный в свежий мир, через пять секунд совпадает с непрерывным. */
+  function resumeAfter(before: number): void {
+    const original = createCordonRun(options);
+    advanceRun(original, before);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as unknown;
+
+    const resumed = createCordonRun(options);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon.pending).toEqual(original.world.cordon.pending);
+    expect(resumed.world.cordon.pendingLeftSec).toBe(original.world.cordon.pendingLeftSec);
+
+    advanceRun(original, 5);
+    advanceRun(resumed, 5);
+
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon).toEqual(original.world.cordon);
+    expect(resumed.world.enemies.aliveCount).toBe(original.world.enemies.aliveCount);
+  }
+
+  it("посреди формирования, через 0,3 с: страж ещё со вспышкой", { timeout: 30_000 }, () => {
+    const probe = createCordonRun(options);
+    advanceRun(probe, 0.3);
+    expect(probe.world.enemies.phase[aliveGuards(probe.world)[0] ?? 0]).toBe(2);
+    resumeAfter(0.3);
+  });
+
+  it("посреди ожидания внутренних, через 0,5 с: место выбрано, элита ещё не вышла", { timeout: 30_000 }, () => {
+    const probe = createCordonRun(options);
+    advanceRun(probe, 0.5);
+    expect(probe.world.cordon.pending).toHaveLength(2);
+    resumeAfter(0.5);
+  });
+
+  it("снимок без полей pending и pendingLeftSec (как до задачи) читается: никого не ждём", () => {
+    const original = createCordonRun(options);
+    advanceRun(original, 0.5);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    delete saved.cordon.pending;
+    delete saved.cordon.pendingLeftSec;
+
+    const resumed = createCordonRun(options);
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.cordon.pending).toEqual([]);
+    expect(resumed.world.cordon.pendingLeftSec).toBe(0);
+    expect(resumed.world.cordon.active).toBe(true);
+  });
+
+  it("битое место ожидающего — ошибка снимка", () => {
+    const original = createCordonRun(options);
+    advanceRun(original, 0.5);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: { pending: Record<string, unknown>[] } };
+    saved.cordon.pending[0] = { typeIndex: 99, x: 0, y: 0 };
+    const fresh = createCordonRun(options);
+    expect(() => restoreWorld(fresh.world, fresh.director, saved)).toThrow(SnapshotError);
+  });
+});

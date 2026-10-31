@@ -6,6 +6,7 @@ import { ConversionsJournal, parseCursor } from "../ad-conversions/conversions-j
 import { emptySummary, type ConversionRow, type ConversionSummary } from "../ad-conversions/conversions.repository.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
+import type { UnknownKeyRow } from "../links/auto-sources.repository.js";
 import { LINK_CODE } from "../links/link-code.js";
 import { LINK_NETWORKS } from "../links/link-networks.js";
 import { LINK_TARGETS } from "../links/link-targets.js";
@@ -45,6 +46,24 @@ const newLinkSchema = z.object({
 });
 // Строго: владельца после создания не сменить, и лишнее поле в теле — ошибка, а не молчаливо брошенный `partnerId`.
 const retargetSchema = z.object({ target: z.enum(LINK_TARGETS) }).strict();
+/**
+ * Название и скрытие автоисточника (T-0180): хотя бы одно поле, лишних нет. Название — одна строка
+ * без управляющих знаков, 1–80 после обрезки; пустая строка и `null` сбрасывают его.
+ */
+const displaySchema = z
+  .object({
+    title: z
+      .string()
+      .max(200)
+      .refine((value) => !/\p{Cc}/u.test(value.trim()), { message: "без управляющих знаков" })
+      .transform((value) => value.trim())
+      .pipe(z.string().max(80, "не длиннее 80 знаков"))
+      .nullable()
+      .optional(),
+    hidden: z.boolean().optional(),
+  })
+  .strict()
+  .refine((value) => value.title !== undefined || value.hidden !== undefined, { message: "нужно название или скрытие" });
 const listQuerySchema = z.object({ partner: z.uuid().optional() });
 const journalQuerySchema = z.object({ before: z.string().max(80).optional() });
 const conversionIdSchema = z.uuid();
@@ -105,6 +124,31 @@ export class AdminLinksController {
     await this.limit(actor.accountId);
     const { target } = parse(() => retargetSchema.parse(body), "Меняется только цель ссылки — Mini App, бот или лендинг; владельца после создания не сменить");
     const link = await this.links.retarget(actor, await this.linkCode(code), target);
+    if (link === null) throw new LinkNotFoundError("Ссылки с таким кодом нет");
+    return { data: link };
+  }
+
+  /** Сводка незнакомых ключей параметра запуска. Объявлена выше маршрутов с `:code`. */
+  @Get("unknown-keys")
+  @RequirePermission("links.manage")
+  async unknownKeys(@Req() request: unknown): Promise<{ data: { keys: UnknownKeyRow[]; limit: number } }> {
+    return { data: await this.links.unknownKeys(accountOf(request)) };
+  }
+
+  /**
+   * Название и скрытие автоисточника: `campaign` и `source` не меняются, по ним идут разрезы аналитики.
+   * У ссылки, заведённой руками, — 400.
+   */
+  @Patch(":code/display")
+  @RequirePermission("links.manage")
+  async display(@Req() request: unknown, @Param("code") code: string, @Body() body: unknown): Promise<{ data: LinkView }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    const { title, hidden } = parse(() => displaySchema.parse(body), "Название — до 80 знаков без управляющих, скрытие — да или нет; нужно хотя бы одно");
+    const id = await this.linkCode(code);
+    let link: LinkView | null = null;
+    if (title !== undefined) link = await this.links.rename(actor, id, title === "" ? null : title);
+    if (hidden !== undefined) link = await this.links.setHidden(actor, id, hidden);
     if (link === null) throw new LinkNotFoundError("Ссылки с таким кодом нет");
     return { data: link };
   }

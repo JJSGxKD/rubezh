@@ -3,8 +3,8 @@ id: T-0113
 title: Доски рейтинга по зрителю: полная и общая, место и профиль по доске смотрящего
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead2-18
 size: M
 depends_on: [T-0112]
@@ -25,19 +25,20 @@ shared:
   - backend/api/src/platforms/telegram/welcome-progress.ts
   - backend/api/test/friends.test.ts
   - backend/api/test/admin.test.ts
+  - backend/api/test/compensation.test.ts
   - docs/14-scalability.md
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0113. Доски рейтинга по зрителю: полная и общая, место и профиль по доске смотрящего
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](T-0112-separate-board-restriction.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0113.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](archive/T-0112-separate-board-restriction.md)
 
 ## Зачем
 

@@ -17,7 +17,7 @@ export {
 export { BASE_CURRENCY, CURRENCIES, CURRENCY_KINDS, currency, isCurrencyCode, type Currency, type CurrencyCode, type CurrencyKind } from "./currencies.js";
 export { Decimal, decimal, positive, type DecimalInput } from "./decimal.js";
 export { freshness, type Freshness, type FreshnessPolicy } from "./freshness.js";
-export { MANUAL_RATE_PURPOSES, manualRate, manualToRate, type ManualRate, type ManualRatePurpose } from "./manual.js";
+export { MANUAL_RATE_PURPOSES, MARKET_MANUAL_MAX_DAYS, MARKET_MANUAL_RULE, PLATFORM_MANUAL_MAX_DAYS, manualRate, manualToRate, type ManualRate, type ManualRatePurpose } from "./manual.js";
 export { ACCEPT_POLICY, FRESHNESS_POLICY, HISTORY_REPEAT_MS, SOURCE_TIMEOUT_MS } from "./policy.js";
 export { quoteFromUnitsPerUsd, quoteInUsd, quotesViaHome, type Quote } from "./quote.js";
 export {
@@ -35,10 +35,10 @@ export {
 } from "./rates.js";
 export { SourceRateLimitedError, SourceUnavailableError, matchBySourceId, type RateSource, type SourceCurrency } from "./sources.js";
 export { MemoryRateStore } from "./memory-store.js";
-export { refreshRates, takeSnapshot, type RateAlerts, type RefreshReport } from "./refresh.js";
+export { FALLBACK_SOURCE, refreshRates, takeSnapshot, type RateAlerts, type RefreshReport } from "./refresh.js";
 export type { RateStore, SourceState, StoredRate } from "./store.js";
 export { fetchBytes, fetchJson, retryAfterMs, type FetchLike } from "./sources/http.js";
-export { CBR_CURRENCIES, ECB_CURRENCIES, ERAPI_CURRENCIES, ERAPI_TARIFFS, createCbrSource, createEcbSource, createErApiSource, parseCbr, parseEcb } from "./sources/fiat.js";
+export { CBR_CURRENCIES, ECB_CURRENCIES, ERAPI_CURRENCIES, ERAPI_TARIFFS, FOREXRATEAPI_CURRENCIES, FOREXRATEAPI_TARIFF, createCbrSource, createEcbSource, createErApiSource, createForexRateApiSource, parseCbr, parseEcb, parseForexRateApi } from "./sources/fiat.js";
 export {
   BINANCE_CURRENCIES,
   COINGECKO_CURRENCIES,

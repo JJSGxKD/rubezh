@@ -18,10 +18,15 @@ export function git(args) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER, stdio: ["ignore", "pipe", "pipe"] }).trim();
 }
 
+/** Без исключения, в заданном каталоге: `{ ok, stdout, stderr }`. */
+function tryGitIn(cwd, args) {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8", maxBuffer: MAX_BUFFER });
+  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr: (result.stderr ?? "").trim() };
+}
+
 /** То же, но без исключения: `{ ok, stdout, stderr }` — по тексту отказа решает вызывающий. */
 export function tryGit(args) {
-  const result = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
-  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr: (result.stderr ?? "").trim() };
+  return tryGitIn(ROOT, args);
 }
 
 export function fetchOrigin() {
@@ -56,22 +61,135 @@ export function takenIds() {
     .filter((id) => id !== undefined);
 }
 
+/** Сколько ждать ответа `gh`, мс: сеть бывает мертва, а зависшая команда мерджа хуже отказа. */
+export const GH_TIMEOUT_MS = 60_000;
+
+/**
+ * `gh` с таймаутом: `{ ok, stdout, stderr, timedOut }` — без исключения, решает
+ * вызывающий. Аргументы массивом, как у `git`. Зависший процесс убивается.
+ */
+export function gh(args, timeoutMs = GH_TIMEOUT_MS) {
+  const result = spawnSync("gh", args, { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER, timeout: timeoutMs, killSignal: "SIGKILL" });
+  const timedOut = result.error?.code === "ETIMEDOUT";
+  const stderr = timedOut ? `gh не ответил за ${String(Math.round(timeoutMs / 1000))} с` : (result.stderr ?? "").trim();
+  return { ok: result.status === 0, stdout: (result.stdout ?? "").trim(), stderr, timedOut };
+}
+
+/** Текст файла по пути в коммите `ref` (SHA или ветка) или `null`, если коммита или файла нет. */
+export function readFileAt(ref, path) {
+  const result = tryGit(["show", `${ref}:${path}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** Есть ли коммит `sha` в локальном репозитории. */
+export function hasCommit(sha) {
+  return tryGit(["cat-file", "-e", `${sha}^{commit}`]).ok;
+}
+
+/** Вывод `git diff --numstat --no-renames base...head` (изменения PR от общего предка) или `null`, если дифф не получился. */
+export function diffNumstat(base, head) {
+  const result = tryGit(["-c", "core.quotepath=off", "diff", "--numstat", "--no-renames", `${base}...${head}`]);
+  return result.ok ? result.stdout : null;
+}
+
+/** `base` — предок `head`: ветка не отстала от базы. Любой сбой git — «нет». */
+export function isAncestor(base, head) {
+  return tryGit(["merge-base", "--is-ancestor", base, head]).ok;
+}
+
+/** Код команд в `scripts/tasks` рабочей копии совпадает с `base`: нет ни правок, ни новых файлов. */
+export function toolsMatchBase(base) {
+  if (!tryGit(["diff", "--quiet", base, "--", "scripts/tasks"]).ok) return false;
+  const untracked = tryGit(["ls-files", "--others", "--exclude-standard", "--", "scripts/tasks"]);
+  return untracked.ok && untracked.stdout === "";
+}
+
+/**
+ * Влить в текущую ветку ветки зависимостей `<remote>/task/T-NNNN` по порядку
+ * `deps` (Р178, сборка ветки задела). Перемотка допустима, редактор сообщения не
+ * открывается. Первая неудача останавливает сборку и откатывает недовлитое
+ * слияние (`merge --abort`); уже влитые зависимости остаются — ветку целиком
+ * откатывает вызывающий. Возвращает `{ ok: true }` или `{ ok: false, dependency,
+ * missing, conflicts, stderr }`: `missing` — ветки зависимости нет на `remote`,
+ * `conflicts` — файлы с конфликтом.
+ */
+export function mergeDependencyBranches(deps, { cwd = ROOT, remote = "origin" } = {}) {
+  for (const id of deps) {
+    const ref = `${remote}/task/${id}`;
+    if (!tryGitIn(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).ok) {
+      return { ok: false, dependency: id, missing: true, conflicts: [], stderr: `ветки ${ref} нет` };
+    }
+    const merged = tryGitIn(cwd, ["merge", "--no-edit", ref]);
+    if (merged.ok) continue;
+    const conflicts = tryGitIn(cwd, ["diff", "--name-only", "--diff-filter=U"]).stdout.split("\n").filter((line) => line !== "");
+    tryGitIn(cwd, ["merge", "--abort"]);
+    return { ok: false, dependency: id, missing: false, conflicts, stderr: merged.stderr || merged.stdout };
+  }
+  return { ok: true };
+}
+
+/**
+ * Файлы, которые меняют ветки зависимостей относительно `base` (Р178, п. 6):
+ * `{ files, missing }`, `files` — без повторов, `missing` — зависимости, чьей
+ * ветки на `remote` нет (их файлы неизвестны).
+ */
+export function dependencyChangedFiles(deps, { base, cwd = ROOT, remote = "origin" }) {
+  const files = new Set();
+  const missing = [];
+  for (const id of deps) {
+    const result = tryGitIn(cwd, ["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...${remote}/task/${id}`]);
+    if (!result.ok) {
+      missing.push(id);
+      continue;
+    }
+    for (const path of result.stdout.split("\n")) if (path !== "") files.add(path);
+  }
+  return { files: [...files], missing };
+}
+
+/** Имя файла задачи `T-NNNN-<slug>.md` наверху `tasks/` в `base` или `null`. */
+export function taskFileNameAt(base, id) {
+  const names = listLines(["ls-tree", "--name-only", base, "tasks/"]).map((path) => path.replace(/^tasks\//, ""));
+  return names.find((name) => name.startsWith(`${id}-`) && name.endsWith(".md")) ?? null;
+}
+
+/** Поставить метку на PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
+export function addPrLabel(number, label) {
+  const result = spawnSync("gh", ["pr", "edit", String(number), "--add-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
+  return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
+}
+
 /** Снять метку с PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
 export function removePrLabel(number, label) {
   const result = spawnSync("gh", ["pr", "edit", String(number), "--remove-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
   return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
 }
 
+/**
+ * Сколько открытых PR читает доска. GraphQL GitHub не пускает запрос дороже
+ * 500 000 узлов, а поле `commits` стоит около 10 000 на PR: при 200 запрос
+ * отклонялся целиком, и все задачи с PR выглядели «в работе». 40 — с запасом.
+ */
+export const OPEN_PRS_LIMIT = 40;
+
 /** Открытые PR с метками (по ним видна «Доработка»), описанием и состоянием проверок (кого ждёт PR) или `null`, если `gh` нет или он не авторизован. */
 export function openPrs() {
-  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup"], {
+  const result = spawnSync("gh", ["pr", "list", "--state", "open", "--limit", String(OPEN_PRS_LIMIT), "--json", "number,headRefName,isDraft,labels,body,createdAt,statusCheckRollup,commits"], {
     cwd: ROOT,
     encoding: "utf8",
     maxBuffer: MAX_BUFFER,
   });
-  if (result.status !== 0) return null;
+  if (result.status !== 0) {
+    // Причина — в лог: без неё доска молча сливает «На ревью» с «В работе».
+    const reason = (result.stderr ?? "").split(/\r?\n/).find((line) => line.trim() !== "") ?? `код ${String(result.status)}`;
+    console.error(`предупреждение: gh pr list не ответил — ${reason.trim()}`);
+    return null;
+  }
   try {
     const parsed = JSON.parse(result.stdout);
+    if (Array.isArray(parsed) && parsed.length >= OPEN_PRS_LIMIT) {
+      console.error(`предупреждение: открытых PR не меньше ${String(OPEN_PRS_LIMIT)} — доска видит только их, подними OPEN_PRS_LIMIT`);
+    }
     return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
@@ -79,45 +197,97 @@ export function openPrs() {
 }
 
 /**
- * Влитые в dev PR веток задач из ответа `gh`: `[{ number, headRefName, login, mergedAt }]` или `null`, если
- * ответ не массив. Аккаунт мог быть удалён — тогда `author: null`, и `login` равен `null`, а PR остаётся.
+ * Дата коммита захвата задачи (`chore(tasks): Взять T-NNNN в работу`) в ветке
+ * `origin/task/T-NNNN` — ISO-строка или `null`, если ветки или коммита нет.
  */
-export function parseMergedTaskPrs(parsed) {
+export function claimedAt(id) {
+  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, `origin/task/${id}`]);
+  return result.ok && result.stdout !== "" ? result.stdout : null;
+}
+
+/**
+ * Влитые в dev PR из ответа `gh`: `[{ number, headRefName, baseRefName, login, mergedAt, body, commits,
+ * reviews, comments }]` или `null`, если ответ не массив. Аккаунт мог быть удалён — тогда `author: null`,
+ * и `login` равен `null`, а PR остаётся. Записи без номера или даты слияния отбрасываются; отсутствующие
+ * `body`, `commits`, `reviews` и `comments` — пусты.
+ */
+export function parseMergedPrs(parsed) {
   if (!Array.isArray(parsed)) return null;
+  const list = (value) => (Array.isArray(value) ? value : []);
   return parsed
-    .filter(
-      (pr) =>
-        typeof pr?.headRefName === "string" &&
-        /^task\/T-\d{4}$/.test(pr.headRefName) &&
-        typeof pr.number === "number" &&
-        typeof pr.mergedAt === "string",
-    )
+    .filter((pr) => typeof pr?.headRefName === "string" && typeof pr.number === "number" && typeof pr.mergedAt === "string")
     .map((pr) => ({
       number: pr.number,
       headRefName: pr.headRefName,
+      baseRefName: typeof pr.baseRefName === "string" ? pr.baseRefName : "",
       login: typeof pr.author?.login === "string" ? pr.author.login : null,
       mergedAt: pr.mergedAt,
+      body: typeof pr.body === "string" ? pr.body : "",
+      commits: list(pr.commits),
+      reviews: list(pr.reviews),
+      comments: list(pr.comments),
     }));
 }
 
-/** Влитые в dev PR задач или `null`, если `gh` нет или он не авторизован. */
-export function mergedTaskPrs() {
+/** Из влитых PR — только ветки задач `task/T-NNNN` в виде `{ number, headRefName, login, mergedAt }` для `taskCredits`. */
+export function taskPrsOf(prs) {
+  return prs
+    .filter((pr) => /^task\/T-\d{4}$/.test(pr.headRefName))
+    .map(({ number, headRefName, login, mergedAt }) => ({ number, headRefName, login, mergedAt }));
+}
+
+/** Влитые в задачи PR из ответа `gh`; `null`, если ответ не массив. */
+export function parseMergedTaskPrs(parsed) {
+  const prs = parseMergedPrs(parsed);
+  return prs === null ? null : taskPrsOf(prs);
+}
+
+/**
+ * Влитые в dev PR одним вызовом `gh` (раздел «Вклад» и «Готово») или `null`, если `gh` нет, он не авторизован
+ * или ответ не разобрался.
+ */
+export function mergedPrs() {
   const result = spawnSync(
     "gh",
-    ["pr", "list", "--state", "merged", "--base", "dev", "--limit", "1000", "--json", "number,headRefName,author,mergedAt"],
+    ["pr", "list", "--state", "merged", "--base", "dev", "--limit", "1000", "--json", "number,headRefName,baseRefName,author,mergedAt,body,commits,reviews,comments"],
     { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER },
   );
   if (result.status !== 0) return null;
   try {
-    return parseMergedTaskPrs(JSON.parse(result.stdout));
+    return parseMergedPrs(JSON.parse(result.stdout));
   } catch {
     return null;
   }
 }
 
+/**
+ * Добавленные в `origin/dev` файлы задач `tasks/T-NNNN-….md`: `[{ fileName, addedAt }]`, дата — коммита
+ * появления. `--diff-filter=A` вместе с поиском переименований не засчитывает переезд в архив (T-0204)
+ * новым файлом. Нет репозитория или истории — пустой список.
+ */
+export function addedTaskSpecs(base = BASE) {
+  const result = tryGit(["log", base, "--diff-filter=A", "--find-renames", "--name-status", "--format=@%cI", "--", "tasks"]);
+  if (!result.ok) return [];
+  const specs = new Map();
+  let addedAt = "";
+  for (const line of result.stdout.split("\n")) {
+    if (line.startsWith("@")) {
+      addedAt = line.slice(1);
+      continue;
+    }
+    const match = /^A\ttasks\/(?:archive\/)?(T-\d{4}-[^/]+\.md)$/.exec(line);
+    if (match === null) continue;
+    const id = match[1].slice(0, 6);
+    // Коммиты идут от новых к старым: последняя запись по задаче — самая ранняя.
+    specs.set(id, { fileName: match[1], addedAt });
+  }
+  return [...specs.values()];
+}
+
 /** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
 export function loadRegistryState(base = BASE) {
   const files = readOriginTasks(base);
+  const taken = takenIds();
   const { tasks, errors } = readTasks(files);
   const epics = files.find((file) => file.name === "epics.md");
   return {
@@ -125,8 +295,9 @@ export function loadRegistryState(base = BASE) {
     errors,
     epicOrder: epics === undefined ? [] : parseEpics(epics.text),
     repoFiles: readOriginFileList(base),
-    taken: takenIds(),
+    taken,
     prs: openPrs(),
+    claims: Object.fromEntries(taken.map((id) => [id, claimedAt(id)])),
   };
 }
 

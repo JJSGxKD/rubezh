@@ -3,8 +3,8 @@ id: T-0115
 title: Метка «Отдельная доска» в сводке, воронке и разборе забегов в панели
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: [T-0112]
@@ -28,11 +28,16 @@ zones:
   - apps/admin/test/board-mark.test.ts
 shared:
   - backend/api/test/daily-stats.test.ts
+  - apps/admin/src/screens/overview/overview-parts.tsx
+  - apps/admin/src/screens/review/review-parts.tsx
+  - backend/api/src/modules/admin/admin.module.ts
+  - backend/api/src/modules/admin/board-mark.reader.ts
+  - backend/api/test/admin.test.ts
   - backend/api/test/ad-conversions.integration.test.ts
   - backend/api/test/partners.integration.test.ts
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -42,7 +47,7 @@ batch: 3
 
 # T-0115. Метка «Отдельная доска» в сводке, воронке и разборе забегов в панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0115.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](T-0112-separate-board-restriction.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0115.json)](README.md#значки-статуса) [![T-0112](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0112.json&label=T-0112)](archive/T-0112-separate-board-restriction.md)
 
 ## Зачем
 
@@ -191,12 +196,12 @@ batch: 3
 
 ## Критерии приёмки
 
-- [ ] Метка видна только держателю права: в сводке, воронке и разборе; у
+- [x] Метка видна только держателю права: в сводке, воронке и разборе; у
   остальных ответ равен прежнему.
-- [ ] Чат, выгрузки, постбэки, кабинет партнёров и выплаты метку не читают; тест
+- [x] Чат, выгрузки, постбэки, кабинет партнёров и выплаты метку не читают; тест
   по исходникам и интеграционные кейсы зелёные.
-- [ ] Ни событий, ни метрик, ни миграций; запрещённых слов нет.
-- [ ] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`) и
+- [x] Ни событий, ни метрик, ни миграций; запрещённых слов нет.
+- [x] Дифф только в зонах и в строках из «Документы»; гейт (`CLAUDE.md`) и
   `pnpm docs:check` зелёные.
 
 ## PR

@@ -12,10 +12,12 @@ import {
   networkFormOf,
   networkFormSchema,
   networkPlatforms,
+  passTitle,
   percent,
   placeOptions,
   reachLabel,
   saveBlock,
+  reorderNetworks,
   saveNetwork,
   type AdBlock,
   type AdNetwork,
@@ -101,7 +103,7 @@ function block(patch: Partial<AdBlock> = {}): AdBlock {
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
-  return { networks: NETWORKS, blocks: [], funnel: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
+  return { networks: NETWORKS, blocks: [], funnel: [], passes: [], days: 7, places: ["second_chance", "wheel_spin", "run_double", "task", "interstitial"], profiles: PROFILES, formats: FORMATS, testMode: false, ...patch };
 }
 
 function form(patch: Partial<BlockForm> = {}): BlockForm {
@@ -122,9 +124,9 @@ describe("реклама в панели: обмен с сервером", () =>
     expect(loaded.ok && loaded.data.profiles.map((profile) => profile.key)).toEqual(["adsgram", "richads", "taddy"]);
     expect(calls[0]?.url).toBe("/api/v1/admin/ads?days=30");
 
-    await saveNetwork(api, "richads", { active: false, priority: 30, keys: { pubId: " 792361 ", appId: "" } });
+    await saveNetwork(api, "richads", { active: false, keys: { pubId: " 792361 ", appId: "" } });
     expect(calls[1]?.url).toBe("/api/v1/admin/ads/networks");
-    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ networkKey: "richads", active: false, priority: 30, keys: { pubId: "792361", appId: "" } });
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ networkKey: "richads", active: false, keys: { pubId: "792361", appId: "" } });
 
     await saveBlock(api, { blockId: null, networkKey: "richads", place: "interstitial", externalId: "  ", success: "view", active: true, platforms: [], devices: [] });
     expect(calls[2]?.url).toBe("/api/v1/admin/ads/blocks");
@@ -182,23 +184,35 @@ describe("реклама в панели: форма блока по профи�
   });
 });
 
+describe("реклама в панели: порядок сетей (T-0168)", () => {
+  it("порядок — POST /ads/networks/order с { ids }, ответ разбирается схемой; другая форма — ошибка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { order: ["taddy", "adsgram"] } }), json(200, { data: { surprise: true } }));
+    const api = new AdminApi(fetch);
+    const ok = await reorderNetworks(api, ["taddy", "adsgram"]);
+    expect(ok.ok && ok.data.order).toEqual(["taddy", "adsgram"]);
+    expect(calls[0]?.url).toBe("/api/v1/admin/ads/networks/order");
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ ids: ["taddy", "adsgram"] });
+    expect((await reorderNetworks(api, ["adsgram", "taddy"])).ok).toBe(false);
+  });
+});
+
 describe("реклама в панели: сети", () => {
   it("ключи сети — по виду; включить без всех ключей нельзя, выключенной — задавать по одному", () => {
     const profile = PROFILES[1];
     const errors = (values: { active: boolean; keys: Record<string, string> }) => {
-      const result = networkFormSchema(profile).safeParse({ priority: 30, ...values });
+      const result = networkFormSchema(profile).safeParse(values);
       return result.success ? {} : Object.fromEntries(result.error.issues.map((issue) => [issue.path.join("."), issue.message]));
     };
     expect(errors({ active: false, keys: { pubId: "792361", appId: "" } })).toEqual({});
     expect(errors({ active: true, keys: { pubId: "792361", appId: "" } })).toEqual({ "keys.appId": "Без этого ключа сеть не включить" });
     expect(errors({ active: false, keys: { pubId: "pub-1", appId: "" } })).toEqual({ "keys.pubId": "Не похоже на значение из кабинета — пример «792361»" });
     expect(errors({ active: true, keys: { pubId: "792361", appId: "1396" } })).toEqual({});
-    expect(networkFormSchema(undefined).safeParse({ active: true, priority: 1, keys: {} }).success).toBe(false);
-    expect(networkFormSchema(profile).safeParse({ active: false, priority: 1.5, keys: {} }).success).toBe(false);
+    expect(networkFormSchema(undefined).safeParse({ active: true, keys: {} }).success).toBe(false);
   });
 
   it("форма сети берёт ключи профиля — заданные и пустые; лишнего ключа из базы в форме нет", () => {
-    expect(networkFormOf({ ...NETWORKS[1], keys: { pubId: "792361", legacy: "x" } } as AdNetwork, PROFILES[1])).toEqual({ active: true, priority: 30, keys: { pubId: "792361", appId: "" } });
+    expect(networkFormOf({ ...NETWORKS[1], keys: { pubId: "792361", legacy: "x" } } as AdNetwork, PROFILES[1])).toEqual({ active: true, keys: { pubId: "792361", appId: "" } });
   });
 
   it("покрытие места — только сети, что реально показывают: включённая, с ключами, блок по правилам", () => {
@@ -280,8 +294,26 @@ describe("реклама в панели: мелочи", () => {
     expect(reachLabel(view(), block({ platforms: ["telegram"], devices: ["android", "ios"] }))).toBe("Telegram; Android, iOS");
     // Пустой список площадок — там, где работает сеть, а не «все площадки».
     expect(reachLabel(view(), block())).toBe("Telegram; все устройства");
-    expect(funnelNetworkTitle("vip", NETWORKS)).toBe("VIP без ролика");
+    // Пропуск VIP — не сеть: из подписей воронки он ушёл, у него своя таблица (Р99).
+    expect(funnelNetworkTitle("vip", NETWORKS)).toBe("vip");
     expect(funnelNetworkTitle("adsgram", NETWORKS)).toBe("AdsGram");
     expect(funnelNetworkTitle("monetag", NETWORKS)).toBe("monetag");
+  });
+});
+
+describe("реклама в панели: пропуск VIP", () => {
+  it("подпись пропуска по ключу; незнакомый — ключом", () => {
+    expect(passTitle("vip")).toBe("VIP");
+    expect(passTitle("gold")).toBe("gold");
+  });
+
+  it("ответ с пропусками разбирается; без поля (сервер старее панели) — пусто", async () => {
+    const base = { networks: [], blocks: [], funnel: [], days: 7, places: ["second_chance"] };
+    const withPasses = fakeFetch(json(200, { data: { ...base, passes: [{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }] } }));
+    const loaded = await fetchAds(new AdminApi(withPasses.fetch), 7);
+    expect(loaded.ok && loaded.data.passes).toEqual([{ passName: "vip", place: "wheel_spin", used: 3, players: 2, claimed: 1 }]);
+    const old = fakeFetch(json(200, { data: base }));
+    const legacy = await fetchAds(new AdminApi(old.fetch), 7);
+    expect(legacy.ok && legacy.data.passes).toEqual([]);
   });
 });

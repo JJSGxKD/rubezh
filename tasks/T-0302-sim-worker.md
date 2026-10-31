@@ -3,8 +3,8 @@ id: T-0302
 title: sim-worker — отдельный процесс со своей сборкой движка: очередь проверки и симуляции черновика контента, отчёт против текущей версии
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0301]
@@ -14,6 +14,7 @@ shared:
   - pnpm-workspace.yaml
   - pnpm-lock.yaml
   - tsconfig.json
+  - tsconfig.tests.json
   - vitest.config.ts
   - docker-compose.yml
   - infra/**
@@ -23,7 +24,8 @@ shared:
   - docs/01-tech-stack.md
   - docs/20-env-and-ports.md
   - docs/21-diagrams.md
-runner: local
+  - docs/30-configuration-map.md
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: patch
@@ -33,7 +35,7 @@ batch: 7
 
 # T-0302. sim-worker — отдельный процесс со своей сборкой движка: очередь проверки и симуляции черновика контента, отчёт против текущей версии
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json)](README.md#значки-статуса) [![T-0301](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json&label=T-0301)](T-0301-content-snapshot.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json)](README.md#значки-статуса) [![T-0301](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0301.json&label=T-0301)](archive/T-0301-content-snapshot.md)
 
 ## Зачем
 

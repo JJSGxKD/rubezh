@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Redis } from "ioredis";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { AdminSettingsController } from "../src/modules/admin/admin-settings.controller.js";
 import { AdminSettingsService } from "../src/modules/admin/admin-settings.service.js";
+import type { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { MemoryRateStore } from "@bh/fx";
 import { FxHooks } from "../src/modules/fx/fx-hooks.js";
@@ -125,6 +127,24 @@ describe("каталог настроек", () => {
     expect(SETTINGS.chatGeneral.schema.safeParse("").success).toBe(true);
     expect(SETTINGS.chatGeneral.schema.safeParse("@team").success).toBe(false);
     expect(SETTINGS.chatGeneral.schema.safeParse("-100:").success).toBe(false);
+  });
+});
+
+describe("ссылки «Связаться с разработчиком»", () => {
+  const keys = [SETTINGS.contactUrlTelegram, SETTINGS.contactUrlMax, SETTINGS.contactUrlVk, SETTINGS.contactUrlWeb];
+
+  it("ключи по соглашению каталога, умолчание — пусто", () => {
+    expect(keys.map((setting) => setting.key)).toEqual(["contact.url-telegram", "contact.url-max", "contact.url-vk", "contact.url-web"]);
+    for (const setting of keys) expect(setting.fallback).toBe("");
+  });
+
+  it("https проходит, пусто допустимо, http и javascript: отклоняются", () => {
+    for (const setting of keys) {
+      expect(setting.schema.safeParse("https://t.me/x?direct").success, setting.key).toBe(true);
+      expect(setting.schema.safeParse("").success, setting.key).toBe(true);
+      expect(setting.schema.safeParse("http://t.me/x").success, setting.key).toBe(false);
+      expect(setting.schema.safeParse("javascript:alert(1)").success, setting.key).toBe(false);
+    }
   });
 });
 
@@ -315,6 +335,16 @@ describe("настройки в панели", () => {
     expect(saved).toMatchObject({ value: "-200:4", source: "base", envValue: "-100", kind: "chat" });
     const [entry] = await rolesRepository.recentAudit(10);
     expect(entry).toMatchObject({ action: "settings.save", target: "notify.chat.general", before: { value: "-100", source: "env" }, after: { value: "-200:4", source: "base" } });
+  });
+
+  it("число из панели приходит числом и сохраняется; число строкой — отказ каталога", async () => {
+    const { admin, owner } = await panel();
+    const controller = new AdminSettingsController(admin, { consume: () => Promise.resolve(true) } as unknown as RateLimiter);
+    const request = { account: owner };
+    const { data } = await controller.save(request, "bot-mention.name.coins", { value: 120 });
+    expect(data).toMatchObject({ key: "bot-mention.name.coins", value: 120, source: "base" });
+    await expect(controller.save(request, "bot-mention.name.coins", { value: "120" })).rejects.toMatchObject({ code: "validation_failed" });
+    await expect(controller.save(request, "bot-mention.name.coins", { value: [120] })).rejects.toMatchObject({ code: "validation_failed" });
   });
 
   it("сброс без записи в базе — не событие для журнала", async () => {

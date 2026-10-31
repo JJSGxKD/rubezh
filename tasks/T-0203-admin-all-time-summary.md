@@ -31,7 +31,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -41,7 +41,7 @@ batch: 3
 
 # T-0203. Сводка «чего достигли» в панели — итоги за всё время и рекорды DAU/WAU/MAU
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0203.json)](README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](T-0052-overview-ads-and-periods-screen.md) [![T-0115](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0115.json&label=T-0115)](T-0115-board-label-in-reports.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0203.json)](README.md#значки-статуса) [![T-0052](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0052.json&label=T-0052)](archive/T-0052-overview-ads-and-periods-screen.md) [![T-0115](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0115.json&label=T-0115)](T-0115-board-label-in-reports.md)
 
 ## Зачем
 

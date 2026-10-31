@@ -1,5 +1,6 @@
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { createCordonState, type CordonState } from "../sim/cordon";
+import { restoreBlessings } from "../sim/secrets";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
 
@@ -21,7 +22,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 9;
+export const WORLD_SNAPSHOT_VERSION = 12;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -51,6 +52,30 @@ interface EncodedPool {
   arrays: Record<string, EncodedArray>;
 }
 
+/** Тайник в снимке: вид нужен для сверки с раскладкой, остальное — состояние. */
+interface SiteSnapshot {
+  kind: string;
+  x: number;
+  y: number;
+  active: boolean;
+  visible: boolean;
+  found: boolean;
+  used: boolean;
+  holdTicks: number;
+}
+
+/**
+ * Состояние тайников. Раскладка бросается при создании мира из того же seed и
+ * контента, поэтому места в снимке нужны для сверки и для огонька, который
+ * летит; журналы для сцены (`foundLog`, `usedLog`, `blessingLog`) не входят.
+ */
+interface SecretsSnapshot {
+  rng: number;
+  sites: SiteSnapshot[];
+  offer: { siteIndex: number; options: string[] } | null;
+  blessings: string[];
+}
+
 export interface WorldSnapshot {
   version: number;
   rng: number;
@@ -70,8 +95,10 @@ export interface WorldSnapshot {
   pickups: EncodedPool;
   /** состояние сундуков; записи для сцены (`founds`, `openings`) не входят */
   chest: { rng: number; dropped: number; opened: number };
+  /** тайники рубежа: поток, места, выбор капища и взятые благословения */
+  secrets: SecretsSnapshot;
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
-  cordon?: CordonState;
+  cordon?: Omit<CordonState, "ended">;
   spawner: unknown;
 }
 
@@ -96,7 +123,9 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     gems: encodeRecord(world.gems, world.gems.count),
     pickups: encodeRecord(world.pickups, world.pickups.count),
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
-    cordon: { ...world.cordon },
+    secrets: capturedSecrets(world),
+    // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
+    cordon: capturedCordon(world.cordon),
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -137,10 +166,100 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.founds = [];
   world.chests.openings = [];
   restoreCordon(world, snapshot.cordon);
+  restoreSecrets(world, snapshot.secrets);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
   world.events.written = 0;
+}
+
+function capturedSecrets(world: World): SecretsSnapshot {
+  const secrets = world.secrets;
+  return {
+    rng: secrets.rng.getState(),
+    sites: secrets.sites.map((site) => ({
+      kind: site.kind,
+      x: site.x,
+      y: site.y,
+      active: site.active,
+      visible: site.visible,
+      found: site.found,
+      used: site.used,
+      holdTicks: site.holdTicks,
+    })),
+    offer: secrets.offer === null ? null : { siteIndex: secrets.offer.siteIndex, options: [...secrets.offer.options] },
+    blessings: [...secrets.blessings],
+  };
+}
+
+/**
+ * Тайники. Раскладка уже брошена при создании мира, поэтому снимок обязан с
+ * ней сойтись: другое число мест или вид — снимок другого контента, а не
+ * повод молча поставить игрока на чужую карту. Поле обязательное: версию
+ * формата подняли, и старый снимок до сюда не доходит.
+ */
+function restoreSecrets(world: World, input: unknown): void {
+  const raw = asRecord(input, "secrets");
+  const secrets = world.secrets;
+  const sites = asArray(raw.sites, "secrets.sites");
+  if (sites.length !== secrets.sites.length) {
+    throw new SnapshotError(`secrets.sites: ${sites.length} мест вместо ${secrets.sites.length}`);
+  }
+
+  // Сначала всё читается и проверяется, потом пишется: битый снимок не оставляет мир наполовину тайниковым.
+  const parsed = sites.map((entry, i) => {
+    const site = asRecord(entry, `secrets.sites[${i}]`);
+    const kind = asString(site.kind, `secrets.sites[${i}].kind`);
+    if (kind !== secrets.sites[i].kind) {
+      throw new SnapshotError(`secrets.sites[${i}].kind: ${kind} вместо ${secrets.sites[i].kind}`);
+    }
+    return {
+      x: asNumber(site.x, `secrets.sites[${i}].x`),
+      y: asNumber(site.y, `secrets.sites[${i}].y`),
+      active: asBoolean(site.active, `secrets.sites[${i}].active`),
+      visible: asBoolean(site.visible, `secrets.sites[${i}].visible`),
+      found: asBoolean(site.found, `secrets.sites[${i}].found`),
+      used: asBoolean(site.used, `secrets.sites[${i}].used`),
+      holdTicks: asNumber(site.holdTicks, `secrets.sites[${i}].holdTicks`),
+    };
+  });
+  const rng = asNumber(raw.rng, "secrets.rng");
+  const blessings = asArray(raw.blessings, "secrets.blessings").map((id, i) => asString(id, `secrets.blessings[${i}]`));
+  let offer: SecretsSnapshot["offer"] = null;
+  if (raw.offer !== null) {
+    const entry = asRecord(raw.offer, "secrets.offer");
+    offer = {
+      siteIndex: asIndex(entry.siteIndex, secrets.sites.length, "secrets.offer.siteIndex"),
+      options: asArray(entry.options, "secrets.offer.options").map((id, i) => asString(id, `secrets.offer.options[${i}]`)),
+    };
+  }
+
+  secrets.rng.setState(rng);
+  parsed.forEach((state, i) => Object.assign(secrets.sites[i], state));
+  secrets.offer = offer;
+  // Журналы — для сцены: после восстановления она начинает с чистого, событие не повторяется.
+  secrets.foundLog = [];
+  secrets.usedLog = [];
+  secrets.blessingLog = [];
+  // Прибавки взятых благословений — заново на мир, собранный из того же набора.
+  restoreBlessings(world, blessings);
+}
+
+function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
+  return {
+    active: state.active,
+    centerX: state.centerX,
+    centerY: state.centerY,
+    radius: state.radius,
+    minRadius: state.minRadius,
+    shrinkPerSec: state.shrinkPerSec,
+    timeLeftSec: state.timeLeftSec,
+    ringsStarted: state.ringsStarted,
+    startedAtSec: state.startedAtSec,
+    guards: state.guards,
+    pending: state.pending.map((entry) => ({ ...entry })),
+    pendingLeftSec: state.pendingLeftSec,
+  };
 }
 
 /**
@@ -161,6 +280,23 @@ function restoreCordon(world: World, input: unknown): void {
     minRadius: asNumber(raw.minRadius, "cordon.minRadius"),
     shrinkPerSec: asNumber(raw.shrinkPerSec, "cordon.shrinkPerSec"),
     timeLeftSec: asNumber(raw.timeLeftSec, "cordon.timeLeftSec"),
+    ringsStarted: raw.ringsStarted === undefined ? 0 : asNumber(raw.ringsStarted, "cordon.ringsStarted"),
+    startedAtSec: raw.startedAtSec === undefined ? 0 : asNumber(raw.startedAtSec, "cordon.startedAtSec"),
+    guards: raw.guards === undefined ? 0 : asNumber(raw.guards, "cordon.guards"),
+    // Снимок до Р166 внутренних врагов не знал: «никого не ждём».
+    pending:
+      raw.pending === undefined
+        ? []
+        : asArray(raw.pending, "cordon.pending").map((entry, i) => {
+            const item = asRecord(entry, `cordon.pending[${i}]`);
+            return {
+              typeIndex: asIndex(item.typeIndex, world.enemyTypes.length, `cordon.pending[${i}].typeIndex`),
+              x: asNumber(item.x, `cordon.pending[${i}].x`),
+              y: asNumber(item.y, `cordon.pending[${i}].y`),
+            };
+          }),
+    pendingLeftSec: raw.pendingLeftSec === undefined ? 0 : asNumber(raw.pendingLeftSec, "cordon.pendingLeftSec"),
+    ended: [],
   });
 }
 

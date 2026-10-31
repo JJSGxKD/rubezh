@@ -19,12 +19,12 @@ shared:
   - docs/32-balance.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0114. Сезон и награды за места по доске зрителя, призы только внутриигровые

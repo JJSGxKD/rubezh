@@ -9,6 +9,7 @@ import { IdempotencyConflictError, InsufficientFundsError } from "./wallet-error
 import { WALLET_REPOSITORY, type ExistingEntry, type RevokeInput, type RevokeOutcome, type WalletEntryRow, type WalletRepository } from "./wallet.repository.js";
 import {
   ADMIN_REASON,
+  REVOKE_REASON,
   isEarnReason,
   type Balances,
   type GrantReason,
@@ -136,18 +137,22 @@ export class WalletService {
   }
 
   /**
-   * Забрать начисленное записью `grantKey` при возврате звёзд (tasks/T-0023):
-   * не больше начисленного и не больше баланса, в минус баланс не уходит.
-   * Потраченное не возвращается. Повтор тем же ключом ничего не списывает.
+   * Забрать начисленное записью `grantKey` при возврате звёзд (tasks/T-0023)
+   * или награду за задание при отписке (tasks/T-0177): не больше начисленного
+   * и не больше баланса, в минус баланс не уходит. Потраченное не
+   * возвращается. Повтор тем же ключом и с той же причиной ничего не списывает
+   * второй раз; тот же ключ с другой причиной — `IdempotencyConflictError`.
+   * Причина не задана — возврат звёзд.
    */
   async revokeUpTo(input: RevokeRequest): Promise<RevokeOutcome> {
     checkKey(input.grantKey);
     checkKey(input.idempotencyKey);
     if (this.repository.revokeUpTo === undefined) throw new Error("хранилище кошелька не умеет отзывать начисленное");
-    const outcome = await this.repository.revokeUpTo({ ...input, source: input.source ?? null, at: input.at ?? new Date() });
+    const reason = input.reason ?? REVOKE_REASON;
+    const outcome = await this.repository.revokeUpTo({ ...input, reason, source: input.source ?? null, at: input.at ?? new Date() });
     // Пишется только тот раз, когда что-то забрали: повторы и пустые отзывы лог не растят.
     if (outcome.status === "revoked") {
-      this.logger.warn(JSON.stringify({ module: "wallet", event: "wallet_revoked", accountId: input.accountId, resource: input.resource, revoked: outcome.revoked, granted: outcome.granted }));
+      this.logger.warn(JSON.stringify({ module: "wallet", event: "wallet_revoked", accountId: input.accountId, resource: input.resource, reason, revoked: outcome.revoked, granted: outcome.granted }));
     }
     return outcome;
   }

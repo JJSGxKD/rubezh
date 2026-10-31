@@ -100,6 +100,9 @@ export class FriendsService implements OnModuleInit {
       this.friends.bonusClaimed(accountId),
     ]);
     const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+    // Игрок увидел заявки на экране друзей — колокольчик про них гаснет (Р135).
+    // Знак вкладки считает ожидающее ответа и от этого не меняется.
+    await this.notifications.readFor(accountId, "friend_request");
     return {
       friends,
       incoming,
@@ -203,6 +206,7 @@ export class FriendsService implements OnModuleInit {
       coins += result.credited;
       await this.friends.markClaimed(gift.fromAccountId, actor.accountId, gift.day);
     }
+    await this.notifications.readFor(actor.accountId, "friend_gift", { key: "fromAccountId", values: [...new Set(gifts.map((gift) => gift.fromAccountId))] });
     return { claimed: gifts.length, coins };
   }
 
@@ -221,8 +225,8 @@ export class FriendsService implements OnModuleInit {
       maxIncoming: FRIENDS_RULES.maxIncomingRequests,
       maxOutgoing: FRIENDS_RULES.maxOutgoingRequests,
     });
-    if (outcome === "incoming_full") throw new FriendLimitError("У игрока слишком много заявок — попробуйте позже");
-    if (outcome === "outgoing_full") throw new FriendLimitError("Слишком много заявок ждут ответа — отмените часть");
+    if (outcome === "incoming_full") throw new FriendLimitError("У игрока слишком много заявок — попробуй позже");
+    if (outcome === "outgoing_full") throw new FriendLimitError("Слишком много заявок ждут ответа — отмени часть");
     // Сообщение — только о новой заявке и мимо ответа: повтор той же заявки
     // не пишет второй раз, а медленный Telegram не держит игрока.
     if (outcome === "sent") {
@@ -239,15 +243,19 @@ export class FriendsService implements OnModuleInit {
     const result = await this.friends.befriend(fromId, actor.accountId, "request", FRIENDS_RULES.maxFriends);
     if (result.outcome === "limit") {
       throw new FriendLimitError(
-        result.accountId === actor.accountId ? `У вас уже ${FRIENDS_RULES.maxFriends} друзей — это потолок` : "У игрока уже потолок друзей",
+        result.accountId === actor.accountId ? `У тебя уже ${FRIENDS_RULES.maxFriends} друзей — это потолок` : "У игрока уже потолок друзей",
       );
     }
     if (result.outcome === "added") this.log("friend_added", { accountId: actor.accountId, friendId: fromId, source: "request" });
+    await this.notifications.readFor(actor.accountId, "friend_request", { key: "fromAccountId", values: [fromId] });
     return { status: "friends" };
   }
 
   async decline(actor: AccessTokenClaims, fromId: string): Promise<{ declined: boolean }> {
-    return { declined: await this.friends.dropRequest(fromId, actor.accountId) };
+    const declined = await this.friends.dropRequest(fromId, actor.accountId);
+    // Заявки уже нет, даже если отклонять было нечего, — уведомление о ней тоже.
+    await this.notifications.readFor(actor.accountId, "friend_request", { key: "fromAccountId", values: [fromId] });
+    return { declined };
   }
 
   async cancel(actor: AccessTokenClaims, toId: string): Promise<{ cancelled: boolean }> {

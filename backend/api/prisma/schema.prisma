@@ -238,6 +238,7 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
 
@@ -447,7 +448,7 @@ model Run {
   enemiesKilled    Int?        @map("enemies_killed")
   /// оружие, уровни и нанесённый урон к концу забега: `[{ id, level, damage? }]`
   weapons          Json?
-  /// подробности для листа забега: `{ passives, damageTaken, xpCollected, waveReached, topKills }`; `null` — сборка до листа
+  /// подробности для листа забега: `{ passives, damageTaken, xpCollected, waveReached, topKills, bossKills, eliteKills, chestsOpened, crystals }` (счётчики итога, T-0125: строка без ключей читается как `null`); `null` — сборка до листа
   details          Json?
   deathCause       String?     @map("death_cause") @db.VarChar(64)
   /// в забеге включали читы режима разработчика
@@ -463,9 +464,11 @@ model Run {
   verdictReasons   String[]    @map("verdict_reasons")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account     Account         @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  purchases   Purchase[]
-  adContinues RunAdContinue[]
+  account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchases    Purchase[]
+  adContinues  RunAdContinue[]
+  gemContinues RunGemContinue[]
+  proof        RunProof?
 
   // Профиль игрока: его забеги, свежие первыми.
   @@index([accountId, finishedAt])
@@ -500,6 +503,59 @@ model RunAdContinue {
   // Суточный потолок рекламных продолжений игрока (Р4).
   @@index([accountId, grantedAt])
   @@map("run_ad_continue")
+}
+
+/// Второй шанс за самоцветы (docs/35-stage4-plan.md Р162, tasks/T-0324):
+/// продолжение забега, купленное в игровой валюте. Третья книга продолжений
+/// рядом с покупками за звёзды и рекламой: итог забега сверяется со всеми, а
+/// один номер продолжения не выдаётся двумя способами. Строка и списание
+/// самоцветов (причина `continue`, ключ `continue:<run_id>:<continue_no>`)
+/// пишутся одной транзакцией.
+///
+/// Цена — целые самоцветы, как и балансы кошелька: дробного самоцвета не
+/// бывает, и точность здесь не теряется (по той же причине у покупки за
+/// звёзды `Int`, а не `Decimal`). `elapsed_sec` — секунда, по которой
+/// посчитана цена: по ней итог забега проверяет, не заплачено ли за меньшее
+/// время, чем прошло (Р5.2). Вайп стирает забеги, строки уходят каскадом.
+model RunGemContinue {
+  runId      String   @map("run_id") @db.VarChar(64)
+  /// какое по счёту продолжение забега
+  continueNo Int      @map("continue_no")
+  accountId  String   @map("account_id") @db.Uuid
+  /// секунда забега, по которой посчитана цена
+  elapsedSec Float    @map("elapsed_sec")
+  /// списано самоцветов
+  priceGems  Int      @map("price_gems")
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([runId, continueNo])
+  // Продолжения игрока по времени: каскад с аккаунта и разбор покупок.
+  @@index([accountId, grantedAt])
+  @@map("run_gem_continue")
+}
+
+/// Запись забега для проверки (docs/35-stage4-plan.md WP5, tasks/T-0317):
+/// сжатый gzip-ом `RunProof` — всё, что задаёт исход, и ничего лишнего. По ней
+/// сервер повторяет забег (T-0318, T-0319). Одна запись на забег; обычная живёт
+/// неделю (`keep_until`), у забегов из верха и с редкой добычей — полгода.
+/// Очистка раз в час удаляет просроченные пачками; вайп стирает своим шагом
+/// до забегов (`wipe-plan.ts`), каскад — только страховка.
+model RunProof {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  /// gzip от JSON записи: до 64 КБ, распакованная — до 512 КБ
+  proof      Bytes
+  sizeBytes  Int      @map("size_bytes")
+  receivedAt DateTime @map("received_at") @db.Timestamptz(3)
+  keepUntil  DateTime @map("keep_until") @db.Timestamptz(3)
+
+  run Run @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  // Очистка: просроченные, самые давние первыми.
+  @@index([keepUntil])
+  @@map("run_proof")
 }
 
 // Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
@@ -2089,6 +2145,51 @@ model IntegrationSecret {
   @@map("integration_secret")
 }
 
+/// Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, T-0065).
+/// Схема, порт, страна и «пароль заполнен целиком или не заполнен вовсе» держатся CHECK в миграции.
+model OutboundProxy {
+  proxyId       String    @id @map("proxy_id") @db.Uuid
+  name          String    @db.VarChar(60)
+  /// `http`, `https` или `socks5`
+  scheme        String    @db.VarChar(8)
+  /// домен или IP без схемы и порта
+  host          String    @db.VarChar(255)
+  port          Int
+  username      String?   @db.VarChar(128)
+  /// пароль — шифртекстом SecretCipher; отпечаток ключа — для перешифровки
+  passwordIv    Bytes?    @map("password_iv")
+  passwordTag   Bytes?    @map("password_tag")
+  passwordCt    Bytes?    @map("password_ct")
+  passwordKeyId String?   @map("password_key_id") @db.VarChar(16)
+  /// ISO-код из двух заглавных букв — вводится руками
+  country       String    @db.VarChar(2)
+  enabled       Boolean
+  /// чем меньше, тем раньше в переборе
+  priority      Int
+  note          String?   @db.VarChar(200)
+  lastCheckAt   DateTime? @map("last_check_at") @db.Timestamptz(3)
+  lastCheckOk   Boolean?  @map("last_check_ok")
+  lastCheckNote String?   @map("last_check_note") @db.VarChar(200)
+  /// кто менял последним; без внешнего ключа — прокси переживает аккаунт
+  updatedBy     String    @map("updated_by") @db.Uuid
+  updatedAt     DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@index([enabled, priority])
+  @@map("outbound_proxy")
+}
+
+/// Режим сервиса клиента исходящих (Р91): строки нет — умолчание из кода (`infra/outbound/outbound-route.ts`).
+model OutboundServiceMode {
+  /// `fx.cbr`, `telegram.bot` — из каталога `OUTBOUND_SERVICES`
+  service   String   @id @db.VarChar(32)
+  /// `direct_first`, `proxy_only` или `direct_only`
+  mode      String   @db.VarChar(16)
+  updatedBy String   @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("outbound_service_mode")
+}
+
 /// Картинка из панели (docs/35-stage4-plan.md О42): в базе до CDN. id — SHA-256
 /// содержимого: одинаковый файл — одна строка, адрес не меняется, поэтому
 /// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
@@ -2132,6 +2233,8 @@ model HomeSlide {
   audience     String     @db.VarChar(16)
   /// первым в карусели — раньше акции; иначе после акции и нового в версии
   pinned       Boolean
+  /// место в своей группе (закреплённые / остальные); меньше — раньше; меняется только запросом порядка
+  position     Int
   startsAt     DateTime   @map("starts_at") @db.Timestamptz(3)
   endsAt       DateTime   @map("ends_at") @db.Timestamptz(3)
   createdAt    DateTime   @map("created_at") @db.Timestamptz(3)
@@ -2145,6 +2248,7 @@ model HomeSlide {
   image MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
 
   @@index([endsAt])
+  @@index([pinned, position])
   @@map("home_slide")
 }
 
@@ -2380,4 +2484,38 @@ model StartParamKey {
   lastAt  DateTime @map("last_at") @db.Timestamptz(3)
 
   @@map("start_param_key")
+}
+
+// Правила фильтра имён (Р168, T-0338): что убирается из ников игроков. Встроенный словарь
+// остаётся в коде, правила его дополняют; правит команда в панели без релиза.
+enum NameRuleCategory {
+  profanity
+  brand
+  ads
+  other
+  allow
+}
+
+enum NameRuleKind {
+  exact
+  word
+  regex
+}
+
+/// Правило фильтра имён: категория задаёт действие, вид — как искать шаблон.
+model NameRule {
+  ruleId    String           @id @map("rule_id") @db.Uuid
+  category  NameRuleCategory
+  kind      NameRuleKind
+  pattern   String           @db.VarChar(100)
+  active    Boolean          @default(true)
+  note      String?          @db.VarChar(200)
+  createdAt DateTime         @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime         @map("updated_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — запись переживает аккаунт
+  updatedBy String?          @map("updated_by") @db.Uuid
+
+  @@unique([category, kind, pattern])
+  @@index([active])
+  @@map("name_rule")
 }

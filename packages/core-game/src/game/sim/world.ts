@@ -1,4 +1,4 @@
-import type { CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -16,6 +16,7 @@ import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool
 import { pushSimEvent, SIM_EVENT } from "./events";
 import { isElite } from "../patterns";
 import { pickStage, type EnemyStage } from "./stages";
+import { registerPlayerHit } from "./streaks";
 
 export type { EnemyType } from "../patterns/enemy-types";
 export { findStageProblems, pickStage, resolveStages, stageOf, MAX_STAGES, type EnemyStage } from "./stages";
@@ -140,9 +141,34 @@ export interface RunStats {
   elapsedSec: number;
   enemiesSpawned: number;
   enemiesKilled: number;
+  /**
+   * Убитые игроком боссы и элиты — для заданий и достижений. Потомки
+   * делящегося босса рядовые и сюда не идут; растёт только в `killEnemy`,
+   * рядом с `enemiesKilled`, поэтому сумма не превышает общего числа убитых.
+   */
+  bossKills: number;
+  eliteKills: number;
   /** убийства игроком по индексу типа врага */
   killsByType: Uint32Array;
   damageTaken: number;
+  /**
+   * Серии для достижений (Р161, tasks/T-0321) — в тиках: пауза и ожидание
+   * решения о втором шансе тиков не двигают, и серия по ним не растёт.
+   * Без попаданий: тик последнего попадания и самая долгая закрытая серия;
+   * попаданием считается любой урон, дошедший до игрока сквозь неуязвимость, —
+   * в том числе в щит буста, до брони и сопротивления.
+   */
+  lastHitTick: number;
+  longestNoHitTicks: number;
+  /**
+   * Без убийств: тик последнего убийства и самая долгая серия, закрытая
+   * убийством. Хвост от последнего убийства до конца забега не считается —
+   * иначе «отбежать минуту и сдаться» давало бы «Пацифиста».
+   */
+  lastKillTick: number;
+  longestNoKillTicks: number;
+  /** убийства по стихии добивающего удара (индекс — `sim/element-ids.ts`); динамит и прочее без стихии — физическое */
+  killsByElement: Float64Array;
   /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
   deathCauseType: number;
   shotsFired: number;
@@ -159,6 +185,11 @@ export interface RunStats {
   /** нанесённый урон по индексу стихии (`sim/element-ids.ts`) */
   damageByElement: Float64Array;
   xpCollected: number;
+  /**
+   * Подобранные кристаллы опыта: слитый с соседним — один, улетевший за радиус
+   * удержания и запасной опыт сундука не считаются.
+   */
+  crystalsCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
   /** подобранные магниты */
@@ -228,6 +259,77 @@ export interface ChestState {
   openings: ChestOpening[];
 }
 
+/**
+ * Тайник на карте (`sim/secrets.ts`). Позиция фиксируется при создании мира, и
+ * только у огонька она меняется по ходу полёта.
+ */
+export interface SecretSite {
+  kind: SecretKind;
+  /** номер кольца от старта, с нуля; у огонька −1: он не принадлежит кольцу */
+  ring: number;
+  x: number;
+  y: number;
+  /**
+   * Есть ли тайник на карте. У огонька мест нет: до своего часа он «спит», а
+   * потом появляется у игрока. Остальные виды активны с первого тика.
+   */
+  active: boolean;
+  /** отмечен на радаре: найденный или открытый камнем-указателем */
+  visible: boolean;
+  /** игрок вошёл в круг; у огонька — он появился */
+  found: boolean;
+  /** израсходован: капище и клад сработали, камень задет */
+  used: boolean;
+  /** сколько подряд тиков игрок простоял в круге; вышел — ноль */
+  holdTicks: number;
+}
+
+/** Найденный тайник — запись для сцены и аналитики. */
+export interface SecretFound {
+  /** номер тайника в раскладке с нуля */
+  index: number;
+  kind: SecretKind;
+  elapsedSec: number;
+}
+
+/** Использованный тайник: `outcome` — что вышло (id благословения, «opened», «touched»). */
+export interface SecretUsed {
+  index: number;
+  kind: SecretKind;
+  outcome: string;
+  elapsedSec: number;
+}
+
+/** Капище предложило благословения: окно выбора рисует их по этим описаниям. */
+export interface BlessingOffered {
+  index: number;
+  options: BlessingDef[];
+  elapsedSec: number;
+}
+
+/**
+ * Тайники забега. `rng`, `sites`, `offer` и `blessings` — состояние и входят в
+ * снимок; `foundLog`, `usedLog` и `blessingLog` — выход для сцены, её курсор
+ * забирает новые записи, а после восстановления из снимка журналы пусты.
+ */
+export interface SecretState {
+  /** собственный поток случайности: `world.rng` тайники не трогают */
+  rng: Rng;
+  sites: SecretSite[];
+  /**
+   * Выбор благословения отдан игроку: мир стоит, пока не придёт `chooseBlessing`.
+   * Выключено — берётся первое из предложенных, как у ботов и golden-прогонов.
+   */
+  manualBlessing: boolean;
+  /** предложенные благословения; непустое значение означает, что мир ждёт выбора */
+  offer: { siteIndex: number; options: string[] } | null;
+  /** id взятых благословений, в порядке выбора */
+  blessings: string[];
+  foundLog: SecretFound[];
+  usedLog: SecretUsed[];
+  blessingLog: BlessingOffered[];
+}
+
 /** Опыт, уровень и очередь выборов внутри забега. */
 export interface ProgressionState {
   level: number;
@@ -281,6 +383,9 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** правила тайников рубежа */
+  secretRules: SecretsDef;
+  secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
   /**
@@ -459,6 +564,10 @@ export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
 export function damagePlayer(world: World, amount: number, sourceType: number): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
+
+  // Попадание засчитано до щита, брони и бессмертия разработчика: купленный
+  // щит не облегчает «Без единой царапины».
+  registerPlayerHit(world);
 
   // Щит буста гасит попадание целиком — вместе со стихией: игрок должен
   // понять, что его спасло, а не гадать, почему урон вышел меньше. Короткая

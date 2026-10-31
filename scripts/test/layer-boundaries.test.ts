@@ -76,6 +76,11 @@ const RULES: Rule[] = [
     why: "пакет проксирования переиспользуется в других проектах: ни игры, ни Nest, ни Prisma",
   },
   {
+    from: "packages/promo-kit/src",
+    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma|["']fabric["']/,
+    why: "модель промо-материала переиспользуется панелью, кабинетом партнёра и другими проектами: ни игры, ни Nest, ни Prisma, ни Fabric (docs/35-stage4-plan.md, Р106, Р159)",
+  },
+  {
     from: "apps/admin/src",
     forbidden: /["']@bh\/(core-game|app-shell|adapter-)|["']phaser["']/i,
     why: "панель — отдельное приложение команды: ни движка, ни оболочки игры, ни площадок; с игрой её роднят только токены дизайна (docs/29-admin-panel.md §4)",
@@ -84,6 +89,16 @@ const RULES: Rule[] = [
     from: "packages/core-game/src/content",
     forbidden: /["']\.\.\/game\//,
     why: "контент — это данные: он не знает о коде движка",
+  },
+  {
+    from: "apps/sim-worker/src",
+    forbidden: /["']@bh\/adapter-|["']phaser["']|["'](?:\.\.\/)+(?:backend|packages\/app-shell|apps\/admin)\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
+    why: "sim-worker — свой процесс со своей сборкой движка (docs/35-stage4-plan.md, Р15): ни бэкенда, ни площадок, ни оболочки, ни Phaser",
+  },
+  {
+    from: "apps/sim-worker/src",
+    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/|joystick|radar))/,
+    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
   },
 ];
 
@@ -115,6 +130,7 @@ describe("границы слоёв", () => {
   it("вообще находит исходники — иначе тест зелёный впустую", () => {
     expect(collect("packages/app-shell/src").length).toBeGreaterThan(10);
     expect(collect("packages/core-game/src").length).toBeGreaterThan(10);
+    expect(collect("apps/sim-worker/src").length).toBeGreaterThan(5);
   });
 
   for (const rule of RULES) {

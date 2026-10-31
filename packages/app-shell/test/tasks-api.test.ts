@@ -108,9 +108,9 @@ describe("клиент заданий", () => {
     expect(broken.ok).toBe(false);
   });
 
-  it("порядок: можно забрать — сверху, в работе — посередине, полученное — внизу; похожие цели рядом и по величине", () => {
+  it("порядок: можно забрать — сверху, в работе — посередине, полученное — внизу; внутри — порядок входа, вид и величина цели не влияют", () => {
     const task = (id: string, kind: string, target: number, done: boolean, claimed: boolean) => ({ ...TASK, id, kind, target, done, claimed });
-    const sorted = sortTasks([
+    const input = [
       task("claimed_runs", "runs", 3, true, true),
       task("kills_big", "kills", 5000, false, false),
       task("runs_10", "runs", 10, false, false),
@@ -119,8 +119,12 @@ describe("клиент заданий", () => {
       task("mystery", "elites", 1, false, false),
       task("runs_3", "runs", 3, false, false),
       task("ready_runs", "runs", 5, true, false),
-    ]);
-    expect(sorted.map((item) => item.id)).toEqual(["ready_runs", "ready_kills", "runs_3", "runs_10", "kills_small", "kills_big", "mystery", "claimed_runs"]);
+    ];
+    const before = input.map((item) => item.id);
+    const sorted = sortTasks(input);
+    expect(sorted.map((item) => item.id)).toEqual(["ready_kills", "ready_runs", "kills_big", "runs_10", "kills_small", "mystery", "runs_3", "claimed_runs"]);
+    expect(input.map((item) => item.id)).toEqual(before);
+    expect(sortTasks([])).toEqual([]);
     expect(isClaimable({ done: true, claimed: false })).toBe(true);
     expect(isClaimable({ done: true, claimed: true })).toBe(false);
     expect(isClaimable({ done: false, claimed: false })).toBe(false);

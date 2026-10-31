@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BOOSTS, DROPS, ENEMIES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { BOOSTS, DROPS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
@@ -56,6 +56,22 @@ describe("гайдбук", () => {
     expect(markup).toContain(`Боссы стоят ${bossSeconds} с`);
     expect(hasTranslation("guide.pickup.freeze.name")).toBe(true);
     expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
+  });
+
+  it("не держит в словарях ключей удалённых огонька, кастера и их паттернов", () => {
+    for (const key of ["enemy.shooter_wisp.name", "enemy.boss_seer.name"]) expect(hasTranslation(key), key).toBe(false);
+    for (const pattern of ["kite_and_shoot", "caster"]) {
+      for (const part of ["name", "text", "tip"]) expect(hasTranslation(`guide.pattern.${pattern}.${part}`), `${pattern}.${part}`).toBe(false);
+    }
+  });
+
+  it("называет каждую ступень врагов, включая три поздних", () => {
+    for (const stage of ENEMY_STAGES) {
+      if (stage.nameKey !== undefined) expect(hasTranslation(stage.nameKey), stage.nameKey).toBe(true);
+    }
+    for (const key of ["enemy.stage.savage", "enemy.stage.frenzied", "enemy.stage.merciless"]) {
+      expect(hasTranslation(key), key).toBe(true);
+    }
   });
 
   it("называет стража кольца и показывает его среди обычных врагов один раз, не среди элиты", () => {

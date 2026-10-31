@@ -165,6 +165,24 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
     expect(await partners.daily(partnerId, new Date(NOW.getTime() - DAY))).toEqual([{ day: "2026-10-02", count: 2 }]);
   });
 
+  it("игрок под отдельной доской в кабинете партнёра и выплатах считается как обычный (T-0115)", async () => {
+    const partnerId = await partner("Канал с доской");
+    const shared = await campaign(partnerId);
+    const [plain, marked] = await Promise.all([player(), player()]);
+    await redeem(plain, shared, partnerId);
+    await redeem(marked, shared, partnerId);
+    await prisma.accountRestriction.create({ data: { accountId: marked, kind: "separate_board", startsAt: new Date(NOW.getTime() - DAY), reason: "other", notify: false } });
+    for (const accountId of [plain, marked]) {
+      await prisma.$executeRaw`INSERT INTO account_funnel (account_id, first_run_finished_at) VALUES (${accountId}::uuid, ${NOW})`;
+      await prisma.$executeRaw`
+        INSERT INTO purchase (purchase_id, account_id, product, sku, price_stars, charged_stars, mode, status, invoiced_at, paid_at)
+        VALUES (${randomUUID()}::uuid, ${accountId}::uuid, 'shop_item', 'gems_60', 50, 50, 'live'::"PaymentMode", 'paid'::"PurchaseStatus", ${new Date(NOW.getTime() + HOUR)}, ${new Date(NOW.getTime() + HOUR)})`;
+    }
+
+    const view = await partners.byId(partnerId, NOW);
+    expect(view?.stats).toEqual({ codes: 1, activeCodes: 1, redeemed: 2, bound: 2, played: 2, payers: 2, stars: 100 });
+  });
+
   it("условия партнёра: записаны и читаются; без них партнёр активен, а процент хранится с двумя знаками", async () => {
     const telegramId = freshTelegramId();
     const full = await partner("С условиями", { telegramId, status: "applied", country: "KZ", payoutCurrency: "USDT", payoutMethod: "USDT TRC-20 на T9yX", sharePercent: "12.50" });

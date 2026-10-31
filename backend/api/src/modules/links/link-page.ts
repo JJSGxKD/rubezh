@@ -19,7 +19,7 @@ export function linkPage(options: { url: string | null; target: string | null })
     `<meta property="og:description" content="${description}">`,
     ...(options.url === null ? [] : [`<meta property="og:url" content="${escapeHtml(options.url)}">`]),
   ].join("\n    ");
-  const action = options.target === null ? "<p>Ссылка скоро заработает — попробуйте через минуту.</p>" : `<p><a href="${escapeHtml(options.target)}">Открыть игру</a></p>`;
+  const action = options.target === null ? "<p>Ссылка скоро заработает — попробуй через минуту.</p>" : `<p><a href="${escapeHtml(options.target)}">Открыть игру</a></p>`;
   return `<!doctype html>
 <html lang="ru">
   <head>
@@ -42,7 +42,7 @@ export function linkPage(options: { url: string | null; target: string | null })
 export function notFoundPage(): string {
   return `<!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Ссылка не найдена</title></head>
-<body><p>Такой ссылки нет — проверьте адрес.</p></body></html>
+<body><p>Такой ссылки нет — проверь адрес.</p></body></html>
 `;
 }
 
@@ -89,7 +89,7 @@ export function openPage(options: { deep: string; fallback: string }): string {
   </head>
   <body>
     <h1>${title}</h1>
-    <p>Не открылось? Нажмите кнопку.</p>
+    <p>Не открылось? Нажми кнопку.</p>
     <p><a href="${escapeHtml(options.deep)}">Открыть в Telegram</a></p>
     <p><a href="${escapeHtml(options.fallback)}">Открыть в браузере</a></p>
     <script id="target" type="application/json">${data}</script>

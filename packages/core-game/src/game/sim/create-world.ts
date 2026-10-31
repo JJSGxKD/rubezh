@@ -13,6 +13,7 @@ import type {
   MapDef,
   PassiveDef,
   RunLoadout,
+  SecretsDef,
   WeaponDef,
 } from "@bh/shared-types";
 import { ELEMENTS } from "@bh/shared-types";
@@ -26,6 +27,7 @@ import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
+import { createSecretState, findSecretsProblems } from "./secrets";
 import { createCordonState } from "./cordon";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
@@ -82,6 +84,21 @@ const FALLBACK_CHESTS: ChestsDef = {
   lowHpRatio: 0.7,
   xpRatio: 0.5,
   maxOnField: 0,
+};
+
+/**
+ * Тайников в тестах симуляции нет: без колец раскладка пуста и поток тайников
+ * не тратится. Остальные поля — минимальные допустимые значения, чтобы запасные
+ * правила проходили ту же проверку, что и боевые.
+ */
+const FALLBACK_SECRETS: SecretsDef = {
+  rings: [],
+  minGapUnits: 0,
+  shrine: { radius: 60, holdSec: 3, offers: 1 },
+  hoard: { radius: 40, holdSec: 2, chestSize: 3 },
+  stone: { radius: 30 },
+  wisp: { appearSec: 90, speed: 80 },
+  blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
 
 /**
@@ -153,6 +170,8 @@ export interface CreateWorldOptions {
   drops?: DropsDef;
   /** сундук забега; по умолчанию — без сундуков */
   chests?: ChestsDef;
+  /** тайники рубежа; по умолчанию — без тайников */
+  secrets?: SecretsDef;
   /** заряды карточек от уровня аккаунта; по умолчанию — нули */
   cardTools?: Partial<CardTools>;
   /** правила действий с карточками; по умолчанию — пропуск платит 30% пути */
@@ -215,6 +234,12 @@ export function createWorld(options: CreateWorldOptions): World {
   const chestProblems = findChestsProblems(chestRules);
   if (chestProblems.length > 0) {
     throw new Error(`Некорректный контент сундуков:\n${chestProblems.join("\n")}`);
+  }
+
+  const secretRules = options.secrets ?? FALLBACK_SECRETS;
+  const secretProblems = findSecretsProblems(secretRules);
+  if (secretProblems.length > 0) {
+    throw new Error(`Некорректный контент тайников:\n${secretProblems.join("\n")}`);
   }
 
   const continueRules = options.continueRules ?? FALLBACK_CONTINUE;
@@ -283,6 +308,8 @@ export function createWorld(options: CreateWorldOptions): World {
       founds: [],
       openings: [],
     },
+    secretRules,
+    secrets: createSecretState(createRng(deriveSeed(options.seed, STREAM_SALT.secret)), secretRules, scale, map.bounds),
     cordon: createCordonState(),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
@@ -359,14 +386,22 @@ export function createWorld(options: CreateWorldOptions): World {
       elapsedSec: 0,
       enemiesSpawned: 0,
       enemiesKilled: 0,
+      bossKills: 0,
+      eliteKills: 0,
       killsByType: new Uint32Array(enemyTypes.length),
       damageTaken: 0,
+      lastHitTick: 0,
+      longestNoHitTicks: 0,
+      lastKillTick: 0,
+      longestNoKillTicks: 0,
+      killsByElement: new Float64Array(ELEMENTS.length),
       deathCauseType: -1,
       shotsFired: 0,
       damageDealt: 0,
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
       damageByElement: new Float64Array(ELEMENTS.length),
       xpCollected: 0,
+      crystalsCollected: 0,
       medkitsCollected: 0,
       magnetsCollected: 0,
       dynamiteCollected: 0,

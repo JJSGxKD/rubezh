@@ -11,6 +11,9 @@
       "path": "packages/proxy-kit"
     },
     {
+      "path": "packages/promo-kit"
+    },
+    {
       "path": "packages/design-tokens"
     },
     {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionTitle, auditChanges, auditMode, auditObject, auditValue, fetchAudit, fieldTitle, NO_AUDIT_FILTER, type AuditEntry } from "../src/api/audit";
+import { actionTitle, AUDIT_AREAS, auditChanges, auditMode, auditObject, auditValue, fetchAudit, fieldTitle, NO_AUDIT_FILTER, type AuditEntry } from "../src/api/audit";
 import { AdminApi } from "../src/api/client";
 import { formatDateTime, formatNumber } from "../src/format";
 import { fakeFetch, json } from "./helpers";
@@ -22,6 +22,54 @@ function entry(patch: Partial<AuditEntry>): AuditEntry {
 }
 
 describe("журнал аудита", () => {
+  it("перестановка заданий (T-0167): название, поле «порядок», порядок через запятую", () => {
+    expect(actionTitle("tasks.reorder")).toBe("Порядок заданий");
+    expect(fieldTitle("order")).toBe("порядок");
+    const reordered = entry({ action: "tasks.reorder", target: "daily", before: { order: ["a", "b", "c"] }, after: { order: ["c", "a", "b"] } });
+    const changes = auditChanges(reordered);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ field: "order" });
+    expect(auditValue(changes[0]?.after, "order")).toBe("c, a, b");
+  });
+
+  it("автоисточники в «Ссылках» (T-0180): названия действий и правка названия «было → стало»", () => {
+    expect(actionTitle("links.rename")).toBe("Название источника");
+    expect(actionTitle("links.hide")).toBe("Скрытие источника");
+    expect(actionTitle("links.unhide")).toBe("Возврат источника в список");
+    const renamed = entry({ action: "links.rename", target: "AutoCode001", before: { title: null }, after: { title: "Посев в Канале N" } });
+    expect(auditChanges(renamed)).toHaveLength(1);
+  });
+
+  it("перестановка слайдов главной (T-0189): название действия, одна правка «порядок» с названиями слайдов", () => {
+    expect(actionTitle("home.slides.reorder")).toBe("Порядок слайдов главной");
+    const reordered = entry({ action: "home.slides.reorder", target: "regular", before: { order: ["Турнир", "Конкурс"] }, after: { order: ["Конкурс", "Турнир"] } });
+    const changes = auditChanges(reordered);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ field: "order" });
+    expect(auditValue(changes[0]?.after, "order")).toBe("Конкурс, Турнир");
+  });
+
+  it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
+    expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
+    expect(actionTitle("ads.networks.reorder")).toBe("Порядок рекламных сетей");
+    expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
+  });
+
+  it("правила фильтра имён: подписи, область «Поддержка» и объект «правило» (T-0338)", () => {
+    expect(actionTitle("names.rule.create")).toBe("Новое правило фильтра имён");
+    expect(actionTitle("names.rule.update")).toBe("Правка правила фильтра имён");
+    expect(actionTitle("names.rule.delete")).toBe("Удаление правила фильтра имён");
+    expect(AUDIT_AREAS.find((area) => area.id === "support")?.prefixes).toContain("names.");
+    expect(auditObject(entry({ action: "names.rule.create", target: "00000000-0000-4000-8000-000000000001" }))).toEqual({ kind: "правило", label: "00000000", route: { section: "names", id: null } });
+  });
+
+  it("перечистка ников: подписи трёх действий и объект «перечистка» (T-0339)", () => {
+    expect(actionTitle("names.reclean.start")).toBe("Запуск перечистки ников");
+    expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
+    expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");
+    expect(auditObject(entry({ action: "names.reclean.start", target: "00000000-0000-4000-8000-000000000009" }))).toEqual({ kind: "перечистка", label: "00000000", route: { section: "names", id: null } });
+  });
+
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
     const page = { entries: [entry({})], next: "2026-10-01T10:00:00.000Z_e1" };
     const { fetch, calls } = fakeFetch(json(200, { data: page }), json(200, { data: { entries: [], next: null } }));
@@ -75,6 +123,31 @@ describe("журнал аудита", () => {
     expect(shown).toMatchObject({ kind: "блокировка целиком", reason: "оскорбления или спам", comment: "разобрались" });
     // Свободная причина других действий — как записана.
     expect(auditValue("компенсация за сбой", "reason")).toBe("компенсация за сбой");
+  });
+
+  it("вид ограничения «отдельная доска» — словами, а не ключом separate_board", () => {
+    expect(auditValue("separate_board", "kind")).toBe("отдельная доска");
+    const board = entry({ action: "players.board.set", target: ACCOUNT, targetName: "Оля", after: { kind: "separate_board", endsAt: null } });
+    const [change] = auditChanges(board);
+    expect(auditValue(change?.after, change?.field ?? "kind")).toBe("отдельная доска");
+  });
+
+  it("закрытие партнёрских заданий за отписку (система, без автора): причина читается словами, а не ключом", () => {
+    const imposed = entry({
+      actorAccountId: null,
+      actorName: null,
+      action: "players.restrict",
+      target: ACCOUNT,
+      targetName: "Оля",
+      after: {
+        restrictions: [{ restrictionId: "r1", kind: "partner_tasks", endsAt: "2026-11-27T10:00:00.000Z", reason: "task_unsubscribe", comment: "Отписка от канала после награды за подписку", notify: true }],
+      },
+    });
+
+    const [restrictions] = auditChanges(imposed);
+
+    expect(auditValue(restrictions?.after, "restrictions", 400)).toBe(`партнёрские задания до ${formatDateTime("2026-11-27T10:00:00.000Z")} — отписка после награды`);
+    expect(auditValue("task_unsubscribe", "reason")).toBe("отписка после награды");
   });
 
   it("забег снят с рейтинга — какой: сложность, время, начало id; и почему", () => {

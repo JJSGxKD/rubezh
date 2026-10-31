@@ -226,16 +226,52 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
       VALUES ('it-pass-open', ${me}::uuid, 'wheel_spin', NULL, 'vip', 'view', now(), now() + interval '1 minute')`).rejects.toThrow();
   });
 
+  it("порядок сетей: priority переписывается только у сдвинувшихся строк, параллельные запросы дают перестановку без дублей, неполный набор — mismatch", async () => {
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    const original = await catalog.networks();
+    const keys = original.map((row) => row.networkKey);
+    const stamps = async () => new Map((await prisma.$queryRaw<{ network_key: string; priority: number; updated_at: Date }[]>`SELECT network_key, priority, updated_at FROM ad_network`).map((row) => [row.network_key, row]));
+    try {
+      // Нумерация 0…n−1 ставится первой, чтобы дальше менялись только переставленные.
+      // Тот же порядок ничего не пишет (changed: false), поэтому — через обратный.
+      await catalog.reorderNetworks([...keys].reverse(), NOON);
+      await catalog.reorderNetworks(keys, NOON);
+      const base = await stamps();
+      const swapped = [...keys];
+      [swapped[0], swapped[1]] = [swapped[1] ?? "", swapped[0] ?? ""];
+      const later = at(NOON, 5);
+      expect(await catalog.reorderNetworks(swapped, later)).toEqual({ status: "ok", before: keys, after: swapped, changed: true });
+      const after = await stamps();
+      for (const key of keys.slice(2)) expect(after.get(key)?.updated_at).toEqual(base.get(key)?.updated_at);
+      expect(after.get(swapped[0] ?? "")?.priority).toBe(0);
+
+      expect(await catalog.reorderNetworks(swapped, later)).toMatchObject({ status: "ok", changed: false });
+
+      const reversed = [...keys].reverse();
+      const results = await Promise.all([catalog.reorderNetworks(reversed, later), catalog.reorderNetworks(keys, later)]);
+      expect(results.every((result) => result.status === "ok")).toBe(true);
+      const priorities = [...(await stamps()).values()].map((row) => row.priority).sort((a, b) => a - b);
+      expect(priorities).toEqual(keys.map((_, index) => index));
+
+      const before = await stamps();
+      expect(await catalog.reorderNetworks(keys.slice(1), later)).toEqual({ status: "mismatch" });
+      expect(await catalog.reorderNetworks([...keys.slice(1), "it_unknown"], later)).toEqual({ status: "mismatch" });
+      expect([...(await stamps()).values()].map((row) => row.priority)).toEqual([...before.values()].map((row) => row.priority));
+    } finally {
+      for (const row of original) await prisma.$executeRaw`UPDATE ad_network SET priority = ${row.priority} WHERE network_key = ${row.networkKey}`;
+    }
+  });
+
   it("каталог панели: ключи сети и блок с площадками и устройствами заводятся и правятся, блок чужой сети — нет, воронка — за окно", async () => {
     const catalog = new PrismaAdsCatalogRepository(prisma);
     const actor = await account();
     expect((await catalog.networks()).find((row) => row.networkKey === network)).toEqual({ networkKey: network, name: "Проверка", active: true, priority: 5, keys: {} });
-    expect(await catalog.updateNetwork({ networkKey: network, active: true, priority: 6, keys: { pubId: "792361", appId: "1396" } }, NOON)).toBe(true);
+    expect(await catalog.updateNetwork({ networkKey: network, active: true, keys: { pubId: "792361", appId: "1396" } }, NOON)).toBe(true);
     expect((await catalog.networks()).find((row) => row.networkKey === network)?.keys).toEqual({ pubId: "792361", appId: "1396" });
-    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, priority: 6, keys: {} }, NOON)).toBe(false);
+    expect(await catalog.updateNetwork({ networkKey: "it_missing", active: true, keys: {} }, NOON)).toBe(false);
     // Ключи доходят до выдачи показа вместе с блоком — их ждёт SDK.
     expect((await repository.activeBlocks()).find((row) => row.blockId === blockOf("view").blockId)?.networkKeys).toEqual({ pubId: "792361", appId: "1396" });
-    await catalog.updateNetwork({ networkKey: network, active: true, priority: 5, keys: {} }, NOON);
+    await catalog.updateNetwork({ networkKey: network, active: true, keys: {} }, NOON);
     // Формат без блока в кабинете — `null`, пустая строка вместо него база не примет.
     const unitless = await catalog.insertBlock({ networkKey: network, place: "interstitial", externalId: null, success: "view", active: false, platforms: [], devices: [] }, actor, NOON);
     expect((await catalog.blocks()).find((row) => row.blockId === unitless?.blockId)?.externalId).toBeNull();
@@ -358,5 +394,57 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
 
     const interstitial = await open(null, "interstitial");
     expect(await viewSecOf(interstitial)).toBeNull();
+  });
+
+  it("пропуск VIP — не досмотр: воронка его не видит, а passes считает отдельно (Р99)", async () => {
+    // Окно в далёких сутках: чужие тесты в него не попадают, а счёт идёт по времени.
+    const base = new Date(Date.UTC(2031, 1, 1, 9));
+    const from = at(base, -60);
+    const to = at(base, 600);
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    // Повторный прогон на той же базе: пропуски прошлого прогона в этом окне не нужны.
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${from} AND created_at < ${to}`;
+    const first = await account();
+    const second = await account();
+
+    // Настоящий показ своей сети, выполненный через report.
+    const real = await session(first, "view", base);
+    await repository.report(real, first, { kind: "completed" }, at(base, 1));
+
+    const pass = async (accountId: string, place: "wheel_spin" | "second_chance", createdAt: Date): Promise<string> => {
+      const sessionId = randomBytes(12).toString("base64url");
+      await repository.createPassSession({ sessionId, accountId, place, pass: "vip", createdAt, expiresAt: at(createdAt, 30) });
+      return sessionId;
+    };
+    const claimedPass = await pass(first, "wheel_spin", at(base, 5));
+    await pass(second, "wheel_spin", at(base, 6));
+    await pass(first, "second_chance", at(base, 7));
+    await prisma.$executeRaw`UPDATE ad_session SET claimed_at = ${at(base, 8)} WHERE session_id = ${claimedPass}`;
+
+    const funnel = (await catalog.funnel(from, to)).filter((row) => row.networkKey === network || row.networkKey === "vip");
+    expect(funnel).toEqual([{ networkKey: network, place: "wheel_spin", offered: 1, shown: 1, clicked: 0, completed: 1, claimed: 0, failed: 0 }]);
+
+    expect(await catalog.passes(from, to)).toEqual([
+      { passName: "vip", place: "second_chance", used: 1, players: 1, claimed: 0 },
+      { passName: "vip", place: "wheel_spin", used: 2, players: 2, claimed: 1 },
+    ]);
+  });
+
+  it("пропуск, записанный до задачи сырым INSERT, считается; граница окна — [from, to)", async () => {
+    const base = new Date(Date.UTC(2031, 2, 1, 9));
+    const catalog = new PrismaAdsCatalogRepository(prisma);
+    await prisma.$executeRaw`DELETE FROM ad_session WHERE block_id IS NULL AND created_at >= ${at(base, -60)} AND created_at < ${at(base, 180)}`;
+    const me = await account();
+    const raw = async (createdAt: Date): Promise<void> => {
+      await prisma.$executeRaw`
+        INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, completed_at, expires_at)
+        VALUES (${randomBytes(12).toString("base64url")}, ${me}::uuid, 'run_double'::"AdPlace", NULL, 'vip', 'view', 'completed', ${createdAt}, ${createdAt}, ${at(createdAt, 30)})`;
+    };
+    await raw(base);
+    await raw(at(base, 60));
+
+    expect(await catalog.passes(base, at(base, 60))).toEqual([{ passName: "vip", place: "run_double", used: 1, players: 1, claimed: 0 }]);
+    expect(await catalog.passes(at(base, 1), at(base, 61))).toEqual([{ passName: "vip", place: "run_double", used: 1, players: 1, claimed: 0 }]);
+    expect(await catalog.passes(at(base, 61), at(base, 120))).toEqual([]);
   });
 });

@@ -110,9 +110,16 @@ const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
 
+const CONTINUE_GROUP = "Второй шанс";
+
 const HOME_GROUP = "Главная";
 
 const DONATE_GROUP = "Донаты";
+
+const CONTACT_GROUP = "Связь с разработчиком";
+
+/** Подпись к ссылкам кнопки «Связаться с разработчиком»: у всех четырёх площадок одна. */
+const CONTACT_HINT = "Куда ведёт кнопка «Связаться с разработчиком» у игроков этой площадки — ссылка https://… Для Telegram — сообщения канала разработчика. Пусто — кнопки нет";
 
 /** Готовые суммы доната: от одной до восьми, целые, через запятую (`parseAmounts`). */
 const amountsSchema = z
@@ -249,6 +256,14 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  shopChoiceMinBuyers: integer(
+    "shop.choice-min-buyers",
+    SHOP_GROUP,
+    "«Выбор игроков»: покупателей для метки",
+    "Сколько разных игроков должно купить набор самоцветов за 30 дней, чтобы у лидера появилась метка «Выбор игроков». Меньше — метки нет",
+    { min: 1, max: 10_000, unit: ["игрок", "игрока", "игроков"] },
+    20,
+  ),
   /**
    * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
    * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
@@ -313,6 +328,46 @@ export const SETTINGS = {
     group: DONATE_GROUP,
     title: "Tribute для веба",
     hint: "То же для игроков в вебе. Пусто — кнопки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlTelegram: {
+    key: "contact.url-telegram",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: Telegram",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlMax: {
+    key: "contact.url-max",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: MAX",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlVk: {
+    key: "contact.url-vk",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: VK",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlWeb: {
+    key: "contact.url-web",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: веб",
+    hint: CONTACT_HINT,
     kind: "url",
     schema: urlSchema,
     fromEnv: () => null,
@@ -409,6 +464,29 @@ export const SETTINGS = {
     "Игрок только что сам смотрел рекламу — колесо, удвоение, второй шанс. 0 — без паузы",
     { min: 0, max: 240, unit: ["минута", "минуты", "минут"] },
     10,
+  ),
+  /**
+   * Второй шанс за ролик и у VIP (docs/35-stage4-plan.md, Р162, Р4): сколько
+   * продолжений в игровые сутки. Дальше — самоцветы или звёзды. Рекламные и
+   * VIP-продолжения считаются порознь: VIP платит за «без ролика», и урезать
+   * ему прежнее число незачем. Без окружения: продуктовые числа правятся в
+   * панели.
+   */
+  continueAdPerDay: integer(
+    "continue.ad-per-day",
+    CONTINUE_GROUP,
+    "Второй шанс за ролик: в сутки",
+    "Сколько раз в игровые сутки (по Москве) игрок продолжает забег за ролик; дальше — самоцветы или звёзды. 0 — за ролик продолжить нельзя. Изменение действует со следующего запроса",
+    { min: 0, max: 20, unit: ["продолжение", "продолжения", "продолжений"] },
+    1,
+  ),
+  continueVipPerDay: integer(
+    "continue.vip-per-day",
+    CONTINUE_GROUP,
+    "Второй шанс у VIP: в сутки",
+    "Сколько раз в игровые сутки (по Москве) VIP продолжает забег без ролика; дальше — самоцветы или звёзды. 0 — VIP платит с первого продолжения",
+    { min: 0, max: 20, unit: ["продолжение", "продолжения", "продолжений"] },
+    5,
   ),
   /**
    * Старт недельных сезонов рейтинга (docs/39-retention-mechanics.md Р1,

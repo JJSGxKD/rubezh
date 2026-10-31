@@ -3,8 +3,8 @@ id: T-0065
 title: Прокси для исходящих запросов — список в панели, перебор после неудачи напрямую
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0060, T-0061]
@@ -17,8 +17,6 @@ zones:
   - backend/api/test/proxies.integration.test.ts
   - apps/admin/src/api/proxies.ts
   - apps/admin/src/screens/proxies/**
-  - apps/admin/src/routes.ts
-  - apps/admin/src/screens/sections.tsx
   - apps/admin/test/proxies.test.ts
 shared:
   - backend/api/package.json
@@ -32,7 +30,11 @@ shared:
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
-runner: local
+  - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../../services";
 import {
+  AUTO_SOURCE_HELP,
+  autoPairs,
   conversion,
   conversionState,
   deviceRows,
@@ -10,16 +12,21 @@ import {
   GOAL_TITLES,
   GOALS,
   goalCounts,
+  linkTitle,
   LINK_TARGETS,
   NETWORK_NO_DIRECT,
   NETWORK_TITLES,
   OWNER_HELP,
   OWNER_TITLES,
+  RENAME_HELP,
+  renameLink,
   resendConversion,
   retargetLink,
+  setLinkHidden,
   TARGET_HELP,
   TARGET_HINTS,
   TARGET_TITLES,
+  TITLE_MAX,
   type Conversion,
   type ConversionSummary,
   type LinkPartner,
@@ -32,7 +39,7 @@ import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading, Notice, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Help, Input, KeyValue, Loading, Notice, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { TokenNotice } from "./TokenNotice";
@@ -58,7 +65,7 @@ export function LinkCard({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const title = link === null ? "Ссылка" : link.campaign;
+  const title = link === null ? "Ссылка" : linkTitle(link);
   const description = link === null ? undefined : `${link.source ?? "без источника"} · заведена ${formatDateTime(link.createdAt)}${link.note === null ? "" : ` · ${link.note}`}`;
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())} title={title} {...(description === undefined ? {} : { description })}>
@@ -115,6 +122,8 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </section>
       )}
 
+      {link.auto ? <AutoSource link={link} onChanged={onChanged} /> : null}
+
       <KeyValue
         items={[
           ["Чья ссылка", <Owner key="owner" partner={link.partner} />, OWNER_HELP],
@@ -144,6 +153,93 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * «Завёлся сам»: источник, который сервер завёл по ссылке с метками (Р116). Название можно поменять, а источник
+ * скрыть — запуски по нему считаются как раньше, кампания и источник в аналитике не меняются.
+ */
+function AutoSource({ link, onChanged }: { link: LinkRow; onChanged: () => void }) {
+  const [renaming, setRenaming] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const hidden = link.hiddenAt !== null;
+  const pairs = autoPairs(link);
+
+  const toggle = async () => {
+    setSaving(true);
+    const result = await setLinkHidden(api, link.code, !hidden);
+    setSaving(false);
+    if (!result.ok) return toast.error(result.error.message);
+    toast.success(hidden ? "Источник вернулся в список" : "Источник скрыт — запуски по нему считаются как раньше");
+    onChanged();
+  };
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        Завёлся сам
+        <Badge>авто</Badge>
+        {hidden ? <Badge tone="warning">скрыта</Badge> : null}
+        <Help text={AUTO_SOURCE_HELP} />
+      </h3>
+      <KeyValue items={[...pairs.map(({ label, value }): [string, string] => [label, value]), ["Завёлся", formatDateTime(link.createdAt)]]} />
+      <p className="text-xs text-text-muted">{AUTO_SOURCE_HELP}</p>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => setRenaming(true)} disabled={saving}>
+          Переименовать
+        </Button>
+        <Button onClick={() => void toggle()} disabled={saving}>
+          {hidden ? "Вернуть в список" : "Скрыть"}
+        </Button>
+      </div>
+      {renaming ? <RenameDialog link={link} onClose={() => setRenaming(false)} onChanged={onChanged} /> : null}
+    </section>
+  );
+}
+
+/** Название источника: 80 знаков, «Сбросить» возвращает кампанию. Ошибка остаётся в окне, поле не сбрасывается. */
+function RenameDialog({ link, onClose, onChanged }: { link: LinkRow; onClose: () => void; onChanged: () => void }) {
+  const [value, setValue] = useState(link.title ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<ApiError | null>(null);
+
+  const save = async (title: string) => {
+    setSaving(true);
+    const result = await renameLink(api, link.code, title);
+    setSaving(false);
+    if (!result.ok) return setError(result.error);
+    toast.success(title.trim() === "" ? `Название сброшено — в списке «${link.campaign}»` : "Название сохранено");
+    onChanged();
+    onClose();
+  };
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => (open ? undefined : onClose())}
+      title="Название источника"
+      description={`Кампания «${link.campaign}» и источник в аналитике не меняются`}
+      footer={
+        <>
+          <Button onClick={() => void save("")} disabled={saving || link.title === null}>
+            Сбросить
+          </Button>
+          <Button onClick={onClose}>Отмена</Button>
+          <Button tone="primary" onClick={() => void save(value)} disabled={saving || value.trim().length > TITLE_MAX}>
+            Сохранить
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        <Input aria-label="Название источника" value={value} onChange={(event) => setValue(event.target.value)} placeholder={link.campaign} maxLength={TITLE_MAX + 10} className="w-full" />
+        <span className="text-xs text-text-muted">
+          {String(value.trim().length)} из {String(TITLE_MAX)}. {RENAME_HELP}
+        </span>
+        {error === null ? null : <ErrorNotice error={error} />}
+      </div>
+    </Dialog>
   );
 }
 

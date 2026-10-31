@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
+import { ROLE_LEVELS, canManage, levelOf } from "../src/modules/roles/role-levels.js";
 import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, permissionsOf } from "../src/modules/roles/permissions.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -52,12 +53,22 @@ describe("перечень прав и состав ролей", () => {
     }
   });
 
-  it("у администратора нет бухгалтерии и раздачи ролей", () => {
+  it("правила фильтра имён names.edit — у владельца, администратора и модератора, у остальных ролей нет (T-0338)", () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role].includes("names.edit"), role).toBe(role === "owner" || role === "admin" || role === "moderator");
+    }
+  });
+
+  it("у администратора нет бухгалтерии, а раздача ролей — есть, но с уровнями (T-0216)", () => {
     const granted = permissionsOf(["admin"]);
 
     expect(granted.has("finance.entry.create")).toBe(false);
     expect(granted.has("finance.period.close")).toBe(false);
-    expect(granted.has("roles.assign")).toBe(false);
+    expect(granted.has("roles.assign")).toBe(true);
+  });
+
+  it("roles.assign — у владельца и администратора, у остальных ролей нет (T-0216)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("roles.assign"))).toEqual(["owner", "admin"]);
   });
 
   it("роли складываются: у человека их бывает несколько", () => {
@@ -114,6 +125,26 @@ describe("кто что может", () => {
     expect(await local.rolesFor(account("555"))).toEqual([]);
   });
 
+  it("dev-player-<id> входит игроком без ролей; роли из базы у него работают; dev-<id> — владелец", async () => {
+    const env = { NODE_ENV: "development", AUTH_ENABLED: "true", AUTH_DEV_LOGIN: "true", JWT_ACCESS_SECRET: "a".repeat(64), TELEGRAM_BOT_TOKEN: "1:T", DATABASE_URL: "postgresql://localhost/test" };
+    const local = new RolesService(config(env), roles, accounts);
+    const player = account("dev-player-alex");
+
+    expect(await local.rolesFor(account("dev-alex"))).toEqual(["owner"]);
+    expect(await local.rolesFor(player)).toEqual([]);
+    expect(await local.can(player, "players.ban")).toBe(false);
+
+    await roles.grant(player.accountId, "admin", null);
+    expect(await local.rolesFor(player)).toEqual(["admin"]);
+  });
+
+  it("без флага dev-alex получает роли из базы, как любой аккаунт", async () => {
+    const dev = account("dev-alex");
+    expect(await service.rolesFor(dev)).toEqual([]);
+    await roles.grant(dev.accountId, "moderator", null);
+    expect(await service.rolesFor(dev)).toEqual(["moderator"]);
+  });
+
   it("список в окружении даёт владельца, пока владельца нет в базе", async () => {
     expect(await service.rolesFor(account(ADMIN_TELEGRAM_ID))).toEqual(["owner"]);
   });
@@ -150,6 +181,117 @@ describe("кто что может", () => {
 
     expect(await service.canByPlatformUser("telegram", "42", "players.ban")).toBe(true);
     expect(await service.canByPlatformUser("telegram", "42", "data.export")).toBe(false);
+  });
+});
+
+describe("уровни ролей (T-0216)", () => {
+  it("уровни по таблице решения: владелец выше всех, финансы и участник — наравне, аналитик ниже всех", () => {
+    expect(ROLE_LEVELS).toEqual({ owner: 100, stakeholder: 90, finance: 90, admin: 80, game_designer: 50, marketer: 50, moderator: 40, analyst: 30 });
+    expect(Object.keys(ROLE_LEVELS).sort()).toEqual([...ROLES].sort());
+  });
+
+  it("levelOf — наибольший уровень из ролей; без ролей — ноль", () => {
+    expect(levelOf([])).toBe(0);
+    expect(levelOf(["analyst", "moderator"])).toBe(40);
+    expect(levelOf(["marketer", "admin"])).toBe(80);
+  });
+
+  it("админ выдаёт аналитика игроку без ролей, а админа, финансы, участника и владельца — нет", () => {
+    expect(canManage(["admin"], [], "analyst")).toBe(true);
+    for (const role of ["game_designer", "marketer", "moderator"] as const) expect(canManage(["admin"], [], role)).toBe(true);
+    for (const role of ["admin", "finance", "stakeholder", "owner"] as const) expect(canManage(["admin"], [], role)).toBe(false);
+  });
+
+  it("аккаунт не ниже себя админ не трогает: ни владельца, ни другого администратора, ни финансы", () => {
+    expect(canManage(["admin"], ["owner"], "analyst")).toBe(false);
+    expect(canManage(["admin"], ["admin"], "analyst")).toBe(false);
+    expect(canManage(["admin"], ["finance"], "analyst")).toBe(false);
+    expect(canManage(["admin"], ["moderator", "analyst"], "analyst")).toBe(true);
+  });
+
+  it("владелец выдаёт и снимает любые роли, в том числе owner и у других владельцев", () => {
+    for (const role of ROLES) expect(canManage(["owner"], [], role)).toBe(true);
+    expect(canManage(["owner"], ["owner"], "owner")).toBe(true);
+    expect(canManage(["owner", "analyst"], ["admin"], "admin")).toBe(true);
+  });
+
+  it("аналитик (право roles.assign у него гипотетическое) не управляет никакой ролью не ниже 30", () => {
+    for (const role of ROLES) expect(canManage(["analyst"], [], role)).toBe(false);
+  });
+
+  it("без ролей — никому и ничего", () => {
+    for (const role of ROLES) expect(canManage([], [], role)).toBe(false);
+  });
+});
+
+describe("уровни ролей в выдаче и снятии (T-0216)", () => {
+  let roles: MemoryRolesRepository;
+  let service: RolesService;
+  let owner: AccountRef;
+  let admin: AccountRef;
+
+  beforeEach(async () => {
+    roles = new MemoryRolesRepository();
+    service = new RolesService(config(), roles, new MemoryAccountRepository());
+    owner = account(ADMIN_TELEGRAM_ID);
+    admin = account("700");
+    await roles.grant(admin.accountId, "admin", null);
+  });
+
+  it("админ выдаёт маркетолога: роль есть, в журнале он исполнитель", async () => {
+    const target = randomUUID();
+
+    expect(await service.grant(admin, target, "marketer")).toBe(true);
+    expect(await roles.rolesOf(target)).toEqual(["marketer"]);
+    expect(roles.entries.at(-1)).toMatchObject({ action: "roles.assign", actorAccountId: admin.accountId, target, after: { role: "marketer" } });
+  });
+
+  it("админ не выдаёт роль не ниже своей: отказ с текстом, роли нет, журнал пуст", async () => {
+    const target = randomUUID();
+    const before = roles.entries.length;
+
+    for (const role of ["admin", "finance", "stakeholder", "owner"] as const) {
+      await expect(service.grant(admin, target, role)).rejects.toThrowError("Эту роль может выдать только тот, у кого роль выше");
+    }
+    expect(await roles.rolesOf(target)).toEqual([]);
+    expect(roles.entries).toHaveLength(before);
+  });
+
+  it("админ не меняет роли аккаунта не ниже себя: ни выдать, ни снять", async () => {
+    const colleague = randomUUID();
+    await roles.grant(colleague, "admin", null);
+    const boss = randomUUID();
+    await roles.grant(boss, "owner", null);
+    await roles.grant(boss, "analyst", null);
+
+    await expect(service.grant(admin, colleague, "analyst")).rejects.toThrowError("У этого аккаунта роль не ниже вашей — менять её роли нельзя");
+    await expect(service.revoke(admin, boss, "analyst")).rejects.toThrowError("У этого аккаунта роль не ниже вашей — менять её роли нельзя");
+    expect(await roles.rolesOf(boss)).toEqual(["owner", "analyst"]);
+  });
+
+  it("админ снимает роль ниже своей у аккаунта ниже себя", async () => {
+    const target = randomUUID();
+    await service.grant(admin, target, "moderator");
+
+    expect(await service.revoke(admin, target, "moderator")).toBe(true);
+    expect(await roles.rolesOf(target)).toEqual([]);
+  });
+
+  it("владелец по-прежнему выдаёт и снимает любые роли", async () => {
+    const target = randomUUID();
+    expect(await service.grant(owner, target, "admin")).toBe(true);
+    expect(await service.grant(owner, target, "finance")).toBe(true);
+    expect(await service.revoke(owner, target, "admin")).toBe(true);
+  });
+
+  it("себе по-прежнему нельзя — и админу тоже", async () => {
+    await expect(service.grant(admin, admin.accountId, "analyst")).rejects.toThrow(/себе/);
+    await expect(service.revoke(admin, admin.accountId, "admin")).rejects.toThrow(/себя/);
+  });
+
+  it("список выданных ролей админ читает целиком — это чтение", async () => {
+    const rows = await service.assignments(admin);
+    expect(rows.some((row) => row.role === "admin" && row.accountId === admin.accountId)).toBe(true);
   });
 });
 

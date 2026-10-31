@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { globToRegExp, matches, outOfZone, zonesOverlap } from "../tasks/zones.mjs";
+import { globToRegExp, holdingPattern, matches, outOfZone, outOfZoneHint, tasksHolding, zonesOverlap } from "../tasks/zones.mjs";
 
 // Зоны задач: шаблоны путей, пересечения и выход за зоны.
 
@@ -81,9 +81,68 @@ describe("выход за зоны", () => {
     expect(outOfZone(["tasks/T-0004-y.md"], task)).toEqual(["tasks/T-0004-y.md"]);
   });
 
-  it("закрытая в своём PR задача переезжает в архив — это не выход за зоны (T-0204)", () => {
+  it("файл своей задачи в архиве — выход за зоны (T-0343): в PR задачи он остаётся в tasks/", () => {
     const own = { ...task, id: "T-0003", fileName: "T-0003-x.md" };
-    expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual([]);
+    expect(outOfZone(["tasks/archive/T-0003-x.md", "tasks/T-0003-x.md"], own)).toEqual(["tasks/archive/T-0003-x.md"]);
     expect(outOfZone(["tasks/archive/T-0004-y.md"], own)).toEqual(["tasks/archive/T-0004-y.md"]);
+  });
+
+  it("tasks/epics.md — выход за зоны: ссылки на задачи правит уборка тимлида", () => {
+    expect(outOfZone(["tasks/epics.md", "tasks/README.md"], task)).toEqual(["tasks/epics.md", "tasks/README.md"]);
+  });
+
+  it("outOfZoneHint: подсказка только про tasks/ и с командой возврата файла", () => {
+    expect(outOfZoneHint(["backend/x.ts"], "T-0003-x.md")).toBeNull();
+    const archived = outOfZoneHint(["tasks/archive/T-0003-x.md"], "T-0003-x.md");
+    expect(archived).toContain("git mv tasks/archive/T-0003-x.md tasks/T-0003-x.md");
+    expect(archived).toContain("pnpm task fix");
+    expect(outOfZoneHint(["tasks/epics.md"], "T-0003-x.md")).not.toBeNull();
+  });
+});
+
+describe("кто держит файл (pnpm task holds)", () => {
+  const working = { id: "T-0003", zones: [`${SHOP}/**`], shared: ["docs/30-configuration-map.md"] };
+  const ids = (found: { task: { id: string } }[]): string[] => found.map((entry) => entry.task.id);
+
+  it("путь в зонах и в shared найден, назван шаблон", () => {
+    expect(holdingPattern(`${SHOP}/shop.service.ts`, working)).toBe(`${SHOP}/**`);
+    expect(holdingPattern("docs/30-configuration-map.md", working)).toBe("docs/30-configuration-map.md");
+  });
+
+  it("чужой путь не найден", () => {
+    expect(holdingPattern(`${WALLET}/wallet.service.ts`, working)).toBeNull();
+    expect(holdingPattern("docs/30-configuration-map.mdx", working)).toBeNull();
+  });
+
+  it("каталог без слэша на конце и со слэшем держит задача с зоной внутри него", () => {
+    expect(holdingPattern(SHOP, working)).toBe(`${SHOP}/**`);
+    expect(holdingPattern(`${SHOP}/`, working)).toBe(`${SHOP}/**`);
+    expect(holdingPattern("backend/api/src/modules", working)).toBe(`${SHOP}/**`);
+  });
+
+  it("путь с «./» и обратными чертами сводится к виду из зон", () => {
+    expect(holdingPattern(`./${SHOP}/shop.service.ts`, working)).toBe(`${SHOP}/**`);
+    expect(holdingPattern(`${SHOP.replaceAll("/", "\\")}\\shop.service.ts`, working)).toBe(`${SHOP}/**`);
+  });
+
+  it("держат задачи «в работе» и «доработка»; ready, на ревью и заблокированные — нет", () => {
+    const zones = { zones: [`${SHOP}/**`], shared: [] };
+    const board = {
+      inProgress: [{ task: { id: "T-0001", ...zones }, pr: 12 }],
+      rework: [{ task: { id: "T-0002", ...zones }, pr: 13 }],
+      free: [{ task: { id: "T-0003", ...zones } }],
+      review: [{ task: { id: "T-0004", ...zones }, pr: 14 }],
+      blocked: [{ task: { id: "T-0005", ...zones } }],
+    };
+    const found = tasksHolding(`${SHOP}/shop.service.ts`, board);
+    expect(ids(found)).toEqual(["T-0001", "T-0002"]);
+    expect(found[0]).toMatchObject({ pr: 12, pattern: `${SHOP}/**`, where: "в работе" });
+    expect(found[1]).toMatchObject({ pr: 13, where: "доработка" });
+  });
+
+  it("путь вне зон задач в работе — пусто", () => {
+    const board = { inProgress: [{ task: { id: "T-0001", zones: [`${SHOP}/**`], shared: [] } }], rework: [] };
+    expect(tasksHolding("README.md", board)).toEqual([]);
+    expect(tasksHolding("a/b.ts", { inProgress: [], rework: [] })).toEqual([]);
   });
 });

@@ -49,6 +49,8 @@ const purchaseFields = {
   sku: id.optional(),
   // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
   promoPct: count.optional(),
+  // Метка набора на витрине в момент покупки: продаёт ли «Хит», «Выбор игроков», «Лучшая цена».
+  badge: z.enum(["hit", "choice", "best"]).optional(),
 };
 
 const runOutcome = payload({
@@ -57,6 +59,16 @@ const runOutcome = payload({
   level: count,
   wave: count,
   enemiesKilled: count,
+  // Счётчики итога для заданий и дашбордов (docs/22-analytics-and-metrics.md
+  // §3.3, tasks/T-0125). Необязательные: сборки до них полей не шлют, версия
+  // прежняя.
+  bossKills: count.optional(),
+  eliteKills: count.optional(),
+  chestsOpened: count.optional(),
+  crystals: count.optional(),
+  // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
+  noHitSec: count.optional(),
+  noKillSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -148,6 +160,21 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ index: count, size: count, rewards: count, fallbacks: count, elapsedSec: seconds }),
   },
+  // Кольцо стражей закончилось (tasks/T-0182, Р112): `outcome` — прорвался
+  // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
+  // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
+  // кольцо просуществовало.
+  ring_ended: {
+    version: 1,
+    payload: payload({
+      index: count,
+      outcome: z.enum(["broken", "held", "died"]),
+      guards: count,
+      killed: count,
+      lifeSec: seconds,
+      elapsedSec: seconds,
+    }),
+  },
   // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
   // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
   // сундука забега, `level` — уровень игрока.
@@ -167,12 +194,17 @@ export const EVENT_DICTIONARY = {
     payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
   },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
-  // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
-  // на какой секунде и волне забега.
+  // (бесплатно в забеге разработчика), `premium` (за Stars), `gems` (за
+  // самоцветы, Р162), `ad` (за ролик), `pass` (с VIP); на какой секунде и
+  // волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
   // Шаг второго шанса показан (tasks/T-0045): сколько раз предложили и чем —
-  // ролик, звёзды, VIP. Доля `continue_used` от этого — конверсия второго шанса.
-  continue_offered: { version: 1, payload: payload({ ad: z.boolean(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }) },
+  // ролик, самоцветы, звёзды, VIP. Доля `continue_used` от этого — конверсия
+  // второго шанса. `gems` необязателен: сборки до Р162 его не шлют.
+  continue_offered: {
+    version: 1,
+    payload: payload({ ad: z.boolean(), gems: z.boolean().optional(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }),
+  },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
@@ -304,6 +336,20 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Проверка рекламы командой (Р165, tasks/T-0333), не игровой показ: в воронку
+  // рекламы не входит. `live` — боевой показ или тестовый, `ms` — от нажатия до
+  // исхода в миллисекундах, `reason` — код отказа, только при `failed`.
+  ad_tested: {
+    version: 1,
+    payload: payload({
+      network: id,
+      format: z.enum(["rewarded", "interstitial"]),
+      live: z.boolean(),
+      outcome: z.enum(["completed", "closed", "failed"]),
+      reason: id.optional(),
+      ms: seconds,
+    }),
+  },
   // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
   // `downtimeSec` — сколько прошло между потерей и возвращением.
   connection_lost: { version: 1, payload: payload({}) },

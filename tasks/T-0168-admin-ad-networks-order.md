@@ -3,18 +3,15 @@ id: T-0168
 title: Порядок рекламных сетей в круге — перетаскиванием вместо числа
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0167]
 zones:
   - apps/admin/src/screens/ads/NetworkCards.tsx
   - apps/admin/src/api/ads.ts
-  - apps/admin/src/api/audit.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/ads.test.ts
-  - apps/admin/test/audit.test.ts
   - backend/api/src/modules/admin/admin-ads.controller.ts
   - backend/api/src/modules/ads/ads-catalog.service.ts
   - backend/api/src/modules/ads/ads-catalog.repository.ts
@@ -23,17 +20,21 @@ zones:
   - backend/api/test/ads.integration.test.ts
 shared:
   - docs/29-admin-panel.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
+  - apps/admin/test/audit.test.ts
+  - backend/api/test/ads-tools.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0168. Порядок рекламных сетей в круге — перетаскиванием вместо числа
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0168.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0168.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md)
 
 ## Зачем
 

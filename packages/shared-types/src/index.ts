@@ -463,12 +463,6 @@ export interface EnemyPatternParams {
     /** насколько быстро доворачивает к игроку, доля скорости в секунду */
     steeringPerSec?: number;
   };
-  kite_and_shoot: {
-    /** дистанция, которую стрелок держит до игрока */
-    preferredDistance?: number;
-    shotIntervalSec?: number;
-    projectileSpeed?: number;
-  };
   dash: {
     /** с какого расстояния до игрока начинается подготовка рывка */
     triggerDistance?: number;
@@ -504,17 +498,6 @@ export interface EnemyPatternParams {
      * один выстрел множит популяцию до конца пула.
      */
     children: { enemy: string; count?: number }[];
-  };
-  caster: {
-    /** дистанция, которую кастер держит до игрока */
-    preferredDistance?: number;
-    /** пауза между кастами в первой фазе боя; дальше он бьёт чаще */
-    castIntervalSec?: number;
-    /** сколько он стоит и светится перед кастом — время игрока уйти с линии */
-    telegraphSec?: number;
-    /** сколько шаров в кольце и в стене на первой фазе */
-    burstCount?: number;
-    projectileSpeed?: number;
   };
   rush: {
     /**
@@ -742,7 +725,7 @@ export type TimelineEventKind = "ring" | "flank" | "cordon";
  * на плотность экрана. Границы допустимого проверяет `findTimelineProblems`.
  */
 export interface CordonRingDef {
-  /** на каком расстоянии от центра стражи встают в строй: меньше расстояния спавна, чтобы приходили снаружи экрана */
+  /** на каком расстоянии от центра стражи встают в строй сразу, со вспышкой */
   radius: number;
   /** до какого радиуса строй сжимается и дальше не идёт: иначе игрока раздавит стенкой */
   minRadius: number;
@@ -750,6 +733,18 @@ export interface CordonRingDef {
   shrinkPerSec: number;
   /** сколько секунд кольцо живёт, если строй не пробили: потом стражи исчезают */
   lifeSec: number;
+  /** кто появляется внутри строя с телеграфом: элита и босс, не стражи */
+  inner?: CordonInnerDef[];
+}
+
+/** Элита или босс внутри кольца (Р166, tasks/T-0335). */
+export interface CordonInnerDef {
+  /** id элиты или босса из контента */
+  enemy: string;
+  /** сколько их, от 1 до 4 */
+  count: number;
+  /** с какой секунды забега запись действует; не задано — с любой */
+  fromSec?: number;
 }
 
 export interface TimelineEventDef {
@@ -1146,6 +1141,85 @@ export interface ChestsDef {
 /** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
 export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKind | "xp" };
 
+// --- Тайники рубежа (docs/35-stage4-plan.md, Р153; design/art/meta-v2.md §5) ---
+// Места на бесконечной карте, ради которых стоит идти: причина двигаться и
+// выбор «рискнуть или нет». Очков рейтинга не дают — дают силу.
+
+/**
+ * Вид тайника. Капище — выбор благословения, клад — сундук, камень-указатель
+ * открывает остальные тайники на радаре, огонёк летит к ближайшему неоткрытому.
+ * Порядок — канонический: в итоге забега и в кодексе виды идут по нему.
+ */
+export const SECRET_KINDS = ["shrine", "hoard", "stone", "wisp"] as const;
+
+export type SecretKind = (typeof SECRET_KINDS)[number];
+
+/**
+ * Виды, которые бывают местом на карте. Огонёк к ним не относится: он один на
+ * забег, появляется у игрока и места в кольце не занимает.
+ */
+export type SecretPlaceKind = Exclude<SecretKind, "wisp">;
+
+/** Вес вида при выборе того, что окажется на месте тайника кольца. */
+export interface SecretKindWeight {
+  kind: SecretPlaceKind;
+  /** больше нуля */
+  weight: number;
+}
+
+/**
+ * Кольцо вокруг старта: сколько тайников в нём и какие виды. Радиусы — в
+ * игровых единицах от точки старта; кольца идут по возрастанию и не
+ * пересекаются.
+ */
+export interface SecretRingDef {
+  minRadius: number;
+  maxRadius: number;
+  /** сколько мест в кольце — целое, не меньше 1; мест на карте всегда ровно столько, сколько в кольцах */
+  count: number;
+  /** виды по весам; в первом кольце — только капище, найти его должен каждый */
+  kinds: readonly SecretKindWeight[];
+}
+
+/**
+ * Благословение капища: прибавка на весь забег. Параметры и пределы — те же,
+ * что у снаряжения и бустов (`LoadoutStat`, `LOADOUT_BOUNDS`), поэтому вместе
+ * с ними оно упирается в страховку движка.
+ */
+export interface BlessingDef {
+  id: string;
+  /** ключ названия — `blessing.<id>` */
+  nameKey: string;
+  modifiers: Partial<Record<LoadoutStat, number>>;
+}
+
+/**
+ * Тайники рубежа — данные геймдизайнера (`core-game/src/content/secrets.ts`).
+ * Расстояния и радиусы — в игровых единицах, скорость — единиц в секунду.
+ */
+export interface SecretsDef {
+  /** кольца от старта; пусто — на карте тайников нет */
+  rings: readonly SecretRingDef[];
+  /** минимальное расстояние между тайниками на земле, единицы; 0 — без требования */
+  minGapUnits: number;
+  /** капище: постоять в круге `holdSec` секунд, выбрать одно из `offers` благословений */
+  shrine: { radius: number; holdSec: number; offers: number };
+  /** клад: постоять в круге `holdSec` секунд, получить сундук размера `chestSize` */
+  hoard: { radius: number; holdSec: number; chestSize: ChestSize };
+  /** камень-указатель: коснуться — все тайники видны на радаре */
+  stone: { radius: number };
+  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
+  wisp: { appearSec: number; speed: number };
+  /** набор благословений капища */
+  blessings: readonly BlessingDef[];
+}
+
+/** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
+export interface RunSecretsSummary {
+  found: SecretKind[];
+  used: SecretKind[];
+}
+
 /**
  * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
  * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
@@ -1307,6 +1381,18 @@ export interface RunResult {
   level: number;
   xpCollected: number;
   enemiesKilled: number;
+  /** убитые игроком боссы и элиты: потомки делящегося босса рядовые и не в счёте */
+  bossKills: number;
+  eliteKills: number;
+  /** открытые сундуки забега */
+  chestsOpened: number;
+  /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
+  crystalsCollected: number;
+  /**
+   * Найденные и использованные тайники рубежа. Необязательное: оболочка и
+   * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
+   */
+  secrets?: RunSecretsSummary;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
   damageDealt: number;
@@ -1317,6 +1403,19 @@ export interface RunResult {
    * не попадают — как враги без убийств в `killsByEnemy`.
    */
   damageByElement: Partial<Record<ElementId, number>>;
+  /**
+   * Самая долгая серия без попадания, целые секунды вниз (Р161, tasks/T-0321):
+   * лучшая из закрытых попаданием и текущей на конец забега. Попадание — любой
+   * урон, дошедший до игрока сквозь неуязвимость, и удар в щит буста тоже.
+   */
+  noHitSec: number;
+  /**
+   * Самая долгая серия без убийства, целые секунды вниз: только закрытые
+   * убийством — хвост до смерти или сдачи не считается.
+   */
+  noKillSec: number;
+  /** убийства по стихии добивающего удара; физических в словаре нет, стихии без убийств не попадают */
+  killsByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */
@@ -1412,6 +1511,18 @@ export interface RunFinishStats {
   waveReached: number;
   /** кого больше всего убил — пятёрка по убыванию */
   topKills: { enemy: string; count: number }[];
+  /**
+   * Счётчики для заданий и достижений (tasks/T-0125). Необязательные: сборки
+   * и записи очереди до них полей не знают.
+   */
+  bossKills?: number;
+  eliteKills?: number;
+  chestsOpened?: number;
+  crystals?: number;
+  /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
+  noHitSec?: number;
+  noKillSec?: number;
+  killsByElement?: Partial<Record<ElementId, number>>;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";

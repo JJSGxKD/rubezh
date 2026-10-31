@@ -3,8 +3,8 @@ id: T-0145
 title: Снимки экранов одной командой — `pnpm screens`
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0144]
@@ -13,7 +13,6 @@ zones:
   - scripts/test/screens.test.ts
   - packages/app-shell/src/state/dev-url.ts
   - packages/app-shell/test/dev-url.test.ts
-  - packages/app-shell/src/state/navigation.ts
   - packages/app-shell/src/state/shell.ts
   - packages/app-shell/src/index.tsx
   - apps/web-telegram/src/main.tsx
@@ -25,17 +24,18 @@ shared:
   - AGENTS.md
   - docs/17-testing-strategy.md
   - docs/20-env-and-ports.md
+  - packages/app-shell/src/state/navigation.ts
 runner: local
 executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0145. Снимки экранов одной командой — `pnpm screens`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](T-0144-dev-login-as-player.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json)](README.md#значки-статуса) [![T-0144](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0144.json&label=T-0144)](archive/T-0144-dev-login-as-player.md)
 
 ## Зачем
 
@@ -192,11 +192,11 @@ batch: 2
 
 ## Критерии приёмки
 
-- [ ] `pnpm screens` при запущенном `pnpm dev` даёт 12 PNG в `var/screens/`.
-- [ ] `pnpm screens --screen shop --as player` снимает магазин глазами игрока.
-- [ ] Без запущенного клиента — понятная ошибка и код 1.
-- [ ] Параметры адреса не действуют в сборке и через туннель (тест).
-- [ ] Гейт (`CLAUDE.md`) зелёный, бюджет первой загрузки не вырос больше чем
+- [x] (проверит тимлид при приёмке) `pnpm screens` при запущенном `pnpm dev` даёт 12 PNG в `var/screens/`.
+- [x] (проверит тимлид при приёмке) `pnpm screens --screen shop --as player` снимает магазин глазами игрока.
+- [x] Без запущенного клиента — понятная ошибка и код 1.
+- [x] Параметры адреса не действуют в сборке и через туннель (тест).
+- [x] Гейт (`CLAUDE.md`) зелёный, бюджет первой загрузки не вырос больше чем
   на 0,3 КБ.
 
 ## PR

@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { boardMark, type BoardMark } from "../restrictions/board-mark.js";
 import { teamDay, type DayStats, type DayWindow, type SourceKind } from "./daily-stats.js";
 
 /**
@@ -24,8 +25,10 @@ export interface DayPoint {
   stars: number;
   /** живые оплаты за сутки — их число, а не сумма */
   purchases: number;
-  /** досмотренные показы рекламы за сутки */
+  /** досмотренные показы рекламы за сутки; пропуски VIP — не они (Р99) */
   adsCompleted: number;
+  /** пропуски VIP за сутки: награда места без ролика */
+  adsPassed: number;
 }
 
 export interface DailyStatsRepository {
@@ -36,6 +39,11 @@ export interface DailyStatsRepository {
    * Сутки без событий — нулями: провал на графике должен быть виден.
    */
   series(from: Date, to: Date): Promise<DayPoint[]>;
+  /**
+   * Метка «Отдельная доска» за окно (T-0115) — только для сводки панели,
+   * держателю права. Отчёт в чат и `/stats` её не читают: `day()` метки не знает.
+   */
+  boardMark(window: DayWindow): Promise<BoardMark>;
 }
 
 const SOURCES: readonly SourceKind[] = ["organic", "click", "invite", "telegram_affiliate", "friend", "unknown"];
@@ -46,6 +54,7 @@ const activeSchema = z.array(z.object({ active: count, sessions: count }));
 const runsSchema = z.array(z.object({ finished: count, players: count, median: z.coerce.number().nullable() }));
 const revenueSchema = z.array(z.object({ stars: count, purchases: count, refunds: count }));
 const pointSchema = z.array(z.object({ day: z.string(), n: count }));
+const adsSchema = z.array(z.object({ day: z.string(), views: count, passes: count }));
 const funnelSchema = z.array(
   z.object({ entered: count, app_opened: count, first_run: count, runs5: count, returned_d1: count, returned_d7: count, first_purchase: count }),
 );
@@ -115,6 +124,10 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
     };
   }
 
+  async boardMark({ from, to }: DayWindow): Promise<BoardMark> {
+    return await boardMark(this.prisma, { from, to });
+  }
+
   async series(from: Date, to: Date): Promise<DayPoint[]> {
     // Сутки — по Москве, как у отчёта в чат: `AT TIME ZONE` не зависит от пояса соединения.
     const [accounts, active, runs, stars, purchases, ads] = await Promise.all([
@@ -133,12 +146,16 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
       this.prisma.$queryRaw`
         SELECT to_char(paid_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
         FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+      // Настоящие показы — с блоком, пропуск VIP — без него (Р99); одним проходом по таблице.
       this.prisma.$queryRaw`
-        SELECT to_char(completed_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        SELECT to_char(completed_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day,
+               count(*) FILTER (WHERE block_id IS NOT NULL) AS views,
+               count(*) FILTER (WHERE block_id IS NULL) AS passes
         FROM ad_session WHERE completed_at >= ${from} AND completed_at < ${to} GROUP BY 1`,
     ]);
     const byDay = (rows: unknown) => new Map(pointSchema.parse(rows).map((row) => [row.day, row.n]));
-    const [newAccounts, activeByDay, runsByDay, starsByDay, purchasesByDay, adsByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars), byDay(purchases), byDay(ads)];
+    const [newAccounts, activeByDay, runsByDay, starsByDay, purchasesByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars), byDay(purchases)];
+    const adsByDay = new Map(adsSchema.parse(ads).map((row) => [row.day, row]));
     const points: DayPoint[] = [];
     for (let day = teamDay(from.getTime()), last = teamDay(to.getTime() - 1); day <= last; day = nextDay(day)) {
       points.push({
@@ -148,7 +165,8 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
         finishedRuns: runsByDay.get(day) ?? 0,
         stars: starsByDay.get(day) ?? 0,
         purchases: purchasesByDay.get(day) ?? 0,
-        adsCompleted: adsByDay.get(day) ?? 0,
+        adsCompleted: adsByDay.get(day)?.views ?? 0,
+        adsPassed: adsByDay.get(day)?.passes ?? 0,
       });
     }
     return points;

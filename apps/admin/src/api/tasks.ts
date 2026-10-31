@@ -54,7 +54,7 @@ export const FILTER_KEYS: Record<string, FilterKey> = {
 export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
 
 /** Русские имена для выбора фильтра: панель движка не знает, список сверяет только глаз команды. */
-export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало" };
+export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало", meteor: "Метеор" };
 export const ELEMENT_TITLES: Record<string, string> = { fire: "Огонь", cold: "Холод", lightning: "Молния", poison: "Яд" };
 export const DIFFICULTY_TITLES: Record<string, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
 export const FILTER_OPTIONS: Record<FilterKey, Record<string, string>> = { weapon: WEAPON_TITLES, element: ELEMENT_TITLES, difficulty: DIFFICULTY_TITLES };
@@ -192,7 +192,17 @@ export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
 
 export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDef>> {
   const title = task.title?.trim() ?? "";
-  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) }, schema: taskSchema });
+  // Место в списке правкой не задаётся: новое задание встаёт в конец, у существующего остаётся прежнее.
+  const body: Partial<TaskDef> = { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) };
+  delete body.sort;
+  return api.request("/tasks", { method: "POST", body, schema: taskSchema });
+}
+
+const orderSchema = z.object({ order: z.array(z.string()) });
+
+/** Новый порядок списка заданий одним запросом: id группы в нужном порядке. */
+export function reorderTasks(api: AdminApi, group: TaskGroup, ids: readonly string[]): Promise<ApiResult<{ order: string[] }>> {
+  return api.request("/tasks/order", { method: "POST", body: { group, ids }, schema: orderSchema });
 }
 
 /**
@@ -300,7 +310,7 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (!TASK_ID_PATTERN.test(id)) return "id — латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков";
   if (isNew && catalog.some((existing) => existing.taskId === id)) return "Такой id уже есть — выберите его в списке, чтобы поправить";
   if (!Number.isInteger(task.target) || task.target <= 0) return "Цель — целое число больше нуля";
-  if (![task.coins, task.gems, task.shards, task.passPoints, task.sort].every(nonNegativeInt)) return "Награда, очки пасса и порядок — целые неотрицательные";
+  if (![task.coins, task.gems, task.shards, task.passPoints].every(nonNegativeInt)) return "Награда и очки пасса — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
   if (task.tier !== null && (task.period === "achievement" || PARTNER_KINDS.has(task.kind))) return "Ступень — только у дневных и недельных заданий";
@@ -346,12 +356,16 @@ export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pic
 export type TaskGroup = TaskPeriod | "partner";
 export const GROUP_TITLES: Record<TaskGroup, string> = { ...PERIOD_TITLES, partner: "Партнёрские" };
 
+/** Группа задания: срок, а партнёрские виды — своя, какой бы срок ни был. */
+export function taskGroupOf(task: Pick<TaskDef, "kind" | "period">): TaskGroup {
+  return PARTNER_KINDS.has(task.kind) ? "partner" : task.period;
+}
+
 /** Каталог по группам в порядке показа игроку: место, потом id. */
 export function groupByPeriod(tasks: readonly TaskDef[]): { group: TaskGroup; tasks: TaskDef[] }[] {
-  const groupOf = (task: TaskDef): TaskGroup => (PARTNER_KINDS.has(task.kind) ? "partner" : task.period);
   return [...TASK_PERIODS, "partner" as const].map((group) => ({
     group,
-    tasks: tasks.filter((task) => groupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
+    tasks: tasks.filter((task) => taskGroupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
   }));
 }
 

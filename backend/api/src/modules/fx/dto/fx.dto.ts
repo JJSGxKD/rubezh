@@ -1,4 +1,4 @@
-import { CURRENCIES, MANUAL_RATE_PURPOSES, type CurrencyCode } from "@bh/fx";
+import { BASE_CURRENCY, CURRENCIES, MANUAL_RATE_PURPOSES, MARKET_MANUAL_MAX_DAYS, MARKET_MANUAL_RULE, type CurrencyCode } from "@bh/fx";
 import { z } from "zod";
 
 /**
@@ -7,20 +7,29 @@ import { z } from "zod";
  * `Decimal`.
  */
 
-const platformCodes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => CURRENCIES[code].kind === "platform");
+// Ручной курс — любой валюте, кроме опорной (Р90): у валюты площадки он основной,
+// у рыночной — запасной.
+const manualCodes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => code !== BASE_CURRENCY);
 // Котировка — только фиат: цена звезды для игрока держится в рублях по прайс-листу,
 // выплата — в долларах; в крипте заданный курс звёзд смысла не имеет.
 const quoteCodes = (Object.keys(CURRENCIES) as CurrencyCode[]).filter((code) => CURRENCIES[code].kind === "fiat");
 
-export const manualRateSchema = z.object({
-  currency: z.enum(platformCodes as [CurrencyCode, ...CurrencyCode[]]),
-  purpose: z.enum(MANUAL_RATE_PURPOSES),
-  price: z.string().regex(/^\d{1,12}(\.\d{1,40})?$/),
-  quote: z.enum(quoteCodes as [CurrencyCode, ...CurrencyCode[]]).default("USD"),
-  // Срок годности обязателен: заданный курс без него устаревал бы молча.
-  expiresInDays: z.number().int().min(1).max(90),
-  note: z.string().trim().min(3).max(200),
-});
+export const manualRateSchema = z
+  .object({
+    currency: z.enum(manualCodes as [CurrencyCode, ...CurrencyCode[]]),
+    purpose: z.enum(MANUAL_RATE_PURPOSES),
+    price: z.string().regex(/^\d{1,12}(\.\d{1,40})?$/),
+    quote: z.enum(quoteCodes as [CurrencyCode, ...CurrencyCode[]]).default("USD"),
+    // Срок годности обязателен: заданный курс без него устаревал бы молча.
+    expiresInDays: z.number().int().min(1).max(90),
+    note: z.string().trim().min(3).max(200),
+  })
+  .superRefine((body, context) => {
+    if (CURRENCIES[body.currency].kind === "platform") return;
+    // Запасной курс рыночной валюты: в долларах, на цену, на неделю (docs/35-stage4-plan.md Р90).
+    if (body.quote !== BASE_CURRENCY || body.purpose !== "price") context.addIssue({ code: "custom", message: MARKET_MANUAL_RULE, path: ["currency"] });
+    if (body.expiresInDays > MARKET_MANUAL_MAX_DAYS) context.addIssue({ code: "custom", message: `Запасной курс — не дольше ${String(MARKET_MANUAL_MAX_DAYS)} дней`, path: ["expiresInDays"] });
+  });
 
 export type ManualRateBody = z.infer<typeof manualRateSchema>;
 

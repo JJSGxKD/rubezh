@@ -23,7 +23,7 @@ export class RestrictionsController {
   @Get()
   async mine(@Req() request: unknown): Promise<{ data: { restrictions: PlayerRestrictionView[] } }> {
     const account = accountOf(request);
-    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуйте позже");
+    if (!(await this.limiter.consume(LIMIT, account.accountId))) throw new RateLimitedError("Слишком часто — попробуй позже");
     return { data: { restrictions: await this.restrictions.visibleFor(account.accountId) } };
   }
 }

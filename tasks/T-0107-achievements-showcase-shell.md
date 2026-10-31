@@ -34,12 +34,12 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0107. Витрина достижений: категории, редкость, любимые и престиж в профиле и рейтинге

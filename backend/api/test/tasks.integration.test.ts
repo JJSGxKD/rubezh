@@ -392,6 +392,145 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)?.image).toBeNull();
   });
 
+  describe("порядок списка одним запросом (T-0167)", () => {
+    const STAMP = new Date("2026-01-01T00:00:00Z");
+
+    // Свои строки уходят после проверок: соседние проверки читают каталог и не ждут чужих партнёрских целей.
+    const cleanup = async (): Promise<void> => {
+      await prisma.$executeRaw`DELETE FROM task_def WHERE task_id LIKE 'it\_ord\_%'`;
+    };
+    beforeAll(cleanup);
+    afterAll(cleanup);
+
+    function partner(taskId: string): TaskDef {
+      return {
+        taskId,
+        period: "achievement",
+        kind: "link",
+        params: { url: "https://example.org/order" },
+        filter: null,
+        tier: null,
+        target: 1,
+        title: null,
+        coins: 10,
+        gems: 0,
+        shards: 0,
+        passPoints: 0,
+        sort: 0,
+        active: true,
+        limit: null,
+        image: null,
+      };
+    }
+
+    /** Партнёрская группа как её видит панель: состав и порядок, `sort` по возрастанию, затем id. */
+    async function partnerIds(): Promise<string[]> {
+      const rows = await prisma.$queryRaw<{ task_id: string }[]>`
+        SELECT task_id FROM task_def WHERE kind IN ('channel', 'link', 'bot') ORDER BY sort, task_id`;
+      return rows.map((row) => row.task_id);
+    }
+
+    /** Группа с четырьмя своими строками, `sort` = 0, 1, 2… и штампом `updated_at`, который не должен сдвигаться у нетронутых. */
+    async function preparedGroup(): Promise<{ ids: string[]; own: string[] }> {
+      const actor = await account();
+      const suffix = `${String(Date.now())}_${String(runNo++)}`;
+      const own = ["a", "b", "c", "d"].map((letter) => `it_ord_${letter}_${suffix}`);
+      for (const taskId of own) expect(await repository.insert(partner(taskId), actor, STAMP)).toBe(true);
+      const ids = await partnerIds();
+      await prisma.$executeRaw`
+        UPDATE task_def SET sort = (o.n - 1)::int, updated_at = ${STAMP}
+        FROM unnest(${ids}::text[]) WITH ORDINALITY AS o(task_id, n) WHERE task_def.task_id = o.task_id`;
+      return { ids: await partnerIds(), own };
+    }
+
+    async function stamps(): Promise<Map<string, { sort: number; updatedAt: Date }>> {
+      const rows = await prisma.$queryRaw<{ task_id: string; sort: number; updated_at: Date }[]>`
+        SELECT task_id, sort, updated_at FROM task_def WHERE kind IN ('channel', 'link', 'bot')`;
+      return new Map(rows.map((row) => [row.task_id, { sort: row.sort, updatedAt: row.updated_at }]));
+    }
+
+    it("переписывает sort только у сдвинувшихся строк: у остальных updated_at прежний", async () => {
+      const actor = await account();
+      const { ids, own } = await preparedGroup();
+      const [, b, c] = own;
+      const order = ids.map((id) => (id === b ? (c ?? id) : id === c ? (b ?? id) : id));
+      const at = new Date("2026-10-30T12:00:00Z");
+
+      const result = await repository.reorder("partner", order, actor, at);
+
+      expect(result).toMatchObject({ status: "ok", changed: true, before: ids, after: order });
+      const after = await stamps();
+      for (const id of ids) {
+        const moved = id === b || id === c;
+        expect(after.get(id)?.sort, id).toBe(order.indexOf(id));
+        expect(after.get(id)?.updatedAt.getTime(), id).toBe(moved ? at.getTime() : STAMP.getTime());
+      }
+    });
+
+    it("тот же порядок — changed: false и ни одной записи", async () => {
+      const actor = await account();
+      const { ids } = await preparedGroup();
+      const before = await stamps();
+
+      const result = await repository.reorder("partner", ids, actor, new Date("2026-10-30T13:00:00Z"));
+
+      expect(result).toMatchObject({ status: "ok", changed: false, before: ids, after: ids });
+      expect(await stamps()).toEqual(before);
+    });
+
+    it("два одновременных запроса с разными порядками: оба проходят, итог — один из двух без смешения", async () => {
+      const actor = await account();
+      const { ids } = await preparedGroup();
+      const forward = ids;
+      const backward = [...ids].reverse();
+
+      const [first, second] = await Promise.all([
+        repository.reorder("partner", forward, actor, new Date("2026-10-30T14:00:00Z")),
+        repository.reorder("partner", backward, actor, new Date("2026-10-30T14:00:01Z")),
+      ]);
+
+      expect(first.status).toBe("ok");
+      expect(second.status).toBe("ok");
+      const final = await partnerIds();
+      expect([forward, backward]).toContainEqual(final);
+      const sorts = [...(await stamps()).values()].map((row) => row.sort).sort((a, b) => a - b);
+      expect(sorts).toEqual(ids.map((_, index) => index));
+    });
+
+    it("чужой список, несуществующий и пропавший id — несоответствие, sort в базе прежние", async () => {
+      const actor = await account();
+      const { ids } = await preparedGroup();
+      const before = await stamps();
+      const dailySeed = catalog.find((task) => task.period === "daily" && task.kind === "runs");
+      if (dailySeed === undefined) throw new Error("в каталоге нет ежедневной цели забега");
+
+      for (const attempt of [[...ids, "it_no_such_task"], [...ids.slice(1)], [...ids.slice(1), dailySeed.taskId], [...ids, ids[0] ?? ""]]) {
+        expect(await repository.reorder("partner", attempt, actor, new Date("2026-10-30T15:00:00Z"))).toEqual({ status: "mismatch" });
+      }
+      expect(await stamps()).toEqual(before);
+    });
+
+    it("строка с неизвестным серверу видом не входит в состав и не переписывается", async () => {
+      const actor = await account();
+      const unknownId = `it_ord_unknown_${String(Date.now())}_${String(runNo++)}`;
+      await prisma.$executeRaw`
+        INSERT INTO task_def (task_id, period, kind, target, coins, gems, shards, sort, created_at, updated_at)
+        VALUES (${unknownId}, 'achievement'::"TaskPeriod", 'zzz_future', 1, 5, 0, 0, 5, ${STAMP}, ${STAMP})`;
+      const known = (await repository.catalog()).filter((task) => task.period === "achievement" && task.kind !== "link" && task.kind !== "bot" && task.kind !== "channel").sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId));
+      const ids = known.map((task) => task.taskId);
+      const swapped = [...ids];
+      const last = swapped.length - 1;
+      [swapped[last - 1], swapped[last]] = [swapped[last] ?? "", swapped[last - 1] ?? ""];
+
+      expect(await repository.reorder("achievement", [...ids, unknownId], actor, new Date("2026-10-30T16:00:00Z"))).toEqual({ status: "mismatch" });
+      expect(await repository.reorder("achievement", swapped, actor, new Date("2026-10-30T16:00:01Z"))).toMatchObject({ status: "ok", changed: true });
+
+      const [row] = await prisma.$queryRaw<{ sort: number; updated_at: Date }[]>`SELECT sort, updated_at FROM task_def WHERE task_id = ${unknownId}`;
+      expect(row?.sort).toBe(5);
+      expect(row?.updated_at.getTime()).toBe(STAMP.getTime());
+    });
+  });
+
   describe("ротация пула", () => {
     function tasksService(): TasksService {
       const wallet = { grant: async (input: { amount: number }) => ({ credited: input.amount, balance: 0, duplicate: false }) } as unknown as WalletService;
@@ -417,6 +556,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
         weapons: [{ id: "spark", level: 3 }],
         boosts: ["fury"],
         xpCollected: 600,
+        counters: null,
         deathCause: null,
         cheats: false,
         continues: 0,

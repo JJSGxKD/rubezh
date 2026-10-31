@@ -17,7 +17,6 @@ zones:
   - apps/admin/src/api/partners.ts
   - apps/admin/src/screens/cabinet/**
   - apps/admin/src/screens/partners/PartnerCard.tsx
-  - apps/admin/src/routes.ts
   - apps/admin/src/App.tsx
 shared:
   - backend/api/src/modules/settings/setting-catalog.ts
@@ -25,7 +24,8 @@ shared:
   - docs/23-referral-and-partner-program.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
-runner: local
+  - apps/admin/src/routes.ts
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

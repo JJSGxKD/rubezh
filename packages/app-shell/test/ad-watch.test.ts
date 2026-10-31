@@ -160,7 +160,7 @@ describe("реклама за награду", () => {
     expect(h.offers).toHaveLength(1);
   });
 
-  it("место на кулдауне — время, когда снова можно; сервер недоступен — «попробуйте ещё раз»", async () => {
+  it("место на кулдауне — время, когда снова можно; сервер недоступен — «попробуй ещё раз»", async () => {
     const cooldown = harness({ offers: [{ ok: true, data: { available: false, reason: "cooldown", retryAt: LATER } }] });
     expect(await watchAd("wheel_spin", cooldown.deps)).toEqual({ kind: "cooldown", retryAt: LATER });
     expect(await watchAd("wheel_spin", harness({ offers: [{ ok: false, failure: "offline" }] }).deps)).toEqual({ kind: "failed" });

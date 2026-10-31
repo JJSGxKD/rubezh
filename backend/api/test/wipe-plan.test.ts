@@ -36,10 +36,23 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 63 модели, стирается 19", () => {
+  it("остаётся 66 моделей, стирается 21", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(63);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(19);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(66);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(21);
+  });
+
+  it("второй шанс за самоцветы стирается своим шагом рядом с рекламным и до забега, а не только каскадом", () => {
+    expect(plan.RunGemContinue?.action).toBe("wipe");
+    expect(plan.RunGemContinue?.why).toContain("часть забега");
+    expect(order.indexOf("RunGemContinue")).toBe(order.indexOf("RunAdContinue") + 1);
+    expect(order.indexOf("RunGemContinue")).toBeLessThan(order.indexOf("Run"));
+  });
+
+  it("запись забега для проверки стирается своим шагом до забега (T-0317), а не только каскадом", () => {
+    expect(plan.RunProof?.action).toBe("wipe");
+    expect(plan.RunProof?.why).toContain("часть забега");
+    expect(order.indexOf("RunProof")).toBeLessThan(order.indexOf("Run"));
   });
 });
 
@@ -66,6 +79,8 @@ describe("план вайпа: порядок стирания", () => {
   it("порядок задан списком из задачи", () => {
     expect(order).toEqual([
       "RunAdContinue",
+      "RunGemContinue",
+      "RunProof",
       "RunReward",
       "RunBoost",
       "TaskRun",

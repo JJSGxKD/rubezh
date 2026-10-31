@@ -3,8 +3,8 @@ id: T-0180
 title: Панель «Ссылки» — автоисточники: пометка «авто», название, скрытие и сводка незнакомых меток
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0179, T-0167]
@@ -14,7 +14,6 @@ zones:
   - backend/api/src/modules/links/auto-sources.repository.ts
   - backend/api/src/modules/links/links.repository.ts
   - apps/admin/src/api/links.ts
-  - apps/admin/src/api/audit.ts
   - apps/admin/src/screens/links/LinksScreen.tsx
   - apps/admin/src/screens/links/LinkCard.tsx
   - apps/admin/src/screens/links/UnknownKeys.tsx
@@ -22,11 +21,13 @@ zones:
   - backend/api/test/links.integration.test.ts
   - backend/api/test/admin-links.http.test.ts
   - apps/admin/test/links.test.ts
-  - apps/admin/test/audit.test.ts
 shared:
   - docs/29-admin-panel.md
   - docs/24-attribution-and-sharing.md
-runner: local
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
+  - backend/api/test/auto-sources.test.ts
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -36,7 +37,7 @@ batch: 3
 
 # T-0180. Панель «Ссылки» — автоисточники: пометка «авто», название, скрытие и сводка незнакомых меток
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](archive/T-0179-start-param-pairs-auto-sources.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0180.json)](README.md#значки-статуса) [![T-0179](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0179.json&label=T-0179)](archive/T-0179-start-param-pairs-auto-sources.md) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md)
 
 ## Зачем
 

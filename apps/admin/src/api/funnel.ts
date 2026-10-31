@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PLATFORM_TITLES } from "./ads";
+import { BOARD_MARK_LABEL } from "./overview";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
@@ -25,7 +26,11 @@ export const funnelRowSchema = z.object({
   firstPurchase: z.number(),
 });
 
-export const funnelReportSchema = z.object({ from: z.string(), to: z.string(), rows: z.array(funnelRowSchema) });
+/** Сводная строка по аккаунтам «Отдельной доски»: числа вех без разреза (T-0115). */
+export const funnelMarkedSchema = funnelRowSchema.omit({ platform: true, startKind: true, startRef: true, startSource: true });
+
+/** `marked` приходит только держателю права `players.board.restrict`. */
+export const funnelReportSchema = z.object({ from: z.string(), to: z.string(), rows: z.array(funnelRowSchema), marked: funnelMarkedSchema.optional() });
 
 export type FunnelRow = z.infer<typeof funnelRowSchema>;
 export type FunnelReport = z.infer<typeof funnelReportSchema>;
@@ -70,6 +75,13 @@ export function periodFromDates(fromDate: string, toDate: string): Period {
 }
 
 const TOTAL = "все";
+/** Вид строки «Отдельная доска (все источники)»: не источник, а срез по аккаунтам. */
+const BOARD_MARK_KIND = "board_mark";
+
+/** Строка помеченных для таблицы; `null`, если права нет и сервер её не прислал. */
+export function markedFunnelRow(report: FunnelReport): FunnelRow | null {
+  return report.marked === undefined ? null : { platform: TOTAL, startKind: BOARD_MARK_KIND, startRef: null, startSource: null, ...report.marked };
+}
 
 /** Итог по всем строкам — первая строка таблицы: общий вид раньше разреза. */
 export function funnelTotal(rows: readonly FunnelRow[]): FunnelRow {
@@ -104,6 +116,8 @@ export function touchOf(row: FunnelRow): { title: string; detail: string | null 
   switch (row.startKind) {
     case TOTAL:
       return { title: "Все источники", detail: null };
+    case BOARD_MARK_KIND:
+      return { title: `${BOARD_MARK_LABEL} (все источники)`, detail: null };
     case "organic":
       return { title: "Органика", detail: "без нашей ссылки: меню бота, поиск, история" };
     case "click":
@@ -125,4 +139,107 @@ export function touchOf(row: FunnelRow): { title: string; detail: string | null 
     default:
       return { title: row.startKind, detail: row.startRef };
   }
+}
+
+const DAY_MS = 86_400_000;
+const MOSCOW_OFFSET_MS = 3 * 3_600_000;
+
+/** Московские сутки момента — `2026-10-22`: сутки команды не зависят от пояса браузера. */
+export function moscowDay(at: Date): string {
+  return new Date(at.getTime() + MOSCOW_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** Пресет периода от «сейчас»: последние N суток по Москве, сегодня включительно. */
+export function presetPeriod(days: 7 | 30 | 90, now: Date): Required<Period> {
+  const [year, month, day] = moscowDay(now).split("-").map(Number) as [number, number, number];
+  const startOfToday = Date.UTC(year, month - 1, day) - MOSCOW_OFFSET_MS;
+  return { from: new Date(startOfToday - (days - 1) * DAY_MS).toISOString(), to: now.toISOString() };
+}
+
+/** Прошлый период той же длины, вплотную перед этим. */
+export function previousPeriod(period: Required<Period>): Required<Period> {
+  const from = new Date(period.from).getTime();
+  const length = new Date(period.to).getTime() - from;
+  return { from: new Date(from - length).toISOString(), to: period.from };
+}
+
+export interface FunnelBar {
+  step: FunnelStep;
+  title: string;
+  count: number;
+  /** доля от «Входа», 0…1 */
+  ofFirst: number;
+  /** доля от прошлой вехи, 0…1; у «Входа» — `null` */
+  ofPrev: number | null;
+  /** изменение доли от входа к прошлому периоду, п. п. с одним знаком; без сравнения — `null` */
+  deltaPts: number | null;
+  /** сколько аккаунтов вошло в прошлом периоде — у «Входа» изменение считается в процентах от него */
+  countBefore: number | null;
+}
+
+/** Полосы по строке «Все источники»; `before` — та же строка прошлого периода или `null`. */
+export function funnelBars(total: FunnelRow, before: FunnelRow | null): FunnelBar[] {
+  const ratio = (count: number, of: number): number => (of === 0 ? 0 : count / of);
+  return FUNNEL_STEPS.map(([step, title], index) => {
+    const count = total[step];
+    const previous = index === 0 ? null : total[FUNNEL_STEPS[index - 1]?.[0] ?? "entered"];
+    const ofFirst = ratio(count, total.entered);
+    return {
+      step,
+      title,
+      count,
+      ofFirst,
+      ofPrev: previous === null ? null : ratio(count, previous),
+      deltaPts: before === null ? null : Math.round((ofFirst - ratio(before[step], before.entered)) * 1000) / 10,
+      countBefore: before === null ? null : before.entered,
+    };
+  });
+}
+
+/** Сколько первых вех в расчёте «больше всего теряем»: вход … 5 забегов, дальше потеря ожидаема. */
+const WORST_STEPS = 6;
+
+/** Индекс вехи с наибольшей потерей от прошлой среди первых шести; потерь нет — `null`. */
+export function worstStep(bars: readonly FunnelBar[]): number | null {
+  let worst: number | null = null;
+  let worstLoss = 0;
+  for (let index = 1; index < Math.min(WORST_STEPS, bars.length); index++) {
+    const ofPrev = bars[index]?.ofPrev ?? null;
+    // Некому было терять, если до прошлой вехи никто не дошёл.
+    if (ofPrev === null || (bars[index - 1]?.count ?? 0) === 0) continue;
+    const loss = 1 - ofPrev;
+    if (loss > worstLoss) {
+      worst = index;
+      worstLoss = loss;
+    }
+  }
+  return worst;
+}
+
+/** Тон ячейки: доля строки против доли «Все источники». */
+export function heatTone(share: number, base: number): { tone: "up" | "down" | "flat"; strength: number } {
+  const diff = share - base;
+  if (Math.abs(diff) < 0.03) return { tone: "flat", strength: 0 };
+  return { tone: diff > 0 ? "up" : "down", strength: Math.min(0.3, Math.abs(diff) * 2) };
+}
+
+/** Фон ячейки из токенов цвета; без подсветки — `undefined`. */
+export function heatBackground(heat: { tone: "up" | "down" | "flat"; strength: number }): string | undefined {
+  if (heat.tone === "flat") return undefined;
+  const color = heat.tone === "up" ? "--color-success" : "--color-danger";
+  return `color-mix(in oklab, var(${color}) ${String(Math.round(heat.strength * 100))}%, transparent)`;
+}
+
+/** Строки по убыванию аккаунтов или любой вехи; исходный список не меняется. */
+export function sortRows(rows: readonly FunnelRow[], key: "accounts" | FunnelStep): FunnelRow[] {
+  return [...rows].sort((a, b) => b[key] - a[key]);
+}
+
+/** Площадки из строк ответа, без повторов, в порядке появления. */
+export function platformsOf(rows: readonly FunnelRow[]): string[] {
+  return [...new Set(rows.map((row) => row.platform))];
+}
+
+export function filterByPlatform(rows: readonly FunnelRow[], platform: string | null): FunnelRow[] {
+  return platform === null ? [...rows] : rows.filter((row) => row.platform === platform);
 }

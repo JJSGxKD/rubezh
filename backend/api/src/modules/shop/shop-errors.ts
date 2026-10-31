@@ -24,7 +24,7 @@ export class ShowcaseOfferNotFoundError extends DomainError {
 /** Предложение вчерашних суток: витрина уже обновилась. */
 export class ShowcaseExpiredError extends DomainError {
   constructor() {
-    super("showcase_expired", "Витрина обновилась — посмотрите, что на ней сегодня", 409);
+    super("showcase_expired", "Витрина обновилась — посмотри, что на ней сегодня", 409);
   }
 }
 

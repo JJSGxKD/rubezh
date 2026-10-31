@@ -2,7 +2,7 @@
   "restricted.section": "Ограничения",
   "restricted.until": "Закрыто {until}",
   "restricted.reason": "Причина: {reason}",
-  "restricted.rest": "Остальное в игре работает как обычно. Считаете, что это ошибка, — напишите нам.",
+  "restricted.rest": "Остальное в игре работает как обычно. Думаешь, это ошибка, — напиши нам.",
   "restricted.write": "Написать нам",
-  "restricted.lifted": "Ограничение уже снято — попробуйте ещё раз"
+  "restricted.lifted": "Ограничение уже снято — попробуй ещё раз"
 }

@@ -3,8 +3,8 @@ id: T-0192
 title: Давление после 8-й минуты — единая сложность тяжелее «Сложной»
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0171, T-0172, T-0102, T-0116, T-0118]
@@ -15,6 +15,9 @@ zones:
   - packages/core-game/src/content/balance-targets.ts
   - packages/core-game/src/game/balance/simulate.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - backend/api/src/modules/runs/run-counters.ts
+  - backend/api/test/run-counters.test.ts
   - scripts/balance/balance-sim.ts
   - packages/core-game/test/content.test.ts
   - packages/core-game/test/balance-properties.test.ts
@@ -32,12 +35,12 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0192. Давление после 8-й минуты — единая сложность тяжелее «Сложной»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json)](README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](archive/T-0171-cordon-guard-content.md) [![T-0172](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json&label=T-0172)](T-0172-remove-shooting-enemies.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0116](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json&label=T-0116)](archive/T-0116-freeze-pickup.md) [![T-0118](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0118.json&label=T-0118)](archive/T-0118-seventh-weapon-meteor-and-evolution.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json)](README.md#значки-статуса) [![T-0171](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0171.json&label=T-0171)](archive/T-0171-cordon-guard-content.md) [![T-0172](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0172.json&label=T-0172)](archive/T-0172-remove-shooting-enemies.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0116](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0116.json&label=T-0116)](archive/T-0116-freeze-pickup.md) [![T-0118](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0118.json&label=T-0118)](archive/T-0118-seventh-weapon-meteor-and-evolution.md)
 
 ## Зачем
 
@@ -51,6 +54,17 @@ batch: 2
 обучающим первым забегом.
 
 ## Решения
+
+> **Поправка claude-lead-1 (27.10.2026, решение владельца Р164).** T-0172
+> вливается с двумя свойствами баланса в `it.fails` — «пассивный умирает до
+> 90 с» и «медиана уклоняющегося в коридоре»: без стрелков бот на «Лёгкой»
+> доживал до потолка (медиана 900 с), пассивный жил 100–115 с. Эта задача
+> **снимает `it.fails`** с обоих и возвращает их зелёными на коридорах шага 7.
+> Обучающая «Лёгкая» удерживается в коридоре `tutorial` ростом кривой внутри
+> пределов решения 3 **в обе стороны**: слишком легко — рост поднимается,
+> слишком тяжело — снижается (шаг 9). Не держится на пределах — вопрос
+> черновиком PR. На отсечке пачки 3 задача не переносится: без неё T-0172
+> облегчает бой у игроков.
 
 Р126 и Р128 (`docs/35-stage4-plan.md`, 20.10.2026), порядок перехода — решение
 `claude-lead-1` от 20.10.2026. Решения ниже приняты пользователем и тимлидом

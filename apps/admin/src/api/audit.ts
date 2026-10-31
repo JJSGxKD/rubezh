@@ -41,7 +41,7 @@ export const AUDIT_PAGE = 50;
  * началам имён действий.
  */
 export const AUDIT_AREAS = [
-  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals.", "payments."] },
+  { id: "support", title: "Поддержка", prefixes: ["players.", "wallet.", "referrals.", "payments.", "names."] },
   { id: "growth", title: "Привлечение", prefixes: ["links.", "partner.", "promo."] },
   { id: "revenue", title: "Доход", prefixes: ["shop.", "ads.", "fx."] },
   { id: "engagement", title: "Вовлечение", prefixes: ["tasks.", "broadcast.", "changelog."] },
@@ -85,6 +85,8 @@ const ACTION_TITLES: Record<string, string> = {
   "players.pii.view": "Просмотр личных данных",
   "players.ban": "Блокировка игрока",
   "players.unban": "Снятие блокировки",
+  "players.rename": "Смена ника",
+  "players.rename.unlock": "Снятие закрепления ника",
   "players.restrict": "Ограничение игрока",
   "players.unrestrict": "Снятие ограничения",
   "players.board.set": "Отдельная доска: наложена",
@@ -108,6 +110,7 @@ const ACTION_TITLES: Record<string, string> = {
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
   "tasks.update": "Правка задания",
+  "tasks.reorder": "Порядок заданий",
   "tasks.network.update": "Правка заданий рекламной сети",
   "partner.create": "Новый партнёр",
   "partner.update": "Правка партнёра",
@@ -117,8 +120,12 @@ const ACTION_TITLES: Record<string, string> = {
   "home.slide.create": "Новый слайд главной",
   "home.slide.update": "Правка слайда главной",
   "home.slide.archive": "Снятие слайда главной",
+  "home.slides.reorder": "Порядок слайдов главной",
   "links.create": "Новая ссылка",
   "links.retarget": "Смена цели ссылки",
+  "links.rename": "Название источника",
+  "links.hide": "Скрытие источника",
+  "links.unhide": "Возврат источника в список",
   "links.conversion.send": "Повторная отправка конверсии в сеть",
   "broadcast.create": "Новая рассылка",
   "broadcast.update": "Правка рассылки",
@@ -138,8 +145,16 @@ const ACTION_TITLES: Record<string, string> = {
   "promo.resume": "Промокод снова действует",
   "promo.remove": "Удаление промокода",
   "ads.network.update": "Правка рекламной сети",
+  "ads.networks.reorder": "Порядок рекламных сетей",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
+  "ads.test": "Проверка рекламы командой",
+  "names.rule.create": "Новое правило фильтра имён",
+  "names.rule.update": "Правка правила фильтра имён",
+  "names.rule.delete": "Удаление правила фильтра имён",
+  "names.reclean.start": "Запуск перечистки ников",
+  "names.reclean.stop": "Остановка перечистки ников",
+  "names.reclean.finish": "Итог перечистки ников",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
 };
@@ -220,9 +235,13 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
         ? { kind: "версия", label: target, route: { section: "changelog", id: null } }
         : { kind: "строка версии", label: named(entry, "version") ?? short(target), route: { section: "changelog", id: null } };
     case "ads":
+      // Проверка показа командой: цель — «сеть:формат» (tasks/T-0333).
+      if (action === "ads.test") return { kind: "проверка", label: target.replace(":", " · "), route: { section: "ads", id: null } };
       return action.startsWith("ads.network.")
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
+    case "names":
+      return { kind: action.startsWith("names.reclean.") ? "перечистка" : "правило", label: short(target), route: { section: "names", id: null } };
     case "fx":
       // Цель лимита и счётчика — код источника, а заданного курса — пара «валюта:назначение».
       return action === "fx.limit.set" || action === "fx.limit.reset" || action === "fx.used.correct"
@@ -241,6 +260,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
  * обновления. Незнакомое поле показывается как записано.
  */
 const FIELD_TITLES: Record<string, string> = {
+  order: "порядок",
   restrictions: "ограничения",
   replaced: "заменили действовавшие",
   runId: "забег",
@@ -390,6 +410,7 @@ const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
  */
 const RESTRICTION_KINDS: Record<string, string> = {
   leaderboard: "рейтинг",
+  separate_board: "отдельная доска",
   referral_rewards: "награды за друзей",
   friend_gifts: "подарки друзьям",
   ad_rewards: "награды за рекламу",
@@ -405,6 +426,7 @@ const RESTRICTION_REASONS: Record<string, string> = {
   promo_abuse: "злоупотребление промокодами",
   abuse: "оскорбления или спам",
   payment_refund: "возврат оплаты",
+  task_unsubscribe: "отписка после награды",
   other: "другое",
 };
 

@@ -23,8 +23,6 @@ export type ShapeKind =
   | "chevron"
   /** четыре тонких луча — пробегающий мимо рой */
   | "mote"
-  /** кольцо со зрачком — кастующий босс */
-  | "eye"
   /** персонаж: светлое тело в тёмном канте */
   | "player"
   /** гранёный кристалл опыта: свет сверху, тень снизу */
@@ -53,7 +51,6 @@ export interface ShapeLook {
 export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   swarm: { shape: "circle", color: 0xff4d5a },
   chase: { shape: "square", color: 0xe0245e },
-  kite_and_shoot: { shape: "triangle", color: 0xff6a6a },
   // Ромб отдан кристаллам опыта: рывковый враг — остриё, и цвет у него
   // тревожный, а не «подбери меня».
   dash: { shape: "chevron", color: 0xff5a2e },
@@ -65,7 +62,6 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   rush: { shape: "mote", color: 0xff9a8a },
   // Кастер стоит в стороне и светится перед ударом: тяжёлая фигура-глаз и самый
   // тёмный оттенок.
-  caster: { shape: "eye", color: 0xc2185b },
   // Страж кольца: временный облик — ромб, который в красной гамме врагов не занят;
   // рисунок для него должен нарисовать дизайнер.
   cordon: { shape: "diamond", color: 0xb3203f },
@@ -122,6 +118,11 @@ export const STAGE_LOOKS: readonly { mixColor: number; mix: number; core: number
   // ступень светлеет к золоту, третья темнеет к тёмно-вишнёвому.
   { mixColor: 0xffd15c, mix: 0.25, core: 0xfff1d6 },
   { mixColor: 0x3b0a1f, mix: 0.35, core: 0xffd9e0 },
+  // Дальше каждая ступень темнее и светлее ядром: к 14:00 враг почти чёрный
+  // с белой точкой, и опытный игрок читает «матёрый» с первого взгляда.
+  { mixColor: 0x240a3a, mix: 0.45, core: 0xe9d4ff },
+  { mixColor: 0x0a0a1a, mix: 0.55, core: 0xd4e8ff },
+  { mixColor: 0x000000, mix: 0.65, core: 0xffffff },
 ];
 
 /** Цвет тела врага на ступени: та же тварь, но матёрее. */

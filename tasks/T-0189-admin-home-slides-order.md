@@ -3,8 +3,8 @@ id: T-0189
 title: Порядок слайдов главной перетаскиванием в панели
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0167]
@@ -20,26 +20,27 @@ zones:
   - backend/api/test/home.test.ts
   - apps/admin/src/screens/home/HomeSlidesScreen.tsx
   - apps/admin/src/api/home-slides.ts
-  - apps/admin/src/api/audit.ts
-  - apps/admin/src/ui/help.ts
   - apps/admin/test/home-slides.test.ts
-  - apps/admin/test/audit.test.ts
 shared:
   - docs/29-admin-panel.md
   - docs/21-diagrams.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
-runner: local
+  - apps/admin/src/api/audit.ts
+  - apps/admin/src/ui/help.ts
+  - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 2
+batch: 3
 ---
 
 # T-0189. Порядок слайдов главной перетаскиванием в панели
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0189.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](T-0167-admin-sortable-list-tasks-order.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0189.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md)
 
 ## Зачем
 

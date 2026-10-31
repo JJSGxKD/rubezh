@@ -4,6 +4,7 @@ import { VERDICT_FILTERS, difficultyTitle, fetchReviewQueue, reasonTitle, runsPe
 import { formatDateTime, formatDuration, formatNumber } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
+import { BoardMarkBadge } from "./review-parts";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 
@@ -65,6 +66,7 @@ function PlayerCell({ run, more }: { run: ReviewRow; more: number }) {
     <span className="flex flex-col">
       <span>{run.displayName ?? <code className="text-xs text-text-muted">{run.accountId.slice(0, 8)}</code>}</span>
       {more > 0 ? <span className="text-xs text-warning">ещё {more} в очереди</span> : null}
+      <BoardMarkBadge run={run} />
     </span>
   );
 }
