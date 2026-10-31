@@ -21,6 +21,7 @@ zones:
   - apps/admin/test/partners.test.ts
 shared:
   - docs/23-referral-and-partner-program.md
+  - backend/api/src/modules/partners/partners.module.ts
 runner: any
 executor: sonnet-5.5
 effort: high
