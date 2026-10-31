@@ -143,6 +143,7 @@
 ```bash
 node design/art/src/build.mjs          # атласы, земля, отчёт о весе
 node design/art/src/previews.mjs       # листы концепций, бестиария, героя, эффектов
+node design/art/src/frame-fit.mjs      # влезает ли рисунок врага в кадр атласа: края и нужный запас `pad`
 node design/art/src/portraits.mjs      # портреты героя вектором для меню (после build.mjs)
 node design/art/src/logo.mjs           # логотип v2: словесный знак, руна, значок приложения, иконка вкладки → out/brand и оболочка
 node design/art/src/bot-art.mjs        # бренд для картинок бота → backend/api/src/common/card/brand-art.ts (после logo.mjs и portraits.mjs)
