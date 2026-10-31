@@ -3,8 +3,8 @@ id: T-0064
 title: Курсы руками — «Обновить сейчас» у источника и запасной ручной курс любой валюты
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0063]
@@ -24,6 +24,8 @@ zones:
   - apps/admin/test/fx.test.ts
 shared:
   - apps/admin/src/ui/help.ts
+  - packages/fx/src/index.ts
+  - backend/api/test/player-address.test.ts
   - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
@@ -215,11 +217,11 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] «Обновить сейчас» опрашивает источник сразу, в пределах лимитов, и
+- [x] «Обновить сейчас» опрашивает источник сразу, в пределах лимитов, и
   показывает, что он вернул.
-- [ ] Ручной курс задаётся любой валюте. У рыночной он работает, только
+- [x] Ручной курс задаётся любой валюте. У рыночной он работает, только
   когда свежего рыночного нет, и это видно в панели.
-- [ ] Гейт (`CLAUDE.md`), `pnpm docs:check` и интеграционные тесты зелёные.
+- [x] Гейт (`CLAUDE.md`), `pnpm docs:check` и интеграционные тесты зелёные.
 
 ## PR
 

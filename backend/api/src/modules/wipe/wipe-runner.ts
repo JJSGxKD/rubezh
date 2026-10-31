@@ -124,13 +124,15 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 19 таблиц плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 21 таблица плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
  */
 export const WIPE_LOCK_TABLES: readonly string[] = [
   "run_ad_continue",
+  "run_gem_continue",
+  "run_proof",
   "run_reward",
   "run_boost",
   "task_run",
@@ -170,7 +172,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 19 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 21 стираемой моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -178,6 +180,10 @@ export const deleteAll: Deleter = async (tx, model) => {
   switch (model) {
     case "RunAdContinue":
       return await tx.runAdContinue.deleteMany({});
+    case "RunGemContinue":
+      return await tx.runGemContinue.deleteMany({});
+    case "RunProof":
+      return await tx.runProof.deleteMany({});
     case "RunReward":
       return await tx.runReward.deleteMany({});
     case "RunBoost":
