@@ -27,11 +27,11 @@ const schema = z.object({
   /**
    * Громкость по регуляторам (docs/31-audio-and-haptics.md). Нет поля —
    * настройки сборки до звука: тогда учитывается прежний выключатель звука,
-   * чтобы выключенное игроком не заиграло после обновления. Громкость музыки,
-   * сохранённая до её удаления, схемой молча отбрасывается — остальное
-   * читается как было.
+   * чтобы выключенное игроком не заиграло после обновления. Громкости музыки
+   * в старых настройках нет — тогда берётся умолчание (T-0234); сохранённая
+   * читается как есть.
    */
-  volumes: z.optional(z.object({ master: volume, effects: volume, ui: volume })),
+  volumes: z.optional(z.object({ master: volume, effects: volume, ui: volume, music: z.optional(volume) })),
   sound: z.optional(z.boolean()),
   haptics: z.boolean(),
 });
@@ -114,12 +114,17 @@ export const useSettings = create<SettingsStore>((set, get) => ({
 }));
 
 function volumesOf(stored: StoredSettings): AudioVolumes {
-  if (stored.volumes !== undefined) return stored.volumes;
+  if (stored.volumes !== undefined) return { ...DEFAULT_VOLUMES, ...definedOnly(stored.volumes) };
   return {
     ...DEFAULT_VOLUMES,
     effects: stored.sound === false ? 0 : DEFAULT_VOLUMES.effects,
     ui: stored.sound === false ? 0 : DEFAULT_VOLUMES.ui,
   };
+}
+
+/** Поле, которого в сохранённом нет, не затирает умолчание: `music: undefined` стало бы громкостью без значения. */
+function definedOnly(stored: Partial<AudioVolumes>): Partial<AudioVolumes> {
+  return Object.fromEntries(Object.entries(stored).filter(([, level]) => level !== undefined));
 }
 
 function value(): ReturnType<typeof createPersistedValue<StoredSettings>> {

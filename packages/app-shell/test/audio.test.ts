@@ -197,6 +197,7 @@ describe("сцены и громкость", () => {
     it("выключенный игроком звук не заигрывает после обновления", () => {
       useSettings.getState().hydrate("normal");
       expect(useSettings.getState().volumes).toEqual({ ...DEFAULT_VOLUMES, effects: 0, ui: 0 });
+      expect(useSettings.getState().volumes.music).toBe(40);
     });
   });
 
@@ -217,10 +218,10 @@ describe("сцены и громкость", () => {
       });
     });
 
-    it("громкость музыки отбрасывается, а остальные настройки игрока не сбрасываются", () => {
+    it("сохранённая громкость музыки читается как есть, а остальные настройки игрока не сбрасываются", () => {
       useSettings.getState().hydrate("normal");
       const state = useSettings.getState();
-      expect(state.volumes).toEqual({ master: 40, effects: 70, ui: 50 });
+      expect(state.volumes).toEqual({ master: 40, effects: 70, ui: 50, music: 55 });
       // Сброс настроек выглядел бы так: вибрация вернулась бы к умолчанию.
       expect(state.haptics).toBe(false);
     });
