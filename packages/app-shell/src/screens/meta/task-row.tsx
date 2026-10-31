@@ -129,8 +129,12 @@ export function TaskRow(props: {
           ) : null}
         </div>
         {/* Метка — откуда вылетает награда при заборе (`reward-burst.tsx`). */}
-        <span data-task-reward={task.id} className="shrink-0">
+        <span data-task-reward={task.id} className="flex shrink-0 flex-col items-end gap-1">
           <RewardChips reward={task.reward} />
+          {/* Очки идут в полосу дня или недели; у партнёрских целей и достижений их нет. */}
+          {task.passPoints > 0 && (task.period === "daily" || task.period === "weekly") && tabOf(task) !== "partner" ? (
+            <span className="font-display text-xs font-semibold tabular-nums text-accent">{t("tasks.points.task", { points: formatNumber(task.passPoints) })}</span>
+          ) : null}
         </span>
       </div>
       {/* Под строкой и во всю ширину: в правой колонке кнопка сжимала полосу
