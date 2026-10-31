@@ -160,23 +160,16 @@ export function isClaimable(task: Pick<TaskItem, "done" | "claimed">): boolean {
   return task.done && !task.claimed;
 }
 
-/** Порядок видов цели внутри группы: похожие стоят рядом, а не вперемешку. */
-const KIND_ORDER = ["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "channel", "bot", "link"];
-
 /**
  * Порядок на экране: сверху — что можно забрать, дальше — в работе, внизу —
- * уже полученное. Внутри — по виду цели, чтобы похожие стояли рядом, и по
- * величине цели; незнакомый вид — после знакомых, порядок сервера сохраняется.
+ * уже полученное. Внутри состояния — порядок сервера, то есть порядок из
+ * панели (Р118): вид и величина цели его не меняют.
  */
-export function sortTasks<T extends Pick<TaskItem, "done" | "claimed" | "kind" | "target">>(tasks: readonly T[]): T[] {
+export function sortTasks<T extends Pick<TaskItem, "done" | "claimed">>(tasks: readonly T[]): T[] {
   const stage = (task: T) => (isClaimable(task) ? 0 : task.claimed ? 2 : 1);
-  const kind = (task: T) => {
-    const index = KIND_ORDER.indexOf(task.kind);
-    return index < 0 ? KIND_ORDER.length : index;
-  };
   return tasks
     .map((task, index) => ({ task, index }))
-    .sort((a, b) => stage(a.task) - stage(b.task) || kind(a.task) - kind(b.task) || a.task.target - b.task.target || a.index - b.index)
+    .sort((a, b) => stage(a.task) - stage(b.task) || a.index - b.index)
     .map((entry) => entry.task);
 }
 

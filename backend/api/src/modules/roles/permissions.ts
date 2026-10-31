@@ -144,6 +144,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   // Операционка без бухгалтерии и ролей: игроки, реклама, флаги, диагностика,
   // одобрение рассылок и выгрузки.
   admin: [
+    // выдаёт и снимает роли ниже своей (`role-levels.ts`, T-0216)
+    "roles.assign",
     "content.view",
     "sku.price.view",
     "analytics.gameplay.view",

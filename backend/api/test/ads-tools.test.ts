@@ -62,6 +62,10 @@ class MemoryCatalog implements AdsCatalogRepository {
     throw new Error("проверка рекламы сети не правит");
   }
 
+  async reorderNetworks(): Promise<never> {
+    throw new Error("проверка рекламы порядок сетей не меняет");
+  }
+
   async insertBlock(): Promise<AdBlockDef | null> {
     throw new Error("проверка рекламы блоки не заводит");
   }

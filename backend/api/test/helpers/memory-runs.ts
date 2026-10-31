@@ -1,9 +1,9 @@
 import type { Redis } from "ioredis";
 import { loadAppConfig } from "../../src/config/app-config.js";
 import { RestrictionsHooks } from "../../src/modules/restrictions/restrictions-hooks.js";
-import type { LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
+import type { Board, LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
 import { RatingRestrictions } from "../../src/modules/runs/rating-restrictions.js";
-import type { Difficulty } from "../../src/modules/runs/run-rules.js";
+import { DIFFICULTIES, type Difficulty } from "../../src/modules/runs/run-rules.js";
 import type {
   BestRunRow,
   FinishOutcome,
@@ -203,64 +203,76 @@ export class MemoryRunsRepository implements RunsRepository {
 export class MemoryLeaderboardStore implements LeaderboardStore {
   /** запись в рейтинг падает — так проверяется, что повтор итога его допишет */
   failSubmit = false;
-  private readonly boards = new Map<Difficulty, Map<string, number>>();
+  /** по доске и сложности, как два ключа в Redis: правила те же, что у `RedisLeaderboardStore` */
+  private readonly boards = new Map<string, Map<string, number>>();
 
-  async submit(difficulty: Difficulty, accountId: string, survivalSec: number): Promise<{ improved: boolean }> {
+  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[]): Promise<{ improved: boolean }> {
     if (this.failSubmit) throw new Error("Redis недоступен");
-    const board = this.board(difficulty);
-    const previous = board.get(accountId);
-    if (previous !== undefined && previous >= survivalSec) return { improved: false };
-    board.set(accountId, survivalSec);
-    return { improved: true };
+    let improved = false;
+    for (const side of boards) {
+      const board = this.board(difficulty, side);
+      const previous = board.get(accountId);
+      if (previous !== undefined && previous >= survivalSec) continue;
+      board.set(accountId, survivalSec);
+      improved = true;
+    }
+    return { improved };
   }
 
-  async rank(difficulty: Difficulty, accountId: string): Promise<number | null> {
-    const index = this.sorted(difficulty).findIndex((entry) => entry.accountId === accountId);
+  async rank(difficulty: Difficulty, accountId: string, side: Board): Promise<number | null> {
+    const index = this.sorted(difficulty, side).findIndex((entry) => entry.accountId === accountId);
     return index < 0 ? null : index + 1;
   }
 
-  async best(difficulty: Difficulty, accountId: string): Promise<number | null> {
-    return this.board(difficulty).get(accountId) ?? null;
+  async best(difficulty: Difficulty, accountId: string, side: Board): Promise<number | null> {
+    return this.board(difficulty, side).get(accountId) ?? null;
   }
 
-  async top(difficulty: Difficulty, limit: number): Promise<LeaderboardEntry[]> {
-    return this.sorted(difficulty).slice(0, limit);
+  async top(difficulty: Difficulty, limit: number, side: Board): Promise<LeaderboardEntry[]> {
+    return this.sorted(difficulty, side).slice(0, limit);
   }
 
-  async count(difficulty: Difficulty): Promise<number> {
-    return this.board(difficulty).size;
+  async count(difficulty: Difficulty, side: Board): Promise<number> {
+    return this.board(difficulty, side).size;
   }
 
-  async countAbove(difficulty: Difficulty, survivalSec: number): Promise<number> {
-    return [...this.board(difficulty).values()].filter((score) => score > survivalSec).length;
+  async countAbove(difficulty: Difficulty, survivalSec: number, side: Board): Promise<number> {
+    return [...this.board(difficulty, side).values()].filter((score) => score > survivalSec).length;
   }
 
-  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null): Promise<void> {
-    if (survivalSec === null) this.board(difficulty).delete(accountId);
-    else this.board(difficulty).set(accountId, survivalSec);
+  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[]): Promise<void> {
+    for (const side of boards) {
+      if (survivalSec === null) this.board(difficulty, side).delete(accountId);
+      else this.board(difficulty, side).set(accountId, survivalSec);
+    }
   }
 
-  async remove(accountIds: readonly string[]): Promise<number> {
+  async remove(accountIds: readonly string[], boards: readonly Board[]): Promise<number> {
     let removed = 0;
-    for (const board of this.boards.values()) for (const accountId of accountIds) if (board.delete(accountId)) removed += 1;
+    for (const side of boards) {
+      for (const difficulty of DIFFICULTIES) {
+        for (const accountId of accountIds) if (this.board(difficulty, side).delete(accountId)) removed += 1;
+      }
+    }
     return removed;
   }
 
-  async replace(difficulty: Difficulty, entries: readonly LeaderboardEntry[]): Promise<void> {
-    this.boards.set(difficulty, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
+  async replace(difficulty: Difficulty, side: Board, entries: readonly LeaderboardEntry[]): Promise<void> {
+    this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
   }
 
-  private board(difficulty: Difficulty): Map<string, number> {
-    let board = this.boards.get(difficulty);
+  private board(difficulty: Difficulty, side: Board): Map<string, number> {
+    const name = `${side}:${difficulty}`;
+    let board = this.boards.get(name);
     if (board === undefined) {
       board = new Map();
-      this.boards.set(difficulty, board);
+      this.boards.set(name, board);
     }
     return board;
   }
 
-  private sorted(difficulty: Difficulty): LeaderboardEntry[] {
-    return [...this.board(difficulty).entries()]
+  private sorted(difficulty: Difficulty, side: Board): LeaderboardEntry[] {
+    return [...this.board(difficulty, side).entries()]
       .map(([accountId, survivalSec]) => ({ accountId, survivalSec }))
       .sort((left, right) => right.survivalSec - left.survivalSec);
   }

@@ -3,7 +3,8 @@ import {
   type PassiveDef,
   type WeaponDef,
 } from "@bh/shared-types";
-import { DIFFICULTIES } from "../src/content/difficulty";
+import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
@@ -332,10 +333,13 @@ describe("контент стража кольца и колец в таймла
 });
 
 describe("боссы бесконечного режима", () => {
-  it("в кривой один босс — Матрёшка, раз в пять отрезков", () => {
+  it("в кривой один вид босса — Матрёшка, два ритма: раз в пять отрезков и раз в восемь", () => {
     const bosses = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
     const onCurve = ENDLESS_CURVE.events.filter((event) => bosses.has(event.enemy));
-    expect(onCurve).toEqual([{ everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 }]);
+    expect(onCurve).toEqual([
+      { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+      { everySegments: 8, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+    ]);
   });
 
   it("смесь и стартовый набор кривой помещаются в пул из девяти врагов", () => {
@@ -472,6 +476,34 @@ describe("проверка контента оружия", () => {
 });
 
 describe("контент уровней сложности", () => {
+  /** Множители «Сложной» до T-0192: новая единая сложность обязана быть строго тяжелее по каждой оси. */
+  const PREVIOUS_HARD = { enemyHpMul: 1.8, enemyDamageMul: 1.5, spawnRateMul: 1.35, maxAliveMul: 1.3 };
+  const hard = DIFFICULTIES.find((difficulty) => difficulty.id === "hard");
+
+  it("единая сложность тяжелее прежней «Сложной» по каждой оси и не выше пределов", () => {
+    expect(hard).toBeDefined();
+    if (hard === undefined) return;
+    expect(hard.enemyHpMul).toBeGreaterThan(PREVIOUS_HARD.enemyHpMul);
+    expect(hard.enemyDamageMul).toBeGreaterThan(PREVIOUS_HARD.enemyDamageMul);
+    expect(hard.spawnRateMul).toBeGreaterThan(PREVIOUS_HARD.spawnRateMul);
+    expect(hard.maxAliveMul).toBeGreaterThan(PREVIOUS_HARD.maxAliveMul);
+    expect(hard.enemyHpMul).toBeLessThanOrEqual(2.5);
+    expect(hard.enemyDamageMul).toBeLessThanOrEqual(2.1);
+    expect(hard.spawnRateMul).toBeLessThanOrEqual(1.8);
+    expect(hard.maxAliveMul).toBeLessThanOrEqual(BALANCE_TARGETS.latePressure.hardMaxAliveMulMax);
+    // Живых врагов не больше слотов пула: выше растёт нагрузка на телефон, а не сложность.
+    expect(ENDLESS_CURVE.maxAlive * hard.maxAliveMul).toBeLessThanOrEqual(360);
+  });
+
+  it("обучающая и нормальная без изменений", () => {
+    const find = (id: string) => DIFFICULTIES.find((difficulty) => difficulty.id === id);
+    expect(find("easy")).toMatchObject({ enemyHpMul: 1, enemyDamageMul: 1, spawnRateMul: 1, maxAliveMul: 1 });
+    expect(find("normal")).toMatchObject({ enemyHpMul: 1.3, enemyDamageMul: 1.2, spawnRateMul: 1.15, maxAliveMul: 1.1 });
+  });
+
+  it("запасной уровень — единая сложность", () => {
+    expect(DEFAULT_DIFFICULTY_ID).toBe("hard");
+  });
 
   it("ловит уровень, который по какой-то оси легче предыдущего", () => {
     const easy = DIFFICULTIES[0];
@@ -506,6 +538,152 @@ describe("контент ступеней врагов", () => {
   it("опыт растёт вместе со здоровьем: матёрого врага должно быть выгодно бить", () => {
     for (let i = 1; i < ENEMY_STAGES.length; i++) {
       expect(ENEMY_STAGES[i].xpMul).toBeGreaterThan(ENEMY_STAGES[i - 1].xpMul);
+    }
+  });
+});
+
+describe("шесть ступеней врагов: траектория роста после 5:30", () => {
+  it("открываются на 0, 150, 330, 480, 660 и 840 секундах", () => {
+    expect(ENEMY_STAGES.map((stage) => stage.fromSec)).toEqual([0, 150, 330, 480, 660, 840]);
+    expect(findStageProblems(ENEMY_STAGES)).toEqual([]);
+  });
+
+  it("называет каждую ступень со второй, ключи не повторяются", () => {
+    const keys = ENEMY_STAGES.slice(1).map((stage) => stage.nameKey);
+    expect(keys.every((key) => typeof key === "string" && key.length > 0)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  // Прежние «Закалённый» (0,55) и «Лютый» (0,5) не меняются, поэтому рост веса
+  // проверяется от «Лютого»: каждая из трёх новых тяжелее предыдущей.
+  it("вес растёт от «Лютого»: новая ступень занимает заметную долю потока", () => {
+    for (let i = 3; i < ENEMY_STAGES.length; i++) {
+      expect(ENEMY_STAGES[i].weight, `ступень ${i}`).toBeGreaterThan(ENEMY_STAGES[i - 1].weight);
+    }
+  });
+
+  it("не разгоняет врага быстрее 1,25 от базовой скорости", () => {
+    for (const stage of ENEMY_STAGES) expect(stage.speedMul).toBeLessThanOrEqual(1.25);
+  });
+
+  it("опыт растёт быстрее здоровья: xpMul / hpMul не убывает", () => {
+    for (let i = 2; i < ENEMY_STAGES.length; i++) {
+      const before = ENEMY_STAGES[i - 1].xpMul / ENEMY_STAGES[i - 1].hpMul;
+      const after = ENEMY_STAGES[i].xpMul / ENEMY_STAGES[i].hpMul;
+      expect(after, `ступень ${i}`).toBeGreaterThanOrEqual(before);
+    }
+  });
+});
+
+describe("давление после 8-й минуты (Р128)", () => {
+  const latePressure = BALANCE_TARGETS.latePressure;
+  const hard = DIFFICULTIES.find((difficulty) => difficulty.id === "hard");
+
+  /** Степень умножением в цикле: как в симуляции, без `Math.pow`. */
+  function growth(base: number, steps: number): number {
+    let value = 1;
+    for (let i = 0; i < steps; i++) value *= base;
+    return value;
+  }
+
+  /**
+   * Индекс силы врага на секунде `sec`: здоровье × урон «Сложной» и кривой,
+   * умноженные на средневзвешенный `hpMul × damageMul` открытых ступеней.
+   */
+  function strengthAt(sec: number): number {
+    if (hard === undefined) throw new Error("в контенте нет «Сложной»");
+    const step = Math.floor((sec - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec);
+    const hp = hard.enemyHpMul * growth(ENDLESS_CURVE.hpGrowth, step);
+    const damage = hard.enemyDamageMul * growth(ENDLESS_CURVE.damageGrowth, step);
+    let weight = 0;
+    let weighted = 0;
+    for (const stage of ENEMY_STAGES) {
+      if (stage.fromSec > sec) break;
+      weight += stage.weight;
+      weighted += stage.weight * stage.hpMul * stage.damageMul;
+    }
+    return (hp * damage * weighted) / weight;
+  }
+
+  const rankedIds = new Set(ENEMIES.filter((enemy) => enemy.rank !== undefined).map((enemy) => enemy.id));
+  const bossIds = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
+
+  interface RankEvent {
+    sec: number;
+    step: number | null;
+    boss: boolean;
+  }
+
+  /** События элит и боссов в окне `[from, to)`: расписанные руками и кривой. */
+  function rankEvents(from: number, to: number): RankEvent[] {
+    const events: RankEvent[] = [];
+    for (const segment of TIMELINE) {
+      for (const event of segment.events ?? []) {
+        if (rankedIds.has(event.enemy) && segment.fromSec >= from && segment.fromSec < to) {
+          events.push({ sec: segment.fromSec, step: null, boss: bossIds.has(event.enemy) });
+        }
+      }
+    }
+    const lastStep = Math.ceil((to - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec);
+    for (let step = 0; step <= lastStep; step++) {
+      const sec = ENDLESS_CURVE.fromSec + step * ENDLESS_CURVE.segmentSec;
+      if (sec < from || sec >= to) continue;
+      for (const event of ENDLESS_CURVE.events) {
+        if (rankedIds.has(event.enemy) && (step + 1) % event.everySegments === 0) {
+          events.push({ sec, step, boss: bossIds.has(event.enemy) });
+        }
+      }
+    }
+    return events;
+  }
+
+  it("индекс силы врага растёт за три минуты в коридоре на точках 8:00, 11:00, 14:00, 17:00", () => {
+    const points = [480, 660, 840, 1020].map(strengthAt);
+    for (let i = 1; i < points.length; i++) {
+      const ratio = points[i] / points[i - 1];
+      expect(ratio, `${i}-е отношение`).toBeGreaterThanOrEqual(latePressure.strengthGrowthPer3Min.min);
+      expect(ratio, `${i}-е отношение`).toBeLessThanOrEqual(latePressure.strengthGrowthPer3Min.max);
+    }
+  });
+
+  it("после 8-й минуты элиты и боссы приходят не реже 0,9 в минуту и вдвое плотнее, чем до неё", () => {
+    const window = (latePressure.toSec - latePressure.fromSec) / 60;
+    const late = rankEvents(latePressure.fromSec, latePressure.toSec);
+    const early = rankEvents(0, latePressure.fromSec);
+    expect(late.length / window).toBeGreaterThanOrEqual(latePressure.rankEventsPerMinuteMin);
+    expect(late.length / window / (early.length / (latePressure.fromSec / 60))).toBeGreaterThanOrEqual(
+      latePressure.rankEventsDensityRatioMin,
+    );
+    expect(late.length).toBeGreaterThanOrEqual(12);
+    expect(late.filter((event) => event.boss).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("не складывает события в кучу: на одном отрезке не больше одного босса и двух событий", () => {
+    const late = rankEvents(latePressure.fromSec, latePressure.toSec);
+    const bySec = new Map<number, RankEvent[]>();
+    for (const event of late) bySec.set(event.sec, [...(bySec.get(event.sec) ?? []), event]);
+    for (const [sec, events] of bySec) {
+      expect(events.length, `секунда ${sec}`).toBeLessThanOrEqual(2);
+      expect(events.filter((event) => event.boss).length, `секунда ${sec}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("кривая только круче прежней и не выходит за пределы", () => {
+    expect(ENDLESS_CURVE.threatGrowth).toBeGreaterThan(1.18);
+    expect(ENDLESS_CURVE.hpGrowth).toBeGreaterThan(1.12);
+    expect(ENDLESS_CURVE.damageGrowth).toBeGreaterThan(1.06);
+    expect(ENDLESS_CURVE.threatGrowth).toBeLessThanOrEqual(1.24);
+    expect(ENDLESS_CURVE.hpGrowth).toBeLessThanOrEqual(1.16);
+    expect(ENDLESS_CURVE.damageGrowth).toBeLessThanOrEqual(1.1);
+    expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
+  });
+
+  it("не трогает рубеж 10:00: Матрёшка на 9:30 на месте, новых боссов ближе минуты к нему нет", () => {
+    const bosses = rankEvents(0, 1500).filter((event) => event.boss);
+    expect(bosses.some((event) => event.sec === 570)).toBe(true);
+    for (const event of bosses) {
+      if (event.sec === 570) continue;
+      expect(Math.abs(event.sec - 600), `босс на ${event.sec} с`).toBeGreaterThan(60);
     }
   });
 });

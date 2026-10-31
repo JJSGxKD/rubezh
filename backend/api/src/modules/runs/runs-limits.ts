@@ -10,7 +10,7 @@ import type { RateLimit } from "../ingest/rate-limiter.js";
  * перерыва; живой игрок столько не сыграет, а скрипт, долбящий приём,
  * упрётся сюда.
  */
-export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | "gemContinue" | "leaderboard" | "profile", RateLimit> = {
+export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | "gemContinue" | "leaderboard" | "profile" | "proof", RateLimit> = {
   start: { scope: "runs:start", limit: 120, windowSec: 3600 },
   finish: { scope: "runs:finish", limit: 120, windowSec: 3600 },
   // Лист забега — четыре чтения из базы на открытие. Игрок листает десяток
@@ -27,4 +27,25 @@ export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | 
   // перерыва живому игроку не нужны, а скрипт упрётся сюда.
   leaderboard: { scope: "runs:leaderboard", limit: 600, windowSec: 3600 },
   profile: { scope: "runs:profile", limit: 600, windowSec: 3600 },
+  // Запись для проверки: одна на забег, а повторы очереди клиента (нет сети,
+  // таймаут) — единицы. Тридцать в минуту с запасом, скрипт упрётся сюда.
+  proof: { scope: "runs:proof", limit: 30, windowSec: 60 },
 };
+
+/**
+ * Запись забега для проверки (docs/35-stage4-plan.md WP5, tasks/T-0317):
+ * размеры, срок хранения, пачка очистки. Меняются здесь, в карте конфигурации —
+ * docs/30-configuration-map.md.
+ */
+export const RUN_PROOF_LIMITS = {
+  /** сжатая запись, байт — столько же, сколько клиент позволяет себе отправить (T-0316) */
+  maxPackedBytes: 64 * 1024,
+  /** распакованная, байт: защита от «бомбы» — маленький gzip, огромный JSON */
+  maxUnpackedBytes: 512 * 1024,
+  /** обычная запись живёт неделю */
+  keepDays: 7,
+  /** у проверенных забегов из верха и с редкой добычей — полгода (T-0319) */
+  keepVerifiedDays: 180,
+  /** сколько просроченных записей удаляет один шаг очистки */
+  cleanupBatch: 1000,
+} as const;

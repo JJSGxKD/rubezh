@@ -7,6 +7,7 @@ import {
   FUNNEL_STEPS,
   funnelBars,
   funnelTotal,
+  markedFunnelRow,
   heatBackground,
   heatTone,
   periodFromDates,
@@ -126,6 +127,8 @@ function Report({ loaded, platform, compare, sortKey, onSort }: { loaded: Loaded
   const rows = filterByPlatform(loaded.now.rows, platform);
   const before = loaded.before === null || loaded.before === "failed" ? null : filterByPlatform(loaded.before.rows, platform);
   const total = funnelTotal(rows);
+  // Последняя строка таблицы: срез по аккаунтам «Отдельной доски», только у держателя права.
+  const marked = platform === null ? markedFunnelRow(loaded.now) : null;
   const bars = funnelBars(total, before === null ? null : funnelTotal(before));
   const showCompare = compare && before !== null;
 
@@ -149,7 +152,7 @@ function Report({ loaded, platform, compare, sortKey, onSort }: { loaded: Loaded
     ...FUNNEL_STEPS.map(
       ([step, title]): Column<FunnelRow> => ({
         title,
-        render: (row) => cell(row, step, row === total),
+        render: (row) => cell(row, step, row === total || row === marked),
         align: "right",
         ...(step === "returnedD1" || step === "returnedD7" ? { help: HELP.funnel.returned } : {}),
       }),
@@ -180,7 +183,7 @@ function Report({ loaded, platform, compare, sortKey, onSort }: { loaded: Loaded
         </div>
         <p className="text-xs text-text-muted">Ячейка подсвечена по доле против строки «Все источники»: зелёным — лучше, красным — хуже, от 3 п. п.</p>
         <DataTable
-          rows={[total, ...sortRows(rows, sortKey)]}
+          rows={[total, ...sortRows(rows, sortKey), ...(marked === null ? [] : [marked])]}
           rowKey={(row) => `${row.platform}|${row.startKind}|${row.startRef ?? ""}|${row.startSource ?? ""}`}
           empty="За период никто не пришёл"
           columns={columns}
@@ -196,7 +199,7 @@ function TouchCell({ row, withPlatform = false }: { row: FunnelRow; withPlatform
     <span className="flex max-w-72 flex-col">
       <span className={row.startKind === "все" ? "font-medium" : ""}>{touch.title}</span>
       {touch.detail === null ? null : <span className="text-xs text-text-muted">{touch.detail}</span>}
-      {withPlatform && row.startKind !== "все" ? <span className="text-xs text-text-muted">{platformTitle(row.platform)}</span> : null}
+      {withPlatform && row.startKind !== "все" && row.platform !== "все" ? <span className="text-xs text-text-muted">{platformTitle(row.platform)}</span> : null}
     </span>
   );
 }

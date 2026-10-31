@@ -69,3 +69,10 @@ export class AdBlockLimitError extends DomainError {
     super("ad_block_limit", message, 409);
   }
 }
+
+/** Порядок сетей пришёл для другого набора: кто-то завёл или убрал сеть, пока список был открыт. */
+export class AdNetworkOrderMismatchError extends DomainError {
+  constructor() {
+    super("ad_network_order_mismatch", "Список сетей изменился — обнови страницу и переставь ещё раз", 400);
+  }
+}

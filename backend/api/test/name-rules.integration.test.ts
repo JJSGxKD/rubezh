@@ -71,6 +71,15 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("правила фил�
     for (const redis of clients) redis.disconnect();
   });
 
+  it("countRegex считает только действующие правила вида regex", async () => {
+    const before = await repository.countRegex();
+    await addRule("other", "regex", `пример-${RUN}-1`);
+    const inactive = await addRule("other", "regex", `пример-${RUN}-2`);
+    await addRule("other", "exact", `пример-${RUN}-3`);
+    await prisma.nameRule.update({ where: { ruleId: inactive.ruleId }, data: { active: false } });
+    expect(await repository.countRegex()).toBe(before + 1);
+  });
+
   it("миграция создала таблицу; тройка (category, kind, pattern) уникальна, findByKey и count её видят", async () => {
     const pattern = `пример-уникальный-${RUN}`;
     const first = await addRule("other", "exact", pattern);

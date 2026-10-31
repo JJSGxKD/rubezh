@@ -27,6 +27,7 @@ import { FlagsService } from "../src/modules/flags/flags.service.js";
 import type { FlagSplit } from "../src/modules/funnel/flag-split-report.js";
 import type { FunnelMilestones, FunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { EMPTY_SPLIT_GROUP } from "./helpers/flag-split.js";
+import { BOARD_MARK_READER } from "../src/modules/admin/board-mark.reader.js";
 import { FUNNEL_REPOSITORY } from "../src/modules/funnel/funnel.repository.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -134,6 +135,8 @@ describe("панель по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: FUNNEL_REPOSITORY, useValue: funnel },
+        // Метка «Отдельная доска» (T-0115): здесь её нет, её проверяют `funnel.integration.test.ts` и `board-mark.test.ts`.
+        { provide: BOARD_MARK_READER, useValue: { ids: async () => [], funnel: async () => ({ accounts: 0, entered: 0, appOpened: 0, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0 }) } },
         { provide: FLAGS_REPOSITORY, useValue: flags },
         FlagsService,
         { provide: RUNS_REPOSITORY, useValue: runs },
@@ -254,6 +257,28 @@ describe("панель по HTTP", () => {
     expect(denied.json().error.code).toBe("forbidden");
     // Очередь разбора модератору открыта: право players.view у него есть.
     expect((await server.inject({ method: "GET", url: "/api/v1/admin/runs/review", headers: { cookie: `${ADMIN_SESSION_COOKIE}=mod` } })).statusCode).toBe(200);
+  });
+
+  it("администратор раздаёт роли ниже своей: список с флагами, маркетолог — 201, администратор и владелец — 403 (T-0216)", async () => {
+    const server = await start();
+    await login(server);
+    const boss = await accounts.upsert({ platform: "telegram", platformUserId: "600010", displayName: "Босс", username: null, photoUrl: null }, Date.now());
+    await roles.grant(boss.accountId, "admin", null);
+    await store.put(hashSessionToken("adm"), { accountId: boss.accountId, platform: "telegram", platformUserId: "600010", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
+    const headers = { cookie: `${ADMIN_SESSION_COOKIE}=adm`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    await accounts.upsert({ platform: "telegram", platformUserId: "600011", displayName: "Новенький", username: null, photoUrl: null }, Date.now());
+
+    const list = await server.inject({ method: "GET", url: "/api/v1/admin/roles", headers });
+    expect(list.statusCode).toBe(200);
+    const catalog = list.json().data.roles as { role: string; grantable: boolean }[];
+    expect(catalog.filter((entry) => entry.grantable).map((entry) => entry.role)).toEqual(["game_designer", "moderator", "marketer", "analyst"]);
+
+    const marketer = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600011", role: "marketer" } });
+    expect(marketer.statusCode).toBe(201);
+    for (const role of ["admin", "owner", "finance"]) {
+      const denied = await server.inject({ method: "POST", url: "/api/v1/admin/roles/grant", headers, payload: { platformUserId: "600011", role } });
+      expect(denied.statusCode, role).toBe(403);
+    }
   });
 
   it("выдача и отзыв роли из панели: снятая последняя роль гасит сессии панели", async () => {

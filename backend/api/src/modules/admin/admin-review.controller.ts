@@ -12,7 +12,9 @@ import { PermissionGuard } from "../roles/permission.guard.js";
 import { RunsViewService } from "../runs/runs-view.service.js";
 import type { ReviewRow } from "../runs/runs.repository.js";
 import { FUNNEL_REPOSITORY, type FunnelRepository } from "../funnel/funnel.repository.js";
-import type { FunnelRow } from "../funnel/funnel-report.js";
+import type { FunnelMarked, FunnelRow } from "../funnel/funnel-report.js";
+import { HIDDEN_KIND_PERMISSION } from "../restrictions/restriction-visibility.js";
+import { BOARD_MARK_READER, type BoardMarkReader } from "./board-mark.reader.js";
 import { parse, periodOf } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 import { flagSplitQuerySchema, periodQuerySchema, reviewLimitSchema } from "./dto/admin.dto.js";
@@ -45,8 +47,12 @@ export interface FlagSplitView {
 const DEFAULT_SPLIT_FLAG = "ads.interstitial";
 const YEAR_MS = 365 * 86_400_000;
 
-/** Забег в очереди и чей он: разбирают человека, и без имени строка — только uuid. */
-export type ReviewView = ReviewRow & { displayName: string | null };
+/**
+ * Забег в очереди и чей он: разбирают человека, и без имени строка — только
+ * uuid. `boardMarked` приходит держателю права `players.board.restrict` и
+ * только ему (T-0115): у остальных ключа в строке нет.
+ */
+export type ReviewView = ReviewRow & { displayName: string | null; boardMarked?: boolean };
 @Controller("admin")
 @UseGuards(AdminSessionGuard, PermissionGuard)
 export class AdminReviewController {
@@ -56,25 +62,51 @@ export class AdminReviewController {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
     private readonly flags: FlagsService,
     private readonly roles: RolesService,
+    @Inject(BOARD_MARK_READER) private readonly boardMarks: BoardMarkReader,
   ) {}
 
   /** Подозрительные и отклонённые забеги, свежие первыми. */
   @Get("runs/review")
   @RequirePermission("players.view")
-  async review(@Query("limit") limit?: string): Promise<{ data: { runs: ReviewView[] } }> {
+  async review(@Req() request: unknown, @Query("limit") limit?: string): Promise<{ data: { runs: ReviewView[] } }> {
     const parsed = parse(() => reviewLimitSchema.parse(limit ?? undefined), "Некорректный предел");
     const runs = await this.runs.review(parsed);
     // Имена — одним запросом на всю очередь: игроков в ней меньше, чем забегов.
     const names = await this.accounts.displayNames([...new Set(runs.map((run) => run.accountId))]);
-    return { data: { runs: runs.map((run) => ({ ...run, displayName: names.get(run.accountId) ?? null })) } };
+    const marked = (await this.roles.can(accountOf(request), HIDDEN_KIND_PERMISSION)) ? await this.markedIn(runs) : null;
+    return {
+      data: {
+        runs: runs.map((run) => ({
+          ...run,
+          displayName: names.get(run.accountId) ?? null,
+          ...(marked === null ? {} : { boardMarked: marked.has(run.accountId) }),
+        })),
+      },
+    };
+  }
+
+  /**
+   * Помеченные аккаунты за окно выборки — от самого раннего забега страницы до
+   * самого позднего, одним запросом на всю страницу (T-0115). Забег без времени
+   * конца — идущий: для него окно доходит до сейчас.
+   */
+  private async markedIn(runs: readonly ReviewRow[]): Promise<ReadonlySet<string>> {
+    if (runs.length === 0) return new Set();
+    const now = Date.now();
+    const moments = runs.map((run) => run.finishedAt?.getTime() ?? now);
+    const ids = await this.boardMarks.ids(new Date(Math.min(...moments)), new Date(Math.max(...moments) + 1));
+    return new Set(ids);
   }
 
   /** Сколько аккаунтов дошло до каждой вехи — по площадке, виду и коду источника первого касания. */
   @Get("funnel")
   @RequirePermission("analytics.gameplay.view")
-  async funnelReport(@Query() query: unknown): Promise<{ data: { from: string; to: string; rows: FunnelRow[] } }> {
+  async funnelReport(@Req() request: unknown, @Query() query: unknown): Promise<{ data: { from: string; to: string; rows: FunnelRow[]; marked?: FunnelMarked } }> {
     const period = periodOf(parse(() => periodQuerySchema.parse(query), "Некорректный период"), new Date());
-    return { data: { from: period.from.toISOString(), to: period.to.toISOString(), rows: await this.funnel.report(period.from, period.to) } };
+    const [rows, canSee] = await Promise.all([this.funnel.report(period.from, period.to), this.roles.can(accountOf(request), HIDDEN_KIND_PERMISSION)]);
+    const base = { from: period.from.toISOString(), to: period.to.toISOString(), rows };
+    // Строка «Отдельная доска» — только держателю права: у остальных ответ прежний.
+    return { data: canSee ? { ...base, marked: await this.boardMarks.funnel(period.from, period.to) } : base };
   }
 
   /**
