@@ -16,6 +16,8 @@ export const reviewRowSchema = z.object({
   level: z.number().nullable(),
   enemiesKilled: z.number().nullable(),
   finishedAt: z.string().nullable(),
+  /** есть только у держателя права `players.board.restrict` (T-0115) */
+  boardMarked: z.boolean().optional(),
 });
 
 export type ReviewRow = z.infer<typeof reviewRowSchema>;

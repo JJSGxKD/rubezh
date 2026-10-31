@@ -3,8 +3,8 @@ id: T-0192
 title: Давление после 8-й минуты — единая сложность тяжелее «Сложной»
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0171, T-0172, T-0102, T-0116, T-0118]
@@ -15,6 +15,9 @@ zones:
   - packages/core-game/src/content/balance-targets.ts
   - packages/core-game/src/game/balance/simulate.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - backend/api/src/modules/runs/run-counters.ts
+  - backend/api/test/run-counters.test.ts
   - scripts/balance/balance-sim.ts
   - packages/core-game/test/content.test.ts
   - packages/core-game/test/balance-properties.test.ts
