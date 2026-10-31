@@ -95,7 +95,7 @@ export function cellSize(radius, k = CELL_K) {
 
 /** Все кадры атласов: имя → { svg, size }. */
 export function collectFrames() {
-  const packs = { core: [], late: [], env: decorFrames(PPU), skins: [] };
+  const packs = { core: [], late: [], env: decorFrames(PPU) };
   for (const [state, frames] of Object.entries(HERO_STATES)) {
     frames.forEach((draw, k) => {
       packs.core.push({
@@ -105,15 +105,18 @@ export function collectFrames() {
       });
     });
   }
-  // Облики — свой пак: грузятся, когда игрок открывает раздел или выбрал облик
-  // (docs/27 §3.5). Только покой и шаг: ранение и смерть — кадры обычного героя.
+  // Облики — пак на облик (`skin-<id>`): в забеге нужен только свой, и с каждым
+  // окрасом пасса общий пак рос бы для всех. Только покой и шаг: ранение и
+  // смерть — кадры обычного героя. Имена кадров — `hero-<id>/…`, как раньше.
   for (const skin of HERO_SKINS.slice(1)) {
+    const frames = [];
     for (const state of ["idle", "walk"]) {
       HERO_STATES[state].forEach((draw, k) => {
         const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${draw()}</svg>`);
-        packs.skins.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS, 2.6) });
+        frames.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS, 2.6) });
       });
     }
+    packs[`skin-${skin.id}`] = frames;
   }
   for (const art of ENEMY_ART) {
     const pack = CORE_ENEMIES.has(art.id) ? packs.core : packs.late;
@@ -146,6 +149,7 @@ export function pack(frames, maxWidth = 1024, pad = 2) {
   let x = pad;
   let y = pad;
   let shelf = 0;
+  let right = 0;
   for (const frame of sorted) {
     if (x + w(frame) + pad > maxWidth) {
       x = pad;
@@ -155,12 +159,15 @@ export function pack(frames, maxWidth = 1024, pad = 2) {
     frame.x = x;
     frame.y = y;
     x += w(frame) + pad;
+    right = Math.max(right, x);
     shelf = Math.max(shelf, h(frame));
   }
-  // Высота — кратная четырём, а не степень двойки: WebGL2 и Phaser держат
+  // Высота и ширина — кратные четырём, а не степень двойки: WebGL2 и Phaser держат
   // такие текстуры без мип-карт, а степень двойки съедала бы до половины атласа.
+  // Ширина — по самому правому кадру: пак облика в шесть кадров не тянет полосу в 1024.
+  const width = Math.min(maxWidth, Math.ceil(right / 4) * 4);
   const height = Math.ceil((y + shelf + pad) / 4) * 4;
-  return { width: maxWidth, height, frames: sorted };
+  return { width, height, frames: sorted };
 }
 
 async function loadPlaywright() {

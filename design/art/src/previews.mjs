@@ -199,7 +199,7 @@ function skinsBoard() {
   const items = [{ text: "Облики героя v2: окрасы хранителя и архетипы — своя голова и предмет на той же позе", x: 24, y: 30, size: 22, bold: true }];
   const rat = ENEMY_ART.find((a) => a.id === "swarm_rat");
   const perRow = 5;
-  const cellW = 300;
+  const cellW = 330;
   const rowH = 268;
   const rows = Math.ceil(HERO_SKINS.length / perRow);
   for (let r = 0; r < rows; r++) items.push({ ground: true, x: 16, y: 46 + r * rowH, w: perRow * cellW + 16, h: rowH - 12 });
