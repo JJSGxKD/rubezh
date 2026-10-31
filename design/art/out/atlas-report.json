@@ -90,6 +90,42 @@
   "gpu": "0.2 МБ"
  },
  {
+  "pack": "skin-leaf_fall",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-pine_wood",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-maple",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-pine_mist",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "8 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
   "pack": "skin-vityaz",
   "frames": 6,
   "atlas": "444×124",
@@ -149,6 +185,15 @@
   "atlas": "492×124",
   "fill": "92%",
   "trim": "56% ячейки",
+  "png": "8 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-listven",
+  "frames": 6,
+  "atlas": "524×124",
+  "fill": "92%",
+  "trim": "59% ячейки",
   "png": "8 КБ",
   "gpu": "0.2 МБ"
  },

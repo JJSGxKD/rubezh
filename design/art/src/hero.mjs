@@ -128,6 +128,18 @@ ${[-10, -4, 3, 10, 15].map((x) => `<circle cx="${x}" cy="${Y(-27)}" r="0.9" fill
 <path d="M-13 ${Y(-28)} Q2 ${Y(-33)} 17 ${Y(-27)} L17 ${Y(-23)} Q2 ${Y(-28)} -13 ${Y(-24)} Z" fill="${H.trim}"/>
 <circle cx="-19" cy="${Y(-48)}" r="2.6" fill="${H.trim}"/><circle cx="23.5" cy="${Y(-46)}" r="2.6" fill="${H.trim}"/>`;
   }
+  if (kind === "leafhood") {
+    // Листвень (облик сезона): капюшон хранителя, по краю — осенние листья, сверху — рожки-веточки.
+    const hood = `<path d="M-14 ${Y(-14)} Q-16 ${Y(-40)} 2 ${Y(-40)} Q18 ${Y(-40)} 16 ${Y(-20)} Q14 ${Y(-10)} 2 ${Y(-9)} Q-10 ${Y(-8)} -14 ${Y(-14)} Z"/>`;
+    const leaf = (x, ly, angle, color) =>
+      `<path d="M0 0 Q4 -4 0 -9 Q-4 -4 0 0 Z" transform="translate(${x} ${Y(ly)}) rotate(${angle})" fill="${color}"/>`;
+    const leaves = [[-14, -16, -110, H.leafA], [-15, -26, -80, H.leafB], [-11, -35, -45, H.leafA], [-3, -40, -10, H.leafB], [6, -40, 20, H.leafA], [13, -35, 55, H.leafB]];
+    return `<path d="M-6 ${Y(-39)} Q-9 ${Y(-47)} -14 ${Y(-50)} M-8 ${Y(-44)} Q-4 ${Y(-48)} -3 ${Y(-52)} M8 ${Y(-39)} Q12 ${Y(-46)} 17 ${Y(-48)} M11 ${Y(-43)} Q9 ${Y(-49)} 11 ${Y(-53)}" fill="none" stroke="${H.twig}" stroke-width="2.2" stroke-linecap="round"/>
+${twoTone(hood, H.cloak, H.cloakShade, -2, -2)}
+${leaves.map(([x, ly, angle, color]) => leaf(x, ly, angle, color)).join("")}
+${face(y)}
+${eyeMark}`;
+  }
   const hood = `<path d="M-14 ${Y(-14)} Q-16 ${Y(-40)} 2 ${Y(-40)} Q18 ${Y(-40)} 16 ${Y(-20)} Q14 ${Y(-10)} 2 ${Y(-9)} Q-10 ${Y(-8)} -14 ${Y(-14)} Z"/>`;
   return `${twoTone(hood, H.cloak, H.cloakShade, -2, -2)}
 ${face(y)}
@@ -173,6 +185,17 @@ function prop(kind, x, y, breath) {
 <path d="M${x} ${Y(-30)} q8 2 10 10 q-6 -3 -10 -2 Z" fill="${H.capA}"/>
 <path d="M${x} ${Y(-30)} q-8 4 -9 13 q4 -5 9 -7 Z" fill="${H.capB}"/>
 <circle cx="${x}" cy="${Y(-33)}" r="3.6" fill="${H.trim}"/><circle cx="${x - 1}" cy="${Y(-34)}" r="1.2" fill="#fff" opacity="0.8"/>`;
+  }
+  if (kind === "branch") {
+    // Посох-коряга Лиственя: кривая ветвь, два листа и жёлудь, горящий вместо оберега.
+    return `<path d="M${x + 2} ${Y(34)} Q${x - 2} ${Y(10)} ${x + 1} ${Y(-8)} Q${x + 4} ${Y(-22)} ${x - 1} ${Y(-32)}" fill="none" stroke="${H.staff}" stroke-width="3.6" stroke-linecap="round"/>
+<path d="M${x + 1} ${Y(-14)} q6 -2 9 -8" fill="none" stroke="${H.staff}" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M${x + 10} ${Y(-22)} q4 -1 4 -6 q-5 0 -4 6 Z" fill="${H.leafA}"/>
+<path d="M${x - 1} ${Y(-24)} q-6 0 -8 -5 q6 -1 8 5 Z" fill="${H.leafB}"/>
+<circle cx="${x - 1}" cy="${Y(-36)}" r="${f(9 + breath)}" fill="${H.ward}" opacity="0.3"/>
+<path d="M${x - 5} ${Y(-37)} Q${x - 1} ${Y(-41)} ${x + 3} ${Y(-37)} Z" fill="${H.twig}"/>
+<ellipse cx="${x - 1}" cy="${Y(-33)}" rx="3.6" ry="4.4" fill="${H.ward}"/>
+<ellipse cx="${x - 2}" cy="${Y(-34)}" rx="1.2" ry="1.8" fill="${H.wardLight}"/>`;
   }
   return `<path d="M${x} ${Y(-30)} L${x + 2} ${Y(34)}" stroke="${H.staff}" stroke-width="3.6" stroke-linecap="round"/>
 <circle cx="${x}" cy="${Y(-34)}" r="${f(9 + breath)}" fill="${H.ward}" opacity="0.3"/>
@@ -239,6 +262,12 @@ export const HERO_SKINS = [
   { id: "keeper_ember", name: "Хранитель · угли", source: "Ярмарка", palette: { cloak: "#5a4644", cloakShade: "#3f302f", cloakDeep: "#2a1f1f", edge: "#ffb36b", eyes: "#1d1c31", scarf: "#ff6a2a", scarfShade: "#c24418", ward: "#ffb36b", wardLight: "#fff0d8", staff: "#2e2422", boots: "#1e1716" } },
   { id: "keeper_rushnik", name: "Хранитель · рушник", source: "Ярмарка", palette: { cloak: "#f7f1e6", cloakShade: "#e8d7c0", cloakDeep: "#b0333b", scarf: "#d23a3a", scarfShade: "#8f2323", staff: "#6b4a32", boots: "#5a2626" } },
   { id: "keeper_storm", name: "Хранитель · гроза", source: "Ярмарка", palette: { cloak: "#a9abd6", cloakShade: "#8183b3", cloakDeep: "#5c5e8c", scarf: "#ffe066", scarfShade: "#c9a82e", ward: "#b8ecff", wardLight: "#ffffff", staff: "#3e3a5c", boots: "#2a2842" } },
+  // Батл-пасс, первый месяц — «Листопад» (Р46, T-0315): два окраса бесплатной ленты (10-я и 20-я
+  // ступени), два окраса VIP-ленты и облик сезона на 30-й. Тёмным плащам VIP-ленты — светлый кант.
+  { id: "leaf_fall", name: "Хранитель · листопад", source: "пасс", palette: { cloak: "#e2a85a", cloakShade: "#b98236", cloakDeep: "#7a5424", scarf: "#a3432b", scarfShade: "#6e2a1b", staff: "#5a3d2a", boots: "#3a2a1c" } },
+  { id: "pine_wood", name: "Хранитель · бор", source: "пасс", palette: { cloak: "#5d7f58", cloakShade: "#46653f", cloakDeep: "#2e452b", scarf: "#e8c25a", scarfShade: "#b8962e", ward: "#b8ecff", wardLight: "#ffffff", staff: "#4a3a2a", boots: "#22301f" } },
+  { id: "maple", name: "Хранитель · клён", source: "пасс · VIP", palette: { cloak: "#8e3b2e", cloakShade: "#6b2a21", cloakDeep: "#471a14", edge: "#ffcf9a", eyes: "#1d1c31", scarf: "#ffd15c", scarfShade: "#c9a033", ward: "#ffb340", wardLight: "#fff1c8", staff: "#3a2418", boots: "#2a1410" } },
+  { id: "pine_mist", name: "Хранитель · туман бора", source: "пасс · VIP", palette: { cloak: "#24484a", cloakShade: "#18393b", cloakDeep: "#0f2628", edge: "#9ff0e0", eyes: "#1d1c31", scarf: "#ffb340", scarfShade: "#c27f1c", ward: "#9ff0e0", wardLight: "#ffffff", staff: "#1f2f2c", boots: "#0f1a1a" } },
   {
     id: "vityaz", name: "Витязь", rarity: "rare", source: "уровень аккаунта",
     palette: { head: "helm", prop: "spear", cloak: "#a8463a", cloakShade: "#7a2c24", cloakDeep: "#521b16", scarf: "#d9b45a", scarfShade: "#a07e2e", mail: "#9aa2bd", mailShade: "#6c7391", helm: "#d5dbea", helmShade: "#9199b5", trim: "#e0bb5e", blade: "#eef3fb", bladeShade: "#aab3c9", staff: "#6b4a32", boots: "#3b2a24" },
@@ -267,6 +296,11 @@ export const HERO_SKINS = [
   {
     id: "skomoroh_maslenitsa", name: "Скоморох · Масленица", rarity: "epic", source: "Ярмарка",
     palette: { head: "jester", prop: "ribbons", cloak: "#f2b632", cloakShade: "#c98a1c", cloakDeep: "#8f5f10", scarf: "#d23a3a", scarfShade: "#8f2323", capA: "#d23a3a", capB: "#46d9c6", trim: "#fff1c8", staff: "#7a5236", boots: "#6b2a1a" },
+  },
+  // Облик сезона — архетип на месяц пасса: своя голова и предмет на общей позе, как у остальных.
+  {
+    id: "listven", name: "Листвень", rarity: "legendary", source: "пасс · VIP",
+    palette: { head: "leafhood", prop: "branch", cloak: "#8a6a3a", cloakShade: "#6a4f2a", cloakDeep: "#46341c", scarf: "#e8c25a", scarfShade: "#b8962e", leafA: "#e0902e", leafB: "#c4482a", twig: "#5a4026", ward: "#ffb340", wardLight: "#fff1c8", staff: "#5a4026", boots: "#2f2418" },
   },
   {
     id: "navi", name: "Навий страж", rarity: "mythic", source: "топ сезона",
