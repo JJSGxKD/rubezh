@@ -26,7 +26,7 @@ import { redisDatabase } from "./helpers/redis-database.js";
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 2);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
-const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null };
+const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
 
 describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   let config: AppConfig;
@@ -274,15 +274,15 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   it("счётчики итога лежат в run.details ключами, а строка прошлой сборки читается с null (T-0125)", async () => {
     const owner = await account();
     const runId = randomUUID();
-    const details = { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [], bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 };
+    const details = { ...NO_COUNTERS, passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [], bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } };
     await runs.finish(finished(runId, owner, { details }));
 
     const row = await prisma.run.findUnique({ where: { runId }, select: { details: true } });
-    expect(row?.details).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 });
-    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 } });
+    expect(row?.details).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } });
+    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } } });
 
     // Запись прошлой сборки: ключей счётчиков в jsonb нет вовсе.
     await prisma.run.update({ where: { runId }, data: { details: { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [] } } });
-    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null } });
+    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null } });
   });
 });

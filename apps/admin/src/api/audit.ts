@@ -110,6 +110,7 @@ const ACTION_TITLES: Record<string, string> = {
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
   "tasks.update": "Правка задания",
+  "tasks.reorder": "Порядок заданий",
   "tasks.network.update": "Правка заданий рекламной сети",
   "partner.create": "Новый партнёр",
   "partner.update": "Правка партнёра",
@@ -254,6 +255,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
  * обновления. Незнакомое поле показывается как записано.
  */
 const FIELD_TITLES: Record<string, string> = {
+  order: "порядок",
   restrictions: "ограничения",
   replaced: "заменили действовавшие",
   runId: "забег",

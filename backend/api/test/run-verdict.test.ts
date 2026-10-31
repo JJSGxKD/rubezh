@@ -158,8 +158,8 @@ describe("снаряжение в вердикте", () => {
 });
 
 describe("счётчики в вердикте (tasks/T-0125)", () => {
-  const plausible = { bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 100 };
-  const implausible = { bossKills: 50, eliteKills: 0, chestsOpened: 0, crystals: 0 };
+  const plausible = { bossKills: 0, eliteKills: 1, chestsOpened: 1, crystals: 100, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+  const implausible = { bossKills: 50, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
 
   it("правдоподобные счётчики и забег без них — без замечаний", () => {
     expect(judgeRun(run({ counters: plausible }), limits)).toEqual({ verdict: "ok", reasons: [] });
@@ -180,7 +180,7 @@ describe("счётчики в вердикте (tasks/T-0125)", () => {
   });
 
   it("счётчики сверяются с убитыми и временем самого забега", () => {
-    const counters = { bossKills: 1, eliteKills: 0, chestsOpened: 0, crystals: 0 };
+    const counters = { bossKills: 1, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
     const long = { survivalSec: 600, finishedAtMs: START + 700_000 };
     expect(judgeRun(run({ counters, enemiesKilled: 0, ...long }), limits).reasons).toContain("counters_implausible");
     expect(judgeRun(run({ counters, enemiesKilled: 10, ...long }), limits).reasons).not.toContain("counters_implausible");

@@ -28,6 +28,10 @@ export const storedDetailsSchema = z.object({
   eliteKills: count.nullable().default(null),
   chestsOpened: count.nullable().default(null),
   crystals: count.nullable().default(null),
+  // Серии и убийства по стихиям (tasks/T-0321): так же — строка прошлой сборки их не несёт.
+  noHitSec: count.nullable().default(null),
+  noKillSec: count.nullable().default(null),
+  killsByElement: z.record(z.string(), count).nullable().default(null),
 });
 
 export type StoredDetails = z.infer<typeof storedDetailsSchema>;
@@ -56,6 +60,9 @@ export function detailsOf(input: FinishDetailsInput): StoredDetails | null {
     eliteKills: input.stats?.eliteKills ?? null,
     chestsOpened: input.stats?.chestsOpened ?? null,
     crystals: input.stats?.crystals ?? null,
+    noHitSec: input.stats?.noHitSec ?? null,
+    noKillSec: input.stats?.noKillSec ?? null,
+    killsByElement: input.stats?.killsByElement ?? null,
   };
 }
 
