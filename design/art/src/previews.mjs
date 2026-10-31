@@ -378,7 +378,31 @@ function plannedFxBoard() {
     items.push({ text: "→", x: x + 112, y: y + 116, size: 26, bold: true });
     items.push({ svg: fxOf(evolved).frames[0], x: x + 150, y: y + 58, size: 100 });
   });
-  return { width: 1380, height: y + 186, items };
+  // Новый контент Р157: оружие с эволюцией — парами, следы и метки врагов —
+  // по кадрам. Всё это в паке `atlas-r157`.
+  y += 180;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 170 });
+  items.push({ text: "Оружие Р157 (T-0281, T-0288…T-0290): базовое → эволюция", x: 26, y: y + 24, size: 16, bold: true });
+  const r157Pairs = [["proj_sickle", "proj_harvest", "Серп → Жатва"], ["orbiter_flail", "orbiter_whirl", "Кистень → Круговерть"], ["proj_rowan_beads", "proj_necklace", "Бусы → Ожерелье"], ["wave_gusli", "wave_bayan_song", "Гусли → Песнь Баяна"]];
+  r157Pairs.forEach(([base, evolved, label], k) => {
+    const x = 26 + k * 335;
+    items.push({ text: label, x, y: y + 50, size: 13, color: "#d7dcef" });
+    items.push({ svg: fxOf(base).frames[0], x, y: y + 58, size: 100 });
+    items.push({ text: "→", x: x + 112, y: y + 116, size: 26, bold: true });
+    items.push({ svg: fxOf(evolved).frames[0], x: x + 150, y: y + 58, size: 100 });
+  });
+  y += 180;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 190 });
+  items.push({ text: "Следы и метки Р157 (T-0282…T-0284, T-0290): кадры по времени", x: 26, y: y + 24, size: 16, bold: true });
+  const strips = [["chain_rowan", "цепь бус"], ["puddle_bog", "лужа Болотника: гаснет"], ["mark_kikimora", "метка Кикиморы: сужается"], ["mark_roots", "метка корней: заполняется"], ["strike_roots", "удар корней"]];
+  let sx = 26;
+  for (const [id, label] of strips) {
+    const frames = fxOf(id).frames;
+    items.push({ text: label, x: sx, y: y + 50, size: 12, color: "#d7dcef" });
+    frames.forEach((svg, k) => items.push({ svg, x: sx + k * 84, y: y + 62, size: 80 }));
+    sx += frames.length * 84 + 18;
+  }
+  return { width: 1380, height: y + 206, items };
 }
 
 async function main() {

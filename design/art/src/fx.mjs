@@ -235,6 +235,69 @@ function scorchFrames() {
 }
 
 /**
+ * Новый контент Р157 (T-0281…T-0290): снаряды и следы оружия, лужи и метки
+ * врагов. Пак `atlas-r157`, как и сами враги: в движке их нет, пока нет
+ * контента. Метки и лужи лежат на земле, рендер растягивает их до радиуса из
+ * данных — форма мягкая и терпит растяжение вдвое.
+ */
+const DANGER = "#ff5d5d";
+function r157Frames() {
+  // Серп: полумесяц лезвия с рукоятью; два кадра — поворот на четверть,
+  // вместе с вращением рендера он не мелькает одним и тем же кадром.
+  const sickle = (k, blade, edge, extra = "") =>
+    svg(`<g transform="rotate(${k * 45})"><path d="M-30 -10 A34 34 0 0 1 32 -14 A26 26 0 0 0 -22 -2 Z" fill="${blade}"/><path d="M-30 -10 A34 34 0 0 1 32 -14 L26 -10 A30 30 0 0 0 -26 -6 Z" fill="${edge}"/><path d="M-26 -4 L-36 24" stroke="#8a5a3c" stroke-width="8" stroke-linecap="round"/>${extra}</g>`);
+  const wave = (k, color, spread) => {
+    const r = 14 + k * 12;
+    const a = (spread / 2) * (Math.PI / 180);
+    const arc = (rr) => `M${f(Math.cos(-a) * rr)} ${f(Math.sin(-a) * rr)} A${rr} ${rr} 0 0 1 ${f(Math.cos(a) * rr)} ${f(Math.sin(a) * rr)}`;
+    return svg(`<path d="${arc(r)}" fill="none" stroke="${color}" stroke-width="${f(7 - k * 1.5)}" stroke-linecap="round" opacity="${f(1 - k * 0.25)}"/><path d="${arc(r + 9)}" fill="none" stroke="${color}" stroke-width="${f(3.5 - k * 0.8)}" stroke-linecap="round" opacity="${f(0.7 - k * 0.2)}"/><circle cx="${f(r + 4)}" cy="${f(-8 + k * 4)}" r="3.5" fill="#fff6dc" opacity="${f(0.9 - k * 0.3)}"/>`);
+  };
+  const ring = (k, color) => {
+    const r = 14 + k * 11;
+    const notes = [0, 1, 2, 3, 4, 5].map((i) => {
+      const ang = (i / 6) * TAU + k * 0.3;
+      return `<path d="M${f(Math.cos(ang) * (r + 8))} ${f(Math.sin(ang) * (r + 8))} v-7 l5 2" fill="none" stroke="#fff6dc" stroke-width="2.4" stroke-linecap="round" opacity="${f(0.9 - k * 0.3)}"/>`;
+    }).join("");
+    return svg(`<circle r="${r}" fill="none" stroke="${color}" stroke-width="${f(7 - k * 1.5)}" opacity="${f(1 - k * 0.25)}"/>${notes}`);
+  };
+  const ball = (body, spike, glow) =>
+    svg(`<circle r="40" fill="${glow}" opacity="0.25"/><path d="M-46 4 L-26 2" stroke="#8a8f9e" stroke-width="5" stroke-dasharray="6 4" stroke-linecap="round"/>${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => { const a = (i / 8) * TAU; return `<path d="M${f(Math.cos(a) * 18)} ${f(Math.sin(a) * 18)} L${f(Math.cos(a) * 30)} ${f(Math.sin(a) * 30)}" stroke="${spike}" stroke-width="6" stroke-linecap="round"/>`; }).join("")}<circle r="20" fill="${body}"/><circle cx="-6" cy="-6" r="7" fill="#ffffff" opacity="0.45"/>`);
+  const berry = (cx, cy, r) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="#e8452f"/><circle cx="${cx - r * 0.3}" cy="${cy - r * 0.3}" r="${r * 0.35}" fill="#ffb3a1"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#7a1a12" stroke-width="2"/>`;
+  const puddle = (k) =>
+    svg(`<ellipse rx="44" ry="26" fill="#3f7a2a" opacity="${f(0.55 - k * 0.15)}"/><ellipse rx="30" ry="16" fill="#6fcf3a" opacity="${f(0.5 - k * 0.14)}"/><ellipse cx="-12" cy="-4" rx="8" ry="3.5" fill="#d9f7c4" opacity="${f(0.7 - k * 0.22)}"/><circle cx="14" cy="4" r="${f(4 - k)}" fill="#b8f08f" opacity="${f(0.8 - k * 0.25)}"/><circle cx="-20" cy="8" r="${f(3 - k * 0.7)}" fill="#b8f08f" opacity="${f(0.7 - k * 0.2)}"/>`);
+  const mark = (k) => {
+    const r = 40 - k * 12;
+    return svg(`<circle r="${r}" fill="${DANGER}" opacity="${f(0.12 + k * 0.06)}"/><circle r="${r}" fill="none" stroke="${DANGER}" stroke-width="4" stroke-dasharray="10 6" opacity="0.9"/><path d="M-6 -6 L6 6 M6 -6 L-6 6" stroke="#6a9a86" stroke-width="4" stroke-linecap="round" opacity="${f(0.4 + k * 0.25)}"/>`);
+  };
+  const rootsMark = (k) =>
+    svg(`<circle r="42" fill="#3b2a1a" opacity="0.3"/><circle r="42" fill="none" stroke="${DANGER}" stroke-width="3" opacity="0.85"/><path d="M0 0 m-42 0 a42 42 0 0 1 84 0" fill="none" stroke="${DANGER}" stroke-width="7" stroke-dasharray="${f(132 * (k + 1) / 3)} 400" stroke-linecap="round"/><path d="M-20 8 q8 -10 16 -2 q6 6 14 -4" fill="none" stroke="#6b5a3a" stroke-width="4" stroke-linecap="round" opacity="${f(0.4 + k * 0.2)}"/>`);
+  const rootsStrike = (k) => {
+    const h = [0.6, 1, 0.75][k];
+    const spikes = [-30, -16, -4, 8, 20, 32].map((x, i) => {
+      const tall = (22 + (i % 3) * 8) * h;
+      return `<path d="M${x - 6} 18 Q${x - 2} ${f(18 - tall * 0.5)} ${x + (i % 2 ? 3 : -3)} ${f(18 - tall)} Q${x + 4} ${f(18 - tall * 0.5)} ${x + 6} 18 Z" fill="#6b5a3a" stroke="#2a1d10" stroke-width="2.4" stroke-linejoin="round"/><path d="M${x + (i % 2 ? 3 : -3)} ${f(18 - tall)} l2 6" stroke="#c9b48a" stroke-width="2"/>`;
+    }).join("");
+    return svg(`<ellipse cy="18" rx="44" ry="12" fill="#2a1d10" opacity="0.5"/>${spikes}<ellipse cy="18" rx="${f(40 * h)}" ry="${f(8 * h)}" fill="none" stroke="${DANGER}" stroke-width="3" opacity="${f(0.9 - k * 0.3)}"/>`);
+  };
+  return {
+    sickle: [0, 1].map((k) => sickle(k, "#c9d1e3", "#ffffff")),
+    harvest: [0, 1].map((k) => sickle(k, "#ffd15c", "#fff6dc", `<path d="M10 4 L18 20 M18 20 l-5 -2 M18 20 l1 -6 M14 12 l-5 -1 M14 12 l2 -5" stroke="#e8c25a" stroke-width="3" stroke-linecap="round"/>`)),
+    gusli: [0, 1, 2].map((k) => wave(k, "#ffe066", 64)),
+    bayan: [0, 1, 2].map((k) => ring(k, "#ffd15c")),
+    flail: [ball("#8a8f9e", "#c9d1e3", "#c9d1e3")],
+    whirl: [ball("#ffd15c", "#fff6dc", "#ffd15c")],
+    rowan: [svg(`<path d="M-44 0 Q-14 -6 6 -4 L6 4 Q-14 6 -44 0 Z" fill="#ff8a6a" opacity="0.6"/>${berry(14, -6, 11)}${berry(18, 10, 9)}${berry(2, 6, 8)}<path d="M8 -16 q8 -10 18 -6 q-6 8 -18 6 Z" fill="#6fae4a"/>`)],
+    necklace: [svg(`<circle r="40" fill="#e8452f" opacity="0.2"/><circle r="24" fill="none" stroke="#8a5a3c" stroke-width="2.4"/>${[0, 1, 2, 3, 4, 5, 6].map((i) => { const a = (i / 7) * TAU - Math.PI / 2; return berry(f(Math.cos(a) * 24), f(Math.sin(a) * 24), 8); }).join("")}<path d="M0 28 l8 8 -8 8 -8 -8 Z" fill="#ffd15c" stroke="#7a4a33" stroke-width="2"/>`)],
+    chain: [0, 1].map((k) => svg(`<path d="M-46 0 L-30 ${k ? 8 : -8} L-14 ${k ? -6 : 6} L2 ${k ? 8 : -8} L18 ${k ? -6 : 6} L34 ${k ? 6 : -6} L46 0" fill="none" stroke="#e8452f" stroke-width="5" stroke-linejoin="round" opacity="0.85"/><path d="M-46 0 L-30 ${k ? 8 : -8} L-14 ${k ? -6 : 6} L2 ${k ? 8 : -8} L18 ${k ? -6 : 6} L34 ${k ? 6 : -6} L46 0" fill="none" stroke="#ffd0c4" stroke-width="2" stroke-linejoin="round"/>`)),
+    puddle: [0, 1, 2].map(puddle),
+    kikimora: [0, 1, 2].map(mark),
+    rootsMark: [0, 1, 2].map(rootsMark),
+    rootsStrike: [0, 1, 2].map(rootsStrike),
+  };
+}
+const R157 = r157Frames();
+
+/**
  * Размер ячейки — в игровых единицах при масштабе 1. Взрыв рендер растягивает
  * до радиуса из события: мягкая форма терпит растяжение вдвое.
  */
@@ -262,4 +325,19 @@ export const FX = [
   { id: "status_frozen", units: 14, frames: STATUS.frozen },
   { id: "status_shock", units: 14, frames: STATUS.shock },
   { id: "status_poison", units: 14, frames: STATUS.poison },
+  // Новый контент Р157 — пак `atlas-r157`. Ячейка — в единицах при масштабе 1;
+  // волны, лужи и метки рендер растягивает до радиуса из данных.
+  { id: "proj_sickle", units: 18, frames: R157.sickle, pack: "r157" },
+  { id: "proj_harvest", units: 20, frames: R157.harvest, pack: "r157" },
+  { id: "wave_gusli", units: 64, frames: R157.gusli, pack: "r157" },
+  { id: "wave_bayan_song", units: 72, frames: R157.bayan, pack: "r157" },
+  { id: "orbiter_flail", units: 20, frames: R157.flail, pack: "r157" },
+  { id: "orbiter_whirl", units: 22, frames: R157.whirl, pack: "r157" },
+  { id: "proj_rowan_beads", units: 14, frames: R157.rowan, pack: "r157" },
+  { id: "proj_necklace", units: 18, frames: R157.necklace, pack: "r157" },
+  { id: "chain_rowan", units: 40, frames: R157.chain, pack: "r157" },
+  { id: "puddle_bog", units: 52, frames: R157.puddle, pack: "r157" },
+  { id: "mark_kikimora", units: 40, frames: R157.kikimora, pack: "r157" },
+  { id: "mark_roots", units: 64, frames: R157.rootsMark, pack: "r157" },
+  { id: "strike_roots", units: 64, frames: R157.rootsStrike, pack: "r157" },
 ];
