@@ -53,7 +53,14 @@ function rimFilter(id, color, radius) {
  * рисунок не знает, рядовой он, элита или вариант для сравнения.
  * Толщина каймы — в игровых единицах, как `enemyRim` в looks.ts (2 у элиты, 3 у босса).
  */
-export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile = false } = {}) {
+/**
+ * Кадр врага: рисунок в клетке −50…50, кайма ранга, свечение Нави под ногами.
+ * `pad` — запас клетки для рисунка, который выходит за неё (копьё, рог, меч):
+ * клетка шире во столько раз, а масштаб рисунка тот же — движок берёт размер
+ * из пикселей кадра, и тело в мире не меняется. Сколько запаса нужно, меряет
+ * `node design/art/src/frame-fit.mjs`.
+ */
+export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile = false, pad = 1 } = {}) {
   const unitsPerBox = (radius * 2 * CELL_K) / 100;
   let filters = defs;
   let body = inner;
@@ -77,7 +84,8 @@ export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile 
     body = `<g filter="url(#rimB)">${body}</g>`;
   }
   const under = hostile ? `<ellipse cx="0" cy="42" rx="34" ry="9" fill="url(#nav)"/>` : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${filters}</defs>${under}${body}</svg>`;
+  const box = pad === 1 ? "-50 -50 100 100" : `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${filters}</defs>${under}${body}</svg>`;
 }
 
 function enemyFrames(art, stage, style = "C", version = 2) {
@@ -85,7 +93,7 @@ function enemyFrames(art, stage, style = "C", version = 2) {
   const palette =
     style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(stage, version));
   const hostile = version === 2 && style === "C";
-  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style, hostile }));
+  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style, hostile, pad: art.pad }));
 }
 
 export { CELL_K };
@@ -133,7 +141,7 @@ export function collectFrames() {
     const stages = art.rank === undefined ? STAGES.length : 1;
     for (let stage = 0; stage < stages; stage++) {
       enemyFrames(art, stage).forEach((svg, k) => {
-        pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius) });
+        pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius * (art.pad ?? 1)) });
       });
     }
   }

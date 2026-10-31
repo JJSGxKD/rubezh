@@ -399,6 +399,9 @@ ${glowEye(36, -10 + bob, 2.4, P)}
  * паттерну: костяной ходок и упырь делят паттерн «chase», но не тело.
  * `pattern` и `rank` — для цвета; `radius` — хитбокс в игровых единицах
  * (PATTERN_TRAITS × множитель ранга), по нему считается размер ячейки.
+ * `pad` — запас ячейки для рисунка, который выходит за неё: копьё Чура, меч
+ * рыцаря, рог Барана. Без него край кадра срезал их, и на `size` 2 копьё
+ * кончалось плоским срезом в кайме. Число — замер `src/frame-fit.mjs`.
  */
 export const ENEMY_ART = [
   { id: "swarm_rat", pattern: "swarm", radius: 7, draw: rat },
@@ -407,16 +410,16 @@ export const ENEMY_ART = [
   { id: "bone_walker", pattern: "chase", radius: 12, draw: boneWalker },
   { id: "shooter_wisp", pattern: "kite_and_shoot", radius: 9, draw: wisp },
   { id: "dasher_wolf", pattern: "dash", radius: 10, draw: wolf },
-  { id: "circler_crow", pattern: "orbit", radius: 8, draw: crow },
+  { id: "circler_crow", pattern: "orbit", radius: 8, draw: crow, pad: 1.09 },
   { id: "bomber_imp", pattern: "exploder", radius: 9, draw: imp },
   { id: "splitter_slime", pattern: "splitter", radius: 13, draw: slime },
   { id: "rushing_bats", pattern: "rush", radius: 6, draw: bats },
-  { id: "elite_ghoul", pattern: "chase", rank: "elite", radius: 12 * 1.7, draw: eliteGhoul },
-  { id: "elite_grave_knight", pattern: "dash", rank: "elite", radius: 10 * 1.7, draw: graveKnight },
-  { id: "boss_seer", pattern: "caster", rank: "boss", radius: 14 * 2.4, draw: seer },
+  { id: "elite_ghoul", pattern: "chase", rank: "elite", radius: 12 * 1.7, draw: eliteGhoul, pad: 1.02 },
+  { id: "elite_grave_knight", pattern: "dash", rank: "elite", radius: 10 * 1.7, draw: graveKnight, pad: 1.17 },
+  { id: "boss_seer", pattern: "caster", rank: "boss", radius: 14 * 2.4, draw: seer, pad: 1.07 },
   { id: "boss_matryoshka", pattern: "splitter", rank: "boss", radius: 13 * 2.4, draw: matryoshka },
   // Запланированные (direction-v2.md §5.1): облик готов раньше контента.
-  { id: "rubezh_guard", pattern: "rush", rank: "boss", radius: 6 * 2.4, draw: rubezhGuard, planned: "T-0120" },
-  { id: "cordon_guard", pattern: "chase", radius: 14, draw: cordonGuard, planned: "T-0171" },
-  { id: "boss_ram", pattern: "dash", rank: "boss", radius: 10 * 2.4, draw: ram, planned: "T-0197" },
+  { id: "rubezh_guard", pattern: "rush", rank: "boss", radius: 6 * 2.4, draw: rubezhGuard, pad: 1.24, planned: "T-0120" },
+  { id: "cordon_guard", pattern: "chase", radius: 14, draw: cordonGuard, pad: 1.09, planned: "T-0171" },
+  { id: "boss_ram", pattern: "dash", rank: "boss", radius: 10 * 2.4, draw: ram, pad: 1.1, planned: "T-0197" },
 ];

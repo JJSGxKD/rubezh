@@ -28,7 +28,7 @@ function heroSvg(state, k) {
 function enemySvg(art, stage, t, style = "C", version = 2) {
   const palette =
     style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(enemyBody(art.pattern, art.rank, stage, art.id, version), enemyEye(stage, version));
-  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style, hostile: version === 2 && style === "C" });
+  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style, hostile: version === 2 && style === "C", pad: art.pad });
 }
 
 /** Ячейка в игровом масштабе: размер в экранных пикселях, как на телефоне. */
