@@ -203,6 +203,160 @@ function prop(kind, x, y, breath) {
 <path d="M${x} ${Y(-40)} L${x + 2.5} ${Y(-35)} L${x} ${Y(-32)} Z" fill="${H.wardLight}"/>`;
 }
 
+/**
+ * Вид спереди и спиной (Р143, design/art/backlog.md п. 1): та же фигура, что
+ * сбоку, — плащ-колокол, шарф, посох, — но симметрично. Спереди посох в правой
+ * руке героя, то есть слева на экране (предмет рисуется зеркалом бокового);
+ * спиной — справа. Шаг — попеременный подъём ступней и качание подола.
+ */
+function poseFacing(view, { walk = null, breath = 0, lean = 0, staffAngle = 0, eyes = "open" }) {
+  const front = view === "front";
+  const w = walk === null ? 0 : Math.sin(walk * TAU);
+  const y = walk === null ? breath * 1.2 : -Math.abs(w) * 2.5;
+  const sway = walk === null ? breath * 0.6 : w * 1.6;
+  const liftL = walk === null ? 0 : Math.max(0, w) * 5;
+  const liftR = walk === null ? 0 : Math.max(0, -w) * 5;
+  const legs = `<path d="M-5 ${f(32 - liftL)} L-4 ${f(18 + y)}" stroke="${H.boots}" stroke-width="7" stroke-linecap="round"/><path d="M5 ${f(32 - liftR)} L4 ${f(18 + y)}" stroke="${H.boots}" stroke-width="7" stroke-linecap="round"/>`;
+  const cloak = `<path d="M-9 ${f(-10 + y)} Q-18 ${f(10 + y)} ${f(-20 + sway)} ${f(28 + y)} Q0 ${f(34 + y)} ${f(20 + sway)} ${f(28 + y)} Q18 ${f(10 + y)} 9 ${f(-10 + y)} Z"/>`;
+  const folds = front
+    ? `<path d="M0 ${f(-6 + y)} L${f(sway * 0.5)} ${f(31 + y)}" stroke="${H.cloakDeep}" stroke-width="2" opacity="0.6"/>`
+    : `<path d="M-6 ${f(-4 + y)} Q-8 ${f(12 + y)} ${f(-10 + sway)} ${f(29 + y)} M6 ${f(-4 + y)} Q8 ${f(12 + y)} ${f(10 + sway)} ${f(29 + y)}" fill="none" stroke="${H.cloakDeep}" stroke-width="2" opacity="0.5"/>`;
+  const hem = `<path d="M-18 ${f(26 + y)} Q0 ${f(31 + y)} 18 ${f(26 + y)}" fill="none" stroke="${H.cloakDeep}" stroke-width="2" opacity="0.7"/>`;
+  const scarf = `<path d="M-11 ${f(-12 + y)} Q0 ${f(-6 + y)} 11 ${f(-12 + y)} L10 ${f(-6 + y)} Q0 ${f(0 + y)} -10 ${f(-6 + y)} Z" fill="${H.scarf}"/>${
+    front
+      ? `<path d="M3 ${f(-6 + y)} L${f(6 + sway)} ${f(10 + y)} L${f(sway)} ${f(8 + y)} Z" fill="${H.scarfShade}"/>`
+      : `<path d="M-3 ${f(-6 + y)} L${f(-7 + sway)} ${f(13 + y)} L${f(1 + sway)} ${f(11 + y)} Z" fill="${H.scarfShade}"/>`
+  }`;
+  const sx = 18;
+  const held = `<g transform="rotate(${f(staffAngle)} ${sx} ${f(8 + y)})">${prop(H.prop ?? "staff", sx, y, breath)}</g>`;
+  const staff = front ? `<g transform="scale(-1 1)">${held}</g>` : held;
+  const arm = front
+    ? `<path d="M-9 ${f(-4 + y)} Q-15 ${f(2 + y)} -19 ${f(4 + y)}" stroke="${H.cloakShade}" stroke-width="6" stroke-linecap="round" fill="none"/>`
+    : `<path d="M9 ${f(-4 + y)} Q15 ${f(2 + y)} 19 ${f(4 + y)}" stroke="${H.cloakShade}" stroke-width="6" stroke-linecap="round" fill="none"/>`;
+  const headSvg = front ? headFront(H.head ?? "hood", y, eyes) : headBack(H.head ?? "hood", y);
+  return `<g transform="rotate(${f(lean)} 0 32)">
+${legs}
+${twoTone(cloak, H.cloak, H.cloakShade, -3, -2)}
+${folds}${hem}
+${headSvg}
+${scarf}
+${staff}${arm}
+</g>`;
+}
+
+/** Лицо анфас — общее у всех голов, как и в профиль. */
+function faceFront(y, eyes) {
+  const Y = (n) => f(n + y);
+  const eyeColor = H.eyes ?? H.edge;
+  const mark =
+    eyes === "open"
+      ? `<ellipse cx="-4" cy="${Y(-23)}" rx="1.6" ry="2.2" fill="${eyeColor}"/><ellipse cx="4" cy="${Y(-23)}" rx="1.6" ry="2.2" fill="${eyeColor}"/>`
+      : `<path d="M-6 ${Y(-22)} h4 M2 ${Y(-22)} h4" stroke="${H.edge}" stroke-width="1.6" stroke-linecap="round"/>`;
+  return `<ellipse cx="0" cy="${Y(-22)}" rx="9.5" ry="8.5" fill="${H.skin}"/><path d="M-7 ${Y(-16)} Q0 ${Y(-13)} 7 ${Y(-16)}" fill="none" stroke="${H.skinShade}" stroke-width="2"/>${mark}`;
+}
+
+/** Затылок под шапкой: у капюшона и шкуры его не видно, у шапок — да. */
+function nape(y) {
+  return `<ellipse cx="0" cy="${f(-22 + y)}" rx="10" ry="9" fill="${H.hair}"/>`;
+}
+
+/** Головы обликов анфас: те же детали, что в профиль, симметрично. */
+function headFront(kind, y, eyes) {
+  const Y = (n) => f(n + y);
+  const hoodShape = `<path d="M-15 ${Y(-12)} Q-17 ${Y(-41)} 0 ${Y(-42)} Q17 ${Y(-41)} 15 ${Y(-12)} Q10 ${Y(-9)} 0 ${Y(-9)} Q-10 ${Y(-9)} -15 ${Y(-12)} Z"/>`;
+  const face = faceFront(y, eyes);
+  if (kind === "helm") {
+    return `${twoTone(hoodShape, H.mail, H.mailShade, -2, -2)}${face}
+${twoTone(`<path d="M-12 ${Y(-27)} Q-12 ${Y(-42)} 0 ${Y(-43)} Q12 ${Y(-42)} 12 ${Y(-27)} Z"/>`, H.helm, H.helmShade, -2, -2)}
+<path d="M-2 ${Y(-42)} L0 ${Y(-52)} L2 ${Y(-42)} Z" fill="${H.trim}"/>
+<path d="M-13 ${Y(-29)} H13 V${Y(-25)} H-13 Z" fill="${H.trim}"/>
+<path d="M0 ${Y(-26)} V${Y(-18)}" stroke="${H.trim}" stroke-width="2.6" stroke-linecap="round"/>`;
+  }
+  if (kind === "wreath") {
+    const flowers = [[-11, -31, 0], [-6, -36, 1], [0, -38, 0], [6, -36, 1], [11, -31, 0]];
+    return `<path d="M-13 ${Y(-8)} Q-16 ${Y(-38)} 0 ${Y(-39)} Q16 ${Y(-38)} 13 ${Y(-8)} Q10 ${Y(-16)} 9 ${Y(-24)} Q0 ${Y(-30)} -9 ${Y(-24)} Q-10 ${Y(-16)} -13 ${Y(-8)} Z" fill="${H.hair}"/>
+${face}
+${flowers.map(([x, fy, alt]) => `<circle cx="${f(x)}" cy="${Y(fy + 2)}" r="2.4" fill="${H.leaf}"/><circle cx="${x}" cy="${Y(fy)}" r="3.2" fill="${alt === 1 ? H.flowerAlt : H.flower}"/><circle cx="${x}" cy="${Y(fy)}" r="1.1" fill="${H.flowerHeart}"/>`).join("")}`;
+  }
+  if (kind === "pelt") {
+    return `<path d="M-10 ${Y(-36)} L-7 ${Y(-49)} L-2 ${Y(-39)} Z" fill="${H.peltShade}"/><path d="M10 ${Y(-36)} L7 ${Y(-49)} L2 ${Y(-39)} Z" fill="${H.pelt}"/>
+${twoTone(hoodShape, H.pelt, H.peltShade, -2, -2)}${face}
+<path d="M-9 ${Y(-33)} Q0 ${Y(-39)} 9 ${Y(-33)} Q0 ${Y(-30)} -9 ${Y(-33)} Z" fill="${H.peltShade}"/>
+<path d="M-12 ${Y(-12)} L-9 ${Y(-6)} L-6 ${Y(-11)} M6 ${Y(-11)} L9 ${Y(-6)} L12 ${Y(-12)}" fill="none" stroke="${H.peltShade}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  }
+  if (kind === "cap") {
+    return `${face}
+${twoTone(`<path d="M-11 ${Y(-27)} Q-10 ${Y(-42)} 0 ${Y(-43)} Q10 ${Y(-42)} 11 ${Y(-27)} Z"/>`, H.capTop, H.capShade, -2, -2)}
+<path d="M0 ${Y(-43)} V${Y(-49)} M-3 ${Y(-46)} H3" stroke="${H.trim}" stroke-width="2" stroke-linecap="round"/>
+<path d="M0 ${Y(-41)} L3 ${Y(-37)} L0 ${Y(-33)} L-3 ${Y(-37)} Z" fill="${H.ward}"/>
+<path d="M-14 ${Y(-30)} Q0 ${Y(-34)} 14 ${Y(-30)} L14 ${Y(-24)} Q0 ${Y(-28)} -14 ${Y(-24)} Z" fill="${H.fur}"/>
+${[-10, -5, 0, 5, 10].map((x) => `<circle cx="${x}" cy="${Y(-27)}" r="0.9" fill="${H.furDot}"/>`).join("")}`;
+  }
+  if (kind === "jester") {
+    return `${face}
+<path d="M-12 ${Y(-26)} Q-22 ${Y(-34)} -20 ${Y(-47)} Q-10 ${Y(-37)} 0 ${Y(-31)} Z" fill="${H.capA}"/>
+<path d="M12 ${Y(-26)} Q22 ${Y(-34)} 20 ${Y(-47)} Q10 ${Y(-37)} 0 ${Y(-31)} Z" fill="${H.capB}"/>
+<path d="M-13 ${Y(-28)} Q0 ${Y(-33)} 13 ${Y(-28)} L13 ${Y(-24)} Q0 ${Y(-29)} -13 ${Y(-24)} Z" fill="${H.trim}"/>
+<circle cx="-20" cy="${Y(-48)}" r="2.6" fill="${H.trim}"/><circle cx="20" cy="${Y(-48)}" r="2.6" fill="${H.trim}"/>`;
+  }
+  if (kind === "leafhood") {
+    const leaf = (x, ly, angle, color) => `<path d="M0 0 Q4 -4 0 -9 Q-4 -4 0 0 Z" transform="translate(${x} ${Y(ly)}) rotate(${angle})" fill="${color}"/>`;
+    const leaves = [[-14, -16, -110, H.leafA], [-14, -28, -70, H.leafB], [-8, -38, -30, H.leafA], [8, -38, 30, H.leafB], [14, -28, 70, H.leafA], [14, -16, 110, H.leafB]];
+    return `<path d="M-6 ${Y(-39)} Q-9 ${Y(-46)} -14 ${Y(-49)} M-8 ${Y(-43)} Q-4 ${Y(-47)} -4 ${Y(-51)} M6 ${Y(-39)} Q9 ${Y(-46)} 14 ${Y(-49)} M8 ${Y(-43)} Q4 ${Y(-47)} 4 ${Y(-51)}" fill="none" stroke="${H.twig}" stroke-width="2.2" stroke-linecap="round"/>
+${twoTone(hoodShape, H.cloak, H.cloakShade, -2, -2)}
+${leaves.map(([x, ly, angle, color]) => leaf(x, ly, angle, color)).join("")}
+${face}`;
+  }
+  return `${twoTone(hoodShape, H.cloak, H.cloakShade, -2, -2)}
+<ellipse cx="0" cy="${Y(-22)}" rx="11" ry="10" fill="${H.cloakDeep}" opacity="0.5"/>
+${face}`;
+}
+
+/** Головы обликов спиной: без лица, но с теми же шапками, рогами и ушами. */
+function headBack(kind, y) {
+  const Y = (n) => f(n + y);
+  const hoodBack = `<path d="M-14 ${Y(-10)} Q-17 ${Y(-40)} 0 ${Y(-43)} Q17 ${Y(-40)} 14 ${Y(-10)} Q0 ${Y(-6)} -14 ${Y(-10)} Z"/>`;
+  const seam = `<path d="M0 ${Y(-41)} Q1 ${Y(-26)} 0 ${Y(-9)}" fill="none" stroke="${H.cloakShade}" stroke-width="1.8" opacity="0.8"/>`;
+  if (kind === "helm") {
+    return `${twoTone(hoodBack, H.mail, H.mailShade, -2, -2)}
+${twoTone(`<path d="M-12 ${Y(-27)} Q-12 ${Y(-42)} 0 ${Y(-43)} Q12 ${Y(-42)} 12 ${Y(-27)} Z"/>`, H.helm, H.helmShade, -2, -2)}
+<path d="M-2 ${Y(-42)} L0 ${Y(-52)} L2 ${Y(-42)} Z" fill="${H.trim}"/>
+<path d="M-13 ${Y(-29)} H13 V${Y(-25)} H-13 Z" fill="${H.trim}"/>`;
+  }
+  if (kind === "wreath") {
+    const flowers = [[-11, -31, 1], [-6, -36, 0], [0, -38, 1], [6, -36, 0], [11, -31, 1]];
+    return `<path d="M-13 ${Y(-10)} Q-16 ${Y(-38)} 0 ${Y(-39)} Q16 ${Y(-38)} 13 ${Y(-10)} Q0 ${Y(-6)} -13 ${Y(-10)} Z" fill="${H.hair}"/>
+${[0, 1, 2, 3].map((k) => `<circle cx="0" cy="${Y(-8 + k * 6)}" r="${f(3.6 - k * 0.4)}" fill="${H.hair}"/>`).join("")}
+${flowers.map(([x, fy, alt]) => `<circle cx="${x}" cy="${Y(fy)}" r="3.2" fill="${alt === 1 ? H.flowerAlt : H.flower}"/><circle cx="${x}" cy="${Y(fy)}" r="1.1" fill="${H.flowerHeart}"/>`).join("")}`;
+  }
+  if (kind === "pelt") {
+    return `<path d="M-10 ${Y(-36)} L-7 ${Y(-49)} L-2 ${Y(-39)} Z" fill="${H.pelt}"/><path d="M10 ${Y(-36)} L7 ${Y(-49)} L2 ${Y(-39)} Z" fill="${H.peltShade}"/>
+${twoTone(hoodBack, H.pelt, H.peltShade, -2, -2)}
+<path d="M-6 ${Y(-30)} Q0 ${Y(-34)} 6 ${Y(-30)} M-7 ${Y(-22)} Q0 ${Y(-26)} 7 ${Y(-22)}" fill="none" stroke="${H.peltShade}" stroke-width="1.6"/>`;
+  }
+  if (kind === "cap") {
+    return `${nape(y)}
+${twoTone(`<path d="M-11 ${Y(-27)} Q-10 ${Y(-42)} 0 ${Y(-43)} Q10 ${Y(-42)} 11 ${Y(-27)} Z"/>`, H.capTop, H.capShade, -2, -2)}
+<path d="M0 ${Y(-43)} V${Y(-49)} M-3 ${Y(-46)} H3" stroke="${H.trim}" stroke-width="2" stroke-linecap="round"/>
+<path d="M-14 ${Y(-30)} Q0 ${Y(-34)} 14 ${Y(-30)} L14 ${Y(-24)} Q0 ${Y(-28)} -14 ${Y(-24)} Z" fill="${H.fur}"/>`;
+  }
+  if (kind === "jester") {
+    return `${nape(y)}
+<path d="M-12 ${Y(-26)} Q-22 ${Y(-34)} -20 ${Y(-47)} Q-10 ${Y(-37)} 0 ${Y(-31)} Z" fill="${H.capB}"/>
+<path d="M12 ${Y(-26)} Q22 ${Y(-34)} 20 ${Y(-47)} Q10 ${Y(-37)} 0 ${Y(-31)} Z" fill="${H.capA}"/>
+<path d="M-13 ${Y(-28)} Q0 ${Y(-33)} 13 ${Y(-28)} L13 ${Y(-24)} Q0 ${Y(-29)} -13 ${Y(-24)} Z" fill="${H.trim}"/>
+<circle cx="-20" cy="${Y(-48)}" r="2.6" fill="${H.trim}"/><circle cx="20" cy="${Y(-48)}" r="2.6" fill="${H.trim}"/>`;
+  }
+  if (kind === "leafhood") {
+    const leaf = (x, ly, angle, color) => `<path d="M0 0 Q4 -4 0 -9 Q-4 -4 0 0 Z" transform="translate(${x} ${Y(ly)}) rotate(${angle})" fill="${color}"/>`;
+    const leaves = [[-14, -16, -110, H.leafB], [-14, -28, -70, H.leafA], [-6, -40, -20, H.leafB], [6, -40, 20, H.leafA], [14, -28, 70, H.leafB], [14, -16, 110, H.leafA]];
+    return `<path d="M-6 ${Y(-39)} Q-9 ${Y(-46)} -14 ${Y(-49)} M6 ${Y(-39)} Q9 ${Y(-46)} 14 ${Y(-49)}" fill="none" stroke="${H.twig}" stroke-width="2.2" stroke-linecap="round"/>
+${twoTone(hoodBack, H.cloak, H.cloakShade, -2, -2)}${seam}
+${leaves.map(([x, ly, angle, color]) => leaf(x, ly, angle, color)).join("")}`;
+  }
+  return `${twoTone(hoodBack, H.cloak, H.cloakShade, -2, -2)}${seam}`;
+}
+
 const shadow = (scale = 1) => `<ellipse cx="0" cy="34" rx="${f(18 * scale)}" ry="${f(6 * scale)}" fill="#000" opacity="0.32"/>`;
 
 /** Кадры героя по состояниям. Ранение — один кадр отдачи: вспышку цветом даёт рендер. */
@@ -219,6 +373,19 @@ export const HERO_STATES = {
     () => shadow(0.8) + edge(pose({ lean: -20, drop: 8, squash: 0.55, staffAngle: -60, eyes: "shut", fade: 0.3 })) + motes(1),
   ],
 };
+
+/**
+ * Кадры спереди и спиной (Р143): покой 2, шаг 4, отдача 1 — как сбоку. Бок —
+ * `HERO_STATES` (имена кадров прежние, `hero/walk0`), лицом и спиной — свои
+ * (`hero/front/walk0`, `hero/back/walk0`). Смерть одна на все стороны: герой
+ * оседает боком.
+ */
+const facing = (view) => ({
+  idle: [0, 1].map((k) => () => shadow() + edge(poseFacing(view, { breath: k }))),
+  walk: [0, 0.25, 0.5, 0.75].map((p) => () => shadow() + edge(poseFacing(view, { walk: p }))),
+  hurt: [() => shadow() + edge(poseFacing(view, { lean: view === "front" ? 8 : -8, staffAngle: -14, eyes: "shut" }))],
+});
+export const HERO_VIEWS = { front: facing("front"), back: facing("back") };
 
 function motes(p) {
   return [[-10, 0.2], [6, 0.6], [14, 0.1], [-4, 0.9]]
