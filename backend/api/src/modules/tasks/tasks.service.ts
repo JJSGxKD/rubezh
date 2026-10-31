@@ -383,12 +383,17 @@ function withCompleted(participation: ReadonlyMap<string, TaskParticipation>, ta
 }
 
 /**
- * Цели в порядке каталога: срок, место, id. Не двигавшаяся цель — с нулём.
+ * Цели в порядке панели: место (`sort`), при равном — id. Каталог отдаёт их
+ * по сроку, а порядок задаёт геймдизайнер перетаскиванием, в том числе
+ * на вкладке «Партнёры», где лежат задания разных сроков (Р118). Не
+ * двигавшаяся цель — с нулём.
  * Цель с исчерпанным лимитом, к которой игрок не переходил, не показывается.
  */
 export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[], participation: ReadonlyMap<string, TaskParticipation> = new Map(), at = new Date()): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
-  return defs.flatMap((def) => {
+  // Сравнение строк, а не `localeCompare`: порядок не должен зависеть от локали сервера.
+  const ordered = [...defs].sort((a, b) => a.sort - b.sort || (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0));
+  return ordered.flatMap((def) => {
     const place = slotsFor(def.limit, participation.get(def.taskId) ?? null, at);
     if (!place.visible) return [];
     const row = byTask.get(def.taskId);
