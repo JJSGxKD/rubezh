@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -79,6 +79,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "secrets", title: "Ключи интеграций", hint: "Токены внешних сервисов: заменить без релиза, значение не показывается", permission: "secrets.view", icon: KeyRound },
       { id: "diagnostics", title: "Диагностика", hint: "Записи забегов и замеры производительности с устройств", permission: "diagnostics.view", icon: Activity },
       { id: "requests", title: "Запросы", hint: "Куда ходит сервер и что к нему приходит: внешние вызовы и сводка маршрутов", permission: "requests.view", icon: Network },
+      { id: "proxies", title: "Прокси", hint: "Через что сервер ходит к внешним API, если напрямую не достучаться", permission: "proxies.view", icon: Waypoints },
       { id: "csp", title: "Блокировки клиента", hint: "Какие адреса политика источников клиента заблокировала и сколько раз", permission: "diagnostics.view", icon: ShieldX },
       { id: "exports", title: "Выгрузки", hint: "Архив событий и отчётов диагностики за период", permission: "data.export", icon: Download },
     ],

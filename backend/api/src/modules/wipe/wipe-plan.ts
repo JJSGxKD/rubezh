@@ -89,6 +89,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FeatureFlag: keep("флаги команды"),
   AppSetting: keep("настройки без релиза"),
   IntegrationSecret: keep("ключи интеграций"),
+  OutboundProxy: keep("прокси для исходящих запросов — настройка команды, к игрокам не относится; пароль только шифртекстом"),
+  OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),

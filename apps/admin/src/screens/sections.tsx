@@ -18,6 +18,7 @@ import { PartnersScreen } from "./partners/PartnersScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
+import { ProxiesScreen } from "./proxies/ProxiesScreen";
 import { RequestsScreen } from "./requests/RequestsScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
@@ -42,6 +43,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
   csp: () => <CspReportsScreen />,
   requests: () => <RequestsScreen />,
+  proxies: () => <ProxiesScreen />,
   exports: () => <ExportsScreen />,
   links: (id) => <LinksScreen id={id} />,
   flags: () => <FlagsScreen />,
