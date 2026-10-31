@@ -213,7 +213,7 @@ export const HERO_DEFS = heroDefs();
 export const HERO_RADIUS = 10;
 
 /**
- * Облики героя. Первые четыре — окрасы хранителя (design/art/registry.md,
+ * Облики героя. Первые пять — окрасы хранителя (design/art/registry.md,
  * G-05): та же поза другой палитрой. Дальше — архетипы v2
  * (design/art/direction-v2.md §7.3): своя голова (`head`) и свой предмет в
  * руке (`prop`) на той же позе — пропорции и хитбокс не расходятся. Мандат
@@ -226,6 +226,12 @@ export const HERO_SKINS = [
   { id: "herbalist", name: "Знахарка", palette: { cloak: "#f1f6ea", cloakShade: "#c4d0b6", cloakDeep: "#8d9a7c", scarf: "#b07cf0", scarfShade: "#7e4fc0", ward: "#46d9c6" } },
   { id: "frost", name: "Зимний дозор", palette: { cloak: "#eef5ff", cloakShade: "#b9cbe6", cloakDeep: "#8199bf", scarf: "#5ccfff", scarfShade: "#2f8fc4", ward: "#b8ecff", wardLight: "#ffffff", boots: "#2f3b5c" } },
   { id: "gilded", name: "Золотой рубеж", palette: { cloak: "#fff7e2", cloakShade: "#e6cf9a", cloakDeep: "#b89a5a", scarf: "#3f6fd0", scarfShade: "#2a4c96", ward: "#ffd15c", wardLight: "#fff6c8", staff: "#5a3d2a" } },
+  // Рассвет (Р155, «Набор хранителя»): небо над рубежом перед восходом —
+  // персиковый плащ с сизо-розовой тенью и солнце золотым шарфом. Оберег
+  // остаётся бирюзой хранителя: это его окрас, а не новый архетип. От
+  // окрасов за уровни отличается тоном плаща — у них белый, травяной,
+  // ледяной и сливочно-золотой.
+  { id: "dawn", name: "Хранитель · рассвет", source: "Набор хранителя", palette: { cloak: "#ffe6dc", cloakShade: "#f0b4a4", cloakDeep: "#b5728a", edge: "#26182e", scarf: "#ffc23d", scarfShade: "#cf8a1c", staff: "#7a5040", boots: "#4a3352" } },
   {
     id: "vityaz", name: "Витязь", rarity: "rare", source: "уровень аккаунта",
     palette: { head: "helm", prop: "spear", cloak: "#a8463a", cloakShade: "#7a2c24", cloakDeep: "#521b16", scarf: "#d9b45a", scarfShade: "#a07e2e", mail: "#9aa2bd", mailShade: "#6c7391", helm: "#d5dbea", helmShade: "#9199b5", trim: "#e0bb5e", blade: "#eef3fb", bladeShade: "#aab3c9", staff: "#6b4a32", boots: "#3b2a24" },

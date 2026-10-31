@@ -199,7 +199,7 @@ function skinsBoard() {
   const items = [{ text: "Облики героя v2: окрасы хранителя и архетипы — своя голова и предмет на той же позе", x: 24, y: 30, size: 22, bold: true }];
   const rat = ENEMY_ART.find((a) => a.id === "swarm_rat");
   const perRow = 5;
-  const cellW = 272;
+  const cellW = 300;
   const rowH = 268;
   const rows = Math.ceil(HERO_SKINS.length / perRow);
   for (let r = 0; r < rows; r++) items.push({ ground: true, x: 16, y: 46 + r * rowH, w: perRow * cellW + 16, h: rowH - 12 });
@@ -214,7 +214,7 @@ function skinsBoard() {
     items.push({ svg: draw("walk", 1), x: x + 70, y: y + 162, size: game });
     items.push({ svg: enemySvg(rat, 1, 0.5), x: x + 104, y: y + 174, size: gameSize(rat.radius) / 2 });
     items.push({ text: skin.name, x: x + 140, y: y + 178, size: 16, bold: true });
-    items.push({ text: skin.rarity === undefined ? "окрас" : `${skin.rarity} · ${skin.source}`, x: x + 140, y: y + 198, size: 12 });
+    items.push({ text: skin.rarity === undefined ? (skin.source === undefined ? "окрас" : `окрас · ${skin.source}`) : `${skin.rarity} · ${skin.source}`, x: x + 140, y: y + 198, size: 12 });
   });
   return { width: perRow * cellW + 48, height: 60 + rows * rowH, items };
 }
