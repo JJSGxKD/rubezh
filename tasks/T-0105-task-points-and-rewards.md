@@ -3,8 +3,8 @@ id: T-0105
 title: Очки заданий: полоса дня и недели и награды за ступени очков
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead2-16
 size: M
 depends_on:
