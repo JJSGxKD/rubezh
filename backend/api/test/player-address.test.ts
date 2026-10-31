@@ -67,6 +67,7 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "purchase_undeliverable", fragment: "Верните звёзды" },
   { code: "fulfill_failed", fragment: "подробности в логе сервера" },
   { code: "promo_campaign_used", fragment: "поставьте на паузу" },
+  { code: "team_slide_order_mismatch", fragment: "обновите страницу и переставьте ещё раз" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];

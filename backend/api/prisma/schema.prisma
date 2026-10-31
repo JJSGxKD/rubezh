@@ -2188,6 +2188,8 @@ model HomeSlide {
   audience     String     @db.VarChar(16)
   /// первым в карусели — раньше акции; иначе после акции и нового в версии
   pinned       Boolean
+  /// место в своей группе (закреплённые / остальные); меньше — раньше; меняется только запросом порядка
+  position     Int
   startsAt     DateTime   @map("starts_at") @db.Timestamptz(3)
   endsAt       DateTime   @map("ends_at") @db.Timestamptz(3)
   createdAt    DateTime   @map("created_at") @db.Timestamptz(3)
@@ -2201,6 +2203,7 @@ model HomeSlide {
   image MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
 
   @@index([endsAt])
+  @@index([pinned, position])
   @@map("home_slide")
 }
 
