@@ -329,6 +329,7 @@ describe("громкость и загрузка", () => {
     expect(() => h.player.setScene("lobby")).not.toThrow();
     await h.settle();
     h.player.setScene("run");
+    await h.settle();
     h.player.setScene("lobby");
     h.player.setScene("lobby");
     await h.settle();

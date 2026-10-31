@@ -302,7 +302,7 @@
 
 | Ключ | Что лежит | Где объявлен |
 |---|---|---|
-| `bh.settings.v1` | режим экрана, громкость звука, вибрация | `app-shell/src/state/settings.ts` |
+| `bh.settings.v1` | режим экрана, громкость звука (общая, бой, интерфейс, музыка), вибрация | `app-shell/src/state/settings.ts` |
 | `bh.diagnostics.v1` | режим диагностики, запись забегов, оверлей FPS | `state/diagnostics.ts` |
 | `bh.meta.v1.profile` | число забегов, последнее стартовое оружие и сложность | `state/meta.ts` |
 | `bh.meta.v1.bestSurvivalSec.<сложность>` | локальный рекорд на каждой сложности; старый ключ без сложности переезжает на `easy` | `core-game/src/game/run/records.ts` |
@@ -498,7 +498,10 @@ pnpm budget
 | Звуки: слои синтеза, шина, громкость, голоса, интервал, реверберация | `app-shell/src/audio/recipes.ts` → `SOUND_RECIPES`; правка на устройстве — звуковая лаборатория (`docs/31-audio-and-haptics.md` §6) |
 | Звук: уровни и приоритеты шин, бюджет запусков, потолок голосов, плотность, глубина приглушения | `audio/recipes.ts` → `BUSES`, `MIX_RULES` |
 | Звук: какие звуки на сигналы забега, сердцебиение, серия кристаллов | `audio/sound-director.ts` → `planCueSounds`, `HEARTBEAT_*`, `GEM_STREAK_*` |
-| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES` (интерфейс громче боя); `audio/audio-engine.ts` → `volumeCurve` |
+| Громкость по умолчанию и шкала регулятора | `audio/index.ts` → `DEFAULT_VOLUMES` (интерфейс громче боя, музыка 40); `audio/audio-engine.ts` → `volumeCurve` |
+| Музыка: уровень шины и её группа | `audio/recipes.ts` → `BUSES.music` |
+| Музыка: что звучит на какой сцене, затухания, приглушение паузы | `audio/music.ts` → `planMusic`, `SWITCH_FADE_SEC`, `LONG_FADE_SEC`, `DIM_LEVEL` |
+| Музыка: треки, длина круга, темп | `audio/music/*.ogg\|m4a`, `audio/music/tracks.json`; пересборка — `design/art/sound.md` §4 |
 | Правила грани звука: включены ли по умолчанию, бюджеты шин, потолок голосов | `audio/audio-engine.ts` → `rulesEnabled`; `audio/recipes.ts` → `MIX_RULES` |
 | Настройки графики игрока: что можно отключить и что включено по умолчанию | `app-shell/src/state/graphics.ts` → `DEFAULT_GRAPHICS`; применяет `core-game/src/game/render/WorldRenderer.ts` |
 | Звук интерфейса и вибрация на нажатия | `app-shell/src/state/ui-feedback.ts` → `FEEDBACK` |

@@ -21,6 +21,7 @@ import { t } from "../i18n";
 import "../i18n/team";
 import { HAPTIC_RULES, haptic, type HapticEvent } from "../state/haptics";
 import { useNavigation } from "../state/navigation";
+import { useSettings } from "../state/settings";
 import { useShell } from "../state/shell";
 import { VolumeSliders } from "./settings";
 
@@ -34,6 +35,8 @@ const TABS = ["sounds", "battle", "feedback"] as const;
 type Tab = (typeof TABS)[number];
 
 const BUS_ORDER: readonly BusId[] = ["threats", "player", "rewards", "weapons", "enemies", "ui"];
+/** Индикаторы шин — и музыка: у неё нет звуков в списке, но уровень виден. */
+const METER_ORDER: readonly BusId[] = [...BUS_ORDER, "music"];
 
 export function SoundLabScreen(): ReactNode {
   const navigation = useNavigation();
@@ -75,6 +78,19 @@ export function SoundLabScreen(): ReactNode {
   );
 }
 
+/** Строка «Музыка»: какие треки звучат и на какой громкости регулятора. */
+function MusicLine(): ReactNode {
+  const volume = useSettings((state) => state.volumes.music);
+  const state = audio.musicState();
+  const playing = state === null || state.playing.length === 0 ? t("soundLab.music.none") : state.playing.join(" + ");
+  return (
+    <div className="grid gap-0.5 text-xs text-text-muted">
+      <span>{t("soundLab.music", { tracks: playing, volume: volume === 0 ? t("settings.volume.off") : `${String(volume)}%` })}</span>
+      {state === null || state.failed.length === 0 ? null : <span>{t("soundLab.music.failed", { tracks: state.failed.join(", ") })}</span>}
+    </div>
+  );
+}
+
 /** Индикаторы шин и общего выхода — десять раз в секунду: грань видна глазом. */
 function Meters(props: { director: SoundDirector }): ReactNode {
   const [, setFrame] = useState(0);
@@ -91,9 +107,10 @@ function Meters(props: { director: SoundDirector }): ReactNode {
         <span>{t("soundLab.starts", { starts: engine.stats.starts, dropped: engine.stats.dropped })}</span>
       </div>
       <Meter label={t("soundLab.master")} value={master.peak} />
-      {BUS_ORDER.map((bus) => (
+      {METER_ORDER.map((bus) => (
         <Meter key={bus} label={t(`soundLab.bus.${bus}`)} value={engine.busLevel(bus).peak} />
       ))}
+      <MusicLine />
     </div>
   );
 }

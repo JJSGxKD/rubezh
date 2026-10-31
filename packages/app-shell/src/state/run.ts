@@ -589,10 +589,13 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       const previous = get().hud;
       if (previous !== null && isLowHp(hud) && !isLowHp(previous) && hud.hp > 0) haptic("lowHp");
       if (bossPhaseRaised(previous?.boss ?? null, hud.boss)) audio.runEvent("bossPhase");
-      audio.hud({
-        hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
-        weapons: hud.weapons.length,
-      });
+      audio.hud(
+        {
+          hpRatio: hud.maxHp > 0 ? hud.hp / hud.maxHp : 1,
+          weapons: hud.weapons.length,
+        },
+        hud.boss !== null,
+      );
       set({ hud, loadingStage: null });
       if (hud.survivalSec - lastSavedSec >= AUTOSAVE_SEC && get().phase === "running") saveRun();
     }),

@@ -10,10 +10,10 @@
  * бюджет запусков, прореживание частых звуков и приглушение под угрозу.
  */
 
-export type BusId = "threats" | "player" | "rewards" | "weapons" | "enemies" | "ui";
+export type BusId = "threats" | "player" | "rewards" | "weapons" | "enemies" | "ui" | "music";
 
 /** Группа — то, чем управляет один регулятор громкости в настройках. */
-export type BusGroup = "effects" | "ui";
+export type BusGroup = "effects" | "ui" | "music";
 
 export interface BusDef {
   /** уровень шины в миксе, 0…1 */
@@ -31,6 +31,9 @@ export const BUSES: Record<BusId, BusDef> = {
   weapons: { level: 0.55, priority: 1, group: "effects" },
   enemies: { level: 0.5, priority: 0, group: "effects" },
   ui: { level: 0.8, priority: 2, group: "ui" },
+  // Музыка (docs/31-audio-and-haptics.md §5): на 6–8 дБ ниже эффектов, без посыла в реверб; правила грани
+  // эффектов её не касаются — угроза её не приглушает, бюджета запусков у неё нет.
+  music: { level: 0.45, priority: 0, group: "music" },
 };
 
 /**
