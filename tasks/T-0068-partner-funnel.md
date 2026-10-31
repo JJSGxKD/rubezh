@@ -3,8 +3,8 @@ id: T-0068
 title: Воронка партнёра — по его ссылкам, кодам и площадкам
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0067, T-0053]
