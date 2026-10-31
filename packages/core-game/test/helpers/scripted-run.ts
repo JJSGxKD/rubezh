@@ -101,6 +101,12 @@ export const GUARD: EnemyDef = { id: "guard", hp: 100000, speed: 40, damage: 5, 
 /** Рядовой враг для тестов кольца. */
 export const RAT: EnemyDef = { id: "rat", hp: 10, speed: 60, damage: 1, xp: 1, threat: 1, pattern: "swarm" };
 
+/** Элита для внутренней части строя (`ring.inner`): догоняет игрока, крепкая, но не бессмертная. */
+export const ELITE: EnemyDef = { id: "elite_test", rank: "elite", hp: 50, speed: 30, damage: 1, xp: 1, threat: 1, pattern: "chase" };
+
+/** Босс для внутренней части строя. */
+export const BOSS: EnemyDef = { id: "boss_test", rank: "boss", hp: 500, speed: 20, damage: 1, xp: 1, threat: 1, pattern: "chase" };
+
 /** Кольцо тестов: сорок стражей встают на 200 и сжимаются до 80 за двадцать секунд. */
 export const CORDON_RING: CordonRingDef = { radius: 200, minRadius: 80, shrinkPerSec: 6, lifeSec: 30 };
 
@@ -109,6 +115,8 @@ export interface CordonRunOptions {
   /** сколько стражей в кольце */
   count?: number;
   ring?: CordonRingDef;
+  /** дополнительные типы врагов после стража и крысы (их индексы — 2, 3, …) */
+  enemies?: EnemyDef[];
   /** отрезки таймлайна вместо одного с кольцом */
   timeline?: TimelineSegmentDef[];
   maxEnemies?: number;
@@ -136,7 +144,7 @@ export function createCordonRun(options: CordonRunOptions = {}): CordonRun {
   ];
   const world = createWorld({
     seed: options.seed ?? 1,
-    enemies: [GUARD, RAT],
+    enemies: [GUARD, RAT, ...(options.enemies ?? [])],
     ...(options.map === undefined ? {} : { map: options.map }),
     config: {
       progressionEnabled: false,
