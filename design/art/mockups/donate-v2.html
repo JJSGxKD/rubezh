@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Донат проекту — макет T-0158</title>
+<style>
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --elite: #ffd15c; --hp: #ff6f90;
+    --danger: #ff5d5d; --success: #8ee86b; --info: #6cb8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.4 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; }
+  h1 { font: 700 20px/1.2 system-ui, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 100ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .sect { width: 100%; margin: 26px 0 8px; font: 700 17px/1.2 system-ui; border-top: 1px solid #ffffff14; padding-top: 18px; }
+  .phone { width: 390px; height: 760px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .phone.w320 { width: 320px; } .phone.w768 { width: 768px; height: 600px; }
+  .cap { width: 390px; margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+  .cap.w320 { width: 320px; } .cap.w768 { width: 768px; } .cap.desk { width: 960px; }
+  .cap b { color: var(--text); }
+  .screen { position: absolute; inset: 0; padding: 0 16px 16px; overflow: hidden; background: var(--bg); }
+  .bar { display: flex; align-items: center; gap: 10px; height: 52px; font: 700 17px/1 "Russo One", system-ui; }
+  .bar .back { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); color: var(--muted); }
+  .col { max-width: 480px; margin: 0 auto; }
+  .wordmark { text-align: center; margin: 6px 0 4px; font: 700 30px/1 "Russo One", system-ui; letter-spacing: .06em; color: var(--accent); }
+  .tag { text-align: center; color: var(--muted); font-size: 13px; margin: 0 auto 16px; max-width: 300px; }
+  .list { border-radius: 10px; background: var(--surface); box-shadow: inset 0 0 0 1px #ffffff10; overflow: hidden; }
+  .li { display: flex; justify-content: space-between; padding: 12px 14px; border-top: 1px solid #ffffff0d; font-size: 14px; }
+  .li:first-child { border-top: 0; } .li span:last-child { color: var(--muted); }
+  .h2 { font: 700 13px/1 "Russo One", system-ui; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 2px 8px; }
+  .muted { color: var(--muted); } .small { font-size: 12.5px; }
+  .card { border-radius: 10px; padding: 14px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 1px 0 #ffffff0d, inset 0 0 0 1px #ffffff10, 0 10px 24px -14px #000; }
+  /* Блок доната — плоская карточка с тёплым отсветом сердца слева: это не витрина магазина. */
+  .donate { background: radial-gradient(80% 90% at 0% 0%, color-mix(in oklab, var(--hp) 14%, transparent), transparent 70%), linear-gradient(180deg, var(--raised), var(--surface)); }
+  .donate .head { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .heart { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; color: var(--hp);
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--hp) 22%, transparent), transparent), var(--sunken); box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--hp) 70%, transparent); }
+  .heart.big { width: 72px; height: 72px; margin: 4px auto 10px; }
+  .t { font: 700 17px/1.2 "Russo One", system-ui; }
+  .p { margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; border: 0; border-radius: 6px; padding: 12px; font: 700 16px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent);
+    background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; }
+  .btn.off { color: var(--muted); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); }
+  .btn.busy { color: var(--muted); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .ghost { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; border-radius: 6px; padding: 10px; font: 700 14px/1 "Russo One", system-ui; color: var(--text); background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .gap8 { height: 8px; } .gap12 { height: 12px; }
+  .thanksline { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+  /* Знак «Меценат»: сердце тоном здоровья, слово — цветом текста (контраст 9,9:1; розовое слово дало бы 4,3:1). */
+  .mec { display: inline-flex; align-items: center; gap: 4px; flex: none; border-radius: 4px; padding: 1px 6px 1px 4px; background: color-mix(in oklab, var(--hp) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hp) 40%, transparent); font: 700 10.5px/1.6 "Russo One", system-ui; color: var(--text); }
+  .mec svg { color: var(--hp); }
+  .mec.l { font-size: 12px; padding: 2px 8px 2px 6px; }
+  .mec.icon { padding: 2px; border-radius: 4px; }
+  .tst { display: inline-flex; align-items: center; gap: 3px; flex: none; border-radius: 4px; padding: 1px 6px; background: color-mix(in oklab, var(--elite) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--elite) 40%, transparent); color: var(--elite); font: 700 10.5px/1.6 "Russo One", system-ui; }
+  .tst.l { font-size: 12px; padding: 2px 8px; }
+  .you { flex: none; border-radius: 4px; padding: 1px 6px; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent); font: 700 10.5px/1.6 "Russo One", system-ui; }
+  .lb { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; background: var(--surface); margin-bottom: 6px; }
+  .lb.me { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 55%, transparent); }
+  .rank { width: 22px; text-align: center; font: 700 15px/1 "Russo One", system-ui; flex: none; }
+  .ava { width: 32px; height: 32px; flex: none; border-radius: 50%; background: #43425f; display: grid; place-items: center; font-size: 13px; }
+  .nm { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; font-size: 14px; }
+  .nm .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .time { font: 700 15px/1 "Russo One", system-ui; flex: none; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunken); margin-bottom: 10px; }
+  .tabs span { flex: 1; text-align: center; padding: 9px 4px; border-radius: 7px; font: 600 13px/1 "Russo One", system-ui; color: var(--muted); }
+  .tabs span.on { background: linear-gradient(180deg, var(--raised), var(--surface)); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  /* Лист */
+  .scrim { position: absolute; inset: 0; background: rgb(18 17 31 / 0.78); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 16px 16px 0 0; padding: 14px 16px 22px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: 0 -20px 40px -10px #000; }
+  .sheet.dialog { left: 50%; right: auto; bottom: auto; top: 50%; width: 420px; transform: translate(-50%, -50%); border-radius: 14px; }
+  .grab { width: 40px; height: 4px; border-radius: 2px; background: #ffffff30; margin: 0 auto 10px; }
+  .x { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
+  .center { text-align: center; }
+  .amounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .amounts span { min-height: 44px; display: grid; place-items: center; border-radius: 8px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--border); font: 700 15px/1 "Russo One", system-ui; }
+  .amounts span.on { box-shadow: inset 0 0 0 2px var(--elite); background: color-mix(in oklab, var(--elite) 12%, var(--sunken)); }
+  .field { display: flex; align-items: center; gap: 8px; min-height: 48px; border-radius: 8px; padding: 0 12px; background: var(--sunken); box-shadow: inset 0 0 0 2px var(--border-strong); font: 700 17px/1 "Russo One", system-ui; }
+  .field.bad { box-shadow: inset 0 0 0 2px var(--danger); }
+  .field .caret { width: 2px; height: 20px; background: var(--text); }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 6px 2px 0; }
+  .err { font-size: 12.5px; color: var(--danger); margin: 6px 2px 0; display: flex; gap: 6px; align-items: flex-start; }
+  .note { display: flex; gap: 8px; align-items: flex-start; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; }
+  .note.test { background: color-mix(in oklab, var(--info) 12%, var(--sunken)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--info) 40%, transparent); }
+  .note.warn { background: color-mix(in oklab, var(--danger) 10%, var(--sunken)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--danger) 40%, transparent); }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #ffffff30; border-top-color: var(--text); }
+  /* Главная */
+  .header { display: flex; align-items: center; gap: 8px; height: 52px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: #43425f; box-shadow: inset 0 0 0 2px var(--border-strong); display: grid; place-items: center; font-weight: 700; }
+  .coin { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: var(--sunken); font: 700 13px/1 "Russo One", system-ui; }
+  .slide { display: flex; gap: 12px; align-items: center; border-radius: 12px; padding: 14px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; }
+  .slide .ic { width: 56px; height: 56px; flex: none; border-radius: 12px; display: grid; place-items: center; background: color-mix(in oklab, var(--hp) 15%, transparent); color: var(--hp); }
+  .dots { display: flex; gap: 6px; justify-content: center; margin: 8px 0 12px; } .dots i { width: 6px; height: 6px; border-radius: 50%; background: #ffffff30; } .dots i.on { background: var(--text); width: 16px; border-radius: 3px; }
+  .play { margin-top: auto; height: 60px; border-radius: 4px; display: grid; place-items: center; color: var(--on-accent); background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -4px 0 #a0582a; font: 700 22px/1 "Russo One", system-ui; letter-spacing: .04em; }
+  .tile { border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; height: 70px; margin-bottom: 8px; }
+  .desk { width: 960px; height: 480px; border-radius: 10px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45; }
+  code { font-size: 11.5px; color: var(--text); }
+  .texts { width: 100%; max-width: 1100px; border-collapse: collapse; font-size: 13px; }
+  .texts td, .texts th { text-align: left; padding: 6px 8px; border-top: 1px solid #ffffff14; vertical-align: top; }
+  .texts th { color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" fill="currentColor"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="flask" viewBox="0 0 24 24"><path d="M10 2v7.31L4.2 19.1A2 2 0 0 0 6 22h12a2 2 0 0 0 1.8-2.9L14 9.31V2M8.5 2h7M7 16h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+
+<h1>Донат проекту — макет T-0158 (Р109) и знак «Меценат» (Р149)</h1>
+<p class="lead">Макет дизайнера к T-0158 вместо черновика в <code>planned-meta-2.html</code>. Значки — набор <code>lucide-react</code>
+(Heart, ExternalLink, FlaskConical, ChevronLeft, X); цвета — токены. Экраны «Об игре» и профиль — плоские, как настройки
+(скилл <code>ui-design</code>, шаг 2): донат — благодарность, а не награда, поэтому реликвии нет. Тексты — на «ты» и без рода
+игрока (Р163). Открывать через статический сервер от корня репозитория.</p>
+
+<div class="grid">
+<div class="sect">1 · «Об игре»: блок «Поддержать проект»</div>
+
+<div><div class="phone"><div class="screen">
+  <div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Об игре</div>
+  <div class="col">
+    <div class="wordmark">РУБЕЖ</div>
+    <p class="tag">Держи рубеж против нечисти — сколько продержишься?</p>
+    <div class="list"><div class="li"><span>Сборка</span><span>0.10.0</span></div><div class="li"><span>Контент</span><span>a91f3c2e</span></div><div class="li"><span>Установка</span><span>7c04ad19</span></div></div>
+    <div style="height:18px"></div>
+    <div class="card donate">
+      <div class="head"><span class="heart"><svg width="20" height="20"><use href="#heart"/></svg></span><span class="t">Поддержать проект</span></div>
+      <p class="p">«Рубеж» делает небольшая команда. Донат — не покупка: игровых наград за него нет, зато у тебя появится знак «Меценат». Спасибо, что играешь.</p>
+      <div class="btn"><svg width="18" height="18"><use href="#heart"/></svg>Поддержать</div>
+      <div class="gap8"></div>
+      <div class="ghost">Поддержать через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div>
+    </div>
+    <div class="h2">Тест игры</div>
+    <p class="small muted" style="margin:0">Это открытый тест: прогресс могут обнулить перед релизом…</p>
+  </div>
+</div></div><div class="cap"><b>390 · оба способа.</b> Блок — между сведениями о сборке и разделом о тесте; заголовок раздела над ним не нужен — его несёт сама карточка. Главная кнопка — «Поддержать» (открывает лист), Tribute — второй кнопкой со значком внешней ссылки: уходит из игры. Пока ответ <code>GET /donations</code> не пришёл, блок места не занимает.</div></div>
+
+<div><div class="phone w320"><div class="screen">
+  <div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Об игре</div>
+  <div class="wordmark" style="font-size:26px">РУБЕЖ</div>
+  <p class="tag">Держи рубеж против нечисти — сколько продержишься?</p>
+  <div class="list"><div class="li"><span>Сборка</span><span>0.10.0</span></div><div class="li"><span>Контент</span><span>a91f3c2e</span></div></div>
+  <div style="height:18px"></div>
+  <div class="card donate">
+    <div class="head"><span class="heart"><svg width="20" height="20"><use href="#heart"/></svg></span><span class="t">Поддержать проект</span></div>
+    <p class="p">«Рубеж» делает небольшая команда. Донат — не покупка: игровых наград за него нет, зато у тебя появится знак «Меценат». Спасибо, что играешь.</p>
+    <div class="ghost">Поддержать через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div>
+  </div>
+</div></div><div class="cap w320"><b>320 · только Tribute</b> (<code>stars: null</code>: оплата выключена или «Покупки» закрыты). Кнопки «Поддержать» нет — не выключенная, а нет вовсе; Tribute встаёт единственной кнопкой. Нет и Tribute — нет и раздела с заголовком: экран как сейчас.</div></div>
+
+<div><div class="phone"><div class="screen">
+  <div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Об игре</div>
+  <div class="col">
+    <div class="wordmark">РУБЕЖ</div>
+    <p class="tag">Держи рубеж против нечисти — сколько продержишься?</p>
+    <div class="list"><div class="li"><span>Сборка</span><span>0.10.0</span></div><div class="li"><span>Контент</span><span>a91f3c2e</span></div><div class="li"><span>Установка</span><span>7c04ad19</span></div></div>
+    <div style="height:18px"></div>
+    <div class="card donate">
+      <div class="head"><span class="heart"><svg width="20" height="20"><use href="#heart"/></svg></span><span class="t">Поддержать проект</span></div>
+      <div class="thanksline" style="margin-bottom:10px"><span class="mec l"><svg width="13" height="13"><use href="#heart"/></svg>Меценат</span><span>Спасибо за поддержку — знак уже у тебя</span></div>
+      <p class="p">«Рубеж» делает небольшая команда. Донат — не покупка: игровых наград за него нет, зато у тебя появится знак «Меценат». Спасибо, что играешь.</p>
+      <div class="btn"><svg width="18" height="18"><use href="#heart"/></svg>Поддержать ещё</div>
+    </div>
+  </div>
+</div></div><div class="cap"><b>390 · уже поддержал звёздами</b> (<code>supporter: true</code>). Заголовок тот же, под ним — знак и спасибо; кнопка — «Поддержать ещё». Кто платил только через Tribute, знака не получает и этой строки не видит (решение 19.10).</div></div>
+
+<div class="sect">2 · Профиль: знак у имени и блок внизу</div>
+
+<div><div class="phone"><div class="screen">
+  <div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Профиль</div>
+  <div class="card" style="display:flex;gap:12px;align-items:center">
+    <span class="avatar" style="width:56px;height:56px;font-size:22px">А</span>
+    <div style="min-width:0"><div style="font:700 18px/1.2 'Russo One',system-ui;margin-bottom:5px">Алёна</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tst l"><svg width="13" height="13"><use href="#flask"/></svg>Тестер</span><span class="mec l"><svg width="13" height="13"><use href="#heart"/></svg>Меценат</span></div></div>
+  </div>
+  <div class="h2">Лучшее</div><div class="tile" style="height:64px"></div>
+  <div class="h2">Последние забеги</div><div class="tile" style="height:52px"></div><div class="tile" style="height:52px"></div>
+  <div style="height:18px"></div>
+  <div class="card donate">
+    <div class="head"><span class="heart"><svg width="20" height="20"><use href="#heart"/></svg></span><span class="t">Поддержать проект</span></div>
+    <div class="thanksline" style="margin-bottom:10px">Спасибо за поддержку — знак уже у тебя</div>
+    <div class="btn"><svg width="18" height="18"><use href="#heart"/></svg>Поддержать ещё</div>
+  </div>
+  <div class="h2">Скоро</div>
+</div></div><div class="cap"><b>Профиль 390.</b> Знак — в строке под именем, после «Тестера»: сначала статус теста, потом поддержка. В профиле знак всегда со словом (<code>size="l"</code>). Блок — после «Последних забегов», перед «Скоро»; в профиле без длинного абзаца — его читали в «Об игре», здесь хватает строки и кнопки. Тот, кто ещё не поддерживал, видит абзац, как в «Об игре».</div></div>
+
+<div><div class="phone w320"><div class="screen">
+  <div class="bar">Рейтинг</div>
+  <div class="tabs"><span class="on">Неделя</span><span>Всё время</span><span>Друзья</span></div>
+  <div class="lb"><span class="rank" style="color:var(--elite)">1</span><span class="ava">А</span><div style="min-width:0;flex:1"><div class="nm"><span class="n">Алёна</span><span class="tst">Тестер</span><span class="mec icon" aria-label="Меценат"><svg width="12" height="12"><use href="#heart"/></svg></span></div><div class="small muted">Ур. 14 · 1 203</div></div><span class="time">18:42</span></div>
+  <div class="lb"><span class="rank">2</span><span class="ava">М</span><div style="min-width:0;flex:1"><div class="nm"><span class="n">Максим</span></div><div class="small muted">Ур. 11 · 980</div></div><span class="time">17:03</span></div>
+  <div class="lb me"><span class="rank">3</span><span class="ava">K</span><div style="min-width:0;flex:1"><div class="nm"><span class="n">kotik_777_super_long</span><span class="tst">Тестер</span><span class="mec icon" aria-label="Меценат"><svg width="12" height="12"><use href="#heart"/></svg></span><span class="you">Ты</span></div><div class="small muted">Ур. 9 · 640</div></div><span class="time">15:10</span></div>
+  <div class="lb"><span class="rank">4</span><span class="ava">Д</span><div style="min-width:0;flex:1"><div class="nm"><span class="n">Дмитрий</span><span class="mec icon" aria-label="Меценат"><svg width="12" height="12"><use href="#heart"/></svg></span></div><div class="small muted">Ур. 8 · 512</div></div><span class="time">14:55</span></div>
+</div></div><div class="cap w320"><b>Ответ на вопрос 2 — знак в строке рейтинга только сердцем, на всех ширинах.</b> Строка и так несёт имя, «Тестер» и «Ты»; слово целиком на 320 съело бы имя до двух букв. Сердце — квадрат 16 px с рамкой, как у «Тестера», имя для диктора и подсказка — «Меценат». Знаки не сжимаются (<code>shrink-0</code>), обрезается имя. Одно правило на все ширины проще, чем переключать по месту.</div></div>
+
+<div class="sect">3 · Лист доната</div>
+
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div class="sheet"><div class="grab"></div><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+  <span class="heart big"><svg width="34" height="34"><use href="#heart"/></svg></span>
+  <div class="center t" style="font-size:21px;margin-bottom:6px">Поддержать проект</div>
+  <p class="p center" style="margin-bottom:14px">Любая сумма в звёздах: от 1 до 10 000 ⭐</p>
+  <div class="amounts"><span>⭐ 50</span><span class="on">⭐ 100</span><span>⭐ 250</span><span>⭐ 500</span><span>⭐ 1 000</span><span class="muted">Своя</span></div>
+  <div class="note test"><svg width="16" height="16" style="flex:none;color:var(--info);margin-top:1px"><use href="#info"/></svg><span>Тестовая оплата: звезда вернётся</span></div>
+  <div class="gap12"></div>
+  <div class="btn">Поддержать на 100 ⭐</div>
+  <div class="gap8"></div>
+  <div class="ghost">Поддержать через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div>
+</div></div></div><div class="cap"><b>390 · выбор суммы.</b> Готовые суммы — <code>presets</code> с сервера, сеткой по три; выбранная — золотой рамкой (как выбор в магазине). Первой выбрана вторая сумма, если она есть, иначе первая. Сумма — и на кнопке: цена видна до нажатия (Р11). Плашка «Тестовая оплата» — только при <code>mode: "test"</code>. Tribute — и здесь, вторым путём; без ссылки — нет.</div></div>
+
+<div><div class="phone w320"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div class="sheet"><div class="grab"></div><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+  <div class="center t" style="font-size:19px;margin:8px 0 12px">Поддержать проект</div>
+  <div class="amounts"><span>⭐ 50</span><span>⭐ 100</span><span>⭐ 250</span><span>⭐ 500</span><span>⭐ 1 000</span><span class="on">Своя</span></div>
+  <div class="gap12"></div>
+  <div class="field bad">⭐ 15000<span class="caret"></span></div>
+  <div class="err"><svg width="14" height="14" style="flex:none;margin-top:1px"><use href="#alert"/></svg>Сумма — целое число от 1 до 10 000 ⭐</div>
+  <div class="gap12"></div>
+  <div class="btn off">Поддержать</div>
+  <div class="gap8"></div>
+  <div class="ghost">Поддержать через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div>
+</div></div></div><div class="cap w320"><b>320 · своя сумма вне пределов.</b> «Своя» раскрывает поле с цифровой клавиатурой (<code>inputMode="numeric"</code>, <code>maxLength</code> — по числу знаков <code>max</code>), сердце сверху на 320 не рисуется — клавиатура и так съест полэкрана. Ошибка — под полем, красной рамкой и значком, а не только цветом; кнопка нейтральная и без суммы, причина — в строке ошибки. Пустое поле — без ошибки, кнопка так же выключена.</div></div>
+
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div class="sheet"><div class="grab"></div><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+  <span class="heart big"><svg width="34" height="34"><use href="#heart"/></svg></span>
+  <div class="center t" style="font-size:21px;margin-bottom:6px">Поддержать проект</div>
+  <p class="p center" style="margin-bottom:14px">Любая сумма в звёздах: от 1 до 10 000 ⭐</p>
+  <div class="amounts" style="opacity:.55"><span>⭐ 50</span><span class="on">⭐ 100</span><span>⭐ 250</span><span>⭐ 500</span><span>⭐ 1 000</span><span class="muted">Своя</span></div>
+  <div class="gap12"></div>
+  <div class="btn busy"><span class="spin"></span>Ждём оплату…</div>
+</div></div></div><div class="cap"><b>390 · оплата идёт.</b> После нажатия — окно оплаты Telegram; пока оно открыто и пока ждём подтверждения (до 45 с), кнопка — «Ждём оплату…» со спиннером, суммы не нажимаются: второе нажатие не создаёт второй счёт. «Меньше движения» — спиннер стоит, слово остаётся. Закрыл лист — ожидание идёт дальше, «Спасибо» придёт знаком в профиле.</div></div>
+
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div class="sheet"><div class="grab"></div><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+  <span class="heart big"><svg width="34" height="34"><use href="#heart"/></svg></span>
+  <div class="center t" style="font-size:21px;margin-bottom:6px">Поддержать проект</div>
+  <p class="p center" style="margin-bottom:14px">Любая сумма в звёздах: от 1 до 10 000 ⭐</p>
+  <div class="amounts"><span>⭐ 50</span><span>⭐ 100</span><span class="on">⭐ 250</span><span>⭐ 500</span><span>⭐ 1 000</span><span class="muted">Своя</span></div>
+  <div class="note warn"><svg width="16" height="16" style="flex:none;color:var(--danger);margin-top:1px"><use href="#alert"/></svg><span>Нет связи. Звёзды не списаны — попробуй ещё раз</span></div>
+  <div class="gap12"></div>
+  <div class="btn">Поддержать на 250 ⭐</div>
+</div></div></div><div class="cap"><b>390 · ошибка.</b> Исходы <code>retry</code> и <code>refused</code> — плашкой над кнопкой, выбранная сумма остаётся, кнопка снова живая. Долгое подтверждение — та же плашка, но тоном информации и без повторной кнопки: «Оплата ещё подтверждается — знак появится сам». Отмена окна оплаты — ничего не показываем, лист как был.</div></div>
+
+<div><div class="phone"><div class="screen" style="padding:0"><div class="scrim"></div>
+<div class="sheet" style="padding-bottom:26px"><div class="grab"></div><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+  <span class="heart big" style="box-shadow: inset 0 0 0 2px var(--hp), 0 0 32px -6px var(--hp)"><svg width="34" height="34"><use href="#heart"/></svg></span>
+  <div class="center t" style="font-size:26px;margin-bottom:8px">Спасибо!</div>
+  <p class="p center">Поддержка «Рубежа» дошла — это правда помогает делать игру дальше.</p>
+  <div class="center" style="margin:4px 0 16px"><span class="mec l" style="font-size:13px;padding:4px 10px 4px 8px"><svg width="14" height="14"><use href="#heart"/></svg>Меценат</span><div class="small muted" style="margin-top:6px">Знак уже в профиле и в рейтинге</div></div>
+  <div class="ghost">Закрыть</div>
+</div></div></div><div class="cap"><b>390 · «Спасибо!»</b> — в том же листе вместо выбора суммы. Сердце с мягким ореолом (один раз проявляется, без пульса), знак крупно — то, что игрок получил, видно сразу. Одна кнопка — «Закрыть». Звука и конфетти нет: это благодарность, не награда. Текст безличный: «ты поддержал» несёт род (Р163).</div></div>
+
+<div class="sect">4 · Слайд на главной</div>
+
+<div><div class="phone"><div class="screen" style="display:flex;flex-direction:column">
+  <div class="header"><span class="avatar">А</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 12</span></div>
+  <div class="slide"><span class="ic"><svg width="30" height="30"><use href="#heart"/></svg></span><div><div class="t" style="font-size:16px;margin-bottom:3px">Поддержать проект</div><div class="small muted">Знак «Меценат» и наше спасибо</div></div></div>
+  <div class="dots"><i></i><i class="on"></i><i></i></div>
+  <div class="tile"></div><div class="tile"></div>
+  <div class="play">ИГРАТЬ</div>
+</div></div><div class="cap"><b>Слайд <code>donate</code></b> — общий вид карусели: значок Heart тоном здоровья (<code>bg-hp/15 text-hp</code> в <code>TONE</code>), заголовок и строка. Касание открывает тот же лист. Включает панель (<code>donate.home-slide</code>); сервер не присылает слайд, когда способов нет.</div></div>
+
+<div class="sect">5 · Планшет и ПК</div>
+
+<div><div class="phone w768"><div class="screen" style="padding:0">
+  <div style="position:absolute;inset:0;padding:0 24px"><div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Об игре</div><div class="col"><div class="wordmark">РУБЕЖ</div><div class="list"><div class="li"><span>Сборка</span><span>0.10.0</span></div></div><div style="height:18px"></div><div class="card donate" style="height:150px"></div></div></div>
+  <div class="scrim"></div>
+  <div class="sheet dialog"><span class="x" aria-label="Закрыть"><svg width="20" height="20"><use href="#close"/></svg></span>
+    <span class="heart big"><svg width="34" height="34"><use href="#heart"/></svg></span>
+    <div class="center t" style="font-size:21px;margin-bottom:6px">Поддержать проект</div>
+    <p class="p center" style="margin-bottom:14px">Любая сумма в звёздах: от 1 до 10 000 ⭐</p>
+    <div class="amounts"><span>⭐ 50</span><span class="on">⭐ 100</span><span>⭐ 250</span><span>⭐ 500</span><span>⭐ 1 000</span><span class="muted">Своя</span></div>
+    <div class="gap12"></div><div class="btn">Поддержать на 100 ⭐</div><div class="gap8"></div><div class="ghost">Поддержать через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div>
+  </div>
+</div></div><div class="cap w768"><b>768 и шире — лист становится диалогом по центру</b>, шириной 420, как другие <code>Modal</code>; содержимое то же. Блок в «Об игре» и профиле — в колонке <code>ContentColumn</code> (480), не растягивается.</div></div>
+
+<div><div class="desk"><div style="width:480px;margin:0 auto;padding-top:8px">
+  <div class="bar"><span class="back"><svg width="20" height="20"><use href="#back"/></svg></span>Об игре</div>
+  <div class="wordmark">РУБЕЖ</div>
+  <div class="list"><div class="li"><span>Сборка</span><span>0.10.0</span></div><div class="li"><span>Контент</span><span>a91f3c2e</span></div></div>
+  <div style="height:18px"></div>
+  <div class="card donate">
+    <div class="head"><span class="heart"><svg width="20" height="20"><use href="#heart"/></svg></span><span class="t">Поддержать проект</span></div>
+    <p class="p">«Рубеж» делает небольшая команда. Донат — не покупка: игровых наград за него нет, зато у тебя появится знак «Меценат». Спасибо, что играешь.</p>
+    <div style="display:flex;gap:8px"><div class="btn" style="flex:1"><svg width="18" height="18"><use href="#heart"/></svg>Поддержать</div><div class="ghost" style="flex:1">Через Tribute <svg width="16" height="16"><use href="#ext"/></svg></div></div>
+  </div>
+</div></div><div class="cap desk"><b>1440, браузер (показано вдвое меньше).</b> Та же колонка 480; от 768 кнопки встают в ряд, Tribute короче — «Через Tribute» (ключ <code>donate.tribute.short</code>). В вебе Tribute ведёт на веб-ссылку (сервер выбрал сам).</div></div>
+
+<div class="sect">6 · Тексты (утверждены тимлидом 31.10, на «ты» и без рода игрока)</div>
+<table class="texts">
+<tr><th>Ключ</th><th>Текст</th><th>Почему так</th></tr>
+<tr><td><code>donate.title</code></td><td>Поддержать проект</td><td></td></tr>
+<tr><td><code>donate.text</code></td><td>«Рубеж» делает небольшая команда. Донат — не покупка: игровых наград за него нет, зато у тебя появится знак «Меценат». Спасибо, что играешь.</td><td>«не покупка» — в первом же абзаце (Р109)</td></tr>
+<tr><td><code>donate.cta</code></td><td>Поддержать</td><td></td></tr>
+<tr><td><code>donate.again</code></td><td>Поддержать ещё</td><td>кнопка у того, кто уже поддержал</td></tr>
+<tr><td><code>donate.tribute</code></td><td>Поддержать через Tribute</td><td></td></tr>
+<tr><td><code>donate.tribute.short</code></td><td>Через Tribute</td><td>кнопка в ряд от 768</td></tr>
+<tr><td><code>donate.already</code></td><td>Спасибо за поддержку — знак уже у тебя</td><td>было «Вы уже поддержали» — род и «вы»</td></tr>
+<tr><td><code>donate.sheet.title</code></td><td>Поддержать проект</td><td></td></tr>
+<tr><td><code>donate.sheet.hint</code></td><td>Любая сумма в звёздах: от {min} до {max} ⭐</td><td></td></tr>
+<tr><td><code>donate.custom</code></td><td>Своя</td><td>подпись плитки; «Своя сумма» — подпись поля для диктора</td></tr>
+<tr><td><code>donate.custom.label</code></td><td>Своя сумма</td><td></td></tr>
+<tr><td><code>donate.custom.invalid</code></td><td>Сумма — целое число от {min} до {max} ⭐</td><td></td></tr>
+<tr><td><code>donate.pay</code></td><td>Поддержать на {n} ⭐</td><td>сумма на кнопке до нажатия (Р11)</td></tr>
+<tr><td><code>donate.pay.idle</code></td><td>Поддержать</td><td>выключенная кнопка без суммы</td></tr>
+<tr><td><code>donate.paying</code></td><td>Ждём оплату…</td><td></td></tr>
+<tr><td><code>donate.test</code></td><td>Тестовая оплата: звезда вернётся</td><td></td></tr>
+<tr><td><code>donate.thanks.title</code></td><td>Спасибо!</td><td></td></tr>
+<tr><td><code>donate.thanks.text</code></td><td>Поддержка «Рубежа» дошла — это правда помогает делать игру дальше.</td><td>безлично: «ты поддержал» несёт род</td></tr>
+<tr><td><code>donate.thanks.badge</code></td><td>Знак уже в профиле и в рейтинге</td><td></td></tr>
+<tr><td><code>donate.close</code></td><td>Закрыть</td><td></td></tr>
+<tr><td><code>donate.retry.offline</code></td><td>Нет связи. Звёзды не списаны — попробуй ещё раз</td><td>«деньги» → «звёзды»: платят звёздами</td></tr>
+<tr><td><code>donate.retry.payment_failed</code></td><td>Оплата не прошла. Попробуй ещё раз</td><td></td></tr>
+<tr><td><code>donate.retry.slow_confirmation</code></td><td>Оплата ещё подтверждается — знак появится сам, повторять не нужно</td><td></td></tr>
+<tr><td><code>donate.refused</code></td><td>Не получилось оформить поддержку. Попробуй позже</td><td></td></tr>
+<tr><td><code>donate.refused.endpoint_disabled</code></td><td>Оплата сейчас недоступна. Попробуй позже</td><td></td></tr>
+<tr><td><code>donate.refused.payments_unsupported</code></td><td>Оплата звёздами доступна только в Telegram</td><td></td></tr>
+<tr><td><code>supporter.badge</code></td><td>Меценат</td><td>имя статусного знака по Р149 и каталогу T-0235; «Поддержал проект» несёт род (Р163)</td></tr>
+<tr><td><code>home.slide.donate.title</code></td><td>Поддержать проект</td><td></td></tr>
+<tr><td><code>home.slide.donate.text</code></td><td>Знак «Меценат» и наше спасибо</td><td></td></tr>
+<tr><td><code>history.purchase.donation</code></td><td>Поддержка проекта</td><td></td></tr>
+</table>
+</div>
+</body>
+</html>
