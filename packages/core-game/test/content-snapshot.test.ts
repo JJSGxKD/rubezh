@@ -18,6 +18,7 @@ import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/con
 import { contentSnapshotSchema } from "../src/content/snapshot-schema";
 import { BALANCE_TARGETS, EVOLUTION_POWER_RATIO } from "../src/content/balance-targets";
 import { ENEMIES } from "../src/content/enemies";
+import { SECRETS } from "../src/content/secrets";
 import { TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { simulateBalanceRun } from "../src/game/balance";
@@ -71,6 +72,7 @@ describe("снимок контента: состав и хэш", () => {
       "maps",
       "drops",
       "chests",
+      "secrets",
       "difficulties",
       "continueRules",
       "boosts",
@@ -107,6 +109,14 @@ describe("снимок контента: состав и хэш", () => {
     expect(hashSnapshot({ ...CONTENT_SNAPSHOT, maxBoostsPerRun: CONTENT_SNAPSHOT.maxBoostsPerRun + 1 })).not.toBe(CONTENT_HASH);
   });
 
+  it("тайники входят в хэш: правка числа тайника — новая версия баланса", () => {
+    expect(CONTENT_SNAPSHOT.secrets).toBe(SECRETS);
+    const longer = { ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, shrine: { ...SECRETS.shrine, holdSec: SECRETS.shrine.holdSec + 1 } } };
+    expect(hashSnapshot(longer)).not.toBe(CONTENT_HASH);
+    const blessed = { ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, blessings: SECRETS.blessings.slice(1) } };
+    expect(hashSnapshot(blessed)).not.toBe(CONTENT_HASH);
+  });
+
   it("меняет хэш от порядка врагов: от него зависят индексы типов и обращения к генератору", () => {
     expect(hashSnapshot({ ...CONTENT_SNAPSHOT, enemies: [...ENEMIES].reverse() })).not.toBe(CONTENT_HASH);
   });
@@ -132,6 +142,25 @@ describe("схема снимка", () => {
     const parsed = contentSnapshotSchema.safeParse(broken);
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues.map((issue) => issue.path.join("."))).toContain("enemies.0.hp");
+  });
+
+  it("тайники в схеме: принимает умолчание, ловит число вне границ и лишнее поле с путём до него", () => {
+    expect(contentSnapshotSchema.safeParse(viaJson(CONTENT_SNAPSHOT)).success).toBe(true);
+    // Правка из панели приходит JSON-ом, а не типизированным объектом: поля могут быть чем угодно.
+    const raw = (secrets: Record<string, unknown>): unknown => JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets }));
+    const brokenShrine = raw({ ...SECRETS, shrine: { ...SECRETS.shrine, holdSec: "долго" } });
+    const parsed = contentSnapshotSchema.safeParse(brokenShrine);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join("."))).toContain("secrets.shrine.holdSec");
+
+    const extra = raw({ ...SECRETS, lootbox: true });
+    expect(contentSnapshotSchema.safeParse(extra).success).toBe(false);
+    const { secrets: _secrets, ...withoutSecrets } = CONTENT_SNAPSHOT;
+    void _secrets;
+    expect(contentSnapshotSchema.safeParse(withoutSecrets).success).toBe(false);
+    // Вид тайника в весах кольца — только из мест: огонёк в кольцо не бросается.
+    const wispRing = raw({ ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] });
+    expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
   });
 
   it("ловит пропавшее обязательное поле и чужую версию схемы", () => {
@@ -216,6 +245,16 @@ describe("проверки контента одной функцией", () => 
     expect(dear).toContainEqual({ path: "levelCurve", message: expect.stringContaining("первый уровень") });
     const flat = findContentProblems({ ...CONTENT_SNAPSHOT, levelCurve: { baseXp: 5, growth: 1 } });
     expect(flat).toContainEqual({ path: "levelCurve", message: expect.stringContaining("должна расти") });
+  });
+
+  it("ловит битые тайники: раздел secrets и сообщение движка тайников", () => {
+    const overlapping = { ...SECRETS, rings: [SECRETS.rings[0], { ...SECRETS.rings[1], minRadius: SECRETS.rings[0].minRadius }, ...SECRETS.rings.slice(2)] };
+    const problems = findContentProblems({ ...CONTENT_SNAPSHOT, secrets: overlapping });
+    expect(problems.some((problem) => problem.path === "secrets")).toBe(true);
+    expect(problems.filter((problem) => problem.path === "secrets").every((problem) => problem.message.length > 0)).toBe(true);
+
+    const noBlessings = findContentProblems({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, blessings: [] } });
+    expect(noBlessings.some((problem) => problem.path === "secrets")).toBe(true);
   });
 
   it("ловит потолки подборов, которые не влезают в пул", () => {

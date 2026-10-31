@@ -75,6 +75,9 @@ export function createRunEngine(): RunEngine {
         closeChest(): void {
           scene()?.closeChest();
         },
+        chooseBlessing(id: string): void {
+          scene()?.chooseBlessing(id);
+        },
         pause(reason: RunPauseReason): void {
           scene()?.pauseRun(reason);
         },

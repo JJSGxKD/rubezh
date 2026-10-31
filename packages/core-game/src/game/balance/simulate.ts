@@ -93,6 +93,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     loadoutLimits: open?.limits ?? content.loadoutLimits,
     drops: content.drops,
     chests: content.chests,
+    secrets: content.secrets,
     map: content.maps[0],
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined
