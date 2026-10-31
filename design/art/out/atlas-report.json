@@ -20,20 +20,146 @@
  {
   "pack": "env",
   "frames": 21,
-  "atlas": "1024×168",
-  "fill": "38%",
+  "atlas": "1004×168",
+  "fill": "39%",
   "trim": "57% ячейки",
   "png": "9 КБ",
-  "gpu": "0.7 МБ"
+  "gpu": "0.6 МБ"
  },
  {
-  "pack": "skins",
-  "frames": 60,
-  "atlas": "1024×596",
-  "fill": "90%",
+  "pack": "skin-herbalist",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-frost",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-gilded",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-dawn",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-keeper_ember",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-keeper_rushnik",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-keeper_storm",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-vityaz",
+  "frames": 6,
+  "atlas": "444×124",
+  "fill": "92%",
+  "trim": "50% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-vedunya",
+  "frames": 6,
+  "atlas": "576×120",
+  "fill": "91%",
+  "trim": "62% ячейки",
+  "png": "8 КБ",
+  "gpu": "0.3 МБ"
+ },
+ {
+  "pack": "skin-ohotnitsa",
+  "frames": 6,
+  "atlas": "496×124",
+  "fill": "93%",
+  "trim": "56% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-knyaz",
+  "frames": 6,
+  "atlas": "480×124",
+  "fill": "92%",
   "trim": "54% ячейки",
-  "png": "69 КБ",
-  "gpu": "2.3 МБ"
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-skomoroh",
+  "frames": 6,
+  "atlas": "492×124",
+  "fill": "92%",
+  "trim": "56% ячейки",
+  "png": "8 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-skomoroh_night",
+  "frames": 6,
+  "atlas": "492×124",
+  "fill": "92%",
+  "trim": "56% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-skomoroh_maslenitsa",
+  "frames": 6,
+  "atlas": "492×124",
+  "fill": "92%",
+  "trim": "56% ячейки",
+  "png": "8 КБ",
+  "gpu": "0.2 МБ"
+ },
+ {
+  "pack": "skin-navi",
+  "frames": 6,
+  "atlas": "488×124",
+  "fill": "89%",
+  "trim": "53% ячейки",
+  "png": "7 КБ",
+  "gpu": "0.2 МБ"
  },
  {
   "pack": "ground-neutral",

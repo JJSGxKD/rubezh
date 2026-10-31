@@ -213,8 +213,8 @@ export const HERO_DEFS = heroDefs();
 export const HERO_RADIUS = 10;
 
 /**
- * Облики героя. Первые пять — окрасы хранителя (design/art/registry.md,
- * G-05): та же поза другой палитрой. Дальше — архетипы v2
+ * Облики героя. Сначала окрасы хранителя (design/art/registry.md, G-05):
+ * та же поза другой палитрой. Дальше — архетипы v2
  * (design/art/direction-v2.md §7.3): своя голова (`head`) и свой предмет в
  * руке (`prop`) на той же позе — пропорции и хитбокс не расходятся. Мандат
  * v2 снял правило «герой — белый»: героя в толпе держат знак под ногами,
@@ -232,6 +232,13 @@ export const HERO_SKINS = [
   // окрасов за уровни отличается тоном плаща — у них белый, травяной,
   // ледяной и сливочно-золотой.
   { id: "dawn", name: "Хранитель · рассвет", source: "Набор хранителя", palette: { cloak: "#ffe6dc", cloakShade: "#f0b4a4", cloakDeep: "#b5728a", edge: "#26182e", scarf: "#ffc23d", scarfShade: "#cf8a1c", staff: "#7a5040", boots: "#4a3352" } },
+  // Окрасы Ярмарки (Р154): только хранитель и Скоморох — окрас заработанного архетипа за самоцветы
+  // продавал бы сам архетип. От окрасов за уровни отличаются тоном плаща: угольный, льняной, грозовой.
+  // У тёмного плаща кант светлый, как у Навьего стража: тёмный кант на тёмном плаще не держит героя в толпе.
+  // У «рушника» тень плаща — красная: подол читается вышивкой, а не тем же белым плащом хранителя.
+  { id: "keeper_ember", name: "Хранитель · угли", source: "Ярмарка", palette: { cloak: "#5a4644", cloakShade: "#3f302f", cloakDeep: "#2a1f1f", edge: "#ffb36b", eyes: "#1d1c31", scarf: "#ff6a2a", scarfShade: "#c24418", ward: "#ffb36b", wardLight: "#fff0d8", staff: "#2e2422", boots: "#1e1716" } },
+  { id: "keeper_rushnik", name: "Хранитель · рушник", source: "Ярмарка", palette: { cloak: "#f7f1e6", cloakShade: "#e8d7c0", cloakDeep: "#b0333b", scarf: "#d23a3a", scarfShade: "#8f2323", staff: "#6b4a32", boots: "#5a2626" } },
+  { id: "keeper_storm", name: "Хранитель · гроза", source: "Ярмарка", palette: { cloak: "#a9abd6", cloakShade: "#8183b3", cloakDeep: "#5c5e8c", scarf: "#ffe066", scarfShade: "#c9a82e", ward: "#b8ecff", wardLight: "#ffffff", staff: "#3e3a5c", boots: "#2a2842" } },
   {
     id: "vityaz", name: "Витязь", rarity: "rare", source: "уровень аккаунта",
     palette: { head: "helm", prop: "spear", cloak: "#a8463a", cloakShade: "#7a2c24", cloakDeep: "#521b16", scarf: "#d9b45a", scarfShade: "#a07e2e", mail: "#9aa2bd", mailShade: "#6c7391", helm: "#d5dbea", helmShade: "#9199b5", trim: "#e0bb5e", blade: "#eef3fb", bladeShade: "#aab3c9", staff: "#6b4a32", boots: "#3b2a24" },
@@ -249,8 +256,17 @@ export const HERO_SKINS = [
     palette: { head: "cap", prop: "sword", cloak: "#3456b8", cloakShade: "#243d88", cloakDeep: "#17285c", scarf: "#ffd15c", scarfShade: "#c9a033", capTop: "#c63c3c", capShade: "#902828", fur: "#f1e9d8", furDot: "#2a2238", trim: "#ffd15c", blade: "#f1f5ff", bladeShade: "#b7c0da", ward: "#5ce1ff", staff: "#5a3d2a", boots: "#2a2238" },
   },
   {
-    id: "skomoroh", name: "Скоморох", rarity: "epic", source: "событие",
+    id: "skomoroh", name: "Скоморох", rarity: "epic", source: "Ярмарка",
     palette: { head: "jester", prop: "ribbons", cloak: "#e0573f", cloakShade: "#b23c2a", cloakDeep: "#7c2618", scarf: "#46d9c6", scarfShade: "#2a9f90", capA: "#ffd15c", capB: "#46d9c6", trim: "#ffb22e", staff: "#7a5236", boots: "#3a2a4a" },
+  },
+  // Окрасы Скомороха — та же голова и ленты, ярмарочные цвета.
+  {
+    id: "skomoroh_night", name: "Скоморох · ночь", rarity: "epic", source: "Ярмарка",
+    palette: { head: "jester", prop: "ribbons", cloak: "#2f3f8f", cloakShade: "#22306e", cloakDeep: "#172150", scarf: "#ffd15c", scarfShade: "#c9a033", capA: "#8a5cff", capB: "#ffd15c", trim: "#ffd15c", staff: "#4a3a2c", boots: "#1a1530" },
+  },
+  {
+    id: "skomoroh_maslenitsa", name: "Скоморох · Масленица", rarity: "epic", source: "Ярмарка",
+    palette: { head: "jester", prop: "ribbons", cloak: "#f2b632", cloakShade: "#c98a1c", cloakDeep: "#8f5f10", scarf: "#d23a3a", scarfShade: "#8f2323", capA: "#d23a3a", capB: "#46d9c6", trim: "#fff1c8", staff: "#7a5236", boots: "#6b2a1a" },
   },
   {
     id: "navi", name: "Навий страж", rarity: "mythic", source: "топ сезона",

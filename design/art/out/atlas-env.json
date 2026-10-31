@@ -426,7 +426,7 @@
   "image": "atlas-env.png",
   "format": "RGBA8888",
   "size": {
-   "w": 1024,
+   "w": 1004,
    "h": 168
   },
   "scale": "2.5"
