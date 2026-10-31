@@ -3,8 +3,8 @@ id: T-0352
 title: Тайники рубежа — проводка к забегу: события в шину, выбор благословения с паузой, снимок контента и забега, эталоны
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0258]
@@ -27,6 +27,8 @@ zones:
 shared:
   - packages/app-shell/test/**
   - docs/32-balance.md
+  - CLAUDE.md
+  - packages/core-game/src/game/balance/simulate.ts
 runner: any
 executor: sonnet-5.5
 effort: high

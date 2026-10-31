@@ -91,6 +91,30 @@ export const teamSlideInputSchema = z
 
 export type TeamSlideInput = z.infer<typeof teamSlideInputSchema>;
 
+/**
+ * Группы с ручным порядком: карусель делит слайды команды на закреплённые и
+ * остальные, и перетащить слайд из группы в группу нельзя — за группу
+ * отвечает отметка «Первым в карусели».
+ */
+export const TEAM_SLIDE_GROUPS = ["pinned", "regular"] as const;
+export type TeamSlideGroup = (typeof TEAM_SLIDE_GROUPS)[number];
+
+export function teamSlideGroup(slide: Pick<TeamSlideRow, "pinned">): TeamSlideGroup {
+  return slide.pinned ? "pinned" : "regular";
+}
+
+/** Сколько слайдов в запросе порядка — столько же, сколько панель читает за раз. */
+export const TEAM_SLIDE_ORDER_MAX = 200;
+
+/** Запрос «новый порядок списка»: все id группы в нужном порядке, без повторов. */
+export const teamSlideOrderSchema = z
+  .object({
+    group: z.enum(TEAM_SLIDE_GROUPS),
+    ids: z.array(z.uuid()).min(1).max(TEAM_SLIDE_ORDER_MAX),
+  })
+  .strict()
+  .refine((order) => new Set(order.ids).size === order.ids.length, { message: "id не повторяются", path: ["ids"] });
+
 export interface TeamSlideRow {
   slideId: string;
   title: string;
@@ -101,6 +125,8 @@ export interface TeamSlideRow {
   platforms: PlatformId[];
   audience: TeamSlideAudience;
   pinned: boolean;
+  /** место в своей группе: меньше — раньше; меняется только запросом порядка */
+  position: number;
   startsAt: Date;
   endsAt: Date;
   createdAt: Date;
@@ -170,11 +196,13 @@ export function inAudience(slide: Pick<TeamSlideRow, "audience" | "platforms">, 
 
 /**
  * Какие слайды команды показать игроку: идущие, его площадки и аудитории,
- * закреплённые первыми, дальше — начавшиеся позже; не больше `shownMax`.
+ * закреплённые первыми, дальше по месту в списке панели; равные места — по
+ * началу (позже — раньше), затем по id, чтобы порядок не зависел от выборки.
+ * Не больше `shownMax`.
  */
 export function teamSlidesFor(slides: readonly TeamSlideRow[], facts: AudienceFacts, at: Date): TeamSlideRow[] {
   return slides
     .filter((slide) => teamSlideState(slide, at) === "active" && inAudience(slide, facts, at))
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.startsAt.getTime() - a.startsAt.getTime())
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.position - b.position || b.startsAt.getTime() - a.startsAt.getTime() || a.slideId.localeCompare(b.slideId))
     .slice(0, TEAM_SLIDE_LIMITS.shownMax);
 }

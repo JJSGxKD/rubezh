@@ -468,6 +468,7 @@ model Run {
   purchases    Purchase[]
   adContinues  RunAdContinue[]
   gemContinues RunGemContinue[]
+  proof        RunProof?
 
   // Профиль игрока: его забеги, свежие первыми.
   @@index([accountId, finishedAt])
@@ -534,6 +535,27 @@ model RunGemContinue {
   // Продолжения игрока по времени: каскад с аккаунта и разбор покупок.
   @@index([accountId, grantedAt])
   @@map("run_gem_continue")
+}
+
+/// Запись забега для проверки (docs/35-stage4-plan.md WP5, tasks/T-0317):
+/// сжатый gzip-ом `RunProof` — всё, что задаёт исход, и ничего лишнего. По ней
+/// сервер повторяет забег (T-0318, T-0319). Одна запись на забег; обычная живёт
+/// неделю (`keep_until`), у забегов из верха и с редкой добычей — полгода.
+/// Очистка раз в час удаляет просроченные пачками; вайп стирает своим шагом
+/// до забегов (`wipe-plan.ts`), каскад — только страховка.
+model RunProof {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  /// gzip от JSON записи: до 64 КБ, распакованная — до 512 КБ
+  proof      Bytes
+  sizeBytes  Int      @map("size_bytes")
+  receivedAt DateTime @map("received_at") @db.Timestamptz(3)
+  keepUntil  DateTime @map("keep_until") @db.Timestamptz(3)
+
+  run Run @relation(fields: [runId], references: [runId], onDelete: Cascade)
+
+  // Очистка: просроченные, самые давние первыми.
+  @@index([keepUntil])
+  @@map("run_proof")
 }
 
 // Покупка за Telegram Stars (docs/34-stage3-plan.md, WP5). Строка заводится,
@@ -2123,6 +2145,51 @@ model IntegrationSecret {
   @@map("integration_secret")
 }
 
+/// Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, T-0065).
+/// Схема, порт, страна и «пароль заполнен целиком или не заполнен вовсе» держатся CHECK в миграции.
+model OutboundProxy {
+  proxyId       String    @id @map("proxy_id") @db.Uuid
+  name          String    @db.VarChar(60)
+  /// `http`, `https` или `socks5`
+  scheme        String    @db.VarChar(8)
+  /// домен или IP без схемы и порта
+  host          String    @db.VarChar(255)
+  port          Int
+  username      String?   @db.VarChar(128)
+  /// пароль — шифртекстом SecretCipher; отпечаток ключа — для перешифровки
+  passwordIv    Bytes?    @map("password_iv")
+  passwordTag   Bytes?    @map("password_tag")
+  passwordCt    Bytes?    @map("password_ct")
+  passwordKeyId String?   @map("password_key_id") @db.VarChar(16)
+  /// ISO-код из двух заглавных букв — вводится руками
+  country       String    @db.VarChar(2)
+  enabled       Boolean
+  /// чем меньше, тем раньше в переборе
+  priority      Int
+  note          String?   @db.VarChar(200)
+  lastCheckAt   DateTime? @map("last_check_at") @db.Timestamptz(3)
+  lastCheckOk   Boolean?  @map("last_check_ok")
+  lastCheckNote String?   @map("last_check_note") @db.VarChar(200)
+  /// кто менял последним; без внешнего ключа — прокси переживает аккаунт
+  updatedBy     String    @map("updated_by") @db.Uuid
+  updatedAt     DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  @@index([enabled, priority])
+  @@map("outbound_proxy")
+}
+
+/// Режим сервиса клиента исходящих (Р91): строки нет — умолчание из кода (`infra/outbound/outbound-route.ts`).
+model OutboundServiceMode {
+  /// `fx.cbr`, `telegram.bot` — из каталога `OUTBOUND_SERVICES`
+  service   String   @id @db.VarChar(32)
+  /// `direct_first`, `proxy_only` или `direct_only`
+  mode      String   @db.VarChar(16)
+  updatedBy String   @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  @@map("outbound_service_mode")
+}
+
 /// Картинка из панели (docs/35-stage4-plan.md О42): в базе до CDN. id — SHA-256
 /// содержимого: одинаковый файл — одна строка, адрес не меняется, поэтому
 /// кеш навсегда. Строка не меняется никогда. Формат, размер и стороны держат
@@ -2166,6 +2233,8 @@ model HomeSlide {
   audience     String     @db.VarChar(16)
   /// первым в карусели — раньше акции; иначе после акции и нового в версии
   pinned       Boolean
+  /// место в своей группе (закреплённые / остальные); меньше — раньше; меняется только запросом порядка
+  position     Int
   startsAt     DateTime   @map("starts_at") @db.Timestamptz(3)
   endsAt       DateTime   @map("ends_at") @db.Timestamptz(3)
   createdAt    DateTime   @map("created_at") @db.Timestamptz(3)
@@ -2179,6 +2248,7 @@ model HomeSlide {
   image MediaImage? @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
 
   @@index([endsAt])
+  @@index([pinned, position])
   @@map("home_slide")
 }
 

@@ -14,6 +14,7 @@ import type {
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  SecretsDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -25,6 +26,7 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { SECRETS } from "./secrets";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
@@ -77,6 +79,7 @@ export interface ContentSnapshot {
   maps: readonly MapDef[];
   drops: DropsDef;
   chests: ChestsDef;
+  secrets: SecretsDef;
   difficulties: readonly DifficultyDef[];
   continueRules: ContinueDef;
   boosts: readonly BoostDef[];
@@ -106,6 +109,7 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   maps: MAPS,
   drops: DROPS,
   chests: CHESTS,
+  secrets: SECRETS,
   difficulties: DIFFICULTIES,
   continueRules: CONTINUE,
   boosts: BOOSTS,
@@ -148,6 +152,7 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.maps,
     snapshot.drops,
     snapshot.chests,
+    snapshot.secrets,
     snapshot.difficulties,
     snapshot.continueRules,
     snapshot.boosts,

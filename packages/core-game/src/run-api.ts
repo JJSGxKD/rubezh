@@ -1,5 +1,5 @@
 import type { ContentSnapshot } from "./content/snapshot";
-import type { CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -285,9 +285,11 @@ export interface RunOptions {
    */
   runId?: string;
   /**
-   * Останавливать забег, когда игрок открыл сундук: оболочка показывает окно
-   * наград и отвечает `closeChest`. Без поля сундук открывается на ходу, а
-   * награды приходят событием `chestOpened`.
+   * Останавливать забег, когда игрок открыл сундук или отстоял капище: оболочка
+   * показывает окно наград и отвечает `closeChest`, у капища — окно выбора
+   * благословения и отвечает `chooseBlessing`. Без поля сундук открывается на
+   * ходу (награды приходят событием `chestOpened`), а капище берёт первое из
+   * предложенных благословений.
    */
   pauseOnChest?: boolean;
   /**
@@ -373,6 +375,19 @@ export interface RunEvents {
    * (аптечка, опыт).
    */
   chestOpened: { index: number; size: ChestSize; rewards: ChestReward[]; fallbacks: number; elapsedSec: number };
+  /** игрок вошёл в круг тайника (аналитика и значки радара); огонёк — он появился */
+  secretFound: { index: number; kind: SecretKind; elapsedSec: number };
+  /**
+   * Тайник использован: `outcome` — id благословения у капища, `opened` у клада,
+   * `touched` у камня-указателя. Клад отдаёт сундук тем же путём, что сундуки забега
+   * (`chestFound` / `chestOpened`).
+   */
+  secretUsed: { index: number; kind: SecretKind; outcome: string; elapsedSec: number };
+  /**
+   * Капище предложило благословения. С `pauseOnChest` мир стоит, пока оболочка не
+   * ответит `chooseBlessing`; без неё первое из предложенных уже взято.
+   */
+  secretBlessing: { index: number; options: BlessingDef[]; elapsedSec: number };
   /**
    * Кольцо стражей закончилось (аналитика, `ring_ended`): `outcome` — прорвался,
    * выстоял до конца времени или погиб в кольце; сообщение приходит один раз на кольцо.
@@ -590,6 +605,12 @@ export interface RunSession {
    * набран уровень, переходит к выбору улучшения. Вне окна сундука — ничего.
    */
   closeChest(): void;
+  /**
+   * Выбрать благословение на капище при `pauseOnChest`: id — одно из предложенных
+   * событием `secretBlessing`. Неизвестный id и вызов вне выбора — ничего: забег
+   * стоит дальше.
+   */
+  chooseBlessing(id: string): void;
   pause(reason: RunPauseReason): void;
   resume(): void;
   abandon(): void;

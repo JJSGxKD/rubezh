@@ -25,7 +25,9 @@ import { AdminRestrictionsController } from "./admin-restrictions.controller.js"
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
+import { AdminNameRulesRecleanController } from "./admin-name-rules-reclean.controller.js";
 import { AdminNameRulesController } from "./admin-name-rules.controller.js";
+import { AdminProxiesController } from "./admin-proxies.controller.js";
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
@@ -73,6 +75,7 @@ import { RequestJournalService } from "../request-journal/request-journal.servic
 import { PanelLoginService } from "./panel-login.service.js";
 import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js";
 import { RoleConfirmations } from "./role-confirmations.js";
+import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js";
 
 /**
  * Серверная часть админ-панели (docs/35-stage4-plan.md, WP17;
@@ -108,6 +111,8 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminPurchasesController,
     AdminAdsController,
     AdminNameRulesController,
+    AdminProxiesController,
+    AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
@@ -128,6 +133,8 @@ import { RoleConfirmations } from "./role-confirmations.js";
     PanelLoginService,
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },
     RoleConfirmations,
+    // Метку «Отдельная доска» читают только отчёты панели (T-0115)
+    { provide: BOARD_MARK_READER, useClass: PrismaBoardMarkReader },
     // Журнал запросов читает только панель; запись — в глобальном `RequestJournalModule`
     { provide: REQUEST_JOURNAL_READER, useClass: PrismaRequestJournalRepository },
     RequestJournalService,

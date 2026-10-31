@@ -1,7 +1,7 @@
 import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutoSourcesService } from "../src/modules/links/auto-sources.service.js";
-import { UNKNOWN_KEYS_MAX, type AutoSourceInput, type AutoSourceOutcome, type AutoSourcesRepository } from "../src/modules/links/auto-sources.repository.js";
+import { UNKNOWN_KEYS_MAX, type AutoSourceInput, type AutoSourceOutcome, type AutoSourcesRepository, type UnknownKeyRow } from "../src/modules/links/auto-sources.repository.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { panelSettings } from "./helpers/settings.js";
 
@@ -71,6 +71,10 @@ class MemoryAutoSources implements AutoSourcesRepository {
         this.keys.set(key, { hits: 1, firstAt: now, lastAt: now });
       }
     }
+  }
+
+  async unknownKeys(): Promise<UnknownKeyRow[]> {
+    return [...this.keys].map(([key, row]) => ({ key, ...row })).sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
   }
 }
 

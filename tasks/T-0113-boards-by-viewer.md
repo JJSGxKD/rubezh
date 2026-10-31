@@ -3,8 +3,8 @@ id: T-0113
 title: Доски рейтинга по зрителю: полная и общая, место и профиль по доске смотрящего
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead2-18
 size: M
 depends_on: [T-0112]
@@ -25,6 +25,7 @@ shared:
   - backend/api/src/platforms/telegram/welcome-progress.ts
   - backend/api/test/friends.test.ts
   - backend/api/test/admin.test.ts
+  - backend/api/test/compensation.test.ts
   - docs/14-scalability.md
   - docs/21-diagrams.md
 runner: any

@@ -12,10 +12,11 @@ import { LinkNotFoundError } from "../src/modules/admin/admin-errors.js";
 import { AdminLinksController } from "../src/modules/admin/admin-links.controller.js";
 import type { ConversionsJournal } from "../src/modules/ad-conversions/conversions-journal.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import { UNKNOWN_KEYS_MAX, type AutoSourcesRepository, type UnknownKeyRow } from "../src/modules/links/auto-sources.repository.js";
 import { isCrawler } from "../src/modules/links/crawler.js";
 import { escapeHtml, linkPage, OPEN_SCRIPT_HASH } from "../src/modules/links/link-page.js";
 import type { LinkTarget } from "../src/modules/links/link-targets.js";
-import { LINKS_REPOSITORY, type ClickInput, type LinkInput, type LinkRecord, type LinksRepository, type LinkStats } from "../src/modules/links/links.repository.js";
+import { LINKS_REPOSITORY, type ClickInput, type LinkDisplayPatch, type LinkInput, type LinkRecord, type LinksRepository, type LinkStats } from "../src/modules/links/links.repository.js";
 import { hostOf, languageOf, LinksService, type VisitorInfo } from "../src/modules/links/links.service.js";
 import { RedirectController } from "../src/modules/links/redirect.controller.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
@@ -67,6 +68,16 @@ class MemoryLinks implements LinksRepository {
   async byCode(code: string): Promise<LinkRecord | null> {
     return this.links.get(code) ?? null;
   }
+  async setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null> {
+    const link = this.links.get(code);
+    // Название и скрытие — только у автоисточника: ручные ссылки правятся как раньше.
+    if (link === undefined || !link.auto) return null;
+    const next = { ...link };
+    if (patch.title !== undefined) next.title = patch.title;
+    if (patch.hidden !== undefined) next.hiddenAt = patch.hidden ? now : null;
+    this.links.set(code, next);
+    return next;
+  }
   async recordClick(click: ClickInput): Promise<void> {
     this.clicks.push(click);
   }
@@ -74,6 +85,18 @@ class MemoryLinks implements LinksRepository {
     return [...this.links.values()]
       .filter((link) => filter.partnerId === undefined || link.partner?.partnerId === filter.partnerId)
       .map((link) => ({ ...link, clicks: this.clicks.filter((click) => click.linkCode === link.code).length, clicks30d: 0, launches: 0, directLaunches: 0, devices: { mobile: 0, desktop: 0, web: 0, unknown: 0 } }));
+  }
+}
+
+/** Сводка незнакомых ключей в памяти: строки отдаются как база — по убыванию «последнего раза», не больше потолка. */
+class MemoryAutoSources implements AutoSourcesRepository {
+  readonly keys: UnknownKeyRow[] = [];
+  async ensure(): Promise<"existing"> {
+    return "existing";
+  }
+  async noteUnknownKeys(): Promise<void> {}
+  async unknownKeys(): Promise<UnknownKeyRow[]> {
+    return [...this.keys].sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime()).slice(0, UNKNOWN_KEYS_MAX);
   }
 }
 
@@ -89,6 +112,7 @@ const deny = {
 } as unknown as RolesService;
 
 let repository: MemoryLinks;
+let autoSources: MemoryAutoSources;
 let miniApp: string | null;
 let botUsername: string | null;
 let service: LinksService;
@@ -120,11 +144,12 @@ function telegramLinks(): AppLinks {
 
 beforeEach(() => {
   repository = new MemoryLinks();
+  autoSources = new MemoryAutoSources();
   miniApp = "https://t.me/rubezh_bot?startapp";
   botUsername = "rubezh_bot";
   const appLinks = telegramLinks();
 
-  service = new LinksService(config(), repository, appLinks, allow);
+  service = new LinksService(config(), repository, appLinks, allow, autoSources);
 });
 
 describe("краулеры превью", () => {
@@ -190,7 +215,7 @@ describe("переход по ссылке", () => {
   });
 
   it("заводить и смотреть ссылки — только с правом", async () => {
-    const guarded = new LinksService(config(), repository, new AppLinks([]), deny);
+    const guarded = new LinksService(config(), repository, new AppLinks([]), deny, autoSources);
     await expect(guarded.create({ accountId: "a1", platform: "telegram", platformUserId: "1" }, { campaign: "c", source: null, medium: null, note: null, platform: "telegram" })).rejects.toThrow("нет права");
     await expect(guarded.list({ accountId: "a1", platform: "telegram", platformUserId: "1" })).rejects.toThrow("нет права");
   });
@@ -210,7 +235,7 @@ describe("цель ссылки и прямая ссылка", () => {
         audits.push(entry);
       },
     } as unknown as RolesService;
-    guarded = new LinksService(config(), repository, telegramLinks(), recording);
+    guarded = new LinksService(config(), repository, telegramLinks(), recording, autoSources);
   });
 
   async function redirectOf(code: string): Promise<string> {
@@ -281,7 +306,7 @@ describe("цель ссылки и прямая ссылка", () => {
   it("retarget без права links.manage — отказ, цель не меняется, аудита нет", async () => {
     const link = await guarded.create(actor, plain);
     audits = [];
-    const denied = new LinksService(config(), repository, telegramLinks(), deny);
+    const denied = new LinksService(config(), repository, telegramLinks(), deny, autoSources);
     await expect(denied.retarget(actor, link.code, "landing")).rejects.toThrow("нет права");
     expect(repository.links.get(link.code)?.target).toBe("app");
     expect(audits).toEqual([]);
@@ -342,6 +367,184 @@ describe("ссылки в панели: цель", () => {
   });
 });
 
+describe("автоисточники: название, скрытие и сводка незнакомых ключей (T-0180)", () => {
+  const actor = { accountId: "a1", platform: "telegram" as const, platformUserId: "1" };
+  const request = { account: actor };
+  let audits: AuditEntry[];
+  let recording: LinksService;
+
+  beforeEach(() => {
+    audits = [];
+    const roles = {
+      require: async () => undefined,
+      audit: async (entry: AuditEntry) => {
+        audits.push(entry);
+      },
+    } as unknown as RolesService;
+    recording = new LinksService(config(), repository, telegramLinks(), roles, autoSources);
+  });
+
+  /** Источник, который сервер завёл сам по `src-tgads_cmp-oct`. */
+  function autoLink(code = "AutoCode001"): LinkRecord {
+    const record: LinkRecord = {
+      code,
+      platform: "telegram",
+      campaign: "oct",
+      source: "tgads",
+      medium: null,
+      note: null,
+      createdBy: null,
+      network: null,
+      registrationOn: "first_run",
+      target: "app",
+      partner: null,
+      createdAt: new Date("2026-10-20T10:00:00Z"),
+      auto: true,
+      autoKey: "src-tgads_cmp-oct",
+      partnerTag: null,
+      title: null,
+      hiddenAt: null,
+    };
+    repository.links.set(code, record);
+    return record;
+  }
+
+  async function manualLink(): Promise<LinkRecord> {
+    return await recording.create(actor, { campaign: "manual", source: null, medium: null, note: null, platform: "telegram" });
+  }
+
+  function panel(links: LinksService = recording): AdminLinksController {
+    const journal = { summaries: async () => new Map() } as unknown as ConversionsJournal;
+    const limiter = { consume: async () => true } as unknown as RateLimiter;
+    const secrets = { get: () => null } as unknown as SecretsService;
+    return new AdminLinksController(links, journal, secrets, limiter);
+  }
+
+  it("rename: название записано, в аудите «было → стало», кампания и источник те же", async () => {
+    const link = autoLink();
+    const view = await recording.rename(actor, link.code, "Посев в Канале N");
+    expect(view).toMatchObject({ code: link.code, title: "Посев в Канале N", campaign: "oct", source: "tgads", autoKey: "src-tgads_cmp-oct" });
+    expect(audits).toEqual([{ actorAccountId: "a1", action: "links.rename", target: link.code, before: { title: null }, after: { title: "Посев в Канале N" } }]);
+
+    await recording.rename(actor, link.code, "Другое название");
+    expect(audits.at(-1)).toMatchObject({ action: "links.rename", before: { title: "Посев в Канале N" }, after: { title: "Другое название" } });
+  });
+
+  it("rename: пустая строка и null сбрасывают название; повтор того же — без записи в аудит", async () => {
+    const link = autoLink();
+    await recording.rename(actor, link.code, "Название");
+    audits = [];
+    expect((await recording.rename(actor, link.code, ""))?.title).toBeNull();
+    expect(audits).toHaveLength(1);
+    expect((await recording.rename(actor, link.code, null))?.title).toBeNull();
+    expect(audits).toHaveLength(1);
+    expect(repository.links.get(link.code)?.title).toBeNull();
+  });
+
+  it("rename и setHidden у ссылки, заведённой руками, — ошибка валидации, ничего не записано, аудита нет", async () => {
+    const link = await manualLink();
+    audits = [];
+    await expect(recording.rename(actor, link.code, "Новое")).rejects.toThrow(ValidationError);
+    await expect(recording.rename(actor, link.code, "Новое")).rejects.toThrow("только источники, заведённые автоматически");
+    await expect(recording.setHidden(actor, link.code, true)).rejects.toThrow(ValidationError);
+    expect(audits).toEqual([]);
+    expect(repository.links.get(link.code)).toMatchObject({ title: null, hiddenAt: null });
+  });
+
+  it("rename и setHidden несуществующей ссылки — null, аудита нет", async () => {
+    expect(await recording.rename(actor, "NoSuchCode9", "Имя")).toBeNull();
+    expect(await recording.setHidden(actor, "NoSuchCode9", true)).toBeNull();
+    expect(audits).toEqual([]);
+  });
+
+  it("setHidden: true ставит hidden_at, false снимает; повтор того же — без второй записи аудита", async () => {
+    const link = autoLink();
+    const hidden = await recording.setHidden(actor, link.code, true);
+    expect(hidden?.hiddenAt).toBeInstanceOf(Date);
+    expect(audits).toEqual([{ actorAccountId: "a1", action: "links.hide", target: link.code, before: { hidden: false }, after: { hidden: true } }]);
+
+    await recording.setHidden(actor, link.code, true);
+    expect(audits).toHaveLength(1);
+
+    const shown = await recording.setHidden(actor, link.code, false);
+    expect(shown?.hiddenAt).toBeNull();
+    expect(audits.at(-1)).toEqual({ actorAccountId: "a1", action: "links.unhide", target: link.code, before: { hidden: true }, after: { hidden: false } });
+    await recording.setHidden(actor, link.code, false);
+    expect(audits).toHaveLength(2);
+  });
+
+  it("скрытый источник остаётся в списке со своим счётом: фильтр — дело панели", async () => {
+    const link = autoLink();
+    await recording.setHidden(actor, link.code, true);
+    const rows = await recording.list(actor);
+    expect(rows.map((row) => [row.code, row.hiddenAt !== null])).toEqual([[link.code, true]]);
+  });
+
+  it("без права links.manage — отказ у rename, setHidden и unknownKeys, ничего не меняется", async () => {
+    const link = autoLink();
+    const denied = new LinksService(config(), repository, telegramLinks(), deny, autoSources);
+    await expect(denied.rename(actor, link.code, "Имя")).rejects.toThrow("нет права");
+    await expect(denied.setHidden(actor, link.code, true)).rejects.toThrow("нет права");
+    await expect(denied.unknownKeys(actor)).rejects.toThrow("нет права");
+    expect(repository.links.get(link.code)).toMatchObject({ title: null, hiddenAt: null });
+  });
+
+  it("unknownKeys: по убыванию «последнего раза», не больше потолка; пустая сводка — пустой список", async () => {
+    expect(await recording.unknownKeys(actor)).toEqual({ keys: [], limit: UNKNOWN_KEYS_MAX });
+    autoSources.keys.push(
+      { key: "utm", hits: 14, firstAt: new Date("2026-10-01T10:00:00Z"), lastAt: new Date("2026-10-27T21:40:00Z") },
+      { key: "ref", hits: 2, firstAt: new Date("2026-10-10T10:00:00Z"), lastAt: new Date("2026-10-28T09:00:00Z") },
+    );
+    const { keys, limit } = await recording.unknownKeys(actor);
+    expect(keys.map((row) => [row.key, row.hits])).toEqual([["ref", 2], ["utm", 14]]);
+    expect(limit).toBe(200);
+
+    for (let index = 0; index < 250; index++) autoSources.keys.push({ key: `k${String(index)}`, hits: 1, firstAt: new Date(index), lastAt: new Date(index) });
+    expect((await recording.unknownKeys(actor)).keys).toHaveLength(UNKNOWN_KEYS_MAX);
+  });
+
+  it("панель: PATCH display меняет название и скрытие одним запросом; ответ — вид ссылки", async () => {
+    const link = autoLink();
+    const answer = (await panel().display(request, link.code, { title: "  Посев в Канале N  ", hidden: true })).data;
+    expect(answer).toMatchObject({ code: link.code, title: "Посев в Канале N", campaign: "oct" });
+    expect(answer.hiddenAt).not.toBeNull();
+    expect(audits.map((entry) => entry.action)).toEqual(["links.rename", "links.hide"]);
+  });
+
+  it("панель: PATCH display — пустое тело, название из 81 знака, управляющие знаки, лишнее поле — ошибка границы", async () => {
+    const link = autoLink();
+    const panelled = panel();
+    await expect(panelled.display(request, link.code, {})).rejects.toThrow(ValidationError);
+    await expect(panelled.display(request, link.code, { title: "я".repeat(81) })).rejects.toThrow(ValidationError);
+    await expect(panelled.display(request, link.code, { title: "Имя\u0007с звонком" })).rejects.toThrow(ValidationError);
+    await expect(panelled.display(request, link.code, { hidden: "да" })).rejects.toThrow(ValidationError);
+    await expect(panelled.display(request, link.code, { title: "Имя", campaign: "other" })).rejects.toThrow(ValidationError);
+    expect((await panelled.display(request, link.code, { title: "я".repeat(80) })).data.title).toBe("я".repeat(80));
+    expect((await panelled.display(request, link.code, { title: "   " })).data.title).toBeNull();
+    expect((await panelled.display(request, link.code, { title: null })).data.title).toBeNull();
+    expect(repository.links.get(link.code)).toMatchObject({ campaign: "oct", source: "tgads" });
+  });
+
+  it("панель: PATCH display — ссылки с таким кодом нет и код не того вида — 404, ручная ссылка — 400", async () => {
+    const panelled = panel();
+    await expect(panelled.display(request, "NoSuchCode9", { hidden: true })).rejects.toThrow(LinkNotFoundError);
+    await expect(panelled.display(request, "../etc", { hidden: true })).rejects.toThrow(LinkNotFoundError);
+    const manual = await manualLink();
+    await expect(panelled.display(request, manual.code, { title: "Имя" })).rejects.toThrow(ValidationError);
+  });
+
+  it("панель: GET unknown-keys — ключи и потолок; список ссылок несёт auto, title и hiddenAt", async () => {
+    autoSources.keys.push({ key: "utm", hits: 14, firstAt: new Date("2026-10-01T10:00:00Z"), lastAt: new Date("2026-10-27T21:40:00Z") });
+    const panelled = panel();
+    expect((await panelled.unknownKeys(request)).data).toEqual({ keys: autoSources.keys, limit: 200 });
+
+    const link = autoLink();
+    await panelled.display(request, link.code, { title: "Посев" });
+    const row = (await panelled.list(request, {})).data.links.find((candidate) => candidate.code === link.code);
+    expect(row).toMatchObject({ auto: true, autoKey: "src-tgads_cmp-oct", title: "Посев", hiddenAt: null });
+  });
+});
+
 describe("ссылки партнёра", () => {
   const actor = { accountId: "a1", platform: "telegram" as const, platformUserId: "1" };
   const request = { account: actor };
@@ -360,7 +563,7 @@ describe("ссылки партнёра", () => {
         audits.push(entry);
       },
     } as unknown as RolesService;
-    recording = new LinksService(config(), repository, telegramLinks(), roles);
+    recording = new LinksService(config(), repository, telegramLinks(), roles, autoSources);
   });
 
   function panel(links: LinksService = service): AdminLinksController {
@@ -417,7 +620,7 @@ describe("ссылки партнёра", () => {
   });
 
   it("список видят только с правом links.manage — и с фильтром тоже", async () => {
-    const guarded = new LinksService(config(), repository, telegramLinks(), deny);
+    const guarded = new LinksService(config(), repository, telegramLinks(), deny, autoSources);
     await expect(guarded.list(actor, { partnerId })).rejects.toThrow("нет права");
   });
 
@@ -626,7 +829,7 @@ describe("HTTP /r/:code", () => {
     expect(page.body).toMatch(/tg:\/\/resolve\?domain=rubezh_bot&amp;start=c-/);
 
     // Нет адаптера с диплинками — переход как раньше.
-    const bare = new LinksService(config(), repository, new AppLinks([{ platform: "telegram", launch: (param) => `https://t.me/rubezh_bot?startapp=${param}`, chat: (param) => `https://t.me/rubezh_bot?start=${param}` }]), allow);
+    const bare = new LinksService(config(), repository, new AppLinks([{ platform: "telegram", launch: (param) => `https://t.me/rubezh_bot?startapp=${param}`, chat: (param) => `https://t.me/rubezh_bot?start=${param}` }]), allow, autoSources);
     const visit = await bare.visit(chat.code, visitor());
     expect(visit).toMatchObject({ kind: "redirect", deep: null });
   });

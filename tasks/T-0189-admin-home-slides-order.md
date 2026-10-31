@@ -3,8 +3,8 @@ id: T-0189
 title: Порядок слайдов главной перетаскиванием в панели
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0167]
@@ -29,6 +29,7 @@ shared:
   - apps/admin/src/api/audit.ts
   - apps/admin/src/ui/help.ts
   - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

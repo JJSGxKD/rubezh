@@ -100,6 +100,10 @@ export const PERMISSIONS = [
   // Смотреть журнал запросов сервера (Р92): куда он ходит и что к нему
   // приходит — без игроков, но с хостами и путями внешних сервисов
   "requests.view",
+  // Прокси для исходящих запросов (Р91, T-0065): список видит и администратор, а завести,
+  // изменить или проверить прокси может только владелец — через прокси уходят запросы с ключами
+  "proxies.view",
+  "proxies.edit",
   "data.export",
   // Инструменты команды в клиенте: режим разработчика, витрина, лаборатория
   "tools.dev",
@@ -140,6 +144,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   // Операционка без бухгалтерии и ролей: игроки, реклама, флаги, диагностика,
   // одобрение рассылок и выгрузки.
   admin: [
+    // выдаёт и снимает роли ниже своей (`role-levels.ts`, T-0216)
+    "roles.assign",
     "content.view",
     "sku.price.view",
     "analytics.gameplay.view",
@@ -171,6 +177,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "secrets.view",
     "diagnostics.view",
     "requests.view",
+    "proxies.view",
     "data.export",
     "tools.dev",
     "names.edit",
