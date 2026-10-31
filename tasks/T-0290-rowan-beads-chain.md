@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/weapons/chain.ts
   - packages/core-game/test/chain-weapon.test.ts
 shared:
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -106,6 +107,9 @@ batch: 6
 2. **`weapons/chain.ts`**, поля `chainRadius`, `bounces`, реестр.
 3. **Облик и звук.**
 4. **Данные** — Бусы, «Ожерелье», открытие, тексты, значок.
+   Кадры снаряда готовы (31.10.2026, пак `atlas-r157`): `fx/proj_rowan_beads0`, у «Ожерелья» `fx/proj_necklace0`, перескок цепи — `fx/chain_rowan0…1`, рендер растягивает его между врагами. Пак
+   движок подключает строкой `art-r157` в `ATLASES`, если её ещё нет
+   (`render/art-atlas.ts`).
 5. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 6. **Документы:**
    - `CLAUDE.md` — строка `chain` в таблице поведений;
