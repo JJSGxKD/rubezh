@@ -206,12 +206,16 @@ function skinsBoard() {
   HERO_SKINS.forEach((skin, i) => {
     const x = 28 + (i % perRow) * cellW;
     const y = 52 + Math.floor(i / perRow) * rowH;
-    const draw = (state, k) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${HERO_STATES[state][k]()}</svg>`);
-    items.push({ svg: draw("idle", 0), x, y, size: 150 });
-    items.push({ svg: draw("walk", 1), x: x + 118, y: y + 40, size: 110 });
+    // Кадр с запасом (`pad`) — как в атласе: голова архетипа не срезана, тело того же размера.
+    const pad = skin.pad ?? 1;
+    const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+    const draw = (state, k) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${HERO_STATES[state][k]()}</svg>`);
+    const at = (cx, cy, size) => ({ x: cx - (size * (pad - 1)) / 2, y: cy - (size * (pad - 1)) / 2, size: size * pad });
+    items.push({ svg: draw("idle", 0), ...at(x, y, 150) });
+    items.push({ svg: draw("walk", 1), ...at(x + 118, y + 40, 110) });
     const game = gameSize(10, 2.6) / 2;
     items.push({ svg: enemySvg(rat, 0, 0), x: x + 40, y: y + 170, size: gameSize(rat.radius) / 2 });
-    items.push({ svg: draw("walk", 1), x: x + 70, y: y + 162, size: game });
+    items.push({ svg: draw("walk", 1), ...at(x + 70, y + 162, game) });
     items.push({ svg: enemySvg(rat, 1, 0.5), x: x + 104, y: y + 174, size: gameSize(rat.radius) / 2 });
     items.push({ text: skin.name, x: x + 140, y: y + 178, size: 16, bold: true });
     items.push({ text: skin.rarity === undefined ? (skin.source === undefined ? "окрас" : `окрас · ${skin.source}`) : `${skin.rarity} · ${skin.source}`, x: x + 140, y: y + 198, size: 12 });

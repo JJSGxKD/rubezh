@@ -268,8 +268,10 @@ export const HERO_SKINS = [
   { id: "pine_wood", name: "Хранитель · бор", source: "пасс", palette: { cloak: "#5d7f58", cloakShade: "#46653f", cloakDeep: "#2e452b", scarf: "#e8c25a", scarfShade: "#b8962e", ward: "#b8ecff", wardLight: "#ffffff", staff: "#4a3a2a", boots: "#22301f" } },
   { id: "maple", name: "Хранитель · клён", source: "пасс · VIP", palette: { cloak: "#8e3b2e", cloakShade: "#6b2a21", cloakDeep: "#471a14", edge: "#ffcf9a", eyes: "#1d1c31", scarf: "#ffd15c", scarfShade: "#c9a033", ward: "#ffb340", wardLight: "#fff1c8", staff: "#3a2418", boots: "#2a1410" } },
   { id: "pine_mist", name: "Хранитель · туман бора", source: "пасс · VIP", palette: { cloak: "#24484a", cloakShade: "#18393b", cloakDeep: "#0f2628", edge: "#9ff0e0", eyes: "#1d1c31", scarf: "#ffb340", scarfShade: "#c27f1c", ward: "#9ff0e0", wardLight: "#ffffff", staff: "#1f2f2c", boots: "#0f1a1a" } },
+  // `pad` у архетипов — запас клетки кадра: шлем, венец, бубенцы и рожки
+  // выше общей позы, и клетка −50…50 их срезала (замер `src/frame-fit.mjs`).
   {
-    id: "vityaz", name: "Витязь", rarity: "rare", source: "уровень аккаунта",
+    id: "vityaz", name: "Витязь", pad: 1.17, rarity: "rare", source: "уровень аккаунта",
     palette: { head: "helm", prop: "spear", cloak: "#a8463a", cloakShade: "#7a2c24", cloakDeep: "#521b16", scarf: "#d9b45a", scarfShade: "#a07e2e", mail: "#9aa2bd", mailShade: "#6c7391", helm: "#d5dbea", helmShade: "#9199b5", trim: "#e0bb5e", blade: "#eef3fb", bladeShade: "#aab3c9", staff: "#6b4a32", boots: "#3b2a24" },
   },
   {
@@ -277,29 +279,29 @@ export const HERO_SKINS = [
     palette: { head: "wreath", prop: "lantern", cloak: "#5e8f62", cloakShade: "#3e6a43", cloakDeep: "#2a4a2e", scarf: "#f2d16b", scarfShade: "#c2a03e", hair: "#b8642e", flower: "#ff7a9c", flowerAlt: "#fff1a6", flowerHeart: "#c9652a", leaf: "#7bc96f", ward: "#ffcf6a", wardLight: "#fff6d8", staff: "#6e4c33", lanternFrame: "#4a3a2c", boots: "#3a3022" },
   },
   {
-    id: "ohotnitsa", name: "Охотница", rarity: "epic", source: "достижение",
+    id: "ohotnitsa", name: "Охотница", pad: 1.11, rarity: "epic", source: "достижение",
     palette: { head: "pelt", prop: "bow", cloak: "#8a6a4a", cloakShade: "#664c33", cloakDeep: "#47331f", scarf: "#d0563d", scarfShade: "#9c3a26", pelt: "#a6aec0", peltShade: "#6f778c", staff: "#7a5236", boots: "#2f2a26" },
   },
   {
-    id: "knyaz", name: "Князь", rarity: "legendary", source: "VIP",
+    id: "knyaz", name: "Князь", pad: 1.13, rarity: "legendary", source: "VIP",
     palette: { head: "cap", prop: "sword", cloak: "#3456b8", cloakShade: "#243d88", cloakDeep: "#17285c", scarf: "#ffd15c", scarfShade: "#c9a033", capTop: "#c63c3c", capShade: "#902828", fur: "#f1e9d8", furDot: "#2a2238", trim: "#ffd15c", blade: "#f1f5ff", bladeShade: "#b7c0da", ward: "#5ce1ff", staff: "#5a3d2a", boots: "#2a2238" },
   },
   {
-    id: "skomoroh", name: "Скоморох", rarity: "epic", source: "Ярмарка",
+    id: "skomoroh", name: "Скоморох", pad: 1.15, rarity: "epic", source: "Ярмарка",
     palette: { head: "jester", prop: "ribbons", cloak: "#e0573f", cloakShade: "#b23c2a", cloakDeep: "#7c2618", scarf: "#46d9c6", scarfShade: "#2a9f90", capA: "#ffd15c", capB: "#46d9c6", trim: "#ffb22e", staff: "#7a5236", boots: "#3a2a4a" },
   },
   // Окрасы Скомороха — та же голова и ленты, ярмарочные цвета.
   {
-    id: "skomoroh_night", name: "Скоморох · ночь", rarity: "epic", source: "Ярмарка",
+    id: "skomoroh_night", name: "Скоморох · ночь", pad: 1.15, rarity: "epic", source: "Ярмарка",
     palette: { head: "jester", prop: "ribbons", cloak: "#2f3f8f", cloakShade: "#22306e", cloakDeep: "#172150", scarf: "#ffd15c", scarfShade: "#c9a033", capA: "#8a5cff", capB: "#ffd15c", trim: "#ffd15c", staff: "#4a3a2c", boots: "#1a1530" },
   },
   {
-    id: "skomoroh_maslenitsa", name: "Скоморох · Масленица", rarity: "epic", source: "Ярмарка",
+    id: "skomoroh_maslenitsa", name: "Скоморох · Масленица", pad: 1.15, rarity: "epic", source: "Ярмарка",
     palette: { head: "jester", prop: "ribbons", cloak: "#f2b632", cloakShade: "#c98a1c", cloakDeep: "#8f5f10", scarf: "#d23a3a", scarfShade: "#8f2323", capA: "#d23a3a", capB: "#46d9c6", trim: "#fff1c8", staff: "#7a5236", boots: "#6b2a1a" },
   },
   // Облик сезона — архетип на месяц пасса: своя голова и предмет на общей позе, как у остальных.
   {
-    id: "listven", name: "Листвень", rarity: "legendary", source: "пасс · VIP",
+    id: "listven", name: "Листвень", pad: 1.22, rarity: "legendary", source: "пасс · VIP",
     palette: { head: "leafhood", prop: "branch", cloak: "#8a6a3a", cloakShade: "#6a4f2a", cloakDeep: "#46341c", scarf: "#e8c25a", scarfShade: "#b8962e", leafA: "#e0902e", leafB: "#c4482a", twig: "#5a4026", ward: "#ffb340", wardLight: "#fff1c8", staff: "#5a4026", boots: "#2f2418" },
   },
   {

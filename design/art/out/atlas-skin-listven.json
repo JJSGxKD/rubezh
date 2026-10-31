@@ -1,123 +1,123 @@
 {
  "frames": {
-  "hero-listven/idle0": {
+  "hero-listven/walk1": {
    "frame": {
     "x": 2,
     "y": 2,
-    "w": 84,
-    "h": 118
+    "w": 91,
+    "h": 132
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 84,
-    "h": 118
+    "x": 35,
+    "y": 1,
+    "w": 91,
+    "h": 132
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-listven/idle1": {
-   "frame": {
-    "x": 88,
-    "y": 2,
-    "w": 87,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 24,
-    "y": 0,
-    "w": 87,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-listven/walk0": {
-   "frame": {
-    "x": 177,
-    "y": 2,
-    "w": 84,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 84,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-listven/walk1": {
-   "frame": {
-    "x": 263,
-    "y": 2,
-    "w": 89,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 22,
-    "y": 0,
-    "w": 89,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-listven/walk2": {
-   "frame": {
-    "x": 354,
-    "y": 2,
-    "w": 84,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 84,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 159,
+    "h": 159
    }
   },
   "hero-listven/walk3": {
    "frame": {
-    "x": 440,
+    "x": 95,
     "y": 2,
-    "w": 81,
-    "h": 118
+    "w": 82,
+    "h": 132
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 30,
-    "y": 0,
-    "w": 81,
-    "h": 118
+    "x": 44,
+    "y": 1,
+    "w": 82,
+    "h": 132
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 159,
+    "h": 159
+   }
+  },
+  "hero-listven/idle0": {
+   "frame": {
+    "x": 179,
+    "y": 2,
+    "w": 85,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 41,
+    "y": 5,
+    "w": 85,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 159,
+    "h": 159
+   }
+  },
+  "hero-listven/walk0": {
+   "frame": {
+    "x": 266,
+    "y": 2,
+    "w": 85,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 41,
+    "y": 5,
+    "w": 85,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 159,
+    "h": 159
+   }
+  },
+  "hero-listven/walk2": {
+   "frame": {
+    "x": 353,
+    "y": 2,
+    "w": 85,
+    "h": 128
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 41,
+    "y": 5,
+    "w": 85,
+    "h": 128
+   },
+   "sourceSize": {
+    "w": 159,
+    "h": 159
+   }
+  },
+  "hero-listven/idle1": {
+   "frame": {
+    "x": 440,
+    "y": 2,
+    "w": 88,
+    "h": 127
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 38,
+    "y": 6,
+    "w": 88,
+    "h": 127
+   },
+   "sourceSize": {
+    "w": 159,
+    "h": 159
    }
   }
  },
@@ -126,8 +126,8 @@
   "image": "atlas-skin-listven.png",
   "format": "RGBA8888",
   "size": {
-   "w": 524,
-   "h": 124
+   "w": 532,
+   "h": 136
   },
   "scale": "2.5"
  }

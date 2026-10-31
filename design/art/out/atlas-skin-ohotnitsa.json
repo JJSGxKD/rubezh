@@ -1,123 +1,123 @@
 {
  "frames": {
-  "hero-ohotnitsa/idle1": {
+  "hero-ohotnitsa/walk1": {
    "frame": {
     "x": 2,
     "y": 2,
-    "w": 83,
-    "h": 120
+    "w": 86,
+    "h": 125
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 24,
-    "y": 0,
-    "w": 83,
-    "h": 120
+    "x": 28,
+    "y": 1,
+    "w": 86,
+    "h": 125
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-ohotnitsa/idle0": {
-   "frame": {
-    "x": 87,
-    "y": 2,
-    "w": 80,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 80,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-ohotnitsa/walk0": {
-   "frame": {
-    "x": 169,
-    "y": 2,
-    "w": 80,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 80,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-ohotnitsa/walk1": {
-   "frame": {
-    "x": 251,
-    "y": 2,
-    "w": 85,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 22,
-    "y": 0,
-    "w": 85,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-ohotnitsa/walk2": {
-   "frame": {
-    "x": 338,
-    "y": 2,
-    "w": 80,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 80,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 145,
+    "h": 145
    }
   },
   "hero-ohotnitsa/walk3": {
    "frame": {
-    "x": 420,
+    "x": 90,
     "y": 2,
     "w": 74,
-    "h": 118
+    "h": 125
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 33,
-    "y": 0,
+    "x": 40,
+    "y": 1,
     "w": 74,
-    "h": 118
+    "h": 125
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 145,
+    "h": 145
+   }
+  },
+  "hero-ohotnitsa/idle0": {
+   "frame": {
+    "x": 166,
+    "y": 2,
+    "w": 80,
+    "h": 122
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 80,
+    "h": 122
+   },
+   "sourceSize": {
+    "w": 145,
+    "h": 145
+   }
+  },
+  "hero-ohotnitsa/idle1": {
+   "frame": {
+    "x": 248,
+    "y": 2,
+    "w": 83,
+    "h": 122
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 31,
+    "y": 6,
+    "w": 83,
+    "h": 122
+   },
+   "sourceSize": {
+    "w": 145,
+    "h": 145
+   }
+  },
+  "hero-ohotnitsa/walk0": {
+   "frame": {
+    "x": 333,
+    "y": 2,
+    "w": 80,
+    "h": 122
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 80,
+    "h": 122
+   },
+   "sourceSize": {
+    "w": 145,
+    "h": 145
+   }
+  },
+  "hero-ohotnitsa/walk2": {
+   "frame": {
+    "x": 415,
+    "y": 2,
+    "w": 80,
+    "h": 122
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 80,
+    "h": 122
+   },
+   "sourceSize": {
+    "w": 145,
+    "h": 145
    }
   }
  },
@@ -126,8 +126,8 @@
   "image": "atlas-skin-ohotnitsa.png",
   "format": "RGBA8888",
   "size": {
-   "w": 496,
-   "h": 124
+   "w": 500,
+   "h": 132
   },
   "scale": "2.5"
  }
