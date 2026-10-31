@@ -71,6 +71,17 @@ export const XP_CRYSTAL_GLYPH: Glyph = [["f", "M12 2.5l6.5 9.5-6.5 9.5L5.5 12z"]
 /** Лечение на карточке уровня. */
 export const HEAL_GLYPH: Glyph = [["f", "M12 20.5S3.5 15.5 3.5 9.2A4.4 4.4 0 0 1 12 7a4.4 4.4 0 0 1 8.5 2.2c0 6.3-8.5 11.3-8.5 11.3z"], ["s", "M12 10v6M9 13h6"]];
 
+/**
+ * Постройки Заставы (Р154, T-0270) — по id строки `outpost`: кузня — молот над
+ * наковальней, капище — резной идол в шапке, сторожевая башня — вышка с
+ * дозорной площадкой.
+ */
+export const OUTPOST_GLYPHS: Readonly<Record<"forge" | "shrine" | "tower", Glyph>> = {
+  forge: [["f", "M4.5 13h11a3 3 0 0 1-3 3h-1v2.5h2V21H6.5v-2.5h2V16h-1a3 3 0 0 1-3-3z"], ["s3", "M13.5 10.5l5.5-5.5"], ["f", "M15.5 2.5l5 5-2.2 2.2-5-5z"]],
+  shrine: [["f", "M9 6.5h6v14H9z"], ["d", "M8.3 6.8a3.7 3.4 0 0 1 7.4 0z"], ["d", "M10.1 9.6h1.4V11h-1.4zM12.5 9.6h1.4V11h-1.4z"], ["s", "M10.5 14.5h3M3.5 21h17"]],
+  tower: [["f", "M9 21V10.5h6V21z"], ["f", "M6.5 10.5h11V7.5h-11z"], ["f", "M6 7.5l6-5 6 5z"], ["d", "M11.1 13h1.8v3h-1.8z"], ["s", "M5 21h14"]],
+};
+
 export function GameGlyph(props: { glyph: Glyph; size: number; className?: string | undefined }): ReactNode {
   return (
     <svg width={props.size} height={props.size} viewBox="0 0 24 24" aria-hidden="true" className={props.className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
