@@ -141,6 +141,7 @@ const ACTION_TITLES: Record<string, string> = {
   "promo.resume": "Промокод снова действует",
   "promo.remove": "Удаление промокода",
   "ads.network.update": "Правка рекламной сети",
+  "ads.networks.reorder": "Порядок рекламных сетей",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
   "ads.test": "Проверка рекламы командой",

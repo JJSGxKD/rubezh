@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, Query, Req, UseGuards } from "@nestjs/comm
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
-import { FUNNEL_DAYS, AdsCatalogService, blockEditSchema, networkEditSchema, type AdNetworkView, type AdsCatalogView } from "../ads/ads-catalog.service.js";
+import { FUNNEL_DAYS, AdsCatalogService, blockEditSchema, networkEditSchema, networkOrderSchema, type AdNetworkView, type AdsCatalogView } from "../ads/ads-catalog.service.js";
 import type { AdBlockDef } from "../ads/ads-catalog.repository.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
@@ -38,6 +38,14 @@ export class AdminAdsController {
   async saveNetwork(@Req() request: unknown, @Body() body: unknown): Promise<{ data: AdNetworkView }> {
     const actor = await this.mutating(request);
     return { data: await this.catalog.saveNetwork(actor, parse(() => networkEditSchema.parse(body), "Некорректная сеть")) };
+  }
+
+  @Post("networks/order")
+  @RequirePermission("ads.edit")
+  async reorderNetworks(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { order: string[] } }> {
+    const actor = await this.mutating(request);
+    const { ids } = parse(() => networkOrderSchema.parse(body), "Некорректный порядок сетей");
+    return { data: await this.catalog.reorderNetworks(actor, ids) };
   }
 
   @Post("blocks")

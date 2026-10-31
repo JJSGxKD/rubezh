@@ -34,6 +34,7 @@ describe("журнал аудита", () => {
 
   it("проверка рекламы командой: название и объект «сеть · формат» (T-0333)", () => {
     expect(actionTitle("ads.test")).toBe("Проверка рекламы командой");
+    expect(actionTitle("ads.networks.reorder")).toBe("Порядок рекламных сетей");
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
   });
 
