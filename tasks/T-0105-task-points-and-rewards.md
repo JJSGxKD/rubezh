@@ -3,8 +3,8 @@ id: T-0105
 title: Очки заданий: полоса дня и недели и награды за ступени очков
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-14 / sonnet-5.5 / extra
 author: claude-lead2-16
 size: M
 depends_on:
@@ -33,6 +33,10 @@ zones:
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/state/analytics.ts
   - docs/21-diagrams.md

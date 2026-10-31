@@ -95,6 +95,7 @@ erDiagram
     ACCOUNT ||--o{ WHEEL_SPIN : "крутки колеса"
     ACCOUNT ||--o{ TASK_PROGRESS : "прогресс заданий по срокам"
     TASK_DEF ||--o{ TASK_PROGRESS : "цель каталога"
+    ACCOUNT ||--o{ TASK_POINTS_CLAIM : "забранные ступени очков заданий"
     TASK_DEF ||--o{ TASK_PARTICIPANT : "игроки партнёрской цели"
     ACCOUNT ||--o{ TASK_PARTICIPANT : "переходы и выполнения партнёрских целей"
     MEDIA_IMAGE |o--o{ TASK_DEF : "картинка 1:1 партнёрской цели"
@@ -734,6 +735,14 @@ erDiagram
         datetime updated_at
     }
 
+    TASK_POINTS_CLAIM {
+        uuid account_id PK,FK
+        enum period PK "daily или weekly (CHECK)"
+        date period_start PK "начало суток или понедельник по Москве: прошлый срок не забирается"
+        int points PK "порог ступени, больше нуля (CHECK)"
+        datetime claimed_at
+    }
+
     TASK_RUN {
         string run_id PK "забег засчитан заданиям однажды"
         uuid account_id FK
@@ -1168,6 +1177,16 @@ erDiagram
   уникальный ключ, сессия показа `ad_session_id`: одна сессия — одна крутка,
   а кулдаун держит забор сессии в модуле рекламы. `granted_at` — кошелёк
   начислил ключом крутки; пусто — следующая крутка дожмёт.
+- **`TASK_POINTS_CLAIM` — забранные ступени очков заданий**
+  (`39-retention-mechanics.md` П2, `35-stage4-plan.md` Р102, T-0105): строка
+  на аккаунт, срок и порог ступени. Сами очки не хранятся: полоса дня и недели
+  считается запросом по выполненным строкам `TASK_PROGRESS` и `task_def.pass_points`
+  каталога сейчас, поэтому правка очков в панели пересчитывает набранное в
+  сроке. Забор — начисление кошельком ключом
+  `task_points:{аккаунт}:{период}:{начало срока}:{порог}:{ресурс}` с причиной
+  `task_reward`, потом `INSERT … ON CONFLICT DO NOTHING` в эту таблицу; ключ
+  срока не даёт забрать прошлые сутки и неделю. Вайп стирает таблицу вместе
+  с заданиями.
 - **`TASK_DEF`, `TASK_PROGRESS`, `TASK_RUN` — задания и достижения**
   (`35-stage4-plan.md`, Р52, WP13): каталог в базе правится из панели без
   релиза, вид цели — строкой, новый вид приходит кодом. Прогресс — строка на
@@ -2187,7 +2206,7 @@ flowchart LR
     WHEEL -. "уровень аккаунта" .-> PROG
     BADGES -. "крутка ждёт" .-> WHEEL
     CADDY -- "/api/v1/tasks" --> TASKS
-    TASKS -- "task_def, task_progress, task_run, task_participant" --> PG
+    TASKS -- "task_def, task_progress, task_points_claim, task_run, task_participant" --> PG
     CADDY -- "/api/v1/media/хэш.webp" --> MEDIA
     MEDIA -- "media_image" --> PG
     ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
