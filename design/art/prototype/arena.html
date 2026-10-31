@@ -42,7 +42,7 @@ const opt = {
   fx: Q.get("fx") !== "0",
   patches: Q.get("patches") !== "0",
   ground: Q.get("ground") !== "0",
-  /** облик героя: keeper (по умолчанию), herbalist, frost, gilded — пак skins */
+  /** облик героя: keeper (по умолчанию) или любой id из HERO_SKINS (hero.mjs) — пак skins */
   skin: Q.get("skin") ?? "keeper",
   seed: Number(Q.get("seed") ?? 7),
   stage: Number(Q.get("stage") ?? -1),
