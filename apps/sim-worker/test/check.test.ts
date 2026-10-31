@@ -25,7 +25,7 @@ function fakeRun(tickMs = 0) {
   const simulate = (options: { seed: number; skill: string }): BalanceRunResult => {
     calls.push({ seed: options.seed, skill: options.skill });
     clock.at += tickMs;
-    return { seed: options.seed, skill: "dodging", startingWeaponId: "w", survivalSec: 100 + options.seed, level: 3, wave: 2, enemiesKilled: 50, xpCollected: 10, peakEnemies: 9, firstLevelUpSec: 10, chestsFound: 1, chestsOpened: 1, evolutions: 0, timedOut: false };
+    return { seed: options.seed, skill: "dodging", startingWeaponId: "w", survivalSec: 100 + options.seed, level: 3, wave: 2, enemiesKilled: 50, xpCollected: 10, peakEnemies: 9, firstLevelUpSec: 10, chestsFound: 1, chestsOpened: 1, evolutions: 0, damageTakenByMinute: [], timedOut: false };
   };
   return { clock, calls, simulate: simulate as never };
 }

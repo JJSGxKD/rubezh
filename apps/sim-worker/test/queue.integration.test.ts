@@ -27,7 +27,7 @@ const REDIS_URL = redisUrl();
 const SNAPSHOT: unknown = JSON.parse(JSON.stringify(CONTENT_SNAPSHOT));
 
 function fakeRun(seed: number): BalanceRunResult {
-  return { seed, skill: "dodging", startingWeaponId: "w", survivalSec: 100 + seed, level: 3, wave: 2, enemiesKilled: 50, xpCollected: 10, peakEnemies: 9, firstLevelUpSec: 10, chestsFound: 1, chestsOpened: 1, evolutions: 0, timedOut: false };
+  return { seed, skill: "dodging", startingWeaponId: "w", survivalSec: 100 + seed, level: 3, wave: 2, enemiesKilled: 50, xpCollected: 10, peakEnemies: 9, firstLevelUpSec: 10, chestsFound: 1, chestsOpened: 1, evolutions: 0, damageTakenByMinute: [], timedOut: false };
 }
 
 describe.skipIf(REDIS_URL === "")("очередь проверок на живом Redis", () => {
