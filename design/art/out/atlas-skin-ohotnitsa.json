@@ -1,0 +1,134 @@
+{
+ "frames": {
+  "hero-ohotnitsa/idle1": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 83,
+    "h": 120
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 0,
+    "w": 83,
+    "h": 120
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-ohotnitsa/idle0": {
+   "frame": {
+    "x": 87,
+    "y": 2,
+    "w": 80,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 80,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-ohotnitsa/walk0": {
+   "frame": {
+    "x": 169,
+    "y": 2,
+    "w": 80,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 80,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-ohotnitsa/walk1": {
+   "frame": {
+    "x": 251,
+    "y": 2,
+    "w": 85,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 0,
+    "w": 85,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-ohotnitsa/walk2": {
+   "frame": {
+    "x": 338,
+    "y": 2,
+    "w": 80,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 80,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-ohotnitsa/walk3": {
+   "frame": {
+    "x": 420,
+    "y": 2,
+    "w": 74,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 0,
+    "w": 74,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-skin-ohotnitsa.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 496,
+   "h": 124
+  },
+  "scale": "2.5"
+ }
+}

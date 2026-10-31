@@ -1,0 +1,134 @@
+{
+ "frames": {
+  "hero-vityaz/idle0": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 71,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 71,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vityaz/idle1": {
+   "frame": {
+    "x": 75,
+    "y": 2,
+    "w": 74,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 0,
+    "w": 74,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vityaz/walk0": {
+   "frame": {
+    "x": 151,
+    "y": 2,
+    "w": 71,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 71,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vityaz/walk1": {
+   "frame": {
+    "x": 224,
+    "y": 2,
+    "w": 76,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 0,
+    "w": 76,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vityaz/walk2": {
+   "frame": {
+    "x": 302,
+    "y": 2,
+    "w": 71,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 71,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vityaz/walk3": {
+   "frame": {
+    "x": 375,
+    "y": 2,
+    "w": 65,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 0,
+    "w": 65,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-skin-vityaz.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 444,
+   "h": 124
+  },
+  "scale": "2.5"
+ }
+}
