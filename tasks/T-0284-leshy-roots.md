@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/patterns/roots.ts
   - packages/core-game/test/roots-pattern.test.ts
 shared:
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
@@ -102,7 +103,12 @@ batch: 6
   - удар — короткая вспышка шипов по кругу (эффекты боя, выключатель
     `weaponEffects` её не прячет: это чтение боя).
 
-  Кадры арта — пункт 16 очереди.
+  Кадры арта готовы (31.10.2026): `leshy/s0/walk<k>` в паке `atlas-r157` — кора,
+  рога-ветви, борода мха, руки уходят в землю. Метка и удар корней —
+  следующим PR дизайнера (пункт 16 очереди).
+  Пак `atlas-r157` движок ещё не грузит: первая из задач T-0281…T-0285
+  добавляет в `ATLASES` (`render/art-atlas.ts`) строку `art-r157` по образцу
+  `art-late`, остальные её уже застают.
 - **Тексты:**
   - `enemy.leshy.name` — «Леший»;
   - гайдбук — «Корни из земли под тобой — выйди из круга до удара».

@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/patterns/blink.ts
   - packages/core-game/test/blink-pattern.test.ts
 shared:
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
@@ -97,6 +98,11 @@ batch: 6
     зелени;
   - `fading` — прозрачность к нулю;
   - метка — кольцо на земле тоном опасности, сужается к концу `telegraphSec`.
+  - в режиме арта — кадры `kikimora/s<ступень>/walk<k>` в паке `atlas-r157`
+    (готовы 31.10.2026); таяние — та же прозрачность поверх кадра.
+    Пак `atlas-r157` движок ещё не грузит: первая из задач T-0281…T-0285
+    добавляет в `ATLASES` (`render/art-atlas.ts`) строку `art-r157` по образцу
+    `art-late`, остальные её уже застают.
 - **Тексты:**
   - `enemy.kikimora.name` — «Кикимора»;
   - строка гайдбука по паттерну — «Исчезает и появляется рядом — следи за
