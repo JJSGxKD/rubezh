@@ -35,6 +35,9 @@ importers:
       '@bh/design-tokens':
         specifier: workspace:*
         version: link:../../packages/design-tokens
+      '@bh/promo-kit':
+        specifier: workspace:*
+        version: link:../../packages/promo-kit
       '@dnd-kit/core':
         specifier: 6.3.1
         version: 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
