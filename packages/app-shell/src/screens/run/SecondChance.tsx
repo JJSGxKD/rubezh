@@ -7,8 +7,10 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import { useAdContinue, type AdContinueStage } from "../../state/ad-continue";
 import { useContinuePurchase, type ContinueStage } from "../../state/continue-purchase";
+import { useGemContinue, type GemContinueStage } from "../../state/gem-continue";
 import { expectOffers, type ContinueOffer } from "../../state/second-chance-offers";
 import { AdContinue, AdContinueView } from "./AdContinue";
+import { GemContinue, GemContinueView } from "./GemContinue";
 import { PaidContinue, PaidContinueView } from "./PaidContinue";
 
 export interface SecondChanceProps {
@@ -25,6 +27,10 @@ export interface SecondChanceProps {
   adFor?: RunResult;
   /** Состояние рекламы для витрины компонентов. */
   adPreview?: AdContinueStage;
+  /** Забег, чей второй шанс можно взять за самоцветы. Нет — нет входа в аккаунт. */
+  gemsFor?: RunResult;
+  /** Состояние самоцветов для витрины компонентов. */
+  gemsPreview?: GemContinueStage;
   /**
    * `inline` — блок среди прочего (витрина, прежние места); `prominent` —
    * главное на экране шага второго шанса: подложка в тоне здоровья.
@@ -32,41 +38,76 @@ export interface SecondChanceProps {
   variant?: "inline" | "prominent";
 }
 
-/**
- * Какие способы продолжить видны. Отпал способ — его кнопка уходит; у VIP —
- * одна кнопка, а звёзды и ролик не предлагаются: платить за то, что даётся
- * бесплатно, незачем. Звёзды, когда купить нельзя, а ролик есть, тоже уходят.
- */
-export function visibleWays(input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null }): { ad: boolean; stars: boolean; vip: boolean } {
-  const { adStage, paidStage } = input;
-  const vip = adStage !== null && (adStage.kind === "ready" || adStage.kind === "watching") && adStage.pass;
-  const showAd = adStage !== null && adStage.kind !== "unavailable";
-  const stars = paidStage !== null && !vip && !(paidStage.kind === "unavailable" && showAd);
-  return { ad: showAd && !vip, stars, vip };
+/** Состояния проверок способов второго шанса; `null` — способа на экране нет. */
+export interface WayStages {
+  adStage: AdContinueStage | null;
+  paidStage: ContinueStage | null;
+  /** не задан — самоцветов нет, как в сборках до Р162 */
+  gemStage?: GemContinueStage | null;
+}
+
+export interface VisibleWays {
+  ad: boolean;
+  gems: boolean;
+  stars: boolean;
+  vip: boolean;
 }
 
 /**
- * Ответили ли проверки способов. Пока ролик (`idle`, `checking`) или звёзды
- * (`idle`, `loading`) спрашивают сервер, флаги `visibleWays` — догадка: ролик
- * «есть», VIP «нет». Способа нет вовсе (`null`) — спрашивать нечего, это тоже ответ.
+ * Какие способы продолжить видны. Отпал способ — его кнопка уходит; у VIP —
+ * одна кнопка, а звёзды, самоцветы и ролик не предлагаются: платить за то, что
+ * даётся бесплатно, незачем. Звёзды, когда купить нельзя, а есть ролик или
+ * самоцветы, тоже уходят.
  */
-export function waysAnswered(input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null }): boolean {
+export function visibleWays(input: WayStages): VisibleWays {
   const { adStage, paidStage } = input;
+  const gemStage = input.gemStage ?? null;
+  const vip = adStage !== null && (adStage.kind === "ready" || adStage.kind === "watching") && adStage.pass;
+  const showAd = adStage !== null && adStage.kind !== "unavailable";
+  const showGems = gemStage !== null && !vip && gemStage.kind !== "unavailable";
+  const stars = paidStage !== null && !vip && !(paidStage.kind === "unavailable" && (showAd || showGems));
+  return { ad: showAd && !vip, gems: showGems, stars, vip };
+}
+
+/**
+ * Порядок кнопок на экране: ролик, если он есть, — главная; нет ролика —
+ * главные самоцветы; звёзды — всегда последними. У VIP одна кнопка.
+ */
+export function wayOrder(ways: VisibleWays): ("ad" | "gems" | "stars" | "vip")[] {
+  if (ways.vip) return ["vip"];
+  const order: ("ad" | "gems" | "stars")[] = [];
+  if (ways.ad) order.push("ad");
+  if (ways.gems) order.push("gems");
+  if (ways.stars) order.push("stars");
+  return order;
+}
+
+/**
+ * Ответили ли проверки способов. Пока ролик (`idle`, `checking`), звёзды или
+ * самоцветы (`idle`, `loading`) спрашивают сервер, флаги `visibleWays` —
+ * догадка: ролик «есть», VIP «нет». Способа нет вовсе (`null`) — спрашивать
+ * нечего, это тоже ответ.
+ */
+export function waysAnswered(input: WayStages): boolean {
+  const { adStage, paidStage } = input;
+  const gemStage = input.gemStage ?? null;
   const adAsking = adStage !== null && (adStage.kind === "idle" || adStage.kind === "checking");
   const paidAsking = paidStage !== null && (paidStage.kind === "idle" || paidStage.kind === "loading");
-  return !adAsking && !paidAsking;
+  const gemAsking = gemStage !== null && (gemStage.kind === "idle" || gemStage.kind === "loading");
+  return !adAsking && !paidAsking && !gemAsking;
 }
 
 /** Тело события `continue_offered`. `null` — слать нечего: ответов ещё нет или предложить нечего. */
 export function continueOfferedPayload(
-  input: { adStage: AdContinueStage | null; paidStage: ContinueStage | null },
+  input: WayStages,
   survivalSec: number,
-): { ad: boolean; stars: boolean; vip: boolean; elapsedSec: number } | null {
+): { ad: boolean; gems: boolean; stars: boolean; vip: boolean; elapsedSec: number } | null {
   if (!waysAnswered(input)) return null;
   // Все существующие способы отпали (или их нет): шага у игрока нет, предлагать было нечего.
   const adGone = input.adStage === null || input.adStage.kind === "unavailable";
   const paidGone = input.paidStage === null || input.paidStage.kind === "unavailable";
-  if (adGone && paidGone) return null;
+  const gemGone = input.gemStage == null || input.gemStage.kind === "unavailable";
+  if (adGone && paidGone && gemGone) return null;
   return { ...visibleWays(input), elapsedSec: Math.round(survivalSec) };
 }
 
@@ -74,28 +115,31 @@ export function continueOfferedPayload(
  * Состояния способов продолжить: живые из сторов, у витрины — заданные
  * образцы. Нет способа — `null`.
  */
-export function useSecondChanceStages(props: SecondChanceProps): { adStage: AdContinueStage | null; paidStage: ContinueStage | null } {
+export function useSecondChanceStages(props: SecondChanceProps): { adStage: AdContinueStage | null; paidStage: ContinueStage | null; gemStage: GemContinueStage | null } {
   const starsStage = useContinuePurchase((state) => state.stage);
   const liveAdStage = useAdContinue((state) => state.stage);
+  const liveGemStage = useGemContinue((state) => state.stage);
   return {
     adStage: props.adPreview ?? (props.adFor === undefined ? null : liveAdStage),
     paidStage: props.paidPreview ?? (props.paidFor === undefined ? null : starsStage),
+    gemStage: props.gemsPreview ?? (props.gemsFor === undefined ? null : liveGemStage),
   };
 }
 
 /**
- * «Второй шанс» на экране смерти: продолжить забег за рекламу или звёзды —
- * все враги вокруг исчезают, здоровье восстанавливается
- * (docs/07-monetization-and-ads.md §8, docs/35-stage4-plan.md WP11).
+ * «Второй шанс» на экране смерти: продолжить забег за рекламу, самоцветы или
+ * звёзды — все враги вокруг исчезают, здоровье восстанавливается
+ * (docs/07-monetization-and-ads.md §8, docs/35-stage4-plan.md WP11, Р162).
  *
  * Видны только те способы, которыми продолжить можно: отпал способ — его
- * кнопка уходит, а вторая занимает всю ширину. У VIP — одна кнопка
- * «Продолжить с VIP»: платить звёздами за то, что даётся бесплатно, незачем.
- * Отпали оба — забег закрывается смертью (`second-chance-offers.ts`).
+ * кнопка уходит, а соседняя занимает всю ширину. Есть ролик — он главный,
+ * самоцветы и звёзды вторым рядом; ролика нет — главные самоцветы. У VIP —
+ * одна кнопка «Продолжить с VIP»: платить за то, что даётся бесплатно, незачем.
+ * Отпали все — забег закрывается смертью (`second-chance-offers.ts`).
  */
 export function SecondChance(props: SecondChanceProps = {}): ReactNode {
-  const live = props.paidFor !== undefined || props.adFor !== undefined;
-  const { adStage, paidStage } = useSecondChanceStages(props);
+  const live = props.paidFor !== undefined || props.adFor !== undefined || props.gemsFor !== undefined;
+  const { adStage, paidStage, gemStage } = useSecondChanceStages(props);
 
   // Какие способы есть — до того, как они начнут отпадать: layout-эффект
   // родителя идёт раньше обычных эффектов кнопок, которые спрашивают сервер.
@@ -104,15 +148,22 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
     const offers: ContinueOffer[] = [];
     if (props.paidFor !== undefined) offers.push("stars");
     if (props.adFor !== undefined) offers.push("ad");
+    if (props.gemsFor !== undefined) offers.push("gems");
     expectOffers(offers);
-  }, [live, props.paidFor, props.adFor]);
+  }, [live, props.paidFor, props.adFor, props.gemsFor]);
 
-  const { ad: showAd, stars: showStars } = visibleWays({ adStage, paidStage });
-  // Звёзды и ролик разом не берутся: пока идёт одно, другое ждёт.
+  const { ad: showAd, gems: showGems, stars: showStars } = visibleWays({ adStage, paidStage, gemStage });
+  // Способы разом не берутся: пока идёт один, остальные ждут.
   const starsBusy = paidStage !== null && (paidStage.kind === "buying" || paidStage.kind === "confirming" || (paidStage.kind === "retry" && paidStage.purchaseId !== null));
   const adBusy = adStage?.kind === "watching";
-  const placeholder = paidStage === null && adStage === null;
+  const gemsBusy = gemStage?.kind === "buying";
+  const placeholder = paidStage === null && adStage === null && gemStage === null;
+  // Без самоцветов ролик и звёзды делят ряд пополам, пока есть оба. С самоцветами
+  // ролик — отдельным рядом, самоцветы со звёздами — вторым.
   const wide = !(showAd && showStars) && !placeholder;
+  const adRow = showGems && showAd;
+  const gemsAlone = !(showAd && showStars);
+  const starsAlone = !showAd;
   const prominent = props.variant === "prominent";
 
   return (
@@ -142,7 +193,7 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
           <p className="mt-0.5 text-xs text-text-muted">{t("run.continue.text")}</p>
         </div>
       </div>
-      <div className={`mt-3 grid gap-2 ${wide ? "grid-cols-1" : "grid-cols-2"}`}>
+      <div className={`mt-3 grid gap-2 ${showGems ? "grid-cols-2" : wide ? "grid-cols-1" : "grid-cols-2"}`}>
         {placeholder ? (
           <>
             <Button track="continue_ad" variant="secondary" block disabled ariaLabel={t("run.continue.ad")}>
@@ -155,15 +206,31 @@ export function SecondChance(props: SecondChanceProps = {}): ReactNode {
             </Button>
           </>
         ) : null}
-        {adStage === null ? null : props.adFor !== undefined ? (
-          <AdContinue result={props.adFor} locked={starsBusy} wide={wide} />
-        ) : (
-          <AdContinueView stage={adStage} locked={starsBusy} wide={wide} onWatch={() => undefined} />
+        {/* Обёртки без собственной вёрстки (`contents`): кнопки остаются ячейками
+            общей сетки, а дерево не меняется, когда способы отпадают, — иначе
+            компонент размонтировался бы и сбросил свою проверку. */}
+        {adStage === null ? null : (
+          <div className={`contents ${adRow ? "[&>button]:col-span-full" : ""}`}>
+            {props.adFor !== undefined ? (
+              <AdContinue result={props.adFor} locked={starsBusy || gemsBusy} wide={wide || adRow} />
+            ) : (
+              <AdContinueView stage={adStage} locked={starsBusy || gemsBusy} wide={wide || adRow} onWatch={() => undefined} />
+            )}
+          </div>
         )}
-        {!showStars ? null : props.paidFor !== undefined ? (
-          <PaidContinue result={props.paidFor} locked={adBusy} />
-        ) : paidStage === null ? null : (
-          <PaidContinueView stage={paidStage} locked={adBusy} onBuy={() => undefined} onRetry={() => undefined} />
+        {gemStage === null ? null : props.gemsFor !== undefined ? (
+          <GemContinue result={props.gemsFor} locked={adBusy || starsBusy} primary={!showAd} className={gemsAlone ? "col-span-full" : ""} />
+        ) : (
+          <GemContinueView stage={gemStage} locked={adBusy || starsBusy} primary={!showAd} onBuy={() => undefined} className={gemsAlone ? "col-span-full" : ""} />
+        )}
+        {!showStars ? null : (
+          <div className={`contents ${showGems && starsAlone ? "[&>button]:col-span-full" : ""}`}>
+            {props.paidFor !== undefined ? (
+              <PaidContinue result={props.paidFor} locked={adBusy || gemsBusy} />
+            ) : paidStage === null ? null : (
+              <PaidContinueView stage={paidStage} locked={adBusy || gemsBusy} onBuy={() => undefined} onRetry={() => undefined} />
+            )}
+          </div>
         )}
       </div>
       {props.onDevContinue === undefined ? null : (

@@ -3,8 +3,8 @@ id: T-0347
 title: Компенсация тестерам — своё имя пересчёта звёзд второго шанса в самоцветы
 epic: E1
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-15 / haiku-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: [T-0324]
@@ -13,7 +13,8 @@ zones:
   - backend/api/src/modules/wipe/compensation.service.ts
   - backend/api/test/compensation-rules.test.ts
   - backend/api/test/compensation.test.ts
-shared: []
+shared:
+  - backend/api/test/run-gem-continue.test.ts
 runner: any
 executor: haiku-5.5
 effort: low

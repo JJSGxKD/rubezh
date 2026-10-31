@@ -20,7 +20,7 @@ import { stepWorld, type SimInput } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type CreateWorldOptions, type World } from "../src/game/sim/world";
 import { takeCordonEvents } from "../src/game/sim/cordon";
 import { damageEnemy } from "../src/game/sim/combat";
-import { advanceRun, aliveGuards, checksumWorld, createCordonRun } from "./helpers/scripted-run";
+import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
 // строку и прочитанный обратно, обязан дать ровно тот же забег, что шёл бы без
@@ -420,3 +420,64 @@ describe("снимок посреди кольца стражей", () => {
   });
 });
 
+describe("снимок посреди формирования и ожидания внутренних", () => {
+  const INNER_RING = { ...CORDON_RING, inner: [{ enemy: "elite_test", count: 2 }] };
+  const options = { seed: 21, ring: INNER_RING, enemies: [ELITE] };
+
+  /** Снимок после `before` секунд, восстановленный в свежий мир, через пять секунд совпадает с непрерывным. */
+  function resumeAfter(before: number): void {
+    const original = createCordonRun(options);
+    advanceRun(original, before);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as unknown;
+
+    const resumed = createCordonRun(options);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon.pending).toEqual(original.world.cordon.pending);
+    expect(resumed.world.cordon.pendingLeftSec).toBe(original.world.cordon.pendingLeftSec);
+
+    advanceRun(original, 5);
+    advanceRun(resumed, 5);
+
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.cordon).toEqual(original.world.cordon);
+    expect(resumed.world.enemies.aliveCount).toBe(original.world.enemies.aliveCount);
+  }
+
+  it("посреди формирования, через 0,3 с: страж ещё со вспышкой", { timeout: 30_000 }, () => {
+    const probe = createCordonRun(options);
+    advanceRun(probe, 0.3);
+    expect(probe.world.enemies.phase[aliveGuards(probe.world)[0] ?? 0]).toBe(2);
+    resumeAfter(0.3);
+  });
+
+  it("посреди ожидания внутренних, через 0,5 с: место выбрано, элита ещё не вышла", { timeout: 30_000 }, () => {
+    const probe = createCordonRun(options);
+    advanceRun(probe, 0.5);
+    expect(probe.world.cordon.pending).toHaveLength(2);
+    resumeAfter(0.5);
+  });
+
+  it("снимок без полей pending и pendingLeftSec (как до задачи) читается: никого не ждём", () => {
+    const original = createCordonRun(options);
+    advanceRun(original, 0.5);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: Record<string, unknown> };
+    delete saved.cordon.pending;
+    delete saved.cordon.pendingLeftSec;
+
+    const resumed = createCordonRun(options);
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.cordon.pending).toEqual([]);
+    expect(resumed.world.cordon.pendingLeftSec).toBe(0);
+    expect(resumed.world.cordon.active).toBe(true);
+  });
+
+  it("битое место ожидающего — ошибка снимка", () => {
+    const original = createCordonRun(options);
+    advanceRun(original, 0.5);
+    const saved = JSON.parse(JSON.stringify(captureWorld(original.world, original.director))) as { cordon: { pending: Record<string, unknown>[] } };
+    saved.cordon.pending[0] = { typeIndex: 99, x: 0, y: 0 };
+    const fresh = createCordonRun(options);
+    expect(() => restoreWorld(fresh.world, fresh.director, saved)).toThrow(SnapshotError);
+  });
+});
