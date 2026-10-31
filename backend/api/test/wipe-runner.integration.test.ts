@@ -151,12 +151,12 @@ function tableOf(model: string): string {
 }
 
 describe("захват таблиц на время вайпа: список и текст", () => {
-  it("список — 20 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
+  it("список — 21 таблица плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
     const expected = [...WIPE_ORDER.map((model) => tableOf(model)), "purchase", "tester_compensation"];
 
     expect([...WIPE_LOCK_TABLES].sort()).toEqual([...expected].sort());
     expect(new Set(WIPE_LOCK_TABLES).size).toBe(WIPE_LOCK_TABLES.length);
-    expect(WIPE_LOCK_TABLES).toHaveLength(22);
+    expect(WIPE_LOCK_TABLES).toHaveLength(23);
   });
 
   it("текст отказа по сроку: 10 секунд из «Решений», остальные — со склонением", () => {
@@ -438,14 +438,14 @@ describe.skipIf(DATABASE_URL === "")("команда вайпа на време�
     expect(seen).toBe("10min");
   });
 
-  it("runWipe: 20 моделей пусты, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
+  it("runWipe: 21 модель пуста, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
 
     const result = await runWipe(prisma, NOW);
 
     const after = await planWipe(prisma, NOW);
     for (const model of WIPE_ORDER) expect(after.rows[model], model).toBe(0);
-    expect(WIPE_ORDER).toHaveLength(20);
+    expect(WIPE_ORDER).toHaveLength(21);
     // Строки заданий «юзернейм бота» стёрты у всех, а аккаунты остались: серия после вайпа начинается заново.
     expect(await prisma.botMentionTask.count()).toBe(0);
     expect(after.rows).toMatchObject({ Account: 2, Friendship: 1, AccountRestriction: 1, VipSubscription: 1, VipPeriod: 1, Purchase: 3, TesterCompensation: 1 });
@@ -527,7 +527,7 @@ describe.skipIf(DATABASE_URL === "")("захват таблиц на время 
     createdAt: NOW,
   });
 
-  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 20 таблиц плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
+  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 21 таблицу плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
     let locked: string[] = [];
     let lockTimeout = "";

@@ -107,6 +107,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
   RunGemContinue: wipe("второй шанс за самоцветы (Р162) — часть забега: свой шаг, а не каскад с забегом"),
+  RunProof: wipe("запись забега для проверки (T-0317) — часть забега: свой шаг, а не каскад с забегом"),
   RunReward: wipe("награда за забег"),
   RunBoost: wipe("бусты на забег"),
   TaskRun: wipe("забеги, засчитанные заданиям"),
@@ -131,6 +132,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "RunAdContinue",
   "RunGemContinue",
+  "RunProof",
   "RunReward",
   "RunBoost",
   "TaskRun",
