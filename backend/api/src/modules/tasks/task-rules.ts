@@ -213,10 +213,13 @@ export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
  */
 export const TASK_LIMIT_GRACE_MIN = 60;
 
+/** Идентификатор задания: латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков. */
+const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
+
 /** Строка каталога — как её правит панель и читает сервер. */
 export const taskDefSchema = z
   .object({
-    taskId: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/, "id — латиница, цифры и подчёркивание, до 48 знаков"),
+    taskId: z.string().regex(TASK_ID, "id — латиница, цифры и подчёркивание, до 48 знаков"),
     period: z.enum(TASK_PERIODS),
     kind: z.enum(TASK_KIND_IDS as [TaskKind, ...TaskKind[]]),
     /** партнёрская цель — куда вести и что проверять; у целей забега — пусто, и панель до партнёрских целей поля не слала */
@@ -229,7 +232,8 @@ export const taskDefSchema = z
     shards: z.number().int().nonnegative().max(1_000),
     /** очки батл-пасса (WP26) */
     passPoints: z.number().int().nonnegative().max(10_000),
-    sort: z.number().int().min(0).max(10_000),
+    /** место в списке: на входе игнорируется, его задаёт сервер — запросом порядка, а новому заданию — «конец списка» */
+    sort: z.number().int().min(0).max(10_000).default(0),
     active: z.boolean(),
     /** ступень пула ротации; `null` — строка в игре всегда (партнёрские цели, достижения, добавленные руками) */
     tier: z.enum(POOL_TIERS).nullable().default(null),
@@ -293,6 +297,29 @@ export function isCheckedKind(kind: TaskKind): boolean {
 }
 
 export type TaskDef = z.infer<typeof taskDefSchema>;
+
+/** Потолок места в списке — тот же, что у схемы строки каталога. */
+export const TASK_SORT_MAX = 10_000;
+
+/**
+ * Список с ручным порядком в панели: три срока и партнёрские цели отдельным
+ * списком, какой бы срок у них ни был — так их видит игрок.
+ */
+export const TASK_GROUPS = ["daily", "weekly", "achievement", "partner"] as const;
+export type TaskGroup = (typeof TASK_GROUPS)[number];
+
+export function taskGroup(def: Pick<TaskDef, "kind" | "period">): TaskGroup {
+  return isCheckedKind(def.kind) ? "partner" : def.period;
+}
+
+/** Запрос «новый порядок списка»: все id группы в нужном порядке, без повторов. */
+export const taskOrderSchema = z
+  .object({
+    group: z.enum(TASK_GROUPS),
+    ids: z.array(z.string().regex(TASK_ID)).min(1).max(TASK_SORT_MAX),
+  })
+  .strict()
+  .refine((order) => new Set(order.ids).size === order.ids.length, { message: "id не повторяются", path: ["ids"] });
 
 /** Что игрок знает о своём месте в задании с лимитом; без лимита и для выполнивших — ничего. */
 export interface TaskSlots {

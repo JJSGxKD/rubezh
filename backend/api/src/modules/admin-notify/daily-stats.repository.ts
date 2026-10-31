@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { boardMark, type BoardMark } from "../restrictions/board-mark.js";
 import { teamDay, type DayStats, type DayWindow, type SourceKind } from "./daily-stats.js";
 
 /**
@@ -38,6 +39,11 @@ export interface DailyStatsRepository {
    * Сутки без событий — нулями: провал на графике должен быть виден.
    */
   series(from: Date, to: Date): Promise<DayPoint[]>;
+  /**
+   * Метка «Отдельная доска» за окно (T-0115) — только для сводки панели,
+   * держателю права. Отчёт в чат и `/stats` её не читают: `day()` метки не знает.
+   */
+  boardMark(window: DayWindow): Promise<BoardMark>;
 }
 
 const SOURCES: readonly SourceKind[] = ["organic", "click", "invite", "telegram_affiliate", "friend", "unknown"];
@@ -116,6 +122,10 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
         firstPurchase: steps?.first_purchase ?? 0,
       },
     };
+  }
+
+  async boardMark({ from, to }: DayWindow): Promise<BoardMark> {
+    return await boardMark(this.prisma, { from, to });
   }
 
   async series(from: Date, to: Date): Promise<DayPoint[]> {

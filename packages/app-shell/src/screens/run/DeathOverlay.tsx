@@ -75,7 +75,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   // закончил сам, а закрытый смертью продолжить уже нечем.
   const { secondChance } = props;
   const waiting = result.outcome === "died" && secondChance !== undefined;
-  const hasWays = secondChance !== undefined && (secondChance.onDevContinue !== undefined || secondChance.paidFor !== undefined || secondChance.adFor !== undefined);
+  const hasWays = secondChance !== undefined && (secondChance.onDevContinue !== undefined || secondChance.paidFor !== undefined || secondChance.adFor !== undefined || secondChance.gemsFor !== undefined);
   const step = deathStep({ phase: waiting ? "downed" : "finished", hasWays });
   const downedWithoutWays = waiting && !hasWays;
 

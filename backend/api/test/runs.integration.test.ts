@@ -6,8 +6,8 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { closeRedis, createRedis } from "../src/infra/redis.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
-import { rebuildLeaderboard } from "../src/modules/runs/leaderboard-rebuild.js";
-import { RedisLeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
+import { rebuildForRestrictions, rebuildLeaderboard } from "../src/modules/runs/leaderboard-rebuild.js";
+import { ALL_BOARDS, COMMON_ONLY, RedisLeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 
@@ -26,7 +26,7 @@ import { redisDatabase } from "./helpers/redis-database.js";
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 2);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
-const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null };
+const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
 
 describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   let config: AppConfig;
@@ -118,10 +118,10 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   it("рекорд в Redis только растёт", async () => {
     const accountId = await account();
 
-    expect(await board.submit("easy", accountId, 200)).toEqual({ improved: true });
-    expect(await board.submit("easy", accountId, 100)).toEqual({ improved: false });
-    expect(await board.submit("easy", accountId, 200)).toEqual({ improved: false });
-    expect(await board.best("easy", accountId)).toBe(200);
+    expect(await board.submit("easy", accountId, 200, ALL_BOARDS)).toEqual({ improved: true });
+    expect(await board.submit("easy", accountId, 100, ALL_BOARDS)).toEqual({ improved: false });
+    expect(await board.submit("easy", accountId, 200, ALL_BOARDS)).toEqual({ improved: false });
+    expect(await board.best("easy", accountId, "common")).toBe(200);
   });
 
   it("лучший забег каждого — одним запросом, с именем из аккаунта", async () => {
@@ -170,10 +170,10 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     // Мусор в проекции, которого в базе нет, — пересборка его уберёт.
     await redis.zadd("runs:leaderboard:easy", 99_999, "призрак");
 
-    await rebuildLeaderboard(runs, board, new Set());
+    await rebuildLeaderboard(runs, board, new Set(), new Set());
 
-    expect(await board.rank("easy", "призрак")).toBeNull();
-    expect((await board.rank("easy", fast)) ?? 0).toBeLessThan((await board.rank("easy", slow)) ?? 0);
+    expect(await board.rank("easy", "призрак", "common")).toBeNull();
+    expect((await board.rank("easy", fast, "common")) ?? 0).toBeLessThan((await board.rank("easy", slow, "common")) ?? 0);
     expect(await redis.exists("runs:leaderboard:easy:rebuild")).toBe(0);
   });
 
@@ -196,17 +196,17 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   it("доска: место того, кого в ней нет, — по строго лучшим; убрать — из всех сложностей разом", async () => {
     const [fast, slow, gone] = [await account(), await account(), await account()];
-    await board.submit("normal", fast, 500);
-    await board.submit("normal", slow, 300);
-    await board.submit("normal", gone, 400);
-    await board.submit("hard", gone, 100);
+    await board.submit("normal", fast, 500, COMMON_ONLY);
+    await board.submit("normal", slow, 300, COMMON_ONLY);
+    await board.submit("normal", gone, 400, COMMON_ONLY);
+    await board.submit("hard", gone, 100, COMMON_ONLY);
 
-    expect(await board.countAbove("normal", 400)).toBe(1);
-    expect(await board.countAbove("normal", 300)).toBe(2);
-    expect(await board.remove([gone, "никого-нет"])).toBe(2);
-    expect(await board.best("normal", gone)).toBeNull();
-    expect(await board.best("hard", gone)).toBeNull();
-    expect(await board.remove([])).toBe(0);
+    expect(await board.countAbove("normal", 400, "common")).toBe(1);
+    expect(await board.countAbove("normal", 300, "common")).toBe(2);
+    expect(await board.remove([gone, "никого-нет"], COMMON_ONLY)).toBe(2);
+    expect(await board.best("normal", gone, "common")).toBeNull();
+    expect(await board.best("hard", gone, "common")).toBeNull();
+    expect(await board.remove([], COMMON_ONLY)).toBe(0);
   });
 
   it("снять с рейтинга модератором: только рейтинговый, вернуть — только снятый им; два нажатия разом меняют однажды", async () => {
@@ -233,11 +233,160 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ survivalSec: 700 });
 
     // Точная запись в доску опускает время — после снятия рекорда.
-    await board.submit("easy", accountId, 700);
-    await board.set("easy", accountId, 300);
-    expect(await board.best("easy", accountId)).toBe(300);
-    await board.set("easy", accountId, null);
-    expect(await board.best("easy", accountId)).toBeNull();
+    await board.submit("easy", accountId, 700, ALL_BOARDS);
+    await board.set("easy", accountId, 300, ALL_BOARDS);
+    expect(await board.best("easy", accountId, "common")).toBe(300);
+    await board.set("easy", accountId, null, ALL_BOARDS);
+    expect(await board.best("easy", accountId, "common")).toBeNull();
+  });
+
+  it("две доски: запись по списку досок, ZADD GT на каждой, improved — если изменилась хоть одна", async () => {
+    await redis.flushdb();
+    const [onlyFull, both] = [await account(), await account()];
+
+    expect(await board.submit("normal", onlyFull, 300, ["full"])).toEqual({ improved: true });
+    // Общего ключа не появилось: пишется только в полную.
+    expect(await redis.exists("runs:leaderboard:normal")).toBe(0);
+    expect(await redis.zscore("runs:leaderboard:full:normal", onlyFull)).toBe("300");
+    expect(await board.best("normal", onlyFull, "common")).toBeNull();
+
+    expect(await board.submit("normal", both, 200, ALL_BOARDS)).toEqual({ improved: true });
+    expect(await board.best("normal", both, "full")).toBe(200);
+    expect(await board.best("normal", both, "common")).toBe(200);
+    expect(await redis.zscore("runs:leaderboard:normal", both)).toBe("200");
+
+    // GT на каждой доске: худшее и равное время ничего не меняют.
+    expect(await board.submit("normal", both, 150, ALL_BOARDS)).toEqual({ improved: false });
+    expect(await board.submit("normal", onlyFull, 300, ["full"])).toEqual({ improved: false });
+    expect(await board.submit("normal", onlyFull, 400, ["full"])).toEqual({ improved: true });
+    expect(await board.best("normal", both, "common")).toBe(200);
+
+    // Доски разошлись (общая отстала): запись в обе улучшает хотя бы одну — `improved`.
+    await board.submit("normal", onlyFull, 500, ["full"]);
+    expect(await board.submit("normal", onlyFull, 500, ALL_BOARDS)).toEqual({ improved: true });
+    expect(await board.best("normal", onlyFull, "common")).toBe(500);
+    expect(await board.submit("normal", onlyFull, 500, ALL_BOARDS)).toEqual({ improved: false });
+  });
+
+  it("две доски: место, размер, строго лучшие и верх считаются каждой своей", async () => {
+    await redis.flushdb();
+    const [a, b, c] = [await account(), await account(), await account()];
+    await board.submit("hard", a, 400, ["full"]);
+    await board.submit("hard", b, 200, ALL_BOARDS);
+    await board.submit("hard", c, 100, ["common"]);
+
+    expect(await board.count("hard", "full")).toBe(2);
+    expect(await board.count("hard", "common")).toBe(2);
+    expect(await board.rank("hard", b, "full")).toBe(2);
+    expect(await board.rank("hard", b, "common")).toBe(1);
+    expect(await board.rank("hard", a, "common")).toBeNull();
+    expect(await board.rank("hard", c, "full")).toBeNull();
+    expect(await board.countAbove("hard", 150, "full")).toBe(2);
+    expect(await board.countAbove("hard", 150, "common")).toBe(1);
+    expect((await board.top("hard", 10, "full")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+      [a, 400],
+      [b, 200],
+    ]);
+    expect((await board.top("hard", 10, "common")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+      [b, 200],
+      [c, 100],
+    ]);
+    expect(await board.top("easy", 10, "common")).toEqual([]);
+  });
+
+  it("две доски: точная запись и снятие идут по списку досок", async () => {
+    await redis.flushdb();
+    const accountId = await account();
+    await board.submit("easy", accountId, 700, ALL_BOARDS);
+
+    // Рекорд снят модератором у аккаунта с отдельной доской — правится только полная.
+    await board.set("easy", accountId, 300, ["full"]);
+    expect(await board.best("easy", accountId, "full")).toBe(300);
+    expect(await board.best("easy", accountId, "common")).toBe(700);
+    await board.set("easy", accountId, null, ["full"]);
+    expect(await board.best("easy", accountId, "full")).toBeNull();
+    expect(await board.best("easy", accountId, "common")).toBe(700);
+  });
+
+  it("две доски: убрать из общей не трогает полную, число — сколько мест снято", async () => {
+    await redis.flushdb();
+    const [stays, goes] = [await account(), await account()];
+    await board.submit("normal", stays, 100, ALL_BOARDS);
+    await board.submit("normal", goes, 200, ALL_BOARDS);
+    await board.submit("hard", goes, 300, ALL_BOARDS);
+
+    expect(await board.remove([goes, "никого-нет"], COMMON_ONLY)).toBe(2);
+    expect(await board.best("normal", goes, "common")).toBeNull();
+    expect(await board.best("hard", goes, "common")).toBeNull();
+    expect(await board.best("normal", goes, "full")).toBe(200);
+    expect(await board.best("hard", goes, "full")).toBe(300);
+    expect(await board.best("normal", stays, "common")).toBe(100);
+
+    expect(await board.remove([goes], ALL_BOARDS)).toBe(2);
+    expect(await board.best("normal", goes, "full")).toBeNull();
+    expect(await board.remove([goes], COMMON_ONLY)).toBe(0);
+    expect(await board.remove([], ALL_BOARDS)).toBe(0);
+  });
+
+  it("две доски: замена одной оставляет чужую нетронутой и не оставляет временного ключа", async () => {
+    await redis.flushdb();
+    const [a, b] = [await account(), await account()];
+    await board.submit("normal", a, 100, ALL_BOARDS);
+
+    await board.replace("normal", "full", [{ accountId: b, survivalSec: 900 }]);
+
+    expect((await board.top("normal", 10, "full")).map((entry) => entry.accountId)).toEqual([b]);
+    expect((await board.top("normal", 10, "common")).map((entry) => entry.accountId)).toEqual([a]);
+    expect(await redis.keys("runs:leaderboard:*:rebuild")).toEqual([]);
+    expect(await redis.keys("runs:leaderboard:rebuild*")).toEqual([]);
+
+    await board.replace("normal", "common", []);
+    expect(await board.count("normal", "common")).toBe(0);
+    expect(await board.count("normal", "full")).toBe(1);
+    expect(await redis.keys("*:rebuild")).toEqual([]);
+  });
+
+  it("пересборка из базы: полная — все рейтинговые без закрытых, общая — ещё и без отдельной доски; счётчики по доскам", async () => {
+    const [closed, separate, plain] = [await account("Закрытый"), await account("Отдельная"), await account("Обычный")];
+    for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 640 }));
+    // Мусор, которого в базе нет, уходит из обеих проекций.
+    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:full:hard", 99_999, "призрак");
+
+    const counts = await rebuildLeaderboard(runs, board, new Set([closed]), new Set([separate]));
+
+    for (const side of ALL_BOARDS) {
+      expect(await board.best("hard", closed, side)).toBeNull();
+      expect(await board.best("hard", "призрак", side)).toBeNull();
+      expect(await board.best("hard", plain, side)).toBe(640);
+    }
+    expect(await board.best("hard", separate, "full")).toBe(640);
+    expect(await board.best("hard", separate, "common")).toBeNull();
+    // Счётчики совпадают с настоящими досками; разница досок — ровно аккаунты отдельной доски.
+    expect(counts.hard).toEqual({ full: await board.count("hard", "full"), common: await board.count("hard", "common") });
+    expect(counts.hard?.full).toBe((counts.hard?.common ?? 0) + 1);
+    expect(Object.keys(counts).sort()).toEqual(["easy", "hard", "normal"]);
+    expect(await redis.keys("*:rebuild")).toEqual([]);
+  });
+
+  it("пересборка по ограничениям спрашивает оба набора: закрытый рейтинг и отдельная доска", async () => {
+    const [closed, separate, plain] = [await account(), await account(), await account()];
+    for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "normal", survivalSec: 555 }));
+    const asked: string[] = [];
+    const restrictions = {
+      restrictedAccounts: async (kind: string) => {
+        asked.push(kind);
+        return kind === "leaderboard" ? [closed] : kind === "separate_board" ? [separate] : [];
+      },
+    };
+
+    await rebuildForRestrictions(runs, board, restrictions);
+
+    expect(asked.sort()).toEqual(["leaderboard", "separate_board"]);
+    expect(await board.best("normal", closed, "full")).toBeNull();
+    expect(await board.best("normal", separate, "full")).toBe(555);
+    expect(await board.best("normal", separate, "common")).toBeNull();
+    expect(await board.best("normal", plain, "common")).toBe(555);
   });
 
   it("очередь разбора видит отклонённые и подозрительные, а честные — нет", async () => {
@@ -274,15 +423,15 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   it("счётчики итога лежат в run.details ключами, а строка прошлой сборки читается с null (T-0125)", async () => {
     const owner = await account();
     const runId = randomUUID();
-    const details = { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [], bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 };
+    const details = { ...NO_COUNTERS, passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [], bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } };
     await runs.finish(finished(runId, owner, { details }));
 
     const row = await prisma.run.findUnique({ where: { runId }, select: { details: true } });
-    expect(row?.details).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 });
-    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350 } });
+    expect(row?.details).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } });
+    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: 1, eliteKills: 4, chestsOpened: 2, crystals: 350, noHitSec: 420, noKillSec: 35, killsByElement: { fire: 12 } } });
 
     // Запись прошлой сборки: ключей счётчиков в jsonb нет вовсе.
     await prisma.run.update({ where: { runId }, data: { details: { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [] } } });
-    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null } });
+    expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null } });
   });
 });

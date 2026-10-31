@@ -110,6 +110,7 @@ const ACTION_TITLES: Record<string, string> = {
   "flags.remove": "Удаление флага",
   "tasks.create": "Новое задание",
   "tasks.update": "Правка задания",
+  "tasks.reorder": "Порядок заданий",
   "tasks.network.update": "Правка заданий рекламной сети",
   "partner.create": "Новый партнёр",
   "partner.update": "Правка партнёра",
@@ -146,6 +147,9 @@ const ACTION_TITLES: Record<string, string> = {
   "names.rule.create": "Новое правило фильтра имён",
   "names.rule.update": "Правка правила фильтра имён",
   "names.rule.delete": "Удаление правила фильтра имён",
+  "names.reclean.start": "Запуск перечистки ников",
+  "names.reclean.stop": "Остановка перечистки ников",
+  "names.reclean.finish": "Итог перечистки ников",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
 };
@@ -232,7 +236,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
         ? { kind: "сеть", label: target, route: { section: "ads", id: null } }
         : { kind: "блок", label: named(entry, "externalId") ?? short(target), route: { section: "ads", id: null } };
     case "names":
-      return { kind: "правило", label: short(target), route: { section: "names", id: null } };
+      return { kind: action.startsWith("names.reclean.") ? "перечистка" : "правило", label: short(target), route: { section: "names", id: null } };
     case "fx":
       // Цель лимита и счётчика — код источника, а заданного курса — пара «валюта:назначение».
       return action === "fx.limit.set" || action === "fx.limit.reset" || action === "fx.used.correct"
@@ -251,6 +255,7 @@ export function auditObject(entry: AuditEntry): AuditObject | null {
  * обновления. Незнакомое поле показывается как записано.
  */
 const FIELD_TITLES: Record<string, string> = {
+  order: "порядок",
   restrictions: "ограничения",
   replaced: "заменили действовавшие",
   runId: "забег",

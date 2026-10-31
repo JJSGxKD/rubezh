@@ -21,7 +21,9 @@ shared:
   - backend/api/src/modules/runs/runs.module.ts
   - backend/api/src/modules/runs/runs-limits.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - backend/api/test/http-app.test.ts
   - backend/api/test/route-limits.test.ts
   - docs/30-configuration-map.md

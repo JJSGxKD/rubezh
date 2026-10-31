@@ -3,8 +3,8 @@ id: T-0167
 title: Порядок заданий перетаскиванием — SortableList в панели и запрос порядка
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -41,7 +41,7 @@ batch: 3
 
 # T-0167. Порядок заданий перетаскиванием — SortableList в панели и запрос порядка
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json)](../README.md#значки-статуса)
 
 ## Зачем
 

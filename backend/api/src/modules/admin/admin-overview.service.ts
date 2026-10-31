@@ -1,12 +1,14 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
-import { dayWindow, teamDay, type DayStats } from "../admin-notify/daily-stats.js";
+import { dayWindow, teamDay, type DayStats, type DayWindow } from "../admin-notify/daily-stats.js";
 import { DAILY_STATS_REPOSITORY, type DailyStatsRepository, type DayPoint } from "../admin-notify/daily-stats.repository.js";
 import { ADS_CATALOG_REPOSITORY, type AdFunnelRow, type AdPassRow, type AdsCatalogRepository } from "../ads/ads-catalog.repository.js";
 import { AD_PLACES } from "../ads/ads-rules.js";
 import { BroadcastsService } from "../broadcasts/broadcasts.service.js";
 import { CHANGELOG_FOR_PLAYERS } from "../changelog/changelog-rules.js";
 import { ChangelogService } from "../changelog/changelog.service.js";
+import type { BoardMark } from "../restrictions/board-mark.js";
+import { HIDDEN_KIND_PERMISSION } from "../restrictions/restriction-visibility.js";
 import { permissionsOf, type Permission } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsViewService } from "../runs/runs-view.service.js";
@@ -67,6 +69,17 @@ export interface OverviewAds {
   networks: { networkKey: string; completed: number }[];
 }
 
+/**
+ * Метка «Отдельная доска» за период и за прошлый (T-0115). Видит только
+ * держатель права `players.board.restrict`; у остальных и когда чтение не
+ * ответило — `null`: сводка живёт без метки, а по ответу не понять, есть ли
+ * вид вообще.
+ */
+export interface OverviewBoardMark {
+  today: BoardMark;
+  yesterday: BoardMark;
+}
+
 export interface Overview {
   /** период: сутки, 7 или 30 дней */
   days: OverviewPeriod;
@@ -82,6 +95,7 @@ export interface Overview {
   series: (Omit<DayPoint, "stars" | "purchases"> & { stars: number | null; purchases: number | null })[];
   /** `null` — нет права `ads.view` или чтение не ответило */
   ads: OverviewAds | null;
+  boardMark: OverviewBoardMark | null;
   attention: AttentionItem[];
 }
 
@@ -109,11 +123,12 @@ export class AdminOverviewService {
     const previousTo = new Date(now.getTime() - days * DAY_MS);
     const seriesFrom = new Date(start.getTime() - (Math.max(OVERVIEW_DAYS, days) - 1) * DAY_MS);
 
-    const [today, yesterday, series, ads, attention] = await Promise.all([
+    const [today, yesterday, series, ads, boardMark, attention] = await Promise.all([
       withTimeout(this.stats.day({ day: teamDay(from.getTime()), from, to: now }), READ_TIMEOUT_MS, "сводка: сейчас"),
       withTimeout(this.stats.day({ day: teamDay(previousFrom.getTime()), from: previousFrom, to: previousTo }), READ_TIMEOUT_MS, "сводка: прошлый период"),
       withTimeout(this.stats.series(seriesFrom, now), READ_TIMEOUT_MS, "сводка: ряд"),
       can.has("ads.view") ? this.adsOverview({ from, to: now }, { from: previousFrom, to: previousTo }) : null,
+      can.has(HIDDEN_KIND_PERMISSION) ? this.boardMarkOverview({ day: teamDay(from.getTime()), from, to: now }, { day: teamDay(previousFrom.getTime()), from: previousFrom, to: previousTo }) : null,
       this.attention(actor, can, now),
     ]);
     const revenue = can.has("analytics.revenue.view");
@@ -127,8 +142,23 @@ export class AdminOverviewService {
       yesterday: shown(yesterday),
       series: series.map((point) => ({ ...point, stars: revenue ? point.stars : null, purchases: revenue ? point.purchases : null })),
       ads,
+      boardMark,
       attention,
     };
+  }
+
+  /** Метка за окно и за прошлое; не ответила — сводка без неё, а не без сводки. */
+  private async boardMarkOverview(now: DayWindow, before: DayWindow): Promise<OverviewBoardMark | null> {
+    try {
+      const [today, yesterday] = await Promise.all([
+        withTimeout(this.stats.boardMark(now), READ_TIMEOUT_MS, "сводка: метка"),
+        withTimeout(this.stats.boardMark(before), READ_TIMEOUT_MS, "сводка: метка до"),
+      ]);
+      return { today, yesterday };
+    } catch (error: unknown) {
+      this.logger.warn(`сводка без метки: ${error instanceof Error ? error.message : "unknown"}`);
+      return null;
+    }
   }
 
   /** Реклама за окно и за прошлое; не ответила — сводка без неё, а не без сводки. */
