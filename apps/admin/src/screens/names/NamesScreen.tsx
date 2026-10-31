@@ -117,9 +117,9 @@ export function NamesScreen() {
                 </span>
               ),
             },
-            { title: "Заметка", render: (rule) => <span className="text-text-muted">{rule.note ?? ""}</span> },
+            { title: "Заметка", render: (rule) => <span className="text-text-muted">{rule.note ?? "—"}</span> },
             { title: "Статус", render: (rule) => <Badge tone={rule.active ? "success" : "neutral"}>{rule.active ? "действует" : "выключено"}</Badge> },
-            { title: "Изменено", render: (rule) => <span className="whitespace-nowrap">{formatDateTime(rule.updatedAt)}</span> },
+            { title: "Изменено", render: (rule) => <span className="md:whitespace-nowrap">{formatDateTime(rule.updatedAt)}</span> },
             {
               title: "",
               render: (rule) => (
