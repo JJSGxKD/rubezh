@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Музыка — прослушка</title>
+<style>
+  :root { --bg:#1d1c31; --surface:#28273f; --border:#43425f; --text:#f3eee6; --muted:#aeaac4; --accent:#ff8f3f; }
+  body { margin:0; background:#0d0c18; color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:860px; margin:0 auto; padding:32px 16px 64px; }
+  h1 { font-size:24px; margin:0 0 8px; }
+  p { color:var(--muted); }
+  .row { display:grid; grid-template-columns:170px 1fr; gap:12px; align-items:center; padding:12px; margin:8px 0; border-radius:8px; background:var(--surface); border:1px solid var(--border); }
+  .row b { color:var(--accent); font-family:ui-monospace, monospace; }
+  .row span { display:block; color:var(--muted); font-size:13px; }
+  audio { width:100%; }
+  button { min-height:44px; padding:0 16px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font:600 15px system-ui; }
+  button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; }
+  @media (max-width:520px) { .row { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Музыка — прослушка</h1>
+  <p>Три круга по 64 с, сочинены кодом (design/art/src/music.mjs, Р180). Проверка — «надоедает ли к третьему разу»:
+  включи круг и займись другим. Громкость в игре будет ниже эффектов на 6–8 дБ (T-0234).</p>
+  <div class="row"><div><b>lobby</b><span>меню: бурдон, хор, гусли · 60 уд.</span></div><audio controls loop preload="none" src="../../../packages/app-shell/src/audio/music/lobby.ogg"></audio></div>
+  <div class="row"><div><b>run</b><span>забег: бубен, бас, гусли, хор · 90 уд.</span></div><audio controls loop preload="none" src="../../../packages/app-shell/src/audio/music/run.ogg"></audio></div>
+  <div class="row"><div><b>boss</b><span>слой босса отдельно · 90 уд.</span></div><audio controls loop preload="none" src="../../../packages/app-shell/src/audio/music/boss.ogg"></audio></div>
+  <div class="row"><div><b>run + boss</b><span>как в бою: босс входит в такт и уходит</span></div>
+    <div class="controls"><button id="play" aria-pressed="false">Играть пульс</button><button id="boss" aria-pressed="false" disabled>Босс вошёл</button></div></div>
+  <p>Нет Opus (старый Safari) — те же треки в .m4a рядом.</p>
+</main>
+<script>
+  // Пульс и босс — два круга одной длины, запущенные в один момент: слой босса только меняет громкость,
+  // как будет в игре (T-0234). Затухание — 2 с.
+  const base = "../../../packages/app-shell/src/audio/music/";
+  let ctx = null, bossGain = null, sources = [];
+  const play = document.getElementById("play"), boss = document.getElementById("boss");
+  async function load(name) {
+    const probe = document.createElement("audio");
+    const ext = probe.canPlayType('audio/ogg; codecs="opus"') ? "ogg" : "m4a";
+    const data = await (await fetch(base + name + "." + ext)).arrayBuffer();
+    return ctx.decodeAudioData(data);
+  }
+  play.addEventListener("click", async () => {
+    if (sources.length) { sources.forEach((s) => s.stop()); sources = []; play.textContent = "Играть пульс"; play.setAttribute("aria-pressed", "false"); boss.disabled = true; return; }
+    ctx = ctx ?? new AudioContext();
+    const [run, layer] = await Promise.all([load("run"), load("boss")]);
+    bossGain = ctx.createGain(); bossGain.gain.value = 0; bossGain.connect(ctx.destination);
+    const at = ctx.currentTime + 0.1;
+    for (const [buffer, out] of [[run, ctx.destination], [layer, bossGain]]) {
+      const s = ctx.createBufferSource(); s.buffer = buffer; s.loop = true; s.loopEnd = 64; s.connect(out); s.start(at); sources.push(s);
+    }
+    play.textContent = "Стоп"; play.setAttribute("aria-pressed", "true"); boss.disabled = false;
+  });
+  boss.addEventListener("click", () => {
+    const on = boss.getAttribute("aria-pressed") !== "true";
+    const g = bossGain.gain, now = ctx.currentTime;
+    g.cancelScheduledValues(now); g.setValueAtTime(g.value, now); g.linearRampToValueAtTime(on ? 1 : 0, now + 2);
+    boss.setAttribute("aria-pressed", String(on)); boss.textContent = on ? "Босс побеждён" : "Босс вошёл";
+  });
+</script>
+</body>
+</html>
