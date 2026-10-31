@@ -1,4 +1,4 @@
-import { applyPattern, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
+import { applyPattern, CORDON_PHASE, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
@@ -8,6 +8,7 @@ import { isTimeFrozen, tickFreeze } from "./freeze";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
+import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
 import { clampToBounds, damagePlayer, despawnProjectile, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
@@ -33,8 +34,8 @@ const MELEE_INTERVAL_SEC = 0.6;
  * воспроизводимость, а вместе с ней golden-прогоны и разбор баг-репортов.
  * Накопление реального времени и вызов нужного числа шагов — забота рендера.
  *
- * Пока игрок выбирает улучшение, мир стоит: шаг не делается вовсе. Так пауза
- * получается детерминированной — в логе ввода выбор приходит на конкретный
+ * Пока игрок выбирает улучшение или благословение капища, мир стоит: шаг не
+ * делается вовсе. Так пауза получается детерминированной — в логе ввода выбор приходит на конкретный
  * тик, и повтор забега попадает в тот же момент (docs/26-stage2-plan.md, WP2).
  */
 /** Урон по времени за тик — один объект на модуль: без аллокаций в цикле по врагам. */
@@ -42,7 +43,7 @@ const statusTick: StatusTick = { burn: 0, poison: 0 };
 
 export function stepWorld(world: World, input: SimInput): void {
   const dt = TICK_SEC;
-  if (isAwaitingChoice(world)) return;
+  if (isAwaitingChoice(world) || isAwaitingBlessing(world)) return;
 
   // Неуязвимость после второго шанса тикает вместе с миром: пауза и выбор
   // улучшения её не съедают.
@@ -75,6 +76,9 @@ export function stepWorld(world: World, input: SimInput): void {
     updatePickups(world);
   }
   if (world.config.progressionEnabled) {
+    // Тайники — до подготовки выбора: клад выдаёт сундук, а сундук мог набрать
+    // уровень, и выбор встанет в этот же шаг.
+    updateSecrets(world);
     // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
     // мир к этому моменту уже в согласованном состоянии.
     prepareOffers(world);
@@ -237,6 +241,8 @@ function updateEnemies(world: World, dt: number): void {
     // Бьёт ли касанием — возможность паттерна, а не проверка его имени: у
     // стрелка таймер занят перезарядкой выстрела, подрывник бьёт взрывом.
     if (!type.contactDamage) continue;
+    // Пока горит вспышка строя, страж не кусает.
+    if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) continue;
 
     const dx = player.x - enemies.x[i];
     const dy = player.y - enemies.y[i];

@@ -17,7 +17,7 @@ import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-conti
 import { RUNS_LIMITS } from "../src/modules/runs/runs-limits.js";
 import { InsufficientBalance } from "../src/modules/wallet/wallet-ledger.js";
 import { emptyBalances } from "../src/modules/wallet/wallet-types.js";
-import { continueGems as compensationGems, CONTINUE_RATE as COMPENSATION_RATE } from "../src/modules/wipe/compensation-rules.js";
+import { compensationGemsForStars } from "../src/modules/wipe/compensation-rules.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 
@@ -77,7 +77,7 @@ describe("цена второго шанса в самоцветах", () => {
 describe("курс переехал из компенсации, числа те же", () => {
   it("курс в цене товара — тот же, что видит компенсация: 6 самоцветов за 5 звёзд", () => {
     expect(CONTINUE_RATE).toEqual({ gems: 6, stars: 5 });
-    expect(COMPENSATION_RATE).toBe(CONTINUE_RATE);
+    expect(compensationGemsForStars(10)).toBe(starsToGems(10));
   });
 
   it("компенсация после вайпа считает то же, что до переезда курса", () => {
@@ -92,7 +92,7 @@ describe("курс переехал из компенсации, числа те
       [51, 62],
     ];
     for (const [stars, gems] of before) {
-      expect(compensationGems(stars), `${String(stars)} ⭐`).toBe(gems);
+      expect(compensationGemsForStars(stars), `${String(stars)} ⭐`).toBe(gems);
       expect(starsToGems(stars), `${String(stars)} ⭐`).toBe(gems);
     }
   });

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "../../api/client";
 import {
   CHANNEL_KIND,
@@ -25,6 +25,7 @@ import {
   fetchTasks,
   groupByPeriod,
   partnerPlatforms,
+  reorderTasks,
   rewardLabel,
   saveTask,
   targetLabel,
@@ -34,6 +35,7 @@ import {
   withKind,
   withPlatform,
   type PoolTier,
+  type TaskGroup,
   type TaskParams,
   type TaskDef,
 } from "../../api/tasks";
@@ -43,6 +45,7 @@ import { ImageField } from "../../ui/image-field";
 import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
+import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
@@ -69,6 +72,10 @@ export function TasksScreen() {
   const [original, setOriginal] = useState<TaskDef | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
+  /** Новый порядок группы сразу, пока запрос в пути: без него строка прыгала бы назад и вперёд. */
+  const [override, setOverride] = useState<{ group: TaskGroup; ids: string[] } | null>(null);
+  /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
+  const [reordering, setReordering] = useState(false);
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
@@ -97,7 +104,23 @@ export function TasksScreen() {
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
-  const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints" | "sort") => ({
+  // Показанный порядок держится, пока не придёт перечитанный каталог: иначе строки на мгновение прыгали бы назад.
+  const loaded = state.status === "ok" ? state.data : null;
+  useEffect(() => setOverride(null), [loaded]);
+
+  const move = async (group: TaskGroup, ids: string[]) => {
+    setOverride({ group, ids });
+    setReordering(true);
+    setOutcome(null);
+    const result = await reorderTasks(api, group, ids);
+    setReordering(false);
+    // При ошибке (в том числе 400: список мог измениться у другого администратора) порядок возвращается к серверному.
+    if (!result.ok) setOverride(null);
+    setOutcome(result.ok ? { tone: "success", text: "Порядок сохранён" } : { tone: "danger", error: result.error });
+    reload();
+  };
+
+  const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints") => ({
     value: String(input[field]),
     onChange: (event: { target: { value: string } }) => setInput({ ...input, [field]: event.target.value === "" ? 0 : Number(event.target.value) }),
     type: "number",
@@ -264,9 +287,6 @@ export function TasksScreen() {
             <Field label="Очки пасса" help={HELP.tasks.passPoints}>
               <Input {...number("passPoints")} />
             </Field>
-            <Field label="Порядок" help={HELP.tasks.order}>
-              <Input {...number("sort")} />
-            </Field>
             <label className="flex items-center gap-1.5 pb-1.5 text-sm">
               <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
               включено
@@ -297,9 +317,10 @@ export function TasksScreen() {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
         ? groupByPeriod(state.data.tasks).map((group) => (
-            <Panel key={group.group} title={GROUP_TITLES[group.group]}>
+            <Panel key={group.group} title={GROUP_TITLES[group.group]} help={HELP.tasks.order}>
               <DataTable
-                rows={group.tasks}
+                rows={override?.group === group.group ? applyOrder(group.tasks, override.ids, (task) => task.taskId) : group.tasks}
+                reorder={{ labelOf: (task) => task.taskId, onReorder: (ids) => void move(group.group, ids), disabled: reordering }}
                 rowKey={(task) => task.taskId}
                 onRowClick={(task) => {
                   setInput({ ...task });
@@ -346,7 +367,6 @@ export function TasksScreen() {
                       ]
                     : []),
                   { title: "Пасс", align: "right", render: (task) => String(task.passPoints) },
-                  { title: "Порядок", align: "right", render: (task) => String(task.sort) },
                   { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },
                 ]}
               />
