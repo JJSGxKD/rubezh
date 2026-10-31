@@ -151,12 +151,12 @@ function tableOf(model: string): string {
 }
 
 describe("захват таблиц на время вайпа: список и текст", () => {
-  it("список — 19 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
+  it("список — 20 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
     const expected = [...WIPE_ORDER.map((model) => tableOf(model)), "purchase", "tester_compensation"];
 
     expect([...WIPE_LOCK_TABLES].sort()).toEqual([...expected].sort());
     expect(new Set(WIPE_LOCK_TABLES).size).toBe(WIPE_LOCK_TABLES.length);
-    expect(WIPE_LOCK_TABLES).toHaveLength(21);
+    expect(WIPE_LOCK_TABLES).toHaveLength(22);
   });
 
   it("текст отказа по сроку: 10 секунд из «Решений», остальные — со склонением", () => {
@@ -322,6 +322,8 @@ async function seed(prisma: PrismaClient, ids: Ids): Promise<void> {
   await prisma.run.create({
     data: { runId: ids.run, accountId: ids.tester, status: "finished", difficulty: "normal", startingWeaponId: "knife", contentHash: "abc", cheats: false, finishedAt: NOW },
   });
+  // Второй шанс за самоцветы (T-0324): своя таблица, вайп стирает её своим шагом до забега.
+  await prisma.runGemContinue.create({ data: { runId: ids.run, continueNo: 1, accountId: ids.tester, elapsedSec: 120, priceGems: 4, grantedAt: NOW } });
   await prisma.item.create({
     data: { itemId: randomUUID(), accountId: ids.tester, slot: "weapon", rarity: "rare", level: 3, seed: 7n, rolls: [], source: "run", createdAt: NOW, updatedAt: NOW },
   });
@@ -395,7 +397,7 @@ describe.skipIf(DATABASE_URL === "")("команда вайпа на време�
     const plan = await planWipe(prisma, NOW);
 
     expect(plan.rows).toMatchObject({
-      Account: 2, Run: 1, Item: 1, WalletBalance: 1, WalletDaily: 1, WalletEntry: 1, AccountProgress: 1, DailyReward: 1, Notification: 1, BotMentionTask: 2,
+      Account: 2, Run: 1, RunGemContinue: 1, Item: 1, WalletBalance: 1, WalletDaily: 1, WalletEntry: 1, AccountProgress: 1, DailyReward: 1, Notification: 1, BotMentionTask: 2,
       Purchase: 3, Friendship: 1, AccountRestriction: 1, VipSubscription: 1, VipPeriod: 1, TesterCompensation: 0, RunReward: 0, RunBoost: 0,
     });
     expect(Object.keys(plan.rows).sort()).toEqual(Object.keys(WIPE_PLAN).sort());
@@ -412,6 +414,7 @@ describe.skipIf(DATABASE_URL === "")("команда вайпа на време�
     await expect(runWipe(prisma, NOW, failing)).rejects.toThrow("сбой");
 
     expect(await prisma.run.count()).toBe(1);
+    expect(await prisma.runGemContinue.count()).toBe(1);
     expect(await prisma.runReward.count()).toBe(0);
     expect(await prisma.item.count()).toBe(1);
     expect(await prisma.walletEntry.count()).toBe(1);
@@ -435,19 +438,22 @@ describe.skipIf(DATABASE_URL === "")("команда вайпа на време�
     expect(seen).toBe("10min");
   });
 
-  it("runWipe: 19 моделей пусты, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
+  it("runWipe: 20 моделей пусты, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
 
     const result = await runWipe(prisma, NOW);
 
     const after = await planWipe(prisma, NOW);
     for (const model of WIPE_ORDER) expect(after.rows[model], model).toBe(0);
-    expect(WIPE_ORDER).toHaveLength(19);
+    expect(WIPE_ORDER).toHaveLength(20);
     // Строки заданий «юзернейм бота» стёрты у всех, а аккаунты остались: серия после вайпа начинается заново.
     expect(await prisma.botMentionTask.count()).toBe(0);
     expect(after.rows).toMatchObject({ Account: 2, Friendship: 1, AccountRestriction: 1, VipSubscription: 1, VipPeriod: 1, Purchase: 3, TesterCompensation: 1 });
-    expect(result.deleted).toMatchObject({ Run: 1, Item: 1, WalletEntry: 1, WalletBalance: 1, WalletDaily: 1, AccountProgress: 1, DailyReward: 1, Notification: 1, BotMentionTask: 2, RunReward: 0 });
+    expect(result.deleted).toMatchObject({ Run: 1, RunGemContinue: 1, Item: 1, WalletEntry: 1, WalletBalance: 1, WalletDaily: 1, AccountProgress: 1, DailyReward: 1, Notification: 1, BotMentionTask: 2, RunReward: 0 });
     expect(Object.keys(result.deleted)).toEqual([...WIPE_ORDER]);
+    // Строки второго шанса стёрты своим шагом, а не только каскадом с забегом.
+    expect(await prisma.runGemContinue.count()).toBe(0);
+    expect(Object.keys(result.deleted).indexOf("RunGemContinue")).toBeLessThan(Object.keys(result.deleted).indexOf("Run"));
     expect(result.snapshot).toEqual({ accounts: 1, testers: 1, bonusGems: 60, restored: { gems: 150 }, continueStars: 4 });
 
     expect(await prisma.purchase.findUniqueOrThrow({ where: { purchaseId: ids.continuePurchase } })).toMatchObject({
@@ -521,7 +527,7 @@ describe.skipIf(DATABASE_URL === "")("захват таблиц на время 
     createdAt: NOW,
   });
 
-  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 19 таблиц плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
+  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 20 таблиц плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
     let locked: string[] = [];
     let lockTimeout = "";

@@ -233,6 +233,8 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     const stamps = async () => new Map((await prisma.$queryRaw<{ network_key: string; priority: number; updated_at: Date }[]>`SELECT network_key, priority, updated_at FROM ad_network`).map((row) => [row.network_key, row]));
     try {
       // Нумерация 0…n−1 ставится первой, чтобы дальше менялись только переставленные.
+      // Тот же порядок ничего не пишет (changed: false), поэтому — через обратный.
+      await catalog.reorderNetworks([...keys].reverse(), NOON);
       await catalog.reorderNetworks(keys, NOON);
       const base = await stamps();
       const swapped = [...keys];

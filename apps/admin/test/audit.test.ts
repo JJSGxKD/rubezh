@@ -46,6 +46,13 @@ describe("журнал аудита", () => {
     expect(auditObject(entry({ action: "names.rule.create", target: "00000000-0000-4000-8000-000000000001" }))).toEqual({ kind: "правило", label: "00000000", route: { section: "names", id: null } });
   });
 
+  it("перечистка ников: подписи трёх действий и объект «перечистка» (T-0339)", () => {
+    expect(actionTitle("names.reclean.start")).toBe("Запуск перечистки ников");
+    expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
+    expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");
+    expect(auditObject(entry({ action: "names.reclean.start", target: "00000000-0000-4000-8000-000000000009" }))).toEqual({ kind: "перечистка", label: "00000000", route: { section: "names", id: null } });
+  });
+
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
     const page = { entries: [entry({})], next: "2026-10-01T10:00:00.000Z_e1" };
     const { fetch, calls } = fakeFetch(json(200, { data: page }), json(200, { data: { entries: [], next: null } }));
