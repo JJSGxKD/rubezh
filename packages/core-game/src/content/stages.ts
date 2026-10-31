@@ -12,6 +12,11 @@ import type { EnemyStageDef } from "@bh/shared-types";
 //  * прежние ступени остаются в потоке: их вес не падает, добавляется вес
 //    новой. Крыса первой минуты приходит и на десятой — рядом с матёрой.
 //
+// После 5:30 у забега должна быть траектория роста: ступени идут раз в три
+// минуты (8:00, 11:00, 14:00), а вес каждой следующей больше предыдущей —
+// новая ступень занимает заметную долю потока, и к 14:00 ступени 4–6 дают
+// около половины врагов. Опыт при этом растёт быстрее здоровья.
+//
 // Элиты и мини-боссы ступеней не получают: они сами и есть контрольная точка
 // сложности, и приходят событием в назначенную минуту.
 export const ENEMY_STAGES: EnemyStageDef[] = [
@@ -33,5 +38,32 @@ export const ENEMY_STAGES: EnemyStageDef[] = [
     speedMul: 1.12,
     xpMul: 4,
     nameKey: "enemy.stage.ravaging",
+  },
+  {
+    fromSec: 480,
+    weight: 0.6,
+    hpMul: 5,
+    damageMul: 1.8,
+    speedMul: 1.16,
+    xpMul: 6,
+    nameKey: "enemy.stage.savage",
+  },
+  {
+    fromSec: 660,
+    weight: 0.7,
+    hpMul: 7,
+    damageMul: 2.1,
+    speedMul: 1.2,
+    xpMul: 9,
+    nameKey: "enemy.stage.frenzied",
+  },
+  {
+    fromSec: 840,
+    weight: 0.8,
+    hpMul: 9.5,
+    damageMul: 2.5,
+    speedMul: 1.24,
+    xpMul: 13,
+    nameKey: "enemy.stage.merciless",
   },
 ];
