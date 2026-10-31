@@ -45,6 +45,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/promo-codes/promo-codes.service.ts",
   "modules/changelog/changelog.service.ts",
   "modules/roles/tools.controller.ts",
+  // отказ выдачи ролей по уровням — сотруднику
+  "modules/roles/roles.service.ts",
   // уведомления в чат администраторов
   "modules/admin-notify/",
   // слоги имени, а не текст: «вы» — приставка
