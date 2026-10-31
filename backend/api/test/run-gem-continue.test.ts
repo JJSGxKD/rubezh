@@ -107,6 +107,8 @@ class MemoryGemContinues implements RunGemContinuesRepository {
   readonly rows: GemContinueRow[] = [];
   /** номера, занятые рекламой в базе, но ещё не видные книге сервиса */
   readonly adRows = new Map<string, number[]>();
+  /** ключи списания, уже занятые в журнале кошелька, хотя строки продолжения нет */
+  readonly busyKeys = new Set<string>();
   charged = 0;
 
   constructor(public gems: number) {}
@@ -119,6 +121,8 @@ class MemoryGemContinues implements RunGemContinuesRepository {
     const existing = await this.find(purchase.runId, purchase.continueNo);
     if (existing !== null) return existing.accountId === purchase.accountId ? { status: "repeat", row: existing } : { status: "taken" };
     if ((this.adRows.get(purchase.runId) ?? []).includes(purchase.continueNo)) return { status: "taken" };
+    // Занятый ключ списания без строки — отказ, как у базы: ни строки, ни списания.
+    if (this.busyKeys.has(`continue:${purchase.runId}:${String(purchase.continueNo)}`)) return { status: "taken" };
     if (this.gems < purchase.priceGems) throw new InsufficientBalance("gems", purchase.priceGems);
     this.gems -= purchase.priceGems;
     this.charged += purchase.priceGems;
@@ -207,6 +211,18 @@ describe("покупка продолжения за самоцветы", () => 
     expect(await service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3))).toEqual({ continueNo: 1, priceGems: 4, balance: 46 });
     expect(repository.rows).toEqual([{ runId: "run-1", continueNo: 1, accountId: ME, elapsedSec: 125, priceGems: 4, grantedAt: at(3) }]);
     expect(await continues.taken("run-1")).toEqual(new Set([1]));
+  });
+
+  it("репозиторий ответил «занято» (ключ списания без строки) — 409 continue_taken, ничего не списано и не записано", async () => {
+    const { service, runs, repository, continues } = setup(50);
+    await started(runs, "run-1");
+    repository.busyKeys.add("continue:run-1:1");
+
+    await expect(service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3))).rejects.toMatchObject({ code: "continue_taken", status: 409 });
+
+    expect(repository.rows).toEqual([]);
+    expect(repository.gems).toBe(50);
+    expect(await continues.taken("run-1")).toEqual(new Set());
   });
 
   it("повтор того же номера — тот же ответ, без второго списания; даже когда забег уже закончен", async () => {
