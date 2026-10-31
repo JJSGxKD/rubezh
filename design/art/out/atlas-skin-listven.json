@@ -1,0 +1,134 @@
+{
+ "frames": {
+  "hero-listven/idle0": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 84,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 84,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-listven/idle1": {
+   "frame": {
+    "x": 88,
+    "y": 2,
+    "w": 87,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 0,
+    "w": 87,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-listven/walk0": {
+   "frame": {
+    "x": 177,
+    "y": 2,
+    "w": 84,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 84,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-listven/walk1": {
+   "frame": {
+    "x": 263,
+    "y": 2,
+    "w": 89,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 0,
+    "w": 89,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-listven/walk2": {
+   "frame": {
+    "x": 354,
+    "y": 2,
+    "w": 84,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 0,
+    "w": 84,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-listven/walk3": {
+   "frame": {
+    "x": 440,
+    "y": 2,
+    "w": 81,
+    "h": 118
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 30,
+    "y": 0,
+    "w": 81,
+    "h": 118
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-skin-listven.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 524,
+   "h": 124
+  },
+  "scale": "2.5"
+ }
+}
