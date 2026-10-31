@@ -95,13 +95,25 @@ const LAYOUT = {
   "21x9": { heroX: 0.5, heroH: 0.5, horizon: 0.5, horde: [0.58, 1.03], count: 120, boss: [0.9, 0.44, 0.34], text: "left", moon: true, chestDX: 0.17, timerX: 0.62 },
 };
 
-function page(format, variantId = "power") {
-  const { w, h } = FORMATS[format];
-  const L = LAYOUT[format];
+/**
+ * Кадр формата. `opts` — для пресетов генератора (`promo-presets.mjs`):
+ * `size` и `layout` — свой холст и раскладка, `seed` — своя толпа,
+ * `text: false` — только мир, без знака и надписей: их ставит документ
+ * пресета слоями поверх.
+ */
+export function page(format, variantId = "power", opts = {}) {
+  const { w, h } = opts.size ?? FORMATS[format];
+  const L = opts.layout ?? LAYOUT[format];
   const V = VARIANTS[variantId];
   const count = Math.round(L.count * V.density);
-  const rand = rng(format.length * 7919 + 17);
+  const rand = rng(opts.seed ?? format.length * 7919 + 17);
   const horizonY = h * L.horizon;
+  // Где кончается земля с толпой и масштаб спрайтов: на сторис толпа стоит
+  // выше нижней плашки, а спрайты меряются шириной сцены, а не высотой холста.
+  const floorY = (L.floor ?? 1) * h;
+  const unit = L.unit ?? h / 1080;
+  // Высота, от которой меряются частокол, луна и жар очага: по умолчанию — холст.
+  const H = L.unit !== undefined ? L.unit * 1080 : h;
   const sprites = {};
   const use = (key, svg) => {
     sprites[key] = svg;
@@ -115,11 +127,11 @@ function page(format, variantId = "power") {
     const kind = HORDE.find((x) => (pick -= x.share) < 0) ?? HORDE[0];
     const d = Math.pow(rand(), 0.8);
     const x = (L.horde[0] + V.shift + (L.horde[1] - L.horde[0] - V.shift) * Math.pow(rand(), 0.7)) * w;
-    const y = horizonY + d * (h - horizonY) * 0.92 + 10;
+    const y = horizonY + d * (floorY - horizonY) * 0.92 + 10;
     const stage = rand() < 0.2 ? 1 : 0;
     const key = use(`${kind.id}-${stage}-${k % 3}`, enemy(kind.id, stage, (k % 3) / 3).svg);
     const art = ENEMY_ART.find((a) => a.id === kind.id);
-    const size = art.radius * 2 * 1.25 * (1.4 + d * 4.2) * (h / 1080) * 1.9;
+    const size = art.radius * 2 * 1.25 * (1.4 + d * 4.2) * unit * 1.9;
     items.push({ key, x, y, size, z: y, dim: 0.55 + d * 0.45, flip: false });
   }
   // Вороны — над толпой, крупные пятна на небе.
@@ -127,7 +139,7 @@ function page(format, variantId = "power") {
     const key = use(`crow-${k % 2}`, enemy("circler_crow", 0, k % 2 ? 0.5 : 0).svg);
     const x = (L.horde[0] + (L.horde[1] - L.horde[0]) * rand()) * w;
     const y = horizonY * (0.45 + rand() * 0.45);
-    items.push({ key, x, y, size: 70 * (h / 1080) * (0.8 + rand() * 0.6), z: y - 2000, dim: 0.8 });
+    items.push({ key, x, y, size: 70 * unit * (0.8 + rand() * 0.6), z: y - 2000, dim: 0.8 });
   }
   // Элиты — ближе к герою, в золотой кайме.
   // У награды элиты уже пали: на месте ближней стоит сундук.
@@ -136,8 +148,8 @@ function page(format, variantId = "power") {
     const key = use(id, enemy(id, 0, 0.3).svg);
     const art = ENEMY_ART.find((a) => a.id === id);
     const x = (L.heroX + dx + 0.06) * w;
-    const y = horizonY + dd * (h - horizonY) * 0.9;
-    items.push({ key, x, y, size: art.radius * 2 * 1.25 * (1.4 + dd * 4.2) * (h / 1080) * 1.9, z: y, dim: 1 });
+    const y = horizonY + dd * (floorY - horizonY) * 0.9;
+    items.push({ key, x, y, size: art.radius * 2 * 1.25 * (1.4 + dd * 4.2) * unit * 1.9, z: y, dim: 1 });
   }
   // Босс — силуэт в глубине справа, крупно.
   const bossKey = use("boss", enemy("boss_matryoshka", 0, 0.2).svg);
@@ -149,8 +161,8 @@ function page(format, variantId = "power") {
   const fxItems = [];
   for (let k = 0; k < 18; k++) {
     const x = (L.heroX + (rand() - 0.2) * 0.3) * w;
-    const y = horizonY + (0.45 + rand() * 0.5) * (h - horizonY);
-    fxItems.push({ key: gemKey, x, y, size: 34 * (h / 1080), z: y - 1 });
+    const y = horizonY + (0.45 + rand() * 0.5) * (floorY - horizonY);
+    fxItems.push({ key: gemKey, x, y, size: 34 * unit, z: y - 1 });
   }
   for (let k = 0; k < 12; k++) {
     const target = items[Math.floor(rand() * Math.min(items.length, count))];
@@ -160,7 +172,7 @@ function page(format, variantId = "power") {
   const heroH = h * L.heroH;
   const heroKey = use("hero", hero("keeper"));
   const heroX = L.heroX * w;
-  const heroY = horizonY + (h - horizonY) * 0.62;
+  const heroY = L.heroY !== undefined ? L.heroY * h : horizonY + (h - horizonY) * 0.62;
   const wardKey = use("ward", fx("orbiter_ward", 0));
   const sparkKey = use("spark", fx("proj_spark", 0));
 
@@ -198,7 +210,7 @@ function page(format, variantId = "power") {
         return `<i class="medal" style="left:${(mx - m / 2).toFixed(1)}px;top:${(my - m / 2).toFixed(1)}px;width:${m.toFixed(1)}px;height:${m.toFixed(1)}px;background-image:url(${b64(fx(id, 0))})"></i>`;
       })
       .join("");
-  } else if (V.extra === "timer" && L.text !== "top") {
+  } else if (V.extra === "timer" && L.text !== "top" && opts.text !== false) {
     over = `<div class="timer" style="position:absolute;left:${(L.timerX * w).toFixed(1)}px;top:${(0.08 * h).toFixed(1)}px;font-size:${(h * 0.075).toFixed(1)}px">${timerInner}</div>`;
   }
 
@@ -222,7 +234,13 @@ function page(format, variantId = "power") {
 
   // В квадрате таймер — строкой между знаком и подписью: сбоку ему нет места.
   const timerRow = V.extra === "timer" ? `<div class="timer" style="display:inline-flex;transform:none;margin-top:${(h * 0.01).toFixed(1)}px;font-size:${(h * 0.062).toFixed(1)}px">${timerInner}</div>` : "";
-  const text = L.text === "top"
+  // Затемнение под надписи пресета: слои документа без тени, и текст поверх
+  // частокола и толпы читается только на тёмном.
+  const SHADE_DIR = { left: "90deg", top: "180deg", bottom: "0deg" };
+  const shade = (L.shade ?? [])
+    .map(({ side, extent }) => `<div style="position:absolute;inset:0;background:linear-gradient(${SHADE_DIR[side]},#0c0a16e0 0%,#0c0a16b3 ${(extent * 55).toFixed(0)}%,transparent ${(extent * 100).toFixed(0)}%)"></div>`)
+    .join("");
+  const text = opts.text === false ? "" : L.text === "top"
     ? `<div class="txt" style="left:0;right:0;top:${h * 0.04}px;text-align:center"><img class="wm" src="${b64(wm)}" style="width:${w * (timerRow === "" ? 0.62 : 0.5)}px">${timerRow}<div class="tag" style="font-size:${h * 0.036}px">${V.headline}</div></div>
        <div class="cta" style="left:50%;transform:translateX(-50%);bottom:${h * 0.05}px;font-size:${h * 0.04}px">Играть бесплатно — в Telegram</div>`
     : `<div class="txt" style="left:${w * 0.04}px;top:${h * 0.08}px;width:${w * (format === "21x9" ? 0.32 : 0.4)}px"><img class="wm" src="${b64(wm)}" style="width:100%"><div class="tag" style="font-size:${h * 0.036}px;text-align:left;margin-top:${h * 0.012}px">${V.headline}${/[.?!]$/.test(V.headline) ? "" : "."}<br><span style="color:#d7d2ea;font-size:.82em">${V.sub}</span></div><div class="cta" style="position:relative;display:inline-block;margin-top:${h * 0.035}px;font-size:${h * 0.04}px">Играть бесплатно — в Telegram</div></div>`;
@@ -234,16 +252,16 @@ function page(format, variantId = "power") {
 @font-face { font-family: "Russo One"; src: url("../../../packages/app-shell/node_modules/@fontsource/russo-one/files/russo-one-latin-400-normal.woff2") format("woff2"); unicode-range: U+0000-00FF, U+2000-206F; }
 body{margin:0}
 .art{position:relative;width:${w}px;height:${h}px;overflow:hidden;background:linear-gradient(180deg,#2a1d4a 0%,#3a2860 ${L.horizon * 45}%,#4b3470 ${L.horizon * 92}%,#2c475e ${L.horizon * 100}%,#2c475e 70%,#1d2c3c 100%);font-family:"Russo One",system-ui}
-.moon{position:absolute;right:${w * 0.1}px;top:${h * 0.07}px;width:${h * 0.16}px;height:${h * 0.16}px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#fff6e0,#f2d9b0 60%,#d9b98a);box-shadow:0 0 ${h * 0.08}px ${h * 0.03}px #ffe7b855}
+.moon{position:absolute;right:${w * 0.1}px;top:${H * 0.07}px;width:${H * 0.16}px;height:${H * 0.16}px;border-radius:50%;background:radial-gradient(circle at 40% 40%,#fff6e0,#f2d9b0 60%,#d9b98a);box-shadow:0 0 ${H * 0.08}px ${H * 0.03}px #ffe7b855}
 .star{position:absolute;border-radius:50%;background:#fff}
-.hearth{position:absolute;left:${L.heroX * w - h * 0.5}px;top:${horizonY - h * 0.25}px;width:${h}px;height:${h * 0.9}px;background:radial-gradient(closest-side,#ff8f3f66,#ff8f3f22 55%,transparent);}
+.hearth{position:absolute;left:${L.heroX * w - H * 0.5}px;top:${horizonY - H * 0.25}px;width:${H}px;height:${H * 0.9}px;background:radial-gradient(closest-side,#ff8f3f66,#ff8f3f22 55%,transparent);}
 .ground{position:absolute;left:0;right:0;top:${horizonY}px;bottom:0;background:radial-gradient(120% 90% at ${L.heroX * 100}% 30%,#3d5c74,#2c475e 55%,#1a2836)}
-.stakes{position:absolute;left:0;right:0;top:${horizonY - h * 0.1}px;height:${h * 0.12}px;background:url(${b64(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="120"><path d="M2 120V30L22 4L42 30V120Z" fill="#120d20" stroke="#ff8f3f" stroke-opacity=".5" stroke-width="2"/></svg>`)}) repeat-x bottom/${h * 0.045}px ${h * 0.12}px}
+.stakes{position:absolute;left:0;right:0;top:${horizonY - H * 0.1}px;height:${H * 0.12}px;background:url(${b64(`<svg xmlns="http://www.w3.org/2000/svg" width="44" height="120"><path d="M2 120V30L22 4L42 30V120Z" fill="#120d20" stroke="#ff8f3f" stroke-opacity=".5" stroke-width="2"/></svg>`)}) repeat-x bottom/${H * 0.045}px ${H * 0.12}px}
 .s{position:absolute;background-size:contain;background-repeat:no-repeat;background-position:center}
 .trail{position:absolute;border-radius:99px;background:linear-gradient(90deg,transparent,#ffe7a3cc);filter:blur(2px);transform-origin:right center}
 .beam{position:absolute;background:linear-gradient(0deg,#ffd15ccc,#ffd15c44 45%,transparent);filter:blur(6px);mix-blend-mode:screen;border-radius:40%}
 .pool{position:absolute;border-radius:50%;background:radial-gradient(closest-side,#ffd15caa,#ffb22e44 55%,transparent);mix-blend-mode:screen}
-.medal{position:absolute;z-index:4;border-radius:50%;background-color:#17162a;background-size:78%;background-repeat:no-repeat;background-position:center;box-shadow:0 0 0 .2em #ffd15c,0 0 0 .34em #7a4a33,0 0 1.2em .3em #ffd15c88;font-size:${(h / 1080) * 16}px}
+.medal{position:absolute;z-index:4;border-radius:50%;background-color:#17162a;background-size:78%;background-repeat:no-repeat;background-position:center;box-shadow:0 0 0 .2em #ffd15c,0 0 0 .34em #7a4a33,0 0 1.2em .3em #ffd15c88;font-size:${unit * 16}px}
 .timer{z-index:5;transform:translateX(-50%);display:flex;align-items:center;gap:.25em;padding:.12em .5em .1em;border-radius:.22em;color:#fff;background:#17162ae6;box-shadow:inset 0 0 0 .05em #ffd15c88,0 .2em .8em #000a;font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .timer .rec{color:#ffd15c;font-size:.32em;text-transform:uppercase;letter-spacing:.12em;align-self:flex-end;margin-bottom:.55em}
 .vig{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 45%,transparent 55%,#0c0a16cc);pointer-events:none}
@@ -255,7 +273,7 @@ ${css}
 </style></head><body><div class="art">
 ${L.moon ? '<div class="moon"></div>' : ""}${stars}<div class="hearth"></div><div class="ground"></div><div class="stakes"></div>
 ${under}${all.map(sprite).join("\n")}${over}
-<div class="vig"></div>${text}
+<div class="vig"></div>${shade}${text}
 </div></body></html>`;
 }
 
