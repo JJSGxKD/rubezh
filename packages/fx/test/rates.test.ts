@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Decimal, decimal, positive } from "../src/decimal.js";
-import { manualRate, manualToRate } from "../src/manual.js";
+import { MARKET_MANUAL_MAX_DAYS, PLATFORM_MANUAL_MAX_DAYS, manualRate, manualToRate } from "../src/manual.js";
 import { quoteFromUnitsPerUsd, quotesViaHome } from "../src/quote.js";
 import {
   MissingRateError,
@@ -167,5 +167,40 @@ describe("заданный курс площадки", () => {
   it("котировка в валюте площадки запрещена: у неё самой нет рынка", () => {
     const setAt = new Date("2026-09-25T00:00:00Z");
     expect(() => manualRate({ currency: "XTR", purpose: "price", price: "1", quote: "XTR", setBy: "a1", setAt, expiresAt: new Date("2026-12-25T00:00:00Z"), note: "" })).toThrow(/нет рынка/);
+  });
+
+  describe("запасной ручной курс рыночной валюты (T-0064)", () => {
+    const setAt = new Date("2026-09-25T12:00:00Z");
+    const days = (count: number) => new Date(setAt.getTime() + count * 86_400_000);
+    const rub = (patch: Record<string, unknown> = {}) =>
+      manualRate({ currency: "RUB", purpose: "price", price: "0.011", quote: "USD", setBy: "a1", setAt, expiresAt: days(7), note: "источники легли", ...patch } as Parameters<typeof manualRate>[0]);
+
+    it("рубль в долларах на 7 дней — курс", () => {
+      expect(rub().price.toString()).toBe("0.011");
+      expect(MARKET_MANUAL_MAX_DAYS).toBe(7);
+      expect(PLATFORM_MANUAL_MAX_DAYS).toBe(90);
+    });
+
+    it("рубль в евро — отказ: цепочка ручных курсов замкнулась бы", () => {
+      expect(() => rub({ quote: "EUR" })).toThrow(RangeError);
+      expect(() => rub({ quote: "EUR" })).toThrow(/в долларах/);
+    });
+
+    it("рубль с целью payout — отказ: курс вывода есть только у валют площадок", () => {
+      expect(() => rub({ purpose: "payout" })).toThrow(RangeError);
+    });
+
+    it("рубль на 8 дней — отказ: запас на время сбоя, а не способ зафиксировать курс", () => {
+      expect(() => rub({ expiresAt: days(8) })).toThrow(/7/);
+    });
+
+    it("доллару курс не задают", () => {
+      expect(() => rub({ currency: "USD" })).toThrow(RangeError);
+    });
+
+    it("Gram и USDT — тоже в долларах и на цену", () => {
+      expect(manualRate({ currency: "GRAM", purpose: "price", price: "5.4", setBy: "a1", setAt, expiresAt: days(3), note: "" }).quote).toBe("USD");
+      expect(() => manualRate({ currency: "USDT", purpose: "payout", price: "1", setBy: "a1", setAt, expiresAt: days(3), note: "" })).toThrow(RangeError);
+    });
   });
 });

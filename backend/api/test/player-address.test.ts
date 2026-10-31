@@ -36,6 +36,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/ads/ad-networks.ts",
   "modules/ads/adsgram-reward.controller.ts",
   "modules/restrictions/restriction-rules.ts",
+  // отказ «Обновить сейчас» у источника курсов — сотруднику
+  "modules/fx/fx.service.ts",
   // перечистка ников из панели: тексты ошибок для сотрудника
   "modules/name-rules/name-rules-reclean.job.ts",
   "modules/name-rules/name-rules-reclean.service.ts",
