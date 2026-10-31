@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
+import type { FunnelRow, Period } from "./funnel";
 import { LINK_NETWORKS, LINK_TARGETS } from "./links";
 
 /**
@@ -50,6 +51,16 @@ export const LINKS_BOUND_HELP = "Сколько приведённых игро�
 export const NO_LINK_FOR_INACTIVE = "Ссылку заводят только активному партнёру: игроков по ней всё равно никто бы не привязал";
 export const NO_BINDING_NOTE = "Новые игроки к партнёру не привязываются";
 export const NO_ACCRUAL_NOTE = "начисления — после модели учёта";
+
+/** Подсказки блока воронки партнёра. Словарь подсказок панели (`ui/help.ts`) вне зон T-0068, поэтому тексты — рядом с блоком. */
+export const FUNNEL_HELP = {
+  block:
+    "Что делают игроки, привязанные к партнёру, — те же девять вех, что в разделе «Воронка». Период считается по дате привязки к партнёру, а не по первому визиту: так видно, как давно партнёр приводит игроков. Пришедшие по его ссылке, но привязанные к другому, сюда не входят.",
+  sources: "Откуда игрок привязан: по ссылке партнёра (кампания и код) или по его промокоду (название кампании). Ссылка с двух площадок — одна строка. Если ссылку или код потом удалили, строка так и называется.",
+  platforms: "Те же игроки по площадкам их аккаунтов: где партнёр приводит больше и где игроки доходят дальше.",
+} as const;
+
+export const NO_FUNNEL_PLAYERS = "За период к партнёру никто не привязан";
 
 const statsSchema = z.object({
   codes: z.number(),
@@ -193,6 +204,51 @@ export function fetchPartners(api: AdminApi): Promise<ApiResult<PartnerCatalog>>
 
 export function fetchPartner(api: AdminApi, partnerId: string): Promise<ApiResult<PartnerDetail>> {
   return api.request(`/partners/${encodeURIComponent(partnerId)}`, { schema: detailSchema });
+}
+
+/** Вехи игроков партнёра в одном срезе: те же, что в отчёте «Воронка», без разреза. */
+const funnelCountsSchema = z.object({
+  accounts: z.number(),
+  entered: z.number(),
+  appOpened: z.number(),
+  firstRunStarted: z.number(),
+  firstRunFinished: z.number(),
+  runs2: z.number(),
+  runs5: z.number(),
+  returnedD1: z.number(),
+  returnedD7: z.number(),
+  firstPurchase: z.number(),
+});
+export type PartnerFunnelCounts = z.infer<typeof funnelCountsSchema>;
+
+/**
+ * Воронка игроков партнёра (Р96, T-0068): привязанные к нему за период по дате привязки — все вместе,
+ * по ссылке или коду и по площадке. Вид источника, которого панель не знает, — ошибка разбора: молча
+ * пустая таблица спрятала бы игроков.
+ */
+export const partnerFunnelSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  total: funnelCountsSchema,
+  sources: z.array(z.object({ via: z.enum(["link", "code"]), name: z.string().nullable(), ref: z.string().nullable(), counts: funnelCountsSchema })),
+  platforms: z.array(z.object({ platform: z.string(), counts: funnelCountsSchema })),
+});
+export type PartnerFunnel = z.infer<typeof partnerFunnelSchema>;
+export type PartnerFunnelSource = PartnerFunnel["sources"][number];
+
+export function fetchPartnerFunnel(api: AdminApi, partnerId: string, period: Period): Promise<ApiResult<PartnerFunnel>> {
+  return api.request(`/partners/${encodeURIComponent(partnerId)}/funnel`, { query: { from: period.from, to: period.to }, schema: partnerFunnelSchema });
+}
+
+/** Вехи партнёра — строкой отчёта «Воронка»: полосы и «где теряем» считаются теми же функциями, что на том экране. */
+export function funnelRowOf(counts: PartnerFunnelCounts, label: string): FunnelRow {
+  return { platform: "все", startKind: "все", startRef: label, startSource: null, ...counts };
+}
+
+/** Как назвать источник привязки: ссылка — кампания и код, код — название кампании промокода; удалённое называется честно. */
+export function sourceTitle(source: Pick<PartnerFunnelSource, "via" | "name" | "ref">): string {
+  if (source.via === "link") return source.name === null ? `ссылка ${source.ref ?? ""}`.trim() : `ссылка ${source.name} · ${source.ref ?? ""}`.replace(/ · $/, "");
+  return source.name === null ? "код (кампании больше нет)" : `код «${source.name}»`;
 }
 
 export function createPartner(api: AdminApi, form: PartnerForm): Promise<ApiResult<Partner>> {

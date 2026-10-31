@@ -1,14 +1,15 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PARTNER_STATUSES, partnerInputSchema } from "../partners/partner-rules.js";
-import { PartnersService, type PartnerDetail, type PartnerView } from "../partners/partners.service.js";
+import { PartnersService, type PartnerDetail, type PartnerFunnel, type PartnerView } from "../partners/partners.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
-import { parse } from "./admin-parse.js";
+import { periodQuerySchema } from "./dto/admin.dto.js";
+import { parse, periodOf } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
 /** Смена статуса: сам статус и причина; длину причины проверяет сервис — одна проверка на все пути. */
@@ -38,6 +39,14 @@ export class AdminPartnersController {
   @RequirePermission("partners.view")
   async detail(@Req() request: unknown, @Param("partnerId") partnerId: string): Promise<{ data: PartnerDetail }> {
     return { data: await this.partners.detail(accountOf(request), partnerIdOf(partnerId)) };
+  }
+
+  /** Воронка игроков партнёра за период (по дате привязки); умолчание — тридцать суток. */
+  @Get(":partnerId/funnel")
+  @RequirePermission("partners.view")
+  async funnel(@Req() request: unknown, @Param("partnerId") partnerId: string, @Query() query: unknown): Promise<{ data: PartnerFunnel }> {
+    const period = periodOf(parse(() => periodQuerySchema.parse(query), "Некорректный период"), new Date());
+    return { data: await this.partners.funnel(accountOf(request), partnerIdOf(partnerId), period.from, period.to) };
   }
 
   @Post()
