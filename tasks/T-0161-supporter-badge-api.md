@@ -1,6 +1,6 @@
 ---
 id: T-0161
-title: Знак «Поддержал проект» в ответах входа, рейтинга и сезонов — сервер
+title: Знак «Меценат» в ответах входа, рейтинга и сезонов — сервер
 epic: E1
 priority: P2
 status: ready
@@ -29,14 +29,14 @@ design: null
 batch: 3
 ---
 
-# T-0161. Знак «Поддержал проект» в ответах входа, рейтинга и сезонов — сервер
+# T-0161. Знак «Меценат» в ответах входа, рейтинга и сезонов — сервер
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0161.json)](README.md#значки-статуса) [![T-0157](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0157.json&label=T-0157)](archive/T-0157-donations-backend.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md)
 
 ## Зачем
 
 Р109 (`docs/35-stage4-plan.md`, 19.10.2026): поддержавшему проект показывается
-знак «Поддержал проект» в профиле и рейтинге. T-0157 ставит и снимает знак
+знак «Меценат» в профиле и рейтинге. T-0157 ставит и снимает знак
 (колонка `account.supporter_at`), эта задача отдаёт его клиенту: в ответе входа,
 в строках рейтинга и в таблице сезона. Экраны — T-0158.
 
@@ -119,7 +119,7 @@ batch: 3
 
 ## PR
 
-- **Заголовок:** `feat(auth): Знак «Поддержал проект» в ответах сервера`
+- **Заголовок:** `feat(auth): Знак «Меценат» в ответах сервера`
 - **Метка:** `release: minor`
 - **Для игроков:** нет — знак появится на экранах с задачей клиента (T-0158)
 - **Сводка для команды:**
@@ -127,5 +127,5 @@ batch: 3
   ```
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — ЗНАК «ПОДДЕРЖАЛ ПРОЕКТ» В ОТВЕТАХ СЕРВЕРА**
 
-  Сервер отдаёт знак «Поддержал проект» во входе, в строках рейтинга и в таблице сезона. Знак ставит и снимает задача про донаты, эта только показывает его клиенту.
+  Сервер отдаёт знак «Меценат» во входе, в строках рейтинга и в таблице сезона. Знак ставит и снимает задача про донаты, эта только показывает его клиенту.
   ```
