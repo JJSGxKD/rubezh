@@ -121,6 +121,7 @@ erDiagram
     SEASON ||--o{ SEASON_REWARD : "награды аккаунтов"
     ACCOUNT ||--o{ SEASON_RESULT : "место в закрытом сезоне"
     ACCOUNT ||--o{ SEASON_REWARD : "награда за сезон"
+    NAME_RULE ||--o{ NAME_RULE_HIT_DAY : "считается по суткам"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -1092,6 +1093,12 @@ erDiagram
         datetime created_at
         datetime updated_at
         uuid updated_by "nullable: кто менял последним, без внешнего ключа"
+    }
+
+    NAME_RULE_HIT_DAY {
+        uuid rule_id PK "и FK на NAME_RULE, каскадом: удалённое правило уносит свои строки"
+        date day PK "сутки UTC"
+        int hits "сколько раз правило изменило результат входа игрока за сутки; CHECK не меньше нуля"
     }
 ```
 
@@ -2079,6 +2086,7 @@ flowchart LR
     AUTH --> PG
     AUTH --> REDIS
     AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
+    AUTH -. вход → буфер в памяти → очередь name-rule-hits раз в 5 с → счётчик name_rule_hit_day .-> NAME_RULES
     NAME_RULES --> PG
     NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
