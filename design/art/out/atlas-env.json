@@ -1,8 +1,48 @@
 {
  "frames": {
-  "decor/landmark_pillar0": {
+  "secret/tree/active": {
    "frame": {
     "x": 2,
+    "y": 2,
+    "w": 127,
+    "h": 175
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 0,
+    "w": 127,
+    "h": 175
+   },
+   "sourceSize": {
+    "w": 175,
+    "h": 175
+   }
+  },
+  "secret/tree/found": {
+   "frame": {
+    "x": 131,
+    "y": 2,
+    "w": 122,
+    "h": 175
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 26,
+    "y": 0,
+    "w": 122,
+    "h": 175
+   },
+   "sourceSize": {
+    "w": 175,
+    "h": 175
+   }
+  },
+  "decor/landmark_pillar0": {
+   "frame": {
+    "x": 255,
     "y": 2,
     "w": 107,
     "h": 161
@@ -22,7 +62,7 @@
   },
   "decor/landmark_well0": {
    "frame": {
-    "x": 111,
+    "x": 364,
     "y": 2,
     "w": 122,
     "h": 149
@@ -40,10 +80,130 @@
     "h": 150
    }
   },
+  "secret/shrine/active": {
+   "frame": {
+    "x": 488,
+    "y": 2,
+    "w": 144,
+    "h": 144
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 8,
+    "y": 1,
+    "w": 144,
+    "h": 144
+   },
+   "sourceSize": {
+    "w": 160,
+    "h": 160
+   }
+  },
+  "secret/rift/active": {
+   "frame": {
+    "x": 634,
+    "y": 2,
+    "w": 134,
+    "h": 129
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 8,
+    "y": 0,
+    "w": 134,
+    "h": 129
+   },
+   "sourceSize": {
+    "w": 150,
+    "h": 150
+   }
+  },
+  "secret/shrine/found": {
+   "frame": {
+    "x": 770,
+    "y": 2,
+    "w": 144,
+    "h": 121
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 8,
+    "y": 24,
+    "w": 144,
+    "h": 121
+   },
+   "sourceSize": {
+    "w": 160,
+    "h": 160
+   }
+  },
+  "secret/rift/found": {
+   "frame": {
+    "x": 2,
+    "y": 179,
+    "w": 122,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 14,
+    "y": 18,
+    "w": 122,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 150,
+    "h": 150
+   }
+  },
+  "secret/stone/active": {
+   "frame": {
+    "x": 126,
+    "y": 179,
+    "w": 81,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 14,
+    "w": 81,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 125,
+    "h": 125
+   }
+  },
+  "secret/stone/found": {
+   "frame": {
+    "x": 209,
+    "y": 179,
+    "w": 59,
+    "h": 110
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 14,
+    "w": 59,
+    "h": 110
+   },
+   "sourceSize": {
+    "w": 125,
+    "h": 125
+   }
+  },
   "decor/grave1": {
    "frame": {
-    "x": 235,
-    "y": 2,
+    "x": 270,
+    "y": 179,
     "w": 57,
     "h": 69
    },
@@ -62,8 +222,8 @@
   },
   "decor/grave0": {
    "frame": {
-    "x": 294,
-    "y": 2,
+    "x": 329,
+    "y": 179,
     "w": 57,
     "h": 60
    },
@@ -82,8 +242,8 @@
   },
   "decor/cross0": {
    "frame": {
-    "x": 353,
-    "y": 2,
+    "x": 388,
+    "y": 179,
     "w": 35,
     "h": 59
    },
@@ -102,8 +262,8 @@
   },
   "decor/cross1": {
    "frame": {
-    "x": 390,
-    "y": 2,
+    "x": 425,
+    "y": 179,
     "w": 37,
     "h": 59
    },
@@ -120,10 +280,50 @@
     "h": 65
    }
   },
+  "secret/hoard/active": {
+   "frame": {
+    "x": 464,
+    "y": 179,
+    "w": 72,
+    "h": 59
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 14,
+    "y": 32,
+    "w": 72,
+    "h": 59
+   },
+   "sourceSize": {
+    "w": 100,
+    "h": 100
+   }
+  },
+  "secret/hoard/found": {
+   "frame": {
+    "x": 538,
+    "y": 179,
+    "w": 62,
+    "h": 57
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 19,
+    "y": 33,
+    "w": 62,
+    "h": 57
+   },
+   "sourceSize": {
+    "w": 100,
+    "h": 100
+   }
+  },
   "decor/reeds0": {
    "frame": {
-    "x": 429,
-    "y": 2,
+    "x": 602,
+    "y": 179,
     "w": 28,
     "h": 47
    },
@@ -142,8 +342,8 @@
   },
   "decor/reeds1": {
    "frame": {
-    "x": 459,
-    "y": 2,
+    "x": 632,
+    "y": 179,
     "w": 30,
     "h": 47
    },
@@ -162,8 +362,8 @@
   },
   "decor/puddle0": {
    "frame": {
-    "x": 491,
-    "y": 2,
+    "x": 664,
+    "y": 179,
     "w": 77,
     "h": 43
    },
@@ -182,8 +382,8 @@
   },
   "decor/stump0": {
    "frame": {
-    "x": 570,
-    "y": 2,
+    "x": 743,
+    "y": 179,
     "w": 51,
     "h": 40
    },
@@ -202,8 +402,8 @@
   },
   "decor/puddle1": {
    "frame": {
-    "x": 623,
-    "y": 2,
+    "x": 796,
+    "y": 179,
     "w": 77,
     "h": 33
    },
@@ -222,8 +422,8 @@
   },
   "decor/grass0": {
    "frame": {
-    "x": 702,
-    "y": 2,
+    "x": 875,
+    "y": 179,
     "w": 23,
     "h": 31
    },
@@ -242,8 +442,8 @@
   },
   "decor/grass1": {
    "frame": {
-    "x": 727,
-    "y": 2,
+    "x": 900,
+    "y": 179,
     "w": 23,
     "h": 31
    },
@@ -262,8 +462,8 @@
   },
   "decor/grass2": {
    "frame": {
-    "x": 752,
-    "y": 2,
+    "x": 925,
+    "y": 179,
     "w": 23,
     "h": 31
    },
@@ -282,8 +482,8 @@
   },
   "decor/stone2": {
    "frame": {
-    "x": 777,
-    "y": 2,
+    "x": 950,
+    "y": 179,
     "w": 33,
     "h": 30
    },
@@ -302,8 +502,8 @@
   },
   "decor/stone1": {
    "frame": {
-    "x": 812,
-    "y": 2,
+    "x": 985,
+    "y": 179,
     "w": 33,
     "h": 29
    },
@@ -322,8 +522,8 @@
   },
   "decor/stone0": {
    "frame": {
-    "x": 847,
-    "y": 2,
+    "x": 2,
+    "y": 292,
     "w": 33,
     "h": 28
    },
@@ -342,8 +542,8 @@
   },
   "decor/bones1": {
    "frame": {
-    "x": 882,
-    "y": 2,
+    "x": 37,
+    "y": 292,
     "w": 30,
     "h": 27
    },
@@ -360,10 +560,50 @@
     "h": 40
    }
   },
+  "secret/wisp/active": {
+   "frame": {
+    "x": 69,
+    "y": 292,
+    "w": 27,
+    "h": 25
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 8,
+    "y": 10,
+    "w": 27,
+    "h": 25
+   },
+   "sourceSize": {
+    "w": 45,
+    "h": 45
+   }
+  },
+  "secret/wisp/hint": {
+   "frame": {
+    "x": 98,
+    "y": 292,
+    "w": 25,
+    "h": 21
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 8,
+    "y": 12,
+    "w": 25,
+    "h": 21
+   },
+   "sourceSize": {
+    "w": 45,
+    "h": 45
+   }
+  },
   "decor/bones0": {
    "frame": {
-    "x": 914,
-    "y": 2,
+    "x": 125,
+    "y": 292,
     "w": 32,
     "h": 20
    },
@@ -382,8 +622,8 @@
   },
   "decor/mushrooms0": {
    "frame": {
-    "x": 948,
-    "y": 2,
+    "x": 159,
+    "y": 292,
     "w": 25,
     "h": 20
    },
@@ -402,8 +642,8 @@
   },
   "decor/mushrooms1": {
    "frame": {
-    "x": 975,
-    "y": 2,
+    "x": 186,
+    "y": 292,
     "w": 24,
     "h": 20
    },
@@ -426,8 +666,8 @@
   "image": "atlas-env.png",
   "format": "RGBA8888",
   "size": {
-   "w": 1004,
-   "h": 168
+   "w": 1020,
+   "h": 324
   },
   "scale": "2.5"
  }

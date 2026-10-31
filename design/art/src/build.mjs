@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
 import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
+import { SECRETS } from "./secrets.mjs";
 import { creaturePalette, enemyBody, enemyEye, GOLD_RIM, hex, NAV_GLOW, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
@@ -96,6 +97,14 @@ export function cellSize(radius, k = CELL_K) {
 /** Все кадры атласов: имя → { svg, size }. */
 export function collectFrames() {
   const packs = { core: [], late: [], env: decorFrames(PPU) };
+  // Тайники — в паке мира рядом с декором: грузятся вместе с землёй, а их
+  // кадров немного. Имя — `secret/<вид>/<состояние>`, вид — как `SecretKind`
+  // в движке; центр кадра — центр тайника (T-0260).
+  for (const secret of SECRETS) {
+    for (const [state, draw] of Object.entries(secret.states)) {
+      packs.env.push({ name: `secret/${secret.id}/${state}`, svg: draw(), size: Math.ceil(secret.units * PPU) });
+    }
+  }
   for (const [state, frames] of Object.entries(HERO_STATES)) {
     frames.forEach((draw, k) => {
       packs.core.push({
