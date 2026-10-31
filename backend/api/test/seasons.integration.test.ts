@@ -715,11 +715,11 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
 
       const lines = log.mock.calls.map(([line]) => String(line)).filter((line) => line.includes('"season_closed"') || line.includes('"season_reward_claimed"'));
       expect(lines).toHaveLength(2);
-      for (const line of lines) {
-        const payload = JSON.parse(line) as Record<string, unknown>;
-        expect(Object.keys(payload).filter((key) => /board|доск|separate/i.test(key)), line).toEqual([]);
-        expect(line).not.toMatch(/"board"|separate|"full"|"common"/);
-      }
+      // Ключи — ровно те, что у событий T-0110: ни «доски», ни признака отдельной доски у них нет.
+      const keysOf = (event: string) => Object.keys(JSON.parse(lines.find((line) => line.includes(`"${event}"`)) ?? "{}") as Record<string, unknown>).sort();
+      expect(keysOf("season_closed")).toEqual(["board_size", "coins_total", "duration_ms", "event", "module", "players", "prestige_total", "rewarded", "season"]);
+      expect(keysOf("season_reward_claimed")).toEqual(["coins", "difficulty", "event", "kind", "module", "place", "prestige", "season"]);
+      for (const line of lines) expect(line).not.toMatch(/separate|"full"|"common"/);
     });
 
     it("живая таблица: наложение убирает аккаунт из общей, полная его держит; снятие возвращает недельное время из базы", async () => {
