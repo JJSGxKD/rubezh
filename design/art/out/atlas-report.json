@@ -1,12 +1,12 @@
 [
  {
   "pack": "core",
-  "frames": 141,
-  "atlas": "1020×896",
-  "fill": "79%",
-  "trim": "62% ячейки",
-  "png": "78 КБ",
-  "gpu": "3.5 МБ"
+  "frames": 155,
+  "atlas": "1020×1012",
+  "fill": "81%",
+  "trim": "60% ячейки",
+  "png": "94 КБ",
+  "gpu": "3.9 МБ"
  },
  {
   "pack": "late",
@@ -37,183 +37,183 @@
  },
  {
   "pack": "skin-herbalist",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-frost",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-gilded",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-dawn",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-keeper_ember",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "19 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-keeper_rushnik",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-keeper_storm",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-leaf_fall",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-pine_wood",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "19 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-maple",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-pine_mist",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "8 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "23 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-vityaz",
-  "frames": 6,
-  "atlas": "452×136",
-  "fill": "90%",
-  "trim": "39% ячейки",
-  "png": "6 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "960×264",
+  "fill": "60%",
+  "trim": "36% ячейки",
+  "png": "20 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-vedunya",
-  "frames": 6,
-  "atlas": "576×120",
-  "fill": "91%",
-  "trim": "62% ячейки",
-  "png": "8 КБ",
-  "gpu": "0.3 МБ"
+  "frames": 18,
+  "atlas": "976×232",
+  "fill": "78%",
+  "trim": "58% ячейки",
+  "png": "24 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-ohotnitsa",
-  "frames": 6,
-  "atlas": "500×132",
-  "fill": "90%",
-  "trim": "47% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.3 МБ"
+  "frames": 18,
+  "atlas": "980×256",
+  "fill": "66%",
+  "trim": "44% ячейки",
+  "png": "21 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-knyaz",
-  "frames": 6,
-  "atlas": "488×132",
-  "fill": "90%",
-  "trim": "45% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "964×256",
+  "fill": "66%",
+  "trim": "42% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "skin-skomoroh",
-  "frames": 6,
-  "atlas": "492×132",
-  "fill": "92%",
-  "trim": "44% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "22 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-skomoroh_night",
-  "frames": 6,
-  "atlas": "492×132",
-  "fill": "92%",
-  "trim": "44% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "20 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-skomoroh_maslenitsa",
-  "frames": 6,
-  "atlas": "492×132",
-  "fill": "92%",
-  "trim": "44% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "22 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-listven",
-  "frames": 6,
-  "atlas": "532×136",
-  "fill": "92%",
-  "trim": "44% ячейки",
-  "png": "8 КБ",
-  "gpu": "0.3 МБ"
+  "frames": 18,
+  "atlas": "1024×264",
+  "fill": "69%",
+  "trim": "41% ячейки",
+  "png": "24 КБ",
+  "gpu": "1.0 МБ"
  },
  {
   "pack": "skin-navi",
-  "frames": 6,
-  "atlas": "488×124",
-  "fill": "89%",
-  "trim": "53% ячейки",
-  "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "ground-neutral",

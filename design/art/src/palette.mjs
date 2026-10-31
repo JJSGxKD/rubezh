@@ -134,6 +134,8 @@ export const HERO = {
   edge: "#1d1c31",
   skin: "#f2c39b",
   skinShade: "#d39a76",
+  // Волосы — затылок под шапкой у вида спиной; венку ведуньи облик даёт свои.
+  hair: "#6b4a34",
   scarf: "#ff8f3f",
   scarfShade: "#c9652a",
   ward: "#46d9c6",

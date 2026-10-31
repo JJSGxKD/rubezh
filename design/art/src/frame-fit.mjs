@@ -19,7 +19,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { svgFrame } from "./build.mjs";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
+import { HERO_SKINS, HERO_STATES, HERO_VIEWS, heroDefs, withHeroPalette } from "./hero.mjs";
 import { creaturePalette, enemyBody, enemyEye } from "./palette.mjs";
 
 /** Запас под замер: шире любого разумного `pad`. */
@@ -43,11 +43,12 @@ export async function measure(browser) {
       items.push({ id: art.id, src: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` });
     }
   }
-  // Облики героя: голова и предмет архетипа — на общей позе, кадры покоя и шага.
+  // Облики героя: голова и предмет архетипа — на общей позе, кадры покоя и
+  // шага сбоку, спереди и спиной (у вида анфас предмет слева, у бокового — справа).
   const box = `${-50 * PROBE} ${-50 * PROBE} ${100 * PROBE} ${100 * PROBE}`;
   for (const skin of HERO_SKINS) {
-    for (const state of ["idle", "walk"]) {
-      for (const draw of HERO_STATES[state]) {
+    for (const states of [HERO_STATES, HERO_VIEWS.front, HERO_VIEWS.back]) {
+      for (const draw of [...states.idle, ...states.walk]) {
         const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${draw()}</svg>`);
         items.push({ id: `hero-${skin.id}`, src: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}` });
       }
