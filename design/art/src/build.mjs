@@ -12,7 +12,7 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
+import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, HERO_VIEWS, heroDefs, withHeroPalette } from "./hero.mjs";
 import { SECRETS } from "./secrets.mjs";
 import { creaturePalette, enemyBody, enemyEye, GOLD_RIM, hex, NAV_GLOW, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
@@ -119,29 +119,37 @@ export function collectFrames() {
       packs.env.push({ name: `secret/${secret.id}/${state}`, svg: draw(), size: Math.ceil(secret.units * PPU) });
     }
   }
-  for (const [state, frames] of Object.entries(HERO_STATES)) {
-    frames.forEach((draw, k) => {
-      packs.core.push({
-        name: `hero/${state}${k}`,
-        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${draw()}</svg>`,
-        size: cellSize(HERO_RADIUS, 2.6),
+  // Вид сбоку — `hero/<состояние>k`, как раньше; спереди и спиной —
+  // `hero/front/…` и `hero/back/…` (Р143, characters.md §4.1).
+  const heroViews = [["", HERO_STATES], ["front/", HERO_VIEWS.front], ["back/", HERO_VIEWS.back]];
+  for (const [view, states] of heroViews) {
+    for (const [state, frames] of Object.entries(states)) {
+      frames.forEach((draw, k) => {
+        packs.core.push({
+          name: `hero/${view}${state}${k}`,
+          svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${draw()}</svg>`,
+          size: cellSize(HERO_RADIUS, 2.6),
+        });
       });
-    });
+    }
   }
   // Облики — пак на облик (`skin-<id>`): в забеге нужен только свой, и с каждым
   // окрасом пасса общий пак рос бы для всех. Только покой и шаг: ранение и
-  // смерть — кадры обычного героя. Имена кадров — `hero-<id>/…`, как раньше.
+  // смерть — кадры обычного героя. Имена кадров — `hero-<id>/…`, как раньше,
+  // спереди и спиной — `hero-<id>/front/…` и `hero-<id>/back/…`.
   for (const skin of HERO_SKINS.slice(1)) {
     const frames = [];
-    for (const state of ["idle", "walk"]) {
-      HERO_STATES[state].forEach((draw, k) => {
-        // Запас клетки (`pad`) — для головы архетипа выше общей позы: шлем,
-        // венец, бубенцы. Масштаб рисунка тот же, тело героя в мире прежнее.
-        const pad = skin.pad ?? 1;
-        const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
-        const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${draw()}</svg>`);
-        frames.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS * pad, 2.6) });
-      });
+    for (const [view, states] of heroViews) {
+      for (const state of ["idle", "walk"]) {
+        states[state].forEach((draw, k) => {
+          // Запас клетки (`pad`) — для головы архетипа выше общей позы: шлем,
+          // венец, бубенцы. Масштаб рисунка тот же, тело героя в мире прежнее.
+          const pad = skin.pad ?? 1;
+          const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+          const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${draw()}</svg>`);
+          frames.push({ name: `hero-${skin.id}/${view}${state}${k}`, svg, size: cellSize(HERO_RADIUS * pad, 2.6) });
+        });
+      }
     }
     packs[`skin-${skin.id}`] = frames;
   }

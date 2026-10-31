@@ -1,8 +1,88 @@
 {
  "frames": {
-  "hero-knyaz/walk1": {
+  "hero-knyaz/back/walk1": {
    "frame": {
     "x": 2,
+    "y": 2,
+    "w": 68,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 45,
+    "y": 1,
+    "w": 68,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/back/walk3": {
+   "frame": {
+    "x": 72,
+    "y": 2,
+    "w": 72,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 41,
+    "y": 1,
+    "w": 72,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/walk1": {
+   "frame": {
+    "x": 146,
+    "y": 2,
+    "w": 72,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 1,
+    "w": 72,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/walk3": {
+   "frame": {
+    "x": 220,
+    "y": 2,
+    "w": 68,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 1,
+    "w": 68,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/walk1": {
+   "frame": {
+    "x": 290,
     "y": 2,
     "w": 84,
     "h": 126
@@ -22,7 +102,7 @@
   },
   "hero-knyaz/walk3": {
    "frame": {
-    "x": 88,
+    "x": 376,
     "y": 2,
     "w": 72,
     "h": 126
@@ -40,9 +120,129 @@
     "h": 147
    }
   },
+  "hero-knyaz/back/idle0": {
+   "frame": {
+    "x": 450,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 43,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/back/walk0": {
+   "frame": {
+    "x": 522,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 43,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/back/walk2": {
+   "frame": {
+    "x": 594,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 43,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/idle0": {
+   "frame": {
+    "x": 666,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/walk0": {
+   "frame": {
+    "x": 738,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/walk2": {
+   "frame": {
+    "x": 810,
+    "y": 2,
+    "w": 70,
+    "h": 123
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 4,
+    "w": 70,
+    "h": 123
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
   "hero-knyaz/idle0": {
    "frame": {
-    "x": 162,
+    "x": 882,
     "y": 2,
     "w": 78,
     "h": 123
@@ -62,8 +262,8 @@
   },
   "hero-knyaz/walk0": {
    "frame": {
-    "x": 242,
-    "y": 2,
+    "x": 2,
+    "y": 130,
     "w": 78,
     "h": 123
    },
@@ -82,8 +282,8 @@
   },
   "hero-knyaz/walk2": {
    "frame": {
-    "x": 322,
-    "y": 2,
+    "x": 82,
+    "y": 130,
     "w": 78,
     "h": 123
    },
@@ -100,10 +300,50 @@
     "h": 147
    }
   },
+  "hero-knyaz/back/idle1": {
+   "frame": {
+    "x": 162,
+    "y": 130,
+    "w": 69,
+    "h": 121
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 44,
+    "y": 6,
+    "w": 69,
+    "h": 121
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
+  "hero-knyaz/front/idle1": {
+   "frame": {
+    "x": 233,
+    "y": 130,
+    "w": 71,
+    "h": 121
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 34,
+    "y": 6,
+    "w": 71,
+    "h": 121
+   },
+   "sourceSize": {
+    "w": 147,
+    "h": 147
+   }
+  },
   "hero-knyaz/idle1": {
    "frame": {
-    "x": 402,
-    "y": 2,
+    "x": 306,
+    "y": 130,
     "w": 81,
     "h": 121
    },
@@ -126,8 +366,8 @@
   "image": "atlas-skin-knyaz.png",
   "format": "RGBA8888",
   "size": {
-   "w": 488,
-   "h": 132
+   "w": 964,
+   "h": 256
   },
   "scale": "2.5"
  }
