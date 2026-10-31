@@ -1,123 +1,123 @@
 {
  "frames": {
-  "hero-vityaz/idle0": {
+  "hero-vityaz/walk1": {
    "frame": {
     "x": 2,
     "y": 2,
-    "w": 71,
-    "h": 118
+    "w": 78,
+    "h": 129
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 71,
-    "h": 118
+    "x": 32,
+    "y": 1,
+    "w": 78,
+    "h": 129
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-vityaz/idle1": {
-   "frame": {
-    "x": 75,
-    "y": 2,
-    "w": 74,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 24,
-    "y": 0,
-    "w": 74,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-vityaz/walk0": {
-   "frame": {
-    "x": 151,
-    "y": 2,
-    "w": 71,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 71,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-vityaz/walk1": {
-   "frame": {
-    "x": 224,
-    "y": 2,
-    "w": 76,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 22,
-    "y": 0,
-    "w": 76,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
-   }
-  },
-  "hero-vityaz/walk2": {
-   "frame": {
-    "x": 302,
-    "y": 2,
-    "w": 71,
-    "h": 118
-   },
-   "rotated": false,
-   "trimmed": true,
-   "spriteSourceSize": {
-    "x": 27,
-    "y": 0,
-    "w": 71,
-    "h": 118
-   },
-   "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 153,
+    "h": 153
    }
   },
   "hero-vityaz/walk3": {
    "frame": {
-    "x": 375,
+    "x": 82,
     "y": 2,
-    "w": 65,
-    "h": 118
+    "w": 66,
+    "h": 129
    },
    "rotated": false,
    "trimmed": true,
    "spriteSourceSize": {
-    "x": 33,
-    "y": 0,
-    "w": 65,
-    "h": 118
+    "x": 44,
+    "y": 1,
+    "w": 66,
+    "h": 129
    },
    "sourceSize": {
-    "w": 130,
-    "h": 130
+    "w": 153,
+    "h": 153
+   }
+  },
+  "hero-vityaz/idle0": {
+   "frame": {
+    "x": 150,
+    "y": 2,
+    "w": 72,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 38,
+    "y": 4,
+    "w": 72,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 153,
+    "h": 153
+   }
+  },
+  "hero-vityaz/walk0": {
+   "frame": {
+    "x": 224,
+    "y": 2,
+    "w": 72,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 38,
+    "y": 4,
+    "w": 72,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 153,
+    "h": 153
+   }
+  },
+  "hero-vityaz/walk2": {
+   "frame": {
+    "x": 298,
+    "y": 2,
+    "w": 72,
+    "h": 126
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 38,
+    "y": 4,
+    "w": 72,
+    "h": 126
+   },
+   "sourceSize": {
+    "w": 153,
+    "h": 153
+   }
+  },
+  "hero-vityaz/idle1": {
+   "frame": {
+    "x": 372,
+    "y": 2,
+    "w": 75,
+    "h": 124
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 6,
+    "w": 75,
+    "h": 124
+   },
+   "sourceSize": {
+    "w": 153,
+    "h": 153
    }
   }
  },
@@ -126,8 +126,8 @@
   "image": "atlas-skin-vityaz.png",
   "format": "RGBA8888",
   "size": {
-   "w": 444,
-   "h": 124
+   "w": 452,
+   "h": 136
   },
   "scale": "2.5"
  }

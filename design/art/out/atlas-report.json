@@ -2,10 +2,10 @@
  {
   "pack": "core",
   "frames": 141,
-  "atlas": "1024×904",
-  "fill": "78%",
+  "atlas": "1020×896",
+  "fill": "79%",
   "trim": "62% ячейки",
-  "png": "79 КБ",
+  "png": "78 КБ",
   "gpu": "3.5 МБ"
  },
  {
@@ -14,7 +14,7 @@
   "atlas": "1024×1588",
   "fill": "81%",
   "trim": "73% ячейки",
-  "png": "114 КБ",
+  "png": "113 КБ",
   "gpu": "6.2 МБ"
  },
  {
@@ -128,10 +128,10 @@
  {
   "pack": "skin-vityaz",
   "frames": 6,
-  "atlas": "444×124",
-  "fill": "92%",
-  "trim": "50% ячейки",
-  "png": "7 КБ",
+  "atlas": "452×136",
+  "fill": "90%",
+  "trim": "39% ячейки",
+  "png": "6 КБ",
   "gpu": "0.2 МБ"
  },
  {
@@ -146,56 +146,56 @@
  {
   "pack": "skin-ohotnitsa",
   "frames": 6,
-  "atlas": "496×124",
-  "fill": "93%",
-  "trim": "56% ячейки",
+  "atlas": "500×132",
+  "fill": "90%",
+  "trim": "47% ячейки",
   "png": "7 КБ",
-  "gpu": "0.2 МБ"
+  "gpu": "0.3 МБ"
  },
  {
   "pack": "skin-knyaz",
   "frames": 6,
-  "atlas": "480×124",
-  "fill": "92%",
-  "trim": "54% ячейки",
+  "atlas": "488×132",
+  "fill": "90%",
+  "trim": "45% ячейки",
   "png": "7 КБ",
   "gpu": "0.2 МБ"
  },
  {
   "pack": "skin-skomoroh",
   "frames": 6,
-  "atlas": "492×124",
+  "atlas": "492×132",
   "fill": "92%",
-  "trim": "56% ячейки",
-  "png": "8 КБ",
+  "trim": "44% ячейки",
+  "png": "7 КБ",
   "gpu": "0.2 МБ"
  },
  {
   "pack": "skin-skomoroh_night",
   "frames": 6,
-  "atlas": "492×124",
+  "atlas": "492×132",
   "fill": "92%",
-  "trim": "56% ячейки",
+  "trim": "44% ячейки",
   "png": "7 КБ",
   "gpu": "0.2 МБ"
  },
  {
   "pack": "skin-skomoroh_maslenitsa",
   "frames": 6,
-  "atlas": "492×124",
+  "atlas": "492×132",
   "fill": "92%",
-  "trim": "56% ячейки",
-  "png": "8 КБ",
+  "trim": "44% ячейки",
+  "png": "7 КБ",
   "gpu": "0.2 МБ"
  },
  {
   "pack": "skin-listven",
   "frames": 6,
-  "atlas": "524×124",
+  "atlas": "532×136",
   "fill": "92%",
-  "trim": "59% ячейки",
+  "trim": "44% ячейки",
   "png": "8 КБ",
-  "gpu": "0.2 МБ"
+  "gpu": "0.3 МБ"
  },
  {
   "pack": "skin-navi",

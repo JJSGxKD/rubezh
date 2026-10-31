@@ -129,8 +129,12 @@ export function collectFrames() {
     const frames = [];
     for (const state of ["idle", "walk"]) {
       HERO_STATES[state].forEach((draw, k) => {
-        const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${draw()}</svg>`);
-        frames.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS, 2.6) });
+        // Запас клетки (`pad`) — для головы архетипа выше общей позы: шлем,
+        // венец, бубенцы. Масштаб рисунка тот же, тело героя в мире прежнее.
+        const pad = skin.pad ?? 1;
+        const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+        const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${draw()}</svg>`);
+        frames.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS * pad, 2.6) });
       });
     }
     packs[`skin-${skin.id}`] = frames;

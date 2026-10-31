@@ -42,8 +42,9 @@ Chromium → атлас Phaser. Так ступени, ранги и окрас�
   новым цветом.
 - **Тело ≈ хитбокс**: ячейка — 1,75 радиуса (`CELL_K` в `src/build.mjs`).
   Размер врага сверх паттерна и ранга — поле `size` контента (Р144,
-  T-0229), а не крупнее нарисованный кадр. Копьё, рог или меч за клеткой —
-  запас `pad` у врага в `ENEMY_ART`, а не уменьшенный рисунок; проверка —
+  T-0229), а не крупнее нарисованный кадр. Копьё, рог, меч или венец за
+  клеткой — запас `pad` у врага в `ENEMY_ART` или у облика в `HERO_SKINS`, а
+  не уменьшенный рисунок; проверка после сборки —
   `node design/art/src/frame-fit.mjs`.
 - **Ракурсы (Р143):** враги — сбоку с зеркалом, герой — в 4 стороны.
 - **Масштаб** — 2,5 пикселя атласа на игровую единицу (`PPU`; в движке —
@@ -81,7 +82,7 @@ Chromium → атлас Phaser. Так ступени, ранги и окрас�
 | Атласы `core`, `late`, `env`, `skins`, земля, отчёт о весе | `node design/art/src/build.mjs` | `out/atlas-*.png/json`, `out/atlas-report.json` |
 | Палитра 256 цветов (кроме плиток земли) | `python3 design/art/src/quantize.py design/art/out/atlas-core.png …` | PNG в 4–5 раз легче |
 | Листы концепций, бестиария, героя | `node design/art/src/previews.mjs` | листы в `out/` |
-| Влезает ли рисунок врага в кадр | `node design/art/src/frame-fit.mjs` | края рисунка и нужный `pad`; код 1 — не влезает |
+| Влезают ли враги и облики в кадр | `node design/art/src/frame-fit.mjs` (после `build.mjs`) | нужный `pad` и кадры атласов у края; код 1 — срез |
 | Логотип → портреты → бренд бота | `node design/art/src/logo.mjs`, затем `portraits.mjs`, затем `bot-art.mjs` | знак, `avatar-hero-*`, `card-hero-*`, модуль бэкенда |
 | Промо 1:1, 16:9, 21:9 и набор площадок | `node design/art/src/promo.mjs`, затем `platform-kit.mjs` | `out/promo/`, значки |
 | Стартовые пресеты генератора промо (Р159) | `node design/art/src/promo-presets.mjs` | `apps/admin/src/screens/promo/art-starters/`: фоны и документы `promo-kit` |
