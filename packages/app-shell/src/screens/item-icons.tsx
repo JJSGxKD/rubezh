@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Anvil, Biohazard, CloudHail, Rocket, Snowflake, Sparkles, Swords, Tornado, type LucideIcon } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { GameGlyph, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "./game-glyphs";
 
 /**
@@ -7,26 +7,11 @@ import { GameGlyph, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "./game-gly
  * §4.5). Соответствие живёт в оболочке, а не в контенте: контент не знает,
  * чем его рисуют. Оружие, для которого значка ещё нет, получает общий —
  * геймдизайнер добавляет оружие данными и не обязан ждать правки интерфейса.
- *
- * Значки оружия, которым свой знак ещё не нарисован: эволюции (T-0103) и
- * «Метеор» с «Ливнем» (T-0118) пришли после знаков мира. До своих знаков —
- * значки из набора, у каждой свой: запасной «искры» их не различал бы.
  */
-const WEAPON_FALLBACK_ICONS: Readonly<Record<string, LucideIcon>> = {
-  starfall: Sparkles,
-  tempest: Tornado,
-  blade_whirl: Swords,
-  frost_crown: Snowflake,
-  forge: Anvil,
-  viper: Biohazard,
-  // Flame занят «Очагом», Sparkles — «Звездопадом» и запасным значком.
-  meteor: Rocket,
-  fire_rain: CloudHail,
-};
 
-/** Есть ли у оружия свой значок, а не запасной. */
+/** Есть ли у оружия свой значок, а не общий. */
 export function hasOwnWeaponIcon(id: string): boolean {
-  return WEAPON_GLYPHS[id] !== undefined || WEAPON_FALLBACK_ICONS[id] !== undefined;
+  return WEAPON_GLYPHS[id] !== undefined;
 }
 
 export type ItemKind = "weapon" | "passive" | "heal";
@@ -35,8 +20,7 @@ export function ItemIcon(props: { kind: ItemKind; id: string; size?: number }): 
   const size = props.size ?? 20;
   const glyph = props.kind === "heal" ? HEAL_GLYPH : (props.kind === "weapon" ? WEAPON_GLYPHS : PASSIVE_GLYPHS)[props.id];
   if (glyph !== undefined) return <GameGlyph glyph={glyph} size={size} />;
-  const Fallback = (props.kind === "weapon" ? WEAPON_FALLBACK_ICONS[props.id] : undefined) ?? Sparkles;
-  return <Fallback size={size} aria-hidden="true" />;
+  return <Sparkles size={size} aria-hidden="true" />;
 }
 
 const TILE_TONE: Record<ItemKind, string> = {
