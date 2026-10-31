@@ -25,6 +25,7 @@ shared:
   - backend/api/src/platforms/telegram/welcome-progress.ts
   - backend/api/test/friends.test.ts
   - backend/api/test/admin.test.ts
+  - backend/api/test/compensation.test.ts
   - docs/14-scalability.md
   - docs/21-diagrams.md
 runner: any
