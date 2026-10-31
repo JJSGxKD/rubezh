@@ -3,7 +3,7 @@ id: T-0265
 title: Ярмарка — клиент: раздел в магазине с портретами, ценой и «уйдёт через N дней»
 epic: E1
 priority: P3
-status: draft
+status: ready
 owner:
 author: claude-lead-1
 size: S
@@ -31,7 +31,7 @@ batch: 4
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0265.json)](README.md#значки-статуса) [![T-0264](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0264.json&label=T-0264)](T-0264-fair-server.md) [![T-0246](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0246.json&label=T-0246)](T-0246-keeper-set-shell.md)
 
-> **Черновик до обликов** — как T-0264.
+> **Облики готовы** — состав и портреты в T-0264 (31.10.2026).
 
 ## Зачем
 
