@@ -1,6 +1,7 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { NAME_RULE_HITS, type NameRuleHitsSink } from "../name-rules/name-rule-hits.js";
 import { NAME_RULES, type NameRulesSource } from "../name-rules/name-rules-source.js";
 import type { NameRuleSet } from "../name-rules/name-rules-engine.js";
 import type { AccountPlatform } from "./access-token.js";
@@ -139,6 +140,7 @@ export class PrismaAccountRepository implements AccountRepository {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaClient,
     @Optional() @Inject(NAME_RULES) private readonly rules?: NameRulesSource,
+    @Optional() @Inject(NAME_RULE_HITS) private readonly hits?: NameRuleHitsSink,
   ) {}
 
   async upsert(identity: AccountArrival, nowMs: number): Promise<Account> {
@@ -180,7 +182,11 @@ export class PrismaAccountRepository implements AccountRepository {
     // два запроса, а не один. Закрепление проверяет сам UPDATE ... WHERE: сверка
     // с прочитанной строкой пропустила бы закрепление, поставленное в панели
     // между чтением и записью. Менять нечего — второго запроса нет.
-    const cleanName = storedNameFor(identity.displayName, identity.username, row.accountId, rules).name;
+    const detail = storedNameDetailed(identity.displayName, identity.username, row.accountId, rules);
+    const cleanName = detail.name;
+    // Закреплённый ник при входе не меняется: счёт показывает, что правила реально убирают, а не что они «сработали бы».
+    // Один вход — одна запись: первый вызов (при создании) не считается, а счёт не ждёт и не бросает.
+    if (row.nameLockedAt === null) this.hits?.record(detail.hits, detail.saved);
     if (row.nameLockedAt !== null || row.displayName === cleanName) return toAccount(row, created);
     const renamed = await this.prisma.account.updateMany({ where: { accountId: row.accountId, nameLockedAt: null }, data: { displayName: cleanName } });
     // Ноль строк — модератор закрепил ник в эту самую минуту: остаётся прежний.
