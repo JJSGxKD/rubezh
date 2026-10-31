@@ -3,8 +3,8 @@ id: T-0114
 title: Сезон и награды за места по доске зрителя, призы только внутриигровые
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead2-18
 size: M
 depends_on: [T-0110, T-0113]
