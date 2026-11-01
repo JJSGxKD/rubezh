@@ -365,5 +365,20 @@
   "guide.title": "Гайдбук",
   "guide.menu.hint": "Враги, оружие, улучшения",
   "guide.lobby.title": "Гайдбук",
-  "guide.lobby.hint": "Кто есть кто и как не погибнуть в первую минуту"
+  "guide.lobby.hint": "Кто есть кто и как не погибнуть в первую минуту",
+  "blessing.title": "Выбери благословение",
+  "blessing.subtitle": "Действует до конца забега",
+  "blessing.fury": "Ярость",
+  "blessing.wind": "Ветер",
+  "blessing.harvest": "Жатва",
+  "blessing.fortress": "Крепость",
+  "blessing.keen": "Зоркость",
+  "blessing.flame": "Пламя",
+  "secret.shrine.name": "Капище",
+  "secret.hoard.name": "Клад",
+  "secret.tree.name": "Древо-оберег",
+  "secret.rift.name": "Разлом Нави",
+  "secret.stone.name": "Камень-указатель",
+  "secret.wisp.name": "Блуждающий огонёк",
+  "gallery.preview.blessing": "Капище: выбери благословение"
 }
