@@ -49,6 +49,7 @@ import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 import { WheelModule } from "./modules/wheel/wheel.module.js";
+import { BattlePassModule } from "./modules/battle-pass/battle-pass.module.js";
 import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
@@ -165,6 +166,7 @@ export const APP_MODULES = [
   DonationsModule,
   BotMentionModule,
   AchievementsModule,
+  BattlePassModule,
 ];
 
 /**
