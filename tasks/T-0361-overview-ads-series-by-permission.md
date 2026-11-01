@@ -13,7 +13,8 @@ zones:
   - backend/api/test/admin-overview.test.ts
   - apps/admin/src/api/overview.ts
   - apps/admin/test/overview.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low
