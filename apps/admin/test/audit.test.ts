@@ -64,6 +64,8 @@ describe("журнал аудита", () => {
   });
 
   it("перечистка ников: подписи трёх действий и объект «перечистка» (T-0339)", () => {
+    expect(actionTitle("names.candidate.dismiss")).toBe("Скрыт кандидат в правила имён");
+    expect(auditObject(entry({ action: "names.candidate.dismiss", target: "00000000-0000-4000-8000-000000000007" }))).toEqual({ kind: "кандидат", label: "00000000", route: { section: "names", id: null } });
     expect(actionTitle("names.reclean.start")).toBe("Запуск перечистки ников");
     expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
     expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");

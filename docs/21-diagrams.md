@@ -1110,6 +1110,17 @@ erDiagram
         date day PK "сутки UTC"
         int hits "сколько раз правило изменило результат входа игрока за сутки; CHECK не меньше нуля"
     }
+
+    NAME_RULE_CANDIDATE {
+        uuid candidate_id PK "кандидаты в правила имён, Р168, T-0341: только агрегат, без аккаунтов и ников"
+        enum kind "word, pair; UNIQUE вместе с token"
+        string token "слово или пара слов, до 64 знаков, в нижнем регистре"
+        int players "разных игроков за 30 суток на момент последнего расчёта; не меньше 20"
+        datetime first_seen_at
+        datetime computed_at
+        datetime dismissed_at "nullable: «Не нужно», расчёт слово не показывает и не воскрешает"
+        uuid dismissed_by "nullable: кто скрыл, без внешнего ключа"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -2112,6 +2123,7 @@ flowchart LR
     AUTH --> REDIS
     AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
     AUTH -. вход → буфер в памяти → очередь name-rule-hits раз в 5 с → счётчик name_rule_hit_day .-> NAME_RULES
+    NAME_RULES -. ночью 03:15 UTC под замком: account → слова в памяти → name_rule_candidate; панель → правило через NameRulesService .-> PG
     NAME_RULES --> PG
     NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
