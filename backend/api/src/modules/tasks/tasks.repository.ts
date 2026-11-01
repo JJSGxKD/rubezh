@@ -3,7 +3,20 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { POOL_TIERS, TASK_KIND_IDS, TASK_PERIODS, runFilterSchema, taskGroup, taskParamsSchema, type TaskDef, type TaskGroup, type TaskKind, type TaskParticipation, type TaskPeriod } from "./task-rules.js";
+import {
+  ACHIEVEMENT_CATEGORIES,
+  POOL_TIERS,
+  TASK_KIND_IDS,
+  TASK_PERIODS,
+  runFilterSchema,
+  taskGroup,
+  taskParamsSchema,
+  type TaskDef,
+  type TaskGroup,
+  type TaskKind,
+  type TaskParticipation,
+  type TaskPeriod,
+} from "./task-rules.js";
 
 /**
  * Задания в базе: каталог (`task_def`), прогресс по срокам (`task_progress`)
@@ -44,6 +57,11 @@ export interface TasksRepository {
   progress(accountId: string, at: Date): Promise<TaskProgressRow[]>;
   /** засчитать забег; `false` — этот забег уже засчитан */
   applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean>;
+  /**
+   * Состояние игрока (друзья, уровень аккаунта) двигает прогресс «максимум» без
+   * записи забега: значение не убывает и не уходит за цель. Повтор безвреден.
+   */
+  applyState(accountId: string, deltas: readonly TaskDelta[], at: Date): Promise<void>;
   /** отметить забор; `false` — уже забрано параллельным запросом */
   markClaimed(accountId: string, taskId: string, periodStart: string, at: Date): Promise<boolean>;
   /**
@@ -104,6 +122,12 @@ const defSchema = z.object({
   params: z.unknown(),
   tier: z.enum(POOL_TIERS).nullable(),
   filter: z.unknown(),
+  category: z.enum(ACHIEVEMENT_CATEGORIES).nullable(),
+  ladder: z.string().nullable(),
+  rung: z.number().int().nullable(),
+  hidden: z.boolean(),
+  hint: z.string().nullable(),
+  prestige: z.number().int(),
 });
 
 const orderRowSchema = z.object({ task_id: z.string(), period: z.enum(TASK_PERIODS), kind: z.string(), sort: z.number().int() });
@@ -126,7 +150,8 @@ export class PrismaTasksRepository implements TasksRepository {
 
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
-      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter
+      SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter,
+             category, ladder, rung, hidden, hint, prestige
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -161,6 +186,12 @@ export class PrismaTasksRepository implements TasksRepository {
         active: row.active,
         limit: row.completion_limit,
         image: row.image_id,
+        category: row.category,
+        ladder: row.ladder,
+        rung: row.rung,
+        hidden: row.hidden,
+        hint: row.hint,
+        prestige: row.prestige,
       });
     }
     return defs;
@@ -187,34 +218,27 @@ export class PrismaTasksRepository implements TasksRepository {
         INSERT INTO task_run (run_id, account_id, applied_at) VALUES (${input.runId}, ${input.accountId}::uuid, ${input.at})
         ON CONFLICT (run_id) DO NOTHING`;
       if (fresh === 0) return false;
-      for (const op of ["sum", "max"] as const) {
-        const deltas = input.deltas.filter((delta) => delta.op === op && delta.amount > 0);
-        if (deltas.length === 0) continue;
-        const merged = op === "sum" ? Prisma.sql`task_progress.value + EXCLUDED.value` : Prisma.sql`GREATEST(task_progress.value, EXCLUDED.value)`;
-        // Прогресс не уходит за цель: «7 из 3» на экране — ошибка, а не заслуга.
-        const next = Prisma.sql`LEAST(EXCLUDED.target, ${merged})`;
-        await tx.$executeRaw`
-          INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
-          SELECT ${input.accountId}::uuid, u.task_id, ${periodStartSql(Prisma.sql`u.period`, input.at)},
-                 LEAST(u.amount, u.target), u.target, CASE WHEN u.amount >= u.target THEN ${input.at}::timestamptz END, ${input.at}
-          FROM unnest(${deltas.map((delta) => delta.taskId)}::text[], ${deltas.map((delta) => delta.period)}::text[],
-                      ${deltas.map((delta) => delta.target)}::int[], ${deltas.map((delta) => delta.amount)}::int[]) AS u(task_id, period, target, amount)
-          ON CONFLICT (account_id, task_id, period_start) DO UPDATE SET
-            value = ${next},
-            target = EXCLUDED.target,
-            completed_at = COALESCE(task_progress.completed_at, CASE WHEN ${next} >= EXCLUDED.target THEN EXCLUDED.updated_at END),
-            updated_at = EXCLUDED.updated_at`;
-      }
+      await mergeProgress(tx, input.accountId, input.at, input.deltas);
       return true;
+    });
+  }
+
+  async applyState(accountId: string, deltas: readonly TaskDelta[], at: Date): Promise<void> {
+    // Записи забега нет: состояние читается заново при каждом открытии витрины, а
+    // «максимум» делает повтор безвредным. Транзакция нужна блокировке строк заданий.
+    await this.prisma.$transaction(async (tx) => {
+      await mergeProgress(tx, accountId, at, deltas);
     });
   }
 
   async insert(task: TaskDef, actorAccountId: string, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter, created_at, updated_at, updated_by)
+        INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter,
+                              category, ladder, rung, hidden, hint, prestige, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
-                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${task.tier}, ${filterJson(task)}::jsonb, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${task.tier}, ${filterJson(task)}::jsonb,
+                ${task.category}, ${task.ladder}, ${task.rung}, ${task.hidden}, ${task.hint}, ${task.prestige}, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -226,7 +250,9 @@ export class PrismaTasksRepository implements TasksRepository {
       (await this.prisma.$executeRaw`
         UPDATE task_def SET target = ${task.target}, title = ${task.title}, coins = ${task.coins}, gems = ${task.gems}, shards = ${task.shards},
           pass_points = ${task.passPoints}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
-          completion_limit = ${task.limit}, image_id = ${task.image}, tier = ${task.tier}, filter = ${filterJson(task)}::jsonb, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          completion_limit = ${task.limit}, image_id = ${task.image}, tier = ${task.tier}, filter = ${filterJson(task)}::jsonb,
+          category = ${task.category}, ladder = ${task.ladder}, rung = ${task.rung}, hidden = ${task.hidden}, hint = ${task.hint}, prestige = ${task.prestige},
+          updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
   }
@@ -337,4 +363,35 @@ function paramsJson(task: Pick<TaskDef, "params">): string | null {
 /** Фильтр цели в колонку `jsonb`: у видов без фильтра — пусто. */
 function filterJson(task: Pick<TaskDef, "filter">): string | null {
   return task.filter === null ? null : JSON.stringify(task.filter);
+}
+
+/**
+ * Слить дельты в прогресс игрока: «сумма» копит, «максимум» помнит лучшее.
+ * Прогресс не уходит за цель — «7 из 3» на экране ошибка, а не заслуга. Общий для
+ * забега и для состояния игрока: разница между ними только в записи `task_run`.
+ */
+async function mergeProgress(db: Pick<Prisma.TransactionClient, "$executeRaw" | "$queryRaw">, accountId: string, at: Date, deltas: readonly TaskDelta[]): Promise<void> {
+  const ids = [...new Set(deltas.filter((delta) => delta.amount > 0).map((delta) => delta.taskId))];
+  if (ids.length === 0) return;
+  // Проверка внешнего ключа берёт блокировку строк заданий в порядке вставки, а перестановка списка в
+  // панели — `FOR UPDATE` по (sort, id): встречные порядки дали бы взаимную блокировку. Берём
+  // свою блокировку в порядке перестановки заранее, и цикла ожидания нет.
+  await db.$queryRaw`SELECT task_id FROM task_def WHERE task_id = ANY(${ids}::text[]) ORDER BY sort, task_id FOR KEY SHARE`;
+  for (const op of ["sum", "max"] as const) {
+    const part = deltas.filter((delta) => delta.op === op && delta.amount > 0);
+    if (part.length === 0) continue;
+    const merged = op === "sum" ? Prisma.sql`task_progress.value + EXCLUDED.value` : Prisma.sql`GREATEST(task_progress.value, EXCLUDED.value)`;
+    const next = Prisma.sql`LEAST(EXCLUDED.target, ${merged})`;
+    await db.$executeRaw`
+      INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
+      SELECT ${accountId}::uuid, u.task_id, ${periodStartSql(Prisma.sql`u.period`, at)},
+             LEAST(u.amount, u.target), u.target, CASE WHEN u.amount >= u.target THEN ${at}::timestamptz END, ${at}
+      FROM unnest(${part.map((delta) => delta.taskId)}::text[], ${part.map((delta) => delta.period)}::text[],
+                  ${part.map((delta) => delta.target)}::int[], ${part.map((delta) => delta.amount)}::int[]) AS u(task_id, period, target, amount)
+      ON CONFLICT (account_id, task_id, period_start) DO UPDATE SET
+        value = ${next},
+        target = EXCLUDED.target,
+        completed_at = COALESCE(task_progress.completed_at, CASE WHEN ${next} >= EXCLUDED.target THEN EXCLUDED.updated_at END),
+        updated_at = EXCLUDED.updated_at`;
+  }
 }

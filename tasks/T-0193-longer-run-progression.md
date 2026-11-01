@@ -3,8 +3,8 @@ id: T-0193
 title: Прокачка до 15-й минуты — кривая опыта, уровни навыков, поздние сундуки, слоты
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-41 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0101, T-0102, T-0116, T-0118, T-0125, T-0172, T-0192]
@@ -33,6 +33,12 @@ zones:
   - packages/core-game/test/balance-properties.test.ts
   - packages/app-shell/test/level-unlocks.test.ts
 shared:
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/test/evolutions-content.test.ts
+  - packages/app-shell/test/guide.test.ts
+  - apps/sim-worker/test/check.test.ts
+  - apps/sim-worker/test/queue.integration.test.ts
   - docs/05-game-design.md
   - docs/30-configuration-map.md
   - docs/32-balance.md

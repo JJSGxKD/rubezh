@@ -44,8 +44,8 @@ describe("вердикт забега", () => {
   });
 
   it("оружий больше, чем слотов, — отказ: честный клиент так не пришлёт", () => {
-    expect(judgeRun(run({ weaponCount: 4 }), limits)).toMatchObject({ verdict: "rejected", reasons: ["weapons_over_slots"] });
-    expect(judgeRun(run({ weaponCount: 3 }), limits).verdict).toBe("ok");
+    expect(judgeRun(run({ weaponCount: 5 }), limits)).toMatchObject({ verdict: "rejected", reasons: ["weapons_over_slots"] });
+    expect(judgeRun(run({ weaponCount: 4 }), limits).verdict).toBe("ok");
   });
 
   it("забег длиннее, чем прошло по часам сервера, — отказ", () => {

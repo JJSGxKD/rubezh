@@ -176,7 +176,7 @@ describe("гайдбук", () => {
     }
     // Сопротивление — процентами, как на карточке выбора.
     const tempering = PASSIVES.find((passive) => passive.stat === "resist");
-    expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 15, to: 60 });
+    expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 10, to: 60 });
   });
 
   it("у каждой эволюции есть строка рецепта, и название с описанием переведены", () => {

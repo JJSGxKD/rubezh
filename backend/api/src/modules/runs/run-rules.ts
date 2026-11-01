@@ -16,7 +16,7 @@ export const DIFFICULTIES = ["easy", "normal", "hard"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
 
 /** Сколько оружий может быть у игрока одновременно (`LOADOUT_LIMITS.weapons`). */
-export const MAX_WEAPONS = 3;
+export const MAX_WEAPONS = 4;
 
 /**
  * Сколько вторых шансов за забег (`CONTINUE.perRun`): сверх этого сервер

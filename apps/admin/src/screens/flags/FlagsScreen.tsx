@@ -3,7 +3,7 @@ import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { FLAG_PLATFORMS, fetchFlags, flagProblem, flagReach, removeFlag, saveFlag, type FlagInput, type FlagRow } from "../../api/flags";
 import { formatDateTime } from "../../format";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 import { hrefOf } from "../../routes";
@@ -75,7 +75,7 @@ export function FlagsScreen() {
     <div className="flex flex-col gap-4">
       <Panel title={editing ? `Флаг ${input.key}` : "Новый флаг"}>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="Ключ" hint="его читает игра; латиница, точка, дефис">
               <Input value={input.key} disabled={editing} onChange={(event) => setInput({ ...input, key: event.target.value.trim().toLowerCase() })} placeholder="shop.v2" maxLength={64} />
             </Field>
@@ -85,7 +85,7 @@ export function FlagsScreen() {
             <Field label="Заметка">
               <Input value={input.note} onChange={(event) => setInput({ ...input, note: event.target.value })} maxLength={200} className="w-72" />
             </Field>
-          </div>
+          </FieldRow>
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={input.enabled} onChange={(event) => setInput({ ...input, enabled: event.target.checked })} />
@@ -101,7 +101,7 @@ export function FlagsScreen() {
           </div>
           <p className="text-sm text-text-muted">Получат: {flagReach(input)}</p>
           <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               Сохранить
             </Button>
             {editing ? (
@@ -115,7 +115,6 @@ export function FlagsScreen() {
               </Button>
             ) : null}
           </div>
-          {problem !== null && input.key !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>

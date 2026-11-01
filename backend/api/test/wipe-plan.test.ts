@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 67 моделей, стирается 22", () => {
+  it("остаётся 69 моделей, стирается 23", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(67);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(22);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(69);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(23);
   });
 
   it("второй шанс за самоцветы стирается своим шагом рядом с рекламным и до забега, а не только каскадом", () => {
@@ -87,6 +87,7 @@ describe("план вайпа: порядок стирания", () => {
       "Run",
       "TaskProgress",
       "TaskPointsClaim",
+      "AchievementFavorite",
       "ShowcaseOffer",
       "ItemEvent",
       "Item",

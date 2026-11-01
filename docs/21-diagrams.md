@@ -123,6 +123,9 @@ erDiagram
     ACCOUNT ||--o{ SEASON_RESULT : "место в закрытом сезоне"
     ACCOUNT ||--o{ SEASON_REWARD : "награда за сезон"
     NAME_RULE ||--o{ NAME_RULE_HIT_DAY : "считается по суткам"
+    TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
+    ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
+    TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -664,7 +667,7 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
         json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
@@ -677,6 +680,12 @@ erDiagram
         int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
         int completions "игроков, выполнивших цель; растёт под блокировкой строки"
         string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
+        string category "nullable: combat|collection|mastery|friends, только у достижений (CHECK)"
+        string ladder "nullable: лестница достижений; вместе с rung (CHECK)"
+        smallint rung "nullable: ступень лестницы с единицы; вместе с ladder (CHECK)"
+        boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
+        string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
+        int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
         int sort
         boolean active
         datetime created_at
@@ -1110,6 +1119,30 @@ erDiagram
         date day PK "сутки UTC"
         int hits "сколько раз правило изменило результат входа игрока за сутки; CHECK не меньше нуля"
     }
+
+    NAME_RULE_CANDIDATE {
+        uuid candidate_id PK "кандидаты в правила имён, Р168, T-0341: только агрегат, без аккаунтов и ников"
+        enum kind "word, pair; UNIQUE вместе с token"
+        string token "слово или пара слов, до 64 знаков, в нижнем регистре"
+        int players "разных игроков за 30 суток на момент последнего расчёта; не меньше 20"
+        datetime first_seen_at
+        datetime computed_at
+        datetime dismissed_at "nullable: «Не нужно», расчёт слово не показывает и не воскрешает"
+        uuid dismissed_by "nullable: кто скрыл, без внешнего ключа"
+    }
+
+    ACHIEVEMENT_RARITY {
+        string task_id PK "и FK на TASK_DEF: достижение, у которого считается «есть у N%»"
+        int holders "выполнили из населения"
+        int population "игроки хотя бы с одним записанным забегом; одно число у всех строк прохода"
+        datetime computed_at "когда пересчитано; таблица заменяется целиком одной транзакцией"
+    }
+
+    ACHIEVEMENT_FAVORITE {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит избранное"
+        int slot PK "1…3 (CHECK): порядок показа в профиле"
+        string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1215,6 +1248,27 @@ erDiagram
   Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
   хранится: он одинаков у всех игроков и реплик, забег двигает только
   выбранные, невыбранные нельзя забрать, знак меню их не считает.
+- **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
+  `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
+  `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
+  периодом `achievement`, потому что забег, защита от повтора, забор и
+  потолок кошелька уже работают на этих таблицах. Категория, лестница
+  (`ladder` + `rung`: каждая ступень считает с нуля), скрытость с подсказкой и
+  престиж — колонки с `CHECK`: поля есть только у достижений, ступень и
+  лестница идут вместе, скрытому нужна подсказка. Виды `friends` и
+  `account_level` забег не двигает: сервер читает число друзей и уровень
+  аккаунта при открытии витрины и дописывает прогресс «максимум» без записи в
+  `TASK_RUN`. Престиж — сумма `prestige` по выполненным (`completed_at` не
+  пуст), выключенное в панели достижение считается. `ACHIEVEMENT_RARITY` —
+  производная таблица: фоновая задача раз в 10 минут проверяет возраст
+  `computed_at`, и если он старше периода (настройка
+  `achievements.rarity-refresh-min`), под локом Redis одним запросом считает
+  население (игроки хотя бы с одним записанным забегом) и держателей среди
+  него, затем заменяет таблицу одной транзакцией. Процент показывается только
+  от порога населения (`achievements.rarity-min-players`). Избранное —
+  до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
+  транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
+  вместе с прогрессом заданий, редкость не трогает.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -2025,6 +2079,7 @@ flowchart LR
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, перебор прокси по режиму<br/>сервиса, запись о каждой попытке<br/>в приёмник, реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
+        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2112,6 +2167,7 @@ flowchart LR
     AUTH --> REDIS
     AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
     AUTH -. вход → буфер в памяти → очередь name-rule-hits раз в 5 с → счётчик name_rule_hit_day .-> NAME_RULES
+    NAME_RULES -. ночью 03:15 UTC под замком: account → слова в памяти → name_rule_candidate; панель → правило через NameRulesService .-> PG
     NAME_RULES --> PG
     NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
@@ -2233,6 +2289,12 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    CADDY -- "/api/v1/achievements" --> ACHIEV
+    ACHIEV -- "achievement_rarity, achievement_favorite; престиж из task_progress" --> PG
+    ACHIEV -- "achievements:rarity:lock, лок пересчёта" --> REDIS
+    ACHIEV -. "определения, прогресс «максимум» для друзей и уровня" .-> TASKS
+    ACHIEV -. "сколько друзей" .-> FRIENDS
+    ACHIEV -. "уровень аккаунта" .-> PROG
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE

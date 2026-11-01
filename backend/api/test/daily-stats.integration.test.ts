@@ -25,7 +25,7 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
   const network = `it_${randomBytes(4).toString("hex")}`;
   const blockId = randomUUID();
 
-  async function account(createdAt: Date, source: "organic" | "click" | null): Promise<string> {
+  async function account(createdAt: Date, source: "organic" | "click" | "link" | "tagged" | null): Promise<string> {
     const accountId = randomUUID();
     accounts.push(accountId);
     await prisma.account.create({ data: { accountId, platform: "telegram", platformUserId: `stats-${accountId.slice(0, 8)}`, displayName: "Тест", createdAt, lastSeenAt: createdAt } });
@@ -113,6 +113,17 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
     expect(stats.runs).toEqual({ finished: 3, players: 2, medianSurvivalSec: 200 });
     expect(stats.revenue).toEqual({ stars: 8, purchases: 2, refunds: 1 });
     expect(stats.funnel).toEqual({ entered: 2, appOpened: 1, firstRun: 1, runs5: 0, returnedD1: 1, returnedD7: 0, firstPurchase: 1 });
+  });
+
+  it("игроки с касанием «прямая ссылка» и «ссылка с метками» — источник «по ссылке», а не «неизвестно» (T-0363)", async () => {
+    const day = dayWindow("2032-01-10");
+    const when = new Date(day.from.getTime() + 3_600_000);
+    await account(when, "click");
+    await account(when, "link");
+    await account(when, "tagged");
+    await account(when, "organic");
+    const stats = await new PrismaDailyStatsRepository(prisma).day(day);
+    expect(stats.accounts).toEqual({ organic: 1, click: 3 });
   });
 
   it("ряд по суткам: те же границы и фильтры, пустые сутки — нулями", async () => {

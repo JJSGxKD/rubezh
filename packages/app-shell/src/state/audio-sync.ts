@@ -47,6 +47,7 @@ export function sceneFor(screen: string, runOnStack: boolean, phase: RunPhase): 
       return "pause";
     case "levelUp":
     case "chest":
+    case "blessing":
       return "choice";
     case "finished":
       return "finished";

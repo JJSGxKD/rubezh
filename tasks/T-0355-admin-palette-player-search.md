@@ -3,8 +3,8 @@ id: T-0355
 title: Панель — поиск игрока из поиска разделов «/»: «@ник» или число — строка «Игрок …» первой
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -12,6 +12,8 @@ zones:
   - apps/admin/src/screens/Shell.tsx
   - apps/admin/test/palette-player.test.ts
 shared:
+  - docs/29-admin-panel.md
+  - design/art/direction-v2.md
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/players/PlayerSearch.tsx
 runner: any

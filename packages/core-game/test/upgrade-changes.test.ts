@@ -82,19 +82,19 @@ describe("что даёт улучшение", () => {
 
   it("у пассивки-множителя — процентом, у перезарядки меньше — лучше", () => {
     expect(passiveChanges(passive("might"), 1, 2)).toEqual([
-      { labelKey: "upgrade.stat.passive.damage", from: 1.1, to: 1.2, format: "percent", lowerIsBetter: false },
+      { labelKey: "upgrade.stat.passive.damage", from: 1.07, to: 1.14, format: "percent", lowerIsBetter: false },
     ]);
     expect(passiveChanges(passive("haste"), null, 1)[0]).toMatchObject({
       from: null,
       format: "percent",
       lowerIsBetter: true,
     });
-    expect(passiveChanges(passive("vitality"), 1, 2)[0]).toMatchObject({ from: 20, to: 45, format: "plus" });
+    expect(passiveChanges(passive("vitality"), 1, 2)[0]).toMatchObject({ from: 15, to: 32, format: "plus" });
     // Сопротивление — доля в контенте, а на карточке — проценты.
     expect(passiveChanges(passive("tempering"), 1, 2)[0]).toMatchObject({
       labelKey: "upgrade.stat.passive.resist",
-      from: 15,
-      to: 30,
+      from: 10,
+      to: 20,
       format: "plus",
     });
   });

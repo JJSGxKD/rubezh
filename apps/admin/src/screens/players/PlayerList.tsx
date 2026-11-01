@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { create } from "zustand";
 import type { ApiError } from "../../api/client";
 import {
@@ -17,17 +17,20 @@ import { fetchRestrictionCatalog } from "../../api/restrictions";
 import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
+import { FILTER_LABELS, clearAllFilters, filterChips } from "./list-filters";
 import { statusBadges } from "./list-status";
 
 /**
  * Список игроков с фильтрами (docs/35-stage4-plan.md WP32). Фильтры и
  * загруженные страницы переживают переход в карточку и обратно — разбирают
  * обычно несколько игроков из одного списка подряд. Порядок и страница — на
- * сервере, по индексу; «Показать ещё» догружает следующую.
+ * сервере, по индексу; «Показать ещё» догружает следующую. Список новых
+ * открывается сразу, фильтры свёрнуты в строку, активные видны чипами
+ * (tasks/T-0354).
  */
 type Listed =
   | { status: "idle" }
@@ -83,19 +86,48 @@ export function PlayerList() {
   const catalog = useApi(() => fetchRestrictionCatalog(api), []);
   const kinds = catalog.state.status === "ok" ? catalog.state.data.kinds : [];
   const kindTitle = (kind: string) => kinds.find((item) => item.kind === kind)?.title ?? kind;
+  const [open, setOpen] = useState(false);
   const problem = filtersProblem(draft);
+  const chips = filterChips(filters, kindTitle);
+
+  // Первое открытие раздела — список новых сразу; вернулись из карточки — список уже в хранилище.
+  useEffect(() => {
+    if (useList.getState().listed.status === "idle") void load(useList.getState().filters, false);
+  }, []);
+
+  const apply = (next: PlayerListFilters) => {
+    setDraft(next);
+    void load(next, false);
+  };
   const set = <K extends keyof PlayerListFilters>(key: K, value: PlayerListFilters[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (problem === null) void load(draft, false);
+    if (problem === null) {
+      setOpen(false);
+      void load(draft, false);
+    }
   };
 
   return (
     <Panel title="Список игроков" actions={<span className="text-xs text-text-muted">фильтры — все вместе; пустое — неважно</span>}>
-      <form onSubmit={submit} className="mb-4 flex flex-col gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button onClick={() => setOpen(!open)}>{chips.length === 0 ? "Фильтры" : `Фильтры · ${String(chips.length)}`}</Button>
+        {chips.map((chip) => (
+          <span key={chip.key} className="inline-flex items-center gap-1 rounded-sm border border-border bg-surface-sunken py-0.5 pr-0.5 pl-2 text-xs">
+            {chip.label}
+            <button type="button" aria-label={`Снять фильтр: ${chip.label}`} onClick={() => apply(chip.clear(filters))} className="inline-flex size-6 items-center justify-center rounded-sm text-text-muted hover:bg-surface-raised hover:text-text">
+              ×
+            </button>
+          </span>
+        ))}
+        {chips.length >= 2 ? (
+          <Button onClick={() => apply(clearAllFilters(filters))}>Сбросить</Button>
+        ) : null}
+      </div>
+      <form onSubmit={submit} className={open ? "mb-4 flex flex-col gap-3" : "hidden"}>
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Площадка">
+          <Field label={FILTER_LABELS.platform}>
             <Select value={draft.platform} onChange={(event) => set("platform", LIST_PLATFORMS.find((platform) => platform === event.target.value) ?? "")}>
               <option value="">все</option>
               {LIST_PLATFORMS.map((platform) => (
@@ -105,19 +137,19 @@ export function PlayerList() {
               ))}
             </Select>
           </Field>
-          <Field label="Уровень от">
+          <Field label={`${FILTER_LABELS.level} от`}>
             <Input type="number" min={1} max={999} value={draft.levelMin} onChange={(event) => set("levelMin", event.target.value)} className="w-20" />
           </Field>
           <Field label="до">
             <Input type="number" min={1} max={999} value={draft.levelMax} onChange={(event) => set("levelMax", event.target.value)} className="w-20" />
           </Field>
-          <Field label="Регистрация с">
+          <Field label={`${FILTER_LABELS.registered} с`}>
             <Input type="date" value={draft.registeredFrom} onChange={(event) => set("registeredFrom", event.target.value)} />
           </Field>
           <Field label="по">
             <Input type="date" value={draft.registeredTo} onChange={(event) => set("registeredTo", event.target.value)} />
           </Field>
-          <Field label="Заходил с">
+          <Field label={`${FILTER_LABELS.seen} с`}>
             <Input type="date" value={draft.seenFrom} onChange={(event) => set("seenFrom", event.target.value)} />
           </Field>
           <Field label="по">
@@ -125,7 +157,7 @@ export function PlayerList() {
           </Field>
         </div>
         <div className="flex flex-wrap items-end gap-2">
-          <Field label="Откуда пришёл">
+          <Field label={FILTER_LABELS.source}>
             <Select value={draft.source} onChange={(event) => set("source", LIST_SOURCES.find(([key]) => key === event.target.value)?.[0] ?? "")}>
               <option value="">неважно</option>
               {LIST_SOURCES.map(([key, title]) => (
@@ -135,12 +167,12 @@ export function PlayerList() {
               ))}
             </Select>
           </Field>
-          <Field label="Кампания">
+          <Field label={FILTER_LABELS.campaign}>
             <Input value={draft.campaign} onChange={(event) => set("campaign", event.target.value)} placeholder="spring-promo" maxLength={64} className="w-36" />
           </Field>
-          {withPayments ? <YesNoField label="Платящий" value={draft.payer} onChange={(value) => set("payer", value)} /> : null}
-          <YesNoField label="Заблокирован" value={draft.banned} onChange={(value) => set("banned", value)} />
-          <Field label="Ограничения">
+          {withPayments ? <YesNoField label={FILTER_LABELS.payer} value={draft.payer} onChange={(value) => set("payer", value)} /> : null}
+          <YesNoField label={FILTER_LABELS.banned} value={draft.banned} onChange={(value) => set("banned", value)} />
+          <Field label={FILTER_LABELS.restricted}>
             <Select value={draft.restricted} onChange={(event) => set("restricted", event.target.value)}>
               <option value="">неважно</option>
               <option value="any">есть</option>
@@ -154,7 +186,7 @@ export function PlayerList() {
                 ))}
             </Select>
           </Field>
-          <YesNoField label="Можно писать" value={draft.canMessage} onChange={(value) => set("canMessage", value)} />
+          <YesNoField label={FILTER_LABELS.canMessage} value={draft.canMessage} onChange={(value) => set("canMessage", value)} />
           <Field label="Порядок">
             <Select value={draft.sort} onChange={(event) => set("sort", LIST_SORTS.find(([key]) => key === event.target.value)?.[0] ?? "registered")}>
               {LIST_SORTS.map(([key, title]) => (
@@ -170,15 +202,13 @@ export function PlayerList() {
               <option value="asc">сначала ранние и младшие</option>
             </Select>
           </Field>
-          <Button tone="primary" type="submit" disabled={problem !== null}>
+          <Button tone="primary" type="submit" disabled={problem !== null} blockedBy={problem}>
             Показать
           </Button>
           <Button onClick={() => setDraft(EMPTY_FILTERS)}>Сбросить</Button>
         </div>
-        {problem === null ? null : <Notice tone="info">{problem}</Notice>}
       </form>
 
-      {listed.status === "idle" ? <p className="text-sm text-text-muted">Задайте фильтры и нажмите «Показать» — или сразу «Показать»: все игроки, новые сверху.</p> : null}
       {listed.status === "loading" ? <Loading /> : null}
       {listed.status === "error" ? <ErrorNotice error={listed.error} onRetry={() => void load(filters, false)} /> : null}
       {listed.status === "ok" ? (
