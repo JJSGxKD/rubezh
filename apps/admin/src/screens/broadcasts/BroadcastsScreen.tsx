@@ -82,7 +82,7 @@ function BroadcastList() {
             rows={state.data.broadcasts}
             rowKey={(row) => row.broadcastId}
             onRowClick={(row) => navigate({ section: "broadcasts", id: row.broadcastId })}
-            empty="Рассылок ещё нет"
+            empty="Рассылок ещё нет — первая начинается с черновика: выберите, кому, и напишите текст выше"
             columns={[
               { title: "Название", render: (row) => row.title },
               { title: "Состояние", render: (row) => <StatusBadge status={row.status} /> },

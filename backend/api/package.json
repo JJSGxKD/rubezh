@@ -16,6 +16,7 @@
     "seasons:rebuild": "node --conditions=source --import @swc-node/register/esm-register src/cli/seasons-rebuild.ts",
     "wipe": "node --conditions=source --import @swc-node/register/esm-register src/cli/wipe.ts",
     "names:clean": "node --conditions=source --import @swc-node/register/esm-register src/cli/display-names-clean.ts",
+    "names:candidates": "node --conditions=source --import @swc-node/register/esm-register src/cli/name-rule-candidates.ts",
     "funnel:report": "node --conditions=source --import @swc-node/register/esm-register src/cli/funnel-report.ts",
     "wallet:reconcile": "node --conditions=source --import @swc-node/register/esm-register src/cli/wallet-reconcile.ts",
     "fx:manual": "node --conditions=source --import @swc-node/register/esm-register src/cli/fx-manual.ts",

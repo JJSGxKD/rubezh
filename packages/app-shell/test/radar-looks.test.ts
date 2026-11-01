@@ -28,8 +28,18 @@ describe("цвета точек радара", () => {
     expect(RADAR_COLORS.medkit).not.toBe(RADAR_COLORS.elite);
   });
 
-  it("все шесть цветов попарно различны", () => {
-    expect(new Set(Object.values(RADAR_COLORS)).size).toBe(6);
+  it("шесть цветов врагов и подборов попарно различны", () => {
+    const base = [RADAR_COLORS.enemy, RADAR_COLORS.elite, RADAR_COLORS.medkit, RADAR_COLORS.magnet, RADAR_COLORS.dynamite, RADAR_COLORS.chest];
+    expect(new Set(base).size).toBe(6);
+  });
+
+  it("тайники — холодная гамма оберегов и Нави: не цвет врага, элиты, опыта и аптечки", () => {
+    const secrets = [RADAR_COLORS.shrine, RADAR_COLORS.hoard, RADAR_COLORS.stone, RADAR_COLORS.tree, RADAR_COLORS.rift, RADAR_COLORS.wisp];
+    for (const color of secrets) {
+      expect([RADAR_COLORS.enemy, RADAR_COLORS.elite, RADAR_COLORS.medkit, RADAR_COLORS.dynamite, COLORS.xp]).not.toContain(color);
+      const { r, b } = channels(color);
+      expect(b, `${color}: нужен холодный тон`).toBeGreaterThanOrEqual(r);
+    }
   });
 });
 

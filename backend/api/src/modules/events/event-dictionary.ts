@@ -164,6 +164,10 @@ export const EVENT_DICTIONARY = {
   // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
   // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
   // кольцо просуществовало.
+  // Тайники рубежа (tasks/T-0260, Р153): найден — игрок вошёл в круг; использован —
+  // отработал (`outcome` — что вышло: id благословения, `opened`, `touched`, `cleared`, `left`).
+  secret_found: { version: 1, payload: payload({ kind: id, sec: seconds }) },
+  secret_used: { version: 1, payload: payload({ kind: id, outcome: id }) },
   ring_ended: {
     version: 1,
     payload: payload({

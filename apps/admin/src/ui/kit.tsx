@@ -25,13 +25,42 @@ const BUTTON_TONES = {
     "bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-bg))] text-danger border border-danger/40 hover:bg-[color-mix(in_oklab,var(--color-danger)_14%,var(--color-bg))]",
 } as const;
 
-export function Button({ tone = "secondary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tone?: keyof typeof BUTTON_TONES }) {
+/**
+ * Причина, по которой главная кнопка недоступна, — одной строкой справа от неё.
+ * Показывается, только когда кнопка выключена и причина не пуста: пока идёт
+ * запрос, «идёт сохранение» видно по самой кнопке.
+ */
+export function blockedReason(disabled: boolean | undefined, blockedBy: string | null | undefined): string | null {
+  const text = blockedBy?.trim() ?? "";
+  return disabled === true && text !== "" ? text : null;
+}
+
+export function Button({
+  tone = "secondary",
+  className = "",
+  blockedBy,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: keyof typeof BUTTON_TONES;
+  /** почему кнопка выключена; показывается справа и связана с кнопкой через `aria-describedby` */
+  blockedBy?: string | null;
+}) {
+  const reasonId = useId();
+  const reason = blockedReason(props.disabled, blockedBy);
   return (
-    <button
-      type="button"
-      {...props}
-      className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-10 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
-    />
+    <>
+      <button
+        type="button"
+        {...props}
+        {...(reason === null ? {} : { "aria-describedby": reasonId })}
+        className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-10 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
+      />
+      {reason === null ? null : (
+        <span id={reasonId} className="text-xs text-text-muted">
+          {reason}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -155,6 +184,24 @@ export function Field({ label, hint, help, error, children }: { label: string; h
   );
 }
 
+/**
+ * Ряд полей формы. Поля выровнены по верху — подпись к подписи, поле к полю:
+ * подсказка и ошибка стоят под своим полем и соседей не сдвигают. Всё, что не
+ * поле (флажок, кнопка, текст), оборачивается в `RowItem`.
+ */
+export function FieldRow({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-start gap-2">{children}</div>;
+}
+
+/** Не-поле в `FieldRow`: сдвинут вниз на строку подписи поля (20 px) и стоит вровень с полями. */
+export function RowItem({ children }: { children: ReactNode }) {
+  return (
+    <div className="pt-5">
+      <div className="flex min-h-[34px] items-center gap-2 max-md:min-h-10">{children}</div>
+    </div>
+  );
+}
+
 export function Panel({ title, help, actions, children }: { title: string; help?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-md border border-border bg-surface">
@@ -258,7 +305,7 @@ export function DataTable<T>({
   rows: readonly T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
-  empty?: string;
+  empty?: ReactNode;
   reorder?: TableReorder<T>;
 }) {
   const narrow = useNarrow();
