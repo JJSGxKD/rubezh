@@ -73,10 +73,15 @@ export const TIMELINE: TimelineSegmentDef[] = [
     ],
     events: [
       { kind: "ring", enemy: "circler_crow", count: 16 },
-      // Первое кольцо редкое и слабое: 24 стража на 30 секунд, из них около 14
-      // строй «держит» — стражам нужно время, чтобы дойти. Дальше кольца
-      // крепнут: больше стражей, дольше и быстрее сжимаются.
-      { kind: "cordon", enemy: "cordon_guard", count: 24, ring: { radius: 170, minRadius: 90, shrinkPerSec: 3, lifeSec: 30 } },
+      // Первое кольцо слабее следующих, но не пустое: 32 стража встают сразу и
+      // держат строй 45 секунд, внутри — элита. Дальше кольца крепнут: больше
+      // стражей, дольше живут, внутри элита покрепче.
+      {
+        kind: "cordon",
+        enemy: "cordon_guard",
+        count: 32,
+        ring: { radius: 170, minRadius: 90, shrinkPerSec: 1.5, lifeSec: 45, inner: [{ enemy: "elite_ghoul", count: 1 }] },
+      },
     ],
   },
   {
@@ -127,8 +132,12 @@ export const TIMELINE: TimelineSegmentDef[] = [
     // Первая контрольная точка сложности: элита приходит в назначенную минуту,
     // а не выпадает случайно из смеси.
     events: [
-      { kind: "ring", enemy: "elite_ghoul", count: 1 },
-      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 200, minRadius: 90, shrinkPerSec: 4, lifeSec: 35 } },
+      {
+        kind: "cordon",
+        enemy: "cordon_guard",
+        count: 40,
+        ring: { radius: 200, minRadius: 90, shrinkPerSec: 2, lifeSec: 50, inner: [{ enemy: "elite_grave_knight", count: 1 }] },
+      },
     ],
   },
 ];
@@ -180,6 +189,19 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
     // параметры кольца с отрезка на отрезок не растут.
-    { everySegments: 3, kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 240, minRadius: 100, shrinkPerSec: 5, lifeSec: 45 } },
+    {
+      everySegments: 3,
+      kind: "cordon",
+      enemy: "cordon_guard",
+      count: 56,
+      ring: {
+        radius: 240,
+        minRadius: 100,
+        shrinkPerSec: 2.5,
+        lifeSec: 60,
+        // босс в кольце — с 630-й секунды: первое кольцо кривой (450 с) только с элитой
+        inner: [{ enemy: "elite_ghoul", count: 1 }, { enemy: "boss_matryoshka", count: 1, fromSec: 630 }],
+      },
+    },
   ],
 };
