@@ -3,8 +3,8 @@ id: T-0107
 title: Витрина достижений: категории, редкость, любимые и престиж в профиле и рейтинге
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-16
 size: M
 depends_on:
