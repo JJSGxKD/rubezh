@@ -3,8 +3,8 @@ id: T-0356
 title: Панель — список первым, форма «Новое …» и «Изменить» в окне: Задания, Главная, Журнал, Флаги
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
