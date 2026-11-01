@@ -452,7 +452,7 @@ describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронк�
     const title = `Код ${randomUUID().slice(0, 6)}`;
     await prisma.$executeRaw`
       INSERT INTO promo_campaign (campaign_id, title, kind, reward, max_redemptions, redeemed, starts_at, ends_at, created_by, created_at, updated_at, partner_id)
-      VALUES (${campaignId}::uuid, ${title}, 'shared', '{}'::jsonb, NULL, 0, ${new Date(T0)}, NULL, ${randomUUID()}::uuid, ${new Date(T0)}, ${new Date(T0)}, ${partnerId}::uuid)`;
+      VALUES (${campaignId}::uuid, ${title}, 'shared', '{"coins":1,"gems":0,"shard_common":0,"shard_uncommon":0}'::jsonb, NULL, 0, ${new Date(T0)}, NULL, ${randomUUID()}::uuid, ${new Date(T0)}, ${new Date(T0)}, ${partnerId}::uuid)`;
     return { partnerId, linkCode, campaign, campaignId, title };
   }
 
