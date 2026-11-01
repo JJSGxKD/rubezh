@@ -3,7 +3,7 @@ id: T-0361
 title: Сводка панели — досмотры рекламы в ряду дней только с правом `ads.view`
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
