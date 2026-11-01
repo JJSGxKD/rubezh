@@ -123,10 +123,13 @@ describe("эволюции в контенте", () => {
     expect(byCategory.get("attack")).toBe(3);
     expect(byCategory.get("mobility")).toBe(2);
     expect(byCategory.get("defense")).toBe(2);
-    expect(LOADOUT_LIMITS.passives.attack).toBeLessThan(3);
-    // слотов защиты и мобильности меньше, чем пар: игрок выбирает, какую эволюцию строить
-    expect(LOADOUT_LIMITS.passives.defense).toBeLessThan(2);
+    // Растянутый набор (T-0193, Р127) даёт атаке и защите столько слотов, сколько пар:
+    // все их эволюции достижимы вместе. Выбор остался в подвижности (одна пара из двух) и
+    // между оружием: слотов оружия четыре, эволюций семь.
+    expect(LOADOUT_LIMITS.passives.attack).toBeLessThanOrEqual(3);
+    expect(LOADOUT_LIMITS.passives.defense).toBeLessThanOrEqual(2);
     expect(LOADOUT_LIMITS.passives.mobility).toBeLessThan(2);
+    expect(LOADOUT_LIMITS.weapons).toBeLessThan(WEAPON_EVOLUTIONS.length);
   });
 });
 
