@@ -3,8 +3,8 @@ id: T-0259
 title: Тайники рубежа — древо-оберег и разлом Нави
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-42 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0258]
@@ -23,10 +23,19 @@ shared:
   - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/src/game/sim/continue.ts
   - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/content/snapshot-schema.ts
   - packages/core-game/test/secrets.test.ts
   - packages/core-game/test/secrets-content.test.ts
   - CLAUDE.md
   - docs/32-balance.md
+  - packages/core-game/src/game/sim/secrets-rules.ts
+  - packages/core-game/src/game/sim/secrets-layout.ts
+  - packages/core-game/src/game/sim/world.ts
+  - packages/core-game/src/game/sim/create-world.ts
+  - packages/core-game/test/secrets.test.ts
+  - packages/core-game/test/secrets-content.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

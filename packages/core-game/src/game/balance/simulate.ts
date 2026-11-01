@@ -107,6 +107,8 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    timeline: content.timeline,
+    endlessCurve: content.endlessCurve,
     map: content.maps[0],
     ...(difficulty === undefined ? {} : { difficulty }),
     ...(options.startingWeaponId === undefined
