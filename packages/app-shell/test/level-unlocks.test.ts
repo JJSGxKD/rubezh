@@ -31,13 +31,28 @@ describe("что открывает уровень", () => {
     expect(unlocksGainedBetween(5, 5)).toEqual([]);
   });
 
-  it("лестница: «Буря» на 4-м, пустой пятый, «Броня» на 6-м, «Закалка» на 14-м", () => {
+  it("лестница: «Буря» на 4-м, пустой пятый, «Броня» и 2-й слот защиты на 6-м", () => {
     expect(unlocksGainedAt(4)).toEqual([{ kind: "weapon", id: "storm" }]);
     expect(unlocksGainedAt(5)).toEqual([]);
-    expect(unlocksGainedAt(14)).toEqual([{ kind: "passive", id: "tempering" }]);
+    expect(unlocksGainedAt(6)).toEqual([
+      { kind: "passive", id: "ward" },
+      { kind: "passiveSlots", category: "defense", count: 2 },
+    ]);
     expect(unlocksGainedBetween(3, 6)).toEqual([
       { kind: "weapon", id: "storm" },
       { kind: "passive", id: "ward" },
+      { kind: "passiveSlots", category: "defense", count: 2 },
+    ]);
+  });
+
+  it("«Жало» и 4-й слот оружия на 11-м, «Закалка» и 3-й слот атаки на 14-м", () => {
+    expect(unlocksGainedAt(11)).toEqual([
+      { kind: "weapon", id: "sting" },
+      { kind: "weaponSlots", count: 4 },
+    ]);
+    expect(unlocksGainedAt(14)).toEqual([
+      { kind: "passive", id: "tempering" },
+      { kind: "passiveSlots", category: "attack", count: 3 },
     ]);
   });
 
@@ -59,7 +74,10 @@ describe("что откроется дальше", () => {
       ],
     });
     expect(nextUnlockAfter(4)?.level).toBe(6);
-    expect(nextUnlockAfter(4)?.unlocks).toEqual([{ kind: "passive", id: "ward" }]);
+    expect(nextUnlockAfter(4)?.unlocks).toEqual([
+      { kind: "passive", id: "ward" },
+      { kind: "passiveSlots", category: "defense", count: 2 },
+    ]);
     expect(nextUnlockAfter(5)?.level).toBe(6);
   });
 
