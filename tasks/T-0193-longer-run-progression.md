@@ -33,6 +33,12 @@ zones:
   - packages/core-game/test/balance-properties.test.ts
   - packages/app-shell/test/level-unlocks.test.ts
 shared:
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/test/evolutions-content.test.ts
+  - packages/app-shell/test/guide.test.ts
+  - apps/sim-worker/test/check.test.ts
+  - apps/sim-worker/test/queue.integration.test.ts
   - docs/05-game-design.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
