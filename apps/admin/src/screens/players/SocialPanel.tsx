@@ -57,6 +57,19 @@ export function SocialPanel({ accountId }: { accountId: string }) {
                           по коду <span className="font-mono">{state.data.partner.code}</span>
                         </>
                       )}
+                      {state.data.partner.code !== null || state.data.partner.linkCode === null ? null : (
+                        <>
+                          {" "}
+                          по ссылке{" "}
+                          {can(view, "links.manage") ? (
+                            <button type="button" className="font-mono hover:text-accent" onClick={() => navigate({ section: "links", id: state.data.partner?.linkCode ?? null })}>
+                              {state.data.partner.linkCode}
+                            </button>
+                          ) : (
+                            <span className="font-mono">{state.data.partner.linkCode}</span>
+                          )}
+                        </>
+                      )}
                       , {formatDateTime(state.data.partner.boundAt)}
                     </span>
                   )

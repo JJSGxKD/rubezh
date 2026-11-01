@@ -77,7 +77,7 @@ export class MemoryPartnersRepository implements PartnersRepository {
     const binding = this.promo.partnerBindings.get(accountId);
     if (binding === undefined) return null;
     const campaign = this.promo.campaigns.get(binding.campaignId);
-    return { partnerId: binding.partnerId, name: this.rows.get(binding.partnerId)?.name ?? "", boundAt: binding.boundAt, campaignTitle: campaign?.title ?? null, code: null };
+    return { partnerId: binding.partnerId, name: this.rows.get(binding.partnerId)?.name ?? "", boundAt: binding.boundAt, campaignTitle: campaign?.title ?? null, code: null, linkCode: null };
   }
 
   private stats(partnerId: string, at: Date): PartnerStats {
