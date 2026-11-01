@@ -3,7 +3,7 @@ id: T-0362
 title: Карточка игрока — привязка к партнёру по ссылке с кодом ссылки и переходом в её карточку
 epic: E7
 priority: P3
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
@@ -90,8 +90,8 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] Привязка по ссылке показывает код ссылки с переходом в её карточку.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Привязка по ссылке показывает код ссылки с переходом в её карточку.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
