@@ -3,8 +3,8 @@ id: T-0197
 title: Второй босс без снарядов — «Таран» вместо ушедшего Вещуна
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0171, T-0172, T-0192]
