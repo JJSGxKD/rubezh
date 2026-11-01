@@ -72,7 +72,8 @@ describe("клиент витрины достижений", () => {
   });
 
   it("ответ без необязательных полей не падает: ни процента, ни подсказки, ни фильтра", async () => {
-    const { percent: _percent, hint: _hint, filter: _filter, ...bare } = OPEN;
+    const bare: Record<string, unknown> = { ...OPEN };
+    for (const key of ["percent", "hint", "filter"]) delete bare[key];
 
     const response = await createAchievementsApi(server([], { prestige: 0, favorites: [], rarity: RARITY, items: [bare] })).load();
 

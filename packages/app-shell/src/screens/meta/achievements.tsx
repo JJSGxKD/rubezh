@@ -5,7 +5,7 @@ import { formatNumber, t } from "../../i18n";
 import "../../i18n/tasks";
 import { createAchievementsApi, favoriteFailureKey, isOpenAchievement, type AchievementsView, type OpenAchievement } from "../../state/achievements-api";
 import { loadBadges } from "../../state/badges-api";
-import { track, useShell } from "../../state/shell";
+import { track } from "../../state/shell";
 import { TASK_NOT_DONE, claimFailureKey, createTasksApi, tasksAvailable } from "../../state/tasks-api";
 import { rewardFeedback } from "../../state/ui-feedback";
 import { loadWallet } from "../../state/wallet-api";
