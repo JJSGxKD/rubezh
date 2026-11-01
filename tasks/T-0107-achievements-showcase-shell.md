@@ -38,6 +38,10 @@ shared:
   - packages/app-shell/src/state/api-request.ts
   - packages/shared-types/src/index.ts
   - packages/app-shell/test/tasks-api.test.ts
+  - packages/app-shell/test/changelog-api.test.ts
+  - packages/app-shell/test/flags-state.test.ts
+  - packages/app-shell/test/friends-api.test.ts
+  - packages/app-shell/test/notifications.test.ts
   - backend/api/test/runs.test.ts
   - backend/api/test/boards-by-viewer.test.ts
   - backend/api/test/compensation.test.ts
