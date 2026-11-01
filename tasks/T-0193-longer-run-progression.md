@@ -3,8 +3,8 @@ id: T-0193
 title: Прокачка до 15-й минуты — кривая опыта, уровни навыков, поздние сундуки, слоты
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-41 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0101, T-0102, T-0116, T-0118, T-0125, T-0172, T-0192]
