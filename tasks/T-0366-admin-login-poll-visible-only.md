@@ -3,8 +3,8 @@ id: T-0366
 title: Вход в панель — опрос ответа бота только в видимой вкладке, срок — по слову сервера, а не по часам устройства
 epic: E14
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
