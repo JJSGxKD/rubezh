@@ -4,7 +4,7 @@ import { createDirection, randomDirection } from "./directions";
 import type { WorldBounds } from "./map-types";
 import type { Rng } from "./rng";
 import { radiusOf } from "./secrets-rules";
-import { clampToBounds, type SecretSite, type SecretState } from "./world";
+import { clampToBounds, type ElitePoolStep, type SecretSite, type SecretState } from "./world";
 
 /**
  * Раскладка тайников: один бросок при создании мира, по кольцам от старта, из
@@ -23,7 +23,13 @@ const scratch = createDirection();
  * Бросить раскладку тайников. Поток приходит снаружи — создание мира заводит
  * его от `deriveSeed(seed, STREAM_SALT.secret)`; без колец поток не тратится.
  */
-export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, bounds: WorldBounds): SecretState {
+export function createSecretState(
+  rng: Rng,
+  def: SecretsDef,
+  unitScale: number,
+  bounds: WorldBounds,
+  elitePool: readonly ElitePoolStep[] = [],
+): SecretState {
   const sites: SecretSite[] = [];
   const gap = def.minGapUnits * unitScale;
 
@@ -52,6 +58,7 @@ export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, 
   return {
     rng,
     sites,
+    elitePool,
     manualBlessing: false,
     offer: null,
     blessings: [],
@@ -65,7 +72,7 @@ export function createSecretState(rng: Rng, def: SecretsDef, unitScale: number, 
 const WISP_RING = -1;
 
 function newSite(kind: SecretKind, ring: number, active: boolean): SecretSite {
-  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [] };
+  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [], waveTicks: 0 };
 }
 
 function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {

@@ -13,7 +13,9 @@ import type {
   MapDef,
   PassiveDef,
   RunLoadout,
+  EndlessCurveDef,
   SecretsDef,
+  TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
 import { ELEMENTS } from "@bh/shared-types";
@@ -28,6 +30,7 @@ import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
 import { createSecretState, findSecretsProblems } from "./secrets";
+import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
@@ -98,7 +101,7 @@ const FALLBACK_SECRETS: SecretsDef = {
   hoard: { radius: 40, holdSec: 2, chestSize: 3 },
   stone: { radius: 30 },
   tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
-  rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5 },
+  rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5, timeLimitSec: 90 },
   wisp: { appearSec: 90, speed: 80 },
   blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
@@ -174,6 +177,12 @@ export interface CreateWorldOptions {
   chests?: ChestsDef;
   /** тайники рубежа; по умолчанию — без тайников */
   secrets?: SecretsDef;
+  /**
+   * Таймлайн спавна и кривая бесконечного режима — только чтобы знать, каких элит таймлайн уже выпускал
+   * (волна разлома Нави). Директор спавна живёт отдельно; без них у разлома нет элит и он не открывается.
+   */
+  timeline?: readonly TimelineSegmentDef[];
+  endlessCurve?: EndlessCurveDef;
   /** заряды карточек от уровня аккаунта; по умолчанию — нули */
   cardTools?: Partial<CardTools>;
   /** правила действий с карточками; по умолчанию — пропуск платит 30% пути */
@@ -311,7 +320,15 @@ export function createWorld(options: CreateWorldOptions): World {
       openings: [],
     },
     secretRules,
-    secrets: createSecretState(createRng(deriveSeed(options.seed, STREAM_SALT.secret)), secretRules, scale, map.bounds),
+    secrets: createSecretState(
+      createRng(deriveSeed(options.seed, STREAM_SALT.secret)),
+      secretRules,
+      scale,
+      map.bounds,
+      options.timeline !== undefined && options.endlessCurve !== undefined
+        ? buildElitePool(options.timeline, options.endlessCurve, enemyTypes)
+        : [],
+    ),
     cordon: createCordonState(),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,

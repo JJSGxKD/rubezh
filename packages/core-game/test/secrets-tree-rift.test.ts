@@ -2,6 +2,8 @@ import type { EndlessCurveDef, EnemyDef, SecretsDef, TimelineSegmentDef } from "
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
 import { SECRETS } from "../src/content/secrets";
+import { contentSnapshotSchema } from "../src/content/snapshot-schema";
+import { CONTENT_SNAPSHOT } from "../src/content/snapshot";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
@@ -233,7 +235,8 @@ describe("разлом Нави", () => {
       expect(distance).toBeLessThan(ONLY_RIFT.rift.ringRadius * unit * 1.01);
     }
     expect(rift(world).opened).toBe(true);
-    expect(secretKindsFound(world)).toEqual(["rift"]);
+    // К 150-й секунде появился и огонёк: он «найден» сам собой.
+    expect(secretKindsFound(world)).toEqual(["rift", "wisp"]);
     expect(secretKindsUsed(world)).toEqual([]);
   });
 
@@ -590,6 +593,16 @@ describe("правила и контент древа и разлома", () => 
     for (const field of ["tree.radius", "tree.healPerSec", "tree.shieldEverySec", "rift.elites", "rift.ringRadius", "rift.chestSize", "rift.timeLimitSec"]) {
       expect(text, field).toContain(`secrets.${field}`);
     }
+  });
+
+  it("схема снимка контента знает древо и разлом: принимает боевые числа, требует срок", () => {
+    const viaJson = (secrets: unknown): unknown => JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets }));
+    expect(contentSnapshotSchema.safeParse(viaJson(SECRETS)).success).toBe(true);
+    const { timeLimitSec: _limit, ...riftWithoutLimit } = SECRETS.rift;
+    void _limit;
+    const parsed = contentSnapshotSchema.safeParse(viaJson({ ...SECRETS, rift: riftWithoutLimit }));
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues.map((issue) => issue.path.join("."))).toContain("secrets.rift.timeLimitSec");
   });
 
   it("срок разлома: коридор 20…300 секунд, границы входят", () => {

@@ -1,5 +1,16 @@
-import { LOADOUT_STATS, SECRET_KINDS, type LoadoutStat, type SecretKind, type SecretsDef } from "@bh/shared-types";
+import {
+  LOADOUT_STATS,
+  SECRET_KINDS,
+  type EndlessCurveDef,
+  type LoadoutStat,
+  type SecretKind,
+  type SecretsDef,
+  type TimelineSegmentDef,
+} from "@bh/shared-types";
+import type { EnemyType } from "../patterns/enemy-types";
 import { LOADOUT_BOUNDS } from "../progression/run-loadout";
+import { segmentStartSec } from "./timeline";
+import type { ElitePoolStep } from "./world";
 
 /**
  * Правила тайников как данные: проверка `content/secrets.ts` и чтение числа из
@@ -7,6 +18,10 @@ import { LOADOUT_BOUNDS } from "../progression/run-loadout";
  */
 
 const ALLOWED_CHEST_SIZES: readonly number[] = [1, 3, 5];
+
+/** Коридор срока волны разлома, секунды: короче — не успеть дойти, длиннее — разлом висит весь забег. */
+const RIFT_TIME_LIMIT_MIN_SEC = 20;
+const RIFT_TIME_LIMIT_MAX_SEC = 300;
 
 export function findSecretsProblems(def: SecretsDef): string[] {
   const problems: string[] = [];
@@ -72,6 +87,11 @@ export function findSecretsProblems(def: SecretsDef): string[] {
   if (!ALLOWED_CHEST_SIZES.includes(def.rift.chestSize)) {
     problems.push(`secrets.rift.chestSize — размер 1, 3 или 5, сейчас ${def.rift.chestSize}`);
   }
+  if (!(def.rift.timeLimitSec >= RIFT_TIME_LIMIT_MIN_SEC && def.rift.timeLimitSec <= RIFT_TIME_LIMIT_MAX_SEC)) {
+    problems.push(
+      `secrets.rift.timeLimitSec — от ${RIFT_TIME_LIMIT_MIN_SEC} до ${RIFT_TIME_LIMIT_MAX_SEC} секунд, сейчас ${def.rift.timeLimitSec}`,
+    );
+  }
   if (!(Number.isFinite(def.wisp.appearSec) && def.wisp.appearSec >= 0)) {
     problems.push(`secrets.wisp.appearSec — не меньше 0, сейчас ${def.wisp.appearSec}`);
   }
@@ -116,4 +136,65 @@ export function radiusOf(def: SecretsDef, kind: SecretKind): number {
     case "wisp":
       return 0;
   }
+}
+
+/**
+ * Таблица «секунда → элиты, которые таймлайн уже выпускал» для волны разлома. Собирается из контента при
+ * создании мира и дальше не меняется, в снимок забега не входит: при восстановлении мир собирается заново
+ * из того же контента.
+ *
+ * Берутся элиты (`rank: "elite"`, боссы — нет) из событий отрезков, расписанных руками, и из событий кривой
+ * бесконечного режима — с секунды первого срабатывания события. Расчёт отрезка (`planSegment`) не зовётся:
+ * он тянет `world.rng`, а таблица обязана быть чистой функцией контента. Шаги идут по секундам и копят
+ * типы: элита, однажды вышедшая, остаётся в пуле.
+ */
+export function buildElitePool(
+  timeline: readonly TimelineSegmentDef[],
+  curve: EndlessCurveDef,
+  enemyTypes: readonly EnemyType[],
+): ElitePoolStep[] {
+  const indexOf = (enemy: string): number => {
+    const index = enemyTypes.findIndex((type) => type.id === enemy);
+    return index >= 0 && enemyTypes[index].rank === "elite" ? index : -1;
+  };
+
+  const releases: { fromSec: number; type: number }[] = [];
+  timeline.forEach((segment, i) => {
+    for (const event of segment.events ?? []) {
+      const type = indexOf(event.enemy);
+      if (type >= 0) releases.push({ fromSec: segmentStartSec(timeline, curve, i), type });
+    }
+  });
+  for (const event of curve.events) {
+    const type = indexOf(event.enemy);
+    // Событие кривой срабатывает на отрезке, где (шаг + 1) кратно `everySegments`: первый раз — на шаге
+    // `everySegments − 1` от начала кривой.
+    const firstStep = Math.max(1, event.everySegments) - 1;
+    if (type >= 0) releases.push({ fromSec: segmentStartSec(timeline, curve, timeline.length + firstStep), type });
+  }
+  // Устойчивая сортировка: при равных секундах порядок событий в контенте сохраняется.
+  releases.sort((a, b) => a.fromSec - b.fromSec);
+
+  const steps: ElitePoolStep[] = [];
+  for (const release of releases) {
+    const last = steps[steps.length - 1];
+    if (last !== undefined && last.fromSec === release.fromSec) {
+      if (!last.types.includes(release.type)) last.types.push(release.type);
+      continue;
+    }
+    const known = last === undefined ? [] : last.types;
+    steps.push({ fromSec: release.fromSec, types: known.includes(release.type) ? [...known] : [...known, release.type] });
+  }
+  return steps;
+}
+
+/**
+ * Типы элит для волны разлома на этой секунде забега: все, что таймлайн к ней уже выпускал. Разлом открыт
+ * раньше первой элиты — берётся первая элита таймлайна. Таймлайна или элит нет — пул пуст, волны не будет.
+ */
+export function elitePoolAt(pool: readonly ElitePoolStep[], elapsedSec: number): readonly number[] {
+  if (pool.length === 0) return [];
+  let found = -1;
+  for (let i = 0; i < pool.length && pool[i].fromSec <= elapsedSec; i++) found = i;
+  return found < 0 ? pool[0].types.slice(0, 1) : pool[found].types;
 }

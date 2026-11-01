@@ -1,11 +1,10 @@
 import { SECRET_KINDS, type BlessingDef, type SecretKind, type SecretsDef } from "@bh/shared-types";
 import { combineModifiers } from "../progression/boosts";
 import { refreshPlayerStats } from "../progression/levels";
-import { isElite } from "../patterns/enemy-types";
 import { openChest } from "./chests";
 import { createDirection, randomRingOffset, ringDirection } from "./directions";
 import type { Rng } from "./rng";
-import { radiusOf } from "./secrets-rules";
+import { elitePoolAt, radiusOf } from "./secrets-rules";
 import { vectorLength } from "./vector";
 import {
   clampToBounds,
@@ -16,6 +15,7 @@ import {
   type SecretFound,
   type SecretSite,
   type SecretUsed,
+  type SecretWaveEnemy,
   type World,
 } from "./world";
 
@@ -27,7 +27,7 @@ import {
  * - **клад** — постоять в круге, получить сундук;
  * - **камень-указатель** — коснуться, и все тайники видны на радаре;
  * - **древо-оберег** — рядом лечит и раз в минуту даёт щит, но не отпускает: оно не исчезает;
- * - **разлом Нави** — вошёл, и выходит волна элит; выдержал — большой сундук;
+ * - **разлом Нави** — вошёл, и выходит волна элит; убил всех за срок — большой сундук;
  * - **огонёк** — появляется у игрока и летит к ближайшему неоткрытому тайнику.
  *
  * Раскладка бросается один раз при создании мира: по кольцам от старта, из
@@ -116,7 +116,7 @@ function updateSite(world: World, index: number, elapsedSec: number): void {
       tendTree(world, site);
       return;
     case "rift":
-      openRift(world, index);
+      openRift(world, index, elapsedSec);
       return;
     case "wisp":
       return;
@@ -134,6 +134,7 @@ function recordUsed(world: World, index: number, outcome: string, elapsedSec: nu
   const site = world.secrets.sites[index];
   site.used = true;
   site.holdTicks = 0;
+  site.waveTicks = 0;
   world.secrets.usedLog.push({ index, kind: site.kind, outcome, elapsedSec });
 }
 
@@ -170,41 +171,44 @@ function tendTree(world: World, site: SecretSite): void {
 // --- Разлом Нави ----------------------------------------------------------------
 
 /**
- * Вход в круг разлома: выпустить волну. Состав и места — из потока тайников, как и вся раскладка, а не
- * из `world.rng`; потолок живых волна не спрашивает — спавн упирается только в ёмкость пула. Нет элит в
- * контенте или нет места в пуле — волны нет, и разлом закрывается без награды.
+ * Вход в круг разлома: выпустить волну. Типы элит — те, что таймлайн к этой секунде уже выпускал
+ * (`elitePoolAt`): игрок не встретит из разлома того, кого ещё не видел один на один. Выбор типа и места —
+ * из потока тайников, а не из `world.rng`; потолок живых волна не спрашивает — спавн упирается только в
+ * ёмкость пула. Вышло меньше положенного — волна из вышедших; не вышло ни одной (пул полон, элит нет) —
+ * разлом остаётся закрытым для события и награды, поток тайников не тратится, и следующий вход пробует снова.
  */
-function openRift(world: World, index: number): void {
+function openRift(world: World, index: number, elapsedSec: number): void {
   const site = world.secrets.sites[index];
   const rules = world.secretRules.rift;
-  site.opened = true;
-
-  const pool: number[] = [];
-  world.enemyTypes.forEach((type, typeIndex) => {
-    if (isElite(type)) pool.push(typeIndex);
-  });
-  if (pool.length === 0) {
-    site.used = true;
-    return;
-  }
+  const pool = elitePoolAt(world.secrets.elitePool, elapsedSec);
+  if (pool.length === 0) return;
 
   const rng = world.secrets.rng;
+  const streamBefore = rng.getState();
   const offset = randomRingOffset(rng);
   const radius = rules.ringRadius * world.config.unitScale;
   const bounds = world.config.bounds;
+  const wave: SecretWaveEnemy[] = [];
   for (let k = 0; k < rules.elites; k++) {
     const type = pool[rng.nextInt(0, pool.length)];
     ringDirection(offset, k, rules.elites, scratch);
     const slot = spawnEnemy(world, type, clampToBounds(site.x + scratch.x * radius, bounds.halfWidth), clampToBounds(site.y + scratch.y * radius, bounds.halfHeight));
-    if (slot >= 0) site.wave.push({ slot, type });
+    if (slot >= 0) wave.push({ slot, type });
   }
-  if (site.wave.length === 0) site.used = true;
+  if (wave.length === 0) {
+    rng.setState(streamBefore);
+    return;
+  }
+  site.opened = true;
+  site.wave = wave;
+  site.waveTicks = 0;
 }
 
 /**
- * Волна идёт: все убиты — сундук у разлома и разлом закрывается; игрок ушёл дальше кольца, не добив, —
- * закрывается без награды. Слот считается своим, пока в нём живёт элита того же типа: убитая вышла из
- * пула, а переиспользованный слот чужого типа в волну не входит.
+ * Волна идёт: все убиты — сундук и разлом закрывается; срок `timeLimitSec` вышел, а хоть одна элита жива, —
+ * закрывается без награды, оставшиеся элиты остаются обычными врагами. Срок считается в тиках с выхода
+ * волны, пока игрок жив, и не зависит от того, где он: от элит уходят кругами. Слот считается своим, пока
+ * в нём живёт элита того же типа: убитая вышла из пула, а переиспользованный слот чужого типа в волну не входит.
  */
 function updateRiftWave(world: World, index: number, elapsedSec: number): void {
   const site = world.secrets.sites[index];
@@ -217,13 +221,24 @@ function updateRiftWave(world: World, index: number, elapsedSec: number): void {
     openChest(world, rules.chestSize);
     return;
   }
-  const dx = world.player.x - site.x;
-  const dy = world.player.y - site.y;
-  const away = rules.ringRadius * world.config.unitScale;
-  if (dx * dx + dy * dy > away * away) {
+  site.waveTicks++;
+  if (site.waveTicks >= holdTicksOf(rules.timeLimitSec)) {
     site.wave = [];
     recordUsed(world, index, "left", elapsedSec);
   }
+}
+
+/**
+ * Второй шанс убирает с поля всех врагов, вместе с элитами волны: пустая волна выдала бы сундук даром.
+ * Поэтому открытый разлом при продолжении закрывается исходом `left`, без награды.
+ */
+export function closeOpenRifts(world: World): void {
+  const elapsedSec = world.stats.elapsedSec;
+  world.secrets.sites.forEach((site, index) => {
+    if (site.kind !== "rift" || !site.opened || site.used) return;
+    site.wave = [];
+    recordUsed(world, index, "left", elapsedSec);
+  });
 }
 
 // --- Капище и благословения -----------------------------------------------------

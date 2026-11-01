@@ -1215,9 +1215,10 @@ export interface SecretsDef {
   tree: { radius: number; healPerSec: number; shieldEverySec: number };
   /**
    * разлом Нави: войти в круг — выходит волна из `elites` элит кольцом `ringRadius` вокруг разлома,
-   * мимо потолка живых; убиты все — сундук размера `chestSize`; ушёл дальше кольца, не добив, — разлом закрыт
+   * мимо потолка живых; типы элит — те, что таймлайн к этой секунде уже выпускал. Убиты все — сундук
+   * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
    */
-  rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize };
+  rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
   /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
   wisp: { appearSec: number; speed: number };
   /** набор благословений капища */
