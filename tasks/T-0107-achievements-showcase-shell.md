@@ -42,6 +42,9 @@ shared:
   - packages/app-shell/test/flags-state.test.ts
   - packages/app-shell/test/friends-api.test.ts
   - packages/app-shell/test/notifications.test.ts
+  - apps/web-telegram/vite.config.ts
+  - backend/api/test/http-app.test.ts
+  - backend/api/test/admin.test.ts
   - backend/api/test/runs.test.ts
   - backend/api/test/boards-by-viewer.test.ts
   - backend/api/test/compensation.test.ts
