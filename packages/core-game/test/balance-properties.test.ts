@@ -114,6 +114,14 @@ describe("свойства баланса", () => {
     expect(byDefault).toEqual(explicit);
   });
 
+  it("бессмертный бот на «Сложной» за 300 с жив и берёт не менее десяти уровней", { timeout: 60_000 }, () => {
+    // Растянутая прокачка (T-0193) не должна оставлять игрока без выбора: к
+    // пятой минуте уровни ещё идут часто. Сам замер сборки — в `balance:sim`.
+    const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], godMode: true, maxSec: 300 });
+    expect(run.timedOut).toBe(true);
+    expect(run.level).toBeGreaterThanOrEqual(10);
+  });
+
   it("зонд давления не убивает бота и считает полные минуты", { timeout: 60_000 }, () => {
     const probe = simulateBalanceRun({ seed: 1, skill: "dodging", immortalPlayer: true, maxSec: 180 });
     expect(probe.timedOut).toBe(true);
@@ -130,10 +138,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 507.95,
-      level: 28,
-      wave: 13,
-      enemiesKilled: 5117,
+      survivalSec: 186.23333333333332,
+      level: 16,
+      wave: 6,
+      enemiesKilled: 837,
     });
   });
 

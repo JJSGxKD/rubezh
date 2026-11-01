@@ -3,8 +3,8 @@ id: T-0260
 title: Тайники рубежа — облик на канве, радар, круг стояния и окно благословения
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0259, T-0352]
@@ -27,6 +27,10 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/core-game/src/game/radar.ts
+  - packages/core-game/src/run-api.ts
+  - packages/app-shell/src/state/audio-sync.ts
+  - packages/app-shell/test/radar-looks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

@@ -126,6 +126,11 @@ export class FriendsService implements OnModuleInit {
     return incoming.length + Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
   }
 
+  /** Сколько у игрока друзей — для достижений «друзья»: одним запросом на счёт, без списка. */
+  async friendCount(accountId: string): Promise<number> {
+    return await this.friends.count(accountId);
+  }
+
   /**
    * Забрать бонус за число друзей — все достигнутые и не забранные ступени.
    * Ключ кошелька — аккаунт и ступень, поэтому ступень даёт монеты один раз

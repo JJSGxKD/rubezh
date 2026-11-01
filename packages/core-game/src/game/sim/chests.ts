@@ -1,4 +1,4 @@
-import type { ChestReward, ChestSize, ChestSource, ChestsDef, EnemyRank } from "@bh/shared-types";
+import type { ChestReward, ChestSize, ChestSource, ChestsDef, ChestsLateDef, EnemyRank } from "@bh/shared-types";
 import { readyEvolutionOption } from "../progression/evolutions";
 import { addXp, applyUpgrade, collectCandidates, drawWeighted, healOption } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
@@ -57,6 +57,7 @@ export function findChestsProblems(def: ChestsDef): string[] {
     // Иначе босс не находил бы себе размера в таблице весов.
     problems.push(`chests.bossMinSize — размер из sizes, сейчас ${def.bossMinSize}`);
   }
+  if (def.late !== undefined) problems.push(...findLateProblems(def, def.late));
   if (!(def.ownedWeightMul >= 1)) {
     problems.push(`chests.ownedWeightMul — не меньше 1, сейчас ${def.ownedWeightMul}`);
   }
@@ -67,6 +68,43 @@ export function findChestsProblems(def: ChestsDef): string[] {
     problems.push(`chests.maxOnField — целое от 0 до ${MAX_PICKUPS_OF_KIND}, сейчас ${def.maxOnField}`);
   }
   return problems;
+}
+
+/** Замечания к поздней таблице: та же форма, что у основной, и в среднем скромнее. */
+function findLateProblems(def: ChestsDef, late: ChestsLateDef): string[] {
+  const problems: string[] = [];
+  if (!(late.afterSec > 0)) problems.push(`chests.late.afterSec — больше 0, сейчас ${late.afterSec}`);
+
+  if (late.sizes.length === 0) problems.push("chests.late.sizes — нужен хотя бы один размер");
+  late.sizes.forEach((entry, i) => {
+    if (!ALLOWED_SIZES.includes(entry.size)) {
+      problems.push(`chests.late.sizes[${i}].size — размер 1, 3 или 5, сейчас ${entry.size}`);
+    }
+    if (!(entry.weight > 0)) problems.push(`chests.late.sizes[${i}].weight — больше 0, сейчас ${entry.weight}`);
+  });
+  if (!late.sizes.some((entry) => entry.size === late.bossMinSize)) {
+    problems.push(`chests.late.bossMinSize — размер из late.sizes, сейчас ${late.bossMinSize}`);
+  }
+
+  // Поздняя таблица, щедрее основной, сделала бы позднюю игру богаче ранней —
+  // обратное тому, ради чего она заведена (Р129).
+  const lateMean = meanSize(late.sizes);
+  const mainMean = meanSize(def.sizes);
+  if (late.sizes.length > 0 && def.sizes.length > 0 && !(lateMean < mainMean)) {
+    problems.push(`chests.late.sizes — средний размер ${lateMean.toFixed(2)} должен быть меньше основного ${mainMean.toFixed(2)}`);
+  }
+  return problems;
+}
+
+/** Средний размер сундука по весам таблицы. */
+function meanSize(sizes: readonly { size: number; weight: number }[]): number {
+  let total = 0;
+  let sum = 0;
+  for (const entry of sizes) {
+    total += entry.weight;
+    sum += entry.size * entry.weight;
+  }
+  return total > 0 ? sum / total : 0;
 }
 
 // --- Выпадение ----------------------------------------------------------------
@@ -84,8 +122,9 @@ export function dropChest(world: World, x: number, y: number, rank: EnemyRank | 
 
   const chests = world.chests;
   const source: ChestSource = rank;
-  let size = rollSize(world);
-  if (source === "boss" && size < rules.bossMinSize) size = rules.bossMinSize;
+  const table = activeTable(world);
+  let size = rollSize(world, table);
+  if (source === "boss" && size < table.bossMinSize) size = table.bossMinSize;
 
   // Разброс как у подборов, но направление и расстояние — из потока сундуков.
   randomDirection(chests.rng, scratch);
@@ -107,14 +146,23 @@ export function dropChest(world: World, x: number, y: number, rank: EnemyRank | 
   world.stats.chestsFound++;
 }
 
-/** Размер очередного сундука: сначала схема, потом бросок по весам. */
-function rollSize(world: World): ChestSize {
-  const rules = world.chestRules;
-  const scripted = rules.opening[world.chests.dropped];
+/** Таблица размеров по секунде забега: с `late.afterSec` — поздняя, скромнее основной. */
+function activeTable(world: World): Pick<ChestsDef, "sizes" | "bossMinSize"> {
+  const late = world.chestRules.late;
+  return late !== undefined && world.stats.elapsedSec >= late.afterSec ? late : world.chestRules;
+}
+
+/**
+ * Размер очередного сундука: сначала схема `opening` (она приоритетнее и
+ * поздней таблицы), потом бросок по весам — ровно одно обращение к потоку
+ * сундуков, как и раньше.
+ */
+function rollSize(world: World, table: Pick<ChestsDef, "sizes">): ChestSize {
+  const scripted = world.chestRules.opening[world.chests.dropped];
   if (scripted !== undefined) return scripted;
 
-  const index = drawWeighted(world.chests.rng, rules.sizes);
-  return rules.sizes[index].size;
+  const index = drawWeighted(world.chests.rng, table.sizes);
+  return table.sizes[index].size;
 }
 
 export function chestsOnField(world: World): number {

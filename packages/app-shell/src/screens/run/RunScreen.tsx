@@ -32,6 +32,10 @@ import type { SecondChanceProps } from "./SecondChance";
 const loadChestOverlay = (): Promise<typeof import("./ChestOverlay")> => import("./ChestOverlay");
 const ChestOverlay = lazy(async () => ({ default: (await loadChestOverlay()).ChestOverlay }));
 
+/** Окно капища «Выбери благословение» — тем же способом: до первого капища оно не нужно. */
+const loadBlessingOverlay = (): Promise<typeof import("./BlessingOverlay")> => import("./BlessingOverlay");
+const BlessingOverlay = lazy(async () => ({ default: (await loadBlessingOverlay()).BlessingOverlay }));
+
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
  * паузы, выбора улучшения и смерти.
@@ -109,6 +113,7 @@ export function RunScreen(): ReactNode {
     prefetchDeathOverlay();
     // Не догрузилось — не беда: `lazy` попробует снова, когда сундук откроют.
     loadChestOverlay().catch(() => undefined);
+    loadBlessingOverlay().catch(() => undefined);
   }, [running]);
 
   return (
@@ -173,6 +178,14 @@ export function RunScreen(): ReactNode {
       {run.phase === "chest" && run.chest !== null ? (
         <Suspense fallback={null}>
           <ChestOverlay chest={run.chest} onTake={() => useRun.getState().closeChest()} />
+        </Suspense>
+      ) : null}
+
+      {/* Капище: мир стоит, пока игрок не выберет благословение. Как и у сундука,
+          лист «Характеристики» и панель разработчика в этой фазе не открываются. */}
+      {run.phase === "blessing" && run.blessing !== null ? (
+        <Suspense fallback={null}>
+          <BlessingOverlay options={run.blessing.options} onChoose={(id) => useRun.getState().chooseBlessing(id)} />
         </Suspense>
       ) : null}
 

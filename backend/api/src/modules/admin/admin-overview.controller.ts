@@ -4,7 +4,7 @@ import { RequirePermission } from "../../common/access.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { parse } from "./admin-parse.js";
-import { AdminOverviewService, type Overview, type OverviewPeriod } from "./admin-overview.service.js";
+import { AdminOverviewService, type AttentionItem, type Overview, type OverviewPeriod } from "./admin-overview.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
 /** Период сводки: параметр приходит строкой; пусто — сутки, как до периодов. */
@@ -21,5 +21,14 @@ export class AdminOverviewController {
   async get(@Req() request: unknown, @Query() query: unknown): Promise<{ data: Overview }> {
     const { days } = parse(() => querySchema.parse(query), "Период — 1, 7 или 30 дней");
     return { data: await this.overview.overview(accountOf(request), Number(days) as OverviewPeriod) };
+  }
+
+  /**
+   * «Ждёт вас» для меню: лёгкий запрос вместо сводки. Права не нужны отдельно —
+   * каждый пункт списка проверяет своё, чужого человек не увидит.
+   */
+  @Get("attention")
+  async attention(@Req() request: unknown): Promise<{ data: { items: AttentionItem[] } }> {
+    return { data: { items: await this.overview.attentionFor(accountOf(request)) } };
   }
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "../../api/client";
 import {
+  ACHIEVEMENT_CATEGORIES,
+  CATEGORY_TITLES,
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
@@ -8,14 +10,21 @@ import {
   FILTER_LABELS,
   FILTER_OPTIONS,
   GROUP_TITLES,
+  HINT_MAX,
   KIND_TITLES,
+  LADDER_MAX,
+  NO_ACHIEVEMENT_FIELDS,
+  NO_CATEGORY_TITLE,
   NO_TIER_TITLE,
   PARTNER_KINDS,
   PARTNER_PLATFORMS,
   PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
   POOL_TIERS,
+  PRESTIGE_MAX,
   REPEAT_TITLES,
+  RUNG_MAX,
+  STATE_KINDS,
   TASK_LIMIT_RANGE,
   TASK_PERIODS,
   TIER_TITLES,
@@ -24,6 +33,7 @@ import {
   completionsLabel,
   fetchTasks,
   groupByPeriod,
+  isAchievement,
   partnerPlatforms,
   reorderTasks,
   rewardLabel,
@@ -33,6 +43,7 @@ import {
   taskProblem,
   togglePlatform,
   withKind,
+  withPeriod,
   withPlatform,
   type PoolTier,
   type TaskGroup,
@@ -51,7 +62,7 @@ import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -101,6 +112,8 @@ export function TasksScreen() {
   const partner = PARTNER_KINDS.has(input.kind);
   const filterKey = FILTER_KEYS[input.kind];
   const pooled = !partner && input.period !== "achievement";
+  const achievement = isAchievement(input);
+  const stateKind = STATE_KINDS.has(input.kind);
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
@@ -150,7 +163,7 @@ export function TasksScreen() {
               </Field>
             ) : (
               <Field label="Срок" help={HELP.tasks.period}>
-                <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
+                <Select value={input.period} disabled={original !== null || partner || stateKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
                   {TASK_PERIODS.map((period) => (
                     <option key={period} value={period}>
                       {PERIOD_TITLES[period]}
@@ -274,6 +287,61 @@ export function TasksScreen() {
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
+          {achievement ? (
+            <FieldRow>
+              <Field label="Категория" help={HELP.tasks.category}>
+                <Select value={input.category ?? ""} onChange={(event) => setInput({ ...input, category: ACHIEVEMENT_CATEGORIES.find((category) => category === event.target.value) ?? null })}>
+                  <option value="">{NO_CATEGORY_TITLE}</option>
+                  {ACHIEVEMENT_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {CATEGORY_TITLES[category]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Лестница" help={HELP.tasks.ladder} hint="латиница, пусто — без лестницы">
+                <Input
+                  value={input.ladder ?? ""}
+                  onChange={(event) => setInput({ ...input, ladder: event.target.value === "" ? null : event.target.value.trim(), rung: event.target.value.trim() === "" ? null : (input.rung ?? 1) })}
+                  placeholder="kills"
+                  maxLength={LADDER_MAX}
+                  className="w-32"
+                />
+              </Field>
+              <Field label="Ступень лестницы" help={HELP.tasks.ladder}>
+                <Input
+                  value={input.rung === null ? "" : String(input.rung)}
+                  disabled={(input.ladder ?? "") === ""}
+                  onChange={(event) => setInput({ ...input, rung: event.target.value.trim() === "" ? null : Number(event.target.value) })}
+                  type="number"
+                  min={1}
+                  max={RUNG_MAX}
+                  step={1}
+                  className="w-24"
+                />
+              </Field>
+              <Field label="Престиж" help={HELP.tasks.prestige} hint={`0–${PRESTIGE_MAX.toLocaleString("ru-RU")}`}>
+                <Input
+                  value={String(input.prestige)}
+                  onChange={(event) => setInput({ ...input, prestige: event.target.value === "" ? 0 : Number(event.target.value) })}
+                  type="number"
+                  min={0}
+                  max={PRESTIGE_MAX}
+                  step={1}
+                  className="w-24"
+                />
+              </Field>
+              <RowItem>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={input.hidden} onChange={(event) => setInput({ ...input, hidden: event.target.checked })} />
+                  скрытое
+                </label>
+              </RowItem>
+              <Field label={`Подсказка — ${String(input.hint?.trim().length ?? 0)} из ${String(HINT_MAX)}`} help={HELP.tasks.hint}>
+                <Input value={input.hint ?? ""} onChange={(event) => setInput({ ...input, hint: event.target.value === "" ? null : event.target.value })} maxLength={HINT_MAX + 20} className="w-80" />
+              </Field>
+            </FieldRow>
+          ) : null}
           <FieldRow>
             <Field label="Монеты">
               <Input {...number("coins")} />
@@ -347,6 +415,22 @@ export function TasksScreen() {
                       </span>
                     ),
                   },
+                  // Категория, лестница и престиж — у достижений: по ним витрина раскладывает список.
+                  ...(group.group === "achievement"
+                    ? [
+                        {
+                          title: "Категория",
+                          help: HELP.tasks.category,
+                          render: (task: TaskDef) => (task.category === null ? <span className="text-text-muted">нет</span> : CATEGORY_TITLES[task.category]),
+                        },
+                        {
+                          title: "Лестница",
+                          render: (task: TaskDef) =>
+                            task.ladder === null ? <span className="text-text-muted">нет</span> : <span className="whitespace-nowrap font-mono text-xs">{`${task.ladder} · ${String(task.rung ?? "?")}`}</span>,
+                        },
+                        { title: "Престиж", help: HELP.tasks.prestige, align: "right" as const, render: (task: TaskDef) => String(task.prestige) },
+                      ]
+                    : []),
                   { title: "Награда", render: (task) => rewardLabel(task) },
                   // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
                   ...(group.group === "partner"
@@ -368,7 +452,15 @@ export function TasksScreen() {
                       ]
                     : []),
                   { title: "Очки", align: "right", render: (task) => String(task.passPoints) },
-                  { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },
+                  {
+                    title: "",
+                    render: (task) => (
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {task.hidden ? <Badge tone="neutral">скрытое</Badge> : null}
+                        {task.active ? null : <Badge tone="warning">выключено</Badge>}
+                      </span>
+                    ),
+                  },
                 ]}
               />
             </Panel>
