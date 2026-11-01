@@ -282,7 +282,7 @@ describe("контент стража кольца и колец в таймла
     expect(guard).toBeDefined();
     expect(guard?.pattern).toBe("cordon");
     expect(guard?.rank).toBeUndefined();
-    expect(guard?.hp).toBeGreaterThanOrEqual(60);
+    expect(guard?.hp).toBeGreaterThanOrEqual(240);
     expect(guard?.speed).toBeLessThanOrEqual(40);
     expect(guard?.element).toBeUndefined();
     expect(guard?.resist).toBeUndefined();
