@@ -3,8 +3,8 @@ id: T-0365
 title: Журнал исходящих — пачка держится в буфере, пока база недоступна; причина сбоя в логе обрезана до 200 знаков
 epic: E4
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
@@ -12,7 +12,8 @@ zones:
   - backend/api/src/modules/request-journal/outbound-sink.ts
   - backend/api/src/modules/request-journal/journal-rules.ts
   - backend/api/test/request-journal.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low
