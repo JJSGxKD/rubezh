@@ -3,7 +3,7 @@ id: T-0107
 title: Витрина достижений: категории, редкость, любимые и престиж в профиле и рейтинге
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-16
 size: M
@@ -34,6 +34,14 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
   - docs/39-retention-mechanics.md
+  - packages/app-shell/src/screens/meta/task-row.tsx
+  - packages/app-shell/src/state/api-request.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/test/tasks-api.test.ts
+  - backend/api/test/runs.test.ts
+  - backend/api/test/boards-by-viewer.test.ts
+  - backend/api/test/compensation.test.ts
+  - backend/api/test/rating-restrictions.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
