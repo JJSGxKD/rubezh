@@ -2362,8 +2362,10 @@ model SeasonResult {
   difficulty Difficulty
   bestSec    Float      @map("best_sec")
   place      Int
-  /// сколько игроков было в таблице сложности
+  /// сколько игроков было в таблице сложности — своей доски аккаунта
   boardSize  Int        @map("board_size")
+  /// доска аккаунта на момент закрытия: `common` — общая, без аккаунтов с отдельной доской; `full` — полная (T-0114, Р104)
+  board      String     @default("common") @db.VarChar(8)
 
   season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
