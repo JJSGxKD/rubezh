@@ -36,7 +36,7 @@ batch: 8
 
 # T-0311. Батл-пасс — сервер: месяц по Москве, очки пасса за задания, 30 ступеней в двух лентах, забор награды, VIP-лента и пройденное до покупки VIP
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json)](README.md#значки-статуса) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](archive/T-0105-task-points-and-rewards.md)
 
 ## Зачем
 

@@ -3,7 +3,7 @@ id: T-0068
 title: Воронка партнёра — по его ссылкам, кодам и площадкам
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -32,7 +32,7 @@ batch: 4
 
 # T-0068. Воронка партнёра — по его ссылкам, кодам и площадкам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0068.json)](README.md#значки-статуса) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](archive/T-0067-partner-links-and-binding.md) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](archive/T-0053-funnel-chart-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0068.json)](../README.md#значки-статуса) [![T-0067](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0067.json&label=T-0067)](T-0067-partner-links-and-binding.md) [![T-0053](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0053.json&label=T-0053)](T-0053-funnel-chart-screen.md)
 
 ## Зачем
 

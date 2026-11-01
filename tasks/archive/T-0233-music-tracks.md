@@ -26,7 +26,7 @@ batch: 3
 
 # T-0233. Музыка — три круга кодом по брифу — лобби, пульс забега и слой босса
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0233.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0233.json)](../README.md#значки-статуса)
 
 > **Сделано за дизайнера 31.10.2026, без исполнителя** (`claude-lead-1`).
 > Генератора с коммерческой лицензией у команды нет, бесплатного набора

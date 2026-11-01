@@ -28,7 +28,7 @@ batch: 8
 
 # T-0318. sim-worker — очередь повтора забега: та же симуляция по записи, снимку контента и снаряжению, исход и тик расхождения
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0318.json)](README.md#значки-статуса) [![T-0302](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json&label=T-0302)](T-0302-sim-worker.md) [![T-0316](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0316.json&label=T-0316)](T-0316-run-proof-client.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0318.json)](README.md#значки-статуса) [![T-0302](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json&label=T-0302)](archive/T-0302-sim-worker.md) [![T-0316](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0316.json&label=T-0316)](T-0316-run-proof-client.md)
 
 ## Зачем
 

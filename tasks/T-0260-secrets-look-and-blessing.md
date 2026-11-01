@@ -37,7 +37,7 @@ batch: 4
 
 # T-0260. Тайники рубежа — облик на канве, радар, круг стояния и окно благословения
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json)](README.md#значки-статуса) [![T-0259](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json&label=T-0259)](T-0259-secrets-tree-and-rift.md) [![T-0352](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json&label=T-0352)](T-0352-secrets-run-wiring.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json)](README.md#значки-статуса) [![T-0259](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json&label=T-0259)](T-0259-secrets-tree-and-rift.md) [![T-0352](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json&label=T-0352)](archive/T-0352-secrets-run-wiring.md)
 
 ## Зачем
 
