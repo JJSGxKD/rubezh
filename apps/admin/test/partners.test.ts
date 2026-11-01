@@ -8,16 +8,21 @@ import {
   createPartner,
   emptyPartnerForm,
   fetchPartner,
+  fetchPartnerFunnel,
   fetchPartners,
   filterPartners,
+  funnelRowOf,
   partnerFormOf,
   partnerFormSchema,
+  partnerFunnelSchema,
   partnerOfRoute,
   setPartnerStatus,
   share,
+  sourceTitle,
   statusTone,
   updatePartner,
 } from "../src/api/partners";
+import { funnelBars } from "../src/api/funnel";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -176,5 +181,62 @@ describe("партнёры в панели", () => {
     expect(partnerOfRoute(`${PARTNER_CODE_ROUTE}${PARTNER.partnerId}`)).toBe(PARTNER.partnerId);
     expect(partnerOfRoute(null)).toBeNull();
     expect(partnerOfRoute(PARTNER.partnerId)).toBeNull();
+  });
+});
+
+describe("воронка партнёра в карточке (T-0068, Р96)", () => {
+  const counts = (patch: Partial<Record<string, number>> = {}) => ({ accounts: 0, entered: 0, appOpened: 0, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0, ...patch });
+  const FUNNEL = {
+    from: "2026-10-01T00:00:00.000Z",
+    to: "2026-10-31T00:00:00.000Z",
+    total: counts({ accounts: 3, entered: 3, appOpened: 3, firstRunStarted: 2, firstRunFinished: 1, firstPurchase: 1 }),
+    sources: [
+      { via: "link", name: "channel-post", ref: "AbCd1234", counts: counts({ accounts: 2, entered: 2, appOpened: 2, firstRunStarted: 1, firstRunFinished: 1 }) },
+      { via: "code", name: "Стрим", ref: "11111111-1111-4111-8111-111111111111", counts: counts({ accounts: 1, entered: 1, appOpened: 1, firstRunStarted: 1, firstPurchase: 1 }) },
+    ],
+    platforms: [{ platform: "telegram", counts: counts({ accounts: 3, entered: 3 }) }],
+  };
+
+  it("fetchPartnerFunnel: адрес с периодом и id в пути; ответ разобран схемой", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: FUNNEL }));
+    const api = new AdminApi(fetch);
+
+    const result = await fetchPartnerFunnel(api, "0c4a5c1e-6a57-4d43-8a2a-0f3f6d0a9b10", { from: "2026-10-01T00:00:00.000Z", to: "2026-10-31T00:00:00.000Z" });
+
+    expect(calls[0]?.url).toBe("/api/v1/admin/partners/0c4a5c1e-6a57-4d43-8a2a-0f3f6d0a9b10/funnel?from=2026-10-01T00%3A00%3A00.000Z&to=2026-10-31T00%3A00%3A00.000Z");
+    expect(result.ok && result.data.sources).toHaveLength(2);
+    expect(result.ok && result.data.total.accounts).toBe(3);
+    expect(partnerFunnelSchema.parse(FUNNEL)).toEqual(FUNNEL);
+  });
+
+  it("ответ без вех или с неизвестным видом источника — ошибка разбора, а не пустая таблица", async () => {
+    const { fetch } = fakeFetch(json(200, { data: { ...FUNNEL, total: { accounts: 3 } } }), json(200, { data: { ...FUNNEL, sources: [{ ...FUNNEL.sources[0], via: "email" }] } }));
+    const api = new AdminApi(fetch);
+
+    expect((await fetchPartnerFunnel(api, "x", {})).ok).toBe(false);
+    expect((await fetchPartnerFunnel(api, "x", {})).ok).toBe(false);
+  });
+
+  it("без периода запрос идёт без параметров: умолчание — тридцать суток — решает сервер", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: FUNNEL }));
+    await fetchPartnerFunnel(new AdminApi(fetch), "abc", {});
+    expect(calls[0]?.url).toBe("/api/v1/admin/partners/abc/funnel");
+  });
+
+  it("funnelRowOf: вехи партнёра встают в строку воронки, и полосы считаются теми же funnelBars, что на экране «Воронка»", () => {
+    const row = funnelRowOf(FUNNEL.total, "Все игроки партнёра");
+    expect(row).toMatchObject({ platform: "все", startKind: "все", accounts: 3, entered: 3, firstRunStarted: 2, firstPurchase: 1 });
+    const bars = funnelBars(row, null);
+    expect(bars).toHaveLength(9);
+    expect(bars[0]).toMatchObject({ step: "entered", count: 3, ofFirst: 1 });
+    expect(bars[2]).toMatchObject({ step: "firstRunStarted", count: 2 });
+    expect(Math.round((bars[2]?.ofFirst ?? 0) * 100)).toBe(67);
+  });
+
+  it("sourceTitle: ссылка — кампания и код, код — название кампании промокода; удалённые называются честно", () => {
+    expect(sourceTitle({ via: "link", name: "channel-post", ref: "AbCd1234" })).toBe("ссылка channel-post · AbCd1234");
+    expect(sourceTitle({ via: "code", name: "Стрим", ref: "11111111-1111-4111-8111-111111111111" })).toBe("код «Стрим»");
+    expect(sourceTitle({ via: "link", name: null, ref: "AbCd1234" })).toBe("ссылка AbCd1234");
+    expect(sourceTitle({ via: "code", name: null, ref: null })).toBe("код (кампании больше нет)");
   });
 });

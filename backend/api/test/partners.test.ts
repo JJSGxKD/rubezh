@@ -19,8 +19,10 @@ import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import type { PartnerFunnelRow } from "../src/modules/funnel/funnel-report.js";
 import { PARTNER_STATUSES, bindsNewPlayers, partnerInputSchema, withinBindWindow } from "../src/modules/partners/partner-rules.js";
 import { PartnersService } from "../src/modules/partners/partners.service.js";
+import type { PartnerFunnelSource } from "../src/modules/funnel/funnel.repository.js";
 import { ROLE_PERMISSIONS } from "../src/modules/roles/permissions.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -293,6 +295,109 @@ describe("партнёры в панели", () => {
   });
 });
 
+describe("воронка партнёра (T-0068, Р96)", () => {
+  const NOW_PERIOD = { from: new Date(NOW.getTime() - 30 * DAY), to: NOW };
+  const counts = (patch: Partial<PartnerFunnelRow> = {}) => ({ accounts: 0, entered: 0, appOpened: 0, firstRunStarted: 0, firstRunFinished: 0, runs2: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0, ...patch });
+
+  class Source implements PartnerFunnelSource {
+    rows: PartnerFunnelRow[] = [];
+    readonly asked: { partnerId: string; from: Date; to: Date }[] = [];
+    async partnerReport(partnerId: string, from: Date, to: Date): Promise<PartnerFunnelRow[]> {
+      this.asked.push({ partnerId, from, to });
+      return this.rows;
+    }
+  }
+
+  function withFunnel() {
+    const ctx = setup();
+    const source = new Source();
+    const service = new PartnersService(ctx.repository, new RolesService(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv), ctx.roles, ctx.accounts), null, source);
+    return { ...ctx, service, source };
+  }
+
+  async function partnerOf(ctx: ReturnType<typeof withFunnel>): Promise<string> {
+    const admin = await person(ctx, "800", "admin");
+    return (await ctx.service.create(admin, { name: "Канал", contact: null, note: null }, NOW)).partnerId;
+  }
+
+  it("без partners.view — отказ; бухгалтерия и маркетолог видят; партнёра нет — 404", async () => {
+    const ctx = withFunnel();
+    const partnerId = await partnerOf(ctx);
+    const moderator = await person(ctx, "801", "moderator");
+    const finance = await person(ctx, "802", "finance");
+    const marketer = await person(ctx, "803", "marketer");
+
+    expect(await codeOf(ctx.service.funnel(moderator, partnerId, NOW_PERIOD.from, NOW_PERIOD.to))).toBe("forbidden");
+    await expect(ctx.service.funnel(finance, partnerId, NOW_PERIOD.from, NOW_PERIOD.to)).resolves.toBeDefined();
+    await expect(ctx.service.funnel(marketer, partnerId, NOW_PERIOD.from, NOW_PERIOD.to)).resolves.toBeDefined();
+    expect(await codeOf(ctx.service.funnel(marketer, randomUUID(), NOW_PERIOD.from, NOW_PERIOD.to))).toBe("partner_not_found");
+    // Партнёра нет — до базы воронки не доходит.
+    expect(ctx.source.asked).toHaveLength(2);
+  });
+
+  it("период 400 суток — 400; ровно 366 — можно; обратный порядок и нулевой период — 400", async () => {
+    const ctx = withFunnel();
+    const partnerId = await partnerOf(ctx);
+    const marketer = await person(ctx, "804", "marketer");
+    const to = NOW;
+
+    expect(await codeOf(ctx.service.funnel(marketer, partnerId, new Date(to.getTime() - 400 * DAY), to))).toBe("validation_failed");
+    await expect(ctx.service.funnel(marketer, partnerId, new Date(to.getTime() - 366 * DAY), to)).resolves.toBeDefined();
+    expect(await codeOf(ctx.service.funnel(marketer, partnerId, to, new Date(to.getTime() - DAY)))).toBe("validation_failed");
+    expect(await codeOf(ctx.service.funnel(marketer, partnerId, to, to))).toBe("validation_failed");
+  });
+
+  it("ответ: все игроки партнёра, источники привязки и площадки; период и партнёр доходят до источника данных", async () => {
+    const ctx = withFunnel();
+    const partnerId = await partnerOf(ctx);
+    const marketer = await person(ctx, "805", "marketer");
+    ctx.source.rows = [
+      { platform: "telegram", via: "link", viaName: "channel-post", viaRef: "AbCd1234", ...counts({ accounts: 2, entered: 2, appOpened: 2, firstRunStarted: 1, firstRunFinished: 1 }) },
+      { platform: "vk", via: "link", viaName: "channel-post", viaRef: "AbCd1234", ...counts({ accounts: 1, entered: 1, appOpened: 1 }) },
+      { platform: "telegram", via: "code", viaName: "Стрим", viaRef: "11111111-1111-4111-8111-111111111111", ...counts({ accounts: 1, entered: 1, appOpened: 1, firstRunStarted: 1, runs2: 1, firstPurchase: 1 }) },
+    ];
+
+    const view = await ctx.service.funnel(marketer, partnerId, NOW_PERIOD.from, NOW_PERIOD.to);
+
+    expect(ctx.source.asked).toEqual([{ partnerId, from: NOW_PERIOD.from, to: NOW_PERIOD.to }]);
+    expect(view.from).toBe(NOW_PERIOD.from.toISOString());
+    expect(view.to).toBe(NOW_PERIOD.to.toISOString());
+    expect(view.total).toEqual(counts({ accounts: 4, entered: 4, appOpened: 4, firstRunStarted: 2, firstRunFinished: 1, runs2: 1, firstPurchase: 1 }));
+    // Источник — ссылка или код, а не площадка: ссылка с двух площадок — одна строка.
+    expect(view.sources).toEqual([
+      { via: "link", name: "channel-post", ref: "AbCd1234", counts: counts({ accounts: 3, entered: 3, appOpened: 3, firstRunStarted: 1, firstRunFinished: 1 }) },
+      { via: "code", name: "Стрим", ref: "11111111-1111-4111-8111-111111111111", counts: counts({ accounts: 1, entered: 1, appOpened: 1, firstRunStarted: 1, runs2: 1, firstPurchase: 1 }) },
+    ]);
+    expect(view.platforms.map((row) => [row.platform, row.counts.accounts])).toEqual([["telegram", 3], ["vk", 1]]);
+  });
+
+  it("нет привязок — нули и пустые списки; без источника данных сервис отвечает пустой воронкой", async () => {
+    const ctx = withFunnel();
+    const partnerId = await partnerOf(ctx);
+    const marketer = await person(ctx, "806", "marketer");
+
+    const empty = await ctx.service.funnel(marketer, partnerId, NOW_PERIOD.from, NOW_PERIOD.to);
+    expect(empty).toMatchObject({ total: counts(), sources: [], platforms: [] });
+
+    const bare = setup();
+    const admin = await person(bare, "807", "admin");
+    const created = await bare.service.create(admin, { name: "Без воронки", contact: null, note: null }, NOW);
+    expect((await bare.service.funnel(admin, created.partnerId, NOW_PERIOD.from, NOW_PERIOD.to)).total).toEqual(counts());
+  });
+
+  it("источники по убыванию игроков, при равенстве по названию; ссылка без названия — после названных", async () => {
+    const ctx = withFunnel();
+    const partnerId = await partnerOf(ctx);
+    const marketer = await person(ctx, "808", "marketer");
+    const row = (via: "link" | "code", viaName: string | null, viaRef: string | null, accounts: number): PartnerFunnelRow => ({ platform: "telegram", via, viaName, viaRef, ...counts({ accounts, entered: accounts }) });
+    ctx.source.rows = [row("code", null, null, 1), row("link", "б-пост", "B1", 2), row("link", "а-пост", "A1", 2), row("code", "Стрим", "C1", 5)];
+
+    const view = await ctx.service.funnel(marketer, partnerId, NOW_PERIOD.from, NOW_PERIOD.to);
+
+    expect(view.sources.map((source) => source.name)).toEqual(["Стрим", "а-пост", "б-пост", null]);
+  });
+});
+
 describe("партнёры по HTTP панели", () => {
   let app: NestFastifyApplication | null = null;
   const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -411,5 +516,64 @@ describe("партнёры по HTTP панели", () => {
     expect(paused.statusCode).toBe(200);
     expect(paused.json<{ data: { status: string } }>().data.status).toBe("paused");
     expect((await app.inject({ method: "GET", url: `${base}/${partnerId}`, headers })).json<{ data: { partner: { status: string } } }>().data.partner.status).toBe("paused");
+  });
+  it("GET /:id/funnel: период по умолчанию — тридцать суток; свой период; 400 на кривые даты и период дольше года; 404 без партнёра; 403 без права", async () => {
+    const cfg = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+    const ctx = setup(cfg);
+    const asked: { from: Date; to: Date }[] = [];
+    const source: PartnerFunnelSource = {
+      partnerReport: async (_partnerId, from, to) => {
+        asked.push({ from, to });
+        return [];
+      },
+    };
+    const service = new PartnersService(ctx.repository, new RolesService(cfg, ctx.roles, ctx.accounts), null, source);
+    @Module({
+      controllers: [AdminSessionController, AdminPartnersController],
+      providers: [
+        { provide: APP_CONFIG, useValue: cfg },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: ACCOUNT_REPOSITORY, useValue: ctx.accounts },
+        { provide: ROLES_REPOSITORY, useValue: ctx.roles },
+        { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
+        { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
+        { provide: PartnersService, useValue: service },
+        PanelLoginService,
+        RateLimiter,
+        RolesService,
+        PermissionGuard,
+        AuthGuard,
+        AdminSessionService,
+        AdminSessionGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const login = await app.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: `dev-${OWNER_ID}:Владелец` } });
+    const cookie = `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(login.headers["set-cookie"]))?.[1] ?? ""}`;
+    const headers = { cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const base = "/api/v1/admin/partners";
+    const created = await app.inject({ method: "POST", url: base, headers, payload: { name: "Канал", contact: null, note: null } });
+    const partnerId = created.json<{ data: { partnerId: string } }>().data.partnerId;
+
+    const byDefault = await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel`, headers });
+    expect(byDefault.statusCode).toBe(200);
+    expect(byDefault.json<{ data: { total: { accounts: number }; sources: unknown[]; platforms: unknown[] } }>().data).toMatchObject({ total: { accounts: 0 }, sources: [], platforms: [] });
+    const first = asked[0];
+    expect(first === undefined ? 0 : Math.round((first.to.getTime() - first.from.getTime()) / DAY)).toBe(30);
+
+    const own = await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel?from=2026-09-01T00:00:00.000Z&to=2026-09-08T00:00:00.000Z`, headers });
+    expect(own.statusCode).toBe(200);
+    expect(asked[1]).toEqual({ from: new Date("2026-09-01T00:00:00.000Z"), to: new Date("2026-09-08T00:00:00.000Z") });
+
+    expect((await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel?from=не-дата`, headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel?from=2025-01-01T00:00:00.000Z&to=2026-09-08T00:00:00.000Z`, headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel?from=2026-09-08T00:00:00.000Z&to=2026-09-01T00:00:00.000Z`, headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: `${base}/${randomUUID()}/funnel`, headers })).statusCode).toBe(404);
+    expect((await app.inject({ method: "GET", url: `${base}/не-uuid/funnel`, headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel` })).statusCode).toBe(401);
   });
 });

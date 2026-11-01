@@ -27,12 +27,14 @@ import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading } from "
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 import { PartnerDialog } from "./PartnerDialog";
+import { PartnerFunnelBlock } from "./partner-funnel";
 import { PartnerStatusDialog } from "./PartnerStatusDialog";
 
 /**
  * Карточка партнёра: статус и условия выплат, что он принёс — плитками,
  * привязки по дням, его коды с тем, сколько игроков привязал каждый, и его
- * ссылки с кликами, запусками и привязанными (T-0067). «Сменить статус…» —
+ * ссылки с кликами, запусками и привязанными (T-0067) и воронка привязанных
+ * игроков по источнику и площадке (T-0068). «Сменить статус…» —
  * отдельное окно с причиной. «Завести код партнёра» и «Завести ссылку»
  * открывают мастер промокодов и мастер ссылок с ним уже выбранным.
  */
@@ -196,6 +198,8 @@ function CardBody({ detail, canEdit, canLink, onChangeStatus }: { detail: Partne
           ]}
         />
       </section>
+
+      <PartnerFunnelBlock partnerId={detail.partner.partnerId} />
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-semibold">Выплаты</h3>
