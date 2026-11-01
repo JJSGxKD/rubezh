@@ -37,11 +37,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка» и уходом стрелков.
+ * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed).
  * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 3;
+const GOLDEN_SEED = 1;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -173,36 +173,38 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 66.68,
-      level: 11,
-      xpCollected: 194,
-      enemiesKilled: 109,
+      survivalSec: 319.93,
+      level: 17,
+      xpCollected: 718,
+      enemiesKilled: 1625,
       killsByEnemy: {
-        swarm_rat: 35,
-        tank_ghoul: 2,
-        bone_walker: 9,
-        mire_shambler: 19,
-        dasher_wolf: 9,
-        circler_crow: 12,
-        bomber_imp: 6,
-        rushing_bats: 14,
-        splitter_slime: 3,
+        swarm_rat: 568,
+        tank_ghoul: 94,
+        bone_walker: 78,
+        mire_shambler: 315,
+        dasher_wolf: 90,
+        circler_crow: 173,
+        bomber_imp: 79,
+        rushing_bats: 149,
+        splitter_slime: 79,
       },
-      damageDealt: 1790,
-      damageTaken: 159,
+      damageDealt: 25790,
+      damageTaken: 164,
       weapons: [
-        { id: "spark", level: 2, damage: 1159 },
-        { id: "hearth", level: 1, damage: 405 },
-        { id: "wardstone", level: 3, damage: 226 },
+        { id: "spark", level: 2, damage: 7582 },
+        { id: "meteor", level: 5, damage: 11358 },
+        { id: "knife", level: 3, damage: 5692 },
+        { id: "hearth", level: 2, damage: 1158 },
       ],
       passives: [
-        { id: "reach", level: 3 },
-        { id: "vitality", level: 1 },
         { id: "haste", level: 1 },
+        { id: "ward", level: 2 },
+        { id: "volley", level: 1 },
+        { id: "swiftness", level: 1 },
       ],
-      deathCause: "dasher_wolf",
-      distance: 10057,
-      peakEnemies: 30,
+      deathCause: "rushing_bats",
+      distance: 50031,
+      peakEnemies: 32,
     });
   });
 
