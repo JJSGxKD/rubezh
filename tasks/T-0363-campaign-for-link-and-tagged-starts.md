@@ -3,8 +3,8 @@ id: T-0363
 title: Кампания и источник у прямых ссылок и ссылок с метками — список игроков, воронка, ежедневный отчёт
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
