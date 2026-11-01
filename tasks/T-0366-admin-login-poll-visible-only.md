@@ -11,7 +11,8 @@ depends_on: []
 zones:
   - apps/admin/src/state/session.ts
   - apps/admin/test/session.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low
