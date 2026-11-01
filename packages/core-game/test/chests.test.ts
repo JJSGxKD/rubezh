@@ -479,7 +479,8 @@ describe("поздняя таблица сундуков", () => {
   });
 
   it("без late размеры идут по основной таблице в любую секунду", () => {
-    const { late: _late, ...plain } = SPLIT;
+    const plain: ChestsDef = { ...SPLIT };
+    delete plain.late;
     const world = setup({}, plain);
     expect(dropAt(world, 5000)).toBe(5);
   });
