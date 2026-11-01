@@ -2,6 +2,7 @@ import ru from "../src/i18n/ru.json";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
+import { taskHint, taskTitle } from "../src/screens/meta/task-row";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
   NETWORK_TASK_CHECKS_MS,
@@ -353,5 +354,50 @@ describe("очки заданий в клиенте", () => {
     expect(words["tasks.claim"]).toBe("Забрать");
     expect(words["tasks.claimed"]).toBe("Получено");
     expect(words["tasks.got"]).toContain("{what}");
+  });
+});
+
+// Название достижения (tasks/T-0106): название лежит в каталоге, а не в словаре
+// клиента, поэтому строка берёт заголовок каталога, потом словарь, потом id.
+
+describe("название достижения в строке задания", () => {
+  const ACHIEVEMENT = { ...TASK, id: "ach_kills_1k", period: "achievement", kind: "kills", title: null, target: 1000, value: 10, done: false, reward: { coins: 200, gems: 0, shards: 0 } };
+
+  it("заголовок каталога — первым, и в словаре его искать не нужно", () => {
+    expect(taskTitle({ ...ACHIEVEMENT, title: "Тысячник" })).toBe("Тысячник");
+    // даже у достижения, которое есть в словаре: название из каталога правится из панели без релиза
+    expect(taskTitle({ ...ACHIEVEMENT, id: "ach_survive_5", kind: "best_survival_sec", title: "Держи рубеж!" })).toBe("Держи рубеж!");
+  });
+
+  it("заголовка нет, а достижение есть в словаре — имя из словаря", () => {
+    expect(taskTitle({ ...ACHIEVEMENT, id: "ach_survive_5", kind: "best_survival_sec", target: 300 })).toBe("Держи рубеж");
+    expect(taskTitle({ ...ACHIEVEMENT, id: "ach_level_40", kind: "run_level", target: 40 })).toBe("Мастер забега");
+  });
+
+  it("ни заголовка, ни словаря — id достижения, а не пустая строка", () => {
+    expect(taskTitle(ACHIEVEMENT)).toBe("ach_kills_1k");
+  });
+
+  it("задание не достижение: заголовок каталога или текст цели по виду — как раньше", () => {
+    expect(taskTitle({ ...TASK, title: "Свой текст" })).toBe("Свой текст");
+    expect(taskTitle({ ...TASK, title: null })).toContain("забег");
+    // id ежедневного в словаре достижений не ищется
+    expect(taskTitle({ ...TASK, id: "ach_survive_5", title: null })).toContain("забег");
+  });
+
+  it("партнёрская цель с периодом «достижение» остаётся с текстом цели по виду", () => {
+    expect(taskTitle({ ...TASK, id: "ach_site", period: "achievement", category: "partner", kind: "link", title: null })).toBe("Перейди по ссылке партнёра");
+  });
+
+  it("под названием достижения — цель словами, потому что название её не объясняет", () => {
+    expect(taskHint({ ...ACHIEVEMENT, title: "Тысячник" })).toContain("врагов");
+    expect(taskHint({ ...ACHIEVEMENT, id: "ach_survive_5", kind: "best_survival_sec", target: 300 })).toContain("в одном забеге");
+    // без названия цель уже стоит заголовком, дублировать нечего… кроме id: тогда цель нужна
+    expect(taskHint(ACHIEVEMENT)).toContain("врагов");
+  });
+
+  it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {
+    expect(taskHint({ ...TASK, title: null })).toBeNull();
+    expect(taskHint({ ...TASK, period: "daily", category: "partner", kind: "channel", title: null })).toContain("Награда каждый день");
   });
 });

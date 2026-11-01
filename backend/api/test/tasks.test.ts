@@ -27,7 +27,9 @@ import {
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
 import { gameDayOf, pickPool } from "../src/modules/tasks/task-pool.js";
 import {
+  NO_ACHIEVEMENT_FIELDS,
   RUN_KINDS,
+  STATE_KINDS,
   TASK_LIMIT_GRACE_MIN,
   WEAPON_ELEMENTS,
   countsForTasks,
@@ -70,7 +72,7 @@ const DAY = 24 * HOUR;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 function def(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId, period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...patch };
+  return { taskId, period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS, ...patch };
 }
 
 const CATALOG: TaskDef[] = [
@@ -143,17 +145,26 @@ class MemoryTasks implements TasksRepository {
   async applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean> {
     if (this.runs.has(input.runId)) return false;
     this.runs.add(input.runId);
-    for (const delta of input.deltas.filter((candidate) => candidate.amount > 0)) {
-      const start = periodStart(delta.period, input.at);
-      const key = `${input.accountId}|${delta.taskId}|${start}`;
-      const row = this.rows.get(key) ?? { accountId: input.accountId, taskId: delta.taskId, periodStart: start, value: 0, target: delta.target, done: false, claimed: false };
+    this.merge(input.accountId, input.at, input.deltas);
+    return true;
+  }
+
+  /** Состояние игрока (друзья, уровень аккаунта): тот же слив прогресса, но забег не занимается. */
+  async applyState(input: { accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<void> {
+    this.merge(input.accountId, input.at, input.deltas);
+  }
+
+  private merge(accountId: string, at: Date, deltas: readonly TaskDelta[]): void {
+    for (const delta of deltas.filter((candidate) => candidate.amount > 0)) {
+      const start = periodStart(delta.period, at);
+      const key = `${accountId}|${delta.taskId}|${start}`;
+      const row = this.rows.get(key) ?? { accountId, taskId: delta.taskId, periodStart: start, value: 0, target: delta.target, done: false, claimed: false };
       const merged = delta.op === "sum" ? row.value + delta.amount : Math.max(row.value, delta.amount);
       row.value = Math.min(delta.target, merged);
       row.target = delta.target;
       row.done = row.done || row.value >= delta.target;
       this.rows.set(key, row);
     }
-    return true;
   }
 
   async insert(task: TaskDef): Promise<boolean> {
@@ -1363,5 +1374,142 @@ describe("ротация: что двигает забег и что видит 
     await ctx.hooks.emit(run({ weapons: [{ id: "storm", level: 1 }] }));
     await ctx.hooks.emit(run({ weapons: [{ id: "spark", level: 1 }] }));
     expect(byId(await ctx.service.view(PLAYER, NOON), "daily_weapon_storm")).toMatchObject({ value: 1, done: false });
+  });
+});
+
+describe("достижения: состояние игрока и скрытые (T-0106)", () => {
+  const friends = () => def("ach_friends_5", { period: "achievement", kind: "friends", target: 5, coins: 200, category: "friends", ladder: "friends", rung: 2, prestige: 10 });
+  const level = () => def("ach_account_10", { period: "achievement", kind: "account_level", target: 10, coins: 200, category: "mastery", ladder: "account", rung: 1, prestige: 10 });
+  const marathon = () =>
+    def("ach_hidden_marathon", {
+      period: "achievement",
+      kind: "best_survival_sec",
+      target: 1800,
+      title: "Марафонец",
+      coins: 500,
+      category: "mastery",
+      hidden: true,
+      hint: "Продержаться очень, очень долго",
+      prestige: 40,
+    });
+
+  function withState() {
+    const ctx = setup();
+    ctx.repository.defs.push(friends(), level(), marathon());
+    ctx.service.forgetCatalog();
+    return ctx;
+  }
+
+  it("состояния — не виды забега: onRun пропускает их, а в каталоге они есть", async () => {
+    expect(STATE_KINDS.friends).toEqual({ op: "max" });
+    expect(STATE_KINDS.account_level).toEqual({ op: "max" });
+    const ctx = withState();
+    await ctx.hooks.emit(run());
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    expect(byId(tasks, "ach_friends_5")).toMatchObject({ value: 0, done: false });
+    expect(byId(tasks, "ach_account_10")).toMatchObject({ value: 0, done: false });
+    // забег остальное засчитал: пропуск — только у состояний
+    expect(byId(tasks, "ach_level_40")).toMatchObject({ value: 22 });
+    expect(ctx.repository.runs.size).toBe(1);
+  });
+
+  it("applyState берёт максимум: меньше прежнего не уменьшает, больше цели не уходит", async () => {
+    const ctx = withState();
+    const value = async () => byId(await ctx.service.view(PLAYER, NOON), "ach_friends_5");
+
+    await ctx.service.applyState(ME, { friends: 3 }, NOON);
+    expect(await value()).toMatchObject({ value: 3, done: false });
+    await ctx.service.applyState(ME, { friends: 1 }, NOON);
+    expect(await value()).toMatchObject({ value: 3, done: false });
+    await ctx.service.applyState(ME, { friends: 40 }, NOON);
+    expect(await value()).toMatchObject({ value: 5, done: true });
+    // друзей стало меньше — выполненное остаётся выполненным
+    await ctx.service.applyState(ME, { friends: 0 }, NOON);
+    expect(await value()).toMatchObject({ value: 5, done: true });
+  });
+
+  it("applyState не занимает запись забега и двигает только свой вид", async () => {
+    const ctx = withState();
+    await ctx.service.applyState(ME, { account_level: 12 }, NOON);
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    expect(byId(tasks, "ach_account_10")).toMatchObject({ value: 10, done: true });
+    expect(byId(tasks, "ach_friends_5")).toMatchObject({ value: 0, done: false });
+    expect(ctx.repository.runs.size).toBe(0);
+  });
+
+  it("ноль друзей строку прогресса не заводит", async () => {
+    const ctx = withState();
+    await ctx.service.applyState(ME, { friends: 0, account_level: 0 }, NOON);
+    expect(ctx.repository.rows.size).toBe(0);
+  });
+
+  it("выключенное достижение состояние не двигает", async () => {
+    const ctx = withState();
+    const off = ctx.repository.defs.find((task) => task.taskId === "ach_friends_5");
+    if (off !== undefined) off.active = false;
+    ctx.service.forgetCatalog();
+    await ctx.service.applyState(ME, { friends: 5 }, NOON);
+    expect(ctx.repository.rows.size).toBe(0);
+  });
+
+  it("забор невыполненного состояния — «не выполнено», а не ограничение партнёрских заданий", async () => {
+    const ctx = withState();
+    ctx.restrictions.restrict(ME, "partner_tasks");
+    await expect(ctx.service.claim(PLAYER, "ach_friends_5", NOON)).rejects.toBeInstanceOf(TaskNotDoneError);
+    await ctx.service.applyState(ME, { friends: 5 }, NOON);
+    // выполненное состояние забирается и под ограничением партнёрских заданий: это не партнёрская цель
+    const result = await ctx.service.claim(PLAYER, "ach_friends_5", NOON);
+    expect(result.claimed).toBe(true);
+    expect(ctx.wallet.grants[0]).toMatchObject({ resource: "coins", amount: 200, reason: "achievement_reward" });
+  });
+
+  it("закрытое скрытое достижение в списке заданий не возвращается, открытое — как обычное", async () => {
+    const ctx = withState();
+    const before = await ctx.service.view(PLAYER, NOON);
+    expect(byId(before, "ach_hidden_marathon")).toBeUndefined();
+    expect(JSON.stringify(before)).not.toContain("Марафонец");
+    expect(JSON.stringify(before)).not.toContain("Продержаться очень");
+
+    // прогресс есть, но не выполнено: всё ещё закрыто
+    await ctx.hooks.emit(run({ survivalSec: 900 }));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_hidden_marathon")).toBeUndefined();
+
+    await ctx.hooks.emit(run({ survivalSec: 1900 }));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_hidden_marathon")).toMatchObject({
+      title: "Марафонец",
+      done: true,
+      hidden: true,
+      achievementCategory: "mastery",
+      prestige: 40,
+      reward: { coins: 500, gems: 0, shards: 0 },
+    });
+    // у другого игрока оно по-прежнему закрыто
+    const other: AccountRef = { accountId: "00000000-0000-4000-8000-00000000f002", platform: "telegram", platformUserId: "555000222" };
+    expect(byId(await ctx.service.view(other, NOON), "ach_hidden_marathon")).toBeUndefined();
+  });
+
+  it("строка задания несёт категорию достижения, лестницу, ступень, престиж и признак скрытого", async () => {
+    const ctx = withState();
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_friends_5")).toMatchObject({
+      period: "achievement",
+      category: "achievement",
+      achievementCategory: "friends",
+      ladder: "friends",
+      rung: 2,
+      prestige: 10,
+      hidden: false,
+    });
+    // обычное задание: поля пустые, а вкладка осталась по сроку
+    expect(byId(await ctx.service.view(PLAYER, NOON), "daily_runs")).toMatchObject({ category: "daily", achievementCategory: null, ladder: null, rung: null, prestige: 0, hidden: false });
+  });
+
+  it("панель сохраняет поля достижения; смена категории и подсказки доходит до каталога", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "504", "game_designer");
+    const fresh = def("ach_new_one", { period: "achievement", kind: "kills", target: 777, coins: 10, category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
+    await ctx.service.save(designer, fresh);
+    expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
+    await ctx.service.save(designer, { ...fresh, category: "mastery", hint: "Другой намёк", prestige: 20 });
+    expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "mastery", hint: "Другой намёк", prestige: 20 });
   });
 });
