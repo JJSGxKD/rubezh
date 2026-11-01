@@ -142,6 +142,17 @@ export function filterGroups(groups: readonly SectionGroup[], query: string): Se
     .filter((group) => group.sections.length > 0);
 }
 
+/**
+ * Запрос в поиске разделов, похожий на игрока (tasks/T-0355): «@ник» (после
+ * «@» хотя бы два знака) или Telegram ID — одни цифры, от 5 до 20. Имя без «@»
+ * не игрок: «рассылки» — раздел; версия и дата тоже. Возвращает запрос без
+ * пробелов по краям.
+ */
+export function playerQuery(query: string): string | null {
+  const text = query.trim();
+  return /^@.{2,}$/u.test(text) || /^\d{5,20}$/u.test(text) ? text : null;
+}
+
 /** Где раздел в меню — для шапки и заголовка вкладки браузера. */
 export function locateSection(id: string, groups: readonly SectionGroup[] = SECTION_GROUPS): { group: SectionGroup; section: Section } | null {
   for (const group of groups) {
