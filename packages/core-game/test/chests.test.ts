@@ -454,13 +454,13 @@ describe("события сундуков для сцены", () => {
 // --- Поздние сундуки скромнее (T-0193, Р129) ----------------------------------------
 
 describe("поздняя таблица сундуков", () => {
-  /** Основная таблица — всегда одиночный, поздняя — всегда пятерной: по размеру видно, какая сработала. */
+  /** Основная таблица — всегда пятерной, поздняя — всегда одиночный: по размеру видно, какая сработала. */
   const SPLIT: ChestsDef = {
     ...ROOMY,
     opening: [],
-    sizes: [{ size: 1, weight: 1 }],
-    bossMinSize: 1,
-    late: { afterSec: 600, sizes: [{ size: 5, weight: 1 }], bossMinSize: 5 },
+    sizes: [{ size: 5, weight: 1 }],
+    bossMinSize: 5,
+    late: { afterSec: 600, sizes: [{ size: 1, weight: 1 }], bossMinSize: 1 },
   };
 
   function dropAt(world: World, elapsedSec: number, rank: "elite" | "boss" = "elite"): number {
@@ -473,29 +473,30 @@ describe("поздняя таблица сундуков", () => {
 
   it("до afterSec размер бросается по основной таблице, с afterSec — по поздней", () => {
     const world = setup({}, SPLIT);
-    expect(dropAt(world, 599.9)).toBe(1);
-    expect(dropAt(world, 600)).toBe(5);
-    expect(dropAt(world, 1200)).toBe(5);
+    expect(dropAt(world, 599.9)).toBe(5);
+    expect(dropAt(world, 600)).toBe(1);
+    expect(dropAt(world, 1200)).toBe(1);
   });
 
   it("без late размеры идут по основной таблице в любую секунду", () => {
     const { late: _late, ...plain } = SPLIT;
     const world = setup({}, plain);
-    expect(dropAt(world, 5000)).toBe(1);
+    expect(dropAt(world, 5000)).toBe(5);
   });
 
   it("схема opening приоритетнее поздней таблицы и после afterSec", () => {
-    const world = setup({}, { ...SPLIT, opening: [3, 1] });
+    const world = setup({}, { ...SPLIT, opening: [3, 5] });
     expect(dropAt(world, 900)).toBe(3);
-    expect(dropAt(world, 900)).toBe(1);
     expect(dropAt(world, 900)).toBe(5);
+    expect(dropAt(world, 900)).toBe(1);
   });
 
   it("сундук с босса после afterSec не ниже late.bossMinSize, до — не ниже bossMinSize", () => {
     const mixed: ChestsDef = {
       ...SPLIT,
-      sizes: [{ size: 1, weight: 1 }, { size: 3, weight: 1 }],
-      late: { afterSec: 600, sizes: [{ size: 1, weight: 10 }, { size: 3, weight: 1 }, { size: 5, weight: 1 }], bossMinSize: 3 },
+      sizes: [{ size: 1, weight: 1 }, { size: 3, weight: 1 }, { size: 5, weight: 1 }],
+      bossMinSize: 1,
+      late: { afterSec: 600, sizes: [{ size: 1, weight: 10 }, { size: 3, weight: 1 }], bossMinSize: 3 },
     };
     const world = setup({}, mixed);
     let sawOne = false;
