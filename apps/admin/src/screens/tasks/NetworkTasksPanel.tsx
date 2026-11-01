@@ -13,7 +13,7 @@ import { hrefOf } from "../../routes";
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
-import { Badge, Button, DataTable, Field, Input, Notice, Panel } from "../../ui/kit";
+import { Badge, Button, DataTable, Field, FieldRow, Input, Notice, Panel } from "../../ui/kit";
 import { toast } from "../../ui/toast";
 
 /**
@@ -171,14 +171,14 @@ function EditDialog({ row, onClose, onSaved }: { row: NetworkTaskRow; onClose: (
           <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
           Показывать задания {row.title} игрокам
         </label>
-        <div className="flex flex-wrap items-end gap-2">
+        <FieldRow>
           <Field label="Заданий в сутки" hint={`${String(dailyCap.min)}–${String(dailyCap.max)}, сутки — московские`}>
             <Input {...number("dailyCap", dailyCap)} />
           </Field>
           <Field label="Пауза, мин" hint={`после выполненного, ${String(pauseMin.min)}–${String(pauseMin.max)}`}>
             <Input {...number("pauseMin", pauseMin)} />
           </Field>
-        </div>
+        </FieldRow>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Монеты">
             <Input {...number("coins")} />

@@ -43,7 +43,7 @@ import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
 import { PhonePreview } from "../../ui/phone-preview";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
@@ -134,7 +134,7 @@ export function TasksScreen() {
       <Panel title={original === null ? "Новое задание" : `Задание ${original.taskId}`}>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
@@ -200,12 +200,12 @@ export function TasksScreen() {
                 <Input {...number("target")} min={1} />
               </Field>
             )}
-          </div>
+          </FieldRow>
           {partner ? (
             <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
           ) : null}
           {partner ? (
-            <div className="flex flex-wrap items-end gap-2">
+            <FieldRow>
               {channel ? (
                 <Field label="Площадка" hint="игроки других площадок задания не увидят">
                   <Select
@@ -263,7 +263,7 @@ export function TasksScreen() {
                   className="w-72"
                 />
               </Field>
-            </div>
+            </FieldRow>
           ) : null}
           {channel ? (
             <Notice tone="info">
@@ -274,7 +274,7 @@ export function TasksScreen() {
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="Монеты">
               <Input {...number("coins")} />
             </Field>
@@ -287,22 +287,23 @@ export function TasksScreen() {
             <Field label="Очки заданий" help={HELP.tasks.passPoints}>
               <Input {...number("passPoints")} />
             </Field>
-            <label className="flex items-center gap-1.5 pb-1.5 text-sm">
-              <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
-              включено
-            </label>
-          </div>
+            <RowItem>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
+                включено
+              </label>
+            </RowItem>
+          </FieldRow>
           <Field label={`Заголовок — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`} hint="пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»)">
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
-          <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               {original === null ? "Завести" : "Сохранить"}
             </Button>
             {original === null ? null : <Button onClick={reset}>Отмена</Button>}
           </div>
-          {problem !== null && input.taskId !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
           <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
