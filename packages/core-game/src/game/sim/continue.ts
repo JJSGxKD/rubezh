@@ -1,6 +1,7 @@
 import type { ContinueDef } from "@bh/shared-types";
 import { clearFreeze } from "./freeze";
 import { clearPlayerStatuses } from "./player-status";
+import { closeOpenRifts } from "./secrets";
 import { despawnEnemy, despawnProjectile, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
 /**
@@ -28,6 +29,8 @@ export function applyContinue(world: World): boolean {
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 1) despawnEnemy(world, i);
   }
+  // Элиты волны разлома только что убраны вместе со всеми: пустая волна не должна дать сундук.
+  closeOpenRifts(world);
   const projectiles = world.projectiles;
   for (let i = 0; i < projectiles.count; i++) {
     if (projectiles.alive[i] === 1 && projectiles.fromPlayer[i] === 0) despawnProjectile(world, i);
