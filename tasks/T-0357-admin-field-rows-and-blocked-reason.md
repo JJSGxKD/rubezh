@@ -3,8 +3,8 @@ id: T-0357
 title: Панель — ряд полей не прыгает от подсказки и ошибки; у недоступной главной кнопки — причина одной строкой
 epic: E7
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
