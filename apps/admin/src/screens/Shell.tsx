@@ -4,6 +4,7 @@ import { Dialog, DropdownMenu } from "radix-ui";
 import { roleName } from "../api/roles";
 import type { AdminIdentity } from "../api/session";
 import { filterGroups, hrefOf, locateSection, resolveRoute, visibleGroups, type Route, type SectionGroup } from "../routes";
+import { badgeText, useAttention } from "../state/use-attention";
 import { useSession } from "../state/use-session";
 import { Badge, Notice } from "../ui/kit";
 import { Toaster } from "../ui/toast";
@@ -30,6 +31,8 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  // «Ждёт вас» — у «Сводки»: считается только тем, кому она открыта.
+  const attention = useAttention(groups.some((group) => group.sections.some((section) => section.id === "overview")));
 
   // Раздел — в заголовке вкладки: с пятью открытыми вкладками панели иначе
   // все они называются одинаково.
@@ -79,8 +82,9 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
         <div className="flex min-h-screen min-w-0 flex-col">
           <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-bg px-3">
             <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
-              <Dialog.Trigger aria-label="Меню разделов" className="grid size-9 shrink-0 place-items-center rounded-md border border-border text-text">
+              <Dialog.Trigger aria-label={attention > 0 ? `Меню разделов. Ждёт вас: ${String(attention)}` : "Меню разделов"} className="relative grid size-9 shrink-0 place-items-center rounded-md border border-border text-text">
                 <Menu size={18} aria-hidden="true" />
+                {attention > 0 ? <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-bg bg-warning" /> : null}
               </Dialog.Trigger>
               <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
@@ -97,7 +101,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
                       <X size={18} aria-hidden="true" />
                     </Dialog.Close>
                   </div>
-                  <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} onNavigate={() => setSheetOpen(false)} />
+                  <MenuColumn groups={groups} attention={attention} route={route} query={query} onQuery={setQuery} searchRef={searchRef} onNavigate={() => setSheetOpen(false)} />
                   <div className="border-t border-border p-3">
                     <AccountBlock identity={identity} />
                   </div>
@@ -122,7 +126,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
           <div className="px-3 pt-3">
             <Brand />
           </div>
-          <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} />
+          <MenuColumn groups={groups} attention={attention} route={route} query={query} onQuery={setQuery} searchRef={searchRef} />
         </aside>
         <div className="flex min-w-0 flex-col">
           <header className="flex items-center gap-3 border-b border-border px-5 py-2.5">
@@ -164,6 +168,7 @@ function Brand() {
 /** Поиск и группы разделов — одно содержимое и для колонки на ПК, и для листа на телефоне. */
 function MenuColumn({
   groups,
+  attention,
   route,
   query,
   onQuery,
@@ -171,6 +176,8 @@ function MenuColumn({
   onNavigate,
 }: {
   groups: SectionGroup[];
+  /** число «Ждёт вас» — знак у «Сводки» */
+  attention: number;
   route: Route | null;
   query: string;
   onQuery: (query: string) => void;
@@ -219,6 +226,7 @@ function MenuColumn({
                 >
                   <Icon size={16} aria-hidden="true" className={active ? "text-accent" : ""} />
                   {section.title}
+                  {section.id === "overview" && badgeText(attention) !== null ? <AttentionBadge count={attention} /> : null}
                 </a>
               );
             })}
@@ -226,6 +234,19 @@ function MenuColumn({
         ))}
       </nav>
     </div>
+  );
+}
+
+/** Число в кружке справа от подписи пункта; обводка цвета фона меню отделяет его от соседей. */
+function AttentionBadge({ count }: { count: number }) {
+  return (
+    <span
+      role="img"
+      aria-label={`Ждёт вас: ${String(count)}`}
+      className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-surface-sunken bg-warning px-1 text-[10.5px] font-semibold leading-none text-bg"
+    >
+      {badgeText(count)}
+    </span>
   );
 }
 
