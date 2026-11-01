@@ -175,6 +175,7 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
           {entry.rank === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
           <span className="truncate">{entry.name}</span>
           {entry.tester === true ? <TesterBadge /> : null}
+          {entry.prestige !== undefined && entry.prestige > 0 ? <PrestigeMark points={entry.prestige} /> : null}
           {entry.isMe ? (
             <span className="shrink-0">
               <Badge tone="accent">{t("rating.you")}</Badge>
@@ -185,6 +186,20 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
       </div>
       <SurvivalTime seconds={entry.survivalSec} />
     </li>
+  );
+}
+
+/**
+ * Очки престижа за достижения (T-0107) рядом с именем. Имя режется многоточием,
+ * значок — нет: число обрезанным вводит в заблуждение. Скринридеру — словами,
+ * знак звезды ему ничего не говорит.
+ */
+function PrestigeMark(props: { points: number }): ReactNode {
+  return (
+    <span className="shrink-0 font-display text-xs font-semibold tabular-nums whitespace-nowrap text-accent">
+      <span aria-hidden="true">{`★ ${formatNumber(props.points)}`}</span>
+      <span className="sr-only">{t("rating.prestige", { points: formatNumber(props.points) })}</span>
+    </span>
   );
 }
 
