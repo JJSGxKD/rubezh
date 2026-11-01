@@ -11,6 +11,7 @@ export interface AudioVolumes {
   master: number;
   effects: number;
   ui: number;
+  music: number;
 }
 
 export interface PlayOptions {
@@ -75,7 +76,7 @@ export class AudioEngine {
    * глушит только сухой звук: хвост реверба уходит в компрессор в обход и
    * звучит на нуле.
    */
-  private readonly reverbSends: Record<BusGroup, GainNode>;
+  private readonly reverbSends: Record<Exclude<BusGroup, "music">, GainNode>;
 
   private readonly master: GainNode;
   private readonly masterMeter: AnalyserNode;
@@ -119,9 +120,10 @@ export class AudioEngine {
     this.reverbSends = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
     for (const send of Object.values(this.reverbSends)) send.connect(this.reverbIn);
 
-    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0) };
+    this.groups = { effects: gainNode(ctx, 0), ui: gainNode(ctx, 0), music: gainNode(ctx, 0) };
     this.groups.effects.connect(compressor);
     this.groups.ui.connect(compressor);
+    this.groups.music.connect(compressor);
 
     for (const [id, bus] of Object.entries(BUSES) as [BusId, (typeof BUSES)[BusId]][]) {
       const input = gainNode(ctx, bus.level);
@@ -206,7 +208,8 @@ export class AudioEngine {
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = options.pan ?? 0;
     source.connect(amp).connect(panner).connect(this.buses[recipe.bus].input);
-    if (recipe.send > 0) panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbSends[BUSES[recipe.bus].group]);
+    const group = BUSES[recipe.bus].group;
+    if (recipe.send > 0 && group !== "music") panner.connect(gainNode(this.ctx, recipe.send)).connect(this.reverbSends[group]);
     source.start(when);
 
     live.push({ source, amp, end: when + buffer.duration / (options.rate ?? 1) });
@@ -224,8 +227,14 @@ export class AudioEngine {
     for (const group of Object.keys(this.groups) as BusGroup[]) {
       const level = volumeCurve(volumes[group]);
       this.groups[group].gain.setTargetAtTime(level, t, 0.05);
-      this.reverbSends[group].gain.setTargetAtTime(level, t, 0.05);
+      // У музыки посыла в реверб нет: хвост в обход регулятора звучал бы и на нуле.
+      if (group !== "music") this.reverbSends[group].gain.setTargetAtTime(level, t, 0.05);
     }
+  }
+
+  /** Вход шины музыки: сюда подключается воспроизведение треков (`music.ts`). */
+  get musicInput(): AudioNode {
+    return this.buses.music.input;
   }
 
   activeVoices(): number {
@@ -271,7 +280,7 @@ export class AudioEngine {
   private duckBelow(bus: BusId, when: number, seconds: number): void {
     const priority = BUSES[bus].priority;
     for (const [id, info] of Object.entries(BUSES) as [BusId, (typeof BUSES)[BusId]][]) {
-      if (id === bus || id === "ui" || info.priority >= priority) continue;
+      if (id === bus || id === "ui" || id === "music" || info.priority >= priority) continue;
       const param = this.buses[id].duck.gain;
       param.cancelScheduledValues(when);
       param.setTargetAtTime(this.rules.duckDepth[id] ?? 0.5, when, 0.03);
