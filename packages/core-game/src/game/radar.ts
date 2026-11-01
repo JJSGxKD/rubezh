@@ -11,8 +11,8 @@ import type { World } from "./sim/world";
  *
  * Радиус радара — кольцо спавна: там появляются враги, которых игрок ещё не
  * видит, и именно о них радар должен предупредить. Точек не больше
- * `MAX_BLIPS`: элиты и подборы кладутся первыми — рядовой рой можно показать
- * не весь, а босса за краем экрана пропустить нельзя.
+ * `MAX_BLIPS`: тайники, подборы и элиты кладутся первыми — рядовой рой можно
+ * показать не весь, а босса за краем экрана пропустить нельзя.
  */
 export const MAX_BLIPS = 96;
 
@@ -48,6 +48,12 @@ export function buildRadarSnapshot(world: World): RadarSnapshot {
     blips[count * 3 + 2] = kind;
     count++;
   };
+
+  // Тайники — первыми: найденное место важнее роя, и потолок точек его не отрежет. На радаре
+  // только найденный или открытый указателем; израсходованный не нужен, а древо остаётся.
+  for (const site of world.secrets.sites) {
+    if (site.active && site.visible && !site.used) push(site.x, site.y, RADAR_BLIP[site.kind]);
+  }
 
   const pickups = world.pickups;
   for (let i = 0; i < pickups.count; i++) {

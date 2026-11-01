@@ -33,7 +33,8 @@ function luminance(color: number): number {
 
 const MIN_DISTANCE = 90;
 const REDS = [...Object.values(ENEMY_LOOKS).map((look) => look.color), WORLD_COLORS.threat, WORLD_COLORS.enemyProjectile];
-const XP_YELLOWS = [...GEM_TIERS.map((tier) => tier.color), WORLD_COLORS.projectile, WORLD_COLORS.xpRing];
+/** Цвета опыта: кристаллы всех ступеней (лайм, бирюза, фиолет, золото), снаряд игрока и кольцо опыта. */
+const XP_COLORS = [...GEM_TIERS.map((tier) => tier.color), WORLD_COLORS.projectile, WORLD_COLORS.xpRing];
 
 describe("тона тайников", () => {
   it("у каждого вида есть тон, тёмный тон и знак; знаки разные", () => {
@@ -49,11 +50,11 @@ describe("тона тайников", () => {
   });
 
   for (const kind of SECRET_KINDS) {
-    it(`«${kind}»: не красный враг, не жёлтый опыт, не белый герой — ни в покое, ни в действии`, () => {
+    it(`«${kind}»: не красный враг, не опыт, не белый герой — ни в покое, ни в действии`, () => {
       const look = SECRET_LOOKS[kind];
       for (const tone of [look.color, look.dark]) {
         for (const red of REDS) expect(distance(tone, red), `${kind}: ${tone.toString(16)} ~ враг ${red.toString(16)}`).toBeGreaterThan(MIN_DISTANCE);
-        for (const yellow of XP_YELLOWS) expect(distance(tone, yellow), `${kind}: ${tone.toString(16)} ~ опыт ${yellow.toString(16)}`).toBeGreaterThan(MIN_DISTANCE);
+        for (const yellow of XP_COLORS) expect(distance(tone, yellow), `${kind}: ${tone.toString(16)} ~ опыт ${yellow.toString(16)}`).toBeGreaterThan(MIN_DISTANCE);
         expect(distance(tone, WORLD_COLORS.player), `${kind}: ${tone.toString(16)} ~ герой`).toBeGreaterThan(MIN_DISTANCE);
       }
     });
