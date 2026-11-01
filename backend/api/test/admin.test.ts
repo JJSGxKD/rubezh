@@ -35,6 +35,7 @@ import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
 import { RunExtras } from "../src/modules/runs/run-details.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
@@ -150,6 +151,7 @@ describe("панель по HTTP", () => {
         RolesService,
         PermissionGuard,
         RunsViewService,
+        RunPrestige,
         RunExtras,
         AdminSessionService,
         AdminSessionGuard,

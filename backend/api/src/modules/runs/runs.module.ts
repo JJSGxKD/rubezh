@@ -17,6 +17,7 @@ import { RunGemContinueController } from "./run-gem-continue.controller.js";
 import { RunGemContinueService } from "./run-gem-continue.service.js";
 import { PrismaRunGemContinuesRepository, RUN_GEM_CONTINUES_REPOSITORY } from "./run-gem-continues.repository.js";
 import { RunLoadouts } from "./run-loadouts.js";
+import { RunPrestige } from "./run-prestige.js";
 import { RunProofsCleanupJob } from "./run-proofs-cleanup.job.js";
 import { PrismaRunProofsRepository, RUN_PROOFS_REPOSITORY } from "./run-proofs.repository.js";
 import { RunProofsService } from "./run-proofs.service.js";
@@ -45,6 +46,7 @@ import { RunsViewService } from "./runs-view.service.js";
     RunAdContinueService,
     RunGemContinueService,
     RunLoadouts,
+    RunPrestige,
     RunExtras,
     RatingRestrictions,
     RunProofsService,
@@ -58,7 +60,7 @@ import { RunsViewService } from "./runs-view.service.js";
   // Хуки, чтение и рейтинг — сводке плейтеста, карточке `/start` и
   // уведомлениям в чат: они читают забеги, но не принимают их. Сверку
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
-  // предметов; награду, бусты и добычу в листе забега — их модули.
-  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
+  // предметов, престиж в строках рейтинга — модуль достижений; награду, бусты и добычу в листе забега — их модули.
+  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}

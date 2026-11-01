@@ -48,6 +48,8 @@ const leaderboardSchema = z.object({
       enemiesKilled: z.number(),
       isMe: z.boolean(),
       tester: z.optional(z.literal(true)),
+      /** очки престижа (T-0107); сервер до достижений поля не отдавал */
+      prestige: z.optional(z.number()),
     }),
   ),
   me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),

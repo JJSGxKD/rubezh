@@ -31,6 +31,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
+import { Achievements } from "./achievements";
 import { BotMentionRows } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
@@ -137,6 +138,7 @@ export function TasksScreen(): ReactNode {
     }
     setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
     if (response.data.claimed) {
+      // Достижения забирают из витрины (`achievements.tsx`); здесь остаются партнёрские цели.
       if (task.period === "achievement") track("achievement_unlocked", { achievement: task.id, kind: task.kind });
       else track("task_completed", { task: task.id, period: task.period, kind: task.kind, ...(isPoolTier(task.tier) ? { tier: task.tier } : {}) });
       setNotice({ taskId: task.id, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
@@ -238,13 +240,16 @@ export function TasksScreen(): ReactNode {
               { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
             ]}
           />
-          {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}
+          {!tasksAvailable() && view !== "achievements" ? <InfoNotice text={t("tasks.guest")} /> : null}
         </div>
 
-        {state.status === "loading" && tasksAvailable() ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
-        {state.status === "failed" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+        {/* Витрина грузит себя сама: сбой списка заданий её не закрывает, знак вкладки лишь не обновится. */}
+        {view === "achievements" ? <Achievements onChanged={() => void refresh()} /> : null}
 
-        {state.status !== "ready" ? null : (
+        {state.status === "loading" && tasksAvailable() && view !== "achievements" ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
+        {state.status === "failed" && view !== "achievements" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+
+        {state.status !== "ready" || view === "achievements" ? null : (
           // Ключ — вид: список монтируется заново, и лесенка появления
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">

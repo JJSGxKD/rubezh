@@ -21,6 +21,7 @@ import { RunsWelcomeProgress } from "../src/platforms/telegram/welcome-progress.
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Доски рейтинга по зрителю (T-0113, Р104): аккаунт со скрытым ограничением
@@ -62,7 +63,7 @@ function build() {
   const roles = new RolesService(config(), rolesRepository, accounts);
   const restrictions = new RestrictionsService(rating.restrictions, accounts, roles, rating.gate, rating.hooks);
   const service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
-  const view = new RunsViewService(runs, board, new RunExtras(), rating.rating);
+  const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   return { accounts, runs, board, rating, rolesRepository, restrictions, service, view };
 }
 

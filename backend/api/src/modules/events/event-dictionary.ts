@@ -286,6 +286,9 @@ export const EVENT_DICTIONARY = {
       prestige: z.number().int().min(0).max(10_000).optional(),
     }),
   },
+  // Сохранил любимые достижения для профиля (T-0107): `count` — сколько их стало.
+  // Событие шлёт клиент после ответа сервера; пустой список («убрал все») — тоже сохранение.
+  achievement_favorites_set: { version: 1, payload: payload({ count: z.number().int().min(0).max(3) }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У

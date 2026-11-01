@@ -12,7 +12,7 @@ interface Call {
 }
 
 function server(calls: Call[], answer: unknown): ApiRequest {
-  return async <T,>(path: string, schema: object, init: { method: "GET" | "POST" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
+  return async <T,>(path: string, schema: object, init: { method: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
     calls.push({ path, method: init.method, ...(init.body === undefined ? {} : { body: init.body }) });
     const { z } = await import("zod/mini");
     const parsed = z.object({ data: schema as never }).safeParse({ data: answer });

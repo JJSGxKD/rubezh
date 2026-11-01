@@ -11,6 +11,7 @@ import { CompensationNotFoundError, CompensationService, type CompensationView }
 import type { RateLimit } from "../src/modules/ingest/rate-limiter.js";
 import type { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { emptyBalances, type Balances, type GrantReason, type WalletResource } from "../src/modules/wallet/wallet-types.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Выдача компенсации после вайпа (docs/35-stage4-plan.md, Р87, tasks/T-0042).
@@ -413,7 +414,7 @@ describe("знак «Тестер» в рейтинге", () => {
       countAbove: async () => 0,
     };
     const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const };
-    return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never);
+    return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never, new RunPrestige());
   }
 
   it("у тестера в строке доски tester: true, у остальных поля нет вовсе", async () => {
@@ -430,7 +431,7 @@ describe("знак «Тестер» в рейтинге", () => {
 
     const { entries } = await view.leaderboardFor(ME, "normal");
 
-    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "rank", "startingWeaponId", "survivalSec", "tester"]);
+    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "prestige", "rank", "startingWeaponId", "survivalSec", "tester"]);
   });
 
   it("игрок в тени видит себя со знаком, если он тестер", async () => {
