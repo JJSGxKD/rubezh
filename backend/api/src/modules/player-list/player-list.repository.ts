@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { touchLinkField } from "../funnel/funnel-report.js";
 import { HIDDEN_KINDS } from "../restrictions/restriction-catalog.js";
 import type { PlayerCursor, PlayerFilters, PlayerSort } from "./player-list-query.js";
 
@@ -99,8 +100,7 @@ function selectSql(showHidden: boolean): Prisma.Sql {
     ARRAY(SELECT r.kind::text FROM account_restriction r WHERE ${activeRestriction(showHidden)} ORDER BY r.kind) AS restrictions,
     COALESCE(p.level, 1) AS level,
     q.first_start_kind::text AS source,
-    (SELECT l.campaign FROM link_click lc JOIN link l ON l.code = lc.link_code
-      WHERE q.first_start_kind = 'click' AND lc.click_id = q.first_start_ref) AS campaign,
+    ${touchLinkField("campaign")} AS campaign,
     f.first_purchase_at IS NOT NULL AS payer,
     m.can_message
   FROM account a
@@ -121,9 +121,7 @@ export function filterConditions(filters: PlayerFilters, showHidden = false): Pr
   if (filters.seenTo !== undefined) conditions.push(Prisma.sql`a.last_seen_at < ${filters.seenTo}`);
   if (filters.source !== undefined) conditions.push(Prisma.sql`q.first_start_kind = ${filters.source}::"StartKind"`);
   if (filters.campaign !== undefined) {
-    conditions.push(Prisma.sql`q.first_start_kind = 'click' AND EXISTS (
-      SELECT 1 FROM link_click lc JOIN link l ON l.code = lc.link_code
-      WHERE lc.click_id = q.first_start_ref AND l.campaign = ${filters.campaign})`);
+    conditions.push(Prisma.sql`${touchLinkField("campaign")} = ${filters.campaign}`);
   }
   if (filters.payer !== undefined) conditions.push(filters.payer ? Prisma.sql`f.first_purchase_at IS NOT NULL` : Prisma.sql`f.first_purchase_at IS NULL`);
   if (filters.banned !== undefined) conditions.push(filters.banned ? Prisma.sql`a.banned_at IS NOT NULL` : Prisma.sql`a.banned_at IS NULL`);
