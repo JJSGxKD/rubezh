@@ -20,7 +20,9 @@ import { useProgress } from "../../state/progress";
 import { useRuns } from "../../state/runs";
 import { useSession } from "../../state/session";
 import { useShell } from "../../state/shell";
+import { createAchievementsApi, type AchievementsSummary } from "../../state/achievements-api";
 import { ItemIcon } from "../item-icons";
+import { achievementTitle, CategoryIcon } from "./achievement-card";
 import { AccountLevel } from "./account-level";
 import { RestrictionsSection } from "./restricted-plaque";
 import { RunDetailSheet } from "./run-detail";
@@ -125,6 +127,8 @@ export function ProfileScreen(): ReactNode {
           <p className="mt-2 text-center text-xs text-text-muted">{t("rating.pending", { count: pending })}</p>
         ) : null}
 
+        {account === null ? null : <ProfileAchievements />}
+
         {/* Закрытое — до рекордов: «нет места» в них объясняет именно оно. */}
         {account === null ? null : <RestrictionsSection />}
 
@@ -178,6 +182,51 @@ export function ProfileScreen(): ReactNode {
       </ContentColumn>
       {openRun === null ? null : <RunDetailSheet runId={openRun} onClose={() => setOpenRun(null)} />}
     </Screen>
+  );
+}
+
+/**
+ * Престиж и три любимых достижения (T-0107). Сводку просит сам блок: сбой её
+ * загрузки блок скрывает, профиль от этого не ломается. Нет любимых — строки
+ * с ними нет.
+ */
+function ProfileAchievements(): ReactNode {
+  const [summary, setSummary] = useState<AchievementsSummary | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void createAchievementsApi()
+      .summary()
+      .then((response) => {
+        if (alive && response.ok) setSummary(response.data);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (summary === null) return null;
+  return (
+    <div className="mt-3">
+      <Card>
+        <p className="font-display text-base font-bold text-accent">{t("profile.prestige", { points: formatNumber(summary.prestige) })}</p>
+        {summary.favorites.length === 0 ? null : (
+          <>
+            <SectionTitle as="h3" spacing="mt-3 mb-2">
+              {t("profile.favorites")}
+            </SectionTitle>
+            <ul className="grid gap-2">
+              {summary.favorites.map((item) => (
+                <li key={item.id} className="surface-sunken flex items-center gap-2 rounded-lg px-3 py-2 text-accent">
+                  <CategoryIcon category={item.category} size={18} />
+                  <span className="min-w-0 truncate text-sm text-text">{achievementTitle(item)}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }
 
