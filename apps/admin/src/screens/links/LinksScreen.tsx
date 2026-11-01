@@ -258,7 +258,7 @@ export function LinksScreen({ id }: { id: string | null }) {
           <DataTable
             rows={visibleLinks(links, showHidden)}
             rowKey={(row) => row.code}
-            empty="Ссылок ещё нет"
+            empty="Ссылок ещё нет — заведите первую для поста или рекламы кнопкой выше"
             onRowClick={(row) => navigate({ section: "links", id: row.code })}
             columns={[
               {

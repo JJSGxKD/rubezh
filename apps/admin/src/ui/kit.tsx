@@ -258,7 +258,7 @@ export function DataTable<T>({
   rows: readonly T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
-  empty?: string;
+  empty?: ReactNode;
   reorder?: TableReorder<T>;
 }) {
   const narrow = useNarrow();

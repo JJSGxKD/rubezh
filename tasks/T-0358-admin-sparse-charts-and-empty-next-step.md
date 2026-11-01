@@ -3,7 +3,7 @@ id: T-0358
 title: Панель — «мало данных» вместо графика из одного столбика; у пустых состояний — следующий шаг
 epic: E7
 priority: P3
-status: in-progress
+status: done
 owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
@@ -12,6 +12,8 @@ zones:
   - apps/admin/src/ui/daily-bars.tsx
   - apps/admin/test/daily-bars.test.ts
 shared:
+  - docs/29-admin-panel.md
+  - design/art/direction-v2.md
   - apps/admin/src/ui/kit.tsx
   - apps/admin/src/screens/**
 runner: any

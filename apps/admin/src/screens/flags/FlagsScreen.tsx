@@ -126,7 +126,7 @@ export function FlagsScreen() {
           <DataTable
             rows={state.data.flags}
             rowKey={(row) => row.key}
-            empty="Флагов ещё нет"
+            empty="Флагов ещё нет — флаг включает функцию на одной площадке или доле игроков"
             columns={[
               { title: "Ключ", render: (row) => <code className="text-xs">{row.key}</code> },
               { title: "Состояние", render: (row) => (row.enabled ? <Badge tone="success">включён</Badge> : <Badge>выключен</Badge>) },
