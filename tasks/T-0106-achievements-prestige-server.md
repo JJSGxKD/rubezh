@@ -3,8 +3,8 @@ id: T-0106
 title: Достижения с престижем: сервер, 49 определений, редкость «есть у N%»
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-44 / sonnet-5.5 / extra
 author: claude-lead2-16
 size: M
 depends_on:
