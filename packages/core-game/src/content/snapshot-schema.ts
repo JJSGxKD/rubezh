@@ -230,6 +230,7 @@ const chestsSchema = z.strictObject({
   lowHpRatio: num,
   xpRatio: num,
   maxOnField: count,
+  late: z.strictObject({ afterSec: num, sizes: z.array(z.strictObject({ size: chestSize, weight: num })), bossMinSize: chestSize }).optional(),
 });
 
 // Тайники рубежа: форма — здесь, раскладка колец и ссылки между полями — `findSecretsProblems`.
@@ -301,7 +302,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   stages: z.array(stageSchema),
   weapons: z.array(weaponSchema),
   passives: z.array(passiveSchema),
-  levelCurve: z.strictObject({ baseXp: positive, growth: positive }),
+  levelCurve: z.strictObject({ baseXp: positive, growth: positive, late: z.strictObject({ fromLevel: num, growth: positive }).optional() }),
   loadoutLimits: z.strictObject({ weapons: count, passives: categoryCounts }),
   accountUnlocks: z.array(unlockSchema),
   timeline: z.array(segmentSchema),
