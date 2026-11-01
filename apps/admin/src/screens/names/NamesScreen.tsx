@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fetchCandidates } from "../../api/name-rule-candidates";
 import { DEFAULT_WINDOW, fetchStats, lastHitText, sortRules, statsById, unusedRules, type RuleSort, type StatsWindow, RULE_SORTS } from "../../api/name-rule-stats";
 import {
   CATEGORY_ACTIONS,
@@ -21,23 +22,28 @@ import { Badge, Button, DataTable, ErrorNotice, Loading, Panel, Select } from ".
 import { formatNumber } from "../../format";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
+import { CandidatesTab } from "./CandidatesTab";
 import { RecleanPanel } from "./RecleanPanel";
 import { StatsPanel, type StatsState } from "./StatsPanel";
 import { RuleDialog } from "./RuleDialog";
 
 const TAB_KEY = "admin.names.tab";
 
+/** Шестая вкладка — не категория правил, а кандидаты из ночного расчёта (T-0341). */
+type Tab = RuleCategory | "candidates";
+const TABS: readonly Tab[] = [...CATEGORY_ORDER, "candidates"];
+
 /** Выбранная вкладка из хранилища браузера; оно может не отвечать — тогда вкладка не помнится. */
-function storedTab(): RuleCategory | null {
+function storedTab(): Tab | null {
   try {
     const raw = window.localStorage.getItem(TAB_KEY);
-    return CATEGORY_ORDER.find((category) => category === raw) ?? null;
+    return TABS.find((tab) => tab === raw) ?? null;
   } catch {
     return null;
   }
 }
 
-function rememberTab(tab: RuleCategory): void {
+function rememberTab(tab: Tab): void {
   try {
     window.localStorage.setItem(TAB_KEY, tab);
   } catch {
@@ -47,8 +53,9 @@ function rememberTab(tab: RuleCategory): void {
 
 /**
  * Фильтр имён (docs/35-stage4-plan.md, Р168): правила по пяти категориям,
- * форма с проверкой на примерах и перечистка старых ников. Без выбранной
- * вкладки экран открывается на первой непустой.
+ * форма с проверкой на примерах, перечистка старых ников и шестая вкладка —
+ * кандидаты из ночного расчёта частых слов. Без выбранной вкладки экран
+ * открывается на первой непустой категории.
  */
 export function NamesScreen() {
   const { state, reload } = useApi(() => fetchRules(api), []);
@@ -57,7 +64,9 @@ export function NamesScreen() {
   const { state: statsState, reload: reloadStats } = useApi(() => fetchStats(api, days), [days]);
   const [onlyUnused, setOnlyUnused] = useState(false);
   const [sort, setSort] = useState<RuleSort>("recent");
-  const [chosen, setChosen] = useState<RuleCategory | null>(storedTab);
+  // Кандидаты грузятся отдельно, как статистика: от них зависит только счётчик вкладки и сама вкладка.
+  const { state: candidatesState, reload: reloadCandidates } = useApi(() => fetchCandidates(api), []);
+  const [chosen, setChosen] = useState<Tab | null>(storedTab);
   const [editing, setEditing] = useState<NameRule | "new" | null>(null);
   const [removing, setRemoving] = useState<NameRule | null>(null);
 
@@ -65,15 +74,18 @@ export function NamesScreen() {
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
   const view = state.data;
   const counts = categoryCounts(view);
-  const tab = chosen ?? CATEGORY_ORDER.find((category) => counts[category] > 0) ?? CATEGORY_ORDER[0];
+  const tab: Tab = chosen ?? CATEGORY_ORDER.find((category) => counts[category] > 0) ?? CATEGORY_ORDER[0];
+  // Правила и сортировка живут в категориях; на вкладке кандидатов они не нужны, а новое правило — по умолчанию бренд.
+  const category: RuleCategory = tab === "candidates" ? "brand" : tab;
+  const candidatesCount = candidatesState.status === "ok" ? String(candidatesState.data.items.length) : "…";
   const stats: StatsState = statsState.status === "ok" ? { status: "ok", stats: statsState.data } : statsState.status === "error" ? { status: "error", retry: reloadStats } : { status: "loading" };
   const loaded = stats.status === "ok" ? stats.stats : null;
   const byId = loaded === null ? null : statsById(loaded);
-  const inTab = rulesOf(view, tab);
+  const inTab = rulesOf(view, category);
   // «Не срабатывали» оставляет в списке только такие правила; порядок — по выбору.
   const rules = sortRules(onlyUnused && loaded !== null ? unusedRules(inTab, loaded) : inTab, loaded, sort);
 
-  const choose = (next: RuleCategory): void => {
+  const choose = (next: Tab): void => {
     rememberTab(next);
     setChosen(next);
   };
@@ -102,80 +114,92 @@ export function NamesScreen() {
         }
       >
         <div className="mb-1 flex flex-wrap gap-1.5" role="tablist" aria-label="Категория">
-          {CATEGORY_ORDER.map((category) => (
+          {TABS.map((item) => (
             <button
-              key={category}
+              key={item}
               type="button"
               role="tab"
-              aria-selected={tab === category}
-              onClick={() => choose(category)}
-              className={`rounded-pill border px-3 py-1 text-xs transition-colors ${tab === category ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
+              aria-selected={tab === item}
+              onClick={() => choose(item)}
+              className={`rounded-pill border px-3 py-1 text-xs transition-colors ${tab === item ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
             >
-              {CATEGORY_TITLES[category]} · {counts[category]}
+              {item === "candidates" ? `Кандидаты · ${candidatesCount}` : `${CATEGORY_TITLES[item]} · ${String(counts[item])}`}
             </button>
           ))}
         </div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-text-muted">
-            {CATEGORY_TITLES[tab]}: {CATEGORY_ACTIONS[tab]}
-          </p>
-          <Select aria-label="Порядок правил" value={sort} onChange={(event) => setSort(RULE_SORTS.find((item) => item.value === event.target.value)?.value ?? "recent")}>
-            {RULE_SORTS.map((item) => (
-              <option key={item.value} value={item.value}>
-                Сначала: {item.title.toLowerCase()}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <DataTable
-          rows={rules}
-          rowKey={(rule) => rule.ruleId}
-          empty={onlyUnused ? "В этой категории все действующие правила срабатывали" : "В этой категории правил пока нет. Встроенный словарь работает и без них"}
-          columns={[
-            {
-              title: "Правило",
-              help: HELP.names.kinds,
-              render: (rule) => (
-                <span className="flex max-w-80 min-w-0 flex-col break-words">
-                  <code className="font-mono text-sm">{rule.pattern}</code>
-                  <span className="text-xs text-text-muted">{KIND_TITLES[rule.kind]}</span>
-                </span>
-              ),
-            },
-            { title: "Заметка", render: (rule) => <span className="text-text-muted">{rule.note ?? "—"}</span> },
-            {
-              title: "Срабатываний",
-              align: "right",
-              // Загрузка — «…»; выключенное правило без данных — прочерк: у него нечего считать.
-              render: (rule) => (stats.status === "loading" ? "…" : stats.status === "error" || byId === null ? "—" : !rule.active && (byId.get(rule.ruleId)?.hits ?? 0) === 0 ? "—" : formatNumber(byId.get(rule.ruleId)?.hits ?? 0)),
-            },
-            {
-              title: "Последний раз",
-              render: (rule) => (stats.status === "loading" ? "…" : byId === null ? "—" : <span className="md:whitespace-nowrap">{lastHitText(byId.get(rule.ruleId)?.lastDay ?? null, new Date())}</span>),
-            },
-            { title: "Статус", render: (rule) => <Badge tone={rule.active ? "success" : "neutral"}>{rule.active ? "действует" : "выключено"}</Badge> },
-            { title: "Изменено", render: (rule) => <span className="md:whitespace-nowrap">{formatDateTime(rule.updatedAt)}</span> },
-            {
-              title: "",
-              render: (rule) => (
-                <span className="flex flex-wrap justify-end gap-1.5 max-md:flex-col max-md:items-stretch">
-                  <Button onClick={() => setEditing(rule)}>Править</Button>
-                  <Button onClick={() => void toggle(rule)}>{rule.active ? "Выключить" : "Включить"}</Button>
-                  <Button tone="danger" onClick={() => setRemoving(rule)}>
-                    Удалить
-                  </Button>
-                </span>
-              ),
-            },
-          ]}
-        />
+        {tab === "candidates" ? (
+          candidatesState.status === "loading" ? (
+            <Loading />
+          ) : candidatesState.status === "error" ? (
+            <ErrorNotice error={candidatesState.error} onRetry={reloadCandidates} />
+          ) : (
+            <CandidatesTab view={candidatesState.data} limits={view.limits} onChanged={reloadCandidates} />
+          )
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-text-muted">
+                {CATEGORY_TITLES[category]}: {CATEGORY_ACTIONS[category]}
+              </p>
+              <Select aria-label="Порядок правил" value={sort} onChange={(event) => setSort(RULE_SORTS.find((item) => item.value === event.target.value)?.value ?? "recent")}>
+                {RULE_SORTS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    Сначала: {item.title.toLowerCase()}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <DataTable
+              rows={rules}
+              rowKey={(rule) => rule.ruleId}
+              empty={onlyUnused ? "В этой категории все действующие правила срабатывали" : "В этой категории правил пока нет. Встроенный словарь работает и без них"}
+              columns={[
+                {
+                  title: "Правило",
+                  help: HELP.names.kinds,
+                  render: (rule) => (
+                    <span className="flex max-w-80 min-w-0 flex-col break-words">
+                      <code className="font-mono text-sm">{rule.pattern}</code>
+                      <span className="text-xs text-text-muted">{KIND_TITLES[rule.kind]}</span>
+                    </span>
+                  ),
+                },
+                { title: "Заметка", render: (rule) => <span className="text-text-muted">{rule.note ?? "—"}</span> },
+                {
+                  title: "Срабатываний",
+                  align: "right",
+                  // Загрузка — «…»; выключенное правило без данных — прочерк: у него нечего считать.
+                  render: (rule) => (stats.status === "loading" ? "…" : stats.status === "error" || byId === null ? "—" : !rule.active && (byId.get(rule.ruleId)?.hits ?? 0) === 0 ? "—" : formatNumber(byId.get(rule.ruleId)?.hits ?? 0)),
+                },
+                {
+                  title: "Последний раз",
+                  render: (rule) => (stats.status === "loading" ? "…" : byId === null ? "—" : <span className="md:whitespace-nowrap">{lastHitText(byId.get(rule.ruleId)?.lastDay ?? null, new Date())}</span>),
+                },
+                { title: "Статус", render: (rule) => <Badge tone={rule.active ? "success" : "neutral"}>{rule.active ? "действует" : "выключено"}</Badge> },
+                { title: "Изменено", render: (rule) => <span className="md:whitespace-nowrap">{formatDateTime(rule.updatedAt)}</span> },
+                {
+                  title: "",
+                  render: (rule) => (
+                    <span className="flex flex-wrap justify-end gap-1.5 max-md:flex-col max-md:items-stretch">
+                      <Button onClick={() => setEditing(rule)}>Править</Button>
+                      <Button onClick={() => void toggle(rule)}>{rule.active ? "Выключить" : "Включить"}</Button>
+                      <Button tone="danger" onClick={() => setRemoving(rule)}>
+                        Удалить
+                      </Button>
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </>
+        )}
       </Panel>
 
       {editing === null ? null : (
         <RuleDialog
           limits={view.limits}
           rule={editing === "new" ? null : editing}
-          category={tab}
+          category={category}
           onClose={() => setEditing(null)}
           onSaved={() => {
             reload();

@@ -25,6 +25,7 @@ import { AdminRestrictionsController } from "./admin-restrictions.controller.js"
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
+import { AdminNameRuleCandidatesController } from "./admin-name-rule-candidates.controller.js";
 import { AdminNameRulesRecleanController } from "./admin-name-rules-reclean.controller.js";
 import { AdminNameRulesController } from "./admin-name-rules.controller.js";
 import { AdminNameRulesStatsController } from "./admin-name-rules-stats.controller.js";
@@ -113,6 +114,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,
+    AdminNameRuleCandidatesController,
     AdminProxiesController,
     AdminNameRulesRecleanController,
     AdminShopController,
