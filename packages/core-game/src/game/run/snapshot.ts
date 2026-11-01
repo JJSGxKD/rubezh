@@ -22,7 +22,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 12;
+export const WORLD_SNAPSHOT_VERSION = 13;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -62,6 +62,12 @@ interface SiteSnapshot {
   found: boolean;
   used: boolean;
   holdTicks: number;
+  /** разлом Нави: волна выпущена */
+  opened: boolean;
+  /** разлом Нави: элиты волны, что ещё живы */
+  wave: { slot: number; type: number }[];
+  /** разлом Нави: сколько тиков идёт волна — отсчёт срока */
+  waveTicks: number;
 }
 
 /**
@@ -185,7 +191,11 @@ function capturedSecrets(world: World): SecretsSnapshot {
       visible: site.visible,
       found: site.found,
       used: site.used,
+      // Отсчёт щита древа — тот же `holdTicks`: он растёт, пока игрок в круге.
       holdTicks: site.holdTicks,
+      opened: site.opened,
+      wave: site.wave.map((entry) => ({ slot: entry.slot, type: entry.type })),
+      waveTicks: site.waveTicks,
     })),
     offer: secrets.offer === null ? null : { siteIndex: secrets.offer.siteIndex, options: [...secrets.offer.options] },
     blessings: [...secrets.blessings],
@@ -221,6 +231,15 @@ function restoreSecrets(world: World, input: unknown): void {
       found: asBoolean(site.found, `secrets.sites[${i}].found`),
       used: asBoolean(site.used, `secrets.sites[${i}].used`),
       holdTicks: asNumber(site.holdTicks, `secrets.sites[${i}].holdTicks`),
+      opened: asBoolean(site.opened, `secrets.sites[${i}].opened`),
+      wave: asArray(site.wave, `secrets.sites[${i}].wave`).map((member, k) => {
+        const entry = asRecord(member, `secrets.sites[${i}].wave[${k}]`);
+        return {
+          slot: asIndex(entry.slot, world.config.maxEnemies, `secrets.sites[${i}].wave[${k}].slot`),
+          type: asIndex(entry.type, world.enemyTypes.length, `secrets.sites[${i}].wave[${k}].type`),
+        };
+      }),
+      waveTicks: asNumber(site.waveTicks, `secrets.sites[${i}].waveTicks`),
     };
   });
   const rng = asNumber(raw.rng, "secrets.rng");

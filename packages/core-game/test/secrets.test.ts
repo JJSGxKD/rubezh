@@ -167,16 +167,18 @@ describe("размещение по кольцам", () => {
     expect(setup(rules({ rings: [] }), 3).secrets.sites).toHaveLength(0);
   });
 
-  it("в дальних кольцах только клад и камень, оба встречаются", () => {
+  it("в дальних кольцах клад, камень, древо и разлом (разлом — только в третьем), все встречаются", () => {
     const seen = new Set<string>();
-    for (let seed = 1; seed <= 30; seed++) {
+    for (let seed = 1; seed <= 60; seed++) {
       for (const site of setup(SECRETS, seed).secrets.sites) {
         if (site.ring < 1) continue;
-        expect(["hoard", "stone"], `seed ${seed}`).toContain(site.kind);
+        expect(["hoard", "stone", "tree", "rift"], `seed ${seed}`).toContain(site.kind);
+        // Кольца считаются с нуля: второе — 1, третье — 2.
+        if (site.kind === "rift") expect(site.ring, `seed ${seed}`).toBe(2);
         seen.add(site.kind);
       }
     }
-    expect([...seen].sort()).toEqual(["hoard", "stone"]);
+    expect([...seen].sort()).toEqual(["hoard", "rift", "stone", "tree"]);
   });
 
   it("первое кольцо — капище на 700–1100 единиц от старта, на любом масштабе", () => {
