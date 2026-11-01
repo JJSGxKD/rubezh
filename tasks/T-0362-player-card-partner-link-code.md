@@ -14,7 +14,10 @@ zones:
   - apps/admin/src/api/players.ts
   - apps/admin/src/screens/players/SocialPanel.tsx
   - apps/admin/test/players.test.ts
-shared: []
+shared:
+  - backend/api/test/helpers/memory-partners.ts
+  - backend/api/test/partner-links.integration.test.ts
+  - docs/23-referral-and-partner-program.md
 runner: any
 executor: sonnet-5.5
 effort: low
