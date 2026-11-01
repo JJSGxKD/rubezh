@@ -234,7 +234,7 @@ const chestsSchema = z.strictObject({
 
 // Тайники рубежа: форма — здесь, раскладка колец и ссылки между полями — `findSecretsProblems`.
 // Огонёк в кольцо не бросается, поэтому в весах — только виды мест.
-const secretPlaceKind = z.enum(["shrine", "hoard", "stone"]);
+const secretPlaceKind = z.enum(["shrine", "hoard", "stone", "tree", "rift"]);
 
 const secretsSchema = z.strictObject({
   rings: z.array(
@@ -249,6 +249,8 @@ const secretsSchema = z.strictObject({
   shrine: z.strictObject({ radius: num, holdSec: num, offers: count }),
   hoard: z.strictObject({ radius: num, holdSec: num, chestSize: chestSize }),
   stone: z.strictObject({ radius: num }),
+  tree: z.strictObject({ radius: num, healPerSec: num, shieldEverySec: num }),
+  rift: z.strictObject({ radius: num, elites: count, ringRadius: num, chestSize: chestSize, timeLimitSec: num }),
   wisp: z.strictObject({ appearSec: num, speed: num }),
   blessings: z.array(z.strictObject({ id: text, nameKey: text, modifiers: loadoutModifiers })),
 });
