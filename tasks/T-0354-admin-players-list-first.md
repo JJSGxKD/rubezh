@@ -3,8 +3,8 @@ id: T-0354
 title: Панель «Игроки» — список новых сразу, фильтры свёрнуты в строку с чипами активных
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
