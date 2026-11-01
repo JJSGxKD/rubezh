@@ -123,6 +123,9 @@ erDiagram
     ACCOUNT ||--o{ SEASON_RESULT : "место в закрытом сезоне"
     ACCOUNT ||--o{ SEASON_REWARD : "награда за сезон"
     NAME_RULE ||--o{ NAME_RULE_HIT_DAY : "считается по суткам"
+    TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
+    ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
+    TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -664,7 +667,7 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
         json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
@@ -677,6 +680,12 @@ erDiagram
         int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
         int completions "игроков, выполнивших цель; растёт под блокировкой строки"
         string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
+        string category "nullable: combat|collection|mastery|friends, только у достижений (CHECK)"
+        string ladder "nullable: лестница достижений; вместе с rung (CHECK)"
+        smallint rung "nullable: ступень лестницы с единицы; вместе с ladder (CHECK)"
+        boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
+        string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
+        int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
         int sort
         boolean active
         datetime created_at
@@ -1110,6 +1119,19 @@ erDiagram
         date day PK "сутки UTC"
         int hits "сколько раз правило изменило результат входа игрока за сутки; CHECK не меньше нуля"
     }
+
+    ACHIEVEMENT_RARITY {
+        string task_id PK "и FK на TASK_DEF: достижение, у которого считается «есть у N%»"
+        int holders "выполнили из населения"
+        int population "игроки хотя бы с одним записанным забегом; одно число у всех строк прохода"
+        datetime computed_at "когда пересчитано; таблица заменяется целиком одной транзакцией"
+    }
+
+    ACHIEVEMENT_FAVORITE {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит избранное"
+        int slot PK "1…3 (CHECK): порядок показа в профиле"
+        string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1215,6 +1237,27 @@ erDiagram
   Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
   хранится: он одинаков у всех игроков и реплик, забег двигает только
   выбранные, невыбранные нельзя забрать, знак меню их не считает.
+- **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
+  `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
+  `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
+  периодом `achievement`, потому что забег, защита от повтора, забор и
+  потолок кошелька уже работают на этих таблицах. Категория, лестница
+  (`ladder` + `rung`: каждая ступень считает с нуля), скрытость с подсказкой и
+  престиж — колонки с `CHECK`: поля есть только у достижений, ступень и
+  лестница идут вместе, скрытому нужна подсказка. Виды `friends` и
+  `account_level` забег не двигает: сервер читает число друзей и уровень
+  аккаунта при открытии витрины и дописывает прогресс «максимум» без записи в
+  `TASK_RUN`. Престиж — сумма `prestige` по выполненным (`completed_at` не
+  пуст), выключенное в панели достижение считается. `ACHIEVEMENT_RARITY` —
+  производная таблица: фоновая задача раз в 10 минут проверяет возраст
+  `computed_at`, и если он старше периода (настройка
+  `achievements.rarity-refresh-min`), под локом Redis одним запросом считает
+  население (игроки хотя бы с одним записанным забегом) и держателей среди
+  него, затем заменяет таблицу одной транзакцией. Процент показывается только
+  от порога населения (`achievements.rarity-min-players`). Избранное —
+  до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
+  транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
+  вместе с прогрессом заданий, редкость не трогает.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
