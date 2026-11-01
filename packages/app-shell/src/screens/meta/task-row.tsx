@@ -82,12 +82,11 @@ export function TaskRow(props: {
   // «Проверить» есть и у невыполненной цели. Ссылку и бота выполняет переход.
   const waitsAction = link !== null && !task.done && !props.closed;
   const opens = waitsAction && isOpenKind(task.kind);
-  const name = achievementName(task);
   // Места считаются при отрисовке, без тикающего таймера: экран заданий
   // перечитывается при каждом открытии и после каждого действия.
   const place = props.closed ? null : slotsText(task.slots, Date.now());
-  const title = task.title ?? name ?? goalText(task);
-  const hint = task.title === null && name !== null ? goalText(task) : (repeatHint(task) ?? null);
+  const title = taskTitle(task);
+  const hint = taskHint(task);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
@@ -195,10 +194,32 @@ function repeatHint(task: TaskItem): string | null {
   return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 
-/** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */
-function achievementName(task: TaskItem): string | null {
+/** Достижение игрока: срок «достижение», но не партнёрская цель — её рисует вкладка партнёров. */
+function isAchievement(task: Pick<TaskItem, "period" | "category">): boolean {
+  return task.period === "achievement" && tabOf(task) !== "partner";
+}
+
+/**
+ * Название строки. У достижения это именно название: заголовок каталога правится
+ * из панели без релиза (tasks/T-0106), словарь клиента остался девяти старым, а
+ * без обоих показывается id — чужому достижению с сервера новее клиента лучше
+ * честный id, чем пустая строка. У остальных заданий заголовок каталога или
+ * текст цели по виду со склонением числа.
+ */
+export function taskTitle(task: TaskItem): string {
+  if (task.title !== null) return task.title;
+  if (!isAchievement(task)) return goalText(task);
   const key = `achievement.${task.id}.name`;
-  return task.period === "achievement" && hasTranslation(key) ? t(key) : null;
+  return hasTranslation(key) ? t(key) : task.id;
+}
+
+/**
+ * Строка под названием. У достижения название не объясняет цель, поэтому цель
+ * словами стоит под ним; у повторяемой партнёрской подписки — когда следующая
+ * награда.
+ */
+export function taskHint(task: TaskItem): string | null {
+  return isAchievement(task) ? goalText(task) : repeatHint(task);
 }
 
 /**
