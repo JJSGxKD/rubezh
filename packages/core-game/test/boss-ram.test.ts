@@ -40,7 +40,7 @@ function speedOf(world: World, slot: number): number {
 describe("Таран", () => {
   it("мигает, прежде чем рвануть: фазы по порядку, телеграф не движется", () => {
     const world = setup();
-    const slot = place(world, 280);
+    const slot = place(world, 400);
     const seen: number[] = [];
     let telegraphTicks = 0;
     const telegraphX: number[] = [];
