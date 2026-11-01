@@ -41,7 +41,6 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("кандидаты в 
   let repository: PrismaNameRuleCandidatesRepository;
   let service: NameRuleCandidatesService;
   const accountIds: string[] = [];
-  const ruleIds: string[] = [];
   let ownerAccount: AccountRef;
 
   async function addAccounts(raw: string, count: number, seenDaysAgo = 1): Promise<string[]> {
@@ -82,7 +81,6 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("кандидаты в 
 
   afterAll(async () => {
     await prisma.nameRuleCandidate.deleteMany({ where: { token: { contains: RUN } } });
-    await prisma.nameRule.deleteMany({ where: { ruleId: { in: ruleIds } } });
     await prisma.account.deleteMany({ where: { accountId: { in: accountIds } } });
     await redis.del("name-rules:candidates:lock");
     await prisma.$disconnect();
@@ -150,24 +148,30 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("кандидаты в 
 
   it("«В стирания»: правило в name_rule, кандидат удалён, ник со словом чистится", async () => {
     const word = `delta${RUN}`;
-    await addAccounts(word, 21);
-    await service.run();
-    const candidate = (await mine()).find((row) => row.token === word);
-    expect(candidate?.players).toBe(21);
+    const ids = await addAccounts(word, 21);
+    // Правило и аккаунты живут только на время проверки: соседний тест перечистки считает всю таблицу и
+    // не должен видеть чужое правило и ники, на которых оно срабатывает.
+    let ruleId: string | null = null;
+    try {
+      await service.run();
+      const candidate = (await mine()).find((row) => row.token === word);
+      expect(candidate?.players).toBe(21);
 
-    const roles = new RolesService(config, new PrismaRolesRepository(prisma), new PrismaAccountRepository(prisma));
-    const nameRules = new NameRulesService(new PrismaNameRulesRepository(prisma), { publishChanged: async () => undefined } as unknown as NameRulesCache, roles);
-    const admin = new NameRuleCandidatesAdminService(repository, roles, nameRules, redis);
+      const roles = new RolesService(config, new PrismaRolesRepository(prisma), new PrismaAccountRepository(prisma));
+      const nameRules = new NameRulesService(new PrismaNameRulesRepository(prisma), { publishChanged: async () => undefined } as unknown as NameRulesCache, roles);
+      const admin = new NameRuleCandidatesAdminService(repository, roles, nameRules, redis);
 
-    const rule = await admin.accept(ownerAccount, candidate?.candidateId ?? "", { category: "brand", kind: "word" });
-    ruleIds.push(rule.ruleId);
+      const rule = await admin.accept(ownerAccount, candidate?.candidateId ?? "", { category: "brand", kind: "word" });
+      ruleId = rule.ruleId;
 
-    expect(await prisma.nameRule.findUnique({ where: { ruleId: rule.ruleId } })).toMatchObject({ category: "brand", kind: "word", pattern: word, active: true });
-    expect((await mine()).some((row) => row.token === word)).toBe(false);
-    const rules = await loadNameRuleSet(prisma);
-    expect(cleanName(`Вася ${word}`, rules).name).toBe("Вася");
-    const view = await admin.list(ownerAccount);
-    expect(view.items.some((item) => item.token === word)).toBe(false);
+      expect(await prisma.nameRule.findUnique({ where: { ruleId: rule.ruleId } })).toMatchObject({ category: "brand", kind: "word", pattern: word, active: true });
+      expect((await mine()).some((row) => row.token === word)).toBe(false);
+      expect(cleanName(`Вася ${word}`, await loadNameRuleSet(prisma)).name).toBe("Вася");
+      expect((await admin.list(ownerAccount)).items.some((item) => item.token === word)).toBe(false);
+    } finally {
+      if (ruleId !== null) await prisma.nameRule.deleteMany({ where: { ruleId } });
+      await prisma.account.deleteMany({ where: { accountId: { in: ids } } });
+    }
   }, TIMEOUT_MS);
 
   it("два одновременных расчёта: один считает, второй пропускает", async () => {
