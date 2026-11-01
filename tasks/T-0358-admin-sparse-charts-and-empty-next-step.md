@@ -3,8 +3,8 @@ id: T-0358
 title: Панель — «мало данных» вместо графика из одного столбика; у пустых состояний — следующий шаг
 epic: E7
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
