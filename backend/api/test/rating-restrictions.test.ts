@@ -32,6 +32,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Ограничение рейтинга (docs/35-stage4-plan.md WP44, О40): игрок пропадает
@@ -84,7 +85,7 @@ beforeEach(async () => {
   const roles = new RolesService(config(), rolesRepository, accounts);
   restrictions = new RestrictionsService(rating.restrictions, accounts, roles, rating.gate, rating.hooks);
   service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
-  view = new RunsViewService(runs, board, new RunExtras(), rating.rating);
+  view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   moderator = await player("модератор");
   await rolesRepository.grant(moderator.accountId, "moderator", null);
 });

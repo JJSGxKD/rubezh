@@ -95,10 +95,10 @@ describe("престиж в строке рейтинга", () => {
 
     const board = await view.leaderboardFor(leader.accountId, "normal");
 
-    expect(board.entries.map((entry) => [entry.name, entry.prestige])).toEqual([
-      ["Лидер", 120],
-      ["Второй", 15],
-      ["Третий", 0],
+    expect(board.entries.map((entry) => [entry.rank, entry.prestige])).toEqual([
+      [1, 120],
+      [2, 15],
+      [3, 0],
     ]);
     expect(third.accountId).not.toBe(leader.accountId);
   });
