@@ -116,6 +116,35 @@ describe.skipIf(DATABASE_URL === "")("список игроков на живо�
     expect(row).toMatchObject({ source: "invite", canMessage: true, payer: false, level: 1, campaign: null });
   });
 
+  it("кампания у касаний click, link и tagged одной ссылки: колонка заполнена, фильтр находит всех троих (T-0363)", async () => {
+    const campaign = `cmp-${String(base)}`.slice(0, 40);
+    const code = `lc${String(base).slice(-8)}`;
+    const autoKey = `src-it_cmp-${String(base)}`.slice(0, 60);
+    const clickId = `ck${String(base).slice(-10)}`;
+    await prisma.link.create({ data: { code, campaign, source: "it_src", auto: false } });
+    const tagged = await prisma.link.create({ data: { code: `lt${String(base).slice(-8)}`, campaign, source: "it_src", auto: true, autoKey } });
+    await prisma.linkClick.create({ data: { clickId, linkCode: code } });
+    const at = new Date(base);
+    const touches = [
+      { accountId: ids[3] ?? "", firstStartKind: "click" as const, firstStartRef: clickId },
+      { accountId: ids[4] ?? "", firstStartKind: "link" as const, firstStartRef: code },
+      { accountId: ids[5] ?? "", firstStartKind: "tagged" as const, firstStartRef: autoKey },
+    ];
+    await prisma.acquisition.createMany({ data: touches.map((touch) => ({ ...touch, firstAt: at, firstDeviceClass: "unknown" as const, lastSeenAt: at })) });
+    try {
+      const found = await all("registered", "asc", { ...window, campaign });
+      expect(found.map((row) => ids.indexOf(row.accountId)).sort()).toEqual([3, 4, 5]);
+      expect(found.map((row) => row.campaign)).toEqual([campaign, campaign, campaign]);
+      expect(found.map((row) => row.source).sort()).toEqual(["click", "link", "tagged"]);
+      // Чужая кампания никого не находит.
+      expect(await all("registered", "asc", { ...window, campaign: `${campaign}-other` })).toEqual([]);
+    } finally {
+      await prisma.acquisition.deleteMany({ where: { accountId: { in: touches.map((touch) => touch.accountId) } } });
+      await prisma.linkClick.deleteMany({ where: { clickId } });
+      await prisma.link.deleteMany({ where: { code: { in: [code, tagged.code] } } });
+    }
+  });
+
   it("ограничения: хоть одно, ни одного, вид; истёкшее и снятое не в счёт, молчаливое — в счёт", async () => {
     const only = async (filters: Partial<PlayerFilters>) => (await all("registered", "asc", { ...window, ...filters })).map((row) => ids.indexOf(row.accountId)).sort();
     expect(await only({ restricted: "any" })).toEqual([2]);
