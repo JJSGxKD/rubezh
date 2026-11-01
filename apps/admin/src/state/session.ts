@@ -52,6 +52,8 @@ export interface SessionTiming {
   pollMs: number;
   now(): number;
   wait(ms: number): Promise<void>;
+  /** Видна ли вкладка: скрытая не опрашивает сервер, чтобы забытые вкладки не съедали общий лимит. */
+  visible(): boolean;
 }
 
 /**
@@ -65,7 +67,11 @@ const TIMING: SessionTiming = {
   pollMs: 2_000,
   now: () => Date.now(),
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  visible: () => typeof document === "undefined" || document.visibilityState === "visible",
 };
+
+/** Срок одного запроса входа на сервере: по нему считается потолок опросов. */
+const REQUEST_TTL_MS = 300_000;
 
 const BOT_REFUSALS: Record<Extract<BotLoginPoll, { status: "declined" }>["reason"], string> = {
   declined: "Вход отклонён в боте. Если это были не вы — просто закройте запрос.",
@@ -111,18 +117,34 @@ export function createSessionStore(api: AdminApi, timing: SessionTiming = TIMING
         const expiresAtMs = Date.parse(opened.data.expiresAt);
         setBot(attempt, { status: "waiting", code: opened.data.code, link: opened.data.link, deepLink: opened.data.deepLink ?? null, expiresAtMs, renewals });
 
-        const outcome = await waitForAnswer(attempt, opened.data, expiresAtMs);
+        const outcome = await waitForAnswer(attempt, opened.data);
         if (outcome !== "expired") return;
         if (renewals + 1 >= MAX_BOT_REQUESTS) return setBot(attempt, { status: "failed", message: "Время вышло — начните вход заново" });
       }
     };
 
     /** Опрос одного запроса: `expired` — срок вышел и нужен новый; `done` — исход уже показан. */
-    const waitForAnswer = async (attempt: number, opened: Parameters<typeof pollBotLogin>[1], expiresAtMs: number): Promise<"expired" | "done"> => {
+    const waitForAnswer = async (attempt: number, opened: Parameters<typeof pollBotLogin>[1]): Promise<"expired" | "done"> => {
+      // Страховка от вечного цикла, если сервер молчит; срок решает сам сервер ответом `expired`.
+      const maxPolls = Math.ceil(REQUEST_TTL_MS / timing.pollMs) + 5;
+      let polls = 0;
+      // После возврата во вкладку опрашиваем сразу, без паузы.
+      let pollNow = false;
       while (attempt === botAttempt) {
-        await timing.wait(timing.pollMs);
+        if (!pollNow) await timing.wait(timing.pollMs);
+        pollNow = false;
         if (attempt !== botAttempt) return "done";
-        if (timing.now() > expiresAtMs) return "expired";
+        if (!timing.visible()) {
+          // Ждём видимости тактами; как только вкладка видна — один опрос сразу.
+          while (attempt === botAttempt && !timing.visible()) await timing.wait(timing.pollMs);
+          if (attempt !== botAttempt) return "done";
+          pollNow = true;
+          continue;
+        }
+        if (polls++ >= maxPolls) {
+          setBot(attempt, { status: "failed", message: "Не дождались ответа, начните вход заново" });
+          return "done";
+        }
         const result = await pollBotLogin(api, opened);
         // Сеть моргнула — пробуем снова на следующем шаге: запрос ещё жив.
         if (!result.ok && result.error.kind === "offline") continue;
