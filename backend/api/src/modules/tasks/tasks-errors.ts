@@ -58,3 +58,17 @@ export class TaskLimitReachedError extends DomainError {
     super("task_limit_reached", "Места в задании закончились", 409);
   }
 }
+
+/** Ступени очков с таким порогом нет в таблице: клиент ошибся или таблица ушла вперёд него. */
+export class TaskPointsStepNotFoundError extends DomainError {
+  constructor() {
+    super("task_points_step_not_found", "Такой награды за очки нет", 404);
+  }
+}
+
+/** Очков на ступень пока не хватает — клиент по коду перечитывает задания и полосу. */
+export class TaskPointsNotReachedError extends DomainError {
+  constructor() {
+    super("task_points_not_reached", "Очков на эту награду пока не хватает", 409);
+  }
+}

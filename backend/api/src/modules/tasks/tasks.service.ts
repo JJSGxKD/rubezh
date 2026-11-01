@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
 import { imagePath } from "../media/image-rules.js";
@@ -43,6 +43,8 @@ import {
   type TaskRun,
 } from "./task-rules.js";
 import { inPlay, rotationAt } from "./task-pool.js";
+import { readyCount, type PointsPeriod, type PointsView } from "./task-points.js";
+import { TaskPointsService, type PointsClaimResult } from "./task-points.service.js";
 import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepository } from "./tasks.repository.js";
 
 /**
@@ -132,6 +134,7 @@ export class TasksService implements OnModuleInit {
     private readonly memberships: ChannelMemberships,
     private readonly media: MediaService,
     private readonly restrictions: AccountRestrictions,
+    @Optional() private readonly points?: TaskPointsService,
   ) {}
 
   onModuleInit(): void {
@@ -141,6 +144,17 @@ export class TasksService implements OnModuleInit {
   async view(account: AccountRef, at = new Date()): Promise<TaskView[]> {
     const { defs, progress, participation } = await this.state(account, at);
     return viewOf(defs, progress, participation, at);
+  }
+
+  /** Полоса очков дня и недели; `null` — сервис очков не подключён (старый состав модуля). */
+  async pointsView(accountId: string, at = new Date()): Promise<PointsView | null> {
+    return this.points === undefined ? null : await this.points.view(accountId, at);
+  }
+
+  /** Забор награды за ступень очков — отдельный сервис, здесь только вход для ручки. */
+  async claimPoints(account: AccountRef, period: PointsPeriod, points: number, at = new Date()): Promise<PointsClaimResult> {
+    if (this.points === undefined) throw new Error("очки заданий не подключены");
+    return await this.points.claim(account, period, points, at);
   }
 
   async claim(account: AccountRef, taskId: string, at = new Date()): Promise<TaskClaimResult> {
@@ -256,12 +270,17 @@ export class TasksService implements OnModuleInit {
     if (!joined) throw new TaskNotJoinedError();
   }
 
-  /** Знак меню: сколько наград можно забрать прямо сейчас (Р50). */
+  /**
+   * Знак меню: сколько наград можно забрать прямо сейчас (Р50) — выполненные
+   * задания и готовые ступени очков (T-0105): игрок видит «есть что забрать»
+   * и там, где задания уже забраны.
+   */
   async badge(accountId: string, at = new Date()): Promise<number> {
-    const [progress, active] = await Promise.all([this.db(this.repository.progress(accountId, at)), this.active()]);
+    const [progress, active, points] = await Promise.all([this.db(this.repository.progress(accountId, at)), this.active(), this.pointsView(accountId, at)]);
     // Невыбранное из пула забрать нельзя, значит и знак его не считает.
     const playing = new Set(inPlay(active, at).map((def) => def.taskId));
-    return progress.filter((row) => row.done && !row.claimed && playing.has(row.taskId)).length;
+    const tasks = progress.filter((row) => row.done && !row.claimed && playing.has(row.taskId)).length;
+    return tasks + (points === null ? 0 : readyCount(points));
   }
 
   /** Весь каталог, и выключенное, с видами и сроками для формы — панели. */

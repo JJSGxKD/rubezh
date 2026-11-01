@@ -72,8 +72,19 @@ const networkTaskSchema = z.object({
   ),
   nextAt: z.nullable(z.string()),
 });
-/** сервер до заданий сетей поля не отдавал */
-const viewSchema = z.object({ tasks: z.array(taskSchema), networks: z.optional(z.array(networkTaskSchema)) });
+/**
+ * Полоса очков заданий (docs/39-retention-mechanics.md П2, T-0105): сумма и
+ * три ступени с состоянием. Состояние — перечисление, а не строка: незнакомое
+ * от сервера новее клиента лучше отказ схемы, чем молча закрытая награда.
+ */
+const pointsBarSchema = z.object({
+  total: z.number(),
+  steps: z.array(z.object({ points: z.number(), reward: rewardSchema, state: z.enum(["locked", "ready", "claimed"]) })),
+});
+const pointsSchema = z.object({ daily: pointsBarSchema, weekly: pointsBarSchema });
+const pointsClaimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema, points: z.number() });
+/** сервер до заданий сетей и очков полей не отдавал */
+const viewSchema = z.object({ tasks: z.array(taskSchema), networks: z.optional(z.array(networkTaskSchema)), points: z.optional(pointsSchema) });
 const claimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema, tasks: z.array(taskSchema) });
 const openSchema = z.object({ url: z.string(), tasks: z.array(taskSchema) });
 const stepSchema = z.object({ ok: z.literal(true) });
@@ -124,6 +135,9 @@ export type FeedItem = z.infer<typeof feedItemSchema>;
 export type FeedCheck = z.infer<typeof feedCheckSchema>;
 export type TaskReward = z.infer<typeof rewardSchema>;
 export type TaskClaim = z.infer<typeof claimSchema>;
+export type TaskPoints = z.infer<typeof pointsSchema>;
+export type PointsClaim = z.infer<typeof pointsClaimSchema>;
+export type PointsPeriod = "daily" | "weekly";
 
 /** Вкладка задания: партнёрские — своей, остальные — по сроку. */
 /**
@@ -184,6 +198,14 @@ export const TASK_CHECK_UNAVAILABLE = "task_check_unavailable";
 /** Места в цели с лимитом закончились, а игрок к ней не переходил в последний час. */
 export const TASK_LIMIT_REACHED = "task_limit_reached";
 
+/** Очков на ступень не хватает — экран устарел: перечитать задания и полосу. */
+export const TASK_POINTS_NOT_REACHED = "task_points_not_reached";
+
+/** Текст отказа в заборе ступени очков по коду сервера — ключом словаря. */
+export function pointsFailureKey(code: string | undefined): string {
+  return code === TASK_POINTS_NOT_REACHED ? "tasks.points.notReached" : "tasks.points.failed";
+}
+
 /** Текст отказа в заборе по коду сервера — ключом словаря. */
 export function claimFailureKey(code: string | undefined): string {
   if (code === TASK_NOT_DONE) return "tasks.stale";
@@ -234,8 +256,10 @@ export function taskLink(task: Pick<TaskItem, "link">): string | null {
 export { openExternalLink as openTaskLink } from "./external-link";
 
 export interface TasksApi {
-  view(): Promise<ApiResult<{ tasks: TaskItem[]; networks?: NetworkTaskItem[] | undefined }>>;
+  view(): Promise<ApiResult<{ tasks: TaskItem[]; networks?: NetworkTaskItem[] | undefined; points?: TaskPoints | undefined }>>;
   claim(taskId: string): Promise<ApiResult<TaskClaim>>;
+  /** награда за ступень очков дня или недели: срок и порог в адресе, ответ несёт, сколько легло на баланс */
+  claimPoints(period: PointsPeriod, points: number): Promise<ApiResult<PointsClaim>>;
   /** переход по ссылке партнёрской цели: ссылку и бота он и выполняет */
   open(taskId: string): Promise<ApiResult<{ url: string; tasks: TaskItem[] }>>;
   /**
@@ -255,6 +279,7 @@ export function createTasksApi(request: ApiRequest = apiRequest): TasksApi {
   return {
     view: () => request("/api/v1/tasks", viewSchema, { method: "GET" }),
     claim: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/claim`, claimSchema, { method: "POST" }),
+    claimPoints: (period, points) => request(`/api/v1/tasks/points/${period}/${String(Math.trunc(points))}/claim`, pointsClaimSchema, { method: "POST" }),
     open: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/open`, openSchema, { method: "POST" }),
     networkStep: (sessionId, outcome) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, stepSchema, { method: "POST", body: { outcome } }),
     networkItem: (network, hints) => request(`/api/v1/tasks/networks/${encodeURIComponent(network)}/item`, feedItemSchema, { method: "POST", body: hintsBody(hints) }),

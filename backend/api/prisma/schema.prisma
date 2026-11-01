@@ -228,6 +228,7 @@ model Account {
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
+  taskPointsClaims TaskPointsClaim[]
   taskParticipants TaskParticipant[]
   restrictions     AccountRestriction[]
   taskRuns         TaskRun[]
@@ -1682,6 +1683,22 @@ model TaskProgress {
 
   @@id([accountId, taskId, periodStart])
   @@map("task_progress")
+}
+
+/// Забранная ступень очков заданий (docs/39-retention-mechanics.md П2, Р102,
+/// T-0105): срок — начало суток или недели по Москве, порог — очки ступени.
+/// Ключ не даёт забрать ступень дважды и ступень прошлого срока
+model TaskPointsClaim {
+  accountId   String     @map("account_id") @db.Uuid
+  period      TaskPeriod
+  periodStart DateTime   @map("period_start") @db.Date
+  points      Int
+  claimedAt   DateTime   @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, period, periodStart, points])
+  @@map("task_points_claim")
 }
 
 /// Забег, засчитанный заданиям: повтор события прогресс не удвоит.
