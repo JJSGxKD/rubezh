@@ -150,8 +150,8 @@ class MemoryTasks implements TasksRepository {
   }
 
   /** Состояние игрока (друзья, уровень аккаунта): тот же слив прогресса, но забег не занимается. */
-  async applyState(input: { accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<void> {
-    this.merge(input.accountId, input.at, input.deltas);
+  async applyState(accountId: string, deltas: readonly TaskDelta[], at: Date): Promise<void> {
+    this.merge(accountId, at, deltas);
   }
 
   private merge(accountId: string, at: Date, deltas: readonly TaskDelta[]): void {
@@ -911,7 +911,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "channel", "link", "bot"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "friends", "account_level", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });
@@ -1413,42 +1413,40 @@ describe("достижения: состояние игрока и скрыты�
     expect(ctx.repository.runs.size).toBe(1);
   });
 
+  /** Дельта состояния, как её строит витрина: вид «максимум», срок — достижение, цель — из каталога. */
+  const state = (ctx: ReturnType<typeof setup>, taskId: string, amount: number): TaskDelta => {
+    const target = ctx.repository.defs.find((task) => task.taskId === taskId)?.target ?? 0;
+    return { taskId, period: "achievement", target, op: "max", amount };
+  };
+
   it("applyState берёт максимум: меньше прежнего не уменьшает, больше цели не уходит", async () => {
     const ctx = withState();
     const value = async () => byId(await ctx.service.view(PLAYER, NOON), "ach_friends_5");
 
-    await ctx.service.applyState(ME, { friends: 3 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 3)], NOON);
     expect(await value()).toMatchObject({ value: 3, done: false });
-    await ctx.service.applyState(ME, { friends: 1 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 1)], NOON);
     expect(await value()).toMatchObject({ value: 3, done: false });
-    await ctx.service.applyState(ME, { friends: 40 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 40)], NOON);
     expect(await value()).toMatchObject({ value: 5, done: true });
     // друзей стало меньше — выполненное остаётся выполненным
-    await ctx.service.applyState(ME, { friends: 0 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 0)], NOON);
     expect(await value()).toMatchObject({ value: 5, done: true });
   });
 
-  it("applyState не занимает запись забега и двигает только свой вид", async () => {
+  it("applyState не занимает запись забега и двигает только названное", async () => {
     const ctx = withState();
-    await ctx.service.applyState(ME, { account_level: 12 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_account_10", 12)], NOON);
     const tasks = await ctx.service.view(PLAYER, NOON);
     expect(byId(tasks, "ach_account_10")).toMatchObject({ value: 10, done: true });
     expect(byId(tasks, "ach_friends_5")).toMatchObject({ value: 0, done: false });
     expect(ctx.repository.runs.size).toBe(0);
   });
 
-  it("ноль друзей строку прогресса не заводит", async () => {
+  it("ноль строку прогресса не заводит, пустой список — тоже", async () => {
     const ctx = withState();
-    await ctx.service.applyState(ME, { friends: 0, account_level: 0 }, NOON);
-    expect(ctx.repository.rows.size).toBe(0);
-  });
-
-  it("выключенное достижение состояние не двигает", async () => {
-    const ctx = withState();
-    const off = ctx.repository.defs.find((task) => task.taskId === "ach_friends_5");
-    if (off !== undefined) off.active = false;
-    ctx.service.forgetCatalog();
-    await ctx.service.applyState(ME, { friends: 5 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 0), state(ctx, "ach_account_10", 0)], NOON);
+    await ctx.service.applyState(ME, [], NOON);
     expect(ctx.repository.rows.size).toBe(0);
   });
 
@@ -1456,7 +1454,7 @@ describe("достижения: состояние игрока и скрыты�
     const ctx = withState();
     ctx.restrictions.restrict(ME, "partner_tasks");
     await expect(ctx.service.claim(PLAYER, "ach_friends_5", NOON)).rejects.toBeInstanceOf(TaskNotDoneError);
-    await ctx.service.applyState(ME, { friends: 5 }, NOON);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 5)], NOON);
     // выполненное состояние забирается и под ограничением партнёрских заданий: это не партнёрская цель
     const result = await ctx.service.claim(PLAYER, "ach_friends_5", NOON);
     expect(result.claimed).toBe(true);
