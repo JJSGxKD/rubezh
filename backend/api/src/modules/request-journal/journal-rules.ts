@@ -1,3 +1,4 @@
+import { Prisma } from "../../generated/prisma/client.js";
 import type { OutboundRecord } from "../../infra/outbound/outbound.js";
 
 /**
@@ -19,6 +20,24 @@ export const OUTBOUND_BUFFER_MAX = 2000;
 export const OUTBOUND_FLUSH_MS = 5_000;
 /** Сколько сбросов подряд база может не принять пачку, прежде чем пачку выбросят. */
 export const FLUSH_ATTEMPTS = 3;
+/** Сколько знаков причины сбоя попадает в лог: сообщение базы бывает в килобайты. */
+export const LOG_REASON_MAX = 200;
+/** Коды Prisma, при которых до базы не достучаться: связь, пул, таймаут, обрыв. */
+const CONNECTION_CODES: ReadonlySet<string> = new Set(["P1001", "P1002", "P1008", "P1017"]);
+
+/** Нет связи с базой (перезапуск, сеть), а не пачка, которую база отвергла по существу. */
+export function isConnectionError(error: unknown): boolean {
+  if (error instanceof Prisma.PrismaClientInitializationError) return true;
+  return error instanceof Prisma.PrismaClientKnownRequestError && CONNECTION_CODES.has(error.code);
+}
+
+/** Причина сбоя для лога: сообщение не длиннее 200 знаков, обрезанное — с «…». */
+export function logReason(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown";
+  const text = error.message;
+  return text.length <= LOG_REASON_MAX ? text : `${text.slice(0, LOG_REASON_MAX - 1)}…`;
+}
+
 /** Как часто один и тот же сбой попадает в лог: запись идёт на каждый запрос, лог не должен расти вместе с ней. */
 export const WARN_EVERY_MS = 60_000;
 
