@@ -3,7 +3,7 @@ id: T-0341
 title: Фильтр имён — кандидаты в правила из частых слов в никах
 epic: E7
 priority: P1
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
