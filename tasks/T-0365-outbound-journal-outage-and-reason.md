@@ -3,8 +3,8 @@ id: T-0365
 title: Журнал исходящих — пачка держится в буфере, пока база недоступна; причина сбоя в логе обрезана до 200 знаков
 epic: E4
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
