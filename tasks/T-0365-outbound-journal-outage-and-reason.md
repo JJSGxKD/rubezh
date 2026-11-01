@@ -12,7 +12,8 @@ zones:
   - backend/api/src/modules/request-journal/outbound-sink.ts
   - backend/api/src/modules/request-journal/journal-rules.ts
   - backend/api/test/request-journal.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low
