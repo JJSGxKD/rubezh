@@ -3,8 +3,8 @@ id: T-0342
 title: Кольцо стражей — плотнее, медленнее, жирнее: числа, элита и босс внутри, гайдбук
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0335, T-0172]
