@@ -43,6 +43,7 @@ shared:
   - backend/api/test/task-pool.test.ts
   - backend/api/test/tasks.integration.test.ts
   - apps/admin/test/tasks.test.ts
+  - packages/app-shell/src/i18n/ru-tasks.json
 runner: any
 executor: sonnet-5.5
 effort: extra

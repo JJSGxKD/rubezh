@@ -63,6 +63,8 @@
   "task.kind.difficulty_runs": "Сыграй {count} {target, plural, one {забег} few {забега} many {забегов} other {забега}} на сложности «{difficulty}»",
   "task.kind.difficulty_survive_sec": "Продержись {time} в одном забеге на сложности «{difficulty}»",
   "task.kind.boost_runs": "Сыграй {count} {target, plural, one {забег} few {забега} many {забегов} other {забега}} с бустом",
+  "task.kind.friends": "Подружись с {count} {target, plural, one {игроком} other {игроками}}",
+  "task.kind.account_level": "Дорасти до уровня аккаунта {count}",
   "botMention.title": "Юзернейм бота",
   "botMention.name.title": "Юзернейм бота в имени",
   "botMention.name.hint": "Впиши {bot} в имя своего профиля. Награда — за каждые игровые сутки, пока он там стоит.",
