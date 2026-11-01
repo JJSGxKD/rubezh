@@ -5,6 +5,8 @@ import { clientLanguageSchema, requesterOf } from "../ads/ad-creatives.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
 import { NetworkTasksService, type NetworkFeedCheck, type NetworkFeedItem, type NetworkTaskView } from "./network-tasks.service.js";
+import { POINT_PERIODS, type PointsView } from "./task-points.js";
+import type { PointsClaimResult } from "./task-points.service.js";
 import { TasksService, type TaskClaimResult, type TaskView } from "./tasks.service.js";
 
 /**
@@ -25,6 +27,9 @@ const FEED_LIMIT: RateLimit = { scope: "tasks_network_item", limit: 60, windowSe
 const CHECK_LIMIT: RateLimit = { scope: "tasks_network_check", limit: 60, windowSec: 3600 };
 const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
 const NETWORK_KEY = /^[a-z][a-z0-9_-]{1,31}$/;
+/** Порог ступени очков: целое от 1, не длиннее шести цифр — до таблицы ступеней проверяет сервис. */
+const POINTS_STEP = /^[1-9][0-9]{0,5}$/;
+const pointsPeriodSchema = z.enum(POINT_PERIODS);
 
 /** Язык и премиум — со слов клиента площадки, для подбора ленты сетью: солгать о них — получить чужие задания. */
 const feedItemSchema = z.object({ language: clientLanguageSchema.optional(), premium: z.boolean().optional() }).strict();
@@ -42,11 +47,23 @@ export class TasksController {
   ) {}
 
   @Get()
-  async view(@Req() request: unknown): Promise<{ data: { tasks: TaskView[]; networks: NetworkTaskView[] } }> {
+  async view(@Req() request: unknown): Promise<{ data: { tasks: TaskView[]; networks: NetworkTaskView[]; points?: PointsView } }> {
     const account = accountOf(request);
     await this.limit(account.accountId);
-    const [tasks, networks] = await Promise.all([this.tasks.view(account), this.networks.view(account)]);
-    return { data: { tasks, networks } };
+    const [tasks, networks, points] = await Promise.all([this.tasks.view(account), this.networks.view(account), this.tasks.pointsView(account.accountId)]);
+    // Без сервиса очков поля нет: клиент разбирает ответ и с ним, и без него.
+    return { data: points === null ? { tasks, networks } : { tasks, networks, points } };
+  }
+
+  /** Награда за ступень очков дня или недели: срок и порог — из адреса, остальное решает сервер. */
+  @Post("points/:period/:points/claim")
+  @HttpCode(200)
+  async claimPoints(@Req() request: unknown, @Param("period") period: string, @Param("points") points: string): Promise<{ data: PointsClaimResult }> {
+    const account = accountOf(request);
+    const parsedPeriod = pointsPeriodSchema.safeParse(period);
+    if (!parsedPeriod.success || !POINTS_STEP.test(points)) throw new ValidationError("Неверный срок или порог награды");
+    await this.limit(account.accountId);
+    return { data: await this.tasks.claimPoints(account, parsedPeriod.data, Number(points)) };
   }
 
   @Post(":taskId/claim")

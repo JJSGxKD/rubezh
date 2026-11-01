@@ -12,6 +12,8 @@ zones:
   - packages/core-game/src/game/weapons/chain.ts
   - packages/core-game/test/chain-weapon.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -90,7 +92,8 @@ batch: 6
 - **Тексты:**
   - `weapon.rowan_beads.name` — «Рябиновые бусы», `.description` — «Ягода перескакивает между врагами и травит»;
   - `weapon.necklace.name` — «Ожерелье», `.description` — «Длинная цепь ягод».
-- **Значок** — `item-icons.tsx`; задания с фильтром оружия — `rowan_beads`,
+- **Значок** готов: `rowan_beads` и `necklace` из `PLANNED_WEAPON_GLYPHS`
+  (`screens/game-glyphs.tsx`) переезжают в `WEAPON_GLYPHS`; задания с фильтром оружия — `rowan_beads`,
   если список есть.
 - **`docs/35`** — у Р157 отметка «сделано: T-0281–T-0290».
 
@@ -106,6 +109,9 @@ batch: 6
 2. **`weapons/chain.ts`**, поля `chainRadius`, `bounces`, реестр.
 3. **Облик и звук.**
 4. **Данные** — Бусы, «Ожерелье», открытие, тексты, значок.
+   Кадры снаряда готовы (31.10.2026, пак `atlas-r157`): `fx/proj_rowan_beads0`, у «Ожерелья» `fx/proj_necklace0`, перескок цепи — `fx/chain_rowan0…1`, рендер растягивает его между врагами. Пак
+   движок подключает строкой `art-r157` в `ATLASES`, если её ещё нет
+   (`render/art-atlas.ts`).
 5. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 6. **Документы:**
    - `CLAUDE.md` — строка `chain` в таблице поведений;

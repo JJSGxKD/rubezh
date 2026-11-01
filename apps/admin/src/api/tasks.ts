@@ -310,7 +310,7 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (!TASK_ID_PATTERN.test(id)) return "id — латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков";
   if (isNew && catalog.some((existing) => existing.taskId === id)) return "Такой id уже есть — выберите его в списке, чтобы поправить";
   if (!Number.isInteger(task.target) || task.target <= 0) return "Цель — целое число больше нуля";
-  if (![task.coins, task.gems, task.shards, task.passPoints].every(nonNegativeInt)) return "Награда и очки пасса — целые неотрицательные";
+  if (![task.coins, task.gems, task.shards, task.passPoints].every(nonNegativeInt)) return "Награда и очки заданий — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
   if (task.tier !== null && (task.period === "achievement" || PARTNER_KINDS.has(task.kind))) return "Ступень — только у дневных и недельных заданий";

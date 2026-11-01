@@ -59,6 +59,6 @@ import { RunsViewService } from "./runs-view.service.js";
   // уведомлениям в чат: они читают забеги, но не принимают их. Сверку
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
   // предметов; награду, бусты и добычу в листе забега — их модули.
-  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunExtras, RUNS_REPOSITORY, LEADERBOARD_STORE],
+  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}

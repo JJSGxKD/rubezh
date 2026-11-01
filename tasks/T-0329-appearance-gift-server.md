@@ -3,7 +3,7 @@ id: T-0329
 title: Облик в подарок другу — сервер: позиция Ярмарки за самоцветы дарящего, только другу и только то, чего у него нет; уведомление получателю
 epic: E1
 priority: P2
-status: draft
+status: ready
 owner:
 author: claude-lead-1
 size: M
@@ -42,8 +42,8 @@ batch: 4
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0329.json)](README.md#значки-статуса) [![T-0264](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0264.json&label=T-0264)](T-0264-fair-server.md) [![T-0247](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0247.json&label=T-0247)](T-0247-player-card-server.md)
 
-> **Черновик до Ярмарки.** Дарится позиция Ярмарки, а Ярмарка (T-0264) —
-> черновик до окрасов от дизайнера. В `ready` — вместе с T-0264.
+> **Ярмарка готова к работе** — T-0264 в `ready` с составом из шести
+> позиций (31.10.2026).
 
 ## Зачем
 

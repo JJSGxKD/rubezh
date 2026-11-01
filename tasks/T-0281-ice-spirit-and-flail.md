@@ -11,6 +11,8 @@ depends_on: [T-0120]
 zones:
   - packages/core-game/test/new-content-wave1.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
   - packages/core-game/src/content/weapons.ts
@@ -98,8 +100,19 @@ batch: 6
   - дух — форма и цвет по `looks.ts` в тоне холода;
   - кистень — объект орбиты крупнее камня-оберега.
 
-  Кадры арта — пункт 16 очереди дизайнера.
-- **Значок оружия** — `screens/item-icons.tsx`, тем же языком, что другие.
+  Кадры арта готовы (31.10.2026): `ice_spirit/s<ступень>/walk<k>` в паке
+  `atlas-r157`, рисунок — `design/art/src/creatures.mjs` (`iceSpirit`). Движок
+  берёт их сам по `id`, как у остальных врагов. Кадры кистеня — следующим
+  PR дизайнера (пункт 16 очереди).
+  Пак `atlas-r157` движок ещё не грузит: первая из задач T-0281…T-0285
+  добавляет в `ATLASES` (`render/art-atlas.ts`) строку `art-r157` по образцу
+  `art-late`, остальные её уже застают.
+  Кадры кистеня готовы там же: `fx/orbiter_flail0`, у «Круговерти» —
+  `fx/orbiter_whirl0` (шар с шипами и обрывком цепи; цепь к игроку рисует
+  рендер орбиты).
+- **Значок оружия** готов (п. 5 очереди дизайнера): `flail` и `whirl` из
+  `PLANNED_WEAPON_GLYPHS` (`screens/game-glyphs.tsx`) переезжают в
+  `WEAPON_GLYPHS` — тест значков требует этого, как только оружие в контенте.
 - **Звук** — удар кистеня: рецепт в `audio/recipes.ts` — глухой тяжёлый
   удар, не громче удара оберега (`docs/31`).
 - **Задания** — если у задания с фильтром оружия есть список id

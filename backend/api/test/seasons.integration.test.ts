@@ -17,7 +17,8 @@ import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { boardViewSchema, claimResultSchema, overviewSchema } from "../src/modules/seasons/dto/seasons.dto.js";
 import { RedisSeasonBoardStore } from "../src/modules/seasons/season-board.store.js";
-import { placeReward, seasonOf, type Season } from "../src/modules/seasons/season-rules.js";
+import { placeReward, seasonOf, standings, type Season, type StandingEntry } from "../src/modules/seasons/season-rules.js";
+import { ALL_BOARDS, FULL_ONLY, type Board } from "../src/modules/runs/leaderboard.store.js";
 import { SeasonSchedule } from "../src/modules/seasons/seasons-schedule.js";
 import { SeasonsClaimService } from "../src/modules/seasons/seasons-claim.service.js";
 import { SeasonsCloseService } from "../src/modules/seasons/seasons-close.service.js";
@@ -73,6 +74,20 @@ class FakeRestrictions {
   }
 }
 
+/** Доска зрителя в тесте: у кого отдельная доска (T-0113) — решает множество, как решает ограничение в проде. */
+class FakeRating {
+  readonly separated = new Set<string>();
+  async boardOf(accountId: string): Promise<Board> {
+    return this.separated.has(accountId) ? "full" : "common";
+  }
+  async boardsFor(accountId: string): Promise<readonly Board[]> {
+    return this.separated.has(accountId) ? FULL_ONLY : ALL_BOARDS;
+  }
+  async separate(): Promise<string[]> {
+    return [...this.separated];
+  }
+}
+
 /** Понедельник как число настройки: 20261102. */
 function settingOf(monday: Date): number {
   return Number(monday.toISOString().slice(0, 10).replaceAll("-", ""));
@@ -90,6 +105,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
   let repository: PrismaSeasonsRepository;
   let closeRepository: PrismaSeasonCloseRepository;
   let restrictions: FakeRestrictions;
+  let rating: FakeRating;
 
   beforeAll(async () => {
     config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, REDIS_URL } as NodeJS.ProcessEnv);
@@ -109,11 +125,13 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
     repository = new PrismaSeasonsRepository(prisma);
     closeRepository = new PrismaSeasonCloseRepository(prisma);
     restrictions = new FakeRestrictions();
+    rating = new FakeRating();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     restrictions.restricted.clear();
+    rating.separated.clear();
   });
 
   afterAll(async () => {
@@ -153,11 +171,11 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
     const schedule = new SeasonSchedule(settings);
     const runsHooks = new RunsHooks();
     const restrictionsHooks = new RestrictionsHooks();
-    const projection = new SeasonsProjection(schedule, store, repository, runsHooks, restrictionsHooks, restrictions as never);
+    const projection = new SeasonsProjection(schedule, store, repository, runsHooks, restrictionsHooks, restrictions as never, rating as never);
     projection.onModuleInit();
     const close = new SeasonsCloseService(redis, schedule, closeRepository, restrictions as never);
     const claim = new SeasonsClaimService(repository, wallet);
-    const view = new SeasonsViewService(schedule, repository, store, friends, restrictions as never);
+    const view = new SeasonsViewService(schedule, repository, store, friends, restrictions as never, rating as never);
     return { settings, schedule, runsHooks, restrictionsHooks, projection, close, claim, view };
   }
 
@@ -502,6 +520,326 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
 
       expect(closed).toEqual([expect.objectContaining({ seasonKey: season.key, players: 0, rewarded: 0 })]);
       expect(await close.closeDue(after(season, DAY))).toEqual([]);
+    });
+  });
+
+  describe("доски зрителя (T-0114, Р104)", () => {
+    /** Скрытое ограничение «Отдельная доска» строкой базы: закрытие читает его из неё. */
+    async function impose(accountId: string, season: Season, patch: { liftedAt?: Date; endsAt?: Date | null } = {}): Promise<void> {
+      await prisma.accountRestriction.create({
+        data: {
+          accountId,
+          kind: "separate_board",
+          startsAt: new Date(season.startsAt.getTime() - 30 * DAY),
+          endsAt: patch.endsAt ?? null,
+          reason: "other",
+          notify: false,
+          ...(patch.liftedAt === undefined ? {} : { liftedAt: patch.liftedAt, liftComment: "снято" }),
+        },
+      });
+    }
+
+    /** Обычные и с отдельной доской: двое первых ограниченных быстрее всех обычных, третий — медленнее всех. */
+    async function mixedSeason(ordinary = 9, separate = 3) {
+      const season = await freeWeek();
+      const normal: string[] = [];
+      const restricted: string[] = [];
+      for (let index = 0; index < ordinary; index++) {
+        const id = await account(`Обычный ${String(index + 1)}`);
+        normal.push(id);
+        await play(id, season, { survivalSec: 400 - index * 10, offsetMs: (index + 1) * HOUR });
+      }
+      for (let index = 0; index < separate; index++) {
+        const id = await account(`Отдельный ${String(index + 1)}`);
+        restricted.push(id);
+        await impose(id, season);
+        await play(id, season, { survivalSec: [1_000, 900, 50][index] ?? 50, offsetMs: (index + 1) * HOUR });
+      }
+      return { season, normal, restricted };
+    }
+
+    it("закрытие: девять обычных и три с отдельной доской — у обычных таблица из девяти без награды за место, у троих полная из двенадцати с ней", async () => {
+      const { season, normal, restricted } = await mixedSeason();
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      const results = new Map((await prisma.seasonResult.findMany({ where: { seasonKey: season.key } })).map((row) => [row.accountId, row]));
+      for (const id of normal) expect(results.get(id), id).toMatchObject({ board: "common", boardSize: 9 });
+      for (const id of restricted) expect(results.get(id), id).toMatchObject({ board: "full", boardSize: 12 });
+      expect(normal.map((id) => results.get(id)?.place)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(restricted.map((id) => results.get(id)?.place)).toEqual([1, 2, 12]);
+
+      const rewards = new Map((await prisma.seasonReward.findMany({ where: { seasonKey: season.key } })).map((row) => [row.accountId, row]));
+      // Девять — меньше MIN_BOARD: места не награждаются, остаётся награда за порог.
+      for (const id of normal) expect(rewards.get(id), id).toMatchObject({ kind: "threshold", coins: 150, prestige: 5, place: null });
+      expect(rewards.get(restricted[0] ?? "")).toMatchObject({ kind: "place", coins: 1000, prestige: 100, place: 1, difficulty: "easy" });
+      expect(rewards.get(restricted[1] ?? "")).toMatchObject({ kind: "place", coins: 600, prestige: 50, place: 2 });
+      expect(rewards.get(restricted[2] ?? "")).toMatchObject({ kind: "place", coins: 250, prestige: 10, place: 12 });
+    });
+
+    it("места в базе сходятся с моделью standings: та же ничья, те же плотные места общей таблицы", async () => {
+      const { season, normal, restricted } = await mixedSeason(10, 2);
+      // Ничья по времени с обычным: решает тот, кто показал раньше.
+      const tie = await account("Ничья");
+      await play(tie, season, { survivalSec: 400, offsetMs: 30 * HOUR });
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      const bests = await prisma.run.groupBy({ by: ["accountId"], where: { finishedAt: { gte: season.startsAt, lt: season.endsAt }, difficulty: "easy" }, _max: { survivalSec: true, finishedAt: true } });
+      const entries: StandingEntry[] = bests.map((row) => ({ accountId: row.accountId, bestSec: row._max.survivalSec ?? 0, firstAt: row._max.finishedAt ?? new Date(0) }));
+      const model = standings(entries, new Set(restricted));
+      const rows = await prisma.seasonResult.findMany({ where: { seasonKey: season.key } });
+      const byAccount = new Map(rows.map((row) => [row.accountId, [row.place, row.boardSize, row.board]]));
+      for (const row of model.common) expect(byAccount.get(row.accountId), row.accountId).toEqual([row.place, row.boardSize, "common"]);
+      for (const row of model.full.filter((candidate) => restricted.includes(candidate.accountId))) expect(byAccount.get(row.accountId), row.accountId).toEqual([row.place, row.boardSize, "full"]);
+      expect(rows).toHaveLength(normal.length + restricted.length + 1);
+    });
+
+    it("обычный игрок, которого аккаунт с ограничением обогнал бы, получает место «как будто его нет»", async () => {
+      const season = await freeWeek();
+      const crowd: string[] = [];
+      for (let index = 0; index < 10; index++) {
+        const id = await account();
+        crowd.push(id);
+        await play(id, season, { survivalSec: 300 - index * 10 });
+      }
+      const fast = await account("Отдельный быстрый");
+      await impose(fast, season);
+      await play(fast, season, { survivalSec: 900 });
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      expect(await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: crowd[0] } })).toMatchObject({ place: 1, boardSize: 10, board: "common" });
+      expect(await prisma.seasonReward.findFirst({ where: { seasonKey: season.key, accountId: crowd[0] } })).toMatchObject({ kind: "place", coins: 1000, place: 1 });
+      expect(await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: fast } })).toMatchObject({ place: 1, boardSize: 11, board: "full" });
+    });
+
+    it("снятие ограничения до закрытия возвращает аккаунт в общую таблицу; ещё действующее со сроком в будущем — нет", async () => {
+      const season = await freeWeek();
+      const [lifted, running, expired] = [await account("Снято"), await account("Действует"), await account("Истекло")];
+      await impose(lifted, season, { liftedAt: new Date(season.startsAt.getTime() + 2 * DAY) });
+      await impose(running, season, { endsAt: new Date(season.endsAt.getTime() + 10 * DAY) });
+      await impose(expired, season, { endsAt: new Date(season.endsAt.getTime() - HOUR) });
+      for (const id of [lifted, running, expired]) await play(id, season, { survivalSec: 250 });
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      const boardOf = async (id: string) => (await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: id } }))?.board;
+      expect(await boardOf(lifted)).toBe("common");
+      expect(await boardOf(expired)).toBe("common");
+      expect(await boardOf(running)).toBe("full");
+      expect(await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: lifted } })).toMatchObject({ boardSize: 2 });
+    });
+
+    it("повторное закрытие ничего не вставляет; колонка board у старых строк — common по умолчанию", async () => {
+      const { season } = await mixedSeason(4, 2);
+      const { close } = world(season.startsAt);
+      await close.closeDue(after(season));
+      const counts = async () => [await prisma.seasonResult.count({ where: { seasonKey: season.key } }), await prisma.seasonReward.count({ where: { seasonKey: season.key } })];
+      const first = await counts();
+
+      expect(await closeRepository.close(season, [], after(season, 2 * HOUR))).toBeNull();
+      expect(await close.closeDue(after(season, 3 * HOUR))).toEqual([]);
+      expect(await counts()).toEqual(first);
+
+      // Строка без явной доски (как до T-0114) читается обычной.
+      const legacy = await account();
+      await prisma.$executeRaw`INSERT INTO season_result (season_key, account_id, difficulty, best_sec, place, board_size) VALUES (${season.key}, ${legacy}::uuid, 'hard', 10, 1, 1)`;
+      expect((await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: legacy } }))?.board).toBe("common");
+    });
+
+    it("награда за порог у аккаунта с ограничением такая же, как у обычного с тем же временем", async () => {
+      const season = await freeWeek();
+      const [ordinary, separate] = [await account("Обычный"), await account("Отдельный")];
+      await impose(separate, season);
+      await play(ordinary, season, { survivalSec: 200 });
+      await play(separate, season, { survivalSec: 200 });
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      const rewards = await prisma.seasonReward.findMany({ where: { seasonKey: season.key, accountId: { in: [ordinary, separate] } } });
+      expect(rewards.map((row) => [row.kind, row.coins, row.prestige, row.difficulty, row.place])).toEqual([
+        ["threshold", 150, 5, null, null],
+        ["threshold", 150, 5, null, null],
+      ]);
+    });
+
+    it("рейтинг закрыт сильнее: под ограничением «leaderboard» или блокировкой, пусть и с отдельной доской, наград нет ни на какой доске", async () => {
+      const season = await freeWeek();
+      const [closed, blocked, ordinary] = [await account("Закрыт"), await account("Блок"), await account("Обычный")];
+      for (const id of [closed, blocked]) await impose(id, season);
+      for (const id of [closed, blocked, ordinary]) await play(id, season, { survivalSec: 300 });
+      restrictions.restricted.set(closed, { notify: true });
+      restrictions.restricted.set(blocked, { notify: false });
+      const { close } = world(season.startsAt);
+
+      await close.closeDue(after(season));
+
+      for (const id of [closed, blocked]) {
+        expect(await prisma.seasonResult.count({ where: { seasonKey: season.key, accountId: id } }), id).toBe(0);
+        expect(await prisma.seasonReward.count({ where: { seasonKey: season.key, accountId: id } }), id).toBe(0);
+      }
+      expect(await prisma.seasonResult.findFirst({ where: { seasonKey: season.key, accountId: ordinary } })).toMatchObject({ boardSize: 1, board: "common" });
+    });
+
+    it("только внутриигровое: у награды и у начисления после claim ровно монеты и престиж, в кошельке одна запись season_reward в мягкой валюте", async () => {
+      const { season, restricted } = await mixedSeason();
+      const { close, claim } = world(season.startsAt);
+      await close.closeDue(after(season));
+      const winner = restricted[0] ?? "";
+      const reward = await prisma.seasonReward.findFirst({ where: { seasonKey: season.key, accountId: winner } });
+      expect(Object.keys(reward ?? {}).sort()).toEqual(["accountId", "claimedAt", "coins", "difficulty", "kind", "place", "prestige", "seasonKey", "status"]);
+
+      const result = await claim.claim(winner, season.key, after(season, DAY));
+
+      expect(result).toEqual({ claimed: true, credited: { coins: 1000, prestige: 100 } });
+      expect(Object.keys(result.credited).sort()).toEqual(["coins", "prestige"]);
+      const entries = await prisma.walletEntry.findMany({ where: { accountId: winner } });
+      expect(entries.map((entry) => [entry.reason, entry.resource, Number(entry.amount)])).toEqual([["season_reward", "coins", 1000]]);
+      // Ни реферальных, ни партнёрских следов у забравшего награду нет.
+      expect(await prisma.referralBinding.count({ where: { OR: [{ referrerId: winner }, { referredId: winner }] } })).toBe(0);
+      expect(await prisma.partnerBinding.count({ where: { accountId: winner } })).toBe(0);
+    });
+
+    it("события сезона: season_closed и season_reward_claimed без полей про доску", async () => {
+      const { season, restricted } = await mixedSeason(4, 2);
+      const { close, claim } = world(season.startsAt);
+      const log = vi.spyOn(Logger.prototype, "log");
+      await close.closeDue(after(season));
+      await claim.claim(restricted[0] ?? "", season.key, after(season, DAY));
+
+      const lines = log.mock.calls.map(([line]) => String(line)).filter((line) => line.includes('"season_closed"') || line.includes('"season_reward_claimed"'));
+      expect(lines).toHaveLength(2);
+      // Ключи — ровно те, что у событий T-0110: ни «доски», ни признака отдельной доски у них нет.
+      const keysOf = (event: string) => Object.keys(JSON.parse(lines.find((line) => line.includes(`"${event}"`)) ?? "{}") as Record<string, unknown>).sort();
+      expect(keysOf("season_closed")).toEqual(["board_size", "coins_total", "duration_ms", "event", "module", "players", "prestige_total", "rewarded", "season"]);
+      expect(keysOf("season_reward_claimed")).toEqual(["coins", "difficulty", "event", "kind", "module", "place", "prestige", "season"]);
+      for (const line of lines) expect(line).not.toMatch(/separate|"full"|"common"/);
+    });
+
+    it("живая таблица: наложение убирает аккаунт из общей, полная его держит; снятие возвращает недельное время из базы", async () => {
+      const season = await freeWeek();
+      const { projection, restrictionsHooks } = world(season.startsAt);
+      const [ordinary, other] = [await account("Обычный"), await account("Другой")];
+      const records = [await play(ordinary, season, { survivalSec: 300 }), await play(other, season, { survivalSec: 200 })];
+      for (const record of records) await projection.recorded(recorded(record));
+      expect(await store.best(season.key, "easy", ordinary, "common")).toBe(300);
+      expect(await store.best(season.key, "easy", ordinary, "full")).toBe(300);
+
+      rating.separated.add(ordinary);
+      const at = new Date(season.startsAt.getTime() + 2 * HOUR);
+      await restrictionsHooks.emitImposed({ accountId: ordinary, kinds: ["separate_board"], at });
+      expect(await store.best(season.key, "easy", ordinary, "common")).toBeNull();
+      expect(await store.best(season.key, "easy", ordinary, "full")).toBe(300);
+      expect(await store.count(season.key, "easy", "common")).toBe(1);
+      expect(await store.count(season.key, "easy", "full")).toBe(2);
+
+      rating.separated.delete(ordinary);
+      await restrictionsHooks.emitSettled({ accountId: ordinary, kinds: ["separate_board"], at });
+      expect(await store.best(season.key, "easy", ordinary, "common")).toBe(300);
+      expect(await store.best(season.key, "easy", ordinary, "full")).toBe(300);
+    });
+
+    it("запись забега идёт по доскам аккаунта: с отдельной доской — только в полную", async () => {
+      const season = await freeWeek();
+      const { projection } = world(season.startsAt);
+      const separate = await account("Отдельный");
+      rating.separated.add(separate);
+
+      await projection.recorded(recorded(await play(separate, season, { survivalSec: 350 })));
+
+      expect(await store.best(season.key, "easy", separate, "common")).toBeNull();
+      expect(await store.best(season.key, "easy", separate, "full")).toBe(350);
+      expect(await redis.exists(`seasons:${season.key}:full:easy`)).toBe(1);
+      expect(await redis.exists(`seasons:${season.key}:easy`)).toBe(0);
+    });
+
+    it("пересборка строит обе таблицы: общая — без аккаунтов с отдельной доской", async () => {
+      const season = await freeWeek();
+      const { projection } = world(season.startsAt);
+      const [ordinary, separate] = [await account("Обычный"), await account("Отдельный")];
+      await play(ordinary, season, { survivalSec: 200 });
+      await play(separate, season, { survivalSec: 500 });
+      rating.separated.add(separate);
+
+      await projection.rebuild(new Date(season.startsAt.getTime() + 2 * HOUR));
+
+      expect(await store.count(season.key, "easy", "common")).toBe(1);
+      expect(await store.count(season.key, "easy", "full")).toBe(2);
+      expect(await store.rank(season.key, "easy", separate, "full")).toBe(1);
+      expect(await store.rank(season.key, "easy", ordinary, "common")).toBe(1);
+    });
+
+    it("чтение по доске зрителя: обычный видит общую без отдельных, отдельный — полную; JSON одной формы", async () => {
+      const season = await freeWeek();
+      const { view, projection } = world(season.startsAt);
+      const [ordinary, separate] = [await account("Обычный"), await account("Отдельный")];
+      rating.separated.add(separate);
+      await projection.recorded(recorded(await play(ordinary, season, { survivalSec: 200 })));
+      await projection.recorded(recorded(await play(separate, season, { survivalSec: 500 })));
+      const now = new Date(season.startsAt.getTime() + 2 * DAY);
+
+      const seenByOrdinary = await view.board(ordinary, { difficulty: "easy", scope: "all" }, now);
+      const seenBySeparate = await view.board(separate, { difficulty: "easy", scope: "all" }, now);
+
+      expect(seenByOrdinary.entries.map((entry) => entry.name)).toEqual(["Обычный"]);
+      expect(seenByOrdinary.total).toBe(1);
+      expect(seenByOrdinary.me).toEqual({ rank: 1, survivalSec: 200 });
+      expect(seenBySeparate.entries.map((entry) => entry.name)).toEqual(["Отдельный", "Обычный"]);
+      expect(seenBySeparate.total).toBe(2);
+      expect(seenBySeparate.me).toEqual({ rank: 1, survivalSec: 500 });
+      expect(Object.keys(seenByOrdinary).sort()).toEqual(Object.keys(seenBySeparate).sort());
+      expect(Object.keys(seenByOrdinary.entries[0] ?? {}).sort()).toEqual(Object.keys(seenBySeparate.entries[0] ?? {}).sort());
+      expect(JSON.stringify(seenByOrdinary)).not.toMatch(/board|separate|доск/i);
+
+      const overviewOrdinary = await view.overview(ordinary, now);
+      const overviewSeparate = await view.overview(separate, now);
+      expect(overviewOrdinary.mine.easy).toBe(200);
+      expect(overviewSeparate.mine.easy).toBe(500);
+    });
+
+    it("таблица друзей — как обычно: друг с отдельной доской виден обычному игроку с его временем, и me считается по этой же таблице", async () => {
+      const season = await freeWeek();
+      const { view, projection } = world(season.startsAt);
+      const [me, friend] = [await account("Я"), await account("Друг с отдельной доской")];
+      rating.separated.add(friend);
+      expect((await friends.befriend(me, friend, "request", 100)).outcome).toBe("added");
+      await projection.recorded(recorded(await play(me, season, { survivalSec: 200 })));
+      await projection.recorded(recorded(await play(friend, season, { survivalSec: 700 })));
+      const now = new Date(season.startsAt.getTime() + 2 * DAY);
+
+      const mine = await view.board(me, { difficulty: "easy", scope: "friends" }, now);
+      const theirs = await view.board(friend, { difficulty: "easy", scope: "friends" }, now);
+
+      expect(mine.entries.map((entry) => [entry.rank, entry.name, entry.survivalSec])).toEqual([[1, "Друг с отдельной доской", 700], [2, "Я", 200]]);
+      expect(mine.me).toEqual({ rank: 2, survivalSec: 200 });
+      expect(theirs.entries.map((entry) => entry.name)).toEqual(["Друг с отдельной доской", "Я"]);
+      expect(theirs.me).toEqual({ rank: 1, survivalSec: 700 });
+    });
+
+    it("вкладка «Друзья» у зрителя с молчаливым ограничением: me считается по той же таблице, что в ответе, а не по общей недели", async () => {
+      const season = await freeWeek();
+      const { view, projection } = world(season.startsAt);
+      const [shadow, friend, stranger] = [await account("Тень"), await account("Друг"), await account("Чужой")];
+      expect((await friends.befriend(shadow, friend, "request", 100)).outcome).toBe("added");
+      await projection.recorded(recorded(await play(friend, season, { survivalSec: 300 })));
+      await projection.recorded(recorded(await play(stranger, season, { survivalSec: 900 })));
+      await play(shadow, season, { survivalSec: 600, ranked: false, ratingRestricted: "silent" });
+      restrictions.restricted.set(shadow, { notify: false });
+      const now = new Date(season.startsAt.getTime() + 2 * DAY);
+
+      const board = await view.board(shadow, { difficulty: "easy", scope: "friends" }, now);
+
+      // Среди друзей (он сам и друг) его 600 — первое место; по общей недели было бы второе после чужого.
+      expect(board.me).toEqual({ rank: 1, survivalSec: 600 });
+      expect(board.total).toBe(2);
+      const all = await view.board(shadow, { difficulty: "easy", scope: "all" }, now);
+      expect(all.me).toEqual({ rank: 2, survivalSec: 600 });
     });
   });
 

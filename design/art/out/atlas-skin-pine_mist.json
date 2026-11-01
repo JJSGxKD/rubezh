@@ -1,0 +1,374 @@
+{
+ "frames": {
+  "hero-pine_mist/back/walk1": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 68,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 37,
+    "y": 1,
+    "w": 68,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/back/walk3": {
+   "frame": {
+    "x": 72,
+    "y": 2,
+    "w": 72,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 1,
+    "w": 72,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/walk1": {
+   "frame": {
+    "x": 146,
+    "y": 2,
+    "w": 72,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 25,
+    "y": 1,
+    "w": 72,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/walk3": {
+   "frame": {
+    "x": 220,
+    "y": 2,
+    "w": 68,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 25,
+    "y": 1,
+    "w": 68,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/walk1": {
+   "frame": {
+    "x": 290,
+    "y": 2,
+    "w": 83,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 1,
+    "w": 83,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/walk3": {
+   "frame": {
+    "x": 375,
+    "y": 2,
+    "w": 72,
+    "h": 117
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 1,
+    "w": 72,
+    "h": 117
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/back/idle0": {
+   "frame": {
+    "x": 449,
+    "y": 2,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/back/idle1": {
+   "frame": {
+    "x": 521,
+    "y": 2,
+    "w": 71,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 5,
+    "w": 71,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/back/walk0": {
+   "frame": {
+    "x": 594,
+    "y": 2,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/back/walk2": {
+   "frame": {
+    "x": 666,
+    "y": 2,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/idle0": {
+   "frame": {
+    "x": 738,
+    "y": 2,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 25,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/idle1": {
+   "frame": {
+    "x": 810,
+    "y": 2,
+    "w": 72,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 5,
+    "w": 72,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/walk0": {
+   "frame": {
+    "x": 884,
+    "y": 2,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 25,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/front/walk2": {
+   "frame": {
+    "x": 2,
+    "y": 121,
+    "w": 70,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 25,
+    "y": 5,
+    "w": 70,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/idle0": {
+   "frame": {
+    "x": 74,
+    "y": 121,
+    "w": 78,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 5,
+    "w": 78,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/idle1": {
+   "frame": {
+    "x": 154,
+    "y": 121,
+    "w": 82,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 5,
+    "w": 82,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/walk0": {
+   "frame": {
+    "x": 238,
+    "y": 121,
+    "w": 78,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 5,
+    "w": 78,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-pine_mist/walk2": {
+   "frame": {
+    "x": 318,
+    "y": 121,
+    "w": 78,
+    "h": 113
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 5,
+    "w": 78,
+    "h": 113
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-skin-pine_mist.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 956,
+   "h": 236
+  },
+  "scale": "2.5"
+ }
+}

@@ -42,7 +42,7 @@ const opt = {
   fx: Q.get("fx") !== "0",
   patches: Q.get("patches") !== "0",
   ground: Q.get("ground") !== "0",
-  /** облик героя: keeper (по умолчанию) или любой id из HERO_SKINS (hero.mjs) — пак skins */
+  /** облик героя: keeper (по умолчанию) или любой id из HERO_SKINS (hero.mjs) — атлас atlas-skin-<id> */
   skin: Q.get("skin") ?? "keeper",
   seed: Number(Q.get("seed") ?? 7),
   stage: Number(Q.get("stage") ?? -1),
@@ -133,7 +133,8 @@ return class Arena extends Phaser.Scene {
     this.load.atlas("core", "../out/atlas-core.png", "../out/atlas-core.json");
     this.load.atlas("late", "../out/atlas-late.png", "../out/atlas-late.json");
     this.load.atlas("env", "../out/atlas-env.png", "../out/atlas-env.json");
-    this.load.atlas("skins", "../out/atlas-skins.png", "../out/atlas-skins.json");
+    // Облик — свой маленький атлас: грузится только выбранный, как будет в игре (T-0239).
+    if (opt.skin !== "keeper") this.load.atlas("skin", `../out/atlas-skin-${opt.skin}.png`, `../out/atlas-skin-${opt.skin}.json`);
     this.load.image("ground", "../out/ground-neutral.webp");
   }
 
@@ -357,7 +358,7 @@ return class Arena extends Phaser.Scene {
     this.hero.t += dt;
     const heroState = moving ? `walk${Math.floor(this.hero.t * 8) % 4}` : `idle${Math.floor(this.hero.t * 1.5) % 2}`;
     const skinned = opt.skin !== "keeper";
-    this.heroSprite.setTexture(skinned ? "skins" : "core", skinned ? `hero-${opt.skin}/${heroState}` : `hero/${heroState}`).setPosition(this.hero.x, this.hero.y).setFlipX(this.hero.vx < 0);
+    this.heroSprite.setTexture(skinned ? "skin" : "core", skinned ? `hero-${opt.skin}/${heroState}` : `hero/${heroState}`).setPosition(this.hero.x, this.hero.y).setFlipX(this.hero.vx < 0);
     this.heroShape.setPosition(this.hero.x, this.hero.y);
     this.cameras.main.centerOn(this.hero.x, this.hero.y);
 

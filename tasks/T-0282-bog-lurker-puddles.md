@@ -12,6 +12,7 @@ zones:
   - packages/core-game/src/game/sim/hazards.ts
   - packages/core-game/test/hazards.test.ts
 shared:
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/waves.ts
@@ -87,7 +88,14 @@ batch: 6
   - полупрозрачный круг на земле тоном стихии (`render/status-tones.ts`);
   - слой земли — под врагами;
   - последние 0,8 с жизни — гаснет;
-  - в режиме арта — тот же круг до кадров дизайнера (пункт 16 очереди).
+  - в режиме арта — тот же круг до кадров лужи (пункт 16 очереди). Кадры
+    самого Болотника готовы: `bog_lurker/s<ступень>/walk<k>` в паке `atlas-r157`.
+    Пак `atlas-r157` движок ещё не грузит: первая из задач T-0281…T-0285
+    добавляет в `ATLASES` (`render/art-atlas.ts`) строку `art-r157` по образцу
+    `art-late`, остальные её уже застают.
+  - кадры лужи готовы: `fx/puddle_bog0…2` в паке `atlas-r157` — свежая,
+    подсохшая, гаснущая; рендер растягивает до `trail.radius` и в последние
+    0,8 с берёт кадр 2.
 
   Лужи **обязательны для чтения боя**: выключатель «Телеграфы» их не прячет.
 - **Болотник** `bog_lurker`:

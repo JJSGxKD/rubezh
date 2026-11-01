@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Батл-пасс — макет T-0314, T-0315</title>
+<style>
+  /* Значения — токены «Сумеречного рубежа» (packages/design-tokens/src/tokens.css). */
+  :root {
+    color-scheme: dark;
+    --bg: #1d1c31; --surface: #28273f; --raised: #353452; --sunken: #17162a;
+    --border: #43425f; --border-strong: #5b5980; --text: #f3eee6; --muted: #aeaac4;
+    --accent: #ff8f3f; --on-accent: #230f02; --elite: #ffd15c; --success: #8ee86b; --passive: #c47dff; --info: #6cb8ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #12111f; color: var(--text); font: 14px/1.4 "IBM Plex Sans", system-ui, sans-serif; padding: 20px; }
+  h1 { font: 700 20px/1.2 system-ui, sans-serif; margin: 0 0 4px; }
+  .lead { color: var(--muted); margin: 0 0 18px; max-width: 100ch; }
+  .grid { display: flex; flex-wrap: wrap; gap: 22px; align-items: flex-start; }
+  .sect { width: 100%; margin: 26px 0 8px; font: 700 17px/1.2 system-ui; border-top: 1px solid #ffffff14; padding-top: 18px; }
+  .phone { width: 390px; height: 780px; border-radius: 22px; overflow: hidden; position: relative; background: var(--bg); box-shadow: 0 0 0 2px #2c2a45, 0 20px 40px -20px #000; }
+  .phone.w320 { width: 320px; } .phone.w768 { width: 768px; height: 560px; }
+  .cap { width: 390px; margin-top: 8px; color: var(--muted); font-size: 12.5px; } .cap.w320 { width: 320px; } .cap.w768 { width: 768px; }
+  .cap b { color: var(--text); }
+  .screen { position: absolute; inset: 0; padding: 0 16px 16px; overflow: hidden; background: radial-gradient(120% 40% at 50% -8%, color-mix(in oklab, var(--passive) 16%, transparent), transparent 62%), var(--bg); }
+  .bar { display: flex; align-items: center; gap: 10px; height: 52px; font: 700 20px/1 "Russo One", system-ui; }
+  .tabs { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: var(--sunken); margin-bottom: 12px; }
+  .tabs span { flex: 1; text-align: center; padding: 10px 4px; border-radius: 7px; font: 600 13px/1 "Russo One", system-ui; color: var(--muted); }
+  .tabs span.on { background: linear-gradient(180deg, var(--raised), var(--surface)); color: var(--text); box-shadow: inset 0 0 0 1px var(--border-strong); }
+  .head { border-radius: 12px; padding: 14px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; align-items: center; }
+  .tier { grid-row: span 2; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font: 700 30px/1 "Russo One", system-ui; color: var(--elite);
+    background: radial-gradient(closest-side, color-mix(in oklab, var(--elite) 22%, transparent), transparent), var(--sunken); box-shadow: inset 0 0 0 3px color-mix(in oklab, var(--elite) 75%, transparent); }
+  .t1 { font: 700 15px/1.2 "Russo One", system-ui; } .t1 small { color: var(--muted); font: 600 12.5px system-ui; }
+  .prog { height: 10px; border-radius: 5px; background: var(--sunken); overflow: hidden; } .prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--passive), #e3b8ff); }
+  .meta { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+  .meta b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .lanes { margin-top: 12px; position: relative; }
+  .lane-label { display: flex; justify-content: space-between; align-items: center; font: 700 12px/1 "Russo One", system-ui; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 10px 2px 6px; }
+  .lane-label b { color: var(--elite); }
+  .row { display: flex; gap: 8px; overflow: hidden; position: relative; }
+  .cell { flex: none; width: 76px; border-radius: 10px; padding: 6px 4px 8px; text-align: center; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); position: relative; }
+  .cell .n { font: 700 11px/1 "Russo One", system-ui; color: var(--muted); }
+  .cell .ic { height: 44px; display: grid; place-items: center; margin: 4px 0 2px; }
+  .cell .v { font: 700 13px/1 "Russo One", system-ui; font-variant-numeric: tabular-nums; }
+  .cell.done { opacity: .62; } .cell.done::after { content: "✓"; position: absolute; top: 4px; right: 6px; color: var(--success); font: 700 13px system-ui; }
+  .cell.ready { box-shadow: inset 0 0 0 2px var(--accent), 0 0 18px -6px var(--accent); background: color-mix(in oklab, var(--accent) 10%, var(--surface)); }
+  .cell.now { box-shadow: inset 0 0 0 2px var(--elite); }
+  .cell.future { opacity: .42; }
+  .cell.skin { background: radial-gradient(100% 70% at 50% 30%, color-mix(in oklab, var(--elite) 18%, transparent), transparent), var(--surface); }
+  .cell.skin .ic img { height: 44px; }
+  .take { display: block; margin-top: 6px; border-radius: 5px; padding: 5px 0; font: 700 11px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent); background: var(--accent); }
+  .lock { position: absolute; inset: 0; border-radius: 10px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: color-mix(in oklab, var(--bg) 62%, transparent); backdrop-filter: blur(1.5px); }
+  .lock .txt { flex: 1; font-size: 12.5px; } .lock .txt b { display: block; font: 700 14px/1.2 "Russo One", system-ui; color: var(--elite); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 6px; font: 700 14px/1 "Russo One", system-ui; text-transform: uppercase; color: var(--on-accent); background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); box-shadow: inset 0 -3px 0 #a0582a; white-space: nowrap; }
+  .btn.vip { color: #2a1d02; background: linear-gradient(180deg, #ffe7a3, var(--elite) 50%, #c9a033); box-shadow: inset 0 -3px 0 #8c6a14; }
+  .btn.wide { width: 100%; }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 10px 2px 0; }
+  .widget { border-radius: 12px; padding: 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; background: radial-gradient(90% 120% at 0% 50%, color-mix(in oklab, var(--passive) 20%, transparent), transparent 70%), linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--passive) 40%, transparent); }
+  .widget .tier { width: 48px; height: 48px; font-size: 22px; grid-row: auto; }
+  .scrim { position: absolute; inset: 0; background: rgb(18 17 31 / 0.78); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 16px 16px 0 0; padding: 16px 16px 22px; text-align: center; background: linear-gradient(180deg, var(--raised), var(--surface)); }
+  .sheet img { height: 220px; filter: drop-shadow(0 6px 8px #000a); }
+  .header { display: flex; align-items: center; gap: 8px; height: 52px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: #43425f; display: grid; place-items: center; font-weight: 700; }
+  .coin { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; background: var(--sunken); font: 700 13px/1 "Russo One", system-ui; }
+  .tile { border-radius: 10px; background: linear-gradient(180deg, var(--raised), var(--surface)); box-shadow: inset 0 0 0 1px #ffffff10; height: 64px; margin-bottom: 8px; }
+  .play { position: absolute; left: 16px; right: 16px; bottom: 70px; height: 60px; border-radius: 4px; display: grid; place-items: center; color: var(--on-accent); background: linear-gradient(180deg, #ffb67f, var(--accent) 45%, #f0782a); font: 700 22px/1 "Russo One", system-ui; }
+  code { font-size: 11.5px; color: var(--text); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#ffd15c"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="#c98a2a" stroke-width="1.6"/><path d="M12 8v8M9.5 9.5l2.5 2.5 2.5-2.5M9.5 14.5l2.5-2.5 2.5 2.5" stroke="#8c5a14" stroke-width="1.4" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="gem" viewBox="0 0 24 24"><path d="M12 3l7 6-7 12-7-12z" fill="#ff5d6c"/><path d="M5 9h14M12 3l-2.5 6 2.5 12 2.5-12z" stroke="#9c2234" stroke-width="1.2" fill="none"/></symbol>
+  <symbol id="shard" viewBox="0 0 24 24"><path d="M8 4l5 3-2 13-5-4z" fill="#c47dff"/><path d="M14 8l5 2-3 9-3-1z" fill="#9a5ad8"/></symbol>
+  <symbol id="boost" viewBox="0 0 24 24"><path d="M9 3h6" stroke="#46d9c6" stroke-width="2" stroke-linecap="round"/><path d="M10.2 3.5v4.6a6.5 6.5 0 1 0 3.6 0V3.5z" fill="#46d9c6" fill-opacity=".3" stroke="#46d9c6" stroke-width="2"/></symbol>
+</svg>
+
+<h1>Батл-пасс — макет T-0314 и облики месяца T-0315</h1>
+<p class="lead">Макет дизайнера к экрану «Пасс» (Р46: две ленты, VIP открывает свою целиком; 30 ступеней) и облики первого месяца
+«Листопад»: окрасы на 10-й и 20-й бесплатной ленты, два окраса VIP-ленты и облик сезона «Листвень» на 30-й. Портреты — <code>design/art/out/card-hero-*.svg</code>.
+Валюты — заглушки; в игре — <code>CurrencyIcons.tsx</code>. Открывать через статический сервер от корня репозитория.</p>
+
+<div class="grid" id="frames"></div>
+
+<script>
+  // Данные одного месяца: ступень → награды двух лент. Облики — на 10/20 (бесплатная, VIP) и 30 (облик сезона, VIP).
+  const FREE = { 1: ["coin", 100], 2: ["shard", 2], 3: ["coin", 150], 4: ["boost", 1], 5: ["gem", 10], 6: ["coin", 200], 7: ["shard", 3], 8: ["coin", 250], 9: ["boost", 1], 10: ["skin", "leaf_fall"],
+    11: ["coin", 300], 12: ["shard", 3], 13: ["gem", 15], 14: ["coin", 300], 15: ["boost", 2], 16: ["coin", 350], 17: ["shard", 4], 18: ["gem", 15], 19: ["coin", 400], 20: ["skin", "pine_wood"] };
+  const VIP = { 1: ["gem", 20], 2: ["coin", 300], 3: ["boost", 2], 4: ["gem", 25], 5: ["shard", 5], 6: ["coin", 400], 7: ["gem", 30], 8: ["boost", 2], 9: ["coin", 500], 10: ["skin", "maple"],
+    11: ["gem", 30], 12: ["shard", 6], 13: ["coin", 600], 14: ["boost", 3], 15: ["gem", 40], 16: ["coin", 700], 17: ["shard", 8], 18: ["gem", 40], 19: ["boost", 3], 20: ["skin", "pine_mist"], 30: ["skin", "listven"] };
+  const NAMES = { leaf_fall: "Хранитель · листопад", pine_wood: "Хранитель · бор", maple: "Хранитель · клён", pine_mist: "Хранитель · туман бора", listven: "Листвень" };
+  const icon = ([kind, value]) => kind === "skin"
+    ? `<img src="../out/card-hero-${value}.svg" alt="${NAMES[value]}">`
+    : `<svg width="30" height="30"><use href="#${kind}"/></svg>`;
+  const value = ([kind, v]) => kind === "skin" ? "облик" : kind === "coin" ? v : kind === "gem" ? v : kind === "shard" ? `×${v}` : `×${v}`;
+  function cell(n, reward, state) {
+    if (!reward) reward = ["coin", 100];
+    const cls = ["cell", state, reward[0] === "skin" ? "skin" : ""].join(" ");
+    return `<div class="${cls}"><div class="n">${n}</div><div class="ic">${icon(reward)}</div><div class="v">${value(reward)}</div>${state === "ready" ? '<span class="take">Забрать</span>' : ""}</div>`;
+  }
+  // Пройдено 7, забраны 1–5 бесплатной; 6 и 7 — «Забрать»; 8 — текущая цель; дальше — впереди.
+  function lane(from, count, data, { claimed, reached, vipLocked }) {
+    let html = "";
+    for (let n = from; n < from + count; n++) {
+      const state = n <= claimed ? "done" : n <= reached ? (vipLocked ? "done" : "ready") : n === reached + 1 ? "now future" : "future";
+      html += cell(n, data[n], vipLocked && n <= reached ? "future" : state);
+    }
+    return html;
+  }
+  function passScreen({ width = 390, vip = false, from = 4, count = 5, title = "Пасс ноября · ещё 12 дн." }) {
+    const lock = vip ? "" : `<div class="lock"><div class="txt"><b>С VIP — ещё 9 наград</b>включая пройденные и облик сезона «Листвень»</div><span class="btn vip">VIP</span></div>`;
+    return `<div class="phone ${width === 320 ? "w320" : width === 768 ? "w768" : ""}"><div class="screen">
+<div class="bar">Задания</div>
+<div class="tabs"><span>День</span><span>Неделя</span><span class="on">Пасс</span></div>
+<div class="head"><div class="tier">7</div><div class="t1">${title}<br><small>ступень 7 из 30</small></div><div class="prog"><i style="width:70%"></i></div>
+<div class="meta"><span><b>140 / 200</b> очков</span><span>ещё <b>60</b> до 8-й</span></div></div>
+<p class="hint">Очки пасса — за задания дня и недели.</p>
+<div class="lanes">
+<div class="lane-label"><span>Бесплатно</span></div>
+<div class="row">${lane(from, count, FREE, { claimed: 5, reached: 7 })}</div>
+<div class="lane-label"><span><b>VIP</b></span>${vip ? '<span class="btn" style="min-height:32px;padding:0 10px;font-size:11px">Забрать всё</span>' : ""}</div>
+<div class="row">${lane(from, count, VIP, { claimed: vip ? 3 : 0, reached: 7, vipLocked: !vip })}${lock}</div>
+</div>
+<p class="hint">Листай ленту: открытие экрана прокручивает к текущей ступени. Облики — на 10-й и 20-й, облик сезона — на 30-й.</p>
+</div></div>`;
+  }
+  const frames = [
+    ["sect", "1 · Экран «Пасс» во вкладке «Задания»"],
+    [passScreen({}), "<b>390 · без VIP.</b> Шапка — ступень в медальоне, полоса очков до следующей, срок месяца. Ленты — бесплатная сверху, VIP снизу, ступени по 76 px, горизонтальная прокрутка; открытие прокручивает к текущей (7-я пройдена, 8-я — цель). Пройденная незабранная — рамка акцента и «Забрать», забранная — галочка и приглушение, будущая — прозрачнее. VIP-строка видна целиком под стеклом с замком: сколько наград ждёт и кнопка в магазин VIP."],
+    [passScreen({ width: 320, count: 4, title: "Пасс ноября · 12 дн." }), "<b>320</b> — четыре ступени в окне, заголовок короче («ещё» убрано). Плашка замка — та же, текст в две строки, кнопка не сжимается."],
+    [passScreen({ vip: true }), "<b>390 · с VIP.</b> Замок снят, на VIP-строке — «Забрать всё»: забирает по очереди всё доступное, один отклик счёта на всё (#460). Пройденные VIP-ступени до покупки становятся «Забрать» — VIP открывает ленту целиком (Р46)."],
+    ["sect", "2 · Облики месяца «Листопад» на ленте"],
+    [passScreen({ from: 8, count: 5 }), "<b>Ступени 8–12.</b> Облик в ячейке — портрет вместо значка валюты, с тёплым отсветом: на ленте сразу видно, где облики. 10-я бесплатной — «Хранитель · листопад», 10-я VIP — «Хранитель · клён»."],
+    [`<div class="phone"><div class="screen"><div class="bar">Задания</div><div class="tabs"><span>День</span><span>Неделя</span><span class="on">Пасс</span></div><div class="tile"></div><div class="tile"></div><div class="scrim"></div>
+<div class="sheet"><img src="../out/card-hero-listven.svg" alt="Листвень"><div style="font:700 22px/1.2 'Russo One',system-ui;margin-top:8px">Листвень</div>
+<p style="color:var(--muted);margin:6px 0 4px">Облик сезона · 30-я ступень VIP-ленты · ноябрь</p><p style="color:var(--muted);font-size:12.5px;margin:0 0 14px">Своя голова и посох на той же позе; виден в забеге, в карточке и на аватаре. Уже есть — вместо него 30 самоцветов.</p>
+<span class="btn wide">Понятно</span></div></div></div>`, "<b>Тап по ступени с обликом</b> — лист: портрет крупно, название, откуда, где виден. Так облик за деньги виден до покупки VIP (Р11). Повторный облик — 30 самоцветов (<code>pass.duplicate-gems</code>, T-0315)."],
+    ["sect", "3 · Виджет на главной и планшет"],
+    [`<div class="phone"><div class="screen" style="display:flex;flex-direction:column"><div class="header"><span class="avatar">А</span><span style="flex:1"></span><span class="coin">🪙 280</span><span class="coin">💎 12</span></div>
+<div class="widget"><div class="tier">7</div><div><div style="font:700 15px/1.2 'Russo One',system-ui">Пасс · ступень 7</div><div class="prog" style="margin-top:8px"><i style="width:70%"></i></div><div style="font-size:12px;color:var(--muted);margin-top:6px">2 награды ждут</div></div><span class="btn">Забрать</span></div>
+<div class="tile" style="margin-top:8px"></div><div class="tile"></div><div class="play">ИГРАТЬ</div></div></div>`, "<b>Виджет на главной</b> — «Пасс · ступень N», полоса и «Забрать», если есть доступные; тап — вкладка «Пасс». Фиолетовый тон пасса отличает его от слайдов карусели."],
+    [passScreen({ width: 768, count: 9 }), "<b>768</b> — в ленте девять ступеней, шапка шире; ленты — так же прокруткой. От 1024 (ПК, T-0298) — та же колонка по центру."],
+  ];
+  document.getElementById("frames").innerHTML = frames.map(([html, cap]) => html === "sect"
+    ? `<div class="sect">${cap}</div>`
+    : `<div>${html}<div class="cap ${html.includes("w320") ? "w320" : html.includes("w768") ? "w768" : ""}">${cap}</div></div>`).join("");
+</script>
+</body>
+</html>

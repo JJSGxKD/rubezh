@@ -267,7 +267,10 @@ export const EVENT_DICTIONARY = {
   // цели доходят до награды и за какой срок. Прогресс и забор — таблица
   // task_progress, начисленное — журнал кошелька (task_reward,
   // achievement_reward); событие шлёт клиент после ответа сервера.
-  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
+  // `tier` — ступень пула ротации (T-0104): видно, какие ступени доходят до награды.
+  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id, tier: z.enum(["easy", "medium", "hard"]).optional() }) },
+  // Забрал награду за ступень очков заданий (T-0105): `step` — порог ступени.
+  task_points_claimed: { version: 1, payload: payload({ period: z.enum(["daily", "weekly"]), step: z.number().int().min(1).max(100_000) }) },
   achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только

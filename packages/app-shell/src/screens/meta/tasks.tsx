@@ -10,17 +10,21 @@ import { rewardFeedback } from "../../state/ui-feedback";
 import {
   TASK_LIMIT_REACHED,
   TASK_NOT_DONE,
+  TASK_POINTS_NOT_REACHED,
   claimFailureKey,
   createTasksApi,
   isClaimable,
   isFeedTask,
   openTaskLink,
+  pointsFailureKey,
   sortTasks,
   taskImageUrl,
   tabOf,
   tasksAvailable,
   type NetworkTaskItem,
+  type PointsPeriod,
   type TaskItem,
+  type TaskPoints,
   type TaskTab,
 } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
@@ -30,6 +34,8 @@ import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { BotMentionRows } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
+import { TaskPointsBar } from "./task-points";
+import { readyIn } from "./task-points-rules";
 import { TaskRow } from "./task-row";
 import { rewardText } from "./task-reward";
 import { TASK_TAB_OF, viewAfterLoad, type TasksView } from "./tasks-rules";
@@ -51,6 +57,11 @@ import { TASK_TAB_OF, viewAfterLoad, type TasksView } from "./tasks-rules";
  *
  * Там же — задания рекламных сетей (WP13, часть 6, `network-tasks.tsx`):
  * сразу за тем, что можно забрать.
+ *
+ * На вкладках «День» и «Неделя» над списком — полоса очков с тремя ступенями
+ * (T-0105, `task-points.tsx`): очки считает сервер по выполненным заданиям,
+ * награду за ступень он же выдаёт. Старый сервер полосу не присылал — блока
+ * тогда просто нет.
  */
 type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; tasks: TaskItem[]; networks: NetworkTaskItem[] };
 
@@ -76,12 +87,19 @@ export function TasksScreen(): ReactNode {
 
   const [networkRows, setNetworkRows] = useState(0);
 
+  // Полоса очков приходит с заданиями, но живёт отдельно: забор ступени меняет
+  // её, не трогая список.
+  const [points, setPoints] = useState<TaskPoints | null>(null);
+  const [pointsBusy, setPointsBusy] = useState<number | null>(null);
+  const [pointsNotice, setPointsNotice] = useState<{ period: PointsPeriod; text: string } | null>(null);
+
   const load = async (): Promise<void> => {
     setState({ status: "loading" });
     const response = await api.view();
     if (!response.ok) return setState({ status: "failed" });
     const networks = response.data.networks ?? [];
     setState({ status: "ready", tasks: response.data.tasks, networks });
+    setPoints(response.data.points ?? null);
     // Вкладка решается однажды, по первому ответу: задание сети уходит на паузу
     // посреди проверки, и экран не должен сам перескочить, пока игрок ждёт награду.
     const partner = networks.some((item) => item.offer !== null || (isFeedTask(item) && item.nextAt === null)) || response.data.tasks.some((task) => tabOf(task) === "partner");
@@ -94,6 +112,7 @@ export function TasksScreen(): ReactNode {
     if (!response.ok) return null;
     const networks = response.data.networks ?? [];
     setState({ status: "ready", tasks: response.data.tasks, networks });
+    setPoints(response.data.points ?? null);
     return networks;
   };
 
@@ -119,13 +138,41 @@ export function TasksScreen(): ReactNode {
     setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
     if (response.data.claimed) {
       if (task.period === "achievement") track("achievement_unlocked", { achievement: task.id, kind: task.kind });
-      else track("task_completed", { task: task.id, period: task.period, kind: task.kind });
+      else track("task_completed", { task: task.id, period: task.period, kind: task.kind, ...(isPoolTier(task.tier) ? { tier: task.tier } : {}) });
       setNotice({ taskId: task.id, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
       // Значки вылетают из награды в строке задания — снимок до перерисовки:
       // забранное задание уходит вниз списка.
       const main = mainResource(response.data.credited);
       rewardFeedback(main === null ? null : ICON_RESOURCE[main.icon]);
       if (main !== null) setBurst(burstAt(document.querySelector(`[data-task-reward="${CSS.escape(task.id)}"]`), main.amount, main.icon));
+      void loadWallet();
+    }
+    void loadBadges();
+  };
+
+  /**
+   * Забрать награду за ступень очков (T-0105): по образцу `claim` — двойное
+   * нажатие блокируется, отказ — строкой под полосой. «Очков не хватает» —
+   * экран устарел (сменились сутки), поэтому задания и полоса перечитываются.
+   */
+  const claimPoints = async (period: PointsPeriod, step: number): Promise<void> => {
+    if (pointsBusy !== null) return;
+    setPointsBusy(step);
+    setPointsNotice(null);
+    const response = await api.claimPoints(period, step);
+    setPointsBusy(null);
+    if (!response.ok) {
+      setPointsNotice({ period, text: t(pointsFailureKey(response.code)) });
+      if (response.code === TASK_POINTS_NOT_REACHED) void refresh();
+      return;
+    }
+    setPoints((current) => (current === null ? current : withStepClaimed(current, period, step)));
+    if (response.data.claimed) {
+      track("task_points_claimed", { period, step });
+      setPointsNotice({ period, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
+      const main = mainResource(response.data.credited);
+      rewardFeedback(main === null ? null : ICON_RESOURCE[main.icon]);
+      if (main !== null) setBurst(burstAt(document.querySelector(`[data-points-reward="${String(step)}"]`), main.amount, main.icon));
       void loadWallet();
     }
     void loadBadges();
@@ -142,7 +189,9 @@ export function TasksScreen(): ReactNode {
   const partner = view === "partner";
   const partnerClosed = useRestricted(PARTNER_RESTRICTION);
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
-  const waiting = (tab: TaskTab) => all.filter((task) => tabOf(task) === tab && isClaimable(task)).length;
+  // К наградам заданий вкладок «День» и «Неделя» прибавляются готовые ступени их полос.
+  const waiting = (tab: TaskTab) =>
+    all.filter((task) => tabOf(task) === tab && isClaimable(task)).length + (points === null ? 0 : tab === "daily" ? readyIn(points.daily) : tab === "weekly" ? readyIn(points.weekly) : 0);
 
   /**
    * Ссылка открывается сразу, в том же нажатии: площадка открывает ссылки
@@ -200,6 +249,17 @@ export function TasksScreen(): ReactNode {
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
             {view === "daily" || view === "weekly" ? <ResetLine period={view} /> : null}
+            {(view === "daily" || view === "weekly") && points !== null ? (
+              <div className="mb-3">
+                <TaskPointsBar
+                  period={view}
+                  bar={points[view]}
+                  claiming={pointsBusy}
+                  notice={pointsNotice?.period === view ? pointsNotice.text : null}
+                  onClaim={(step) => void claimPoints(view, step)}
+                />
+              </div>
+            ) : null}
             {partner ? <RestrictedPlaque kinds={PARTNER_RESTRICTION} className="mb-3" /> : null}
             {/* Под ограничением вкладка пуста не потому, что заданий нет: это говорит плашка. */}
             {tasks.length === 0 && (!partner || (networkRows === 0 && !partnerClosed)) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
@@ -215,6 +275,17 @@ export function TasksScreen(): ReactNode {
       </ContentColumn>
     </Screen>
   );
+}
+
+/** Ступень пула ротации в событии — только известная серверу: словарь событий другой не примет. */
+function isPoolTier(tier: string | null | undefined): tier is "easy" | "medium" | "hard" {
+  return tier === "easy" || tier === "medium" || tier === "hard";
+}
+
+/** Полоса после забора: ступень становится забранной, остальное как было. */
+function withStepClaimed(points: TaskPoints, period: PointsPeriod, step: number): TaskPoints {
+  const bar = points[period];
+  return { ...points, [period]: { ...bar, steps: bar.steps.map((candidate) => (candidate.points === step ? { ...candidate, state: "claimed" as const } : candidate)) } };
 }
 
 function ResetLine(props: { period: ResetPeriod }): ReactNode {

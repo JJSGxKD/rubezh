@@ -11,7 +11,6 @@ depends_on: [T-0235, T-0240, T-0107, T-0111]
 zones:
   - packages/app-shell/src/state/emblems-api.ts
   - packages/app-shell/src/screens/meta/emblem-chip.tsx
-  - packages/app-shell/src/screens/meta/emblem-glyphs.tsx
   - packages/app-shell/src/screens/meta/emblems.tsx
   - packages/app-shell/src/screens/meta/emblem-rules.ts
   - packages/app-shell/test/emblem-rules.test.ts
@@ -83,14 +82,12 @@ batch: 4
 - **Старый сервер:** нет `emblem` в строке — рисуется прежняя метка «Тестер»
   (`tester-badge.tsx`), как сейчас. Есть `emblem` — прежнюю метку в этой
   строке не рисуем, чтобы знаков не было два.
-- **Значки знаков** — `emblem-glyphs.tsx`: карта id → значок. Пока дизайнер
-  не нарисовал свои (очередь дизайнера, `design/art/backlog.md`), значки
-  берутся из набора проекта:
-  - по виду знака: VIP — корона, Тестер — колба (как сейчас), Меценат —
-    сердце, Команда — щит, сезонные — кубок;
-  - заслуги — значок категории достижения из витрины T-0107.
-
-  Нет в карте — значок категории.
+- **Значки знаков** — готовы (31.10.2026, п. 11 и 18 очереди дизайнера):
+  `screens/meta/emblem-glyphs.tsx`, карта `EMBLEM_GLYPHS` id знака → `Glyph`,
+  рисуется `GameGlyph` из `game-glyphs.tsx`. Файл сгенерирован
+  `design/art/src/emblem-glyphs.mjs` — задача его не правит. Лист значков —
+  `design/art/mockups/emblems-v2.html`. Нет в карте — значок категории
+  достижения из витрины T-0107.
 - **Витрина T-0107** получает категории `status` и `season` в конце
   `CATEGORY_ORDER`: «Статус» и «Сезоны». Их карточки — без полосы прогресса,
   без «Забрать», с отметкой «Получено» или условием.
@@ -122,7 +119,7 @@ batch: 4
    - `heldCount(items)`.
 3. **`state/emblems-api.ts`** — Zod-схемы (`z/mini`), `load()` и `choose(id
    | null)`, коды ошибок `emblem_not_held` и `emblem_not_found`.
-4. **`emblem-glyphs.tsx`** и **`emblem-chip.tsx`** — по «Решениям». У чипа
+4. **`emblem-chip.tsx`** — по «Решениям», значок из `EMBLEM_GLYPHS`. У чипа
    два размера: строка списка и профиль.
 5. **`emblems.tsx`** — экран: загрузка, ошибка с «Повторить», группы, лист
    выбора.

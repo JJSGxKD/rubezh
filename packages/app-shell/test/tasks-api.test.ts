@@ -17,6 +17,7 @@ import {
   slotsText,
   taskImageUrl,
   openTaskLink,
+  pointsFailureKey,
   sortTasks,
   tabOf,
   taskLink,
@@ -286,5 +287,71 @@ describe("ротация заданий и новые виды цели", () => 
     // нет фильтра — без аргументов, экран не падает
     expect(goalFilterParams({ kind: "weapon_runs", filter: null })).toEqual({});
     expect(goalFilterParams({ kind: "runs" })).toEqual({});
+  });
+});
+
+// Очки заданий (docs/39-retention-mechanics.md П2, tasks/T-0105): полоса дня и
+// недели приходит вместе с заданиями, ступень забирается отдельной ручкой.
+
+const STEP = (points: number, coins: number, shards: number, state: string) => ({ points, reward: { coins, gems: 0, shards }, state });
+const POINTS = {
+  daily: { total: 30, steps: [STEP(20, 40, 0, "ready"), STEP(50, 80, 0, "locked"), STEP(100, 150, 3, "locked")] },
+  weekly: { total: 30, steps: [STEP(150, 150, 0, "locked"), STEP(400, 300, 5, "locked"), STEP(700, 600, 10, "locked")] },
+};
+
+describe("очки заданий в клиенте", () => {
+  it("ответ без points разбирается (сервер до очков его не отдавал); с points — тоже, со всеми ступенями", async () => {
+    const old = await createTasksApi(server([], { tasks: [TASK] })).view();
+    expect(old.ok && old.data.points).toBeUndefined();
+
+    const view = await createTasksApi(server([], { tasks: [TASK], points: POINTS })).view();
+    expect(view.ok && view.data.points?.daily.total).toBe(30);
+    expect(view.ok && view.data.points?.daily.steps.map((step) => step.state)).toEqual(["ready", "locked", "locked"]);
+    expect(view.ok && view.data.points?.weekly.steps[2]).toEqual({ points: 700, reward: { coins: 600, gems: 0, shards: 10 }, state: "locked" });
+  });
+
+  it("ступень вне известных состояний — отказ схемы, а не молча закрытая полоса", async () => {
+    const broken = await createTasksApi(server([], { tasks: [TASK], points: { ...POINTS, daily: { total: 0, steps: [STEP(20, 40, 0, "maybe")] } } })).view();
+    expect(broken.ok).toBe(false);
+  });
+
+  it("забор ступени — POST без тела: период и порог в адресе; ответ несёт, сколько легло", async () => {
+    const sent: Sent[] = [];
+    const answer = { claimed: true, credited: { coins: 40, gems: 0, shards: 0 }, points: 20 };
+
+    const claim = await createTasksApi(server(sent, answer)).claimPoints("daily", 20);
+
+    expect(claim.ok && claim.data).toEqual(answer);
+    expect(sent).toEqual([{ method: "POST", path: "/api/v1/tasks/points/daily/20/claim", body: undefined }]);
+    await createTasksApi(server(sent, answer)).claimPoints("weekly", 400);
+    expect(sent[1]?.path).toBe("/api/v1/tasks/points/weekly/400/claim");
+  });
+
+  it("отказ в заборе: не хватает очков — «обновили прогресс», остальное — «попробуй ещё раз»", () => {
+    expect(pointsFailureKey("task_points_not_reached")).toBe("tasks.points.notReached");
+    expect(pointsFailureKey("task_points_step_not_found")).toBe("tasks.points.failed");
+    expect(pointsFailureKey("rate_limited")).toBe("tasks.points.failed");
+    expect(pointsFailureKey(undefined)).toBe("tasks.points.failed");
+  });
+
+  it("тексты полосы — в словаре дословно: названия полос, склонение очков, строки «до награды» и отказов", () => {
+    const words = ruTasks as Record<string, string>;
+    expect(words["tasks.points.daily"]).toBe("Очки дня");
+    expect(words["tasks.points.weekly"]).toBe("Очки недели");
+    expect(words["tasks.points.total"]).toBe("{points} {points, plural, one {очко} few {очка} many {очков} other {очка}}");
+    expect(words["tasks.points.task"]).toBe("+{points} оч.");
+    expect(words["tasks.points.left"]).toBe("До награды ещё {left} {left, plural, one {очко} few {очка} many {очков} other {очка}}");
+    expect(words["tasks.points.allDone.daily"]).toBe("Все награды дня получены");
+    expect(words["tasks.points.allDone.weekly"]).toBe("Все награды недели получены");
+    expect(words["tasks.points.weeklyHint"]).toBe("В очки недели идут и ежедневные задания");
+    expect(words["tasks.points.failed"]).toBe("Не удалось забрать награду за очки — попробуй ещё раз");
+    expect(words["tasks.points.notReached"]).toBe("Очков пока не хватает — обновили прогресс");
+  });
+
+  it("существующие ключи для ячеек ступеней — «Забрать», «Получено», «Получено: …» — на месте", () => {
+    const words = ruTasks as Record<string, string>;
+    expect(words["tasks.claim"]).toBe("Забрать");
+    expect(words["tasks.claimed"]).toBe("Получено");
+    expect(words["tasks.got"]).toContain("{what}");
   });
 });

@@ -40,7 +40,7 @@ batch: 4
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](T-0121-rubezh-win-reward-server.md)
 
 > **Облик готов** (`design/art/backlog.md`, п. 12, 26.10.2026): кадры
-> `hero-dawn/…` в атласе `skins`, портреты `design/art/out/portrait-hero-dawn.svg`,
+> `hero-dawn/…` в атласе `atlas-skin-dawn`, портреты `design/art/out/portrait-hero-dawn.svg`,
 > `card-hero-dawn.svg` и голова `avatar-hero-dawn.svg`; портрет для картинок
 > бота — `HERO_PORTRAITS.dawn` в `backend/api/src/common/card/brand-art.ts`.
 

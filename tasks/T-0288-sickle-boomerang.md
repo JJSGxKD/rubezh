@@ -12,6 +12,8 @@ zones:
   - packages/core-game/src/game/weapons/boomerang.ts
   - packages/core-game/test/boomerang.test.ts
 shared:
+  - packages/app-shell/src/screens/game-glyphs.tsx
+  - packages/core-game/src/game/render/art-atlas.ts
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
@@ -95,7 +97,8 @@ batch: 6
 - **Тексты:**
   - `weapon.sickle.name` — «Серп», `.description` — «Летит к врагу и возвращается — режет на обоих путях»;
   - `weapon.harvest.name` — «Жатва», `.description` — «Четыре серпа крестом».
-- **Значок** — `item-icons.tsx`. Задания с фильтром оружия — `sickle` в
+- **Значок** готов: `sickle` и `harvest` из `PLANNED_WEAPON_GLYPHS`
+  (`screens/game-glyphs.tsx`) переезжают в `WEAPON_GLYPHS`. Задания с фильтром оружия — `sickle` в
   список, если он есть (`tasks/task-rules.ts`).
 
 ## Как сейчас
@@ -115,6 +118,9 @@ batch: 6
 2. **`weapons/boomerang.ts`**, поле `range`, реестр.
 3. **Облик и звук.**
 4. **Данные** — Серп, «Жатва», открытие, тексты, значок.
+   Кадры снаряда готовы (31.10.2026, пак `atlas-r157`): `fx/proj_sickle0…1` и у «Жатвы» `fx/proj_harvest0…1` — два кадра поворота. Пак
+   движок подключает строкой `art-r157` в `ATLASES`, если её ещё нет
+   (`render/art-atlas.ts`).
 5. **Эталоны** — обновить, `pnpm balance:sim` до и после.
 6. **Документы:**
    - `CLAUDE.md` — строка `boomerang` в таблице поведений;

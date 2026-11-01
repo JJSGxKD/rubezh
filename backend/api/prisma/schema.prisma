@@ -228,6 +228,7 @@ model Account {
   changelogSeen    ChangelogSeen?
   wheelSpins       WheelSpin[]
   taskProgress     TaskProgress[]
+  taskPointsClaims TaskPointsClaim[]
   taskParticipants TaskParticipant[]
   restrictions     AccountRestriction[]
   taskRuns         TaskRun[]
@@ -1684,6 +1685,22 @@ model TaskProgress {
   @@map("task_progress")
 }
 
+/// Забранная ступень очков заданий (docs/39-retention-mechanics.md П2, Р102,
+/// T-0105): срок — начало суток или недели по Москве, порог — очки ступени.
+/// Ключ не даёт забрать ступень дважды и ступень прошлого срока
+model TaskPointsClaim {
+  accountId   String     @map("account_id") @db.Uuid
+  period      TaskPeriod
+  periodStart DateTime   @map("period_start") @db.Date
+  points      Int
+  claimedAt   DateTime   @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, period, periodStart, points])
+  @@map("task_points_claim")
+}
+
 /// Забег, засчитанный заданиям: повтор события прогресс не удвоит.
 model TaskRun {
   runId     String   @id @map("run_id") @db.VarChar(64)
@@ -2362,8 +2379,10 @@ model SeasonResult {
   difficulty Difficulty
   bestSec    Float      @map("best_sec")
   place      Int
-  /// сколько игроков было в таблице сложности
+  /// сколько игроков было в таблице сложности — своей доски аккаунта
   boardSize  Int        @map("board_size")
+  /// доска аккаунта на момент закрытия: `common` — общая, без аккаунтов с отдельной доской; `full` — полная (T-0114, Р104)
+  board      String     @default("common") @db.VarChar(8)
 
   season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
