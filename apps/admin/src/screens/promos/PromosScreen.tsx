@@ -3,7 +3,7 @@ import type { ApiError } from "../../api/client";
 import { CANCELLABLE, PROMO_STATE_TITLES, PROMO_TITLE_MAX, cancelPromo, createPromo, draftProblem, emptyDraft, fetchPromos, promoPrice, type Promo, type PromoDraft } from "../../api/shop-promos";
 import { formatDateTime } from "../../format";
 import { api } from "../../services";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
 
@@ -57,7 +57,7 @@ export function PromosScreen() {
     <div className="flex flex-col gap-4">
       <Panel title="Новая акция" help={HELP.promos.promos}>
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="Товар">
               <Select value={input.sku} onChange={(event) => set({ sku: event.target.value })}>
                 {skus.map((candidate) => (
@@ -76,7 +76,7 @@ export function PromosScreen() {
             <Field label="Дней" help={HELP.promos.days} hint={`до ${String(limits.maxDays)}`}>
               <Input type="number" min={1} max={limits.maxDays} step={1} value={String(input.days)} onChange={(event) => set({ days: Number(event.target.value) })} className="w-20" />
             </Field>
-          </div>
+          </FieldRow>
           <Field label={`Подпись баннера — ${String(input.title.trim().length)} из ${String(PROMO_TITLE_MAX)}`} help={HELP.promos.title}>
             <Input value={input.title} onChange={(event) => set({ title: event.target.value })} maxLength={PROMO_TITLE_MAX + 10} placeholder="Неделя самоцветов" className="w-full max-w-md" />
           </Field>
@@ -86,11 +86,10 @@ export function PromosScreen() {
             </Notice>
           )}
           <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               Завести
             </Button>
           </div>
-          {problem === null ? null : <Notice tone="info">{problem}</Notice>}
         </form>
         {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
       </Panel>

@@ -17,7 +17,7 @@ import { fetchRestrictionCatalog } from "../../api/restrictions";
 import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Panel, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
@@ -202,12 +202,11 @@ export function PlayerList() {
               <option value="asc">сначала ранние и младшие</option>
             </Select>
           </Field>
-          <Button tone="primary" type="submit" disabled={problem !== null}>
+          <Button tone="primary" type="submit" disabled={problem !== null} blockedBy={problem}>
             Показать
           </Button>
           <Button onClick={() => setDraft(EMPTY_FILTERS)}>Сбросить</Button>
         </div>
-        {problem === null ? null : <Notice tone="info">{problem}</Notice>}
       </form>
 
       {listed.status === "loading" ? <Loading /> : null}

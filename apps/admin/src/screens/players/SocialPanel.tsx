@@ -5,7 +5,7 @@ import { fetchSocial, REFERRAL_STATUSES, rejectReferral } from "../../api/player
 import { formatDateTime } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
-import { Button, ErrorNotice, Field, Input, KeyValue, Loading, Notice, Panel } from "../../ui/kit";
+import { Button, ErrorNotice, Field, FieldRow, Input, KeyValue, Loading, Notice, Panel, RowItem } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
 
@@ -74,23 +74,25 @@ export function SocialPanel({ accountId }: { accountId: string }) {
             ]}
           />
           {state.data.referredBy?.status === "bound" && can(view, "players.ban") ? (
-            <div className="flex flex-wrap items-end gap-2">
+            <FieldRow>
               <Field label="Причина отклонения" hint="Попадёт в аудит вместе с прежним статусом.">
                 <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={256} className="w-80 max-w-full" />
               </Field>
-              {confirming ? (
-                <>
-                  <Button tone="danger" onClick={() => void reject()}>
-                    Да, отклонить
+              <RowItem>
+                {confirming ? (
+                  <>
+                    <Button tone="danger" onClick={() => void reject()}>
+                      Да, отклонить
+                    </Button>
+                    <Button onClick={() => setConfirming(false)}>Отмена</Button>
+                  </>
+                ) : (
+                  <Button tone="danger" disabled={reason.trim().length < 3} onClick={() => setConfirming(true)}>
+                    Отклонить привязку
                   </Button>
-                  <Button onClick={() => setConfirming(false)}>Отмена</Button>
-                </>
-              ) : (
-                <Button tone="danger" disabled={reason.trim().length < 3} onClick={() => setConfirming(true)}>
-                  Отклонить привязку
-                </Button>
-              )}
-            </div>
+                )}
+              </RowItem>
+            </FieldRow>
           ) : null}
           {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
         </div>

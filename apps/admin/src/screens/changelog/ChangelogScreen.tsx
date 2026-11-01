@@ -139,14 +139,12 @@ export function ChangelogScreen() {
             <TextArea value={input.text} onChange={(event) => setInput({ ...input, text: event.target.value })} rows={3} maxLength={TEXT_MAX + 50} className="w-full max-w-2xl" />
           </Field>
           {lockedByPublication ? <Notice tone="info">Строка уже у игроков: меняются только текст и вид.</Notice> : null}
-          <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               {original === null ? "Добавить черновиком" : "Сохранить"}
             </Button>
             {original === null ? null : <Button onClick={reset}>Отмена</Button>}
           </div>
-          {/* После добавления поле текста пустое, а версия остаётся для следующей строки: подсказка — когда начали писать. */}
-          {problem !== null && input.text.trim() !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Версия так, как её увидит игрок в «Что нового»: та же карточка в странице клиента (Р83). */}
           <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
