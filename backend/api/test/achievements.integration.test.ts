@@ -135,6 +135,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       INSERT INTO task_progress (account_id, task_id, period_start, value, target, completed_at, updated_at)
       SELECT ${accountId}::uuid, d.task_id, DATE '2000-01-01', d.target, d.target, ${NOON}, ${NOON}
       FROM task_def d WHERE d.task_id = ANY(${taskIds}::text[])
+      ORDER BY d.sort, d.task_id
       ON CONFLICT (account_id, task_id, period_start) DO NOTHING`;
   }
 
@@ -331,7 +332,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       expect(JSON.stringify(before)).not.toContain("Марафонец");
       expect(JSON.stringify(before)).not.toContain("Продержаться очень");
 
-      await tasks.onRun(recorded(me.accountId, { survivalSec: 1900 }));
+      // на «Лёгкой» — цель «Выстоявшего» на «Сложной» этим забегом не открывается
+      await tasks.onRun(recorded(me.accountId, { survivalSec: 1900, difficulty: "easy" }));
       const after = await tasks.view(me, NOON);
       expect(after.find((task) => task.id === "ach_hidden_marathon")).toMatchObject({ title: "Марафонец", done: true, hidden: true, achievementCategory: "mastery", prestige: 40 });
       // других скрытых это не открыло

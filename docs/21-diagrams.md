@@ -2068,6 +2068,7 @@ flowchart LR
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, перебор прокси по режиму<br/>сервиса, запись о каждой попытке<br/>в приёмник, реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
+        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2276,6 +2277,12 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    CADDY -- "/api/v1/achievements" --> ACHIEV
+    ACHIEV -- "achievement_rarity, achievement_favorite; престиж из task_progress" --> PG
+    ACHIEV -- "achievements:rarity:lock, лок пересчёта" --> REDIS
+    ACHIEV -. "определения, прогресс «максимум» для друзей и уровня" .-> TASKS
+    ACHIEV -. "сколько друзей" .-> FRIENDS
+    ACHIEV -. "уровень аккаунта" .-> PROG
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
