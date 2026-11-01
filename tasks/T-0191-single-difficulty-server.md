@@ -3,8 +3,8 @@ id: T-0191
 title: Одна сложность на сервере — рейтинг с чистого листа
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0107, T-0112, T-0113, T-0114, T-0125]
