@@ -78,7 +78,9 @@ describe("клиент сезона: overview", () => {
   });
 
   it("ответ старого сервера без history и pending — пустые списки", async () => {
-    const { history: _history, pending: _pending, ...old } = FULL;
+    const old: Record<string, unknown> = { ...FULL };
+    delete old["history"];
+    delete old["pending"];
     const response = await createSeasonsApi(server([], old)).overview();
 
     expect(response.ok).toBe(true);
