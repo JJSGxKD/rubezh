@@ -23,6 +23,9 @@ shared:
   - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/src/game/sim/continue.ts
   - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/content/snapshot-schema.ts
   - packages/core-game/test/secrets.test.ts
   - packages/core-game/test/secrets-content.test.ts
   - CLAUDE.md
