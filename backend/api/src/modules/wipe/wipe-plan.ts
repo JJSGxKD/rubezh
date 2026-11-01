@@ -101,6 +101,9 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FxSourceState: keep("состояние источников курсов"),
   FxSourceLimit: keep("лимиты источников курсов задаёт команда в панели"),
 
+  // --- остаются: общие числа по всем игрокам ---
+  AchievementRarity: keep("редкость достижений — общие числа по всем игрокам, не данные одного; ближайший пересчёт обновит их после вайпа (T-0106)"),
+
   // --- остаются: журнал запросов сервера ---
   NameRule: keep("правила фильтра имён — настройка команды, не данные игрока"),
   NameRuleHitDay: keep("счётчики срабатываний правил имён"),
@@ -118,6 +121,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   Run: wipe("забеги и рейтинги стираются (Р87); ссылку покупки на забег обнуляет T-0041"),
   TaskProgress: wipe("прогресс заданий начинается заново"),
   TaskPointsClaim: wipe("забранные ступени очков заданий (T-0105) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, отметки не оставляем"),
+  AchievementFavorite: wipe("любимые достижения ссылаются на выполненное, а прогресс заданий после вайпа начинается заново (T-0106)"),
   ShowcaseOffer: wipe("предложения витрины ссылаются на предметы"),
   ItemEvent: wipe("журнал предметов"),
   Item: wipe("снаряжение стирается"),
@@ -144,6 +148,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "Run",
   "TaskProgress",
   "TaskPointsClaim",
+  "AchievementFavorite",
   "ShowcaseOffer",
   "ItemEvent",
   "Item",

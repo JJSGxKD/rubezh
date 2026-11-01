@@ -99,7 +99,8 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
 
     const bySource: Partial<Record<SourceKind, number>> = {};
     for (const row of accountsSchema.parse(accounts)) {
-      const kind = SOURCES.find((source) => source === row.kind) ?? "unknown";
+      // Прямая ссылка и ссылка с метками — тоже переход по нашей ссылке; разрез по ним — в разделе «Ссылки».
+      const kind = row.kind === "link" || row.kind === "tagged" ? "click" : (SOURCES.find((source) => source === row.kind) ?? "unknown");
       bySource[kind] = (bySource[kind] ?? 0) + row.n;
     }
     const [act] = activeSchema.parse(active);

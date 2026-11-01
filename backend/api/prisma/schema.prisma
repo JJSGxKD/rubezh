@@ -203,6 +203,8 @@ model Account {
   // Недельные сезоны рейтинга (T-0110)
   seasonResults SeasonResult[]
   seasonRewards SeasonReward[]
+  // Любимые достижения (T-0106)
+  achFavorites  AchievementFavorite[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -1598,15 +1600,30 @@ model TaskDef {
   /// `RUN_FILTER_KEYS`); отдельно от `params`, чтобы партнёрскую цель по-прежнему
   /// отличал именно он
   filter          Json?
+  /// категория достижения (docs/39-retention-mechanics.md К1, T-0106): combat,
+  /// collection, mastery или friends; только у достижений (`CHECK` в миграции)
+  category        String?    @db.VarChar(16)
+  /// лестница достижений: строки с общим `ladder` и номером `rung` с единицы;
+  /// каждая ступень считает с нуля. Одно поле без другого `CHECK` не пропустит
+  ladder          String?    @db.VarChar(32)
+  rung            Int?       @db.SmallInt
+  /// скрытое, пока не выполнено: сервер до выполнения не отдаёт ни название,
+  /// ни вид, ни цель, ни награду — только подсказку `hint`
+  hidden          Boolean    @default(false)
+  hint            String?    @db.VarChar(120)
+  /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
+  prestige        Int        @default(0)
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
   /// `null` — строка из миграции, человек её не правил
   updatedBy       String?    @map("updated_by") @db.Uuid
 
-  image        MediaImage?       @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
+  image        MediaImage?           @relation(fields: [imageId], references: [imageId], onDelete: Restrict)
   progress     TaskProgress[]
   participants TaskParticipant[]
+  rarity       AchievementRarity?
+  favorites    AchievementFavorite[]
 
   @@map("task_def")
 }
@@ -2576,4 +2593,40 @@ model NameRuleCandidate {
   @@unique([kind, token])
   @@index([players])
   @@map("name_rule_candidate")
+}
+
+// Достижения с престижем (docs/39-retention-mechanics.md К1, T-0106).
+// Определения остаются в `task_def` с периодом `achievement`; здесь — редкость
+// «есть у N%» и три любимых достижения игрока.
+
+/// Редкость достижения: сколько игроков из населения выполнили его. Население —
+/// игроки хотя бы с одним записанным забегом. Таблицу целиком заменяет фоновая
+/// задача под локом Redis (`achievements/achievement-rarity.job.ts`); общая для
+/// всех, вайп её не очищает. Процент считает чтение, и только от порога населения
+/// (настройка `achievements.rarity-min-players`)
+model AchievementRarity {
+  taskId     String   @id @map("task_id") @db.VarChar(48)
+  holders    Int
+  population Int
+  computedAt DateTime @map("computed_at") @db.Timestamptz(3)
+
+  task TaskDef @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+
+  @@map("achievement_rarity")
+}
+
+/// Любимое достижение игрока: до трёх слотов, достижение — выполненное им,
+/// чужое в слот не ставится (проверка в сервисе под блокировкой аккаунта). Слот
+/// 1…3 — порядок показа в профиле (`CHECK` в миграции)
+model AchievementFavorite {
+  accountId String @map("account_id") @db.Uuid
+  slot      Int    @db.SmallInt
+  taskId    String @map("task_id") @db.VarChar(48)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId], onDelete: Restrict)
+
+  @@id([accountId, slot])
+  @@unique([accountId, taskId])
+  @@map("achievement_favorite")
 }

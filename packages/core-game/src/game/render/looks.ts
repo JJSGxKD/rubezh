@@ -1,4 +1,4 @@
-import type { EnemyPattern } from "@bh/shared-types";
+import type { EnemyPattern, SecretKind } from "@bh/shared-types";
 
 /**
  * Как выглядит мир забега: формы и цвета врагов, кристаллов, подборов и
@@ -188,6 +188,28 @@ export const PICKUP_LOOKS: readonly (ShapeLook & {
   // магнита, а от того заморозка отличается силуэтом — лучами, а не подковой.
   { id: "freeze", key: "bh-freeze-pickup", shape: "freeze", color: 0xa9c8ff, size: 1.25 },
 ];
+
+/** Знак вида тайника внутри круга: столб, ромб, ёлочка, трещина, треугольник, точка с хвостом. */
+export type SecretSign = "pillar" | "diamond" | "fir" | "crack" | "triangle" | "tail";
+
+/**
+ * Облик тайников рубежа (docs/35-stage4-plan.md, Р153; design/art/meta-v2.md
+ * §5.3): тайник темнее героя, без красного врага и без жёлтого опыта.
+ * `dark` — в покое, `color` — действующий: бирюза оберегов или фиолет Нави.
+ * Вид читается и знаком внутри круга, а не только тоном: тона у видов
+ * близки, а различать их приходится на бегу.
+ */
+export const SECRET_LOOKS: Record<SecretKind, { sign: SecretSign; color: number; dark: number }> = {
+  shrine: { sign: "pillar", color: 0x46d9c6, dark: 0x23635f },
+  hoard: { sign: "diamond", color: 0x4aa8ff, dark: 0x243c66 },
+  tree: { sign: "fir", color: 0x3fc7a0, dark: 0x1f5a4a },
+  rift: { sign: "crack", color: 0x7f5cff, dark: 0x352668 },
+  stone: { sign: "triangle", color: 0x6f86ff, dark: 0x2c3470 },
+  wisp: { sign: "tail", color: 0x5fd0c0, dark: 0x2a5b60 },
+};
+
+/** Радиус круга тайника на земле, игровые единицы; круг стояния рисуется отдельно — по радиусу вида из контента. */
+export const SECRET_BODY_RADIUS_UNITS = 24;
 
 /**
  * Остальная палитра мира: персонаж, снаряды, взрывы и земля.

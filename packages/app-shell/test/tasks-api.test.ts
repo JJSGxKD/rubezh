@@ -2,6 +2,7 @@ import ru from "../src/i18n/ru.json";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
+import { taskHint, taskTitle } from "../src/screens/meta/task-row";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
   NETWORK_TASK_CHECKS_MS,
@@ -21,6 +22,7 @@ import {
   sortTasks,
   tabOf,
   taskLink,
+  type TaskItem,
 } from "../src/state/tasks-api";
 
 // Клиент заданий (docs/35-stage4-plan.md WP13): цели с прогрессом — GET,
@@ -353,5 +355,60 @@ describe("очки заданий в клиенте", () => {
     expect(words["tasks.claim"]).toBe("Забрать");
     expect(words["tasks.claimed"]).toBe("Получено");
     expect(words["tasks.got"]).toContain("{what}");
+  });
+});
+
+// Название достижения (tasks/T-0106): название лежит в каталоге, а не в словаре
+// клиента, поэтому строка берёт заголовок каталога, потом словарь, потом id.
+
+describe("название достижения в строке задания", () => {
+  /** Строка, как её разобрал клиент: срок и поля — в типах, а не строками. */
+  function row(patch: Partial<TaskItem> = {}): TaskItem {
+    return { id: "daily_runs", period: "daily", kind: "runs", title: null, target: 3, value: 3, done: true, claimed: false, reward: { coins: 120, gems: 0, shards: 0 }, passPoints: 0, ...patch };
+  }
+  const achievement = (patch: Partial<TaskItem> = {}) => row({ id: "ach_kills_1k", period: "achievement", kind: "kills", target: 1000, value: 10, done: false, ...patch });
+
+  it("заголовок каталога — первым, и в словаре его искать не нужно", () => {
+    expect(taskTitle(achievement({ title: "Тысячник" }))).toBe("Тысячник");
+    // даже у достижения, которое есть в словаре: название из каталога правится из панели без релиза
+    expect(taskTitle(achievement({ id: "ach_survive_5", kind: "best_survival_sec", title: "Держи рубеж!" }))).toBe("Держи рубеж!");
+  });
+
+  it("заголовка нет, а достижение есть в словаре — имя из словаря", () => {
+    expect(taskTitle(achievement({ id: "ach_survive_5", kind: "best_survival_sec", target: 300 }))).toBe("Держи рубеж");
+    expect(taskTitle(achievement({ id: "ach_level_40", kind: "run_level", target: 40 }))).toBe("Мастер забега");
+  });
+
+  it("ни заголовка, ни словаря — id достижения, а не пустая строка", () => {
+    expect(taskTitle(achievement())).toBe("ach_kills_1k");
+  });
+
+  it("задание не достижение: заголовок каталога или текст цели по виду — как раньше", () => {
+    expect(taskTitle(row({ title: "Свой текст" }))).toBe("Свой текст");
+    expect(taskTitle(row())).toContain("забег");
+    // id ежедневного в словаре достижений не ищется
+    expect(taskTitle(row({ id: "ach_survive_5" }))).toContain("забег");
+  });
+
+  it("партнёрская цель с периодом «достижение» остаётся с текстом цели по виду", () => {
+    expect(taskTitle(row({ id: "ach_site", period: "achievement", category: "partner", kind: "link" }))).toBe("Перейди по ссылке партнёра");
+  });
+
+  it("под названием достижения — цель словами, потому что название её не объясняет", () => {
+    expect(taskHint(achievement({ title: "Тысячник" }))).toContain("врагов");
+    expect(taskHint(achievement({ id: "ach_survive_5", kind: "best_survival_sec", target: 300 }))).toContain("в одном забеге");
+    // без названия стоит id, и цель тем более нужна
+    expect(taskHint(achievement())).toContain("врагов");
+  });
+
+  it("цель «друзья» и «уровень аккаунта» читается словами, а не голым числом", () => {
+    expect(taskHint(achievement({ id: "ach_friends_5", kind: "friends", target: 5 }))).toBe("Подружись с 5 игроками");
+    expect(taskHint(achievement({ id: "ach_friends_1", kind: "friends", target: 1 }))).toBe("Подружись с 1 игроком");
+    expect(taskHint(achievement({ id: "ach_account_10", kind: "account_level", target: 10 }))).toBe("Дорасти до уровня аккаунта 10");
+  });
+
+  it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {
+    expect(taskHint(row())).toBeNull();
+    expect(taskHint(row({ category: "partner", kind: "channel" }))).toContain("Награда каждый день");
   });
 });

@@ -73,3 +73,36 @@ export const BALANCE_TARGETS = {
  * границы эволюции не за что хотеть, выше верхней — она ломает таймлайн.
  */
 export const EVOLUTION_POWER_RATIO = { min: 1.8, max: 3.5 } as const;
+
+/**
+ * Сборка набора (T-0193, Р127): когда бессмертный бот на «Сложной» доводит
+ * все слоты до максимума. Коридор **относительный**, а не в секундах: бот не
+ * человек, он собирает набор за 1000–2500 с, а живой игрок — за ≈ 8 минут, и
+ * секунды бота с минутами человека не сравниваются. Цель Р127 — «набор
+ * собирается с 8-й до 15-й минуты», то есть примерно вдвое позже: у того же
+ * бота это ×1,6…×2,3 к замеру до правок.
+ *
+ * Лежит отдельно от `BALANCE_TARGETS`: это ориентир прогона `pnpm balance:sim`,
+ * а не часть контента, которую правит редактор баланса и которая уезжает в
+ * снимок.
+ */
+export const BUILD_COMPLETE_TARGETS = {
+  /**
+   * Медиана секунды сборки до правок T-0193: бессмертный бот («dodging», `godMode`),
+   * «Сложная», оружие «Искра», 20 seed, контент dev от 01.11.2026 (слоты 3/2/1/1,
+   * навыки по 4–5 уровней, кривая 1,22). Собрали все двадцать: p10 601 с, p90 1058 с.
+   */
+  buildCompleteBaselineSec: 685.5,
+  /** во сколько раз позже базы собирается набор после правок */
+  buildCompleteRatio: { min: 1.6, max: 2.3 },
+  /** не менее такой доли seed обязана собрать набор до `max × buildCompleteHorizon` секунд */
+  buildCompleteShareMin: 0.6,
+  /** запас потолка прогона к верхней границе коридора */
+  buildCompleteHorizon: 1.15,
+} as const;
+
+/** Границы коридора сборки в секундах: база × доли из `BUILD_COMPLETE_TARGETS`. */
+export function buildCompleteCorridorSec(): { min: number; max: number } {
+  const { buildCompleteBaselineSec, buildCompleteRatio } = BUILD_COMPLETE_TARGETS;
+  return { min: buildCompleteBaselineSec * buildCompleteRatio.min, max: buildCompleteBaselineSec * buildCompleteRatio.max };
+}

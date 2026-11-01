@@ -12,6 +12,7 @@ import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
+import { SecretsRenderer } from "./secrets-look";
 import { projectileLook, type ProjectileLook } from "./projectile-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
@@ -99,6 +100,7 @@ export class WorldRenderer {
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly pickups: PickupRenderer;
+  private readonly secrets: SecretsRenderer;
   private readonly telegraphs: Telegraphs;
   /** граница «Очага» и молнии «Грозы» */
   private readonly weaponEffects: WeaponEffects;
@@ -175,6 +177,9 @@ export class WorldRenderer {
     this.telegraphs = new Telegraphs(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
+    // Тайники — на земле, под героем, врагами и подборами; порядок в режиме арта выставляет `applyArtMode`.
+    this.secrets = new SecretsRenderer(scene, world, this.layer);
+    this.secrets.place(this.layer, false);
     this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
@@ -222,6 +227,7 @@ export class WorldRenderer {
    */
   sync(alpha: number): void {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+    this.secrets.sync();
     this.syncEnemies(t);
     this.syncProjectiles(t);
     this.pickups.sync(t);
@@ -283,6 +289,7 @@ export class WorldRenderer {
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
       this.pickups.setArt(this.art.pickupArt());
+      this.secrets.setArt(this.art.secretArt(), this.art.scale);
       this.feedback.setDeathArt(this.art.deathArt());
       // Спрайты крупнее фигур, и толпа поверх героя прятала его целиком: в
       // режиме арта враги под героем, без него — прежний порядок.
@@ -296,6 +303,8 @@ export class WorldRenderer {
       this.artGround?.setVisible(this.art.on);
       // Знак под ногами — на земле: сразу над землёй и декором, под всеми, кто по ней ходит.
       if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
+      // Тайники — следом за землёй, декором и знаком под ногами; без арта — в самом низу слоя.
+      this.secrets.place(this.layer, this.art.on);
       this.ground.setVisible(!this.art.on);
     });
   }

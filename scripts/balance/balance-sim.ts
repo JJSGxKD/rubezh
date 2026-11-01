@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
-import { BALANCE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
+import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec } from "../../packages/core-game/src/content/balance-targets";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { ENEMY_STAGES } from "../../packages/core-game/src/content/stages";
 import { ENDLESS_CURVE } from "../../packages/core-game/src/content/waves";
@@ -59,6 +59,10 @@ const PRESSURE_SEEDS = 10;
 const PRESSURE_MAX_SEC = 1020;
 const PRESSURE_WINDOW_MIN = 3;
 
+/** Сборка набора: seed и оружие. Прогон до сборки, потолок — из коридора. */
+const BUILD_SEEDS = 10;
+const BUILD_WEAPON_ID = "spark";
+
 it("свод калибровки баланса", () => {
   const scenarios = buildScenarios();
   const rows: string[] = [];
@@ -94,6 +98,8 @@ it("свод калибровки баланса", () => {
   rows.push(...corridorLines(byScenario));
   rows.push("");
   rows.push(...pressureLines());
+  rows.push("");
+  rows.push(...buildLines());
   rows.push("");
   rows.push(...levelLines());
 
@@ -256,6 +262,65 @@ function pressureLines(): string[] {
       `| ${from}–${to} | ${fixed(quantile(damages, 0.5))} | ${fixed(quantile(damages, 0.9))} | ${fixed(strengthAt(((from + to) / 2) * 60))} |`,
     );
   }
+  return lines;
+}
+
+/**
+ * Сборка набора (Р127, tasks/T-0193): бессмертный уклоняющийся бот на «Сложной»
+ * идёт, пока все слоты не заняты и не доведены до максимума. Коридор
+ * относительный — во сколько раз позже, чем у того же бота до правок: секунды
+ * бота с минутами человека не сравниваются (`BUILD_COMPLETE_TARGETS`).
+ */
+function buildLines(): string[] {
+  const targets = BUILD_COMPLETE_TARGETS;
+  const corridor = buildCompleteCorridorSec();
+  const maxSec = Math.ceil(corridor.max * targets.buildCompleteHorizon);
+  const runs: BalanceRunResult[] = [];
+  for (let seed = 1; seed <= BUILD_SEEDS; seed++) {
+    runs.push(
+      simulateBalanceRun({
+        seed,
+        skill: "dodging",
+        startingWeaponId: BUILD_WEAPON_ID,
+        difficultyId: BASE_DIFFICULTY_ID,
+        godMode: true,
+        stopOnBuild: true,
+        maxSec,
+      }),
+    );
+  }
+  const summary = summarizeRuns(runs);
+  const built = runs.filter((run) => run.buildCompleteSec > 0).sort((a, b) => a.buildCompleteSec - b.buildCompleteSec);
+  const times = built.map((run) => run.buildCompleteSec);
+  const picks = built.map((run) => run.buildPicks).sort((a, b) => a - b);
+
+  const lines = [
+    "## Сборка набора (Р127)",
+    "",
+    `Бессмертный уклоняющийся бот, «${BASE_DIFFICULTY_ID}», «${BUILD_WEAPON_ID}», ${BUILD_SEEDS} seed, до ${maxSec} с. ` +
+      `База до правок — ${fixed(targets.buildCompleteBaselineSec)} с, коридор ×${targets.buildCompleteRatio.min}–×${targets.buildCompleteRatio.max} = ` +
+      `${fixed(corridor.min)}–${fixed(corridor.max)} с.`,
+    "",
+    "| медиана, с | p10 | p90 | собрали | выборов до сборки (медиана) | во сколько раз позже базы |",
+    "|---|---|---|---|---|---|",
+    `| ${fixed(summary.medianBuildCompleteSec)} | ${fixed(quantile(times, 0.1))} | ${fixed(quantile(times, 0.9))} | ` +
+      `${percent(summary.buildCompleteRatio)} | ${quantile(picks, 0.5)} | ×${(summary.medianBuildCompleteSec / targets.buildCompleteBaselineSec).toFixed(2)} |`,
+    "",
+  ];
+  lines.push(
+    verdict(
+      `медиана сборки в ${fixed(corridor.min)}–${fixed(corridor.max)} с`,
+      summary.medianBuildCompleteSec >= corridor.min && summary.medianBuildCompleteSec <= corridor.max,
+      `${fixed(summary.medianBuildCompleteSec)} с`,
+    ),
+  );
+  lines.push(
+    verdict(
+      `набор собрали не менее ${percent(targets.buildCompleteShareMin)} seed`,
+      summary.buildCompleteRatio >= targets.buildCompleteShareMin,
+      percent(summary.buildCompleteRatio),
+    ),
+  );
   return lines;
 }
 

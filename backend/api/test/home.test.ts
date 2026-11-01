@@ -48,6 +48,11 @@ function task(patch: Partial<TaskView> = {}): TaskView {
     image: null,
     tier: null,
     filter: null,
+    achievementCategory: null,
+    ladder: null,
+    rung: null,
+    prestige: 0,
+    hidden: false,
     ...patch,
   };
 }

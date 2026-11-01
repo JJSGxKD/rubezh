@@ -1136,6 +1136,24 @@ export interface ChestsDef {
   xpRatio: number;
   /** сундуков на поле одновременно; 0 — сундуков нет */
   maxOnField: number;
+  /**
+   * Поздние сундуки скромнее: с секунды `afterSec` забега размер бросается по
+   * этой таблице, а не по `sizes`. Растянутая прокачка (Р129) держится на том,
+   * что набор не доукомплектовывается сундуками за десятой минутой: пятерной
+   * сундук с позднего босса одним касанием закрывал бы несколько уровней
+   * навыков. Схема `opening` приоритетнее и действует, как раньше.
+   */
+  late?: ChestsLateDef;
+}
+
+/** Таблица размеров поздних сундуков (`ChestsDef.late`). */
+export interface ChestsLateDef {
+  /** с какой секунды забега сундуки бросаются по `sizes`; больше нуля */
+  afterSec: number;
+  /** вес каждого размера; в среднем скромнее основной таблицы */
+  sizes: readonly { size: ChestSize; weight: number }[];
+  /** сундук с босса в это время не меньше этого размера; значение должно быть среди `sizes` */
+  bossMinSize: ChestSize;
 }
 
 /** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
@@ -1150,7 +1168,7 @@ export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKin
  * открывает остальные тайники на радаре, огонёк летит к ближайшему неоткрытому.
  * Порядок — канонический: в итоге забега и в кодексе виды идут по нему.
  */
-export const SECRET_KINDS = ["shrine", "hoard", "stone", "wisp"] as const;
+export const SECRET_KINDS = ["shrine", "hoard", "stone", "tree", "rift", "wisp"] as const;
 
 export type SecretKind = (typeof SECRET_KINDS)[number];
 
@@ -1208,6 +1226,17 @@ export interface SecretsDef {
   hoard: { radius: number; holdSec: number; chestSize: ChestSize };
   /** камень-указатель: коснуться — все тайники видны на радаре */
   stone: { radius: number };
+  /**
+   * древо-оберег: пока игрок в круге, лечит `healPerSec` долей максимума здоровья в секунду и раз в
+   * `shieldEverySec` секунд даёт щит на одно попадание; не исчезает, отошёл — прекращается
+   */
+  tree: { radius: number; healPerSec: number; shieldEverySec: number };
+  /**
+   * разлом Нави: войти в круг — выходит волна из `elites` элит кольцом `ringRadius` вокруг разлома,
+   * мимо потолка живых; типы элит — те, что таймлайн к этой секунде уже выпускал. Убиты все — сундук
+   * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
+   */
+  rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
   /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
   wisp: { appearSec: number; speed: number };
   /** набор благословений капища */
@@ -1277,6 +1306,16 @@ export interface LevelCurveDef {
   baseXp: number;
   /** во сколько раз дороже следующий уровень */
   growth: number;
+  /**
+   * Другой рост поздних уровней: с уровня `fromLevel` каждый следующий
+   * дороже предыдущего в `late.growth` раз, а не в `growth`. Набор в забеге
+   * растянут до 15-й минуты (Р127): при двух навыках по шесть уровней и
+   * четырёх оружиях по восемь нужно около семидесяти выборов, а геометрия
+   * 1,22 за уровень к 15-й минуте столько уровней не даёт — хвост приходится
+   * подбирать отдельно, и он может быть положе основного участка. Не задан —
+   * весь рост идёт по `growth`.
+   */
+  late?: { fromLevel: number; growth: number };
 }
 
 export type UpgradeOptionKind =

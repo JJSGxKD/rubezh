@@ -8,8 +8,10 @@ import type { AccountUnlockDef, CardToolRules, CardToolUnlockDef } from "@bh/sha
  * категории и урезанные слоты. Остальное растянуто лестницей до 14-го уровня
  * (Р102, docs/39-retention-mechanics.md К3): новое открытие приходит каждые
  * 1–3 уровня, иначе после пятнадцати забегов открывать нечего и цель
- * пропадает. Слоты чувствуются сильнее любого предмета, поэтому приходят на
- * 2-м и 3-м уровнях и доходят до потолка контента (`LOADOUT_LIMITS`). Уровни
+ * пропадает. Слоты чувствуются сильнее любого предмета: третье оружие и
+ * второй слот атаки приходят на 2-м и 3-м уровнях, а слоты растянутого набора
+ * (Р127, T-0193) — на 6-м, 11-м и 14-м уровнях, рядом с «Бронёй», «Жалом» и
+ * «Закалкой», и доходят до потолка контента (`LOADOUT_LIMITS`). Уровни
  * 15–20 пусты нарочно: там встанет оружие поездов, у каждого своя строка.
  * Сила новичка растёт с каждым уровнем, а баланс забега одинаков для всех (Р40).
  *
@@ -30,10 +32,10 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   { level: 2, weapons: ["hearth"], slots: { weapons: 3 } },
   { level: 3, passives: ["reach"], slots: { passives: { attack: 2 } } },
   { level: 4, weapons: ["storm"] },
-  { level: 6, passives: ["ward"] },
+  { level: 6, passives: ["ward"], slots: { passives: { defense: 2 } } },
   { level: 8, passives: ["volley"] },
-  { level: 11, weapons: ["sting"] },
-  { level: 14, passives: ["tempering"] },
+  { level: 11, weapons: ["sting"], slots: { weapons: 4 } },
+  { level: 14, passives: ["tempering"], slots: { passives: { attack: 3 } } },
   // Оружие поезда: уровни 15–20 отданы новому оружию (Р105).
   { level: 16, weapons: ["meteor"] },
 ];
