@@ -4,7 +4,7 @@ title: Тайники рубежа — древо-оберег и разлом �
 epic: E10
 priority: P2
 status: in-progress
-owner: claude-13 / sonnet-5.5 / high
+owner: claude-42 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0258]
