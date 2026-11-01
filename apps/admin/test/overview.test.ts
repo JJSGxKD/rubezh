@@ -107,8 +107,9 @@ describe("сводка: реклама", () => {
 
   it("ответ без рекламы и без выручки разбирается; сервер старее панели — тоже", () => {
     const base = { day: "2026-10-07", from: "2026-10-06T21:00:00.000Z", at: "2026-10-07T12:00:00.000Z", today: DAY, yesterday: DAY, attention: [] };
-    const withoutAds = overviewSchema.parse({ ...base, days: 7, ads: null, series: [{ day: "2026-10-07", newAccounts: 1, active: 1, finishedRuns: 1, stars: null, purchases: null, adsCompleted: 5 }] });
+    const withoutAds = overviewSchema.parse({ ...base, days: 7, ads: null, series: [{ day: "2026-10-07", newAccounts: 1, active: 1, finishedRuns: 1, stars: null, purchases: null, adsCompleted: null }] });
     expect(withoutAds.ads).toBeNull();
+    expect(withoutAds.series[0]?.adsCompleted).toBeNull();
     expect(withoutAds.series[0]?.purchases).toBeNull();
     const old = overviewSchema.parse({ ...base, series: [{ day: "2026-10-07", newAccounts: 1, active: 1, finishedRuns: 1, stars: 3 }] });
     expect(old.days).toBe(1);
