@@ -3,7 +3,7 @@ id: T-0311
 title: Батл-пасс — сервер: месяц по Москве, очки пасса за задания, 30 ступеней в двух лентах, забор награды, VIP-лента и пройденное до покупки VIP
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -17,13 +17,17 @@ shared:
   - backend/api/prisma/migrations/**
   - backend/api/src/app.module.ts
   - backend/api/src/modules/tasks/tasks.service.ts
+  - backend/api/src/modules/tasks/tasks.module.ts
   - backend/api/src/modules/vip/vip.service.ts
   - backend/api/src/modules/wallet/wallet-types.ts
   - backend/api/src/modules/wallet/wallet-limits.ts
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - docs/21-diagrams.md
+  - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
 runner: any
