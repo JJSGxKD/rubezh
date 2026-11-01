@@ -16,12 +16,13 @@ import { findContentProblems } from "../src/game/content-problems";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
-import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS, PATTERN_TRAITS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
 import { MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
+import { findLevelCurveProblems, xpForLevel } from "../src/game/progression/levels";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
@@ -757,5 +758,196 @@ describe("контент сундуков забега", () => {
       );
     }
     expect(findChestsProblems({ ...CHESTS, maxOnField: 0 })).toEqual([]);
+  });
+});
+
+// --- Прокачка до 15-й минуты (T-0193, Р127, Р129) ---------------------------------
+
+/** Прежняя формула кривой повторена умножением: сравнение не зависит от кода под тестом. */
+function legacyXp(level: number): number {
+  let raw = 6;
+  for (let step = 1; step < level; step++) raw *= 1.22;
+  return Math.max(1, Math.ceil(raw));
+}
+
+describe("кривая опыта поздних уровней", () => {
+  it("хвост задан, а основной участок прежний", () => {
+    expect(LEVEL_CURVE.baseXp).toBe(6);
+    expect(LEVEL_CURVE.growth).toBe(1.22);
+    expect(LEVEL_CURVE.late).toBeDefined();
+  });
+
+  it("до late.fromLevel включительно уровень стоит столько же, сколько по прежней формуле", () => {
+    const late = LEVEL_CURVE.late;
+    expect(late).toBeDefined();
+    if (late === undefined) return;
+    for (let level = 1; level <= late.fromLevel; level++) {
+      expect(xpForLevel(LEVEL_CURVE, level), `уровень ${level}`).toBe(legacyXp(level));
+    }
+  });
+
+  it("после fromLevel каждый шаг дороже предыдущего ровно в late.growth раз (до округления)", () => {
+    const late = LEVEL_CURVE.late;
+    if (late === undefined) throw new Error("late не задан");
+    let raw = 6;
+    for (let step = 1; step < late.fromLevel; step++) raw *= 1.22;
+    for (let level = late.fromLevel + 1; level <= 80; level++) {
+      raw *= late.growth;
+      expect(xpForLevel(LEVEL_CURVE, level), `уровень ${level}`).toBe(Math.max(1, Math.ceil(raw)));
+    }
+  });
+
+  it("строго растёт до восьмидесятого уровня и всегда конечна", () => {
+    let previous = 0;
+    for (let level = 1; level <= 80; level++) {
+      const xp = xpForLevel(LEVEL_CURVE, level);
+      expect(Number.isFinite(xp), `уровень ${level}`).toBe(true);
+      expect(xp, `уровень ${level}`).toBeGreaterThan(previous);
+      previous = xp;
+    }
+  });
+
+  it("без late считает по-старому", () => {
+    const plain = { baseXp: 6, growth: 1.22 };
+    for (const level of [1, 2, 10, 30, 60]) expect(xpForLevel(plain, level)).toBe(legacyXp(level));
+  });
+
+  it("боевая кривая проходит проверку без замечаний", () => {
+    expect(findLevelCurveProblems(LEVEL_CURVE)).toEqual([]);
+  });
+
+  it("ловит late.growth не больше единицы, дробный fromLevel и fromLevel меньше десяти", () => {
+    const late = { fromLevel: 25, growth: 1.12 };
+    expect(findLevelCurveProblems({ ...LEVEL_CURVE, late: { ...late, growth: 1 } }).join("\n")).toContain("late.growth");
+    expect(findLevelCurveProblems({ ...LEVEL_CURVE, late: { ...late, growth: 0.9 } }).join("\n")).toContain("late.growth");
+    expect(findLevelCurveProblems({ ...LEVEL_CURVE, late: { ...late, fromLevel: 25.5 } }).join("\n")).toContain("late.fromLevel");
+    expect(findLevelCurveProblems({ ...LEVEL_CURVE, late: { ...late, fromLevel: 9 } }).join("\n")).toContain("late.fromLevel");
+  });
+
+  it("хвост может быть положе основного участка", () => {
+    expect(findLevelCurveProblems({ baseXp: 6, growth: 1.22, late: { fromLevel: 25, growth: 1.05 } })).toEqual([]);
+  });
+
+  it("ловит growth не больше единицы", () => {
+    expect(findLevelCurveProblems({ baseXp: 6, growth: 1 }).join("\n")).toContain("growth");
+    expect(findLevelCurveProblems({ baseXp: 6, growth: 0.8 }).join("\n")).toContain("growth");
+  });
+});
+
+describe("уровни навыков до 15-й минуты", () => {
+  /** Прежние уровни навыков: на них считается «шаг не крупнее» и потолок «на треть». */
+  const LEGACY: Record<string, number[]> = {
+    might: [1.1, 1.2, 1.3, 1.45, 1.6],
+    haste: [0.92, 0.85, 0.79, 0.73, 0.68],
+    reach: [1.1, 1.2, 1.32, 1.45, 1.6],
+    swiftness: [1.08, 1.15, 1.22, 1.3],
+    vitality: [20, 45, 75, 110],
+    mending: [0.4, 0.9, 1.5, 2.2],
+    lodestone: [1.3, 1.7, 2.2, 2.8],
+    ward: [1, 2, 3],
+    tempering: [0.15, 0.3, 0.45, 0.6],
+  };
+  const EPS = 1e-9;
+
+  /** Отступ уровня от нейтрали: прибавка для сложения, расстояние до единицы для множителя. */
+  const gain = (passive: PassiveDef, value: number): number => (passive.op === "add" ? value : Math.abs(value - 1));
+
+  it("у всех, кроме «Залпа», от 6 до 8 уровней; «Залп» без изменений", () => {
+    for (const passive of PASSIVES) {
+      if (passive.id === "volley") {
+        expect(passive.levels, passive.id).toEqual([1, 2]);
+        continue;
+      }
+      expect(passive.levels.length, passive.id).toBeGreaterThanOrEqual(6);
+      expect(passive.levels.length, passive.id).toBeLessThanOrEqual(8);
+    }
+  });
+
+  it("каждый следующий уровень строго лучше предыдущего", () => {
+    for (const passive of PASSIVES) {
+      for (let i = 1; i < passive.levels.length; i++) {
+        expect(gain(passive, passive.levels[i]), `${passive.id}, уровень ${i + 1}`).toBeGreaterThan(gain(passive, passive.levels[i - 1]));
+      }
+    }
+  });
+
+  it("шаг каждого уровня не больше наибольшего прежнего шага", () => {
+    for (const passive of PASSIVES) {
+      const legacy = LEGACY[passive.id];
+      if (legacy === undefined) continue;
+      const neutral = passive.op === "add" ? 0 : 1;
+      const steps = (values: number[]): number[] => values.map((value, i) => Math.abs(value - (i === 0 ? neutral : values[i - 1])));
+      const biggestLegacy = Math.max(...steps(legacy));
+      for (const [i, step] of steps(passive.levels).entries()) {
+        expect(step, `${passive.id}, уровень ${i + 1}`).toBeLessThanOrEqual(biggestLegacy + EPS);
+      }
+    }
+  });
+
+  it("итог последнего уровня не сильнее прежнего больше чем на треть прибавки", () => {
+    for (const passive of PASSIVES) {
+      const legacy = LEGACY[passive.id];
+      if (legacy === undefined) continue;
+      const last = passive.levels[passive.levels.length - 1];
+      const legacyGain = gain(passive, legacy[legacy.length - 1]);
+      expect(gain(passive, last), passive.id).toBeLessThanOrEqual(legacyGain * (4 / 3) + EPS);
+    }
+  });
+
+  it("«Закалка» не доходит до потолка сопротивления игрока 75%", () => {
+    const tempering = PASSIVES.find((passive) => passive.id === "tempering");
+    expect(tempering?.levels.at(-1)).toBeLessThanOrEqual(0.75);
+  });
+});
+
+describe("слоты набора до 15-й минуты", () => {
+  it("потолок: оружие 4, атака 3, защита 2, подвижность 1", () => {
+    expect(LOADOUT_LIMITS).toEqual({ weapons: 4, passives: { attack: 3, defense: 2, mobility: 1 } });
+  });
+
+  it("навыков в каждой категории больше, чем слотов, оружия больше, чем слотов", () => {
+    expect(BASE_WEAPONS.length).toBeGreaterThan(LOADOUT_LIMITS.weapons);
+    for (const category of ["attack", "defense", "mobility"] as const) {
+      const count = PASSIVES.filter((passive) => passive.category === category).length;
+      expect(count, category).toBeGreaterThan(LOADOUT_LIMITS.passives[category]);
+    }
+  });
+
+  it("лестница проходит проверку без замечаний", () => {
+    const baseWeapons = CONTENT_SNAPSHOT.weapons.filter((weapon) => weapon.evolvedFrom === undefined);
+    const passives = new Map(CONTENT_SNAPSHOT.passives.map((passive) => [passive.id, passive.category] as const));
+    expect(
+      findUnlockProblems(CONTENT_SNAPSHOT.accountUnlocks, { weapons: baseWeapons.map((weapon) => weapon.id), passives }, CONTENT_SNAPSHOT.loadoutLimits),
+    ).toEqual([]);
+  });
+
+  it("слоты приходят на 6-м, 11-м и 14-м уровнях, а между ними не меняются", () => {
+    const limits = (level: number) => unlocksAt(ACCOUNT_UNLOCKS, level).limits;
+    expect(limits(5)).toEqual({ weapons: 3, passives: { attack: 2, defense: 1, mobility: 1 } });
+    expect(limits(6)).toEqual({ weapons: 3, passives: { attack: 2, defense: 2, mobility: 1 } });
+    expect(limits(10)).toEqual({ weapons: 3, passives: { attack: 2, defense: 2, mobility: 1 } });
+    expect(limits(11)).toEqual({ weapons: 4, passives: { attack: 2, defense: 2, mobility: 1 } });
+    expect(limits(13)).toEqual({ weapons: 4, passives: { attack: 2, defense: 2, mobility: 1 } });
+    expect(limits(14)).toEqual({ weapons: 4, passives: { attack: 3, defense: 2, mobility: 1 } });
+    const last = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+    expect(limits(last)).toEqual(LOADOUT_LIMITS);
+  });
+});
+
+describe("поздние сундуки скромнее", () => {
+  const mean = (sizes: readonly { size: number; weight: number }[]): number => {
+    const total = sizes.reduce((sum, entry) => sum + entry.weight, 0);
+    return sizes.reduce((sum, entry) => sum + entry.size * entry.weight, 0) / total;
+  };
+
+  it("боевая таблица проходит проверку без замечаний", () => {
+    expect(findChestsProblems(CHESTS)).toEqual([]);
+  });
+
+  it("поздняя таблица задана и в среднем скромнее основной", () => {
+    expect(CHESTS.late).toBeDefined();
+    if (CHESTS.late === undefined) return;
+    expect(mean(CHESTS.late.sizes)).toBeLessThan(mean(CHESTS.sizes));
+    expect(CHESTS.late.afterSec).toBeGreaterThan(0);
   });
 });

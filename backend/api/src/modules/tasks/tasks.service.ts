@@ -32,6 +32,7 @@ import {
   slotsFor,
   taskGroup,
   visibleOn,
+  type AchievementCategory,
   type PoolTier,
   type RunFilter,
   type TaskCategory,
@@ -95,6 +96,18 @@ export interface TaskView {
   tier: PoolTier | null;
   /** оружие, стихия или сложность цели — по ним клиент строит текст */
   filter: RunFilter | null;
+  /**
+   * Категория достижения (бой, коллекция, мастерство, друзья); у заданий — `null`. Не
+   * `category`: так уже названа вкладка игрока.
+   */
+  achievementCategory: AchievementCategory | null;
+  /** лестница достижений и номер ступени с единицы; у остальных — `null` */
+  ladder: string | null;
+  rung: number | null;
+  /** очки престижа за выполненное; у заданий — ноль */
+  prestige: number;
+  /** скрытое достижение — в список попадает уже открытым */
+  hidden: boolean;
 }
 
 export interface TaskCatalogView {
@@ -162,13 +175,14 @@ export class TasksService implements OnModuleInit {
     const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined) throw new TaskNotFoundError();
-    // Партнёрские задания закрыты ограничением (WP44); цели забега — нет.
-    if (!isRunKind(def.kind)) await this.restrictions.ensure(accountId, "partner_tasks", at);
+    // Партнёрские задания закрыты ограничением (WP44); цели забега и состояния игрока — нет.
+    if (isCheckedKind(def.kind)) await this.restrictions.ensure(accountId, "partner_tasks", at);
     // Мест нет, а игрок к цели не переходил — бота спрашивать незачем.
     if (!slotsFor(def.limit, participation.get(taskId) ?? null, at).visible) throw this.limitReached(accountId, taskId);
     let row = progress.find((candidate) => candidate.taskId === taskId);
     if (row === undefined || !row.done) {
-      if (isRunKind(def.kind)) throw new TaskNotDoneError();
+      // Забег и состояние игрока засчитывает сервер сам: нажатием их не выполнить.
+      if (!isCheckedKind(def.kind)) throw new TaskNotDoneError();
       if (OPEN_KINDS.has(def.kind)) throw new TaskNotOpenedError();
       await this.checkJoined(account, def);
       const completed = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
@@ -337,6 +351,25 @@ export class TasksService implements OnModuleInit {
   }
 
   /**
+   * Состояние игрока (число друзей, уровень аккаунта) — прогресс «максимум» без записи
+   * забега. Дельты строит витрина достижений, которая и знает, какие числа прочитаны.
+   */
+  async applyState(accountId: string, deltas: readonly TaskDelta[], at = new Date()): Promise<void> {
+    if (deltas.every((delta) => delta.amount <= 0)) return;
+    await this.db(this.repository.applyState(accountId, deltas, at));
+  }
+
+  /** Включённые достижения с категорией — то, что показывает витрина; из того же кеша, что и цели забега. */
+  async achievementDefs(): Promise<TaskDef[]> {
+    return (await this.active()).filter((def) => def.period === "achievement" && def.category !== null && !isCheckedKind(def.kind));
+  }
+
+  /** Прогресс игрока по включённым целям — достижения лежат в нём с общим днём срока. */
+  async progressRows(accountId: string, at = new Date()): Promise<TaskProgressRow[]> {
+    return await this.db(this.repository.progress(accountId, at));
+  }
+
+  /**
    * Записанный забег двигает цели. Слушатель работает после ответа игроку;
    * повтор события ничего не удваивает — забег засчитывается по `run_id`
    * однажды.
@@ -416,6 +449,8 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
     const place = slotsFor(def.limit, participation.get(def.taskId) ?? null, at);
     if (!place.visible) return [];
     const row = byTask.get(def.taskId);
+    // Закрытое скрытое достижение не показывается вовсе: его название и цель игрок не должен узнать раньше времени.
+    if (def.hidden && !(row?.done ?? false)) return [];
     const slots = place.slots === null ? null : { left: place.slots.left, total: place.slots.total, holdUntil: place.slots.holdUntil?.toISOString() ?? null };
     return {
       id: def.taskId,
@@ -434,6 +469,11 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       image: def.image === null ? null : imagePath(def.image),
       tier: def.tier,
       filter: def.filter,
+      achievementCategory: def.category,
+      ladder: def.ladder,
+      rung: def.rung,
+      prestige: def.prestige,
+      hidden: def.hidden,
     };
   });
 }

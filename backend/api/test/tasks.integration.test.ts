@@ -5,7 +5,7 @@ import { imageIdOf } from "../src/modules/media/image-rules.js";
 import { PrismaMediaRepository } from "../src/modules/media/media.repository.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { POOL_QUOTA, gameDayOf, gameWeekStartOf, pickPool } from "../src/modules/tasks/task-pool.js";
-import { POOL_TIERS, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
+import { NO_ACHIEVEMENT_FIELDS, POOL_TIERS, type TaskParams, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { TaskNotFoundError } from "../src/modules/tasks/tasks-errors.js";
 import { ACHIEVEMENT_PERIOD_START, PrismaTasksRepository, periodStartSql, type TaskDelta } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
@@ -201,6 +201,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       active: true,
       limit: null,
       image: null,
+      ...NO_ACHIEVEMENT_FIELDS,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect(await repository.insert({ ...task, coins: 999 }, actor, NOON)).toBe(false);
@@ -235,6 +236,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       active: true,
       limit: null,
       image: null,
+      ...NO_ACHIEVEMENT_FIELDS,
     };
     expect(await repository.insert(task, actor, NOON)).toBe(true);
     expect((await repository.catalog()).find((candidate) => candidate.taskId === taskId)).toEqual(task);
@@ -310,6 +312,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       active: false,
       limit,
       image: null,
+      ...NO_ACHIEVEMENT_FIELDS,
     };
     expect(await repository.insert(task, await account(), NOON)).toBe(true);
     return task;
@@ -420,6 +423,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
         active: true,
         limit: null,
         image: null,
+        ...NO_ACHIEVEMENT_FIELDS,
       };
     }
 

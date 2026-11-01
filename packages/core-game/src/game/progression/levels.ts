@@ -29,9 +29,34 @@ export function xpForLevel(curve: LevelCurveDef, level: number): number {
   // Умножение в цикле, а не Math.pow: степень по спецификации ECMAScript
   // приближённая и может разойтись между JS-движками, а от порога опыта
   // зависит, на каком тике игрок получит уровень (docs/26-stage2-plan.md, WP4.5).
+  const late = curve.late;
   let raw = curve.baseXp;
-  for (let step = 1; step < level; step++) raw *= curve.growth;
+  for (let step = 1; step < level; step++) {
+    raw *= late !== undefined && step >= late.fromLevel ? late.growth : curve.growth;
+  }
   return Math.max(1, Math.ceil(raw));
+}
+
+/**
+ * Замечания к кривой опыта: пустой список — кривая годится. Хвост `late` может
+ * быть положе основного участка (Р127), но обязан расти: кривая, у которой
+ * следующий уровень не дороже предыдущего, отдала бы уровни даром.
+ */
+export function findLevelCurveProblems(curve: LevelCurveDef): string[] {
+  const problems: string[] = [];
+  if (!(curve.baseXp > 0)) problems.push(`levelCurve.baseXp — больше 0, сейчас ${curve.baseXp}`);
+  if (!(curve.growth > 1)) problems.push(`levelCurve.growth — больше 1, кривая опыта должна расти, сейчас ${curve.growth}`);
+
+  const late = curve.late;
+  if (late !== undefined) {
+    // Раньше десятого уровня хвост съел бы начало, а оно должно оставаться
+    // дешёвым: первый выбор приходит в первые полминуты.
+    if (!Number.isInteger(late.fromLevel) || late.fromLevel < 10) {
+      problems.push(`levelCurve.late.fromLevel — целое от 10, сейчас ${late.fromLevel}`);
+    }
+    if (!(late.growth > 1)) problems.push(`levelCurve.late.growth — больше 1, хвост кривой должен расти, сейчас ${late.growth}`);
+  }
+  return problems;
 }
 
 /**

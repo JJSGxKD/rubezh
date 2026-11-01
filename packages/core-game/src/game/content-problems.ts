@@ -4,7 +4,7 @@ import type { ContentSnapshot } from "../content/snapshot";
 import { findPassiveContentProblems } from "./progression/passives";
 import { findBoostProblems } from "./progression/boosts";
 import { findEvolutionProblems } from "./progression/evolutions";
-import { xpForLevel } from "./progression/levels";
+import { findLevelCurveProblems as findCurveShapeProblems, xpForLevel } from "./progression/levels";
 import { findCardToolProblems, findUnlockProblems } from "./progression/unlocks";
 import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
@@ -31,8 +31,8 @@ export interface ContentProblem {
 /** Первый уровень дороже этого — первая минута без решений, самый дешёвый способ потерять игрока. */
 const MAX_FIRST_LEVEL_XP = 8;
 
-/** Сколько уровней кривой опыта проверяется на строгий рост: дальше игрок за забег не доходит. */
-const CHECKED_LEVELS = 20;
+/** Сколько уровней кривой опыта проверяется на строгий рост: с растянутой прокачкой (Р127) бессмертный бот доходит до шестидесятых. */
+const CHECKED_LEVELS = 80;
 
 /**
  * Все проверки контента одной функцией: ссылки на врагов и оружие, паттерны,
@@ -100,7 +100,8 @@ function findDifficultySetProblems(content: ContentSnapshot): string[] {
 
 function findLevelCurveProblems(content: ContentSnapshot): string[] {
   const curve = content.levelCurve;
-  if (!(curve.baseXp > 0 && curve.growth > 0)) return ["levelCurve: baseXp и growth должны быть больше нуля"];
+  const shape = findCurveShapeProblems(curve);
+  if (shape.length > 0) return shape;
 
   const problems: string[] = [];
   if (xpForLevel(curve, 1) > MAX_FIRST_LEVEL_XP) {

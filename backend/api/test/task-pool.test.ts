@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { POOL_QUOTA, gameDayOf, gameWeekStartOf, inPlay, pickPool } from "../src/modules/tasks/task-pool.js";
-import type { PoolTier, TaskDef } from "../src/modules/tasks/task-rules.js";
+import { NO_ACHIEVEMENT_FIELDS, type PoolTier, type TaskDef } from "../src/modules/tasks/task-rules.js";
 
 /**
  * Ротация заданий (docs/39-retention-mechanics.md П1, T-0104): набор дня и
@@ -26,6 +26,7 @@ function row(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
     active: true,
     limit: null,
     image: null,
+    ...NO_ACHIEVEMENT_FIELDS,
     ...patch,
   };
 }

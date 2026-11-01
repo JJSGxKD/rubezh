@@ -271,7 +271,17 @@ export const EVENT_DICTIONARY = {
   task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id, tier: z.enum(["easy", "medium", "hard"]).optional() }) },
   // Забрал награду за ступень очков заданий (T-0105): `step` — порог ступени.
   task_points_claimed: { version: 1, payload: payload({ period: z.enum(["daily", "weekly"]), step: z.number().int().min(1).max(100_000) }) },
-  achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
+  // Необязательные `category` и `prestige` (T-0106): какие категории закрывают и за какой престиж;
+  // у партнёрской цели их нет. Событие шлёт клиент после забора, смысл прежний.
+  achievement_unlocked: {
+    version: 1,
+    payload: payload({
+      achievement: id,
+      kind: id,
+      category: z.enum(["combat", "collection", "mastery", "friends"]).optional(),
+      prestige: z.number().int().min(0).max(10_000).optional(),
+    }),
+  },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У

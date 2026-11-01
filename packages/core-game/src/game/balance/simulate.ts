@@ -8,6 +8,7 @@ import { stepWorld } from "../sim/step";
 import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
+import { isBuildComplete } from "./build-complete";
 
 /**
  * Прогон забега ботом на боевом контенте — вход калибровки баланса
@@ -44,6 +45,14 @@ export interface BalanceRunOptions {
    * настоящий бот не доживает.
    */
   immortalPlayer?: boolean;
+  /**
+   * Бессмертие движка (`world.cheats.godMode`): урон по игроку не отнимает
+   * здоровья, и бот идёт до `maxSec`, не умирая. Им меряется сборка набора
+   * (T-0193): на «Сложной» обычный бот гибнет раньше, чем соберёт его.
+   */
+  godMode?: boolean;
+  /** прогон кончается, когда набор собран; `buildCompleteSec` — эта секунда */
+  stopOnBuild?: boolean;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
   /**
@@ -73,7 +82,11 @@ export interface BalanceRunResult {
   chestsOpened: number;
   /** сколько слотов оружия к концу забега заняли эволюции */
   evolutions: number;
-  /** забег упёрся в аварийный потолок, а не кончился смертью */
+  /** секунда, на которой набор собран целиком (`isBuildComplete`); 0 — не собран за прогон */
+  buildCompleteSec: number;
+  /** сколько выборов уровня сделано к секунде сборки, а без сборки — за весь прогон */
+  buildPicks: number;
+  /** забег упёрся в аварийный потолок, а не кончился смертью или сборкой набора */
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
   damageTakenByMinute: number[];
@@ -107,6 +120,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
       ? { config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 } } }
       : {}),
   });
+  if (options.godMode === true) world.cheats.godMode = true;
   const director = createTimelineDirector(content.timeline, content.endlessCurve);
   const bot = createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
@@ -114,6 +128,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   const damageTakenByMinute: number[] = [];
   let damageAtMinuteStart = 0;
   let firstLevelUpSec = 0;
+  let buildCompleteSec = 0;
+  let picks = 0;
+  let buildPicks = 0;
   let tick = 0;
   while (tick < maxTicks && world.player.alive) {
     // Выбор делается до шага: пока он не сделан, мир стоит, и цикл крутился бы
@@ -121,12 +138,22 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     if (isAwaitingChoice(world)) {
       if (firstLevelUpSec === 0) firstLevelUpSec = world.stats.elapsedSec;
       chooseUpgrade(world, bot.choose(world.progression.offers));
+      picks++;
       continue;
     }
 
     director.update(world, TICK_SEC);
     stepWorld(world, bot.input(world));
     tick++;
+
+    // Раз в тик, пока набор не собран: слотов немного, а секунда сборки нужна
+    // точная. Сундук тоже улучшает набор, поэтому смотрим после шага, а не
+    // после выбора карточки.
+    if (buildCompleteSec === 0 && isBuildComplete(world)) {
+      buildCompleteSec = world.stats.elapsedSec;
+      buildPicks = picks;
+      if (options.stopOnBuild === true) break;
+    }
 
     // Минута закрывается, когда забег её прошёл целиком: урон считается по
     // границам, а не по таймеру внутри мира.
@@ -150,7 +177,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     chestsFound: world.stats.chestsFound,
     chestsOpened: world.stats.chestsOpened,
     evolutions: world.loadout.weapons.filter((slot) => world.weaponTypes[slot.typeIndex]?.evolvedFrom !== undefined).length,
-    timedOut: world.player.alive,
+    buildCompleteSec,
+    buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
+    timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
   };
 }
@@ -181,6 +210,10 @@ export interface BalanceSummary {
   medianChestsOpened: number;
   /** медиана слотов оружия, занятых эволюциями к концу забега */
   medianEvolutions: number;
+  /** медиана секунды сборки набора по тем прогонам, где он собран; 0 — не собрал никто */
+  medianBuildCompleteSec: number;
+  /** доля прогонов, где набор собран */
+  buildCompleteRatio: number;
   timedOut: number;
 }
 
@@ -191,6 +224,7 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
   const firstLevelUps = results.map((run) => run.firstLevelUpSec).sort((a, b) => a - b);
   const chests = results.map((run) => run.chestsOpened).sort((a, b) => a - b);
   const evolutions = results.map((run) => run.evolutions).sort((a, b) => a - b);
+  const builds = results.filter((run) => run.buildCompleteSec > 0).map((run) => run.buildCompleteSec).sort((a, b) => a - b);
 
   return {
     runs: results.length,
@@ -206,6 +240,8 @@ export function summarizeRuns(results: readonly BalanceRunResult[]): BalanceSumm
     medianFirstLevelUpSec: quantile(firstLevelUps, 0.5),
     medianChestsOpened: quantile(chests, 0.5),
     medianEvolutions: quantile(evolutions, 0.5),
+    medianBuildCompleteSec: quantile(builds, 0.5),
+    buildCompleteRatio: results.length === 0 ? 0 : builds.length / results.length,
     timedOut: results.filter((run) => run.timedOut).length,
   };
 }
