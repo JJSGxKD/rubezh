@@ -3,8 +3,8 @@ id: T-0361
 title: Сводка панели — досмотры рекламы в ряду дней только с правом `ads.view`
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
@@ -13,7 +13,8 @@ zones:
   - backend/api/test/admin-overview.test.ts
   - apps/admin/src/api/overview.ts
   - apps/admin/test/overview.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low

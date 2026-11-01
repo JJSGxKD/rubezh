@@ -71,7 +71,8 @@ export const overviewSchema = z.object({
       stars: z.number().nullable(),
       /** `null` — выручка закрыта; старый сервер поля не отдаёт */
       purchases: z.number().nullable().default(null),
-      adsCompleted: z.number().default(0),
+      /** `null` — нет права `ads.view`; старый сервер поля не отдаёт */
+      adsCompleted: z.number().nullable().default(0),
       /** пропуски VIP за сутки — отдельно от досмотров */
       adsPassed: z.number().default(0),
     }),

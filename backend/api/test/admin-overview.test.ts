@@ -248,6 +248,7 @@ describe("сводка панели", () => {
   it("тридцать дней — ряд тридцать суток", async () => {
     const { service, stats, owner } = await setup();
     const overview = await service.overview(owner, 30, NOW);
+    expect(overview.series.every((point) => point.adsCompleted === 7)).toBe(true);
     expect(overview.series).toHaveLength(30);
     expect(stats.seriesRange).toEqual([new Date("2026-09-01T21:00:00.000Z"), NOW]);
     expect(stats.windows[0]).toEqual({ day: "2026-09-02", from: new Date("2026-09-01T21:00:00.000Z"), to: NOW });
@@ -258,6 +259,7 @@ describe("сводка панели", () => {
     const analyst = await person("3", "analyst");
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.ads).toBeNull();
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(ads.calls).toEqual([]);
     expect(ads.passCalls).toEqual([]);
   });
@@ -297,9 +299,9 @@ describe("сводка панели", () => {
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.today.revenue).toBeNull();
     expect(overview.series[0]?.stars).toBeNull();
-    // Покупки — деньги, как звёзды; досмотренная реклама — нет.
     expect(overview.series[0]?.purchases).toBeNull();
-    expect(overview.series[0]?.adsCompleted).toBe(7);
+    // Досмотры — часть рекламы: без ads.view их в ряду нет.
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(overview.attention).toEqual([]);
     expect(overview.ads).toBeNull();
 

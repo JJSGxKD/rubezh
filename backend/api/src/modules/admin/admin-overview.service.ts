@@ -92,7 +92,7 @@ export interface Overview {
   /** вчера с полуночи до того же часа */
   yesterday: OverviewDay;
   /** звёзды и покупки — `null`, если выручка закрыта */
-  series: (Omit<DayPoint, "stars" | "purchases"> & { stars: number | null; purchases: number | null })[];
+  series: (Omit<DayPoint, "stars" | "purchases" | "adsCompleted"> & { stars: number | null; purchases: number | null; adsCompleted: number | null })[];
   /** `null` — нет права `ads.view` или чтение не ответило */
   ads: OverviewAds | null;
   boardMark: OverviewBoardMark | null;
@@ -140,7 +140,12 @@ export class AdminOverviewService {
       at: now.toISOString(),
       today: shown(today),
       yesterday: shown(yesterday),
-      series: series.map((point) => ({ ...point, stars: revenue ? point.stars : null, purchases: revenue ? point.purchases : null })),
+      series: series.map((point) => ({
+        ...point,
+        stars: revenue ? point.stars : null,
+        purchases: revenue ? point.purchases : null,
+        adsCompleted: can.has("ads.view") ? point.adsCompleted : null,
+      })),
       ads,
       boardMark,
       attention,
