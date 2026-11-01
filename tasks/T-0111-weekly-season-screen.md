@@ -3,7 +3,7 @@ id: T-0111
 title: Недельный сезон — экран рейтинга: вкладки «Неделя», «Всё время», «Друзья», награды и таймер
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-17
 size: M
