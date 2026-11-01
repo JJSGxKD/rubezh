@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, BlessingDef, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -35,6 +35,7 @@ import { BootScreen } from "./gates";
 import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
+import { BlessingOverlay } from "./run/BlessingOverlay";
 import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
@@ -53,7 +54,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "aside";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -92,6 +93,7 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
+          <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
         </ListGroup>
 
@@ -456,6 +458,8 @@ function renderPreview(preview: Preview): ReactNode {
       const size = preview === "chest1" ? 1 : preview === "chest3" ? 3 : 5;
       return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size) }} onTake={noop} />;
     }
+    case "blessing":
+      return <BlessingOverlay options={SAMPLE_BLESSINGS} onChoose={noop} />;
     case "pause":
       return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} onStats={noop} />;
     case "death":
@@ -606,6 +610,13 @@ const SAMPLE_OFFERS: UpgradeOption[] = [
 ];
 
 /** Сундук: все виды наград — новое, уровни, лечение и опыт. */
+/** Предложение капища для витрины: три из набора контента, как их отдаёт движок. */
+const SAMPLE_BLESSINGS: BlessingDef[] = [
+  { id: "fury", nameKey: "blessing.fury", modifiers: { damage: 0.1 } },
+  { id: "wind", nameKey: "blessing.wind", modifiers: { moveSpeed: 0.08 } },
+  { id: "fortress", nameKey: "blessing.fortress", modifiers: { maxHp: 10 } },
+];
+
 const SAMPLE_CHEST: ChestReward[] = [
   { ...SAMPLE_OFFERS[1]!, kind: "weapon_level" },
   { ...KNIFE_NEW, kind: "weapon_new" },

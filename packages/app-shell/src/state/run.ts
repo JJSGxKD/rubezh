@@ -1,4 +1,4 @@
-import { ELEMENTS, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   describeEvolution,
   loadRunEngine,
@@ -36,9 +36,18 @@ import { clientErrorCount, reportError, track, useShell } from "./shell";
 /**
  * `downed` — игрок умер, но второй шанс ещё есть: мир стоит, итог отложен до
  * решения (docs/07-monetization-and-ads.md §8). `chest` — игрок открыл сундук,
- * мир стоит, пока окно с наградами не закроют (tasks/T-0100).
+ * мир стоит, пока окно с наградами не закроют (tasks/T-0100). `blessing` —
+ * игрок отстоял круг капища: мир стоит, пока он не выберет благословение
+ * (tasks/T-0260).
  */
-export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "chest" | "downed" | "finished" | "error";
+export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "chest" | "blessing" | "downed" | "finished" | "error";
+
+/** Предложение капища: из чего выбирать — пока фаза `blessing`. */
+export interface OfferedBlessings {
+  /** номер тайника в раскладке мира */
+  index: number;
+  options: BlessingDef[];
+}
 
 /** Открытый сундук: что вынул игрок, награды уже выданы движком. */
 export interface OpenedChest {
@@ -122,6 +131,8 @@ export interface RunStore {
   canReroll: boolean;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
+  /** предложенные благословения — пока фаза `blessing` */
+  blessing: OfferedBlessings | null;
   level: number;
   result: RunResult | null;
   isNewRecord: boolean;
@@ -151,6 +162,8 @@ export interface RunStore {
   declineContinue(): void;
   /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
   closeChest(): void;
+  /** Выбрать благословение капища: движок применит его, и забег пойдёт дальше. */
+  chooseBlessing(id: string): void;
   choose(optionId: string): void;
   /** Переброс карточек на выборе улучшения. */
   reroll(): void;
@@ -234,6 +247,7 @@ const IDLE = {
   toolsTotal: NO_TOOLS,
   canReroll: false,
   chest: null as OpenedChest | null,
+  blessing: null as OfferedBlessings | null,
   level: 1,
   result: null,
   isNewRecord: false,
@@ -446,6 +460,12 @@ export const useRun = create<RunStore>((set, get) => ({
     session?.closeChest();
   },
 
+  chooseBlessing(id: string): void {
+    if (get().phase !== "blessing") return;
+    // Фазу дальше ведёт движок: `resumed` или следующее окно, если оно накопилось, — как у сундука.
+    session?.chooseBlessing(id);
+  },
+
   choose(optionId: string): void {
     if (get().phase !== "levelUp") return;
     track("upgrade_chosen", { option: optionId, level: get().level });
@@ -619,7 +639,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level, chest: null, tools, toolsTotal, canReroll });
+      set({ phase: "levelUp", offers: options, queued, level, chest: null, blessing: null, tools, toolsTotal, canReroll });
       saveRun();
     }),
 
@@ -637,6 +657,21 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
       audio.runEvent("chestDrop");
+    }),
+
+    created.on("secretFound", ({ kind, elapsedSec }) => {
+      track("secret_found", { kind, sec: Math.round(elapsedSec) });
+    }),
+
+    created.on("secretUsed", ({ kind, outcome }) => {
+      track("secret_used", { kind, outcome });
+    }),
+
+    created.on("secretBlessing", ({ index, options }) => {
+      // Мир уже стоит: окно показывает предложение и ждёт выбора. Звук и отклик — как у выбора уровня.
+      haptic("levelUp");
+      audio.runEvent("levelUp");
+      set({ phase: "blessing", blessing: { index, options: [...options] } });
     }),
 
     created.on("ringEnded", ({ index, outcome, guards, killed, lifeSec, elapsedSec }) => {
@@ -664,7 +699,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       }
     }),
 
-    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [], chest: null })),
+    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [], chest: null, blessing: null })),
 
     created.on("devInfo", (devInfo) => set({ devInfo })),
 
@@ -867,9 +902,9 @@ function isLowHp(hud: HudSnapshot): boolean {
   return hud.maxHp > 0 && hud.hp / hud.maxHp <= LOW_HP_RATIO;
 }
 
-/** Забег идёт и его есть что сохранять: бег, пауза, выбор уровня или окно сундука. */
+/** Забег идёт и его есть что сохранять: бег, пауза, выбор уровня, окно сундука или капища. */
 export function isRunActivePhase(phase: RunPhase): boolean {
-  return phase === "running" || phase === "paused" || phase === "levelUp" || phase === "chest";
+  return phase === "running" || phase === "paused" || phase === "levelUp" || phase === "chest" || phase === "blessing";
 }
 
 /**

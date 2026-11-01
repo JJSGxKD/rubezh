@@ -3,8 +3,8 @@ id: T-0359
 title: Панель — счётчик «Ждёт вас» на пункте «Сводка» в меню; лёгкий запрос `/admin/attention`
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -13,6 +13,8 @@ zones:
   - apps/admin/src/state/use-attention.ts
   - apps/admin/test/attention.test.ts
 shared:
+  - docs/29-admin-panel.md
+  - design/art/direction-v2.md
   - apps/admin/src/screens/Shell.tsx
   - backend/api/src/modules/admin/admin-overview.service.ts
   - backend/api/src/modules/admin/admin-overview.controller.ts

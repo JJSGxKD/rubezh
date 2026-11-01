@@ -94,6 +94,13 @@ export const RADAR_BLIP = {
   dynamite: 4,
   chest: 5,
   freeze: 6,
+  // Тайники рубежа (Р153): вид читается цветом и формой, поэтому у каждого свой код.
+  shrine: 7,
+  hoard: 8,
+  stone: 9,
+  tree: 10,
+  rift: 11,
+  wisp: 12,
 } as const;
 
 export type RadarBlipKind = (typeof RADAR_BLIP)[keyof typeof RADAR_BLIP];

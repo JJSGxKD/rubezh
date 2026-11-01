@@ -1,6 +1,8 @@
 import type Phaser from "phaser";
+import { SECRET_KINDS } from "@bh/shared-types";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
 import type { PickupArt } from "./pickups";
+import { secretFrameName, type SecretArt, type SecretLookState } from "./secrets-look";
 import { STATUS_MARK_FRAMES, type StatusMarkArt } from "./status-marks";
 import { STATUS_TONE } from "./status-tones";
 
@@ -186,6 +188,7 @@ export class ArtMode {
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
   private orbiterFrame: ArtFrame | null = null;
+  private secretFrames: SecretArt | null = null;
   private statusMarkFrames: StatusMarkArt = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
   private readonly shown: Int16Array;
@@ -251,6 +254,11 @@ export class ArtMode {
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
     this.orbiterFrame = this.atlas.find("fx/orbiter_ward0");
+    // Тайники: кадры `secret/<вид>/<состояние>` атласа env; нет кадра — тайник остаётся фигурой.
+    const states: readonly SecretLookState[] = ["found", "active", "hint"];
+    this.secretFrames = Object.fromEntries(
+      SECRET_KINDS.map((kind) => [kind, Object.fromEntries(states.flatMap((state) => { const frame = this.atlas.find(secretFrameName(kind, state)); return frame === null ? [] : [[state, frame]]; }))]),
+    ) as SecretArt;
     const tones = Object.values(STATUS_TONE);
     this.statusMarkFrames = Array.from({ length: Math.max(...tones) + 1 }, (_, tone) =>
       (STATUS_MARK_FRAMES[tone] ?? []).map((name) => this.atlas.find(name)).filter((frame): frame is ArtFrame => frame !== null),
@@ -268,6 +276,11 @@ export class ArtMode {
    */
   orbiterArt(): ArtFrame | null {
     return this.enabled ? this.orbiterFrame : null;
+  }
+
+  /** Кадры тайников для `SecretsRenderer`; `null` — режим выключен. */
+  secretArt(): SecretArt | null {
+    return this.enabled ? this.secretFrames : null;
   }
 
   /** Кадры подборов для `PickupRenderer`; `null` — режим выключен. */
