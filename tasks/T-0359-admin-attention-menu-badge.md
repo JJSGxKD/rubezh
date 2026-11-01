@@ -3,8 +3,8 @@ id: T-0359
 title: Панель — счётчик «Ждёт вас» на пункте «Сводка» в меню; лёгкий запрос `/admin/attention`
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-12 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
