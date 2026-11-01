@@ -137,6 +137,8 @@ const SEASONS_GROUP = "Сезоны рейтинга";
 
 const BOT_MENTION_GROUP = "Юзернейм бота";
 
+const ACHIEVEMENTS_GROUP = "Достижения";
+
 /**
  * Предел награды за сутки — суточный потолок причины `task_reward`
  * (`wallet/wallet-limits.ts`): больше всё равно срезалось бы кошельком.
@@ -606,6 +608,28 @@ export const SETTINGS = {
   botMentionBioCoins: integer("bot-mention.bio.coins", BOT_MENTION_GROUP, "Bio: монеты за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_COINS, 0),
   botMentionBioGems: integer("bot-mention.bio.gems", BOT_MENTION_GROUP, "Bio: самоцветы за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_GEMS, 0),
   botMentionBioShards: integer("bot-mention.bio.shards", BOT_MENTION_GROUP, "Bio: осколки за сутки", "Обычные осколки за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_SHARDS, 0),
+  /**
+   * Редкость достижений (docs/39-retention-mechanics.md К1, tasks/T-0106): процент
+   * «есть у N%» показывается от порога населения, иначе у трёх игроков будет «100%».
+   * Без окружения: продуктовые числа правятся в панели. Ключи через дефис — как у соседей:
+   * формат ключа не знает подчёркивания (`SETTING_KEY`).
+   */
+  achievementsRarityMinPlayers: integer(
+    "achievements.rarity-min-players",
+    ACHIEVEMENTS_GROUP,
+    "Редкость: порог числа игроков",
+    "Процент «есть у N% игроков» у достижений показывается, когда в счёте не меньше стольких игроков (игроки хотя бы с одним записанным забегом). Ниже — процента нет вовсе. На закрытом тесте до сотни не дойти — поставьте меньше",
+    { min: 1, max: 100_000, unit: ["игрок", "игрока", "игроков"] },
+    100,
+  ),
+  achievementsRarityRefreshMin: integer(
+    "achievements.rarity-refresh-min",
+    ACHIEVEMENTS_GROUP,
+    "Редкость: период пересчёта",
+    "Как часто пересчитывается «есть у N%». Пересчёт идёт фоновой задачей по всем игрокам с забегом, а проверяет её раз в десять минут, поэтому меньше десяти минут ставить нельзя",
+    { min: 10, max: 10_080, unit: ["минута", "минуты", "минут"] },
+    360,
+  ),
   linksAutoDailyCap: integer(
     "links.auto-daily-cap",
     AUTO_SOURCES_GROUP,
