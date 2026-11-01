@@ -402,9 +402,9 @@ describe("название достижения в строке задания",
   });
 
   it("цель «друзья» и «уровень аккаунта» читается словами, а не голым числом", () => {
-    expect(taskHint(achievement({ id: "ach_friends_5", kind: "friends", target: 5 }))).toBe("Подружись с 5 игроками");
-    expect(taskHint(achievement({ id: "ach_friends_1", kind: "friends", target: 1 }))).toBe("Подружись с 1 игроком");
-    expect(taskHint(achievement({ id: "ach_account_10", kind: "account_level", target: 10 }))).toBe("Дорасти до уровня аккаунта 10");
+    expect(taskHint(achievement({ id: "ach_friends_5", kind: "friends", target: 5 }))).toBe("Набери друзей: 5");
+    expect(taskHint(achievement({ id: "ach_friends_1", kind: "friends", target: 1 }))).toBe("Набери друзей: 1");
+    expect(taskHint(achievement({ id: "ach_account_10", kind: "account_level", target: 10 }))).toBe("Дорасти до 10 уровня аккаунта");
   });
 
   it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {

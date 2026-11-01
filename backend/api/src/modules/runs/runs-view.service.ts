@@ -3,6 +3,7 @@ import { DomainError } from "../../common/domain-error.js";
 import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunExtras, type RunLootPart, type RunRewardPart } from "./run-details.js";
+import { RunPrestige } from "./run-prestige.js";
 import { DIFFICULTIES, type Difficulty } from "./run-rules.js";
 import { RUNS_REPOSITORY, type ReviewRow, type RunDetailRow, type RunsRepository } from "./runs.repository.js";
 
@@ -50,6 +51,8 @@ export interface LeaderboardView {
     startingWeaponId: string;
     enemiesKilled: number;
     isMe: boolean;
+    /** очки престижа за достижения (tasks/T-0107); ноль — значок не рисуется */
+    prestige: number;
   }[];
   me: { rank: number; survivalSec: number } | null;
   totalPlayers: number;
@@ -111,6 +114,7 @@ export class RunsViewService {
     @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
     private readonly extras: RunExtras,
     private readonly rating: RatingRestrictions,
+    private readonly prestige: RunPrestige,
   ) {}
 
   async leaderboardFor(accountId: string, difficulty: Difficulty): Promise<LeaderboardView> {
@@ -124,8 +128,11 @@ export class RunsViewService {
     ]);
 
     // Порядок и места — из проекции, подробности лучшего забега — из базы
-    // одним запросом на всю страницу.
-    const details = new Map((await this.runs.bestRuns(top.map((entry) => entry.accountId), difficulty)).map((row) => [row.accountId, row]));
+    // одним запросом на всю страницу, престиж — одним запросом к достижениям:
+    // игрок в тени добавляет в него себя, его строку рисует `fromShadow`.
+    const ids = top.map((entry) => entry.accountId);
+    const [rows, prestige] = await Promise.all([this.runs.bestRuns(ids, difficulty), this.prestige.of(hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids)]);
+    const details = new Map(rows.map((row) => [row.accountId, row]));
 
     const view: LeaderboardView = {
       difficultyId: difficulty,
@@ -147,20 +154,21 @@ export class RunsViewService {
             startingWeaponId: row.startingWeaponId,
             enemiesKilled: row.enemiesKilled,
             isMe: entry.accountId === accountId,
+            prestige: prestige.get(entry.accountId) ?? 0,
           },
         ];
       }),
       me: rank === null || best === null ? null : { rank, survivalSec: best },
       totalPlayers: total,
     };
-    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board) : view;
+    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board, prestige.get(accountId) ?? 0) : view;
   }
 
   /**
    * Доска глазами игрока в тени: он — на месте, которое занял бы лучшим
    * забегом, включая сданные в тени, а те, кто ниже, сдвинуты на строку.
    */
-  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView, board: Board): Promise<LeaderboardView> {
+  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView, board: Board, ownPrestige: number): Promise<LeaderboardView> {
     const mine = await this.runs.bestRunOf(accountId, difficulty, true);
     // До обхода игрок мог остаться в доске гонкой с наложением — себя он видит один раз.
     const others = view.entries.filter((entry) => !entry.isMe);
@@ -178,6 +186,7 @@ export class RunsViewService {
       startingWeaponId: mine.startingWeaponId,
       enemiesKilled: mine.enemiesKilled,
       isMe: true,
+      prestige: ownPrestige,
     };
     const entries = [...others.map((entry) => (entry.rank >= rank ? { ...entry, rank: entry.rank + 1 } : entry)), own]
       .filter((entry) => entry.rank <= LEADERBOARD_LIMIT)

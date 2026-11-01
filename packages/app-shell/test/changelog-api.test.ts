@@ -16,7 +16,7 @@ interface Call {
 }
 
 function server(calls: Call[], answers: Record<string, unknown>): ApiRequest {
-  return async <T,>(path: string, schema: object, init: { method: "GET" | "POST" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
+  return async <T,>(path: string, schema: object, init: { method: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
     calls.push({ path, method: init.method, ...(init.body === undefined ? {} : { body: init.body }) });
     const key = Object.keys(answers).find((prefix) => path.startsWith(prefix));
     if (key === undefined) return { ok: false, failure: "unavailable" };
