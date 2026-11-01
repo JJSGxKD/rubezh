@@ -412,7 +412,7 @@ describe("знак «Тестер» в рейтинге", () => {
       best: async () => 300,
       countAbove: async () => 0,
     };
-    const rating = { hold: async () => options.hold ?? null };
+    const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const };
     return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never);
   }
 

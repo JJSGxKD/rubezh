@@ -3,22 +3,30 @@ import { AdminApi } from "../src/api/client";
 import {
   conversion,
   conversionState,
+  autoPairs,
   createLink,
   DEVICE_TITLES,
   deviceRows,
   fetchConversions,
   fetchLinks,
+  fetchUnknownKeys,
   freshRow,
   launchesLabel,
+  linkSchema,
+  linkTitle,
   LINK_PARTNER_ROUTE,
   OWNER_TITLES,
   ownerLabel,
   partnerOfLinkRoute,
+  renameLink,
   resendConversion,
   retargetLink,
+  setLinkHidden,
   SLUG,
   summaryLine,
   TARGET_TITLES,
+  unknownKeysSchema,
+  visibleLinks,
   type Conversion,
   type ConversionSummary,
 } from "../src/api/links";
@@ -41,7 +49,14 @@ const LINK = {
   target: "app" as const,
   directUrl: "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef",
   partner: null as { partnerId: string; name: string } | null,
+  auto: false,
+  autoKey: null as string | null,
+  partnerTag: null as string | null,
+  title: null as string | null,
+  hiddenAt: null as string | null,
 };
+
+const AUTO = { ...LINK, code: "AutoCode001", campaign: "oct", source: "tgads", auto: true, autoKey: "src-tgads_cmp-oct" };
 
 const counts = (patch: Partial<Record<"pending" | "sent" | "failed" | "skipped", number>> = {}) => ({ pending: 0, sent: 0, failed: 0, skipped: 0, ...patch });
 
@@ -321,5 +336,75 @@ describe("конверсии словами", () => {
       "3": counts({ sent: 1, failed: 2 }),
     };
     expect(summaryLine(summary)).toEqual({ registrations: 13, purchases: 6, failed: 3, waiting: 2 });
+  });
+});
+
+describe("автоисточники в панели «Ссылки» (T-0180)", () => {
+  it("linkTitle: есть название — оно, нет — кампания", () => {
+    expect(linkTitle({ title: "Посев в Канале N", campaign: "oct" })).toBe("Посев в Канале N");
+    expect(linkTitle({ title: null, campaign: "oct" })).toBe("oct");
+    expect(linkTitle({ title: "", campaign: "oct" })).toBe("oct");
+  });
+
+  it("visibleLinks: скрытые уходят, при showHidden возвращаются; порядок сохраняется", () => {
+    const rows = [{ ...AUTO, code: "a" }, { ...AUTO, code: "b", hiddenAt: "2026-10-21T10:00:00.000Z" }, { ...LINK, code: "c" }];
+    expect(visibleLinks(rows, false).map((row) => row.code)).toEqual(["a", "c"]);
+    expect(visibleLinks(rows, true).map((row) => row.code)).toEqual(["a", "b", "c"]);
+    expect(visibleLinks([], false)).toEqual([]);
+  });
+
+  it("autoPairs: четыре пары, часть пар, ни одной; у ссылки, заведённой руками, пар нет", () => {
+    expect(autoPairs({ ...AUTO, medium: "post", partnerTag: "ivan" })).toEqual([
+      { label: "Источник", value: "tgads" },
+      { label: "Кампания", value: "oct" },
+      { label: "Место", value: "post" },
+      { label: "Партнёр", value: "ivan" },
+    ]);
+    expect(autoPairs(AUTO)).toEqual([
+      { label: "Источник", value: "tgads" },
+      { label: "Кампания", value: "oct" },
+    ]);
+    expect(autoPairs({ ...AUTO, source: null, campaign: "" })).toEqual([]);
+    expect(autoPairs(LINK)).toEqual([]);
+  });
+
+  it("схема ответа без новых полей (сервер старее) разбирается: ссылка считается ручной, без названия и скрытия", () => {
+    const old = Object.fromEntries(Object.entries(LINK).filter(([key]) => !["auto", "autoKey", "partnerTag", "title", "hiddenAt"].includes(key)));
+    expect(linkSchema.parse(old)).toMatchObject({ auto: false, autoKey: null, partnerTag: null, title: null, hiddenAt: null });
+    expect(linkSchema.parse({ ...AUTO, title: "Посев", hiddenAt: "2026-10-21T10:00:00.000Z" })).toMatchObject({ auto: true, title: "Посев", hiddenAt: "2026-10-21T10:00:00.000Z" });
+    // Мусор в новых полях список не ломает.
+    expect(linkSchema.parse({ ...LINK, auto: "да", title: 5, hiddenAt: {} })).toMatchObject({ auto: false, title: null, hiddenAt: null });
+  });
+
+  it("renameLink и setLinkHidden: PATCH :code/display с нужным телом; ответ — ссылка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { ...AUTO, title: "Посев" } }), json(200, { data: { ...AUTO, hiddenAt: "2026-10-21T10:00:00.000Z" } }), json(200, { data: { ...AUTO } }));
+    const api = new AdminApi(fetch);
+    const renamed = await renameLink(api, "AutoCode001", "Посев");
+    expect(renamed.ok && renamed.data.title).toBe("Посев");
+    expect([calls[0]?.url, calls[0]?.init.method]).toEqual(["/api/v1/admin/links/AutoCode001/display", "PATCH"]);
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ title: "Посев" });
+
+    const hidden = await setLinkHidden(api, "AutoCode001", true);
+    expect(hidden.ok && hidden.data.hiddenAt).not.toBeNull();
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ hidden: true });
+
+    // «Сбросить» — пустое название: сервер возвращает кампанию.
+    await renameLink(api, "AutoCode001", "  ");
+    expect(JSON.parse(String(calls[2]?.init.body))).toEqual({ title: null });
+  });
+
+  it("сводка незнакомых ключей: адрес, разбор ответа; ответ другой формы — ошибка разбора", async () => {
+    const { fetch, calls } = fakeFetch(
+      json(200, { data: { keys: [{ key: "utm", hits: 14, firstAt: "2026-10-01T10:00:00.000Z", lastAt: "2026-10-27T21:40:00.000Z" }], limit: 200 } }),
+      json(200, { data: { keys: "нет" } }),
+    );
+    const api = new AdminApi(fetch);
+    const answer = await fetchUnknownKeys(api);
+    expect(calls[0]?.url).toBe("/api/v1/admin/links/unknown-keys");
+    expect(answer.ok && answer.data.keys[0]).toMatchObject({ key: "utm", hits: 14 });
+    expect(answer.ok && answer.data.limit).toBe(200);
+    expect((await fetchUnknownKeys(api)).ok).toBe(false);
+    expect(unknownKeysSchema.safeParse({ keys: [], limit: 200 }).success).toBe(true);
+    expect(unknownKeysSchema.safeParse({ keys: [{ key: "utm" }], limit: 200 }).success).toBe(false);
   });
 });

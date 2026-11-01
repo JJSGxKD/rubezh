@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PLATFORM_TITLES } from "./ads";
+import { BOARD_MARK_LABEL } from "./overview";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
@@ -25,7 +26,11 @@ export const funnelRowSchema = z.object({
   firstPurchase: z.number(),
 });
 
-export const funnelReportSchema = z.object({ from: z.string(), to: z.string(), rows: z.array(funnelRowSchema) });
+/** Сводная строка по аккаунтам «Отдельной доски»: числа вех без разреза (T-0115). */
+export const funnelMarkedSchema = funnelRowSchema.omit({ platform: true, startKind: true, startRef: true, startSource: true });
+
+/** `marked` приходит только держателю права `players.board.restrict`. */
+export const funnelReportSchema = z.object({ from: z.string(), to: z.string(), rows: z.array(funnelRowSchema), marked: funnelMarkedSchema.optional() });
 
 export type FunnelRow = z.infer<typeof funnelRowSchema>;
 export type FunnelReport = z.infer<typeof funnelReportSchema>;
@@ -70,6 +75,13 @@ export function periodFromDates(fromDate: string, toDate: string): Period {
 }
 
 const TOTAL = "все";
+/** Вид строки «Отдельная доска (все источники)»: не источник, а срез по аккаунтам. */
+const BOARD_MARK_KIND = "board_mark";
+
+/** Строка помеченных для таблицы; `null`, если права нет и сервер её не прислал. */
+export function markedFunnelRow(report: FunnelReport): FunnelRow | null {
+  return report.marked === undefined ? null : { platform: TOTAL, startKind: BOARD_MARK_KIND, startRef: null, startSource: null, ...report.marked };
+}
 
 /** Итог по всем строкам — первая строка таблицы: общий вид раньше разреза. */
 export function funnelTotal(rows: readonly FunnelRow[]): FunnelRow {
@@ -104,6 +116,8 @@ export function touchOf(row: FunnelRow): { title: string; detail: string | null 
   switch (row.startKind) {
     case TOTAL:
       return { title: "Все источники", detail: null };
+    case BOARD_MARK_KIND:
+      return { title: `${BOARD_MARK_LABEL} (все источники)`, detail: null };
     case "organic":
       return { title: "Органика", detail: "без нашей ссылки: меню бота, поиск, история" };
     case "click":

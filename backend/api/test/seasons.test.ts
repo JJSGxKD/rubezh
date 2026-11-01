@@ -14,6 +14,9 @@ import { boardQuerySchema, seasonKeyParamSchema } from "../src/modules/seasons/d
 import {
   MIN_BOARD,
   PLACE_LADDER,
+  SEASON_REWARD_KEYS,
+  assertInGameReward,
+  standings,
   THRESHOLD_REWARD,
   THRESHOLD_SEC,
   dueSeasons,
@@ -24,6 +27,7 @@ import {
   seasonByKey,
   seasonOf,
   thresholdReached,
+  type StandingEntry,
 } from "../src/modules/seasons/season-rules.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -322,5 +326,87 @@ describe("RunsService.setRanked: слушатели узнают о смене �
     await expect(service.setRanked(moderator, run.runId, true, "ещё раз")).rejects.toMatchObject({ code: "run_ranking_conflict" });
 
     expect(seen).toEqual(["игрок:hard", "игрок:hard"]);
+  });
+});
+
+describe("standings: две таблицы сезона (T-0114, Р104)", () => {
+  const at = (hours: number): Date => new Date(Date.UTC(2026, 10, 2, hours));
+  const entry = (accountId: string, bestSec: number, firstAtHours = 1): StandingEntry => ({ accountId, bestSec, firstAt: at(firstAtHours) });
+  const placesOf = (table: readonly { accountId: string; place: number; boardSize: number }[]) => table.map((row) => [row.accountId, row.place, row.boardSize]);
+
+  it("трое обычных и двое с ограничением, времена вперемешку: общая из троих с местами 1–3, полная из пяти", () => {
+    const table = standings([entry("a", 300), entry("s1", 280), entry("b", 250), entry("s2", 200), entry("c", 100)], new Set(["s1", "s2"]));
+    expect(placesOf(table.common)).toEqual([["a", 1, 3], ["b", 2, 3], ["c", 3, 3]]);
+    expect(placesOf(table.full)).toEqual([["a", 1, 5], ["s1", 2, 5], ["b", 3, 5], ["s2", 4, 5], ["c", 5, 5]]);
+  });
+
+  it("обычный игрок, которого аккаунт с ограничением обогнал бы, получает место «как будто его нет»", () => {
+    const table = standings([entry("s", 500), entry("a", 400)], new Set(["s"]));
+    expect(placesOf(table.common)).toEqual([["a", 1, 1]]);
+    expect(placesOf(table.full)).toEqual([["s", 1, 2], ["a", 2, 2]]);
+  });
+
+  it("ничья по времени решена тем, кто показал его раньше; одно время и одно время показа — одно место", () => {
+    const table = standings([entry("late", 300, 5), entry("early", 300, 1), entry("x", 300, 5), entry("low", 100)], new Set());
+    expect(table.common.map((row) => [row.accountId, row.place])).toEqual([["early", 1], ["late", 2], ["x", 2], ["low", 4]]);
+  });
+
+  it("пустое множество ограничений: общая равна полной", () => {
+    const table = standings([entry("a", 300), entry("b", 200)], new Set());
+    expect(table.common).toEqual(table.full);
+  });
+
+  it("все с ограничением: общая пуста, полная — все; нет никого — обе пусты", () => {
+    const only = standings([entry("s1", 300), entry("s2", 200)], new Set(["s1", "s2"]));
+    expect(only.common).toEqual([]);
+    expect(only.full).toHaveLength(2);
+    expect(standings([], new Set())).toEqual({ common: [], full: [] });
+  });
+
+  it("вход не меняется, а порядок записей на входе на места не влияет", () => {
+    const entries = [entry("a", 100), entry("b", 300), entry("c", 200)];
+    const copy = [...entries];
+    const shuffled = [entries[2] as StandingEntry, entries[0] as StandingEntry, entries[1] as StandingEntry];
+    expect(standings(entries, new Set())).toEqual(standings(shuffled, new Set()));
+    expect(entries).toEqual(copy);
+  });
+
+  it("награда по таблице аккаунта: девять обычных и трое с ограничением — у обычных таблица из девяти без награды за место, у троих полная из двенадцати с ней", () => {
+    const common = Array.from({ length: 9 }, (_, index) => entry(`n${String(index)}`, 400 - index * 10));
+    const separate = ["s0", "s1", "s2"].map((id, index) => entry(id, 450 - index * 10));
+    const table = standings([...common, ...separate], new Set(["s0", "s1", "s2"]));
+
+    const prizeOf = (row: { place: number; boardSize: number }) => placeReward(row.place, row.boardSize, "easy");
+    expect(table.common.every((row) => row.boardSize === 9 && prizeOf(row) === null)).toBe(true);
+    expect(table.full.filter((row) => row.accountId.startsWith("s")).map(prizeOf)).toEqual([{ coins: 1000, prestige: 100 }, { coins: 600, prestige: 50 }, { coins: 600, prestige: 50 }]);
+  });
+});
+
+describe("награды сезона — только внутриигровые (T-0114)", () => {
+  it("ключи награды — ровно монеты и престиж", () => {
+    expect([...SEASON_REWARD_KEYS]).toEqual(["coins", "prestige"]);
+    for (const prize of [placeReward(1, 20, "easy"), rewardFor([{ difficulty: "easy", bestSec: 200, place: 40, boardSize: 5 }])]) {
+      expect(prize).not.toBeNull();
+      expect(Object.keys(prize ?? {}).filter((key) => key !== "kind" && key !== "difficulty" && key !== "place").sort()).toEqual(["coins", "prestige"]);
+    }
+  });
+
+  it("assertInGameReward пропускает монеты и престиж; звёзды, TON, подарки и выплаты — нет", () => {
+    expect(() => assertInGameReward({ coins: 600, prestige: 50 })).not.toThrow();
+    expect(() => assertInGameReward({ coins: 0, prestige: 0 })).not.toThrow();
+    for (const extra of ["stars", "ton", "gift", "payout", "referral", "partner", "gems"]) {
+      expect(() => assertInGameReward({ coins: 1, prestige: 1, [extra]: 5 }), extra).toThrow(/внутриигров/);
+    }
+  });
+
+  it("assertInGameReward не пускает дробные, отрицательные и не числа", () => {
+    for (const bad of [{ coins: 1.5, prestige: 1 }, { coins: -1, prestige: 1 }, { coins: "100", prestige: 1 }, { coins: 1, prestige: Number.NaN }, { coins: 1 }]) {
+      expect(() => assertInGameReward(bad as never), JSON.stringify(bad)).toThrow();
+    }
+  });
+
+  it("ни одно значение лестницы и порога не выходит за монеты и престиж", () => {
+    for (const step of PLACE_LADDER) expect(Object.keys(step).sort()).toEqual(["coins", "fromPlace", "prestige", "toPlace"]);
+    expect(Object.keys(THRESHOLD_REWARD).sort()).toEqual(["coins", "prestige"]);
   });
 });

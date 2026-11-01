@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CONTINUE_RATE, starsToGems } from "../payments/continue-price.js";
+import { starsToGems } from "../payments/continue-price.js";
 import { WALLET_RESOURCES, type WalletResource } from "../wallet/wallet-types.js";
 
 /**
@@ -20,14 +20,8 @@ export function bonusGems(level: number): number {
   return Math.min(Math.max(whole, 1) * TESTER_BONUS.gemsPerLevel, TESTER_BONUS.maxGems);
 }
 
-/**
- * Курс второго шанса — правило товара, оно живёт рядом с ценой
- * (`payments/continue-price.ts`, Р162); компенсация берёт его оттуда.
- */
-export { CONTINUE_RATE };
-
 /** Звёзды второго шанса → самоцветы по курсу товара, вверх до целого: 10 ⭐ → 12, 3 ⭐ → 4. */
-export function continueGems(stars: number): number {
+export function compensationGemsForStars(stars: number): number {
   return starsToGems(stars);
 }
 

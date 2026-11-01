@@ -15,6 +15,7 @@ import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
 import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admin-session.store.js";
 import type { AdFunnelRow, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { BoardMark } from "../src/modules/restrictions/board-mark.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -57,6 +58,14 @@ function stats(active: number): DayStats {
 class FakeStats implements DailyStatsRepository {
   readonly windows: DayWindow[] = [];
   seriesRange: [Date, Date] | null = null;
+  readonly boardWindows: DayWindow[] = [];
+  boardFails = false;
+  /** Метка «Отдельная доска» (T-0115): числа зависят от окна, чтобы сегодня и вчера не спутать. */
+  async boardMark(window: DayWindow): Promise<BoardMark> {
+    this.boardWindows.push(window);
+    if (this.boardFails) throw new Error("база не ответила");
+    return { marked: 5, active: 3, newAccounts: 1, runs: window.day === "2026-10-01" ? 20 : 12 };
+  }
   async day(window: DayWindow): Promise<DayStats> {
     this.windows.push(window);
     return stats(window.day === "2026-10-01" ? 40 : 30);
@@ -296,6 +305,32 @@ describe("сводка панели", () => {
 
     const moderator = await person("4", "moderator");
     await expect(service.overview(moderator, 1, NOW)).rejects.toMatchObject({ code: "forbidden" });
+  });
+
+  it("владельцу — метка «Отдельная доска» за те же окна; admin и аналитику — null, и репозиторий не зовётся (T-0115)", async () => {
+    const { service, stats, owner, person } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.boardMark).toEqual({
+      today: { marked: 5, active: 3, newAccounts: 1, runs: 20 },
+      yesterday: { marked: 5, active: 3, newAccounts: 1, runs: 12 },
+    });
+    expect(stats.boardWindows).toEqual(stats.windows);
+
+    const calls = stats.boardWindows.length;
+    for (const [id, role] of [["5", "admin"], ["6", "analyst"]] as const) {
+      const other = await person(id, role);
+      expect((await service.overview(other, 1, NOW)).boardMark).toBeNull();
+    }
+    expect(stats.boardWindows).toHaveLength(calls);
+  });
+
+  it("метка не ответила — null, остальная сводка цела (T-0115)", async () => {
+    const { service, stats, owner } = await setup();
+    stats.boardFails = true;
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.boardMark).toBeNull();
+    expect(overview.today.active).toBe(40);
+    expect(overview.attention.length).toBeGreaterThan(0);
   });
 
   it("источник, который не ответил, — без своей строки, а не без сводки", async () => {

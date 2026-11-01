@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Decimal, MemoryRateStore, quoteInUsd, rateOf, type RateSource } from "@bh/fx";
 import { describe, expect, it } from "vitest";
-import { ForbiddenError, ValidationError } from "../src/common/domain-error.js";
+import { DomainError, ForbiddenError, ValidationError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { FxAlertNotifier, fxAlertText, type FxAlertApi } from "../src/modules/admin-notify/fx-alert-notifier.js";
-import { sourceLimitSchema, sourceUsedSchema } from "../src/modules/fx/dto/fx.dto.js";
+import { manualRateSchema, sourceLimitSchema, sourceUsedSchema } from "../src/modules/fx/dto/fx.dto.js";
 import { FxHooks, type FxAlert } from "../src/modules/fx/fx-hooks.js";
-import { FxRefresher, fxSources } from "../src/modules/fx/fx.refresher.js";
-import { FxService, FxSourceNotFoundError } from "../src/modules/fx/fx.service.js";
+import { FxRefreshBusyError, FxRefreshLimitError, FxRefreshPausedError, FxRefresher, fxSources } from "../src/modules/fx/fx.refresher.js";
+import { FxService, FxSourceNotFoundError, type RefreshNowResult } from "../src/modules/fx/fx.service.js";
 import type { LimitStore, SourceLimit } from "../src/modules/fx/fx.store.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -31,11 +31,18 @@ function config(patch: Record<string, string> = {}): AppConfig {
 /** Redis на двух командах: `SET … NX` и снятие лока своим токеном. */
 class FakeRedis {
   readonly values = new Map<string, string>();
+  readonly ttls = new Map<string, number>();
 
-  async set(key: string, value: string, ..._args: unknown[]): Promise<"OK" | null> {
-    if (this.values.has(key)) return null;
+  async set(key: string, value: string, ...args: unknown[]): Promise<"OK" | null> {
+    if (args.includes("NX") && this.values.has(key)) return null;
     this.values.set(key, value);
+    const px = args.indexOf("PX");
+    if (px >= 0) this.ttls.set(key, Number(args[px + 1]));
     return "OK";
+  }
+
+  async pttl(key: string): Promise<number> {
+    return this.values.has(key) ? (this.ttls.get(key) ?? -1) : -2;
   }
 
   async eval(_script: string, _keys: number, key: string, token: string): Promise<number> {
@@ -86,6 +93,9 @@ function gramSource(usd: string): RateSource & { calls: number } {
   return source;
 }
 
+/** Обновление «сейчас» в тестах, которым оно не нужно: звать его нельзя. */
+const NO_REFRESHER = { refreshNow: async () => Promise.reject(new Error("обновление не ожидалось")) };
+
 describe("проход курсов по расписанию", () => {
   it("идёт под локом и снимает только свой лок", async () => {
     const redis = new FakeRedis();
@@ -94,7 +104,7 @@ describe("проход курсов по расписанию", () => {
 
     const report = await refresher.tick([gramSource("1.43")], NOW);
     expect(report?.accepted).toEqual(["GRAM"]);
-    expect(redis.values.size).toBe(0);
+    expect(redis.values.has("fx:refresh:lock")).toBe(false);
 
     // Лок у другой реплики — проход не идёт и чужой лок не трогает.
     redis.values.set("fx:refresh:lock", "other-replica");
@@ -169,7 +179,7 @@ describe("источники из окружения", () => {
 describe("заданные курсы", () => {
   function setup() {
     const roles = new MemoryRolesRepository();
-    const service = new FxService(new MemoryFxStore(), environmentSecrets(config()), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()));
+    const service = new FxService(new MemoryFxStore(), environmentSecrets(config()), new RolesService(config(), roles, new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
     return { service, roles };
   }
   const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
@@ -186,16 +196,32 @@ describe("заданные курсы", () => {
     expect(overview.missing).toEqual(expect.arrayContaining(["RUB", "EUR", "GRAM", "USDT"]));
   });
 
-  it("без права — отказ, рыночная валюта руками не ставится, ноль — ошибка", async () => {
+  it("без права — отказ, у рыночной валюты курс запасной (в долларах и на цену), ноль — ошибка", async () => {
     const { service } = setup();
     await expect(service.setManual({ ...owner, platformUserId: "555" }, input, NOW)).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(service.setManual(owner, { ...input, currency: "GRAM" as never }, NOW)).rejects.toThrow("только валюты площадки");
+    await expect(service.setManual(owner, { ...input, currency: "GRAM" as never }, NOW)).rejects.toBeInstanceOf(ValidationError);
     await expect(service.setManual(owner, { ...input, price: "0" }, NOW)).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("ручной курс рыночной валюты — запасной: в обзоре помечен, «в работе» только пока рыночного курса нет (T-0064)", async () => {
+    const store = new MemoryFxStore();
+    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
+    const rub = { currency: "RUB" as const, purpose: "price" as const, price: "0.011", quote: "USD" as const, expiresInDays: 7, note: "источники легли" };
+
+    const saved = await service.setManual(owner, rub, NOW);
+    expect(saved).toMatchObject({ currency: "RUB", purpose: "price", quote: "USD", fallback: true });
+    expect((await service.overview(NOW)).manual.find((rate) => rate.currency === "RUB")?.fallback).toBe(true);
+
+    // Рыночный курс появился и свежий — запасной остаётся в списке, но не в работе.
+    await store.setCurrentRate(rateOf("RUB", new Decimal(1).div("90"), ["cbr"], NOW), NOW);
+    expect((await service.overview(NOW)).manual.find((rate) => rate.currency === "RUB")?.fallback).toBe(false);
+    // Курс звезды — не запасной никогда.
+    expect((await service.setManual(owner, input, NOW)).fallback).toBe(false);
   });
 
   it("цена звезды в рублях показывается и в долларах по курсу рубля, без курса — честное «нет»", async () => {
     const store = new MemoryFxStore();
-    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()));
+    const service = new FxService(store, environmentSecrets(config()), new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), switchesOf(config()), NO_REFRESHER);
     const rub = { ...input, purpose: "price" as const, price: "1.72", quote: "RUB" as const };
     expect((await service.setManual(owner, rub, NOW)).usdPerUnit).toBeNull();
 
@@ -203,6 +229,197 @@ describe("заданные курсы", () => {
     const [price] = (await service.overview(NOW)).manual;
     expect(price).toMatchObject({ purpose: "price", price: "1.72", quote: "RUB" });
     expect(Number(price?.usdPerUnit)).toBeCloseTo(0.02031, 5);
+  });
+});
+
+describe("схема ручного курса (T-0064)", () => {
+  const body = { currency: "XTR", purpose: "payout", price: "0.013", expiresInDays: 90, note: "вывод звёзд" };
+  const refused = (patch: Record<string, unknown>) => manualRateSchema.safeParse({ ...body, ...patch });
+  const RESERVE = "У рыночной валюты ручной курс — запасной: в долларах и только для цен";
+
+  it("звёзды — до 90 дней, любая котировка-фиат, любая цель", () => {
+    expect(refused({}).success).toBe(true);
+    expect(refused({ expiresInDays: 91 }).success).toBe(false);
+    expect(refused({ purpose: "price", quote: "RUB" }).success).toBe(true);
+  });
+
+  it("рубль — до 7 дней и только USD и price; остальное — 400 с понятным текстом", () => {
+    const rub = { currency: "RUB", purpose: "price", price: "0.011", quote: "USD", expiresInDays: 7 };
+    expect(refused(rub).success).toBe(true);
+    expect(refused({ ...rub, quote: undefined }).success).toBe(true);
+    for (const patch of [{ quote: "EUR" }, { quote: "RUB" }, { purpose: "payout" }]) {
+      const result = refused({ ...rub, ...patch });
+      expect(result.success).toBe(false);
+      expect(!result.success && result.error.issues.map((issue) => issue.message)).toContain(RESERVE);
+    }
+    expect(refused({ ...rub, expiresInDays: 8 }).success).toBe(false);
+  });
+
+  it("Gram и USDT тоже; доллару курс не задают", () => {
+    for (const currency of ["GRAM", "USDT", "EUR"]) expect(refused({ currency, purpose: "price", expiresInDays: 3 }).success, currency).toBe(true);
+    expect(refused({ currency: "USD", purpose: "price", expiresInDays: 3 }).success).toBe(false);
+  });
+});
+
+describe("«Обновить сейчас» (T-0064)", () => {
+  const cfg = () => config({ FX_ENABLED: "true" });
+  const SOURCE = "fake";
+
+  function fake(perMonth: number | null = null): RateSource & { calls: number } {
+    const result = {
+      id: SOURCE,
+      currencies: [],
+      tariff: { name: "test", perMinute: 10, perMonth, minIntervalMs: 60_000 },
+      calls: 0,
+      async fetch() {
+        result.calls++;
+        return [quoteInUsd("GRAM", "5.41", SOURCE, NOW), quoteInUsd("USDT", "1", SOURCE, NOW)];
+      },
+    };
+    return result;
+  }
+
+  function setup() {
+    const redis = new FakeRedis();
+    const store = new MemoryFxStore();
+    const hooks = new FxHooks();
+    const alerts: FxAlert[] = [];
+    hooks.onAlert("test", async (alert) => void alerts.push(alert));
+    const refresher = new FxRefresher(environmentSecrets(cfg()), store, redis as never, hooks, switchesOf(cfg()));
+    return { redis, store, refresher, alerts };
+  }
+
+  it("опрашивает источник сразу, мимо расписания: курсы приняты, снимок взят, пауза до следующего запроса поставлена", async () => {
+    const { redis, store, refresher } = setup();
+    const source = fake();
+    // Расписание говорит «рано»: обычный проход источник не тронул бы.
+    await store.saveSourceState(SOURCE, { usage: { month: "2026-09", used: 3, pausedUntil: null }, nextPollAt: new Date(NOW.getTime() + 3_600_000) });
+
+    const result = await refresher.refreshNow(SOURCE, NOW, [source]);
+
+    expect(source.calls).toBe(1);
+    expect(result).toMatchObject({ source: SOURCE, ok: true, error: null });
+    expect(result.quotes).toEqual([
+      { currency: "GRAM", usdPerUnit: "5.41", status: "accepted" },
+      { currency: "USDT", usdPerUnit: "1", status: "accepted" },
+    ]);
+    expect((await store.snapshot(result.snapshotId))?.rates.has("GRAM")).toBe(true);
+    expect((await store.sourceState(SOURCE))?.usage.used).toBe(4);
+    // Пауза — 60 000 / perMinute мс; лок снят.
+    expect(redis.ttls.get(`fx:poll-gap:${SOURCE}`)).toBe(6_000);
+    expect(redis.values.has("fx:refresh:lock")).toBe(false);
+  });
+
+  it("источник не ответил — это исход, а не ошибка запроса: причина в ответе, снимок взят, запрос учтён", async () => {
+    const { store, refresher, alerts } = setup();
+    const broken: RateSource = { ...fake(), fetch: async () => Promise.reject(new Error("HTTP 502")) };
+
+    const result = await refresher.refreshNow(SOURCE, NOW, [broken]);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(result).toMatchObject({ ok: false, quotes: [], error: "HTTP 502" });
+    expect(result.snapshotId).toBeTruthy();
+    expect((await store.sourceState(SOURCE))?.usage.used).toBe(1);
+    expect(alerts).toContainEqual({ kind: "source_failed", source: SOURCE, reason: "HTTP 502" });
+  });
+
+  it("месячный лимит исчерпан — отказ до опроса; лимит из панели важнее тарифа из кода", async () => {
+    const { store, refresher } = setup();
+    const source = fake(10);
+    await store.saveSourceState(SOURCE, { usage: { month: "2026-09", used: 10, pausedUntil: null }, nextPollAt: NOW });
+
+    await expect(refresher.refreshNow(SOURCE, NOW, [source])).rejects.toBeInstanceOf(FxRefreshLimitError);
+    expect(source.calls).toBe(0);
+
+    await store.setLimit(SOURCE, 20, "поставщик поднял тариф", "owner", NOW);
+    await expect(refresher.refreshNow(SOURCE, NOW, [source])).resolves.toMatchObject({ ok: true });
+    expect(source.calls).toBe(1);
+  });
+
+  it("счётчик прошлого месяца лимита не съедает", async () => {
+    const { store, refresher } = setup();
+    await store.saveSourceState(SOURCE, { usage: { month: "2026-08", used: 10, pausedUntil: null }, nextPollAt: NOW });
+    await expect(refresher.refreshNow(SOURCE, NOW, [fake(10)])).resolves.toMatchObject({ ok: true });
+  });
+
+  it("с прошлого опроса прошло меньше 60 000 / perMinute — отказ с секундами, источник не тронут", async () => {
+    const { redis, refresher } = setup();
+    const source = fake();
+    redis.values.set(`fx:poll-gap:${SOURCE}`, "1");
+    redis.ttls.set(`fx:poll-gap:${SOURCE}`, 4_200);
+
+    const error = await refresher.refreshNow(SOURCE, NOW, [source]).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(FxRefreshPausedError);
+    expect((error as FxRefreshPausedError).seconds).toBe(5);
+    expect(source.calls).toBe(0);
+  });
+
+  it("проход по расписанию тоже ставит паузу: следующий «сейчас» упрётся в неё", async () => {
+    const { redis, refresher } = setup();
+    await refresher.tick([fake()], NOW);
+    expect(redis.ttls.get(`fx:poll-gap:${SOURCE}`)).toBe(6_000);
+  });
+
+  it("лок занят — FxRefreshBusyError, источник не тронут, чужой лок цел", async () => {
+    const { redis, refresher } = setup();
+    const source = fake();
+    redis.values.set("fx:refresh:lock", "other-replica");
+
+    await expect(refresher.refreshNow(SOURCE, NOW, [source])).rejects.toBeInstanceOf(FxRefreshBusyError);
+    expect(source.calls).toBe(0);
+    expect(redis.values.get("fx:refresh:lock")).toBe("other-replica");
+  });
+
+  it("недоступный Redis — понятная ошибка, а не молчаливый опрос мимо лока", async () => {
+    const { store } = setup();
+    const broken = { set: async () => Promise.reject(new Error("ECONNREFUSED")), eval: async () => 0, pttl: async () => -2 };
+    const refresher = new FxRefresher(environmentSecrets(cfg()), store, broken as never, new FxHooks(), switchesOf(cfg()));
+    const source = fake();
+
+    await expect(refresher.refreshNow(SOURCE, NOW, [source])).rejects.toThrow();
+    expect(source.calls).toBe(0);
+  });
+
+  describe("в панели: сервис", () => {
+    const cfgOwner = () => config();
+    const owner: AccountRef = { accountId: randomUUID(), platform: "telegram", platformUserId: OWNER_ID };
+    const result: RefreshNowResult = { source: "coingecko", ok: true, error: null, quotes: [{ currency: "GRAM", usdPerUnit: "5.41", status: "accepted" }], snapshotId: "s1" };
+
+    function serviceWith(refresher: Pick<FxRefresher, "refreshNow">) {
+      const roles = new MemoryRolesRepository();
+      const service = new FxService(new MemoryFxStore(), environmentSecrets(cfgOwner()), new RolesService(cfgOwner(), roles, new MemoryAccountRepository()), switchesOf(cfgOwner()), refresher);
+      return { service, roles };
+    }
+
+    it("успех: ответ источника и запись в аудит с источником и исходом", async () => {
+      const { service, roles } = serviceWith({ refreshNow: async () => result });
+
+      expect(await service.refreshNow(owner, "coingecko", NOW)).toEqual(result);
+      expect(roles.entries).toEqual([expect.objectContaining({ action: "fx.refresh.now", target: "coingecko", actorAccountId: owner.accountId, after: { ok: true, error: null, quotes: [{ currency: "GRAM", status: "accepted" }] } })]);
+    });
+
+    it("без права — отказ; неизвестный источник — 404", async () => {
+      const { service } = serviceWith({ refreshNow: async () => result });
+      await expect(service.refreshNow({ ...owner, platformUserId: "555" }, "coingecko", NOW)).rejects.toBeInstanceOf(ForbiddenError);
+      await expect(service.refreshNow(owner, "нет-такого", NOW)).rejects.toBeInstanceOf(FxSourceNotFoundError);
+    });
+
+    it("лимит — 409, пауза — 429 с секундами, занято — 409; тексты из решений, аудита нет", async () => {
+      const failing = (error: Error) => serviceWith({ refreshNow: async () => Promise.reject(error) });
+      const cases: [Error, number, string][] = [
+        [new FxRefreshLimitError(), 409, "Лимит источника на месяц исчерпан"],
+        [new FxRefreshPausedError(7), 429, "Источник спрашивали только что — повторите через 7 с"],
+        [new FxRefreshBusyError(), 409, "Идёт обновление по расписанию, повторите через минуту"],
+      ];
+      for (const [error, status, message] of cases) {
+        const { service, roles } = failing(error);
+        const refusal = await service.refreshNow(owner, "coingecko", NOW).catch((reason: unknown) => reason);
+        expect(refusal).toBeInstanceOf(DomainError);
+        expect(refusal).toMatchObject({ status, message });
+        expect(roles.entries).toEqual([]);
+      }
+    });
   });
 });
 
@@ -374,7 +591,7 @@ describe("лимиты источников в панели", () => {
     const roles = new MemoryRolesRepository();
     const store = new MemoryFxStore();
     const cfg = demo();
-    const service = new FxService(store, environmentSecrets(cfg), new RolesService(cfg, roles, new MemoryAccountRepository()), switchesOf(cfg));
+    const service = new FxService(store, environmentSecrets(cfg), new RolesService(cfg, roles, new MemoryAccountRepository()), switchesOf(cfg), NO_REFRESHER);
     const seed = (used: number, nextPollAt = new Date(NOW.getTime() + 60_000), month = "2026-09") =>
       store.saveSourceState("coingecko", { usage: { month, used, pausedUntil: null }, nextPollAt });
     const view = async () => (await service.overview(NOW)).sources.find((source) => source.source === "coingecko");

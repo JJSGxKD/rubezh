@@ -17,6 +17,9 @@ import { RunGemContinueController } from "./run-gem-continue.controller.js";
 import { RunGemContinueService } from "./run-gem-continue.service.js";
 import { PrismaRunGemContinuesRepository, RUN_GEM_CONTINUES_REPOSITORY } from "./run-gem-continues.repository.js";
 import { RunLoadouts } from "./run-loadouts.js";
+import { RunProofsCleanupJob } from "./run-proofs-cleanup.job.js";
+import { PrismaRunProofsRepository, RUN_PROOFS_REPOSITORY } from "./run-proofs.repository.js";
+import { RunProofsService } from "./run-proofs.service.js";
 import { RunsHooks } from "./runs-hooks.js";
 import { RunsViewService } from "./runs-view.service.js";
 
@@ -44,6 +47,9 @@ import { RunsViewService } from "./runs-view.service.js";
     RunLoadouts,
     RunExtras,
     RatingRestrictions,
+    RunProofsService,
+    RunProofsCleanupJob,
+    { provide: RUN_PROOFS_REPOSITORY, useClass: PrismaRunProofsRepository },
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
     { provide: RUN_GEM_CONTINUES_REPOSITORY, useClass: PrismaRunGemContinuesRepository },
@@ -53,6 +59,6 @@ import { RunsViewService } from "./runs-view.service.js";
   // уведомлениям в чат: они читают забеги, но не принимают их. Сверку
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
   // предметов; награду, бусты и добычу в листе забега — их модули.
-  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunExtras, RUNS_REPOSITORY, LEADERBOARD_STORE],
+  exports: [RunsService, RunsViewService, RunsHooks, RunContinues, RunLoadouts, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}

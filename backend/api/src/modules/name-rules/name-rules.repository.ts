@@ -33,6 +33,8 @@ export interface NameRulesRepository {
   listActive(): Promise<StoredNameRule[]>;
   findByKey(category: NameRuleCategory, kind: NameRuleKind, pattern: string): Promise<StoredNameRule | null>;
   count(): Promise<number>;
+  /** действующих правил вида `regex` */
+  countRegex(): Promise<number>;
   insert(row: StoredNameRule): Promise<void>;
   /** изменённая строка; `null` — такого правила нет */
   update(ruleId: string, patch: NameRulePatch, at: Date, by: string | null): Promise<StoredNameRule | null>;
@@ -65,6 +67,10 @@ export class PrismaNameRulesRepository implements NameRulesRepository {
 
   async count(): Promise<number> {
     return await this.prisma.nameRule.count();
+  }
+
+  async countRegex(): Promise<number> {
+    return await this.prisma.nameRule.count({ where: { kind: "regex", active: true } });
   }
 
   async insert(row: StoredNameRule): Promise<void> {

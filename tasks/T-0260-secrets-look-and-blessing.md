@@ -37,7 +37,7 @@ batch: 4
 
 # T-0260. Тайники рубежа — облик на канве, радар, круг стояния и окно благословения
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json)](README.md#значки-статуса) [![T-0259](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json&label=T-0259)](T-0259-secrets-tree-and-rift.md) [![T-0352](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json&label=T-0352)](T-0352-secrets-run-wiring.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json)](README.md#значки-статуса) [![T-0259](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0259.json&label=T-0259)](T-0259-secrets-tree-and-rift.md) [![T-0352](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json&label=T-0352)](archive/T-0352-secrets-run-wiring.md)
 
 ## Зачем
 
@@ -62,8 +62,12 @@ batch: 4
   камень — треугольник, огонёк — точка с хвостом). Тоны — из `looks.ts`,
   новые записи `SECRET_LOOKS`. Действующий — со столбом света: прозрачность
   вытянутого прямоугольника, без `ADD`.
-- **Арт** — кадры атласа `env` (`secrets.mjs` дизайнера, очередь п. 8). Нет
-  кадра — фигура.
+- **Арт** — кадры атласа `env` готовы (31.10.2026, п. 8 и 14 очереди
+  дизайнера): `secret/<вид>/found` и `secret/<вид>/active`, у огонька —
+  `secret/wisp/hint` и `secret/wisp/active`; вид — как `SecretKind`
+  (`shrine`, `hoard`, `stone`, `tree`, `rift`, `wisp`). Центр кадра — центр
+  тайника, ячейка — `units` тайника × `ART_PPU` (`design/art/src/secrets.mjs`).
+  Нет кадра — фигура.
 - **Круг стояния** — дуга прогресса вокруг тайника, тон вида.
 - **Радар** — точка тайника цветом вида, как сейчас отметки элит; закрытые
   невидимые не рисуются.

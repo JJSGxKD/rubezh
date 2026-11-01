@@ -43,7 +43,7 @@ export interface NameRuleView {
 
 export interface NameRulesView {
   rules: NameRuleView[];
-  limits: { patternMax: number; noteMax: number; rulesMax: number; samplesMax: number; sampleMax: number };
+  limits: { patternMax: number; noteMax: number; rulesMax: number; regexRulesMax: number; samplesMax: number; sampleMax: number };
 }
 
 export interface ProbeInput {
@@ -93,14 +93,15 @@ export class NameRulesService {
   async view(actor: AccountRef): Promise<NameRulesView> {
     await this.roles.require(actor, "names.edit");
     const rows = await this.db(this.repository.list());
-    const { patternMax, noteMax, rulesMax, samplesMax, sampleMax } = NAME_RULE_LIMITS;
-    return { rules: rows.map(ruleView), limits: { patternMax, noteMax, rulesMax, samplesMax, sampleMax } };
+    const { patternMax, noteMax, rulesMax, regexRulesMax, samplesMax, sampleMax } = NAME_RULE_LIMITS;
+    return { rules: rows.map(ruleView), limits: { patternMax, noteMax, rulesMax, regexRulesMax, samplesMax, sampleMax } };
   }
 
   async create(actor: AccountRef, input: NameRuleInput, at = new Date()): Promise<NameRuleView> {
     await this.roles.require(actor, "names.edit");
     const checked = checkedRule({ active: true, note: null, ...input });
     if ((await this.db(this.repository.count())) >= NAME_RULE_LIMITS.rulesMax) throw new NameRuleConflictError(`Правил уже ${String(NAME_RULE_LIMITS.rulesMax)} — нужно удалить лишние`);
+    await this.ensureRegexRoom(checked);
     this.ensureUnique(checked, await this.db(this.repository.list()), null);
 
     const row: StoredNameRule = { ruleId: randomUUID(), ...checked, createdAt: at, updatedAt: at, updatedBy: actor.accountId };
@@ -123,6 +124,8 @@ export class NameRulesService {
       active: patch.active ?? before.active,
       note: patch.note === undefined ? before.note : patch.note,
     });
+    // Своя регулярка не считается лишней: правка шаблона на потолке проходит.
+    if (!(before.kind === "regex" && before.active)) await this.ensureRegexRoom(checked);
     this.ensureUnique(checked, rows, ruleId);
 
     const updated = await this.db(this.repository.update(ruleId, checked, at, actor.accountId));
@@ -161,6 +164,12 @@ export class NameRulesService {
       const result = cleanNameDetailed(sample, set);
       return { sample, name: result.name, verdict: result.verdict, candidateHit: result.hits.includes(candidateId), saved: result.saved.includes(candidateId) };
     });
+  }
+
+  /** Регулярок среди действующих правил не больше потолка: остальные виды идут до общего `rulesMax`. */
+  private async ensureRegexRoom(rule: Checked): Promise<void> {
+    if (rule.kind !== "regex" || !rule.active) return;
+    if ((await this.db(this.repository.countRegex())) >= NAME_RULE_LIMITS.regexRulesMax) throw new NameRuleConflictError(`Регулярок уже ${String(NAME_RULE_LIMITS.regexRulesMax)} — нужно удалить лишние`);
   }
 
   private ensureUnique(rule: Checked, rows: readonly StoredNameRule[], selfId: string | null): void {

@@ -3,7 +3,7 @@ import { createPrisma } from "../infra/database.js";
 import { closeRedis, createRedis } from "../infra/redis.js";
 import { AccountRestrictions } from "../modules/restrictions/account-restrictions.js";
 import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
-import { rebuildLeaderboard } from "../modules/runs/leaderboard-rebuild.js";
+import { formatBoardCounts, rebuildForRestrictions } from "../modules/runs/leaderboard-rebuild.js";
 import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
 import { WipeUsageError, formatPlan, formatResult, parseWipeArgs, planWipe, runWipe } from "../modules/wipe/wipe-runner.js";
@@ -19,7 +19,8 @@ import { WipeUsageError, formatPlan, formatResult, parseWipeArgs, planWipe, runW
  *
  * В контейнере — `node dist/cli/wipe.js …`. Снимок компенсаций и стирание —
  * одна транзакция; после неё пересобирается рейтинг (доски станут пустыми),
- * ограниченные по-прежнему в доски не возвращаются. Блокировки, сессии, лимиты
+ * ограниченные по-прежнему в доски не возвращаются, а аккаунты с отдельной доской
+ * лягут только в полную. Блокировки, сессии, лимиты
  * и кеш ограничений не трогаются.
  */
 async function main(): Promise<void> {
@@ -40,9 +41,9 @@ async function main(): Promise<void> {
     const redis = createRedis(config);
     try {
       await redis.connect();
-      const excluded = await new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config).restrictedAccounts("leaderboard");
-      const counts = await rebuildLeaderboard(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), new Set(excluded));
-      console.log(`\nрейтинг пересобран: ${Object.entries(counts).map(([difficulty, count]) => `${difficulty} — ${count}`).join(", ")}`);
+      const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
+      const counts = await rebuildForRestrictions(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions);
+      console.log(`\nрейтинг пересобран: ${formatBoardCounts(counts)}`);
     } catch (error: unknown) {
       throw new Error(`Вайп выполнен, но рейтинг не пересобран: ${error instanceof Error ? error.message : "unknown"}. Повторите: node dist/cli/runs-rebuild-leaderboard.js`, { cause: error });
     } finally {

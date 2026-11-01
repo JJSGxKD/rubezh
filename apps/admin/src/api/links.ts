@@ -77,6 +77,13 @@ export const linkSchema = z.object({
   directUrl: z.string().nullable(),
   // Сервер старее партнёрских ссылок или прислал мусор: ссылка считается ссылкой команды, список не ломается.
   partner: linkPartnerSchema.nullable().catch(null),
+  // Автоисточник (Р116) и его показ. Сервер старее панели или мусор в поле: ссылка считается ручной,
+  // список не ломается.
+  auto: z.boolean().catch(false),
+  autoKey: z.string().nullable().catch(null),
+  partnerTag: z.string().nullable().catch(null),
+  title: z.string().nullable().catch(null),
+  hiddenAt: z.string().nullable().catch(null),
 });
 
 /** Клики по классу устройства; без класса и незнакомый класс сервер сводит в `unknown`. */
@@ -144,6 +151,54 @@ export function createLink(api: AdminApi, input: NewLink): Promise<ApiResult<Lin
 /** Сменить цель: прошлые клики остаются, новые идут по-новому. */
 export function retargetLink(api: AdminApi, code: string, target: LinkTarget): Promise<ApiResult<Link>> {
   return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { target }, schema: linkSchema });
+}
+
+/** Дать автоисточнику название; пустое сбрасывает, и в списке снова кампания. Кампания и источник не меняются. */
+export function renameLink(api: AdminApi, code: string, title: string): Promise<ApiResult<Link>> {
+  const trimmed = title.trim();
+  return api.request(`/links/${encodeURIComponent(code)}/display`, { method: "PATCH", body: { title: trimmed === "" ? null : trimmed }, schema: linkSchema });
+}
+
+/** Скрыть автоисточник из списка или вернуть; запуски по нему считаются как раньше. */
+export function setLinkHidden(api: AdminApi, code: string, hidden: boolean): Promise<ApiResult<Link>> {
+  return api.request(`/links/${encodeURIComponent(code)}/display`, { method: "PATCH", body: { hidden }, schema: linkSchema });
+}
+
+export const unknownKeysSchema = z.object({
+  keys: z.array(z.object({ key: z.string(), hits: z.number(), firstAt: z.string(), lastAt: z.string() })),
+  limit: z.number(),
+});
+export type UnknownKeys = z.infer<typeof unknownKeysSchema>;
+
+/** Сводка ключей параметра запуска, которых нет в списке: только чтение. */
+export function fetchUnknownKeys(api: AdminApi): Promise<ApiResult<UnknownKeys>> {
+  return api.request("/links/unknown-keys", { schema: unknownKeysSchema });
+}
+
+export const AUTO_SOURCE_HELP = "Источник появился по первой ссылке с такими метками. Название можно поменять, а источник скрыть: запуски по нему продолжат считаться.";
+export const UNKNOWN_KEYS_HELP = "Ключи в параметре запуска, которых нет в списке: источником они не становятся, а копятся здесь. Нужен ключ — добавьте его в список в коде (docs/24, §3.6).";
+export const RENAME_HELP = "Меняется только название для людей. Кампания и источник остаются: по ним идут разрезы аналитики. Пустое название возвращает кампанию.";
+export const TITLE_MAX = 80;
+
+/** Название для списка и карточки: данное в панели, а нет — кампания. */
+export function linkTitle(link: Pick<Link, "title" | "campaign">): string {
+  return link.title !== null && link.title !== "" ? link.title : link.campaign;
+}
+
+/** Строки без скрытых источников; при `showHidden` — все. Порядок как пришёл. */
+export function visibleLinks<T extends Pick<Link, "hiddenAt">>(rows: readonly T[], showHidden: boolean): T[] {
+  return showHidden ? [...rows] : rows.filter((row) => row.hiddenAt === null);
+}
+
+/** Пары, по которым источник завёлся сам: подписанные словами, для карточки. У ручной ссылки — пусто. */
+export function autoPairs(link: Pick<Link, "auto" | "source" | "campaign" | "medium" | "partnerTag">): { label: string; value: string }[] {
+  if (!link.auto) return [];
+  const pairs: { label: string; value: string }[] = [];
+  if (link.source !== null && link.source !== "") pairs.push({ label: "Источник", value: link.source });
+  if (link.campaign !== "") pairs.push({ label: "Кампания", value: link.campaign });
+  if (link.medium !== null && link.medium !== "") pairs.push({ label: "Место", value: link.medium });
+  if (link.partnerTag !== null && link.partnerTag !== "") pairs.push({ label: "Партнёр", value: link.partnerTag });
+  return pairs;
 }
 
 /** Только что заведённая ссылка строкой списка — карточка открывается, не дожидаясь перечитывания. */

@@ -8,6 +8,7 @@ import { xpForLevel } from "./progression/levels";
 import { findCardToolProblems, findUnlockProblems } from "./progression/unlocks";
 import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
+import { findSecretsProblems } from "./sim/secrets";
 import { findContinueProblems } from "./sim/continue";
 import { findDifficultyContentProblems } from "./sim/difficulty";
 import { findDropsContentProblems } from "./sim/gems";
@@ -70,6 +71,7 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("drops", findDropsContentProblems(content.drops));
   add("chests", findChestsProblems(content.chests));
   add("chests", findPickupPoolProblems(content));
+  add("secrets", findSecretsProblems(content.secrets));
   add("difficulties", findDifficultyContentProblems(content.difficulties));
   add("difficulties", findDifficultySetProblems(content));
   add("continueRules", findContinueProblems(content.continueRules));

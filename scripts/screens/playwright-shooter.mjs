@@ -1,0 +1,54 @@
+// Съёмка настоящим браузером. Подключается к установленным Edge или Chrome
+// через playwright-core: сам пакет браузеров не скачивает
+// (docs/17-testing-strategy.md §8).
+
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { contextOptions, openSeededPage, runSteps } from "./steps.mjs";
+
+/** Пауза после последнего шага: анимации выключены, но экран ещё дорисовывается. */
+const SETTLE_MS = 400;
+const IDLE_WAIT_MS = 5_000;
+
+function firstLine(error) {
+  return error instanceof Error ? error.message.split("\n")[0] : String(error);
+}
+
+export async function createPlaywrightShooter({ browser: channel }) {
+  const { chromium } = await import("playwright-core");
+  let browser;
+  try {
+    browser = await chromium.launch({ channel });
+  } catch (error) {
+    throw new Error(`браузер ${channel} не запустился (${firstLine(error)}). Поставьте Edge или Chrome, либо смените --browser`);
+  }
+
+  return {
+    // Возвращает ошибки консоли страницы; сломанный шаг или адрес — исключение.
+    async shoot(job) {
+      const context = await browser.newContext(contextOptions(job));
+      const consoleErrors = [];
+      try {
+        const page = await openSeededPage(context, job, (opened) => {
+          opened.on("console", (message) => {
+            if (message.type() === "error") consoleErrors.push(message.text());
+          });
+          opened.on("pageerror", (error) => consoleErrors.push(error.message));
+        });
+        await runSteps(page, job.scenario);
+        // Сеть успокаивается не всегда (внешние скрипты), поэтому ждём недолго и не падаем.
+        await page.waitForLoadState("networkidle", { timeout: IDLE_WAIT_MS }).catch(() => undefined);
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(SETTLE_MS);
+        mkdirSync(dirname(job.file), { recursive: true });
+        await page.screenshot({ path: job.file });
+      } finally {
+        await context.close();
+      }
+      return consoleErrors;
+    },
+    async close() {
+      await browser.close();
+    },
+  };
+}

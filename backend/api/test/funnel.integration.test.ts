@@ -7,9 +7,20 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { bucketOf } from "../src/modules/flags/flag-rollout.js";
 import { flagSplitReport } from "../src/modules/funnel/flag-split-report.js";
-import { funnelReport } from "../src/modules/funnel/funnel-report.js";
+import { funnelMarked, funnelReport, partnerFunnelReport } from "../src/modules/funnel/funnel-report.js";
+import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { PrismaFunnelRepository } from "../src/modules/funnel/funnel.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
+import { vi } from "vitest";
+import type { Account } from "../src/modules/auth/account.repository.js";
+import { AdminReviewController } from "../src/modules/admin/admin-review.controller.js";
+import { PrismaBoardMarkReader } from "../src/modules/admin/board-mark.reader.js";
+import type { Role } from "../src/modules/roles/permissions.js";
+import { RolesService } from "../src/modules/roles/roles.service.js";
+import type { ReviewRow } from "../src/modules/runs/runs.repository.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
  * Вехи воронки на живом Postgres (docs/17-testing-strategy.md
@@ -224,5 +235,305 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
     expect(early.share.d1Eligible + early.rest.d1Eligible).toBe(24);
     const elsewhere = await flagSplitReport(prisma, { ...rule, platforms: ["vk"] }, new Date(day - HOUR), new Date(day + 2 * HOUR), later, []);
     expect(elsewhere.share.players + elsewhere.rest.players).toBe(0);
+  });
+});
+
+/**
+ * Метка «Отдельная доска» в воронке и разборе забегов (T-0115). Окно — в 2019
+ * году, раньше любых видов соседних тестов; виды этого блока кончаются до 2020.
+ */
+describe.skipIf(DATABASE_URL === "")("метка «Отдельная доска» в воронке и разборе", () => {
+  const FROM = new Date("2019-06-10T00:00:00Z");
+  const TO = new Date("2019-06-11T00:00:00Z");
+  const at = (hours: number) => new Date(FROM.getTime() + hours * HOUR);
+  let prisma: PrismaClient;
+  let reader: PrismaBoardMarkReader;
+  const ids: Record<string, string> = {};
+
+  async function player(name: string, milestones: { entered?: number; appOpened?: number; firstRunStarted?: number; firstPurchase?: number }, view: "active" | "lifted" | null): Promise<void> {
+    const accountId = randomUUID();
+    ids[name] = accountId;
+    await prisma.account.create({ data: { accountId, platform: "telegram", platformUserId: `fm-${accountId.slice(0, 8)}`, displayName: name, createdAt: at(0), lastSeenAt: at(0) } });
+    await prisma.accountFunnel.create({
+      data: {
+        accountId,
+        enteredAt: milestones.entered === undefined ? null : at(milestones.entered),
+        appOpenedAt: milestones.appOpened === undefined ? null : at(milestones.appOpened),
+        firstRunStartedAt: milestones.firstRunStarted === undefined ? null : at(milestones.firstRunStarted),
+        firstPurchaseAt: milestones.firstPurchase === undefined ? null : at(milestones.firstPurchase),
+      },
+    });
+    if (view === null) return;
+    await prisma.accountRestriction.create({
+      data: {
+        accountId,
+        kind: "separate_board",
+        startsAt: new Date("2019-05-01T00:00:00Z"),
+        endsAt: new Date("2019-07-01T00:00:00Z"),
+        liftedAt: view === "lifted" ? new Date("2019-06-01T00:00:00Z") : null,
+        liftComment: view === "lifted" ? "снято" : null,
+        reason: "other",
+        notify: false,
+      },
+    });
+  }
+
+  async function staff(role: Role) {
+    const accounts = new MemoryAccountRepository();
+    const rolesRepository = new MemoryRolesRepository();
+    const roles = new RolesService(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), rolesRepository, accounts);
+    const account: Account = await accounts.upsert({ platform: "telegram", platformUserId: "9", displayName: "Сотрудник", username: null, photoUrl: null }, Date.now());
+    await rolesRepository.grant(account.accountId, role, null);
+    return { roles, request: { account: { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId } } };
+  }
+
+  async function controller(role: Role, rows: ReviewRow[]) {
+    const { roles, request } = await staff(role);
+    const runs = { review: async () => rows };
+    const accounts = { displayNames: async () => new Map<string, string>() };
+    const funnel = new PrismaFunnelRepository(prisma);
+    return { request, controller: new AdminReviewController(runs as never, funnel, accounts as never, {} as never, roles, reader) };
+  }
+
+  const flagged = (name: string, finishedAt: Date): ReviewRow => ({ runId: `fm-${name}`, accountId: ids[name]!, verdict: "suspicious", verdictReasons: [], difficulty: "easy", survivalSec: 60, level: 1, enemiesKilled: 1, finishedAt });
+
+  beforeAll(async () => {
+    prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
+    reader = new PrismaBoardMarkReader(prisma);
+    await player("m1", { entered: 1, appOpened: 1, firstRunStarted: 2 }, "active");
+    await player("m2", { entered: 2, appOpened: 2, firstPurchase: 5 }, "active");
+    // Помечен, но когорта не в окне: первый контакт днём позже.
+    await player("m3", { entered: 30, appOpened: 30 }, "active");
+    await player("p1", { entered: 1, appOpened: 1 }, null);
+    // Вид снят до окна: не помечен.
+    await player("p2", { entered: 3, appOpened: 3 }, "lifted");
+  });
+
+  afterAll(async () => {
+    await prisma.account.deleteMany({ where: { accountId: { in: Object.values(ids) } } });
+    await prisma.$disconnect();
+  });
+
+  it("сводная строка по помеченным: те же числа вех, когорта по первому контакту в окне", async () => {
+    expect(await funnelMarked(prisma, FROM, TO)).toEqual({
+      accounts: 2,
+      entered: 2,
+      appOpened: 2,
+      firstRunStarted: 1,
+      firstRunFinished: 0,
+      runs2: 0,
+      runs5: 0,
+      returnedD1: 0,
+      returnedD7: 0,
+      firstPurchase: 1,
+    });
+  });
+
+  it("окно без помеченных — нули, а не пропавшая строка", async () => {
+    expect(await funnelMarked(prisma, new Date("2018-01-01T00:00:00Z"), new Date("2018-01-02T00:00:00Z"))).toMatchObject({ accounts: 0, entered: 0, firstPurchase: 0 });
+  });
+
+  it("маршрут воронки: `marked` только у держателя права players.board.restrict", async () => {
+    const owner = await controller("owner", []);
+    const query = { from: FROM.toISOString(), to: TO.toISOString() };
+    const full = await owner.controller.funnelReport(owner.request, query);
+    expect(full.data.marked).toMatchObject({ accounts: 2, entered: 2 });
+
+    const analyst = await controller("analyst", []);
+    const plain = await analyst.controller.funnelReport(analyst.request, query);
+    expect("marked" in plain.data).toBe(false);
+    expect(plain.data.rows).toEqual(full.data.rows);
+  });
+
+  it("разбор забегов: `boardMarked` у нужных строк владельцу, одним запросом на страницу; остальным поля нет", async () => {
+    const rows = [flagged("m1", at(3)), flagged("p1", at(4)), flagged("m2", at(5)), flagged("p2", at(6))];
+    const owner = await controller("owner", rows);
+    const spy = vi.spyOn(reader, "ids");
+    const seen = await owner.controller.review(owner.request, undefined);
+    expect(seen.data.runs.map((run) => [run.runId, run.boardMarked])).toEqual([
+      ["fm-m1", true],
+      ["fm-p1", false],
+      ["fm-m2", true],
+      ["fm-p2", false],
+    ]);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    spy.mockClear();
+    const moderator = await controller("moderator", rows);
+    const hidden = await moderator.controller.review(moderator.request, undefined);
+    expect(hidden.data.runs.every((run) => !("boardMarked" in run))).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("отчёт `funnelReport` метки не знает: до и после снятия видов он тот же", async () => {
+    const before = await funnelReport(prisma, FROM, TO);
+    await prisma.accountRestriction.deleteMany({ where: { accountId: { in: Object.values(ids) } } });
+    expect(await funnelReport(prisma, FROM, TO)).toEqual(before);
+    expect(before.reduce((sum, row) => sum + row.accounts, 0)).toBe(4);
+  });
+});
+
+/** Прямые ссылки кампаний и воронка партнёра (T-0068): свои игроки, окно 2026 года, как у вех выше. */
+describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронка партнёра (T-0068, Р96)", () => {
+  let prisma: PrismaClient;
+  let accounts: PrismaAccountRepository;
+  let funnel: PrismaFunnelRepository;
+
+  async function account(): Promise<string> {
+    const created = await accounts.upsert(
+      { platform: "telegram", platformUserId: String(710_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Путник", username: null },
+      Date.now(),
+    );
+    return created.accountId;
+  }
+
+  beforeAll(() => {
+    prisma = createPrisma(loadAppConfig({ DATABASE_URL }));
+    accounts = new PrismaAccountRepository(prisma);
+    funnel = new PrismaFunnelRepository(prisma);
+  });
+
+  afterAll(async () => {
+    await prisma.$disconnect();
+  });
+
+  const WINDOW_FROM = new Date(T0 - HOUR);
+  const WINDOW_TO = new Date(T0 + 24 * HOUR);
+
+  async function touchSession(accountId: string, startKind: "link" | "click", startRef: string): Promise<void> {
+    await new PrismaSessionsRepository(prisma).record({
+      sessionId: randomUUID(),
+      accountId,
+      platform: "telegram",
+      place: "channel",
+      startKind,
+      startParam: `${startKind === "link" ? "l" : "c"}-${startRef}`,
+      startRef,
+      clientPlatform: null,
+      clientVersion: null,
+      deviceClass: "unknown",
+      os: "unknown",
+      ipPrefix: null,
+      startedAt: new Date(T0).toISOString(),
+    });
+    await funnel.entered(accountId, new Date(T0));
+  }
+
+  it("аккаунт с первым касанием «прямая ссылка» стоит в отчёте под кампанией своей ссылки, как клик; без ссылки — кампании нет", async () => {
+    const campaign = `direct-${randomUUID().slice(0, 8)}`;
+    const code = newLinkCode();
+    await prisma.link.create({ data: { code, campaign, source: "tg_ads" } });
+    const [first, second, orphan] = [await account(), await account(), await account()];
+    await touchSession(first, "link", code);
+    await touchSession(second, "link", code);
+    // Клик той же ссылки — в той же строке: прямая ссылка и переходник сравниваются как одна кампания.
+    const clickId = newClickId();
+    await prisma.linkClick.create({ data: { clickId, linkCode: code } });
+    await touchSession(await account(), "click", clickId);
+    await touchSession(orphan, "link", newLinkCode());
+
+    const report = await funnelReport(prisma, WINDOW_FROM, WINDOW_TO);
+
+    expect(report.filter((line) => line.startRef === campaign)).toEqual([expect.objectContaining({ platform: "telegram", startKind: "click", startSource: "tg_ads", accounts: 3, entered: 3 })]);
+    // Ссылка удалена или кода нет — кампания пуста, а в строку «неизвестно» не уходит.
+    expect(report.some((line) => line.startKind === "link")).toBe(false);
+  });
+
+  /** Партнёр, ссылка и код партнёра. */
+  async function setupPartner(name: string) {
+    const partnerId = randomUUID();
+    const long = new Date(Date.UTC(2020, 0, 1));
+    await new PrismaPartnersRepository(prisma).create({ partnerId, name, contact: null, note: null, createdBy: randomUUID(), createdAt: long, updatedAt: long });
+    const linkCode = newLinkCode();
+    const campaign = `p-${randomUUID().slice(0, 8)}`;
+    await prisma.link.create({ data: { code: linkCode, campaign, source: null, partnerId } });
+    const campaignId = randomUUID();
+    const title = `Код ${randomUUID().slice(0, 6)}`;
+    await prisma.$executeRaw`
+      INSERT INTO promo_campaign (campaign_id, title, kind, reward, max_redemptions, redeemed, starts_at, ends_at, created_by, created_at, updated_at, partner_id)
+      VALUES (${campaignId}::uuid, ${title}, 'shared', '{"coins":1,"gems":0,"shard_common":0,"shard_uncommon":0}'::jsonb, NULL, 0, ${new Date(T0)}, NULL, ${randomUUID()}::uuid, ${new Date(T0)}, ${new Date(T0)}, ${partnerId}::uuid)`;
+    return { partnerId, linkCode, campaign, campaignId, title };
+  }
+
+  async function bind(accountId: string, partnerId: string, boundAt: Date, via: { linkCode?: string; campaignId?: string }): Promise<void> {
+    await prisma.partnerBinding.create({ data: { accountId, partnerId, boundAt, linkCode: via.linkCode ?? null, campaignId: via.campaignId ?? null } });
+  }
+
+  async function milestones(accountId: string, steps: Partial<Record<"enteredAt" | "appOpenedAt" | "firstRunStartedAt" | "firstRunFinishedAt" | "runs2At" | "runs5At" | "returnedD1At" | "returnedD7At" | "firstPurchaseAt", boolean>>): Promise<void> {
+    const at = new Date(T0);
+    await prisma.accountFunnel.create({ data: { accountId, ...Object.fromEntries(Object.entries(steps).filter(([, on]) => on).map(([key]) => [key, at])) } });
+  }
+
+  it("воронка партнёра: двое по ссылке и один по коду — всего три, две строки источников, вехи верны; чужой партнёр и привязка вне окна не видны", async () => {
+    const mine = await setupPartner("Мой");
+    const other = await setupPartner("Чужой");
+    const [byLinkA, byLinkB, byCode, foreign, early] = [await account(), await account(), await account(), await account(), await account()];
+    await milestones(byLinkA, { enteredAt: true, appOpenedAt: true, firstRunStartedAt: true, firstRunFinishedAt: true });
+    await milestones(byLinkB, { enteredAt: true, appOpenedAt: true });
+    await milestones(byCode, { enteredAt: true, appOpenedAt: true, firstRunStartedAt: true, firstRunFinishedAt: true, runs2At: true, firstPurchaseAt: true });
+    await milestones(foreign, { enteredAt: true, appOpenedAt: true, firstPurchaseAt: true });
+    await milestones(early, { enteredAt: true, appOpenedAt: true });
+    await bind(byLinkA, mine.partnerId, new Date(T0), { linkCode: mine.linkCode });
+    await bind(byLinkB, mine.partnerId, new Date(T0 + HOUR), { linkCode: mine.linkCode });
+    await bind(byCode, mine.partnerId, new Date(T0 + 2 * HOUR), { campaignId: mine.campaignId });
+    await bind(foreign, other.partnerId, new Date(T0), { linkCode: other.linkCode });
+    // Привязан к партнёру давно — по дате привязки в окно не попадает, хотя вехи свежие.
+    await bind(early, mine.partnerId, new Date(T0 - 40 * 24 * HOUR), { linkCode: mine.linkCode });
+
+    const rows = await partnerFunnelReport(prisma, mine.partnerId, WINDOW_FROM, WINDOW_TO);
+
+    const total = rows.reduce((sum, row) => sum + row.accounts, 0);
+    expect(total).toBe(3);
+    const link = rows.filter((row) => row.via === "link");
+    const code = rows.filter((row) => row.via === "code");
+    expect(link).toEqual([expect.objectContaining({ platform: "telegram", viaName: mine.campaign, viaRef: mine.linkCode, accounts: 2, entered: 2, appOpened: 2, firstRunStarted: 1, firstRunFinished: 1, runs2: 0, firstPurchase: 0 })]);
+    expect(code).toEqual([expect.objectContaining({ platform: "telegram", viaName: mine.title, viaRef: mine.campaignId, accounts: 1, entered: 1, firstRunStarted: 1, runs2: 1, firstPurchase: 1 })]);
+    expect(rows).toHaveLength(2);
+
+    // Чужой партнёр — своя воронка; у партнёра без привязок — пусто.
+    const theirs = await partnerFunnelReport(prisma, other.partnerId, WINDOW_FROM, WINDOW_TO);
+    expect(theirs.reduce((sum, row) => sum + row.accounts, 0)).toBe(1);
+    expect(await partnerFunnelReport(prisma, randomUUID(), WINDOW_FROM, WINDOW_TO)).toEqual([]);
+  });
+
+  it("окно — по дате привязки, а не по первому контакту: левая граница включительно, правая исключительно", async () => {
+    const partner = await setupPartner("Окно");
+    const [inside, onFrom, onTo] = [await account(), await account(), await account()];
+    for (const id of [inside, onFrom, onTo]) await milestones(id, { enteredAt: true });
+    await bind(inside, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
+    await bind(onFrom, partner.partnerId, WINDOW_FROM, { linkCode: partner.linkCode });
+    await bind(onTo, partner.partnerId, WINDOW_TO, { linkCode: partner.linkCode });
+
+    const rows = await partnerFunnelReport(prisma, partner.partnerId, WINDOW_FROM, WINDOW_TO);
+
+    expect(rows.reduce((sum, row) => sum + row.accounts, 0)).toBe(2);
+  });
+
+  it("игрок без строки воронки всё равно считается в «всех», а вехи у него нули; ссылка и код с разных площадок — разные строки", async () => {
+    const partner = await setupPartner("Площадки");
+    const bare = await account();
+    await bind(bare, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
+    const max = await accounts.upsert({ platform: "max", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Из MAX", username: null, photoUrl: null }, Date.now());
+    await milestones(max.accountId, { enteredAt: true });
+    await bind(max.accountId, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
+
+    const rows = await partnerFunnelReport(prisma, partner.partnerId, WINDOW_FROM, WINDOW_TO);
+
+    expect(rows.map((row) => [row.platform, row.accounts, row.entered]).sort()).toEqual([["max", 1, 1], ["telegram", 1, 0]]);
+  });
+
+  it("ссылка удалена: привязка остаётся, строка источника — «ссылка» без названия; удалён и код — тоже без названия", async () => {
+    const partner = await setupPartner("Удалённые");
+    const [viaLink, viaCode] = [await account(), await account()];
+    await bind(viaLink, partner.partnerId, new Date(T0), { linkCode: partner.linkCode });
+    await bind(viaCode, partner.partnerId, new Date(T0), { campaignId: partner.campaignId });
+    await prisma.link.delete({ where: { code: partner.linkCode } });
+
+    const rows = await partnerFunnelReport(prisma, partner.partnerId, WINDOW_FROM, WINDOW_TO);
+
+    // Удалённая ссылка обнуляет `link_code` привязки: она читается как привязка кодом без названия кампании.
+    expect(rows.reduce((sum, row) => sum + row.accounts, 0)).toBe(2);
+    expect(rows.every((row) => row.via === "code")).toBe(true);
   });
 });

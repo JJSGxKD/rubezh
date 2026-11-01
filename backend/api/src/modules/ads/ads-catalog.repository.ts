@@ -25,7 +25,6 @@ export interface AdNetworkRow {
 export interface AdNetworkEdit {
   networkKey: string;
   active: boolean;
-  priority: number;
   keys: Record<string, string>;
 }
 
@@ -67,6 +66,9 @@ export interface AdPassRow {
   claimed: number;
 }
 
+/** Итог перестановки: `mismatch` — набор не равен набору сетей, ничего не записано. */
+export type AdNetworksReorderResult = { status: "mismatch" } | { status: "ok"; before: string[]; after: string[]; changed: boolean };
+
 export const ADS_CATALOG_REPOSITORY = Symbol("ADS_CATALOG_REPOSITORY");
 
 export interface AdsCatalogRepository {
@@ -74,6 +76,12 @@ export interface AdsCatalogRepository {
   blocks(): Promise<AdBlockDef[]>;
   /** `false` — такой сети нет */
   updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean>;
+  /**
+   * Новый порядок всех сетей одной транзакцией под блокировкой: `priority` —
+   * место в `ids`, переписываются только сдвинувшиеся строки. Порядок уже
+   * такой — `changed: false`, записей нет.
+   */
+  reorderNetworks(ids: readonly string[], at: Date): Promise<AdNetworksReorderResult>;
   /** новый блок — идентификатор выдаёт база; `null` — сети нет */
   insertBlock(block: Omit<AdBlockDef, "blockId">, actorAccountId: string, at: Date): Promise<AdBlockDef | null>;
   /** сеть и место у блока не меняются; `false` — блока нет */
@@ -84,6 +92,8 @@ export interface AdsCatalogRepository {
 }
 
 export const networkKeysSchema = z.record(z.string(), z.string());
+
+const orderRowSchema = z.object({ network_key: z.string(), priority: z.number().int() });
 
 const networkSchema = z.object({ network_key: z.string(), name: z.string(), active: z.boolean(), priority: z.number().int(), keys: networkKeysSchema });
 
@@ -146,9 +156,31 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
   async updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        UPDATE ad_network SET active = ${edit.active}, priority = ${edit.priority}, keys = ${JSON.stringify(edit.keys)}::jsonb, updated_at = ${at}
+        UPDATE ad_network SET active = ${edit.active}, keys = ${JSON.stringify(edit.keys)}::jsonb, updated_at = ${at}
         WHERE network_key = ${edit.networkKey}`) > 0
     );
+  }
+
+  async reorderNetworks(ids: readonly string[], at: Date): Promise<AdNetworksReorderResult> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Все сети — под блокировкой: второй запрос ждёт здесь и читает уже новый порядок.
+      const rows = await tx.$queryRaw<unknown[]>`SELECT network_key, priority FROM ad_network ORDER BY priority, network_key FOR UPDATE`;
+      const members = rows.map((raw) => orderRowSchema.parse(raw));
+      const before = members.map((row) => row.network_key);
+      const known = new Set(before);
+      if (ids.length !== before.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) return { status: "mismatch" };
+      if (!ids.some((id, index) => before[index] !== id)) return { status: "ok", before, after: [...ids], changed: false };
+
+      const current = new Map(members.map((row) => [row.network_key, row.priority]));
+      const moving = ids.flatMap((id, index) => (current.get(id) === index ? [] : [{ id, priority: index }]));
+      if (moving.length > 0) {
+        await tx.$executeRaw`
+          UPDATE ad_network SET priority = u.priority, updated_at = ${at}
+          FROM unnest(${moving.map((row) => row.id)}::text[], ${moving.map((row) => row.priority)}::int[]) AS u(network_key, priority)
+          WHERE ad_network.network_key = u.network_key`;
+      }
+      return { status: "ok", before, after: [...ids], changed: true };
+    });
   }
 
   async insertBlock(block: Omit<AdBlockDef, "blockId">, actorAccountId: string, at: Date): Promise<AdBlockDef | null> {

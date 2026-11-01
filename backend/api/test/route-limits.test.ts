@@ -129,8 +129,18 @@ const ROUTES: RouteCase[] = [
     key: ACCOUNT_ID,
     build: (limiter) => {
       const leaderboardFor = vi.fn(ok);
-      const controller = new RunsController({} as never, { leaderboardFor } as never, limiter as never);
+      const controller = new RunsController({} as never, { leaderboardFor } as never, limiter as never, {} as never);
       return { call: async () => await controller.leaderboard(request, "easy"), service: leaderboardFor };
+    },
+  },
+  {
+    name: "PUT /runs/:runId/proof",
+    scope: "runs:proof",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const receive = vi.fn(ok);
+      const controller = new RunsController({} as never, {} as never, limiter as never, { receive } as never);
+      return { call: async () => await controller.proof(request, "00000000-0000-4000-8000-000000000099", { proof: "AA==" }), service: receive };
     },
   },
   {
@@ -139,7 +149,7 @@ const ROUTES: RouteCase[] = [
     key: ACCOUNT_ID,
     build: (limiter) => {
       const profile = vi.fn(ok);
-      const controller = new RunsController({} as never, { profile } as never, limiter as never);
+      const controller = new RunsController({} as never, { profile } as never, limiter as never, {} as never);
       return { call: async () => await controller.me(request), service: profile };
     },
   },

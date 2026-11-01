@@ -5,13 +5,17 @@ import {
   budgetTone,
   correctSourceUsed,
   fetchFxOverview,
+  isMarketCurrency,
   limitCaption,
   limitValueProblem,
+  MANUAL_CURRENCIES,
   MANUAL_PURPOSES,
+  MARKET_MANUAL_MAX_DAYS,
   manualRateProblem,
   parseCount,
-  PLATFORM_CURRENCIES,
   QUOTE_CURRENCIES,
+  refreshSource,
+  refreshSummary,
   resetSourceLimit,
   setManualRate,
   setSourceLimit,
@@ -25,6 +29,7 @@ import { formatDateTime, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { ConfirmDialog } from "../../ui/confirm-dialog";
+import { toast } from "../../ui/toast";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -78,9 +83,32 @@ type SourceEdit = { kind: "limit" | "used"; source: SourceRow };
 
 function SourcesPanel({ sources, canEdit, onChanged }: { sources: readonly SourceRow[]; canEdit: boolean; onChanged: () => void }) {
   const [editing, setEditing] = useState<SourceEdit | null>(null);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{ ok: boolean; text: string } | null>(null);
   const narrow = useNarrow();
+
+  /** «Обновить сейчас»: итог — уведомлением и строкой под таблицей; отказ сервера (лимит, пауза, занято) — тем же текстом. */
+  const refresh = async (source: SourceRow): Promise<void> => {
+    setRefreshing(source.source);
+    const result = await refreshSource(api, source.source);
+    setRefreshing(null);
+    if (!result.ok) {
+      setOutcome({ ok: false, text: `${source.source}: ${result.error.message}` });
+      toast.error(result.error.message);
+      return;
+    }
+    const text = refreshSummary(result.data);
+    setOutcome({ ok: result.data.ok, text });
+    if (result.data.ok) toast.success(text);
+    else toast.error(text);
+    onChanged();
+  };
+
   const actions = (source: SourceRow): ReactNode => (
     <span className="flex flex-wrap items-start gap-1.5 whitespace-nowrap md:flex-col md:items-stretch">
+      <Button aria-label={`Обновить сейчас источник ${source.source}`} disabled={refreshing !== null} onClick={() => void refresh(source)}>
+        {refreshing === source.source ? "Спрашиваем…" : "Обновить сейчас"}
+      </Button>
       <Button aria-label={`Изменить лимит источника ${source.source}`} onClick={() => setEditing({ kind: "limit", source })}>
         Изменить лимит…
       </Button>
@@ -102,8 +130,13 @@ function SourcesPanel({ sources, canEdit, onChanged }: { sources: readonly Sourc
   const close = () => setEditing(null);
 
   return (
-    <Panel title="Источники" help={HELP.fx.sourcesPanel}>
+    <Panel title="Источники" help={canEdit ? `${HELP.fx.sourcesPanel} ${HELP.fx.refreshNow}` : HELP.fx.sourcesPanel}>
       <DataTable rows={sources} rowKey={(source) => source.source} empty="Источников нет" columns={columns} />
+      {outcome === null ? null : (
+        <div className="mt-3" aria-live="polite">
+          <Notice tone={outcome.ok ? "success" : "warning"}>{outcome.text}</Notice>
+        </div>
+      )}
       {editing?.kind === "limit" ? <LimitDialog source={editing.source} onClose={close} onSaved={onChanged} /> : null}
       {editing?.kind === "used" ? <UsedDialog source={editing.source} onClose={close} onSaved={onChanged} /> : null}
     </Panel>
@@ -223,7 +256,12 @@ export function FxScreen() {
       {state.status === "ok" ? (
         <>
           {state.data.enabled ? null : <Notice tone="info">Сбор курсов на сервере выключен — ниже последние сохранённые.</Notice>}
-          {state.data.missing.length === 0 ? null : <Notice>Нет курса: {state.data.missing.join(", ")}</Notice>}
+          {state.data.missing.length === 0 ? null : (
+            <Notice>
+              Нет курса:{" "}
+              {state.data.missing.map((code) => (state.data.manual.some((rate) => rate.currency === code && rate.fallback) ? `${code} (работает запасной ручной)` : code)).join(", ")}
+            </Notice>
+          )}
           <Panel title="Курсы" help={HELP.fx.rates} actions={<Button onClick={reload}>Обновить</Button>}>
             <DataTable
               rows={state.data.rates}
@@ -245,7 +283,15 @@ export function FxScreen() {
               rowKey={(rate) => `${rate.currency}|${rate.purpose}`}
               empty="Заданных курсов нет"
               columns={[
-                { title: "Валюта", render: (rate) => rate.currency },
+                {
+                  title: "Валюта",
+                  render: (rate) => (
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {rate.currency}
+                      {isMarketCurrency(rate.currency) ? <Badge tone={rate.fallback ? "warning" : "neutral"}>{rate.fallback ? "запасной — в работе" : "запасной"}</Badge> : null}
+                    </span>
+                  ),
+                },
                 { title: "Назначение", help: HELP.fx.purpose, render: (rate) => MANUAL_PURPOSES.find(([id]) => id === rate.purpose)?.[1] ?? rate.purpose },
                 { title: "Цена", render: (rate) => <code>{`${rate.price} ${rate.quote}`}</code>, align: "right" },
                 { title: "В $", render: (rate) => <code>{rate.usdPerUnit ?? "—"}</code>, align: "right" },
@@ -264,13 +310,20 @@ export function FxScreen() {
 }
 
 function ManualRateForm({ onSaved }: { onSaved: () => void }) {
-  const [input, setInput] = useState<ManualRateInput>({ currency: PLATFORM_CURRENCIES[0], purpose: "price", price: "", quote: "USD", expiresInDays: 30, note: "" });
+  const [input, setInput] = useState<ManualRateInput>({ currency: MANUAL_CURRENCIES[0][0], purpose: "price", price: "", quote: "USD", expiresInDays: 30, note: "" });
+  const market = isMarketCurrency(input.currency);
   const [confirming, setConfirming] = useState(false);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<{ tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null>(null);
   const problem = input.price === "" ? "Укажите цену" : manualRateProblem(input);
   const patch = (next: Partial<ManualRateInput>) => {
-    setInput((current) => ({ ...current, ...next }));
+    // Рыночная валюта — запасной курс: только доллар и цена, срок до недели; выбор сразу приводит форму к этому.
+    const toMarket = next.currency !== undefined && isMarketCurrency(next.currency);
+    setInput((current) => ({
+      ...current,
+      ...next,
+      ...(toMarket ? { quote: "USD", purpose: "price", expiresInDays: Math.min(current.expiresInDays, MARKET_MANUAL_MAX_DAYS) } : {}),
+    }));
     setConfirming(false);
   };
 
@@ -290,14 +343,16 @@ function ManualRateForm({ onSaved }: { onSaved: () => void }) {
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Валюта">
             <Select value={input.currency} onChange={(event) => patch({ currency: event.target.value })}>
-              {PLATFORM_CURRENCIES.map((code) => (
-                <option key={code}>{code}</option>
+              {MANUAL_CURRENCIES.map(([code, title]) => (
+                <option key={code} value={code}>
+                  {code} — {title}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Назначение" help={HELP.fx.purpose}>
             <Select value={input.purpose} onChange={(event) => patch({ purpose: event.target.value })}>
-              {MANUAL_PURPOSES.map(([id, name]) => (
+              {MANUAL_PURPOSES.filter(([id]) => !market || id === "price").map(([id, name]) => (
                 <option key={id} value={id}>
                   {name}
                 </option>
@@ -309,15 +364,16 @@ function ManualRateForm({ onSaved }: { onSaved: () => void }) {
           </Field>
           <Field label="В валюте">
             <Select value={input.quote} onChange={(event) => patch({ quote: event.target.value })}>
-              {QUOTE_CURRENCIES.map((code) => (
+              {QUOTE_CURRENCIES.filter((code) => !market || code === "USD").map((code) => (
                 <option key={code}>{code}</option>
               ))}
             </Select>
           </Field>
           <Field label="Дней">
-            <Input type="number" min={1} max={90} value={input.expiresInDays} onChange={(event) => patch({ expiresInDays: Number(event.target.value) })} className="w-20" />
+            <Input type="number" min={1} max={market ? MARKET_MANUAL_MAX_DAYS : 90} value={input.expiresInDays} onChange={(event) => patch({ expiresInDays: Number(event.target.value) })} className="w-20" />
           </Field>
         </div>
+        {market ? <Notice tone="info">{HELP.fx.fallback}</Notice> : null}
         <Field label="Причина" hint="Попадёт в аудит вместе с прежним курсом.">
           <Input value={input.note} onChange={(event) => patch({ note: event.target.value })} maxLength={200} />
         </Field>

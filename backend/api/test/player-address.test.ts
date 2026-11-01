@@ -36,12 +36,19 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/ads/ad-networks.ts",
   "modules/ads/adsgram-reward.controller.ts",
   "modules/restrictions/restriction-rules.ts",
+  // отказ «Обновить сейчас» у источника курсов — сотруднику
+  "modules/fx/fx.service.ts",
+  // перечистка ников из панели: тексты ошибок для сотрудника
+  "modules/name-rules/name-rules-reclean.job.ts",
+  "modules/name-rules/name-rules-reclean.service.ts",
   "modules/media/image-rules.ts",
   "modules/media/media-errors.ts",
   "modules/promo-codes/promo-code-rules.ts",
   "modules/promo-codes/promo-codes.service.ts",
   "modules/changelog/changelog.service.ts",
   "modules/roles/tools.controller.ts",
+  // отказ выдачи ролей по уровням — сотруднику
+  "modules/roles/roles.service.ts",
   // уведомления в чат администраторов
   "modules/admin-notify/",
   // слоги имени, а не текст: «вы» — приставка
@@ -60,6 +67,7 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "purchase_undeliverable", fragment: "Верните звёзды" },
   { code: "fulfill_failed", fragment: "подробности в логе сервера" },
   { code: "promo_campaign_used", fragment: "поставьте на паузу" },
+  { code: "team_slide_order_mismatch", fragment: "обновите страницу и переставьте ещё раз" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];

@@ -223,6 +223,23 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     expect(await ofAccount(player.accountId)).toMatchObject([{ goal: 1, status: "pending" }]);
   });
 
+  it("аккаунт под отдельной доской уходит в сеть как обычный игрок: те же строки и состояния (T-0115)", async () => {
+    const code = await adsgramLink();
+    const plain = await playerFromClick(code);
+    const marked = await playerFromClick(code);
+    await prisma.accountRestriction.create({ data: { accountId: marked.accountId, kind: "separate_board", startsAt: new Date(Date.now() - 60 * MINUTE), reason: "other", notify: false } });
+    for (const player of [plain, marked]) {
+      await finishedRun(player.accountId, 95);
+      await purchase(player.accountId, 40);
+    }
+
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+    const shape = (rows: Awaited<ReturnType<typeof ofAccount>>) => rows.map((row) => [row.goal, row.status, row.destination, row.reason]);
+    expect(shape(await ofAccount(marked.accountId))).toEqual(shape(await ofAccount(plain.accountId)));
+    expect(await ofAccount(marked.accountId)).toHaveLength(2);
+  });
+
   it("старый игрок, открывший игру по рекламе, — не конверсия сети; аккаунт команды — пропущен", async () => {
     const code = await adsgramLink("launch");
     const old = await playerFromClick(code);

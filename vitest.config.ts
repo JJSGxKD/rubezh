@@ -20,6 +20,8 @@ export default defineConfig({
       "apps/admin/test/**/*.test.ts",
       // Логика клиента Telegram без DOM.
       "apps/web-telegram/test/**/*.test.ts",
+      // Воркер симуляции: проверка черновика контента, очередь, метрики.
+      "apps/sim-worker/test/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Тесты не зависят друг от друга и от порядка

@@ -7,6 +7,7 @@ import {
   foldForRules,
   maskSpans,
   previewMatches,
+  ProbeCache,
   protectedSpans,
   type NameRuleDef,
 } from "../src/modules/name-rules/name-rules-engine.js";
@@ -297,5 +298,69 @@ describe("лимиты и детерминизм", () => {
     for (const sample of ["Бренд Вася пример12", "Вася", "примерслово", "҉ Оля"]) {
       expect(cleanNameDetailed(sample, set)).toEqual(cleanNameDetailed(sample, set));
     }
+  });
+});
+
+describe("прогон регулярок: один раз на шаблон (T-0350)", () => {
+  const regex = (n: number, pattern: string) => def(n, "other", "regex", pattern);
+  const counting = () => {
+    const calls: string[] = [];
+    return { calls, probe: (pattern: string) => (calls.push(pattern), { ok: true as const }) };
+  };
+
+  it("две компиляции одного набора прогоняют шаблон один раз", () => {
+    const { calls, probe } = counting();
+    const probes = new ProbeCache(probe, 500);
+    const defs = [regex(1, "пример\\d"), regex(2, "образец")];
+    compileNameRules(defs, undefined, { probes });
+    compileNameRules(defs, undefined, { probes });
+    expect(calls).toEqual(["пример\\d", "образец"]);
+  });
+
+  it("501-й шаблон вытесняет первый: тот прогоняется снова", () => {
+    const { calls, probe } = counting();
+    const probes = new ProbeCache(probe, 500);
+    for (let n = 0; n < 501; n += 1) probes.run(`шаблон${String(n)}`);
+    expect(calls).toHaveLength(501);
+    probes.run("шаблон500");
+    expect(calls).toHaveLength(501);
+    probes.run("шаблон0");
+    expect(calls).toHaveLength(502);
+  });
+
+  it("отказ прогона тоже запоминается, и правило остаётся отклонённым", () => {
+    const calls: string[] = [];
+    const probes = new ProbeCache((pattern) => (calls.push(pattern), { ok: false as const, reason: "медленно" }), 500);
+    const reasons: string[] = [];
+    for (let round = 0; round < 2; round += 1) compileNameRules([regex(1, "образец")], (_def, reason) => reasons.push(reason), { probes });
+    expect(calls).toHaveLength(1);
+    expect(reasons).toEqual(["медленно", "медленно"]);
+  });
+});
+
+describe("медленное правило видно в логе (T-0350)", () => {
+  /** Часы, у которых каждое чтение сдвигается на `step` миллисекунд. */
+  const clock = (step: number) => {
+    let time = 0;
+    return () => (time += step);
+  };
+  const set = (now: () => number, onSlow: (ruleId: string, ms: number) => void) => compileNameRules([def(1, "other", "regex", "образец")], undefined, { now, onSlow });
+
+  it("применение дольше порога зовёт onSlow с ruleId и временем", () => {
+    const slow: [string, number][] = [];
+    applyNameRules(set(clock(10), (ruleId, ms) => slow.push([ruleId, ms])), "Вася образец");
+    expect(slow[0]?.[0]).toBe(id(1));
+    expect(slow[0]?.[1]).toBeGreaterThan(5);
+  });
+
+  it("быстрое применение не зовёт, а правило не пропускается и при медленном", () => {
+    const slow: string[] = [];
+    expect(applyNameRules(set(clock(1), (ruleId) => slow.push(ruleId)), "Вася образец").text).toBe("Вася  ");
+    expect(slow).toEqual([]);
+    expect(applyNameRules(set(clock(10), () => undefined), "Вася образец").hits).toEqual([id(1)]);
+  });
+
+  it("без колбэка ничего не происходит", () => {
+    expect(() => applyNameRules(compileNameRules([def(1, "other", "regex", "образец")], undefined, { now: clock(10) }), "образец")).not.toThrow();
   });
 });

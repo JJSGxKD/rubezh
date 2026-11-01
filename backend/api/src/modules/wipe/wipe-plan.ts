@@ -89,6 +89,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FeatureFlag: keep("флаги команды"),
   AppSetting: keep("настройки без релиза"),
   IntegrationSecret: keep("ключи интеграций"),
+  OutboundProxy: keep("прокси для исходящих запросов — настройка команды, к игрокам не относится; пароль только шифртекстом"),
+  OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),
@@ -101,19 +103,20 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 
   // --- остаются: журнал запросов сервера ---
   NameRule: keep("правила фильтра имён — настройка команды, не данные игрока"),
+  NameRuleHitDay: keep("счётчики срабатываний правил имён"),
   OutboundCall: keep("журнал исходящих запросов — не данные игрока, сам стирается через 7 суток (Р92)"),
   InboundMinute: keep("сводка входящих запросов по маршрутам — без игроков, сама стирается через 7 суток (Р92)"),
 
-  // --- уходят каскадом вместе с забегом: своего шага стирания у них нет ---
-  RunGemContinue: keep("второй шанс за самоцветы (Р162): строки уходят каскадом вместе с забегом (ON DELETE CASCADE) — отдельного шага стирания нет"),
-
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
+  RunGemContinue: wipe("второй шанс за самоцветы (Р162) — часть забега: свой шаг, а не каскад с забегом"),
+  RunProof: wipe("запись забега для проверки (T-0317) — часть забега: свой шаг, а не каскад с забегом"),
   RunReward: wipe("награда за забег"),
   RunBoost: wipe("бусты на забег"),
   TaskRun: wipe("забеги, засчитанные заданиям"),
   Run: wipe("забеги и рейтинги стираются (Р87); ссылку покупки на забег обнуляет T-0041"),
   TaskProgress: wipe("прогресс заданий начинается заново"),
+  TaskPointsClaim: wipe("забранные ступени очков заданий (T-0105) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, отметки не оставляем"),
   ShowcaseOffer: wipe("предложения витрины ссылаются на предметы"),
   ItemEvent: wipe("журнал предметов"),
   Item: wipe("снаряжение стирается"),
@@ -132,11 +135,14 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 /** Порядок стирания: дочерние раньше родительских. Ровно модели с `action: "wipe"`. */
 export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "RunAdContinue",
+  "RunGemContinue",
+  "RunProof",
   "RunReward",
   "RunBoost",
   "TaskRun",
   "Run",
   "TaskProgress",
+  "TaskPointsClaim",
   "ShowcaseOffer",
   "ItemEvent",
   "Item",

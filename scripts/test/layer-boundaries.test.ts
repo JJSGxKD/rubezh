@@ -90,6 +90,16 @@ const RULES: Rule[] = [
     forbidden: /["']\.\.\/game\//,
     why: "контент — это данные: он не знает о коде движка",
   },
+  {
+    from: "apps/sim-worker/src",
+    forbidden: /["']@bh\/adapter-|["']phaser["']|["'](?:\.\.\/)+(?:backend|packages\/app-shell|apps\/admin)\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
+    why: "sim-worker — свой процесс со своей сборкой движка (docs/35-stage4-plan.md, Р15): ни бэкенда, ни площадок, ни оболочки, ни Phaser",
+  },
+  {
+    from: "apps/sim-worker/src",
+    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/|joystick|radar))/,
+    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
+  },
 ];
 
 /** Публичная дверь движка: только этот файл вправе тянуть Phaser в оболочке. */
@@ -120,6 +130,7 @@ describe("границы слоёв", () => {
   it("вообще находит исходники — иначе тест зелёный впустую", () => {
     expect(collect("packages/app-shell/src").length).toBeGreaterThan(10);
     expect(collect("packages/core-game/src").length).toBeGreaterThan(10);
+    expect(collect("apps/sim-worker/src").length).toBeGreaterThan(5);
   });
 
   for (const rule of RULES) {

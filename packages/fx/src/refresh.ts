@@ -22,6 +22,9 @@ import type { RateStore, StoredRate } from "./store.js";
  *    за свежий.
  */
 
+/** Метка в источниках курса: он взят из запасного ручного, а не с рынка. */
+export const FALLBACK_SOURCE = "fallback";
+
 export interface RateAlerts {
   /** скачок без подтверждения или несогласные источники — `rate_rejected` */
   rejected(currency: CurrencyCode, decision: Extract<AcceptDecision, { status: "rejected" }>): void;
@@ -39,14 +42,21 @@ export interface RefreshReport {
   stale: CurrencyCode[];
 }
 
-export async function refreshRates(input: { sources: readonly RateSource[]; store: RateStore; alerts: RateAlerts; now: Date }): Promise<RefreshReport> {
+/**
+ * `force` — «обновить сейчас» (T-0064): опрашивается только источник с этим
+ * id и не глядя на срок следующего опроса. Остальное — как в обычном проходе:
+ * запрос учитывается в бюджете, отказ даёт тревогу, курсы принимаются по тем же
+ * правилам. Лимиты и лок проверяет тот, кто вызывает.
+ */
+export async function refreshRates(input: { sources: readonly RateSource[]; store: RateStore; alerts: RateAlerts; now: Date; force?: string }): Promise<RefreshReport> {
   const { store, alerts, now } = input;
   const report: RefreshReport = { polled: [], failed: [], accepted: [], rejected: [], stale: [] };
   const touched = new Set<CurrencyCode>();
 
   for (const source of input.sources) {
+    if (input.force !== undefined && source.id !== input.force) continue;
     const state = await store.sourceState(source.id);
-    if (state !== null && state.nextPollAt > now) continue;
+    if (input.force === undefined && state !== null && state.nextPollAt > now) continue;
     const usage: SourceUsage = state?.usage ?? { month: "", used: 0, pausedUntil: null };
     try {
       const quotes = await source.fetch(AbortSignal.timeout(SOURCE_TIMEOUT_MS));
@@ -91,7 +101,9 @@ export async function refreshRates(input: { sources: readonly RateSource[]; stor
 }
 
 /**
- * Снимок на сейчас: принятые курсы и действующие заданные. Просроченный курс в
+ * Снимок на сейчас: принятые курсы и действующие заданные. Рыночный курс,
+ * которого нет или который просрочен, заменяет запасной ручной, пока не истёк
+ * его срок (источники `manual:<кто>` и `fallback`). Просроченный курс в
  * снимок не попадает — пересчёт по нему упадёт с «нет курса», и продажа по
  * нему не состоится (§3.12: продавать по устаревшему — не дольше срока).
  */
@@ -105,7 +117,16 @@ export async function takeSnapshot(store: RateStore, now: Date): Promise<RatesSn
     const kind = CURRENCIES[code].kind;
     if (kind === "platform") continue;
     const rate = await store.currentRate(code);
-    if (rate !== null && freshness(rate.observedAt, now, FRESHNESS_POLICY[kind]) !== "expired") rates.set(code, stripAccepted(rate));
+    if (rate !== null && freshness(rate.observedAt, now, FRESHNESS_POLICY[kind]) !== "expired") {
+      rates.set(code, stripAccepted(rate));
+      continue;
+    }
+    // Рыночного курса нет или он просрочен: работает запасной ручной, пока он не истёк (Р90).
+    const manual = await store.currentManual(code, "price");
+    if (manual !== null && manual.quote === BASE_CURRENCY && manual.expiresAt >= now) {
+      const fallback = manualToRate(manual, new Decimal(1));
+      rates.set(code, { ...fallback, sources: [...fallback.sources, FALLBACK_SOURCE] });
+    }
   }
   for (const code of codes) {
     if (CURRENCIES[code].kind !== "platform") continue;

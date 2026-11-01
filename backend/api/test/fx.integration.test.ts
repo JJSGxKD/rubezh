@@ -7,7 +7,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { closeRedis } from "../src/infra/redis.js";
 import { FxHooks, type FxAlert } from "../src/modules/fx/fx-hooks.js";
-import { FxRefresher } from "../src/modules/fx/fx.refresher.js";
+import { FxRefreshBusyError, FxRefresher } from "../src/modules/fx/fx.refresher.js";
 import { PrismaRateStore } from "../src/modules/fx/fx.store.js";
 import { environmentSecrets } from "../src/modules/secrets/secrets.service.js";
 import { rateStoreContract } from "../../../packages/fx/test/store-contract.js";
@@ -163,5 +163,34 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("лимиты исто�
     // Лок прохода снят, порог 100% ещё не тронут.
     expect(await redis.exists("fx:refresh:lock")).toBe(0);
     expect(await redis.exists("fx:budget:fake:2026-09:100")).toBe(0);
+  });
+
+  it("«Обновить сейчас» и проход по расписанию одновременно: опрос один, второй получает отказ или пропуск (T-0064)", async () => {
+    const config = loadAppConfig({ NODE_ENV: "test", FX_ENABLED: "true" } as NodeJS.ProcessEnv);
+    const make = () => new FxRefresher(environmentSecrets(config), store, redis, new FxHooks(), switchesOf(config));
+    const replicaA = make();
+    const replicaB = make();
+    let calls = 0;
+    // Опрос длится, пока вторая реплика пробует взять тот же лок.
+    const slow: RateSource = {
+      ...fakeSource(),
+      async fetch() {
+        calls++;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return [quoteInUsd("GRAM", "1.43", "fake", NOW)];
+      },
+    };
+    await store.saveSourceState("fake", { usage: { month: "2026-09", used: 0, pausedUntil: null }, nextPollAt: new Date(NOW.getTime() - 1000) });
+
+    const [tick, now] = await Promise.allSettled([replicaA.tick([slow], NOW), replicaB.refreshNow("fake", NOW, [slow])]);
+
+    expect(calls).toBe(1);
+    // Выиграл один: либо проход ответил отчётом, а «сейчас» — отказом, либо наоборот.
+    const tickRan = tick.status === "fulfilled" && tick.value !== null;
+    const nowRan = now.status === "fulfilled";
+    expect(Number(tickRan) + Number(nowRan)).toBe(1);
+    if (!nowRan) expect((now as PromiseRejectedResult).reason).toBeInstanceOf(FxRefreshBusyError);
+    expect(await redis.exists("fx:refresh:lock")).toBe(0);
+    expect((await store.sourceState("fake"))?.usage.used).toBe(1);
   });
 });

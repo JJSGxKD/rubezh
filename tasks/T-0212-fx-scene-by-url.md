@@ -33,7 +33,7 @@ batch: 3
 
 # T-0212. Сцена эффекта по адресу — `?fx=<сцена>` на dev-сервере, шаг по тикам для снимков
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0212.json)](README.md#значки-статуса) [![T-0145](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json&label=T-0145)](T-0145-screens-one-command.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0212.json)](README.md#значки-статуса) [![T-0145](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0145.json&label=T-0145)](archive/T-0145-screens-one-command.md)
 
 ## Зачем
 

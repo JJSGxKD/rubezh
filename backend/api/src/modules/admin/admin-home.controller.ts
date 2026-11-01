@@ -3,7 +3,7 @@ import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
-import { teamSlideInputSchema } from "../home/team-slide-rules.js";
+import { teamSlideInputSchema, teamSlideOrderSchema } from "../home/team-slide-rules.js";
 import { TeamSlidesService, type TeamSlideAdminRow, type TeamSlideCatalogView } from "../home/team-slides.service.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -37,6 +37,15 @@ export class AdminHomeController {
     const actor = await this.consume(request);
     const input = parse(() => teamSlideInputSchema.parse(body), "Некорректный слайд");
     return { data: await this.slides.create(actor, input) };
+  }
+
+  /** Новый порядок группы: id в нужном порядке, одной транзакцией. Объявлен выше `:slideId`, чтобы `order` не принялся за id. */
+  @Post("order")
+  @RequirePermission("home.edit")
+  async order(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { order: string[] } }> {
+    const actor = await this.consume(request);
+    const { group, ids } = parse(() => teamSlideOrderSchema.parse(body), "Некорректный порядок слайдов");
+    return { data: await this.slides.reorder(actor, group, ids) };
   }
 
   // Правка — POST, как во всей панели: другие методы её клиент не шлёт.

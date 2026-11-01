@@ -1,4 +1,4 @@
-import { mountAppShell, type AnalyticsSink } from "@bh/app-shell";
+import { mountAppShell, readDevUrl, type AnalyticsSink } from "@bh/app-shell";
 import { CONTENT_HASH } from "@bh/core-game";
 import { isTelegramEnvironment, TelegramAdapter } from "@bh/adapter-telegram";
 import { loadGraspil } from "./graspil";
@@ -10,6 +10,9 @@ import { loadGraspil } from "./graspil";
  * (docs/27-design-system-and-app-shell.md §2).
  */
 const params = new URLSearchParams(globalThis.location.search);
+// Адресом управляет только локальный dev-сервер: снимки экранов открывают
+// нужный экран и входят под именем разработчика без кликов.
+const devUrl = readDevUrl(globalThis.location.href, import.meta.env.DEV);
 const container = document.getElementById("app");
 
 if (container === null) {
@@ -55,13 +58,14 @@ void mountAppShell({
     // сборку имя разработчика не попадает.
     auth: {
       baseUrl: import.meta.env.DEV ? "" : (import.meta.env.VITE_API_URL ?? ""),
-      devUser: import.meta.env.DEV ? (import.meta.env.VITE_AUTH_DEV_USER ?? "") : "",
+      devUser: import.meta.env.DEV ? (devUrl.devUser ?? import.meta.env.VITE_AUTH_DEV_USER ?? "") : "",
     },
     // Минимальная версия Bot API. 7.7 — версия, с которой клиент умеет
     // отключать вертикальные свайпы: без этого свайп закрывает приложение
     // посреди забега, и игра не «беднее», а сломана
     // (docs/33-telegram-mini-app-pitfalls.md §2.3).
     minPlatformVersion: "7.7",
+    devStartScreen: devUrl.screen ?? undefined,
   },
   analytics: createAnalytics(),
 }).then(() => loadGraspil((import.meta.env.VITE_GRASPIL_KEY ?? "").trim()));

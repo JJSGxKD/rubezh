@@ -232,6 +232,27 @@ const chestsSchema = z.strictObject({
   maxOnField: count,
 });
 
+// Тайники рубежа: форма — здесь, раскладка колец и ссылки между полями — `findSecretsProblems`.
+// Огонёк в кольцо не бросается, поэтому в весах — только виды мест.
+const secretPlaceKind = z.enum(["shrine", "hoard", "stone"]);
+
+const secretsSchema = z.strictObject({
+  rings: z.array(
+    z.strictObject({
+      minRadius: num,
+      maxRadius: num,
+      count: count,
+      kinds: z.array(z.strictObject({ kind: secretPlaceKind, weight: num })),
+    }),
+  ),
+  minGapUnits: num,
+  shrine: z.strictObject({ radius: num, holdSec: num, offers: count }),
+  hoard: z.strictObject({ radius: num, holdSec: num, chestSize: chestSize }),
+  stone: z.strictObject({ radius: num }),
+  wisp: z.strictObject({ appearSec: num, speed: num }),
+  blessings: z.array(z.strictObject({ id: text, nameKey: text, modifiers: loadoutModifiers })),
+});
+
 const difficultySchema = z.strictObject({
   id: z.enum(DIFFICULTY_IDS as [string, ...string[]]) as z.ZodType<(typeof DIFFICULTY_IDS)[number]>,
   nameKey: text,
@@ -263,6 +284,14 @@ const balanceTargetsSchema = z.strictObject({
   dodgingDeathsBeforeMinuteRatioMax: num,
   firstLevelUpSec: range,
   firstChestEventSec: range,
+  latePressure: z.strictObject({
+    fromSec: num,
+    toSec: num,
+    strengthGrowthPer3Min: range,
+    rankEventsPerMinuteMin: num,
+    rankEventsDensityRatioMin: num,
+    hardMaxAliveMulMax: num,
+  }),
   evolutionPowerRatio: range,
 });
 
@@ -280,6 +309,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   maps: z.array(mapSchema),
   drops: dropsSchema,
   chests: chestsSchema,
+  secrets: secretsSchema,
   difficulties: z.array(difficultySchema),
   continueRules: continueSchema,
   boosts: z.array(boostSchema),

@@ -168,6 +168,97 @@ describe("курс звезды в рублях", () => {
   });
 });
 
+describe("«Обновить сейчас»: force (T-0064)", () => {
+  it("опрашивает только названный источник, не глядя на nextPollAt, и учитывает запрос", async () => {
+    const now = T0;
+    const store = new MemoryRateStore();
+    const a = source("a", gram("a", "1.43"), () => now);
+    const b = source("b", gram("b", "1.42"), () => now);
+    await refreshRates({ sources: [a, b], store, alerts: alertsLog(), now });
+    expect([a.calls, b.calls]).toEqual([1, 1]);
+    const usedBefore = (await store.sourceState("a"))?.usage.used;
+
+    // До nextPollAt обычный проход источников не трогает, а force — опрашивает один.
+    const soon = at(MINUTE);
+    expect((await refreshRates({ sources: [a, b], store, alerts: alertsLog(), now: soon })).polled).toEqual([]);
+    const forced = await refreshRates({ sources: [a, b], store, alerts: alertsLog(), now: soon, force: "a" });
+
+    expect(forced.polled).toEqual(["a"]);
+    expect([a.calls, b.calls]).toEqual([2, 1]);
+    expect((await store.sourceState("a"))?.usage.used).toBe((usedBefore ?? 0) + 1);
+  });
+
+  it("отказ названного источника — тревога и учёт запроса, как в обычном проходе", async () => {
+    const store = new MemoryRateStore();
+    const alerts = alertsLog();
+    const broken: RateSource = { id: "broken", currencies: [], tariff: { name: "test", perMinute: 60, perMonth: null, minIntervalMs: 5 * MINUTE }, fetch: async () => Promise.reject(new SourceUnavailableError("broken", "нет связи")) };
+
+    const report = await refreshRates({ sources: [broken], store, alerts, now: T0, force: "broken" });
+
+    expect(report.failed).toEqual(["broken"]);
+    expect(alerts.log).toContain("failed broken");
+    expect((await store.sourceState("broken"))?.usage.used).toBe(1);
+  });
+});
+
+describe("запасной ручной курс рыночной валюты (T-0064)", () => {
+  const MARKET_RUB = (rub: string) => rateOf("RUB", new Decimal(1).div(rub), ["cbr"], T0);
+  const manualRub = (days: number, who = "owner") => manualRate({ currency: "RUB", purpose: "price", price: "0.011", quote: "USD", setBy: who, setAt: T0, expiresAt: at(days * 86_400_000), note: "источники легли" });
+
+  it("рыночный курс свежий — ручной рубля не берётся", async () => {
+    const store = new MemoryRateStore();
+    await store.setCurrentRate(MARKET_RUB("90"), T0);
+    await store.appendManual(manualRub(7));
+
+    const snapshot = await takeSnapshot(store, T0);
+
+    expect(snapshot.rates.get("RUB")?.sources).toEqual(["cbr"]);
+    expect(snapshot.rates.get("RUB")?.usdPerUnit.toDecimalPlaces(6).toString()).toBe("0.011111");
+  });
+
+  it("рыночного нет — берётся ручной: источники [manual:<кто>, fallback]", async () => {
+    const store = new MemoryRateStore();
+    await store.appendManual(manualRub(7, "a1"));
+
+    const snapshot = await takeSnapshot(store, T0);
+
+    expect(snapshot.rates.get("RUB")?.sources).toEqual(["manual:a1", "fallback"]);
+    expect(snapshot.rates.get("RUB")?.usdPerUnit.toString()).toBe("0.011");
+  });
+
+  it("рыночный просрочен — берётся ручной, пока тот не истёк", async () => {
+    const store = new MemoryRateStore();
+    await store.setCurrentRate(MARKET_RUB("90"), T0);
+    await store.appendManual(manualRub(7));
+    // Рыночный фиат стареет за 5 суток и годен для продажи ещё 30: после 35 суток его брать нельзя.
+    const late = at(40 * 86_400_000);
+    await store.appendManual(manualRate({ currency: "RUB", purpose: "price", price: "0.011", setBy: "owner", setAt: at(38 * 86_400_000), expiresAt: at(45 * 86_400_000), note: "запас" }));
+
+    const snapshot = await takeSnapshot(store, late);
+
+    expect(snapshot.rates.get("RUB")?.sources).toEqual(["manual:owner", "fallback"]);
+  });
+
+  it("ручной просрочен — курса рубля в снимке нет, как раньше", async () => {
+    const store = new MemoryRateStore();
+    await store.appendManual(manualRub(7));
+
+    const snapshot = await takeSnapshot(store, at(60 * 86_400_000));
+
+    expect(snapshot.rates.has("RUB")).toBe(false);
+  });
+
+  it("запасной рубль годится как котировка звезды в рублях", async () => {
+    const store = new MemoryRateStore();
+    await store.appendManual(manualRub(7));
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "price", price: "1.72", quote: "RUB", setBy: "owner", setAt: T0, expiresAt: at(90 * 86_400_000), note: "" }));
+
+    const snapshot = await takeSnapshot(store, T0);
+
+    expect(snapshot.rates.get("XTR")?.usdPerUnit.toDecimalPlaces(5).toString()).toBe("0.01892");
+  });
+});
+
 describe("хранилище в памяти", () => {
   rateStoreContract(async () => ({ store: new MemoryRateStore(), source: (name) => name }));
 });

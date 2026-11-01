@@ -5,6 +5,7 @@ import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js";
+import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 
 /**
  * Роли и журнал на настоящем Postgres (docs/17-testing-strategy.md §4.2).
@@ -124,5 +125,21 @@ describe.skipIf(DATABASE_URL === "")("роли и журнал на живом P
 
     expect(await roles.rolesOf(id)).toEqual([]);
     expect(await roles.recentAudit(200).then((rows) => rows.some((row) => row.actorAccountId === id))).toBe(true);
+  });
+
+  it("администратор выдаёт маркетолога — роль есть, в журнале он исполнитель; администратора выдать не может (T-0216)", async () => {
+    const service = new RolesService(config, roles, accounts);
+    const actorId = await account();
+    await roles.grant(actorId, "admin", null);
+    const actor: AccountRef = { accountId: actorId, platform: "telegram", platformUserId: "1" };
+    const target = await account();
+
+    expect(await service.grant(actor, target, "marketer")).toBe(true);
+    expect(await roles.rolesOf(target)).toEqual(["marketer"]);
+    const entry = (await roles.auditPage({ limit: 20, before: null, actions: ["roles."], actorAccountId: null, target })).find((row) => row.action === "roles.assign");
+    expect(entry).toMatchObject({ actorAccountId: actorId, after: { role: "marketer" } });
+
+    await expect(service.grant(actor, target, "admin")).rejects.toThrowError("Эту роль может выдать только тот, у кого роль выше");
+    expect(await roles.rolesOf(target)).toEqual(["marketer"]);
   });
 });

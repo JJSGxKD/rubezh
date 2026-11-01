@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NAME_RULE_CATEGORIES, NAME_RULE_LIMITS, type NameRuleCategory, type NameRuleKind } from "./name-rules-limits.js";
-import { checkRegexSafety, probeRegex } from "./name-rules-safety.js";
+import { checkRegexSafety, probeRegex, type SafetyResult } from "./name-rules-safety.js";
 
 /**
  * Движок правил фильтра имён (docs/35-stage4-plan.md, Р168): чистые функции
@@ -51,8 +51,53 @@ interface CompiledRule {
   regex: RegExp | null;
 }
 
+/** Что движок знает о наборе кроме правил: как мерить медленные регулярки. */
+interface CompiledSet {
+  rules: readonly CompiledRule[];
+  onSlow: ((ruleId: string, ms: number) => void) | undefined;
+  now: () => number;
+}
+
 /** Содержимое наборов лежит рядом, а не в самом объекте: снаружи набор — только размер и подпись. */
-const COMPILED = new WeakMap<NameRuleSet, readonly CompiledRule[]>();
+const COMPILED = new WeakMap<NameRuleSet, CompiledSet>();
+
+/**
+ * Результаты прогона регулярок по тексту шаблона. Набор пересобирается на
+ * каждой реплике, а прогон — сотни строк: шаблон, уже прогнанный при
+ * сохранении или прошлой сборке, второй раз не гоняется. Старейшая запись
+ * вытесняется сверх предела.
+ */
+export class ProbeCache {
+  private readonly results = new Map<string, SafetyResult>();
+
+  constructor(
+    private readonly probe: (pattern: string) => SafetyResult = (pattern) => probeRegex(pattern),
+    private readonly max: number = NAME_RULE_LIMITS.probeCacheMax,
+  ) {}
+
+  run(pattern: string): SafetyResult {
+    const known = this.results.get(pattern);
+    if (known !== undefined) return known;
+    const result = this.probe(pattern);
+    this.results.set(pattern, result);
+    if (this.results.size > this.max) {
+      const oldest = this.results.keys().next();
+      if (!oldest.done) this.results.delete(oldest.value);
+    }
+    return result;
+  }
+}
+
+const PROBES = new ProbeCache();
+
+export interface CompileOptions {
+  /** прогон регулярок; по умолчанию общий на процесс */
+  probes?: ProbeCache;
+  /** регулярка заняла на одном нике дольше `slowRuleMs`; правило при этом не пропускается */
+  onSlow?: (ruleId: string, ms: number) => void;
+  /** часы замера, миллисекунды; подменяются в тестах */
+  now?: () => number;
+}
 
 export const EMPTY_NAME_RULES: NameRuleSet = Object.freeze({ size: 0, signature: "" });
 
@@ -80,13 +125,13 @@ export function nameRulesSignature(defs: readonly NameRuleDef[]): string {
   return createHash("sha256").update(lines.join("\n")).digest("hex");
 }
 
-function compileOne(def: NameRuleDef): { rule: CompiledRule } | { reason: string } {
+function compileOne(def: NameRuleDef, probes: ProbeCache): { rule: CompiledRule } | { reason: string } {
   if (def.kind === "regex") {
     const safety = checkRegexSafety(def.pattern);
     if (!safety.ok) return { reason: safety.reason };
     // Прогон по «злым» строкам — второй раз после сохранения: правило могли записать мимо панели.
-    // Повторный замер перед отказом делает сам прогон.
-    const probe = probeRegex(def.pattern);
+    // Повторный замер перед отказом делает сам прогон; результат помнит кеш.
+    const probe = probes.run(def.pattern);
     if (!probe.ok) return { reason: probe.reason };
     return { rule: { ruleId: def.ruleId, category: def.category, kind: def.kind, folded: "", regex: new RegExp(def.pattern, "giu") } };
   }
@@ -99,17 +144,17 @@ function compileOne(def: NameRuleDef): { rule: CompiledRule } | { reason: string
  * Набор из определений. Плохое определение пропускается с причиной в
  * `onInvalid`, остальные работают: одно битое правило не должно ронять вход.
  */
-export function compileNameRules(defs: readonly NameRuleDef[], onInvalid?: (def: NameRuleDef, reason: string) => void): NameRuleSet {
+export function compileNameRules(defs: readonly NameRuleDef[], onInvalid?: (def: NameRuleDef, reason: string) => void, options: CompileOptions = {}): NameRuleSet {
   const compiled: CompiledRule[] = [];
   for (const def of defs) {
-    const result = compileOne(def);
+    const result = compileOne(def, options.probes ?? PROBES);
     if ("rule" in result) compiled.push(result.rule);
     else onInvalid?.(def, result.reason);
   }
   // Порядок применения не зависит от порядка строк в базе: категория, затем id.
   compiled.sort((a, b) => NAME_RULE_CATEGORIES.indexOf(a.category) - NAME_RULE_CATEGORIES.indexOf(b.category) || (a.ruleId < b.ruleId ? -1 : a.ruleId > b.ruleId ? 1 : 0));
   const set: NameRuleSet = Object.freeze({ size: compiled.length, signature: nameRulesSignature(defs) });
-  COMPILED.set(set, compiled);
+  COMPILED.set(set, { rules: compiled, onSlow: options.onSlow, now: options.now ?? (() => performance.now()) });
   return set;
 }
 
@@ -165,16 +210,21 @@ function regexSpans(regex: RegExp, text: string): Span[] {
   return spans;
 }
 
-function spansOf(rule: CompiledRule, text: string, folded: string): Span[] {
-  if (rule.regex !== null) return regexSpans(rule.regex, text);
-  return phraseSpans(folded, rule.folded, rule.kind === "word");
+function spansOf(rule: CompiledRule, text: string, folded: string, meter?: CompiledSet): Span[] {
+  if (rule.regex === null) return phraseSpans(folded, rule.folded, rule.kind === "word");
+  if (meter?.onSlow === undefined) return regexSpans(rule.regex, text);
+  const startedAt = meter.now();
+  const spans = regexSpans(rule.regex, text);
+  const ms = meter.now() - startedAt;
+  if (ms > NAME_RULE_LIMITS.slowRuleMs) meter.onSlow(rule.ruleId, ms);
+  return spans;
 }
 
 const overlaps = (a: Span, b: Span): boolean => a.start < b.end && b.start < a.end;
 
 function rulesOf(set: NameRuleSet, categories: readonly NameRuleCategory[]): readonly CompiledRule[] {
   const compiled = COMPILED.get(set);
-  return compiled === undefined ? [] : compiled.filter((rule) => categories.includes(rule.category));
+  return compiled === undefined ? [] : compiled.rules.filter((rule) => categories.includes(rule.category));
 }
 
 interface Candidate {
@@ -185,7 +235,8 @@ interface Candidate {
 /** Совпадения правил этих категорий на тексте — в порядке применения. */
 function candidates(set: NameRuleSet, categories: readonly NameRuleCategory[], text: string): Candidate[] {
   const folded = foldForRules(text);
-  return rulesOf(set, categories).flatMap((rule) => spansOf(rule, text, folded).map((span) => ({ ruleId: rule.ruleId, span })));
+  const meter = COMPILED.get(set);
+  return rulesOf(set, categories).flatMap((rule) => spansOf(rule, text, folded, meter).map((span) => ({ ruleId: rule.ruleId, span })));
 }
 
 /** Участки, которые правила `allow` берут под охрану, и id сработавших исключений. */
@@ -223,7 +274,7 @@ export function maskSpans(text: string, spans: readonly Span[]): string {
  */
 export function applyNameRules(set: NameRuleSet, name: string): RulesVerdict {
   const compiled = COMPILED.get(set);
-  if (compiled === undefined || compiled.length === 0) return { text: name, profane: false, hits: [], saved: [] };
+  if (compiled === undefined || compiled.rules.length === 0) return { text: name, profane: false, hits: [], saved: [] };
   const head = name.slice(0, headLength(name));
   const tail = name.slice(head.length);
   const saved = new Set<string>();
@@ -253,6 +304,6 @@ export function applyNameRules(set: NameRuleSet, name: string): RulesVerdict {
 export function previewMatches(def: NameRuleDef, text: string): Span[] {
   const compiled = compileNameRules([def]);
   const head = text.slice(0, headLength(text));
-  const rule = COMPILED.get(compiled)?.[0];
+  const rule = COMPILED.get(compiled)?.rules[0];
   return rule === undefined ? [] : spansOf(rule, head, foldForRules(head));
 }

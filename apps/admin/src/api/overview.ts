@@ -41,6 +41,19 @@ const overviewAdsSchema = z.object({
 });
 export type OverviewAds = z.infer<typeof overviewAdsSchema>;
 
+/** Подпись метки: нейтральная, одна на сводку, воронку и разбор забегов (T-0115). */
+export const BOARD_MARK_LABEL = "Отдельная доска";
+
+const boardMarkDaySchema = z.object({ marked: z.number(), active: z.number(), newAccounts: z.number(), runs: z.number() });
+export type BoardMarkDay = z.infer<typeof boardMarkDaySchema>;
+export const boardMarkSchema = z.object({ today: boardMarkDaySchema, yesterday: boardMarkDaySchema });
+export type BoardMark = z.infer<typeof boardMarkSchema>;
+
+/** Доля завершённых забегов на помеченных, целыми процентами; забегов нет — `null`. */
+export function boardMarkShare(mark: BoardMarkDay, day: OverviewDay): number | null {
+  return day.runs.finished === 0 ? null : Math.round((mark.runs / day.runs.finished) * 100);
+}
+
 export const overviewSchema = z.object({
   /** период; сервер без периодов (до T-0051) поля не отдаёт — это были сутки */
   days: periodSchema.default(1),
@@ -65,6 +78,8 @@ export const overviewSchema = z.object({
   ),
   /** `null` — нет права `ads.view` или чтение рекламы не ответило */
   ads: overviewAdsSchema.nullable().default(null),
+  /** `null` — нет права `players.board.restrict` или чтение метки не ответило: блока нет */
+  boardMark: boardMarkSchema.nullable().default(null),
   attention: z.array(z.object({ section: z.string(), count: z.number(), text: z.string() })),
 });
 export type Overview = z.infer<typeof overviewSchema>;

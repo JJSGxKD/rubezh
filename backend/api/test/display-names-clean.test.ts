@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cleanAll, parseCleanArgs, planCleanup, type CleanResult, type CleanupRow } from "../src/cli/display-names-clean.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
-import { displayNameFor } from "../src/modules/auth/display-name.js";
+import { cleanNameDetailed, displayNameFor } from "../src/modules/auth/display-name.js";
 import { compileNameRules } from "../src/modules/name-rules/name-rules-engine.js";
 
 // Чистка ников старых аккаунтов (tasks/T-0150): чистая часть команды
@@ -202,5 +202,14 @@ describe("cleanAll: набор правил и крючки onPage и shouldStop
     expect(reads).toHaveLength(1);
     expect(asked).toBe(2);
     expect(result.scanned).toBe(500);
+  });
+});
+
+describe("правила видят ник после NFKC (T-0350)", () => {
+  it("точное правило «kot» срабатывает на нике со знаком Кельвина (U+212A) вместо первой буквы", () => {
+    const rules = compileNameRules([{ ruleId: ID, category: "brand", kind: "exact", pattern: "kot" }]);
+    const result = cleanNameDetailed("\u212Aot Вася", rules);
+    expect(result.hits).toEqual([ID]);
+    expect(result.name).toBe("Вася");
   });
 });

@@ -17,7 +17,7 @@ import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-conti
 import { RUNS_LIMITS } from "../src/modules/runs/runs-limits.js";
 import { InsufficientBalance } from "../src/modules/wallet/wallet-ledger.js";
 import { emptyBalances } from "../src/modules/wallet/wallet-types.js";
-import { continueGems as compensationGems, CONTINUE_RATE as COMPENSATION_RATE } from "../src/modules/wipe/compensation-rules.js";
+import { compensationGemsForStars } from "../src/modules/wipe/compensation-rules.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 
@@ -77,7 +77,7 @@ describe("цена второго шанса в самоцветах", () => {
 describe("курс переехал из компенсации, числа те же", () => {
   it("курс в цене товара — тот же, что видит компенсация: 6 самоцветов за 5 звёзд", () => {
     expect(CONTINUE_RATE).toEqual({ gems: 6, stars: 5 });
-    expect(COMPENSATION_RATE).toBe(CONTINUE_RATE);
+    expect(compensationGemsForStars(10)).toBe(starsToGems(10));
   });
 
   it("компенсация после вайпа считает то же, что до переезда курса", () => {
@@ -92,7 +92,7 @@ describe("курс переехал из компенсации, числа те
       [51, 62],
     ];
     for (const [stars, gems] of before) {
-      expect(compensationGems(stars), `${String(stars)} ⭐`).toBe(gems);
+      expect(compensationGemsForStars(stars), `${String(stars)} ⭐`).toBe(gems);
       expect(starsToGems(stars), `${String(stars)} ⭐`).toBe(gems);
     }
   });
@@ -107,6 +107,8 @@ class MemoryGemContinues implements RunGemContinuesRepository {
   readonly rows: GemContinueRow[] = [];
   /** номера, занятые рекламой в базе, но ещё не видные книге сервиса */
   readonly adRows = new Map<string, number[]>();
+  /** ключи списания, уже занятые в журнале кошелька, хотя строки продолжения нет */
+  readonly busyKeys = new Set<string>();
   charged = 0;
 
   constructor(public gems: number) {}
@@ -119,6 +121,8 @@ class MemoryGemContinues implements RunGemContinuesRepository {
     const existing = await this.find(purchase.runId, purchase.continueNo);
     if (existing !== null) return existing.accountId === purchase.accountId ? { status: "repeat", row: existing } : { status: "taken" };
     if ((this.adRows.get(purchase.runId) ?? []).includes(purchase.continueNo)) return { status: "taken" };
+    // Занятый ключ списания без строки — отказ, как у базы: ни строки, ни списания.
+    if (this.busyKeys.has(`continue:${purchase.runId}:${String(purchase.continueNo)}`)) return { status: "taken" };
     if (this.gems < purchase.priceGems) throw new InsufficientBalance("gems", purchase.priceGems);
     this.gems -= purchase.priceGems;
     this.charged += purchase.priceGems;
@@ -207,6 +211,18 @@ describe("покупка продолжения за самоцветы", () => 
     expect(await service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3))).toEqual({ continueNo: 1, priceGems: 4, balance: 46 });
     expect(repository.rows).toEqual([{ runId: "run-1", continueNo: 1, accountId: ME, elapsedSec: 125, priceGems: 4, grantedAt: at(3) }]);
     expect(await continues.taken("run-1")).toEqual(new Set([1]));
+  });
+
+  it("репозиторий ответил «занято» (ключ списания без строки) — 409 continue_taken, ничего не списано и не записано", async () => {
+    const { service, runs, repository, continues } = setup(50);
+    await started(runs, "run-1");
+    repository.busyKeys.add("continue:run-1:1");
+
+    await expect(service.buy(ME, "run-1", { continueNo: 1, elapsedSec: 125 }, at(3))).rejects.toMatchObject({ code: "continue_taken", status: 409 });
+
+    expect(repository.rows).toEqual([]);
+    expect(repository.gems).toBe(50);
+    expect(await continues.taken("run-1")).toEqual(new Set());
   });
 
   it("повтор того же номера — тот же ответ, без второго списания; даже когда забег уже закончен", async () => {

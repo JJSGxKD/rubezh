@@ -99,6 +99,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build --file backend/api/Dockerfile --tag rubezh-api:pr .
+      # Воркер симуляции (tasks/T-0302) — второй образ релиза: поломка его
+      # Dockerfile должна выясняться на PR, а не при публикации.
+      - run: docker build --file apps/sim-worker/Dockerfile --tag rubezh-sim-worker:pr .
       # Карточки бота рисуются системными шрифтами: без шрифта в образе — или
       # когда resvg его не находит — текст пропадает целиком, а тесты на машине
       # с Windows этого не видят. Поэтому карточка рисуется в самом образе.
@@ -202,7 +205,10 @@ jobs:
       # репозитория пишется как есть — отсюда приведение регистра.
       - if: steps.tip.outputs.current == 'true'
         id: image
-        run: echo "name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/rubezh-api" >> "$GITHUB_OUTPUT"
+        run: |
+          owner="ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "name=${owner}/rubezh-api" >> "$GITHUB_OUTPUT"
+          echo "sim_name=${owner}/rubezh-sim-worker" >> "$GITHUB_OUTPUT"
 
       # Образ собирается здесь, а публикуется после тега: до тега наружу не
       # уходит ничего с номером версии (docs/09-ci-cd.md §8.1, «Порядок
@@ -214,6 +220,17 @@ jobs:
           --tag "${IMAGE}:sha-${GITHUB_SHA::12}" .
         env:
           IMAGE: ${{ steps.image.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+
+      # Образ воркера симуляции (tasks/T-0302) собирается там же и под тем же
+      # номером: версия сервера и воркера не расходятся.
+      - if: steps.tip.outputs.current == 'true'
+        run: >-
+          docker build --file apps/sim-worker/Dockerfile
+          --tag "${IMAGE}:${VERSION}"
+          --tag "${IMAGE}:sha-${GITHUB_SHA::12}" .
+        env:
+          IMAGE: ${{ steps.image.outputs.sim_name }}
           VERSION: ${{ steps.version.outputs.version }}
 
       # Тег — первым из того, что видно снаружи: отказать может именно он
@@ -255,10 +272,13 @@ jobs:
         run: |
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "${IMAGE}:sha-${GITHUB_SHA::12}"
+          docker push "${SIM_IMAGE}:sha-${GITHUB_SHA::12}"
+          docker push "${SIM_IMAGE}:${VERSION}"
           docker push "${IMAGE}:${VERSION}"
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ steps.image.outputs.name }}
+          SIM_IMAGE: ${{ steps.image.outputs.sim_name }}
           VERSION: ${{ steps.version.outputs.version }}
 
       - if: steps.tag.outputs.created == 'true'

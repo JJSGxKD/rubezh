@@ -9,7 +9,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_DEFS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
+import { HERO_DEFS, HERO_SKINS, HERO_STATES, HERO_VIEWS, heroDefs, withHeroPalette } from "./hero.mjs";
 import { creaturePalette, enemyBody, enemyEye, STAGES } from "./palette.mjs";
 import { svgFrame, PPU, CELL_K } from "./build.mjs";
 import { FX } from "./fx.mjs";
@@ -21,14 +21,15 @@ const GROUND = "#33506a";
 /** Пикселей экрана на игровую единицу у телефона 390×844 с DPR 3 в движении. */
 const GAME_PX = 2.8;
 
-function heroSvg(state, k) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${HERO_STATES[state][k]()}</svg>`;
+function heroSvg(state, k, states = HERO_STATES, mirror = false) {
+  const inner = states[state][k]();
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${mirror ? `<g transform="scale(-1 1)">${inner}</g>` : inner}</svg>`;
 }
 
 function enemySvg(art, stage, t, style = "C", version = 2) {
   const palette =
     style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(enemyBody(art.pattern, art.rank, stage, art.id, version), enemyEye(stage, version));
-  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style, hostile: version === 2 && style === "C" });
+  return svgFrame(art.draw(t, palette), { rank: art.rank, radius: art.radius, style, hostile: version === 2 && style === "C", pad: art.pad });
 }
 
 /** Ячейка в игровом масштабе: размер в экранных пикселях, как на телефоне. */
@@ -133,6 +134,10 @@ function rosterBoard() {
   return { width: 1380, height: y + 16, items };
 }
 
+/**
+ * Герой: бок с полным набором, ниже — вид спереди и спиной (Р143,
+ * characters.md §4.1) и четыре стороны в игровом масштабе.
+ */
 function heroBoard() {
   const items = [];
   items.push({ text: "Хранитель рубежа: покой ×2 · шаг ×4 · ранение · смерть ×4 · игровой масштаб справа", x: 24, y: 30, size: 22, bold: true });
@@ -146,7 +151,31 @@ function heroBoard() {
   }
   items.push({ svg: heroSvg("walk", 1), x: 24, y: 160, size: gameSize(10, 2.6) / 2 });
   items.push({ text: "← в игре", x: 60, y: 196, size: 14, color: "#d7dcef" });
-  return { width: 1380, height: 230, items };
+  const views = [
+    ["спереди — идёт вниз", HERO_VIEWS.front],
+    ["спиной — идёт вверх", HERO_VIEWS.back],
+  ];
+  let y = 226;
+  for (const [label, states] of views) {
+    items.push({ ground: true, x: 16, y, w: 1350, h: 124 });
+    items.push({ text: label, x: 24, y: y + 22, size: 15, bold: true });
+    let vx = 220;
+    for (const [state, frames] of Object.entries(states)) {
+      frames.forEach((_, k) => {
+        items.push({ svg: heroSvg(state, k, states), x: vx, y: y + 6, size: 112 });
+        vx += 104;
+      });
+    }
+    y += 132;
+  }
+  // Четыре стороны в игровом масштабе: влево — тот же бок зеркалом.
+  items.push({ ground: true, x: 16, y, w: 1350, h: 96 });
+  items.push({ text: "в игре: вправо · влево · вниз · вверх", x: 24, y: y + 22, size: 15, bold: true });
+  const game = gameSize(10, 2.6) / 2;
+  [heroSvg("walk", 1), heroSvg("walk", 1, HERO_STATES, true), heroSvg("walk", 1, HERO_VIEWS.front), heroSvg("walk", 1, HERO_VIEWS.back)].forEach((svg, k) => {
+    items.push({ svg, x: 360 + k * 90, y: y + 14, size: game });
+  });
+  return { width: 1380, height: y + 108, items };
 }
 
 /** Эффекты: кадры по порядку; белые — в цвете, как их окрасит тинт в рендере. */
@@ -196,25 +225,33 @@ function pickupsBoard() {
  * затем архетипы со своей головой и предметом.
  */
 function skinsBoard() {
-  const items = [{ text: "Облики героя v2: окрасы хранителя и архетипы — своя голова и предмет на той же позе", x: 24, y: 30, size: 22, bold: true }];
+  const items = [{ text: "Облики героя v2: окрасы хранителя и архетипы — своя голова и предмет на той же позе; справа — спереди и спиной", x: 24, y: 30, size: 22, bold: true }];
   const rat = ENEMY_ART.find((a) => a.id === "swarm_rat");
   const perRow = 5;
-  const cellW = 272;
+  const cellW = 330;
   const rowH = 268;
   const rows = Math.ceil(HERO_SKINS.length / perRow);
   for (let r = 0; r < rows; r++) items.push({ ground: true, x: 16, y: 46 + r * rowH, w: perRow * cellW + 16, h: rowH - 12 });
   HERO_SKINS.forEach((skin, i) => {
     const x = 28 + (i % perRow) * cellW;
     const y = 52 + Math.floor(i / perRow) * rowH;
-    const draw = (state, k) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${HERO_STATES[state][k]()}</svg>`);
-    items.push({ svg: draw("idle", 0), x, y, size: 150 });
-    items.push({ svg: draw("walk", 1), x: x + 118, y: y + 40, size: 110 });
+    // Кадр с запасом (`pad`) — как в атласе: голова архетипа не срезана, тело того же размера.
+    const pad = skin.pad ?? 1;
+    const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+    const draw = (state, k) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${HERO_STATES[state][k]()}</svg>`);
+    const at = (cx, cy, size) => ({ x: cx - (size * (pad - 1)) / 2, y: cy - (size * (pad - 1)) / 2, size: size * pad });
+    items.push({ svg: draw("idle", 0), ...at(x, y, 150) });
+    items.push({ svg: draw("walk", 1), ...at(x + 110, y + 40, 110) });
+    // Спереди и спиной — мельче, справа: облик держится во всех сторонах.
+    const view = (states) => withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${states.idle[0]()}</svg>`);
+    items.push({ svg: view(HERO_VIEWS.front), ...at(x + 214, y + 4, 84) });
+    items.push({ svg: view(HERO_VIEWS.back), ...at(x + 214, y + 82, 84) });
     const game = gameSize(10, 2.6) / 2;
     items.push({ svg: enemySvg(rat, 0, 0), x: x + 40, y: y + 170, size: gameSize(rat.radius) / 2 });
-    items.push({ svg: draw("walk", 1), x: x + 70, y: y + 162, size: game });
+    items.push({ svg: draw("walk", 1), ...at(x + 70, y + 162, game) });
     items.push({ svg: enemySvg(rat, 1, 0.5), x: x + 104, y: y + 174, size: gameSize(rat.radius) / 2 });
     items.push({ text: skin.name, x: x + 140, y: y + 178, size: 16, bold: true });
-    items.push({ text: skin.rarity === undefined ? "окрас" : `${skin.rarity} · ${skin.source}`, x: x + 140, y: y + 198, size: 12 });
+    items.push({ text: skin.rarity === undefined ? (skin.source === undefined ? "окрас" : `окрас · ${skin.source}`) : `${skin.rarity} · ${skin.source}`, x: x + 140, y: y + 198, size: 12 });
   });
   return { width: perRow * cellW + 48, height: 60 + rows * rowH, items };
 }
@@ -374,7 +411,31 @@ function plannedFxBoard() {
     items.push({ text: "→", x: x + 112, y: y + 116, size: 26, bold: true });
     items.push({ svg: fxOf(evolved).frames[0], x: x + 150, y: y + 58, size: 100 });
   });
-  return { width: 1380, height: y + 186, items };
+  // Новый контент Р157: оружие с эволюцией — парами, следы и метки врагов —
+  // по кадрам. Всё это в паке `atlas-r157`.
+  y += 180;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 170 });
+  items.push({ text: "Оружие Р157 (T-0281, T-0288…T-0290): базовое → эволюция", x: 26, y: y + 24, size: 16, bold: true });
+  const r157Pairs = [["proj_sickle", "proj_harvest", "Серп → Жатва"], ["orbiter_flail", "orbiter_whirl", "Кистень → Круговерть"], ["proj_rowan_beads", "proj_necklace", "Бусы → Ожерелье"], ["wave_gusli", "wave_bayan_song", "Гусли → Песнь Баяна"]];
+  r157Pairs.forEach(([base, evolved, label], k) => {
+    const x = 26 + k * 335;
+    items.push({ text: label, x, y: y + 50, size: 13, color: "#d7dcef" });
+    items.push({ svg: fxOf(base).frames[0], x, y: y + 58, size: 100 });
+    items.push({ text: "→", x: x + 112, y: y + 116, size: 26, bold: true });
+    items.push({ svg: fxOf(evolved).frames[0], x: x + 150, y: y + 58, size: 100 });
+  });
+  y += 180;
+  items.push({ ground: true, x: 16, y, w: 1350, h: 190 });
+  items.push({ text: "Следы и метки Р157 (T-0282…T-0284, T-0290): кадры по времени", x: 26, y: y + 24, size: 16, bold: true });
+  const strips = [["chain_rowan", "цепь бус"], ["puddle_bog", "лужа Болотника: гаснет"], ["mark_kikimora", "метка Кикиморы: сужается"], ["mark_roots", "метка корней: заполняется"], ["strike_roots", "удар корней"]];
+  let sx = 26;
+  for (const [id, label] of strips) {
+    const frames = fxOf(id).frames;
+    items.push({ text: label, x: sx, y: y + 50, size: 12, color: "#d7dcef" });
+    frames.forEach((svg, k) => items.push({ svg, x: sx + k * 84, y: y + 62, size: 80 }));
+    sx += frames.length * 84 + 18;
+  }
+  return { width: 1380, height: y + 206, items };
 }
 
 async function main() {

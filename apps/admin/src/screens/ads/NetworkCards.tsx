@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useEffect, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import {
   AD_PLATFORMS,
@@ -10,6 +11,7 @@ import {
   networkReady,
   placeOptions,
   profileOf,
+  reorderNetworks,
   saveNetwork,
   type AdNetwork,
   type AdNetworkProfile,
@@ -21,22 +23,56 @@ import { api } from "../../services";
 import { HELP } from "../../ui/help";
 import { InlineCode } from "../../ui/inline-code";
 import { Badge, Button, Field, Help, Input, Notice, Panel } from "../../ui/kit";
+import { SortableItem, SortableList } from "../../ui/sortable-list";
+import { applyOrder } from "../../ui/sortable-order";
 import { toast } from "../../ui/toast";
 
 /**
  * Сети карточками (docs/35-stage4-plan.md WP12, часть 5): у каждой — что она
- * умеет и в каких местах показывает, её ключи по профилю, место в круге и
- * включённость. Включить сеть без обязательных ключей нельзя — галочка
+ * умеет и в каких местах показывает, её ключи по профилю и включённость.
+ * Место в круге — порядок карточек: их переставляют за ручку, порядок уходит
+ * на сервер одним запросом. Включить сеть без обязательных ключей нельзя — галочка
  * подскажет, каких не хватает; ключ не того вида подсвечивается у поля.
  */
 export function NetworkCards({ view, canEdit, onSaved }: { view: AdsView; canEdit: boolean; onSaved: () => void }) {
+  // Показанный порядок держится, пока не придёт перечитанный каталог: иначе карточки на мгновение прыгали бы назад.
+  const [shown, setShown] = useState<string[] | null>(null);
+  const [saving, setSaving] = useState(false);
+  const serverOrder = view.networks.map((network) => network.networkKey);
+  const serverKey = serverOrder.join("|");
+  useEffect(() => setShown(null), [serverKey]);
+
+  const networks = shown === null ? view.networks : applyOrder(view.networks, shown, (network) => network.networkKey);
+  const ids = networks.map((network) => network.networkKey);
+  const nameOf = (id: string): string => view.networks.find((network) => network.networkKey === id)?.name ?? id;
+
+  const move = async (next: string[]) => {
+    setShown(next);
+    setSaving(true);
+    const result = await reorderNetworks(api, next);
+    setSaving(false);
+    if (result.ok) {
+      toast.success("Порядок сетей сохранён", { description: "Выдача увидит правку в течение полуминуты" });
+    } else {
+      // В том числе 400: список сетей мог измениться у другого администратора — порядок возвращается к серверному.
+      setShown(null);
+      toast.error(result.error.message);
+    }
+    onSaved();
+  };
+
   return (
     <Panel title="Сети" help={HELP.ads.networks}>
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {view.networks.map((network) => (
-          <NetworkCard key={network.networkKey} view={view} network={network} profile={profileOf(view, network.networkKey)} canEdit={canEdit} onSaved={onSaved} />
-        ))}
-      </div>
+      <p className="mb-3 text-xs text-text-muted">{HELP.ads.priority}</p>
+      <SortableList ids={ids} labelOf={nameOf} onReorder={(next) => void move(next)} layout="grid" disabled={!canEdit || saving}>
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          {networks.map((network) => (
+            <SortableItem key={network.networkKey} id={network.networkKey} as="div">
+              {(handle) => <NetworkCard view={view} network={network} profile={profileOf(view, network.networkKey)} canEdit={canEdit} onSaved={onSaved} handle={handle} />}
+            </SortableItem>
+          ))}
+        </div>
+      </SortableList>
     </Panel>
   );
 }
@@ -54,7 +90,22 @@ function stateBadge(network: AdNetwork) {
   return <Badge>выключена</Badge>;
 }
 
-function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsView; network: AdNetwork; profile: AdNetworkProfile | undefined; canEdit: boolean; onSaved: () => void }) {
+function NetworkCard({
+  view,
+  network,
+  profile,
+  canEdit,
+  onSaved,
+  handle,
+}: {
+  view: AdsView;
+  network: AdNetwork;
+  profile: AdNetworkProfile | undefined;
+  canEdit: boolean;
+  onSaved: () => void;
+  /** ручка перестановки; `null` — переставлять нечего или нельзя */
+  handle: ReactNode;
+}) {
   const form = useForm<NetworkForm>({ resolver: zodResolver(networkFormSchema(profile)), defaultValues: networkFormOf(network, profile), mode: "onChange" });
   const { errors, isSubmitting, isDirty } = form.formState;
 
@@ -64,7 +115,7 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
       toast.error(`${network.name}: ${result.error.message}`);
       return;
     }
-    toast.success(`${result.data.name}: ${result.data.active ? "включена" : "выключена"}, место в круге ${String(result.data.priority)}`, {
+    toast.success(`${result.data.name}: ${result.data.active ? "включена" : "выключена"}`, {
       description: "Выдача увидит правку в течение полуминуты",
     });
     form.reset(networkFormOf(result.data, profile));
@@ -76,6 +127,7 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
   return (
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3 rounded-sm border border-border bg-surface-sunken p-4">
       <header className="flex flex-wrap items-center gap-2">
+        {canEdit ? handle : null}
         <h3 className="text-base font-semibold">{network.name}</h3>
         {stateBadge(network)}
         {profile === undefined ? null : (
@@ -164,9 +216,6 @@ function NetworkCard({ view, network, profile, canEdit, onSaved }: { view: AdsVi
           </section>
 
           <div className="flex flex-wrap items-end gap-3">
-            <Field label="Место в круге" hint="меньше — раньше" help={HELP.ads.priority} error={errors.priority?.message}>
-              <Input type="number" min={0} step={1} {...form.register("priority", { valueAsNumber: true })} disabled={!canEdit} className="w-24" />
-            </Field>
             <div className="flex flex-col gap-1 pb-1.5">
               <label className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" {...form.register("active", { onChange: () => void form.trigger("keys") })} disabled={!canEdit} />

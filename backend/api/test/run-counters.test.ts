@@ -74,7 +74,7 @@ describe("rankBudget", () => {
     const world = createWorld({ seed: 1, enemies: ENEMIES });
     let elite = 0;
     let boss = 0;
-    // Мимо кратного всем «каждые N отрезков» (4, 5, 6) — несколько кругов.
+    // Мимо кратного всем «каждые N отрезков» (4–9) — несколько кругов.
     const segments = TIMELINE.length + 450;
 
     for (let index = 0; index < segments; index++) {

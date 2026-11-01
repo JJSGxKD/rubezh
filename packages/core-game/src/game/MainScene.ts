@@ -21,6 +21,7 @@ import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
@@ -74,7 +75,7 @@ const MAX_DEV_STEP_TICKS = 600;
  * пауза, выбор улучшения и смерть обязаны быть детерминированными — иначе
  * повтор забега по логу ввода разойдётся с оригиналом.
  */
-type RunPhase = "running" | "choosing" | "chest" | "paused" | "downed" | "dead";
+type RunPhase = "running" | "choosing" | "chest" | "blessing" | "paused" | "downed" | "dead";
 
 export interface MainSceneData {
   seed: number;
@@ -107,7 +108,7 @@ export interface MainSceneData {
    * (docs/35-stage4-plan.md §3.5). Без поля движок заводит id сам.
    */
   runId?: string;
-  /** останавливать забег на открытом сундуке до `closeChest` */
+  /** останавливать забег на открытом сундуке до `closeChest` и на капище до `chooseBlessing` */
   pauseOnChest?: boolean;
   /** контент забега; без поля — боевой `CONTENT_SNAPSHOT` (песочница редактора баланса) */
   content?: ContentSnapshot;
@@ -149,6 +150,10 @@ export class MainScene extends Phaser.Scene {
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
   /** сколько записей о сундуках сцена уже отдала оболочке; после снимка — с нуля */
   private chestCursor: ChestCursor = { found: 0, opened: 0 };
+  /** сколько записей о тайниках сцена уже отдала оболочке; после снимка — с нуля */
+  private secretCursor: SecretCursor = { found: 0, used: 0, blessings: 0 };
+  /** оболочка уже получила `secretBlessing` для открытого выбора; после снимка — нет, и окно просит предложение заново */
+  private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
   private cueTracker!: CueTracker;
@@ -178,6 +183,8 @@ export class MainScene extends Phaser.Scene {
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
     this.chestCursor = { found: 0, opened: 0 };
+    this.secretCursor = { found: 0, used: 0, blessings: 0 };
+    this.blessingAnnounced = false;
     this.cordonCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
@@ -195,6 +202,9 @@ export class MainScene extends Phaser.Scene {
     });
     this.world = world;
     this.spawner = spawner;
+    // Выбор благословения отдан игроку только там, где оболочка умеет его показать:
+    // боты, повтор и стенд берут первое из предложенных.
+    world.secrets.manualBlessing = this.sceneData.pauseOnChest === true;
 
     // Снимок переносится до рендера и камеры: они строятся уже по
     // продолженному миру, и первый кадр не показывает пустое начало забега.
@@ -300,8 +310,9 @@ export class MainScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
       steps++;
       this.emitChestEvents();
+      this.emitSecretEvents();
       this.emitCordonEvents();
-      if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest()) break;
+      if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
     this.trackDevInfo(deltaMs, simMs, steps);
@@ -335,8 +346,8 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     // Окно сундука идёт первым: выбор уровня, набранный той же наградой, ждёт
-    // его закрытия (`closeChest`).
-    if (this.isInChest()) return;
+    // его закрытия (`closeChest`), а окно капища — после сундука.
+    if (this.isInChest() || this.isInBlessing()) return;
     if (isAwaitingChoice(this.world)) this.enterChoice();
   }
 
@@ -472,6 +483,35 @@ export class MainScene extends Phaser.Scene {
   closeChest(): void {
     if (this.phase !== "chest") return;
     this.emitHud();
+    this.leaveOverlay();
+  }
+
+  /**
+   * Ответ оболочки на капище: одно из предложенных благословений. Неизвестный id
+   * игнорируется — он приходит снаружи, — и забег стоит дальше. Выбор — часть
+   * записи забега: на этом тике повтор применит то же.
+   */
+  chooseBlessing(id: string): void {
+    if (this.phase !== "blessing") return;
+    if (!chooseBlessing(this.world, id)) return;
+    this.probe.choice(this.world, `blessing:${id}`);
+    this.blessingAnnounced = false;
+    // Использование капища — событием, как и находка: оболочка узнаёт, что именно взято.
+    this.emitSecretEvents();
+    this.emitHud();
+    this.leaveOverlay();
+  }
+
+  /**
+   * Конец окна сундука или капища: следующее окно по очереди (капище, выбор
+   * уровня) или возврат в забег. Окна идут в порядке сундук → капище → уровень:
+   * награда клада могла набрать уровень, а капище могло встать в тот же шаг.
+   */
+  private leaveOverlay(): void {
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) {
+      this.showBlessing();
+      return;
+    }
     if (isAwaitingChoice(this.world)) {
       this.enterChoice();
       return;
@@ -589,8 +629,9 @@ export class MainScene extends Phaser.Scene {
       this.step(IDLE_INPUT);
       this.probe.stepped(IDLE_CODE, this.world);
       this.emitChestEvents();
+      this.emitSecretEvents();
       this.emitCordonEvents();
-      if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
+      if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
     this.worldRenderer.sync(1);
     this.emitHud();
@@ -669,6 +710,10 @@ export class MainScene extends Phaser.Scene {
    * враги не должны нападать, пока он ищет палец для джойстика.
    */
   private enterRestored(): void {
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) {
+      this.enterBlessing();
+      return;
+    }
     if (isAwaitingChoice(this.world)) {
       this.enterChoice();
       return;
@@ -696,6 +741,23 @@ export class MainScene extends Phaser.Scene {
     if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
   }
 
+  /**
+   * Новые события тайников — оболочке. Капище с отданным игроку выбором
+   * останавливает забег: мир стоит, пока оболочка не ответит `chooseBlessing`.
+   */
+  private emitSecretEvents(): void {
+    const events = takeSecretEvents(this.world, this.secretCursor);
+    this.secretCursor = events.cursor;
+    const bus = this.sceneData.bus;
+    for (const found of events.found) bus.emit("secretFound", found);
+    for (const offered of events.blessings) {
+      bus.emit("secretBlessing", offered);
+      this.blessingAnnounced = this.world.secrets.manualBlessing;
+    }
+    for (const used of events.used) bus.emit("secretUsed", used);
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) this.enterBlessing();
+  }
+
   /** Закончившиеся кольца — оболочке, для аналитики. Журнал после восстановления снимка пуст. */
   private emitCordonEvents(): void {
     settleCordonDeath(this.world);
@@ -713,6 +775,33 @@ export class MainScene extends Phaser.Scene {
     if (this.phase !== "running") return;
     this.phase = "chest";
     this.joystick.setVisible(false);
+    this.emitHud();
+  }
+
+  private isInBlessing(): boolean {
+    return this.phase === "blessing";
+  }
+
+  /** Окно капища: открытый сундук его не перебивает — выбор подождёт `closeChest`. */
+  private enterBlessing(): void {
+    if (this.phase !== "running") return;
+    this.joystick.setVisible(false);
+    this.showBlessing();
+  }
+
+  /**
+   * Поставить мир на выбор благословения. Предложение оболочка получает с
+   * событием `secretBlessing`; продолженный из снимка забег журналов не помнит,
+   * и предложение отправляется заново — иначе окну нечего показать.
+   */
+  private showBlessing(): void {
+    this.phase = "blessing";
+    const offer = this.world.secrets.offer;
+    if (!this.blessingAnnounced && offer !== null) {
+      const options = offer.options.flatMap((id) => this.world.secretRules.blessings.filter((blessing) => blessing.id === id));
+      this.sceneData.bus.emit("secretBlessing", { index: offer.siteIndex, options, elapsedSec: this.world.stats.elapsedSec });
+      this.blessingAnnounced = true;
+    }
     this.emitHud();
   }
 

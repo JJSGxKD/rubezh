@@ -28,7 +28,18 @@ const LETTERS = {
   У: { w: 74, d: "M0 0H25L41 40L52 0H74L46 88L37 100H8V80H26L30 68Z" },
   Б: { w: 72, d: "M0 12L12 0H70V22H24V38H58L72 52V86L58 100H0ZM24 60V78H48V60Z" },
   Е: { w: 64, d: "M12 0H64V22H24V39H56V61H24V78H64V100H0V12Z" },
+  // Латиница для мира (Р146): те же штрих, срезы и чаши, что у кириллицы.
+  // R — чаша Р и нога под наклоном, B — две чаши Б, Z — диагональ толщиной
+  // в штрих, H — перекладина на высоте средней у Е.
+  R: { w: 74, d: "M12 0H58L72 14V48L60 60L74 100H50L38 62H24V100H0V12ZM24 22V40H48V22Z" },
+  U: { w: 72, d: "M0 0H24V78H48V0H72V86L58 100H12L0 88Z" },
+  B: { w: 72, d: "M0 12L12 0H58L72 14V36L64 46L72 56V86L58 100H0ZM24 22V36H48V22ZM24 60V78H48V60Z" },
+  E: { w: 64, d: "M12 0H64V22H24V39H56V61H24V78H64V100H0V12Z" },
+  Z: { w: 72, d: "M12 0H72V22L30 78H72V100H0V78L42 22H0V12Z" },
+  H: { w: 72, d: "M0 12L12 0H24V39H48V0H72V100H48V61H24V100H0Z" },
 };
+/** Между руной и словом в латинском знаке: руна там — оберег перед словом, а не буква. */
+const RUNE_GAP = 26;
 const ZHE_W = 104;
 const GAP = 12;
 const STEM = 20;
@@ -54,14 +65,17 @@ export const BRAND = {
  * Фигуры словесного знака одним слоем. `grow` утолщает штрихи — так рисуется
  * контур: те же фигуры, толще и тёмным, под лицом.
  */
-function letterShapes({ fill, rune, grow = 0, dy = 0, gem = null, id, letters = ["Р", "У", "Б", "Е"] }) {
+function letterShapes({ fill, rune, grow = 0, dy = 0, gem = null, id, letters = ["Р", "У", "Б", "Е"], runeFirst = false }) {
   const parts = [];
-  let x = 0;
+  // У кириллицы руна — последняя буква «Ж»; у латиницы — оберег перед словом.
+  let x = runeFirst ? ZHE_W + RUNE_GAP : 0;
   for (const ch of letters) {
     const stroke = grow > 0 ? ` stroke="${fill}" stroke-width="${grow * 2}" stroke-linejoin="miter"` : "";
     parts.push(`<path transform="translate(${x} ${dy})" d="${LETTERS[ch].d}" fill="${fill}" fill-rule="evenodd"${stroke}/>`);
     x += LETTERS[ch].w + GAP;
   }
+  const wordEnd = x - GAP;
+  if (runeFirst) x = 0;
   const c = x + ZHE_W / 2;
   // Диагонали — толстые линии, обрезанные по строке: концы ложатся
   // горизонтальным срезом, как у прямых букв. Контур обрезан рамкой шире на
@@ -79,7 +93,7 @@ function letterShapes({ fill, rune, grow = 0, dy = 0, gem = null, id, letters = 
     const r = 21 + (gem.grow ?? 0);
     parts.push(`<path transform="translate(0 ${dy})" d="M${c} ${50 - r}L${c + r} 50L${c} ${50 + r}L${c - r} 50Z" fill="${gem.fill}" stroke="${gem.stroke ?? "none"}" stroke-width="${gem.strokeWidth ?? 0}" stroke-linejoin="round"/>`);
   }
-  return { parts: parts.join(""), width: x + ZHE_W, zheX: x, gemX: c };
+  return { parts: parts.join(""), width: runeFirst ? wordEnd : x + ZHE_W, zheX: x, gemX: c };
 }
 
 function gradients(id) {
@@ -96,16 +110,16 @@ function gradients(id) {
  * и ромб. `letters` — буквы перед руной: у словесного знака все четыре, у
  * знака-оберега ни одной.
  */
-function layers({ id, letters, depth, outline, glow }) {
+function layers({ id, letters, depth, outline, glow, runeFirst = false }) {
   const b = BRAND;
   const ink = { fill: b.ink, grow: outline + 2 };
   // Контур — под выдавленным низом и под лицом, тем же тёмным.
-  const outer = letterShapes({ fill: b.ink, rune: b.ink, grow: outline, dy: depth, gem: ink, id, letters });
-  const outerTop = letterShapes({ fill: b.ink, rune: b.ink, grow: outline, gem: ink, id, letters });
+  const outer = letterShapes({ fill: b.ink, rune: b.ink, grow: outline, dy: depth, gem: ink, id, letters, runeFirst });
+  const outerTop = letterShapes({ fill: b.ink, rune: b.ink, grow: outline, gem: ink, id, letters, runeFirst });
   const extrude = [];
-  for (let k = depth; k > 0; k -= 1.5) extrude.push(letterShapes({ fill: b.depth, rune: b.emberDepth, dy: k, id, letters }).parts);
-  const face = letterShapes({ fill: `url(#${id}-steel)`, rune: `url(#${id}-ember)`, id, letters });
-  const gloss = letterShapes({ fill: `url(#${id}-gloss)`, rune: `url(#${id}-gloss)`, id, letters });
+  for (let k = depth; k > 0; k -= 1.5) extrude.push(letterShapes({ fill: b.depth, rune: b.emberDepth, dy: k, id, letters, runeFirst }).parts);
+  const face = letterShapes({ fill: `url(#${id}-steel)`, rune: `url(#${id}-ember)`, id, letters, runeFirst });
+  const gloss = letterShapes({ fill: `url(#${id}-gloss)`, rune: `url(#${id}-gloss)`, id, letters, runeFirst });
   const g = face.gemX;
   const gem = `<path d="M${g} 27L${g + 23} 50L${g} 73L${g - 23} 50Z" fill="${b.ink}"/>
     <path d="M${g} 31L${g + 19} 50L${g} 69L${g - 19} 50Z" fill="url(#${id}-ward)"/>
@@ -121,6 +135,19 @@ function layers({ id, letters, depth, outline, glow }) {
  */
 export function wordmark({ id = "wm", depth = 9, outline = 6, glow = true } = {}) {
   const { body, width } = layers({ id, letters: ["Р", "У", "Б", "Е"], depth, outline, glow });
+  const pad = outline + 4;
+  const lift = glow ? 14 : 0;
+  const viewBox = `${-pad} ${-pad - lift} ${width + pad * 2} ${100 + depth + pad * 2 + lift}`;
+  return { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}"><defs>${gradients(id)}</defs>${body}</svg>`, width: width + pad * 2 };
+}
+
+/**
+ * Словесный знак для мира (Р146): RUBEZH латиницей тем же рисунком букв, руна
+ * с ромбом — перед словом. Руна одна для всех стран, поэтому узнаётся и без
+ * кириллицы.
+ */
+export function wordmarkLatin({ id = "wl", depth = 9, outline = 6, glow = true } = {}) {
+  const { body, width } = layers({ id, letters: ["R", "U", "B", "E", "Z", "H"], depth, outline, glow, runeFirst: true });
   const pad = outline + 4;
   const lift = glow ? 14 : 0;
   const viewBox = `${-pad} ${-pad - lift} ${width + pad * 2} ${100 + depth + pad * 2 + lift}`;
@@ -203,6 +230,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const files = {
     "wordmark.svg": wordmark().svg,
     "wordmark-flat.svg": wordmark({ id: "wf", depth: 4, outline: 4, glow: false }).svg,
+    "wordmark-latin.svg": wordmarkLatin().svg,
+    "wordmark-latin-flat.svg": wordmarkLatin({ id: "wlf", depth: 4, outline: 4, glow: false }).svg,
     "rune.svg": runeMark(),
     "rune-flat.svg": runeMark({ id: "rf", depth: 4, outline: 5, glow: false }),
     "app-icon.svg": appIcon(),
@@ -216,6 +245,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   mkdirSync(APP_BRAND, { recursive: true });
   writeFileSync(join(APP_BRAND, "rune.svg"), files["rune.svg"] + "\n");
   writeFileSync(join(APP_BRAND, "wordmark.svg"), files["wordmark.svg"] + "\n");
+  writeFileSync(join(APP_BRAND, "wordmark-latin.svg"), files["wordmark-latin.svg"] + "\n");
   console.log(`оболочка: ${APP_BRAND}`);
   await bakePreview(files);
 }
@@ -239,7 +269,12 @@ async function bakePreview(files) {
   <div style="display:flex">
     <div style="flex:1;background:#f3efe6;padding:28px 48px;display:flex;gap:40px;align-items:center"><div style="width:360px">${files["wordmark.svg"]}</div><div style="width:84px">${files["rune.svg"]}</div></div>
     <div style="flex:1;background:#1d1c31;padding:28px 48px;display:flex;gap:40px;align-items:center"><div style="width:220px">${files["wordmark-flat.svg"]}</div><div style="width:64px">${files["rune-flat.svg"]}</div><div style="width:32px">${files["favicon.svg"]}</div></div>
-  </div></body>`;
+  </div>
+  <div style="background:radial-gradient(120% 80% at 50% 0%,#3b2a55,#141322);padding:32px 48px;display:flex;gap:48px;align-items:center">
+    <div style="width:640px">${files["wordmark-latin.svg"]}</div>
+    <div style="width:300px">${files["wordmark-latin-flat.svg"]}</div>
+  </div>
+  <div style="background:#f3efe6;padding:24px 48px;display:flex;gap:48px;align-items:center"><div style="width:420px">${files["wordmark-latin.svg"]}</div><div style="width:200px">${files["wordmark-latin-flat.svg"]}</div></div></body>`;
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 100 } });
   await page.setContent(html);

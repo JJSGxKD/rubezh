@@ -3,7 +3,7 @@ import { createPrisma } from "../infra/database.js";
 import { closeRedis, createRedis } from "../infra/redis.js";
 import { AccountRestrictions } from "../modules/restrictions/account-restrictions.js";
 import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
-import { rebuildLeaderboard } from "../modules/runs/leaderboard-rebuild.js";
+import { formatBoardCounts, rebuildForRestrictions } from "../modules/runs/leaderboard-rebuild.js";
 import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
 
@@ -16,7 +16,12 @@ import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
  * В контейнере — `node dist/cli/runs-rebuild-leaderboard.js`. Безопасно
  * повторять: рейтинг собирается во временный ключ и подменяет рабочий одной
  * командой, игроки не видят пустого рейтинга ни в какой момент. Те, кому
- * рейтинг сейчас закрыт ограничением, в доски не возвращаются.
+ * рейтинг сейчас закрыт ограничением, в доски не возвращаются; доски две —
+ * полная и общая (docs/14-scalability.md, T-0113), аккаунты с отдельной
+ * доской лежат только в полной.
+ *
+ * При выкате T-0113 команду запускают до первого наложения «Отдельной доски»:
+ * она наполняет полную доску, которой раньше не было.
  */
 async function main(): Promise<void> {
   const config = configFromEnvironment();
@@ -25,9 +30,9 @@ async function main(): Promise<void> {
   const redis = createRedis(config);
   try {
     await redis.connect();
-    const excluded = await new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config).restrictedAccounts("leaderboard");
-    const counts = await rebuildLeaderboard(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), new Set(excluded));
-    console.log(`рейтинг пересобран: ${Object.entries(counts).map(([difficulty, count]) => `${difficulty} — ${count}`).join(", ")}`);
+    const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
+    const counts = await rebuildForRestrictions(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions);
+    console.log(`рейтинг пересобран: ${formatBoardCounts(counts)}`);
   } finally {
     await prisma.$disconnect();
     await closeRedis(redis);

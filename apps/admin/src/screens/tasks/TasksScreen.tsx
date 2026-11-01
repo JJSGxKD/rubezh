@@ -284,7 +284,7 @@ export function TasksScreen() {
             <Field label="Осколки">
               <Input {...number("shards")} />
             </Field>
-            <Field label="Очки пасса" help={HELP.tasks.passPoints}>
+            <Field label="Очки заданий" help={HELP.tasks.passPoints}>
               <Input {...number("passPoints")} />
             </Field>
             <label className="flex items-center gap-1.5 pb-1.5 text-sm">
@@ -366,7 +366,7 @@ export function TasksScreen() {
                         },
                       ]
                     : []),
-                  { title: "Пасс", align: "right", render: (task) => String(task.passPoints) },
+                  { title: "Очки", align: "right", render: (task) => String(task.passPoints) },
                   { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },
                 ]}
               />

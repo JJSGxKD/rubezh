@@ -14,6 +14,7 @@ import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { watchPlatform } from "./state/platform";
+import { useNavigation } from "./state/navigation";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
@@ -118,6 +119,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   const stopAudio = startAudioSync();
 
   render(<App />);
+  // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
+  if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль и кошелёк: рекорд,
   // поставленный на другом устройстве, появляется на главной, награды за
@@ -287,5 +290,7 @@ async function waitForFonts(timeoutMs: number): Promise<boolean> {
 }
 
 export type { ShellBuildInfo, ShellCapabilities } from "./state/shell";
+export { readDevUrl } from "./state/dev-url";
+export type { ScreenId } from "./state/navigation";
 export type { AnalyticsEvent, AnalyticsPayload, AnalyticsSink } from "./state/analytics";
 export { COLORS, PLATFORM_COLORS } from "./design-system/tokens";

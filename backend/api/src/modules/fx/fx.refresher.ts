@@ -11,6 +11,8 @@ import {
   createTonApiSource,
   monthOf,
   refreshRates,
+  takeSnapshot,
+  type Quote,
   type RateAlerts,
   type RateSource,
   type RateStore,
@@ -50,6 +52,41 @@ const TICK_MS = 60_000;
 const LOCK_KEY = "fx:refresh:lock";
 const LOCK_TTL_MS = 90_000;
 const BUDGET_KEY_TTL_SEC = 35 * 24 * 60 * 60;
+
+/** Пауза между опросами одного источника: «с прошлого запроса прошло меньше 60 000 / perMinute мс». */
+const GAP_KEY = (source: string): string => `fx:poll-gap:${source}`;
+
+/** Идёт обновление по расписанию или другое «сейчас» — повторять не нужно, через минуту источник снова доступен. */
+export class FxRefreshBusyError extends Error {
+  constructor() {
+    super("обновление курсов уже идёт");
+  }
+}
+
+/** Месячный лимит источника исчерпан: ждать нового месяца или поднять лимит в панели. */
+export class FxRefreshLimitError extends Error {
+  constructor() {
+    super("лимит источника на месяц исчерпан");
+  }
+}
+
+/** Источник спрашивали только что (или он после отказа по лимиту ждёт): через сколько секунд можно снова. */
+export class FxRefreshPausedError extends Error {
+  constructor(readonly seconds: number) {
+    super(`источник спрашивали только что — через ${String(seconds)} с`);
+  }
+}
+
+/** Что вернул источник на «Обновить сейчас»: по каждой валюте — принят ли её курс. */
+export interface RefreshNowResult {
+  source: string;
+  /** источник ответил; `false` — не ответил, причина в `error` */
+  ok: boolean;
+  error: string | null;
+  quotes: { currency: string; usdPerUnit: string; status: "accepted" | "rejected" | "waiting" }[];
+  /** снимок, взятый после опроса */
+  snapshotId: string;
+}
 
 const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
@@ -95,7 +132,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
     @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     // Без лимитов (хранилище ядра в тестах) источники идут по тарифу из кода.
     @Inject(FX_STORE) private readonly store: RateStore & Partial<LimitStore>,
-    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
+    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval" | "pttl">,
     private readonly hooks: FxHooks,
     private readonly switches: FeatureSwitches,
     // Без модуля клиента (тесты) источники берут глобальный fetch.
@@ -134,6 +171,7 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
         const limited = applyLimits(sources, (await this.store.limits?.()) ?? new Map());
         const before = await this.usedThisMonth(limited, now);
         const report = await refreshRates({ sources: limited, store: this.store, alerts: this.alerts(), now });
+        for (const source of limited.filter((candidate) => report.polled.includes(candidate.id) || report.failed.includes(candidate.id))) await this.markPolled(source);
         await this.announceBudget(limited, before, now);
         // В лог — только проход, в котором что-то случилось: иначе он растёт
         // на строку в минуту без пользы.
@@ -149,6 +187,85 @@ export class FxRefresher implements OnApplicationBootstrap, OnModuleDestroy {
       return null;
     } finally {
       this.running = false;
+    }
+  }
+
+  /**
+   * «Обновить сейчас» (Р90, T-0064): один источник сразу, мимо расписания, но в
+   * пределах лимитов и под тем же локом, что проход по расписанию, — двух
+   * опросов разом нет. Затем — новый снимок. Источник, не ответивший, — исход
+   * в ответе, а не ошибка: человек нажал, чтобы увидеть, что с источником.
+   * `sources` — подмена для теста; в работе источники берутся как у прохода.
+   */
+  async refreshNow(source: string, now = new Date(), sources: readonly RateSource[] = fxSources(this.secrets, this.fetchFor())): Promise<RefreshNowResult> {
+    const found = applyLimits(sources, (await this.store.limits?.()) ?? new Map()).find((candidate) => candidate.id === source);
+    if (found === undefined) throw new Error(`источника курсов ${source} нет`);
+    if (this.running) throw new FxRefreshBusyError();
+    this.running = true;
+    try {
+      const token = randomUUID();
+      // Недоступный Redis — ошибка, а не опрос мимо лока: бюджет источника считает лок.
+      if ((await this.redis.set(LOCK_KEY, token, "PX", LOCK_TTL_MS, "NX")) === null) throw new FxRefreshBusyError();
+      try {
+        await this.ensureAllowed(found, now);
+        return await this.pollNow(found, now);
+      } finally {
+        await this.redis.eval(RELEASE_SCRIPT, 1, LOCK_KEY, token);
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /** Лимит месяца, ожидание после отказа источника и пауза с прошлого опроса — до обращения к источнику. */
+  private async ensureAllowed(source: RateSource, now: Date): Promise<void> {
+    const state = await this.store.sourceState(source.id);
+    const used = state?.usage.month === monthOf(now) ? state.usage.used : 0;
+    if (source.tariff.perMonth !== null && used >= source.tariff.perMonth) throw new FxRefreshLimitError();
+    const pausedUntil = state?.usage.pausedUntil ?? null;
+    if (pausedUntil !== null && pausedUntil > now) throw new FxRefreshPausedError(Math.ceil((pausedUntil.getTime() - now.getTime()) / 1000));
+    const left = await this.redis.pttl(GAP_KEY(source.id));
+    if (left > 0) throw new FxRefreshPausedError(Math.ceil(left / 1000));
+  }
+
+  private async pollNow(source: RateSource, now: Date): Promise<RefreshNowResult> {
+    let quotes: Quote[] = [];
+    let failure: string | null = null;
+    // Ответ источника ядро наружу не отдаёт — перехватываем его на пути к хранилищу.
+    const watched: RateSource = {
+      ...source,
+      fetch: async (signal) => {
+        try {
+          quotes = await source.fetch(signal);
+          return quotes;
+        } catch (error: unknown) {
+          failure = error instanceof Error ? error.message : "неизвестно";
+          throw error;
+        }
+      },
+    };
+    const report = await refreshRates({ sources: [watched], store: this.store, alerts: this.alerts(), now, force: source.id });
+    await this.markPolled(source);
+    const snapshot = await takeSnapshot(this.store, now);
+    return {
+      source: source.id,
+      ok: report.polled.includes(source.id),
+      error: failure,
+      quotes: quotes.map((quote) => ({
+        currency: quote.currency,
+        usdPerUnit: quote.usdPerUnit.toFixed(),
+        status: report.accepted.includes(quote.currency) ? "accepted" : report.rejected.includes(quote.currency) ? "rejected" : "waiting",
+      })),
+      snapshotId: snapshot.id,
+    };
+  }
+
+  /** Запрос сделан — следующий не раньше, чем позволяет лимит в минуту; сбой Redis ответ не портит. */
+  private async markPolled(source: RateSource): Promise<void> {
+    try {
+      await this.redis.set(GAP_KEY(source.id), "1", "PX", Math.ceil(60_000 / source.tariff.perMinute));
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "fx", event: "poll_gap_not_set", source: source.id, reason: error instanceof Error ? error.message : "unknown" }));
     }
   }
 

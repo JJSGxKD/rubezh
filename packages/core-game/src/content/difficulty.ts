@@ -1,8 +1,10 @@
 import type { DifficultyDef, DifficultyId } from "@bh/shared-types";
 
 // Уровни сложности — данные геймдизайнера. Множители ложатся поверх кривой
-// сложности таймлайна: «Лёгкая» — баланс, откалиброванный ботом
-// (content/balance-targets.ts), остальные строже по всем осям сразу.
+// сложности таймлайна. Игроку выдаётся одна сложность — «Сложная» (Р126):
+// она и есть главный бой, коридоры калибровки заданы для неё
+// (content/balance-targets.ts). «Лёгкая» — только обучающий первый забег,
+// «Нормальная» остаётся ради старых клиентов и записей.
 //
 // Порядок — от лёгкой к сложной: тест контента проверяет, что следующий
 // уровень ни по одной оси не легче предыдущего.
@@ -29,19 +31,18 @@ export const DIFFICULTIES: DifficultyDef[] = [
     id: "hard",
     nameKey: "difficulty.hard.name",
     descriptionKey: "difficulty.hard.description",
-    enemyHpMul: 1.8,
-    enemyDamageMul: 1.5,
-    spawnRateMul: 1.35,
-    maxAliveMul: 1.3,
+    enemyHpMul: 2,
+    enemyDamageMul: 1.7,
+    spawnRateMul: 1.5,
+    maxAliveMul: 1.4,
   },
 ];
 
 /**
- * Что открыто по умолчанию. Не «Лёгкая»: на первом плейтесте игра на ней
- * ощущалась слишком простой, а первое впечатление складывается на том, что
- * выбрано за игрока.
+ * Запасной уровень, когда id забега неизвестен: единая сложность, а не
+ * «Нормальная» — другой в игре уже нет.
  */
-export const DEFAULT_DIFFICULTY_ID: DifficultyId = "normal";
+export const DEFAULT_DIFFICULTY_ID: DifficultyId = "hard";
 
 export function findDifficulty(id: string): DifficultyDef | undefined {
   return DIFFICULTIES.find((difficulty) => difficulty.id === id);

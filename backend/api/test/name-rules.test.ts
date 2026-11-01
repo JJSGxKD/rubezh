@@ -44,6 +44,11 @@ class MemoryNameRules implements NameRulesRepository {
     return this.rows.size;
   }
 
+  async countRegex(): Promise<number> {
+    this.touched += 1;
+    return [...this.rows.values()].filter((row) => row.active && row.kind === "regex").length;
+  }
+
   async insert(row: StoredNameRule): Promise<void> {
     this.touched += 1;
     this.rows.set(row.ruleId, { ...row });
@@ -159,7 +164,7 @@ describe("view", () => {
     const view = await ctx.service.view(admin);
 
     expect(view.rules).toEqual([{ ruleId: expect.any(String), category: "brand", kind: "exact", pattern: "пример-бренд", active: true, note: "заметка", updatedAt: "2026-10-27T10:00:00.000Z", updatedBy: admin.accountId }]);
-    expect(view.limits).toEqual({ patternMax: 100, noteMax: 200, rulesMax: 2000, samplesMax: 20, sampleMax: 256 });
+    expect(view.limits).toEqual({ patternMax: 100, noteMax: 200, rulesMax: 2000, regexRulesMax: 100, samplesMax: 20, sampleMax: 256 });
   });
 });
 
@@ -242,6 +247,18 @@ describe("create", () => {
     expect((error as NameRuleConflictError).message).toBe("Правил уже 2000 — нужно удалить лишние");
   });
 
+  it("сотая регулярка создаётся, сто первая — конфликт; точные правила идут до общего потолка", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "813", "admin");
+    for (let index = 0; index < NAME_RULE_LIMITS.regexRulesMax - 1; index += 1) ctx.repository.seed({ kind: "regex", pattern: `пример${String(index)}` });
+
+    await expect(ctx.service.create(admin, { category: "brand", kind: "regex", pattern: "сотая" })).resolves.toMatchObject({ kind: "regex" });
+    const error = await ctx.service.create(admin, { category: "brand", kind: "regex", pattern: "сто-первая" }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(NameRuleConflictError);
+    expect((error as NameRuleConflictError).message).toBe("Регулярок уже 100 — нужно удалить лишние");
+    await expect(ctx.service.create(admin, brand("точное-правило"))).resolves.toMatchObject({ kind: "exact" });
+  });
+
   it("сбой рассылки не роняет запись и не отменяет аудит", async () => {
     const ctx = setup();
     const admin = await person(ctx, "812", "admin");
@@ -268,6 +285,17 @@ describe("update и remove", () => {
     expect(ctx.roles.entries).toEqual([expect.objectContaining({ action: "names.rule.update", target: created.ruleId, before: created, after: updated })]);
     expect(ctx.published).toEqual([created.ruleId]);
     expect(logs.join("\n")).not.toContain("пример-бренд");
+  });
+
+  it("update: правка точного правила в regex сверх потолка — конфликт; правка регулярки без смены вида проходит", async () => {
+    const ctx = setup();
+    const admin = await person(ctx, "814", "admin");
+    const first = ctx.repository.seed({ kind: "regex", pattern: "пример-первый" });
+    for (let index = 1; index < NAME_RULE_LIMITS.regexRulesMax; index += 1) ctx.repository.seed({ kind: "regex", pattern: `пример${String(index)}` });
+    const exact = ctx.repository.seed({ pattern: "точное" });
+
+    await expect(ctx.service.update(admin, exact.ruleId, { kind: "regex" })).rejects.toBeInstanceOf(NameRuleConflictError);
+    await expect(ctx.service.update(admin, first.ruleId, { pattern: "пример-другой" })).resolves.toMatchObject({ pattern: "пример-другой" });
   });
 
   it("update: смена вида на regex с опасным шаблоном и дубль с другим правилом отклоняются", async () => {

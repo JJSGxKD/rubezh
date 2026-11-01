@@ -21,6 +21,20 @@ import type { Rate } from "./rates.js";
 
 export const MANUAL_RATE_PURPOSES = ["price", "payout"] as const;
 
+/**
+ * Срок годности заданного курса (Р90, T-0064). У валюты площадки рынка нет и
+ * курс держится до трёх месяцев. У рыночной валюты он **запасной**: запас на
+ * время сбоя источников, а не способ зафиксировать курс, поэтому не дольше
+ * недели.
+ */
+export const MARKET_MANUAL_MAX_DAYS = 7;
+export const PLATFORM_MANUAL_MAX_DAYS = 90;
+
+/** Текст отказа: тот же слышит панель и сервер. */
+export const MARKET_MANUAL_RULE = "У рыночной валюты ручной курс — запасной: в долларах и только для цен";
+
+const DAY_MS = 86_400_000;
+
 export type ManualRatePurpose = (typeof MANUAL_RATE_PURPOSES)[number];
 
 export interface ManualRate {
@@ -39,6 +53,14 @@ export interface ManualRate {
 
 export function manualRate(input: Omit<ManualRate, "price" | "quote"> & { price: DecimalInput; quote?: CurrencyCode }): ManualRate {
   const quote = input.quote ?? BASE_CURRENCY;
+  if (input.currency === BASE_CURRENCY) throw new RangeError("доллар — опорная валюта: его курс не задают");
+  // У рыночной валюты ручной курс — запасной (Р90): работает, только пока источники
+  // не дают свежего. В долларах, иначе цепочка ручных курсов друг через друга
+  // замкнулась бы; на цену, потому что курс вывода есть только у валют площадок.
+  if (CURRENCIES[input.currency].kind !== "platform") {
+    if (quote !== BASE_CURRENCY || input.purpose !== "price") throw new RangeError(MARKET_MANUAL_RULE);
+    if (input.expiresAt.getTime() - input.setAt.getTime() > MARKET_MANUAL_MAX_DAYS * DAY_MS) throw new RangeError(`срок запасного курса — до ${String(MARKET_MANUAL_MAX_DAYS)} дней`);
+  }
   if (input.expiresAt <= input.setAt) throw new RangeError("срок годности курса — позже момента, когда его поставили");
   // Котировка в валюте площадки замкнула бы курс звезды на курс голосов, у
   // которых рынка тоже нет, — считать их было бы не из чего.

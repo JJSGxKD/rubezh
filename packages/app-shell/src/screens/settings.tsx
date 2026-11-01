@@ -218,13 +218,13 @@ export function SettingsScreen(): ReactNode {
 }
 
 /**
- * Громкость по регуляторам (docs/31-audio-and-haptics.md §5). Общая — поверх
- * всех; эффекты и интерфейс — отдельно: игрок вправе оставить бой и
- * убрать щелчки кнопок. Экспорт — для лаборатории звука, те же регуляторы.
+ * Громкость по регуляторам (docs/31-audio-and-haptics.md §6). Общая — поверх
+ * всех; эффекты, интерфейс и музыка — отдельно: игрок вправе оставить бой и
+ * убрать щелчки кнопок или музыку. Экспорт — для лаборатории звука, те же регуляторы.
  */
 export function VolumeSliders(): ReactNode {
   const volumes = useSettings((state) => state.volumes);
-  const keys: readonly VolumeKey[] = ["master", "effects", "ui"];
+  const keys: readonly VolumeKey[] = ["master", "effects", "ui", "music"];
   return (
     <ListGroup>
       {keys.map((key) => (

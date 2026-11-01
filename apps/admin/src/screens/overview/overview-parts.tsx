@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import {
+  BOARD_MARK_LABEL,
+  boardMarkShare,
   completionPct,
   funnelBars,
   LOW_COMPLETION_PCT,
@@ -8,7 +10,9 @@ import {
   OVERVIEW_PERIODS,
   versusBefore,
   type AdsTotals,
+  type BoardMark,
   type Overview,
+  type OverviewDay,
   type OverviewAds,
   type OverviewDays,
 } from "../../api/overview";
@@ -203,5 +207,44 @@ function CompletionCell({ totals }: { totals: AdsTotals }) {
         <i className={`block h-full ${low ? "bg-warning" : "bg-info"}`} style={{ width: `${String(pct)}%` }} />
       </span>
     </span>
+  );
+}
+
+/**
+ * «Отдельная доска» — сколько аккаунтов под этим видом и какая часть забегов на
+ * них приходится (T-0115). Блока нет, когда сервер прислал `null`: права нет или
+ * чтение метки не ответило, а места под пустой блок экран не держит.
+ */
+export function BoardMarkPanel({ mark, today }: { mark: BoardMark | null; today: OverviewDay }) {
+  if (mark === null) return null;
+  const share = boardMarkShare(mark.today, today);
+  const rows = [
+    ["С видом", mark.today.marked, mark.yesterday.marked],
+    ["Играли", mark.today.active, mark.yesterday.active],
+    ["Новые", mark.today.newAccounts, mark.yesterday.newAccounts],
+    ["Забегов", mark.today.runs, mark.yesterday.runs],
+  ] as const;
+  return (
+    <Panel title={BOARD_MARK_LABEL}>
+      <table className="w-full text-sm tabular-nums">
+        <thead>
+          <tr className="text-left text-xs text-text-muted">
+            <th className="py-1 font-normal" />
+            <th className="py-1 text-right font-normal">сейчас</th>
+            <th className="py-1 text-right font-normal">вчера</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([title, now, before]) => (
+            <tr key={title} className="border-t border-border">
+              <td className="py-1.5">{title}</td>
+              <td className="py-1.5 text-right">{formatNumber(now)}</td>
+              <td className="py-1.5 text-right text-text-muted">{formatNumber(before)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {share === null ? null : <p className="mt-2 text-xs text-text-muted">{`На них ${String(share)}% завершённых забегов периода.`}</p>}
+    </Panel>
   );
 }

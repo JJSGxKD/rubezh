@@ -36,6 +36,7 @@ import { LinksModule } from "./modules/links/links.module.js";
 import { FlagsModule } from "./modules/flags/flags.module.js";
 import { BroadcastsModule } from "./modules/broadcasts/broadcasts.module.js";
 import { SettingsModule } from "./modules/settings/settings.module.js";
+import { ProxiesModule } from "./modules/proxies/proxies.module.js";
 import { SecretsModule } from "./modules/secrets/secrets.module.js";
 import { AdConversionsModule } from "./modules/ad-conversions/ad-conversions.module.js";
 import { TelegramPanelLoginModule } from "./platforms/telegram/telegram-panel-login.module.js";
@@ -103,6 +104,7 @@ export const APP_MODULES = [
   OutboundModule,
   SettingsModule,
   SecretsModule,
+  ProxiesModule,
   AdConversionsModule,
   PlatformsModule,
   IngestModule,

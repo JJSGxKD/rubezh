@@ -34,7 +34,7 @@ batch: 8
 
 # T-0316. Запись для проверки у каждого забега — лог ввода, выборы и контрольные суммы сквозь продолжение из снимка; отправка на сервер очередью
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0316.json)](README.md#значки-статуса) [![T-0317](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json&label=T-0317)](T-0317-run-proof-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0316.json)](README.md#значки-статуса) [![T-0317](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json&label=T-0317)](archive/T-0317-run-proof-server.md)
 
 ## Зачем
 
