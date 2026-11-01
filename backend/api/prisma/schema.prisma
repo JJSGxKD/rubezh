@@ -2554,3 +2554,26 @@ model NameRuleHitDay {
   @@index([day])
   @@map("name_rule_hit_day")
 }
+
+enum NameCandidateKind {
+  word
+  pair
+}
+
+/// Частые слова и пары слов в никах (Р168, T-0341): только агрегат — слово и число разных игроков.
+model NameRuleCandidate {
+  candidateId String            @id @map("candidate_id") @db.Uuid
+  token       String            @db.VarChar(64)
+  kind        NameCandidateKind
+  /// разных игроков за окно на момент последнего расчёта; не меньше порога
+  players     Int
+  firstSeenAt DateTime          @map("first_seen_at") @db.Timestamptz(3)
+  computedAt  DateTime          @map("computed_at") @db.Timestamptz(3)
+  /// скрыт сотрудником: расчёт его не показывает и не воскрешает
+  dismissedAt DateTime?         @map("dismissed_at") @db.Timestamptz(3)
+  dismissedBy String?           @map("dismissed_by") @db.Uuid
+
+  @@unique([kind, token])
+  @@index([players])
+  @@map("name_rule_candidate")
+}

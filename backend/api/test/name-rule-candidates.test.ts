@@ -3,6 +3,7 @@ import { Logger, Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { parseCandidatesArgs } from "../src/cli/name-rule-candidates.js";
 import { ForbiddenError } from "../src/common/domain-error.js";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
@@ -321,6 +322,24 @@ describe("приватность", () => {
     await ctx.instance.run();
 
     expect(JSON.parse(ctx.redis.store.get(LAST_KEY) ?? "null")).toEqual({ computedAt: NOW.toISOString(), scanned: 20, kept: 3, capped: false });
+  });
+});
+
+describe("сухой прогон и команда", () => {
+  it("dryRun считает и ничего не пишет: ни таблицы, ни итога в Redis", async () => {
+    const ctx = service();
+    ctx.prisma.add("пример-бренд", 20);
+
+    expect(await ctx.instance.run({ dryRun: true })).toEqual({ status: "done", scanned: 20, kept: 3, capped: false });
+
+    expect(ctx.repository.saved).toHaveLength(0);
+    expect(ctx.redis.store.has(LAST_KEY)).toBe(false);
+  });
+
+  it("параметры команды: допустим только --dry-run", () => {
+    expect(parseCandidatesArgs([])).toEqual({ dryRun: false });
+    expect(parseCandidatesArgs(["--dry-run"])).toEqual({ dryRun: true });
+    expect(() => parseCandidatesArgs(["--force"])).toThrow("Допустим только --dry-run");
   });
 });
 

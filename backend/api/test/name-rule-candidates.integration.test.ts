@@ -98,10 +98,11 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("кандидаты в 
 
     expect(result.status).toBe("done");
     const rows = await mine();
+    // Вид сортируется по порядку значений перечисления: слова раньше пар.
     expect(rows.map((row) => [row.kind, row.token, row.players])).toEqual([
-      ["pair", `${ALPHA} ${BETA}`, 25],
       ["word", ALPHA, 25],
       ["word", BETA, 25],
+      ["pair", `${ALPHA} ${BETA}`, 25],
     ]);
     expect(rows.every((row) => row.dismissedAt === null)).toBe(true);
   }, TIMEOUT_MS);
