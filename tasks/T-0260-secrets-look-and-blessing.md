@@ -27,6 +27,10 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/core-game/src/game/radar.ts
+  - packages/core-game/src/run-api.ts
+  - packages/app-shell/src/state/audio-sync.ts
+  - packages/app-shell/test/radar-looks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

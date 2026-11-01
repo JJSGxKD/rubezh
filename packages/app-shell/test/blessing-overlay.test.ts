@@ -1,7 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { BlessingDef } from "@bh/shared-types";
-import { SECRETS } from "@bh/core-game";
 import { describe, expect, it, vi } from "vitest";
 import { BlessingOverlay, blessingCards, blessingGains } from "../src/screens/run/BlessingOverlay";
 import { t } from "../src/i18n";
@@ -11,7 +10,16 @@ import "../src/i18n/run";
 // карточки, как у выбора улучшения; выбор зовёт `chooseBlessing` с id, а
 // прибавка читается строкой из модификатора.
 
-const THREE: readonly BlessingDef[] = SECRETS.blessings.slice(0, 3);
+/** Набор капища из `core-game/src/content/secrets.ts`: движок отдаёт оболочке именно такие определения. */
+const ALL: readonly BlessingDef[] = [
+  { id: "fury", nameKey: "blessing.fury", modifiers: { damage: 0.1 } },
+  { id: "wind", nameKey: "blessing.wind", modifiers: { moveSpeed: 0.08 } },
+  { id: "harvest", nameKey: "blessing.harvest", modifiers: { pickupRadius: 0.2 } },
+  { id: "fortress", nameKey: "blessing.fortress", modifiers: { maxHp: 10 } },
+  { id: "keen", nameKey: "blessing.keen", modifiers: { cooldown: 0.08 } },
+  { id: "flame", nameKey: "blessing.flame", modifiers: { statusChance: 0.1 } },
+];
+const THREE: readonly BlessingDef[] = ALL.slice(0, 3);
 
 describe("карточки благословений", () => {
   it("по карточке на предложение, в порядке движка; название — из словаря", () => {
@@ -44,7 +52,7 @@ describe("карточки благословений", () => {
   });
 
   it("весь набор контента читается: у каждого благословения есть название и хотя бы одна строка", () => {
-    for (const blessing of SECRETS.blessings) {
+    for (const blessing of ALL) {
       const card = blessingCards([blessing], () => undefined)[0];
       expect(card?.title, blessing.id).not.toBe(blessing.nameKey);
       expect(card?.gains.length, blessing.id).toBeGreaterThan(0);
