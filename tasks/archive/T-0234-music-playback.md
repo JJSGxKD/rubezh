@@ -37,7 +37,7 @@ batch: 3
 
 # T-0234. Музыка в игре — лобби, пульс забега, слой босса и регулятор громкости
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0234.json)](README.md#значки-статуса) [![T-0233](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0233.json&label=T-0233)](T-0233-music-tracks.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0234.json)](../README.md#значки-статуса) [![T-0233](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0233.json&label=T-0233)](T-0233-music-tracks.md)
 
 ## Зачем
 

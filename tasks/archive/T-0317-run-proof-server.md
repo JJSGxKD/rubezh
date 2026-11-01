@@ -39,7 +39,7 @@ batch: 8
 
 # T-0317. Сервер принимает запись для проверки — PUT к своему забегу, проверка формы и размера, хранение 7 дней, дольше — у проверенных
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0317.json)](../README.md#значки-статуса)
 
 ## Зачем
 

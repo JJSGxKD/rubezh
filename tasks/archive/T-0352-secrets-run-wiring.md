@@ -3,7 +3,7 @@ id: T-0352
 title: Тайники рубежа — проводка к забегу: события в шину, выбор благословения с паузой, снимок контента и забега, эталоны
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-13 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -39,7 +39,7 @@ batch: 4
 
 # T-0352. Тайники рубежа — проводка к забегу: события в шину, выбор благословения с паузой, снимок контента и забега, эталоны
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json)](README.md#значки-статуса) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](archive/T-0258-secrets-engine-core.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0352.json)](../README.md#значки-статуса) [![T-0258](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0258.json&label=T-0258)](T-0258-secrets-engine-core.md)
 
 ## Зачем
 
