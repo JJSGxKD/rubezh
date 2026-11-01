@@ -333,14 +333,68 @@ describe("контент стража кольца и колец в таймла
   });
 });
 
+describe("контент Тарана", () => {
+  const ram = ENEMIES.find((enemy) => enemy.id === "boss_ram");
+
+  it("Таран описан по таблице задачи и стоит в массиве последним", () => {
+    expect(ram).toBeDefined();
+    expect(ENEMIES[ENEMIES.length - 1].id).toBe("boss_ram");
+    expect(ram).toMatchObject({
+      rank: "boss",
+      pattern: "dash",
+      hp: 1000,
+      speed: 58,
+      damage: 26,
+      xp: 90,
+      threat: 250,
+      params: { triggerDistance: 300, telegraphSec: 0.9, dashSpeed: 520, dashDurationSec: 0.8, recoverSec: 1.8 },
+      resist: { cold: 0.4, lightning: -0.4 },
+    });
+    expect(ram?.element).toBeUndefined();
+  });
+
+  it("у Тарана нет снарядов", () => {
+    const params = (ram?.params ?? {}) as Record<string, unknown>;
+    expect(params).not.toHaveProperty("projectileSpeed");
+    expect(params).not.toHaveProperty("shotIntervalSec");
+    expect(findEnemyContentProblems(ENEMIES)).toEqual([]);
+  });
+
+  it("босс не слабее порога стража рубежа", () => {
+    // T-0120: страж рубежа (1400) не меньше 1,3 × здоровья любого босса.
+    expect(ram?.hp).toBeLessThanOrEqual(1076);
+  });
+});
+
 describe("боссы бесконечного режима", () => {
-  it("в кривой один вид босса — Матрёшка, два ритма: раз в пять отрезков и раз в восемь", () => {
+  it("в кривой два вида босса и они чередуются: Матрёшка раз в пять отрезков, Таран раз в восемь", () => {
     const bosses = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
     const onCurve = ENDLESS_CURVE.events.filter((event) => bosses.has(event.enemy));
     expect(onCurve).toEqual([
       { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
-      { everySegments: 8, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+      { everySegments: 8, kind: "ring", enemy: "boss_ram", count: 1 },
     ]);
+    // Секунда срабатывания: (step + 1) % everySegments === 0 на fromSec + step * segmentSec.
+    const fired: { sec: number; enemy: string }[] = [];
+    for (let step = 0; step < 40; step++) {
+      const sec = ENDLESS_CURVE.fromSec + step * ENDLESS_CURVE.segmentSec;
+      if (sec < 480 || sec >= 1320) continue;
+      for (const event of onCurve) {
+        if ((step + 1) % event.everySegments === 0) fired.push({ sec, enemy: event.enemy });
+      }
+    }
+    fired.sort((a, b) => a.sec - b.sec);
+    expect(fired).toEqual([
+      { sec: 570, enemy: "boss_matryoshka" },
+      { sec: 750, enemy: "boss_ram" },
+      { sec: 870, enemy: "boss_matryoshka" },
+      { sec: 1170, enemy: "boss_matryoshka" },
+      { sec: 1230, enemy: "boss_ram" },
+    ]);
+    for (const segment of TIMELINE) {
+      for (const spawn of segment.spawns) expect(spawn.enemy).not.toBe("boss_ram");
+      for (const event of segment.events ?? []) expect(event.enemy).not.toBe("boss_ram");
+    }
   });
 
   it("смесь и стартовый набор кривой помещаются в пул из девяти врагов", () => {
