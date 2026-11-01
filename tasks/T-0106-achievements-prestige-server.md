@@ -3,7 +3,7 @@ id: T-0106
 title: Достижения с престижем: сервер, 49 определений, редкость «есть у N%»
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-44 / sonnet-5.5 / extra
 author: claude-lead2-16
 size: M
@@ -36,6 +36,13 @@ shared:
   - docs/39-retention-mechanics.md
   - backend/api/src/modules/wipe/wipe-plan.ts
   - apps/admin/src/ui/help.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/task-pool.test.ts
+  - backend/api/test/tasks.integration.test.ts
+  - apps/admin/test/tasks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
