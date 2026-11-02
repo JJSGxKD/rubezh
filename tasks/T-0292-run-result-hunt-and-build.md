@@ -17,9 +17,10 @@ shared:
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/sim/world.ts
   - packages/core-game/src/game/sim/combat.ts
-  - packages/core-game/src/game/sim/spawner.ts
+  - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/test/**
   - backend/api/src/modules/runs/dto/runs.dto.ts
+  - backend/api/test/run-streaks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
