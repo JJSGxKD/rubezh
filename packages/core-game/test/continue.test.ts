@@ -33,18 +33,16 @@ describe("второй шанс", () => {
     expect(applyContinue(w)).toBe(false);
   });
 
-  it("убирает врагов и их снаряды без добычи, снаряды игрока оставляет", () => {
+  it("второй шанс не трогает снаряды игрока: враги сняты без добычи", () => {
     const w = world();
     spawnEnemy(w, 0, 100, 0);
     spawnEnemy(w, 0, -100, 0);
-    const hostile = spawnProjectile(w, 50, 0, -1, 0, 5, 3, false);
-    const own = spawnProjectile(w, 0, 50, 0, 1, 5, 3, true);
+    const own = spawnProjectile(w, 0, 50, 0, 1, 5, 3);
     kill(w);
 
     expect(applyContinue(w)).toBe(true);
 
     expect(w.enemies.aliveCount).toBe(0);
-    expect(w.projectiles.alive[hostile]).toBe(0);
     expect(w.projectiles.alive[own]).toBe(1);
     // Ни убийств, ни кристаллов: иначе умереть было бы выгоднее, чем выжить.
     expect(w.stats.enemiesKilled).toBe(0);

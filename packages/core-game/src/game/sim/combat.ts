@@ -1,4 +1,5 @@
 import { isElite, onEnemyKilled } from "../patterns";
+import { recordHunt } from "../run/hunt-log";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { dropChest } from "./chests";
@@ -98,6 +99,7 @@ export function killEnemy(world: World, index: number): void {
   world.stats.enemiesKilled++;
   world.stats.killsByType[typeIndex]++;
   registerKill(world);
+  recordHunt(world, index, type);
   if (type.rank === "boss") world.stats.bossKills++;
   else if (type.rank === "elite") world.stats.eliteKills++;
 

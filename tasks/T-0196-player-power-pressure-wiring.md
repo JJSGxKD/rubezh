@@ -3,7 +3,7 @@ id: T-0196
 title: Подстройка под силу — калибровка, слабое устройство в оболочке, аналитика и приём на сервере
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
