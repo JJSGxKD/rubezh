@@ -103,6 +103,9 @@ export function createRunEngine(): RunEngine {
         inspect() {
           return scene()?.inspect() ?? null;
         },
+        devRenderStats() {
+          return scene()?.devRenderStats() ?? null;
+        },
         setDev(dev) {
           scene()?.setDev(dev);
         },
