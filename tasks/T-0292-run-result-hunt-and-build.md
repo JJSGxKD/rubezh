@@ -3,8 +3,8 @@ id: T-0292
 title: Итог забега для очков — журнал охоты (сколько жила каждая элита и босс) и оценка сборки
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0125, T-0195]
@@ -17,9 +17,10 @@ shared:
   - packages/core-game/src/game/run/snapshot.ts
   - packages/core-game/src/game/sim/world.ts
   - packages/core-game/src/game/sim/combat.ts
-  - packages/core-game/src/game/sim/spawner.ts
+  - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/test/**
   - backend/api/src/modules/runs/dto/runs.dto.ts
+  - backend/api/test/run-streaks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -112,9 +113,9 @@ batch: 7
 
 ## Критерии приёмки
 
-- [ ] Итог несёт журнал охоты и оценку сборки; старые итоги принимаются.
-- [ ] Детерминизм и снимок сохранены.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Итог несёт журнал охоты и оценку сборки; старые итоги принимаются.
+- [x] Детерминизм и снимок сохранены.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

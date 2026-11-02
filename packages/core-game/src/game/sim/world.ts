@@ -1,5 +1,6 @@
 import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
+import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
@@ -430,6 +431,8 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** журнал охоты и время появления врагов (`run/hunt-log.ts`, tasks/T-0292) */
+  hunt: HuntState;
   /** подстройка давления под силу игрока; `null` — подстройки нет, и забег идёт по кривой единой сложности */
   pressureRules: PressureDef | null;
   /** правила тайников рубежа */
@@ -570,6 +573,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.stage[slot] = stageIndex;
+  markSpawn(world, slot);
   pool.alive[slot] = 1;
   // Состояние паттерна сбрасывается целиком: слот мог принадлежать врагу с
   // другим поведением, и его фаза рывка не должна достаться новому врагу.
