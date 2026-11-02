@@ -111,14 +111,14 @@ describe("свойства баланса", () => {
 
   it("рубеж: до отметки доходит не больше 35% забегов бота, берёт его не больше 15% (T-0120)", { timeout: 60_000 }, () => {
     const runs = dodgingRuns();
-    const reached = runs.filter((run) => run.rubezh.reached).length / runs.length;
-    const cleared = runs.filter((run) => run.rubezh.clearedSec !== null).length / runs.length;
+    const reached = runs.filter((run) => run.rubezh?.reached === true).length / runs.length;
+    const cleared = runs.filter((run) => run.rubezh?.clearedSec != null).length / runs.length;
 
     expect(reached).toBeLessThanOrEqual(BALANCE_TARGETS.rubezh.reachedRatioMax);
     expect(cleared).toBeLessThanOrEqual(BALANCE_TARGETS.rubezh.clearedRatioMax);
     expect(cleared).toBeLessThanOrEqual(reached);
     // дошедший до отметки прожил хотя бы её: иначе поле «дошёл» врёт
-    for (const run of runs.filter((candidate) => candidate.rubezh.reached)) {
+    for (const run of runs.filter((candidate) => candidate.rubezh?.reached === true)) {
       expect(run.survivalSec).toBeGreaterThanOrEqual(RUBEZH.atSec);
     }
   });

@@ -16,7 +16,7 @@ const OTHER_BOSSES = ENEMIES.filter((enemy) => enemy.rank === "boss" && enemy.id
 /** Список врагов с подменой стража: негативы проверяют одну неисправность за раз. */
 function withGuard(patch: Partial<EnemyDef> | null): EnemyDef[] {
   const rest = ENEMIES.filter((enemy) => enemy.id !== "rubezh_guard");
-  return GUARD === undefined || patch === null ? rest : [...rest, { ...GUARD, ...patch }];
+  return GUARD === undefined || patch === null ? rest : [...rest, { ...GUARD, ...patch } as EnemyDef];
 }
 
 describe("отметка рубежа", () => {

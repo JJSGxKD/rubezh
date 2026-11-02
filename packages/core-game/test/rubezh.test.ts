@@ -211,16 +211,36 @@ describe("боссы таймлайна при страже", () => {
     }
   });
 
-  it("пока страж жив, событие босса пропущено — не отложено", () => {
-    const segments = bossSegments().filter((segment) => segment.startSec >= MARK);
-    expect(segments.length).toBeGreaterThan(0);
-    const first = segments[0];
+  it("событие босса из окна вокруг отметки переносится на первый отрезок после него — один раз", () => {
+    const world = createRubezhWorld(1);
+    const first = bossSegments().find((segment) => segment.startSec >= MARK);
+    // 570 с кривой (Матрёшка каждые пять отрезков) приходит на 690 с
+    expect(first?.startSec).toBe(MARK + 90);
+    expect(bossEvents(world, first?.index ?? -1)).toEqual(["boss_matryoshka"]);
+    const secs = bossSegments().map((segment) => segment.startSec);
+    expect(secs.filter((sec) => sec >= MARK - 60 && sec < MARK + 90)).toEqual([]);
+    expect(secs.slice(0, 3)).toEqual([MARK + 90, 750, 870]);
+  });
 
+  it("мир без стража окна не знает: формула кривой прежняя, Матрёшка на 570 с", () => {
+    const world = createRubezhWorld(1, { rubezh: undefined });
+    const index = TIMELINE.length + (570 - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec;
+    expect(segmentStartSec(TIMELINE, ENDLESS_CURVE, index)).toBe(570);
+    expect(bossEvents(world, index)).toEqual(["boss_matryoshka"]);
+  });
+
+  it("пока страж жив, события боссов пропущены — не отложены на потом", () => {
+    const segments = bossSegments().filter((segment) => segment.startSec >= MARK);
+    const [first, second] = segments;
     const alive = stepAt(1, MARK);
     expect(alive.rubezh.phase).toBe("guard");
     expect(bossEvents(alive, first.index)).toEqual([]);
-    // тот же отрезок позже не наверстывается: события привязаны к отрезку
-    expect(bossEvents(alive, first.index + 1)).toEqual(bossEvents(createRubezhWorld(1), first.index + 1));
+    expect(bossEvents(alive, second.index)).toEqual([]);
+
+    // страж пал: следующий босс по расписанию приходит как обычно, пропущенные не наверстываются
+    damageEnemy(alive, aliveRubezhGuards(alive)[0], 1e9, 0);
+    expect(bossEvents(alive, second.index)).toEqual(bossEvents(createRubezhWorld(1), second.index));
+    expect(bossEvents(alive, second.index)).toEqual(["boss_ram"]);
   });
 
   it("не мешает остальным событиям отрезка", () => {
@@ -238,10 +258,9 @@ describe("боссы таймлайна при страже", () => {
     expect(bossEvents(world, first.index).length).toBeGreaterThan(0);
   });
 
-  it("до прихода стража и при пропущенном рубеже боссы идут как обычно", () => {
-    const first = bossSegments().filter((segment) => segment.startSec >= MARK)[0];
-    expect(bossEvents(createRubezhWorld(1), first.index).length).toBeGreaterThan(0);
-    expect(bossEvents(createRubezhWorld(1, { rubezh: undefined }), first.index).length).toBeGreaterThan(0);
+  it("до прихода стража босс отрезка идёт как обычно", () => {
+    const first = bossSegments().find((segment) => segment.startSec >= MARK);
+    expect(bossEvents(createRubezhWorld(1), first?.index ?? -1).length).toBeGreaterThan(0);
   });
 });
 

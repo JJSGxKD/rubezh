@@ -373,11 +373,11 @@ describe("контент Тарана", () => {
 });
 
 describe("боссы бесконечного режима", () => {
-  it("в кривой два вида босса и они чередуются: Матрёшка раз в семь отрезков, Таран раз в восемь", () => {
+  it("в кривой два вида босса и они чередуются: Матрёшка раз в пять отрезков, Таран раз в восемь", () => {
     const bosses = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
     const onCurve = ENDLESS_CURVE.events.filter((event) => bosses.has(event.enemy));
     expect(onCurve).toEqual([
-      { everySegments: 7, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+      { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
       { everySegments: 8, kind: "ring", enemy: "boss_ram", count: 1 },
     ]);
     // Секунда срабатывания: (step + 1) % everySegments === 0 на fromSec + step * segmentSec.
@@ -390,14 +390,15 @@ describe("боссы бесконечного режима", () => {
       }
     }
     fired.sort((a, b) => a.sec - b.sec);
-    // Рубеж на 600 с (T-0120, Р126): в минуту до отметки и после неё боссов нет.
+    // Формула кривой не меняется: событие на 570 с сдвигает к 690 с таймлайн мира с рубежом
+    // (`sim/timeline.ts`, T-0120, Р126) — это проверяет `rubezh.test.ts`.
     expect(fired).toEqual([
-      { sec: 690, enemy: "boss_matryoshka" },
+      { sec: 570, enemy: "boss_matryoshka" },
       { sec: 750, enemy: "boss_ram" },
-      { sec: 1110, enemy: "boss_matryoshka" },
+      { sec: 870, enemy: "boss_matryoshka" },
+      { sec: 1170, enemy: "boss_matryoshka" },
       { sec: 1230, enemy: "boss_ram" },
     ]);
-    for (const { sec } of fired) expect(sec <= 540 || sec >= 660).toBe(true);
     for (const segment of TIMELINE) {
       for (const spawn of segment.spawns) expect(spawn.enemy).not.toBe("boss_ram");
       for (const event of segment.events ?? []) expect(event.enemy).not.toBe("boss_ram");
