@@ -90,7 +90,7 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
 
   beforeEach(async () => {
     await redis.flushdb();
-    const settings = panelSettings({ [SETTINGS.seasonsStartDate.key]: 20_260_101 });
+    const settings = panelSettings({ [SETTINGS.seasonsStartDate.key]: 20_260_105 });
     hooks = new RunsHooks();
     service = new FeedService(repository, new SeasonSchedule(settings), hooks, restrictions, settings);
     service.onModuleInit();

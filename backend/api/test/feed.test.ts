@@ -208,7 +208,7 @@ class FakeFeedRepository implements FeedRepository {
   }
 }
 
-const START_DATE = 20_260_101;
+const START_DATE = 20_260_105;
 
 function build(settings: Record<string, number> = {}, seasons = true) {
   const repository = new FakeFeedRepository();
