@@ -1,3 +1,4 @@
+import type { ChatTarget } from "./chat-target.js";
 import type { PlatformId } from "./platform.js";
 
 /**
@@ -11,6 +12,12 @@ export interface OutgoingMessage {
   text: string;
   /** кнопка-ссылка под сообщением; `null` — без кнопки */
   button: { text: string; url: string } | null;
+  /**
+   * Кнопка с действием под ссылкой: нажатие приходит боту обновлением с
+   * `data` (tasks/T-0128, «Не напоминать»). Площадка без таких кнопок шлёт
+   * сообщение без неё; рассылки поле не заполняют.
+   */
+  action?: { text: string; data: string };
 }
 
 export type SendOutcome =
@@ -29,6 +36,11 @@ export interface Messenger {
   /** сколько сообщений в секунду площадка принимает от бота на массовой отправке */
   readonly ratePerSec: number;
   send(platformUserId: string, message: OutgoingMessage): Promise<SendOutcome>;
+  /**
+   * Простой текст в чат команды (с темой, если она есть) — суточные отчёты
+   * модулей, которым нельзя знать адаптер площадки. Не у каждой площадки есть.
+   */
+  sendToChat?(target: ChatTarget, text: string): Promise<SendOutcome>;
 }
 
 export class Messengers {

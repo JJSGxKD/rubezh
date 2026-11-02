@@ -672,7 +672,6 @@ export function spawnProjectile(
   vy: number,
   damage: number,
   ttlSec: number,
-  fromPlayer: boolean,
 ): number {
   const pool = world.projectiles;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxProjectiles);
@@ -686,10 +685,8 @@ export function spawnProjectile(
   pool.vy[slot] = vy;
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
-  pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
-  // Владельца и пробивание выставляет стреляющий после спавна; без сброса
+  // Оружие и пробивание выставляет стреляющий после спавна; без сброса
   // снаряд унаследовал бы их от прежнего снаряда в этом слоте.
-  pool.ownerType[slot] = NO_OWNER_TYPE;
   pool.ownerWeapon[slot] = NO_OWNER_TYPE;
   pool.pierce[slot] = 0;
   pool.lastHit[slot] = -1;

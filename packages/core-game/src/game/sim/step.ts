@@ -11,7 +11,7 @@ import { updatePickups } from "./pickups";
 import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
-import { clampToBounds, damagePlayer, despawnProjectile, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
+import { clampToBounds, damagePlayer, despawnProjectile, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик — направление, а не координаты курсора: так один и тот же
@@ -261,8 +261,6 @@ function updateEnemies(world: World, dt: number): void {
 
 function updateProjectiles(world: World, dt: number): void {
   const projectiles = world.projectiles;
-  const player = world.player;
-  const playerRadius = world.config.player.radius;
   const projectileRadius = world.config.player.projectileRadius;
 
   for (let p = 0; p < projectiles.count; p++) {
@@ -277,20 +275,7 @@ function updateProjectiles(world: World, dt: number): void {
       continue;
     }
 
-    if (projectiles.fromPlayer[p] === 1) {
-      hitEnemies(world, p, projectileRadius);
-      continue;
-    }
-
-    if (!player.alive) continue;
-    const dx = player.x - projectiles.x[p];
-    const dy = player.y - projectiles.y[p];
-    const contact = playerRadius + projectileRadius;
-    if (dx * dx + dy * dy <= contact * contact) {
-      const owner = projectiles.ownerType[p];
-      damagePlayer(world, projectiles.damage[p], owner === NO_OWNER_TYPE ? -1 : owner);
-      despawnProjectile(world, p);
-    }
+    hitEnemies(world, p, projectileRadius);
   }
 }
 

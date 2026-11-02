@@ -336,6 +336,20 @@ WP28). Пишет в бота сервер, у получателя нет ус�
 параметром `n-<вид>`. Выбор игрока, что дублировать, — `settings_changed` с
 `setting` вида `bot.friendRequest` и `scope = account`.
 
+**Напоминания бота — те же таблицы, событий не вводим** (`35-stage4-plan.md`,
+`39-retention-mechanics.md` П5, T-0128). Три вида — `season_overtaken`,
+`season_closing`, `daily_reward_ready` — идут дублем в бота и пишут исход в
+`notification.bot_outcome`, поэтому серверных событий у них нет по той же
+причине, что у остальных видов. Возврат из напоминания — сессии с
+`start_kind = notification` и `start_ref` из трёх видов: параметры
+`n-season_overtaken`, `n-season_closing`, `n-daily_reward_ready`. Доля
+отписавшихся — `settings_changed` с `setting = bot.reminders` и
+`scope = account` (переключатель в игре) плюс суточный отчёт в поток
+`notify.chat.reminders`: отправлено по видам, не доставлено и сколько игроков
+заблокировали бота после напоминания (сверка `notification.bot_at` с
+`account_messaging.changed_at`). Нажатие «Не напоминать» в самом сообщении
+события не порождает: оно меняет ключ аккаунта, а его видно по отчёту.
+
 **Награды и уровень — таблицы, а не события** (`35-stage4-plan.md`, WP4).
 `run_rewarded` и серверный `level_up` отложены по той же причине, что
 `funnel_step_reached`: их порождает сервер, а конверт события привязан к
