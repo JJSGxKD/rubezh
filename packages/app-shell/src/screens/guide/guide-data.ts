@@ -35,31 +35,50 @@ export function speedClass(speed: number): SpeedClass {
 export interface GuideEnemy {
   def: EnemyDef;
   /** на кого распадается при смерти; пусто — не распадается */
-  children: { def: EnemyDef; count: number }[];
+  children: { def: EnemyDef; count: number; opened: boolean }[];
+  /**
+   * Открыта ли запись в кодексе (tasks/T-0127). Закрытая показывается силуэтом без
+   * названия и описания. Гость, ошибка сети и старый сервер — открыто всё.
+   */
+  opened: boolean;
 }
 
 /** Умолчание числа потомков живёт в движке — гайдбук берёт его оттуда же. */
 const DEFAULT_CHILD_COUNT = 3;
 
-function toGuideEnemy(def: EnemyDef): GuideEnemy {
-  if (def.pattern !== "splitter") return { def, children: [] };
+export function toGuideEnemy(def: EnemyDef, opened = true, openedIds: OpenedEnemies = null): GuideEnemy {
+  if (def.pattern !== "splitter") return { def, children: [], opened };
 
   const children = def.params.children.flatMap((entry) => {
     const child = ENEMIES.find((enemy) => enemy.id === entry.enemy);
     const count = entry.count ?? DEFAULT_CHILD_COUNT;
-    return child === undefined || count < 1 ? [] : [{ def: child, count }];
+    // Потомок называется, только если и его запись открыта: иначе открытая матрёшка выдала бы закрытого.
+    return child === undefined || count < 1 ? [] : [{ def: child, count, opened: isOpened(openedIds, child) }];
   });
-  return { def, children };
+  return { def, children, opened };
 }
 
+/**
+ * `openedIds` — id открытых записей кодекса; `null` — кодекса нет, открыто всё.
+ * Состав списка от кодекса не зависит: закрытый враг остаётся в нём силуэтом.
+ */
+export type OpenedEnemies = ReadonlySet<string> | null;
+
+const isOpened = (openedIds: OpenedEnemies, def: EnemyDef): boolean => openedIds === null || openedIds.has(def.id);
+
 /** Обычные враги в порядке контента — примерно в том, в каком они приходят. */
-export function regularEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank === undefined).map(toGuideEnemy);
+export function regularEnemies(openedIds: OpenedEnemies = null): GuideEnemy[] {
+  return ENEMIES.filter((enemy) => enemy.rank === undefined).map((def) => toGuideEnemy(def, isOpened(openedIds, def), openedIds));
 }
 
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
-export function eliteEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
+export function eliteEnemies(openedIds: OpenedEnemies = null): GuideEnemy[] {
+  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map((def) => toGuideEnemy(def, isOpened(openedIds, def), openedIds));
+}
+
+/** Группа записи для закрытой карточки: игрок знает, кого искать — рядового, элиту или босса. */
+export function enemyGroup(def: EnemyDef): "regular" | "elite" | "boss" {
+  return def.rank === "boss" ? "boss" : def.rank === "elite" ? "elite" : "regular";
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */
