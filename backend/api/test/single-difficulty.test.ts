@@ -6,6 +6,7 @@ import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import type { RunFinish } from "../src/modules/runs/dto/runs.dto.js";
 import { ALL_BOARDS, type Board, type LeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
 import { isRatedRun, ratedWhere, ratingSinceOf } from "../src/modules/runs/rated-runs.js";
+import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
 import { RunExtras } from "../src/modules/runs/run-details.js";
 import { RunLoadouts } from "../src/modules/runs/run-loadouts.js";
@@ -510,12 +511,11 @@ describe("пересборка рейтинга из базы равна жив�
 
 describe("чтение: доски нерейтинговых сложностей пусты", () => {
   it("leaderboardFor(easy) и (normal) — пустая доска той же формы без обращения к Redis, базе и ограничениям", async () => {
-    const w = world();
     const view = new RunsViewService(
       untouchable<RunsRepository>("база"),
       untouchable<LeaderboardStore>("redis"),
       new RunExtras(),
-      untouchable<typeof w.rating.rating>("ограничения"),
+      untouchable<RatingRestrictions>("ограничения"),
       new RunPrestige(),
     );
 
