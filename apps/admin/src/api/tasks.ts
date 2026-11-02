@@ -33,6 +33,7 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   boost_runs: "Забеги с бустом",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  codex_percent: "Кодекс врагов, %",
   channel: "Подписка на канал",
   link: "Переход по ссылке",
   bot: "Запуск бота",
@@ -79,7 +80,7 @@ export const PARTNER_KINDS: ReadonlySet<string> = new Set([CHANNEL_KIND, "link",
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
  * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
  */
-export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level"]);
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "codex_percent"]);
 
 /** Категории достижений — те же, что у сервера; названия — те, что видит игрок. */
 export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;

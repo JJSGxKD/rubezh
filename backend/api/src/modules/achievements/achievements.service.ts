@@ -120,7 +120,8 @@ export class AchievementsService {
    */
   private async syncState(accountId: string, at: Date): Promise<void> {
     try {
-      const defs = (await this.tasks.achievementDefs()).filter((def) => isStateKind(def.kind));
+      // Только друзья и уровень: остальные состояния дописывают их модули (кодекс — `codex`).
+      const defs = (await this.tasks.achievementDefs()).filter((def) => def.kind === "friends" || def.kind === "account_level");
       if (defs.length === 0) return;
       const wants = new Set(defs.map((def) => def.kind));
       const [friends, level] = await Promise.all([
