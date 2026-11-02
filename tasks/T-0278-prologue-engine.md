@@ -3,8 +3,8 @@ id: T-0278
 title: Пролог первого забега — движок: таймлайн трёх минут, оберег 25 %, большой первый сундук, «Советуем» и победа над Стражем
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0120]
