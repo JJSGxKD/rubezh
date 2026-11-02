@@ -65,11 +65,13 @@ export function sanitizeLoadout(input: unknown): RunLoadout {
         .filter((boost): boost is string => typeof boost === "string" && boost.length > 0 && boost.length <= MAX_BOOST_ID)
         .slice(0, MAX_LOADOUT_BOOSTS)
     : [];
+  // Сохраняется только слабое устройство: отсутствие поля и есть «обычное», а мусор не повод делать устройство слабым.
+  const deviceClass: Pick<RunLoadout, "deviceClass"> = record.deviceClass === "light" ? { deviceClass: "light" } : {};
   // Битый уровень — не повод открыть всё: забег идёт с первого уровня.
   const level = record.accountLevel;
-  if (level === undefined) return { modifiers, boosts };
+  if (level === undefined) return { modifiers, boosts, ...deviceClass };
   const accountLevel = typeof level === "number" && Number.isInteger(level) && level >= 1 ? Math.min(level, MAX_ACCOUNT_LEVEL) : 1;
-  return { modifiers, boosts, accountLevel };
+  return { modifiers, boosts, accountLevel, ...deviceClass };
 }
 
 /** Прибавка параметра; не задана — ноль. */
@@ -78,9 +80,15 @@ export function loadoutValue(modifiers: Readonly<Partial<Record<LoadoutStat, num
 }
 
 /**
- * Набор без модификаторов, бустов и уровня: в запись и снимок такой не
- * пишется. Уровень — не пустота: без него повтор открыл бы всё.
+ * Набор без модификаторов, бустов, уровня и класса устройства: в запись и
+ * снимок такой не пишется. Уровень — не пустота: без него повтор открыл бы
+ * всё; класс устройства — тоже: без него повтор шёл бы с другим потолком врагов.
  */
 export function isEmptyLoadout(loadout: RunLoadout): boolean {
-  return Object.keys(loadout.modifiers).length === 0 && loadout.boosts.length === 0 && loadout.accountLevel === undefined;
+  return (
+    Object.keys(loadout.modifiers).length === 0 &&
+    loadout.boosts.length === 0 &&
+    loadout.accountLevel === undefined &&
+    loadout.deviceClass === undefined
+  );
 }

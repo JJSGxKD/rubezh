@@ -232,6 +232,13 @@ describe("итог забега", () => {
     return world;
   }
 
+  it("сценарий без набора подстройки не несёт: в итоге нет поля pressure", () => {
+    const world = worldWithEnemyAt(DUMMY, 200);
+    const result = resultOf(world, 1);
+    expect(result.pressure).toBeUndefined();
+    expect("pressure" in result).toBe(false);
+  });
+
   it("называет врага, который добил игрока", () => {
     const world = worldWithEnemyAt(BITER, 8);
     for (let tick = 0; tick < 60 * 20 && world.player.alive; tick++) {

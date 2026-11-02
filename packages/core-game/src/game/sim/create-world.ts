@@ -13,6 +13,7 @@ import type {
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  PressureDef,
   RunLoadout,
   EndlessCurveDef,
   SecretsDef,
@@ -32,6 +33,7 @@ import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
 import { createSecretState, findSecretsProblems } from "./secrets";
+import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
 import { gridCellSize, SpatialGrid } from "./grid";
@@ -180,6 +182,11 @@ export interface CreateWorldOptions {
   /** тайники рубежа; по умолчанию — без тайников */
   secrets?: SecretsDef;
   /**
+   * подстройка давления под силу игрока; заглушки нет: не передана — подстройки нет, и забег идёт по
+   * кривой единой сложности. Включается, только если у набора забега есть уровень аккаунта
+   */
+  pressure?: PressureDef;
+  /**
    * Таймлайн спавна и кривая бесконечного режима — только чтобы знать, каких элит таймлайн уже выпускал
    * (волна разлома Нави). Директор спавна живёт отдельно; без них у разлома нет элит и он не открывается.
    */
@@ -257,6 +264,14 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент тайников:\n${secretProblems.join("\n")}`);
   }
 
+  const pressureRules = options.pressure ?? null;
+  if (pressureRules !== null) {
+    const pressureProblems = findPressureProblems(pressureRules);
+    if (pressureProblems.length > 0) {
+      throw new Error(`Некорректная подстройка давления:\n${pressureProblems.join("\n")}`);
+    }
+  }
+
   const continueRules = options.continueRules ?? FALLBACK_CONTINUE;
   const continueProblems = findContinueProblems(continueRules);
   if (continueProblems.length > 0) {
@@ -309,7 +324,7 @@ export function createWorld(options: CreateWorldOptions): World {
   };
 
   const cellSize = gridCellSize(scale);
-  return {
+  const world: World = {
     config,
     mapId: map.id,
     rng: createRng(options.seed),
@@ -328,6 +343,7 @@ export function createWorld(options: CreateWorldOptions): World {
       founds: [],
       openings: [],
     },
+    pressureRules,
     secretRules,
     secrets: createSecretState(
       createRng(deriveSeed(options.seed, STREAM_SALT.secret)),
@@ -370,6 +386,15 @@ export function createWorld(options: CreateWorldOptions): World {
       hpMul: 1,
       damageMul: 1,
       maxAlive: maxEnemies,
+      // Без подстройки — нейтральные значения: множители единицы, сдвиги нули.
+      power: 0,
+      pressureLevel: 1,
+      startPower: 0,
+      startPressure: 1,
+      spawnMul: 1,
+      stageShiftSec: 0,
+      eliteLead: 0,
+      bossLead: 0,
     },
     // Игрок стартует в начале координат: центр карты, если у неё есть
     // границы, и просто точка отсчёта, если мир бесконечен.
@@ -455,6 +480,9 @@ export function createWorld(options: CreateWorldOptions): World {
     chainBuffer: new Int32Array(maxEnemies),
     cheats: { ...NO_CHEATS },
   };
+  // Стартовая сила нужна событию `started` и аналитике до первого отрезка таймлайна.
+  if (isPressureActive(world)) initPressure(world);
+  return world;
 }
 
 function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {

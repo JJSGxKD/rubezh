@@ -40,6 +40,7 @@ import { PrismaSeasonsRepository, SEASONS_REPOSITORY } from "./seasons.repositor
     { provide: SEASONS_REPOSITORY, useClass: PrismaSeasonsRepository },
     { provide: SEASON_CLOSE_REPOSITORY, useClass: PrismaSeasonCloseRepository },
   ],
-  exports: [SeasonsProjection],
+  // Расписание нужно ленте событий: рекорд недели считается по текущему сезону (tasks/T-0174).
+  exports: [SeasonsProjection, SeasonSchedule],
 })
 export class SeasonsModule {}
