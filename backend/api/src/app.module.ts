@@ -68,6 +68,7 @@ import { RequestJournalModule } from "./modules/request-journal/request-journal.
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
+import { CodexModule } from "./modules/codex/codex.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -166,6 +167,7 @@ export const APP_MODULES = [
   DonationsModule,
   BotMentionModule,
   AchievementsModule,
+  CodexModule,
   BattlePassModule,
 ];
 

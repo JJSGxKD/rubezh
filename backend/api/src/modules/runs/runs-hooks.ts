@@ -34,6 +34,12 @@ export interface RecordedRun {
    * достижения такие числа не идут.
    */
   counters: RunCounters | null;
+  /**
+   * Враги, вышедшие в мир за забег, — со слов клиента: объединение
+   * `stats.enemiesSeen` и ключей `stats.topKills` (tasks/T-0127). Открывает записи
+   * кодекса. Необязательное: слушатели, которым враги не нужны, поле не заполняют.
+   */
+  enemiesSeen?: readonly string[];
   deathCause: string | null;
   cheats: boolean;
   /** сколько вторых шансов взято: оплаченные сверх этого числа не использованы */
@@ -43,6 +49,23 @@ export interface RecordedRun {
   verdict: RunVerdict;
   reasons: VerdictReason[];
   finishedAt: Date;
+}
+
+/** Статистика итога, из которой видно, кого игрок встретил: ключи `topKills` и (после T-0125) `enemiesSeen`. */
+export interface SeenStats {
+  enemiesSeen?: readonly string[] | undefined;
+  topKills?: readonly { enemy: string }[] | undefined;
+}
+
+/**
+ * Кого игрок встретил в забеге: объединение `enemiesSeen` и ключей `topKills`
+ * без повторов, порядок первого появления. Убитый встречен точно, а босс в
+ * `topKills` не попадает — без `enemiesSeen` полный кодекс был бы недостижим.
+ * Итог без статистики — пусто.
+ */
+export function enemiesSeenOf(stats: SeenStats | undefined): string[] {
+  if (stats === undefined) return [];
+  return [...new Set([...(stats.enemiesSeen ?? []), ...(stats.topKills ?? []).map((kill) => kill.enemy)])];
 }
 
 export type RunListener = (run: RecordedRun) => Promise<void>;

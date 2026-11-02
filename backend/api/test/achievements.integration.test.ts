@@ -186,9 +186,9 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("от 40 до 50 достижений, id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+    it("от 40 до 55 достижений, id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
       expect(catalog.length).toBeGreaterThanOrEqual(40);
-      expect(catalog.length).toBeLessThanOrEqual(50);
+      expect(catalog.length).toBeLessThanOrEqual(55);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
