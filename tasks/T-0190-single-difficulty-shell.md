@@ -3,7 +3,7 @@ id: T-0190
 title: Одна сложность у игрока — без выбора, первый забег обучающий
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
