@@ -124,6 +124,17 @@ export interface MainSceneData {
  * (docs/27-design-system-and-app-shell.md §3.2). Сцена сообщает о событиях и
  * принимает команды, а что показать игроку, решает оболочка.
  */
+/** Видимые объекты вместе с вложенными в контейнеры: контейнер сам почти ничего не рисует. */
+function countVisible(list: readonly Phaser.GameObjects.GameObject[]): number {
+  let count = 0;
+  for (const child of list) {
+    if (!("visible" in child) || child.visible !== true) continue;
+    count += 1;
+    if (child instanceof Phaser.GameObjects.Container) count += countVisible(child.list);
+  }
+  return count;
+}
+
 export class MainScene extends Phaser.Scene {
   private sceneData!: MainSceneData;
   private world!: World;
@@ -572,7 +583,7 @@ export class MainScene extends Phaser.Scene {
    */
   devRenderStats(): { displayObjects: number } | null {
     if (!this.ready || this.sceneData.dev === undefined) return null;
-    return { displayObjects: this.children.list.filter((child) => "visible" in child && child.visible === true).length };
+    return { displayObjects: countVisible(this.children.list) };
   }
 
   /** Характеристики забега для листа «Характеристики». */
