@@ -50,7 +50,7 @@ function stats(active: number): DayStats {
     active,
     sessions: active * 2,
     runs: { finished: 10, players: 4, medianSurvivalSec: 300 },
-    revenue: { stars: 150, purchases: 3, refunds: 0 },
+    revenue: { stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 },
     funnel: { entered: 5, appOpened: 5, firstRun: 4, runs5: 1, returnedD1: 2, returnedD7: 0, firstPurchase: 1 },
   };
 }

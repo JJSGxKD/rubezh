@@ -21,6 +21,7 @@ shared:
   - backend/api/src/modules/payments/purchase-types.ts
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
+  - backend/api/test/admin-overview.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
