@@ -16,6 +16,7 @@ zones:
   - packages/app-shell/src/dev/fx-stand.ts
 shared:
   - packages/core-game/src/run-api.ts
+  - packages/core-game/src/engine/run-engine.ts
   - package.json
   - docs/17-testing-strategy.md
 runner: local
