@@ -126,12 +126,12 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   it("лучший забег каждого — одним запросом, с именем из аккаунта", async () => {
     const accountId = await account("Анна");
-    await runs.finish(finished(randomUUID(), accountId, { difficulty: "normal", survivalSec: 90, level: 5 }));
-    await runs.finish(finished(randomUUID(), accountId, { difficulty: "normal", survivalSec: 250, level: 11 }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "hard", survivalSec: 90, level: 5 }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "hard", survivalSec: 250, level: 11 }));
     // Не рейтинговый — не должен попасть, даже если он лучше.
-    await runs.finish(finished(randomUUID(), accountId, { difficulty: "normal", survivalSec: 999, ranked: false }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "hard", survivalSec: 999, ranked: false }));
 
-    const [best] = await runs.bestRuns([accountId], "normal");
+    const [best] = await runs.bestRuns([accountId], "hard", null);
 
     expect(best).toMatchObject({ displayName: "Анна", survivalSec: 250, level: 11 });
   });
@@ -140,9 +140,9 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const tester = await account("Тестер");
     const plain = await account("Обычный");
     await prisma.account.update({ where: { accountId: tester }, data: { testerAt: new Date("2026-10-01T10:00:00Z") } });
-    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "normal", survivalSec: 120 }));
+    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 120 }));
 
-    const rows = await runs.bestRuns([tester, plain], "normal");
+    const rows = await runs.bestRuns([tester, plain], "hard", null);
     const byId = new Map(rows.map((row) => [row.accountId, row]));
 
     expect(byId.get(tester)).toMatchObject({ displayName: "Тестер", tester: true });
@@ -154,39 +154,39 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const tester = await account("Тестер в тени");
     const plain = await account("Обычный в тени");
     await prisma.account.update({ where: { accountId: tester }, data: { testerAt: new Date("2026-10-01T10:00:00Z") } });
-    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "easy", survivalSec: 80 }));
-    await runs.finish(finished(randomUUID(), tester, { difficulty: "easy", survivalSec: 300, ranked: false, ratingRestricted: "silent" }));
+    for (const id of [tester, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 80 }));
+    await runs.finish(finished(randomUUID(), tester, { difficulty: "hard", survivalSec: 300, ranked: false, ratingRestricted: "silent" }));
 
-    expect(await runs.bestRunOf(tester, "easy", false)).toMatchObject({ tester: true, survivalSec: 80 });
-    expect(await runs.bestRunOf(tester, "easy", true)).toMatchObject({ tester: true, survivalSec: 300 });
-    expect(await runs.bestRunOf(plain, "easy", false)).not.toHaveProperty("tester");
-    expect(await runs.bestRunOf(tester, "easy", false)).not.toHaveProperty("testerAt");
+    expect(await runs.bestRunOf(tester, "hard", false, null)).toMatchObject({ tester: true, survivalSec: 80 });
+    expect(await runs.bestRunOf(tester, "hard", true, null)).toMatchObject({ tester: true, survivalSec: 300 });
+    expect(await runs.bestRunOf(plain, "hard", false, null)).not.toHaveProperty("tester");
+    expect(await runs.bestRunOf(tester, "hard", false, null)).not.toHaveProperty("testerAt");
   });
 
   it("пересборка ставит рейтинг по базе и подменяет его целиком", async () => {
     const [slow, fast] = [await account(), await account()];
-    await runs.finish(finished(randomUUID(), slow, { difficulty: "easy", survivalSec: 100 }));
-    await runs.finish(finished(randomUUID(), fast, { difficulty: "easy", survivalSec: 500 }));
+    await runs.finish(finished(randomUUID(), slow, { difficulty: "hard", survivalSec: 100 }));
+    await runs.finish(finished(randomUUID(), fast, { difficulty: "hard", survivalSec: 500 }));
     // Мусор в проекции, которого в базе нет, — пересборка его уберёт.
-    await redis.zadd("runs:leaderboard:easy", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
 
-    await rebuildLeaderboard(runs, board, new Set(), new Set());
+    await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
 
-    expect(await board.rank("easy", "призрак", "common")).toBeNull();
-    expect((await board.rank("easy", fast, "common")) ?? 0).toBeLessThan((await board.rank("easy", slow, "common")) ?? 0);
-    expect(await redis.exists("runs:leaderboard:easy:rebuild")).toBe(0);
+    expect(await board.rank("hard", "призрак", "common")).toBeNull();
+    expect((await board.rank("hard", fast, "common")) ?? 0).toBeLessThan((await board.rank("hard", slow, "common")) ?? 0);
+    expect(await redis.exists("runs:leaderboard:hard:rebuild")).toBe(0);
   });
 
   it("ограничение рейтинга: лучший для возврата — только рейтинговые, для тени — и сданные молча; база держит пометку только у нерейтингового", async () => {
     const accountId = await account("Тень");
-    await runs.finish(finished(randomUUID(), accountId, { difficulty: "easy", survivalSec: 200 }));
-    await runs.finish(finished(randomUUID(), accountId, { difficulty: "easy", survivalSec: 400, ranked: false, ratingRestricted: "silent" }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "hard", survivalSec: 200 }));
+    await runs.finish(finished(randomUUID(), accountId, { difficulty: "hard", survivalSec: 400, ranked: false, ratingRestricted: "silent" }));
     const told = randomUUID();
-    await runs.finish(finished(told, accountId, { difficulty: "easy", survivalSec: 900, ranked: false, ratingRestricted: "notified" }));
+    await runs.finish(finished(told, accountId, { difficulty: "hard", survivalSec: 900, ranked: false, ratingRestricted: "notified" }));
 
-    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ displayName: "Тень", survivalSec: 200 });
-    expect(await runs.bestRunOf(accountId, "easy", true)).toMatchObject({ survivalSec: 400 });
-    expect(await runs.bestRunOf(accountId, "normal", true)).toBeNull();
+    expect(await runs.bestRunOf(accountId, "hard", false, null)).toMatchObject({ displayName: "Тень", survivalSec: 200 });
+    expect(await runs.bestRunOf(accountId, "hard", true, null)).toMatchObject({ survivalSec: 400 });
+    expect(await runs.bestRunOf(accountId, "normal", true, null)).toBeNull();
     expect(await runs.find(told)).toMatchObject({ ranked: false, ratingRestricted: "notified" });
     expect(await runs.detail(accountId, told)).toMatchObject({ ratingRestricted: "notified" });
 
@@ -210,27 +210,27 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   });
 
   it("снять с рейтинга модератором: только рейтинговый, вернуть — только снятый им; два нажатия разом меняют однажды", async () => {
-    // Пересборка в соседнем тесте читает всю базу, а доска «normal» там считается поштучно — здесь «easy».
+    // Проверки ниже — по аккаунту, а не по всей базе: забеги соседних тестов на единой сложности им не мешают.
     const accountId = await account("Рекорд");
     const [record, second, cheats, restricted] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-    await runs.finish(finished(record, accountId, { difficulty: "easy", survivalSec: 700 }));
-    await runs.finish(finished(second, accountId, { difficulty: "easy", survivalSec: 300 }));
-    await runs.finish(finished(cheats, accountId, { difficulty: "easy", survivalSec: 900, ranked: false, cheats: true }));
-    await runs.finish(finished(restricted, accountId, { difficulty: "easy", survivalSec: 800, ranked: false, ratingRestricted: "notified" }));
+    await runs.finish(finished(record, accountId, { difficulty: "hard", survivalSec: 700 }));
+    await runs.finish(finished(second, accountId, { difficulty: "hard", survivalSec: 300 }));
+    await runs.finish(finished(cheats, accountId, { difficulty: "hard", survivalSec: 900, ranked: false, cheats: true }));
+    await runs.finish(finished(restricted, accountId, { difficulty: "hard", survivalSec: 800, ranked: false, ratingRestricted: "notified" }));
 
-    const [first, repeat] = await Promise.all([runs.setRanked(record, false), runs.setRanked(record, false)]);
-    expect([first, repeat].filter((changed) => changed !== null)).toEqual([{ accountId, difficulty: "easy", survivalSec: 700 }]);
-    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ survivalSec: 300 });
+    const [first, repeat] = await Promise.all([runs.setRanked(record, false, null), runs.setRanked(record, false, null)]);
+    expect([first, repeat].filter((changed) => changed !== null)).toEqual([{ accountId, difficulty: "hard", survivalSec: 700 }]);
+    expect(await runs.bestRunOf(accountId, "hard", false, null)).toMatchObject({ survivalSec: 300 });
     // В списке модератора — рейтинговые и снятые им, без забегов с читами и под ограничением.
-    expect((await runs.moderationRuns(accountId, "easy", 10)).map((row) => [row.runId, row.ranked])).toEqual([
+    expect((await runs.moderationRuns(accountId, "hard", 10, null)).map((row) => [row.runId, row.ranked])).toEqual([
       [record, false],
       [second, true],
     ]);
 
-    expect(await runs.setRanked(cheats, true)).toBeNull();
-    expect(await runs.setRanked(restricted, true)).toBeNull();
-    expect(await runs.setRanked(record, true)).toMatchObject({ survivalSec: 700 });
-    expect(await runs.bestRunOf(accountId, "easy", false)).toMatchObject({ survivalSec: 700 });
+    expect(await runs.setRanked(cheats, true, null)).toBeNull();
+    expect(await runs.setRanked(restricted, true, null)).toBeNull();
+    expect(await runs.setRanked(record, true, null)).toMatchObject({ survivalSec: 700 });
+    expect(await runs.bestRunOf(accountId, "hard", false, null)).toMatchObject({ survivalSec: 700 });
 
     // Точная запись в доску опускает время — после снятия рекорда.
     await board.submit("easy", accountId, 700, ALL_BOARDS);
@@ -353,7 +353,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
     await redis.zadd("runs:leaderboard:full:hard", 99_999, "призрак");
 
-    const counts = await rebuildLeaderboard(runs, board, new Set([closed]), new Set([separate]));
+    const counts = await rebuildLeaderboard(runs, board, new Set([closed]), new Set([separate]), null);
 
     for (const side of ALL_BOARDS) {
       expect(await board.best("hard", closed, side)).toBeNull();
@@ -371,7 +371,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   it("пересборка по ограничениям спрашивает оба набора: закрытый рейтинг и отдельная доска", async () => {
     const [closed, separate, plain] = [await account(), await account(), await account()];
-    for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "normal", survivalSec: 555 }));
+    for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 555 }));
     const asked: string[] = [];
     const restrictions = {
       restrictedAccounts: async (kind: string) => {
@@ -380,13 +380,13 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       },
     };
 
-    await rebuildForRestrictions(runs, board, restrictions);
+    await rebuildForRestrictions(runs, board, restrictions, null);
 
     expect(asked.sort()).toEqual(["leaderboard", "separate_board"]);
-    expect(await board.best("normal", closed, "full")).toBeNull();
-    expect(await board.best("normal", separate, "full")).toBe(555);
-    expect(await board.best("normal", separate, "common")).toBeNull();
-    expect(await board.best("normal", plain, "common")).toBe(555);
+    expect(await board.best("hard", closed, "full")).toBeNull();
+    expect(await board.best("hard", separate, "full")).toBe(555);
+    expect(await board.best("hard", separate, "common")).toBeNull();
+    expect(await board.best("hard", plain, "common")).toBe(555);
   });
 
   it("очередь разбора видит отклонённые и подозрительные, а честные — нет", async () => {

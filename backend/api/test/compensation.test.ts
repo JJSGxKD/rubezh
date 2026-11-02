@@ -413,14 +413,14 @@ describe("знак «Тестер» в рейтинге", () => {
       best: async () => 300,
       countAbove: async () => 0,
     };
-    const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const };
+    const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const, since: () => null };
     return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never, new RunPrestige());
   }
 
   it("у тестера в строке доски tester: true, у остальных поля нет вовсе", async () => {
     const view = viewOf([best(FRIEND, { tester: true }), best(STRANGER)]);
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries[0]).toMatchObject({ tester: true });
     expect(entries[1]).not.toHaveProperty("tester");
@@ -429,7 +429,7 @@ describe("знак «Тестер» в рейтинге", () => {
   it("идентификаторы чужих аккаунтов и дата знака в строку не попадают", async () => {
     const view = viewOf([best(FRIEND, { tester: true })]);
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "prestige", "rank", "startingWeaponId", "survivalSec", "tester"]);
   });
@@ -438,7 +438,7 @@ describe("знак «Тестер» в рейтинге", () => {
     const mine = best(ME, { tester: true, survivalSec: 500 });
     const view = viewOf([best(STRANGER)], { shadow: mine, hold: "silent" });
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries.find((entry) => entry.isMe)).toMatchObject({ tester: true });
   });
@@ -446,7 +446,7 @@ describe("знак «Тестер» в рейтинге", () => {
   it("игрок в тени без знака — поля tester нет", async () => {
     const view = viewOf([best(STRANGER)], { shadow: best(ME, { survivalSec: 500 }), hold: "silent" });
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries.find((entry) => entry.isMe)).not.toHaveProperty("tester");
   });

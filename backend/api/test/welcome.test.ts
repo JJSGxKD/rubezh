@@ -28,7 +28,7 @@ import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
 const TOKEN = "123456:TEST-welcome";
-const VETERAN: WelcomeProgress = { best: { difficulty: "normal", survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
+const VETERAN: WelcomeProgress = { best: { survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
 
 function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string; premium?: boolean } = {}): TelegramUpdate {
   return {
@@ -75,14 +75,26 @@ describe("карточка приветствия", () => {
     expect(welcomeCacheKey(card)).toMatch(/^[0-9a-f]{64}$/);
   });
 
+  it("подпись рекорда без сложности: «рекорд» и «best», а ключ кэша зависит от времени, места и числа игроков", () => {
+    expect(WELCOME_TEXTS.ru.recordLabel()).toBe("рекорд");
+    expect(WELCOME_TEXTS.en.recordLabel()).toBe("best");
+    const card: WelcomeCard = { language: "ru", name: "Анна", progress: VETERAN };
+    expect(welcomeCacheKey(card)).not.toBe(welcomeCacheKey({ ...card, progress: { ...VETERAN, best: { ...VETERAN.best!, rank: 4 } } }));
+    expect(welcomeCacheKey(card)).not.toBe(welcomeCacheKey({ ...card, progress: { ...VETERAN, best: { ...VETERAN.best!, total: 42 } } }));
+  });
+
   it("рисует рекорд и место, а новичку — суть игры", () => {
     const veteran = renderWelcomeSvg({ language: "ru", name: "Анна", progress: VETERAN });
     expect(veteran).toContain("7:43");
     expect(veteran).toContain("#3 из 41");
     expect(veteran).toContain("12 забегов");
+    // Сложность одна: подписи «Лёгкая / Нормальная / Сложная» на карточке больше нет.
+    expect(veteran).toContain("рекорд");
+    expect(veteran).not.toMatch(/Лёгкая|Нормальная|Сложная/);
+    expect(renderWelcomeSvg({ language: "en", name: "Zoe", progress: VETERAN })).not.toMatch(/Easy|Normal|Hard/);
     const newcomer = renderWelcomeSvg({ language: "en", name: "Zoe", progress: { best: null, runs: 0 } });
     expect(newcomer).toContain("Hi, Zoe!");
-    expect(newcomer).not.toContain("best ·");
+    expect(newcomer).not.toContain("best");
     expect(renderWelcomePng({ language: "ru", name: "Анна", progress: VETERAN }).subarray(1, 4).toString()).toBe("PNG");
   }, PNG_RENDER_TIMEOUT_MS);
 });

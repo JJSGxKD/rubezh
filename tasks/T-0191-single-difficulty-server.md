@@ -3,8 +3,8 @@ id: T-0191
 title: Одна сложность на сервере — рейтинг с чистого листа
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0107, T-0112, T-0113, T-0114, T-0125]
@@ -48,6 +48,9 @@ shared:
   - backend/api/prisma/migrations/**
   - backend/api/test/settings.test.ts
   - docs/30-configuration-map.md
+  - backend/api/test/boards-by-viewer.test.ts
+  - backend/api/test/rating-prestige.test.ts
+  - backend/api/test/compensation.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
