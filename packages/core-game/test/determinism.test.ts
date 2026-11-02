@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { RUBEZH } from "../src/content/rubezh";
+import { checksumWorld } from "../src/game/sim/checksum";
 import { createRng } from "../src/game/sim/rng";
+import { createRubezhWorld, jumpToSec, stepTicks } from "./helpers/rubezh-run";
 import { ALL_PATTERNS_WEIGHTS, runScripted } from "./helpers/scripted-run";
 
 // Детерминизм — предусловие всей стратегии тестирования
@@ -95,8 +98,9 @@ describe("симуляция", () => {
     // прокачкой (T-0193): мельче шаги навыков (первый «Мощи» 1,07 вместо 1,1)
     // и четыре слота оружия — убито меньше (481), уровень на единицу ниже. Затем —
     // с Тараном (T-0197): счётчик убийств по типам стал на одну ячейку длиннее,
-    // сумма изменилась, а убийства и уровень остались прежними.
-    expect(run.checksum).toBe(68506753);
+    // сумма изменилась, а убийства и уровень остались прежними. Затем — со стражем
+    // рубежа (T-0120): тот же случай, ячейка в конце, убийства и уровень прежние.
+    expect(run.checksum).toBe(-789188299);
     expect(run.world.stats.enemiesKilled).toBe(481);
     expect(run.world.progression.level).toBe(19);
   });
@@ -113,5 +117,37 @@ describe("симуляция", () => {
     expect(run.world.enemies.aliveCount).toBeGreaterThan(0);
     expect(run.world.stats.shotsFired).toBeGreaterThan(0);
     expect(run.world.stats.enemiesKilled).toBeGreaterThan(0);
+  });
+});
+
+describe("рубеж и детерминизм (T-0120)", () => {
+  it("забег короче отметки с правилами рубежа считается побитно так же, как без них", () => {
+    const options = { seed: 20260912, ticks: 3600, population: 80, weights: ALL_PATTERNS_WEIGHTS, immortalPlayer: true };
+    const without = runScripted(options);
+    const with_ = runScripted({ ...options, rubezh: RUBEZH });
+
+    expect(with_.checksum).toBe(without.checksum);
+    expect(with_.world.stats).toEqual(without.world.stats);
+    expect(with_.world.rng.getState()).toBe(without.world.rng.getState());
+  });
+
+  it("два мира с одним seed после прихода стража дают одну сумму", () => {
+    const sums = [1, 2].map(() => {
+      const world = createRubezhWorld(20261103);
+      jumpToSec(world, RUBEZH.atSec - 5);
+      stepTicks(world, 60 * 40);
+      return checksumWorld(world);
+    });
+    expect(sums[1]).toBe(sums[0]);
+  });
+
+  it("страж меняет сумму: мир с рубежом после отметки не равен миру без него", () => {
+    const sumOf = (rubezh: boolean) => {
+      const world = createRubezhWorld(20261103, rubezh ? {} : { rubezh: undefined });
+      jumpToSec(world, RUBEZH.atSec - 5);
+      stepTicks(world, 60 * 40);
+      return checksumWorld(world);
+    };
+    expect(sumOf(true)).not.toBe(sumOf(false));
   });
 });

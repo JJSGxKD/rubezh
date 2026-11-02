@@ -6,6 +6,7 @@ import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
+import type { RubezhState } from "./rubezh";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -440,6 +441,8 @@ export interface World {
   secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
+  /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
+  rubezh: RubezhState;
   /**
    * Отдельный поток случайности для новых карточек после переброса и
    * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется
