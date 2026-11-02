@@ -648,10 +648,13 @@ DAU / WAU / MAU и sticky (DAU/MAU). Сессии в сутки, длитель�
 его не отмечает, `funnel/funnel-tracker.ts`), и конверсию в платящего,
 ARPU, ARPPU и средний чек считают по остальным видам. В выручке он — своя
 строка: отчёт делит `purchase` по `product`, и складывать донат с магазином
-в одну сумму не нужно. Пока разреза по `product` нет в ежедневной статистике
-чата администраторов (`admin-notify/daily-stats.repository.ts`) и в
-конверсиях рекламных сетей (`ad-conversions/conversions.repository.ts`), они
-считают любую настоящую оплату, и донат попадает туда как оплата. Возвраты и
+в одну сумму не нужно. Ежедневная статистика в чат администраторов
+(`admin-notify/daily-stats.repository.ts`) считает покупки и их звёзды без
+донатов, донаты выводит строкой «Донаты: N на M ⭐», а доход — покупки плюс
+донаты; цели рекламных сетей (`ad-conversions/conversions.repository.ts`) и
+разрез по флагам (`funnel/flag-split-report.ts`) донаты не считают, номер
+покупки для целей тоже — одно условие `DONATION_PRODUCT`
+(`payments/purchase-types.ts`). Возвраты и
 их причины — те же, что у остальных;
 серверные строки лога модуля `donations`: `donation_order`,
 `donation_fulfilled`, `supporter_revoked` (метрик Prometheus нет: счётчик по
