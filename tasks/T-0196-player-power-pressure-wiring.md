@@ -4,7 +4,7 @@ title: Подстройка под силу — калибровка, слабо
 epic: E10
 priority: P1
 status: in-progress
-owner: claude-47 / sonnet-5.5 / high
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0195, T-0190, T-0192, T-0193, T-0197, T-0101, T-0102, T-0125, T-0182]
