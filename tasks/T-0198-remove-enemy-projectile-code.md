@@ -4,7 +4,7 @@ title: Уборка кода вражеских снарядов — снаря�
 epic: E10
 priority: P2
 status: in-progress
-owner: claude-48 / sonnet-5.5 / medium
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0172, T-0197, T-0102, T-0116, T-0118, T-0125, T-0182, T-0195]
