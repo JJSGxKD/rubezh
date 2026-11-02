@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
+import { RUBEZH } from "../src/content/rubezh";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -106,6 +107,27 @@ describe("свойства баланса", () => {
 
   it("хотя бы раз открывает сундук: путь к нему боту не закрыт", { timeout: 60_000 }, () => {
     expect(tutorialRuns().some((run) => run.chestsOpened >= 1)).toBe(true);
+  });
+
+  it("рубеж: до отметки доходит не больше 35% забегов бота, берёт его не больше 15% (T-0120)", { timeout: 60_000 }, () => {
+    const runs = dodgingRuns();
+    const reached = runs.filter((run) => run.rubezh.reached).length / runs.length;
+    const cleared = runs.filter((run) => run.rubezh.clearedSec !== null).length / runs.length;
+
+    expect(reached).toBeLessThanOrEqual(BALANCE_TARGETS.rubezh.reachedRatioMax);
+    expect(cleared).toBeLessThanOrEqual(BALANCE_TARGETS.rubezh.clearedRatioMax);
+    expect(cleared).toBeLessThanOrEqual(reached);
+    // дошедший до отметки прожил хотя бы её: иначе поле «дошёл» врёт
+    for (const run of runs.filter((candidate) => candidate.rubezh.reached)) {
+      expect(run.survivalSec).toBeGreaterThanOrEqual(RUBEZH.atSec);
+    }
+  });
+
+  it("рубеж: коридоры заданы и согласованы", () => {
+    const { guardHpMinRatio, reachedRatioMax, clearedRatioMax } = BALANCE_TARGETS.rubezh;
+    expect(guardHpMinRatio).toBe(1.3);
+    expect(clearedRatioMax).toBeLessThan(reachedRatioMax);
+    expect(reachedRatioMax).toBeLessThan(1);
   });
 
   it("по умолчанию идёт на «Сложной»", { timeout: 60_000 }, () => {
