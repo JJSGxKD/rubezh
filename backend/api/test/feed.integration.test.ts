@@ -237,7 +237,7 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
 
     expect((await service.view(NOW)).events.map((item) => item.name)).toEqual(["Открытый"]);
 
-    await prisma.accountRestriction.update({ where: { restrictionId: restriction.restrictionId }, data: { liftedAt: NOW } });
+    await prisma.accountRestriction.update({ where: { restrictionId: restriction.restrictionId }, data: { liftedAt: NOW, liftComment: "feed-test" } });
     service.dropCache();
 
     expect((await service.view(NOW)).events.map((item) => item.name).sort()).toEqual(["Открытый", "Скрытый"]);
@@ -249,7 +249,7 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
     await hooks.emit(recorded(closed, { survivalSec: 800 }));
     await hooks.emit(recorded(blocked, { survivalSec: 800 }));
     for (const [accountId, kind] of [[closed, "leaderboard"], [blocked, "all"]] as const) {
-      await prisma.accountRestriction.create({ data: { accountId, kind, startsAt: new Date(NOW.getTime() - HOUR), endsAt: null, reason: "feed-test", notify: false } });
+      await prisma.accountRestriction.create({ data: { accountId, kind, startsAt: new Date(NOW.getTime() - HOUR), endsAt: null, reason: "feed-test", notify: kind === "all" } });
     }
 
     expect((await service.view(NOW)).events).toEqual([]);
