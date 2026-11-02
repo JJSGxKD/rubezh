@@ -3,7 +3,7 @@ id: T-0291
 title: Рейтинг эффективности — таблица ожидаемого E(S, t): новый выход balance:sim по полосам силы и минутам забега
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -137,9 +137,9 @@ batch: 7
 
 ## Критерии приёмки
 
-- [ ] `pnpm balance:expected` строит таблицу E(S, t) по пяти полосам силы и 20 минутам.
-- [ ] Таблица лежит файлом у сервера с хэшем контента.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] `pnpm balance:expected` строит таблицу E(S, t) по пяти полосам силы и 20 минутам.
+- [x] Таблица лежит файлом у сервера с хэшем контента.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
