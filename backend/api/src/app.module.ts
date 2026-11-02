@@ -68,6 +68,8 @@ import { RequestJournalModule } from "./modules/request-journal/request-journal.
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
+import { RemindersModule } from "./modules/reminders/reminders.module.js";
+import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -167,6 +169,8 @@ export const APP_MODULES = [
   BotMentionModule,
   AchievementsModule,
   BattlePassModule,
+  RemindersModule,
+  RemindersOffModule,
 ];
 
 /**

@@ -40,6 +40,7 @@ import { PrismaSeasonsRepository, SEASONS_REPOSITORY } from "./seasons.repositor
     { provide: SEASONS_REPOSITORY, useClass: PrismaSeasonsRepository },
     { provide: SEASON_CLOSE_REPOSITORY, useClass: PrismaSeasonCloseRepository },
   ],
-  exports: [SeasonsProjection],
+  // Расписание и таблицу недели читают напоминания бота (`modules/reminders`, tasks/T-0128).
+  exports: [SeasonsProjection, SeasonSchedule, SEASON_BOARD_STORE],
 })
 export class SeasonsModule {}
