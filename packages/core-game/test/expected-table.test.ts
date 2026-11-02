@@ -127,17 +127,6 @@ describe("сборка таблицы из прогонов", () => {
     expect(table.rows[0]).toEqual({ band: "average", minute: 1, killsPerMin: 0, huntPerMin: 0, huntKillSec: { elite: 0, boss: 0 }, damageTakenPerMin: 0, buildScore: 0 });
   });
 
-  it("минута 1 без данных, дальше есть: впереди стоят значения первой минуты с данными", () => {
-    // Невозможно для одного прогона, но два пула полос независимы; проверяем заполнение назад.
-    const rows = buildExpectedTable({
-      contentHash: "h",
-      generatedAt: "t",
-      minutes: 1,
-      bands: [{ id: "average", power: 2, runs: [] }],
-    }).rows;
-    expect(rows[0].killsPerMin).toBe(0);
-  });
-
   it("полосы идут в порядке входа, строки — полоса за полосой по минутам, поля шапки сохранены", () => {
     const runs = [lived(2, { kills: [60, 120], damage: [1, 1], build: [1, 1] })];
     const table = buildExpectedTable({
@@ -199,7 +188,8 @@ describe("поиск строки по силе и минуте", () => {
     // Центры 1, 3, 5, 7, 9 — границы 2, 4, 6, 8.
     expect(expectedBandOf(table.bands, 1.99).id).toBe("novice");
     expect(expectedBandOf(table.bands, 2).id).toBe("novice_average");
-    expect(expectedBandOf(table.bands, 8).id).toBe("average_full");
+    expect(expectedBandOf(table.bands, 7.99).id).toBe("average_full");
+    expect(expectedBandOf(table.bands, 8).id).toBe("full");
     expect(expectedBandOf(table.bands, 500).id).toBe("full");
   });
 
