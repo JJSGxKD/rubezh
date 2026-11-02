@@ -6,9 +6,11 @@ import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
 import {
+  POWER_PROFILES,
   simulateBalanceRun,
   summarizeRuns,
   type BalanceRunResult,
+  type PowerProfile,
 } from "../src/game/balance";
 
 /**
@@ -151,4 +153,48 @@ describe("свойства баланса", () => {
 
     expect(second).toEqual(first);
   });
+});
+
+// Подстройка под силу (tasks/T-0196, решение 2, Р131, Р183): лесенка профилей.
+//
+// В гейт входит только ступень «полный арсенал к среднему» (1,25–1,6): она
+// держится на любых наборах seed (в balance:sim: 1,40 и 1,43 на двух наборах по
+// 30 забегов). Остальные коридоры — «новичок к среднему», слабое устройство,
+// пик врагов, половина преимущества, средний к базовой — меряет `pnpm balance:sim`
+// вердиктами: медиана бота на них двугорбая (бот либо гибнет на стене около
+// 100-й секунды, либо живёт 600–1100 с), и медиана пяти забегов на одном оружии
+// прыгает с 140 до 770 секунд от seed к seed. Тест на такой выборке ловил бы
+// удачу, а не баланс (docs/32-balance.md §3.1, вопрос 1 к PR T-0196).
+
+const PROFILE_WEAPONS = STARTING_WEAPONS.includes("spark") ? ["spark"] : STARTING_WEAPONS.slice(0, 1);
+
+/** Прогоны профиля на одном оружии: пять забегов бота с подстройкой. */
+function profileRuns(profile: PowerProfile): BalanceRunResult[] {
+  return PROFILE_WEAPONS.flatMap((startingWeaponId) =>
+    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout })),
+  );
+}
+
+describe("подстройка под силу: лесенка профилей", () => {
+  it("полный арсенал живёт в 1,25–1,6 раза дольше среднего игрока", { timeout: 180_000 }, () => {
+    const ratio = summarizeRuns(profileRuns(POWER_PROFILES.full)).medianSurvivalSec / summarizeRuns(profileRuns(POWER_PROFILES.average)).medianSurvivalSec;
+    expect(ratio).toBeGreaterThanOrEqual(1.25);
+    expect(ratio).toBeLessThanOrEqual(1.6);
+  });
+});
+
+/**
+ * Остальные шесть свойств решения 2 T-0196 в гейт не входят: на этом боте
+ * они не выполнимы (docs/32-balance.md §3.2, «Замер T-0196»), а коридоры
+ * спецификацией зафиксированы. Пока владелец не решит вопрос 1 PR #650,
+ * они стоят заглушками, чтобы пробел был виден в отчёте тестов, а не тихо
+ * терялся. Вердикты по ним выдаёт `pnpm balance:sim`.
+ */
+describe("подстройка под силу: свойства, ждущие решения по коридорам", () => {
+  it.todo("средний к медиане бота без набора лежит в 0,85–1,15");
+  it.todo("новичок живёт в 0,6–0,8 раза от среднего");
+  it.todo("медианы растут от новичка к среднему и полному, с подстройкой и без");
+  it.todo("подстройка забирает не больше половины преимущества соседних профилей");
+  it.todo("средний на слабом устройстве живёт в 0,85–1,15 от обычного");
+  it.todo("пик врагов на слабом устройстве не выше caps.light + 8 и 0,8 от обычного");
 });
