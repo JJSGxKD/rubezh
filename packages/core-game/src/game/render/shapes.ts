@@ -114,16 +114,6 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
     case "gem_rich":
       drawGem(graphics, spec, true);
       return;
-    case "bolt":
-      // Снаряд врага: тёмный ореол, цветное тело и почти белое ядро. Раньше
-      // это был ровный красный кружок, и его путали с мелким врагом.
-      graphics.fillStyle(spec.color, 0.25);
-      graphics.fillCircle(r, r, r);
-      graphics.fillStyle(spec.color, 1);
-      graphics.fillCircle(r, r, r * 0.68);
-      graphics.fillStyle(WORLD_COLORS.enemyProjectileCore, 1);
-      graphics.fillCircle(r, r, r * 0.3);
-      return;
     case "hexagon":
       graphics.fillPoints(points(r, HEXAGON), true);
       return;
