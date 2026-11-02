@@ -5,7 +5,7 @@ import { FRIENDS_RULES } from "../friends/friends-rules.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RatingRestrictions } from "../runs/rating-restrictions.js";
 import type { Board } from "../runs/leaderboard.store.js";
-import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
+import { DIFFICULTIES, isRatedDifficulty, type Difficulty } from "../runs/run-rules.js";
 import { boardViewSchema, overviewSchema, type BoardQuery, type BoardView, type Overview } from "./dto/seasons.dto.js";
 import { SEASON_BOARD_STORE, type SeasonBoardStore } from "./season-board.store.js";
 import { BOARD_LIMIT, DIFFICULTY_MUL, HISTORY_LIMIT, MIN_BOARD, PLACE_LADDER, THRESHOLD_REWARD, THRESHOLD_SEC, type Season } from "./season-rules.js";
@@ -26,6 +26,10 @@ import { SEASONS_REPOSITORY, type SeasonsRepository } from "./seasons.repository
  * без аккаунтов с отдельной доской, — аккаунт с ней — полную; форма ответа одна.
  * Таблица друзей — как обычно: друзья видны всем друзьям независимо от доски,
  * поэтому читается полная, а `me` считается по той же таблице, что в ответе.
+ *
+ * Единая сложность (Р126, T-0191): у нерейтинговых сложностей таблица пуста, а
+ * лучшее время недели — `null`; форма ответа прежняя, старый клиент ошибки не
+ * увидит. Забеги до отсечки рейтинга в недельные времена не входят.
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -83,13 +87,15 @@ export class SeasonsViewService {
     const season = this.schedule.current(at);
     const { difficulty } = query;
     if (season === null) return boardViewSchema.parse({ seasonKey: null, difficulty, total: 0, entries: [], me: null });
+    // Нерейтинговая сложность: ни проекции, ни базы, ни ограничений — пустая таблица недели.
+    if (!isRatedDifficulty(difficulty)) return boardViewSchema.parse({ seasonKey: season.key, difficulty, total: 0, entries: [], me: null });
 
     const hold = await this.restrictionOf(accountId, at);
     const shadow = hold !== null && !hold.notify;
     const friendsScope = query.scope === "friends";
     const board = await withTimeout(this.rating.boardOf(accountId, at), DB_TIMEOUT_MS, "seasons: доска зрителя");
     const standing = friendsScope ? await this.friendsStanding(accountId, season, difficulty, shadow) : await this.allStanding(accountId, season, difficulty, board);
-    const rows = new Map((await withTimeout(this.repository.boardRuns(standing.top.map((entry) => entry.accountId), difficulty, season), DB_TIMEOUT_MS, "seasons: забеги недели")).map((row) => [row.accountId, row]));
+    const rows = new Map((await withTimeout(this.repository.boardRuns(standing.top.map((entry) => entry.accountId), difficulty, season, this.schedule.ratingSince()), DB_TIMEOUT_MS, "seasons: забеги недели")).map((row) => [row.accountId, row]));
 
     const entries = standing.top.flatMap((entry, index) => {
       const row = rows.get(entry.accountId);
@@ -135,7 +141,7 @@ export class SeasonsViewService {
     const scores = await withTimeout(this.store.scores(season.key, difficulty, [accountId, ...friends.map((friend) => friend.accountId)], "full"), REDIS_TIMEOUT_MS, "seasons: таблица недели");
     // Молчаливо ограниченного в таблице нет, а себя он видит: его время из тени встаёт среди друзей.
     if (shadow) {
-      const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true), DB_TIMEOUT_MS, "seasons: лучший забег недели");
+      const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince()), DB_TIMEOUT_MS, "seasons: лучший забег недели");
       if (mine !== null) scores.set(accountId, mine.survivalSec);
     }
     // Как у Redis при равном времени: выше идентификатор.
@@ -146,7 +152,7 @@ export class SeasonsViewService {
 
   /** Место игрока из тени: лучший забег недели вместе со сданными молча, среди настоящих игроков. */
   private async shadowStanding(accountId: string, season: Season, difficulty: Difficulty, board: Board): Promise<{ rank: number; survivalSec: number } | null> {
-    const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true), DB_TIMEOUT_MS, "seasons: лучший забег недели");
+    const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince()), DB_TIMEOUT_MS, "seasons: лучший забег недели");
     if (mine === null) return null;
     const above = await withTimeout(this.store.countAbove(season.key, difficulty, mine.survivalSec, board), REDIS_TIMEOUT_MS, "seasons: таблица недели");
     return { rank: above + 1, survivalSec: mine.survivalSec };
@@ -157,12 +163,14 @@ export class SeasonsViewService {
     const hold = await this.restrictionOf(accountId, at);
     const shadow = hold !== null && !hold.notify;
     const board = await withTimeout(this.rating.boardOf(accountId, at), DB_TIMEOUT_MS, "seasons: доска зрителя");
+    const since = this.schedule.ratingSince();
     const times = await Promise.all(
-      DIFFICULTIES.map(async (difficulty) =>
-        shadow
-          ? ((await withTimeout(this.repository.bestRun(accountId, difficulty, season, true), DB_TIMEOUT_MS, "seasons: лучший забег недели"))?.survivalSec ?? null)
-          : await withTimeout(this.store.best(season.key, difficulty, accountId, board), REDIS_TIMEOUT_MS, "seasons: таблица недели"),
-      ),
+      DIFFICULTIES.map(async (difficulty) => {
+        if (!isRatedDifficulty(difficulty)) return null;
+        return shadow
+          ? ((await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, since), DB_TIMEOUT_MS, "seasons: лучший забег недели"))?.survivalSec ?? null)
+          : await withTimeout(this.store.best(season.key, difficulty, accountId, board), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+      }),
     );
     return { easy: times[0] ?? null, normal: times[1] ?? null, hard: times[2] ?? null };
   }

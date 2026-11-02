@@ -2,7 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { BestRunRow } from "../runs/runs.repository.js";
-import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
+import { DIFFICULTIES, isRatedDifficulty, type Difficulty } from "../runs/run-rules.js";
 import type { Season, SeasonResultLine } from "./season-rules.js";
 
 /**
@@ -14,6 +14,12 @@ import type { Season, SeasonResultLine } from "./season-rules.js";
  * Окно недели везде одно: `finished_at` от начала сезона включительно до его
  * конца исключительно, и только законченные рейтинговые забеги. Снятие забега
  * модератором (`ranked = false`) учитывается само: база — источник истины.
+ *
+ * Единая сложность (Р126, T-0191): считаются только рейтинговые сложности, а
+ * нижняя граница окна — не раньше отсечки `rating.since-date`,
+ * `[max(начало недели, отсечка), конец недели)`. Нерейтинговой сложности запрос
+ * в базу не уходит вовсе. Отсечку знает расписание (`SeasonSchedule.ratingSince`),
+ * сюда её передают параметром.
  */
 
 export type RewardKind = "place" | "threshold";
@@ -41,14 +47,14 @@ export const SEASONS_REPOSITORY = Symbol("SEASONS_REPOSITORY");
 
 export interface SeasonsRepository {
   /** Лучшее рейтинговое время каждого аккаунта за неделю — источник пересборки живой таблицы. */
-  weekBests(difficulty: Difficulty, season: Season, excluded: readonly string[]): Promise<{ accountId: string; survivalSec: number }[]>;
+  weekBests(difficulty: Difficulty, season: Season, excluded: readonly string[], since: Date | null): Promise<{ accountId: string; survivalSec: number }[]>;
   /**
    * Лучший забег аккаунта за неделю. `shadow` — вместе со сданными под
    * молчаливым ограничением рейтинга: так игрок видит себя сам.
    */
-  bestRun(accountId: string, difficulty: Difficulty, season: Season, shadow: boolean): Promise<{ survivalSec: number } | null>;
+  bestRun(accountId: string, difficulty: Difficulty, season: Season, shadow: boolean, since: Date | null): Promise<{ survivalSec: number } | null>;
   /** Лучший забег недели каждого из аккаунтов — для строк таблицы, одним запросом на страницу. */
-  boardRuns(accountIds: readonly string[], difficulty: Difficulty, season: Season): Promise<BestRunRow[]>;
+  boardRuns(accountIds: readonly string[], difficulty: Difficulty, season: Season, since: Date | null): Promise<BestRunRow[]>;
   rewardOf(seasonKey: string, accountId: string): Promise<RewardRow | null>;
   /** Ждущие награды аккаунта, свежие сезоны первыми. */
   pendingRewards(accountId: string): Promise<RewardRow[]>;
@@ -62,29 +68,31 @@ export interface SeasonsRepository {
 export class PrismaSeasonsRepository implements SeasonsRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async weekBests(difficulty: Difficulty, season: Season, excluded: readonly string[]): Promise<{ accountId: string; survivalSec: number }[]> {
+  async weekBests(difficulty: Difficulty, season: Season, excluded: readonly string[], since: Date | null): Promise<{ accountId: string; survivalSec: number }[]> {
+    if (!isRatedDifficulty(difficulty)) return [];
     const rows = await this.prisma.run.groupBy({
       by: ["accountId"],
-      where: { ...windowOf(season), difficulty, ranked: true, accountId: { notIn: [...excluded] } },
+      where: { ...windowOf(season, since), difficulty, ranked: true, accountId: { notIn: [...excluded] } },
       _max: { survivalSec: true },
     });
     return rows.map((row) => ({ accountId: row.accountId, survivalSec: row._max.survivalSec ?? 0 }));
   }
 
-  async bestRun(accountId: string, difficulty: Difficulty, season: Season, shadow: boolean): Promise<{ survivalSec: number } | null> {
+  async bestRun(accountId: string, difficulty: Difficulty, season: Season, shadow: boolean, since: Date | null): Promise<{ survivalSec: number } | null> {
+    if (!isRatedDifficulty(difficulty)) return null;
     const row = await this.prisma.run.findFirst({
-      where: { ...windowOf(season), accountId, difficulty, OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
+      where: { ...windowOf(season, since), accountId, difficulty, OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
       orderBy: [{ survivalSec: "desc" }, { finishedAt: "asc" }],
       select: { survivalSec: true },
     });
     return row === null ? null : { survivalSec: row.survivalSec ?? 0 };
   }
 
-  async boardRuns(accountIds: readonly string[], difficulty: Difficulty, season: Season): Promise<BestRunRow[]> {
-    if (accountIds.length === 0) return [];
+  async boardRuns(accountIds: readonly string[], difficulty: Difficulty, season: Season, since: Date | null): Promise<BestRunRow[]> {
+    if (accountIds.length === 0 || !isRatedDifficulty(difficulty)) return [];
     // `distinct` с сортировкой по времени берёт лучший забег недели каждого аккаунта.
     const rows = await this.prisma.run.findMany({
-      where: { ...windowOf(season), accountId: { in: [...accountIds] }, difficulty, ranked: true },
+      where: { ...windowOf(season, since), accountId: { in: [...accountIds] }, difficulty, ranked: true },
       orderBy: [{ accountId: "asc" }, { survivalSec: "desc" }, { finishedAt: "asc" }],
       distinct: ["accountId"],
       select: {
@@ -146,9 +154,14 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
   }
 }
 
-/** Окно недели и только законченные забеги. */
-function windowOf(season: Season) {
-  return { status: "finished" as const, finishedAt: { gte: season.startsAt, lt: season.endsAt } };
+/**
+ * Окно недели и только законченные забеги. Нижняя граница — позже из двух:
+ * начала недели и отсечки рейтинга; отсечка после конца недели даёт пустое
+ * окно, а не ошибку.
+ */
+export function windowOf(season: Season, since: Date | null) {
+  const from = since !== null && since.getTime() > season.startsAt.getTime() ? since : season.startsAt;
+  return { status: "finished" as const, finishedAt: { gte: from, lt: season.endsAt } };
 }
 
 function toRewardRow(row: { seasonKey: string; kind: string; difficulty: Difficulty | null; place: number | null; coins: number; prestige: number; status: string }): RewardRow {
