@@ -36,6 +36,9 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/i18n/ru-account.json
+  - packages/app-shell/test/notifications.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -47,6 +50,8 @@ batch: 3
 # T-0128. Напоминания через бота: обогнали в сезоне, сезон закрывается, награда дня
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0128.json)](README.md#значки-статуса) [![T-0010](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0010.json&label=T-0010)](archive/T-0010-bot-write-access.md) [![T-0104](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0104.json&label=T-0104)](archive/T-0104-tasks-pool-rotation-new-kinds.md) [![T-0110](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0110.json&label=T-0110)](archive/T-0110-weekly-season-server.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md)
+
+> **Расширение зон (shared) по ответу тимлида** в PR: <https://github.com/JJSGxKD/rubezh/pull/633#issuecomment-6574173250> — строка ленты у напоминаний рисуется (`screens/meta/notifications.tsx`, `ru-account.json`, `notifications.test.ts`).
 
 ## Зачем
 
@@ -65,7 +70,7 @@ batch: 3
   | `season_closing` | игровые сутки перед закрытием сезона, у игрока есть ранговый забег недели | `season_closing:<ключ сезона>` | `endsAt` (ISO) |
   | `daily_reward_ready` | награда дня сегодня не забрана | `daily_reward_ready:<игровой день>` | нет |
 
-- **Одно напоминание в сутки на игрока на все три вида вместе.** Окно — ключ `reminders.min_gap_hours` (24), скользящее, а не «до полуночи»: между двумя напоминаниями не меньше суток даже на стыке дней. Выбирает вид планировщик по приоритету `season_overtaken` → `season_closing` → `daily_reward_ready`; потолок в отправителе — вторая линия защиты (две реплики, перезапуск).
+- **Одно напоминание в сутки на игрока на все три вида вместе.** Окно — ключ `reminders.min-gap-hours` (по умолчанию 20, диапазон 12–168), скользящее, а не «до полуночи»: проход доходит до игрока примерно в то же время суток, и окно в 24 часа давало бы напоминание через день (ответ тимлида в PR). Выбирает вид планировщик по приоритету `season_overtaken` → `season_closing` → `daily_reward_ready`; потолок в отправителе — вторая линия защиты (две реплики, перезапуск).
 - **Тихие часы — по часовому поясу игрового дня** (`GAME_DAY_TIME_ZONE`, Москва, `common/game-day.ts`), у аккаунта собственного пояса нет. Старт: тихо с 21:00 до 10:00, то есть пишем с 10:00 до 21:00 по Москве. Окно может переходить через полночь; `from == to` — тихих часов нет. Проверка и при планировании, и при отправке: задание, застрявшее в очереди до 21:00, в 21:05 не уходит.
 - **Отписка кнопкой под сообщением, возврат — в настройках игры.** Ключ аккаунта `bot.reminders` (по умолчанию включён: игрок сам разрешил боту писать, а каждое сообщение несёт кнопку выхода). Один ключ на все три вида. Кнопка «Не напоминать» — кнопка обратного вызова (`callback_data: "rm:off"`) рядом со ссылкой «Открыть игру»; нажатие ставит `bot.reminders = false`.
 - **Кнопка с действием — в порт, не в адаптер.** `OutgoingMessage` получает необязательное `action?: { text: string; data: string }`; `Messenger` площадки без такой кнопки отправляет сообщение без неё. Рассылки поле не заполняют, их поведение не меняется.
@@ -102,7 +107,7 @@ batch: 3
 4. **Порт и Telegram.** `OutgoingMessage.action?` (разделы «Решения»); `telegram-messenger.ts` рисует его второй строкой разметки, `callback_data` не длиннее 64 байт. Новая команда `reminders-off.command.ts` по образцу `role-confirm.command.ts`: `rm:off` → аккаунт по `platformUserId` → `bot.reminders = false` через `AccountSettingsService` (вызов `merge` по образцу контроллера настроек) → `answerCallbackQuery` с текстом из раздела «Тексты». Повторное нажатие даёт тот же ответ; неизвестный игрок — тот же ответ без записи. Подключить в `bot-router.ts`.
 5. **Модуль `reminders`** (`reminder-rules.ts`, `reminders.repository.ts`, `reminders.scanner.ts`, `reminders.report.ts`, `reminders.module.ts`; строка в `app.module.ts`):
    - `reminder-rules.ts` (чистые функции): `isQuietHour(at, from, to)`, `closingDay(season)` (игровые сутки перед `gameDayOf(season.endsAt)`), `overtaken(before, now)`, `chooseKind(candidates)` по приоритету. `overtaken`: из снимка `[{ accountId, rank, score }]` и текущих мест — игроки, у которых `score` тот же, а место хуже; игрок, чей результат вырос, не «обогнан»;
-   - `reminders.scanner.ts`: `onApplicationBootstrap` запускает `setInterval(() => void this.tick(), SCAN_INTERVAL_MS)`; тик берёт лок `reminders:scan:lock` (`SET NX PX`, токен, снятие скриптом — как `fx.refresher.ts`; лок держит одну реплику). Тик ничего не делает, если `reminders.enabled` выключен, нет сезона (T-0110) или час в тихом окне — **снимок таблицы в такой тик не обновляется**, поэтому обгон за ночь утром виден. Иначе:
+   - `reminders.scanner.ts`: `onApplicationBootstrap` запускает `setInterval(() => void this.tick(), SCAN_INTERVAL_MS)`; тик берёт лок `reminders:scan:lock` (`SET NX PX`, токен, снятие скриптом — как `fx.refresher.ts`; лок держит одну реплику). Тик ничего не делает, если `reminders.enabled` выключен, час в тихом окне — **снимок таблицы в такой тик не обновляется**, поэтому обгон за ночь утром виден. Иначе:
      1. **Обогнали.** Для каждой сложности: снимок первых `SNAPSHOT_TOP` мест из Redis (`reminders:snap:<ключ сезона>:<сложность>`, JSON, разбор Zod, TTL 8 суток) сравнивается с текущим: для каждого игрока снимка берутся `best` и `rank` из `season-board.store.ts`; потом снимок заменяется текущим. Первый тик сезона обгонов не даёт (снимка нет);
      2. **Сезон закрывается.** Если сегодня `closingDay`: страница игроков с ранговым забегом недели (`run.ranked`, `finished_at` в `[startsAt, endsAt)`), у которых можно писать, ключевой курсор по `account_id`, `TICK_LIMIT` на тик, курсор в Redis (`reminders:cur:closing:<ключ сезона>`, TTL 2 суток, конец — метка «готово»);
      3. **Награда дня.** Страница игроков из `daily_reward`, у которых `last_claim_day < сегодня` и не старше `reminders.lapse_days`, можно писать; тот же курсор (`reminders:cur:daily:<игровой день>`);
