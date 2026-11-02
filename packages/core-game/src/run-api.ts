@@ -401,6 +401,17 @@ export interface RunEvents {
    * выстоял до конца времени или погиб в кольце; сообщение приходит один раз на кольцо.
    */
   ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
+  /**
+   * На отметке рубежа пришёл страж (T-0120): оболочка рисует баннер. Сообщение
+   * приходит один раз за забег; продолженный из снимка забег с живым стражем
+   * его не повторяет.
+   */
+  rubezhGuardSpawned: { enemyId: string; elapsedSec: number };
+  /**
+   * Страж пал — рубеж взят (T-0120). `clearedSec` — секунда забега, на которой он пал;
+   * забег идёт дальше бесконечным режимом. Один раз за забег.
+   */
+  rubezhCleared: { clearedSec: number; elapsedSec: number };
   paused: { reason: RunPauseReason; elapsedSec: number };
   resumed: { elapsedSec: number };
   /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */
