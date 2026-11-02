@@ -3,7 +3,7 @@ id: T-0195
 title: Сила игрока и подстройка директора — движок и контент
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-46 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
