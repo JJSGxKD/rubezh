@@ -69,6 +69,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   PromoCampaign: keep("кампании промокодов команды"),
   PromoCode: keep("коды команды"),
   TaskDef: keep("каталог заданий команды"),
+  PassSeason: keep("ленты месяцев пасса команды (T-0311) — настройка, не данные игрока"),
   ShopPromo: keep("акции магазина команды"),
   HomeSlide: keep("слайды главной команды"),
   MediaImage: keep("картинки панели"),
@@ -134,6 +135,9 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
+  PassProgress: wipe("очки батл-пасса (T-0311) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, очки не оставляем"),
+  PassClaim: wipe("журнал забранных наград пасса (T-0311) — идёт вместе с очками и кошельком, которые вайп обнуляет"),
+  BoostCredit: wipe("бусты-подарки пасса (T-0311) — часть добычи игрока, как осколки и снаряжение"),
   BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
@@ -162,4 +166,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "VipDaily",
   "Notification",
   "BotMentionTask",
+  "PassProgress",
+  "PassClaim",
+  "BoostCredit",
 ];

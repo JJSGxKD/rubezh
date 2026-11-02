@@ -3,8 +3,8 @@ id: T-0311
 title: Батл-пасс — сервер: месяц по Москве, очки пасса за задания, 30 ступеней в двух лентах, забор награды, VIP-лента и пройденное до покупки VIP
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0105]
@@ -17,13 +17,17 @@ shared:
   - backend/api/prisma/migrations/**
   - backend/api/src/app.module.ts
   - backend/api/src/modules/tasks/tasks.service.ts
+  - backend/api/src/modules/tasks/tasks.module.ts
   - backend/api/src/modules/vip/vip.service.ts
   - backend/api/src/modules/wallet/wallet-types.ts
   - backend/api/src/modules/wallet/wallet-limits.ts
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - docs/21-diagrams.md
+  - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
 runner: any
@@ -110,11 +114,13 @@ VIP открывает свою ленту целиком, включая сту
     — повтор ничего не удвоит.
 
   Выдача:
-  - через кошелёк, причина `pass_reward`, ключ `pass:<month>:<tier>:<lane>:<account>`;
+  - через кошелёк, причина `pass_reward`, ключ `pass:<month>:<tier>:<lane>:<account>:<resource>`
+    (награда ступени бывает из нескольких ресурсов, ключ кошелька — строка на ресурс);
   - бусты — подарком: `boost_credit (account_id, boost_id, count)` получает
     `+count`. Тратит подарки включение буста на забег — T-0312.
 
-  Всё — одной транзакцией.
+  Кошелёк — по ключу идемпотентности и раньше журнала; журнал и подарок-буст —
+  одной транзакцией (ответ 1 ниже).
 - **VIP посреди месяца** — VIP-ступени до текущей забираются сразу после
   покупки: условие — VIP активен в момент забора, а не в момент ступени.
 - **Ответ** `GET /api/v1/pass`:
@@ -174,9 +180,9 @@ VIP открывает свою ленту целиком, включая сту
 
 ## Аналитика
 
-`pass_tier_reached { tier }` и `pass_reward_claimed { tier, lane }` — в
-словарь `docs/22` §3.3 (WP26): сервер пишет `pass_tier_reached` при переходе
-ступени, клиент — забор (T-0314).
+`pass_tier_reached { tier }` и `pass_reward_claimed { tier, lane }` — строки
+лога `module: "battle-pass"`, как у сезонов рейтинга: серверного вида события в
+конвейере нет (ответ 2 ниже). Клиентские события пасса заводит T-0314.
 
 ## Настройки и окружение
 
@@ -185,6 +191,28 @@ VIP открывает свою ленту целиком, включая сту
 ## Документы
 
 По шагу 6.
+
+## Ответы на вопросы PR #621
+
+Решения `claude-lead-1` от 01.11.2026. Во всех четырёх принят вариант А: он не
+удваивает и не теряет награду, а доказан тестами на живом Postgres.
+
+1. **Кошелёк и журнал — не одной транзакцией. Принято.** Кошелёк начисляет по
+   ключу идемпотентности раньше журнала, журнал и подарок-буст — одной
+   транзакцией. Упавший между ними процесс не оставит награду забранной, но
+   невыданной: повтор узнает начисление по ключу и допишет журнал. Общая
+   транзакция с кошельком (`creditWithin`) — отдельная работа на все модули,
+   которые начисляют, а не правка этой задачи.
+2. **События пасса — строки лога. Принято.** Как у сезонов рейтинга
+   (`season_closed`): серверного вида события в конвейере нет. Клиентские
+   `pass_opened` и `pass_reward_claimed` заводит T-0314.
+3. **Ключ кошелька с ресурсом на конце. Принято**, строка спецификации
+   поправлена: так же устроены задания.
+4. **Очки пасса — после отметки «забрано». Принято.** Удвоения нет, потеря
+   возможна только при падении процесса между двумя командами и видна по строке
+   `pass_points_failed`. Писать таблицу пасса из репозитория заданий значит
+   связать два модуля через базу; журнал очков — новая таблица ради редкого
+   случая.
 
 ## Критерии приёмки
 

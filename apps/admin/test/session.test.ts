@@ -78,7 +78,7 @@ describe("вход через бота", () => {
   /** Часы, которые идут только по шагам опроса: каждое ожидание — плюс две секунды. */
   function timing() {
     let now = START;
-    return { pollMs: 2_000, now: () => now, wait: async (ms: number) => void (now += ms) };
+    return { pollMs: 2_000, now: () => now, wait: async (ms: number) => void (now += ms), visible: () => true };
   }
 
   async function anonymousStore(...responses: (Response | Error)[]) {
@@ -102,7 +102,7 @@ describe("вход через бота", () => {
   it("ожидание хранит код, ссылку, диплинк и число замен", async () => {
     const { fetch } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), PENDING());
     let release: () => void = () => undefined;
-    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)) });
+    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)), visible: () => true });
     await store.getState().restore();
     const login = store.getState().startBotLogin();
     await expect.poll(() => store.getState().view).toMatchObject({
@@ -117,7 +117,7 @@ describe("вход через бота", () => {
   it("повторный вызов за тот же показ страницы запрос не открывает", async () => {
     const { fetch, calls } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), PENDING());
     let release: () => void = () => undefined;
-    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)) });
+    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)), visible: () => true });
     await store.getState().restore();
     const first = store.getState().startBotLogin();
     await expect.poll(() => store.getState().view).toMatchObject({ bot: { status: "waiting" } });
@@ -157,6 +157,48 @@ describe("вход через бота", () => {
     const { store } = await anonymousStore(json(201, { data: OPENED }), new TypeError("fetch failed"), json(201, { data: { status: "confirmed", identity: IDENTITY } }));
     await store.getState().startBotLogin();
     expect(store.getState().view.status).toBe("ready");
+  });
+
+  it("часы устройства спешат на час — вход не обрывается, решает ответ сервера", async () => {
+    const { fetch } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), PENDING(), json(201, { data: { status: "confirmed", identity: IDENTITY } }));
+    let now = START + 3_600_000;
+    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => now, wait: async (ms) => void (now += ms), visible: () => true });
+    await store.getState().restore();
+    await store.getState().startBotLogin();
+    expect(store.getState().view.status).toBe("ready");
+  });
+
+  it("скрытая вкладка не опрашивает сервер, видимая — опрашивает сразу", async () => {
+    const { fetch, calls } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), json(201, { data: { status: "confirmed", identity: IDENTITY } }));
+    let hiddenWaits = 10;
+    let visible = false;
+    const polls = () => calls.filter((call) => call.url.endsWith("/poll")).length;
+    const seenDuringHidden: number[] = [];
+    const store = createSessionStore(new AdminApi(fetch), {
+      pollMs: 2_000,
+      now: () => START,
+      wait: async () => {
+        if (hiddenWaits-- > 0) seenDuringHidden.push(polls());
+        else visible = true;
+      },
+      visible: () => visible,
+    });
+    await store.getState().restore();
+    await store.getState().startBotLogin();
+    expect(seenDuringHidden).toHaveLength(10);
+    expect(seenDuringHidden.every((count) => count === 0)).toBe(true);
+    expect(polls()).toBe(1);
+    expect(store.getState().view.status).toBe("ready");
+  });
+
+  it("сервер вечно отвечает pending — после потолка опросов «Не дождались ответа»", async () => {
+    const ceiling = Math.ceil(300_000 / 2_000) + 5;
+    const { fetch, calls } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), ...Array.from({ length: ceiling + 20 }, PENDING));
+    const store = createSessionStore(new AdminApi(fetch), timing());
+    await store.getState().restore();
+    await store.getState().startBotLogin();
+    expect(store.getState().view).toMatchObject({ status: "anonymous", bot: { status: "failed", message: expect.stringContaining("Не дождались ответа") } });
+    expect(calls.filter((call) => call.url.endsWith("/poll"))).toHaveLength(ceiling);
   });
 
   it("истёк запрос — открывается новый сам, число замен растёт", async () => {
@@ -211,7 +253,7 @@ describe("вход через бота", () => {
   it("отмена гасит опрос и возвращает покой", async () => {
     const { fetch } = fakeFetch(json(401, { error: { code: "unauthorized", message: "нет" } }), json(201, { data: OPENED }), PENDING());
     let release: () => void = () => undefined;
-    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)) });
+    const store = createSessionStore(new AdminApi(fetch), { pollMs: 2_000, now: () => START, wait: () => new Promise((resolve) => (release = resolve)), visible: () => true });
     await store.getState().restore();
     const login = store.getState().loginBot();
     await expect.poll(() => store.getState().view).toMatchObject({ bot: { status: "waiting", code: "4821", link: OPENED.link } });
