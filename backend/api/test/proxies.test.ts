@@ -493,11 +493,11 @@ describe("прокси в панели по HTTP", () => {
   });
 
   describe("режимы сервисов", () => {
-    it("все сервисы клиента подряд; Bot API — «только напрямую» по умолчанию, остальные — «сначала напрямую»", async () => {
+    it("все сервисы клиента подряд; Bot API и адрес подписки — «только напрямую» по умолчанию, остальные — «сначала напрямую»", async () => {
       const body = (await call("GET", "/modes", "adm")).json() as ModesBody;
       expect(body.data.modes.map((item) => item.service)).toEqual([...OUTBOUND_SERVICES]);
       for (const item of body.data.modes) {
-        expect(item, item.service).toMatchObject({ mode: item.service === "telegram.bot" ? "direct_only" : "direct_first", custom: false, updatedAt: null });
+        expect(item, item.service).toMatchObject({ mode: item.service === "telegram.bot" || item.service === "proxy.subscription" ? "direct_only" : "direct_first", custom: false, updatedAt: null });
         expect(item.default).toBe(item.mode);
       }
     });

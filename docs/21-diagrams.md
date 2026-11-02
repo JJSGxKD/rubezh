@@ -1003,6 +1003,44 @@ erDiagram
         datetime updated_at
     }
 
+    PROXY_SUBSCRIPTION {
+        string key PK "одна строка: main (CHECK)"
+        string name
+        bytes url_iv "12 байт: адрес подписки только шифртекстом"
+        bytes url_tag "16 байт подписи GCM"
+        bytes url_ct "шифртекст адреса"
+        string url_key_id "отпечаток ключа шифрования"
+        string url_hint "хост …abcd: сверить с кабинетом поставщика"
+        boolean enabled
+        string[] countries "ISO-коды стран узлов; пусто — любые"
+        datetime last_refresh_at "nullable"
+        boolean last_refresh_ok "nullable"
+        string last_refresh_note "nullable: итог словами, без адреса"
+        int provider_interval_hours "nullable: Profile-Update-Interval"
+        bigint traffic_used_bytes "nullable"
+        bigint traffic_total_bytes "nullable"
+        datetime expires_at "nullable"
+        uuid updated_by "без внешнего ключа"
+        datetime updated_at
+    }
+
+    PROXY_SUBSCRIPTION_NODE {
+        string subscription_key PK "и FK на PROXY_SUBSCRIPTION: удаление подписки уносит узлы"
+        string node_key PK "16 hex от параметров узла, название не влияет"
+        int slot UK "вход Xray: порт = XRAY_SOCKS_PORT_BASE + slot"
+        string protocol "vless, vmess, trojan или shadowsocks"
+        string name
+        string country "nullable: из названия узла"
+        string host
+        string state "unknown, healthy или down (CHECK)"
+        int failures
+        int latency_ms "nullable"
+        datetime last_probe_at "nullable"
+        datetime next_probe_at
+    }
+
+    PROXY_SUBSCRIPTION ||--o{ PROXY_SUBSCRIPTION_NODE : "узлы подписки"
+
     ACCOUNT_RESTRICTION {
         uuid restriction_id PK
         uuid account_id FK "удалённый аккаунт уносит свои строки"
@@ -1619,6 +1657,14 @@ erDiagram
   `proxy:<id>`, поэтому строку не переложить под другой прокси. Ни связей с
   аккаунтом, ни внешних ключей: «кто менял» переживает человека. При вайпе
   таблицы остаются — это настройка команды, а не данные игрока.
+- **`PROXY_SUBSCRIPTION` и `PROXY_SUBSCRIPTION_NODE` — подписка Xray для
+  прокси** (Р101, T-0093, поток — §4.30). Одна подписка на систему (`key =
+  'main'`). Адрес — только шифртекстом `SecretCipher` (имя шифртекста
+  `proxy_subscription:main`); в панель уходит подсказка «хост …abcd». Секретов
+  узла (UUID, пароль) в таблицах нет — они только в конфиге Xray и в ответе
+  поставщика. Слот узла уникален: порт входа Xray = база + слот, и узел не
+  меняет порт между обновлениями. При вайпе таблицы остаются — это настройка
+  команды.
 - **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
   §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
   забег, ни оплата: проход раз в минуту выводит их из фактов — первого
@@ -1927,6 +1973,7 @@ flowchart TD
     CG --> ST
     API --> ST
     API --> FX
+    API --> PK
     SH --> DT
     ADM --> DT
 ```
@@ -2109,6 +2156,7 @@ flowchart LR
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
         PROXIES["proxies<br/>прокси для исходящих запросов:<br/>список и режимы сервисов из панели,<br/>пароль шифртекстом, снимок маршрутов<br/>в памяти, реализовано"]
+        SUBSCR["proxies/subscription<br/>подписка Xray: обновление под замком,<br/>слоты узлов, конфиг в общий том,<br/>проверки узлов, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
@@ -2288,6 +2336,12 @@ flowchart LR
     PROXIES -- "канал proxies:changed" --> REDIS
     PROXIES -. пароль прокси: тот же шифр, что у ключей .-> SECRETS
     OUTBOUND -. "маршруты: прокси и режимы (снимок в памяти)" .-> PROXIES
+    PROXIES -. "узлы подписки после ручных прокси" .-> SUBSCR
+    SUBSCR -- "proxy_subscription, proxy_subscription_node" --> PG
+    SUBSCR -. "адрес подписки: тот же шифр" .-> SECRETS
+    SUBSCR -. "proxy.subscription: только напрямую" .-> OUTBOUND
+    SUBSCR -- "замок proxy-subscription:refresh:lock" --> REDIS
+    ADMINAPI -. "подписка: обновить, проверить, права proxies.*" .-> SUBSCR
     OUTBOUND -- "outbound:route:сервис — какой прокси сработал, 10 минут" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
@@ -3993,6 +4047,53 @@ sequenceDiagram
   запрос в обход режима; запись в журнал не пишется, попытки не было.
 - **Память маршрута — подсказка:** Redis лёг — план без запомненного, вызов
   не падает и не ждёт дольше 300 мс.
+
+#### Подписка Xray: от адреса до SOCKS-входа (Р101, T-0093)
+
+Адрес подписки обновляется по расписанию (раз в `proxy.subscription.refresh-hours`,
+не меньше интервала поставщика, потолок 168 часов) и кнопкой «Обновить сейчас»,
+не чаще раза в минуту. Узлы становятся прокси для клиента исходящих: на узел один
+SOCKS-вход контейнера Xray в сети `tunnel` (без выхода наружу, порты не
+публикуются).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as ProxySubscription (расписание, кнопка)
+    participant R as Redis (замок)
+    participant P as Поставщик подписки
+    participant K as @bh/proxy-kit
+    participant V as Том xray-config
+    participant X as Контейнер Xray (run.sh)
+    participant O as Outbound (клиент исходящих)
+    participant N as Узел подписки
+
+    S->>R: SET proxy-subscription:refresh:lock NX PX 120000
+    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***)
+    P-->>S: список ссылок (base64 или текст)
+    S->>K: parseSubscription, assignSlots, buildXrayConfig
+    S->>V: config.json атомарно: временный файл и rename
+    S->>S: транзакция: узлы upsert, пропавшие удалены, итог, трафик, срок
+    X->>V: раз в 5 с: хеш конфига изменился?
+    X->>X: xray run -test; принят — перезапуск, нет — прежний конфиг остаётся
+    S->>O: узлы в перебор: socks5://xray:порт, лучшие по задержке после ручных прокси
+    O->>X: запрос через SOCKS-вход узла
+    X->>N: исходящее подключение узла (VLESS, VMess, Trojan, Shadowsocks)
+```
+
+- **Сбой поставщика не обнуляет пул:** сеть, код ответа, формат, ноль подходящих
+  узлов, нет каталога тома — узлы и конфиг остаются прежними, меняется только
+  итог в строке подписки. Повтор после неудачи — через 15 минут.
+- **Файла конфига нет** (том пересоздан, сервер переехал), а подписка свежая:
+  тик обновляет её сразу, не через период. Каталога тома нет или прошлое
+  обновление провалилось — не трогаем, действует повтор через 15 минут.
+- **Конфиг пишется раньше таблицы:** нет контейнера Xray — узлы, которых он не
+  видит, в таблицу не попадают.
+- **Проверка узла** — запрос на ipify через узел (как «Проверить» у ручного
+  прокси), не раньше 20 секунд после записи конфига: Xray перезапускается.
+  Проверяет та реплика, что держит замок; остальные собирают пул из таблицы.
+- **В перебор не все узлы:** `proxy.subscription.candidates` лучших здоровых
+  (по задержке, фильтр стран подписки), после ручных прокси.
 
 ### 4.31 Донат проекту: заказ, оплата, знак, возврат (этап 4, реализовано серверная часть)
 

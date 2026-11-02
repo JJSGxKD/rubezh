@@ -41,6 +41,8 @@ export const TEAM_PATHS: readonly string[] = [
   // перечистка ников из панели: тексты ошибок для сотрудника
   "modules/name-rules/name-rules-reclean.job.ts",
   "modules/name-rules/name-rules-reclean.service.ts",
+  // подписка Xray — раздел панели, игрок её не видит
+  "modules/proxies/subscription/",
   "modules/media/image-rules.ts",
   "modules/media/media-errors.ts",
   "modules/promo-codes/promo-code-rules.ts",

@@ -9,10 +9,15 @@ const BOT_TOKEN = /^bot\d+(?::|%3A)/i;
  * заменяются на звёздочки. Ключи сервисов бывают и в пути
  * (путь вида `/v6/<ключ>/latest/USD`), и в query; в запись не должно попасть ни то,
  * ни другое.
+ *
+ * `maskPath` — для сервисов с секретным адресом (адрес подписки Xray): токен
+ * бывает короче 24 знаков и правило сегментов его не поймает, поэтому путь
+ * записывается целиком как `/***`.
  */
-export function safePath(url: string): { host: string; path: string } {
+export function safePath(url: string, options: { maskPath?: boolean } = {}): { host: string; path: string } {
   if (!URL.canParse(url)) return { host: "", path: "" };
   const parsed = new URL(url);
+  if (options.maskPath === true) return { host: parsed.hostname, path: "/***" };
   const path = parsed.pathname
     .split("/")
     .map((segment) => (BOT_TOKEN.test(segment) ? "bot***" : KEY_LIKE.test(segment) ? "***" : segment))
