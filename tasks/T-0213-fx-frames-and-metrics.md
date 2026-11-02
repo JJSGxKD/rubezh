@@ -3,7 +3,7 @@ id: T-0213
 title: Раскадровка эффекта и замеры — `pnpm fx:frames <сцена>`
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
