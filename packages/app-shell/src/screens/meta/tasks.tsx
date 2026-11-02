@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Clock } from "lucide-react";
 import { ContentColumn, ErrorState, InfoNotice, PageTitle, Screen, SegmentedControl } from "../../design-system/components";
 import { t } from "../../i18n";
@@ -189,6 +189,16 @@ export function TasksScreen(): ReactNode {
   const claimable = tasks.filter(isClaimable);
   const rest = tasks.filter((task) => !isClaimable(task));
   const partner = view === "partner";
+  // Показы партнёрских заданий (T-0224): событие на задание, чья карточка
+  // нарисована на вкладке «Партнёры»; ref живёт, пока открыт экран.
+  const shownPartner = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (state.status !== "ready" || view !== "partner") return;
+    for (const item of unseenPartnerShows(state.tasks, shownPartner.current)) {
+      shownPartner.current.add(item.id);
+      track("task_shown", { task: item.id, kind: item.kind });
+    }
+  }, [state, view]);
   const partnerClosed = useRestricted(PARTNER_RESTRICTION);
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
   // К наградам заданий вкладок «День» и «Неделя» прибавляются готовые ступени их полос.
@@ -280,6 +290,11 @@ export function TasksScreen(): ReactNode {
       </ContentColumn>
     </Screen>
   );
+}
+
+/** Партнёрские задания, чей показ ещё не записан на этом открытии экрана (T-0224). */
+export function unseenPartnerShows(tasks: readonly TaskItem[], seen: ReadonlySet<string>): TaskItem[] {
+  return tasks.filter((task) => tabOf(task) === "partner" && !seen.has(task.id));
 }
 
 /** Ступень пула ротации в событии — только известная серверу: словарь событий другой не примет. */
