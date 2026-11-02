@@ -1,4 +1,9 @@
 {
+  "feed.label": "Что происходит в игре",
+  "feed.longRun": "{name}: {minutes} мин в одном забеге",
+  "feed.weekRecord": "{name}: новый рекорд недели — {time}",
+  "feed.boss": "{name}: босс повержен",
+  "feed.chest": "{name}: открыт редкий сундук",
   "home.carousel": "Сейчас в игре",
   "home.carousel.role": "карусель",
   "home.carousel.position": "Слайд {n} из {total}",
