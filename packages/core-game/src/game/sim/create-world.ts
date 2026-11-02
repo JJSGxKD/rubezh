@@ -1,3 +1,4 @@
+import { createHuntState } from "../run/hunt-log";
 import type {
   BoostDef,
   CardToolRules,
@@ -336,6 +337,7 @@ export function createWorld(options: CreateWorldOptions): World {
     loadoutLimits,
     drops,
     chestRules,
+    hunt: createHuntState(maxEnemies),
     chests: {
       rng: createRng(deriveSeed(options.seed, STREAM_SALT.chest)),
       dropped: 0,

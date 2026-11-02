@@ -1,4 +1,5 @@
 import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
+import { buildScore } from "./hunt-log";
 import { continueSeconds } from "../sim/continue";
 import { describePressureResult } from "../sim/pressure";
 import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
@@ -71,6 +72,8 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     continues: continueSeconds(world),
     ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
     ...(pressure === undefined ? {} : { pressure }),
+    huntLog: world.hunt.log.map((entry) => ({ ...entry })),
+    buildScore: buildScore(world),
   };
 }
 
