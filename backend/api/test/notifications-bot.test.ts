@@ -284,10 +284,10 @@ describe("напоминания в дубле бота", () => {
     expect(s.messenger.sent).toHaveLength(2);
   });
 
-  it("окно — reminders.min-gap-hours в секундах (по умолчанию сутки)", async () => {
+  it("окно — reminders.min-gap-hours в секундах (по умолчанию 20 часов)", async () => {
     const target = await player(s);
     await s.sender.deliver(reminder(target.accountId), DAY);
-    expect(s.redis.windows.get(`bot-notify:${target.accountId}:reminder`)).toBe(86_400);
+    expect(s.redis.windows.get(`bot-notify:${target.accountId}:reminder`)).toBe(72_000);
 
     const short = setup({ "reminders.enabled": true, "reminders.min-gap-hours": 12 });
     const other = await player(short);
