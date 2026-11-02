@@ -165,15 +165,15 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     });
   }
 
-  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number } = {}) {
+  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number; donation?: boolean } = {}) {
     const purchaseId = randomUUID();
     const paidAt = new Date(Date.now() - paidMinutesAgo * MINUTE);
     await prisma.purchase.create({
       data: {
         purchaseId,
         accountId,
-        product: "shop_item",
-        sku: "gems_small",
+        product: patch.donation === true ? "donation" : "shop_item",
+        sku: patch.donation === true ? "donation" : "gems_small",
         priceStars: 50,
         chargedStars: patch.chargedStars ?? 50,
         mode: patch.mode ?? "live",
@@ -275,6 +275,16 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     // Через десять минут отлежится и свежая — повторной.
     await conversions.sweep(new Date(Date.now() + 15 * MINUTE));
     expect((await ofAccount(player.accountId)).find((row) => row.purchaseId === fresh)).toMatchObject({ goal: 3 });
+  });
+
+  it("донат — не покупка: донат первым, покупка вторым — цель 2 у покупки, у доната цели нет (T-0364)", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromClick(code);
+    await purchase(player.accountId, 40, { donation: true });
+    const bought = await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    const rows = (await ofAccount(player.accountId)).filter((row) => row.goal !== 1);
+    expect(rows.map((row) => [row.goal, row.purchaseId])).toEqual([[2, bought]]);
   });
 
   it("журнал, счёт по ссылке, отправка и повтор неотправленной", async () => {
