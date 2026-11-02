@@ -428,8 +428,9 @@ describe("замок пересчёта", () => {
     await vi.advanceTimersByTimeAsync(400);
     expect((await pending).accounts.total).toBe(1600);
     expect(repository.calls.accounts).toBe(1);
-    // Чужой замок мы не трогали.
+    // Чужой замок мы не трогали, а результат положили в кеш: следующий запрос не ждёт заново.
     expect(store.locks.get(ALL_TIME_LOCK_KEY)).toBe("соседняя-реплика");
+    expect(JSON.parse(store.values.get(ALL_TIME_KEY) ?? "{}")).toMatchObject({ accounts: { total: 1600 } });
   });
 
   it("пока мы ждали замок, сосед положил результат — повторная проверка после замка не считает второй раз", async () => {

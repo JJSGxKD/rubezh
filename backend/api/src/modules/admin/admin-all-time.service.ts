@@ -113,7 +113,11 @@ export class AdminAllTimeService {
       if (ready !== null) return ready;
       lock = await this.lock(token);
     }
-    return lock === "held" ? await this.recount(now, token) : await this.compute(now);
+    if (lock === "held") return await this.recount(now, token);
+    const fresh = await this.compute(now);
+    // Сосед не успел или упал: результат кладём в кеш и мы, иначе каждый следующий запрос ждал бы пять секунд и считал заново.
+    if (lock === "busy") await this.remember(fresh);
+    return fresh;
   }
 
   /** Замок взят: сосед мог положить результат между нашим промахом по кешу и замком. */
