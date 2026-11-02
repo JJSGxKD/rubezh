@@ -42,14 +42,15 @@ describe("единая сложность: выбора в оболочке не
   });
 
   it("заголовка и списка сложностей в интерфейсе нет", () => {
-    expect(offenders(/difficulty\.title/)).toEqual([]);
+    expect(offenders(/["`]difficulty\.title["`]/)).toEqual([]);
     expect(offenders(/DIFFICULTIES\.map/)).toEqual([]);
   });
 
   it("лист «Перед забегом» и рейтинг не рисуют переключатель сложности", () => {
     for (const file of ["screens/pre-run.tsx", "screens/meta/rating.tsx"]) {
       const text = readFileSync(join(SRC, file), "utf8");
-      expect(text, file).not.toMatch(/SegmentedControl/);
+      // В листе «Перед забегом» остаётся переключатель режима — не сложности.
+      expect(text, file).not.toMatch(/track="difficulty"/);
       expect(text, file).not.toMatch(/\bDIFFICULTIES\b/);
     }
   });

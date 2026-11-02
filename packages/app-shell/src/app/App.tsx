@@ -17,7 +17,6 @@ import {
 } from "../state/navigation";
 import { badgeText, useBadges } from "../state/badges";
 import { useConnection } from "../state/connection";
-import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useProgress } from "../state/progress";
 import { useRun } from "../state/run";
@@ -384,7 +383,7 @@ function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void 
  *
  * Новичок, которого высадили в лобби, видит витрину из карточек и не видит
  * игры: интерес держится на первом бою, а не на меню. Поэтому после согласия
- * забег начинается сам — на «Лёгкой», со стартовым оружием и подсказками
+ * забег начинается сам — обучающий, со стартовым оружием и подсказками
  * первого забега. Выйти из него можно тем же способом, что из любого другого.
  */
 async function acceptAndPlay(): Promise<void> {
@@ -395,8 +394,8 @@ async function acceptAndPlay(): Promise<void> {
     skipFirstRunHints();
     return;
   }
-  // Первый забег — на «Лёгкой»: она и задумана как баланс без поправок.
-  useMeta.getState().rememberDifficulty("easy");
+  // Сложность выберет RunScreen по числу забегов: у нового аккаунта это
+  // обучающий забег (state/difficulty.ts), выбирать нечего.
   useRun.getState().intend({ kind: "new" });
   useNavigation.getState().push("run");
 }
