@@ -199,8 +199,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
         minRadius: 100,
         shrinkPerSec: 2.5,
         lifeSec: 60,
-        // босс в кольце — с 630-й секунды: первое кольцо кривой (450 с) только с элитой
-        inner: [{ enemy: "elite_ghoul", count: 1 }, { enemy: "boss_matryoshka", count: 1, fromSec: 630 }],
+        inner: [{ enemy: "elite_ghoul", count: 1 }],
       },
     },
   ],
