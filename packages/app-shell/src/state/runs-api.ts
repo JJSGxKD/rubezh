@@ -35,7 +35,7 @@ const finishSchema = z.object({
   verdict: z.enum(["ok", "suspicious", "rejected"]),
 });
 
-const leaderboardSchema = z.object({
+export const leaderboardSchema = z.object({
   difficultyId: difficultySchema,
   entries: z.array(
     z.object({

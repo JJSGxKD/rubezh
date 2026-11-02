@@ -14,10 +14,14 @@ import {
 } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import { useMeta } from "../../state/meta";
+import { useNavigation } from "../../state/navigation";
 import type { ApiFailure } from "../../state/api-request";
 import { useRestricted } from "../../state/restrictions";
 import { useRuns } from "../../state/runs";
 import { ItemIcon } from "../item-icons";
+import "../../i18n/season";
+import { ClaimArea } from "./rating-rewards";
+import { BoardSkeleton, SeasonTab, useSeasonOverview } from "./rating-season";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
@@ -35,6 +39,13 @@ import { TesterBadge } from "./tester-badge";
 /** Рейтинг закрывает своё ограничение (WP44); о молчаливом игрок не узнаёт — у него тень. */
 const RATING_RESTRICTION = ["leaderboard"];
 
+/**
+ * Вкладки рейтинга (tasks/T-0111): «Неделя» и «Друзья» живут в `rating-season.tsx`
+ * и есть, только когда сезоны включены; «Всё время» — прежний экран без изменений.
+ */
+type RatingTab = "week" | "all" | "friends";
+const TAB_IDS: readonly RatingTab[] = ["week", "all", "friends"];
+
 export function RatingScreen(): ReactNode {
   const [difficultyId, setDifficultyId] = useState<DifficultyId>(() => useMeta.getState().lastDifficultyId);
   const board = useRuns((state) => state.leaderboards[difficultyId]);
@@ -43,6 +54,12 @@ export function RatingScreen(): ReactNode {
   const [failure, setFailure] = useState<ApiFailure | null>(null);
   const notice = useSessionNotice();
   const restricted = useRestricted(RATING_RESTRICTION);
+  const navigation = useNavigation();
+  const { overview, receivedAt, reload } = useSeasonOverview();
+  const [picked, setPicked] = useState<RatingTab | null>(null);
+  const seasons = overview?.enabled === true ? overview : null;
+  // Пока обзор не пришёл, вкладки нет: таблицу «Всё время» не грузим зря, а потом не перебиваем.
+  const tab: RatingTab | null = overview === null ? null : (picked ?? (seasons?.season != null ? "week" : "all"));
 
   // Ответ на переключённую уже сложность не должен затереть состояние текущей.
   const latest = useRef<DifficultyId>(difficultyId);
@@ -61,8 +78,8 @@ export function RatingScreen(): ReactNode {
   }, []);
 
   useEffect(() => {
-    void load(difficultyId);
-  }, [difficultyId, load]);
+    if (tab === "all") void load(difficultyId);
+  }, [tab, difficultyId, load]);
 
   return (
     <Screen>
@@ -70,56 +87,91 @@ export function RatingScreen(): ReactNode {
         <PageTitle>{t("rating.title")}</PageTitle>
         <p className="mb-3 text-sm text-text-muted">{t("rating.subtitle")}</p>
 
-        <SegmentedControl track="difficulty"
-          label={t("difficulty.title")}
-          items={DIFFICULTY_IDS.map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
-          activeId={difficultyId}
-          onSelect={(id) => setDifficultyId(id as DifficultyId)}
-        />
+        {seasons === null ? null : <ClaimArea pending={seasons.pending} reload={reload} />}
+        {seasons === null || tab === null ? null : (
+          <SegmentedControl
+            track="rating_tab"
+            label={t("rating.tabs")}
+            items={TAB_IDS.map((id) => ({ id, label: t(`rating.tab.${id}`) }))}
+            activeId={tab}
+            onSelect={(id) => setPicked(id as RatingTab)}
+          />
+        )}
 
-        <div className="mt-4 grid grid-cols-1 gap-3" aria-busy={loading}>
-          {/* Нет сессии — сказать почему; ошибка запроса лишь повторила бы то
-              же другими словами, а у блокировки ещё и потеряла бы причину. */}
-          {notice !== null ? (
-            <SessionNotice notice={notice} />
-          ) : failure === null ? null : (
-            <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
-          )}
+        {tab === null ? <BoardSkeleton /> : null}
+        {seasons !== null && (tab === "week" || tab === "friends") ? (
+          <div className="mt-4">
+            <SeasonTab
+              scope={tab === "week" ? "all" : "friends"}
+              data={seasons}
+              receivedAt={receivedAt}
+              reload={reload}
+              restriction={RATING_RESTRICTION}
+              row={(entry, index) => <LeaderboardRow key={`${entry.rank}-${entry.name}`} entry={entry} index={index} />}
+              onInvite={() => navigation.resetTo("friends")}
+            />
+          </div>
+        ) : null}
 
-          {board === undefined ? (
-            loading ? <BoardSkeleton /> : null
-          ) : (
-            <>
-              {/* Под ограничением места нет, и «сыграйте забег» соврало бы — вместо него плашка. */}
-              <RestrictedPlaque kinds={RATING_RESTRICTION} />
-              {restricted ? null : (
-                <MyPlace
-                  me={board.me}
-                  totalPlayers={board.totalPlayers}
-                  inTable={board.entries.some((entry) => entry.isMe)}
-                />
+        {tab === "all" ? (
+          <>
+            <SegmentedControl track="difficulty"
+              label={t("difficulty.title")}
+              items={DIFFICULTY_IDS.map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
+              activeId={difficultyId}
+              onSelect={(id) => setDifficultyId(id as DifficultyId)}
+            />
+
+            <div className="mt-4 grid grid-cols-1 gap-3" aria-busy={loading}>
+              {/* Нет сессии — сказать почему; ошибка запроса лишь повторила бы то
+                  же другими словами, а у блокировки ещё и потеряла бы причину. */}
+              {notice !== null ? (
+                <SessionNotice notice={notice} />
+              ) : failure === null ? null : (
+                <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
               )}
-              {board.entries.length === 0 ? (
-                <p className="surface-sunken rounded-lg p-4 text-center text-sm text-text-muted">
-                  {t("rating.empty")}
-                </p>
+
+              {board === undefined ? (
+                loading ? <BoardSkeleton /> : null
               ) : (
-                <ol className="grid grid-cols-1 gap-2">
-                  {board.entries.map((entry, index) => (
-                    <LeaderboardRow key={`${entry.rank}-${entry.name}`} entry={entry} index={index} />
-                  ))}
-                </ol>
+                <>
+                  {/* Под ограничением места нет, и «сыграйте забег» соврало бы — вместо него плашка. */}
+                  <RestrictedPlaque kinds={RATING_RESTRICTION} />
+                  {restricted ? null : (
+                    <MyPlace
+                      me={board.me}
+                      totalPlayers={board.totalPlayers}
+                      inTable={board.entries.some((entry) => entry.isMe)}
+                    />
+                  )}
+                  {board.entries.length === 0 ? (
+                    <p className="surface-sunken rounded-lg p-4 text-center text-sm text-text-muted">
+                      {t("rating.empty")}
+                    </p>
+                  ) : (
+                    <ol className="grid grid-cols-1 gap-2">
+                      {board.entries.map((entry, index) => (
+                        <LeaderboardRow key={`${entry.rank}-${entry.name}`} entry={entry} index={index} />
+                      ))}
+                    </ol>
+                  )}
+                </>
               )}
-            </>
-          )}
 
-          {pending > 0 ? (
-            <p className="text-center text-xs text-text-muted">{t("rating.pending", { count: pending })}</p>
-          ) : null}
-        </div>
+              {pending > 0 ? (
+                <p className="text-center text-xs text-text-muted">{t("rating.pending", { count: pending })}</p>
+              ) : null}
+            </div>
 
-        <SectionTitle>{t("rating.later")}</SectionTitle>
-        <StubNotice text={t("rating.soon")} />
+          </>
+        ) : null}
+
+        {overview !== null && seasons === null ? (
+          <>
+            <SectionTitle>{t("rating.later")}</SectionTitle>
+            <StubNotice text={t("rating.soon")} />
+          </>
+        ) : null}
       </ContentColumn>
     </Screen>
   );
@@ -221,15 +273,5 @@ export function RatingMeta(props: { weaponId: string; level: number; kills: numb
       <span className="shrink-0 whitespace-nowrap">{`· ${t("rating.row.level", { level: props.level })}`}</span>
       <span className="shrink-0 whitespace-nowrap">{`· ${t("rating.row.kills", { kills: formatNumber(props.kills) })}`}</span>
     </p>
-  );
-}
-
-function BoardSkeleton(): ReactNode {
-  return (
-    <div className="grid gap-2" aria-hidden="true">
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index} className="surface-card h-14 animate-pulse rounded-lg" style={staggerStyle(index)} />
-      ))}
-    </div>
   );
 }

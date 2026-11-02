@@ -3,8 +3,8 @@ id: T-0111
 title: Недельный сезон — экран рейтинга: вкладки «Неделя», «Всё время», «Друзья», награды и таймер
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-17
 size: M
 depends_on:
@@ -25,6 +25,7 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/27-design-system-and-app-shell.md
   - docs/39-retention-mechanics.md
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
