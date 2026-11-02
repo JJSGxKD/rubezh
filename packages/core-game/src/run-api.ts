@@ -1,5 +1,5 @@
 import type { ContentSnapshot } from "./content/snapshot";
-import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -193,7 +193,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 7;
+export const RUN_SNAPSHOT_FORMAT = 8;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -338,9 +338,10 @@ export interface RunEvents {
    * придёт в итоге, — по нему сервер сверяет итог со своим временем начала
    * (docs/34-stage3-plan.md, WP4). Сложность и стартовое оружие — те, что
    * выбрал сам движок: пустое оружие в опциях значит «по умолчанию», и
-   * оболочка не знает, какое это.
+   * оболочка не знает, какое это. `pressure` — сила игрока и давление на старте
+   * (подстройка, Р131); нет поля — подстройки не было.
    */
-  started: { runId: string; difficultyId: DifficultyId; startingWeaponId: string };
+  started: { runId: string; difficultyId: DifficultyId; startingWeaponId: string; pressure?: RunPressureStart };
   /**
    * Игрок умер, но второй шанс ещё есть: мир стоит и ждёт решения оболочки —
    * `continueRun` или `declineContinue`. `result` — итог, каким он будет при
