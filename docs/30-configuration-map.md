@@ -135,7 +135,7 @@
 | Кольца здоровья и опыта вокруг персонажа: радиусы, толщина, пороги цвета | `game/render/player-rings.ts` |
 | Знак под ногами героя-спрайта: размеры эллипса, толщина, вспышка уровня, ободок щита и число бусин | `game/render/player-sigil.ts` (`SIGIL`, `LEVEL_FLASH_TICKS`, `SHIELD_RIM`, `SHIELD_BEADS_MAX`) |
 | Полёт кристалла от места смерти: длительность, разлёт, потолок горсти | `game/sim/gems.ts` → `GEM_LAND_TICKS`, `SCATTER_MIN`, `SCATTER_MAX`, `MAX_GEMS_PER_KILL` |
-| Формы и цвета мира: враги по паттернам, кристаллы, подборы, снаряды | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS`; рисование фигур — `render/shapes.ts` |
+| Формы и цвета мира: враги по паттернам, кристаллы, подборы, снаряды игрока | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `WORLD_COLORS`; рисование фигур — `render/shapes.ts` |
 | Ступени ценности кристаллов: пороги, цвета, размеры; подскок и мерцание | `game/render/looks.ts` → `GEM_TIERS`; `render/pickups.ts` → `GEM_HOP_UNITS`, `SHIMMER_*` |
 | Подборы (аптечка, магнит, динамит, заморозка): радиус касания, полёт, потолок пула и потолок вида; вид на земле, пульсация, кольца лечения и магнита | `game/sim/pickups.ts` → `PICKUP_RADIUS_UNITS`, `PICKUP_LAND_TICKS`, `MAX_PICKUPS`, `MAX_PICKUPS_OF_KIND`; `render/looks.ts` → `PICKUP_LOOKS`; `render/pickups.ts` → `PICKUP_*`; `WorldRenderer.ts` → `HEAL_RING_UNITS`, `MAGNET_RING_UNITS` |
 | Числа урона: сколько на экране, сколько новых за кадр, жизнь, подъём, размер; вспышка гибели | `game/render/combat-feedback.ts` → `MAX_NUMBERS`, `MAX_NEW_NUMBERS_PER_FRAME`, `NUMBER_*`, `BURST_*` |
@@ -158,7 +158,7 @@
 | Формы и цвета врагов, кристаллов, подборов, персонажа и эффектов — на канве и в гайдбуке сразу | `game/render/looks.ts` → `ENEMY_LOOKS`, `GEM_TIERS`, `PICKUP_LOOKS`, `STAGE_LOOKS`, `WORLD_COLORS` |
 | Вспышка попадания, взрывы, плитка фона | `game/render/WorldRenderer.ts` → `HIT_FLASH_TICKS`, `BLAST_*`, `GROUND_TILE_UNITS` |
 | Тон состояния врага: цвета стихий на канве и в гайдбуке, пульс, порядок важности | `game/render/status-tones.ts` → `STATUS_TONE_COLORS`, `ELEMENT_TONE`, `STATUS_PULSE_*` |
-| Телеграфы угроз: за сколько до выстрела виден прицел стрелка, толщина полос | `game/render/telegraphs.ts` → `AIM_TELEGRAPH_SEC`, `LANE_WIDTH_UNITS`, `AIM_WIDTH_UNITS`; ширина полосы рывка — тело врага (`laneWidth`), прозрачность подложки и доля отсчёта — `LANE_TRACK_ALPHA`, `LANE_FILL_SHARE`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
+| Телеграфы угроз: толщина полос | `game/render/telegraphs.ts` → `LANE_WIDTH_UNITS`; ширина полосы рывка — тело врага (`laneWidth`), прозрачность подложки и доля отсчёта — `LANE_TRACK_ALPHA`, `LANE_FILL_SHARE`; отсчёт взрыва и рывка берётся из `fuseSec` и `telegraphSec` врага |
 | Граница «Очага» и молния «Грозы»: вспышка, высота и изгиб молнии | `game/render/weapon-effects.ts` → `AURA_FLASH_TICKS`, `BOLT_LIFETIME_TICKS`, `BOLT_HEIGHT_UNITS`, `BOLT_JITTER_UNITS` |
 | Потолок шагов симуляции за кадр, частота снимков HUD | `game/MainScene.ts` → `MAX_STEPS_PER_FRAME`, `HUD_INTERVAL_MS` |
 | Бот калибровки: дистанции страха и сближения, стратегия выбора | `game/balance/bot.ts` |

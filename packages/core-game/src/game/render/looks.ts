@@ -29,8 +29,6 @@ export type ShapeKind =
   | "gem"
   /** крупный кристалл: те же грани и искра в центре */
   | "gem_rich"
-  /** снаряд врага: раскалённое ядро с ореолом */
-  | "bolt"
   | "medkit"
   | "magnet"
   | "dynamite"
@@ -223,7 +221,6 @@ export const WORLD_COLORS = {
   /** тёмный кант персонажа: светлое тело на светлом фоне иначе теряется */
   playerEdge: 0x1d1c31,
   projectile: 0xffe066,
-  enemyProjectile: 0xff6b6b,
   orbiter: 0x46d9c6,
   blast: 0xffa24d,
   strike: 0x9bd0ff,
@@ -245,8 +242,6 @@ export const WORLD_COLORS = {
   aura: 0xff9a3c,
   /** молния «Грозы»: ореол и светлый стержень */
   lightning: 0x9bd0ff,
-  /** раскалённое ядро вражеского снаряда */
-  enemyProjectileCore: 0xfff1e6,
   /** кольцо здоровья: полное, на исходе и почти пустое */
   hpFull: 0xff6f90,
   hpMid: 0xffc14d,

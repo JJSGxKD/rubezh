@@ -2,7 +2,7 @@ import type { ContinueDef } from "@bh/shared-types";
 import { clearFreeze } from "./freeze";
 import { clearPlayerStatuses } from "./player-status";
 import { closeOpenRifts } from "./secrets";
-import { despawnEnemy, despawnProjectile, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
+import { despawnEnemy, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
 /**
  * Второй шанс — продолжение забега после смерти
@@ -31,10 +31,6 @@ export function applyContinue(world: World): boolean {
   }
   // Элиты волны разлома только что убраны вместе со всеми: пустая волна не должна дать сундук.
   closeOpenRifts(world);
-  const projectiles = world.projectiles;
-  for (let i = 0; i < projectiles.count; i++) {
-    if (projectiles.alive[i] === 1 && projectiles.fromPlayer[i] === 0) despawnProjectile(world, i);
-  }
 
   const rules = world.continueRules;
   const player = world.player;

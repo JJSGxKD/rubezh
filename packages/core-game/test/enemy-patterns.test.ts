@@ -7,7 +7,6 @@ import { vectorLength } from "../src/game/sim/vector";
 import {
   createWorld,
   DEFAULT_SIM_CONFIG,
-  NO_OWNER_TYPE,
   spawnEnemy,
   TICK_SEC,
   type PlayerConfig,
@@ -442,17 +441,5 @@ describe("статистика врагов", () => {
 
     expect(world.stats.killsByType[typeIndex(world, "t_swarm")]).toBe(2);
     expect(world.stats.killsByType[typeIndex(world, "t_chase")]).toBe(0);
-  });
-
-  it("не путает снаряд игрока с вражеским: владелец сбрасывается при повторном использовании слота", () => {
-    const world = setup({ playerAttacks: true });
-    place(world, "t_swarm", 200, 0);
-
-    run(world, 240);
-
-    for (let p = 0; p < world.projectiles.count; p++) {
-      if (world.projectiles.alive[p] === 0 || world.projectiles.fromPlayer[p] === 0) continue;
-      expect(world.projectiles.ownerType[p]).toBe(NO_OWNER_TYPE);
-    }
   });
 });
