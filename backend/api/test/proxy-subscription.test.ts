@@ -32,7 +32,7 @@ import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { SecretCipher } from "../src/modules/secrets/secret-cipher.js";
-import { SETTINGS, type SettingValue } from "../src/modules/settings/setting-catalog.js";
+import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -178,7 +178,7 @@ describe("обновление подписки", () => {
     ["HTTP 500", () => new Response("сбой", { status: 500 }), "Поставщик ответил кодом 500"],
     ["формат Clash", () => answer("proxies:\n  - name: a\n    type: vless\n"), "Формат подписки не поддерживается: нужен список ссылок (base64 или текст)"],
     ["пустое тело", () => answer(""), "Подписка пустая"],
-    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов (пропущено 1)"],
+    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов (пропущено 2)"],
     ["сеть упала", () => Promise.reject(new TypeError("fetch failed")), "Не удалось связаться с поставщиком"],
     ["слишком большой ответ", () => answer("x", { headers: { "content-length": String(3 * 1024 * 1024) } }), "Ответ поставщика больше 2 МБ"],
   ];
@@ -625,7 +625,7 @@ describe("расписание обновления и проверок", () => 
 
   it("не больше пяти проверок параллельно", async () => {
     const s = scheduled();
-    await seed(s);
+    await seed(s, { lastRefreshAt: after(-3600), lastRefreshOk: true });
     s.repository.nodes = Array.from({ length: 12 }, (_, index) => nodeRow(`k${String(index).padStart(3, "0")}`, index));
     await s.routes.reload();
     let running = 0;
@@ -680,9 +680,10 @@ describe("подписка по HTTP в панели", () => {
   let roles: MemoryRolesRepository;
   let sealing: SecretCipher | null;
 
-  async function boot(options: { cipher: SecretCipher | null } = { cipher: cipher() }): Promise<void> {
+  async function boot(options: { encryption: boolean } = { encryption: true }): Promise<void> {
     r = rig();
-    sealing = options.cipher;
+    // Сервис и обновление шифруют одним ключом, как в приложении.
+    sealing = options.encryption ? r.cipher : null;
     const accounts = new MemoryAccountRepository();
     roles = new MemoryRolesRepository();
     const store = new MemoryAdminSessionStore();
@@ -833,7 +834,7 @@ describe("подписка по HTTP в панели", () => {
 
   it("без ключа шифрования сохранить нельзя — 409", async () => {
     await app?.close();
-    await boot({ cipher: null });
+    await boot({ encryption: false });
     const response = await save();
     expect(response.statusCode).toBe(409);
     expect(r.repository.subscription).toBeNull();
@@ -854,10 +855,11 @@ describe("подписка по HTTP в панели", () => {
 
   it("«Проверить узлы» не чаще раза в минуту; отмечает все узлы к проверке сейчас", async () => {
     await save();
-    r.repository.nodes = [nodeRow("aaaa", 0, { nextProbeAt: new Date(NOW.getTime() + 999_999) })];
+    const far = Date.now() + 10 * 3_600_000;
+    r.repository.nodes = [nodeRow("aaaa", 0, { nextProbeAt: new Date(far) })];
 
     expect((await call("POST", "/probe", "own")).statusCode).toBe(200);
-    expect(r.repository.nodes[0]?.nextProbeAt.getTime()).toBeLessThan(NOW.getTime() + 999_999);
+    expect(r.repository.nodes[0]?.nextProbeAt.getTime()).toBeLessThanOrEqual(Date.now());
     expect((await call("POST", "/probe", "own")).statusCode).toBe(429);
   });
 
