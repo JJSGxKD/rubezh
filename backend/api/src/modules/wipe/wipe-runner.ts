@@ -124,7 +124,7 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 23 таблицы плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 26 таблиц плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
@@ -153,6 +153,9 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "vip_daily",
   "notification",
   "bot_mention_task",
+  "pass_progress",
+  "pass_claim",
+  "boost_credit",
   "purchase",
   "tester_compensation",
 ];
@@ -174,7 +177,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 23 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 26 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -226,6 +229,12 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.notification.deleteMany({});
     case "BotMentionTask":
       return await tx.botMentionTask.deleteMany({});
+    case "PassProgress":
+      return await tx.passProgress.deleteMany({});
+    case "PassClaim":
+      return await tx.passClaim.deleteMany({});
+    case "BoostCredit":
+      return await tx.boostCredit.deleteMany({});
     default:
       throw new Error(`Модель ${model} не входит в план стирания`);
   }

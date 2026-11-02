@@ -168,7 +168,7 @@ export function TaskRow(props: {
   );
 }
 
-function ProgressLine(props: { task: TaskItem }): ReactNode {
+export function ProgressLine(props: { task: Pick<TaskItem, "kind" | "value" | "target"> }): ReactNode {
   const { task } = props;
   const format = (value: number): string => (TIME_KINDS.has(task.kind) ? formatDuration(value) : formatNumber(value));
   const text = `${format(task.value)} / ${format(task.target)}`;
@@ -227,7 +227,7 @@ export function taskHint(task: TaskItem): string | null {
  * с разрядами, как в полосе прогресса. Незнакомый вид без заголовка — просто
  * число цели.
  */
-function goalText(task: TaskItem): string {
+export function goalText(task: Pick<TaskItem, "kind" | "target"> & { filter?: TaskItem["filter"] }): string {
   const key = `task.kind.${task.kind}`;
   if (!hasTranslation(key)) return formatNumber(task.target);
   return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000), ...goalFilterParams(task) });

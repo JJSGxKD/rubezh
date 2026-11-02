@@ -141,4 +141,19 @@ export const ENEMIES: EnemyDef[] = [
       ],
     },
   },
+  // Таран — босс на уворот, а не на счёт: один враг, длинный телеграф, рывок
+  // через поле и долгая пауза после него. Матрёшка плодит врагов — Таран
+  // ничего не плодит.
+  {
+    id: "boss_ram",
+    hp: 1000,
+    speed: 58,
+    damage: 26,
+    xp: 90,
+    threat: 250,
+    rank: "boss",
+    pattern: "dash",
+    params: { triggerDistance: 300, telegraphSec: 0.9, dashSpeed: 520, dashDurationSec: 0.8, recoverSec: 1.8 },
+    resist: { cold: 0.4, lightning: -0.4 },
+  },
 ];

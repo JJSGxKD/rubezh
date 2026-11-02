@@ -180,11 +180,11 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
-    // После 8-й минуты элиты и Матрёшка приходят каждую-вторую минуту, а не раз
-    // в пять; второй босс — отдельная задача, поэтому «больше боссов» здесь
-    // значит больше событий той же Матрёшки.
+    // После 8-й минуты элиты и боссы приходят чаще. Боссы чередуются: Матрёшка
+    // каждые пять минут, Таран каждые восемь — Таран отдан тому, что в ритм
+    // Матрёшки не попадает.
     { everySegments: 7, kind: "ring", enemy: "elite_ghoul", count: 3 },
-    { everySegments: 8, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+    { everySegments: 8, kind: "ring", enemy: "boss_ram", count: 1 },
     { everySegments: 9, kind: "flank", enemy: "elite_grave_knight", count: 2 },
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому

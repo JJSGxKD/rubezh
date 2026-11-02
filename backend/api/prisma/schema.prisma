@@ -205,6 +205,10 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Батл-пасс (T-0311)
+  passProgress  PassProgress[]
+  passClaims    PassClaim[]
+  boostCredits  BoostCredit[]
 
   // Друзья (WP14)
   friendLink       FriendLink?
@@ -2629,4 +2633,64 @@ model AchievementFavorite {
   @@id([accountId, slot])
   @@unique([accountId, taskId])
   @@map("achievement_favorite")
+}
+
+// Батл-пасс (docs/35-stage4-plan.md Р46, §3.15, T-0311): месяц по Москве, очки
+// пасса за задания, 30 ступеней в двух лентах. Ленты месяца правит панель
+// (T-0313), без строки работает лента по умолчанию из кода.
+
+/// Очки пасса игрока за месяц по Москве (`YYYY-MM`). Растут под
+/// `UPDATE … SET points = points + n`, не убывают; очки сверх 30-й ступени
+/// копятся, но ступеней не дают
+model PassProgress {
+  accountId String   @map("account_id") @db.Uuid
+  monthKey  String   @map("month_key") @db.VarChar(7)
+  points    Int
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, monthKey])
+  @@map("pass_progress")
+}
+
+/// Ленты месяца: 30 записей `{ tier, free, vip }` (награды — монеты, самоцветы,
+/// осколки по редкостям, буст; случайного нет, Р11). Нет строки на месяц — лента
+/// по умолчанию из кода. Строку пишет панель, длину и формат держит `CHECK`
+model PassSeason {
+  monthKey    String   @id @map("month_key") @db.VarChar(7)
+  tiers       Json
+  publishedAt DateTime @map("published_at") @db.Timestamptz(3)
+
+  @@map("pass_season")
+}
+
+/// Журнал забранных наград пасса: ключ `(аккаунт, месяц, ступень, лента)` не даёт
+/// забрать награду дважды. Строка пишется после начисления кошельком, в той же
+/// транзакции, что и подарок-буст
+model PassClaim {
+  accountId String   @map("account_id") @db.Uuid
+  monthKey  String   @map("month_key") @db.VarChar(7)
+  tier      Int      @db.SmallInt
+  /// `free` или `vip` (`CHECK` в миграции)
+  lane      String   @db.VarChar(4)
+  claimedAt DateTime @map("claimed_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, monthKey, tier, lane])
+  @@map("pass_claim")
+}
+
+/// Бусты-подарки: пасс дарит буст, а не списывает самоцветы за него. Тратит
+/// подарок включение буста на забег (T-0312)
+model BoostCredit {
+  accountId String @map("account_id") @db.Uuid
+  boostId   String @map("boost_id") @db.VarChar(32)
+  count     Int
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, boostId])
+  @@map("boost_credit")
 }

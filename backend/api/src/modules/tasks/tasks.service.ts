@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import { BattlePassService } from "../battle-pass/battle-pass.service.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
 import { imagePath } from "../media/image-rules.js";
 import { MediaService } from "../media/media.service.js";
@@ -148,6 +149,7 @@ export class TasksService implements OnModuleInit {
     private readonly media: MediaService,
     private readonly restrictions: AccountRestrictions,
     @Optional() private readonly points?: TaskPointsService,
+    @Optional() private readonly pass?: BattlePassService,
   ) {}
 
   onModuleInit(): void {
@@ -213,8 +215,25 @@ export class TasksService implements OnModuleInit {
       credited[field] = result.credited;
     }
     const claimed = await this.db(this.repository.markClaimed(accountId, taskId, done.periodStart, at));
-    if (claimed) this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
+    if (claimed) {
+      this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
+      await this.awardPassPoints(accountId, taskId, def.passPoints, at);
+    }
     return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at) };
+  }
+
+  /**
+   * Очки пасса за забранное задание (T-0311). Только тому, чья отметка «забрано» встала первой, —
+   * поэтому повтор и гонка очков не удваивают. Сбой очков не отменяет забор: награда уже выдана
+   * и отмечена, а упавшую прибавку команда видит по строке `pass_points_failed`.
+   */
+  private async awardPassPoints(accountId: string, taskId: string, points: number, at: Date): Promise<void> {
+    if (this.pass === undefined || points <= 0) return;
+    try {
+      await this.pass.addTaskPoints(accountId, points, at);
+    } catch (error: unknown) {
+      this.logger.error(JSON.stringify({ module: "tasks", event: "pass_points_failed", accountId, taskId, points, reason: error instanceof Error ? error.message : String(error) }));
+    }
   }
 
   /**

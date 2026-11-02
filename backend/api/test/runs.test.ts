@@ -15,6 +15,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Приём забегов (docs/34-stage3-plan.md, WP4). Проверяется не «забег
@@ -71,7 +72,7 @@ describe("приём забегов", () => {
       recorded.push(run);
     });
     service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
-    view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
+    view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating, new RunPrestige());
   });
 
   it("слушатели узнают о записанном забеге с вердиктом", async () => {
@@ -372,7 +373,7 @@ describe("чтение забегов", () => {
     const runs = new MemoryRunsRepository();
     const board = new MemoryLeaderboardStore();
     const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
-    const view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating);
+    const view = new RunsViewService(runs, board, new RunExtras(), ratingRestrictions(runs, board).rating, new RunPrestige());
     const [me, other] = [account("1"), account("2")];
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));
     await service.finish(other, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
@@ -391,7 +392,7 @@ describe("лист забега в профиле", () => {
     const board = new MemoryLeaderboardStore();
     const extras = new RunExtras();
     const service = new RunsService(config(), runs, board, new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository()), new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
-    return { runs, extras, service, view: new RunsViewService(runs, board, extras, ratingRestrictions(runs, board).rating) };
+    return { runs, extras, service, view: new RunsViewService(runs, board, extras, ratingRestrictions(runs, board).rating, new RunPrestige()) };
   }
 
   it("отдаёт свой забег с подробностями, а награду, бусты и добычу — из их модулей", async () => {
