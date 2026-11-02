@@ -1,4 +1,4 @@
-import { ELEMENTS, type UpgradeChange, type WeaponBehavior } from "@bh/shared-types";
+import { ELEMENTS, type LimitDef, type UpgradeChange, type WeaponBehavior } from "@bh/shared-types";
 import type { WeaponType, ResolvedWeaponLevel } from "../weapons/weapon-types";
 import type { PassiveType } from "./passives";
 
@@ -134,6 +134,39 @@ export function passiveChanges(type: PassiveType, fromLevel: number | null, toLe
 /** Лечение запасного варианта — в процентах максимального здоровья. */
 export function healChanges(healRatio: number): UpgradeChange[] {
   return [change("upgrade.stat.heal", null, round(healRatio * 100), "value", false)];
+}
+
+/**
+ * Параметры, которые прибавка меняет числом, а не множителем: на карточке они
+ * «+10» и «+0,1». Сопротивление — доля, игроку нужны проценты. Остальное —
+ * множители: «+3%».
+ */
+const FLAT_LIMIT_STATS: ReadonlySet<string> = new Set(["maxHp", "regenPerSec", "armor"]);
+
+/**
+ * Что даёт нажатие «Предела»: «было» — набрано до нажатия, «стало» — после, так
+ * что отдельной строки «всего» не нужно. Подпись — параметр навыка, чтобы игрок
+ * читал привычные слова. Перезарядка идёт множителем вниз и помечена «меньше —
+ * лучше»; сам шаг в данных — ускорение, как у снаряжения.
+ */
+export function limitChanges(def: LimitDef, stacksBefore: number): UpgradeChange[] {
+  const before = def.step * stacksBefore;
+  const after = def.step * (stacksBefore + 1);
+  const labelKey = `upgrade.stat.passive.${def.stat}`;
+
+  if (FLAT_LIMIT_STATS.has(def.stat)) return [change(labelKey, roundLimit(before), roundLimit(after), "plus", false)];
+  if (def.stat.startsWith("resist")) {
+    return [change(labelKey, roundLimit(before * 100), roundLimit(after * 100), "plus", false)];
+  }
+  if (def.stat === "cooldown") {
+    return [change(labelKey, roundLimit(1 - before), roundLimit(1 - after), "percent", true)];
+  }
+  return [change(labelKey, roundLimit(1 + before), roundLimit(1 + after), "percent", false)];
+}
+
+/** Четыре знака: 0,1 × 3 в двоичной дроби — 0,30000000000000004, а на карточке хвоста быть не должно. */
+function roundLimit(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
 }
 
 function weaponLabel(behavior: WeaponBehavior, field: WeaponField): string {

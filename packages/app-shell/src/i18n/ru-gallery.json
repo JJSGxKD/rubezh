@@ -20,6 +20,8 @@
   "gallery.preview.runLoading": "Загрузка забега",
   "gallery.preview.levelUp": "Выбор улучшения",
   "gallery.preview.levelUpLong": "Выбор улучшения: длинные тексты и лечение",
+  "gallery.preview.levelUpLimit": "Выбор улучшения: три «Предела»",
+  "gallery.preview.levelUpLimitHurt": "Выбор улучшения: «Предел» и лечение",
   "gallery.preview.pause": "Пауза",
   "gallery.preview.death": "Смерть, режим диагностики",
   "gallery.preview.record": "Смерть с новым рекордом",

@@ -3,8 +3,8 @@ id: T-0194
 title: «Предел» — бесконечные малые прибавки, когда прокачивать нечего
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-45 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0193, T-0101, T-0102, T-0103, T-0116, T-0182]
@@ -41,6 +41,11 @@ shared:
   - docs/30-configuration-map.md
   - docs/32-balance.md
   - CLAUDE.md
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/screens/run/card-tools-rules.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/progression/evolutions.ts
+  - packages/core-game/src/game/run-world.ts
 runner: any
 executor: sonnet-5.5
 effort: high

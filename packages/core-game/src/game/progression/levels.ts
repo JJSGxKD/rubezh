@@ -1,7 +1,9 @@
-import type { LevelCurveDef, PassiveCategory, UpgradeOption } from "@bh/shared-types";
+import type { LevelCurveDef, PassiveCategory, UpgradeOption, UpgradeOptionKind } from "@bh/shared-types";
 import type { Rng } from "../sim/rng";
 import type { World } from "../sim/world";
+import { combineModifiers } from "./boosts";
 import { applyEvolution, isWeaponOfferable } from "./evolutions";
+import { limitCandidates, limitModifiers } from "./limit";
 import { computePlayerStats } from "./passives";
 import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
 import {
@@ -17,6 +19,12 @@ export const OFFERS_PER_LEVEL = 3;
 
 /** Доля максимального здоровья, которую лечит запасной вариант. */
 const HEAL_RATIO = 0.3;
+
+/**
+ * Ниже какой доли здоровья среди карточек «Предела» появляется лечение
+ * (Р130): при полном здоровье оно было бы пустой карточкой.
+ */
+const LIMIT_HEAL_BELOW_RATIO = 0.5;
 
 export const HEAL_OPTION_ID = "heal";
 
@@ -101,12 +109,36 @@ export function prepareOffers(world: World): UpgradeOption[] {
 
   const candidates = collectCandidates(world);
   progression.offers =
-    candidates.length === 0 ? [healOption()] : pickWeighted(world.rng, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
+    candidates.length === 0 ? buildLimitOffers(world, world.rng) : pickWeighted(world.rng, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
   return progression.offers;
 }
 
+/**
+ * Карточки, когда прокачивать нечего: «Предел» вместо одного лечения. Лечение
+ * остаётся последней карточкой, пока здоровье ниже половины, и тогда «Предела»
+ * на одну меньше; записей не осталось (все упёрлись в предел или их нет в
+ * мире) — одно лечение, как раньше. Лечение генератор не трогает: число
+ * бросков зависит только от здоровья и стопок, и реплей сходится.
+ */
+export function buildLimitOffers(world: World, rng: Rng): UpgradeOption[] {
+  const pool = limitCandidates(world);
+  if (pool.length === 0) return [healOption()];
+
+  const wanted = OFFERS_PER_LEVEL + world.boosts.extraOffers;
+  const hurt = world.player.hp < world.playerStats.maxHp * LIMIT_HEAL_BELOW_RATIO;
+  const offers = pickWeighted(rng, pool, hurt ? wanted - 1 : wanted);
+  if (hurt) offers.push(healOption());
+  return offers;
+}
+
+/**
+ * Вариант выбора, который вправе выдать и сундук: всё, кроме «Предела».
+ * Сундук без прокачки даёт аптечку или опыт — малые прибавки там не к месту.
+ */
+export type ItemOption = Omit<UpgradeOption, "kind"> & { kind: Exclude<UpgradeOptionKind, "limit"> };
+
 export interface Candidate {
-  option: UpgradeOption;
+  option: ItemOption;
   weight: number;
 }
 
@@ -209,9 +241,13 @@ export function passivesInCategory(world: World, category: PassiveCategory): num
  * дважды. Генератор приходит снаружи — карточки уровня бросают `world.rng`,
  * переброс — свой поток.
  */
-export function pickWeighted(rng: Rng, candidates: readonly Candidate[], count: number): UpgradeOption[] {
+export function pickWeighted<T extends UpgradeOption>(
+  rng: Rng,
+  candidates: readonly { option: T; weight: number }[],
+  count: number,
+): T[] {
   const pool = [...candidates];
-  const picked: UpgradeOption[] = [];
+  const picked: T[] = [];
 
   while (picked.length < count && pool.length > 0) {
     const index = drawWeighted(rng, pool);
@@ -245,7 +281,7 @@ export function drawWeighted(rng: Rng, pool: readonly { weight: number }[]): num
  * Запасной вариант, когда всё собрано и прокачано до потолка: выбор из
  * ничего хуже, чем небольшая награда.
  */
-export function healOption(): UpgradeOption {
+export function healOption(): ItemOption {
   return {
     id: HEAL_OPTION_ID,
     kind: "heal",
@@ -304,8 +340,15 @@ export function applyUpgrade(world: World, option: UpgradeOption): void {
       if (slot >= 0) world.loadout.passives[slot].level = option.level;
       break;
     }
-    default:
+    case "heal":
       world.player.hp = Math.min(world.playerStats.maxHp, world.player.hp + world.playerStats.maxHp * HEAL_RATIO);
+      break;
+    case "limit": {
+      const index = world.limitTypes.findIndex((def) => def.id === option.refId);
+      // Здоровье вырастет вместе с максимумом при пересчёте ниже.
+      if (index >= 0) world.progression.limitStacks[index]++;
+      break;
+    }
   }
 
   refreshPlayerStats(world);
@@ -322,7 +365,9 @@ export function refreshPlayerStats(world: World): void {
     world.playerStatsBase,
     world.passiveTypes,
     passiveLevels(world.loadout),
-    world.loadoutModifiers,
+    // «Предел» складывается со снаряжением и бустами и упирается в те же
+    // пределы движка; навыки применяются сверху, как к снаряжению.
+    combineModifiers(world.loadoutModifiers, limitModifiers(world.progression.limitStacks, world.limitTypes)),
   );
 
   const gained = world.playerStats.maxHp - previousMaxHp;

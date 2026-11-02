@@ -9,6 +9,7 @@ import type {
   EnemyDef,
   EnemyStageDef,
   LevelCurveDef,
+  LimitDef,
   LoadoutLimits,
   MapDef,
   PassiveDef,
@@ -23,6 +24,7 @@ import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
 import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
 import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
+import { findLimitProblems } from "../progression/limit";
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { xpForLevel } from "../progression/levels";
@@ -203,6 +205,8 @@ export interface CreateWorldOptions {
   boosts?: readonly BoostDef[];
   /** сколько бустов действует на забег; по умолчанию — все из набора */
   maxBoostsPerRun?: number;
+  /** записи «Предела»; по умолчанию — пусто, и при полной прокачке остаётся одно лечение */
+  limits?: readonly LimitDef[];
   config?: Partial<SimConfig>;
 }
 
@@ -285,6 +289,11 @@ export function createWorld(options: CreateWorldOptions): World {
   if (boostProblems.length > 0) {
     throw new Error(`Некорректные бусты:\n${boostProblems.join("\n")}`);
   }
+  const limitTypes = options.limits ?? [];
+  const limitProblems = findLimitProblems(limitTypes);
+  if (limitProblems.length > 0) {
+    throw new Error(`Некорректные записи «Предела»:\n${limitProblems.join("\n")}`);
+  }
   const runLoadout = sanitizeLoadout(options.loadout ?? EMPTY_LOADOUT);
   const boosts = resolveBoosts(options.boosts ?? [], runLoadout.boosts, options.maxBoostsPerRun ?? runLoadout.boosts.length);
   const loadoutModifiers = combineModifiers(runLoadout.modifiers, boosts.modifiers);
@@ -338,6 +347,7 @@ export function createWorld(options: CreateWorldOptions): World {
     runLoadout,
     boosts,
     loadoutModifiers,
+    limitTypes,
     playerStatsBase,
     loadout,
     progression: {
@@ -350,6 +360,7 @@ export function createWorld(options: CreateWorldOptions): World {
       tools: { ...toolsTotal },
       toolsTotal,
       banished: [],
+      limitStacks: limitTypes.map(() => 0),
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
     // спавна — стенд испытаний, тесты паттернов — она такой и остаётся.
