@@ -3,7 +3,7 @@ id: T-0176
 title: Лента живых событий — клиент: строка на главной под «Играть»
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -21,6 +21,8 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/22-analytics-and-metrics.md
   - backend/api/src/modules/events/event-dictionary.ts
+  - packages/app-shell/src/state/analytics.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
