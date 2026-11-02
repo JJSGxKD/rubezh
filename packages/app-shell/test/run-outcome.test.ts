@@ -18,6 +18,11 @@ vi.mock("@bh/core-game", async (importOriginal) => ({
 const { useRun } = await import("../src/state/run");
 const { initShell, reportError } = await import("../src/state/shell");
 
+// Потолок ключей payload на сервере (`MAX_PAYLOAD_KEYS` в словаре событий):
+// оболочка не импортирует бэкенд, поэтому число продублировано, а равенство
+// не меньше 48 держит scripts/test/event-dictionary.test.ts.
+const MAX_PAYLOAD_KEYS = 48;
+
 type Handlers = { [E in keyof RunEvents]?: (payload: RunEvents[E]) => void };
 
 function fakeEngine(): { engine: RunEngine; emit<E extends keyof RunEvents>(event: E, payload: RunEvents[E]): void } {
@@ -147,6 +152,84 @@ describe("итог забега в аналитике", () => {
     await vi.waitFor(() => expect(reports.queueRunReport).toHaveBeenCalledTimes(1));
 
     expect(reports.queueRunReport).toHaveBeenCalledWith(recording, 1);
+  });
+
+  describe("сила и давление (tasks/T-0196, решение 5)", () => {
+    const START = { runId: "run-1", difficultyId: "hard" as const, startingWeaponId: "spark" };
+    const PRESSURE = { power: 2.01, level: 1, deviceClass: "standard" as const };
+    const PRESSURE_RESULT = { ...PRESSURE, powerEnd: 2.4, levelEnd: 1.04 };
+
+    async function started() {
+      const fake = fakeEngine();
+      engine.load.mockResolvedValue(fake.engine);
+      await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "normal" });
+      return fake;
+    }
+    const startedEvents = () => events.filter((entry) => entry.event === "run_started");
+
+    it("run_started уходит из события started, один раз, с силой и прежними полями", async () => {
+      const fake = await started();
+      expect(startedEvents()).toHaveLength(0);
+
+      fake.emit("started", { ...START, pressure: PRESSURE });
+
+      expect(startedEvents()).toHaveLength(1);
+      expect(startedEvents()[0]?.payload).toMatchObject({
+        power: 2.01,
+        pressure: 1,
+        deviceClass: "standard",
+        weapon: "spark",
+        map: "frontier",
+        difficulty: "hard",
+        devMode: false,
+      });
+      expect(startedEvents()[0]?.payload).toEqual(
+        expect.objectContaining({ seed: expect.any(Number), screenMode: expect.any(String), orientation: expect.any(String) }),
+      );
+    });
+
+    it("started без давления — run_started без новых полей", async () => {
+      const fake = await started();
+      fake.emit("started", START);
+
+      const payload = startedEvents()[0]?.payload ?? {};
+      expect(payload).not.toHaveProperty("power");
+      expect(payload).not.toHaveProperty("pressure");
+      expect(payload).not.toHaveProperty("deviceClass");
+      expect(payload).toMatchObject({ weapon: "spark", difficulty: "hard" });
+    });
+
+    it("«Ещё раз» — второе started — отправляет событие второй раз", async () => {
+      const fake = await started();
+      fake.emit("started", { ...START, pressure: PRESSURE });
+      fake.emit("finished", RESULT);
+      fake.emit("started", { ...START, runId: "run-2", pressure: { ...PRESSURE, power: 3.1 } });
+
+      expect(startedEvents()).toHaveLength(2);
+      expect(startedEvents()[1]?.payload).toMatchObject({ power: 3.1 });
+    });
+
+    it("итог с давлением несёт силу и давление на старте и в конце, итог без него — нет", async () => {
+      const fake = await started();
+      fake.emit("finished", { ...RESULT, pressure: PRESSURE_RESULT });
+      fake.emit("abandoned", { ...RESULT, outcome: "abandoned" });
+
+      const finished = events.find((entry) => entry.event === "run_finished");
+      expect(finished?.payload).toMatchObject({ power: 2.01, pressure: 1, powerEnd: 2.4, pressureEnd: 1.04, deviceClass: "standard" });
+      const abandoned = events.find((entry) => entry.event === "run_abandoned");
+      for (const key of ["power", "pressure", "powerEnd", "pressureEnd", "deviceClass"]) expect(abandoned?.payload, key).not.toHaveProperty(key);
+    });
+
+    it("самый полный payload итога не длиннее лимита словаря за вычетом запаса", async () => {
+      const fake = await started();
+      fake.emit("diagnostics", DIAGNOSTICS);
+      fake.emit("finished", { ...RESULT, pressure: PRESSURE_RESULT });
+
+      const payload = events.find((entry) => entry.event === "run_finished")?.payload ?? {};
+      // Поля, которые приходят не из этого пути: чёрный арт, восстановленный забег, прерванный обновлением.
+      const others = ["art", "recovered", "interrupted"].filter((key) => !(key in payload)).length;
+      expect(Object.keys(payload).length + others).toBeLessThanOrEqual(MAX_PAYLOAD_KEYS - 4);
+    });
   });
 
   it("без записи очередь отчётов не трогается", async () => {

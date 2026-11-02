@@ -145,6 +145,33 @@ describe("выгрузка закрытого теста", () => {
     expect([...repository.journal.values()][0]).toMatchObject({ source: "cli", requestedBy: "cli" });
   });
 
+  it("таблица забегов несёт силу, давление и класс устройства, а без них — пустые ячейки", async () => {
+    const repository = new MemoryExportRepository();
+    const outcome = { seed: 7, survivalSec: 412, level: 18, wave: 7, enemiesKilled: 900, weapon: "spark", map: "meadow", difficulty: "hard", contentHash: "abc", isNewRecord: true, cheats: false };
+    repository.events = [
+      event(0, { eventType: "run_finished", payload: { ...outcome, power: 2.01, pressure: 1.04, deviceClass: "light" }, receivedAt: new Date("2026-09-15T11:00:00Z") }),
+      event(1, { eventType: "run_finished", payload: outcome, receivedAt: new Date("2026-09-15T11:01:00Z") }),
+    ];
+
+    const artifact = await service(repository).build({ period: { from: null, to: NOW }, source: "cli", requestedBy: "cli" });
+    try {
+      const files = unzip(readFileSync(artifact.parts[0]!));
+      const [header, withPower, without] = files.get("runs.csv")!.toString().trim().split("\n");
+      const columns = header!.split(",");
+      for (const column of ["power", "pressure", "deviceClass"]) expect(columns, column).toContain(column);
+
+      const cell = (line: string | undefined, column: string): string => line!.split(",")[columns.indexOf(column)]!;
+      expect(cell(withPower, "power")).toBe("2.01");
+      expect(cell(withPower, "pressure")).toBe("1.04");
+      expect(cell(withPower, "deviceClass")).toBe("light");
+      expect(cell(without, "power")).toBe("");
+      expect(cell(without, "pressure")).toBe("");
+      expect(cell(without, "deviceClass")).toBe("");
+    } finally {
+      await artifact.cleanup();
+    }
+  });
+
   it("не выпускает сырых Telegram ID ни из конверта, ни из тела отчёта", async () => {
     const repository = new MemoryExportRepository();
     repository.events = [event(0)];
