@@ -3,8 +3,8 @@ id: T-0364
 title: Донаты отдельно от покупок — ежедневный отчёт, цели сетей, разрез флагов
 epic: E1
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
