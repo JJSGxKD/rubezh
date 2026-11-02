@@ -178,9 +178,13 @@ describe("директор: множители отрезка", () => {
 });
 
 describe("слабое устройство", () => {
-  /** Опорный игрок: давление ровно единица, поэтому желаемый потолок — ровно тот, что в отрезке. */
+  /**
+   * Опорный игрок: давление ровно единица, поэтому желаемый потолок — ровно тот, что в отрезке. Помощь
+   * отстающему отключена (`buildPoints 0`): на 60-й и 120-й секундах набор из одного оружия иначе её получил бы.
+   */
+  const REFERENCE_RULES = { ...TEST_PRESSURE, power: { ...TEST_PRESSURE.power, buildPoints: 0 } };
   function deviceWorld(deviceClass: "light" | "standard", elapsedSec: number, patch: Parameters<typeof makePressureWorld>[0] = {}): World {
-    return makePressureWorld({ deviceClass, elapsedSec, ...patch });
+    return makePressureWorld({ deviceClass, elapsedSec, pressure: REFERENCE_RULES, ...patch });
   }
 
   it("потолок живых ниже, а до compensateFromSec добавки нет", () => {
