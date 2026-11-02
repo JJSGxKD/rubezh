@@ -1,6 +1,7 @@
-import type { DifficultyId, RunLoadout } from "@bh/shared-types";
+import type { DifficultyId, RunHuntEntry, RunLoadout } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
+import { buildScore } from "../run/hunt-log";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
@@ -113,6 +114,14 @@ export interface BalanceRunResult {
   endPressure: number;
   /** доля собранного набора (`buildScoreOf`) на каждой полной минуте — вход расписания сборки */
   buildScoreByMinute: number[];
+  /** убийств с начала забега на каждой полной минуте — вход таблицы ожидаемого (T-0291) */
+  killsByMinute: number[];
+  /** сколько записей журнала охоты было на каждой полной минуте: срез `huntLog` до минуты */
+  huntLogCountByMinute: number[];
+  /** оценка сборки итога (`buildScore` из журнала охоты, не доля `buildScoreOf`) на каждой полной минуте */
+  buildPointsByMinute: number[];
+  /** журнал охоты за весь прогон: убитые элиты и боссы с ценностью и временем жизни */
+  huntLog: RunHuntEntry[];
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
@@ -156,6 +165,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
 
   const damageTakenByMinute: number[] = [];
   const buildScoreByMinute: number[] = [];
+  const killsByMinute: number[] = [];
+  const huntLogCountByMinute: number[] = [];
+  const buildPointsByMinute: number[] = [];
   let damageAtMinuteStart = 0;
   let firstLevelUpSec = 0;
   let buildCompleteSec = 0;
@@ -191,6 +203,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
       damageTakenByMinute.push(world.stats.damageTaken - damageAtMinuteStart);
       damageAtMinuteStart = world.stats.damageTaken;
       buildScoreByMinute.push(buildScoreOf(world));
+      killsByMinute.push(world.stats.enemiesKilled);
+      huntLogCountByMinute.push(world.hunt.log.length);
+      buildPointsByMinute.push(buildScore(world));
     }
   }
 
@@ -217,6 +232,10 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     startPressure: pressured ? world.difficulty.startPressure : 1,
     endPressure: pressured ? world.difficulty.pressureLevel : 1,
     buildScoreByMinute,
+    killsByMinute,
+    huntLogCountByMinute,
+    buildPointsByMinute,
+    huntLog: world.hunt.log.map((entry) => ({ ...entry })),
   };
 }
 
