@@ -3,7 +3,7 @@ id: T-0203
 title: Сводка «чего достигли» в панели — итоги за всё время и рекорды DAU/WAU/MAU
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-1
 size: M
