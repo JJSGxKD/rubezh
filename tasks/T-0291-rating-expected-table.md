@@ -3,8 +3,8 @@ id: T-0291
 title: Рейтинг эффективности — таблица ожидаемого E(S, t): новый выход balance:sim по полосам силы и минутам забега
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0196, T-0292]
