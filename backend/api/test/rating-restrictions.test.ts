@@ -48,7 +48,7 @@ const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.P
 function finish(patch: Partial<RunFinish> = {}): RunFinish {
   return {
     runId: randomUUID(),
-    difficultyId: "normal",
+    difficultyId: "hard",
     outcome: "died",
     survivalSec: 120,
     level: 6,
@@ -107,8 +107,8 @@ describe("ограничение рейтинга, о котором сообщ�
     const now = Date.now();
     await restrictions.impose(moderator, cheater.accountId, input({ endsAt: new Date(now + 3 * DAY).toISOString() }), new Date(now));
 
-    expect(await board.best("normal", cheater.accountId, "common")).toBeNull();
-    const seen = await view.leaderboardFor(honest.accountId, "normal");
+    expect(await board.best("hard", cheater.accountId, "common")).toBeNull();
+    const seen = await view.leaderboardFor(honest.accountId, "hard");
     expect(seen.entries.map((entry) => [entry.rank, entry.survivalSec, entry.isMe])).toEqual([[1, 200, true]]);
     expect(seen.totalPlayers).toBe(1);
 
@@ -116,13 +116,13 @@ describe("ограничение рейтинга, о котором сообщ�
     expect(await service.finish(cheater, during, now + DAY)).toMatchObject({ recorded: false, verdict: "ok", isNewBest: false, rank: null });
     expect(runs.rows.get(during.runId)).toMatchObject({ ranked: false, ratingRestricted: "notified" });
     expect((await view.detail(cheater.accountId, during.runId)).rating).toBe("restricted");
-    expect((await view.leaderboardFor(cheater.accountId, "normal")).me).toBeNull();
-    expect((await view.profile(cheater.accountId)).best.normal).toBeNull();
+    expect((await view.leaderboardFor(cheater.accountId, "hard")).me).toBeNull();
+    expect((await view.profile(cheater.accountId)).best.hard).toBeNull();
 
     // Срок вышел — задача возвращает лучший забег до ограничения, а не за срок.
     expect(await restrictions.settleDue(new Date(now + 3 * DAY + 60_000))).toBe(1);
-    expect(await board.best("normal", cheater.accountId, "common")).toBe(300);
-    expect(await board.rank("normal", cheater.accountId, "common")).toBe(1);
+    expect(await board.best("hard", cheater.accountId, "common")).toBe(300);
+    expect(await board.rank("hard", cheater.accountId, "common")).toBe(1);
     // Новые забеги — снова в рейтинг.
     expect(await service.finish(cheater, finish({ survivalSec: 400 }), now + 3 * DAY + 120_000)).toMatchObject({ recorded: true, isNewBest: true, rank: 1 });
   });
@@ -135,10 +135,10 @@ describe("ограничение рейтинга, о котором сообщ�
 
     // Клиент повторил итог из очереди уже после наложения.
     expect(await service.finish(target, first)).toMatchObject({ recorded: true, rank: null });
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
 
     await restrictions.lift(moderator, imposed?.restrictionId ?? "", "разобрались — честный");
-    expect(await board.best("normal", target.accountId, "common")).toBe(250);
+    expect(await board.best("hard", target.accountId, "common")).toBe(250);
   });
 
   it("блокировка целиком тоже убирает из досок; снятие одного вида при другом действующем в доску не возвращает", async () => {
@@ -148,9 +148,9 @@ describe("ограничение рейтинга, о котором сообщ�
     const [banned] = await restrictions.impose(moderator, target.accountId, input({ kinds: ["all"], reason: "abuse" }));
 
     await restrictions.lift(moderator, restricted?.restrictionId ?? "", "рейтинг — по ошибке");
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
     await restrictions.lift(moderator, banned?.restrictionId ?? "", "блокировка — по ошибке");
-    expect(await board.best("normal", target.accountId, "common")).toBe(250);
+    expect(await board.best("hard", target.accountId, "common")).toBe(250);
   });
 });
 
@@ -165,9 +165,9 @@ describe("тень: ограничение рейтинга молча", () => {
     const run = finish({ survivalSec: 400 });
     expect(await service.finish(shadow, run)).toEqual({ recorded: true, verdict: "ok", bestSurvivalSec: 400, isNewBest: true, rank: 2 });
     expect(runs.rows.get(run.runId)).toMatchObject({ ranked: false, ratingRestricted: "silent" });
-    expect(await board.best("normal", shadow.accountId, "common")).toBeNull();
+    expect(await board.best("hard", shadow.accountId, "common")).toBeNull();
 
-    const mine = await view.leaderboardFor(shadow.accountId, "normal");
+    const mine = await view.leaderboardFor(shadow.accountId, "hard");
     expect(mine.entries.map((entry) => [entry.rank, entry.survivalSec, entry.isMe])).toEqual([
       [1, 600, false],
       [2, 400, true],
@@ -176,17 +176,17 @@ describe("тень: ограничение рейтинга молча", () => {
     expect(mine.me).toEqual({ rank: 2, survivalSec: 400 });
     expect(mine.totalPlayers).toBe(3);
     // Карточка `/start` считает доску так же: место 2 из 3, а не из 2.
-    expect(await view.boardSize(shadow.accountId, "normal")).toBe(3);
-    expect(await view.boardSize(third.accountId, "normal")).toBe(2);
-    const theirs = await view.leaderboardFor(third.accountId, "normal");
+    expect(await view.boardSize(shadow.accountId, "hard")).toBe(3);
+    expect(await view.boardSize(third.accountId, "hard")).toBe(2);
+    const theirs = await view.leaderboardFor(third.accountId, "hard");
     expect(theirs.entries.map((entry) => [entry.rank, entry.survivalSec, entry.isMe])).toEqual([
       [1, 600, false],
       [2, 300, true],
     ]);
     expect(theirs.totalPlayers).toBe(2);
-    expect((await view.profile(shadow.accountId)).best.normal).toEqual({ survivalSec: 400, rank: 2 });
+    expect((await view.profile(shadow.accountId)).best.hard).toEqual({ survivalSec: 400, rank: 2 });
     // Команда в карточке игрока видит правду: в доске его нет.
-    expect((await view.profile(shadow.accountId, "team")).best.normal).toBeNull();
+    expect((await view.profile(shadow.accountId, "team")).best.hard).toBeNull();
     expect((await view.detail(shadow.accountId, run.runId)).rating).toBe("ranked");
 
     // Повтор итога рекордом не называется; худший забег рекорд не опускает.
@@ -194,7 +194,7 @@ describe("тень: ограничение рейтинга молча", () => {
     expect(await service.finish(shadow, finish({ survivalSec: 100 }))).toMatchObject({ isNewBest: false, bestSurvivalSec: 400 });
 
     await restrictions.lift(moderator, imposed?.restrictionId ?? "", "достаточно");
-    expect(await board.best("normal", shadow.accountId, "common")).toBe(200);
+    expect(await board.best("hard", shadow.accountId, "common")).toBe(200);
   });
 
   it("в тени без единого забега — себя в доске нет, как у любого без забегов", async () => {
@@ -202,7 +202,7 @@ describe("тень: ограничение рейтинга молча", () => {
     await service.finish(other, finish());
     await restrictions.impose(moderator, shadow.accountId, input({ notify: false }));
 
-    const seen = await view.leaderboardFor(shadow.accountId, "normal");
+    const seen = await view.leaderboardFor(shadow.accountId, "hard");
     expect(seen.me).toBeNull();
     expect(seen.entries.map((entry) => [entry.survivalSec, entry.isMe])).toEqual([[120, false]]);
     expect(seen.totalPlayers).toBe(1);
@@ -214,12 +214,12 @@ describe("последствия догоняют сбои", () => {
     const target = await player("Игрок");
     await restrictions.impose(moderator, target.accountId, input());
     // Итог, принятый в ту же секунду, что наложение, успел записать место.
-    await board.submit("normal", target.accountId, 300, ALL_BOARDS);
+    await board.submit("hard", target.accountId, 300, ALL_BOARDS);
 
     // Две проекции — два снятых места.
     expect(await rating.rating.tick()).toBe(2);
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
-    expect(await board.best("normal", target.accountId, "full")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "full")).toBeNull();
     expect(await rating.rating.tick()).toBe(0);
     rating.lock.held = true;
     expect(await rating.rating.tick()).toBeNull();
@@ -231,9 +231,9 @@ describe("последствия догоняют сбои", () => {
     await service.finish(other, finish({ survivalSec: 200 }));
     await restrictions.impose(moderator, target.accountId, input({ notify: false }));
 
-    expect((await service.rebuildLeaderboard()).normal).toEqual({ full: 1, common: 1 });
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
-    expect(await board.best("normal", other.accountId, "common")).toBe(200);
+    expect((await service.rebuildLeaderboard()).hard).toEqual({ full: 1, common: 1 });
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", other.accountId, "common")).toBe(200);
   });
 
   it("не вернулось в доску — ограничение не сведено, и задача по сроку повторит", async () => {
@@ -245,11 +245,11 @@ describe("последствия догоняют сбои", () => {
     board.failSubmit = true;
     await restrictions.settleDue(new Date(now + DAY + 1));
     expect(rating.restrictions.rows[0]?.settledAt).toBeNull();
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
 
     board.failSubmit = false;
     expect(await restrictions.settleDue(new Date(now + DAY + 60_000))).toBe(1);
-    expect(await board.best("normal", target.accountId, "common")).toBe(300);
+    expect(await board.best("hard", target.accountId, "common")).toBe(300);
     expect(rating.restrictions.rows[0]?.settledAt).not.toBeNull();
   });
 });
@@ -263,23 +263,23 @@ describe("модератор снимает забег с рейтинга (ча
     await service.finish(other, finish({ survivalSec: 400 }));
 
     expect(await service.setRanked(moderator, record.runId, false, "забег без урона за 8 минут")).toEqual({ accountId: cheater.accountId, ranked: false });
-    expect(await board.best("normal", cheater.accountId, "common")).toBe(300);
-    expect(await board.rank("normal", cheater.accountId, "common")).toBe(2);
+    expect(await board.best("hard", cheater.accountId, "common")).toBe(300);
+    expect(await board.rank("hard", cheater.accountId, "common")).toBe(2);
     // Игрок видит у забега «не учтён после проверки».
     expect((await view.detail(cheater.accountId, record.runId)).rating).toBe("review");
-    expect((await view.moderationRuns(cheater.accountId)).normal.map((run) => [run.survivalSec, run.ranked])).toEqual([
+    expect((await view.moderationRuns(cheater.accountId)).hard.map((run) => [run.survivalSec, run.ranked])).toEqual([
       [500, false],
       [300, true],
     ]);
     expect(rolesRepository.entries.at(-1)).toMatchObject({
       action: "players.run.unrank",
       target: cheater.accountId,
-      after: { runId: record.runId, difficulty: "normal", survivalSec: 500, comment: "забег без урона за 8 минут" },
+      after: { runId: record.runId, difficulty: "hard", survivalSec: 500, comment: "забег без урона за 8 минут" },
     });
     await expect(service.setRanked(moderator, record.runId, false, "ещё раз")).rejects.toMatchObject({ code: "run_ranking_conflict", status: 409 });
 
     await service.setRanked(moderator, record.runId, true, "ошиблись — запись забега чистая");
-    expect(await board.best("normal", cheater.accountId, "common")).toBe(500);
+    expect(await board.best("hard", cheater.accountId, "common")).toBe(500);
     expect(rolesRepository.entries.at(-1)).toMatchObject({ action: "players.run.rerank" });
     await expect(service.setRanked(moderator, record.runId, true, "ещё раз")).rejects.toMatchObject({ code: "run_ranking_conflict" });
   });
@@ -289,7 +289,7 @@ describe("модератор снимает забег с рейтинга (ча
     const only = finish({ survivalSec: 250 });
     await service.finish(target, only);
     await service.setRanked(moderator, only.runId, false, "накрутка");
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
 
     const best = finish({ survivalSec: 600 });
     const second = finish({ survivalSec: 200 });
@@ -297,9 +297,9 @@ describe("модератор снимает забег с рейтинга (ча
     await service.finish(target, second);
     const [imposed] = await restrictions.impose(moderator, target.accountId, input());
     await service.setRanked(moderator, best.runId, false, "тот же приём");
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
     await restrictions.lift(moderator, imposed?.restrictionId ?? "", "разобрались");
-    expect(await board.best("normal", target.accountId, "common")).toBe(200);
+    expect(await board.best("hard", target.accountId, "common")).toBe(200);
   });
 
   it("право — модератора; чужой и незнакомый забег — 404; забег с читами или нечестный не возвращается", async () => {
@@ -314,7 +314,7 @@ describe("модератор снимает забег с рейтинга (ча
     const cheats = finish({ survivalSec: 900, cheats: true });
     await service.finish(target, cheats);
     await expect(service.setRanked(moderator, cheats.runId, true, "вернуть")).rejects.toMatchObject({ code: "run_ranking_conflict" });
-    expect((await view.moderationRuns(target.accountId)).normal.map((item) => item.runId)).toEqual([run.runId]);
+    expect((await view.moderationRuns(target.accountId)).hard.map((item) => item.runId)).toEqual([run.runId]);
   });
 });
 
@@ -327,11 +327,12 @@ describe("отдельная доска: переносы между доска�
     await rolesRepository.grant(owner.accountId, "owner", null);
   });
 
-  /** По забегу на каждой сложности; рейтинговые — 100, 200, 300 с. */
+  /** По забегу на каждой сложности; рейтинговый один — единая сложность, 300 с (Р126). */
   async function playAll(account: AccountRef): Promise<void> {
     for (const [difficultyId, survivalSec] of [["easy", 100], ["normal", 200], ["hard", 300]] as const) await service.finish(account, finish({ difficultyId, survivalSec }));
   }
 
+  /** Лучшее время в доске по каждой сложности: нерейтинговые всегда пусты, значит, значим один элемент. */
   async function bests(accountId: string, side: "full" | "common"): Promise<(number | null)[]> {
     return [await board.best("easy", accountId, side), await board.best("normal", accountId, side), await board.best("hard", accountId, side)];
   }
@@ -349,23 +350,23 @@ describe("отдельная доска: переносы между доска�
     expect(await rating.rating.separate()).toEqual([]);
   });
 
-  it("наложение убирает из общей доски все три сложности и оставляет в полной; снятие возвращает лучший рейтинговый в общую", async () => {
+  it("наложение убирает из общей доски единую сложность и оставляет в полной; снятие возвращает лучший рейтинговый в общую; нерейтинговые доски пусты", async () => {
     const [target, other] = [await player("Игрок"), await player("Другой")];
     await playAll(target);
     await playAll(other);
     // Забег с читами рейтинговым не стал — для возврата он не годится, даже если лучше.
-    await service.finish(target, finish({ difficultyId: "normal", survivalSec: 900, cheats: true }));
+    await service.finish(target, finish({ difficultyId: "hard", survivalSec: 900, cheats: true }));
 
     const [imposed] = await restrictions.impose(owner, target.accountId, hidden());
 
     expect(await bests(target.accountId, "common")).toEqual([null, null, null]);
-    expect(await bests(target.accountId, "full")).toEqual([100, 200, 300]);
-    expect(await bests(other.accountId, "common")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "full")).toEqual([null, null, 300]);
+    expect(await bests(other.accountId, "common")).toEqual([null, null, 300]);
 
     await restrictions.lift(owner, imposed?.restrictionId ?? "", "разобрались");
 
-    expect(await bests(target.accountId, "common")).toEqual([100, 200, 300]);
-    expect(await bests(target.accountId, "full")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "common")).toEqual([null, null, 300]);
+    expect(await bests(target.accountId, "full")).toEqual([null, null, 300]);
   });
 
   it("срок вышел — то же, что снятие", async () => {
@@ -377,7 +378,7 @@ describe("отдельная доска: переносы между доска�
 
     expect(await restrictions.settleDue(new Date(now + DAY + 60_000))).toBe(1);
 
-    expect(await bests(target.accountId, "common")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "common")).toEqual([null, null, 300]);
     expect(await rating.rating.boardsFor(target.accountId, new Date(now + DAY + 60_000))).toEqual(ALL_BOARDS);
   });
 
@@ -393,8 +394,8 @@ describe("отдельная доска: переносы между доска�
     expect(await bests(target.accountId, "full")).toEqual([null, null, null]);
 
     await restrictions.lift(moderator, closed?.restrictionId ?? "", "честный");
-    expect(await bests(target.accountId, "common")).toEqual([100, 200, 300]);
-    expect(await bests(target.accountId, "full")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "common")).toEqual([null, null, 300]);
+    expect(await bests(target.accountId, "full")).toEqual([null, null, 300]);
   });
 
   it("закрытый рейтинг снят, а отдельная доска держится — лучший возвращается только в полную", async () => {
@@ -404,11 +405,11 @@ describe("отдельная доска: переносы между доска�
     const [closed] = await restrictions.impose(moderator, target.accountId, input());
 
     await restrictions.lift(moderator, closed?.restrictionId ?? "", "честный");
-    expect(await bests(target.accountId, "full")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "full")).toEqual([null, null, 300]);
     expect(await bests(target.accountId, "common")).toEqual([null, null, null]);
 
     await restrictions.lift(owner, separate?.restrictionId ?? "", "разобрались");
-    expect(await bests(target.accountId, "common")).toEqual([100, 200, 300]);
+    expect(await bests(target.accountId, "common")).toEqual([null, null, 300]);
   });
 
   it("блокировка целиком — не отдельная доска: аккаунт не лежит ни в одной", async () => {
@@ -426,15 +427,15 @@ describe("отдельная доска: переносы между доска�
     await restrictions.impose(owner, separate.accountId, hidden());
     await restrictions.impose(moderator, closed.accountId, input());
     // Итоги, принятые в ту же секунду, что наложение, успели записать места в доски, которые читали до него.
-    await board.submit("normal", separate.accountId, 300, ALL_BOARDS);
-    await board.submit("normal", closed.accountId, 400, ALL_BOARDS);
+    await board.submit("hard", separate.accountId, 300, ALL_BOARDS);
+    await board.submit("hard", closed.accountId, 400, ALL_BOARDS);
 
     // Отдельная доска теряет одно место (общая), закрытый рейтинг — два.
     expect(await rating.rating.sweep()).toBe(3);
-    expect(await board.best("normal", separate.accountId, "common")).toBeNull();
-    expect(await board.best("normal", separate.accountId, "full")).toBe(300);
-    expect(await board.best("normal", closed.accountId, "common")).toBeNull();
-    expect(await board.best("normal", closed.accountId, "full")).toBeNull();
+    expect(await board.best("hard", separate.accountId, "common")).toBeNull();
+    expect(await board.best("hard", separate.accountId, "full")).toBe(300);
+    expect(await board.best("hard", closed.accountId, "common")).toBeNull();
+    expect(await board.best("hard", closed.accountId, "full")).toBeNull();
     expect(await rating.rating.sweep()).toBe(0);
   });
 
@@ -443,14 +444,14 @@ describe("отдельная доска: переносы между доска�
     await service.finish(separate, finish({ survivalSec: 250 }));
     await service.finish(plain, finish({ survivalSec: 150 }));
     await restrictions.impose(owner, separate.accountId, hidden());
-    for (const side of ALL_BOARDS) await board.replace("normal", side, []);
+    for (const side of ALL_BOARDS) await board.replace("hard", side, []);
 
-    expect((await service.rebuildLeaderboard()).normal).toEqual({ full: 2, common: 1 });
-    expect(await board.best("normal", separate.accountId, "full")).toBe(250);
-    expect(await board.best("normal", separate.accountId, "common")).toBeNull();
-    expect(await board.best("normal", plain.accountId, "common")).toBe(150);
-    expect(await board.rank("normal", plain.accountId, "full")).toBe(2);
-    expect(await board.rank("normal", plain.accountId, "common")).toBe(1);
+    expect((await service.rebuildLeaderboard()).hard).toEqual({ full: 2, common: 1 });
+    expect(await board.best("hard", separate.accountId, "full")).toBe(250);
+    expect(await board.best("hard", separate.accountId, "common")).toBeNull();
+    expect(await board.best("hard", plain.accountId, "common")).toBe(150);
+    expect(await board.rank("hard", plain.accountId, "full")).toBe(2);
+    expect(await board.rank("hard", plain.accountId, "common")).toBe(1);
   });
 });
 
@@ -559,11 +560,11 @@ describe("доска зрителя: `boardOf` (T-0112)", () => {
     await restrictions.impose(boss, target.accountId, input({ kinds: ["separate_board"], notify: false }));
 
     // Рейтинг не закрыт: из полной доски игрок не пропадает, из общей уходит (T-0113).
-    expect(await board.best("normal", target.accountId, "full")).toBe(300);
-    expect(await board.best("normal", target.accountId, "common")).toBeNull();
+    expect(await board.best("hard", target.accountId, "full")).toBe(300);
+    expect(await board.best("hard", target.accountId, "common")).toBeNull();
     const run = finish({ survivalSec: 400 });
     expect(await service.finish(target, run)).toMatchObject({ recorded: true, verdict: "ok", isNewBest: true, rank: 1 });
-    expect(await board.best("normal", target.accountId, "full")).toBe(400);
+    expect(await board.best("hard", target.accountId, "full")).toBe(400);
     expect(runs.rows.get(run.runId)).toMatchObject({ ranked: true });
     expect(runs.rows.get(run.runId)?.ratingRestricted ?? null).toBeNull();
     expect((await view.detail(target.accountId, run.runId)).rating).toBe("ranked");
