@@ -3,7 +3,7 @@ id: T-0194
 title: «Предел» — бесконечные малые прибавки, когда прокачивать нечего
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-45 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
