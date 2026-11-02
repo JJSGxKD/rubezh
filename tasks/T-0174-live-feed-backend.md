@@ -3,7 +3,7 @@ id: T-0174
 title: Лента живых событий — сервер: запись настоящих событий за сутки, кэш, маршрут
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
