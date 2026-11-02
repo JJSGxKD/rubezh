@@ -3,7 +3,7 @@ id: T-0212
 title: Сцена эффекта по адресу — `?fx=<сцена>` на dev-сервере, шаг по тикам для снимков
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
