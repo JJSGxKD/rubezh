@@ -126,6 +126,7 @@ erDiagram
     TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
+    ACCOUNT ||--o{ CODEX_ENTRY : "открытые записи кодекса врагов"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -1147,6 +1148,12 @@ erDiagram
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
     }
 
+    CODEX_ENTRY {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
+        string enemy_id PK "id врага из content/enemies.ts; внешнего ключа нет, список врагов — CODEX_ENEMY_IDS на сервере"
+        datetime first_seen_at "время записи забега, в котором враг встретился первым; не переписывается"
+    }
+
     PASS_PROGRESS {
         uuid account_id PK,FK "каскадом"
         string month_key PK "ГГГГ-ММ по Москве (CHECK)"
@@ -1278,6 +1285,16 @@ erDiagram
   Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
   хранится: он одинаков у всех игроков и реплик, забег двигает только
   выбранные, невыбранные нельзя забрать, знак меню их не считает.
+- **`CODEX_ENTRY` — кодекс врагов** (`39-retention-mechanics.md` К2,
+  `35-stage4-plan.md` Р102, T-0127): по строке на пару «аккаунт — враг»,
+  открытая запись не закрывается и не переписывается (`ON CONFLICT DO NOTHING`).
+  Запись открывает слушатель записи забега (`RunsHooks`) — один раз на забег и
+  только для забегов, засчитываемых заданиям; врагов он берёт из итога забега
+  (`enemiesSeen` и ключи `topKills`) и фильтрует по таблице сервера. Награда — три
+  достижения лестницы `codex` в `TASK_DEF` (30 / 60 / 100%): вид `codex_percent`,
+  как у `friends` и `account_level`, — состояние с действием «максимум», процент
+  дописывает модуль кодекса при записи и при ответе `GET /api/v1/codex`. Вайп
+  стирает записи вместе с прогрессом заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -2128,6 +2145,7 @@ flowchart LR
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        CODEX["codex<br/>кодекс врагов: записи по итогу забега,<br/>процент в достижения лестницы codex,<br/>ответ для гайдбука, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2344,6 +2362,10 @@ flowchart LR
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
+    CADDY -- "/api/v1/codex" --> CODEX
+    CODEX -- "codex_entry" --> PG
+    RUNS -. "записанный забег, RunsHooks: кого встретил игрок" .-> CODEX
+    CODEX -. "процент кодекса «максимум», награда в заданиях, T-0127" .-> TASKS
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
