@@ -1503,6 +1503,15 @@ export interface RunPressureResult extends RunPressureStart {
   levelEnd: number;
 }
 
+/** Убитая элита или босс: сколько жила и сколько стоила (tasks/T-0292, Р152). */
+export interface RunHuntEntry {
+  rank: "elite" | "boss";
+  /** опыт врага из контента */
+  value: number;
+  /** секунд от появления до смерти */
+  aliveSec: number;
+}
+
 export interface RunResult {
   runId: string;
   /** seed забега: с ним и логом ввода забег воспроизводится целиком */
@@ -1593,6 +1602,13 @@ export interface RunResult {
   boosts?: string[];
   /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
   pressure?: RunPressureResult;
+  /**
+   * Журнал охоты: запись на каждую убитую элиту и босса, до 64 (tasks/T-0292).
+   * Необязательный: итог прошлой сборки поля не знает.
+   */
+  huntLog?: RunHuntEntry[];
+  /** Оценка сборки: эволюции × 2 + оружие и навыки на максимуме (tasks/T-0292). */
+  buildScore?: number;
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
@@ -1674,6 +1690,9 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
+  huntLog?: RunHuntEntry[];
+  buildScore?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";

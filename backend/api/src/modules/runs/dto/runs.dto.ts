@@ -92,6 +92,18 @@ export const runFinishSchema = z
         noHitSec: z.number().int().min(0).max(86_400).optional(),
         noKillSec: z.number().int().min(0).max(86_400).optional(),
         killsByElement: z.partialRecord(z.enum(ELEMENT_KEYS), z.number().int().min(0).max(1_000_000)).optional(),
+        // Журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): потолки формы, старые сборки полей не шлют.
+        huntLog: z
+          .array(
+            z.object({
+              rank: z.enum(["elite", "boss"]),
+              value: z.number().min(0).max(10_000),
+              aliveSec: z.number().min(0).max(7_200),
+            }),
+          )
+          .max(64)
+          .optional(),
+        buildScore: z.number().min(0).max(64).optional(),
       })
       .optional(),
   })
