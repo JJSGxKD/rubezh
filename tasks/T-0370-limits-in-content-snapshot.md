@@ -3,7 +3,7 @@ id: T-0370
 title: «Предел» в снимке контента и отпечатке; после изгнания последнего предмета — «Предел», а не лечение
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
