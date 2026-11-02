@@ -3,7 +3,7 @@ id: T-0198
 title: Уборка кода вражеских снарядов — снаряд врага уходит из пула, отрисовки и сигналов
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
@@ -38,6 +38,9 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/31-audio-and-haptics.md
+  - packages/core-game/test/enemy-patterns.test.ts
+  - packages/core-game/test/freeze-pickup.test.ts
+  - packages/core-game/test/secrets-look.test.ts
   - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
