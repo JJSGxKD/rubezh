@@ -62,6 +62,7 @@ import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
+import { FeedModule } from "./modules/feed/feed.module.js";
 import { OnlineModule } from "./modules/online/online.module.js";
 import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
 import { RequestJournalModule } from "./modules/request-journal/request-journal.module.js";
@@ -163,6 +164,7 @@ export const APP_MODULES = [
   WipeModule,
   SeasonsModule,
   OnlineModule,
+  FeedModule,
   CspReportsModule,
   RequestJournalModule,
   DonationsModule,

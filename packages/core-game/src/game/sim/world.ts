@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -395,6 +395,22 @@ export interface DifficultyState {
   hpMul: number;
   damageMul: number;
   maxAlive: number;
+  /** сила игрока в очках на последнем пересчёте (подстройка, Р131); без подстройки — 0 */
+  power: number;
+  /** уровень давления на последнем пересчёте; 1 — опорный игрок, без подстройки — 1 */
+  pressureLevel: number;
+  /** сила на старте забега — для аналитики; без подстройки — 0 */
+  startPower: number;
+  /** уровень давления на старте забега; без подстройки — 1 */
+  startPressure: number;
+  /** множитель темпа спавна поверх уровня сложности; без подстройки — 1 */
+  spawnMul: number;
+  /** на сколько секунд раньше открываются ступени врагов (минус — позже); без подстройки — 0 */
+  stageShiftSec: number;
+  /** на сколько отрезков раньше приходят события элит кривой (минус — позже); без подстройки — 0 */
+  eliteLead: number;
+  /** то же для боссов; боссы только вперёд, без подстройки — 0 */
+  bossLead: number;
 }
 
 export interface World {
@@ -414,6 +430,8 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** подстройка давления под силу игрока; `null` — подстройки нет, и забег идёт по кривой единой сложности */
+  pressureRules: PressureDef | null;
   /** правила тайников рубежа */
   secretRules: SecretsDef;
   secrets: SecretState;

@@ -28,6 +28,8 @@ const visualsSchema = z.object({
   techInfo: z.boolean(),
   /** необязательное: настройки прошлой сборки поля не знают и не должны сбрасываться целиком */
   sprites: z.optional(z.boolean()),
+  /** необязательное по той же причине: светлая земля стенда эффектов */
+  lightGround: z.optional(z.boolean()),
 });
 
 const cheatsSchema = z.object({
@@ -80,6 +82,7 @@ export const DEFAULT_DEV_SETTINGS: DevSettings = {
     effects: true,
     techInfo: true,
     sprites: false,
+    lightGround: false,
   },
   cheats: { godMode: false, oneHitKill: false, damageMul: 1, moveSpeedMul: 1, freezeEnemies: false, spawnPaused: false },
   timeScale: 1,
@@ -128,7 +131,7 @@ export function toRunDev(settings: DevSettings): RunDevOptions {
   if (settings.start.allWeapons) for (const weapon of BASE_WEAPONS) start.push({ kind: "giveWeapon", id: weapon.id, level: 99 });
   if (settings.start.allPassives) for (const passive of PASSIVES) start.push({ kind: "givePassive", id: passive.id, level: 99 });
   if (settings.start.minute > 0) start.push({ kind: "jumpToMinute", minute: settings.start.minute });
-  return { visuals: { ...settings.visuals, sprites: settings.visuals.sprites === true }, cheats: { ...settings.cheats }, timeScale: settings.timeScale, start };
+  return { visuals: { ...settings.visuals, sprites: settings.visuals.sprites === true, lightGround: settings.visuals.lightGround === true }, cheats: { ...settings.cheats }, timeScale: settings.timeScale, start };
 }
 
 /** Включено ли что-то, что делает забег забегом с читами — для плашки на экранах. */

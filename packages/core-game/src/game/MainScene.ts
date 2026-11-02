@@ -22,6 +22,7 @@ import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
 import { isEmptyLoadout } from "./progression/run-loadout";
@@ -265,10 +266,12 @@ export class MainScene extends Phaser.Scene {
     // До первого HUD: оболочка ставит начало в очередь раньше, чем игрок
     // успеет умереть, — порядок старта и итога в очереди важен серверу.
     if (resume === undefined) {
+      const pressure = describePressureStart(this.world);
       this.sceneData.bus.emit("started", {
         runId: this.runId,
         difficultyId: this.world.difficultyLevel.id,
         startingWeaponId: this.startingWeaponId(),
+        ...(pressure === undefined ? {} : { pressure }),
       });
     }
     this.emitHud();

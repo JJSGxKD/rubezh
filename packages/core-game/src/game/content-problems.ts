@@ -10,6 +10,7 @@ import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
 import { findSecretsProblems } from "./sim/secrets";
 import { findContinueProblems } from "./sim/continue";
+import { findPressureProblems } from "./sim/pressure";
 import { findDifficultyContentProblems } from "./sim/difficulty";
 import { findDropsContentProblems } from "./sim/gems";
 import { findMapContentProblems } from "./sim/map-types";
@@ -78,6 +79,7 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("boosts", findBoostProblems(content.boosts));
   add("maxBoostsPerRun", findBoostLimitProblems(content));
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
+  add("pressure", findPressureProblems(content.pressure));
   return problems;
 }
 

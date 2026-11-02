@@ -10,7 +10,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("readDevUrl", () => {
   it("открывает экран из адреса на localhost в dev", () => {
-    expect(readDevUrl("http://localhost:5173/?screen=shop", true)).toEqual({ screen: "shop", devUser: null });
+    expect(readDevUrl("http://localhost:5173/?screen=shop", true)).toEqual({ screen: "shop", devUser: null, fx: null, ground: "map" });
   });
 
   it("принимает 127.0.0.1", () => {
@@ -18,15 +18,15 @@ describe("readDevUrl", () => {
   });
 
   it("в сборке параметры не действуют", () => {
-    expect(readDevUrl("http://localhost:5173/?screen=shop&dev-user=a:B", false)).toEqual({ screen: null, devUser: null });
+    expect(readDevUrl("http://localhost:5173/?screen=shop&dev-user=a:B", false)).toEqual({ screen: null, devUser: null, fx: null, ground: "map" });
   });
 
   it("через туннель параметры не действуют", () => {
-    expect(readDevUrl("https://dev-tg.example/?screen=shop&dev-user=a:B", true)).toEqual({ screen: null, devUser: null });
+    expect(readDevUrl("https://dev-tg.example/?screen=shop&dev-user=a:B", true)).toEqual({ screen: null, devUser: null, fx: null, ground: "map" });
   });
 
   it("хост, лишь начинающийся с localhost, не считается локальным", () => {
-    expect(readDevUrl("https://localhost.evil.example/?screen=shop", true)).toEqual({ screen: null, devUser: null });
+    expect(readDevUrl("https://localhost.evil.example/?screen=shop", true)).toEqual({ screen: null, devUser: null, fx: null, ground: "map" });
   });
 
   it("забег и стресс-тест адресом не открываются", () => {
@@ -61,6 +61,26 @@ describe("readDevUrl", () => {
   });
 
   it("битый адрес не бросает", () => {
-    expect(readDevUrl("не адрес", true)).toEqual({ screen: null, devUser: null });
+    expect(readDevUrl("не адрес", true)).toEqual({ screen: null, devUser: null, fx: null, ground: "map" });
+  });
+
+  it("сцена эффекта: по умолчанию на земле карты", () => {
+    expect(readDevUrl("http://localhost:5173/?fx=storm", true)).toMatchObject({ fx: "storm", ground: "map" });
+  });
+
+  it("ground=light даёт светлую землю, прочее — карту", () => {
+    expect(readDevUrl("http://localhost:5173/?fx=storm&ground=light", true).ground).toBe("light");
+    expect(readDevUrl("http://localhost:5173/?fx=storm&ground=zzz", true).ground).toBe("map");
+  });
+
+  it("неизвестная сцена — null с предупреждением", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    expect(readDevUrl("http://localhost:5173/?fx=nope", true).fx).toBeNull();
+    expect(warn).toHaveBeenCalledWith("неизвестная сцена эффекта: nope");
+  });
+
+  it("в сборке и через туннель сцена не действует", () => {
+    expect(readDevUrl("http://localhost:5173/?fx=storm", false).fx).toBeNull();
+    expect(readDevUrl("https://dev-tg.example/?fx=storm", true).fx).toBeNull();
   });
 });
