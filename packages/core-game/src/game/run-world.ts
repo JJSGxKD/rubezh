@@ -59,6 +59,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    pressure: content.pressure,
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,
     continueRules: content.continueRules,

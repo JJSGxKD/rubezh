@@ -1,4 +1,4 @@
-import type { CordonRingDef, EndlessCurveDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
+import type { CordonRingDef, EndlessCurveDef, EndlessEventDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
 import type { World } from "./world";
 
 /**
@@ -163,11 +163,31 @@ function planGeneratedSegment(
     threatPerSec: mix.length === 0 ? 0 : budget,
     spawns,
     bursts: [],
-    events: resolveEvents(
-      world,
-      curve.events.filter((event) => (step + 1) % Math.max(1, event.everySegments) === 0),
-    ),
+    events: resolveEvents(world, eventsDue(world, curve.events, step)),
   };
+}
+
+/**
+ * События кривой, которые срабатывают на этом шаге. Без подстройки — прежнее
+ * правило `(step + 1) % everySegments === 0`. Подстройка сдвигает только
+ * события элит и боссов (`world.difficulty.eliteLead`, `bossLead`): событие
+ * приходит на столько отрезков раньше, и считается оно от `n = step + 1 + lead`.
+ * Нулевой и отрицательный `n` — события ещё нет. События обычных врагов и
+ * расписанные руками отрезки не двигаются: первая минута и первая элита на 90-й
+ * секунде одинаковы у всех.
+ */
+function eventsDue(world: World, events: readonly EndlessEventDef[], step: number): EndlessEventDef[] {
+  return events.filter((event) => {
+    const n = step + 1 + leadOf(world, event.enemy);
+    return n > 0 && n % Math.max(1, event.everySegments) === 0;
+  });
+}
+
+function leadOf(world: World, enemyId: string): number {
+  const rank = world.enemyTypes.find((type) => type.id === enemyId)?.rank;
+  if (rank === "elite") return world.difficulty.eliteLead;
+  if (rank === "boss") return world.difficulty.bossLead;
+  return 0;
 }
 
 /**

@@ -15,6 +15,7 @@ import type {
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  PressureDef,
   SecretsDef,
   TimelineSegmentDef,
   WeaponDef,
@@ -27,6 +28,7 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { PRESSURE } from "./pressure";
 import { SECRETS } from "./secrets";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
@@ -88,6 +90,8 @@ export interface ContentSnapshot {
   cardToolUnlocks: readonly CardToolUnlockDef[];
   cardToolRules: CardToolRules;
   limits: readonly LimitDef[];
+  /** подстройка давления под силу игрока и устройство (Р131, Р183) */
+  pressure: PressureDef;
   /** коридоры для отчёта симуляции; в хэш не входят */
   balanceTargets: BalanceTargetsDef;
 }
@@ -119,6 +123,7 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   cardToolUnlocks: CARD_TOOL_UNLOCKS,
   cardToolRules: CARD_TOOL_RULES,
   limits: LIMITS,
+  pressure: PRESSURE,
   balanceTargets: { ...BALANCE_TARGETS, evolutionPowerRatio: EVOLUTION_POWER_RATIO },
 };
 
@@ -163,6 +168,7 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.cardToolUnlocks,
     snapshot.cardToolRules,
     snapshot.limits,
+    snapshot.pressure,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

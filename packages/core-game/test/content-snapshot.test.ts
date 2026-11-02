@@ -18,6 +18,7 @@ import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/con
 import { contentSnapshotSchema } from "../src/content/snapshot-schema";
 import { BALANCE_TARGETS, EVOLUTION_POWER_RATIO } from "../src/content/balance-targets";
 import { ENEMIES } from "../src/content/enemies";
+import { PRESSURE } from "../src/content/pressure";
 import { SECRETS } from "../src/content/secrets";
 import { LIMITS } from "../src/content/upgrades";
 import { TIMELINE } from "../src/content/waves";
@@ -81,6 +82,7 @@ describe("снимок контента: состав и хэш", () => {
       "cardToolUnlocks",
       "cardToolRules",
       "limits",
+      "pressure",
       "balanceTargets",
     ]);
   });
@@ -153,6 +155,14 @@ describe("снимок контента: состав и хэш", () => {
     expect(world.limitTypes).toEqual(only);
   });
 
+  it("подстройка давления входит в снимок и в хэш: правка числа — новая версия баланса", () => {
+    expect(CONTENT_SNAPSHOT.pressure).toBe(PRESSURE);
+    const stronger = { ...CONTENT_SNAPSHOT, pressure: { ...PRESSURE, maxLevel: PRESSURE.maxLevel + 0.1 } };
+    expect(hashSnapshot(stronger)).not.toBe(CONTENT_HASH);
+    const lighter = { ...CONTENT_SNAPSHOT, pressure: { ...PRESSURE, devices: { ...PRESSURE.devices, caps: { ...PRESSURE.devices.caps, light: PRESSURE.devices.caps.light - 1 } } } };
+    expect(hashSnapshot(lighter)).not.toBe(CONTENT_HASH);
+  });
+
   it("меняет хэш от порядка врагов: от него зависят индексы типов и обращения к генератору", () => {
     expect(hashSnapshot({ ...CONTENT_SNAPSHOT, enemies: [...ENEMIES].reverse() })).not.toBe(CONTENT_HASH);
   });
@@ -197,6 +207,24 @@ describe("схема снимка", () => {
     // Вид тайника в весах кольца — только из мест: огонёк в кольцо не бросается.
     const wispRing = raw({ ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] });
     expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
+  });
+
+  it("подстройка в схеме: принимает умолчание, ловит лишнее поле и пропажу раздела", () => {
+    const raw = (pressure: Record<string, unknown>): unknown => JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, pressure }));
+    expect(contentSnapshotSchema.safeParse(raw({ ...PRESSURE })).success).toBe(true);
+    expect(contentSnapshotSchema.safeParse(raw({ ...PRESSURE, lootbox: true })).success).toBe(false);
+
+    const broken = contentSnapshotSchema.safeParse(raw({ ...PRESSURE, reference: "много" }));
+    expect(broken.success).toBe(false);
+    expect(broken.error?.issues.map((issue) => issue.path.join("."))).toContain("pressure.reference");
+
+    // Вверх ступени не сдвигаются: поля сдвига в наборе `up` нет и в схеме.
+    const shifted = raw({ ...PRESSURE, levers: { ...PRESSURE.levers, up: { ...PRESSURE.levers.up, stageShiftSec: 60 } } });
+    expect(contentSnapshotSchema.safeParse(shifted).success).toBe(false);
+
+    const { pressure: _pressure, ...withoutPressure } = CONTENT_SNAPSHOT;
+    void _pressure;
+    expect(contentSnapshotSchema.safeParse(withoutPressure).success).toBe(false);
   });
 
   it("ловит пропавшее обязательное поле и чужую версию схемы", () => {
@@ -291,6 +319,12 @@ describe("проверки контента одной функцией", () => 
 
     const noBlessings = findContentProblems({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, blessings: [] } });
     expect(noBlessings.some((problem) => problem.path === "secrets")).toBe(true);
+  });
+
+  it("ловит битую подстройку: раздел pressure", () => {
+    const problems = findContentProblems({ ...CONTENT_SNAPSHOT, pressure: { ...PRESSURE, minLevel: 2 } });
+    expect(problems.some((problem) => problem.path === "pressure")).toBe(true);
+    expect(problems.filter((problem) => problem.path === "pressure").every((problem) => problem.message.length > 0)).toBe(true);
   });
 
   it("ловит потолки подборов, которые не влезают в пул", () => {
