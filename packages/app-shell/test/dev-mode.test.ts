@@ -101,11 +101,11 @@ function result(patch: Partial<RunResult> = {}): RunResult {
   };
 }
 
-function start(devTools: boolean): void {
+function start(devTools: boolean, storage: KeyValueStorage = memoryStorage()): void {
   initShell({
     adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
     capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, devTools },
-    storage: memoryStorage(),
+    storage,
     analytics: () => undefined,
     build: { version: "test", contentHash: "", platform: "web" },
   });
@@ -132,6 +132,15 @@ describe("настройки режима разработчика", () => {
     expect(useDevMode.getState().settings).toEqual(DEFAULT_DEV_SETTINGS);
     expect(hasCheats(DEFAULT_DEV_SETTINGS)).toBe(false);
     expect(hasCheats(DEV_PRESETS.arsenal)).toBe(true);
+  });
+
+  it("настройки без lightGround читаются с false", () => {
+    const { lightGround: _omitted, ...visuals } = DEFAULT_DEV_SETTINGS.visuals;
+    const storage = memoryStorage();
+    storage.set("bh.dev.v1", JSON.stringify({ ...DEFAULT_DEV_SETTINGS, visuals }));
+    start(true, storage);
+    expect(useDevMode.getState().settings.visuals.lightGround).toBe(false);
+    expect(toRunDev(useDevMode.getState().settings).visuals.lightGround).toBe(false);
   });
 
   it("превращает старт в команды движку", () => {
