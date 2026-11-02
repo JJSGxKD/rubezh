@@ -28,6 +28,9 @@ zones:
   - backend/api/test/export.test.ts
   - scripts/test/run-report-schema.test.ts
   - scripts/test/event-dictionary.test.ts
+  - apps/sim-worker/test/check.test.ts
+  - apps/sim-worker/test/queue.integration.test.ts
+  - packages/app-shell/test/run-restart-difficulty.test.ts
 shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
