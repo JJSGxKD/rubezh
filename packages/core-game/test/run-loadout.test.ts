@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PASSIVES } from "../src/content/upgrades";
 import { replayRecording } from "../src/game/diagnostics/replay";
 import { refreshPlayerStats } from "../src/game/progression/levels";
-import { LOADOUT_BOUNDS, sanitizeLoadout } from "../src/game/progression/run-loadout";
+import { isEmptyLoadout, LOADOUT_BOUNDS, sanitizeLoadout } from "../src/game/progression/run-loadout";
 import { damageEnemy } from "../src/game/sim/combat";
 import { ELEMENT_FIRE, ELEMENT_PHYSICAL } from "../src/game/sim/elements";
 import { createWorld, DEFAULT_SIM_CONFIG, spawnEnemy, type World } from "../src/game/sim/world";
@@ -43,6 +43,31 @@ describe("разбор набора", () => {
     expect(sanitizeLoadout(null)).toEqual({ modifiers: {}, boosts: [] });
     expect(sanitizeLoadout("damage")).toEqual({ modifiers: {}, boosts: [] });
     expect(sanitizeLoadout({ modifiers: 3, boosts: "x" })).toEqual({ modifiers: {}, boosts: [] });
+  });
+});
+
+describe("класс устройства в наборе", () => {
+  it("слабое устройство сохраняется, в том числе вместе с уровнем аккаунта", () => {
+    expect(sanitizeLoadout({ modifiers: {}, boosts: [], deviceClass: "light" })).toEqual({ modifiers: {}, boosts: [], deviceClass: "light" });
+    expect(sanitizeLoadout({ modifiers: {}, boosts: [], accountLevel: 8, deviceClass: "light" })).toEqual({
+      modifiers: {},
+      boosts: [],
+      accountLevel: 8,
+      deviceClass: "light",
+    });
+  });
+
+  it("обычное устройство, мусор и не строка отбрасываются: отсутствие поля и есть «обычное»", () => {
+    for (const deviceClass of ["standard", "weird", "", 7, null, {}, ["light"]]) {
+      const loadout = sanitizeLoadout({ modifiers: {}, boosts: [], accountLevel: 3, deviceClass });
+      expect("deviceClass" in loadout, String(deviceClass)).toBe(false);
+      expect(loadout.accountLevel).toBe(3);
+    }
+  });
+
+  it("набор с одним лишь классом устройства не пуст: в запись и снимок он пишется", () => {
+    expect(isEmptyLoadout({ modifiers: {}, boosts: [], deviceClass: "light" })).toBe(false);
+    expect(isEmptyLoadout({ modifiers: {}, boosts: [] })).toBe(true);
   });
 });
 

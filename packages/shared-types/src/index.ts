@@ -904,6 +904,11 @@ export const LOADOUT_STATS = [
 
 export type LoadoutStat = (typeof LOADOUT_STATS)[number];
 
+/** Класс устройства игрока: от него зависит потолок живых врагов (подстройка давления, Р67). */
+export const DEVICE_CLASSES = ["standard", "light"] as const;
+
+export type DeviceClass = (typeof DEVICE_CLASSES)[number];
+
 /**
  * Набор на забег: модификаторы параметров и активные бусты. Пишется в запись
  * и снимок забега — иначе повтор и продолженный забег разошлись бы с
@@ -920,6 +925,13 @@ export interface RunLoadout {
    * баланса. Оболочка на новом забеге ставит его всегда.
    */
   accountLevel?: number;
+  /**
+   * Класс устройства (docs/35-stage4-plan.md, Р67): на слабом телефоне потолок
+   * живых врагов ниже. Класс влияет на бой, значит обязан попасть в запись и
+   * снимок забега, а набор туда уже попадает — отдельное поле не нужно. Нет
+   * поля — обычное устройство: `"standard"` в набор не пишется.
+   */
+  deviceClass?: DeviceClass;
 }
 
 /**
@@ -1275,6 +1287,66 @@ export interface DifficultyDef {
   maxAliveMul: number;
 }
 
+/** Наклоны рычагов подстройки: на сколько множитель меняется на единицу уровня давления. */
+export interface PressureLeversDef {
+  /** здоровье врагов */
+  hp: number;
+  /** урон врагов */
+  damage: number;
+  /** темп спавна */
+  spawn: number;
+  /** потолок живых */
+  alive: number;
+  /** на сколько отрезков раньше приходят события элит и боссов кривой на единицу уровня */
+  leadPerLevel: number;
+}
+
+/**
+ * Подстройка давления под силу игрока и устройство (docs/35-stage4-plan.md,
+ * Р131, Р65, Р67, Р183) — данные геймдизайнера
+ * (`core-game/src/content/pressure.ts`). Подробности — `docs/32-balance.md` §2.7.
+ */
+export interface PressureDef {
+  power: {
+    /** очков за один слот: оружия и навыков всех категорий */
+    slotPoints: number;
+    /** очков за единицу прибавки параметра снаряжения; параметр без записи не считается */
+    gear: Partial<Record<LoadoutStat, number>>;
+    /** очков за долю набора, которой игроку не хватает до расписания */
+    buildPoints: number;
+    /** потолок помощи отстающему, очки; сама помощь только вычитает */
+    buildCap: number;
+    /** ожидаемая доля набора по секундам: пары «секунда, доля» */
+    buildSchedule: [number, number][];
+  };
+  /** сила, при которой давление не поправляется: ровно кривая единой сложности */
+  reference: number;
+  /** очков выше опорной, на которые уровень давления вырастает на единицу */
+  spanUp: number;
+  /** очков ниже опорной, на которые уровень давления падает на единицу */
+  spanDown: number;
+  minLevel: number;
+  maxLevel: number;
+  levers: {
+    /** слабее опорного: работают все рычаги */
+    down: PressureLeversDef & { stageShiftSec: number };
+    /** сильнее опорного: толпа и события, здоровье и урон едва-едва, ступени не сдвигаются */
+    up: PressureLeversDef;
+  };
+  /** пределы сдвига событий по рангу врага, в отрезках */
+  leads: { elite: { min: number; max: number }; boss: { min: number; max: number } };
+  devices: {
+    /** потолок живых врагов по классу устройства */
+    caps: Record<DeviceClass, number>;
+    /** с какой секунды забега урезанное потолком добирают здоровье и урон */
+    compensateFromSec: number;
+    hpComp: number;
+    damageComp: number;
+    /** во сколько раз добор не больше */
+    maxShortfall: number;
+  };
+}
+
 /** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
 export interface LoadoutLimits {
   weapons: number;
@@ -1418,6 +1490,19 @@ export interface RunPassiveSummary {
   level: number;
 }
 
+/** Сила игрока и уровень давления на старте забега (подстройка, Р131); числа округлены до сотых. */
+export interface RunPressureStart {
+  power: number;
+  level: number;
+  deviceClass: DeviceClass;
+}
+
+/** То же на конец забега: сравнение со стартом показывает, насколько набор отстал от расписания. */
+export interface RunPressureResult extends RunPressureStart {
+  powerEnd: number;
+  levelEnd: number;
+}
+
 export interface RunResult {
   runId: string;
   /** seed забега: с ним и логом ввода забег воспроизводится целиком */
@@ -1506,6 +1591,8 @@ export interface RunResult {
    * итог прошлой сборки.
    */
   boosts?: string[];
+  /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
+  pressure?: RunPressureResult;
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
