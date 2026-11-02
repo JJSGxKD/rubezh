@@ -3,7 +3,7 @@ id: T-0128
 title: Напоминания через бота: обогнали в сезоне, сезон закрывается, награда дня
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-21
 size: M
@@ -29,6 +29,8 @@ shared:
   - backend/api/src/platforms/telegram/bot-router.ts
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/seasons/season-board.store.ts
+  - backend/api/src/modules/seasons/seasons.module.ts
+  - packages/app-shell/src/state/account-settings.ts
   - packages/app-shell/src/screens/settings.tsx
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
