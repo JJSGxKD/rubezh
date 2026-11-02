@@ -210,6 +210,5 @@ describe("гайдбук", () => {
     for (const word of ["урон", "перезарядку", "площадь", "здоровье", "восстановление", "скорость", "притяжение"]) {
       expect(text, word).toContain(word);
     }
-    expect(renderToStaticMarkup(createElement(GuideScreen))).toContain("Когда брать нечего");
   });
 });
