@@ -17,7 +17,10 @@ zones:
   - backend/api/test/daily-stats.test.ts
   - backend/api/test/ad-conversions.integration.test.ts
   - backend/api/test/funnel.integration.test.ts
-shared: []
+shared:
+  - backend/api/src/modules/payments/purchase-types.ts
+  - docs/22-analytics-and-metrics.md
+  - docs/24-attribution-and-sharing.md
 runner: any
 executor: sonnet-5.5
 effort: medium
