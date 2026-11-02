@@ -36,6 +36,7 @@ shared:
   - backend/api/src/modules/achievements/achievements.service.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
   - backend/api/test/tasks.test.ts
   - backend/api/test/achievements.integration.test.ts
   - packages/app-shell/src/state/analytics.ts
