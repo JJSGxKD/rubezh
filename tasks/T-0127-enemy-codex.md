@@ -41,6 +41,7 @@ shared:
   - backend/api/test/achievements.integration.test.ts
   - packages/app-shell/src/state/analytics.ts
   - apps/admin/src/api/tasks.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high

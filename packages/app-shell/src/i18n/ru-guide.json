@@ -112,7 +112,7 @@
   "guide.codex.title": "Кодекс врагов",
   "guide.codex.progress": "Открыто {opened} из {total}",
   "guide.codex.locked.name": "Неизвестный враг",
-  "guide.codex.locked.hint": "Встретьте его в забеге — и запись откроется.",
+  "guide.codex.locked.hint": "Встреть его в забеге — и запись откроется.",
   "guide.codex.group.regular": "Обычный",
   "guide.codex.group.elite": "Элита",
   "guide.codex.group.boss": "Босс",

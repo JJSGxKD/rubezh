@@ -167,7 +167,7 @@ describe("тексты", () => {
     expect(dictionary["guide.codex.title"]).toBe("Кодекс врагов");
     expect(dictionary["guide.codex.progress"]).toBe("Открыто {opened} из {total}");
     expect(dictionary["guide.codex.locked.name"]).toBe("Неизвестный враг");
-    expect(dictionary["guide.codex.locked.hint"]).toBe("Встретьте его в забеге — и запись откроется.");
+    expect(dictionary["guide.codex.locked.hint"]).toBe("Встреть его в забеге — и запись откроется.");
     expect(dictionary["guide.codex.error"]).toBe("Не удалось загрузить кодекс — враги показаны без отметок.");
   });
 
