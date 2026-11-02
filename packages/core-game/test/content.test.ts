@@ -16,13 +16,14 @@ import { findContentProblems } from "../src/game/content-problems";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS, PATTERN_TRAITS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
 import { MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
 import { findLevelCurveProblems, xpForLevel } from "../src/game/progression/levels";
+import { findLimitProblems } from "../src/game/progression/limit";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
@@ -1003,5 +1004,19 @@ describe("поздние сундуки скромнее", () => {
     if (CHESTS.late === undefined) return;
     expect(mean(CHESTS.late.sizes)).toBeLessThan(mean(CHESTS.sizes));
     expect(CHESTS.late.afterSec).toBeGreaterThan(0);
+  });
+});
+
+describe("контент «Предела»", () => {
+  it("записи проходят проверку: шаг мал, параметр известен, id не повторяются", () => {
+    expect(findLimitProblems(LIMITS)).toEqual([]);
+  });
+
+  it("записей семь, а ключи текстов называются по id", () => {
+    expect(LIMITS.map((def) => def.id).sort()).toEqual(["area", "cooldown", "damage", "maxHp", "pull", "regen", "speed"]);
+    for (const def of LIMITS) {
+      expect(def.nameKey).toBe(`upgrade.limit.${def.id}.name`);
+      expect(def.descriptionKey).toBe(`upgrade.limit.${def.id}.description`);
+    }
   });
 });
