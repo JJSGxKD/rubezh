@@ -16,7 +16,7 @@ import type { RunFinishRecord, RunsRepository } from "../src/modules/runs/runs.r
 import { DIFFICULTY_LEVEL_BONUS } from "../src/modules/items/item-catalog.js";
 import { DIFFICULTY_REWARD_MUL, runReward } from "../src/modules/progress/progress-rules.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
-import { SETTINGS, SETTING_LIST } from "../src/modules/settings/setting-catalog.js";
+import { SETTINGS, SETTING_LIST, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
@@ -195,7 +195,7 @@ describe("ключ настроек rating.since-date", () => {
     expect(setting.group).toBe("Рейтинг");
     expect(setting.kind).toBe("number");
     expect(setting.fallback).toBe(0);
-    expect(setting.fromEnv(config())).toBeNull();
+    expect((setting as SettingDefinition<number>).fromEnv(config())).toBeNull();
   });
 
   it("схема принимает ноль и существующую дату, отвергает несуществующую, дробь, отрицательное и мусор", () => {
@@ -210,7 +210,7 @@ describe("ключ настроек rating.since-date", () => {
   });
 
   it("дату в прошлом ставить можно: проверки при сохранении нет", () => {
-    expect(setting.saveCheck).toBeUndefined();
+    expect((setting as SettingDefinition<number>).saveCheck).toBeUndefined();
   });
 
   it("редактор панели покажет единицу «(ГГГГММДД)» и пределы", () => {

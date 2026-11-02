@@ -328,11 +328,11 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       await projection.recorded(recorded(best));
       expect(await store.best(season.key, "hard", id)).toBe(500);
 
-      await runs.setRanked(best.runId, false);
+      await runs.setRanked(best.runId, false, null);
       await projection.refresh(id, "hard", new Date(season.startsAt.getTime() + 3 * HOUR));
       expect(await store.best(season.key, "hard", id)).toBe(300);
 
-      await runs.setRanked(best.runId, true);
+      await runs.setRanked(best.runId, true, null);
       await projection.refresh(id, "hard", new Date(season.startsAt.getTime() + 3 * HOUR));
       expect(await store.best(season.key, "hard", id)).toBe(500);
     });
@@ -436,7 +436,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const { season } = await crowdedSeason(12);
       const now = after(season);
 
-      const outcomes = await Promise.all([closeRepository.close(season, [], now), closeRepository.close(season, [], now)]);
+      const outcomes = await Promise.all([closeRepository.close(season, [], now, null), closeRepository.close(season, [], now, null)]);
 
       expect(outcomes.filter((outcome) => outcome !== null)).toHaveLength(1);
       expect(await prisma.season.count({ where: { seasonKey: season.key } })).toBe(1);
@@ -498,7 +498,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const id = await account();
       const best = await play(id, season, { survivalSec: 500 });
       await play(id, season, { survivalSec: 300, offsetMs: 2 * HOUR });
-      await runs.setRanked(best.runId, false);
+      await runs.setRanked(best.runId, false, null);
 
       await close.closeDue(after(season));
 
@@ -753,7 +753,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const counts = async () => [await prisma.seasonResult.count({ where: { seasonKey: season.key } }), await prisma.seasonReward.count({ where: { seasonKey: season.key } })];
       const first = await counts();
 
-      expect(await closeRepository.close(season, [], after(season, 2 * HOUR))).toBeNull();
+      expect(await closeRepository.close(season, [], after(season, 2 * HOUR), null)).toBeNull();
       expect(await close.closeDue(after(season, 3 * HOUR))).toEqual([]);
       expect(await counts()).toEqual(first);
 
