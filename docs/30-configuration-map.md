@@ -309,8 +309,8 @@
 |---|---|---|
 | `bh.settings.v1` | режим экрана, громкость звука (общая, бой, интерфейс, музыка), вибрация | `app-shell/src/state/settings.ts` |
 | `bh.diagnostics.v1` | режим диагностики, запись забегов, оверлей FPS | `state/diagnostics.ts` |
-| `bh.meta.v1.profile` | число забегов, последнее стартовое оружие и сложность | `state/meta.ts` |
-| `bh.meta.v1.bestSurvivalSec.<сложность>` | локальный рекорд на каждой сложности; старый ключ без сложности переезжает на `easy` | `core-game/src/game/run/records.ts` |
+| `bh.meta.v1.profile` | число забегов, последнее стартовое оружие; сложность не хранится — её определяет число забегов (`state/difficulty.ts`, Р126), прежнее поле `lastDifficultyId` читается и игнорируется | `state/meta.ts` |
+| `bh.meta.v1.bestSurvivalSec.<сложность>` | локальный рекорд прежних сложностей `easy` и `normal`; старый ключ без сложности переезжает на `easy`. Рекорд единой сложности (`hard`) — под ключом `bh.meta.v2.bestSurvivalSec.hard`: прежний, поставленный на более лёгком контенте, не читается (Р126) | `core-game/src/game/run/records.ts` |
 | `bh.install.v1.id` | `installId` устройства | `state/install.ts` |
 | `bh.install.v1.accepted` | предупреждение закрытого теста принято | `state/install.ts` |
 | `bh.hints.v1` | какие подсказки первого забега игрок уже усвоил | `state/hints.ts` |
