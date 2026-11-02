@@ -37,6 +37,11 @@ export const NOTIFICATION_KINDS = {
   team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
   /** вышла версия — что нового, в журнале обновлений (WP31) */
   app_update: z.object({ version: z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/) }),
+  /**
+   * пасс месяца закрыт: незабранные награды зачислены сами (T-0312); месяц `ГГГГ-ММ`, наград не
+   * больше, чем в двух лентах по 30 ступеней
+   */
+  pass_closed: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), rewards: z.number().int().min(1).max(60) }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;
