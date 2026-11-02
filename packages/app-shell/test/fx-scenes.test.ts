@@ -1,6 +1,9 @@
+import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
 import { ENEMIES, WEAPONS } from "@bh/core-game";
 import { describe, expect, it } from "vitest";
 import { FX_SCENES, fxScene } from "../src/dev/fx-scenes";
+import { DEFAULT_DEV_SETTINGS, toRunDev, useDevMode } from "../src/state/dev-mode";
+import { initShell } from "../src/state/shell";
 
 // Каталог сцен собирается из контента: новое оружие получает сцену без правки
 // каталога (docs/17-testing-strategy.md, «Стенд эффектов»).
@@ -59,5 +62,33 @@ describe("каталог сцен эффектов", () => {
 
   it("неизвестная сцена — null", () => {
     expect(fxScene("nope")).toBeNull();
+  });
+});
+
+describe("настройки разработчика и светлая земля стенда", () => {
+  it("настройки без lightGround читаются, а в движок уходят с false", () => {
+    const values: Record<string, string> = {};
+    const storage: KeyValueStorage = {
+      get: (key) => values[key] ?? null,
+      set: (key, value) => {
+        values[key] = value;
+      },
+      remove: (key) => {
+        delete values[key];
+      },
+    };
+    const visuals = Object.fromEntries(Object.entries(DEFAULT_DEV_SETTINGS.visuals).filter(([key]) => key !== "lightGround"));
+    storage.set("bh.dev.v1", JSON.stringify({ ...DEFAULT_DEV_SETTINGS, visuals, timeScale: 0.5 }));
+    initShell({
+      adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
+      capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false, devTools: true },
+      storage,
+      analytics: () => undefined,
+      build: { version: "test", contentHash: "", platform: "web" },
+    });
+    useDevMode.getState().hydrate();
+    // Старые настройки не сброшены целиком: сохранённое значение на месте.
+    expect(useDevMode.getState().settings.timeScale).toBe(0.5);
+    expect(toRunDev(useDevMode.getState().settings).visuals.lightGround).toBe(false);
   });
 });
