@@ -54,7 +54,7 @@ export interface RecordedRun {
 /** Статистика итога, из которой видно, кого игрок встретил: ключи `topKills` и (после T-0125) `enemiesSeen`. */
 export interface SeenStats {
   enemiesSeen?: readonly string[] | undefined;
-  topKills?: readonly { enemy: string }[] | undefined;
+  topKills?: readonly { enemy: string; count: number }[] | undefined;
 }
 
 /**
