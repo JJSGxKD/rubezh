@@ -110,14 +110,6 @@ export function WorldShape(props: { shape: ShapeKind; color: number; r: number }
     case "gem":
     case "gem_rich":
       return <Gem r={r} fill={fill} rich={props.shape === "gem_rich"} />;
-    case "bolt":
-      return (
-        <>
-          <circle r={r} fill={fill} opacity={0.25} />
-          <circle r={r * 0.68} fill={fill} />
-          <circle r={r * 0.3} fill={hex(WORLD_COLORS.enemyProjectileCore)} />
-        </>
-      );
     case "double":
       return (
         <>

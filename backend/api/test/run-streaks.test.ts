@@ -89,3 +89,39 @@ describe("приём итога: схема", () => {
     }
   });
 });
+
+describe("приём итога: журнал охоты и оценка сборки (tasks/T-0292)", () => {
+  const base = {
+    runId: randomUUID(),
+    difficultyId: "hard",
+    outcome: "died",
+    survivalSec: 600,
+    level: 10,
+    enemiesKilled: 1000,
+    startingWeaponId: "spark",
+    weapons: [{ id: "spark", level: 3 }],
+    contentHash: "abc",
+  };
+  const stats = { damageTaken: 10, xpCollected: 100, waveReached: 3, topKills: [] };
+  const entry = { rank: "elite", value: 7, aliveSec: 12.4 };
+  const parse = (patch: object): boolean => runFinishSchema.safeParse({ ...base, stats: { ...stats, ...patch } }).success;
+
+  it("итог без полей принят", () => {
+    expect(parse({})).toBe(true);
+  });
+
+  it("с полями разбирается; ровно 64 строки можно", () => {
+    expect(parse({ huntLog: [entry], buildScore: 5 })).toBe(true);
+    expect(parse({ huntLog: Array.from({ length: 64 }, () => entry) })).toBe(true);
+  });
+
+  it("65 строк, чужой ранг и числа вне коридора — отказ", () => {
+    expect(parse({ huntLog: Array.from({ length: 65 }, () => entry) })).toBe(false);
+    expect(parse({ huntLog: [{ ...entry, rank: "normal" }] })).toBe(false);
+    expect(parse({ huntLog: [{ ...entry, value: 10_001 }] })).toBe(false);
+    expect(parse({ huntLog: [{ ...entry, aliveSec: 7_201 }] })).toBe(false);
+    expect(parse({ huntLog: [{ ...entry, aliveSec: -1 }] })).toBe(false);
+    expect(parse({ buildScore: 65 })).toBe(false);
+    expect(parse({ buildScore: -1 })).toBe(false);
+  });
+});

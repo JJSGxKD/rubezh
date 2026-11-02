@@ -1257,6 +1257,10 @@ erDiagram
   дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
   пишется один раз, повтор задания его не перепишет. Пусто — в бота не
   уходило: вид не дублируется, игрок выключил его или писать нельзя.
+  Напоминания (T-0128) — три вида в той же таблице: `season_overtaken`
+  (ключ `season_overtaken:сезон:игровой день`), `season_closing`
+  (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
+  день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -2177,6 +2181,7 @@ flowchart LR
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2422,6 +2427,13 @@ flowchart LR
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
     NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    REMINDERS -. "season_overtaken, season_closing, daily_reward_ready: notify" .-> NOTIF
+    REMINDERS -- "награда дня, рейтинговые забеги, account_messaging, итог суток" --> PG
+    REMINDERS -- "лок прохода, курсоры, снимок, окна потолка" --> REDIS
+    REMINDERS -. "расписание сезона, таблица недели" .-> SEASONS
+    REMINDERS -. "bot.reminders" .-> ACCSET
+    REMINDERS -. "порт Messengers: sendToChat, суточный отчёт" .-> TGADP
+    TGADP -. "кнопка rm:off: bot.reminders = false" .-> ACCSET
     CADDY -- "/api/v1/me/badges" --> BADGES
     BADGES -. "новые предметы" .-> ITEMS
     BADGES -. "подарки и заявки" .-> FRIENDS
@@ -4313,6 +4325,57 @@ sequenceDiagram
 - **Отчёт по умолчанию — свод калибровки:** те же сценарии, зёрна и функции, что у
   `pnpm balance:sim`; черновик и база сравниваются по медианам и по коридорам
   `balance-targets` своего снимка.
+
+### 4.34 Напоминания бота: проход, лента, очередь, бот (этап 4, реализовано)
+
+Включается ключом `reminders.enabled` (по умолчанию выключен). Проход идёт
+раз в 10 минут; лента и очередь дубля уже работают для заявок и подарков —
+напоминания лишь новые виды в них (`35-stage4-plan.md` WP28, `tasks/T-0128`).
+
+```mermaid
+sequenceDiagram
+    participant S as RemindersScanner<br/>(каждая реплика)
+    participant R as Redis
+    participant P as Postgres
+    participant N as notifications<br/>(лента)
+    participant Q as notifications-bot<br/>(очередь BullMQ)
+    participant T as Telegram
+    participant U as Игрок
+
+    S->>R: SET reminders:scan:lock NX PX (токен)
+    alt лок у другой реплики
+        R-->>S: nil — проход пропущен
+    else лок взят
+        S->>R: метка отчёта reminders:report:день NX (после 00:10 по Москве)
+        S->>S: тихий час или нет сезона — на этом всё, снимок не трогаем
+        S->>R: снимок reminders:snap:сезон:сложность, ZREVRANGE таблицы недели
+        S->>P: reachable(обогнанные): без бана, can_message
+        S->>P: closingPage / dailyPage — страница по account_id, не больше 500
+        S->>R: EXISTS bot-notify:аккаунт:reminder — конвейером на всех
+        S->>S: chooseKind — один вид на игрока по приоритету
+        S->>N: notify(вид, dedupeKey) — повтор строки не заводит
+        N-->>Q: onCreated: задание, jobId = id уведомления
+        S->>R: курсоры и новый снимок — после записи строк
+        S->>R: DEL лок только своим токеном
+    end
+    Q->>Q: включатель, тихие часы, аккаунт, can_message, bot.reminders
+    Q->>R: SET bot-notify:аккаунт:reminder NX EX (окно потолка)
+    Q->>T: sendMessage: текст, «Открыть игру» и «Не напоминать» (rm:off)
+    T-->>U: сообщение
+    U->>T: нажал «Не напоминать»
+    T->>S: callback_query rm:off (через BotRouter) → bot.reminders = false
+```
+
+- **Одно напоминание на игрока в окно.** Планировщик выбирает один вид и не
+  заводит строку там, где окно занято, а отправитель держит окно второй раз
+  (`SET NX`): две реплики, перезапуск и застрявшее задание второго сообщения
+  не дадут. Окно — `reminders.min-gap-hours`, скользящее.
+- **Тихие часы** проверяются дважды: проход в тихий час ничего не читает и снимок
+  не двигает (обгон за ночь виден утром), а задание, застрявшее до 21:00, в
+  21:05 не уходит и окно не занимает.
+- **Курсор двигается после записи.** Упавший проход повторит страницу; ключ
+  события (`daily_reward_ready:день`, `season_closing:сезон`,
+  `season_overtaken:сезон:день`) не даст второй строки ленты.
 
 ## 5. Топология развёртывания
 

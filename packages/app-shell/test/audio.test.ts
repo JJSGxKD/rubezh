@@ -30,7 +30,6 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     fuses: 0,
     dashWarns: 0,
     dashes: 0,
-    enemyShots: 0,
     weapons: {},
     ...patch,
   };
@@ -93,7 +92,7 @@ describe("план звуков забега", () => {
   });
 
   it("атаки врагов не звучат — только попадание по игроку; «Гроза» звучит ударом, а не срабатыванием", () => {
-    const attacks = planCueSounds(cues({ explosions: 2, explosionsNear: 1, fuses: 1, dashWarns: 1, dashes: 1, enemyShots: 1 }), 0);
+    const attacks = planCueSounds(cues({ explosions: 2, explosionsNear: 1, fuses: 1, dashWarns: 1, dashes: 1 }), 0);
     expect(attacks).toEqual([]);
     expect(planCueSounds(cues({ playerHit: 1, explosionsNear: 1 }), 0).map((request) => request.id)).toEqual(["hurt"]);
     const storm = planCueSounds(cues({ weapons: { storm: 1, spark: 1 } }), 0).map((request) => request.id);

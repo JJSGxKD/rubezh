@@ -11,6 +11,7 @@ import type {
   EnemyDef,
   EnemyStageDef,
   LevelCurveDef,
+  LimitDef,
   LoadoutLimits,
   MapDef,
   PassiveDef,
@@ -31,7 +32,7 @@ import { PRESSURE } from "./pressure";
 import { SECRETS } from "./secrets";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "./waves";
 import { WEAPONS } from "./weapons";
 
@@ -88,6 +89,7 @@ export interface ContentSnapshot {
   maxBoostsPerRun: number;
   cardToolUnlocks: readonly CardToolUnlockDef[];
   cardToolRules: CardToolRules;
+  limits: readonly LimitDef[];
   /** подстройка давления под силу игрока и устройство (Р131, Р183) */
   pressure: PressureDef;
   /** коридоры для отчёта симуляции; в хэш не входят */
@@ -120,6 +122,7 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   maxBoostsPerRun: MAX_BOOSTS_PER_RUN,
   cardToolUnlocks: CARD_TOOL_UNLOCKS,
   cardToolRules: CARD_TOOL_RULES,
+  limits: LIMITS,
   pressure: PRESSURE,
   balanceTargets: { ...BALANCE_TARGETS, evolutionPowerRatio: EVOLUTION_POWER_RATIO },
 };
@@ -164,6 +167,7 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.maxBoostsPerRun,
     snapshot.cardToolUnlocks,
     snapshot.cardToolRules,
+    snapshot.limits,
     snapshot.pressure,
   ]);
 

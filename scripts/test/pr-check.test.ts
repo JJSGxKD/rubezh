@@ -270,6 +270,13 @@ describe("checkRunnerLines", () => {
     ]);
   });
 
+  it("задачу тимлида подписывает claude-lead-N", () => {
+    expect(checkRunnerLines(`${TASK}
+
+Поток: claude-lead-1 / sonnet-5.5 / high
+Запустил: владелец`, "task/T-0001")).toEqual([]);
+  });
+
   it("номер аккаунта не цифры — ошибка", () => {
     expect(checkRunnerLines(`${TASK}\n\nПоток: claude-x / sonnet-5.5 / medium\nЗапустил: владелец`, "task/T-0001")).toEqual([
       expect.stringContaining("поток: в описании нет строки"),
