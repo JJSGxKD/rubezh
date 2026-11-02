@@ -36,10 +36,10 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 70 моделей, стирается 26", () => {
+  it("остаётся 70 моделей, стирается 27", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
     expect(actions.filter((action) => action === "keep")).toHaveLength(70);
-    expect(actions.filter((action) => action === "wipe")).toHaveLength(26);
+    expect(actions.filter((action) => action === "wipe")).toHaveLength(27);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
@@ -109,6 +109,7 @@ describe("план вайпа: порядок стирания", () => {
       "PassProgress",
       "PassClaim",
       "BoostCredit",
+      "CodexEntry",
     ]);
   });
 

@@ -205,6 +205,8 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс врагов (T-0127)
+  codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
   passProgress  PassProgress[]
   passClaims    PassClaim[]
@@ -2693,4 +2695,25 @@ model BoostCredit {
 
   @@id([accountId, boostId])
   @@map("boost_credit")
+}
+
+// Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
+// кодекс — три достижения лестницы `codex` в `task_def`, процент пишется в
+// `task_progress` видом `codex_percent`.
+
+/// Открытая запись кодекса: игрок встретил врага в забеге. Одна строка на пару,
+/// открытая запись не закрывается и не переписывается — повтор забега ничего
+/// не меняет (`ON CONFLICT DO NOTHING`). Список врагов — таблица сервера
+/// `CODEX_ENEMY_IDS`, внешнего ключа на врага нет: враги живут в контенте движка
+model CodexEntry {
+  accountId   String   @map("account_id") @db.Uuid
+  /// id врага из контента (`content/enemies.ts`)
+  enemyId     String   @map("enemy_id") @db.VarChar(48)
+  /// когда запись открыта: время записи забега, в котором враг встретился первым
+  firstSeenAt DateTime @map("first_seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, enemyId])
+  @@map("codex_entry")
 }

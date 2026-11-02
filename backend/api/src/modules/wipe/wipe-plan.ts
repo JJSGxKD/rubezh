@@ -123,6 +123,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   TaskProgress: wipe("прогресс заданий начинается заново"),
   TaskPointsClaim: wipe("забранные ступени очков заданий (T-0105) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, отметки не оставляем"),
   AchievementFavorite: wipe("любимые достижения ссылаются на выполненное, а прогресс заданий после вайпа начинается заново (T-0106)"),
+  CodexEntry: wipe("открытые записи кодекса врагов (T-0127) — прогресс того же рода, что задания: процент в task_progress после вайпа начинается заново, записи без него не оставляем"),
   ShowcaseOffer: wipe("предложения витрины ссылаются на предметы"),
   ItemEvent: wipe("журнал предметов"),
   Item: wipe("снаряжение стирается"),
@@ -169,4 +170,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "PassProgress",
   "PassClaim",
   "BoostCredit",
+  "CodexEntry",
 ];

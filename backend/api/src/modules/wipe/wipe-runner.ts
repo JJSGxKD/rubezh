@@ -203,6 +203,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.taskPointsClaim.deleteMany({});
     case "AchievementFavorite":
       return await tx.achievementFavorite.deleteMany({});
+    case "CodexEntry":
+      return await tx.codexEntry.deleteMany({});
     case "ShowcaseOffer":
       return await tx.showcaseOffer.deleteMany({});
     case "ItemEvent":
