@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { ratingSinceOf } from "../runs/rated-runs.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { dueSeasons, parseStartDate, seasonOf, type Season } from "./season-rules.js";
@@ -18,6 +19,14 @@ export class SeasonSchedule {
   /** Понедельник первого сезона; `null` — сезонов нет. */
   startsAt(): Date | null {
     return parseStartDate(this.settings.get(SETTINGS.seasonsStartDate));
+  }
+
+  /**
+   * Отсечка рейтинга (`rating.since-date`, Р126): сезоны считают забеги не
+   * раньше неё. `null` — отсечки нет. Читается на каждый вызов, как и старт.
+   */
+  ratingSince(): Date | null {
+    return ratingSinceOf(this.settings.get(SETTINGS.ratingSinceDate));
   }
 
   /** Сезон, в который попадает момент; `null` — сезонов нет или первый ещё не начался. */

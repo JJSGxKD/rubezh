@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CONTINUE } from "../../packages/core-game/src/content/continue";
 import { DIFFICULTIES as CONTENT_DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { LOADOUT_LIMITS } from "../../packages/core-game/src/content/upgrades";
-import { CONTINUES_PER_RUN, DIFFICULTIES, MAX_WEAPONS } from "../../backend/api/src/modules/runs/run-rules.js";
+import { CONTINUES_PER_RUN, DIFFICULTIES, MAX_WEAPONS, RATED_DIFFICULTIES } from "../../backend/api/src/modules/runs/run-rules.js";
 
 // Правила игры на сервере — копия чисел из контента, а не импорт: собранный
 // бэкенд не импортирует исходники пакетов монорепо. Копия не имеет права
@@ -22,5 +22,15 @@ describe("правила игры на сервере совпадают с ко
 
   it("список сложностей", () => {
     expect([...DIFFICULTIES].sort()).toEqual(CONTENT_DIFFICULTIES.map((difficulty) => difficulty.id).sort());
+  });
+
+  it("рейтинговые сложности есть среди сложностей контента", () => {
+    // Р126: рейтинг считает единую сложность. Убрали её из контента — рейтинг
+    // остался бы без единой допустимой сложности.
+    const contentIds = CONTENT_DIFFICULTIES.map((difficulty) => difficulty.id as string);
+    expect(RATED_DIFFICULTIES.length).toBeGreaterThan(0);
+    for (const difficulty of RATED_DIFFICULTIES) {
+      expect(contentIds, `рейтинговой сложности ${difficulty} нет в контенте: поправьте RATED_DIFFICULTIES в backend/api/src/modules/runs/run-rules.ts`).toContain(difficulty);
+    }
   });
 });

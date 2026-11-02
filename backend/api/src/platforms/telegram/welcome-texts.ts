@@ -19,8 +19,6 @@ export function languageOf(languageCode: string | undefined): WelcomeLanguage {
   return RUSSIAN_READERS.has(base) ? "ru" : "en";
 }
 
-export type Difficulty = "easy" | "normal" | "hard";
-
 export interface WelcomeTexts {
   brand: string;
   greeting(name: string): string;
@@ -28,7 +26,7 @@ export interface WelcomeTexts {
   newcomerLead: string;
   newcomerPoints: readonly string[];
   newcomerCall: string;
-  recordLabel(difficulty: Difficulty): string;
+  recordLabel(): string;
   rank(rank: number, total: number): string;
   runs(count: number): string;
   veteranCall: string;
@@ -38,9 +36,6 @@ export interface WelcomeTexts {
   groupHint: string;
 }
 
-const RU_DIFFICULTIES: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
-const EN_DIFFICULTIES: Record<Difficulty, string> = { easy: "Easy", normal: "Normal", hard: "Hard" };
-
 export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
   ru: {
     brand: "РУБЕЖ",
@@ -49,7 +44,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     newcomerLead: "Продержись как можно дольше против волн, которые не кончаются.",
     newcomerPoints: ["Персонаж атакует сам — ты ведёшь его пальцем", "Собирай кристаллы и выбирай улучшения", "Каждая минута злее предыдущей"],
     newcomerCall: "Жми «Играть» — первый забег займёт пару минут",
-    recordLabel: (difficulty) => `рекорд · ${RU_DIFFICULTIES[difficulty]}`,
+    recordLabel: () => "рекорд",
     rank: (rank, total) => `#${rank} из ${total}`,
     runs: (count) => `${count} ${pluralRu(count, "забег", "забега", "забегов")}`,
     veteranCall: "Побьёшь свой рекорд?",
@@ -67,7 +62,7 @@ export const WELCOME_TEXTS: Record<WelcomeLanguage, WelcomeTexts> = {
     newcomerLead: "Hold out as long as you can against waves that never end.",
     newcomerPoints: ["Your hero attacks on its own — you steer", "Collect crystals and pick upgrades", "Every minute is harder than the last"],
     newcomerCall: "Tap “Play” — your first run takes a couple of minutes",
-    recordLabel: (difficulty) => `best · ${EN_DIFFICULTIES[difficulty]}`,
+    recordLabel: () => "best",
     rank: (rank, total) => `#${rank} of ${total}`,
     runs: (count) => `${count} ${count === 1 ? "run" : "runs"}`,
     veteranCall: "Can you beat your record?",

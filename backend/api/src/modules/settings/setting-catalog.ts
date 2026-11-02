@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
@@ -135,6 +136,8 @@ const AUTO_SOURCES_GROUP = "Автоисточники";
 
 const SEASONS_GROUP = "Сезоны рейтинга";
 
+const RATING_GROUP = "Рейтинг";
+
 const BOT_MENTION_GROUP = "Юзернейм бота";
 
 const ACHIEVEMENTS_GROUP = "Достижения";
@@ -151,6 +154,9 @@ const MENTION_SHARDS = { min: 0, max: 100, unit: ["осколок", "оскол�
 
 /** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
 const SEASONS_START_MAX = 20_991_228;
+
+/** Последняя допустимая дата отсечки рейтинга: 31 декабря 2099. */
+const RATING_SINCE_MAX = 20_991_231;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -518,6 +524,30 @@ export const SETTINGS = {
       const start = parseStartDate(value);
       return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
     },
+  } satisfies SettingDefinition<number>,
+  /**
+   * Отсечка рейтинга единой сложности (docs/35-stage4-plan.md, Р126,
+   * tasks/T-0191): в общий рейтинг и сезоны идут забеги рейтинговой сложности,
+   * законченные не раньше этих суток UTC. Выкат — событие среды, а не кода, поэтому
+   * дата лежит в настройке: миграция ставит её днём применения на каждой среде,
+   * тимлид сдвигает в панели без релиза. Без окружения; число ГГГГММДД, как у
+   * `seasons.start-date`, — редактор панели даты не знает.
+   */
+  ratingSinceDate: {
+    key: "rating.since-date",
+    group: RATING_GROUP,
+    title: "Рейтинг считается с даты",
+    hint: "Дата выката единой сложности числом ГГГГММДД, например 20261026. Забеги, законченные раньше, в рейтинг и в сезоны не идут; они остаются в истории. 0 — без отсечки",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(RATING_SINCE_MAX, { message: `не больше ${String(RATING_SINCE_MAX)}` })
+      .refine((value) => value === 0 || ratingSinceOf(value) !== null, { message: "дата в виде ГГГГММДД, например 20261026, или 0" }),
+    range: { min: 0, max: RATING_SINCE_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
   } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",

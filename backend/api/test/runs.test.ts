@@ -37,7 +37,7 @@ function account(platformUserId = "555"): AccountRef {
 function finish(runId: string, patch: Partial<RunFinish> = {}): RunFinish {
   return {
     runId,
-    difficultyId: "normal",
+    difficultyId: "hard",
     outcome: "died",
     survivalSec: 120,
     level: 6,
@@ -109,7 +109,7 @@ describe("приём забегов", () => {
   it("стартованный и законченный забег попадает в рейтинг с проверенным временем", async () => {
     const me = account();
     const runId = randomUUID();
-    await service.start(me, { runId, difficultyId: "normal", startingWeaponId: "knife", contentHash: "abc", elapsedSec: 0 }, 1_000_000);
+    await service.start(me, { runId, difficultyId: "hard", startingWeaponId: "knife", contentHash: "abc", elapsedSec: 0 }, 1_000_000);
 
     const result = await service.finish(me, finish(runId), 1_000_000 + 125_000);
 
@@ -143,7 +143,7 @@ describe("приём забегов", () => {
     const forged = await service.finish(me, finish(runId, { survivalSec: 5000 }));
 
     expect(forged.bestSurvivalSec).toBe(60);
-    expect(await board.best("normal", me.accountId, "common")).toBe(60);
+    expect(await board.best("hard", me.accountId, "common")).toBe(60);
   });
 
   it("чужой ключ забега не принимается", async () => {
@@ -172,7 +172,7 @@ describe("приём забегов", () => {
   it("забег длиннее прошедшего времени записывается, но в рейтинг не идёт", async () => {
     const me = account();
     const runId = randomUUID();
-    await service.start(me, { runId, difficultyId: "normal", startingWeaponId: "knife", contentHash: "abc", elapsedSec: 0 }, 1_000_000);
+    await service.start(me, { runId, difficultyId: "hard", startingWeaponId: "knife", contentHash: "abc", elapsedSec: 0 }, 1_000_000);
 
     const result = await service.finish(me, finish(runId, { survivalSec: 600 }), 1_000_000 + 60_000);
 
@@ -223,13 +223,13 @@ describe("приём забегов", () => {
     const [first, second] = [account("1"), account("2")];
     await service.finish(first, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
     await service.finish(second, finish(randomUUID(), { survivalSec: 300, level: 12, enemiesKilled: 900 }));
-    for (const side of ALL_BOARDS) await board.replace("normal", side, []);
+    for (const side of ALL_BOARDS) await board.replace("hard", side, []);
 
     const counts = await service.rebuildLeaderboard();
 
-    expect(counts.normal).toEqual({ full: 2, common: 2 });
-    expect(await board.rank("normal", second.accountId, "common")).toBe(1);
-    expect(await board.rank("normal", first.accountId, "common")).toBe(2);
+    expect(counts.hard).toEqual({ full: 2, common: 2 });
+    expect(await board.rank("hard", second.accountId, "common")).toBe(1);
+    expect(await board.rank("hard", first.accountId, "common")).toBe(2);
   });
 
   it("забег аккаунта с отдельной доской пишется в полную доску и не в общую; повтор итога доски не меняет (T-0113)", async () => {
@@ -240,19 +240,19 @@ describe("приём забегов", () => {
 
     const first = randomUUID();
     expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: true, bestSurvivalSec: 300, rank: 1 });
-    expect(await board.best("normal", separate.accountId, "full")).toBe(300);
-    expect(await board.best("normal", separate.accountId, "common")).toBeNull();
-    expect(await board.count("normal", "common")).toBe(0);
+    expect(await board.best("hard", separate.accountId, "full")).toBe(300);
+    expect(await board.best("hard", separate.accountId, "common")).toBeNull();
+    expect(await board.count("hard", "common")).toBe(0);
 
     // Повтор итога из очереди — тот же ответ, доски те же.
     expect(await own.finish(separate, finish(first, { survivalSec: 300 }))).toMatchObject({ recorded: true, isNewBest: false, bestSurvivalSec: 300, rank: 1 });
-    expect([await board.count("normal", "full"), await board.count("normal", "common")]).toEqual([1, 0]);
+    expect([await board.count("hard", "full"), await board.count("hard", "common")]).toEqual([1, 0]);
 
     // Обычный игрок пишется в обе, и его место общей доски не сдвинуто забегом чужой.
     expect(await own.finish(plain, finish(randomUUID(), { survivalSec: 100 }))).toMatchObject({ recorded: true, isNewBest: true, rank: 1 });
-    expect(await board.best("normal", plain.accountId, "full")).toBe(100);
-    expect(await board.best("normal", plain.accountId, "common")).toBe(100);
-    expect(await board.rank("normal", plain.accountId, "full")).toBe(2);
+    expect(await board.best("hard", plain.accountId, "full")).toBe(100);
+    expect(await board.best("hard", plain.accountId, "common")).toBe(100);
+    expect(await board.rank("hard", plain.accountId, "full")).toBe(2);
   });
 });
 
@@ -291,7 +291,7 @@ describe("второй шанс в итоге забега", () => {
 
     expect(result).toMatchObject({ verdict: "rejected", recorded: false });
     expect(recorded[0]).toMatchObject({ continues: 1, reasons: expect.arrayContaining(["unpaid_continue"]) });
-    expect(await board.best("normal", me.accountId, "common")).toBeNull();
+    expect(await board.best("hard", me.accountId, "common")).toBeNull();
   });
 
   it("оплаченное продолжение — обычный забег в рейтинге", async () => {
@@ -350,7 +350,7 @@ describe("снаряжение в итоге забега", () => {
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "rejected" });
     check.answer = "stale";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "suspicious" });
-    expect(await board.best("normal", me.accountId, "common")).toBeNull();
+    expect(await board.best("hard", me.accountId, "common")).toBeNull();
 
     check.answer = "valid";
     await expect(service.finish(me, finish(randomUUID(), { loadout: snapshot(me.accountId) }))).resolves.toMatchObject({ verdict: "ok", recorded: true });
@@ -378,7 +378,7 @@ describe("чтение забегов", () => {
     await service.finish(me, finish(randomUUID(), { survivalSec: 100 }));
     await service.finish(other, finish(randomUUID(), { survivalSec: 200, level: 8, enemiesKilled: 500 }));
 
-    const leaderboard = await view.leaderboardFor(me.accountId, "normal");
+    const leaderboard = await view.leaderboardFor(me.accountId, "hard");
 
     expect(leaderboard.entries.map((entry) => entry.isMe)).toEqual([false, true]);
     expect(leaderboard.me).toEqual({ rank: 2, survivalSec: 100 });

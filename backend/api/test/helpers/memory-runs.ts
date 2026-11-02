@@ -3,6 +3,7 @@ import { loadAppConfig } from "../../src/config/app-config.js";
 import { RestrictionsHooks } from "../../src/modules/restrictions/restrictions-hooks.js";
 import type { Board, LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
 import { RatingRestrictions } from "../../src/modules/runs/rating-restrictions.js";
+import { isRatedRun } from "../../src/modules/runs/rated-runs.js";
 import { DIFFICULTIES, type Difficulty } from "../../src/modules/runs/run-rules.js";
 import type {
   BestRunRow,
@@ -17,8 +18,10 @@ import type {
   StartOutcome,
   StoredRun,
 } from "../../src/modules/runs/runs.repository.js";
+import type { SettingsReader } from "../../src/modules/settings/settings.service.js";
 import { AUTH_ENV } from "./auth-env.js";
 import { MemoryRestrictionsRepository, restrictionsGate } from "./memory-restrictions.js";
+import { panelSettings } from "./settings.js";
 
 /**
  * Забеги и рейтинг в памяти — для тестов сервиса. Смысл тот же, что у
@@ -42,6 +45,7 @@ export class MemoryRunsRepository implements RunsRepository {
       status: row.status,
       difficulty: row.difficulty,
       startedAt: row.startedAt,
+      finishedAt: row.record?.finishedAt ?? null,
       survivalSec: row.survivalSec,
       verdict: row.verdict,
       ranked: row.ranked,
@@ -58,6 +62,7 @@ export class MemoryRunsRepository implements RunsRepository {
       status: "started",
       difficulty: record.difficulty,
       startedAt: record.startedAt,
+      finishedAt: null,
       survivalSec: null,
       verdict: null,
       ranked: false,
@@ -76,6 +81,7 @@ export class MemoryRunsRepository implements RunsRepository {
       status: "finished",
       difficulty: record.difficulty,
       startedAt: existing?.startedAt ?? null,
+      finishedAt: record.finishedAt,
       survivalSec: record.survivalSec,
       verdict: record.verdict,
       ranked: record.ranked,
@@ -131,40 +137,50 @@ export class MemoryRunsRepository implements RunsRepository {
     };
   }
 
-  async bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]> {
+  async bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]> {
     return accountIds.flatMap((accountId) => {
-      const best = this.rankedOf(difficulty).filter((row) => row.accountId === accountId).sort((a, b) => b.survivalSec - a.survivalSec)[0];
+      const best = this.rankedOf(difficulty, since).filter((row) => row.accountId === accountId).sort((a, b) => b.survivalSec - a.survivalSec)[0];
       if (best === undefined) return [];
       return [{ accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled }];
     });
   }
 
-  async bestTimes(difficulty: Difficulty): Promise<{ accountId: string; survivalSec: number }[]> {
+  async bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]> {
     const best = new Map<string, number>();
-    for (const row of this.rankedOf(difficulty)) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, row.survivalSec));
+    for (const row of this.rankedOf(difficulty, since)) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, row.survivalSec));
     return [...best.entries()].map(([accountId, survivalSec]) => ({ accountId, survivalSec }));
   }
 
-  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null> {
+  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null> {
     const counted = [...this.rows.values()].flatMap((row) =>
-      row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.record.ranked || (shadow && row.record.ratingRestricted === "silent")) ? [row.record] : [],
+      row.record !== undefined &&
+      row.accountId === accountId &&
+      row.record.difficulty === difficulty &&
+      isRatedRun(difficulty, row.record.finishedAt, since) &&
+      (row.record.ranked || (shadow && row.record.ratingRestricted === "silent"))
+        ? [row.record]
+        : [],
     );
     const best = counted.sort((a, b) => b.survivalSec - a.survivalSec)[0];
     if (best === undefined) return null;
     return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
   }
 
-  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]> {
+  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]> {
     return [...this.rows.values()]
-      .flatMap((row) => (row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.ranked || this.unrankedByModerator(row)) ? [{ ...row.record, ranked: row.ranked }] : []))
+      .flatMap((row) =>
+        row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && isRatedRun(difficulty, row.record.finishedAt, since) && (row.ranked || this.unrankedByModerator(row))
+          ? [{ ...row.record, ranked: row.ranked }]
+          : [],
+      )
       .sort((a, b) => b.survivalSec - a.survivalSec)
       .slice(0, limit)
       .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
   }
 
-  async setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
+  async setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
     const row = this.rows.get(runId);
-    if (row?.record === undefined || (ranked ? !this.unrankedByModerator(row) : !row.ranked)) return null;
+    if (row?.record === undefined || !isRatedRun(row.record.difficulty, row.record.finishedAt, since) || (ranked ? !this.unrankedByModerator(row) : !row.ranked)) return null;
     row.ranked = ranked;
     row.record = { ...row.record, ranked };
     return { accountId: row.accountId, difficulty: row.record.difficulty, survivalSec: row.record.survivalSec };
@@ -195,8 +211,9 @@ export class MemoryRunsRepository implements RunsRepository {
     return [...this.rows.values()].flatMap((row) => (row.record !== undefined && row.accountId === accountId ? [row.record] : []));
   }
 
-  private rankedOf(difficulty: Difficulty): RunFinishRecord[] {
-    return [...this.rows.values()].flatMap((row) => (row.record?.ranked === true && row.record.difficulty === difficulty ? [row.record] : []));
+  /** Рейтинговые забеги сложности — то же условие, что `ratedWhere` в запросах Postgres. */
+  private rankedOf(difficulty: Difficulty, since: Date | null): RunFinishRecord[] {
+    return [...this.rows.values()].flatMap((row) => (row.record?.ranked === true && row.record.difficulty === difficulty && isRatedRun(difficulty, row.record.finishedAt, since) ? [row.record] : []));
   }
 }
 
@@ -292,12 +309,15 @@ export class MemoryLock {
   }
 }
 
-/** Рейтинг под ограничениями поверх памяти: ограничения кладёт тест — в `restrictions`. */
-export function ratingRestrictions(runs: RunsRepository, board: LeaderboardStore, restrictions = new MemoryRestrictionsRepository()) {
+/**
+ * Рейтинг под ограничениями поверх памяти: ограничения кладёт тест — в
+ * `restrictions`, настройки панели (отсечка `rating.since-date`) — в `settings`.
+ */
+export function ratingRestrictions(runs: RunsRepository, board: LeaderboardStore, restrictions = new MemoryRestrictionsRepository(), settings: SettingsReader = panelSettings()) {
   const gate = restrictionsGate(restrictions);
   const hooks = new RestrictionsHooks();
   const lock = new MemoryLock();
-  const rating = new RatingRestrictions(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), lock as unknown as Redis, runs, board, gate, hooks);
+  const rating = new RatingRestrictions(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), lock as unknown as Redis, runs, board, gate, hooks, settings);
   rating.onModuleInit();
   return { rating, gate, hooks, restrictions, lock };
 }
