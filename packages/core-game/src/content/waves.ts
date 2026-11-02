@@ -74,14 +74,9 @@ export const TIMELINE: TimelineSegmentDef[] = [
     events: [
       { kind: "ring", enemy: "circler_crow", count: 16 },
       // Первое кольцо слабее следующих, но не пустое: 32 стража встают сразу и
-      // держат строй 45 секунд, внутри — элита. Дальше кольца крепнут: больше
-      // стражей, дольше живут, внутри элита покрепче.
-      {
-        kind: "cordon",
-        enemy: "cordon_guard",
-        count: 32,
-        ring: { radius: 170, minRadius: 90, shrinkPerSec: 1.5, lifeSec: 45, inner: [{ enemy: "elite_ghoul", count: 1 }] },
-      },
+      // держат строй 45 секунд. Элиты внутри нет: сундук с неё ускорял сборку
+      // набора, элиту в строй ставят только кольца кривой.
+      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 170, minRadius: 90, shrinkPerSec: 1.5, lifeSec: 45 } },
     ],
   },
   {
@@ -132,12 +127,8 @@ export const TIMELINE: TimelineSegmentDef[] = [
     // Первая контрольная точка сложности: элита приходит в назначенную минуту,
     // а не выпадает случайно из смеси.
     events: [
-      {
-        kind: "cordon",
-        enemy: "cordon_guard",
-        count: 40,
-        ring: { radius: 200, minRadius: 90, shrinkPerSec: 2, lifeSec: 50, inner: [{ enemy: "elite_grave_knight", count: 1 }] },
-      },
+      { kind: "ring", enemy: "elite_ghoul", count: 1 },
+      { kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 200, minRadius: 90, shrinkPerSec: 2, lifeSec: 50 } },
     ],
   },
 ];

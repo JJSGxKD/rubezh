@@ -32,24 +32,24 @@ describe("числа кольца стражей (Р166)", () => {
     expect(curveCordon?.ring?.shrinkPerSec).toBeLessThanOrEqual(SHRINK_BEFORE_R166.curve / 2);
   });
 
-  it("внутри каждого кольца есть элита, а босса внутри нет: боссы приходят своими событиями кривой", () => {
+  it("элита внутри строя — только у колец кривой, ручные кольца без неё; боссов внутри нет нигде", () => {
     const rings = [
-      { where: "180 с", ring: cordonEventAt(180)?.ring },
-      { where: "300 с", ring: cordonEventAt(300)?.ring },
-      { where: "кривая", ring: curveCordon?.ring },
+      { where: "180 с", ring: cordonEventAt(180)?.ring, eliteInside: false },
+      { where: "300 с", ring: cordonEventAt(300)?.ring, eliteInside: false },
+      { where: "кривая", ring: curveCordon?.ring, eliteInside: true },
     ];
-    for (const { where, ring } of rings) {
+    for (const { where, ring, eliteInside } of rings) {
       const ranks = (ring?.inner ?? []).map((entry) => ENEMIES.find((enemy) => enemy.id === entry.enemy)?.rank);
-      expect(ranks.includes("elite"), `элита в кольце ${where}`).toBe(true);
+      expect(ranks.includes("elite"), `элита в кольце ${where}`).toBe(eliteInside);
       expect(ranks.includes("boss"), `босс в кольце ${where}`).toBe(false);
     }
   });
 
-  it("кольцо на 300 с не сопровождается отдельным событием ring элиты", () => {
+  it("первую элиту на 300 с приводит обычное событие ring, как до задачи", () => {
     const events = TIMELINE.find((segment) => segment.fromSec === 300)?.events ?? [];
     const eliteRings = events.filter(
       (event) => event.kind === "ring" && ENEMIES.find((enemy) => enemy.id === event.enemy)?.rank === "elite",
     );
-    expect(eliteRings).toEqual([]);
+    expect(eliteRings).toHaveLength(1);
   });
 });

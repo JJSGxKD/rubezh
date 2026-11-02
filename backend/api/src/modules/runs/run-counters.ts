@@ -89,9 +89,6 @@ interface RankEvent {
  */
 const MANUAL_RANK_EVENTS: readonly RankEvent[] = [
   { atSec: 90, rank: "elite", count: 1 },
-  // Кольцо стражей несёт элиту внутри (`ring.inner`, Р166): убить её можно
-  // сразу, как кольцо встало, поэтому она в бюджете с начала отрезка.
-  { atSec: 180, rank: "elite", count: 1 },
   { atSec: 240, rank: "elite", count: 1 },
   { atSec: 300, rank: "elite", count: 1 },
 ];
