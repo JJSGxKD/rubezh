@@ -6,6 +6,7 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
+import { difficultyForNextRun } from "../../state/difficulty";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import { canOfferGemContinue, canOfferPaidContinue } from "../../state/payments-availability";
@@ -85,7 +86,7 @@ export function RunScreen(): ReactNode {
       container,
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
-      difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
+      difficultyId: resume?.difficultyId ?? difficultyForNextRun(useMeta.getState().runs),
       beforeNewRun: interstitialBeforeNewRun,
     });
 

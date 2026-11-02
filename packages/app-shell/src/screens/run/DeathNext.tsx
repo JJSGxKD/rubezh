@@ -6,6 +6,7 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 // Подписи открытий — в словаре аккаунта: он приезжает с этим чанком.
 import "../../i18n/account";
+import { RATED_DIFFICULTY_ID } from "../../state/difficulty";
 import { nextUnlockAfter } from "../../state/level-unlocks";
 import { useMeta } from "../../state/meta";
 import type { RunRewardView } from "../../state/progress";
@@ -29,7 +30,7 @@ const ICON: Record<NextGoal["kind"], typeof Crown> = { record: Crown, level: Spa
 
 export function DeathNext(props: { result: RunResult; isNewRecord: boolean; reward: RunRewardView | undefined; withTasks: boolean }): ReactNode {
   const { result, reward } = props;
-  const best = useMeta((state) => state.best[result.difficultyId]);
+  const best = useMeta((state) => state.best[RATED_DIFFICULTY_ID]);
   const settled = reward !== undefined && reward.status !== "pending";
   const [tasks, setTasks] = useState<Tasks>("loading");
 

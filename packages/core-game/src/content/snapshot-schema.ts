@@ -171,7 +171,14 @@ const unlockSchema = z.strictObject({
     .optional(),
 });
 
-const ringSchema = z.strictObject({ radius: num, minRadius: num, shrinkPerSec: num, lifeSec: num });
+const innerSchema = z.strictObject({ enemy: text, count: num, fromSec: nonNegative.optional() });
+const ringSchema = z.strictObject({
+  radius: num,
+  minRadius: num,
+  shrinkPerSec: num,
+  lifeSec: num,
+  inner: z.array(innerSchema).optional(),
+});
 const eventKind = z.enum(["ring", "flank", "cordon"]);
 
 const segmentSchema = z.strictObject({

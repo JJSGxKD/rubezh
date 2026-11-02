@@ -1,7 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
-import { DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
+import { DIFFICULTIES, RATED_DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
 import { assertInGameReward, rewardFor, type Season } from "./season-rules.js";
 
 /**
@@ -24,6 +24,12 @@ import { assertInGameReward, rewardFor, type Season } from "./season-rules.js";
  * всех, остальные — в общей, где таких аккаунтов нет, и каждый берёт место и
  * размер таблицы по своей доске (`season_result.board`). Принадлежность
  * определяется правилом живой таблицы: ограничение не снято и срок не вышел.
+ *
+ * Единая сложность (Р126, T-0191): в итоги идут только рейтинговые сложности, а
+ * нижняя граница окна — не раньше отсечки рейтинга, `[max(начало недели,
+ * отсечка), конец недели)`. Итог по-прежнему отдаёт размер таблицы по всем
+ * трём ключам сложности (у нерейтинговых — нули). Закрытые прежде сезоны,
+ * их итоги и награды не пересчитываются: закрытие пишет только свой сезон.
  */
 
 /** Аккаунтов в одной пачке наград: память держит пачку, а не весь сезон. */
@@ -51,9 +57,10 @@ export interface SeasonCloseRepository {
   closedKeys(seasonKeys: readonly string[]): Promise<Set<string>>;
   /**
    * Закрыть сезон. `excluded` — аккаунты с закрытым рейтингом: в итогах их
-   * нет, места считаются без них. `null` — сезон уже закрыт, не нами.
+   * нет, места считаются без них. `since` — отсечка рейтинга: забеги раньше неё
+   * в итоги не идут. `null` — сезон уже закрыт, не нами.
    */
-  close(season: Season, excluded: readonly string[], now: Date): Promise<SeasonClosed | null>;
+  close(season: Season, excluded: readonly string[], now: Date, since: Date | null): Promise<SeasonClosed | null>;
 }
 
 @Injectable()
@@ -66,7 +73,10 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
     return new Set(rows.map((row) => row.seasonKey));
   }
 
-  async close(season: Season, excluded: readonly string[], now: Date): Promise<SeasonClosed | null> {
+  async close(season: Season, excluded: readonly string[], now: Date, since: Date | null): Promise<SeasonClosed | null> {
+    // Нижняя граница окна считается здесь, а не в SQL: параметр с `NULL` оставил бы базе угадывать тип.
+    const from = since !== null && since.getTime() > season.startsAt.getTime() ? since : season.startsAt;
+    const rated = [...RATED_DIFFICULTIES];
     return await this.prisma.$transaction(
       async (tx) => {
         const created = await tx.$executeRaw`
@@ -86,7 +96,8 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
                    ) AS separate
             FROM run r
             WHERE r.status = 'finished' AND r.ranked AND r.survival_sec IS NOT NULL
-              AND r.finished_at >= ${season.startsAt} AND r.finished_at < ${season.endsAt}
+              AND r.difficulty::text = ANY(${rated}::text[])
+              AND r.finished_at >= ${from} AND r.finished_at < ${season.endsAt}
               AND NOT (r.account_id = ANY(${[...excluded]}::uuid[]))
             ORDER BY r.account_id, r.difficulty, r.survival_sec DESC, r.finished_at ASC
           ),
