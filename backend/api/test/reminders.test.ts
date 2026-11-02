@@ -518,11 +518,16 @@ describe("планировщик напоминаний", () => {
     expect(s.reports).toHaveLength(1);
   });
 
-  it("сезона нет — тик ничего не делает (ключ старта не задан)", async () => {
+  it("сезонов нет — награда дня уходит, сезонных видов нет", async () => {
     const s = scanning({ "seasons.start-date": 0 });
+    s.board.scores.set(player(9), 100);
     s.repository.daily.push(target(1));
-    expect((await s.scanner().tick(MSK(4, 12))).status).toBe("no_season");
-    expect(rowsOf(s)).toEqual([]);
+    const summary = await s.scanner().tick(MSK(4, 12));
+    expect(summary.status).toBe("done");
+    expect(summary.created).toEqual({ season_overtaken: 0, season_closing: 0, daily_reward_ready: 1 });
+    expect(rowsOf(s).map((row) => [row.accountId, row.kind])).toEqual([[player(1), "daily_reward_ready"]]);
+    // Без сезона нет ни таблицы недели, ни снимка.
+    expect([...s.redis.values.keys()].some((key) => key.startsWith("reminders:snap:"))).toBe(false);
   });
 
   it("награда дня: строка ленты с ключом игровых суток, повторный тик ничего не добавляет", async () => {
@@ -729,7 +734,7 @@ describe("ключи каталога настроек напоминаний", 
     expect(SETTINGS.remindersEnabled.key).toBe("reminders.enabled");
     expect(SETTINGS.remindersEnabled.fallback).toBe(false);
     expect([SETTINGS.remindersMinGapHours, SETTINGS.remindersQuietFromHour, SETTINGS.remindersQuietToHour, SETTINGS.remindersLapseDays].map((setting) => [setting.key, setting.fallback])).toEqual([
-      ["reminders.min-gap-hours", 24],
+      ["reminders.min-gap-hours", 20],
       ["reminders.quiet-from-hour", 21],
       ["reminders.quiet-to-hour", 10],
       ["reminders.lapse-days", 14],

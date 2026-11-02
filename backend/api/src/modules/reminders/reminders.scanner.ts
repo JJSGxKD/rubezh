@@ -53,7 +53,7 @@ const MAX_FAILURES_IN_ROW = 5;
 const RANK_BATCH = 20;
 const REMINDERS_KEY = "bot.reminders";
 
-type TickStatus = "done" | "disabled" | "locked" | "quiet" | "no_season" | "failed";
+type TickStatus = "done" | "disabled" | "locked" | "quiet" | "failed";
 
 export interface TickSummary {
   status: TickStatus;
@@ -124,9 +124,8 @@ export class RemindersScanner implements OnApplicationBootstrap, OnModuleDestroy
       // Отчёт за вчера идёт и в тихие часы: он нужен команде с 00:10, а тихо до 10:00.
       await this.report.runIfDue(now).catch((error: unknown) => this.warn("report_failed", error));
       if (isQuietHour(now, this.settings.get(SETTINGS.remindersQuietFromHour), this.settings.get(SETTINGS.remindersQuietToHour))) return { ...summary, status: "quiet" };
-      const season = this.schedule.current(now);
-      if (season === null) return { ...summary, status: "no_season" };
-      await this.scan(season, now, summary);
+      // Сезона может не быть (ключ старта не задан): награда дня от него не зависит, её шлём всё равно.
+      await this.scan(this.schedule.current(now), now, summary);
       this.logger.log(JSON.stringify({ module: "reminders", event: "reminders_tick", candidates: summary.candidates, created: summary.created, skipped: summary.skipped }));
       return summary;
     } catch (error: unknown) {
@@ -142,7 +141,7 @@ export class RemindersScanner implements OnApplicationBootstrap, OnModuleDestroy
     return { status, candidates: zeroes(), created: zeroes(), skipped: {} };
   }
 
-  private async scan(season: Season, now: Date, summary: TickSummary): Promise<void> {
+  private async scan(season: Season | null, now: Date, summary: TickSummary): Promise<void> {
     const day = gameDayOf(now);
     const offers = new Map<string, Offer>();
     const offer = (target: ReminderTarget, reminder: Reminder): void => {
@@ -155,9 +154,12 @@ export class RemindersScanner implements OnApplicationBootstrap, OnModuleDestroy
     const cursors: { name: string; value: string }[] = [];
     const snapshots: { difficulty: Difficulty; entries: SnapshotEntry[] }[] = [];
 
-    for (const difficulty of RATED_DIFFICULTIES) snapshots.push(await this.overtakenOffers(season, day, difficulty, offer));
+    // Без сезона нет таблицы недели и закрытия: остаётся только награда дня.
+    if (season !== null) {
+      for (const difficulty of RATED_DIFFICULTIES) snapshots.push(await this.overtakenOffers(season, day, difficulty, offer));
+    }
 
-    if (day === closingDay(season)) {
+    if (season !== null && day === closingDay(season)) {
       const name = `closing:${season.key}`;
       const cursor = await this.store.readCursor(name);
       if (cursor !== CURSOR_DONE) {
@@ -179,7 +181,9 @@ export class RemindersScanner implements OnApplicationBootstrap, OnModuleDestroy
 
     await this.resolve(offers, now, summary);
     for (const cursor of cursors) await this.store.writeCursor(cursor.name, cursor.value);
-    for (const snapshot of snapshots) await this.store.writeSnapshot(season.key, snapshot.difficulty, snapshot.entries);
+    if (season !== null) {
+      for (const snapshot of snapshots) await this.store.writeSnapshot(season.key, snapshot.difficulty, snapshot.entries);
+    }
   }
 
   /**
