@@ -6,6 +6,7 @@ import { ShardIcon } from "../design-system/components/ShardIcon";
 import { formatDuration, formatNumber, t } from "../i18n";
 import "../i18n/home";
 import { useBadges } from "../state/badges";
+import { RATED_DIFFICULTY_ID } from "../state/difficulty";
 import { refreshHome, useHome, type HomeWidgets as WidgetData } from "../state/home-api";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
@@ -197,10 +198,10 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
       );
     }
     case "record": {
-      const face = recordFace(meta.best[meta.lastDifficultyId], meta.lastDifficultyId, meta.lastRun, meta.runs);
+      const face = recordFace(meta.best[RATED_DIFFICULTY_ID], RATED_DIFFICULTY_ID, meta.lastRun, meta.runs);
       return (
         <Frame id={id} size={size} index={index} ready={false} onOpen={open(face.state, () => navigation.resetTo("rating"))}>
-          <RecordView face={face} size={size} difficulty={t(`difficulty.${meta.lastDifficultyId}.name`)} />
+          <RecordView face={face} size={size} />
         </Frame>
       );
     }
@@ -561,15 +562,15 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
   );
 }
 
-export function RecordView(props: { face: RecordFace; size: WidgetSize; difficulty: string }): ReactNode {
+export function RecordView(props: { face: RecordFace; size: WidgetSize }): ReactNode {
   const { face, size } = props;
   const icon = (
     <IconFace size={size}>
       <Trophy size={iconSize(size)} />
     </IconFace>
   );
-  // Рекорд — на выбранной сложности: широкий называет её, плитке хватает «Рекорд».
-  const title = size === "tile" ? label("record", size) : t("widget.record.on", { difficulty: props.difficulty });
+  // Сложность одна, называть её не нужно: широкому — «Лучший забег», плитке — «Рекорд».
+  const title = size === "tile" ? label("record", size) : t("widget.record.title");
   switch (face.state) {
     case "none":
       return <Layout size={size} face={icon} label={title} big="—" sub={size === "tile" ? t("widget.record.noneShort") : t("widget.record.none")} />;

@@ -68,6 +68,12 @@ export function countersOf(stats: CounterFields | undefined): RunCounters | null
   };
 }
 
+interface CurveRankEvent {
+  everySegments: number;
+  rank: "elite" | "boss";
+  count: number;
+}
+
 interface RankEvent {
   /** секунда забега, на которой событие срабатывает */
   atSec: number;
@@ -102,8 +108,10 @@ const CURVE = {
     { everySegments: 7, rank: "elite", count: 3 },
     { everySegments: 8, rank: "boss", count: 1 },
     { everySegments: 9, rank: "elite", count: 2 },
+    // Кольцо стражей кривой: элита внутри, босса в строю нет.
+    { everySegments: 3, rank: "elite", count: 1 },
   ],
-} as const;
+} as const satisfies { fromSec: number; segmentSec: number; events: readonly CurveRankEvent[] };
 
 /**
  * Сколько элит и боссов пришло по таймлайну к секунде `survivalSec` включая
@@ -120,7 +128,9 @@ export function rankBudget(survivalSec: number): { elite: number; boss: number }
   if (survivalSec >= CURVE.fromSec) {
     // Отрезки кривой, уже начавшиеся к этой секунде.
     const started = Math.floor((survivalSec - CURVE.fromSec) / CURVE.segmentSec) + 1;
-    for (const event of CURVE.events) budget[event.rank] += Math.floor(started / event.everySegments) * event.count;
+    for (const event of CURVE.events as readonly CurveRankEvent[]) {
+      budget[event.rank] += Math.floor(started / event.everySegments) * event.count;
+    }
   }
   return budget;
 }

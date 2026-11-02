@@ -13,6 +13,7 @@ import {
   type RunSnapshot,
 } from "@bh/core-game";
 import { create } from "zustand";
+import { RATED_DIFFICULTY_ID } from "./difficulty";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
 import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
@@ -554,14 +555,18 @@ function restartSession(set: SetState, get: GetState): void {
   set({ ...IDLE, phase: "running", seed, devRun });
   lastSavedSec = 0;
   errorsAtRunStart = clientErrorCount();
-  session.restart(seed);
+  // «Ещё раз» бывает только после забега, значит первого, обучающего забега
+  // уже нет: следующий идёт на единой сложности (Р126). Настоящую сложность
+  // получает и аналитика, и повторный «Ещё раз».
+  if (startOptions !== null) startOptions = { ...startOptions, difficultyId: RATED_DIFFICULTY_ID };
+  session.restart(seed, { difficultyId: RATED_DIFFICULTY_ID });
   setRunUiMode(true);
 
   track("run_started", {
     seed,
     weapon: startOptions?.startingWeaponId ?? "",
     map: startOptions?.mapId ?? "",
-    difficulty: startOptions?.difficultyId ?? "",
+    difficulty: RATED_DIFFICULTY_ID,
     screenMode: screenModeNow(),
     orientation: orientationNow(),
     devMode: devRun,

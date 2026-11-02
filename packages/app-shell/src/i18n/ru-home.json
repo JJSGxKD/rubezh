@@ -50,7 +50,6 @@
   "widget.tasks.idle": "Награды за забеги",
   "widget.record.title": "Лучший забег",
   "widget.record.short": "Рекорд",
-  "widget.record.on": "Лучший забег · {difficulty}",
   "widget.record.gap": "не хватило {time}",
   "widget.record.fresh": "в последнем забеге",
   "widget.record.none": "Первый забег ещё впереди",

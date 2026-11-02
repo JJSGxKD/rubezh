@@ -5,6 +5,7 @@ import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/account";
 import "../../i18n/arsenal";
 import "../../i18n/boosts";
+import { historyDifficultyKey } from "../../state/difficulty";
 import { damageShares, loadRunDetail, type RunDetail } from "../../state/run-detail-api";
 import { ItemIcon } from "../item-icons";
 import { isEvolutionWeapon } from "../run/evolution-hints";
@@ -77,6 +78,8 @@ function Body(props: { run: RunDetail }): ReactNode {
   const ratingKey = `runDetail.rating.${run.rating}`;
   // Подробностей нет — забег записан сборкой до листа: честно сказать, а не рисовать нули.
   const old = run.passives.length === 0 && run.damageTaken === null;
+  // Плашка только у забегов не на единой сложности: «Обучение» и «Нормальная».
+  const difficultyKey = historyDifficultyKey(run.difficultyId);
   return (
     <div className="grid gap-4">
       <div className="flex items-center gap-3">
@@ -88,7 +91,7 @@ function Body(props: { run: RunDetail }): ReactNode {
           <p className="text-xs text-text-muted">{outcomeLine(run)}</p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <Badge>{t(`difficulty.${run.difficultyId}.name`)}</Badge>
+          {difficultyKey === null ? null : <Badge>{t(difficultyKey)}</Badge>}
           <Badge tone={RATING_TONE[run.rating] ?? "muted"}>{hasTranslation(ratingKey) ? t(ratingKey) : t("runDetail.rating.review")}</Badge>
         </div>
       </div>
