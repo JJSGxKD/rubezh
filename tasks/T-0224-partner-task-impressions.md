@@ -3,8 +3,8 @@ id: T-0224
 title: Показы партнёрских заданий — событие `task_shown` при открытии экрана заданий
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0105, T-0107]
