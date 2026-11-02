@@ -360,8 +360,14 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(summary).toContain("xpCollected: world.stats.xpCollected");
   });
 
-  it("подстройка давления (T-0195) подняла формат снимка забега до 8", () => {
-    expect(RUN_SNAPSHOT_FORMAT).toBe(8);
+  it("формат снимка забега не ниже восьмого: подстройка давления и уборка вражеских снарядов", () => {
+    expect(RUN_SNAPSHOT_FORMAT).toBeGreaterThan(8);
+  });
+
+  it("в снимке нет массивов вражеского снаряда", () => {
+    const saved = roundTrip(newRun(1)) as { projectiles: { arrays: Record<string, unknown> } };
+    expect(Object.keys(saved.projectiles.arrays)).not.toContain("fromPlayer");
+    expect(Object.keys(saved.projectiles.arrays)).not.toContain("ownerType");
   });
 });
 
@@ -674,15 +680,15 @@ describe("снимок посреди формирования и ожидани
 describe("снимок с подстройкой давления (tasks/T-0195)", () => {
   const WITH_PRESSURE = { pressure: TEST_PRESSURE, loadout: { modifiers: { damage: 1 }, boosts: [], accountLevel: 5, deviceClass: "light" as const } };
 
-  it("версия мира поднята до 15: в числах сложности появились поля подстройки", () => {
-    expect(WORLD_SNAPSHOT_VERSION).toBe(15);
+  it("версия мира не ниже 15: в числах сложности появились поля подстройки", () => {
+    expect(WORLD_SNAPSHOT_VERSION).toBeGreaterThanOrEqual(15);
   });
 
   it("снимок прежней версии отвергается понятной ошибкой", () => {
     const run = newRun(1, WITH_PRESSURE);
     const saved = roundTrip(run) as Record<string, unknown>;
-    expect(() => restoreWorld(newRun(1, WITH_PRESSURE).world, newRun(1, WITH_PRESSURE).director, { ...saved, version: 14 })).toThrow(
-      /версия 14, ожидалась 15/,
+    expect(() => restoreWorld(newRun(1, WITH_PRESSURE).world, newRun(1, WITH_PRESSURE).director, { ...saved, version: WORLD_SNAPSHOT_VERSION - 1 })).toThrow(
+      new RegExp(`версия ${WORLD_SNAPSHOT_VERSION - 1}, ожидалась ${WORLD_SNAPSHOT_VERSION}`),
     );
   });
 

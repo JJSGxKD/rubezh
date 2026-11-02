@@ -193,7 +193,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 8;
+export const RUN_SNAPSHOT_FORMAT = 9;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -751,11 +751,10 @@ export interface RunCues {
   bossSpawns: number;
   /** собранный опыт — кристаллы */
   xp: number;
-  /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул, стрелок выстрелил */
+  /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул */
   fuses: number;
   dashWarns: number;
   dashes: number;
-  enemyShots: number;
   /** срабатывания оружия: id оружия → сколько раз */
   weapons: Record<string, number>;
 }
