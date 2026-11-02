@@ -35,6 +35,8 @@
   "run.hint.move": "Проведи пальцем по экрану — персонаж пойдёт следом. Оружие стреляет само.",
   "run.level": "Уровень {level}",
   "run.levelUp.new": "Новое",
+  "run.levelUp.limit": "Предел",
+  "run.levelUp.limitCount": "Предел × {count}",
   "run.levelUp.evolve": "Эволюция",
   "run.evolution.hintWeapon": "С навыком «{passive}» станет «{evolution}»",
   "run.evolution.hintWeaponReady": "Максимум! С «{passive}» сундук даст «{evolution}»",
