@@ -38,6 +38,16 @@ shared:
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - .github/workflows/deploy.yml
+  - apps/admin/src/api/proxies.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/helpers/memory-subscription.ts
+  - backend/api/test/outbound-proxy.test.ts
+  - backend/api/test/outbound.test.ts
+  - backend/api/test/player-address.test.ts
+  - backend/api/test/proxies.test.ts
+  - backend/api/test/wipe-plan.test.ts
+  - infra/prod/api.env.example
 runner: local
 executor: sonnet-5.5
 effort: extra
