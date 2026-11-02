@@ -143,8 +143,14 @@ describe("снимок контента: состав и хэш", () => {
 
   it("мир забега берёт записи «Предела» из снимка", () => {
     const only = LIMITS.slice(0, 1);
-    const world = createRunWorld({ seed: 1, content: { ...CONTENT_SNAPSHOT, limits: only } });
-    expect(world.limits).toEqual(only);
+    const { world } = createRunWorld({
+      seed: 1,
+      mapId: CONTENT_SNAPSHOT.maps[0].id,
+      difficultyId: DEFAULT_DIFFICULTY_ID,
+      unitScale: 1,
+      content: { ...CONTENT_SNAPSHOT, limits: only },
+    });
+    expect(world.limitTypes).toEqual(only);
   });
 
   it("меняет хэш от порядка врагов: от него зависят индексы типов и обращения к генератору", () => {

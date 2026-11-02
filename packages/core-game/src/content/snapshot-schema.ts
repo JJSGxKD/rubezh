@@ -157,6 +157,15 @@ const passiveSchema = z.strictObject({
 
 const loadoutModifiers = z.partialRecord(z.enum(LOADOUT_STATS), num);
 
+const limitSchema = z.strictObject({
+  id: text,
+  nameKey: text,
+  descriptionKey: text,
+  stat: z.enum(LOADOUT_STATS),
+  step: num,
+  weight: num.optional(),
+});
+
 const categoryCounts = z.strictObject({ attack: count, defense: count, mobility: count });
 
 const unlockSchema = z.strictObject({
@@ -326,6 +335,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   maxBoostsPerRun: count,
   cardToolUnlocks: z.array(z.strictObject({ level: z.int().positive(), ...cardTools })),
   cardToolRules: z.strictObject({ skipXpRatio: num }),
+  limits: z.array(limitSchema),
   balanceTargets: balanceTargetsSchema,
 });
 

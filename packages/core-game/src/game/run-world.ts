@@ -1,7 +1,6 @@
 import type { DifficultyId, MapDef, RunLoadout } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../content/snapshot";
-import { LIMITS } from "../content/upgrades";
 import { cardToolsAt, unlocksAt, weaponsOpenAt } from "./progression/unlocks";
 import { createTimelineDirector } from "./sim/director";
 import type { Spawner } from "./sim/spawner";
@@ -65,7 +64,7 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     continueRules: content.continueRules,
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
-    limits: LIMITS,
+    limits: content.limits,
     // Без уровня зарядов нет: на этом наборе идут golden-тесты и запись прошлой сборки.
     ...(level === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, level) }),
     cardRules: content.cardToolRules,
