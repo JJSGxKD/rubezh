@@ -1157,7 +1157,7 @@ export interface ChestsLateDef {
 }
 
 /** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
-export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKind | "xp" };
+export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: Exclude<UpgradeOptionKind, "limit"> | "xp" };
 
 // --- Тайники рубежа (docs/35-stage4-plan.md, Р153; design/art/meta-v2.md §5) ---
 // Места на бесконечной карте, ради которых стоит идти: причина двигаться и
@@ -1324,7 +1324,32 @@ export type UpgradeOptionKind =
   | "passive_new"
   | "passive_level"
   | "weapon_evolve"
-  | "heal";
+  | "heal"
+  /** малая прибавка «Предела»: предлагается, только когда прокачивать нечего */
+  | "limit";
+
+/**
+ * Запись «Предела» (docs/35-stage4-plan.md, Р130): малая прибавка к параметру,
+ * которую можно брать без счёта, когда в наборе всё взято и прокачано. Данные
+ * геймдизайнера (`core-game/src/content/upgrades.ts`, `LIMITS`); складывается
+ * со снаряжением и бустами и упирается в те же пределы движка.
+ */
+export interface LimitDef {
+  /** id записи; карточка получает id `limit:<id>` */
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  /** параметр, к которому идёт прибавка, — тот же, что у снаряжения */
+  stat: LoadoutStat;
+  /**
+   * Прибавка за одно нажатие в шкале `LoadoutStat`: у перезарядки это
+   * ускорение (0,02 — на 2% короче), у здоровья — число. Больше нуля и не
+   * больше 5% предела параметра.
+   */
+  step: number;
+  /** вес при выборе карточек; не задан — 1 */
+  weight?: number;
+}
 
 /**
  * Вариант выбора при наборе уровня. `id` устойчив между прогонами — именно он
