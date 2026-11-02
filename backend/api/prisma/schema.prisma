@@ -1373,7 +1373,10 @@ model RunBoost {
   runId      String    @id @map("run_id") @db.VarChar(64)
   accountId  String    @map("account_id") @db.Uuid
   boosts     String[]
-  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 }
+  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 } и чем оплачен каждый
+  /// буст: "paid_with": { "fury": "credit", "aegis": "coins" } — "credit" значит
+  /// подарок пасса (`boost_credit`), его возврат — подарок, а не деньги (T-0312);
+  /// у покупок до подарков ключа нет
   cost       Json
   createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
   refundedAt DateTime? @map("refunded_at") @db.Timestamptz(3)
@@ -2680,6 +2683,16 @@ model PassClaim {
 
   @@id([accountId, monthKey, tier, lane])
   @@map("pass_claim")
+}
+
+/// Метка закрытого месяца пасса (T-0312): пишется последней, когда незабранное
+/// выдано всем. Нет строки у прошедшего месяца — задание закрывает его снова, а
+/// двойных выдач нет: каждая награда держится на ключе кошелька и журнале `pass_claim`
+model PassClose {
+  monthKey String   @id @map("month_key") @db.VarChar(7)
+  closedAt DateTime @map("closed_at") @db.Timestamptz(3)
+
+  @@map("pass_close")
 }
 
 /// Бусты-подарки: пасс дарит буст, а не списывает самоцветы за него. Тратит

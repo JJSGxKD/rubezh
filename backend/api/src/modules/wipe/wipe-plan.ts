@@ -70,6 +70,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   PromoCode: keep("коды команды"),
   TaskDef: keep("каталог заданий команды"),
   PassSeason: keep("ленты месяцев пасса команды (T-0311) — настройка, не данные игрока"),
+  PassClose: keep("метка закрытого месяца пасса (T-0312) — служебная: очки и журнал стираются, а выданное закрытием уже в кошельке"),
   ShopPromo: keep("акции магазина команды"),
   HomeSlide: keep("слайды главной команды"),
   MediaImage: keep("картинки панели"),
