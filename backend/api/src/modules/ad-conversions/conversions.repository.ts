@@ -5,6 +5,7 @@ import { PRISMA } from "../../infra/database.js";
 import { CONVERSION_WINDOWS, PAYMENT_CURRENCY, isConversionGoal, type ConversionGoal } from "./conversion-rules.js";
 import { DESTINATION_KINDS, destinationOf, type DestinationKind } from "./destinations/destination.js";
 import { TARGETS_CTE } from "./destinations/destination-targets.js";
+import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 import { EVENT_GOAL, KNOWN_GOALS, eventOfGoal, type PostbackEvent } from "./postback-events.js";
 
 /**
@@ -175,7 +176,7 @@ export class PrismaConversionsRepository implements ConversionsRepository {
                row_number() OVER (PARTITION BY p.account_id ORDER BY p.paid_at, p.purchase_id) AS n
         FROM purchase p
         WHERE p.account_id IN (SELECT account_id FROM attributed)
-          AND p.mode = 'live' AND p.paid_at IS NOT NULL AND p.status = 'paid' AND p.refund_requested_at IS NULL
+          AND p.mode = 'live' AND p.product::text <> ${DONATION_PRODUCT} AND p.paid_at IS NOT NULL AND p.status = 'paid' AND p.refund_requested_at IS NULL
       )
       INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, purchase_id, status, reason, next_attempt_at, created_at)
       SELECT gen_random_uuid(), t.destination, t.destination, t.link_code, t.click_id, t.account_id,

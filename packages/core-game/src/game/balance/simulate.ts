@@ -1,7 +1,6 @@
 import type { DifficultyId } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
-import { LIMITS } from "../../content/upgrades";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
@@ -108,7 +107,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
-    limits: LIMITS,
+    limits: content.limits,
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,
     map: content.maps[0],
