@@ -3,8 +3,8 @@ id: T-0093
 title: Подписка Xray для прокси — хранение, обновление, контейнер Xray, раздел панели
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-11
 size: M
 depends_on: [T-0092, T-0065]
