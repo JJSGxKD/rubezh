@@ -197,8 +197,8 @@ export async function run(options, log = console.log) {
         await recordVideo(browser, options, scene);
         log(`видео ${join(options.out, `${scene}.webm`)}`);
       } catch (error) {
-        failed = true;
-        log(`ОШИБКА видео ${scene}: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+        // Видео нужно человеку, а не замерам: без кодека ffmpeg листы и JSON остаются верными.
+        log(`ПРЕДУПРЕЖДЕНИЕ видео ${scene} не записано: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
       }
     }
     log(`\nсцена\tземля\tжизнь\tмакс. доля\tвспышки\tмакс. объектов\tp95 кадра`);
