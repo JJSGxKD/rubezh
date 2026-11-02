@@ -7,6 +7,7 @@ import { REFRESH_LOCK_KEY, REFRESH_LOCK_TTL_MS, withLock, type LockRedis } from 
 import { SUBSCRIPTION_KEY, type StoredSubscription, type SubscriptionRepository } from "./subscription.repository.js";
 import type { SubscriptionRoutes } from "./subscription-routes.js";
 import type { SubscriptionSync } from "./subscription.sync.js";
+import type { ConfigWriter } from "./xray-config-writer.js";
 
 /**
  * Расписание подписки Xray (docs/35-stage4-plan.md Р101, tasks/T-0093), по
@@ -16,6 +17,11 @@ import type { SubscriptionSync } from "./subscription.sync.js";
  * - **Период обновления** — `max(настройка, интервал поставщика)`, не больше 168
  *   часов. После неудачи повтор через 15 минут, а не через период: сбой
  *   поставщика обычно короткий.
+ * - **Файла конфига нет** (том Xray пересоздан, сервер переехал), а подписка
+ *   считается свежей: обновление немедленно, не через период — иначе Xray стоит
+ *   без входов, а перебор отдаёт на них запросы. Только когда каталог тома есть
+ *   и прошлое обновление не провалилось: после сбоя действует повтор через
+ *   15 минут, поставщика не долбим каждый тик.
  * - **Проверки** — не раньше 20 секунд после записи конфига (Xray перезапускается
  *   и не принимает подключения), по пять параллельно и не больше 25 за тик,
  *   чтобы проход укладывался в срок замка. Остальные подхватит следующий тик.
@@ -34,6 +40,7 @@ export interface SchedulerDeps {
   repository: SubscriptionRepository;
   routes: SubscriptionRoutes;
   sync: SubscriptionSync;
+  writer: ConfigWriter;
   proxyFetch: ProxyFetch;
   redis: LockRedis;
   settings: SettingsReader;
@@ -68,7 +75,7 @@ export class SubscriptionScheduler implements OnApplicationBootstrap, OnModuleDe
     try {
       const snapshot = await this.deps.routes.reload();
       if (snapshot === null || !snapshot.subscription.enabled) return;
-      if (this.refreshDue(snapshot.subscription, now)) await this.deps.sync.refresh(now);
+      if (this.refreshDue(snapshot.subscription, now) || (await this.configMissing(snapshot.subscription))) await this.deps.sync.refresh(now);
 
       const fresh = await this.deps.routes.reload();
       if (fresh === null || !fresh.subscription.enabled) return;
@@ -88,6 +95,12 @@ export class SubscriptionScheduler implements OnApplicationBootstrap, OnModuleDe
     if (subscription.lastRefreshOk === false) return passed >= RETRY_AFTER_FAILURE_MS;
     const hours = Math.min(MAX_PERIOD_HOURS, Math.max(this.deps.settings.get(SETTINGS.proxySubscriptionRefreshHours), subscription.providerIntervalHours ?? 0));
     return passed >= hours * 3_600_000;
+  }
+
+  private async configMissing(subscription: StoredSubscription): Promise<boolean> {
+    if (subscription.lastRefreshOk === false) return false;
+    if (!(await this.deps.writer.available())) return false;
+    return !(await this.deps.writer.exists());
   }
 
   private async probeDue(now: Date): Promise<void> {

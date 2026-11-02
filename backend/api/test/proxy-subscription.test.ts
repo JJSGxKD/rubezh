@@ -529,7 +529,7 @@ describe("расписание обновления и проверок", () => 
   function scheduled(options: { settings?: Record<string, SettingValue> } = {}) {
     const r = rig(options);
     const proxyFetch = vi.fn<ProxyFetch>(async () => ipify());
-    const scheduler = new SubscriptionScheduler({ repository: r.repository, routes: r.routes, sync: r.sync, proxyFetch, redis: r.redis, settings: r.settings, changed: r.changed });
+    const scheduler = new SubscriptionScheduler({ repository: r.repository, routes: r.routes, sync: r.sync, writer: r.writer, proxyFetch, redis: r.redis, settings: r.settings, changed: r.changed });
     return { ...r, proxyFetch, scheduler };
   }
   const after = (seconds: number): Date => new Date(NOW.getTime() + seconds * 1000);
@@ -568,6 +568,51 @@ describe("расписание обновления и проверок", () => 
     await seed(s, { lastRefreshAt: NOW, lastRefreshOk: false, lastRefreshNote: "Подписка пустая" });
 
     await s.scheduler.tick(after(14 * 60));
+    expect(s.fetch).not.toHaveBeenCalled();
+    await s.scheduler.tick(after(15 * 60 + 1));
+    expect(s.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("файла конфига нет, подписка свежая: тик обновляет сразу, не ждёт период", async () => {
+    const s = scheduled();
+    await seed(s, { lastRefreshAt: NOW, lastRefreshOk: true });
+    s.writer.fileExists = false;
+
+    await s.scheduler.tick(after(60));
+
+    expect(s.fetch).toHaveBeenCalledTimes(1);
+    expect(s.writer.written).toHaveLength(1);
+    // Файл записан: следующий тик подписку не трогает.
+    await s.scheduler.tick(after(120));
+    expect(s.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("файл на месте, подписка свежая: тик подписку не обновляет", async () => {
+    const s = scheduled();
+    await seed(s, { lastRefreshAt: NOW, lastRefreshOk: true });
+
+    await s.scheduler.tick(after(60));
+
+    expect(s.fetch).not.toHaveBeenCalled();
+  });
+
+  it("файла нет, но каталога тома тоже нет (Xray не подключён): подписку не дёргаем", async () => {
+    const s = scheduled();
+    await seed(s, { lastRefreshAt: NOW, lastRefreshOk: true });
+    s.writer.fileExists = false;
+    s.writer.available_ = false;
+
+    await s.scheduler.tick(after(60));
+
+    expect(s.fetch).not.toHaveBeenCalled();
+  });
+
+  it("файла нет, но прошлое обновление провалилось: действует повтор через 15 минут, а не каждый тик", async () => {
+    const s = scheduled();
+    await seed(s, { lastRefreshAt: NOW, lastRefreshOk: false, lastRefreshNote: "Подписка пустая" });
+    s.writer.fileExists = false;
+
+    await s.scheduler.tick(after(60));
     expect(s.fetch).not.toHaveBeenCalled();
     await s.scheduler.tick(after(15 * 60 + 1));
     expect(s.fetch).toHaveBeenCalledTimes(1);

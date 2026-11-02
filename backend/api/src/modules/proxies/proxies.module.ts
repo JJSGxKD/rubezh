@@ -84,11 +84,12 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
     },
     {
       provide: SubscriptionScheduler,
-      inject: [SUBSCRIPTION_REPOSITORY, SubscriptionRoutes, SubscriptionSync, OUTBOUND_PROXY_FETCH, REDIS, SETTINGS_READER, ProxyRoutes, APP_CONFIG],
+      inject: [SUBSCRIPTION_REPOSITORY, SubscriptionRoutes, SubscriptionSync, CONFIG_WRITER, OUTBOUND_PROXY_FETCH, REDIS, SETTINGS_READER, ProxyRoutes, APP_CONFIG],
       useFactory: (
         repository: SubscriptionRepository,
         routes: SubscriptionRoutes,
         sync: SubscriptionSync,
+        writer: ConfigWriter,
         proxyFetch: ProxyFetch,
         redis: Redis,
         settings: SettingsReader,
@@ -96,7 +97,7 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
         config: AppConfig,
       ): SubscriptionScheduler => {
         // Без базы подписке негде жить: расписание не запускается (как опрос прокси).
-        return new SubscriptionScheduler({ repository, routes, sync, proxyFetch, redis, settings, changed: () => proxyRoutes.changed("subscription"), autostart: config.databaseUrl !== "" });
+        return new SubscriptionScheduler({ repository, routes, sync, writer, proxyFetch, redis, settings, changed: () => proxyRoutes.changed("subscription"), autostart: config.databaseUrl !== "" });
       },
     },
     ProxySubscriptionService,

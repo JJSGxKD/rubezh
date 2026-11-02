@@ -67,13 +67,20 @@ export class MemorySubscriptionRepository implements SubscriptionRepository {
 export class MemoryConfigWriter implements ConfigWriter {
   readonly written: Record<string, unknown>[] = [];
   available_ = true;
+  /** файл конфига лежит в томе; запись его создаёт */
+  fileExists = true;
 
   async available(): Promise<boolean> {
     return this.available_;
   }
 
+  async exists(): Promise<boolean> {
+    return this.fileExists;
+  }
+
   async write(config: Record<string, unknown>): Promise<void> {
     if (!this.available_) throw new SidecarMissingError();
+    this.fileExists = true;
     this.written.push(config);
   }
 

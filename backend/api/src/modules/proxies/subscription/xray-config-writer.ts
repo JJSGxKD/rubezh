@@ -20,6 +20,8 @@ export class SidecarMissingError extends Error {
 export interface ConfigWriter {
   /** есть ли куда писать: каталог тома существует */
   available(): Promise<boolean>;
+  /** лежит ли уже файл конфига: без него Xray висит на «жду конфиг» */
+  exists(): Promise<boolean>;
   /** нет каталога — `SidecarMissingError` */
   write(config: Record<string, unknown>): Promise<void>;
 }
@@ -38,6 +40,14 @@ export class FileConfigWriter implements ConfigWriter {
   async available(): Promise<boolean> {
     try {
       return (await stat(dirname(this.path))).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  async exists(): Promise<boolean> {
+    try {
+      return (await stat(this.path)).isFile();
     } catch {
       return false;
     }
