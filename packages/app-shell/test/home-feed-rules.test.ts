@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { claimFeedView, FEED_VIEWS_PER_LAUNCH, FEED_WINDOW_MS, feedTextOf, freshItems, nextHoldMs, nextIndex } from "../src/screens/home-feed-rules";
+import { claimFeedView, FEED_VIEWS_PER_LAUNCH, FEED_WINDOW_MS, feedDue, feedTextOf, freshItems, nextHoldMs, nextIndex } from "../src/screens/home-feed-rules";
 import type { FeedItem } from "../src/state/feed-api";
 
 // Правила ленты на главной (Р114, tasks/T-0176): как долго держится событие,
@@ -96,5 +96,13 @@ describe("показы для аналитики", () => {
     expect(FEED_VIEWS_PER_LAUNCH).toBe(20);
     expect(claimFeedView(seen, "extra")).toBe(false);
     expect(seen.size).toBe(20);
+  });
+});
+
+describe("когда спрашивать ленту снова", () => {
+  it("ни разу не спрашивали — пора; иначе не раньше refreshSec", () => {
+    expect(feedDue(0, 300, NOW)).toBe(true);
+    expect(feedDue(NOW, 300, NOW + 299_999)).toBe(false);
+    expect(feedDue(NOW, 300, NOW + 300_000)).toBe(true);
   });
 });
