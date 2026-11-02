@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
@@ -12,6 +11,7 @@ import { WalletService } from "../wallet/wallet.service.js";
 import { BATTLE_PASS_REPOSITORY, type BattlePassRepository } from "./battle-pass.repository.js";
 import type { PassCredited } from "./battle-pass.service.js";
 import { DEFAULT_RIBBON } from "./pass-defaults.js";
+import { PassCloseLock, PassCloseLockLost, type HeldLock } from "./pass-close.lock.js";
 import { PASS_CLOSE_REPOSITORY, type PassCloseRepository, type PassPlayer } from "./pass-close.repository.js";
 import { claimKey, monthBounds, monthKeyOf, passGrantKey, passRibbonSchema, rewardLines, tierOf, PASS_TIERS, type PassLane, type PassReward, type PassTierDef } from "./pass-rules.js";
 
@@ -69,7 +69,7 @@ export interface PassCloseLimits {
 
 export const PASS_CLOSE_LIMITS: PassCloseLimits = { batch: 500, concurrency: 4, attempts: 3, retryDelayMs: 2_000, lockTtlMs: 5 * 60_000, lockRenewEveryMs: 60_000, lookbackMonths: 3, graceMs: 10_000 };
 export const PASS_CLOSE_OPTIONS = Symbol("PASS_CLOSE_OPTIONS");
-export const PASS_CLOSE_LOCK_KEY = "battle-pass:close:lock";
+export { PASS_CLOSE_LOCK_KEY } from "./pass-close.lock.js";
 
 /** Итог закрытия месяца: сколько игроков получили награды и сколько наград выдано этим проходом. */
 export interface PassClosed {
@@ -78,39 +78,19 @@ export interface PassClosed {
   rewards: number;
 }
 
-const RELEASE_SCRIPT = `
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-  return redis.call("DEL", KEYS[1])
-end
-return 0
-`;
-const RENEW_SCRIPT = `
-if redis.call("GET", KEYS[1]) == ARGV[1] then
-  return redis.call("PEXPIRE", KEYS[1], ARGV[2])
-end
-return 0
-`;
 const FIRST_ACCOUNT = "00000000-0000-0000-0000-000000000000";
-const REDIS_TIMEOUT_MS = 2_000;
 const DB_TIMEOUT_MS = 10_000;
 const WALLET_TIMEOUT_MS = 8_000;
 /** Игрок получает не больше: 30 ступеней двух лент. */
 const MAX_REWARDS = PASS_TIERS * 2;
 
-/** Замок потерян: токен в Redis уже чужой или ключа нет. Проход прекращается, выданное остаётся. */
-class PassCloseLockLost extends Error {}
-
-interface HeldLock {
-  token: string;
-  renewedAt: number;
-}
-
 @Injectable()
 export class PassCloseService {
   private readonly logger = new Logger("battle-pass");
+  private readonly lock: PassCloseLock;
 
   constructor(
-    @Inject(REDIS) private readonly redis: Pick<Redis, "set" | "eval">,
+    @Inject(REDIS) redis: Pick<Redis, "set" | "eval">,
     @Inject(PASS_CLOSE_REPOSITORY) private readonly closing: PassCloseRepository,
     @Inject(BATTLE_PASS_REPOSITORY) private readonly pass: BattlePassRepository,
     private readonly wallet: WalletService,
@@ -118,7 +98,9 @@ export class PassCloseService {
     @Inject(VIP_REPOSITORY) private readonly vip: Pick<VipRepository, "withVipDuring">,
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
     @Optional() @Inject(PASS_CLOSE_OPTIONS) private readonly limits: PassCloseLimits = PASS_CLOSE_LIMITS,
-  ) {}
+  ) {
+    this.lock = new PassCloseLock(redis, limits.lockTtlMs, limits.lockRenewEveryMs);
+  }
 
   /**
    * Закрыть прошедшие месяцы, которые ещё не закрыты. Возвращает закрытые этим
@@ -131,7 +113,7 @@ export class PassCloseService {
     // Дешёвая проверка без замка: почти каждую минуту закрывать нечего.
     if ((await this.open(candidates)).length === 0) return [];
 
-    const lock = await this.acquire();
+    const lock = await this.lock.acquire();
     if (lock === null) return null;
     try {
       const closed: PassClosed[] = [];
@@ -146,7 +128,7 @@ export class PassCloseService {
       this.warn("pass_close_lock_lost", {});
       return null;
     } finally {
-      await this.release(lock);
+      await this.lock.release(lock);
     }
   }
 
@@ -216,7 +198,7 @@ export class PassCloseService {
     const wins = new Map<string, number>();
     const failed: PassPlayer[] = [];
     for (let from = 0; from < players.length; from += this.limits.concurrency) {
-      await this.keepLock(lock);
+      await this.lock.keep(lock);
       await Promise.all(
         players.slice(from, from + this.limits.concurrency).map(async (player) => {
           const tally = { wins: 0 };
@@ -309,35 +291,6 @@ export class PassCloseService {
     if (parsed.success) return parsed.data;
     this.logger.error(JSON.stringify({ module: "battle-pass", event: "pass_season_invalid", month, problem: parsed.error.issues[0]?.message ?? "лента не проходит схему" }));
     return DEFAULT_RIBBON;
-  }
-
-  private async acquire(): Promise<HeldLock | null> {
-    const token = randomUUID();
-    const taken = await withTimeout(this.redis.set(PASS_CLOSE_LOCK_KEY, token, "PX", this.limits.lockTtlMs, "NX"), REDIS_TIMEOUT_MS, "батл-пасс: замок закрытия");
-    return taken === null ? null : { token, renewedAt: Date.now() };
-  }
-
-  /** Продлить замок, если пора. Redis недоступен — идём дальше: двойной проход безопасен, а остановка стоила бы месяца. */
-  private async keepLock(lock: HeldLock): Promise<void> {
-    if (Date.now() - lock.renewedAt < this.limits.lockRenewEveryMs) return;
-    let kept: unknown;
-    try {
-      kept = await withTimeout(this.redis.eval(RENEW_SCRIPT, 1, PASS_CLOSE_LOCK_KEY, lock.token, String(this.limits.lockTtlMs)) as Promise<unknown>, REDIS_TIMEOUT_MS, "батл-пасс: продление замка");
-    } catch (error: unknown) {
-      this.warn("pass_close_lock_renew_failed", { reason: error instanceof Error ? error.message : "unknown" });
-      return;
-    }
-    if (Number(kept) !== 1) throw new PassCloseLockLost();
-    lock.renewedAt = Date.now();
-  }
-
-  private async release(lock: HeldLock): Promise<void> {
-    try {
-      await withTimeout(this.redis.eval(RELEASE_SCRIPT, 1, PASS_CLOSE_LOCK_KEY, lock.token) as Promise<unknown>, REDIS_TIMEOUT_MS, "батл-пасс: снятие замка");
-    } catch (error: unknown) {
-      // Замок живёт не дольше TTL: следующий проход увидит его свободным.
-      this.warn("pass_close_lock_not_released", { reason: error instanceof Error ? error.message : "unknown" });
-    }
   }
 
   private async timed<T>(promise: Promise<T>): Promise<T> {

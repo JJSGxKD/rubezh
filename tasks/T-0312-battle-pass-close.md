@@ -16,6 +16,7 @@ zones:
 shared:
   - backend/api/src/modules/battle-pass/battle-pass.module.ts
   - backend/api/src/modules/battle-pass/pass-close.repository.ts
+  - backend/api/src/modules/battle-pass/pass-close.lock.ts
   - backend/api/src/modules/boosts/boosts.service.ts
   - backend/api/src/modules/boosts/boosts.repository.ts
   - backend/api/src/modules/notifications/notification-kinds.ts
