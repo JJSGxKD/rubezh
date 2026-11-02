@@ -4,7 +4,7 @@ title: Напоминания через бота: обогнали в сезо�
 epic: E16
 priority: P1
 status: done
-owner: claude-10 / sonnet-5.5 / extra
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-21
 size: M
 depends_on: [T-0010, T-0104, T-0110, T-0191]
