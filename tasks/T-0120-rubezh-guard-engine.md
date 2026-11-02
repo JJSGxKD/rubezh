@@ -3,7 +3,7 @@ id: T-0120
 title: Рубеж — цель забега, движок: страж на отметке, победа в итоге забега
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
@@ -33,6 +33,14 @@ shared:
   - packages/core-game/src/content/balance-targets.ts
   - scripts/balance/balance-sim.ts
   - packages/core-game/test/**
+  - CLAUDE.md
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/sim/rng.ts
+  - packages/core-game/src/game/sim/spawner.ts
 runner: any
 executor: sonnet-5.5
 effort: high
