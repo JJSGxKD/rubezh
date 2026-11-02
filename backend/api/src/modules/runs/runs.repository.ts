@@ -2,8 +2,9 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { ratedWhere } from "./rated-runs.js";
 import { storedDetailsSchema, storedWeaponsSchema, type StoredDetails } from "./run-details.js";
-import type { Difficulty } from "./run-rules.js";
+import { isRatedDifficulty, type Difficulty } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
 /**
@@ -13,6 +14,12 @@ import type { RunVerdict, VerdictReason } from "./run-verdict.js";
  * Идемпотентность — первичным ключом `run_id`, а не проверкой в коде: два
  * одновременных итога одного забега упираются в базу, и прошедшим считается
  * ровно один (docs/15-engineering-standards.md §4.1).
+ *
+ * Рейтинговые запросы (лучшее, доска, список модератора, снятие с рейтинга)
+ * берут `since` последним параметром — отсечку рейтинга (Р126, `rated-runs.ts`):
+ * забеги нерейтинговой сложности и законченные раньше неё не видны. Для
+ * нерейтинговой сложности запрос в базу не уходит вовсе. История (`recent`,
+ * `stats`, `detail`, `review`) остаётся полной.
  */
 
 /**
@@ -61,6 +68,8 @@ export interface StoredRun {
   status: "started" | "finished";
   difficulty: Difficulty;
   startedAt: Date | null;
+  /** когда закончен; `null` — забег ещё не закончен */
+  finishedAt: Date | null;
   /** записанное время выживания; `null` — забег ещё не закончен */
   survivalSec: number | null;
   verdict: RunVerdict | null;
@@ -149,25 +158,28 @@ export interface RunsRepository {
   /** свой законченный забег; чужой, незаконченный и незнакомый — `null` */
   detail(accountId: string, runId: string): Promise<RunDetailRow | null>;
   /** Лучший рейтинговый забег каждого из аккаунтов — для строк лидерборда */
-  bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]>;
+  bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]>;
   /** Лучшее рейтинговое время каждого аккаунта — источник пересборки проекции */
-  bestTimes(difficulty: Difficulty): Promise<{ accountId: string; survivalSec: number }[]>;
+  bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]>;
   /**
    * Лучший рейтинговый забег игрока — вернуть его в доску, когда ограничение
    * рейтинга снято. `shadow` — вместе со сданными под молчаливым
    * ограничением: так игрок видит себя сам.
    */
-  bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null>;
+  bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null>;
   /**
    * Забеги игрока, которые модератор может снять с рейтинга или вернуть:
    * рейтинговые и снятые модератором, лучшие первыми.
    */
-  moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]>;
+  moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]>;
   /**
    * Снять с рейтинга или вернуть — условно: снять можно только рейтинговый,
-   * вернуть — только снятый модератором. `null` — менять нечего.
+   * вернуть — только снятый модератором. Забег нерейтинговой сложности или
+   * законченный раньше отсечки не меняется ни в ту, ни в другую сторону:
+   * иначе он, с честным вердиктом и `ranked = false`, выглядел бы как «снятый
+   * модератором», и его можно было бы «вернуть» в рейтинг. `null` — менять нечего.
    */
-  setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null>;
+  setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null>;
   review(limit: number): Promise<ReviewRow[]>;
 }
 
@@ -184,6 +196,7 @@ export class PrismaRunsRepository implements RunsRepository {
         status: true,
         difficulty: true,
         startedAt: true,
+        finishedAt: true,
         survivalSec: true,
         verdict: true,
         ranked: true,
@@ -336,12 +349,12 @@ export class PrismaRunsRepository implements RunsRepository {
     };
   }
 
-  async bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]> {
-    if (accountIds.length === 0) return [];
+  async bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]> {
+    if (accountIds.length === 0 || !isRatedDifficulty(difficulty)) return [];
     // Один запрос на всю страницу, а не по запросу на строку: `distinct` с
     // сортировкой по времени берёт лучший забег каждого аккаунта.
     const rows = await this.prisma.run.findMany({
-      where: { accountId: { in: [...accountIds] }, difficulty, ranked: true },
+      where: { ...ratedWhere(since), accountId: { in: [...accountIds] }, difficulty, ranked: true },
       orderBy: [{ accountId: "asc" }, { survivalSec: "desc" }],
       distinct: ["accountId"],
       select: {
@@ -365,17 +378,20 @@ export class PrismaRunsRepository implements RunsRepository {
     }));
   }
 
-  async bestTimes(difficulty: Difficulty): Promise<{ accountId: string; survivalSec: number }[]> {
+  async bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]> {
+    if (!isRatedDifficulty(difficulty)) return [];
     const rows = await this.prisma.run.groupBy({
       by: ["accountId"],
-      where: { difficulty, ranked: true },
+      where: { ...ratedWhere(since), difficulty, ranked: true },
       _max: { survivalSec: true },
     });
     return rows.map((row) => ({ accountId: row.accountId, survivalSec: row._max.survivalSec ?? 0 }));
   }
-  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null> {
+
+  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null> {
+    if (!isRatedDifficulty(difficulty)) return null;
     const row = await this.prisma.run.findFirst({
-      where: { accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
+      where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
       orderBy: { survivalSec: "desc" },
       select: {
         accountId: true,
@@ -399,9 +415,10 @@ export class PrismaRunsRepository implements RunsRepository {
     };
   }
 
-  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]> {
+  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]> {
+    if (!isRatedDifficulty(difficulty)) return [];
     const rows = await this.prisma.run.findMany({
-      where: { accountId, difficulty, status: "finished", OR: [{ ranked: true }, UNRANKED_BY_MODERATOR] },
+      where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: [{ ranked: true }, UNRANKED_BY_MODERATOR] },
       orderBy: [{ survivalSec: "desc" }, { finishedAt: "desc" }],
       take: limit,
       select: { runId: true, difficulty: true, survivalSec: true, level: true, enemiesKilled: true, startingWeaponId: true, finishedAt: true, ranked: true },
@@ -418,15 +435,16 @@ export class PrismaRunsRepository implements RunsRepository {
     }));
   }
 
-  async setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
-    // Условие — в самом обновлении: два нажатия разом меняют забег однажды.
-    const where = ranked ? { runId, status: "finished" as const, ...UNRANKED_BY_MODERATOR } : { runId, status: "finished" as const, ranked: true };
+  async setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
+    // Условие — в самом обновлении: два нажатия разом меняют забег однажды;
+    // рейтинговость забега (сложность и отсечка) проверяется там же, а не до него.
+    const counted = { ...ratedWhere(since), runId, status: "finished" as const };
+    const where = ranked ? { ...counted, ...UNRANKED_BY_MODERATOR } : { ...counted, ranked: true };
     const { count } = await this.prisma.run.updateMany({ where, data: { ranked } });
     if (count === 0) return null;
     const row = await this.prisma.run.findUnique({ where: { runId }, select: { accountId: true, difficulty: true, survivalSec: true } });
     return row === null ? null : { accountId: row.accountId, difficulty: row.difficulty, survivalSec: row.survivalSec ?? 0 };
   }
-
 
   async review(limit: number): Promise<ReviewRow[]> {
     const rows = await this.prisma.run.findMany({

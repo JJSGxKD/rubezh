@@ -31,7 +31,8 @@ export interface ReviewCardAccount {
   username: string | null;
 }
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
+/** Сложность одна (Р126): `hard` — основной забег, `easy` — обучающий, `normal` приходит только от старых клиентов. */
+const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: "Обучающий", normal: "Прежняя нормальная", hard: "Основной" };
 
 const VERDICT_LABELS: Record<ReviewCardRun["verdict"], string> = {
   suspicious: "подозрительный",

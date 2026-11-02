@@ -29,7 +29,7 @@ const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.P
 function finish(patch: Partial<RunFinish> = {}): RunFinish {
   return {
     runId: randomUUID(),
-    difficultyId: "normal",
+    difficultyId: "hard",
     outcome: "died",
     survivalSec: 120,
     level: 6,
@@ -93,7 +93,7 @@ describe("престиж в строке рейтинга", () => {
     const [leader, second, third] = [await player("Лидер", 600), await player("Второй", 300), await player("Третий", 200)];
     prestige.provide(source({ [leader.accountId]: 120, [second.accountId]: 15 }));
 
-    const board = await view.leaderboardFor(leader.accountId, "normal");
+    const board = await view.leaderboardFor(leader.accountId, "hard");
 
     expect(board.entries.map((entry) => [entry.rank, entry.prestige])).toEqual([
       [1, 120],
@@ -108,7 +108,7 @@ describe("престиж в строке рейтинга", () => {
     const spy = source({});
     prestige.provide(spy);
 
-    await view.leaderboardFor(players[0]?.accountId ?? "", "normal");
+    await view.leaderboardFor(players[0]?.accountId ?? "", "hard");
 
     expect(spy.calls).toHaveLength(1);
     expect([...(spy.calls[0] ?? [])].sort()).toEqual(players.map((entry) => entry.accountId).sort());
@@ -118,7 +118,7 @@ describe("престиж в строке рейтинга", () => {
     const spy = source({});
     prestige.provide(spy);
 
-    const empty = await view.leaderboardFor(randomUUID(), "normal");
+    const empty = await view.leaderboardFor(randomUUID(), "hard");
 
     expect(empty.entries).toEqual([]);
     expect(spy.calls).toHaveLength(0);
@@ -127,7 +127,7 @@ describe("престиж в строке рейтинга", () => {
   it("источника нет — у всех ноль, таблица отдана", async () => {
     const [leader] = [await player("Лидер", 600), await player("Второй", 300)];
 
-    const seen = await view.leaderboardFor(leader.accountId, "normal");
+    const seen = await view.leaderboardFor(leader.accountId, "hard");
 
     expect(seen.entries.map((entry) => entry.prestige)).toEqual([0, 0]);
     expect(seen.entries).toHaveLength(2);
@@ -141,7 +141,7 @@ describe("престиж в строке рейтинга", () => {
       },
     });
 
-    const seen = await view.leaderboardFor(leader.accountId, "normal");
+    const seen = await view.leaderboardFor(leader.accountId, "hard");
 
     expect(seen.entries.map((entry) => [entry.rank, entry.prestige])).toEqual([
       [1, 0],
@@ -154,7 +154,7 @@ describe("престиж в строке рейтинга", () => {
     prestige.provide({ of: () => new Promise<Map<string, number>>(() => undefined) });
     vi.useFakeTimers();
 
-    const pending = view.leaderboardFor(leader.accountId, "normal");
+    const pending = view.leaderboardFor(leader.accountId, "hard");
     await vi.advanceTimersByTimeAsync(PRESTIGE_TIMEOUT_MS + 1);
     const seen = await pending;
 
@@ -172,7 +172,7 @@ describe("престиж в строке рейтинга", () => {
       },
     });
 
-    const seen = await view.leaderboardFor(leader.accountId, "normal");
+    const seen = await view.leaderboardFor(leader.accountId, "hard");
 
     expect(seen.entries.map((entry) => entry.prestige)).toEqual([0, 0]);
   });
@@ -181,7 +181,7 @@ describe("престиж в строке рейтинга", () => {
     const [leader, second] = [await player("Лидер", 600), await player("Второй", 300)];
     prestige.provide(source({ [leader.accountId]: 7 }));
 
-    const seen = await view.leaderboardFor(second.accountId, "normal");
+    const seen = await view.leaderboardFor(second.accountId, "hard");
     const text = JSON.stringify(seen);
 
     expect(text).not.toContain(leader.accountId);

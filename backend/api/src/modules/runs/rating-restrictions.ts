@@ -4,10 +4,13 @@ import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { REDIS } from "../../infra/redis.js";
+import { SETTINGS } from "../settings/setting-catalog.js";
+import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsHooks, type RestrictionChange } from "../restrictions/restrictions-hooks.js";
 import { ALL_BOARDS, COMMON_ONLY, FULL_ONLY, LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
-import { DIFFICULTIES } from "./run-rules.js";
+import { ratingSinceOf } from "./rated-runs.js";
+import { RATED_DIFFICULTIES } from "./run-rules.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
 
 /**
@@ -71,6 +74,7 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
     private readonly restrictions: AccountRestrictions,
     private readonly hooks: RestrictionsHooks,
+    @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
   onModuleInit(): void {
@@ -88,6 +92,17 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
 
   onModuleDestroy(): void {
     if (this.timer !== null) clearInterval(this.timer);
+  }
+
+  /**
+   * Отсечка рейтинга (`rating.since-date`, Р126): забеги раньше неё и
+   * нерейтинговых сложностей в доски не идут. Читается из памяти настроек на
+   * каждый вызов — правка из панели действует сразу, без запроса к базе. Здесь,
+   * а не в каждом сервисе, потому что доски и их возврат после ограничений —
+   * дело этого класса, а сервисы забегов его уже внедряют.
+   */
+  since(): Date | null {
+    return ratingSinceOf(this.settings.get(SETTINGS.ratingSinceDate));
   }
 
   /** Закрыт ли рейтинг игроку сейчас и как: `null` — открыт. */
@@ -193,12 +208,13 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     this.log("log", "rating_board_restored", { accountId: change.accountId, boards: restored });
   }
 
-  /** Вернуть в доски лучший рейтинговый забег каждой сложности; сколько сложностей вернулось. */
+  /** Вернуть в доски лучший рейтинговый забег каждой рейтинговой сложности; сколько сложностей вернулось. */
   private async restoreInto(accountId: string, boards: readonly Board[]): Promise<number> {
     let restored = 0;
-    for (const difficulty of DIFFICULTIES) {
+    const since = this.since();
+    for (const difficulty of RATED_DIFFICULTIES) {
       // Лучший рейтинговый: сданные под ограничением рейтинговыми не стали.
-      const best = await withTimeout(this.runs.bestRunOf(accountId, difficulty, false), DB_TIMEOUT_MS, "runs: база");
+      const best = await withTimeout(this.runs.bestRunOf(accountId, difficulty, false, since), DB_TIMEOUT_MS, "runs: база");
       if (best === null) continue;
       await this.redisCall(this.leaderboard.submit(difficulty, accountId, best.survivalSec, boards));
       restored += 1;

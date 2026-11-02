@@ -84,10 +84,22 @@ describe("карточка проблемного забега", () => {
     expect(svg).toContain("игра замедлялась");
     expect(svg).toContain("ошибки клиента");
     expect(svg).toContain("красная полоса у оси — игра догоняла время");
-    expect(svg).toContain("нормальная, погиб от swarm_rat");
+    expect(svg).toContain("прежняя нормальная, погиб от swarm_rat");
     expect(svg).toMatch(/fill-opacity="[\d.]+"\/>/);
     expect(renderRunCardPng(input).subarray(1, 4).toString()).toBe("PNG");
   }, PNG_RENDER_TIMEOUT_MS);
+
+  it("сложность называется по-новому и без слова «сложности»: основная, обучающий и прежняя нормальная", () => {
+    for (const [difficultyId, label] of [["hard", "основная"], ["easy", "обучающий"], ["normal", "прежняя нормальная"]] as const) {
+      const input = runCardInput({ clientErrors: 1 });
+      input.payload.recording.difficultyId = difficultyId;
+      input.summary = runSummaryOf(input.payload);
+      expect(renderRunCardSvg(input)).toContain(`${label}, погиб от swarm_rat`);
+      const caption = runCaption(input);
+      expect(caption).toContain(`· ${label}, FPS`);
+      expect(caption).not.toContain("на сложности");
+    }
+  });
 
   it("подпись даёт команду повтора, а неповторимую запись так и называет", () => {
     const input = runCardInput({ clientErrors: 1 });
@@ -321,11 +333,18 @@ describe("карточка забега на разбор", () => {
 
     expect(text).toContain("Забег на разбор · отклонён");
     expect(text).toContain("Иван (@ivan) · аккаунт 1b6a2c8e");
-    expect(text).toContain("Нормальная · 12:34 · уровень 18 · убийств 34000 · погиб от swarm_rat");
+    expect(text).toContain("Прежняя нормальная · 12:34 · уровень 18 · убийств 34000 · погиб от swarm_rat");
     expect(text).toContain("забег дольше, чем прошло по часам сервера; старт не дошёл");
     expect(text).toContain(`Забег ${run.runId}`);
     expect(text).toContain("только в панели: раздел «Разбор забегов»");
     expect(text).not.toContain("runs/review");
+  });
+
+  it("сложность в карточке разбора: «Основной», «Обучающий», «Прежняя нормальная»", () => {
+    expect(reviewCardText({ ...run, difficulty: "hard" }, null)).toContain("Основной · 12:34 · уровень 18");
+    expect(reviewCardText({ ...run, difficulty: "easy" }, null)).toContain("Обучающий · 12:34 · уровень 18");
+    expect(reviewCardText({ ...run, difficulty: "normal" }, null)).toContain("Прежняя нормальная · 12:34 · уровень 18");
+    for (const difficulty of ["easy", "normal", "hard"] as const) expect(reviewCardText({ ...run, difficulty }, null)).not.toMatch(/Лёгкая|Нормальная|Сложная/);
   });
 
   it("без аккаунта — полный идентификатор: по нему его ещё можно найти", () => {

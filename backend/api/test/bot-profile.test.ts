@@ -70,6 +70,15 @@ describe("профиль бота", () => {
   });
 });
 
+describe("тексты профиля: сложность одна", () => {
+  it("описание не обещает рекорды на каждой сложности: говорит про общий рейтинг", () => {
+    expect(BOT_PROFILE_TEXTS.ru.description).not.toMatch(/на каждой сложности/);
+    expect(BOT_PROFILE_TEXTS.ru.description).toContain("• стихии, боссы и общий рейтинг");
+    expect(BOT_PROFILE_TEXTS.en.description).not.toMatch(/every difficulty/);
+    expect(BOT_PROFILE_TEXTS.en.description).toContain("• elements, bosses and a global leaderboard");
+  });
+});
+
 describe("тексты профиля: идёт тест", () => {
   it("описание бота не называет тест закрытым и говорит, что идёт тест", () => {
     expect(BOT_PROFILE_TEXTS.ru.description).not.toMatch(/закрыт/i);
