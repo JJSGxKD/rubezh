@@ -15,6 +15,8 @@ zones:
   - packages/core-game/test/cordon-balance.test.ts
   - packages/app-shell/src/i18n/ru-guide.json
   - packages/app-shell/test/guide.test.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/test/balance-properties.test.ts
 shared:
   - docs/32-balance.md
   - docs/35-stage4-plan.md
