@@ -149,6 +149,7 @@ const SERVICE_TITLES: Record<string, string> = {
   "ads.creatives": "Креативы рекламных сетей",
   "ads.postback": "Постбэки в кабинеты сетей",
   "secrets.check": "Проверка ключей из панели",
+  "proxy.subscription": "Загрузка подписки Xray",
 };
 
 export const serviceTitle = (service: string): string => SERVICE_TITLES[service] ?? service;
