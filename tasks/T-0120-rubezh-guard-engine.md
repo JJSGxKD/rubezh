@@ -13,7 +13,6 @@ zones:
   - packages/core-game/src/content/rubezh.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/hash.ts
-  - packages/core-game/src/content/balance-targets.ts
   - packages/core-game/src/game/sim/rubezh.ts
   - packages/core-game/src/game/sim/step.ts
   - packages/core-game/src/game/sim/combat.ts
@@ -26,13 +25,14 @@ zones:
   - packages/core-game/src/game/MainScene.ts
   - packages/core-game/src/run-api.ts
   - packages/core-game/src/index.ts
-  - packages/core-game/test/**
-  - scripts/balance/balance-sim.ts
 shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/32-balance.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - packages/core-game/src/content/balance-targets.ts
+  - scripts/balance/balance-sim.ts
+  - packages/core-game/test/**
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -56,7 +56,7 @@ batch: 3
 
 ## Решения
 
-**Поправка `claude-lead-1` от 02.11.2026 (Р184).** Зависимость от T-0196 снята: общие с ней только файлы баланса (`balance-targets.ts`, `balance-sim.ts`, `docs/32`), а не код. Влита T-0196 раньше — свести ветку с `dev` и пересчитать эталоны; позже — то же сделает она.
+**Поправка `claude-lead-1` от 02.11.2026 (Р184).** Зависимость от T-0196 снята, `balance-targets.ts`, `balance-sim.ts` и `packages/core-game/test/**` перенесены из `zones` в `shared`: общие с ней только файлы баланса (`balance-targets.ts`, `balance-sim.ts`, `docs/32`), а не код. Влита T-0196 раньше — свести ветку с `dev` и пересчитать эталоны; позже — то же сделает она.
 
 **Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Рейтинговая сложность одна — `hard`. После T-0192 событие Матрёшки по формуле таймлайна приходит на 570 с — за 30 с до стража на 600 с. Страж остаётся на 600 с; событие босса ближе 60 с к нему сдвигается на 660 с или позже, с отметкой и замером `balance:sim` в описании PR.
 
