@@ -10,8 +10,10 @@ import { loadAppConfig } from "../src/config/app-config.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } from "../src/platforms/ports/messenger.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import type { SettingValue } from "../src/modules/settings/setting-catalog.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { memoryNotifications } from "./helpers/memory-notifications.js";
+import { panelSettings } from "./helpers/settings.js";
 
 /**
  * Дубль уведомлений в бота (docs/35-stage4-plan.md WP28): критерий приёмки —
@@ -39,10 +41,13 @@ class FakeMessenger implements Messenger {
 /** Redis для окна вида: `SET NX EX` и `GET`, срок не нужен — тест укладывается в окно. */
 class FakeRedis {
   readonly keys = new Map<string, string>();
+  readonly windows = new Map<string, number>();
 
   async set(key: string, value: string, ...options: (string | number)[]): Promise<"OK" | null> {
     if (options.includes("NX") && this.keys.has(key)) return null;
     this.keys.set(key, value);
+    const seconds = options[options.indexOf("EX") + 1];
+    if (typeof seconds === "number") this.windows.set(key, seconds);
     return "OK";
   }
 
@@ -51,7 +56,8 @@ class FakeRedis {
   }
 }
 
-function setup() {
+function setup(panelValues: Record<string, SettingValue> = {}) {
+  const panel = panelSettings(panelValues);
   const accounts = new MemoryAccountRepository();
   const messenger = new FakeMessenger();
   const redis = new FakeRedis();
@@ -73,8 +79,8 @@ function setup() {
       marks.push({ notificationId, outcome });
     },
   };
-  const sender = new BotNotifySender(accounts, new Messengers([messenger]), links, messaging, accountSettings, notifications, redis as unknown as Redis);
-  return { accounts, messenger, redis, states, settings, changes, marks, sender };
+  const sender = new BotNotifySender(accounts, new Messengers([messenger]), links, messaging, accountSettings, notifications, redis as unknown as Redis, panel);
+  return { accounts, messenger, redis, states, settings, changes, marks, sender, panel };
 }
 
 let nextUserId = 700_000;
@@ -203,8 +209,141 @@ describe("дубль уведомлений в бота", () => {
       { valueOf: async () => undefined },
       { markBot: async () => {} },
       s.redis as unknown as Redis,
+      s.panel,
     );
     expect(await sender.deliver(request(target.accountId), NOW)).toEqual({ status: "skipped", reason: "no_bot" });
+  });
+});
+
+// Напоминания (tasks/T-0128): три вида под одним ключом игрока, одним окном
+// потолка и общими правилами тихих часов и включателя.
+describe("напоминания в дубле бота", () => {
+  /** 12:00 по Москве — не тихо; 22:30 по Москве — тихо при умолчании 21 → 10. */
+  const DAY = new Date(Date.UTC(2026, 10, 4, 9, 0));
+  const NIGHT = new Date(Date.UTC(2026, 10, 4, 19, 30));
+  let s: ReturnType<typeof setup>;
+
+  beforeEach(() => {
+    s = setup({ "reminders.enabled": true });
+  });
+
+  const reminder = (accountId: string, kind = "daily_reward_ready", payload: unknown = {}): BotNotifyJob => ({ notificationId: randomUUID(), accountId, kind, payload });
+  const overtaken = (accountId: string): BotNotifyJob => reminder(accountId, "season_overtaken", { difficulty: "hard", place: 4 });
+  const closing = (accountId: string): BotNotifyJob => reminder(accountId, "season_closing", { endsAt: "2026-11-09T00:00:00.000Z" });
+
+  it("у напоминания в сообщении кнопка в игру и кнопка действия «Не напоминать», у заявки в друзья действия нет", async () => {
+    const target = await player(s);
+    expect(await s.sender.deliver(reminder(target.accountId), DAY)).toEqual({ status: "sent" });
+    expect(s.messenger.sent[0]?.message).toEqual({
+      text: "Награда дня ждёт тебя в «Рубеже». Загляни и забери её сегодня.",
+      button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-daily_reward_ready" },
+      action: { text: "🔕 Не напоминать", data: "rm:off" },
+    });
+
+    const other = await player(s);
+    expect(await s.sender.deliver(request(other.accountId), DAY)).toEqual({ status: "sent" });
+    expect(s.messenger.sent[1]?.message).not.toHaveProperty("action");
+  });
+
+  it("включатель выключен — напоминание не уходит, и это проверяется до всего остального", async () => {
+    const off = setup();
+    const target = await player(off);
+    expect(await off.sender.deliver(reminder(target.accountId), DAY)).toEqual({ status: "skipped", reason: "disabled" });
+    expect(await off.sender.deliver(overtaken(target.accountId), DAY)).toEqual({ status: "skipped", reason: "disabled" });
+    expect(off.messenger.sent).toEqual([]);
+    expect(off.redis.keys.size).toBe(0);
+
+    // Остальные виды включателем напоминаний не управляются.
+    expect(await off.sender.deliver(request(target.accountId), DAY)).toEqual({ status: "sent" });
+  });
+
+  it("тихие часы: задание не уходит, окно потолка цело — утром то же задание проходит", async () => {
+    const target = await player(s);
+    const job = reminder(target.accountId);
+    expect(await s.sender.deliver(job, NIGHT)).toEqual({ status: "skipped", reason: "quiet_hours" });
+    expect(s.redis.keys.size).toBe(0);
+    expect(s.messenger.sent).toEqual([]);
+    expect(await s.sender.deliver(job, DAY)).toEqual({ status: "sent" });
+  });
+
+  it("тихие часы берутся из ключей панели, и окно может не переходить через полночь", async () => {
+    const custom = setup({ "reminders.enabled": true, "reminders.quiet-from-hour": 13, "reminders.quiet-to-hour": 15 });
+    const target = await player(custom);
+    expect(await custom.sender.deliver(reminder(target.accountId), new Date(Date.UTC(2026, 10, 4, 11, 0)))).toEqual({ status: "skipped", reason: "quiet_hours" });
+    expect(await custom.sender.deliver(reminder(target.accountId), new Date(Date.UTC(2026, 10, 4, 9, 0)))).toEqual({ status: "sent" });
+  });
+
+  it("окно потолка общее на три вида: второе напоминание подряд — throttled, повтор того же задания проходит", async () => {
+    const target = await player(s);
+    const first = overtaken(target.accountId);
+    expect(await s.sender.deliver(first, DAY)).toEqual({ status: "sent" });
+    expect(await s.sender.deliver(closing(target.accountId), DAY)).toEqual({ status: "skipped", reason: "throttled" });
+    expect(await s.sender.deliver(reminder(target.accountId), DAY)).toEqual({ status: "skipped", reason: "throttled" });
+    expect(await s.sender.deliver(first, DAY)).toEqual({ status: "sent" });
+    expect(s.redis.keys.has(`bot-notify:${target.accountId}:reminder`)).toBe(true);
+    expect(s.messenger.sent).toHaveLength(2);
+  });
+
+  it("окно — reminders.min-gap-hours в секундах (по умолчанию сутки)", async () => {
+    const target = await player(s);
+    await s.sender.deliver(reminder(target.accountId), DAY);
+    expect(s.redis.windows.get(`bot-notify:${target.accountId}:reminder`)).toBe(86_400);
+
+    const short = setup({ "reminders.enabled": true, "reminders.min-gap-hours": 12 });
+    const other = await player(short);
+    await short.sender.deliver(reminder(other.accountId), DAY);
+    expect(short.redis.windows.get(`bot-notify:${other.accountId}:reminder`)).toBe(43_200);
+  });
+
+  it("напоминание не занимает окно заявки и подарка: у них свои потолки", async () => {
+    const target = await player(s);
+    expect(await s.sender.deliver(reminder(target.accountId), DAY)).toEqual({ status: "sent" });
+    expect(await s.sender.deliver(request(target.accountId), DAY)).toEqual({ status: "sent" });
+  });
+
+  it("один ключ игрока на три вида: bot.reminders = false — opted_out для каждого", async () => {
+    const target = await player(s);
+    s.settings.set("bot.reminders", false);
+    for (const job of [overtaken(target.accountId), closing(target.accountId), reminder(target.accountId)]) {
+      expect(await s.sender.deliver(job, DAY)).toEqual({ status: "skipped", reason: "opted_out" });
+    }
+    expect(s.messenger.sent).toEqual([]);
+    expect(s.redis.keys.size).toBe(0);
+  });
+
+  it("игрок не выбирал — напоминания включены по умолчанию", async () => {
+    const target = await player(s);
+    expect(botRuleOf("daily_reward_ready")).toMatchObject({ setting: "bot.reminders", byDefault: true });
+    expect(botRuleOf("season_overtaken")).toMatchObject({ setting: "bot.reminders", byDefault: true });
+    expect(botRuleOf("season_closing")).toMatchObject({ setting: "bot.reminders", byDefault: true });
+    expect(await s.sender.deliver(reminder(target.accountId), DAY)).toEqual({ status: "sent" });
+  });
+
+  it("без разрешения писать, после блокировки бота и у заблокированного аккаунта — не пишем, потолок не расходуется", async () => {
+    const stranger = await player(s, null);
+    const blocked = await player(s, false);
+    expect(await s.sender.deliver(reminder(stranger.accountId), DAY)).toEqual({ status: "skipped", reason: "not_allowed" });
+    expect(await s.sender.deliver(reminder(blocked.accountId), DAY)).toEqual({ status: "skipped", reason: "not_allowed" });
+    const banned = await player(s);
+    await s.accounts.setBan(banned.accountId, { at: DAY, reason: "накрутка" });
+    expect(await s.sender.deliver(reminder(banned.accountId), DAY)).toEqual({ status: "skipped", reason: "banned" });
+    expect(s.messenger.sent).toEqual([]);
+    expect(s.redis.keys.size).toBe(0);
+  });
+
+  it("блокировка при отправке напоминания — отметка у игрока и исход в строке ленты", async () => {
+    const target = await player(s);
+    s.messenger.next = { status: "blocked" };
+    const job = reminder(target.accountId);
+    expect(await s.sender.deliver(job, DAY)).toEqual({ status: "blocked" });
+    expect(s.changes).toEqual([{ platformUserId: target.platformUserId, reason: "blocked" }]);
+    expect(s.marks).toEqual([{ notificationId: job.notificationId, outcome: "blocked" }]);
+  });
+
+  it("данные не по схеме — писать нечего, окно не занято", async () => {
+    const target = await player(s);
+    expect(await s.sender.deliver(reminder(target.accountId, "season_overtaken", { difficulty: "hard" }), DAY)).toEqual({ status: "skipped", reason: "bad_payload" });
+    expect(s.redis.keys.size).toBe(0);
   });
 });
 
