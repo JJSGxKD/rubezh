@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { formatDuration } from "../../common/card/labels.js";
 import { HERO_PORTRAITS, PORTRAIT_RATIO, WORDMARK_RATIO, WORDMARK_SVG } from "../../common/card/brand-art.js";
 import { estimateWidth, PALETTE, rect, renderPng, svgDocument, svgImage, text, twilightBackdrop, wrapWords } from "../../common/card/svg.js";
-import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-texts.js";
+import { WELCOME_TEXTS, type WelcomeLanguage } from "./welcome-texts.js";
 
 /**
  * Карточка приветствия по `/start`: имя, язык и прогресс игрока.
@@ -13,7 +13,7 @@ import { WELCOME_TEXTS, type Difficulty, type WelcomeLanguage } from "./welcome-
  * Сменой версии сбрасываются и картинки, нарисованные без шрифта: их
  * `file_id` Telegram отдаёт так же охотно, как хорошие.
  */
-export const CARD_VERSION = 4;
+export const CARD_VERSION = 5;
 
 const WIDTH = 1200;
 const HEIGHT = 675;
@@ -21,8 +21,8 @@ const PAD = 72;
 const NAME_MAX = 18;
 
 export interface WelcomeProgress {
-  /** лучший забег на самой сложной сложности, где он есть; `null` — забегов нет */
-  best: { difficulty: Difficulty; survivalSec: number; rank: number; total: number } | null;
+  /** лучший забег в рейтинге единой сложности; `null` — рекорда нет */
+  best: { survivalSec: number; rank: number; total: number } | null;
   runs: number;
 }
 
@@ -58,7 +58,7 @@ export function welcomeCacheKey(card: WelcomeCard): string {
     card.progress.runs,
     // Время — с тем же округлением, что на картинке: иначе 7:42,4 и 7:42,6
     // дали бы две копии одной карточки.
-    best === null ? null : [best.difficulty, Math.round(best.survivalSec), best.rank, best.total],
+    best === null ? null : [Math.round(best.survivalSec), best.rank, best.total],
   ]);
   return createHash("sha256").update(payload).digest("hex");
 }
@@ -98,7 +98,7 @@ export function renderWelcomeSvg(card: WelcomeCard): string {
     const panelY = PAD + 176;
     parts.push(rect(PAD, panelY, COLUMN, 236, { fill: PALETTE.surface, stroke: PALETTE.border, radius: 24 }));
     parts.push(text(PAD + 36, panelY + 140, formatDuration(best.survivalSec), { size: 120, fill: PALETTE.accent, weight: 800 }));
-    parts.push(text(PAD + 40, panelY + 196, texts.recordLabel(best.difficulty), { size: 28, fill: PALETTE.muted, spacing: 1 }));
+    parts.push(text(PAD + 40, panelY + 196, texts.recordLabel(), { size: 28, fill: PALETTE.muted, spacing: 1 }));
 
     const right = PAD + COLUMN - 32;
     const rank = texts.rank(best.rank, best.total);

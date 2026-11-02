@@ -26,7 +26,8 @@ export interface RunCardInput {
   payload: RunSubmission;
 }
 
-const DIFFICULTY_LABELS: Record<string, string> = { easy: "лёгкая", normal: "нормальная", hard: "сложная" };
+/** Сложность одна (Р126): `hard` — основная, `easy` — обучающий забег, `normal` приходит только от старых клиентов. */
+const DIFFICULTY_LABELS: Record<string, string> = { easy: "обучающий", normal: "прежняя нормальная", hard: "основная" };
 
 const BLOCKER_LABELS: Record<string, string> = {
   resumed: "не повторить: продолжен из снимка",
@@ -151,7 +152,7 @@ export function runCaption(input: RunCardInput): string {
   return [
     `Забег · ${summary.problems.map(runProblemLabel).join(", ")} · сборка ${input.appVersion}`,
     deviceLine(input.device),
-    `${formatDuration(summary.survivalSec)} на сложности ${DIFFICULTY_LABELS[summary.difficulty] ?? summary.difficulty}, FPS ${summary.avgFps}, p95 ${summary.p95FrameMs} мс, рывков ${percent(summary.over33Ratio)}%, догоняние ${percent(summary.catchUpRatio)}%, ошибок ${summary.clientErrors}`,
+    `${formatDuration(summary.survivalSec)} · ${DIFFICULTY_LABELS[summary.difficulty] ?? summary.difficulty}, FPS ${summary.avgFps}, p95 ${summary.p95FrameMs} мс, рывков ${percent(summary.over33Ratio)}%, догоняние ${percent(summary.catchUpRatio)}%, ошибок ${summary.clientErrors}`,
     summary.replayBlocker === null
       ? `Повтор: pnpm replay ${input.reportId} --from diagnostic_reports.ndjson`
       : (BLOCKER_LABELS[summary.replayBlocker] ?? summary.replayBlocker),
