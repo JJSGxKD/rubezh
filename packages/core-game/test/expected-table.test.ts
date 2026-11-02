@@ -322,21 +322,25 @@ describe("проверка схемы таблицы", () => {
 
 describe("файл таблицы у сервера", () => {
   const path = fileURLToPath(new URL("../../../backend/api/src/modules/rating/expected-runs.json", import.meta.url));
-  const table = JSON.parse(readFileSync(path, "utf8")) as ExpectedTable;
+  // Читается внутри тестов: нет файла — падают только они, а не весь набор.
+  const load = (): ExpectedTable => JSON.parse(readFileSync(path, "utf8")) as ExpectedTable;
 
   it("проходит свою схему: пять полос, двадцать минут", () => {
+    const table = load();
     expect(findExpectedTableProblems(table)).toEqual([]);
     expect(table.bands.map((band) => band.id)).toEqual([...EXPECTED_BAND_IDS]);
     expect(table.rows).toHaveLength(5 * EXPECTED_MINUTES);
   });
 
   it("у пяти полос fromPower растёт", () => {
+    const table = load();
     for (let i = 1; i < table.bands.length; i++) {
       expect(table.bands[i].fromPower, table.bands[i].id).toBeGreaterThan(table.bands[i - 1].fromPower);
     }
   });
 
   it("несёт отпечаток контента и версию формата", () => {
+    const table = load();
     expect(table.version).toBe(1);
     expect(table.contentHash).toMatch(/^[0-9a-f]+$/);
   });
