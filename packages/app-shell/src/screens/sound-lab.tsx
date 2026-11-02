@@ -346,7 +346,6 @@ function simulatedCues(weapons: number, density: number): RunCues {
     fuses: chance(0.5 * density),
     dashWarns: chance(0.4 * density),
     dashes: chance(0.4 * density),
-    enemyShots: chance(1.2 * density),
     weapons: fired,
   };
 }

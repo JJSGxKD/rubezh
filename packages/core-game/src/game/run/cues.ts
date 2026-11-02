@@ -29,14 +29,12 @@ export class CueTracker {
   private readonly enemyAlive: Uint8Array;
   private readonly enemyType: Uint8Array;
   private readonly enemyPhase: Uint8Array;
-  private readonly enemyCooldown: Float32Array;
 
   constructor(private readonly world: World) {
     const capacity = world.enemies.alive.length;
     this.enemyAlive = new Uint8Array(capacity);
     this.enemyType = new Uint8Array(capacity);
     this.enemyPhase = new Uint8Array(capacity);
-    this.enemyCooldown = new Float32Array(capacity);
     this.eventsRead = world.events.written;
     this.kills = world.stats.enemiesKilled;
     this.eliteKills = countEliteKills(world);
@@ -98,7 +96,7 @@ export class CueTracker {
     this.xp = xp;
 
     const elitesAlive = this.scanEnemies(cues);
-    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.enemyShots > 0 || cues.bossSpawns > 0) any = true;
+    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.bossSpawns > 0) any = true;
     // Появление элиты — это рост числа живых сверх убитых за то же окно.
     const spawned = elitesAlive - this.elitesAlive + cues.eliteKills;
     if (spawned > 0) {
@@ -133,7 +131,7 @@ export class CueTracker {
 
   /**
    * Один проход по врагам: начала угроз — переход в фазу фитиля, телеграфа
-   * или рывка, взведённая перезарядка стрелка — и число живых элит. Сравнение
+   * или рывка — и число живых элит. Сравнение
    * идёт с тем же врагом в слоте: только что появившийся не «начинает» угрозу.
    * Босс считается по новому слоту, а не по разнице живых: он один на
    * событие, а элиты рядом с ним могут выйти и пасть в том же окне.
@@ -146,7 +144,6 @@ export class CueTracker {
       const alive = enemies.alive[i] === 1;
       const typeIndex = enemies.type[i];
       const phase = enemies.phase[i];
-      const cooldown = enemies.attackCooldown[i];
       const same = alive && this.enemyAlive[i] === 1 && this.enemyType[i] === typeIndex;
       if (alive) {
         const type = world.enemyTypes[typeIndex];
@@ -161,7 +158,6 @@ export class CueTracker {
       this.enemyAlive[i] = alive ? 1 : 0;
       this.enemyType[i] = typeIndex;
       this.enemyPhase[i] = phase;
-      this.enemyCooldown[i] = cooldown;
     }
     return elites;
   }
@@ -185,7 +181,6 @@ function emptyCues(): RunCues {
     fuses: 0,
     dashWarns: 0,
     dashes: 0,
-    enemyShots: 0,
     weapons: {},
   };
 }
@@ -207,7 +202,6 @@ function resetCues(cues: RunCues): void {
   cues.fuses = 0;
   cues.dashWarns = 0;
   cues.dashes = 0;
-  cues.enemyShots = 0;
   for (const id of Object.keys(cues.weapons)) cues.weapons[id] = 0;
 }
 
