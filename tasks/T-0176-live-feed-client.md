@@ -3,8 +3,8 @@ id: T-0176
 title: Лента живых событий — клиент: строка на главной под «Играть»
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0174]
