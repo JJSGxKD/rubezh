@@ -95,7 +95,7 @@ describe("бот калибровки", () => {
   it("без набора идёт как раньше: подстройку не включают ни выключатель, ни открытие по уровню", () => {
     const plain = simulateBalanceRun({ seed: 3, skill: "dodging", maxSec: 240 });
     expect(simulateBalanceRun({ seed: 3, skill: "dodging", maxSec: 240, pressure: false })).toEqual(plain);
-    expect(simulateBalanceRun({ seed: 3, skill: "dodging", maxSec: 240, accountLevel: 14 })).toEqual(plain);
+    expect(simulateBalanceRun({ seed: 3, skill: "dodging", maxSec: 240, accountLevel: TOP_LEVEL })).toEqual(plain);
   });
 
   it("профиль включает подстройку и мягчит бой новичку", () => {
