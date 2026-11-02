@@ -121,6 +121,12 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   render(<App />);
   // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
   if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
+  // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
+  // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
+  const fxScene = options.capabilities.devFxScene;
+  if (fxScene !== undefined) {
+    void import("./dev/fx-stand").then(({ startFxStand }) => startFxStand(fxScene.id, fxScene.ground));
+  }
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль и кошелёк: рекорд,
   // поставленный на другом устройстве, появляется на главной, награды за
