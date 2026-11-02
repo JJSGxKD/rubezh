@@ -7,6 +7,7 @@ import {
   ringDirection,
 } from "./directions";
 import { startCordon } from "./cordon";
+import { applySegmentPressure, isPressureActive, refreshPressure } from "./pressure";
 import { spawnOnRing, spawnRandomOnRing, type Spawner } from "./spawner";
 import { planSegment, segmentStartSec, type SegmentEvent, type SegmentPlan } from "./timeline";
 import type { World } from "./world";
@@ -44,6 +45,9 @@ export function createTimelineDirector(
 
   function enterSegment(world: World, next: number): void {
     index = next;
+    // Сдвиги событий и ступеней нужны плану, поэтому подстройка пересчитывается до него.
+    const pressured = isPressureActive(world);
+    if (pressured) refreshPressure(world);
     plan = planSegment(world, timeline, curve, next);
     // Аллокация раз в отрезок, то есть примерно раз в минуту: в кадре её нет,
     // а держать массив по максимальной длине смеси — лишняя сложность.
@@ -54,12 +58,16 @@ export function createTimelineDirector(
     const level = world.difficultyLevel;
     world.difficulty.segment = plan.index;
     world.difficulty.segmentStartedSec = world.stats.elapsedSec;
-    world.difficulty.hpMul = plan.hpMul * level.enemyHpMul;
-    world.difficulty.damageMul = plan.damageMul * level.enemyDamageMul;
-    world.difficulty.maxAlive = Math.min(
-      world.config.maxEnemies,
-      Math.round(plan.maxAlive * level.maxAliveMul),
-    );
+    if (pressured) {
+      applySegmentPressure(world, plan);
+    } else {
+      world.difficulty.hpMul = plan.hpMul * level.enemyHpMul;
+      world.difficulty.damageMul = plan.damageMul * level.enemyDamageMul;
+      world.difficulty.maxAlive = Math.min(
+        world.config.maxEnemies,
+        Math.round(plan.maxAlive * level.maxAliveMul),
+      );
+    }
 
     for (const burst of plan.bursts) {
       for (let n = 0; n < burst.count; n++) {
@@ -95,7 +103,7 @@ export function createTimelineDirector(
       }
       if (plan === null) return;
 
-      const spawnRateMul = world.difficultyLevel.spawnRateMul;
+      const spawnRateMul = world.difficultyLevel.spawnRateMul * world.difficulty.spawnMul;
       for (let i = 0; i < plan.spawns.length; i++) {
         const spawn = plan.spawns[i];
         debt[i] += spawn.perSec * spawnRateMul * dtSec;

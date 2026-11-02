@@ -56,7 +56,8 @@ export function resolveStages(defs: readonly EnemyStageDef[] | undefined): Enemy
  */
 export function pickStage(world: World): number {
   const stages = world.stages;
-  const elapsed = world.stats.elapsedSec;
+  // Сдвиг подстройки: новичку ступени открываются позже, без подстройки он нулевой. Минус не уводит секунду ниже нуля.
+  const elapsed = Math.max(0, world.stats.elapsedSec + world.difficulty.stageShiftSec);
 
   let total = 0;
   let last = 0;
