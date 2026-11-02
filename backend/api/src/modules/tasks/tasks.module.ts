@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
@@ -21,12 +22,14 @@ import { TasksService } from "./tasks.service.js";
  * Очки заданий (T-0105) — `TaskPointsService`: полоса дня и недели и награды
  * за ступени; знак меню берёт готовые ступени через фасад `TasksService`.
  *
+ * Очки батл-пасса (T-0311) забранное задание прибавляет через `BattlePassService`.
+ *
  * Задания рекламных сетей (WP13, часть 6) — `NetworkTasksService`: модуль
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
  * них, решает он.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule],
   controllers: [TasksController],
   providers: [
     TasksService,

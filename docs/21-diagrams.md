@@ -126,6 +126,9 @@ erDiagram
     TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
+    ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
+    ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
+    ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -1143,6 +1146,33 @@ erDiagram
         int slot PK "1…3 (CHECK): порядок показа в профиле"
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
     }
+
+    PASS_PROGRESS {
+        uuid account_id PK,FK "каскадом"
+        string month_key PK "ГГГГ-ММ по Москве (CHECK)"
+        int points "не меньше нуля (CHECK); растёт под UPDATE … SET points = points + n"
+        datetime updated_at
+    }
+
+    PASS_SEASON {
+        string month_key PK "ГГГГ-ММ (CHECK); нет строки на месяц — лента по умолчанию из кода"
+        jsonb tiers "ровно 30 записей { tier, free, vip } (CHECK); награда — монеты, самоцветы, осколки, буст"
+        datetime published_at
+    }
+
+    PASS_CLAIM {
+        uuid account_id PK,FK "каскадом"
+        string month_key PK "ГГГГ-ММ"
+        smallint tier PK "1…30 (CHECK)"
+        string lane PK "free или vip (CHECK)"
+        datetime claimed_at "ключ не даёт забрать награду дважды"
+    }
+
+    BOOST_CREDIT {
+        uuid account_id PK,FK "каскадом"
+        string boost_id PK "id буста из каталога бустов"
+        int count "подарки, не меньше нуля (CHECK); тратит включение буста на забег (T-0312)"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1269,6 +1299,24 @@ erDiagram
   до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
   транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
   вместе с прогрессом заданий, редкость не трогает.
+- **`PASS_PROGRESS`, `PASS_SEASON`, `PASS_CLAIM`, `BOOST_CREDIT` — батл-пасс**
+  (`35-stage4-plan.md` Р46, §3.15, T-0311): месяц — календарный по Москве
+  (UTC+3 без летнего времени), ключ `ГГГГ-ММ`; граница — 1-е число 00:00 МСК.
+  Очки пасса — забор задания с `task_def.pass_points > 0` прибавляет их
+  `PASS_PROGRESS` текущего месяца одной командой `points = points + n`, и
+  только тому запросу, чья отметка «забрано» встала первой. Ступень не
+  хранится: `floor(points / pass.points-per-tier)`, не больше 30. Ленты
+  месяца — `PASS_SEASON.tiers` (30 записей `{ tier, free, vip }`), нет строки —
+  лента по умолчанию из `battle-pass/pass-defaults.ts`; порченая лента
+  заменяется умолчанием, ошибка идёт в лог. Забор награды — начисление
+  кошельком по ключу `pass:{месяц}:{ступень}:{лента}:{аккаунт}:{ресурс}` с
+  причиной `pass_reward`, затем одна транзакция: `INSERT … ON CONFLICT DO
+  NOTHING` в `PASS_CLAIM` и, если награда с бустом, `BOOST_CREDIT` `+count`.
+  Упавший между кошельком и журналом забор повторяется без второго
+  начисления; проигравший гонку журнала получает `409`. VIP-лента
+  проверяется по VIP в момент забора, поэтому купленный посреди месяца VIP
+  открывает и пройденные ступени. Вайп стирает очки, журнал и подарки, ленты
+  месяца остаются.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN

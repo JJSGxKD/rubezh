@@ -3,15 +3,16 @@ id: T-0366
 title: Вход в панель — опрос ответа бота только в видимой вкладке, срок — по слову сервера, а не по часам устройства
 epic: E14
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
 zones:
   - apps/admin/src/state/session.ts
   - apps/admin/test/session.test.ts
-shared: []
+shared:
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: low
