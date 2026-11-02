@@ -41,6 +41,11 @@ shared:
   - docs/30-configuration-map.md
   - docs/32-balance.md
   - CLAUDE.md
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/screens/run/card-tools-rules.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/progression/evolutions.ts
+  - packages/core-game/src/game/run-world.ts
 runner: any
 executor: sonnet-5.5
 effort: high
