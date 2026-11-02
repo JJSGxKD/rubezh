@@ -288,6 +288,38 @@ const boostSchema = z.strictObject({
   cardTools: z.strictObject(cardTools).optional(),
 });
 
+// Подстройка давления: форма — здесь, пределы и связи между полями — `findPressureProblems`.
+// Набор `up` без поля сдвига ступеней: вверх ступени не сдвигаются (Р183), и лишнее поле — ошибка схемы.
+const pressureLevers = { hp: num, damage: num, spawn: num, alive: num, leadPerLevel: num };
+const pressureLead = z.strictObject({ min: num, max: num });
+
+const pressureSchema = z.strictObject({
+  power: z.strictObject({
+    slotPoints: num,
+    gear: loadoutModifiers,
+    buildPoints: num,
+    buildCap: num,
+    buildSchedule: z.array(z.tuple([num, num])),
+  }),
+  reference: num,
+  spanUp: num,
+  spanDown: num,
+  minLevel: num,
+  maxLevel: num,
+  levers: z.strictObject({
+    down: z.strictObject({ ...pressureLevers, stageShiftSec: num }),
+    up: z.strictObject(pressureLevers),
+  }),
+  leads: z.strictObject({ elite: pressureLead, boss: pressureLead }),
+  devices: z.strictObject({
+    caps: z.strictObject({ standard: num, light: num }),
+    compensateFromSec: num,
+    hpComp: num,
+    damageComp: num,
+    maxShortfall: num,
+  }),
+});
+
 const balanceTargetsSchema = z.strictObject({
   passiveDeathBeforeSec: positive,
   dodgingMedianSec: range,
@@ -326,6 +358,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   maxBoostsPerRun: count,
   cardToolUnlocks: z.array(z.strictObject({ level: z.int().positive(), ...cardTools })),
   cardToolRules: z.strictObject({ skipXpRatio: num }),
+  pressure: pressureSchema,
   balanceTargets: balanceTargetsSchema,
 });
 

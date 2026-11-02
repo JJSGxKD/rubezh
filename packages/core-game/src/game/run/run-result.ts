@@ -1,5 +1,6 @@
 import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
 import { continueSeconds } from "../sim/continue";
+import { describePressureResult } from "../sim/pressure";
 import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
 import { TICK_HZ, type World } from "../sim/world";
 
@@ -30,6 +31,7 @@ export interface RunResultOptions {
 
 export function buildRunResult(world: World, options: RunResultOptions): RunResult {
   const stats = world.stats;
+  const pressure = describePressureResult(world);
 
   return {
     runId: options.runId,
@@ -68,6 +70,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     cheats: options.cheats === true,
     continues: continueSeconds(world),
     ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
+    ...(pressure === undefined ? {} : { pressure }),
   };
 }
 

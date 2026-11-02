@@ -157,7 +157,7 @@ export class WorldRenderer {
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
     this.ground = scene.add
-      .tileSprite(0, 0, scene.scale.width, scene.scale.height, "bh-ground")
+      .tileSprite(0, 0, scene.scale.width, scene.scale.height, GROUND_KEY)
       .setOrigin(0, 0)
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
@@ -271,6 +271,7 @@ export class WorldRenderer {
   setDevVisuals(visuals: RunDevVisuals | null): void {
     this.visuals = visuals;
     this.applyEffectSwitches();
+    this.ground.setTexture(visuals?.lightGround === true ? this.ensureGroundTexture(this.world.config.unitScale, true) : GROUND_KEY);
     const wantsDebug =
       visuals !== null &&
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
@@ -699,25 +700,30 @@ export class WorldRenderer {
    * обязана быть одинаковой на любом устройстве, иначе на телефоне с высокой
    * плотностью она превращается в мелкую рябь.
    */
-  private ensureGroundTexture(scale: number): void {
-    const key = "bh-ground";
-    if (this.scene.textures.exists(key)) return;
+  private ensureGroundTexture(scale: number, light = false): string {
+    const key = light ? GROUND_LIGHT_KEY : GROUND_KEY;
+    if (this.scene.textures.exists(key)) return key;
 
     const size = Math.max(2, Math.round(GROUND_TILE_UNITS * scale));
     const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
-    graphics.fillStyle(WORLD_COLORS.ground, 1);
+    graphics.fillStyle(light ? LIGHT_GROUND_COLOR : WORLD_COLORS.ground, 1);
     graphics.fillRect(0, 0, size, size);
     graphics.fillStyle(WORLD_COLORS.groundLine, 1);
     graphics.fillRect(0, 0, size, Math.max(1, Math.round(scale)));
     graphics.fillRect(0, 0, Math.max(1, Math.round(scale)), size);
     graphics.generateTexture(key, size, size);
     graphics.destroy();
+    return key;
   }
 }
 
 
 /** Сколько взрывов показывается одновременно; дальше перезаписываются старые. */
 const MAX_BLASTS = 24;
+const GROUND_KEY = "bh-ground";
+const GROUND_LIGHT_KEY = "bh-ground-light";
+/** Проверочная светлая земля — только для стенда эффектов, не цвет игры. */
+const LIGHT_GROUND_COLOR = 0xc8c4b8;
 /** Сторона плитки фона в игровых единицах. */
 const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;

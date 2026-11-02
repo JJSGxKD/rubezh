@@ -22,6 +22,7 @@ import { stepWorld, type SimInput } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type CreateWorldOptions, type SecretSite, type World } from "../src/game/sim/world";
 import { takeCordonEvents } from "../src/game/sim/cordon";
 import { damageEnemy } from "../src/game/sim/combat";
+import { TEST_PRESSURE } from "./helpers/pressure-fixture";
 import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
@@ -359,8 +360,8 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(summary).toContain("xpCollected: world.stats.xpCollected");
   });
 
-  it("поле необязательное, поэтому формат снимка прежний", () => {
-    expect(RUN_SNAPSHOT_FORMAT).toBe(7);
+  it("подстройка давления (T-0195) подняла формат снимка забега до 8", () => {
+    expect(RUN_SNAPSHOT_FORMAT).toBe(8);
   });
 });
 
@@ -667,5 +668,41 @@ describe("снимок посреди формирования и ожидани
     saved.cordon.pending[0] = { typeIndex: 99, x: 0, y: 0 };
     const fresh = createCordonRun(options);
     expect(() => restoreWorld(fresh.world, fresh.director, saved)).toThrow(SnapshotError);
+  });
+});
+
+describe("снимок с подстройкой давления (tasks/T-0195)", () => {
+  const WITH_PRESSURE = { pressure: TEST_PRESSURE, loadout: { modifiers: { damage: 1 }, boosts: [], accountLevel: 5, deviceClass: "light" as const } };
+
+  it("версия мира поднята до 15: в числах сложности появились поля подстройки", () => {
+    expect(WORLD_SNAPSHOT_VERSION).toBe(15);
+  });
+
+  it("снимок прежней версии отвергается понятной ошибкой", () => {
+    const run = newRun(1, WITH_PRESSURE);
+    const saved = roundTrip(run) as Record<string, unknown>;
+    expect(() => restoreWorld(newRun(1, WITH_PRESSURE).world, newRun(1, WITH_PRESSURE).director, { ...saved, version: 14 })).toThrow(
+      /версия 14, ожидалась 15/,
+    );
+  });
+
+  it("числа подстройки переносятся и пересчитываются заново только на входе в отрезок", () => {
+    const original = newRun(5, WITH_PRESSURE);
+    advance(original, 5 * 60);
+    expect(original.world.difficulty.power).toBeGreaterThan(0);
+    expect(original.world.difficulty.pressureLevel).toBeGreaterThan(1);
+
+    const resumed = newRun(5, WITH_PRESSURE);
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    for (const field of ["power", "pressureLevel", "startPower", "startPressure", "spawnMul", "stageShiftSec", "eliteLead", "bossLead"] as const) {
+      expect(resumed.world.difficulty[field], field).toBe(original.world.difficulty[field]);
+    }
+  });
+
+  it("снимок без числа подстройки не читается: пропуск поля не должен давать мир с нулями", () => {
+    const run = newRun(5, WITH_PRESSURE);
+    const saved = roundTrip(run) as { difficulty: Record<string, unknown> };
+    delete saved.difficulty.spawnMul;
+    expect(() => restoreWorld(newRun(5, WITH_PRESSURE).world, newRun(5, WITH_PRESSURE).director, saved)).toThrow(SnapshotError);
   });
 });
