@@ -84,10 +84,10 @@ export function startFxStand(sceneId: string, ground: "map" | "light"): void {
       difficultyId: DEFAULT_DIFFICULTY_ID,
     });
     await until(() => useRun.getState().phase === "running" || useRun.getState().phase === "paused", "забег не начался");
+    // Сцена создаётся после события старта: пауза и команды нужны готовому миру.
+    await until(() => useRun.getState().inspect() !== null, "мир не готов");
     useRun.getState().pause("manual");
     await until(() => useRun.getState().phase === "paused", "пауза");
-    // Сцена создаётся после события старта: команды принимает только готовый мир.
-    await until(() => useRun.getState().inspect() !== null, "мир не готов");
     for (const command of scene.commands) useRun.getState().devCommand(command);
     await twoFrames();
   })();
