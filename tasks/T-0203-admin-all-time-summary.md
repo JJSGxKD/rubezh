@@ -27,6 +27,7 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
