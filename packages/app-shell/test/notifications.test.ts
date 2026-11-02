@@ -146,6 +146,47 @@ describe("уведомление о версии при скрытом журн�
   });
 });
 
+describe("напоминания бота в ленте (T-0128)", () => {
+  const AT = "2026-11-04T09:00:00.000Z";
+  const row = (kind: string, data: Record<string, unknown>) => describeNotification({ id: "n4", kind, data, createdAt: AT, read: false });
+
+  it("обогнали: сложность и место из данных, ведёт на вкладку рейтинга", () => {
+    const described = row("season_overtaken", { difficulty: "hard", place: 7 });
+
+    expect(described?.text).toBe("Тебя обогнали в недельном сезоне «Рубежа»: на сложности «Сложная» ты теперь на 7-м месте. До закрытия сезона можно отыграться.");
+    expect(described?.target).toBe("rating");
+    expect(described?.over).toBeUndefined();
+    expect(described?.icon).toBeDefined();
+  });
+
+  it("обогнали: неизвестная сложность или место не числом — строки нет, а не «undefined» в тексте", () => {
+    expect(row("season_overtaken", { difficulty: "nightmare", place: 7 })).toBeNull();
+    expect(row("season_overtaken", { difficulty: "hard", place: "7" })).toBeNull();
+    expect(row("season_overtaken", {})).toBeNull();
+  });
+
+  it("сезон закрывается: время закрытия по Москве, ведёт на вкладку рейтинга", () => {
+    // Конец сезона — понедельник 00:00 UTC, то есть 03:00 по Москве.
+    const described = row("season_closing", { endsAt: "2026-11-09T00:00:00.000Z" });
+
+    expect(described?.text).toBe("Недельный сезон «Рубежа» закрывается завтра в 03:00 по Москве. Награды за порог и за место получат те, кто попал в таблицу, — успей улучшить результат.");
+    expect(described?.target).toBe("rating");
+  });
+
+  it("сезон закрывается: срок не датой — строки нет", () => {
+    expect(row("season_closing", { endsAt: "скоро" })).toBeNull();
+    expect(row("season_closing", {})).toBeNull();
+  });
+
+  it("награда дня: текст бота, касание открывает экран награды поверх ленты", () => {
+    const described = row("daily_reward_ready", {});
+
+    expect(described?.text).toBe("Награда дня ждёт тебя в «Рубеже». Загляни и забери её сегодня.");
+    expect(described?.target).toBe("daily");
+    expect(described?.over).toBe(true);
+  });
+});
+
 describe("уведомление об отписке от канала (T-0177)", () => {
   const AT = "2026-10-28T10:00:00.000Z";
   const CLOSED_UNTIL = "2026-11-27T09:00:00.000Z";
