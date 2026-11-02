@@ -335,7 +335,7 @@ describe.skipIf(DATABASE_URL === "")("закрытие месяца пасса �
       const half = await person();
       await passRepository.addPoints(half.accountId, month, 250, times(month).inside);
       const nothing = await person();
-      await passRepository.addPoints(nothing.accountId, month, 99, times(month).inside);
+      await passRepository.addPoints(nothing.accountId, month, 40, times(month).inside);
       settings.set(SETTINGS.passPointsPerTier.key, 50);
 
       await replica().closeDue(closeAt);
@@ -405,6 +405,19 @@ describe.skipIf(DATABASE_URL === "")("закрытие месяца пасса �
       expect(await ledger(me.accountId, month)).toEqual(before);
       expect(await closeRows(month)).toBe(1);
       expect(await notices(me.accountId)).toHaveLength(1);
+    }, RACE_TIMEOUT_MS);
+
+    it("первые секунды нового месяца закрытие ждёт: запрос, начатый в последнюю секунду, ещё прибавляет очки", async () => {
+      const month = await freeMonth();
+      const { endsAt } = monthBounds(month);
+      const me = await reached(3, month);
+
+      expect(forMonth(await replica().closeDue(new Date(endsAt.getTime() + 1_000)), month)).toBeUndefined();
+      expect(await journal(me.accountId, month)).toEqual([]);
+
+      // очки, дошедшие уже после границы, но с меткой прежнего месяца, успевают до закрытия
+      await passRepository.addPoints(me.accountId, month, 200, new Date(endsAt.getTime() - 100));
+      expect(forMonth(await replica().closeDue(new Date(endsAt.getTime() + PASS_CLOSE_LIMITS.graceMs)), month)).toEqual({ monthKey: month, accounts: 1, rewards: 5 });
     }, RACE_TIMEOUT_MS);
 
     it("месяц без игроков закрывается пустой строкой", async () => {
@@ -673,7 +686,7 @@ describe.skipIf(DATABASE_URL === "")("закрытие месяца пасса �
       await replica().closeDue(times(month).closeAt);
       await replica().closeDue(times(month).closeAt);
 
-      expect(logged(log, "pass_closed")).toEqual([expect.objectContaining({ module: "battle-pass", event: "pass_closed", month, accounts: 2, rewards: 5 })]);
+      expect(logged(log, "pass_closed").filter((line) => line.month === month)).toEqual([expect.objectContaining({ module: "battle-pass", event: "pass_closed", month, accounts: 2, rewards: 5 })]);
       const claimed = logged(log, "pass_reward_claimed").filter((line) => line.month === month);
       expect(claimed).toHaveLength(5);
       expect(claimed.every((line) => line.source === "close" && line.module === "battle-pass")).toBe(true);
