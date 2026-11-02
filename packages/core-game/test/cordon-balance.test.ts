@@ -32,21 +32,16 @@ describe("числа кольца стражей (Р166)", () => {
     expect(curveCordon?.ring?.shrinkPerSec).toBeLessThanOrEqual(SHRINK_BEFORE_R166.curve / 2);
   });
 
-  it("внутри каждого кольца есть элита; босс только в кольце кривой и с fromSec не меньше 630", () => {
+  it("внутри каждого кольца есть элита, а босса внутри нет: боссы приходят своими событиями кривой", () => {
     const rings = [
-      { where: "180 с", ring: cordonEventAt(180)?.ring, bossAllowed: false },
-      { where: "300 с", ring: cordonEventAt(300)?.ring, bossAllowed: false },
-      { where: "кривая", ring: curveCordon?.ring, bossAllowed: true },
+      { where: "180 с", ring: cordonEventAt(180)?.ring },
+      { where: "300 с", ring: cordonEventAt(300)?.ring },
+      { where: "кривая", ring: curveCordon?.ring },
     ];
-    for (const { where, ring, bossAllowed } of rings) {
-      const inner = ring?.inner ?? [];
-      const ranks = inner.map((entry) => ({ entry, rank: ENEMIES.find((enemy) => enemy.id === entry.enemy)?.rank }));
-      expect(ranks.some((item) => item.rank === "elite"), `элита в кольце ${where}`).toBe(true);
-      for (const { entry, rank } of ranks) {
-        if (rank !== "boss") continue;
-        expect(bossAllowed, `босс в кольце ${where}`).toBe(true);
-        expect(entry.fromSec ?? 0, `fromSec босса в кольце ${where}`).toBeGreaterThanOrEqual(630);
-      }
+    for (const { where, ring } of rings) {
+      const ranks = (ring?.inner ?? []).map((entry) => ENEMIES.find((enemy) => enemy.id === entry.enemy)?.rank);
+      expect(ranks.includes("elite"), `элита в кольце ${where}`).toBe(true);
+      expect(ranks.includes("boss"), `босс в кольце ${where}`).toBe(false);
     }
   });
 
