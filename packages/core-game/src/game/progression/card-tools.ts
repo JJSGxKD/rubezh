@@ -1,6 +1,6 @@
 import type { CardTools } from "@bh/shared-types";
 import type { World } from "../sim/world";
-import { addXp, collectCandidates, drawWeighted, healOption, isAwaitingChoice, OFFERS_PER_LEVEL, pickWeighted, type Candidate } from "./levels";
+import { addXp, buildLimitOffers, collectCandidates, drawWeighted, isAwaitingChoice, OFFERS_PER_LEVEL, pickWeighted, type Candidate } from "./levels";
 
 /**
  * Переброс, пропуск и изгнание карточек (docs/39-retention-mechanics.md Б3,
@@ -135,7 +135,7 @@ function banish(world: World, optionId: string): CardToolOutcome | null {
   } else {
     progression.offers.splice(index, 1);
     // Выбирать больше не из чего — остаётся запасной вариант, мир не зависает.
-    if (progression.offers.length === 0) progression.offers = [healOption()];
+    if (progression.offers.length === 0) progression.offers = buildLimitOffers(world, world.cardRng);
   }
   return { kind: "banish", left: progression.tools.banish, item: key };
 }

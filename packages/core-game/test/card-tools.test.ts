@@ -1,7 +1,7 @@
 import type { BoostDef, EnemyDef, LoadoutLimits, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import {
   applyCardTool,
@@ -282,6 +282,21 @@ describe("изгнание", () => {
     applyCardTool(world, `${BANISH_PREFIX}${third.id}`);
     expect(ids(world)).toEqual([HEAL_OPTION_ID]);
     expect(world.progression.banished).toHaveLength(3);
+  });
+
+  it("изгнан последний предмет, записи «Предела» есть — вместо лечения «Предел», world.rng не тронут", () => {
+    const world = smallPool(1, { cardTools: { reroll: 0, skip: 0, banish: 1 }, limits: LIMITS });
+    const rngBefore = JSON.stringify(world.rng);
+    applyCardTool(world, `${BANISH_PREFIX}${world.progression.offers[0].id}`);
+    expect(world.progression.offers.length).toBeGreaterThan(0);
+    expect(world.progression.offers.every((offer) => offer.kind === "limit")).toBe(true);
+    expect(JSON.stringify(world.rng)).toBe(rngBefore);
+  });
+
+  it("изгнан последний предмет, записей «Предела» нет — одна карточка лечения", () => {
+    const world = smallPool(1, { cardTools: { reroll: 0, skip: 0, banish: 1 } });
+    applyCardTool(world, `${BANISH_PREFIX}${world.progression.offers[0].id}`);
+    expect(ids(world)).toEqual([HEAL_OPTION_ID]);
   });
 
   it("повторно изгнанное не двоится в списке", () => {
