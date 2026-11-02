@@ -696,6 +696,11 @@ export interface RunDevVisuals {
    * только в режиме разработчика (design/art/characters.md, «Интеграция»).
    */
   sprites: boolean;
+  /**
+   * Светлая земля карты вместо тёмной: проверить, как читается вспышка на
+   * светлом участке. Только для стенда эффектов, у обычного забега выключено.
+   */
+  lightGround: boolean;
 }
 
 export interface RunDevCheats {

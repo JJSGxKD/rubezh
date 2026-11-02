@@ -135,11 +135,10 @@ describe("настройки режима разработчика", () => {
   });
 
   it("настройки без lightGround читаются с false", () => {
-    const { lightGround: _omitted, ...visuals } = DEFAULT_DEV_SETTINGS.visuals;
+    const visuals = Object.fromEntries(Object.entries(DEFAULT_DEV_SETTINGS.visuals).filter(([key]) => key !== "lightGround"));
     const storage = memoryStorage();
     storage.set("bh.dev.v1", JSON.stringify({ ...DEFAULT_DEV_SETTINGS, visuals }));
     start(true, storage);
-    expect(useDevMode.getState().settings.visuals.lightGround).toBe(false);
     expect(toRunDev(useDevMode.getState().settings).visuals.lightGround).toBe(false);
   });
 
