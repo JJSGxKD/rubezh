@@ -65,20 +65,38 @@ batch: 3
 
 ## Решения
 
-Р131, Р65, Р67, WP34 (`docs/35-stage4-plan.md`) и решения пользователя и
-`claude-lead-1` от 21.10.2026. Исполнитель их не пересматривает. Числа,
-помеченные «рабочие», калибрует T-0196 по `pnpm balance:sim` в фиксированных
-коридорах; в этой задаче они остаются такими, как в таблицах ниже.
+Р131, Р65, Р67, Р183, WP34 (`docs/35-stage4-plan.md`) и решения пользователя и
+`claude-lead-1` от 21.10.2026 и 02.11.2026. Исполнитель их не пересматривает.
+Числа, помеченные «рабочие», калибрует T-0196 по `pnpm balance:sim` в
+фиксированных коридорах; в этой задаче они остаются такими, как в таблицах ниже.
+
+**Главное правило (Р183, владелец, 02.11.2026): подстройка не отбирает
+прокачку.** Игрок обязан чувствовать, что стал сильнее: прокачанный живёт
+заметно дольше новичка (цель — около 7, 10 и 14 минут у новичка, среднего и
+полного арсенала), а подстройка забирает не больше половины преимущества. Из
+этого правила — решения 1, 4, 6 и 12 ниже:
+
+- **бусты в силу не входят.** Буст — разовая покупка на забег: если он
+  поднимает давление, игрок платит за то, что у него сразу забирают;
+- **внутри забега — только помощь отстающему.** Удачный выбор карточек не
+  наказывается: набор впереди расписания давление не поднимает;
+- **вверх давление растёт прежде всего числом врагов и событиями, а не
+  здоровьем.** Прокачанный игрок должен видеть, что рядовой падает быстрее, а
+  толпа больше — ему есть кого косить. Здоровье и урон врагов вверх почти не
+  растут, ступени врагов вверх не сдвигаются; вниз, для новичка, работают все
+  рычаги, как раньше.
 
 1. **Сила считается внутри движка, чистой функцией от мира, без новых
    входов забега.** Всё, что нужно, мир уже хранит: уровень аккаунта в
    `world.runLoadout.accountLevel` и открытые им слоты в `world.loadoutLimits`;
-   прибавки снаряжения, дерева и бустов вместе — в `world.loadoutModifiers`;
-   не-параметрические эффекты бустов — в `world.boosts` (`shieldHits`,
-   `startLevels`, `extraOffers`); собранное в забеге — в `world.loadout`
-   (оружие и навыки с уровнями). Повтор забега по записи (`replayRecording`)
-   и продолжение из снимка получают тот же набор (`recording.loadout`,
-   `snapshot.loadout`), поэтому дают тот же бой.
+   прибавки снаряжения и дерева **без бустов** — в `world.runLoadout.modifiers`
+   (`create-world.ts` складывает их с прибавками бустов в
+   `world.loadoutModifiers` уже после; для силы берётся набор до бустов);
+   собранное в забеге — в `world.loadout` (оружие и навыки с уровнями).
+   `world.loadoutModifiers` и `world.boosts` сила не читает (Р183). Повтор
+   забега по записи (`replayRecording`) и продолжение из снимка получают тот
+   же набор (`recording.loadout`, `snapshot.loadout`), поэтому дают тот же
+   бой.
 2. **Единственный новый вход — класс устройства, и он едет внутри
    `RunLoadout`.** `RunLoadout.deviceClass?: "standard" | "light"` — по образцу
    `accountLevel`: поле необязательное, нет поля — обычное устройство, значение
@@ -95,16 +113,15 @@ batch: 3
    единицы, сдвиги нули, и забег побитово равен забегу без этой задачи. Боты
    `balance:sim` без набора, сценарные эталоны `determinism` и `run-summary` и
    golden «Сложной» из T-0192 поэтому **не меняются**.
-4. **Сила — сумма очков из четырёх слагаемых (Р65).** Очки — условная шкала,
+4. **Сила — сумма очков из трёх слагаемых (Р65, Р183).** Очки — условная шкала,
    на которой «опорный» игрок (`reference`) получает давление T-0192 без
    поправок:
 
    | Слагаемое | Откуда | Формула |
    |---|---|---|
    | слоты | `world.loadoutLimits` (уровень аккаунта открывает слоты) | `slotPoints × (weapons + attack + defense + mobility)` |
-   | снаряжение | `world.loadoutModifiers` (предметы, дерево, модификаторы бустов вместе) | сумма `gear[stat] × modifiers[stat]` по `LOADOUT_STATS` в порядке перечня |
-   | эффекты бустов | `world.boosts` | `shieldPoints × shieldHits + startLevelPoints × startLevels + offerPoints × extraOffers` |
-   | собранное в забеге | `world.loadout`, `world.stats.elapsedSec` | `clamp(buildPoints × (buildScore − expectedBuild(elapsedSec)), −buildCap, +buildCap)` |
+   | снаряжение | `world.runLoadout.modifiers` (предметы и дерево, **без бустов**) | сумма `gear[stat] × modifiers[stat]` по `LOADOUT_STATS` в порядке перечня |
+   | собранное в забеге | `world.loadout`, `world.stats.elapsedSec` | `clamp(buildPoints × (buildScore − expectedBuild(elapsedSec)), −buildCap, 0)` — **не выше нуля** |
 
    `buildScore` — доля собранного набора от ёмкости: `min(1, суммарный
    уровень оружия и навыков / (слотов оружия × средний максимальный уровень
@@ -113,22 +130,35 @@ batch: 3
    `world.passiveTypes` (`levels.length`), пустой список — единица.
    `expectedBuild` — ломаная по таблице `buildSchedule` (секунда → ожидаемая
    доля): до первой точки — её значение, после последней — последнее.
-   Так считается не «сколько собрано», а «впереди или позади расписания»:
-   игрок, собравший набор раньше обычного, получает давление выше, отставший —
-   ниже, и рост набора со временем сам по себе давление не поднимает.
+   Так считается не «сколько собрано», а «позади ли расписания»: отставший
+   получает давление ниже, а собравший набор раньше обычного — то же, что по
+   силе на старте: удачный выбор карточек не наказывается (Р183). Рост набора
+   со временем сам по себе давление не поднимает.
 5. **Из очков — уровень давления `L` в пределах.**
    `delta = total − reference`; `raw = 1 + delta / spanUp`, если `delta ≥ 0`,
    иначе `1 + delta / spanDown`; `L = min(maxLevel, max(minLevel, raw))`.
    `L = 1` — опорный игрок, `L < 1` — мягче, `L > 1` — жёстче. **Разброс
    ограничен** пределами `minLevel 0,75` и `maxLevel 1,3` (рабочие).
 6. **Три рычага — все линейные по `d = L − 1`, без степеней** (детерминизм
-   между JS-движками, `CLAUDE.md`):
+   между JS-движками, `CLAUDE.md`). **Рычаги несимметричны (Р183):** при
+   `d < 0` (новичок, мягче) берётся набор `k = levers.down`, при `d ≥ 0`
+   (сильнее опорного) — `k = levers.up`. Вниз работают все рычаги; вверх
+   давление растёт толпой и событиями, здоровье и урон — едва-едва, ступени не
+   сдвигаются:
 
    | Рычаг | Что меняется | Формула |
    |---|---|---|
-   | 1. Здоровье и урон | `world.difficulty.hpMul`, `damageMul` | множитель отрезка × `(1 + levers.hp × d)` и `(1 + levers.damage × d)` |
-   | 2. Темп и потолок | `world.difficulty.spawnMul`, `maxAlive` | `spawnMul = 1 + levers.spawn × d`; `desiredAlive = round(plan.maxAlive × difficultyLevel.maxAliveMul × (1 + levers.alive × d))` |
-   | 3. Состав и события | `stageShiftSec`, `eliteLead`, `bossLead` | `stageShiftSec = round(levers.stageShiftSec × d)` — ступени открываются на столько секунд раньше (минус — позже); `lead = clamp(round(levers.leadPerLevel × d), leads[ранг].min, leads[ранг].max)` — события элит и боссов кривой приходят на столько отрезков раньше |
+   | 1. Здоровье и урон | `world.difficulty.hpMul`, `damageMul` | множитель отрезка × `(1 + k.hp × d)` и `(1 + k.damage × d)` |
+   | 2. Темп и потолок | `world.difficulty.spawnMul`, `maxAlive` | `spawnMul = 1 + k.spawn × d`; `desiredAlive = round(plan.maxAlive × difficultyLevel.maxAliveMul × (1 + k.alive × d))` |
+   | 3. Состав и события | `stageShiftSec`, `eliteLead`, `bossLead` | `stageShiftSec = d < 0 ? round(levers.down.stageShiftSec × d) : 0` — у новичка ступени открываются на столько секунд позже, у сильного не сдвигаются; `lead = clamp(round(k.leadPerLevel × d), leads[ранг].min, leads[ранг].max)` — события элит и боссов кривой приходят на столько отрезков раньше (минус — позже) |
+
+   Почему вверх не здоровье: ступень и здоровье делают из рядового «губку» —
+   прокачанный бьёт сильнее, а враг падает так же долго, и прокачка не
+   ощущается. Толпа и ранние элиты — наоборот: больше целей, больше опыта и
+   сундуков, бой плотнее, а сила видна. Поэтому `findPressureProblems` держит
+   потолок: `levers.up.hp × (maxLevel − 1) ≤ 0,1` (подстройка удлиняет
+   убийство рядового у самого сильного не больше чем на десятую) и
+   `levers.up.damage × (maxLevel − 1) ≤ 0,15`.
 
    Сдвиг ступеней: `pickStage` сравнивает `fromSec` ступени с
    `max(0, elapsedSec + stageShiftSec)`. Сдвиг событий: только у **событий
@@ -141,7 +171,8 @@ batch: 3
    everySegments === 0`). **Боссы сдвигаются только вперёд** (`leads.boss`
    от 0 до +1): события боссов привязаны к минутам, рубеж на 10:00 (T-0120)
    на них опирается, и «позже» для босса новичку не нужно — Р131 говорит
-   «раньше». Элиты — в обе стороны (от −1 до +1).
+   «раньше». Элиты — в обе стороны (от −1 до +1). Ранняя элита сильному
+   игроку — ещё и ранний сундук: давление, которое награждает.
 7. **Слабое устройство (Р67).** Класс устройства — из `world.runLoadout`.
    Потолок живых отрезка: `deviceLimited = min(desiredAlive, caps[класс])`,
    `maxAlive = min(world.config.maxEnemies, deviceLimited)`. Если потолок
@@ -187,13 +218,12 @@ batch: 3
     |---|---|
     | `power.slotPoints` | 0,15 |
     | `power.gear` | `damage` 1; `cooldown` 1; `area` 0,4; `projectileSpeed` 0,15; `duration` 0,25; `moveSpeed` 0,5; `pickupRadius` 0,05; `maxHp` 0,01; `regenPerSec` 0,5; `armor` 0,1; `resistFire`, `resistCold`, `resistLightning`, `resistPoison` по 0,35; `damageFire`, `damageCold`, `damageLightning`, `damagePoison` по 0,2; `statusChance` 0,15 |
-    | `power.shieldPoints`, `startLevelPoints`, `offerPoints` | 0,2; 0,1; 0,15 |
     | `power.buildPoints`, `buildCap` | 4; 1,5 |
     | `power.buildSchedule` | `[[0, 0.02], [120, 0.12], [300, 0.32], [600, 0.6], [900, 0.85], [1200, 1]]` (T-0196 выведет расписание из прогона бота) |
     | `reference`, `spanUp`, `spanDown` | 2,0; 11; 6 |
     | `minLevel`, `maxLevel` | 0,75; 1,3 |
-    | `levers.hp`, `damage`, `spawn`, `alive` | 0,8; 0,6; 0,6; 0,4 |
-    | `levers.stageShiftSec`, `leadPerLevel` | 300; 3,5 |
+    | `levers.down` (новичок): `hp`, `damage`, `spawn`, `alive`, `stageShiftSec`, `leadPerLevel` | 0,8; 0,6; 0,6; 0,4; 300; 3,5 |
+    | `levers.up` (сильнее опорного): `hp`, `damage`, `spawn`, `alive`, `leadPerLevel` | 0,2; 0,3; 0,9; 0,6; 3,5 |
     | `leads.elite`, `leads.boss` | `{ min: -1, max: 1 }`; `{ min: 0, max: 1 }` |
     | `devices.caps` | `standard: 360`, `light: 160` |
     | `devices.compensateFromSec`, `hpComp`, `damageComp`, `maxShortfall` | 300; 0,5; 0,35; 2,5 |
@@ -201,8 +231,9 @@ batch: 3
     Ориентиры (посчитаны по `item-rules.ts` и лестнице `unlocks.ts`):
     новичок (1-й уровень, без снаряжения) — около 0,75 очка, `L ≈ 0,79`;
     средний (8-й уровень аккаунта, шесть редких предметов 10-го уровня) —
-    около 2,0, `L ≈ 1`; полный арсенал (14-й уровень, шесть легендарных 19-го,
-    три буста) — около 4,8, `L ≈ 1,25`.
+    около 2,0, `L ≈ 1`; полный арсенал (14-й уровень, шесть легендарных 19-го)
+    — около 4,3, `L ≈ 1,2`. Бусты в силу не входят (Р183): с тремя бустами у
+    полного арсенала те же очки, и бусты целиком остаются его преимуществом.
 
 ## Как сейчас
 
@@ -265,10 +296,11 @@ T-0197 и задачи пачки, от которых она зависит. С
      устройства влияет на бой, значит обязан попасть в запись и снимок, а
      набор туда уже попадает; нет поля — обычное устройство.
    - `PressureDef` (форма — решение 12: `power { slotPoints, gear:
-     Partial<Record<LoadoutStat, number>>, shieldPoints, startLevelPoints,
-     offerPoints, buildPoints, buildCap, buildSchedule: [number, number][] }`,
-     `reference`, `spanUp`, `spanDown`, `minLevel`, `maxLevel`, `levers {
-     hp, damage, spawn, alive, stageShiftSec, leadPerLevel }`, `leads {
+     Partial<Record<LoadoutStat, number>>, buildPoints, buildCap,
+     buildSchedule: [number, number][] }`, `reference`, `spanUp`,
+     `spanDown`, `minLevel`, `maxLevel`, `levers { down { hp, damage, spawn,
+     alive, stageShiftSec, leadPerLevel }, up { hp, damage, spawn, alive,
+     leadPerLevel } }`, `leads {
      elite, boss: { min, max } }`, `devices { caps: Record<DeviceClass,
      number>, compensateFromSec, hpComp, damageComp, maxShortfall }`).
    - `RunPressureStart { power: number; level: number; deviceClass:
@@ -284,7 +316,8 @@ T-0197 и задачи пачки, от которых она зависит. С
 4. **`game/sim/player-power.ts`** (новый, чистый):
    - `buildScoreOf(world: World): number` — решение 4;
    - `expectedBuildScore(schedule, sec): number`;
-   - `interface PlayerPower { slots; gear; boosts; build; total }`;
+   - `interface PlayerPower { slots; gear; build; total }` (бустов нет,
+     Р183; `build` не больше нуля);
    - `computePlayerPower(world: World, rules: PressureDef): PlayerPower` —
      слагаемые решения 4; цикл по `LOADOUT_STATS` в порядке перечня,
      неизвестные веса — ноль; аллокация одного результата на вызов
@@ -293,7 +326,8 @@ T-0197 и задачи пачки, от которых она зависит. С
    - `isPressureActive(world): boolean` — `world.pressureRules !== null &&
      world.runLoadout.accountLevel !== undefined`;
    - `pressureLevelOf(rules, total): number` — решение 5;
-   - `leversOf(rules, level): PressureLevers` — решение 6
+   - `leversOf(rules, level): PressureLevers` — решение 6, набор `down` или
+     `up` по знаку `d`
      (`hpScale`, `damageScale`, `spawnScale`, `aliveScale`, `stageShiftSec`,
      `eliteLead`, `bossLead`);
    - `refreshPressure(world): void` — считает силу и уровень, пишет в
@@ -392,11 +426,11 @@ T-0197 и задачи пачки, от которых она зависит. С
 `packages/core-game/test/helpers/pressure-fixture.ts` (новый): `TEST_PRESSURE:
 PressureDef` с двоично-точными числами, чтобы ожидания считались без
 округлений: `slotPoints 0.25`; `gear { damage 1, maxHp 0.0625 }`;
-`shieldPoints 0.25`, `startLevelPoints 0.125`, `offerPoints 0.125`;
 `buildPoints 1`, `buildCap 0.5`, `buildSchedule [[0,0],[100,0.5],[200,1]]`;
 `reference 1.25`, `spanUp 2`, `spanDown 1`, `minLevel 0.75`, `maxLevel 1.5`;
-`levers { hp 1, damage 0.5, spawn 0.5, alive 0.5, stageShiftSec 100,
-leadPerLevel 4 }`; `leads { elite {-1, 1}, boss {0, 1} }`; `devices { caps {
+`levers { down { hp 1, damage 0.5, spawn 0.5, alive 0.5, stageShiftSec 100,
+leadPerLevel 4 }, up { hp 0.125, damage 0.25, spawn 1, alive 0.5,
+leadPerLevel 4 } }`; `leads { elite {-1, 1}, boss {0, 1} }`; `devices { caps {
 standard 400, light 100 }, compensateFromSec 60, hpComp 0.5, damageComp 0.5,
 maxShortfall 2 }`. Там же помощник, собирающий мир с `loadoutLimits`,
 `loadout { modifiers, boosts, accountLevel }`, `pressure` и стартовым
@@ -407,16 +441,17 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
 - **слоты:** лимиты `{ weapons 2, attack 1, defense 1, mobility 1 }` дают
   `0,25 × 5 = 1,25`, лимиты `4 / 3 / 2 / 1` — `2,5`;
 - **снаряжение:** модификаторы `{ damage: 0.1, maxHp: 16 }` дают `0,1 + 1 =
-  1,1`; нулевые и неизвестные параметры в сумму не входят; прибавка буста
-  (`fury`) идёт через `world.loadoutModifiers` и тоже считается;
-- **эффекты бустов:** `shieldHits 1` — `+0,25`, `startLevels 2` — `+0,25`,
-  `extraOffers 1` — `+0,125`;
-- **собранное:** стартовый мир на 0-й секунде (ожидаемое 0): `build =
-  buildPoints × buildScoreOf(world)`, то есть не отрицательно и не больше
-  `buildCap`; мир с полностью заполненным набором (все слоты заняты, все
+  1,1`; нулевые и неизвестные параметры в сумму не входят;
+- **бусты не входят в силу (Р183):** тот же набор с бустами `fury`, `aegis`,
+  `head_start` и `insight` (прибавка урона, щит, старт с уровня, лишняя
+  карточка) даёт ту же силу и тот же `L`, что без них, хотя
+  `world.loadoutModifiers` у них разные; источник снаряжения —
+  `world.runLoadout.modifiers`;
+- **собранное:** стартовый мир на 0-й секунде (ожидаемое 0): `build = 0`
+  (впереди или вровень с расписанием — ноль); мир с полностью заполненным набором (все слоты заняты, все
   уровни на максимуме, `buildScoreOf = 1`) на 50-й секунде (ожидаемое 0,25) —
-  `build = +0,5` (потолок, не 0,75); мир с одним оружием первого уровня на
-  200-й секунде (ожидаемое 1) — `-0,5` (потолок); ломаная
+  `build = 0` (впереди расписания — не выше нуля, Р183); мир с одним оружием
+  первого уровня на 200-й секунде (ожидаемое 1) — `-0,5` (потолок помощи); ломаная
   `expectedBuildScore`: до первой точки, ровно на точке, между точками
   (100 → 150 = 0,75), после последней; пустой список типов оружия и навыков
   не даёт деления на ноль;
@@ -430,12 +465,14 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
 - **уровень давления:** `total = reference` → `L = 1` ровно; `total =
   reference + 1` → `1 + 1/2 = 1,5` (потолок `maxLevel`); `total = reference −
   0,5` → `0,5` → зажато `0,75`; промежуточные значения линейны;
-- **рычаги:** при `L = 1,5` (`d = 0,5`): `hpScale 1,5`, `damageScale 1,25`,
-  `spawnScale 1,25`, `aliveScale 1,25`, `stageShiftSec 50`, `eliteLead 1`
-  (`round(2)` зажато до 1), `bossLead 1`; при `L = 0,75` (`d = −0,25`):
+- **рычаги вверх — набор `up` (Р183):** при `L = 1,5` (`d = 0,5`):
+  `hpScale 1,0625`, `damageScale 1,125`, `spawnScale 1,5`, `aliveScale 1,25`,
+  `stageShiftSec 0` (вверх ступени не сдвигаются), `eliteLead 1` (`round(2)`
+  зажато до 1), `bossLead 1`;
+- **рычаги вниз — набор `down`:** при `L = 0,75` (`d = −0,25`):
   `0,75 / 0,875 / 0,875 / 0,875`, `stageShiftSec −25`, `eliteLead −1`,
   `bossLead 0` (зажат нижним пределом босса); `L = 1` — единицы и нули, без
-  `-0`;
+  `-0`; при любом `L ≥ 1` `stageShiftSec` равен 0;
 - **директор, множители отрезка:** на мире с активной подстройкой первый
   `director.update` ставит `world.difficulty.hpMul/damageMul/maxAlive/spawnMul`
   по формулам решений 6–7 (план — фикстура с `maxAlive 200`); спавн-темп в
@@ -474,8 +511,9 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
   duration 0.3494, statusChance 0.4368, damageFire 0.2184, damageCold 0.2184,
   damageLightning 0.2184, damagePoison 0.2184, maxHp 52.42, armor 2.6208,
   regenPerSec 1.3104, resistFire 0.262, resistCold 0.262, pickupRadius 0.5242,
-  moveSpeed 0.0874 }`, буст `fury`, `bulwark`, `aegis`) — от 1,15 до 1,3;
-  порядок `L(новичок) < L(средний) < L(полный)`; на реальном контенте
+  moveSpeed 0.0874 }`) — от 1,1 до 1,3, и с бустами `fury`, `bulwark`,
+  `aegis` — тот же `L` до бита; порядок `L(новичок) < L(средний) <
+  L(полный)`; на реальном контенте
   `PRESSURE` и `createRunWorld`.
 - **детерминизм при замене движка:** тест чистоты `sim-purity.test.ts`
   остаётся зелёным без правок (новые файлы лежат в `game/sim/`).
@@ -517,7 +555,11 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
 (секунды строго растут и начинаются с 0; доли не убывают и в пределах 0–1),
 не целый или перевёрнутый `leads`, `caps.light > caps.standard` или меньше 60,
 `maxShortfall < 1`, отрицательные `hpComp`/`damageComp`/`compensateFromSec`,
-`buildCap < 0`; сообщения называют поле. Сверх того: `PRESSURE.devices.caps.standard`
+`buildCap < 0`; **потолки Р183:** `levers.up.hp × (maxLevel − 1) > 0,1` и
+`levers.up.damage × (maxLevel − 1) > 0,15` — ошибка, сообщение называет поле
+и говорит «подстройка не должна делать из врага губку для сильного игрока»;
+поле `stageShiftSec` в `levers.up` — ошибка (вверх ступени не сдвигаются);
+сообщения называют поле. Сверх того: `PRESSURE.devices.caps.standard`
 не меньше `round(ENDLESS_CURVE.maxAlive × findDifficulty("hard").maxAliveMul)`
 (потолок обычного устройства не режет «Сложную» на опорной силе) и не больше
 пула `DEFAULT_SIM_CONFIG.maxEnemies`; `caps.light` ниже `caps.standard`;
@@ -558,9 +600,11 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
   `deviceClass`.
 - `CLAUDE.md`, «Как добавить отрезок таймлайна спавна»: после абзаца про
   уровни сложности — абзац «Подстройка под силу игрока (Р131) — `content/
-  pressure.ts`: очки силы из слотов, снаряжения, бустов и собранного набора
-  относительно расписания; уровень давления в пределах 0,75–1,3; три рычага
-  — здоровье и урон, темп и потолок живых, ступени и события элит и боссов;
+  pressure.ts`: очки силы из слотов и снаряжения (бусты не входят — Р183) и
+  отставания набора от расписания (только помощь отстающему); уровень
+  давления в пределах 0,75–1,3; три рычага — здоровье и урон, темп и потолок
+  живых, ступени и события элит и боссов; вниз работают все, вверх — толпа и
+  события, здоровье и урон едва-едва: подстройка не отбирает прокачку;
   на слабом устройстве потолок живых ниже, а добавку берут здоровье и урон.
   Работает, только если у набора есть `accountLevel`: стенд, боты и забег
   разработчика идут без неё. Числа калибрует `pnpm balance:sim`
@@ -628,7 +672,7 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
   ```
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — СИЛА ИГРОКА И ПОДСТРОЙКА ДАВЛЕНИЯ**
 
-  Движок научился считать силу игрока (уровень аккаунта, снаряжение, бусты, собранное в забеге) и подстраивать по ней давление: здоровье и урон врагов, темп спавна и потолок живых, ступени и события элит и боссов. На слабом устройстве потолок живых ниже, а недостающее добирают здоровье и урон.
+  Движок научился считать силу игрока (уровень аккаунта и снаряжение; бусты не входят) и подстраивать по ней давление так, чтобы прокачка ощущалась: новичку мягче всеми рычагами, сильному — больше врагов и раньше элиты, а не «губки». На слабом устройстве потолок живых ниже, а недостающее добирают здоровье и урон.
 
   🛠 **Движок и контент**
 

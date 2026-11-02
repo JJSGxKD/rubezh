@@ -24,9 +24,9 @@ export function WidgetShowcase(props: { now: number }): ReactNode {
     { id: "tasks", size: "hero", ready: true, view: <TasksView face={{ state: "ready", claimable: 2, done: 2, total: 4 }} size="hero" /> },
     { id: "tasks", size: "tile", ready: false, view: <TasksView face={{ state: "progress", done: 1, total: 4 }} size="tile" /> },
     { id: "friends", size: "tile", ready: false, view: <FriendsView face={{ state: "news", count: 2 }} size="tile" /> },
-    { id: "record", size: "hero", ready: false, view: <RecordView face={{ state: "gap", bestSec: 754, gapSec: 42 }} size="hero" difficulty={t("difficulty.normal.name")} /> },
-    { id: "record", size: "tile", ready: false, view: <RecordView face={{ state: "record", bestSec: 754 }} size="tile" difficulty={t("difficulty.normal.name")} /> },
-    { id: "record", size: "tile", ready: false, view: <RecordView face={{ state: "none" }} size="tile" difficulty={t("difficulty.normal.name")} /> },
+    { id: "record", size: "hero", ready: false, view: <RecordView face={{ state: "gap", bestSec: 754, gapSec: 42 }} size="hero" /> },
+    { id: "record", size: "tile", ready: false, view: <RecordView face={{ state: "record", bestSec: 754 }} size="tile" /> },
+    { id: "record", size: "tile", ready: false, view: <RecordView face={{ state: "none" }} size="tile" /> },
     { id: "friends", size: "row", ready: false, view: <FriendsView face={{ state: "idle" }} size="row" /> },
     { id: "tasks", size: "row", ready: false, view: <TasksView face={{ state: "idle" }} size="row" /> },
   ];
