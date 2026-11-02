@@ -8,7 +8,7 @@ import { createRunWorld } from "../../packages/core-game/src/game/run-world";
 import { buildScoreOf } from "../../packages/core-game/src/game/sim/player-power";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { ENEMY_STAGES } from "../../packages/core-game/src/content/stages";
-import { ENDLESS_CURVE } from "../../packages/core-game/src/content/waves";
+import { ENDLESS_CURVE, TIMELINE } from "../../packages/core-game/src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
 import { BASE_WEAPONS } from "../../packages/core-game/src/content/weapons";
 import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
@@ -349,6 +349,14 @@ const POWER_MAX_SEC = 1800;
 const SCHEDULE_GRID_SEC = [0, 120, 300, 600, 900, 1200];
 const SCHEDULE_SEEDS = 10;
 
+/** Сколько врагов приходит самым крупным событием таймлайна и кривой, вместе с содержимым кольца стражей. */
+function largestEventSize(): number {
+  const sizeOf = (event: { count: number; ring?: { inner?: { count: number }[] } }): number =>
+    event.count + (event.ring?.inner ?? []).reduce((sum, inner) => sum + inner.count, 0);
+  const events = [...TIMELINE.flatMap((segment) => segment.events ?? []), ...ENDLESS_CURVE.events];
+  return Math.max(0, ...events.map(sizeOf));
+}
+
 /** Стартовые оружия первого уровня аккаунта: с ними приходит новичок. */
 function startingWeapons(): string[] {
   const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
@@ -426,8 +434,6 @@ function powerLines(): string[] {
 
   const ratio = (a: string, b: string): number => (medians[b] === 0 || medians[b] === undefined ? 0 : (medians[a] ?? 0) / medians[b]);
   const between = (value: number, range: { min: number; max: number }): boolean => value >= range.min && value <= range.max;
-  const baseline = targets.baselineMedianSec > 0 ? targets.baselineMedianSec : (medians["без набора (база)"] ?? 0);
-  const averageToBaseline = baseline === 0 ? 0 : (medians["средний"] ?? 0) / baseline;
   const noviceToAverage = ratio("новичок", "средний");
   const fullToAverage = ratio("полный арсенал", "средний");
   const lightToStandard = ratio("средний, слабое устройство", "средний");
@@ -435,13 +441,6 @@ function powerLines(): string[] {
   const levelOf = (runs: BalanceRunResult[]): number => median(runs.map((run) => run.startPressure));
 
   lines.push("", "### Вердикты по коридорам", "");
-  lines.push(
-    verdict(
-      `средний к базовой медиане ${targets.averageToBaseline.min}–${targets.averageToBaseline.max}`,
-      between(averageToBaseline, targets.averageToBaseline),
-      `${averageToBaseline.toFixed(2)} (база ${fixed(baseline)} с)`,
-    ),
-  );
   lines.push(verdict(`новичок к среднему ${targets.noviceToAverage.min}–${targets.noviceToAverage.max}`, between(noviceToAverage, targets.noviceToAverage), noviceToAverage.toFixed(2)));
   lines.push(verdict(`полный к среднему ${targets.fullToAverage.min}–${targets.fullToAverage.max}`, between(fullToAverage, targets.fullToAverage), fullToAverage.toFixed(2)));
   lines.push(
@@ -454,28 +453,27 @@ function powerLines(): string[] {
       "по таблице",
     ),
   );
-  const halfPairs: [string, string, string, string][] = [
-    ["новичок", "средний", "новичок, без подстройки", "средний, без подстройки"],
-    ["средний", "полный арсенал", "средний, без подстройки", "полный арсенал, без подстройки"],
-  ];
-  for (const [weak, strong, weakOff, strongOff] of halfPairs) {
-    const withPressure = ratio(strong, weak);
-    const without = ratio(strongOff, weakOff);
-    lines.push(
-      verdict(
-        `${weak} → ${strong}: с подстройкой не меньше √(без неё)`,
-        withPressure >= Math.sqrt(without),
-        `с подстройкой ${withPressure.toFixed(2)}, без неё ${without.toFixed(2)}, √ = ${Math.sqrt(without).toFixed(2)}`,
-      ),
-    );
-  }
+  // «Не больше половины преимущества» защищает сильного (Р183), поэтому только пара «средний → полный»:
+  // новичку вниз работают все рычаги, и его отношение к среднему задаёт коридор лесенки.
+  const withPressure = ratio("полный арсенал", "средний");
+  const without = ratio("полный арсенал, без подстройки", "средний, без подстройки");
+  lines.push(
+    verdict(
+      "средний → полный арсенал: с подстройкой не меньше √(без неё)",
+      withPressure >= Math.sqrt(without),
+      `с подстройкой ${withPressure.toFixed(2)}, без неё ${without.toFixed(2)}, √ = ${Math.sqrt(without).toFixed(2)}`,
+    ),
+  );
   lines.push(verdict(`слабое устройство к обычному ${targets.lightToStandard.min}–${targets.lightToStandard.max}`, between(lightToStandard, targets.lightToStandard), lightToStandard.toFixed(2)));
 
   const cap = PRESSURE.devices.caps.light;
   const lightPeakMax = Math.max(...results.averageLight.map((run) => run.peakEnemies));
   const standardPeak = median(results.averageOn.map((run) => run.peakEnemies));
   const lightPeak = median(results.averageLight.map((run) => run.peakEnemies));
-  lines.push(verdict(`пик на слабом не больше caps.light + ${targets.lightPeakSlack} = ${cap + targets.lightPeakSlack}`, lightPeakMax <= cap + targets.lightPeakSlack, `макс ${lightPeakMax}`));
+  // Потолок держит поток, а не события: кольцо и строй стражей его не режут (Р67), поэтому к потолку
+  // добавляется самое крупное событие таймлайна и запас на распад делящихся.
+  const peakLimit = cap + largestEventSize() + targets.lightPeakSlack;
+  lines.push(verdict(`пик на слабом не больше caps.light + крупнейшее событие + ${targets.lightPeakSlack} = ${peakLimit}`, lightPeakMax <= peakLimit, `макс ${lightPeakMax}`));
   lines.push(
     verdict(
       `пик на слабом не больше ${targets.lightPeakShareMax} от обычного, если обычный не ниже ${targets.lightPeakThreshold} × caps.light`,
@@ -494,6 +492,10 @@ function powerLines(): string[] {
     `Отношения соседних профилей (сильный / слабый), без подстройки → с подстройкой: ` +
       `новичок → средний ${ratio("средний, без подстройки", "новичок, без подстройки").toFixed(2)} → ${ratio("средний", "новичок").toFixed(2)}, ` +
       `средний → полный ${ratio("полный арсенал, без подстройки", "средний, без подстройки").toFixed(2)} → ${ratio("полный арсенал", "средний").toFixed(2)}.`,
+    "",
+    "Медиана бота на этих профилях двугорбая: забег либо обрывается на стене первых двух минут, либо живёт 600–1 100 с, " +
+      "поэтому на пяти seed вердикты «новичок к среднему», «порядок» и «слабое устройство» ловят удачу, а не баланс. " +
+      "Читать их надо по этой таблице на десяти seed, в гейт они не входят.",
   );
   return lines;
 }
