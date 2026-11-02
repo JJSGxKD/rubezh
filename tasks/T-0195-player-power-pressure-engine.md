@@ -11,7 +11,10 @@ depends_on: [T-0101, T-0102, T-0116, T-0125, T-0170, T-0182, T-0190, T-0192, T-0
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/pressure.ts
-  - packages/core-game/src/content/hash.ts
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/test/content-snapshot.test.ts
   - packages/core-game/src/game/sim/player-power.ts
   - packages/core-game/src/game/sim/pressure.ts
   - packages/core-game/src/game/sim/director.ts
@@ -278,8 +281,14 @@ T-0197 и задачи пачки, от которых она зависит. С
 - `game/MainScene.ts`: `started` эмитится один раз после сборки сцены
   (≈ 243–249), запись забега собирает `world.runLoadout` целиком
   (≈ 223 и 495), «Ещё раз» сохраняет набор и обнуляет бусты (≈ 430).
-- `content/hash.ts`: `CONTENT_HASH` по списку таблиц контента; новая таблица
-  добавляется в конец списка.
+- `content/snapshot.ts`: контент забега — снимок `ContentSnapshot`
+  (`CONTENT_SNAPSHOT` по умолчанию), его отпечаток `hashSnapshot` считается
+  по полям снимка в их порядке; `content/hash.ts` — только
+  `CONTENT_HASH = hashSnapshot(CONTENT_SNAPSHOT)`. Схема снимка —
+  `content/snapshot-schema.ts`, проверки смысла — `findContentProblems`
+  (`game/content-problems.ts`, разделы по образцу `secrets`). `createRunWorld`
+  берёт контент из переданного снимка (`content.secrets` и т. д.). Образец
+  добавления раздела — тайники (T-0352) и «Предел» (T-0370).
 - Боты `balance:sim` и сценарные тесты создают мир через `createWorld`/
   `createRunWorld` **без** `accountLevel` — подстройка для них выключена
   (решение 3).
@@ -311,8 +320,16 @@ T-0197 и задачи пачки, от которых она зависит. С
    числами решения 12. Шапка: что такое очки, что `reference` — давление
    T-0192, что числа рабочие и калибруются по `pnpm balance:sim`
    (`docs/32-balance.md` §3). Комментарий у каждого числа, у которого есть
-   «почему» (не пересказ имени поля). `content/hash.ts`: `PRESSURE` — в конец
-   списка отпечатка.
+   «почему» (не пересказ имени поля).
+   **Снимок контента и отпечаток.** `content/snapshot.ts`: поле `pressure:
+   PressureDef` в `ContentSnapshot` — последним перед `balanceTargets`, в
+   `CONTENT_SNAPSHOT` — `pressure: PRESSURE`, в `hashSnapshot` — последним
+   элементом массива (порядок полей снимка и хэша один). `snapshot-schema.ts`
+   — `strictObject` по форме `PressureDef`, поле обязательное.
+   `game/content-problems.ts` — `add("pressure", findPressureProblems(
+   content.pressure))`. `content/hash.ts` не правится: `CONTENT_HASH`
+   поменяется сам. Если T-0370 влита раньше и добавила `limits` последним
+   полем, `pressure` идёт после `limits`.
 4. **`game/sim/player-power.ts`** (новый, чистый):
    - `buildScoreOf(world: World): number` — решение 4;
    - `expectedBuildScore(schedule, sec): number`;
@@ -378,7 +395,8 @@ T-0197 и задачи пачки, от которых она зависит. С
    `deviceClass` только значения `"light"` (всё остальное, включая `"standard"`
    и мусор, отбрасывается — отсутствие поля и есть «обычное»), в обоих
    `return`; `isEmptyLoadout` не считает пустым набор с `deviceClass`.
-   `run-world.ts`: в `createWorld` — `pressure: PRESSURE`.
+   `run-world.ts`: в `createWorld` — `pressure: content.pressure` (из
+   снимка, не импортом).
 9. **Снимок.** `snapshot.ts`: `WORLD_SNAPSHOT_VERSION` +1 от значения в
    `dev` на момент задачи; `run-api.ts`: `RUN_SNAPSHOT_FORMAT` +1 (комментарий
    поля не переписывать; тесты формата сравнивают с константами). Новые поля
@@ -565,6 +583,13 @@ maxShortfall 2 }`. Там же помощник, собирающий мир с 
 пула `DEFAULT_SIM_CONFIG.maxEnemies`; `caps.light` ниже `caps.standard`;
 `reference` лежит между очками новичка и полного арсенала из теста
 ориентиров. Прежние тесты контента зелёные без правок.
+
+`packages/core-game/test/content-snapshot.test.ts`: `CONTENT_SNAPSHOT.pressure`
+— тот же объект, что `PRESSURE` (`toBe`); поле стоит в списке полей снимка там
+же, где в хэше; `hashSnapshot` меняется, если поменять одно число `pressure` в
+копии снимка; `contentSnapshotSchema` разбирает `CONTENT_SNAPSHOT` и отвергает
+снимок без `pressure` и `pressure` с лишним полем; `findContentProblems` на
+копии снимка с `pressure.minLevel: 2` возвращает ошибку раздела `pressure`.
 
 Остальные тесты движка, `sim-purity`, `layer-boundaries`, `perf-budget`,
 `determinism` и `run-summary` — зелёные без правок эталонов.

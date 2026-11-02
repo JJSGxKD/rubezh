@@ -198,4 +198,17 @@ describe("гайдбук", () => {
     }
     expect(t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })).toContain(String(MAX_BOOSTS_PER_RUN));
   });
+
+  it("тема «Когда брать нечего» рассказывает про «Предел», а не про одно лечение", () => {
+    const title = t("guide.upgrades.heal.title");
+    const text = t("guide.upgrades.heal.text");
+    expect(title).toBe("Когда брать нечего");
+    expect(text).not.toContain("вместо улучшения предлагается лечение");
+    expect(text).toContain("малые прибавки без конца");
+    expect(text).toContain("меньше половины");
+    // Каждая прибавка из контента названа в тексте темы.
+    for (const word of ["урон", "перезарядку", "площадь", "здоровье", "восстановление", "скорость", "притяжение"]) {
+      expect(text, word).toContain(word);
+    }
+  });
 });

@@ -6,11 +6,11 @@ import { DROPS } from "../src/content/drops";
 import { ENEMIES } from "../src/content/enemies";
 import { MAPS } from "../src/content/maps";
 import { SECRETS } from "../src/content/secrets";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { applyCardTool, BANISH_PREFIX, REROLL_COMMAND } from "../src/game/progression/card-tools";
-import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
+import { chooseUpgrade, isAwaitingChoice, refreshPlayerStats } from "../src/game/progression/levels";
 import { captureWorld, restoreWorld, SnapshotError, WORLD_SNAPSHOT_VERSION } from "../src/game/run/snapshot";
 import { RUN_SNAPSHOT_FORMAT } from "../src/run-api";
 import { readSnapshotCounters } from "../src/snapshot-counters";
@@ -218,6 +218,45 @@ describe("снимок забега", () => {
       expect(() => restoreWorld(newRun(1).world, newRun(1).director, input), JSON.stringify(broken)).toThrow(SnapshotError);
     }
     expect(() => restoreWorld(newRun(1).world, newRun(1).director, { ...saved, cardRng: undefined })).toThrow(SnapshotError);
+  });
+
+  it("сохраняет стопки «Предела»: характеристики и следующая карточка те же", () => {
+    const patch = { limits: LIMITS };
+    const original = newRun(31, patch);
+    original.world.progression.limitStacks[0] = 4;
+    original.world.progression.limitStacks[3] = 2;
+    refreshPlayerStats(original.world);
+    const saved = roundTrip(original);
+
+    const resumed = newRun(31, patch);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.progression.limitStacks).toEqual(original.world.progression.limitStacks);
+    expect(resumed.world.progression.limitStacks).toHaveLength(LIMITS.length);
+    // Характеристики восстанавливаются из снимка, а при следующем пересчёте
+    // стопки обязаны дать то же самое.
+    const damageMul = original.world.playerStats.damageMul;
+    refreshPlayerStats(resumed.world);
+    expect(resumed.world.playerStats.damageMul).toBe(damageMul);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+  });
+
+  it("битые стопки «Предела» в снимке — SnapshotError, а не мир с NaN", () => {
+    const saved = roundTrip(newRun(1, { limits: LIMITS })) as { progression: Record<string, unknown> };
+    const broken: unknown[] = [
+      undefined,
+      "много",
+      [],
+      new Array<number>(LIMITS.length + 1).fill(0),
+      [-1, ...new Array<number>(LIMITS.length - 1).fill(0)],
+      [1.5, ...new Array<number>(LIMITS.length - 1).fill(0)],
+      ["1", ...new Array<number>(LIMITS.length - 1).fill(0)],
+      [null, ...new Array<number>(LIMITS.length - 1).fill(0)],
+    ];
+    for (const limitStacks of broken) {
+      const input = { ...saved, progression: { ...saved.progression, limitStacks } };
+      expect(() => restoreWorld(newRun(1, { limits: LIMITS }).world, newRun(1).director, input), JSON.stringify(limitStacks)).toThrow(SnapshotError);
+    }
   });
 
   it("не тащит в снимок события для сцены: после восстановления они пусты", () => {

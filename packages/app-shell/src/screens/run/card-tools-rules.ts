@@ -25,9 +25,17 @@ export interface ToolButtonsInput {
   offers: readonly UpgradeOption[];
 }
 
-/** Лечение — запасной вариант без предмета: его нельзя ни изгнать, ни заменить переброской. */
+/**
+ * Лечение и «Предел» — варианты без предмета: их нельзя ни изгнать, ни
+ * заменить переброской. Изгонять нечего: предмета, который вернулся бы в
+ * следующих выборах, у них нет.
+ */
+function isItemCard(offer: UpgradeOption): boolean {
+  return offer.kind !== "heal" && offer.kind !== "limit";
+}
+
 function hasItemCards(offers: readonly UpgradeOption[]): boolean {
-  return offers.some((offer) => offer.kind !== "heal");
+  return offers.some(isItemCard);
 }
 
 /**
@@ -58,5 +66,5 @@ export function cardTapAction(
   offer: UpgradeOption,
 ): CardTapAction {
   if (mode === "choose") return "choose";
-  return offer.kind === "heal" ? "ignore" : "banish";
+  return isItemCard(offer) ? "banish" : "ignore";
 }

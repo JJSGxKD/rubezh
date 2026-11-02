@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
@@ -377,6 +377,8 @@ export interface ProgressionState {
   toolsTotal: CardTools;
   /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
   banished: string[];
+  /** сколько раз нажата каждая запись «Предела», в порядке `limitTypes` (`progression/limit.ts`) */
+  limitStacks: number[];
 }
 
 /**
@@ -446,6 +448,8 @@ export interface World {
   boosts: RunBoosts;
   /** прибавки снаряжения и бустов вместе — от них считаются характеристики */
   loadoutModifiers: Partial<Record<LoadoutStat, number>>;
+  /** записи «Предела»; неизменны, нажатия — в `progression.limitStacks` */
+  limitTypes: readonly LimitDef[];
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;

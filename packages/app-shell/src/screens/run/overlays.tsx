@@ -320,8 +320,10 @@ function EvolutionHint(props: { offer: UpgradeOption; loadout: LevelUpOverlayPro
   );
 }
 
-function kindOf(offer: UpgradeOption): ItemKind {
+/** Вид значка карточки: «Предел» и лечение — свои, остальное — оружие или пассивка. */
+export function kindOf(offer: UpgradeOption): ItemKind {
   if (offer.kind === "heal") return "heal";
+  if (offer.kind === "limit") return "limit";
   return offer.kind === "weapon_new" || offer.kind === "weapon_level" || offer.kind === "weapon_evolve" ? "weapon" : "passive";
 }
 
@@ -332,6 +334,8 @@ function kindOf(offer: UpgradeOption): ItemKind {
 function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
+  // Сколько нажатий набрано с этим — счёт нажатий берётся из уровня карточки.
+  if (offer.kind === "limit") return <Badge tone="info">{t("run.levelUp.limitCount", { count: offer.level })}</Badge>;
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;
   const element = offer.kind === "weapon_new" || offer.kind === "weapon_level" ? weaponElementOf(offer.refId) : null;
 

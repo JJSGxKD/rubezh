@@ -1,5 +1,6 @@
 import type { EnemyDef, LevelCurveDef, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
+import { LIMITS } from "../src/content/upgrades";
 import { addPassive } from "../src/game/progression/loadout";
 import {
   chooseUpgrade,
@@ -359,9 +360,45 @@ describe("опыт и уровни", () => {
       weapons: [SPARK],
       passives: [MIGHT],
       loadoutLimits: { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } },
+      limits: LIMITS,
+      config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 100 } },
     });
     // Оружие одно и уже на максимуме, пассивок некуда брать — остаётся
-    // только лечение.
+    // только «Предел»: три малые прибавки, а лечения при полном здоровье нет.
+    world.loadout.weapons[0].level = SPARK.levels.length;
+    place(world, "fragile", 60, 0);
+    run(world, 180);
+
+    expect(world.progression.offers).toHaveLength(3);
+    expect(world.progression.offers.every((offer) => offer.kind === "limit")).toBe(true);
+  });
+
+  it("при просевшем здоровье вместо одной прибавки «Предела» — лечение, и оно лечит", () => {
+    const world = setup({
+      weapons: [SPARK],
+      passives: [MIGHT],
+      loadoutLimits: { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } },
+      limits: LIMITS,
+      config: { player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 100 } },
+    });
+    world.loadout.weapons[0].level = SPARK.levels.length;
+    world.player.hp = 40;
+    place(world, "fragile", 60, 0);
+    run(world, 180);
+
+    const kinds = world.progression.offers.map((offer) => offer.kind);
+    expect(kinds).toEqual(["limit", "limit", "heal"]);
+
+    chooseUpgrade(world, "heal");
+    expect(world.player.hp).toBeGreaterThan(40);
+  });
+
+  it("без записей «Предела» в мире остаётся одно лечение", () => {
+    const world = setup({
+      weapons: [SPARK],
+      passives: [MIGHT],
+      loadoutLimits: { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } },
+    });
     world.loadout.weapons[0].level = SPARK.levels.length;
     world.player.hp = 100;
     place(world, "fragile", 60, 0);

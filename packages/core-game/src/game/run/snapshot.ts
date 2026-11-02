@@ -22,7 +22,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 13;
+export const WORLD_SNAPSHOT_VERSION = 14;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -155,7 +155,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   assignNumbers(world.playerStats, snapshot.playerStats, "playerStats");
   assignNumbers(world.playerStatsBase, snapshot.playerStatsBase, "playerStatsBase");
   world.loadout = restoreLoadout(world, snapshot.loadout);
-  world.progression = restoreProgression(snapshot.progression);
+  world.progression = restoreProgression(snapshot.progression, world.limitTypes.length);
   assignNumbers(world.difficulty, snapshot.difficulty, "difficulty");
   world.gemMergeCursor = asNumber(snapshot.gemMergeCursor, "gemMergeCursor");
 
@@ -344,7 +344,7 @@ function restoreLoadout(world: World, input: unknown): World["loadout"] {
   return { weapons, passives };
 }
 
-function restoreProgression(input: unknown): World["progression"] {
+function restoreProgression(input: unknown, limitCount: number): World["progression"] {
   const progression = asRecord(input, "progression");
   return {
     level: asNumber(progression.level, "progression.level"),
@@ -359,7 +359,28 @@ function restoreProgression(input: unknown): World["progression"] {
     tools: restoreCardTools(progression.tools, "progression.tools"),
     toolsTotal: restoreCardTools(progression.toolsTotal, "progression.toolsTotal"),
     banished: asArray(progression.banished, "progression.banished").map((key, i) => asString(key, `progression.banished[${i}]`)),
+    limitStacks: restoreLimitStacks(progression.limitStacks, limitCount),
   };
+}
+
+/**
+ * Стопки «Предела»: длина обязана сойтись с записями мира, иначе снимок —
+ * другого контента, а не повод молча сдвинуть прибавки на чужие параметры.
+ * Отрицательное или дробное число отвергается: оно дало бы мир с NaN в
+ * характеристиках.
+ */
+function restoreLimitStacks(input: unknown, limitCount: number): number[] {
+  const raw = asArray(input, "progression.limitStacks");
+  if (raw.length !== limitCount) {
+    throw new SnapshotError(`progression.limitStacks: ${raw.length} записей, в мире ${limitCount}`);
+  }
+  return raw.map((value, i) => {
+    const count = asNumber(value, `progression.limitStacks[${i}]`);
+    if (!Number.isInteger(count) || count < 0) {
+      throw new SnapshotError(`progression.limitStacks[${i}]: целое от 0, а не ${count}`);
+    }
+    return count;
+  });
 }
 
 function restoreCardTools(input: unknown, path: string): World["progression"]["tools"] {

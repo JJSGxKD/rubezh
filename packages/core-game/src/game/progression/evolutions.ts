@@ -1,8 +1,8 @@
-import type { UpgradeOption, WeaponDef, WeaponLevel } from "@bh/shared-types";
+import type { WeaponDef, WeaponLevel } from "@bh/shared-types";
 import { EVOLUTION_POWER_RATIO } from "../../content/balance-targets";
 import type { World } from "../sim/world";
 import { evolutionChanges } from "./upgrade-changes";
-import { refreshPlayerStats } from "./levels";
+import { refreshPlayerStats, type ItemOption } from "./levels";
 import { weaponSlotOf } from "./loadout";
 
 /**
@@ -83,7 +83,7 @@ function firstReady(world: World): EvolutionProgress | undefined {
  * не готово. Строки «было → стало» — от последнего уровня базового к
  * единственному уровню эволюции.
  */
-export function readyEvolutionOption(world: World): UpgradeOption | null {
+export function readyEvolutionOption(world: World): ItemOption | null {
   const ready = firstReady(world);
   if (ready === undefined) return null;
   const evolved = world.weaponTypes.find((type) => type.id === ready.evolutionId);

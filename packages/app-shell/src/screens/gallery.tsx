@@ -54,7 +54,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -86,6 +86,8 @@ export function GalleryScreen(): ReactNode {
             title={t("gallery.preview.levelUpLong")}
             onClick={() => setPreview("levelUpLong")}
           />
+          <ListItem title={t("gallery.preview.levelUpLimit")} onClick={() => setPreview("levelUpLimit")} />
+          <ListItem title={t("gallery.preview.levelUpLimitHurt")} onClick={() => setPreview("levelUpLimitHurt")} />
           <ListItem title={t("gallery.preview.pause")} onClick={() => setPreview("pause")} />
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
@@ -452,6 +454,24 @@ function renderPreview(preview: Preview): ReactNode {
           onStats={noop}
         />
       );
+    case "levelUpLimit":
+    case "levelUpLimitHurt":
+      return (
+        <LevelUpOverlay
+          level={31}
+          offers={preview === "levelUpLimit" ? LIMIT_OFFERS : LIMIT_OFFERS_HURT}
+          queued={1}
+          loadout={{
+            weapons: [
+              { id: "spark", level: 8 },
+              { id: "knife", level: 8 },
+            ],
+            passives: [{ id: "might", level: 6 }],
+          }}
+          onChoose={noop}
+          onStats={noop}
+        />
+      );
     case "chest1":
     case "chest3":
     case "chest5": {
@@ -623,6 +643,52 @@ const SAMPLE_CHEST: ChestReward[] = [
   { ...SAMPLE_OFFERS[2]!, kind: "passive_level" },
   { id: "heal", kind: "heal", refId: "", level: 0, nameKey: "upgrade.heal.name", descriptionKey: "upgrade.heal.description", changes: [] },
   { id: "xp", kind: "xp", refId: "", level: 0, nameKey: "upgrade.xp.name", descriptionKey: "upgrade.xp.description", changes: [change("upgrade.xp.label", null, 40, "plus")] },
+];
+
+/** «Предел» (T-0194): накопленное «было → стало» и самое длинное название. */
+const LIMIT_OFFERS: UpgradeOption[] = [
+  {
+    id: "limit:damage",
+    kind: "limit",
+    refId: "damage",
+    level: 3,
+    nameKey: "upgrade.limit.damage.name",
+    descriptionKey: "upgrade.limit.damage.description",
+    changes: [change("upgrade.stat.passive.damage", 1.06, 1.09, "percent")],
+  },
+  {
+    id: "limit:cooldown",
+    kind: "limit",
+    refId: "cooldown",
+    level: 12,
+    nameKey: "upgrade.limit.cooldown.name",
+    descriptionKey: "upgrade.limit.cooldown.description",
+    changes: [change("upgrade.stat.passive.cooldown", 0.78, 0.76, "percent", true)],
+  },
+  {
+    id: "limit:regen",
+    kind: "limit",
+    refId: "regen",
+    level: 1,
+    nameKey: "upgrade.limit.regen.name",
+    descriptionKey: "upgrade.limit.regen.description",
+    changes: [change("upgrade.stat.passive.regenPerSec", 0, 0.1, "plus")],
+  },
+];
+
+/** Здоровье ниже половины: две прибавки и лечение последним. */
+const LIMIT_OFFERS_HURT: UpgradeOption[] = [
+  LIMIT_OFFERS[0]!,
+  LIMIT_OFFERS[1]!,
+  {
+    id: "heal",
+    kind: "heal",
+    refId: "",
+    level: 0,
+    nameKey: "upgrade.heal.name",
+    descriptionKey: "upgrade.heal.description",
+    changes: [change("upgrade.stat.heal", null, 30)],
+  },
 ];
 
 /** Самые длинные тексты словаря — на них вёрстка ломается первой (§4.3). */
