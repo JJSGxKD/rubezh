@@ -2216,6 +2216,61 @@ model OutboundProxy {
   @@map("outbound_proxy")
 }
 
+/// Подписка Xray для прокси исходящих запросов (docs/35-stage4-plan.md Р101, T-0093).
+/// Одна строка: key = 'main'. Адрес — шифртекстом SecretCipher; состояние узла
+/// и его слот держат CHECK в миграции
+model ProxySubscription {
+  key                   String    @id @db.VarChar(16)
+  name                  String    @db.VarChar(60)
+  /// адрес подписки — шифртекстом SecretCipher
+  urlIv                 Bytes     @map("url_iv")
+  urlTag                Bytes     @map("url_tag")
+  urlCt                 Bytes     @map("url_ct")
+  urlKeyId              String    @map("url_key_id") @db.VarChar(16)
+  /// «хост …abcd» — сверить с кабинетом поставщика
+  urlHint               String    @map("url_hint") @db.VarChar(80)
+  enabled               Boolean
+  /// ISO-коды стран узлов; пусто — любые
+  countries             String[]  @db.VarChar(2)
+  lastRefreshAt         DateTime? @map("last_refresh_at") @db.Timestamptz(3)
+  lastRefreshOk         Boolean?  @map("last_refresh_ok")
+  lastRefreshNote       String?   @map("last_refresh_note") @db.VarChar(300)
+  providerIntervalHours Int?      @map("provider_interval_hours")
+  trafficUsedBytes      BigInt?   @map("traffic_used_bytes")
+  trafficTotalBytes     BigInt?   @map("traffic_total_bytes")
+  expiresAt             DateTime? @map("expires_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — подписка переживает аккаунт
+  updatedBy             String    @map("updated_by") @db.Uuid
+  updatedAt             DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  nodes ProxySubscriptionNode[]
+
+  @@map("proxy_subscription")
+}
+
+/// Узлы подписки. Секретов узла (UUID, пароль) в базе нет: они только в конфиге
+/// Xray и в ответе поставщика. `slot` — вход Xray узла: порт = база + слот
+model ProxySubscriptionNode {
+  subscriptionKey String    @map("subscription_key") @db.VarChar(16)
+  nodeKey         String    @map("node_key") @db.VarChar(16)
+  slot            Int       @unique
+  protocol        String    @db.VarChar(12)
+  name            String    @db.VarChar(80)
+  country         String?   @db.VarChar(2)
+  host            String    @db.VarChar(255)
+  /// `unknown`, `healthy` или `down` (`CHECK` в миграции)
+  state           String    @db.VarChar(8)
+  failures        Int
+  latencyMs       Int?      @map("latency_ms")
+  lastProbeAt     DateTime? @map("last_probe_at") @db.Timestamptz(3)
+  nextProbeAt     DateTime  @map("next_probe_at") @db.Timestamptz(3)
+
+  subscription ProxySubscription @relation(fields: [subscriptionKey], references: [key], onDelete: Cascade)
+
+  @@id([subscriptionKey, nodeKey])
+  @@map("proxy_subscription_node")
+}
+
 /// Режим сервиса клиента исходящих (Р91): строки нет — умолчание из кода (`infra/outbound/outbound-route.ts`).
 model OutboundServiceMode {
   /// `fx.cbr`, `telegram.bot` — из каталога `OUTBOUND_SERVICES`
