@@ -17,6 +17,7 @@ import {
 } from "../run-api";
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
+import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
@@ -520,16 +521,8 @@ export class MainScene extends Phaser.Scene {
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
-  restartRun(seed: number): void {
-    // «Ещё раз» — новый забег, а не повтор продолженного: со своим id и без
-    // бустов. Буст — расходник на один забег, и перенести его на следующий
-    // значило бы дать его даром, а сервер отклонил бы такой забег как
-    // неоплаченный. Снаряжение остаётся: снимок надетого всё тот же.
-    const next: MainSceneData = { ...this.sceneData, seed };
-    delete next.resume;
-    delete next.runId;
-    if (next.loadout !== undefined) next.loadout = { ...next.loadout, boosts: [] };
-    this.scene.restart(next);
+  restartRun(seed: number, difficultyId?: DifficultyId): void {
+    this.scene.restart(restartSceneData(this.sceneData, seed, difficultyId));
   }
 
   /**

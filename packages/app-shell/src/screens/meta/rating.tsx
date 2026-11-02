@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Crown, Trophy } from "lucide-react";
-import { DIFFICULTY_IDS, type DifficultyId, type LeaderboardEntry } from "@bh/shared-types";
+import type { LeaderboardEntry } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -13,7 +13,7 @@ import {
   staggerStyle,
 } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
-import { useMeta } from "../../state/meta";
+import { RATED_DIFFICULTY_ID } from "../../state/difficulty";
 import { useNavigation } from "../../state/navigation";
 import type { ApiFailure } from "../../state/api-request";
 import { useRestricted } from "../../state/restrictions";
@@ -28,9 +28,8 @@ import { RankMark, SurvivalTime, SyncProblem } from "./sync-ui";
 import { TesterBadge } from "./tester-badge";
 
 /**
- * Рейтинг закрытого теста: лучшее время каждого игрока, отдельно по
- * сложностям (docs/26-stage2-plan.md, Р18 и WP13). Время на разных
- * сложностях несравнимо, поэтому общей таблицы нет.
+ * Рейтинг: лучшее время каждого игрока (docs/26-stage2-plan.md, Р18 и WP13).
+ * Сложность одна (Р126), поэтому таблица одна; обучающий забег в неё не идёт.
  *
  * Таблица — по аккаунтам и из базы: в неё попадает забег, прошедший проверки
  * антифрода (docs/34-stage3-plan.md, WP4). Подозрительный забег остаётся в
@@ -47,8 +46,7 @@ type RatingTab = "week" | "all" | "friends";
 const TAB_IDS: readonly RatingTab[] = ["week", "all", "friends"];
 
 export function RatingScreen(): ReactNode {
-  const [difficultyId, setDifficultyId] = useState<DifficultyId>(() => useMeta.getState().lastDifficultyId);
-  const board = useRuns((state) => state.leaderboards[difficultyId]);
+  const board = useRuns((state) => state.leaderboards[RATED_DIFFICULTY_ID]);
   const pending = useRuns((state) => state.pending);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<ApiFailure | null>(null);
@@ -61,25 +59,20 @@ export function RatingScreen(): ReactNode {
   // Пока обзор не пришёл, вкладки нет: таблицу «Всё время» не грузим зря, а потом не перебиваем.
   const tab: RatingTab | null = overview === null ? null : (picked ?? (seasons?.season != null ? "week" : "all"));
 
-  // Ответ на переключённую уже сложность не должен затереть состояние текущей.
-  const latest = useRef<DifficultyId>(difficultyId);
-
-  const load = useCallback(async (id: DifficultyId): Promise<void> => {
-    latest.current = id;
+  const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setFailure(null);
     // Неотправленные забеги сперва уходят на сервер: иначе игрок не нашёл
     // бы в таблице забег, который только что сыграл.
     await useRuns.getState().flush("screen");
-    const problem = await useRuns.getState().loadLeaderboard(id);
-    if (latest.current !== id) return;
+    const problem = await useRuns.getState().loadLeaderboard(RATED_DIFFICULTY_ID);
     setFailure(problem);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (tab === "all") void load(difficultyId);
-  }, [tab, difficultyId, load]);
+    if (tab === "all") void load();
+  }, [tab, load]);
 
   return (
     <Screen>
@@ -115,20 +108,13 @@ export function RatingScreen(): ReactNode {
 
         {tab === "all" ? (
           <>
-            <SegmentedControl track="difficulty"
-              label={t("difficulty.title")}
-              items={DIFFICULTY_IDS.map((id) => ({ id, label: t(`difficulty.${id}.name`) }))}
-              activeId={difficultyId}
-              onSelect={(id) => setDifficultyId(id as DifficultyId)}
-            />
-
             <div className="mt-4 grid grid-cols-1 gap-3" aria-busy={loading}>
               {/* Нет сессии — сказать почему; ошибка запроса лишь повторила бы то
                   же другими словами, а у блокировки ещё и потеряла бы причину. */}
               {notice !== null ? (
                 <SessionNotice notice={notice} />
               ) : failure === null ? null : (
-                <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load(difficultyId)} />
+                <SyncProblem failure={failure} compact={board !== undefined} onRetry={() => void load()} />
               )}
 
               {board === undefined ? (
@@ -162,7 +148,6 @@ export function RatingScreen(): ReactNode {
                 <p className="text-center text-xs text-text-muted">{t("rating.pending", { count: pending })}</p>
               ) : null}
             </div>
-
           </>
         ) : null}
 

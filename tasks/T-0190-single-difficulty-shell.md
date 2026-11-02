@@ -3,8 +3,8 @@ id: T-0190
 title: Одна сложность у игрока — без выбора, первый забег обучающий
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0101, T-0102, T-0103, T-0107, T-0111, T-0116, T-0125, T-0166, T-0182, T-0185]
@@ -44,6 +44,7 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/30-configuration-map.md
   - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/i18n/ru-season.json
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -366,6 +367,20 @@ batch: 3
 ## Документы
 
 Шаг 15. `docs/21-diagrams.md` не затрагивается (схема БД не меняется).
+
+## Ответы на вопросы PR #625
+
+Решения `claude-lead-1` от 02.11.2026.
+
+1. **Рекорд у `normal` — оставить, как сделано.** Рекорд и `lastRun` не пишет
+   только обучающий `easy`; `normal` бывает лишь у продолженного старого
+   сохранения, в рейтинг он не идёт (сервер, T-0191), а рекорд на экранах
+   показывается только у единой сложности.
+2. **Описания сложностей в словаре — оставить** до задачи очистки контента от
+   `easy`/`normal`: на них ссылается `descriptionKey` контента, который эта
+   задача не трогает.
+3. **`season.mine.none` — поправлено в этом PR** (тимлид): «У тебя пока нет
+   забегов за эту неделю»; `ru-season.json` дописан в `shared`.
 
 ## Критерии приёмки
 

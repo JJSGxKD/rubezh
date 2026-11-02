@@ -13,7 +13,7 @@
   "season.utcNote": "Сезон идёт с понедельника до воскресенья по Гринвичу",
   "season.notStarted": "Первый сезон начнётся {date}",
   "season.mine": "Твоё лучшее на этой неделе: {time}",
-  "season.mine.none": "На этой сложности у тебя пока нет забегов за эту неделю",
+  "season.mine.none": "У тебя пока нет забегов за эту неделю",
   "season.rewards.title": "Награды недели",
   "season.rewards.threshold": "Продержись {time} — получи {coins} монет и {prestige} престижа",
   "season.rewards.threshold.reached": "Порог взят — награда будет после закрытия сезона",

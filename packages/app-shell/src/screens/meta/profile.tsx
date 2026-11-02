@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
-import { DIFFICULTY_IDS, type RecentRun } from "@bh/shared-types";
+import type { RecentRun } from "@bh/shared-types";
 import {
   Avatar,
   Badge,
@@ -13,6 +13,7 @@ import {
   StubNotice,
 } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
+import { historyDifficultyKey, RATED_DIFFICULTY_ID } from "../../state/difficulty";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import type { ApiFailure } from "../../state/api-request";
@@ -49,6 +50,11 @@ export function ProfileScreen(): ReactNode {
   const progress = useProgress((state) => state.progress);
   const pending = useRuns((state) => state.pending);
   const local = useMeta();
+  // Рекорд один — по единой сложности. Рекорд устройства может оказаться
+  // больше серверного: забег ещё в очереди или сыгран до плейтеста. Игроку
+  // показываем лучший.
+  const bestServer = profile?.best[RATED_DIFFICULTY_ID] ?? null;
+  const bestSeconds = Math.max(bestServer?.survivalSec ?? 0, local.best[RATED_DIFFICULTY_ID]);
   const account = useSession((state) => state.account);
   const status = useSession((state) => state.status);
   const notice = useSessionNotice();
@@ -133,31 +139,12 @@ export function ProfileScreen(): ReactNode {
         {account === null ? null : <RestrictionsSection />}
 
         <SectionTitle>{t("profile.best")}</SectionTitle>
-        <ul className="grid grid-cols-1 gap-2">
-          {DIFFICULTY_IDS.map((id) => {
-            const server = profile?.best[id] ?? null;
-            // Рекорд устройства может оказаться больше серверного: забег ещё в
-            // очереди или сыгран до плейтеста. Игроку показываем лучший.
-            const seconds = Math.max(server?.survivalSec ?? 0, local.best[id]);
-            return (
-              <li key={id} className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">
-                <span className="min-w-0 flex-1">
-                  <span className="block font-display text-sm font-semibold text-text">
-                    {t(`difficulty.${id}.name`)}
-                  </span>
-                  <span className="block text-xs text-text-muted">
-                    {server === null ? t("profile.best.noRank") : t("profile.best.rank", { rank: server.rank })}
-                  </span>
-                </span>
-                {seconds > 0 ? (
-                  <SurvivalTime seconds={seconds} />
-                ) : (
-                  <span className="font-display text-base text-text-muted">—</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="surface-card flex items-center gap-3 rounded-lg px-3 py-2.5">
+          <span className="min-w-0 flex-1 text-sm text-text-muted">
+            {bestServer === null ? t("profile.best.noRank") : t("profile.best.rank", { rank: bestServer.rank })}
+          </span>
+          {bestSeconds > 0 ? <SurvivalTime seconds={bestSeconds} /> : <span className="font-display text-base text-text-muted">—</span>}
+        </div>
 
         <SectionTitle>{t("profile.recent")}</SectionTitle>
         {profile === null || profile.recent.length === 0 ? (
@@ -232,6 +219,8 @@ function ProfileAchievements(): ReactNode {
 
 function RecentRunRow(props: { run: RecentRun; onOpen?: (() => void) | undefined }): ReactNode {
   const { run } = props;
+  // Плашка только у забегов не на единой сложности: «Обучение» и «Нормальная».
+  const difficultyKey = historyDifficultyKey(run.difficultyId);
   const body = (
     <>
       <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-md bg-weapon/15 text-weapon">
@@ -240,7 +229,7 @@ function RecentRunRow(props: { run: RecentRun; onOpen?: (() => void) | undefined
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-sm text-text">{t(`weapon.${run.startingWeaponId}.name`)}</span>
-          <Badge>{t(`difficulty.${run.difficultyId}.name`)}</Badge>
+          {difficultyKey === null ? null : <Badge>{t(difficultyKey)}</Badge>}
         </span>
         <span className="block text-xs text-text-muted">
           {t("profile.recent.meta", { level: run.level, date: formatWhen(run.at) })}
