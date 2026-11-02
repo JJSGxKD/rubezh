@@ -87,6 +87,13 @@ describe("rankBudget", () => {
         const rank = world.enemyTypes[event.typeIndex].rank;
         if (rank === "elite") elite += event.count;
         if (rank === "boss") boss += event.count;
+        // Элита и босс внутри кольца стражей (`ring.inner`) тоже убиваются.
+        for (const entry of event.ring?.inner ?? []) {
+          if (entry.fromSec !== undefined && plan.fromSec < entry.fromSec) continue;
+          const innerRank = world.enemyTypes.find((type) => type.id === entry.enemy)?.rank;
+          if (innerRank === "elite") elite += entry.count;
+          if (innerRank === "boss") boss += entry.count;
+        }
       }
       expect(rankBudget(plan.fromSec), `в начале отрезка ${index}`).toEqual({ elite, boss });
     }

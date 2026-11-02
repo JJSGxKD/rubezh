@@ -68,6 +68,14 @@ export function countersOf(stats: CounterFields | undefined): RunCounters | null
   };
 }
 
+interface CurveRankEvent {
+  everySegments: number;
+  rank: "elite" | "boss";
+  count: number;
+  /** запись `ring.inner` с `fromSec`: считается только с отрезков, начавшихся не раньше этой секунды */
+  minSec?: number;
+}
+
 interface RankEvent {
   /** секунда забега, на которой событие срабатывает */
   atSec: number;
@@ -83,6 +91,9 @@ interface RankEvent {
  */
 const MANUAL_RANK_EVENTS: readonly RankEvent[] = [
   { atSec: 90, rank: "elite", count: 1 },
+  // Кольцо стражей несёт элиту внутри (`ring.inner`, Р166): убить её можно
+  // сразу, как кольцо встало, поэтому она в бюджете с начала отрезка.
+  { atSec: 180, rank: "elite", count: 1 },
   { atSec: 240, rank: "elite", count: 1 },
   { atSec: 300, rank: "elite", count: 1 },
 ];
@@ -102,8 +113,11 @@ const CURVE = {
     { everySegments: 7, rank: "elite", count: 3 },
     { everySegments: 8, rank: "boss", count: 1 },
     { everySegments: 9, rank: "elite", count: 2 },
+    // Кольцо стражей кривой: элита внутри, а с 630-й секунды ещё и босс.
+    { everySegments: 3, rank: "elite", count: 1 },
+    { everySegments: 3, rank: "boss", count: 1, minSec: 630 },
   ],
-} as const;
+} as const satisfies { fromSec: number; segmentSec: number; events: readonly CurveRankEvent[] };
 
 /**
  * Сколько элит и боссов пришло по таймлайну к секунде `survivalSec` включая
@@ -120,7 +134,12 @@ export function rankBudget(survivalSec: number): { elite: number; boss: number }
   if (survivalSec >= CURVE.fromSec) {
     // Отрезки кривой, уже начавшиеся к этой секунде.
     const started = Math.floor((survivalSec - CURVE.fromSec) / CURVE.segmentSec) + 1;
-    for (const event of CURVE.events) budget[event.rank] += Math.floor(started / event.everySegments) * event.count;
+    for (const event of CURVE.events as readonly CurveRankEvent[]) {
+      // Отрезки, начавшиеся раньше `minSec`, записи не несут.
+      const skipped = event.minSec === undefined ? 0 : Math.max(0, Math.ceil((event.minSec - CURVE.fromSec) / CURVE.segmentSec));
+      const firings = Math.floor(started / event.everySegments) - Math.floor(Math.min(skipped, started) / event.everySegments);
+      budget[event.rank] += firings * event.count;
+    }
   }
   return budget;
 }

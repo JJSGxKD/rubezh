@@ -17,6 +17,8 @@ zones:
   - packages/app-shell/test/guide.test.ts
   - packages/core-game/src/content/snapshot-schema.ts
   - packages/core-game/test/balance-properties.test.ts
+  - backend/api/src/modules/runs/run-counters.ts
+  - backend/api/test/run-counters.test.ts
 shared:
   - docs/32-balance.md
   - docs/35-stage4-plan.md
