@@ -2,7 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
-import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec } from "../../packages/core-game/src/content/balance-targets";
+import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, PRESSURE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
+import { PRESSURE } from "../../packages/core-game/src/content/pressure";
+import { createRunWorld } from "../../packages/core-game/src/game/run-world";
+import { buildScoreOf } from "../../packages/core-game/src/game/sim/player-power";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
 import { ENEMY_STAGES } from "../../packages/core-game/src/content/stages";
 import { ENDLESS_CURVE } from "../../packages/core-game/src/content/waves";
@@ -10,11 +13,14 @@ import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
 import { BASE_WEAPONS } from "../../packages/core-game/src/content/weapons";
 import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
 import {
+  POWER_PROFILES,
   quantile,
   simulateBalanceRun,
   summarizeRuns,
+  withDevice,
   type BalanceRunResult,
   type BotSkill,
+  type PowerProfile,
 } from "../../packages/core-game/src/game/balance";
 
 /**
@@ -107,6 +113,17 @@ it("свод калибровки баланса", () => {
   writeFileSync(REPORT_PATH, `${rows.join("\n")}\n`, "utf8");
   console.log(rows.join("\n"));
   console.log(`\nТаблица сохранена: ${REPORT_PATH}`);
+});
+
+// Подстройка под силу — отдельным тестом: калибровка гоняет только её (`-t "подстройка"`),
+// а не весь свод на двадцати seed. Таблица пишется в свой файл рядом со сводом.
+it("подстройка под силу и расписание сборки", () => {
+  const rows = [...powerLines(), "", ...scheduleLines()];
+  mkdirSync(dirname(REPORT_PATH), { recursive: true });
+  const powerPath = join(dirname(REPORT_PATH), "balance-power.md");
+  writeFileSync(powerPath, `${rows.join("\n")}\n`, "utf8");
+  console.log(rows.join("\n"));
+  console.log(`\nТаблица сохранена: ${powerPath}`);
 });
 
 function buildScenarios(): Scenario[] {
@@ -322,6 +339,216 @@ function buildLines(): string[] {
     ),
   );
   return lines;
+}
+
+/** Подстройка под силу: seed на оружие и потолок прогона (бот профиля живёт дольше базового). */
+const POWER_SEEDS = 10;
+const POWER_MAX_SEC = 1800;
+
+/** Сетка расписания сборки: секунды и округление до 0,05 (T-0196, решение 3.1). */
+const SCHEDULE_GRID_SEC = [0, 120, 300, 600, 900, 1200];
+const SCHEDULE_SEEDS = 10;
+
+/** Стартовые оружия первого уровня аккаунта: с ними приходит новичок. */
+function startingWeapons(): string[] {
+  const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
+  return BASE_WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
+}
+
+/**
+ * Подстройка под силу (Р131, Р183, tasks/T-0196): три профиля силы на
+ * «Сложной» с подстройкой и без неё, и «средний» на слабом устройстве. Таблица
+ * и вердикты по коридорам `PRESSURE_TARGETS`; последняя строка — отношения
+ * соседних профилей, по ним проверяется «не больше половины преимущества».
+ */
+function powerLines(): string[] {
+  const targets = PRESSURE_TARGETS;
+  const weapons = startingWeapons();
+  const rowsOf = (profile: PowerProfile, options: { pressure: boolean; light?: boolean }): BalanceRunResult[] => {
+    const runs: BalanceRunResult[] = [];
+    const loadout = options.light === true ? withDevice(profile, "light").loadout : profile.loadout;
+    for (const startingWeaponId of weapons) {
+      for (let seed = 1; seed <= POWER_SEEDS; seed++) {
+        runs.push(
+          simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, maxSec: POWER_MAX_SEC, loadout, pressure: options.pressure }),
+        );
+      }
+    }
+    return runs;
+  };
+
+  const { novice, average, full } = POWER_PROFILES;
+  const results = {
+    noviceOn: rowsOf(novice, { pressure: true }),
+    noviceOff: rowsOf(novice, { pressure: false }),
+    averageOn: rowsOf(average, { pressure: true }),
+    averageOff: rowsOf(average, { pressure: false }),
+    fullOn: rowsOf(full, { pressure: true }),
+    fullOff: rowsOf(full, { pressure: false }),
+    averageLight: rowsOf(average, { pressure: true, light: true }),
+  };
+  const baselineRuns: BalanceRunResult[] = [];
+  for (const startingWeaponId of weapons) {
+    for (let seed = 1; seed <= POWER_SEEDS; seed++) {
+      baselineRuns.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, maxSec: POWER_MAX_SEC }));
+    }
+  }
+
+  const lines = [
+    "## Подстройка под силу (Р131)",
+    "",
+    `Уклоняющийся бот, «${BASE_DIFFICULTY_ID}», ${POWER_SEEDS} seed × ${weapons.length} оружия. «Без подстройки» — тот же набор, давление единой сложности. ` +
+      `L — уровень давления на старте и в конце (медианы).`,
+    "",
+    "| Профиль | медиана, с | p10 | p90 | пик врагов (медиана / макс) | L старт | L конец |",
+    "|---|---|---|---|---|---|---|",
+  ];
+  const medians: Record<string, number> = {};
+  const addRow = (name: string, runs: BalanceRunResult[]): void => {
+    const summary = summarizeRuns(runs);
+    medians[name] = summary.medianSurvivalSec;
+    const peaks = runs.map((run) => run.peakEnemies).sort((a, b) => a - b);
+    const start = runs.map((run) => run.startPressure).sort((a, b) => a - b);
+    const end = runs.map((run) => run.endPressure).sort((a, b) => a - b);
+    lines.push(
+      `| ${name} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ${fixed(summary.p90SurvivalSec)} | ` +
+        `${quantile(peaks, 0.5)} / ${peaks[peaks.length - 1] ?? 0} | ${quantile(start, 0.5).toFixed(2)} | ${quantile(end, 0.5).toFixed(2)} |`,
+    );
+  };
+  addRow("без набора (база)", baselineRuns);
+  addRow("новичок, без подстройки", results.noviceOff);
+  addRow("новичок", results.noviceOn);
+  addRow("средний, без подстройки", results.averageOff);
+  addRow("средний", results.averageOn);
+  addRow("полный арсенал, без подстройки", results.fullOff);
+  addRow("полный арсенал", results.fullOn);
+  addRow("средний, слабое устройство", results.averageLight);
+
+  const ratio = (a: string, b: string): number => (medians[b] === 0 || medians[b] === undefined ? 0 : (medians[a] ?? 0) / medians[b]);
+  const between = (value: number, range: { min: number; max: number }): boolean => value >= range.min && value <= range.max;
+  const baseline = targets.baselineMedianSec > 0 ? targets.baselineMedianSec : (medians["без набора (база)"] ?? 0);
+  const averageToBaseline = baseline === 0 ? 0 : (medians["средний"] ?? 0) / baseline;
+  const noviceToAverage = ratio("новичок", "средний");
+  const fullToAverage = ratio("полный арсенал", "средний");
+  const lightToStandard = ratio("средний, слабое устройство", "средний");
+  const median = (values: number[]): number => quantile([...values].sort((a, b) => a - b), 0.5);
+  const levelOf = (runs: BalanceRunResult[]): number => median(runs.map((run) => run.startPressure));
+
+  lines.push("", "### Вердикты по коридорам", "");
+  lines.push(
+    verdict(
+      `средний к базовой медиане ${targets.averageToBaseline.min}–${targets.averageToBaseline.max}`,
+      between(averageToBaseline, targets.averageToBaseline),
+      `${averageToBaseline.toFixed(2)} (база ${fixed(baseline)} с)`,
+    ),
+  );
+  lines.push(verdict(`новичок к среднему ${targets.noviceToAverage.min}–${targets.noviceToAverage.max}`, between(noviceToAverage, targets.noviceToAverage), noviceToAverage.toFixed(2)));
+  lines.push(verdict(`полный к среднему ${targets.fullToAverage.min}–${targets.fullToAverage.max}`, between(fullToAverage, targets.fullToAverage), fullToAverage.toFixed(2)));
+  lines.push(
+    verdict(
+      "порядок: новичок < средний < полный — с подстройкой и без",
+      (medians["новичок"] ?? 0) < (medians["средний"] ?? 0) &&
+        (medians["средний"] ?? 0) < (medians["полный арсенал"] ?? 0) &&
+        (medians["новичок, без подстройки"] ?? 0) < (medians["средний, без подстройки"] ?? 0) &&
+        (medians["средний, без подстройки"] ?? 0) < (medians["полный арсенал, без подстройки"] ?? 0),
+      "по таблице",
+    ),
+  );
+  const halfPairs: [string, string, string, string][] = [
+    ["новичок", "средний", "новичок, без подстройки", "средний, без подстройки"],
+    ["средний", "полный арсенал", "средний, без подстройки", "полный арсенал, без подстройки"],
+  ];
+  for (const [weak, strong, weakOff, strongOff] of halfPairs) {
+    const withPressure = ratio(strong, weak);
+    const without = ratio(strongOff, weakOff);
+    lines.push(
+      verdict(
+        `${weak} → ${strong}: с подстройкой не меньше √(без неё)`,
+        withPressure >= Math.sqrt(without),
+        `с подстройкой ${withPressure.toFixed(2)}, без неё ${without.toFixed(2)}, √ = ${Math.sqrt(without).toFixed(2)}`,
+      ),
+    );
+  }
+  lines.push(verdict(`слабое устройство к обычному ${targets.lightToStandard.min}–${targets.lightToStandard.max}`, between(lightToStandard, targets.lightToStandard), lightToStandard.toFixed(2)));
+
+  const cap = PRESSURE.devices.caps.light;
+  const lightPeakMax = Math.max(...results.averageLight.map((run) => run.peakEnemies));
+  const standardPeak = median(results.averageOn.map((run) => run.peakEnemies));
+  const lightPeak = median(results.averageLight.map((run) => run.peakEnemies));
+  lines.push(verdict(`пик на слабом не больше caps.light + ${targets.lightPeakSlack} = ${cap + targets.lightPeakSlack}`, lightPeakMax <= cap + targets.lightPeakSlack, `макс ${lightPeakMax}`));
+  lines.push(
+    verdict(
+      `пик на слабом не больше ${targets.lightPeakShareMax} от обычного, если обычный не ниже ${targets.lightPeakThreshold} × caps.light`,
+      standardPeak < targets.lightPeakThreshold * cap || lightPeak <= targets.lightPeakShareMax * standardPeak,
+      `слабое ${lightPeak}, обычное ${standardPeak}`,
+    ),
+  );
+  for (const [id, runs] of [["novice", results.noviceOn], ["average", results.averageOn], ["full", results.fullOn]] as const) {
+    const range = targets.levels[id];
+    const value = levelOf(runs);
+    lines.push(verdict(`L(${id}) в ${range.min}–${range.max}`, value >= range.min && value <= range.max, value.toFixed(2)));
+  }
+
+  lines.push(
+    "",
+    `Отношения соседних профилей (сильный / слабый), без подстройки → с подстройкой: ` +
+      `новичок → средний ${ratio("средний, без подстройки", "новичок, без подстройки").toFixed(2)} → ${ratio("средний", "новичок").toFixed(2)}, ` +
+      `средний → полный ${ratio("полный арсенал, без подстройки", "средний, без подстройки").toFixed(2)} → ${ratio("полный арсенал", "средний").toFixed(2)}.`,
+  );
+  return lines;
+}
+
+/**
+ * Расписание сборки (T-0196, решение 3.1): бессмертный бот профиля «средний»
+ * без подстройки идёт до 1200 с, по минутам запоминается доля собранного
+ * набора. Медиана по seed на сетке секунд, округление до 0,05, расписание не
+ * убывает — готовый литерал для `PRESSURE.power.buildSchedule`.
+ */
+function scheduleLines(): string[] {
+  const weapons = startingWeapons();
+  const { average } = POWER_PROFILES;
+  const byMinute: number[][] = [];
+  for (const startingWeaponId of weapons) {
+    for (let seed = 1; seed <= SCHEDULE_SEEDS; seed++) {
+      const run = simulateBalanceRun({
+        seed,
+        skill: "dodging",
+        startingWeaponId,
+        difficultyId: BASE_DIFFICULTY_ID,
+        godMode: true,
+        maxSec: SCHEDULE_GRID_SEC[SCHEDULE_GRID_SEC.length - 1],
+        loadout: average.loadout,
+        pressure: false,
+      });
+      run.buildScoreByMinute.forEach((score, minute) => {
+        (byMinute[minute] ??= []).push(score);
+      });
+    }
+  }
+
+  // Начало забега: набор ещё не растёт, остаётся доля стартового оружия.
+  const start = createRunWorld({ seed: 1, mapId: "frontier", difficultyId: BASE_DIFFICULTY_ID, unitScale: 1, loadout: average.loadout }).world;
+  const points: [number, number][] = [];
+  let previous = 0;
+  for (const sec of SCHEDULE_GRID_SEC) {
+    const value = sec === 0 ? buildScoreOf(start) : quantile([...(byMinute[sec / 60 - 1] ?? [])].sort((a, b) => a - b), 0.5);
+    const rounded = Math.max(previous, Math.round(value / 0.05) * 0.05);
+    previous = rounded;
+    points.push([sec, Number(rounded.toFixed(2))]);
+  }
+
+  return [
+    "## Расписание сборки",
+    "",
+    `Бессмертный уклоняющийся бот, «${BASE_DIFFICULTY_ID}», профиль «${average.titleRu}», подстройка выключена, ${SCHEDULE_SEEDS} seed × ${weapons.length} оружия, до ${SCHEDULE_GRID_SEC[SCHEDULE_GRID_SEC.length - 1]} с. ` +
+      "Медиана доли набора на сетке, округление до 0,05.",
+    "",
+    "| сек | " + points.map(([sec]) => String(sec)).join(" | ") + " |",
+    "|---|" + points.map(() => "---").join("|") + "|",
+    "| доля набора | " + points.map(([, value]) => value.toFixed(2)).join(" | ") + " |",
+    "",
+    `buildSchedule: [${points.map(([sec, value]) => `[${sec}, ${value}]`).join(", ")}]`,
+  ];
 }
 
 /**
