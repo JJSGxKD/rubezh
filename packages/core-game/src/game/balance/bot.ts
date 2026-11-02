@@ -62,6 +62,9 @@ const DODGING_PRIORITY: readonly UpgradeOption["kind"][] = [
   "weapon_new",
   "passive_new",
   "passive_level",
+  // «Предел» — это прибавки к урону и живучести, лечение при полном здоровье
+  // пустое: бот берёт прибавку, а не стоит на месте.
+  "limit",
   "heal",
 ];
 
