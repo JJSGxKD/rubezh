@@ -8,6 +8,7 @@ import "../../i18n/run";
 // Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
 // первой загрузкой.
 import "../../i18n/account";
+import { TUTORIAL_DIFFICULTY_ID } from "../../state/difficulty";
 import { unlockLabel, unlocksGainedBetween } from "../../state/level-unlocks";
 import type { RunRewardView } from "../../state/progress";
 import { track } from "../../state/shell";
@@ -95,9 +96,9 @@ export function ResultsHero(props: { result: RunResult; isNewRecord: boolean; ra
         </div>
         <div className="mt-1 text-xs text-text-muted">{t("run.death.survived")}</div>
       </div>
-      {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
+      {/* Плашка — только у обучающего забега: он не рекорд и не идёт в рейтинг. */}
       <div className="mt-3 flex flex-wrap justify-center gap-2">
-        <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {result.difficultyId === TUTORIAL_DIFFICULTY_ID ? <Badge>{t("run.death.tutorial")}</Badge> : null}
         {/* Читы — видно сразу: иначе «рекорд» бессмертного забега на скриншоте
             выглядит настоящим. */}
         {result.cheats ? (
