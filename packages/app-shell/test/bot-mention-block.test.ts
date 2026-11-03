@@ -5,7 +5,7 @@ import "../src/i18n/tasks";
 import { BotMentionBlock, type BotMentionBlockProps } from "../src/screens/meta/bot-mention-rows";
 import type { BotMentionTask } from "../src/state/bot-mention-api";
 
-// Блок «юзернейм бота» над вкладками «Заданий» (tasks/T-0337, Р167) без
+// Блок «юзернейм бота» под вкладками «Заданий» (tasks/T-0337, Р167, Р185) без
 // браузера: разметка презентационного компонента.
 
 function task(patch: Partial<BotMentionTask> = {}): BotMentionTask {
