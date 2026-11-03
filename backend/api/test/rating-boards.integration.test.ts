@@ -12,6 +12,8 @@ import type { RunScorer } from "../src/modules/rating/run-scorer.service.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { runFinishSchema, type RunFinish } from "../src/modules/runs/dto/runs.dto.js";
+import { PrismaRunScoresRepository } from "../src/modules/rating/run-scores.repository.js";
+import { LeaderboardWarmup } from "../src/modules/runs/leaderboard-warmup.js";
 import { RedisLeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
 import { rebuildLeaderboard } from "../src/modules/runs/leaderboard-rebuild.js";
 import { RunExtras } from "../src/modules/runs/run-details.js";
@@ -352,6 +354,83 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
     });
   });
 
+  describe("первое наполнение доски при старте", () => {
+    const LOCK_KEY = "runs:leaderboard-warmup:lock";
+
+    /** Сервис наполнения на настоящих базах; отсечка с 2046 года: досчитываются только забеги этого файла, чужие строки общей базы не трогаются. */
+    function warmup() {
+      const settings = panelSettings({ "rating.since-date": 20_460_101 });
+      const rating = ratingRestrictions(runs, leaderboard, undefined, settings);
+      return new LeaderboardWarmup(config, redis, runs, leaderboard, new PrismaRunScoresRepository(prisma), killsScorer(), rating.rating);
+    }
+
+    /** Фоновое наполнение старта: ждём, пока на доске появится игрок. */
+    async function appeared(accountId: string): Promise<number | null> {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const best = await leaderboard.best("hard", accountId, "common");
+        if (best !== null) return best;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return null;
+    }
+
+    beforeEach(async () => {
+      await redis.del(LOCK_KEY);
+    });
+
+    it("старт на пустом Redis с забегами в базе: очки досчитаны, доска по очкам собрана без команд", async () => {
+      const early = await player("До очков");
+      const sharp = await player("Меткий");
+      const at = new Date(Date.UTC(2046, 5, 1));
+      // Забег до подсчёта очков (300 убийств — 1 800 очков заглушки) и забег с очками выше.
+      await save(early.accountId, at, 3_000, null);
+      await save(sharp.accountId, at, 600, 2_400);
+      const service = warmup();
+      expect(await service.needed()).toBe(true);
+
+      await service.onApplicationBootstrap();
+
+      expect(await appeared(early.accountId)).toBe(1_800);
+      expect(await leaderboard.best("hard", sharp.accountId, "common")).toBe(2_400);
+      expect(await prisma.run.count({ where: { accountId: early.accountId, points: 1_800 } })).toBe(1);
+      const top = await leaderboard.top("hard", 10_000, "common");
+      expect(top.map((entry) => entry.accountId).filter((id) => [early.accountId, sharp.accountId].includes(id))).toEqual([sharp.accountId, early.accountId]);
+      expect(await service.needed()).toBe(false);
+      expect(await redis.exists(LOCK_KEY)).toBe(0);
+    });
+
+    it("доска уже есть — ничего не пересчитывается; повторный старт безвреден", async () => {
+      const early = await player("До очков");
+      const present = await player("На доске");
+      await save(early.accountId, new Date(Date.UTC(2046, 5, 2)), 3_000, null);
+      await leaderboard.submit("hard", present.accountId, 500, ["full", "common"]);
+      const service = warmup();
+
+      expect(await service.needed()).toBe(false);
+      expect(await service.warm()).toBeNull();
+
+      expect(await prisma.run.count({ where: { accountId: early.accountId, points: null } })).toBe(1);
+      expect(await leaderboard.best("hard", early.accountId, "common")).toBeNull();
+    });
+
+    it("лок у соседней реплики — эта не пересчитывает; повтор после наполнения ничего не меняет", async () => {
+      const early = await player("До очков");
+      await save(early.accountId, new Date(Date.UTC(2046, 5, 3)), 3_000, null);
+      const service = warmup();
+      await redis.set(LOCK_KEY, "другая-реплика", "PX", 60_000);
+
+      expect(await service.warm()).toBeNull();
+      expect(await leaderboard.best("hard", early.accountId, "common")).toBeNull();
+      await redis.del(LOCK_KEY);
+
+      const first = await service.warm();
+      expect(first?.rescored).toBeGreaterThanOrEqual(1);
+      expect(await leaderboard.best("hard", early.accountId, "common")).toBe(1_800);
+      expect(await service.warm()).toBeNull();
+      expect(await leaderboard.best("hard", early.accountId, "common")).toBe(1_800);
+    });
+  });
+
   describe("снятие забега модератором", () => {
     it("снят лучший по очкам — в досках лучший из оставшихся, и вечной, и недельной", async () => {
       const week = await freeWeek();
@@ -437,6 +516,33 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
         ["Я", 1_800, 900],
       ]);
       expect(board.me).toMatchObject({ rank: 2, points: 1_800, survivalSec: 900 });
+    });
+  });
+
+  describe("тень: молчаливое ограничение рейтинга", () => {
+    it("в сезоне по очкам игрок в тени с забегом только под ограничением видит среди друзей себя с верными очками и временем", async () => {
+      const week = await freeWeek();
+      const w = world(week.startsAt, week.startsAt);
+      const shadow = await player("Тень");
+      const friend = await player("Друг");
+      w.rating.restrictions.restrict(shadow.accountId, "leaderboard", { notify: false });
+      expect((await friends.befriend(shadow.accountId, friend.accountId, "request", 100)).outcome).toBe("added");
+
+      await play(w, friend, new Date(week.startsAt.getTime() + HOUR), 400, 100);
+      // Единственный забег тени сдан под ограничением: рейтинговым он не стал, строки среди рейтинговых у неё нет.
+      await w.service.finish(shadow, finish(900, 300), week.startsAt.getTime() + 2 * HOUR);
+      expect(await prisma.run.count({ where: { accountId: shadow.accountId, ranked: true } })).toBe(0);
+      expect(await prisma.run.count({ where: { accountId: shadow.accountId, ratingRestricted: "silent" } })).toBe(1);
+
+      const board = await w.seasonsView.board(shadow.accountId, { difficulty: "hard", scope: "friends" }, new Date(week.startsAt.getTime() + 3 * HOUR));
+
+      // 1 800 очков и 900 с — её собственный забег; друг с 600 очками ниже.
+      expect(board.scoring).toBe("points");
+      expect(board.total).toBe(2);
+      expect(board.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k" });
+      // Среди всех её нет: тень видна только ей самой, и место недели считается по настоящим игрокам.
+      const all = await w.seasonsView.board(shadow.accountId, { difficulty: "hard", scope: "all" }, new Date(week.startsAt.getTime() + 3 * HOUR));
+      expect(all.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k" });
     });
   });
 
