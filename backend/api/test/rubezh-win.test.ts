@@ -222,6 +222,59 @@ describe("победа над стражем в приёме забегов", ()
     expect((await w.view.leaderboardFor(me.accountId, "hard")).entries).toEqual([]);
   });
 
+  describe("рейтинговый забег с читами и победой (владелец считает читы в рейтинге)", () => {
+    async function cheatingWinner(): Promise<{ owner: AccountRef; runId: string }> {
+      const owner = await player(w, "Владелец с читами");
+      await w.rolesRepository.grant(owner.accountId, "owner", null);
+      const runId = randomUUID();
+      await w.service.finish(owner, finish({ runId, cheats: true, countInRating: true, rubezh: WIN }));
+      return { owner, runId };
+    }
+
+    it("забег попал в рейтинг, а отметки победителя нет", async () => {
+      const { owner, runId } = await cheatingWinner();
+
+      expect(w.runs.rows.get(runId)?.record).toMatchObject({ verdict: "ok", ranked: true, cheats: true, rubezhReached: true, rubezhClearedSec: 650 });
+      const entries = (await w.view.leaderboardFor(owner.accountId, "hard")).entries;
+      expect(entries).toHaveLength(1);
+      expect(entries[0]).not.toHaveProperty("rubezh");
+      expect(await w.runs.rubezhWinners("hard", null)).toEqual([]);
+    });
+
+    it("пересборка доски отметку не ставит", async () => {
+      await cheatingWinner();
+      const lost = new MemoryLeaderboardStore();
+
+      await rebuildLeaderboard(w.runs, lost, new Set(), new Set(), null);
+
+      const top = await lost.top("hard", 10, "full");
+      expect(top).toHaveLength(1);
+      expect(top.some((entry) => entry.rubezh)).toBe(false);
+    });
+
+    it("снятие другого забега модератором отметку не ставит", async () => {
+      const { owner } = await cheatingWinner();
+      const otherRunId = randomUUID();
+      await w.service.finish(owner, finish({ runId: otherRunId, cheats: false, survivalSec: 640 }));
+
+      await w.service.setRanked(owner, otherRunId, false, "проверка");
+
+      const top = await w.board.top("hard", 10, "full");
+      expect(top).toHaveLength(1);
+      expect(top.some((entry) => entry.rubezh)).toBe(false);
+    });
+
+    it("честная победа того же аккаунта отметку ставит, и снятие забега с читами её не убирает", async () => {
+      const { owner, runId } = await cheatingWinner();
+      await w.service.finish(owner, finish({ cheats: false, survivalSec: 660, rubezh: { reached: true, clearedSec: 620, guardHpPercent: null } }));
+      expect((await w.board.top("hard", 10, "full")).some((entry) => entry.rubezh)).toBe(true);
+
+      await w.service.setRanked(owner, runId, false, "проверка");
+
+      expect((await w.board.top("hard", 10, "full")).some((entry) => entry.rubezh)).toBe(true);
+    });
+  });
+
   it("победа скрытого аккаунта другим не видна; тот, кому положена полная доска, видит её флаг", async () => {
     const owner = await player(w, "Владелец");
     await w.rolesRepository.grant(owner.accountId, "owner", null);

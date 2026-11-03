@@ -465,6 +465,21 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await runs.rubezhWinners("hard", null, [])).toEqual([]);
   });
 
+  it("победители рубежа: рейтинговый забег с читами победой не считается, честная победа того же аккаунта — считается", async () => {
+    const [cheater, mixed] = [await account(), await account()];
+    const win = { rubezhReached: true, rubezhClearedSec: 650, survivalSec: 700 };
+    // Читы в рейтинг пускает право владельца и админа (`countInRating`): забег рейтинговый, вердикт ok, победы всё равно нет.
+    await runs.finish(finished(randomUUID(), cheater, { ...win, cheats: true }));
+    await runs.finish(finished(randomUUID(), mixed, { ...win, cheats: true }));
+    await runs.finish(finished(randomUUID(), mixed, { ...win, cheats: false }));
+
+    const winners = await runs.rubezhWinners("hard", null);
+    expect(winners).not.toContain(cheater);
+    expect(winners).toContain(mixed);
+    expect(await runs.rubezhWinners("hard", null, [cheater])).toEqual([]);
+    expect(await runs.rubezhWinners("hard", null, [cheater, mixed])).toEqual([mixed]);
+  });
+
   it("отметка в доске: запись вместе с submit, страница читает флаги одним SMISMEMBER", async () => {
     const [winner, plain] = [await account(), await account()];
     await board.submit("hard", winner, 700, ALL_BOARDS, true);
@@ -506,5 +521,15 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     // Закрытый рейтинг: победитель в доски не попал — и в набор тоже.
     await rebuildLeaderboard(runs, board, new Set([winner]), new Set(), null);
     expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(0);
+  });
+
+  it("пересборка не ставит отметку за победу с читами, даже если забег рейтинговый и самый длинный", async () => {
+    const cheater = await account();
+    await runs.finish(finished(randomUUID(), cheater, { survivalSec: 950, cheats: true, rubezhReached: true, rubezhClearedSec: 700 }));
+    await redis.del("lb:rubezh:hard");
+
+    await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
+
+    expect(await redis.sismember("lb:rubezh:hard", cheater)).toBe(0);
   });
 });

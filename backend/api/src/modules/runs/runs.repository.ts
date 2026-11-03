@@ -494,6 +494,8 @@ export class PrismaRunsRepository implements RunsRepository {
         difficulty,
         ranked: true,
         verdict: "ok",
+        // Забег с читами в рейтинг может попасть (владелец, админ), победой он не считается: так же в finish и в повторе.
+        cheats: false,
         rubezhReached: true,
         rubezhClearedSec: { not: null },
         ...(only === undefined ? {} : { accountId: { in: [...only] } }),

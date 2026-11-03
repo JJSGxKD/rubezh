@@ -218,7 +218,7 @@ export class MemoryRunsRepository implements RunsRepository {
 
   async rubezhWinners(difficulty: Difficulty, since: Date | null, only?: readonly string[]): Promise<string[]> {
     const winners = this.rankedOf(difficulty, since).filter(
-      (record) => record.verdict === "ok" && record.rubezhReached && record.rubezhClearedSec !== null && (only === undefined || only.includes(record.accountId)),
+      (record) => record.verdict === "ok" && !record.cheats && record.rubezhReached && record.rubezhClearedSec !== null && (only === undefined || only.includes(record.accountId)),
     );
     return [...new Set(winners.map((record) => record.accountId))];
   }
