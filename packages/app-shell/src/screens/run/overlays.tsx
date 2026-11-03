@@ -39,6 +39,8 @@ export interface PauseOverlayProps {
   onStats(): void;
   /** лист режима разработчика — только у забега разработчика */
   onDev?: () => void;
+  /** пролог: сдача спрашивает по-другому — он начнётся заново, а не запишется */
+  prologue?: boolean;
 }
 
 export function PauseOverlay(props: PauseOverlayProps): ReactNode {
@@ -62,7 +64,7 @@ export function PauseOverlay(props: PauseOverlayProps): ReactNode {
           </>
         }
       >
-        <p className="text-sm text-text-muted">{t("run.surrender.text")}</p>
+        <p className="text-sm text-text-muted">{t(props.prologue === true ? "run.surrender.prologue" : "run.surrender.text")}</p>
       </Modal>
     );
   }
@@ -216,34 +218,47 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
         {props.offers.map((offer, index) => {
           const kind = kindOf(offer);
           return (
-            <Card
-              key={offer.id}
-              appearIndex={index}
-              compact
-              stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
-              onClick={guarded(ready, () => tap(offer))}
-            >
-              {isNew(offer) ? <CornerRibbon>{t("run.levelUp.new")}</CornerRibbon> : null}
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <ItemMedallion kind={kind} id={offer.refId} />
-                <span className="min-w-0 font-display text-base font-bold break-words text-text">
-                  {t(offer.nameKey)}
-                </span>
-                <OfferTag offer={offer} />
-              </div>
-              {/* Описание — только у нового: у уровня к взятому предмету
-                  важнее, что именно поменяется, а описание игрок уже видел. */}
-              {/* В ландшафте колонка узкая и описание расползается на три-четыре
-                  строки — там оно обрезается до двух: числа ниже важнее. */}
-              {isNew(offer) || offer.changes.length === 0 ? (
-                <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
-              ) : null}
-              <ChangeList changes={offer.changes} />
-              <EvolutionHint offer={offer} loadout={props.loadout} />
-            </Card>
+            <RecommendedFrame key={offer.id} on={offer.recommended === true}>
+              <Card
+                appearIndex={index}
+                compact
+                stripe={kind === "passive" ? "passive" : kind === "weapon" ? "weapon" : "info"}
+                onClick={guarded(ready, () => tap(offer))}
+              >
+                {offer.recommended === true ? (
+                  <CornerRibbon>
+                    <span data-recommended="">{t("run.levelUp.recommended")}</span>
+                  </CornerRibbon>
+                ) : isNew(offer) ? (
+                  <CornerRibbon>{t("run.levelUp.new")}</CornerRibbon>
+                ) : null}
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <ItemMedallion kind={kind} id={offer.refId} />
+                  <span className="min-w-0 font-display text-base font-bold break-words text-text">
+                    {t(offer.nameKey)}
+                  </span>
+                  <OfferTag offer={offer} />
+                </div>
+                {/* Описание — только у нового: у уровня к взятому предмету
+                    важнее, что именно поменяется, а описание игрок уже видел. */}
+                {/* В ландшафте колонка узкая и описание расползается на три-четыре
+                    строки — там оно обрезается до двух: числа ниже важнее. */}
+                {isNew(offer) || offer.changes.length === 0 ? (
+                  <p className="mt-1.5 text-xs text-text-muted landscape:line-clamp-2">{t(offer.descriptionKey)}</p>
+                ) : null}
+                <ChangeList changes={offer.changes} />
+                <EvolutionHint offer={offer} loadout={props.loadout} />
+              </Card>
+            </RecommendedFrame>
           );
         })}
       </div>
+      {/* Подсказка пролога о «Советуем»: под карточками, пока на одной из них стоит метка. */}
+      {props.offers.some((offer) => offer.recommended === true) ? (
+        <p role="status" className="mt-2 text-center text-sm text-text short:hidden">
+          {t("run.hint.choose")}
+        </p>
+      ) : null}
       {tools === undefined ? null : (
         <>
           <CardToolsBar
@@ -261,6 +276,16 @@ export function LevelUpOverlay(props: LevelUpOverlayProps): ReactNode {
       )}
     </Modal>
   );
+}
+
+/**
+ * Кайма «Советуем» (T-0280): светлая рамка тоном акцента вокруг карточки, на
+ * которую пролог указывает пальцем. Статичная: движения на выборе улучшения
+ * нет. Выбор не навязан — карточка внутри берётся тем же касанием.
+ */
+function RecommendedFrame(props: { on: boolean; children: ReactNode }): ReactNode {
+  if (!props.on) return props.children;
+  return <div className="rounded-lg ring-2 ring-accent shadow-[0_0_14px_color-mix(in_oklab,var(--color-accent)_45%,transparent)]">{props.children}</div>;
 }
 
 function isNew(offer: UpgradeOption): boolean {
@@ -334,6 +359,8 @@ export function kindOf(offer: UpgradeOption): ItemKind {
 function OfferTag(props: { offer: UpgradeOption }): ReactNode {
   const { offer } = props;
   if (offer.kind === "heal") return null;
+  // Уголок занят меткой «Советуем» — «Новое» остаётся значком в строке.
+  if (offer.recommended === true && isNew(offer)) return <Badge tone="accent">{t("run.levelUp.new")}</Badge>;
   // Сколько нажатий набрано с этим — счёт нажатий берётся из уровня карточки.
   if (offer.kind === "limit") return <Badge tone="info">{t("run.levelUp.limitCount", { count: offer.level })}</Badge>;
   const category = offer.kind === "passive_new" || offer.kind === "passive_level" ? passiveCategoryOf(offer.refId) : null;

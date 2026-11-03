@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RUN_MODES } from "../../runs/run-rules.js";
 
 /**
  * Схема записи забега (`rubezh.run.v1`, docs/28-diagnostics.md §3.3–§3.4).
@@ -118,6 +119,9 @@ export const runRecordingSchema = z.object({
   seed: z.number().int(),
   mapId: id,
   difficultyId: id,
+  // Режим забега (T-0278, T-0279): без него перепроверка пролога собрала бы обычный мир и разошлась с первого тика.
+  // Запись обычного забега поля не несёт.
+  mode: z.enum(RUN_MODES).optional(),
   startingWeaponId: id,
   contentHash: id,
   unitScale: z.number().positive().max(10),

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { DomainError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
@@ -7,8 +7,10 @@ import type { RunFinish, RunStart } from "./dto/runs.dto.js";
 import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { rebuildLeaderboard, type BoardCounts } from "./leaderboard-rebuild.js";
 import { isRatedRun } from "./rated-runs.js";
+import { isPrologueWin } from "./prologue-rules.js";
+import { PrologueService } from "./prologue.service.js";
 import { countersOf } from "./run-counters.js";
-import { isRatedDifficulty, type Difficulty } from "./run-rules.js";
+import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js";
 import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
@@ -71,15 +73,19 @@ export class RunsService {
     private readonly continues: RunContinues,
     private readonly loadouts: RunLoadouts,
     private readonly rating: RatingRestrictions,
+    // Нет сервиса пролога (старый состав модуля) — все забеги бесконечные, награды пролога нет.
+    @Optional() private readonly prologue?: PrologueService,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
   async start(account: AccountRef, start: RunStart, nowMs = Date.now()): Promise<{ trusted: boolean }> {
     const startedAtMs = trustedStartMs(nowMs, start.elapsedSec, this.config.runs.startMaxDelaySec);
+    const mode = await this.modeOf(account, start.mode, start.difficultyId);
     const outcome = await this.runs.start({
       runId: start.runId,
       accountId: account.accountId,
       difficulty: start.difficultyId,
+      mode,
       startingWeaponId: start.startingWeaponId,
       contentHash: start.contentHash,
       startedAt: startedAtMs === null ? null : new Date(startedAtMs),
@@ -101,6 +107,7 @@ export class RunsService {
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
     ]);
     const counters = countersOf(run.stats);
+    const mode = await this.modeOf(account, run.mode, run.difficultyId);
     const judged = judgeRun(
       {
         counters,
@@ -125,16 +132,23 @@ export class RunsService {
     const rubezhCleared = rubezhWinOf(run.rubezh, judged.reasons);
     // Нерейтинговый забег ограничений рейтинга не касается: `held` для него не нужен и не вычисляется.
     const rated = isRatedRun(run.difficultyId, new Date(nowMs), this.rating.since());
-    const rankable = rated && judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
+    // Пролог в рейтинг не идёт ни при каких условиях (Р151): сложность у него и так нерейтинговая, но правило не должно зависеть от неё.
+    const rankable = rated && mode !== "prologue" && judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
     const held = rankable ? await this.rating.hold(account.accountId, new Date(nowMs)) : null;
     const ranked = rankable && held === null;
     // Лучшее в тени — до записи этого забега: иначе не понять, новый ли это рекорд.
     const shadowBefore = held === "silent" ? ((await this.runs.bestRunOf(account.accountId, run.difficultyId, true, this.rating.since()))?.survivalSec ?? null) : undefined;
 
+    // Награда пролога и признак — до записи забега: упал приём посередине, повтор итога пройдёт этот путь целиком,
+    // а начисление по ключу аккаунта не удвоится. Повтор уже записанного итога сюда не доходит (`replay` выше).
+    if (this.prologue !== undefined && isPrologueWin({ mode, won: run.prologue?.won, sec: run.prologue?.sec, survivalSec: run.survivalSec, verdict: judged.verdict })) {
+      await this.prologue.settle({ accountId: account.accountId, at: new Date(nowMs), ...(run.prologue === undefined ? {} : { sec: run.prologue.sec }) });
+    }
     const outcome = await this.runs.finish({
       runId: run.runId,
       accountId: account.accountId,
       difficulty: run.difficultyId,
+      mode,
       startingWeaponId: run.startingWeaponId,
       contentHash: run.contentHash,
       finishedAt: new Date(nowMs),
@@ -166,6 +180,7 @@ export class RunsService {
       runId: run.runId,
       accountId: account.accountId,
       difficulty: run.difficultyId,
+      mode,
       outcome: run.outcome,
       survivalSec: run.survivalSec,
       level: run.level,
@@ -186,6 +201,11 @@ export class RunsService {
       rubezhCleared,
     });
     return result;
+  }
+
+  /** Режим записи (`prologue-rules.ts` → `admitMode`); без сервиса пролога любой забег бесконечный. */
+  private async modeOf(account: AccountRef, mode: RunMode | undefined, difficulty: Difficulty): Promise<RunMode> {
+    return this.prologue === undefined ? "endless" : await this.prologue.admit(account.accountId, mode, difficulty);
   }
 
   /**

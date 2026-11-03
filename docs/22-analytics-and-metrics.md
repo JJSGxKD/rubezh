@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `tutorial_step`, `tutorial_completed`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
 | Интерфейс | `screen_viewed`, `ui_clicked`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42); `feed_event_viewed` (лента живых событий под «Играть», Р114) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); `ad_tested` (проверка рекламы командой, T-0333); выдача показа — строка `ad_session`, а не событие |
@@ -237,6 +237,8 @@ Zod-схемы `payload` — в словаре сервера
 | `chest_found` | Сундук забега выпал (T-0099, `39-retention-mechanics.md` Б1): доля забегов, дожитых до элиты, и секунда первого сундука — проверка, что он приходит около 2:00. Знаменатель для `chest_opened` | `index` — порядковый номер выпадения с нуля, `size` — 1 / 3 / 5, `source` — `elite` или `boss`, `elapsedSec` |
 | `chest_opened` | Игрок коснулся сундука: сколько доходят до выпавшего и что внутри. Доля `fallbacks` показывает, как часто улучшать уже нечего, — сигнал нехватки контента в позднем забеге | `index`, `size`, `rewards` — сколько наград выдано, `fallbacks` — сколько из них запасные (аптечка, опыт), `elapsedSec` |
 | `ring_ended` | Кольцо стражей закончилось (T-0182, Р112): игрок прорвался, выстоял до конца времени или погиб внутри. Доля `broken`, `held` и `died` по кольцам и по минутам показывает, слабы ли кольца или непробиваемы, — калибровка `32-balance.md` §3.2. Одно событие на кольцо; забег, брошенный при активном кольце, события не даёт | `index` — номер кольца в забеге с нуля, `outcome` — `broken` (прорвался) / `held` (выстоял) / `died` (погиб), `guards` — сколько стражей вышло в строй, `killed` — сколько убито к концу, `lifeSec` — сколько кольцо просуществовало, `elapsedSec` |
+| `tutorial_step` | Шаг пролога — первого забега аккаунта (T-0280, Р151, `design/art/meta-v2.md` §4.2): воронка покажет, где новички уходят. Каждый шаг — один раз за забег-пролог, по порядку прохождения | `step` — `start` (забег начался), `first_gem` (первый кристалл на поле — первое убийство), `first_level` (первый выбор улучшения), `first_elite` (вышла первая элита), `first_chest` (выпал первый сундук), `guard` (пришёл Страж рубежа), `won` (Страж пал) |
+| `tutorial_completed` | Пролог выигран (T-0280): доля новичков, дошедших до победы, и время, за которое они её берут. Приходит вместе с шагом `won`. Серверный признак — строка лога `prologue_won` (T-0279) | `sec` — секунда забега на победе |
 | `secret_found` | Игрок вошёл в круг тайника рубежа (T-0260, Р153, `design/art/meta-v2.md` §5): находят ли тайники вообще и на какой секунде — калибровка раскладки по кольцам в `content/secrets.ts`. Одно событие на тайник; огонёк тоже считается — «находка» у него появление | `kind` — `shrine` / `hoard` / `stone` / `tree` / `rift` / `wisp`, `sec` — секунда забега |
 | `secret_used` | Тайник отработал (T-0260): капище выдало благословение, клад — сундук, камень открыл остальные места, разлом закончился. Доля использованных среди найденных и выбор благословений — настройка наборов и наград | `kind` — вид тайника, `outcome` — что вышло: у капища — id взятого благословения (`fury`, `wind` и так далее), у клада `opened`, у камня `touched`, у разлома `cleared` (выдержал) или `left` (срок вышел или погиб) |
 | `evolution_unlocked` | Сундук выдал эволюцию оружия (T-0102, `39-retention-mechanics.md` Б2): оружие на максимуме плюс навык рецепта превратились в сильную версию. Из события считается доля забегов с эволюцией — знаменатель `run_started` (`39` §4.6) — и то, какие рецепты собирают чаще | `evolution` — результат, `weapon` — базовое оружие, `passive` — навык рецепта, `chest` — номер сундука забега (`index` из `chest_opened`), `level` — уровень игрока, `elapsedSec` |
@@ -377,6 +379,17 @@ JSON пишутся те же два имени: `season_closed` — один р
 поэтому счётчик закрытых сезонов и длительность закрытия — те же строки лога
 (`duration_ms`); меток с аккаунтами в них нет. Когда появится серверный вид
 события в конвейере, оба имени заведутся в словаре без смены полей.
+
+**Пролог — строка лога, а не событие** (`35-stage4-plan.md`, Р151;
+`tasks/T-0279`). Победа над Стражем в прологе принимается на сервере, и
+конверт события привязан к устройству, поэтому серверного события в словаре
+нет. В лог сервера строкой JSON (`module: "prologue"`) пишется `prologue_won` —
+один раз, у выигравшего отметку «пройден» (`accountId`, `sec` — секунда победы
+со слов итога). Награда лежит в журнале кошелька с причиной `prologue_reward`,
+признак — `account.prologue_done_at`, режим забега — `run.mode`. Забег с
+флагом победы, не прошедший проверку правдоподобия (секунда расходится с длиной
+забега больше чем на секунду или забег короче 160 с), строки не пишет: он
+записан обычным забегом пролога без награды. Меток Prometheus нет.
 
 **Батл-пасс — таблицы и строки лога, а не события** (`35-stage4-plan.md`,
 Р46, WP26; `tasks/T-0311`). `pass_tier_reached`, который WP26 ставит в словарь,

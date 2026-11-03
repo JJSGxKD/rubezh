@@ -1,6 +1,7 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error.js";
 import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
+import { PrologueService } from "./prologue.service.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunExtras, type RunLootPart, type RunRewardPart } from "./run-details.js";
 import { RunPrestige } from "./run-prestige.js";
@@ -71,6 +72,8 @@ export interface ProfileView {
   totalSurvivalSec: number;
   best: Record<Difficulty, { survivalSec: number; rank: number } | null>;
   recent: { runId: string; difficultyId: Difficulty; survivalSec: number; level: number; startingWeaponId: string; at: number }[];
+  /** пролог пройден (T-0279): `false` — «Награда дня» и «Задания» закрыты, следующий запуск снова пролог; у аккаунтов до пролога — `true` */
+  prologueDone: boolean;
 }
 
 /**
@@ -122,6 +125,8 @@ export class RunsViewService {
     private readonly extras: RunExtras,
     private readonly rating: RatingRestrictions,
     private readonly prestige: RunPrestige,
+    // Нет сервиса пролога (старый состав модуля) — разделы открыты.
+    @Optional() private readonly prologue?: PrologueService,
   ) {}
 
   async leaderboardFor(accountId: string, difficulty: Difficulty): Promise<LeaderboardView> {
@@ -211,7 +216,8 @@ export class RunsViewService {
     // Для команды место такое же, как у владельца профиля: по доске аккаунта.
     const board = await this.rating.boardOf(accountId);
     const shadow = audience === "player" && (await this.rating.hold(accountId)) === "silent";
-    const [stats, recent, ...bests] = await Promise.all([
+    const [prologueDone, stats, recent, ...bests] = await Promise.all([
+      this.prologue === undefined ? true : this.prologue.isDone(accountId),
       this.runs.stats(accountId),
       this.runs.recent(accountId, RECENT_RUNS_SHOWN),
       ...DIFFICULTIES.map(async (difficulty) => (shadow ? await this.shadowBest(accountId, difficulty, board) : await this.boardBest(accountId, difficulty, board))),
@@ -219,6 +225,7 @@ export class RunsViewService {
 
     return {
       ...stats,
+      prologueDone,
       best: { easy: bests[0] ?? null, normal: bests[1] ?? null, hard: bests[2] ?? null },
       recent: recent.map((run) => ({
         runId: run.runId,
