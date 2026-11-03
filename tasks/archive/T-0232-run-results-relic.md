@@ -27,7 +27,7 @@ batch: 3
 
 # T-0232. Итоги забега — окно-реликвия, как сундук и уровень
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json)](README.md#значки-статуса) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json)](../README.md#значки-статуса) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
 
 ## Зачем
 
