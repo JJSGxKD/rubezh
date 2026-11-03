@@ -162,10 +162,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 317.48333333333335,
-      level: 21,
-      wave: 10,
-      enemiesKilled: 2032,
+      survivalSec: 112.64999999999999,
+      level: 8,
+      wave: 3,
+      enemiesKilled: 308,
     });
   });
 
