@@ -3,8 +3,8 @@ id: T-0279
 title: Пролог — сервер: запись забега-пролога, награда один раз, признак «пролог пройден» и открытие награды дня и заданий
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0278, T-0191]
