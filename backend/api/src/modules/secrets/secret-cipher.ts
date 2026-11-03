@@ -94,7 +94,8 @@ export class SecretCipher {
    * вместе с текущим ключом — при смене ключа идентификатор тоже новый.
    */
   deriveId(purpose: string, label: string): string {
-    return createHmac("sha256", this.current().key).update(`rubezh:derived-id:${purpose}:${label}`, "utf8").digest("hex").slice(0, 32);
+    // Пара кодируется JSON-списком: с разделителем-двоеточием «a:b» + «c» и «a» + «b:c» дали бы один идентификатор.
+    return createHmac("sha256", this.current().key).update(JSON.stringify(["rubezh:derived-id", purpose, label]), "utf8").digest("hex").slice(0, 32);
   }
 
   private current(): { id: string; key: Buffer } {
