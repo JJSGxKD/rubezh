@@ -3,8 +3,8 @@ id: T-0280
 title: Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0278, T-0279, T-0190, T-0232, T-0124]
