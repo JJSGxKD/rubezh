@@ -1,8 +1,9 @@
 import { Inject, Injectable } from "@nestjs/common";
-import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { DIFFICULTIES, RATED_DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
-import { assertInGameReward, rewardFor, type Season } from "./season-rules.js";
+import { assertInGameReward, rewardFor, type PrizeRules, type Season } from "./season-rules.js";
 
 /**
  * Закрытие недельного сезона в Postgres (tasks/T-0110): итоги, места и
@@ -24,6 +25,12 @@ import { assertInGameReward, rewardFor, type Season } from "./season-rules.js";
  * всех, остальные — в общей, где таких аккаунтов нет, и каждый берёт место и
  * размер таблицы по своей доске (`season_result.board`). Принадлежность
  * определяется правилом живой таблицы: ограничение не снято и срок не вышел.
+ *
+ * Режим сезона (tasks/T-0294) приходит правилами `PrizeRules`: сезон по времени
+ * ранжирует по `survival_sec`, сезон по очкам — по `points`, и забег без очков в
+ * итоги не идёт. Число пишется в ту же колонку `best_sec`: что в ней лежит, знает
+ * режим сезона (`SeasonSchedule.scoringOf`), а порог награды участника берётся
+ * из тех же правил.
  *
  * Единая сложность (Р126, T-0191): в итоги идут только рейтинговые сложности, а
  * нижняя граница окна — не раньше отсечки рейтинга, `[max(начало недели,
@@ -58,9 +65,10 @@ export interface SeasonCloseRepository {
   /**
    * Закрыть сезон. `excluded` — аккаунты с закрытым рейтингом: в итогах их
    * нет, места считаются без них. `since` — отсечка рейтинга: забеги раньше неё
-   * в итоги не идут. `null` — сезон уже закрыт, не нами.
+   * в итоги не идут. `rules` — режим сезона и порог награды участника; не заданы —
+   * сезон по времени. `null` — сезон уже закрыт, не нами.
    */
-  close(season: Season, excluded: readonly string[], now: Date, since: Date | null): Promise<SeasonClosed | null>;
+  close(season: Season, excluded: readonly string[], now: Date, since: Date | null, rules?: PrizeRules): Promise<SeasonClosed | null>;
 }
 
 @Injectable()
@@ -73,7 +81,10 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
     return new Set(rows.map((row) => row.seasonKey));
   }
 
-  async close(season: Season, excluded: readonly string[], now: Date, since: Date | null): Promise<SeasonClosed | null> {
+  async close(season: Season, excluded: readonly string[], now: Date, since: Date | null, rules: PrizeRules = TIME_RULES): Promise<SeasonClosed | null> {
+    // Счёт сезона и условие «забег стоит в таблице» — статические куски SQL, не пользовательский ввод.
+    const byPoints = rules.scoring === "points";
+    const score = byPoints ? Prisma.sql`r.points` : Prisma.sql`r.survival_sec`;
     // Нижняя граница окна считается здесь, а не в SQL: параметр с `NULL` оставил бы базе угадывать тип.
     const from = since !== null && since.getTime() > season.startsAt.getTime() ? since : season.startsAt;
     const rated = [...RATED_DIFFICULTIES];
@@ -88,18 +99,18 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
         await tx.$executeRaw`
           INSERT INTO season_result (season_key, account_id, difficulty, best_sec, place, board_size, board)
           WITH best AS (
-            SELECT DISTINCT ON (r.account_id, r.difficulty) r.account_id, r.difficulty, r.survival_sec AS best_sec, r.finished_at AS first_at,
+            SELECT DISTINCT ON (r.account_id, r.difficulty) r.account_id, r.difficulty, ${score} AS best_sec, r.finished_at AS first_at,
                    EXISTS (
                      SELECT 1 FROM account_restriction s
                      WHERE s.account_id = r.account_id AND s.kind = 'separate_board'
                        AND s.lifted_at IS NULL AND (s.ends_at IS NULL OR s.ends_at > ${now})
                    ) AS separate
             FROM run r
-            WHERE r.status = 'finished' AND r.ranked AND r.survival_sec IS NOT NULL
+            WHERE r.status = 'finished' AND r.ranked AND ${score} IS NOT NULL
               AND r.difficulty::text = ANY(${rated}::text[])
               AND r.finished_at >= ${from} AND r.finished_at < ${season.endsAt}
               AND NOT (r.account_id = ANY(${[...excluded]}::uuid[]))
-            ORDER BY r.account_id, r.difficulty, r.survival_sec DESC, r.finished_at ASC
+            ORDER BY r.account_id, r.difficulty, ${score} DESC, r.finished_at ASC
           ),
           common AS (
             SELECT b.account_id, b.difficulty, b.best_sec,
@@ -118,7 +129,7 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
           SELECT ${season.key}, f.account_id, f.difficulty, f.best_sec, f.place, f.board_size, 'full' FROM complete f WHERE f.separate
           ON CONFLICT DO NOTHING`;
 
-        await this.assignRewards(tx, season.key);
+        await this.assignRewards(tx, season.key, rules);
 
         await tx.$executeRaw`
           UPDATE season
@@ -135,7 +146,7 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
    * Награды считает код (`rewardFor`), а не SQL: числа живут в одном месте.
    * Аккаунты идут пачками по ключу, чтобы сезон на миллион игроков не лёг в память.
    */
-  private async assignRewards(tx: Transaction, seasonKey: string): Promise<void> {
+  private async assignRewards(tx: Transaction, seasonKey: string, rules: PrizeRules): Promise<void> {
     let after = FIRST_ACCOUNT;
     for (;;) {
       const accounts = await tx.$queryRaw<{ account_id: string }[]>`
@@ -152,7 +163,7 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
 
       const prizes = ids.flatMap((accountId) => {
         // Места и размер — своей доски аккаунта: в его строках все результаты с одной доской.
-        const prize = rewardFor((byAccount.get(accountId) ?? []).map((row) => ({ difficulty: row.difficulty, bestSec: row.bestSec, place: row.place, boardSize: row.boardSize })));
+        const prize = rewardFor((byAccount.get(accountId) ?? []).map((row) => ({ difficulty: row.difficulty, bestSec: row.bestSec, place: row.place, boardSize: row.boardSize })), rules);
         if (prize === null) return [];
         // Только внутриигровое: монеты и престиж, больше ничего не выдаётся ни на одной доске.
         assertInGameReward({ coins: prize.coins, prestige: prize.prestige });
@@ -182,3 +193,6 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
 }
 
 type Transaction = Prisma.TransactionClient;
+
+/** Сезоны до перехода на очки: по времени, порог — секунды сложности. */
+const TIME_RULES: PrizeRules = { scoring: "time", thresholdPoints: 0 };

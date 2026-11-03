@@ -21,7 +21,7 @@ import { SETTINGS, SETTING_LIST, type SettingDefinition } from "../src/modules/s
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
 
 /**
@@ -87,6 +87,7 @@ function legacy(accountId: string, difficulty: Difficulty, survivalSec: number, 
     verdictReasons: [],
     rubezhReached: false,
     rubezhClearedSec: null,
+    ...(difficulty === "hard" ? { score: { points: survivalSec, axes: { t: 1, k: 1, h: 1, c: 1, b: 1 }, style: "t" as const, band: "average" } } : {}),
   };
 }
 
@@ -108,7 +109,7 @@ function world(since: number | null = 20261026) {
   hooks.onRecorded("test", async (run) => {
     recorded.push(run);
   });
-  const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating);
+  const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
   const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   const player = async (name: string): Promise<AccountRef> => {
     const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
@@ -123,7 +124,7 @@ async function snapshot(board: MemoryLeaderboardStore): Promise<Record<string, [
   for (const difficulty of DIFFICULTIES) {
     for (const side of ALL_BOARDS) {
       const entries = await board.top(difficulty, 1_000, side);
-      result[`${side}:${difficulty}`] = entries.map((entry): [string, number] => [entry.accountId, entry.survivalSec]).sort((left, right) => (left[0] < right[0] ? -1 : 1));
+      result[`${side}:${difficulty}`] = entries.map((entry): [string, number] => [entry.accountId, entry.score]).sort((left, right) => (left[0] < right[0] ? -1 : 1));
     }
   }
   return result;
@@ -234,7 +235,7 @@ describe("приём забегов: рейтинг только у единой
 
     const result = await w.service.finish(me, runOf("hard"), AFTER_MS);
 
-    expect(result).toEqual({ recorded: true, verdict: "ok", bestSurvivalSec: 120, isNewBest: true, rank: 1 });
+    expect(result).toMatchObject({ recorded: true, verdict: "ok", bestSurvivalSec: 120, isNewBest: true, rank: 1 });
     expect(await w.board.best("hard", me.accountId, "common")).toBe(120);
     expect(await w.board.best("hard", me.accountId, "full")).toBe(120);
     expect(w.recorded[0]).toMatchObject({ difficulty: "hard", ranked: true });
@@ -283,6 +284,8 @@ describe("приём забегов: рейтинг только у единой
       new RunContinues(),
       new RunLoadouts(),
       w.rating.rating,
+      undefined,
+      survivalScorer(),
     );
 
     await expect(untouched.finish(account(), runOf("easy"), AFTER_MS)).resolves.toMatchObject({ recorded: false, rank: null });
@@ -534,12 +537,12 @@ describe("чтение: доски нерейтинговых сложносте
 
     const profile = await w.view.profile(me.accountId);
 
-    expect(profile.best).toEqual({ easy: null, normal: null, hard: { survivalSec: 250, rank: 1 } });
+    expect(profile.best).toMatchObject({ easy: null, normal: null, hard: { survivalSec: 250, rank: 1 } });
     expect(await w.view.boardSize(me.accountId, "easy")).toBe(0);
     expect(await w.view.boardSize(me.accountId, "normal")).toBe(0);
     expect(await w.view.boardSize(me.accountId, "hard")).toBe(1);
     expect((await w.view.leaderboardFor(me.accountId, "easy")).entries).toEqual([]);
-    expect((await w.view.leaderboardFor(me.accountId, "hard")).me).toEqual({ rank: 1, survivalSec: 250 });
+    expect((await w.view.leaderboardFor(me.accountId, "hard")).me).toMatchObject({ rank: 1, survivalSec: 250 });
   });
 
   it("игрок в тени на единой сложности видит себя, на нерейтинговых — пусто", async () => {

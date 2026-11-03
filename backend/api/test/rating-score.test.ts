@@ -308,6 +308,8 @@ describe("ключи панели", () => {
       "rating.weight-build": 10,
       "rating.endurance-exponent": 130,
       "rating.index-cap": 3,
+      "rating.points-from": 0,
+      "rating.season-threshold-points": 800,
     });
   });
 
