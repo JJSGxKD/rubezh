@@ -28,6 +28,16 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - docs/20-env-and-ports.md
+  - backend/api/tsconfig.json
+  - backend/api/src/modules/runs/runs.repository.ts
+  - backend/api/src/modules/events/events.module.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
+  - backend/api/test/helpers/memory-runs.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/state/analytics.ts
+  - packages/app-shell/test/runs.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
