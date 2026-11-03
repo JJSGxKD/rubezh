@@ -186,3 +186,44 @@ describe("счётчики в вердикте (tasks/T-0125)", () => {
     expect(judgeRun(run({ counters, enemiesKilled: 10, ...long }), limits).reasons).not.toContain("counters_implausible");
   });
 });
+
+describe("победа над стражем рубежа (T-0121)", () => {
+  const long = { survivalSec: 700, finishedAtMs: START + 710_000 };
+  const claim = (reached: boolean, clearedSec: number | null) => ({ reached, clearedSec, guardHpPercent: null });
+
+  it("победа на 650 с при 700 с выживания — без замечаний; без поля rubezh — как раньше", () => {
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 650) }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ ...long, rubezh: null }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ ...long }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("страж пришёл, но жив, — не замечание", () => {
+    expect(judgeRun(run({ ...long, rubezh: claim(true, null) }), limits)).toEqual({ verdict: "ok", reasons: [] });
+    expect(judgeRun(run({ ...long, rubezh: claim(false, null) }), limits)).toEqual({ verdict: "ok", reasons: [] });
+  });
+
+  it("победа раньше, чем страж мог пасть, — подозрение; ровно на границе честно", () => {
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 599) }), limits)).toEqual({ verdict: "suspicious", reasons: ["rubezh_implausible"] });
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 604) }), limits).verdict).toBe("suspicious");
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 605) }), limits).verdict).toBe("ok");
+  });
+
+  it("победа позже конца забега — подозрение; допуск в секунду", () => {
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 701) }), limits).verdict).toBe("ok");
+    expect(judgeRun(run({ ...long, rubezh: claim(true, 702) }), limits)).toEqual({ verdict: "suspicious", reasons: ["rubezh_implausible"] });
+  });
+
+  it("победа при reached: false — подозрение", () => {
+    expect(judgeRun(run({ ...long, rubezh: claim(false, 650) }), limits)).toEqual({ verdict: "suspicious", reasons: ["rubezh_implausible"] });
+  });
+
+  it("страж пришёл при выживании короче отметки — подозрение; допуск в секунду", () => {
+    const short = { survivalSec: 598, finishedAtMs: START + 610_000 };
+    expect(judgeRun(run({ ...short, rubezh: claim(true, null) }), limits)).toEqual({ verdict: "suspicious", reasons: ["rubezh_implausible"] });
+    expect(judgeRun(run({ survivalSec: 599, finishedAtMs: START + 610_000, rubezh: claim(true, null) }), limits).verdict).toBe("ok");
+  });
+
+  it("причина не лечит отказной забег", () => {
+    expect(judgeRun(run({ ...long, weaponCount: 5, rubezh: claim(true, 599) }), limits).verdict).toBe("rejected");
+  });
+});

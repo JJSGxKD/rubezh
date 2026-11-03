@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
@@ -65,6 +65,8 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
+      rubezhReached: false,
+      rubezhClearedSec: null,
       ...patch,
     };
   }
@@ -433,5 +435,76 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     // Запись прошлой сборки: ключей счётчиков в jsonb нет вовсе.
     await prisma.run.update({ where: { runId }, data: { details: { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [] } } });
     expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null } });
+  });
+
+  it("победа над стражем (T-0121): колонки пишутся и читаются, обычный забег — false и null", async () => {
+    const owner = await account();
+    const [won, plain] = [randomUUID(), randomUUID()];
+    await runs.finish(finished(won, owner, { survivalSec: 700, rubezhReached: true, rubezhClearedSec: 650 }));
+    await runs.finish(finished(plain, owner));
+
+    expect(await runs.find(won)).toMatchObject({ rubezhReached: true, rubezhClearedSec: 650 });
+    expect(await runs.find(plain)).toMatchObject({ rubezhReached: false, rubezhClearedSec: null });
+    expect(await prisma.run.findUnique({ where: { runId: won }, select: { rubezhReached: true, rubezhClearedSec: true } })).toEqual({ rubezhReached: true, rubezhClearedSec: 650 });
+  });
+
+  it("победители рубежа: рейтинговый забег с вердиктом ok и засчитанной победой; подозрение, нерейтинговый и сложность без доски не считаются", async () => {
+    const [winner, suspicious, unranked, reachedOnly, easy] = [await account(), await account(), await account(), await account(), await account()];
+    const win = { rubezhReached: true, rubezhClearedSec: 650, survivalSec: 700 };
+    await runs.finish(finished(randomUUID(), winner, win));
+    await runs.finish(finished(randomUUID(), suspicious, { ...win, verdict: "suspicious", verdictReasons: ["rubezh_implausible"], ranked: false }));
+    await runs.finish(finished(randomUUID(), unranked, { ...win, ranked: false }));
+    await runs.finish(finished(randomUUID(), reachedOnly, { rubezhReached: true, survivalSec: 700 }));
+    await runs.finish(finished(randomUUID(), easy, { ...win, difficulty: "easy" }));
+
+    const winners = await runs.rubezhWinners("hard", null);
+    expect(winners).toContain(winner);
+    for (const other of [suspicious, unranked, reachedOnly, easy]) expect(winners).not.toContain(other);
+    expect(await runs.rubezhWinners("hard", null, [winner, suspicious])).toEqual([winner]);
+    expect(await runs.rubezhWinners("easy", null)).toEqual([]);
+    expect(await runs.rubezhWinners("hard", null, [])).toEqual([]);
+  });
+
+  it("отметка в доске: запись вместе с submit, страница читает флаги одним SMISMEMBER", async () => {
+    const [winner, plain] = [await account(), await account()];
+    await board.submit("hard", winner, 700, ALL_BOARDS, true);
+    await board.submit("hard", plain, 650, ALL_BOARDS);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+    expect(await redis.sismember("lb:rubezh:hard", plain)).toBe(0);
+
+    const spy = vi.spyOn(redis, "smismember");
+    const top = await board.top("hard", 50, "common");
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    expect(top.find((entry) => entry.accountId === winner)).toMatchObject({ rubezh: true });
+    expect(top.find((entry) => entry.accountId === plain)).not.toHaveProperty("rubezh");
+    // Повторная запись без победы набор не сбрасывает: отметка живёт, пока её не снимет пересборка.
+    await board.submit("hard", winner, 710, ALL_BOARDS);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+  });
+
+  it("пустая доска: SMISMEMBER не зовётся", async () => {
+    const spy = vi.spyOn(redis, "smismember");
+    expect(await board.top("easy", 10, "common")).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("пересборка восстанавливает набор победителей по базе и убирает лишних", async () => {
+    const [winner, plain] = [await account(), await account()];
+    await runs.finish(finished(randomUUID(), winner, { survivalSec: 900, rubezhReached: true, rubezhClearedSec: 700 }));
+    await runs.finish(finished(randomUUID(), plain, { survivalSec: 800 }));
+    await redis.del("lb:rubezh:hard");
+    await redis.sadd("lb:rubezh:hard", plain, "призрак");
+
+    await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
+
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+    expect(await redis.sismember("lb:rubezh:hard", plain)).toBe(0);
+    expect(await redis.sismember("lb:rubezh:hard", "призрак")).toBe(0);
+    expect(await redis.exists("lb:rubezh:hard:rebuild")).toBe(0);
+    // Закрытый рейтинг: победитель в доски не попал — и в набор тоже.
+    await rebuildLeaderboard(runs, board, new Set([winner]), new Set(), null);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(0);
   });
 });
