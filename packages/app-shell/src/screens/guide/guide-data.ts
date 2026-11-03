@@ -1,6 +1,7 @@
 import {
   ELEMENTS,
   PASSIVE_CATEGORIES,
+  RUBEZH_REWARD_MUL,
   type BoostDef,
   type EnemyDef,
   type EnemyStageDef,
@@ -11,7 +12,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, BOOSTS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, BOOSTS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -60,6 +61,17 @@ export function regularEnemies(): GuideEnemy[] {
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
 export function eliteEnemies(): GuideEnemy[] {
   return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
+}
+
+/**
+ * Раздел «Рубеж» (T-0124): когда приходит страж, кто он и во сколько раз
+ * победа над ним умножает награду. Всё из контента и общих констант —
+ * геймдизайнер меняет отметку или стража, и гайдбук меняется вместе с игрой.
+ * `null` — стража нет в контенте (тест контента такого не допустит).
+ */
+export function rubezhGuide(): { atSec: number; guard: EnemyDef; rewardMul: number } | null {
+  const guard = ENEMIES.find((enemy) => enemy.id === RUBEZH.guard);
+  return guard === undefined ? null : { atSec: RUBEZH.atSec, guard, rewardMul: RUBEZH_REWARD_MUL };
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */
