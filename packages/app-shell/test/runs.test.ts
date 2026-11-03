@@ -271,6 +271,19 @@ describe("очередь забегов", () => {
     expect(sent.stats).toEqual({ damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] });
   });
 
+  it("запись очереди хранит журнал охоты, сборку и силу и отправляет их на сервер как есть (T-0293)", async () => {
+    const hunt = [{ rank: "elite" as const, value: 12, aliveSec: 14.5 }];
+    const queued = toSubmission(result("run-00000001", { huntLog: hunt, buildScore: 7, pressure: { power: 2.4, level: 1, deviceClass: "normal", powerEnd: 2.9, levelEnd: 1.1 } }));
+    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...queued }]));
+
+    reply = async () => json(200, FINISHED);
+    mount();
+    await useRuns.getState().flush("launch");
+
+    const sent = requests[0]?.body as { stats: Record<string, unknown> };
+    expect(sent.stats).toMatchObject({ huntLog: hunt, buildScore: 7, power: 2.4 });
+  });
+
   it("рекорд с другого устройства приходит в лобби и в хранилище устройства", async () => {
     reply = async () =>
       json(200, {
@@ -366,6 +379,37 @@ describe("счётчики итога забега (T-0125)", () => {
     expect(submission.stats).toMatchObject({ bossKills: 2, eliteKills: 5, chestsOpened: 3, crystals: 412 });
   });
 
+});
+
+describe("очки эффективности: журнал охоты, сборка и сила (T-0293)", () => {
+  const hunt = [
+    { rank: "elite" as const, value: 12, aliveSec: 14.5 },
+    { rank: "boss" as const, value: 80, aliveSec: 31 },
+  ];
+
+  it("журнал охоты, оценка сборки и сила на старте уходят в stats", () => {
+    const submission = toSubmission(
+      result("run-00000001", {
+        huntLog: hunt,
+        buildScore: 7,
+        pressure: { power: 2.4, level: 1, deviceClass: "normal", powerEnd: 2.9, levelEnd: 1.1 },
+      }),
+    );
+
+    expect(submission.stats).toMatchObject({ huntLog: hunt, buildScore: 7, power: 2.4 });
+  });
+
+  it("итог без них (сборка без подстройки, прошлый движок) уходит без этих ключей: сервер считает эти оси единицей", () => {
+    const stats = toSubmission(result("run-00000001")).stats;
+
+    expect(stats).not.toHaveProperty("huntLog");
+    expect(stats).not.toHaveProperty("buildScore");
+    expect(stats).not.toHaveProperty("power");
+  });
+
+  it("пустой журнал охоты уходит пустым массивом: охоты не было, и это не «неизвестно»", () => {
+    expect(toSubmission(result("run-00000001", { huntLog: [], buildScore: 0 })).stats).toMatchObject({ huntLog: [], buildScore: 0 });
+  });
 });
 
 describe("подробности забега для листа в профиле", () => {
