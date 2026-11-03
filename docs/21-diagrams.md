@@ -49,6 +49,7 @@ erDiagram
         string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
         datetime supporter_at "nullable: знак «Меценат» (Р109, Р149) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
+        datetime prologue_done_at "nullable: пролог пройден (T-0279, Р151) — победа в нём; аккаунтам с забегами до выката миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -147,6 +148,7 @@ erDiagram
         uuid account_id FK
         enum status "started|finished"
         enum difficulty "easy|normal|hard"
+        enum mode "endless|prologue: пролог — вне рейтинга и заданий (T-0279); без поля от старого клиента — endless"
         string starting_weapon_id
         string content_hash
         datetime started_at "nullable: по часам сервера; старт не дошёл — пусто"
@@ -2624,6 +2626,8 @@ sequenceDiagram
   `lb:rubezh:{сложность}` (accountId) вместе с рекордом, а доска читает флаги
   всей страницы одним `SMISMEMBER`. Набор — проекция, как и доски:
   пересборка собирает его заново по `run.rubezh_*` и `ranked`.
+- **пролог** (T-0279, Р151) записывается тем же приёмом, но вне рейтинга и
+  заданий; победа и награда — отдельный поток (§4.35).
 
 ### 4.3 Награда за просмотр рекламы (этап 4, реализовано ядро)
 
@@ -4389,6 +4393,57 @@ sequenceDiagram
 - **Курсор двигается после записи.** Упавший проход повторит страницу; ключ
   события (`daily_reward_ready:день`, `season_closing:сезон`,
   `season_overtaken:сезон:день`) не даст второй строки ленты.
+
+### 4.35 Пролог: запись, награда один раз, закрытые разделы (этап 4, реализована серверная часть)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant R as RunsService
+    participant G as PrologueService
+    participant W as wallet
+    participant P as Postgres
+    participant D as DailyService / TasksService
+
+    C->>R: POST /runs { mode: prologue, difficultyId: easy, prologue: { won } }
+    R->>G: admit(mode, difficulty)
+    G->>P: account.prologue_done_at
+    alt сложность не easy
+        G-->>C: 400 run_invalid
+    else признак уже стоит
+        G-->>R: endless: обычный забег без наград пролога
+    else признак пуст
+        G-->>R: prologue
+    end
+    R->>R: вердикт антифрода; рейтинг и задания пролог не двигает
+    opt режим prologue, won = true, вердикт не rejected
+        R->>G: settle(accountId)
+        G->>W: grant монеты, ключ prologue:accountId
+        G->>W: grant самоцветы, ключ prologue:accountId:gems
+        G->>P: UPDATE account SET prologue_done_at = now() WHERE prologue_done_at IS NULL
+    end
+    R->>P: запись забега с mode
+    C->>D: POST /daily/claim, POST /tasks/:id/claim
+    D->>P: account.prologue_done_at
+    alt признак пуст
+        D-->>C: 409 prologue_required
+    else
+        D-->>C: обычный ответ
+    end
+```
+
+- **Награда — один раз на аккаунт.** Ключ начисления собран из аккаунта, а не
+  забега: два запроса разом и два разных забега-пролога дают одну строку
+  журнала на ресурс. Начисление идёт раньше отметки: упали посередине — повтор
+  итога пройдёт путь целиком, а кошелёк узнает ключ и не удвоит.
+- **Победа — по `prologue.won`, а не по исходу.** Клиент присылает победу как
+  `abandoned` с этим итогом (`deathCause = null`); отклонённый антифродом забег
+  не засчитывается.
+- **Старые аккаунты пролог не проходят.** Миграция ставит признак всем, у кого
+  есть хоть один забег: разделы открыты сразу.
+- **Закрыты два раздела:** награда дня и забор задания. Список заданий
+  отдаётся как обычно — оболочка его просто не показывает.
 
 ## 5. Топология развёртывания
 

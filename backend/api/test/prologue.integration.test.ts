@@ -292,7 +292,9 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
 
       const [row] = await prisma.$queryRaw<{ ranked: boolean }[]>`SELECT ranked FROM run WHERE run_id = ${runId}`;
       expect(row?.ranked).toBe(false);
-      for (const difficulty of ["easy", "normal", "hard"] as const) expect(await board.best(difficulty, me.accountId, "all")).toBeNull();
+      for (const difficulty of ["easy", "normal", "hard"] as const) {
+        for (const side of ["full", "common"] as const) expect(await board.best(difficulty, me.accountId, side)).toBeNull();
+      }
       const event = recorded.find((run) => run.runId === runId);
       expect(event?.mode).toBe("prologue");
       expect(event?.ranked).toBe(false);
@@ -377,7 +379,10 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
     it("старый клиент без mode — обычный забег: признак не ставится, режим endless", async () => {
       const me = await person();
       const runId = randomUUID();
-      const { mode: _mode, prologue: _prologue, ...legacy } = prologueBody(runId, { difficultyId: "hard", outcome: "died", deathCause: "swarm_rat" });
+      // Тело сборки до пролога: без полей режима и пролога.
+      const legacy: Record<string, unknown> = { ...prologueBody(runId, { difficultyId: "hard", outcome: "died", deathCause: "swarm_rat" }) };
+      delete legacy.mode;
+      delete legacy.prologue;
       const http = app;
       if (http === null) throw new Error("приложение не запущено");
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { runRecordingSchema } from "../src/modules/diagnostics/dto/run-report.dto.js";
 import { DomainError } from "../src/common/domain-error.js";
 import {
   PROLOGUE_DIFFICULTY,
@@ -62,6 +63,17 @@ describe("допуск к прологу", () => {
 
   it("список режимов сервера — endless и prologue", () => {
     expect([...RUN_MODES]).toEqual(["endless", "prologue"]);
+  });
+});
+
+describe("запись забега для перепроверки", () => {
+  it("схема записи диагностики несёт режим: без него повтор пролога собрал бы обычный мир", () => {
+    const mode = runRecordingSchema.shape.mode;
+    expect(mode.safeParse("prologue").data).toBe("prologue");
+    expect(mode.safeParse("endless").data).toBe("endless");
+    // Запись обычного забега поля не несёт.
+    expect(mode.safeParse(undefined).success).toBe(true);
+    expect(mode.safeParse("tutorial").success).toBe(false);
   });
 });
 
