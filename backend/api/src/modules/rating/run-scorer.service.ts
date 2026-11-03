@@ -101,7 +101,7 @@ export class RunScorer {
         style: styleOf(indexes, params),
         band: band.id,
         expectedPoints: expectedPointsOf(rounded.t, params),
-        outOfRange: isOutOfRange(indexes, params.cap),
+        outOfRange: isOutOfRange(indexes, params.cap, row),
       };
     } catch (error: unknown) {
       this.logger.error(JSON.stringify({ module: "rating", event: "score_failed", reason: error instanceof Error ? error.message : String(error) }));

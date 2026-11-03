@@ -245,20 +245,49 @@ describe("веса", () => {
 });
 
 describe("честность", () => {
+  /** Строка таблицы с достаточным ожидаемым по Сборке: проверяются все оси, кроме Стойкости. */
+  const row = expectedRowOf(table(), "average", 10);
+
   it("индекс выше двух потолков — выброс; ровно два потолка ещё не выброс", () => {
-    expect(isOutOfRange({ t: 1, k: 6.01, h: 1, c: 1, b: 1 }, 3)).toBe(true);
-    expect(isOutOfRange({ t: 1, k: 6, h: 1, c: 1, b: 1 }, 3)).toBe(false);
-    expect(isOutOfRange({ t: 1, k: 1, h: 1, c: 1, b: 7 }, 3)).toBe(true);
+    expect(isOutOfRange({ t: 1, k: 6.01, h: 1, c: 1, b: 1 }, 3, row)).toBe(true);
+    expect(isOutOfRange({ t: 1, k: 6, h: 1, c: 1, b: 1 }, 3, row)).toBe(false);
+    expect(isOutOfRange({ t: 1, k: 1, h: 6.01, c: 1, b: 1 }, 3, row)).toBe(true);
+    expect(isOutOfRange({ t: 1, k: 1, h: 1, c: 6.01, b: 1 }, 3, row)).toBe(true);
+    expect(isOutOfRange({ t: 1, k: 1, h: 1, c: 1, b: 7 }, 3, row)).toBe(true);
   });
 
   it("индекс семь по Натиску — подозрение с причиной axis_out_of_range", () => {
     const input = onTarget(10);
-    const row = indexesOf({ ...input, enemiesKilled: input.enemiesKilled * 7 });
+    const indexes = indexesOf({ ...input, enemiesKilled: input.enemiesKilled * 7 });
 
-    expect(isOutOfRange(row, 3)).toBe(true);
+    expect(isOutOfRange(indexes, 3, row)).toBe(true);
     const verdict = judgeRun(verdictInput({ axisOutOfRange: true }), config().runs);
     expect(verdict.verdict).toBe("suspicious");
     expect(verdict.reasons).toContain("axis_out_of_range");
+  });
+
+  it("забег на сорок пять минут при остальных осях по ожиданию выбросом не считается", () => {
+    const input = { ...onTarget(20), survivalSec: 45 * 60 };
+    const indexes = indexesOf(input);
+
+    // (2700 / 600) ^ 1,3 ≈ 7,1 — выше двух потолков, но Стойкость выбросом не бывает.
+    expect(indexes.t).toBeGreaterThan(6);
+    expect(isOutOfRange(indexes, 3, expectedRowOf(table(), "average", 20))).toBe(false);
+  });
+
+  it("Сборка семь на минуте, где ожидаемая ниже двух, выбросом не считается", () => {
+    const early = expectedRowOf(table(), "full", 3);
+    expect(early.buildScore).toBeLessThan(2);
+    const indexes = indexesOf({ ...onTarget(3, "full"), buildScore: 7 });
+
+    expect(indexes.b).toBe(7);
+    expect(isOutOfRange(indexes, 3, early)).toBe(false);
+  });
+
+  it("Сборка семь на минуте с достаточным ожидаемым — по-прежнему выброс", () => {
+    const input = { ...onTarget(10), buildScore: row.buildScore * 7 };
+
+    expect(isOutOfRange(indexesOf(input), 3, row)).toBe(true);
   });
 
   it("забег без выброса осей причину не получает", () => {
@@ -304,6 +333,13 @@ describe("подсчёт очков забега (RunScorer)", () => {
     expect(scored?.band).toBe("average");
     expect(scored?.style).toBe("t");
     expect(scored?.expectedPoints).toBeGreaterThanOrEqual(998);
+    expect(scored?.outOfRange).toBe(false);
+  });
+
+  it("рекордный забег на сорок пять минут подозрения не вызывает, очки идут по потолку Стойкости", () => {
+    const scored = scorer().score({ ...onTarget(20), survivalSec: 45 * 60 });
+
+    expect(scored?.axes.t).toBeGreaterThan(6);
     expect(scored?.outOfRange).toBe(false);
   });
 

@@ -133,9 +133,24 @@ export function styleOf(indexes: AxisValues, params: ScoreParams): AxisId {
   return best;
 }
 
-/** Сырой индекс любой оси выше двух потолков — выброс, который честный забег не даёт. */
-export function isOutOfRange(indexes: AxisValues, cap: number): boolean {
-  return AXIS_IDS.some((axis) => indexes[axis] > 2 * cap);
+/**
+ * Ожидаемая Сборка ниже этого порога делителем не служит: на ранних минутах
+ * таблица знает 0…1, и две эволюции из сундуков дали бы индекс семь у честного
+ * забега. Выброс Сборки там не проверяется.
+ */
+const BUILD_OUTLIER_MIN_EXPECTED = 2;
+
+/**
+ * Сырой индекс оси выше двух потолков — выброс, который честный забег не
+ * даёт. Стойкость не проверяется: она растёт со временем жизни, а рекордный
+ * забег за рубежом честно перешагивает шесть (около сорока минут); время
+ * проверяет вердикт (`longer_than_wall_clock`). Сборка проверяется, только
+ * когда ожидаемое достаточно велико, чтобы делить на него.
+ */
+export function isOutOfRange(indexes: AxisValues, cap: number, expected: ExpectedRow): boolean {
+  const limit = 2 * cap;
+  if (indexes.k > limit || indexes.h > limit || indexes.c > limit) return true;
+  return expected.buildScore >= BUILD_OUTLIER_MIN_EXPECTED && indexes.b > limit;
 }
 
 /**
