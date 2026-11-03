@@ -73,6 +73,10 @@ const runOutcome = payload({
   // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
   noHitSec: count.optional(),
   noKillSec: count.optional(),
+  // Рубеж (tasks/T-0121, Р102): дошёл до стража и победил ли; секунда победы.
+  // Необязательные: сборки до рубежа полей не шлют, версия прежняя.
+  rubezh: z.enum(["none", "reached", "cleared"]).optional(),
+  rubezhClearedSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,

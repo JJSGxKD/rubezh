@@ -53,6 +53,7 @@ const REASON_LABELS: Record<VerdictReason, string> = {
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
   counters_implausible: "счётчики забега не сходятся с ходом боя",
+  rubezh_implausible: "победа над стражем рубежа невозможна по времени",
 };
 
 /** Сколько знаков id аккаунта показывать: хватает найти его, не загромождая строку. */

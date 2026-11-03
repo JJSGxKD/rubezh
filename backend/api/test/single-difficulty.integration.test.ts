@@ -109,6 +109,8 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
       ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
+      rubezhReached: false,
+      rubezhClearedSec: null,
       ...patch,
     };
   }

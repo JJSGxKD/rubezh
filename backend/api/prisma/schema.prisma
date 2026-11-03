@@ -469,6 +469,10 @@ model Run {
   verdict          RunVerdict?
   /// коды причин вердикта, в том числе сведения, не меняющие его
   verdictReasons   String[]    @map("verdict_reasons")
+  /// страж рубежа пришёл (со слов итога, T-0121); победа засчитывается вердиктом `ok`
+  rubezhReached    Boolean     @default(false) @map("rubezh_reached")
+  /// секунда, на которой пал страж; `null` — не пал
+  rubezhClearedSec Int?        @map("rubezh_cleared_sec")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
