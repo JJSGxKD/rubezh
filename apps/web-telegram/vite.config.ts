@@ -60,6 +60,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/tools",
       "/api/v1/events",
       "/api/v1/diagnostics",
+      "/api/v1/feed",
       "/api/v1/feedback",
       "/api/v1/bot",
       "/api/v1/bot-mention",
