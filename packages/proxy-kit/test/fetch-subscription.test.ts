@@ -74,6 +74,20 @@ describe("загрузка подписки", () => {
     }
   });
 
+  it("x-hwid уходит только на исходный origin: на другой хост и порт — без него, на возврат — снова с ним", async () => {
+    const hwid = "0123456789abcdef0123456789abcdef";
+    const hops = ["https://other.example.net/sub", "https://sub.example.com:8443/sub", "https://sub.example.com.evil.net/sub", "https://sub.example.com/back"];
+    const { calls, options } = setup((_url, call) => (call <= hops.length ? new Response(null, { status: 302, headers: { location: hops[call - 1] ?? "" } }) : new Response(BODY)), { hwid, maxRedirects: 10 });
+    await fetchSubscription(URL_SECRET, options);
+
+    expect(calls.map((call) => new Headers(call.init.headers).has("x-hwid"))).toEqual([true, false, false, false, true]);
+    for (const call of calls) {
+      const headers = new Headers(call.init.headers);
+      expect(headers.get("x-device-os"), call.url).toBe("Linux");
+      expect(headers.get("user-agent"), call.url).toBe("v2rayN/7.0");
+    }
+  });
+
   it("без hwid заголовка x-hwid нет: устройство подписке не представляется", async () => {
     const { calls, options } = setup(() => new Response(BODY));
     await fetchSubscription(URL_SECRET, options);
