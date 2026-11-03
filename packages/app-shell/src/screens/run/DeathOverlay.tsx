@@ -12,6 +12,7 @@ import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
 import { DeathNext } from "./DeathNext";
+import { RubezhResult } from "./RubezhResult";
 import { ChanceStep, LevelUpCard, ResultsHero, RewardCard, RunDetails, RunStats } from "./death-parts";
 import { deathStep } from "./death-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
@@ -152,6 +153,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
             {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
             {reward === undefined ? null : <RewardCard reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
             {reward?.status === "granted" ? <LevelUpCard levelBefore={reward.levelBefore} levelAfter={reward.levelAfter} /> : null}
+            <RubezhResult result={result} reward={reward} />
             <DeathNext result={result} isNewRecord={props.isNewRecord} reward={reward} withTasks={props.showReward === true} />
           </div>
           <div className="grid content-start gap-3">

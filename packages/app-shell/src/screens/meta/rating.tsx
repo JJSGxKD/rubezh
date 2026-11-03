@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Crown, Trophy } from "lucide-react";
+import { Crown, ShieldCheck, Trophy } from "lucide-react";
 import type { LeaderboardEntry } from "@bh/shared-types";
 import {
   Avatar,
@@ -192,7 +192,7 @@ function MyPlace(props: {
   );
 }
 
-function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): ReactNode {
+export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): ReactNode {
   const { entry } = props;
 
   return (
@@ -208,10 +208,12 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
       <RankMark rank={entry.rank} />
       <Avatar name={entry.name} url={entry.photoUrl} size={36} />
       <div className="min-w-0 flex-1">
-        <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-text">
+        {/* Метки не сжимаются, поэтому на узком экране уходят на вторую строку, а не выдавливают имя и не наезжают на время. */}
+        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-text">
           {entry.rank === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
-          <span className="truncate">{entry.name}</span>
+          <span className="max-w-full truncate">{entry.name}</span>
           {entry.tester === true ? <TesterBadge /> : null}
+          {entry.rubezh === true ? <RubezhMark /> : null}
           {entry.prestige !== undefined && entry.prestige > 0 ? <PrestigeMark points={entry.prestige} /> : null}
           {entry.isMe ? (
             <span className="shrink-0">
@@ -223,6 +225,20 @@ function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }): Reac
       </div>
       <SurvivalTime seconds={entry.survivalSec} />
     </li>
+  );
+}
+
+/**
+ * Значок «Рубеж взят» (T-0124): у аккаунта засчитана победа над стражем. Тон
+ * элиты, как у стража на экране смерти; не сжимается, как и остальные метки.
+ * Подсказка — для наведения, скринридеру — слова, значок сам ему ничего не говорит.
+ */
+function RubezhMark(): ReactNode {
+  return (
+    <span title={t("rating.rubezh.hint")} className="inline-flex shrink-0 items-center rounded-sm bg-elite/15 p-0.5 text-elite ring-1 ring-elite/40">
+      <ShieldCheck size={12} aria-hidden="true" />
+      <span className="sr-only">{t("rating.rubezh.label")}</span>
+    </span>
   );
 }
 
