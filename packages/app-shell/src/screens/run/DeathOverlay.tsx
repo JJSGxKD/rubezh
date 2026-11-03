@@ -149,7 +149,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       {/* Лента-заголовок с медальоном исхода (T-0232): тон окна говорит, чем кончился забег. */}
       <div className="mt-1 mb-3 flex items-center justify-center gap-2 short:mb-2">
         <ResultsMedallion icon={look.icon} tone={look.tone} />
-        <RibbonTitle id={titleId} tone={look.tone}>
+        <RibbonTitle id={titleId} tone={look.tone} className="max-[22.5rem]:px-4">
           {t(look.titleKey)}
         </RibbonTitle>
       </div>

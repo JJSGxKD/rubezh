@@ -27,10 +27,9 @@ import { SecondChance, continueOfferedPayload, useSecondChanceStages, type Secon
  */
 export function ResultsMedallion(props: { icon: "skull" | "crown"; tone: string }): ReactNode {
   return (
-    <span
-      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-sunken ring-2 ring-current short:size-9"
-      style={{ color: props.tone, backgroundImage: "radial-gradient(closest-side, color-mix(in oklab, currentColor 22%, transparent), transparent)" }}
-    >
+    // Обёртка с isolate: лучи уходят под круг, но остаются над фоном окна —
+    // внутри круга с заливкой их закрывала бы анимация появления.
+    <span className="relative isolate inline-flex shrink-0">
       {props.icon === "crown" ? (
         <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
           <span className="block size-full animate-chest-rays-in">
@@ -44,7 +43,12 @@ export function ResultsMedallion(props: { icon: "skull" | "crown"; tone: string 
           </span>
         </span>
       ) : null}
-      {props.icon === "crown" ? <Crown size={22} aria-hidden="true" /> : <Skull size={22} aria-hidden="true" />}
+      <span
+        className="inline-flex size-11 items-center justify-center rounded-full bg-surface-sunken ring-2 ring-current max-[22.5rem]:size-9 short:size-9"
+        style={{ color: props.tone, backgroundImage: "radial-gradient(closest-side, color-mix(in oklab, currentColor 22%, transparent), transparent)" }}
+      >
+        {props.icon === "crown" ? <Crown size={22} aria-hidden="true" /> : <Skull size={22} aria-hidden="true" />}
+      </span>
     </span>
   );
 }
