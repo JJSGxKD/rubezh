@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { RunCounters } from "./run-counters.js";
-import type { Difficulty } from "./run-rules.js";
+import type { Difficulty, RunMode } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
 /**
@@ -17,6 +17,8 @@ export interface RecordedRun {
   runId: string;
   accountId: string;
   difficulty: Difficulty;
+  /** пролог — вне рейтинга и заданий (T-0279); поля нет — бесконечный забег */
+  mode?: RunMode;
   outcome: "died" | "abandoned";
   survivalSec: number;
   level: number;

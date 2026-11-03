@@ -4,7 +4,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { ratedWhere } from "./rated-runs.js";
 import { storedDetailsSchema, storedWeaponsSchema, type StoredDetails } from "./run-details.js";
-import { isRatedDifficulty, type Difficulty } from "./run-rules.js";
+import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
 /**
@@ -33,6 +33,8 @@ export interface RunStartRecord {
   runId: string;
   accountId: string;
   difficulty: Difficulty;
+  /** режим; не задан — бесконечный (колонка по умолчанию `endless`) */
+  mode?: RunMode;
   startingWeaponId: string;
   contentHash: string;
   startedAt: Date | null;
@@ -42,6 +44,8 @@ export interface RunFinishRecord {
   runId: string;
   accountId: string;
   difficulty: Difficulty;
+  /** режим, которым забег записан: старт мог назвать пролог, а признак к итогу уже встал; не задан — как при старте */
+  mode?: RunMode;
   startingWeaponId: string;
   contentHash: string;
   finishedAt: Date;
@@ -242,6 +246,7 @@ export class PrismaRunsRepository implements RunsRepository {
 
     const finished = {
       status: "finished" as const,
+      ...(record.mode === undefined ? {} : { mode: record.mode }),
       finishedAt: record.finishedAt,
       outcome: record.outcome,
       survivalSec: record.survivalSec,
