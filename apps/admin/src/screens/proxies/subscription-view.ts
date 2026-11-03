@@ -7,7 +7,13 @@ import { formatTime } from "../../format";
  * из компонентов ради теста; сервер проверит то же самое ещё раз.
  */
 
-const URL_PROBLEM = "Нужен публичный https-адрес без логина и пароля";
+const URL_PROBLEMS = {
+  malformed: "Не похоже на адрес подписки: скопируйте ссылку целиком",
+  crypt: "Зашифрованная ссылка Happ не подойдёт: нужен исходный адрес подписки https://",
+  scheme: "Нужен адрес https:// — http и другие схемы не подходят",
+  credentials: "Уберите логин и пароль из адреса: подписке они не нужны",
+  host: "Это адрес локальной сети — нужен адрес поставщика в интернете",
+} as const;
 const PRIVATE_SUFFIXES = [".localhost", ".local", ".internal", ".lan"];
 const COUNTRIES_MAX = 10;
 const GB = 1024 ** 3;
@@ -20,20 +26,33 @@ function isPrivateIpv4(host: string): boolean {
 }
 
 /**
+ * Адрес так, как его отправим: без пробелов по краям, без обёртки Happ
+ * `happ://add/` и со схемой `https://`, если её не вставили — поставщики
+ * часто дают ссылку без схемы, а «логин и пароль» в тексте ошибки сбивали.
+ */
+export function normalizeSubscriptionUrl(raw: string): string {
+  const text = raw.trim().replace(/^happ:\/\/add\//i, "");
+  if (text === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(text)) return text;
+  return `https://${text}`;
+}
+
+/**
  * Что не так с адресом подписки; `null` — годится. `keep` — правка: пустое поле
  * оставляет прежний адрес. Закрытые адреса отсекаются очевидные, окончательно
  * решает сервер (он ещё и спрашивает DNS).
  */
 export function subscriptionUrlProblem(raw: string, options: { keep?: boolean } = {}): string | null {
-  const text = raw.trim();
+  const text = normalizeSubscriptionUrl(raw);
   if (text === "") return options.keep === true ? null : "Укажите адрес подписки";
-  if (!URL.canParse(text)) return URL_PROBLEM;
+  if (/^happ:\/\/crypt/i.test(text)) return URL_PROBLEMS.crypt;
+  if (!URL.canParse(text)) return URL_PROBLEMS.malformed;
   const url = new URL(text);
-  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return URL_PROBLEM;
+  if (url.protocol !== "https:") return URL_PROBLEMS.scheme;
+  if (url.username !== "" || url.password !== "") return URL_PROBLEMS.credentials;
   const host = url.hostname.toLowerCase().replace(/\.$/, "");
-  if (host === "localhost" || PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix)) || isPrivateIpv4(host)) return URL_PROBLEM;
+  if (host === "localhost" || PRIVATE_SUFFIXES.some((suffix) => host.endsWith(suffix)) || isPrivateIpv4(host)) return URL_PROBLEMS.host;
   // Одна метка без точки — имя сервиса в сети контейнеров (`redis`), не поставщик подписки.
-  if (!host.startsWith("[") && !host.includes(".")) return URL_PROBLEM;
+  if (!host.startsWith("[") && !host.includes(".")) return URL_PROBLEMS.host;
   return null;
 }
 
