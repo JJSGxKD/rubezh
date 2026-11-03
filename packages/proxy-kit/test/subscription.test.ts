@@ -37,8 +37,9 @@ describe("форматы тела", () => {
     expect(parsed.skipped).toEqual([]);
   });
 
-  it("Clash YAML и JSON — unsupported_format", () => {
-    for (const body of ["proxies:\n  - name: a\n    type: vless\n    server: example.com\n", JSON.stringify({ outbounds: [] }), JSON.stringify([{ outbounds: [] }])]) {
+  it("Clash YAML, sing-box JSON и JSON не про Xray — unsupported_format (JSON-конфиги Xray — в xray-json.test.ts)", () => {
+    const singBox = JSON.stringify({ outbounds: [{ type: "vless", server: "example.com", server_port: 443 }] });
+    for (const body of ["proxies:\n  - name: a\n    type: vless\n    server: example.com\n", singBox, JSON.stringify({ proxies: [] }), JSON.stringify([{ name: "a" }])]) {
       expect(() => parseSubscription(body)).toThrow(SubscriptionFormatError);
       try {
         parseSubscription(body);

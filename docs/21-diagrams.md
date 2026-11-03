@@ -4091,8 +4091,8 @@ sequenceDiagram
     participant N as Узел подписки
 
     S->>R: SET proxy-subscription:refresh:lock NX PX 120000
-    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***)
-    P-->>S: список ссылок (base64 или текст)
+    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***, заголовки User-Agent, x-hwid и x-device-os)
+    P-->>S: список ссылок (base64 или текст) либо JSON-конфиги Xray
     S->>K: parseSubscription, assignSlots, buildXrayConfig
     S->>V: config.json атомарно: временный файл и rename
     S->>S: транзакция: узлы upsert, пропавшие удалены, итог, трафик, срок
