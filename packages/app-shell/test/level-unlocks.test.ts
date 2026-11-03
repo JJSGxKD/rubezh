@@ -82,9 +82,11 @@ describe("что откроется дальше", () => {
   });
 
   it("на последнем уровне лестницы и выше — ничего", () => {
-    // 14-й уровень — «Закалка»; следом идёт «Метеор» на 16-м (T-0118), дальше открытий нет.
+    // 14-й уровень — «Закалка»; следом «Метеор» на 16-м (T-0118) и «Кистень»
+    // на 18-м (T-0281), дальше открытий нет.
     expect(nextUnlockAfter(14)).toEqual({ level: 16, unlocks: [{ kind: "weapon", id: "meteor" }] });
-    expect(nextUnlockAfter(16)).toBeNull();
+    expect(nextUnlockAfter(16)).toEqual({ level: 18, unlocks: [{ kind: "weapon", id: "flail" }] });
+    expect(nextUnlockAfter(18)).toBeNull();
     expect(nextUnlockAfter(99)).toBeNull();
   });
 

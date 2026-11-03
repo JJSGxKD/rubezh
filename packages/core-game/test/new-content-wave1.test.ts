@@ -71,6 +71,7 @@ describe("Кистень и «Круговерть»", () => {
   it("кистень открывается на 18-м уровне аккаунта, эволюция вместе с ним", () => {
     expect(unlocksAt(ACCOUNT_UNLOCKS, 17).weapons.has("flail")).toBe(false);
     expect(unlocksAt(ACCOUNT_UNLOCKS, 18).weapons.has("flail")).toBe(true);
-    expect(unlocksAt(ACCOUNT_UNLOCKS, 18).weapons.has("whirl")).toBe(true);
+    // Эволюция в лестницу не вносится: открыта вместе с базовым.
+    expect(ACCOUNT_UNLOCKS.some((row) => row.weapons?.includes("whirl") === true)).toBe(false);
   });
 });

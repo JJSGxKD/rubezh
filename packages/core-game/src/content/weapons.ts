@@ -167,6 +167,22 @@ export const WEAPONS: WeaponDef[] = [
       { damage: 44, cooldownSec: 1.7, projectiles: 2, areaRadius: 118, statusChance: 0.6 },
     ],
   },
+  {
+    // Один тяжёлый груз на цепи: бьёт редко, но намного сильнее камня оберега.
+    // Растёт ударом, радиусом и паузой, а не числом грузов — число остаётся за
+    // «Круговертью».
+    id: "flail",
+    behavior: "orbit",
+    nameKey: "weapon.flail.name",
+    descriptionKey: "weapon.flail.description",
+    levels: [
+      { damage: 34, cooldownSec: 1.6, projectiles: 1, areaRadius: 72, projectileSpeed: 260 },
+      { damage: 40, cooldownSec: 1.5, projectiles: 1, areaRadius: 76, projectileSpeed: 270 },
+      { damage: 46, cooldownSec: 1.4, projectiles: 1, areaRadius: 80, projectileSpeed: 280 },
+      { damage: 53, cooldownSec: 1.3, projectiles: 1, areaRadius: 84, projectileSpeed: 290 },
+      { damage: 60, cooldownSec: 1.2, projectiles: 1, areaRadius: 88, projectileSpeed: 300 },
+    ],
+  },
 
   // Эволюции (tasks/T-0102, docs/39-retention-mechanics.md Б2): базовое оружие
   // на последнем уровне плюс навык рецепта превращаются в сундуке в одну
@@ -243,6 +259,17 @@ export const WEAPONS: WeaponDef[] = [
     evolvedFrom: "meteor",
     recipe: { passive: "reach" },
     levels: [{ damage: 64, cooldownSec: 1.4, projectiles: 3, areaRadius: 150, statusChance: 0.85 }],
+  },
+  // Два груза вместо одного; урон подобран так, чтобы сила осталась в
+  // коридоре `EVOLUTION_POWER_RATIO` (×3,4 к максимуму кистеня).
+  {
+    id: "whirl",
+    behavior: "orbit",
+    nameKey: "weapon.whirl.name",
+    descriptionKey: "weapon.whirl.description",
+    evolvedFrom: "flail",
+    recipe: { passive: "might" },
+    levels: [{ damage: 85, cooldownSec: 1.0, projectiles: 2, areaRadius: 100, projectileSpeed: 340 }],
   },
 ];
 

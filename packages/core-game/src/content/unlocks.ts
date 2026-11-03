@@ -38,6 +38,8 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   { level: 14, passives: ["tempering"], slots: { passives: { attack: 3 } } },
   // Оружие поезда: уровни 15–20 отданы новому оружию (Р105).
   { level: 16, weapons: ["meteor"] },
+  // Кистень (Р157, T-0281): первое оружие волны нового контента.
+  { level: 18, weapons: ["flail"] },
 ];
 
 /**
