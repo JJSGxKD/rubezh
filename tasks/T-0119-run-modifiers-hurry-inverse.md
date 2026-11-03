@@ -3,8 +3,8 @@ id: T-0119
 title: Модификаторы забега «Спешка» и «Инверсия»: данные и движок
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0108, T-0192, T-0193, T-0194, T-0195, T-0196, T-0198]
