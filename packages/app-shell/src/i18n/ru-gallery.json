@@ -25,6 +25,8 @@
   "gallery.preview.pause": "Пауза",
   "gallery.preview.death": "Смерть, режим диагностики",
   "gallery.preview.record": "Смерть с новым рекордом",
+  "gallery.preview.abandoned": "Забег сдан",
+  "gallery.preview.rubezhHeld": "Смерть после удержанного рубежа",
   "gallery.preview.chest": "Сундук на {size}",
   "gallery.modals": "Модалки",
   "gallery.modal.long": "Длинный лист",

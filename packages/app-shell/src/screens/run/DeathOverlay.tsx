@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Crown, Skull } from "lucide-react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { RunResult } from "@bh/shared-types";
-import { Button, Modal } from "../../design-system/components";
+import { Button, Modal, RibbonTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
 // Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
@@ -13,9 +12,10 @@ import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
 import { DeathNext } from "./DeathNext";
 import { RubezhResult } from "./RubezhResult";
-import { ChanceStep, LevelUpCard, ResultsHero, RewardCard, RunDetails, RunStats } from "./death-parts";
+import { ChanceStep, LevelUpCard, ResultsHero, ResultsMedallion, RewardCard, RunDetails, RunStats } from "./death-parts";
 import { deathStep } from "./death-rules";
 import { guarded, useTapGuard } from "./overlay-guard";
+import { resultsLook } from "./results-look";
 import type { SecondChanceProps } from "./SecondChance";
 
 /**
@@ -60,6 +60,7 @@ export interface DeathOverlayProps {
 
 export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   const ready = useTapGuard();
+  const titleId = useId();
   const { result } = props;
   const stored = useProgress((state) => state.rewards[result.runId]);
   const reward = props.reward ?? (props.showReward === true ? stored : undefined);
@@ -110,6 +111,8 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
     );
   }
 
+  const look = resultsLook(result.outcome, props.isNewRecord, result.rubezh?.clearedSec != null);
+
   const actions = (
     <>
       <Button track="restart" size="l" block glow loading={props.restarting === true} onClick={guarded(ready, props.onRestart)}>
@@ -134,16 +137,22 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
 
   return (
     <Modal
-      title={result.outcome === "died" ? t("run.death.title") : t("run.death.abandoned")}
-      icon={props.isNewRecord ? <RecordCrown /> : <Skull size={26} />}
+      labelledBy={titleId}
+      relic={look.tone}
       size="l"
-      cut
       pinFooter
       // Кнопки закреплены внизу окна: при любом числе карточек видны все три.
       // В портрете «Ещё раз» и пара под ней, в ландшафте — один ряд из трёх
       // (docs/27-design-system-and-app-shell.md §5.3).
       footer={<div className="grid gap-2 landscape:grid-cols-[2fr_1fr_1fr]">{actions}</div>}
     >
+      {/* Лента-заголовок с медальоном исхода (T-0232): тон окна говорит, чем кончился забег. */}
+      <div className="mt-1 mb-3 flex items-center justify-center gap-2 short:mb-2">
+        <ResultsMedallion icon={look.icon} tone={look.tone} />
+        <RibbonTitle id={titleId} tone={look.tone}>
+          {t(look.titleKey)}
+        </RibbonTitle>
+      </div>
       {/* Прокрутка одна — тело модалки: окно не выше экрана, а карточки
           уходят под неё, не унося за край кнопки. */}
       <div>
@@ -166,26 +175,3 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   );
 }
 
-/**
- * Корона нового рекорда с лучами за ней — тот же веер, что за сундуком
- * (`effects.md` §6.1): рекорд — награда, и выглядит наградой. Лучи — за
- * кругом значка, вращается слой целиком (только `transform`).
- */
-function RecordCrown(): ReactNode {
-  return (
-    <>
-      <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
-        <span className="block size-full animate-chest-rays-in">
-          <span
-            className="block size-full animate-chest-rays-spin rounded-full"
-            style={{
-              backgroundImage: "repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--color-accent) 32%, transparent) 0deg 7deg, transparent 7deg 22deg)",
-              maskImage: "radial-gradient(closest-side, black 30%, transparent 85%)",
-            }}
-          />
-        </span>
-      </span>
-      <Crown size={28} />
-    </>
-  );
-}
