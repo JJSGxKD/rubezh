@@ -13,6 +13,7 @@ import { useHints } from "./state/hints";
 import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
+import { usePrologue } from "./state/prologue";
 import { watchPlatform } from "./state/platform";
 import { useNavigation } from "./state/navigation";
 import { useTools } from "./state/tools";
@@ -100,6 +101,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   if (useInstall.getState().firstOpen) track("app_first_open");
   useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
+  // Метки «Новое» и отметка победы в прологе — после меты: переживают перезапуск.
+  usePrologue.getState().hydrate();
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
   useRuns.getState().hydrate();
