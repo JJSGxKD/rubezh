@@ -481,7 +481,7 @@ describe("запись забега с очками", () => {
     const board = new MemoryLeaderboardStore();
     const roles = new RolesService(config(), new MemoryRolesRepository(), new MemoryAccountRepository());
     const scorer = new RunScorer({ get: () => source }, panelSettings(), null);
-    const service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, scorer);
+    const service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, scorer);
     return { runs, service };
   }
 

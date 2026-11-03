@@ -1728,6 +1728,8 @@ export interface RunStartSubmission {
   contentHash: string;
   /** сколько секунд прошло от начала забега до отправки: старт мог ждать сеть */
   elapsedSec: number;
+  /** режим забега; нет поля — `endless` (T-0280, сервер T-0279) */
+  mode?: RunMode;
 }
 
 export interface RunFinishSubmission {
@@ -1770,6 +1772,10 @@ export interface RunFinishSubmission {
    */
   passives?: { id: string; level: number }[];
   stats?: RunFinishStats;
+  /** режим забега; нет поля — `endless` (T-0280, сервер T-0279) */
+  mode?: RunMode;
+  /** пролог: победа и секунда; есть только у забега в режиме `prologue`. Победа приходит как `abandoned` с этим итогом */
+  prologue?: RunPrologue;
 }
 
 export interface RunFinishStats {
@@ -1910,6 +1916,8 @@ export interface RunProfile {
   totalSurvivalSec: number;
   best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
   recent: RecentRun[];
+  /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
+  prologueDone?: boolean;
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

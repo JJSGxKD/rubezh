@@ -1,10 +1,12 @@
 import {
   DIFFICULTY_IDS,
   ELEMENTS,
+  RUN_MODES,
   type DifficultyId,
   type Leaderboard,
   type RunFinishResult,
   type RunFinishSubmission,
+  type RunMode,
   type RunProfile,
   type RunResult,
   type RunStartSubmission,
@@ -57,6 +59,9 @@ const finishFields = {
   startingWeaponId: z.string(),
   weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.optional(z.number()) })),
   contentHash: z.string(),
+  // Режим и итог пролога (T-0280): записи прошлых сборок их не знают — это бесконечный забег.
+  mode: z.optional(z.enum(RUN_MODES)),
+  prologue: z.optional(z.object({ won: z.boolean(), sec: z.number() })),
   // Необязательные: забеги в очереди от прошлой сборки этих полей не знают,
   // и выбрасывать их из-за этого незачем.
   deathCause: z.optional(z.nullable(z.string())),
@@ -99,6 +104,7 @@ const startEntrySchema = z.object({
   contentHash: z.string(),
   /** когда забег начался по часам устройства: к отправке прибавится ожидание */
   startedAtMs: z.number(),
+  mode: z.optional(z.enum(RUN_MODES)),
 });
 
 const finishEntrySchema = z.object({ kind: z.literal("finish"), ...finishFields });
@@ -125,7 +131,7 @@ export interface RunsStore {
 
   hydrate(): void;
   /** поставить старт забега в очередь и попробовать отправить */
-  registerStart(start: { runId: string; difficultyId: DifficultyId; startingWeaponId: string }): void;
+  registerStart(start: { runId: string; difficultyId: DifficultyId; startingWeaponId: string; mode?: RunMode }): void;
   /** поставить итог забега в очередь и попробовать отправить */
   submitRun(result: RunResult, countInRating?: boolean): void;
   /**
@@ -290,6 +296,9 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     startingWeaponId: result.startingWeaponId,
     weapons: result.weapons.map(({ id, level, damage }) => ({ id, level, damage: Math.round(damage) })),
     contentHash: result.contentHash,
+    // Режим и итог пролога: без них сервер записал бы пролог обычным забегом и не выдал награду (T-0279).
+    ...(result.mode === undefined ? {} : { mode: result.mode }),
+    ...(result.prologue === undefined ? {} : { prologue: { won: result.prologue.won, sec: result.prologue.sec } }),
     deathCause: result.deathCause,
     // Без секунд продолжений сервер счёл бы купленный второй шанс
     // неоплаченным — и наоборот, не нашёл бы, что сверять с покупкой.
@@ -333,6 +342,7 @@ export function toStart(entry: z.infer<typeof startEntrySchema>, nowMs: number):
     startingWeaponId: entry.startingWeaponId,
     contentHash: entry.contentHash,
     elapsedSec: Math.round(elapsedSec * 10) / 10,
+    ...(entry.mode === undefined ? {} : { mode: entry.mode }),
   };
 }
 

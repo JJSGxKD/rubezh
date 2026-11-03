@@ -3,8 +3,8 @@ id: T-0280
 title: Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0278, T-0279, T-0190, T-0232, T-0124]
@@ -14,6 +14,7 @@ zones:
   - packages/app-shell/test/prologue-shell.test.ts
 shared:
   - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/index.tsx
   - packages/app-shell/src/state/first-run.ts
   - packages/app-shell/src/state/hints.ts
   - packages/app-shell/src/state/run.ts
@@ -30,17 +31,23 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/state/runs-api.ts
+  - packages/app-shell/src/screens/home-showcase.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/test/hints.test.ts
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/mockups/prologue-v2.html
-batch: 6
+batch: 3
 ---
 
 # T-0280. Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0280.json)](README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](archive/T-0278-prologue-engine.md) [![T-0279](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json&label=T-0279)](T-0279-prologue-server.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](archive/T-0190-single-difficulty-shell.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](T-0232-run-results-relic.md) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0280.json)](../README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](T-0278-prologue-engine.md) [![T-0279](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json&label=T-0279)](T-0279-prologue-server.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](T-0232-run-results-relic.md) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
 
 ## Зачем
 

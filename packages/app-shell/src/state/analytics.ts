@@ -31,6 +31,8 @@ export const ANALYTICS_EVENTS = [
   "chest_found",
   "chest_opened",
   "ring_ended",
+  "tutorial_step",
+  "tutorial_completed",
   "secret_found",
   "secret_used",
   "evolution_unlocked",

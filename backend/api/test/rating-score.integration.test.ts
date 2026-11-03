@@ -47,7 +47,7 @@ describe.skipIf(!live)("очки эффективности на живом Post
     const board = new MemoryLeaderboardStore();
     const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
     const scorer = new RunScorer({ get: () => source }, panelSettings(overrides), null);
-    return new RunsService(config, runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, scorer);
+    return new RunsService(config, runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, scorer);
   }
 
   /** Итог по ожидаемому на десятой минуте полосы `average`, как его присылает клиент после T-0292. */

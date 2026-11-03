@@ -47,6 +47,12 @@ enum Difficulty {
   hard
 }
 
+// Режим забега (T-0279, Р151): пролог — первый забег аккаунта, вне рейтинга и заданий.
+enum RunMode {
+  endless
+  prologue
+}
+
 enum RunStatus {
   started
   finished
@@ -184,6 +190,8 @@ model Account {
   nameLockedAt   DateTime? @map("name_locked_at") @db.Timestamptz(3)
   /// знак «Поддержал проект» (Р109): когда подтверждён первый донат; снимается внешним возвратом
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
+  /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
+  prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
 
   roles         AccountRole[]
   runs          Run[]
@@ -444,6 +452,8 @@ model Run {
   accountId        String      @map("account_id") @db.Uuid
   status           RunStatus
   difficulty       Difficulty
+  /// режим: `prologue` — пролог первого забега (T-0279); старые клиенты без поля — `endless`
+  mode             RunMode     @default(endless)
   startingWeaponId String      @map("starting_weapon_id") @db.VarChar(64)
   contentHash      String      @map("content_hash") @db.VarChar(32)
   /// когда забег начался по часам сервера; `null` — старт не дошёл или пришёл слишком поздно

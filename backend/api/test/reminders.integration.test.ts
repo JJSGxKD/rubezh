@@ -122,11 +122,13 @@ describe.skipIf(!live)("напоминания на живых Postgres и Redis
   const msk = (season: Season, weekday: number, hour: number, minute = 0): Date => new Date(season.startsAt.getTime() + weekday * DAY + (hour - 3) * 3_600_000 + minute * 60_000);
   const dayOf = (season: Season, weekday: number): string => new Date(season.startsAt.getTime() + weekday * DAY).toISOString().slice(0, 10);
 
-  async function player(options: { canMessage?: boolean | null; banned?: boolean; platform?: "telegram" | "vk" } = {}): Promise<string> {
-    const { canMessage = true, banned = false, platform = "telegram" } = options;
+  async function player(options: { canMessage?: boolean | null; banned?: boolean; platform?: "telegram" | "vk"; prologueDone?: boolean } = {}): Promise<string> {
+    const { canMessage = true, banned = false, platform = "telegram", prologueDone = true } = options;
     const account = await accounts.upsert({ platform, platformUserId: String(500_000_000 + Math.floor(Math.random() * 400_000_000)), displayName: "Напомни", username: null, photoUrl: null }, Date.now());
     created.push(account.accountId);
     if (canMessage !== null) await messaging.set(account.accountId, { canMessage, reason: canMessage ? "entered" : "blocked", changedAt: new Date() });
+    // Награда дня закрыта до пролога (Р151): без признака игрок в напоминания не попадает.
+    if (prologueDone) await prisma.account.update({ where: { accountId: account.accountId }, data: { prologueDoneAt: new Date() } });
     if (banned) await prisma.account.update({ where: { accountId: account.accountId }, data: { bannedAt: new Date(), banReason: "тест" } });
     return account.accountId;
   }
@@ -205,7 +207,7 @@ describe.skipIf(!live)("напоминания на живых Postgres и Redis
     expect(await rowsOf(ids, "daily_reward_ready")).toHaveLength(1_200);
   }, 120_000);
 
-  it("не выбираются: нельзя писать, заблокирован, давно не заходил, уже забрал сегодня, платформа без бота, занято окно потолка, отписался", async () => {
+  it("не выбираются: нельзя писать, не прошёл пролог, заблокирован, давно не заходил, уже забрал сегодня, платформа без бота, занято окно потолка, отписался", async () => {
     const season = await freeWeek();
     const w = world(season, { "reminders.lapse-days": 14 });
     const tuesday = dayOf(season, 1);
@@ -223,14 +225,15 @@ describe.skipIf(!live)("напоминания на живых Postgres и Redis
     const noBot = await player({ platform: "vk" });
     const busy = await player();
     const optedOut = await player();
-    for (const id of [eligible, strangers, blockedBot, banned, noBot, busy, optedOut]) await claimedOn(id, tuesday);
+    const noPrologue = await player({ prologueDone: false });
+    for (const id of [eligible, strangers, blockedBot, banned, noBot, busy, optedOut, noPrologue]) await claimedOn(id, tuesday);
     await claimedOn(atEdge, edge);
     await claimedOn(lapsed, longAgo);
     await claimedOn(claimedToday, wednesday);
     await redis.set(`bot-notify:${busy}:reminder`, randomUUID(), "EX", 600);
     await accountSettings.merge({ accountId: optedOut, platform: "telegram", platformUserId: "1" }, { version: 1, values: { "bot.reminders": { value: false, ageMs: 0 } } });
 
-    const all = [eligible, atEdge, strangers, blockedBot, banned, lapsed, claimedToday, noBot, busy, optedOut];
+    const all = [eligible, atEdge, strangers, blockedBot, banned, lapsed, claimedToday, noBot, busy, optedOut, noPrologue];
     await w.scanner().tick(msk(season, 2, 12));
     const rows = await rowsOf(all);
     expect(rows.map((row) => row.accountId).sort()).toEqual([eligible, atEdge].sort());

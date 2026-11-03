@@ -3,8 +3,8 @@ id: T-0232
 title: Итоги забега — окно-реликвия, как сундук и уровень
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0124]
@@ -15,18 +15,19 @@ shared:
   - packages/app-shell/src/screens/run/DeathOverlay.tsx
   - packages/app-shell/src/screens/run/death-parts.tsx
   - packages/app-shell/src/screens/gallery.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
   - docs/27-design-system-and-app-shell.md
 runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0232. Итоги забега — окно-реликвия, как сундук и уровень
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json)](README.md#значки-статуса) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json)](../README.md#значки-статуса) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
 
 ## Зачем
 

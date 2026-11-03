@@ -218,6 +218,11 @@ export const EVENT_DICTIONARY = {
       elapsedSec: seconds,
     }),
   },
+  // Воронка пролога (tasks/T-0280, Р151): шаг первого забега аккаунта — `start`,
+  // `first_gem`, `first_level`, `first_elite`, `first_chest`, `guard`, `won`;
+  // победа добавляет `tutorial_completed` с секундой забега.
+  tutorial_step: { version: 1, payload: payload({ step: id }) },
+  tutorial_completed: { version: 1, payload: payload({ sec: seconds }) },
   // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
   // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
   // сундука забега, `level` — уровень игрока.
