@@ -17,6 +17,14 @@ import { quantile, type BalanceRunResult } from "./simulate";
 /** Сколько минут в таблице: дальше сервер берёт значение 20-й минуты. */
 export const EXPECTED_MINUTES = 20;
 
+/**
+ * Минимум прогонов в выборке минуты. Минута, до которой в полосе дожили
+ * меньше, берёт значения последней минуты с достаточной выборкой: медиана
+ * одного-двух прогонов хвоста — шум, а не ожидаемое (tasks/T-0291, ответ
+ * тимлида). Формат файла от этого не меняется.
+ */
+export const EXPECTED_MIN_SAMPLES = 5;
+
 /** Версия формата файла: сервер сверяет её при загрузке. */
 export const EXPECTED_TABLE_VERSION = 1;
 
@@ -78,6 +86,8 @@ export interface BuildExpectedOptions {
   bands: readonly ExpectedBandRuns[];
   /** по умолчанию — `EXPECTED_MINUTES`; меньше нужно только малому прогону теста */
   minutes?: number;
+  /** по умолчанию — `EXPECTED_MIN_SAMPLES`; меньше нужно только малому прогону теста */
+  minSamples?: number;
 }
 
 /** Сотые, как сила в итоге забега (`toHundredths` в `sim/pressure.ts`). */
@@ -100,6 +110,8 @@ function fullMinutes(run: BalanceRunResult): number {
 }
 
 interface Cell {
+  /** сколько прогонов дожило до минуты и вошло в медианы */
+  samples: number;
   killsPerMin: number;
   huntPerMin: number;
   /** `null` — убитых такого ранга у прогонов минуты нет */
@@ -135,6 +147,7 @@ function cellOf(runs: readonly BalanceRunResult[], minute: number): Cell | null 
   }
 
   return {
+    samples: reached.length,
     killsPerMin: sortedMedian(kills),
     huntPerMin: sortedMedian(hunt),
     huntKillSec: {
@@ -147,23 +160,28 @@ function cellOf(runs: readonly BalanceRunResult[], minute: number): Cell | null 
 }
 
 /**
- * Строки одной полосы. Минута, до которой не дожил ни один прогон, берёт
- * значение последней минуты с данными; время жизни по рангу переносится так
- * же по минутам, где убитых этого ранга ещё не было.
+ * Строки одной полосы. Минута, до которой дожили меньше `minSamples` прогонов,
+ * берёт значения последней минуты с достаточной выборкой; время жизни по рангу
+ * переносится так же по минутам, где убитых этого ранга ещё не было. Пока
+ * достаточной выборки не было вовсе (прогонов в полосе мало), строка строится
+ * из того, что есть: перенести пока нечего.
  */
-function rowsOf(band: ExpectedBandRuns, minutes: number): ExpectedRow[] {
+function rowsOf(band: ExpectedBandRuns, minutes: number, minSamples: number): ExpectedRow[] {
   const rows: ExpectedRow[] = [];
   let last: ExpectedRow | null = null;
+  let enough = false;
   let lastElite = 0;
   let lastBoss = 0;
   for (let minute = 1; minute <= minutes; minute++) {
     const cell = cellOf(band.runs, minute);
+    const thin = cell !== null && cell.samples < minSamples;
     let row: ExpectedRow;
-    if (cell === null) {
+    if (cell === null || (thin && enough)) {
       row = last === null
         ? { band: band.id, minute, killsPerMin: 0, huntPerMin: 0, huntKillSec: { elite: 0, boss: 0 }, damageTakenPerMin: 0, buildScore: 0 }
         : { ...last, minute, huntKillSec: { ...last.huntKillSec } };
     } else {
+      if (!thin) enough = true;
       lastElite = cell.huntKillSec.elite ?? lastElite;
       lastBoss = cell.huntKillSec.boss ?? lastBoss;
       row = {
@@ -185,6 +203,7 @@ function rowsOf(band: ExpectedBandRuns, minutes: number): ExpectedRow[] {
 /** Таблица из прогонов: полосы по центрам силы, строки — медианы. */
 export function buildExpectedTable(options: BuildExpectedOptions): ExpectedTable {
   const minutes = options.minutes ?? EXPECTED_MINUTES;
+  const minSamples = options.minSamples ?? EXPECTED_MIN_SAMPLES;
   const bands: ExpectedBand[] = options.bands.map((band, index) => {
     const next = options.bands[index + 1];
     return {
@@ -199,7 +218,7 @@ export function buildExpectedTable(options: BuildExpectedOptions): ExpectedTable
     contentHash: options.contentHash,
     generatedAt: options.generatedAt,
     bands,
-    rows: options.bands.flatMap((band) => rowsOf(band, minutes)),
+    rows: options.bands.flatMap((band) => rowsOf(band, minutes, minSamples)),
   };
 }
 

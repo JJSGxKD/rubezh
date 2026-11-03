@@ -9,6 +9,7 @@ import { BASE_WEAPONS } from "../../packages/core-game/src/content/weapons";
 import { unlocksAt } from "../../packages/core-game/src/game/progression/unlocks";
 import {
   buildExpectedTable,
+  EXPECTED_MIN_SAMPLES,
   EXPECTED_MINUTES,
   expectedBandLoadouts,
   findExpectedTableProblems,
@@ -91,7 +92,7 @@ function reportLines(table: ExpectedTable, bands: { id: string; power: number; r
     "# Таблица ожидаемого для рейтинга",
     "",
     `Отпечаток контента: ${table.contentHash}. «${DIFFICULTY_ID}», ${SEEDS} seed × ${startingWeapons().length} оружия на полосу. ` +
-      `«Дожили» — сколько прогонов дошло до минуты, из них строится строка; тонкая выборка в хвосте — повод смотреть строку с подозрением.`,
+      `«Дожили» — сколько прогонов дошло до минуты, из них строится строка; минуты, до которых дожили меньше ${EXPECTED_MIN_SAMPLES}, перенесены с последней минуты с достаточной выборкой.`,
     "",
     "| Полоса | сила | от | до | дожили до минуты " + milestones.join(" / ") + " |",
     "|---|---|---|---|---|",

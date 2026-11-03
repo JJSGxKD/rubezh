@@ -5,6 +5,7 @@ import { sanitizeLoadout } from "../src/game/progression/run-loadout";
 import {
   buildExpectedTable,
   EXPECTED_BAND_IDS,
+  EXPECTED_MIN_SAMPLES,
   EXPECTED_MINUTES,
   expectedBandLoadouts,
   expectedBandOf,
@@ -73,7 +74,7 @@ describe("сборка таблицы из прогонов", () => {
       lived(2, { kills: [120, 400], damage: [20, 40], build: [2, 3] }),
       lived(2, { kills: [180, 600], damage: [30, 50], build: [3, 4] }),
     ];
-    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, bands: [{ id: "average", power: 2, runs }] });
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, minSamples: 1, bands: [{ id: "average", power: 2, runs }] });
     const [first, second] = table.rows;
 
     expect(first).toMatchObject({ band: "average", minute: 1, killsPerMin: 120, damageTakenPerMin: 20, buildScore: 2 });
@@ -91,7 +92,7 @@ describe("сборка таблицы из прогонов", () => {
     ];
     // К 1-й минуте убита первая запись, ко 2-й — две, к 3-й — все три.
     const only = lived(3, { kills: [1, 2, 3], damage: [0, 0, 0], hunt: [1, 2, 3], build: [0, 0, 0], log });
-    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 3, bands: [{ id: "average", power: 2, runs: [only] }] });
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 3, minSamples: 1, bands: [{ id: "average", power: 2, runs: [only] }] });
 
     expect(table.rows[0]).toMatchObject({ huntPerMin: 10, huntKillSec: { elite: 20, boss: 0 } });
     expect(table.rows[1]).toMatchObject({ huntPerMin: 25, huntKillSec: { elite: 20, boss: 60 } });
@@ -102,7 +103,7 @@ describe("сборка таблицы из прогонов", () => {
 
   it("минута без данных берёт значение последней минуты с данными той же полосы", () => {
     const short = lived(2, { kills: [60, 240], damage: [5, 5], build: [1, 3] });
-    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 4, bands: [{ id: "average", power: 2, runs: [short] }] });
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 4, minSamples: 1, bands: [{ id: "average", power: 2, runs: [short] }] });
 
     expect(table.rows).toHaveLength(4);
     expect(table.rows[2]).toEqual({ ...table.rows[1], minute: 3 });
@@ -112,7 +113,7 @@ describe("сборка таблицы из прогонов", () => {
   it("прогон, не дожившего до минуты, в её строку не входит", () => {
     const strong = lived(3, { kills: [60, 120, 180], damage: [1, 1, 1], build: [1, 2, 3] });
     const weak = lived(1, { kills: [600], damage: [1], build: [9] });
-    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 3, bands: [{ id: "average", power: 2, runs: [strong, weak] }] });
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 3, minSamples: 1, bands: [{ id: "average", power: 2, runs: [strong, weak] }] });
 
     // На 1-й минуте оба: медиана верхняя из 60 и 600. На 2-й и 3-й — один сильный.
     expect(table.rows[0].killsPerMin).toBe(600);
@@ -120,8 +121,44 @@ describe("сборка таблицы из прогонов", () => {
     expect(table.rows[2].buildScore).toBe(3);
   });
 
+  it("минимум выборки — пять прогонов, как договорились с сервером", () => {
+    expect(EXPECTED_MIN_SAMPLES).toBe(5);
+  });
+
+  it("минута, до которой дожили меньше пяти прогонов, берёт значения последней минуты с выборкой не меньше пяти", () => {
+    // Пять прогонов по две минуты и два до третьей, два до четвёртой: хвост из двух прогонов — шум.
+    const long = [1, 2, 3, 4, 5].map((n) => lived(2, { kills: [60 * n, 120 * n], damage: [1, 1], build: [n, n] }));
+    const tail = [lived(4, { kills: [60, 120, 900, 1800], damage: [1, 1, 1, 1], build: [7, 7, 9, 9] }), lived(3, { kills: [60, 120, 900], damage: [1, 1, 1], build: [7, 7, 9] })];
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 4, bands: [{ id: "average", power: 2, runs: [...long, ...tail] }] });
+
+    // 1-я и 2-я минуты: дожили все семь, выборка достаточная.
+    expect(table.rows[1].buildScore).toBe(4);
+    // Своя медиана 3-й минуты по двум прогонам хвоста была бы 300 убийств в минуту.
+    expect(table.rows[2].killsPerMin).not.toBe(300);
+    // 3-я и 4-я: дожили два и один — берут строку 2-й минуты целиком, а не свои медианы.
+    expect(table.rows[2]).toEqual({ ...table.rows[1], minute: 3 });
+    expect(table.rows[3]).toEqual({ ...table.rows[1], minute: 4 });
+  });
+
+  it("выборка ровно в пять прогонов — своя строка, четыре — перенос", () => {
+    const make = (count: number) => Array.from({ length: count }, () => lived(2, { kills: [60, 600], damage: [1, 1], build: [1, 5] }));
+    const five = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, bands: [{ id: "average", power: 2, runs: [...make(5), lived(1, { kills: [60], damage: [1], build: [1] })] }] });
+    expect(five.rows[1].buildScore).toBe(5);
+
+    const four = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, bands: [{ id: "average", power: 2, runs: [...make(4), ...make(1).map(() => lived(1, { kills: [60], damage: [1], build: [1] }))] }] });
+    // Во 2-й минуте только четыре прогона — перенос строки 1-й минуты, где выборка пять.
+    expect(four.rows[1]).toEqual({ ...four.rows[0], minute: 2 });
+  });
+
+  it("прогонов в полосе меньше пяти — строки строятся из того, что есть, а не обнуляются", () => {
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, bands: [{ id: "average", power: 2, runs: [lived(2, { kills: [60, 240], damage: [1, 1], build: [1, 3] })] }] });
+
+    expect(table.rows[0].killsPerMin).toBe(60);
+    expect(table.rows[1].killsPerMin).toBe(120);
+  });
+
   it("нет данных вовсе — нули, а не пропуск строки", () => {
-    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, bands: [{ id: "average", power: 2, runs: [run({ survivalSec: 10 })] }] });
+    const table = buildExpectedTable({ contentHash: "h", generatedAt: "t", minutes: 2, minSamples: 1, bands: [{ id: "average", power: 2, runs: [run({ survivalSec: 10 })] }] });
 
     expect(table.rows).toHaveLength(2);
     expect(table.rows[0]).toEqual({ band: "average", minute: 1, killsPerMin: 0, huntPerMin: 0, huntKillSec: { elite: 0, boss: 0 }, damageTakenPerMin: 0, buildScore: 0 });
@@ -133,6 +170,7 @@ describe("сборка таблицы из прогонов", () => {
       contentHash: "abc",
       generatedAt: "2026-10-25T00:00:00.000Z",
       minutes: 2,
+      minSamples: 1,
       bands: [
         { id: "novice", power: 1, runs },
         { id: "novice_average", power: 2, runs },
@@ -154,6 +192,7 @@ describe("сборка таблицы из прогонов", () => {
       contentHash: "h",
       generatedAt: "t",
       minutes: 1,
+      minSamples: 1,
       bands: [
         { id: "novice", power: 1, runs },
         { id: "novice_average", power: 3, runs },
@@ -181,6 +220,7 @@ describe("поиск строки по силе и минуте", () => {
     contentHash: "h",
     generatedAt: "t",
     minutes: 3,
+    minSamples: 1,
     bands: EXPECTED_BAND_IDS.map((id, index) => ({ id, power: 1 + index * 2, runs })),
   });
 
@@ -244,6 +284,7 @@ describe("малый прогон: 2 зерна, 3 минуты", () => {
     contentHash: "test",
     generatedAt: "t",
     minutes: 3,
+    minSamples: 1,
     bands: profiles.map((profile, index) => ({
       id: bandIds[index],
       power: loadoutPower(profile.loadout),
@@ -280,6 +321,7 @@ describe("проверка схемы таблицы", () => {
       contentHash: "h",
       generatedAt: "t",
       minutes: 2,
+      minSamples: 1,
       bands: [
         { id: "novice", power: 1, runs },
         { id: "average", power: 3, runs },
