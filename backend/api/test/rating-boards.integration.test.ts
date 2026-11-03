@@ -539,10 +539,10 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
       // 1 800 очков и 900 с — её собственный забег; друг с 600 очками ниже.
       expect(board.scoring).toBe("points");
       expect(board.total).toBe(2);
-      expect(board.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k" });
+      expect(board.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k", division: "ruby" });
       // Среди всех её нет: тень видна только ей самой, и место недели считается по настоящим игрокам.
       const all = await w.seasonsView.board(shadow.accountId, { difficulty: "hard", scope: "all" }, new Date(week.startsAt.getTime() + 3 * HOUR));
-      expect(all.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k" });
+      expect(all.me).toEqual({ rank: 1, points: 1_800, survivalSec: 900, style: "k", division: "ruby" });
     });
   });
 
@@ -562,7 +562,7 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
       expect(await seasonsRepository.rewardOf(week.key, short.accountId)).toBeNull();
       expect(await seasonsRepository.rewardOf(week.key, enough.accountId)).toMatchObject({ kind: "threshold", coins: THRESHOLD_REWARD.coins, prestige: THRESHOLD_REWARD.prestige });
       const history = await seasonsRepository.history(enough.accountId, 8);
-      expect(history[0]?.results).toEqual([{ difficulty: "hard", bestSec: 800, place: 1, boardSize: 2 }]);
+      expect(history[0]?.results).toEqual([{ difficulty: "hard", bestSec: 800, place: 1, boardSize: 2, division: "ruby" }]);
     });
 
     it("порог из панели: rating.season-threshold-points ставит планку закрытию сезона", async () => {
@@ -593,7 +593,7 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
       expect(await seasonsRepository.rewardOf(before.key, quick.accountId)).toBeNull();
       expect(await seasonsRepository.rewardOf(before.key, long.accountId)).toMatchObject({ kind: "threshold" });
       const history = await seasonsRepository.history(long.accountId, 8);
-      expect(history[0]?.results).toEqual([{ difficulty: "hard", bestSec: 400, place: 1, boardSize: 2 }]);
+      expect(history[0]?.results).toEqual([{ difficulty: "hard", bestSec: 400, place: 1, boardSize: 2, division: "ruby" }]);
     });
   });
 });

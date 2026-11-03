@@ -2485,6 +2485,8 @@ model SeasonResult {
   boardSize  Int        @map("board_size")
   /// доска аккаунта на момент закрытия: `common` — общая, без аккаунтов с отдельной доской; `full` — полная (T-0114, Р104)
   board      String     @default("common") @db.VarChar(8)
+  /// дивизион по месту и размеру доски на закрытии: ruby, gold, silver, bronze; `null` — сезон закрыт до дивизионов (T-0295, Р152)
+  division   String?    @db.VarChar(8)
 
   season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)

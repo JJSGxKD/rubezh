@@ -1080,7 +1080,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
           startsAt: season.startsAt.toISOString(),
           endsAt: season.endsAt.toISOString(),
           scoring: "time",
-          results: [{ difficulty: "hard", bestSec: 500, place: 1, boardSize: 12 }],
+          results: [{ difficulty: "hard", bestSec: 500, place: 1, boardSize: 12, division: "ruby" }],
           reward: { ...prize(1, 12), claimed: false },
         },
       ]);

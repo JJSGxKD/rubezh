@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { DIVISIONS, type Division } from "../rating/division-rules.js";
 import type { Scoring } from "../rating/rating-switch.js";
 import type { BestRunRow } from "../runs/runs.repository.js";
 import { DIFFICULTIES, isRatedDifficulty, type Difficulty } from "../runs/run-rules.js";
@@ -41,11 +42,16 @@ export interface RewardRow {
   status: RewardStatus;
 }
 
+/** Строка итога в истории: с дивизионом, записанным при закрытии (T-0295); `null` — сезон закрыт до дивизионов. */
+export interface HistoryResult extends SeasonResultLine {
+  division: Division | null;
+}
+
 export interface HistoryRow {
   seasonKey: string;
   startsAt: Date;
   endsAt: Date;
-  results: SeasonResultLine[];
+  results: HistoryResult[];
   reward: { coins: number; prestige: number; claimed: boolean } | null;
 }
 
@@ -167,7 +173,7 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
         startsAt: season.startsAt,
         endsAt: season.endsAt,
         results: season.results
-          .map((result) => ({ difficulty: result.difficulty, bestSec: result.bestSec, place: result.place, boardSize: result.boardSize }))
+          .map((result) => ({ difficulty: result.difficulty, bestSec: result.bestSec, place: result.place, boardSize: result.boardSize, division: divisionOfColumn(result.division) }))
           .sort((left, right) => DIFFICULTIES.indexOf(left.difficulty) - DIFFICULTIES.indexOf(right.difficulty)),
         reward: reward === undefined ? null : { coins: reward.coins, prestige: reward.prestige, claimed: reward.status === "claimed" },
       };
@@ -205,4 +211,9 @@ function toRewardRow(row: { seasonKey: string; kind: string; difficulty: Difficu
     prestige: row.prestige,
     status: row.status === "claimed" ? "claimed" : "pending",
   };
+}
+
+/** Колонка — строка без проверки в базе: незнакомое значение читается как «дивизиона нет», а не роняет историю. */
+function divisionOfColumn(value: string | null): Division | null {
+  return DIVISIONS.find((division) => division === value) ?? null;
 }
