@@ -3,8 +3,8 @@ id: T-0070
 title: Постбэки в s2s-сети и партнёру — шаблон адреса, click_id и sub1…sub5
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-2
 size: M
 depends_on: [T-0069, T-0067, T-0058]
