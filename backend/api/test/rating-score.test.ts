@@ -544,7 +544,8 @@ describe("запись забега с очками", () => {
 
     expect(result.verdict).toBe("suspicious");
     expect(result.recorded).toBe(false);
-    expect(runs.rows.get(run.runId)?.record?.verdictReasons).toEqual(["axis_out_of_range"]);
+    // Без старта время не проверено (unverified_time) — вердикт оно не меняет.
+    expect(runs.rows.get(run.runId)?.record?.verdictReasons).toEqual(["unverified_time", "axis_out_of_range"]);
   });
 
   it("клиент прошлой сборки без журнала охоты, оценки сборки и силы — очки считаются по средней полосе", async () => {

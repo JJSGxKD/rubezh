@@ -156,7 +156,7 @@ describe.skipIf(!live)("очки эффективности на живом Post
     expect(first.scanned).toBeGreaterThanOrEqual(2);
     expect(snapshot.every((row) => row.points !== null)).toBe(true);
     expect(again).toEqual(snapshot);
-    expect(second.scanned).toBe(first.scanned);
+    expect(second.unscored).toBe(0);
   });
 
   it("ключ rating.weight-hunt из панели меняет очки при пересчёте", async () => {
