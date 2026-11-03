@@ -54,7 +54,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -92,6 +92,8 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
+          <ListItem title={t("gallery.preview.abandoned")} onClick={() => setPreview("abandoned")} />
+          <ListItem title={t("gallery.preview.rubezhHeld")} onClick={() => setPreview("rubezhHeld")} />
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
@@ -488,6 +490,32 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord={false}
           diagnostics
+          reward={{ status: "pending" }}
+          onDecline={noop}
+          onRestart={noop}
+          onMenu={noop}
+          onShare={shareNoop}
+        />
+      );
+    case "abandoned":
+      return (
+        <DeathOverlay
+          result={{ ...SAMPLE_RESULT, outcome: "abandoned" }}
+          isNewRecord={false}
+          diagnostics={false}
+          reward={{ status: "pending" }}
+          onDecline={noop}
+          onRestart={noop}
+          onMenu={noop}
+          onShare={shareNoop}
+        />
+      );
+    case "rubezhHeld":
+      return (
+        <DeathOverlay
+          result={{ ...SAMPLE_RESULT, rubezh: { reached: true, clearedSec: 702, guardHpPercent: null } }}
+          isNewRecord={false}
+          diagnostics={false}
           reward={{ status: "pending" }}
           onDecline={noop}
           onRestart={noop}

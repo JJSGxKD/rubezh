@@ -3,8 +3,8 @@ id: T-0232
 title: Итоги забега — окно-реликвия, как сундук и уровень
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0124]
@@ -15,6 +15,7 @@ shared:
   - packages/app-shell/src/screens/run/DeathOverlay.tsx
   - packages/app-shell/src/screens/run/death-parts.tsx
   - packages/app-shell/src/screens/gallery.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
   - docs/27-design-system-and-app-shell.md
 runner: any
 executor: sonnet-5.5
