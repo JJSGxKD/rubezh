@@ -473,6 +473,16 @@ model Run {
   rubezhReached    Boolean     @default(false) @map("rubezh_reached")
   /// секунда, на которой пал страж; `null` — не пал
   rubezhClearedSec Int?        @map("rubezh_cleared_sec")
+  /// очки эффективности (T-0293, Р152); `null` — пролог и обучение, сбой подсчёта или забег до очков
+  points           Int?
+  /// индексы пяти осей с тремя знаками: `{ t, k, h, c, b }`, 1 — ровно ожидаемое; сырые, без потолка индекса
+  axes             Json?
+  /// стиль забега — ключ сильнейшей оси: `t`, `k`, `h`, `c` или `b`
+  style            String?     @db.VarChar(8)
+  /// полоса силы, по которой взято ожидаемое: `novice`…`full`
+  band             String?     @db.VarChar(16)
+  /// исходные числа подсчёта, которых нет в других колонках, — для пересчёта: `{ power, huntLog, buildScore }`
+  scoreInput       Json?       @map("score_input")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
