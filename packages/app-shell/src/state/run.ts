@@ -59,6 +59,17 @@ export interface OpenedChest {
 }
 
 /**
+ * Сообщение рубежа для баннера (tasks/T-0124): страж пришёл или пал. `seq`
+ * растёт с каждым сообщением — по нему баннер отличает новое сообщение от
+ * повторной отрисовки старого и не склеивает два подряд. Пролог (T-0280)
+ * кормит баннер тем же видом.
+ */
+export interface RubezhNotice {
+  kind: "spawned" | "cleared";
+  seq: number;
+}
+
+/**
  * Этап загрузки забега для экрана загрузки: чанк движка, затем мир до первого
  * снимка HUD. `null` — загрузки нет, в том числе при «Ещё раз»: сцена там уже
  * жива, и экран загрузки только мигнул бы.
@@ -133,6 +144,8 @@ export interface RunStore {
   canReroll: boolean;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
+  /** последнее сообщение рубежа для баннера; `null` — в этом забеге рубеж ещё не заговорил */
+  rubezhNotice: RubezhNotice | null;
   /** предложенные благословения — пока фаза `blessing` */
   blessing: OfferedBlessings | null;
   level: number;
@@ -220,6 +233,9 @@ let startToken = 0;
 /** Когда игрок начал забег — от этой точки считается время до первого кадра. */
 let firstFrameStartedAt: number | null = null;
 
+/** Номер последнего сообщения рубежа: общий на сессию, не сбрасывается — баннер сравнивает номера. */
+let rubezhNoticeSeq = 0;
+
 /** Секунда забега, на которой он сохранялся последний раз. */
 let lastSavedSec = 0;
 
@@ -249,6 +265,7 @@ const IDLE = {
   toolsTotal: NO_TOOLS,
   canReroll: false,
   chest: null as OpenedChest | null,
+  rubezhNotice: null as RubezhNotice | null,
   blessing: null as OfferedBlessings | null,
   level: 1,
   result: null,
@@ -690,6 +707,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 
+    // Баннеры рубежа: звук и вибрация уже есть — приход стража звучит как приход
+    // босса (`cues.bossSpawns`), добыча стража — как любой сундук. Нового сигнала нет.
+    created.on("rubezhGuardSpawned", () => set({ rubezhNotice: { kind: "spawned", seq: ++rubezhNoticeSeq } })),
+    created.on("rubezhCleared", () => set({ rubezhNotice: { kind: "cleared", seq: ++rubezhNoticeSeq } })),
+
     created.on("paused", ({ reason, elapsedSec }) => {
       set({ phase: "paused", pauseReason: reason });
       // Сворачивание — самый частый путь к закрытию приложения: сохраняемся
@@ -859,7 +881,19 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     continues: result.continues.length,
     ...elementDamageFields(result.damageByElement),
     ...pressureResultFields(result.pressure),
+    ...rubezhFields(result.rubezh),
   };
+}
+
+/**
+ * Рубеж в итоге плоскими полями словаря событий (docs/22-analytics-and-metrics.md
+ * §3.3, T-0121): `rubezh` — none, reached или cleared; секунда победы только у
+ * cleared. Итога без рубежа (сборка движка до него) поля не несёт.
+ */
+function rubezhFields(rubezh: RunResult["rubezh"]): Record<string, string | number> {
+  if (rubezh === undefined) return {};
+  if (rubezh.clearedSec !== null) return { rubezh: "cleared", rubezhClearedSec: Math.round(rubezh.clearedSec) };
+  return { rubezh: rubezh.reached ? "reached" : "none" };
 }
 
 /**

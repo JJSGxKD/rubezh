@@ -1844,6 +1844,8 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
+  /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
+  rubezh?: true | undefined;
 }
 
 export interface Leaderboard {
