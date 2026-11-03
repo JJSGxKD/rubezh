@@ -1,4 +1,4 @@
-import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunMode, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   describeEvolution,
   loadRunEngine,
@@ -25,6 +25,7 @@ import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
 import { canOfferContinue } from "./payments-availability";
+import { usePrologue } from "./prologue";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -85,7 +86,7 @@ export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
  * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
  */
-export type RunIntent = { kind: "new"; boosts?: BoughtBoosts } | { kind: "resume"; snapshot: RunSnapshot };
+export type RunIntent = { kind: "new"; boosts?: BoughtBoosts; mode?: RunMode } | { kind: "resume"; snapshot: RunSnapshot };
 
 /**
  * Бусты, купленные на новый забег до «В бой» (docs/35-stage4-plan.md §3.5):
@@ -112,6 +113,8 @@ export interface RunStartOptions {
   startingWeaponId: string;
   mapId: string;
   difficultyId: DifficultyId;
+  /** режим нового забега: пролог первого забега аккаунта или бесконечный (T-0280); нет поля — бесконечный */
+  mode?: RunMode;
   /** плотность экрана; стенд испытаний фиксирует её ради сравнимости замеров */
   pixelRatio?: number;
   /** продолжить сохранённый забег вместо нового */
@@ -131,6 +134,8 @@ const AUTOSAVE_SEC = 15;
 
 export interface RunStore {
   phase: RunPhase;
+  /** режим идущего забега: у пролога свои подсказки, начало, выход и окно победы */
+  mode: RunMode;
   loadingStage: RunLoadingStage | null;
   hud: HudSnapshot | null;
   offers: UpgradeOption[];
@@ -257,6 +262,7 @@ const NO_TOOLS: CardTools = { reroll: 0, skip: 0, banish: 0 };
 
 const IDLE = {
   phase: "idle" as RunPhase,
+  mode: "endless" as RunMode,
   loadingStage: null as RunLoadingStage | null,
   hud: null,
   offers: [] as UpgradeOption[],
@@ -313,7 +319,14 @@ export const useRun = create<RunStore>((set, get) => ({
     const resume = options.resume;
     const bought = resume === undefined ? options.boosts : undefined;
     const seed = resume?.seed ?? nextSeed();
-    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
+    // Продолженный забег берёт режим из снимка: пролог, сохранённый на выходе, остаётся прологом.
+    const mode: RunMode = resume?.mode ?? options.mode ?? "endless";
+    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed, mode });
+    if (resume === undefined) {
+      if (mode === "prologue") usePrologue.getState().beginRun();
+      // Подпись у «Играть» после победы живёт до второго забега.
+      else usePrologue.getState().endlessRunStarted();
+    }
     startOptions = options;
     firstFrameStartedAt = performance.now();
     errorsAtRunStart = clientErrorCount();
@@ -374,7 +387,7 @@ export const useRun = create<RunStore>((set, get) => ({
       const created = engine.start({
         container: options.container,
         seed,
-        mode: "endless",
+        mode,
         mapId: options.mapId,
         difficultyId: options.difficultyId,
         startingWeaponId: options.startingWeaponId,
@@ -601,7 +614,8 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     // к нему привязан тогда же: итог понесёт его серверу.
     created.on("started", (started) => {
       bindLoadout?.(started.runId);
-      useRuns.getState().registerStart(started);
+      useRuns.getState().registerStart({ ...started, ...(get().mode === "prologue" ? { mode: "prologue" as const } : {}) });
+      if (get().mode === "prologue") usePrologue.getState().step("start", 0);
       // Одно место для первого забега и для «Ещё раз»: сцена шлёт `started` в обоих случаях.
       track("run_started", {
         seed: get().seed,
@@ -635,12 +649,19 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         hud.boss !== null,
       );
       set({ hud, loadingStage: null });
+      // С первого убитого врага на поле лежит кристалл: подсказка про сбор приходит по событию (T-0280).
+      if (get().mode === "prologue" && hud.enemiesKilled > 0) usePrologue.getState().step("first_gem", hud.survivalSec);
       if (hud.survivalSec - lastSavedSec >= AUTOSAVE_SEC && get().phase === "running") saveRun();
     }),
 
     created.on("cues", (cues) => {
       hapticForCues(cues);
       audio.cues(cues);
+      if (get().mode !== "prologue") return;
+      const sec = get().hud?.survivalSec ?? 0;
+      if (cues.eliteSpawns > 0) usePrologue.getState().step("first_elite", sec);
+      // Оберег удержал здоровье: подсказка про него — один раз за пролог.
+      if ((cues.ward ?? 0) > 0) usePrologue.getState().wardNoticed(sec);
     }),
 
     created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, refreshed }) => {
@@ -653,6 +674,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       // Переброс и изгнание обновляют карточки того же уровня: это не новое
       // предложение, и считать его в воронку нельзя.
       if (!refreshed) track("upgrade_offered", { level, count: options.length, queued });
+      if (get().mode === "prologue") usePrologue.getState().step("first_level", get().hud?.survivalSec ?? 0);
       if (get().phase !== "levelUp") {
         haptic("levelUp");
         audio.runEvent("levelUp");
@@ -675,6 +697,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
       audio.runEvent("chestDrop");
+      if (get().mode === "prologue") usePrologue.getState().step("first_chest", elapsedSec);
     }),
 
     created.on("secretFound", ({ kind, elapsedSec }) => {
@@ -709,8 +732,21 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     // Баннеры рубежа: звук и вибрация уже есть — приход стража звучит как приход
     // босса (`cues.bossSpawns`), добыча стража — как любой сундук. Нового сигнала нет.
-    created.on("rubezhGuardSpawned", () => set({ rubezhNotice: { kind: "spawned", seq: ++rubezhNoticeSeq } })),
-    created.on("rubezhCleared", () => set({ rubezhNotice: { kind: "cleared", seq: ++rubezhNoticeSeq } })),
+    created.on("rubezhGuardSpawned", ({ elapsedSec }) => {
+      set({ rubezhNotice: { kind: "spawned", seq: ++rubezhNoticeSeq } });
+      if (get().mode === "prologue") usePrologue.getState().step("guard", elapsedSec);
+    }),
+    created.on("rubezhCleared", () => {
+      // В прологе «Рубеж взят! Бой продолжается» врёт: боя дальше нет, сразу победа. Баннер подменяет окно «Рубеж удержан!».
+      if (get().mode === "prologue") return;
+      set({ rubezhNotice: { kind: "cleared", seq: ++rubezhNoticeSeq } });
+    }),
+    // Победа в прологе: дальше движок закроет забег обычным `abandoned` с тем же итогом, и итог уйдёт общим путём.
+    created.on("prologueWon", ({ elapsedSec }) => {
+      usePrologue.getState().step("won", elapsedSec);
+      usePrologue.getState().markWon();
+      haptic("record");
+    }),
 
     created.on("paused", ({ reason, elapsedSec }) => {
       set({ phase: "paused", pauseReason: reason });
@@ -806,7 +842,8 @@ function finishRun(
 
   const diagnostics = pendingDiagnostics;
   pendingDiagnostics = null;
-  track(event, {
+  // Победа в прологе приходит от движка как `abandoned`, но это не сдача: в воронке она — завершённый забег.
+  track(result.prologue?.won === true ? "run_finished" : event, {
     ...outcomeFields(result, isNewRecord),
     ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
     ...(runArt === null ? {} : { art: runArt }),
