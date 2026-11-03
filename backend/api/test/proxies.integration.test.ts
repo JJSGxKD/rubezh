@@ -23,7 +23,8 @@ import { testPrisma } from "./helpers/test-prisma.js";
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 13);
+// Сдвиг 3: соседи по базе не делают `flushdb` (на сдвиге 13 её чистят другие файлы).
+const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 3);
 const ACTOR = { accountId: "00000000-0000-4000-8000-000000000001", platform: "telegram" as const, platformUserId: "700000" };
 const PASSWORD = "Интеграционный-пароль-42";
 
