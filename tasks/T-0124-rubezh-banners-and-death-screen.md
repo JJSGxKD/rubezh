@@ -3,8 +3,8 @@ id: T-0124
 title: Рубеж — цель забега, оболочка: баннеры, «до рубежа N с», отметка в рейтинге
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0121, T-0109, T-0186, T-0190, T-0193, T-0196]
