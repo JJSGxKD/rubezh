@@ -3,8 +3,8 @@ id: T-0232
 title: Итоги забега — окно-реликвия, как сундук и уровень
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0124]
