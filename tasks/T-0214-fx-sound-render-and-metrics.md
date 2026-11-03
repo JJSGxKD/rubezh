@@ -25,7 +25,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0214. Рендер звуков в WAV и замеры — `pnpm fx:sound [звук…]`

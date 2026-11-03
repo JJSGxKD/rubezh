@@ -37,7 +37,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0130. Испытание дня: сервер — расписание, выдача попыток, проверка, награда, таблица дня

@@ -22,7 +22,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0358. Панель — «мало данных» вместо графика из одного столбика; у пустых состояний — следующий шаг

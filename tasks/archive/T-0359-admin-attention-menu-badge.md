@@ -25,7 +25,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0359. Панель — счётчик «Ждёт вас» на пункте «Сводка» в меню; лёгкий запрос `/admin/attention`

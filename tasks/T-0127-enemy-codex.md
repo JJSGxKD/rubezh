@@ -36,7 +36,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0127. Кодекс врагов: гайдбук как коллекция, «7/11» и награда за полный

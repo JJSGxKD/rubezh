@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: design/art/meta-v2.md
-batch: 7
+batch: 3
 ---
 
 # T-0291. Рейтинг эффективности — таблица ожидаемого E(S, t): новый выход balance:sim по полосам силы и минутам забега

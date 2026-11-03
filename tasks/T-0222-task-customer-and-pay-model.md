@@ -26,7 +26,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0222. Заказчик партнёрского задания — модель оплаты CPA или RS, ставка и срок удержания

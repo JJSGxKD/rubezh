@@ -44,7 +44,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/donate-v2.html
-batch: 3
+batch: 4
 ---
 
 # T-0158. Донаты проекту — клиент: лист доната, ссылки Tribute, знак, благодарность, слайд

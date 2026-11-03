@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: low
 release: patch
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0215. Отчёт проверки звука и эффектов — `pnpm fx:check`, таблица в описание PR

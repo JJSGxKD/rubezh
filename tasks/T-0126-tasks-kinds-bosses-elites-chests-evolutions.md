@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0126. Задания и достижения: боссы, элиты, сундуки, кристаллы, эволюции

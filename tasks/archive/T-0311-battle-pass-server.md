@@ -35,7 +35,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/meta-v2.md
-batch: 8
+batch: 3
 ---
 
 # T-0311. Батл-пасс — сервер: месяц по Москве, очки пасса за задания, 30 ступеней в двух лентах, забор награды, VIP-лента и пройденное до покупки VIP

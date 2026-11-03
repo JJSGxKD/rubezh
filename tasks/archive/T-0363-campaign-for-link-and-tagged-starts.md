@@ -24,7 +24,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0363. Кампания и источник у прямых ссылок и ссылок с метками — список игроков, воронка, ежедневный отчёт

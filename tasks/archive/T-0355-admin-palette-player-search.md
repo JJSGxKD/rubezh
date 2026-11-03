@@ -22,7 +22,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0355. Панель — поиск игрока из поиска разделов «/»: «@ник» или число — строка «Игрок …» первой

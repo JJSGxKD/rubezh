@@ -22,7 +22,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0354. Панель «Игроки» — список новых сразу, фильтры свёрнуты в строку с чипами активных

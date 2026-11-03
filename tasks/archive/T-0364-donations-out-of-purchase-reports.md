@@ -28,7 +28,7 @@ effort: medium
 release: patch
 merge: lead
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0364. Донаты отдельно от покупок — ежедневный отчёт, цели сетей, разрез флагов

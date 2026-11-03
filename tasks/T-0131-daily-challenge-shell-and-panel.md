@@ -33,7 +33,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0131. Испытание дня — вход с главной, лист испытания, таблица дня, расписание в панели

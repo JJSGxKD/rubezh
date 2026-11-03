@@ -21,7 +21,7 @@ effort: medium
 release: minor
 merge: lead
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0357. Панель — ряд полей не прыгает от подсказки и ошибки; у недоступной главной кнопки — причина одной строкой

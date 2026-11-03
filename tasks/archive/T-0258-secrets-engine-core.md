@@ -34,7 +34,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0258. Тайники рубежа — движок: размещение по кольцам, капище, клад, камень-указатель, огонёк

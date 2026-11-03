@@ -48,7 +48,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/meta-v2.md
-batch: 6
+batch: 3
 ---
 
 # T-0278. Пролог первого забега — движок: таймлайн трёх минут, оберег 25 %, большой первый сундук, «Советуем» и победа над Стражем

@@ -41,7 +41,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/meta-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0259. Тайники рубежа — древо-оберег и разлом Нави

@@ -21,7 +21,7 @@ effort: low
 release: patch
 merge: lead
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0361. Сводка панели — досмотры рекламы в ряду дней только с правом `ads.view`

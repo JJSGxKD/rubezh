@@ -24,7 +24,7 @@ effort: low
 release: patch
 merge: lead
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0362. Карточка игрока — привязка к партнёру по ссылке с кодом ссылки и переходом в её карточку

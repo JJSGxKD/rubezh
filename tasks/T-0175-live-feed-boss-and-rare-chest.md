@@ -42,7 +42,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0175. Лента живых событий — убитый босс и редкий сундук: счётчик редких сундуков и события

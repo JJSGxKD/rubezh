@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/planned-meta-2.html
-batch: 3
+batch: 4
 ---
 
 # T-0148. Счётчик онлайна — клиент и панель: шапка, кнопка «Играть», разбивка

@@ -26,7 +26,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/meta-v2.md
-batch: 7
+batch: 3
 ---
 
 # T-0292. Итог забега для очков — журнал охоты (сколько жила каждая элита и босс) и оценка сборки
