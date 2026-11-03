@@ -75,6 +75,8 @@ const profileSchema = z.object({
       at: z.number(),
     }),
   ),
+  // Признак пролога (T-0279): сервер до пролога поля не отдавал.
+  prologueDone: z.optional(z.boolean()),
 });
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */
