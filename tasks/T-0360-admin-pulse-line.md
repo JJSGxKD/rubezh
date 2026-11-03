@@ -29,7 +29,7 @@ batch: 4
 
 # T-0360. Панель — строка «пульса» в шапке: онлайн сейчас, ход рассылки, новые блокировки клиента за час
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0360.json)](README.md#значки-статуса) [![T-0359](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0359.json&label=T-0359)](T-0359-admin-attention-menu-badge.md) [![T-0148](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json&label=T-0148)](T-0148-online-counter-client.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0360.json)](README.md#значки-статуса) [![T-0359](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0359.json&label=T-0359)](archive/T-0359-admin-attention-menu-badge.md) [![T-0148](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json&label=T-0148)](T-0148-online-counter-client.md)
 
 ## Зачем
 

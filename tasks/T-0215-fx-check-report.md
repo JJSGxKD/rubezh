@@ -32,7 +32,7 @@ batch: 3
 
 # T-0215. Отчёт проверки звука и эффектов — `pnpm fx:check`, таблица в описание PR
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0215.json)](README.md#значки-статуса) [![T-0213](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0213.json&label=T-0213)](T-0213-fx-frames-and-metrics.md) [![T-0214](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0214.json&label=T-0214)](T-0214-fx-sound-render-and-metrics.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0215.json)](README.md#значки-статуса) [![T-0213](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0213.json&label=T-0213)](archive/T-0213-fx-frames-and-metrics.md) [![T-0214](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0214.json&label=T-0214)](T-0214-fx-sound-render-and-metrics.md)
 
 ## Зачем
 

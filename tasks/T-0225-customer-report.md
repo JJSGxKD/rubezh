@@ -33,7 +33,7 @@ batch: 3
 
 # T-0225. Отчёт заказчику партнёрских заданий — по дням, без ID, экран и CSV
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0225.json)](README.md#значки-статуса) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](T-0222-task-customer-and-pay-model.md) [![T-0223](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0223.json&label=T-0223)](T-0223-subscription-retention-marks.md) [![T-0224](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0224.json&label=T-0224)](T-0224-partner-task-impressions.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0225.json)](README.md#значки-статуса) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](T-0222-task-customer-and-pay-model.md) [![T-0223](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0223.json&label=T-0223)](T-0223-subscription-retention-marks.md) [![T-0224](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0224.json&label=T-0224)](archive/T-0224-partner-task-impressions.md)
 
 ## Зачем
 

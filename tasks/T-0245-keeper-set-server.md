@@ -37,7 +37,7 @@ batch: 4
 
 # T-0245. «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](T-0121-rubezh-win-reward-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json)](README.md#значки-статуса) [![T-0237](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json&label=T-0237)](T-0237-appearance-server.md) [![T-0121](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0121.json&label=T-0121)](archive/T-0121-rubezh-win-reward-server.md)
 
 > **Облик готов** (`design/art/backlog.md`, п. 12, 26.10.2026): кадры
 > `hero-dawn/…` в атласе `atlas-skin-dawn`, портреты `design/art/out/portrait-hero-dawn.svg`,
