@@ -60,10 +60,10 @@ export interface FinishResult {
   isNewBest: boolean;
   rank: number | null;
   /**
-   * Очки эффективности (tasks/T-0293, Р152). `null` — очков нет: пролог и
+   * Очки эффективности (tasks/T-0293, Р152). Нет поля — очков нет: пролог и
    * обучение, сбой подсчёта.
    */
-  score: RunScoreView | null;
+  score?: RunScoreView;
 }
 
 /** Ответ без очков: места и рекорд считает рейтинг, очки добавляет приём итога. */
@@ -180,7 +180,8 @@ export class RunsService {
 
     if (judged.verdict !== "ok") this.logSuspicious(account, run.runId, judged.verdict, judged.reasons);
     const placed = await this.resultOf(account, run.difficultyId, run.survivalSec, judged.verdict, ranked, held, rubezhCleared && !run.cheats, shadowBefore);
-    const result: FinishResult = { ...placed, score: this.viewOf(scored) };
+    const view = this.viewOf(scored);
+    const result: FinishResult = view === null ? placed : { ...placed, score: view };
     // Слушатели — после записи и без ожидания: ответ игроку не ждёт ни
     // сводки, ни очереди уведомлений.
     void this.hooks.emit({
@@ -206,7 +207,7 @@ export class RunsService {
       finishedAt: new Date(nowMs),
       rubezhCleared,
     });
-    if (result.score !== null) void this.scorer?.announce(account, run.runId, result.score);
+    if (result.score !== undefined) void this.scorer?.announce(account, run.runId, result.score);
     return result;
   }
 
@@ -274,7 +275,8 @@ export class RunsService {
     const rubezhWon = stored.verdict === "ok" && !stored.cheats && rubezhClaimsWin({ reached: stored.rubezhReached, clearedSec: stored.rubezhClearedSec });
     const placed = await this.resultOf(account, stored.difficulty, stored.survivalSec, stored.verdict ?? "ok", ranked, stored.ratingRestricted, rubezhWon);
     // Очки — как записаны: повтор не считает их заново и не обращается к таблице.
-    return { ...placed, score: stored.score === null || this.scorer === null ? null : { ...stored.score, expectedPoints: this.scorer.expectedPointsFor(stored.score.axes.t) } };
+    if (stored.score === null || this.scorer === null) return placed;
+    return { ...placed, score: { ...stored.score, expectedPoints: this.scorer.expectedPointsFor(stored.score.axes.t) } };
   }
 
   private viewOf(scored: ScoredRun | null): RunScoreView | null {

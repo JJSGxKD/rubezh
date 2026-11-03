@@ -519,7 +519,7 @@ describe("запись забега с очками", () => {
 
     const result = await service.finish(me, run);
 
-    expect(result.score).toBeNull();
+    expect(result.score).toBeUndefined();
     expect(runs.rows.get(run.runId)?.record?.score).toBeNull();
   });
 
@@ -530,7 +530,7 @@ describe("запись забега с очками", () => {
     const result = await service.finish(me, run);
 
     expect(result.verdict).toBe("ok");
-    expect(result.score).toBeNull();
+    expect(result.score).toBeUndefined();
     expect(runs.rows.get(run.runId)?.status).toBe("finished");
   });
 

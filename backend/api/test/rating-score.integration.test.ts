@@ -120,7 +120,7 @@ describe.skipIf(!live)("очки эффективности на живом Post
 
     const result = await service().finish(me, run);
 
-    expect(result.score).toBeNull();
+    expect(result.score).toBeUndefined();
     const row = await prisma.run.findUnique({ where: { runId: run.runId } });
     expect(row?.points).toBeNull();
     expect(row?.axes).toBeNull();
