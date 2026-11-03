@@ -3,7 +3,7 @@ id: T-0278
 title: Пролог первого забега — движок: таймлайн трёх минут, оберег 25 %, большой первый сундук, «Советуем» и победа над Стражем
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -28,6 +28,18 @@ shared:
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/core-game/src/content/hash.ts
   - packages/core-game/src/content/balance-targets.ts
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/run/records.ts
+  - packages/core-game/src/game/run/cues.ts
+  - packages/core-game/src/game/sim/player-status.ts
+  - packages/core-game/src/game/MainScene.ts
+  - packages/core-game/src/game/diagnostics/replay.ts
+  - packages/core-game/src/game/diagnostics/run-recorder.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/engine/run-engine.ts
+  - packages/core-game/test/helpers/prologue-run.ts
   - packages/shared-types/src/index.ts
   - docs/30-configuration-map.md
   - docs/32-balance.md
