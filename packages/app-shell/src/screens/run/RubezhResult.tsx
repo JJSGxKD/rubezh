@@ -53,13 +53,14 @@ export function RubezhResult(props: { result: RunResult; reward: RunRewardView |
       <div className="min-w-0 flex-1">
         <div className="font-display text-[15px] leading-tight text-elite">{t("run.rubezh.cleared.title")}</div>
         <div className="mt-0.5 text-[12.5px] text-text">{t("run.rubezh.cleared.time", { time: formatDuration(view.clearedSec) })}</div>
+        {/* Награда приходит позже итога: метка появляется вместе с ней, а карточка видна сразу.
+            Под временем, а не сбоку: рядом на 320 px она сжимала заголовок до двух строк. */}
+        {view.rewardMul === null ? null : (
+          <span className="mt-1.5 inline-block animate-pop-in">
+            <Badge tone="accent">{t("run.rubezh.cleared.reward", { mul: view.rewardMul })}</Badge>
+          </span>
+        )}
       </div>
-      {/* Награда приходит позже итога: строка появляется вместе с ней, а карточка видна сразу. */}
-      {view.rewardMul === null ? null : (
-        <span className="shrink-0 animate-pop-in">
-          <Badge tone="accent">{t("run.rubezh.cleared.reward", { mul: view.rewardMul })}</Badge>
-        </span>
-      )}
     </div>
   );
 }
