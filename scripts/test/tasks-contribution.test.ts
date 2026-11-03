@@ -172,11 +172,12 @@ describe("PR тимлидов", () => {
 describe("строка «Поток:»", () => {
   it("разбор отдаёт аккаунт", () => {
     expect(parseRunnerLine("Описание\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: владелец")).toBe("claude-3");
+    expect(parseRunnerLine("Поток: claude-lead-1 / sonnet-5.5 / high")).toBe("claude-lead-1");
     expect(parseRunnerLine("нет строки")).toBeNull();
   });
 
   it("на тех же примерах отвечает так же, как проверка pr-check", () => {
-    const bodies = ["Поток: claude-3 / sonnet-5.5 / medium", "Поток: claude-x / sonnet-5.5 / medium", "Поток: claude-3 / gpt-5 / medium", "Поток: claude-3 / sonnet-5.5", "ничего"];
+    const bodies = ["Поток: claude-3 / sonnet-5.5 / medium", "Поток: claude-lead-1 / sonnet-5.5 / high", "Поток: claude-lead / sonnet-5.5 / high", "Поток: claude-x / sonnet-5.5 / medium", "Поток: claude-3 / gpt-5 / medium", "Поток: claude-3 / sonnet-5.5", "ничего"];
     for (const body of bodies) {
       const checkOk = !checkRunnerLines(`${body}\nЗапустил: владелец`, "task/T-0001").some((error: string) => error.startsWith("поток"));
       // pr-check дополнительно сверяет модель и уровень по спискам; формат строки совпадает.

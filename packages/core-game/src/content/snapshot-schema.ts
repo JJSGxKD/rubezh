@@ -343,6 +343,8 @@ const balanceTargetsSchema = z.strictObject({
     rankEventsDensityRatioMin: num,
     hardMaxAliveMulMax: num,
   }),
+  // Необязательное: снимок, сохранённый до рубежа (T-0120), коридора не знает.
+  rubezh: z.strictObject({ guardHpMinRatio: num, reachedRatioMax: num, clearedRatioMax: num }).optional(),
   evolutionPowerRatio: range,
 });
 

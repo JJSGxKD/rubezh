@@ -1,3 +1,4 @@
+import { createHuntState } from "../run/hunt-log";
 import type {
   BoostDef,
   CardToolRules,
@@ -16,6 +17,7 @@ import type {
   PressureDef,
   RunLoadout,
   EndlessCurveDef,
+  RubezhDef,
   SecretsDef,
   TimelineSegmentDef,
   WeaponDef,
@@ -36,6 +38,7 @@ import { createSecretState, findSecretsProblems } from "./secrets";
 import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
+import { createRubezhState } from "./rubezh";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
@@ -181,6 +184,8 @@ export interface CreateWorldOptions {
   chests?: ChestsDef;
   /** тайники рубежа; по умолчанию — без тайников */
   secrets?: SecretsDef;
+  /** правила рубежа (страж на отметке); по умолчанию рубежа нет: стража в мире не будет */
+  rubezh?: RubezhDef;
   /**
    * подстройка давления под силу игрока; заглушки нет: не передана — подстройки нет, и забег идёт по
    * кривой единой сложности. Включается, только если у набора забега есть уровень аккаунта
@@ -336,6 +341,7 @@ export function createWorld(options: CreateWorldOptions): World {
     loadoutLimits,
     drops,
     chestRules,
+    hunt: createHuntState(maxEnemies),
     chests: {
       rng: createRng(deriveSeed(options.seed, STREAM_SALT.chest)),
       dropped: 0,
@@ -355,6 +361,7 @@ export function createWorld(options: CreateWorldOptions): World {
         : [],
     ),
     cordon: createCordonState(),
+    rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,

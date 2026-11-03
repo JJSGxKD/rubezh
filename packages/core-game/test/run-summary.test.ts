@@ -125,6 +125,11 @@ describe("статистика забега", () => {
     expect(world.stats.elapsedSec).toBeCloseTo(world.stats.tick / 60, 9);
   });
 
+  it("несёт рубеж в итоге: забег короче отметки — страж не приходил (T-0120)", () => {
+    expect(world.stats.elapsedSec).toBeLessThan(600);
+    expect(resultOf(world, GOLDEN_SEED).rubezh).toEqual({ reached: false, clearedSec: null, guardHpPercent: null });
+  });
+
   it("копит собранный опыт вместе с прогрессией", () => {
     expect(world.stats.xpCollected).toBeCloseTo(world.progression.totalXp, 9);
   });

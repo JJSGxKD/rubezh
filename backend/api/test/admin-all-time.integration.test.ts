@@ -146,12 +146,14 @@ describe.skipIf(DATABASE_URL === "")("итоги за всё время на ж�
           { ...base, purchaseId: randomUUID(), continueNo: 2, priceStars: 30, chargedStars: 30, mode: "live", status: "refunded", paidAt: new Date(), refundedAt: new Date() },
           // Тестовая оплата в выручку не идёт.
           { ...base, purchaseId: randomUUID(), continueNo: 3, priceStars: 30, chargedStars: 1, mode: "test", status: "paid", paidAt: new Date() },
+          // Донат: звёзды в доходе, но в «покупки» не входит (Р109).
+          { purchaseId: randomUUID(), accountId: buyer, product: "donation", sku: "donation", priceStars: 20, chargedStars: 20, mode: "live", status: "paid", invoicedAt: new Date(), paidAt: new Date() },
           // Счёт выставлен, оплаты нет.
           { ...base, purchaseId: randomUUID(), continueNo: 4, priceStars: 40, chargedStars: 40, mode: "live", status: "pending" },
         ],
       });
       const after = await repository.revenue();
-      expect({ paid: after.paid - before.paid, refunded: after.refunded - before.refunded, purchases: after.purchases - before.purchases }).toEqual({ paid: 80, refunded: 30, purchases: 2 });
+      expect({ paid: after.paid - before.paid, refunded: after.refunded - before.refunded, purchases: after.purchases - before.purchases, donations: after.donations - before.donations }).toEqual({ paid: 100, refunded: 30, purchases: 2, donations: 1 });
     });
   });
 
@@ -333,7 +335,7 @@ describe.skipIf(REDIS_URL === "")("кеш итогов на живом Redis", (
     const repository = {
       accounts: () => slow([{ platform: "telegram" as const, total: 10, banned: 1, reachable: 4 }]),
       runs: () => slow({ runs: 7, players: 3 }),
-      revenue: () => slow({ paid: 20, refunded: 5, purchases: 2 }),
+      revenue: () => slow({ paid: 20, refunded: 5, purchases: 2, donations: 0 }),
       records: () => slow({ dau: null, wau: null, mau: null }),
       activeIn: () => slow(2),
       lastClosedDay: async () => null,

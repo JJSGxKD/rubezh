@@ -17,7 +17,7 @@ export type PlatformTotal = z.infer<typeof platformTotalSchema>;
 const recordSchema = z.object({ value: z.number(), day: z.string(), now: z.number() });
 export type AudienceRecord = z.infer<typeof recordSchema>;
 
-const revenueSchema = z.object({ stars: z.number(), paid: z.number(), refunded: z.number(), purchases: z.number() });
+const revenueSchema = z.object({ stars: z.number(), paid: z.number(), refunded: z.number(), purchases: z.number(), donations: z.number() });
 export type AllTimeRevenue = z.infer<typeof revenueSchema>;
 
 export const allTimeSchema = z.object({
@@ -81,9 +81,9 @@ export function recordLine(record: AudienceRecord | null, at: string): string {
   return record === null ? "рекордов пока нет" : `рекорд ${formatNumber(record.value)} — ${recordDate(record.day, at)}`;
 }
 
-/** «оплачено 1 500 · возвращено 120 · покупок 12». */
+/** «оплачено 1 500 · возвращено 120 · покупок 12»; донаты есть — «… · донатов 3». */
 export function starsLine(revenue: AllTimeRevenue): string {
-  return `оплачено ${formatNumber(revenue.paid)} · возвращено ${formatNumber(revenue.refunded)} · покупок ${formatNumber(revenue.purchases)}`;
+  return `оплачено ${formatNumber(revenue.paid)} · возвращено ${formatNumber(revenue.refunded)} · покупок ${formatNumber(revenue.purchases)}${revenue.donations > 0 ? ` · донатов ${formatNumber(revenue.donations)}` : ""}`;
 }
 
 /** Доля тех, кому можно писать, целым процентом от всех аккаунтов; аккаунтов нет — 0. */

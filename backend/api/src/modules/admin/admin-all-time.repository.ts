@@ -43,6 +43,7 @@ export interface RevenueRow {
   refunded: number;
   /** число оплаченных живых покупок */
   purchases: number;
+  donations: number;
 }
 
 /** Лучшие сутки показателя в снимках. */
@@ -93,7 +94,7 @@ const count = z.coerce.number().int().nonnegative();
 const platformSchema = z.enum(PLATFORM_IDS);
 const accountsSchema = z.array(z.object({ platform: platformSchema, total: count, banned: count, reachable: count }));
 const runsSchema = z.array(z.object({ runs: count, players: count }));
-const revenueSchema = z.array(z.object({ paid: count, refunded: count, purchases: count }));
+const revenueSchema = z.array(z.object({ paid: count, refunded: count, purchases: count, donations: count }));
 const recordSchema = z.array(z.object({ day: z.string(), value: count }));
 const activeSchema = z.array(z.object({ active: count }));
 const lastDaySchema = z.array(z.object({ day: z.string().nullable() }));
@@ -127,13 +128,15 @@ export class PrismaAllTimeRepository implements AllTimeRepository {
   }
 
   async revenue(): Promise<RevenueRow> {
+    // «Покупки» — без донатов, как в отчёте и сводке (Р109); звёзды — все живые оплаты, донаты тоже.
     // Тестовая оплата — одна звезда на проверку, в выручку не идёт; возвращённая оплата входит в обе суммы.
     const rows = await this.prisma.$queryRaw`
       SELECT coalesce(sum(charged_stars) FILTER (WHERE paid_at IS NOT NULL), 0) AS paid,
              coalesce(sum(charged_stars) FILTER (WHERE refunded_at IS NOT NULL), 0) AS refunded,
-             count(*) FILTER (WHERE paid_at IS NOT NULL) AS purchases
+             count(*) FILTER (WHERE paid_at IS NOT NULL AND product <> 'donation') AS purchases,
+             count(*) FILTER (WHERE paid_at IS NOT NULL AND product = 'donation') AS donations
       FROM purchase WHERE mode = 'live'`;
-    return revenueSchema.parse(rows)[0] ?? { paid: 0, refunded: 0, purchases: 0 };
+    return revenueSchema.parse(rows)[0] ?? { paid: 0, refunded: 0, purchases: 0, donations: 0 };
   }
 
   async records(): Promise<Records> {

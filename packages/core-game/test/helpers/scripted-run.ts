@@ -1,4 +1,4 @@
-import type { CordonRingDef, EndlessCurveDef, EnemyDef, EnemyPattern, MapDef, TimelineSegmentDef, UpgradeOption } from "@bh/shared-types";
+import type { CordonRingDef, EndlessCurveDef, EnemyDef, EnemyPattern, MapDef, RubezhDef, TimelineSegmentDef, UpgradeOption } from "@bh/shared-types";
 import { ENEMIES } from "../../src/content/enemies";
 import { ENDLESS_CURVE } from "../../src/content/waves";
 import { DROPS } from "../../src/content/drops";
@@ -31,6 +31,8 @@ export interface ScriptedRunOptions {
   weights?: Partial<Record<EnemyPattern, number>>;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
+  /** правила рубежа (T-0120); без поля рубежа в мире нет, как в забегах до задачи */
+  rubezh?: RubezhDef;
   /**
    * Как отвечать на выбор улучшения. По умолчанию берётся первый вариант:
    * сценарий должен быть воспроизводимым, а не «как повезёт».
@@ -69,6 +71,7 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),
+    ...(options.rubezh === undefined ? {} : { rubezh: options.rubezh }),
     // Нагрузочный прогон меряет устойчивое состояние: если игрок умирает на
     // тридцатой секунде, дальше меряется мир без выстрелов — то есть не тот
     // мир, ради которого прогон затевался.

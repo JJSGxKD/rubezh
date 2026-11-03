@@ -56,7 +56,7 @@ class FakeRepository implements AllTimeRepository {
     { platform: "max", total: 60, banned: 1, reachable: 0 },
   ];
   runsRow: RunsRow = { runs: 5000, players: 900 };
-  revenueRow: RevenueRow = { paid: 500, refunded: 120, purchases: 12 };
+  revenueRow: RevenueRow = { paid: 500, refunded: 120, purchases: 12, donations: 0 };
   recordRows: { dau: RecordRow | null; wau: RecordRow | null; mau: RecordRow | null } = {
     dau: { day: "2026-09-20", value: 100 },
     wau: { day: "2026-09-21", value: 300 },
@@ -167,7 +167,7 @@ describe("права", () => {
 
   it("с обоими правами доход считается: оплачено 500, возвращено 120 — 380 звёзд", async () => {
     const { service, owner } = await setup();
-    expect((await service.allTime(owner, NOW)).revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12 });
+    expect((await service.allTime(owner, NOW)).revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12, donations: 0 });
   });
 
   it("доход режется по праву после кеша: кеш наполнил владелец, аналитик получает null", async () => {
@@ -180,8 +180,8 @@ describe("права", () => {
   it("и наоборот: кеш наполнил аналитик, владелец всё равно видит доход — в кеше полный ответ", async () => {
     const { service, store, owner, analyst } = await setup();
     expect((await service.allTime(analyst, NOW)).revenue).toBeNull();
-    expect((await service.allTime(owner, NOW)).revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12 });
-    expect(JSON.parse(store.values.get(ALL_TIME_KEY) ?? "{}").revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12 });
+    expect((await service.allTime(owner, NOW)).revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12, donations: 0 });
+    expect(JSON.parse(store.values.get(ALL_TIME_KEY) ?? "{}").revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12, donations: 0 });
   });
 });
 
@@ -224,7 +224,7 @@ describe("цифры", () => {
     const { service, repository, owner } = await setup();
     repository.accountRows = [];
     repository.runsRow = { runs: 0, players: 0 };
-    repository.revenueRow = { paid: 0, refunded: 0, purchases: 0 };
+    repository.revenueRow = { paid: 0, refunded: 0, purchases: 0, donations: 0 };
     repository.recordRows = { dau: null, wau: null, mau: null };
     repository.live = { dau: 0, wau: 0, mau: 0 };
     expect(await service.allTime(owner, NOW)).toEqual({
@@ -232,7 +232,7 @@ describe("цифры", () => {
       accounts: { total: 0, banned: 0, byPlatform: [] },
       reachable: { total: 0, byPlatform: [] },
       played: { players: 0, runs: 0 },
-      revenue: { stars: 0, paid: 0, refunded: 0, purchases: 0 },
+      revenue: { stars: 0, paid: 0, refunded: 0, purchases: 0, donations: 0 },
       records: { dau: null, wau: null, mau: null },
     });
   });
@@ -539,7 +539,7 @@ describe("по HTTP", () => {
     const owner = await get(server, "own");
     expect(owner.statusCode).toBe(200);
     const body = owner.json() as { data: AllTime };
-    expect(body.data.revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12 });
+    expect(body.data.revenue).toEqual({ stars: 380, paid: 500, refunded: 120, purchases: 12, donations: 0 });
     expect(body.data.accounts.total).toBe(1600);
 
     const analyst = (await get(server, "ana")).json() as { data: AllTime };

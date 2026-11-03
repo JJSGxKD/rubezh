@@ -1262,6 +1262,35 @@ export interface RunSecretsSummary {
 }
 
 /**
+ * Отметка рубежа — секунда забега, на которой приходит страж (Р102, Р105,
+ * docs/39-retention-mechanics.md Б6). Одна константа на движок и сервер: движок
+ * ставит стража, сервер проверяет заявленную победу (`clearedSec` не раньше
+ * отметки); второй копии нет. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_AT_SEC = 600;
+
+/** Правила рубежа: когда приходит страж и кто он (`content/rubezh.ts`). */
+export interface RubezhDef {
+  /** секунда забега, на которой приходит страж */
+  atSec: number;
+  /** id врага из контента: босс без снарядов */
+  guard: string;
+}
+
+/**
+ * Рубеж в итоге забега (T-0120). Победа — убитый страж, а не конец забега: она
+ * записывается в итог и не сбрасывается смертью или сдачей.
+ */
+export interface RunRubezh {
+  /** страж пришёл: забег дожил до отметки */
+  reached: boolean;
+  /** секунда забега, на которой страж пал; `null` — не пал */
+  clearedSec: number | null;
+  /** остаток здоровья живого стража целым процентом 1–100 к концу забега; `null` — стража нет или он убит */
+  guardHpPercent: number | null;
+}
+
+/**
  * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
  * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
  */
@@ -1503,6 +1532,15 @@ export interface RunPressureResult extends RunPressureStart {
   levelEnd: number;
 }
 
+/** Убитая элита или босс: сколько жила и сколько стоила (tasks/T-0292, Р152). */
+export interface RunHuntEntry {
+  rank: "elite" | "boss";
+  /** опыт врага из контента */
+  value: number;
+  /** секунд от появления до смерти */
+  aliveSec: number;
+}
+
 export interface RunResult {
   runId: string;
   /** seed забега: с ним и логом ввода забег воспроизводится целиком */
@@ -1542,6 +1580,12 @@ export interface RunResult {
    * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
    */
   secrets?: RunSecretsSummary;
+  /**
+   * Рубеж: пришёл ли страж, пал ли он и сколько здоровья у него осталось —
+   * «почти победил» для экрана смерти (T-0120). Необязательное: итог прошлой
+   * сборки поля не знает, а движок отдаёт его всегда.
+   */
+  rubezh?: RunRubezh;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
   damageDealt: number;
@@ -1593,6 +1637,13 @@ export interface RunResult {
   boosts?: string[];
   /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
   pressure?: RunPressureResult;
+  /**
+   * Журнал охоты: запись на каждую убитую элиту и босса, до 64 (tasks/T-0292).
+   * Необязательный: итог прошлой сборки поля не знает.
+   */
+  huntLog?: RunHuntEntry[];
+  /** Оценка сборки: эволюции × 2 + оружие и навыки на максимуме (tasks/T-0292). */
+  buildScore?: number;
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
@@ -1674,6 +1725,9 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
+  huntLog?: RunHuntEntry[];
+  buildScore?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";

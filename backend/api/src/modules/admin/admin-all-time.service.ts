@@ -52,7 +52,7 @@ export interface AllTime {
   reachable: { total: number; byPlatform: PlatformTotal[] };
   played: { players: number; runs: number };
   /** `null` — нет права `analytics.revenue.view` */
-  revenue: { stars: number; paid: number; refunded: number; purchases: number } | null;
+  revenue: { stars: number; paid: number; refunded: number; purchases: number; donations: number } | null;
   /** `null` — снимков нет и сегодня никого */
   records: Record<"dau" | "wau" | "mau", AllTimeRecord | null>;
 }
@@ -65,7 +65,7 @@ const cachedSchema = z.object({
   accounts: z.object({ total: z.number(), banned: z.number(), byPlatform: platformTotals }),
   reachable: z.object({ total: z.number(), byPlatform: platformTotals }),
   played: z.object({ players: z.number(), runs: z.number() }),
-  revenue: z.object({ stars: z.number(), paid: z.number(), refunded: z.number(), purchases: z.number() }).nullable(),
+  revenue: z.object({ stars: z.number(), paid: z.number(), refunded: z.number(), purchases: z.number(), donations: z.number() }).nullable(),
   records: z.object({ dau: recordSchema, wau: recordSchema, mau: recordSchema }),
 });
 
@@ -153,7 +153,7 @@ export class AdminAllTimeService {
       accounts: { total: sum(accounts, "total"), banned: sum(accounts, "banned"), byPlatform: byPlatform(accounts, "total") },
       reachable: { total: sum(accounts, "reachable"), byPlatform: byPlatform(accounts, "reachable") },
       played: { players: runs.players, runs: runs.runs },
-      revenue: { stars: revenue.paid - revenue.refunded, paid: revenue.paid, refunded: revenue.refunded, purchases: revenue.purchases },
+      revenue: { stars: revenue.paid - revenue.refunded, paid: revenue.paid, refunded: revenue.refunded, purchases: revenue.purchases, donations: revenue.donations },
       records: {
         dau: recordOf(snapshots.dau, today, dayNow),
         wau: recordOf(snapshots.wau, today, weekNow),

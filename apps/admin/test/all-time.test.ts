@@ -35,7 +35,7 @@ const DATA: AllTime = {
     ],
   },
   played: { players: 900, runs: 5000 },
-  revenue: { stars: 380, paid: 500, refunded: 120, purchases: 12 },
+  revenue: { stars: 380, paid: 500, refunded: 120, purchases: 12, donations: 0 },
   records: {
     dau: { value: 130, day: "2026-10-20", now: 130 },
     wau: { value: 300, day: "2026-10-14", now: 250 },
@@ -112,8 +112,12 @@ describe("recordLine", () => {
 });
 
 describe("starsLine и доля", () => {
+  it("донаты в подписи — только когда они есть", () => {
+    expect(starsLine({ stars: 380, paid: 1500, refunded: 120, purchases: 12, donations: 3 })).toBe(`оплачено ${formatNumber(1500)} · возвращено 120 · покупок 12 · донатов 3`);
+  });
+
   it("оплачено, возвращено, покупок", () => {
-    expect(starsLine({ stars: 380, paid: 1500, refunded: 120, purchases: 12 })).toBe(`оплачено ${formatNumber(1500)} · возвращено 120 · покупок 12`);
+    expect(starsLine({ stars: 380, paid: 1500, refunded: 120, purchases: 12, donations: 0 })).toBe(`оплачено ${formatNumber(1500)} · возвращено 120 · покупок 12`);
   });
 
   it("доля «можно писать» — целым процентом от всех; аккаунтов нет — ноль", () => {

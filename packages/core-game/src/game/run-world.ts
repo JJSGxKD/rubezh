@@ -1,5 +1,6 @@
 import type { DifficultyId, MapDef, RunLoadout } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
+import { RUBEZH } from "../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../content/snapshot";
 import { cardToolsAt, unlocksAt, weaponsOpenAt } from "./progression/unlocks";
 import { createTimelineDirector } from "./sim/director";
@@ -59,6 +60,8 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    // Рубеж — часть боевого контента вне снимка: страж берётся из `content.enemies`, а без него в снимке рубежа нет.
+    rubezh: RUBEZH,
     pressure: content.pressure,
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,

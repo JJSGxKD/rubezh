@@ -25,6 +25,7 @@ import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -158,6 +159,8 @@ export class MainScene extends Phaser.Scene {
   private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
+  /** фаза рубежа на прошлом шаге: смена фазы — повод для сообщения, после снимка отсчёт идёт от восстановленной */
+  private rubezhPhase: RubezhPhase = "pending";
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -204,6 +207,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.world = world;
     this.spawner = spawner;
+    this.rubezhPhase = world.rubezh.phase;
     // Выбор благословения отдан игроку только там, где оболочка умеет его показать:
     // боты, повтор и стенд берут первое из предложенных.
     world.secrets.manualBlessing = this.sceneData.pauseOnChest === true;
@@ -316,6 +320,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
@@ -627,6 +632,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -693,6 +699,8 @@ export class MainScene extends Phaser.Scene {
         throw new SnapshotError("снят на другой версии контента");
       }
       restoreWorld(this.world, this.spawner, snapshot.world);
+      // Страж, пришедший до сохранения, баннера не повторяет: отсчёт — от восстановленной фазы.
+      this.rubezhPhase = this.world.rubezh.phase;
       return true;
     } catch (error: unknown) {
       this.phase = "dead";
@@ -760,6 +768,25 @@ export class MainScene extends Phaser.Scene {
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /**
+   * Рубеж — оболочке. Фаза сравнивается с прошлой: смена одна, поэтому каждое
+   * сообщение уходит ровно один раз за забег, а журнала в мире не нужно.
+   */
+  private emitRubezhEvents(): void {
+    const state = this.world.rubezh;
+    if (state.phase === this.rubezhPhase) return;
+    const previous = this.rubezhPhase;
+    this.rubezhPhase = state.phase;
+    const bus = this.sceneData.bus;
+    const elapsedSec = this.world.stats.elapsedSec;
+    if (previous === "pending" && (state.phase === "guard" || state.phase === "cleared")) {
+      bus.emit("rubezhGuardSpawned", { enemyId: this.world.enemyTypes[state.guardType].id, elapsedSec });
+    }
+    if (state.phase === "cleared" && state.clearedSec !== null) {
+      bus.emit("rubezhCleared", { clearedSec: state.clearedSec, elapsedSec });
+    }
   }
 
   /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
