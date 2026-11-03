@@ -28,6 +28,8 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - backend/api/test/seasons.test.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/rating-boards.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
