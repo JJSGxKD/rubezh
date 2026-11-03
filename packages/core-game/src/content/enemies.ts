@@ -61,6 +61,22 @@ export const ENEMIES: EnemyDef[] = [
     pattern: "orbit",
     params: { orbitRadius: 220, shrinkPerSec: 34, minRadius: 0 },
   },
+  // Ледяной дух: ворон наоборот — медленнее, крепче, кольцо шире и сужается
+  // мягко, а каждое второе-третье касание морозит. Стойкость к холоду парная
+  // (docs/32-balance.md §2.5): огонь бьёт его в полтора раза сильнее.
+  {
+    id: "ice_spirit",
+    hp: 22,
+    speed: 90,
+    damage: 6,
+    xp: 4,
+    threat: 4,
+    pattern: "orbit",
+    element: "cold",
+    statusChance: 0.35,
+    resist: { cold: 0.5, fire: -0.5 },
+    params: { orbitRadius: 150, shrinkPerSec: 10 },
+  },
   { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder", resist: { fire: 0.7, cold: -0.3 }, element: "fire" },
   // Нетопыри не преследуют вовсе: берут упреждение, проносятся мимо насквозь
   // и через пару секунд заходят снова. Давление от них не в погоне, а в том,
