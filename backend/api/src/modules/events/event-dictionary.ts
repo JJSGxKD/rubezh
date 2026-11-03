@@ -169,6 +169,24 @@ export const EVENT_DICTIONARY = {
   },
   run_resumed: { version: 1, payload: payload({ seed: z.number().int(), elapsedSec: seconds, level: count }) },
   run_finished: { version: 1, payload: runOutcome },
+  // Серверное событие: сервер посчитал очки эффективности записанного забега
+  // (tasks/T-0293, Р152). Индексы осей — с тремя знаками, 1 — ровно ожидаемое;
+  // `style` — ключ сильнейшей оси, `strengthBand` — полоса силы. Шлёт только
+  // сервер, клиент его не пишет.
+  run_scored: {
+    version: 1,
+    payload: payload({
+      runId: id,
+      points: count,
+      endurance: amount,
+      onslaught: amount,
+      hunt: amount,
+      clean: amount,
+      build: amount,
+      style: z.enum(["t", "k", "h", "c", "b"]),
+      strengthBand: id,
+    }),
+  },
   run_abandoned: { version: 1, payload: runOutcome },
   run_paused: { version: 1, payload: payload({ reason: id, elapsedSec: seconds }) },
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
