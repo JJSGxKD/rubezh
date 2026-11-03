@@ -1,4 +1,6 @@
 import type { Redis } from "ioredis";
+import type { RunScorer } from "../../src/modules/rating/run-scorer.service.js";
+import type { StoredScore } from "../../src/modules/rating/score-types.js";
 import { loadAppConfig } from "../../src/config/app-config.js";
 import { RestrictionsHooks } from "../../src/modules/restrictions/restrictions-hooks.js";
 import type { Board, LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
@@ -26,8 +28,35 @@ import { panelSettings } from "./settings.js";
 /**
  * Забеги и рейтинг в памяти — для тестов сервиса. Смысл тот же, что у
  * реализаций на Postgres и Redis: повтор ключа не создаёт вторую запись,
- * лучшее время только растёт. Сами реализации проверяются на живых базах.
+ * лучший счёт только растёт. Сами реализации проверяются на живых базах.
+ *
+ * Доска всех времён ранжирует по очкам (tasks/T-0294): забег без очков в ней не
+ * стоит. Сервису для очков нужен подсчёт — в тестах это `survivalScorer()`:
+ * очки равны секундам, поэтому порядок по очкам совпадает с порядком по времени.
  */
+
+/** Очки в памяти: записанные у забега или `null`. */
+function pointsOf(record: RunFinishRecord): number | null {
+  return record.score?.points ?? null;
+}
+
+/** Очки забега, равные его секундам, — запись `score` в строку для тестов доски. */
+export function secondsScore(survivalSec: number): StoredScore {
+  return { points: Math.round(survivalSec), axes: { t: 1, k: 1, h: 1, c: 1, b: 1 }, style: "t", band: "average" };
+}
+
+/**
+ * Подсчёт очков для тестов доски: очки равны секундам выживания. Остальное, что
+ * умеет настоящий `RunScorer`, этим тестам не нужно.
+ */
+export function survivalScorer(): RunScorer {
+  const scorer: Pick<RunScorer, "score" | "announce" | "expectedPointsFor"> = {
+    score: (input) => ({ points: Math.round(input.survivalSec), axes: { t: 1, k: 1, h: 1, c: 1, b: 1 }, style: "t", band: "average", expectedPoints: 0, outOfRange: false }),
+    announce: async () => {},
+    expectedPointsFor: () => 0,
+  };
+  return scorer as RunScorer;
+}
 
 interface Row extends StoredRun {
   record?: RunFinishRecord;
@@ -151,16 +180,19 @@ export class MemoryRunsRepository implements RunsRepository {
 
   async bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]> {
     return accountIds.flatMap((accountId) => {
-      const best = this.rankedOf(difficulty, since).filter((row) => row.accountId === accountId).sort((a, b) => b.survivalSec - a.survivalSec)[0];
+      const best = this.rankedOf(difficulty, since).filter((row) => row.accountId === accountId && pointsOf(row) !== null).sort((a, b) => (pointsOf(b) ?? 0) - (pointsOf(a) ?? 0))[0];
       if (best === undefined) return [];
-      return [{ accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled }];
+      return [{ accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, points: pointsOf(best), style: best.score?.style ?? null, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled }];
     });
   }
 
-  async bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]> {
+  async bestScores(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; score: number }[]> {
     const best = new Map<string, number>();
-    for (const row of this.rankedOf(difficulty, since)) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, row.survivalSec));
-    return [...best.entries()].map(([accountId, survivalSec]) => ({ accountId, survivalSec }));
+    for (const row of this.rankedOf(difficulty, since)) {
+      const points = pointsOf(row);
+      if (points !== null) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, points));
+    }
+    return [...best.entries()].map(([accountId, score]) => ({ accountId, score }));
   }
 
   async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null> {
@@ -169,13 +201,14 @@ export class MemoryRunsRepository implements RunsRepository {
       row.accountId === accountId &&
       row.record.difficulty === difficulty &&
       isRatedRun(difficulty, row.record.finishedAt, since) &&
+      pointsOf(row.record) !== null &&
       (row.record.ranked || (shadow && row.record.ratingRestricted === "silent"))
         ? [row.record]
         : [],
     );
-    const best = counted.sort((a, b) => b.survivalSec - a.survivalSec)[0];
+    const best = counted.sort((a, b) => (pointsOf(b) ?? 0) - (pointsOf(a) ?? 0))[0];
     if (best === undefined) return null;
-    return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
+    return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, points: pointsOf(best), style: best.score?.style ?? null, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
   }
 
   async moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]> {
@@ -187,7 +220,7 @@ export class MemoryRunsRepository implements RunsRepository {
       )
       .sort((a, b) => b.survivalSec - a.survivalSec)
       .slice(0, limit)
-      .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
+      .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, points: pointsOf(record), level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
   }
 
   async setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
@@ -244,15 +277,15 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   /** набор победителей над стражем по сложности, как `lb:rubezh:<сложность>` */
   private readonly winners = new Map<Difficulty, Set<string>>();
 
-  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[], rubezh = false): Promise<{ improved: boolean }> {
+  async submit(difficulty: Difficulty, accountId: string, score: number, boards: readonly Board[], rubezh = false): Promise<{ improved: boolean }> {
     if (this.failSubmit) throw new Error("Redis недоступен");
     if (rubezh) this.winnersOf(difficulty).add(accountId);
     let improved = false;
     for (const side of boards) {
       const board = this.board(difficulty, side);
       const previous = board.get(accountId);
-      if (previous !== undefined && previous >= survivalSec) continue;
-      board.set(accountId, survivalSec);
+      if (previous !== undefined && previous >= score) continue;
+      board.set(accountId, score);
       improved = true;
     }
     return { improved };
@@ -277,14 +310,14 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
     return this.board(difficulty, side).size;
   }
 
-  async countAbove(difficulty: Difficulty, survivalSec: number, side: Board): Promise<number> {
-    return [...this.board(difficulty, side).values()].filter((score) => score > survivalSec).length;
+  async countAbove(difficulty: Difficulty, score: number, side: Board): Promise<number> {
+    return [...this.board(difficulty, side).values()].filter((other) => other > score).length;
   }
 
-  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[]): Promise<void> {
+  async set(difficulty: Difficulty, accountId: string, score: number | null, boards: readonly Board[]): Promise<void> {
     for (const side of boards) {
-      if (survivalSec === null) this.board(difficulty, side).delete(accountId);
-      else this.board(difficulty, side).set(accountId, survivalSec);
+      if (score === null) this.board(difficulty, side).delete(accountId);
+      else this.board(difficulty, side).set(accountId, score);
     }
   }
 
@@ -299,7 +332,7 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   }
 
   async replace(difficulty: Difficulty, side: Board, entries: readonly LeaderboardEntry[]): Promise<void> {
-    this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
+    this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.score])));
   }
 
   async replaceRubezh(difficulty: Difficulty, accountIds: readonly string[]): Promise<void> {
@@ -332,8 +365,8 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
 
   private sorted(difficulty: Difficulty, side: Board): LeaderboardEntry[] {
     return [...this.board(difficulty, side).entries()]
-      .map(([accountId, survivalSec]) => ({ accountId, survivalSec }))
-      .sort((left, right) => right.survivalSec - left.survivalSec);
+      .map(([accountId, score]) => ({ accountId, score }))
+      .sort((left, right) => right.score - left.score);
   }
 }
 

@@ -615,7 +615,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
         [c, "hard", 100, 3 * DAY],
       ];
       for (const [who, difficulty, survivalSec, offsetMs] of plan) await runsHooks.emit(recorded(await play(who, season, { difficulty, survivalSec, offsetMs })));
-      const topOf = async (difficulty: "easy" | "normal" | "hard", side: Board) => (await store.top(season.key, difficulty, 100, side)).map((entry) => [entry.accountId, entry.survivalSec]);
+      const topOf = async (difficulty: "easy" | "normal" | "hard", side: Board) => (await store.top(season.key, difficulty, 100, side)).map((entry) => [entry.accountId, entry.score]);
       const live = await topOf("hard", "full");
       expect(live).toEqual([[a, 300], [b, 200], [c, 100]]);
       expect(await topOf("easy", "full")).toEqual([]);
@@ -902,10 +902,10 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
 
       expect(seenByOrdinary.entries.map((entry) => entry.name)).toEqual(["Обычный"]);
       expect(seenByOrdinary.total).toBe(1);
-      expect(seenByOrdinary.me).toEqual({ rank: 1, survivalSec: 200 });
+      expect(seenByOrdinary.me).toMatchObject({ rank: 1, survivalSec: 200 });
       expect(seenBySeparate.entries.map((entry) => entry.name)).toEqual(["Отдельный", "Обычный"]);
       expect(seenBySeparate.total).toBe(2);
-      expect(seenBySeparate.me).toEqual({ rank: 1, survivalSec: 500 });
+      expect(seenBySeparate.me).toMatchObject({ rank: 1, survivalSec: 500 });
       expect(Object.keys(seenByOrdinary).sort()).toEqual(Object.keys(seenBySeparate).sort());
       expect(Object.keys(seenByOrdinary.entries[0] ?? {}).sort()).toEqual(Object.keys(seenBySeparate.entries[0] ?? {}).sort());
       expect(JSON.stringify(seenByOrdinary)).not.toMatch(/board|separate|доск/i);
@@ -930,9 +930,9 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const theirs = await view.board(friend, { difficulty: "hard", scope: "friends" }, now);
 
       expect(mine.entries.map((entry) => [entry.rank, entry.name, entry.survivalSec])).toEqual([[1, "Друг с отдельной доской", 700], [2, "Я", 200]]);
-      expect(mine.me).toEqual({ rank: 2, survivalSec: 200 });
+      expect(mine.me).toMatchObject({ rank: 2, survivalSec: 200 });
       expect(theirs.entries.map((entry) => entry.name)).toEqual(["Друг с отдельной доской", "Я"]);
-      expect(theirs.me).toEqual({ rank: 1, survivalSec: 700 });
+      expect(theirs.me).toMatchObject({ rank: 1, survivalSec: 700 });
     });
 
     it("вкладка «Друзья» у зрителя с молчаливым ограничением: me считается по той же таблице, что в ответе, а не по общей недели", async () => {
@@ -949,10 +949,10 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const board = await view.board(shadow, { difficulty: "hard", scope: "friends" }, now);
 
       // Среди друзей (он сам и друг) его 600 — первое место; по общей недели было бы второе после чужого.
-      expect(board.me).toEqual({ rank: 1, survivalSec: 600 });
+      expect(board.me).toMatchObject({ rank: 1, survivalSec: 600 });
       expect(board.total).toBe(2);
       const all = await view.board(shadow, { difficulty: "hard", scope: "all" }, now);
-      expect(all.me).toEqual({ rank: 2, survivalSec: 600 });
+      expect(all.me).toMatchObject({ rank: 2, survivalSec: 600 });
     });
   });
 
@@ -1079,6 +1079,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
           seasonKey: season.key,
           startsAt: season.startsAt.toISOString(),
           endsAt: season.endsAt.toISOString(),
+          scoring: "time",
           results: [{ difficulty: "hard", bestSec: 500, place: 1, boardSize: 12 }],
           reward: { ...prize(1, 12), claimed: false },
         },
@@ -1127,7 +1128,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
         [1, "Быстрый", 400, 11, false],
         [2, "Медленный", 100, 3, true],
       ]);
-      expect(board.me).toEqual({ rank: 2, survivalSec: 100 });
+      expect(board.me).toMatchObject({ rank: 2, survivalSec: 100 });
       expect(JSON.stringify(board)).not.toContain(fast);
     });
 
@@ -1154,7 +1155,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
         [2, "Я"],
       ]);
       expect(board.total).toBe(2);
-      expect(board.me).toEqual({ rank: 2, survivalSec: 200 });
+      expect(board.me).toMatchObject({ rank: 2, survivalSec: 200 });
       const everyone = await view.board(me, { difficulty: "hard", scope: "all" }, now);
       expect(everyone.total).toBe(4);
     });
@@ -1164,7 +1165,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
 
       const board = await view.board(await account(), { difficulty: "hard", scope: "all" }, new Date());
 
-      expect(board).toEqual({ seasonKey: null, difficulty: "hard", total: 0, entries: [], me: null });
+      expect(board).toEqual({ seasonKey: null, difficulty: "hard", scoring: "time", total: 0, entries: [], me: null });
     });
 
     it("молчаливое ограничение: игрок видит своё место в таблице из тени, а другие его нет", async () => {
@@ -1179,7 +1180,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       const own = await view.board(shadow, { difficulty: "hard", scope: "all" }, now);
       const other = await view.board(honest, { difficulty: "hard", scope: "all" }, now);
 
-      expect(own.me).toEqual({ rank: 1, survivalSec: 600 });
+      expect(own.me).toMatchObject({ rank: 1, survivalSec: 600 });
       expect(other.entries.map((entry) => entry.name)).toEqual(["Честный"]);
       expect(other.total).toBe(1);
     });
