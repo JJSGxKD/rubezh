@@ -1,10 +1,12 @@
-import type { DifficultyId, RunRubezh } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunRubezh } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
+import { buildScoreOf } from "../sim/player-power";
+import { isPressureActive } from "../sim/pressure";
 import { describeRubezh } from "../sim/rubezh";
 import { stepWorld } from "../sim/step";
 import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
@@ -40,6 +42,19 @@ export interface BalanceRunOptions {
    * заданы коридоры калибровки.
    */
   accountLevel?: number;
+  /**
+   * Набор забега — снаряжение, бусты, уровень аккаунта и класс устройства
+   * (профили силы калибровки, `POWER_PROFILES`). Уровень аккаунта набора
+   * открывает оружие и навыки вместо `accountLevel` и включает подстройку под
+   * силу. Без набора бот идёт ровно как раньше.
+   */
+  loadout?: RunLoadout;
+  /**
+   * Подстройка под силу (Р131): по умолчанию включена, но работает, только если
+   * у набора есть уровень аккаунта. `false` — строка «без подстройки»: набор
+   * по-прежнему действует, а давление остаётся единой сложностью.
+   */
+  pressure?: boolean;
   maxSec?: number;
   /**
    * Зонд давления: игрок почти неуязвим, и бот идёт до `maxSec`, а не до
@@ -97,12 +112,21 @@ export interface BalanceRunResult {
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
   damageTakenByMinute: number[];
+  /** сила игрока в очках на старте; 0 — подстройки не было */
+  startPower: number;
+  /** уровень давления на старте; 1 — подстройки не было */
+  startPressure: number;
+  /** уровень давления на последнем пересчёте; 1 — подстройки не было */
+  endPressure: number;
+  /** доля собранного набора (`buildScoreOf`) на каждой полной минуте — вход расписания сборки */
+  buildScoreByMinute: number[];
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
   const content = options.content ?? CONTENT_SNAPSHOT;
   const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? DEFAULT_DIFFICULTY_ID));
-  const open = options.accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, options.accountLevel);
+  const accountLevel = options.loadout?.accountLevel ?? options.accountLevel;
+  const open = accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, accountLevel);
   const world = createWorld({
     seed: options.seed,
     enemies: content.enemies,
@@ -114,6 +138,10 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    ...(options.pressure === false ? {} : { pressure: content.pressure }),
+    boosts: content.boosts,
+    maxBoostsPerRun: content.maxBoostsPerRun,
+    ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
     rubezh: RUBEZH,
     limits: content.limits,
     timeline: content.timeline,
@@ -135,6 +163,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
   const damageTakenByMinute: number[] = [];
+  const buildScoreByMinute: number[] = [];
   let damageAtMinuteStart = 0;
   let firstLevelUpSec = 0;
   let buildCompleteSec = 0;
@@ -169,9 +198,11 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     if (Math.floor(world.stats.elapsedSec / 60) > damageTakenByMinute.length) {
       damageTakenByMinute.push(world.stats.damageTaken - damageAtMinuteStart);
       damageAtMinuteStart = world.stats.damageTaken;
+      buildScoreByMinute.push(buildScoreOf(world));
     }
   }
 
+  const pressured = isPressureActive(world);
   return {
     seed: options.seed,
     skill: options.skill,
@@ -191,6 +222,10 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     rubezh: describeRubezh(world),
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
+    startPower: pressured ? world.difficulty.startPower : 0,
+    startPressure: pressured ? world.difficulty.startPressure : 1,
+    endPressure: pressured ? world.difficulty.pressureLevel : 1,
+    buildScoreByMinute,
   };
 }
 

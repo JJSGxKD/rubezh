@@ -1,4 +1,4 @@
-import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   describeEvolution,
   loadRunEngine,
@@ -15,6 +15,7 @@ import {
 import { create } from "zustand";
 import { RATED_DIFFICULTY_ID } from "./difficulty";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
+import { deviceClassOf } from "./device";
 import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
@@ -380,6 +381,9 @@ export const useRun = create<RunStore>((set, get) => ({
                 modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed),
                 boosts: [...boostIds],
                 ...(accountLevel === undefined ? {} : { accountLevel }),
+                // Слабое устройство (Р67): потолок врагов ниже, добор здоровьем и уроном. Обычному
+                // полю не писать; забегу разработчика оно ничего не даёт — подстройки там нет.
+                ...(accountLevel !== undefined && deviceClassOf() === "light" ? { deviceClass: "light" as const } : {}),
               },
             }),
         ...(bought === undefined ? {} : { runId: bought.runId }),
@@ -406,17 +410,8 @@ export const useRun = create<RunStore>((set, get) => ({
           elapsedSec: Math.round(resume.summary.survivalSec),
           level: resume.summary.level,
         });
-        return;
       }
-      track("run_started", {
-        seed,
-        weapon: options.startingWeaponId,
-        map: options.mapId,
-        difficulty: options.difficultyId,
-        screenMode: screenModeNow(),
-        orientation: orientationNow(),
-        devMode: devRun,
-      });
+      // run_started уходит из события движка `started` (там уже известна сила игрока).
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
       // Забег не начался — купленные на него бусты возвращаются.
@@ -561,16 +556,6 @@ function restartSession(set: SetState, get: GetState): void {
   if (startOptions !== null) startOptions = { ...startOptions, difficultyId: RATED_DIFFICULTY_ID };
   session.restart(seed, { difficultyId: RATED_DIFFICULTY_ID });
   setRunUiMode(true);
-
-  track("run_started", {
-    seed,
-    weapon: startOptions?.startingWeaponId ?? "",
-    map: startOptions?.mapId ?? "",
-    difficulty: RATED_DIFFICULTY_ID,
-    screenMode: screenModeNow(),
-    orientation: orientationNow(),
-    devMode: devRun,
-  });
 }
 
 /**
@@ -600,6 +585,17 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     created.on("started", (started) => {
       bindLoadout?.(started.runId);
       useRuns.getState().registerStart(started);
+      // Одно место для первого забега и для «Ещё раз»: сцена шлёт `started` в обоих случаях.
+      track("run_started", {
+        seed: get().seed,
+        weapon: started.startingWeaponId,
+        map: startOptions?.mapId ?? "",
+        difficulty: started.difficultyId,
+        screenMode: screenModeNow(),
+        orientation: orientationNow(),
+        devMode: get().devRun,
+        ...pressureStartFields(started.pressure),
+      });
     }),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
@@ -824,6 +820,22 @@ function countsInRating(get: GetState): boolean {
   return get().devRun && useDevMode.getState().settings.countInRating;
 }
 
+/**
+ * Сила игрока и давление на старте плоскими полями (docs/22-analytics-and-metrics.md
+ * §3.3). Нет `pressure` — подстройки не было (забег разработчика, сборка без
+ * неё), и полей тоже нет.
+ */
+function pressureStartFields(pressure: RunPressureStart | undefined): Record<string, string | number> {
+  if (pressure === undefined) return {};
+  return { power: pressure.power, pressure: pressure.level, deviceClass: pressure.deviceClass };
+}
+
+/** То же на итог: старт и конец забега. */
+function pressureResultFields(pressure: RunPressureResult | undefined): Record<string, string | number> {
+  if (pressure === undefined) return {};
+  return { ...pressureStartFields(pressure), powerEnd: pressure.powerEnd, pressureEnd: pressure.levelEnd };
+}
+
 function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
   return {
     seed: result.seed,
@@ -846,6 +858,7 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     cheats: result.cheats,
     continues: result.continues.length,
     ...elementDamageFields(result.damageByElement),
+    ...pressureResultFields(result.pressure),
   };
 }
 

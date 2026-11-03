@@ -7,9 +7,11 @@ import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
 import {
+  POWER_PROFILES,
   simulateBalanceRun,
   summarizeRuns,
   type BalanceRunResult,
+  type PowerProfile,
 } from "../src/game/balance";
 
 /**
@@ -172,5 +174,52 @@ describe("свойства баланса", () => {
     const second = simulateBalanceRun({ seed: 77, skill: "dodging", maxSec: 900 });
 
     expect(second).toEqual(first);
+  });
+});
+
+// Подстройка под силу (tasks/T-0196, решение 2, Р131, Р183): лесенка профилей.
+//
+// В гейт входят только устойчивые свойства: порядок «средний < полный арсенал» и
+// правило «подстройка забирает не больше половины преимущества» для пары
+// «средний → полный». Они выполнялись в каждом из восьми окон по пять seed на
+// «Искре» и в шести окнах по пятнадцать забегов на трёх оружиях. Остальное меряет
+// `pnpm balance:sim` вердиктами на десяти seed: медиана бота на профилях
+// двугорбая (он либо гибнет на стене около 100-й секунды, либо живёт 600–1100 с),
+// и на пяти забегах она прыгает с 140 до 770 с — отношение «полный к среднему»
+// выходит из коридора 1,25–1,6 в двух окнах из восьми, «новичок к среднему» и
+// слабое устройство тем более. Такой тест ловил бы удачу, а не баланс
+// (docs/32-balance.md §3.2).
+
+const PROFILE_WEAPONS = STARTING_WEAPONS.includes("spark") ? ["spark"] : STARTING_WEAPONS.slice(0, 1);
+
+const profileCache = new Map<string, BalanceRunResult[]>();
+
+/** Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз. */
+function profileRuns(profile: PowerProfile, pressure: boolean): BalanceRunResult[] {
+  const key = `${profile.id}:${String(pressure)}`;
+  const known = profileCache.get(key);
+  if (known !== undefined) return known;
+
+  const runs = PROFILE_WEAPONS.flatMap((startingWeaponId) =>
+    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure })),
+  );
+  profileCache.set(key, runs);
+  return runs;
+}
+
+const medianOf = (profile: PowerProfile, pressure: boolean): number => summarizeRuns(profileRuns(profile, pressure)).medianSurvivalSec;
+
+describe("подстройка под силу: лесенка профилей", () => {
+  it("полный арсенал живёт дольше среднего игрока — с подстройкой и без неё", { timeout: 240_000 }, () => {
+    expect(medianOf(POWER_PROFILES.full, true)).toBeGreaterThan(medianOf(POWER_PROFILES.average, true));
+    expect(medianOf(POWER_PROFILES.full, false)).toBeGreaterThan(medianOf(POWER_PROFILES.average, false));
+  });
+
+  it("подстройка забирает у полного арсенала не больше половины его преимущества", { timeout: 240_000 }, () => {
+    // Правило Р183 защищает сильного: отношение с подстройкой не меньше корня из отношения без неё.
+    // Новичку вниз работают все рычаги, поэтому для пары «новичок → средний» правила нет.
+    const withPressure = medianOf(POWER_PROFILES.full, true) / medianOf(POWER_PROFILES.average, true);
+    const without = medianOf(POWER_PROFILES.full, false) / medianOf(POWER_PROFILES.average, false);
+    expect(withPressure).toBeGreaterThanOrEqual(Math.sqrt(without));
   });
 });
