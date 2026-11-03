@@ -196,6 +196,24 @@ function corridorLines(byScenario: ReadonlyMap<string, BalanceRunResult[]>): str
     ),
   );
 
+  // Рубеж на 10:00 (T-0120): доли — по всем забегам уклоняющегося бота на «Сложной».
+  const reached = dodging.filter((run) => run.rubezh?.reached === true).length / Math.max(1, dodging.length);
+  const cleared = dodging.filter((run) => run.rubezh?.clearedSec != null).length / Math.max(1, dodging.length);
+  lines.push(
+    verdict(
+      `дошёл до рубежа не больше ${percent(target.rubezh.reachedRatioMax)}`,
+      reached <= target.rubezh.reachedRatioMax,
+      percent(reached),
+    ),
+  );
+  lines.push(
+    verdict(
+      `взял рубеж не больше ${percent(target.rubezh.clearedRatioMax)}`,
+      cleared <= target.rubezh.clearedRatioMax,
+      percent(cleared),
+    ),
+  );
+
   // Свод по всем сценариям прячет сильный перекос: одно удачное стартовое
   // оружие вытягивает медиану за два слабых. Разбор по сценариям — отдельно.
   lines.push("", "## Перекос по стартовым оружиям", "");

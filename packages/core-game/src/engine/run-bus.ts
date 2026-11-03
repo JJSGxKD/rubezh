@@ -26,6 +26,8 @@ export class RunBus {
     secretUsed: new Set(),
     secretBlessing: new Set(),
     ringEnded: new Set(),
+    rubezhGuardSpawned: new Set(),
+    rubezhCleared: new Set(),
     paused: new Set(),
     resumed: new Set(),
     devInfo: new Set(),

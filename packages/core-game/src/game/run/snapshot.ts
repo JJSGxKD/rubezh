@@ -2,6 +2,7 @@ import type { RunHuntEntry } from "@bh/shared-types";
 import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { createCordonState, type CordonState } from "../sim/cordon";
+import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
@@ -107,6 +108,11 @@ export interface WorldSnapshot {
   secrets: SecretsSnapshot;
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
   cordon?: Omit<CordonState, "ended">;
+  /**
+   * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
+   * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
+   */
+  rubezh?: { rng: number; phase: RubezhPhase; clearedSec: number | null };
   /** журнал охоты; в снимках без поля — пуст, а время появления живых элит неизвестно (tasks/T-0292) */
   hunt?: HuntSnapshot;
   spawner: unknown;
@@ -136,6 +142,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     secrets: capturedSecrets(world),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
+    rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
     hunt: captureHunt(world),
     spawner: spawner.saveState?.() ?? null,
   };
@@ -177,6 +184,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.founds = [];
   world.chests.openings = [];
   restoreCordon(world, snapshot.cordon);
+  restoreRubezh(world, snapshot.rubezh);
   restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
 
@@ -348,6 +356,35 @@ function restoreCordon(world: World, input: unknown): void {
     pendingLeftSec: raw.pendingLeftSec === undefined ? 0 : asNumber(raw.pendingLeftSec, "cordon.pendingLeftSec"),
     ended: [],
   });
+}
+
+/**
+ * Рубеж. Отсутствие поля — снимок до рубежа: версию формата не поднимали. Отметка
+ * ещё впереди — страж придёт как обычно, позади — забег начат без него и страж
+ * в него не вмешивается. Мир без стража (нет правил или врага в контенте)
+ * остаётся «пропущен», что бы ни сказал снимок о фазе «ждёт».
+ */
+function restoreRubezh(world: World, input: unknown): void {
+  const state = world.rubezh;
+  if (input === undefined) {
+    if (state.guardType >= 0) state.phase = world.stats.tick < state.atTick ? "pending" : "skipped";
+    state.clearedSec = null;
+    return;
+  }
+  const raw = asRecord(input, "rubezh");
+  const phase = asString(raw.phase, "rubezh.phase");
+  if (!(RUBEZH_PHASES as readonly string[]).includes(phase)) throw new SnapshotError(`rubezh.phase: «${phase}» — неизвестная фаза`);
+  const restored = phase as RubezhPhase;
+  if (state.guardType < 0 && (restored === "guard" || restored === "cleared")) {
+    throw new SnapshotError(`rubezh.phase: ${restored}, а стража в контенте этого забега нет`);
+  }
+  const clearedSec = raw.clearedSec === null ? null : asNumber(raw.clearedSec, "rubezh.clearedSec");
+  if ((restored === "cleared") !== (clearedSec !== null)) {
+    throw new SnapshotError("rubezh.clearedSec: секунда победы задана не в той фазе");
+  }
+  state.rng.setState(asNumber(raw.rng, "rubezh.rng"));
+  state.phase = state.guardType < 0 ? "skipped" : restored;
+  state.clearedSec = clearedSec;
 }
 
 // --- Набор и прогрессия -------------------------------------------------------

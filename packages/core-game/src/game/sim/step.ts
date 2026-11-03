@@ -5,6 +5,7 @@ import { damageEnemy, inflictDamage } from "./combat";
 import { pushPlayerOutOfGuards, updateCordon } from "./cordon";
 import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
 import { isTimeFrozen, tickFreeze } from "./freeze";
+import { stepRubezh } from "./rubezh";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
@@ -56,6 +57,8 @@ export function stepWorld(world: World, input: SimInput): void {
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
   recycleLostEnemies(world);
+  // Страж рубежа — после переноса отставших: свежий страж стоит на кольце спавна и сразу в сетке этого тика.
+  stepRubezh(world);
   // Кольцо стражей — после переноса отставших и до сетки: исчезнувшие по времени
   // стражи не должны попасть в сетку этого тика.
   updateCordon(world, dt);
