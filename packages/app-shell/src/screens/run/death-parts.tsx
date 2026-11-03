@@ -20,6 +20,36 @@ import { isEvolutionWeapon } from "./evolution-hints";
 import { SecondChance, continueOfferedPayload, useSecondChanceStages, type SecondChanceProps } from "./SecondChance";
 
 /**
+ * Медальон исхода слева от ленты окна итогов: круг с кольцом тона и светом
+ * изнутри, как `ItemMedallion` в сундуке. У короны за кругом — медленные лучи,
+ * тот же веер, что за сундуком (`effects.md` §6.1): вращается слой целиком
+ * (только `transform`). Общий для итогов и окна «Рубеж удержан!» пролога.
+ */
+export function ResultsMedallion(props: { icon: "skull" | "crown"; tone: string }): ReactNode {
+  return (
+    <span
+      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-surface-sunken ring-2 ring-current short:size-9"
+      style={{ color: props.tone, backgroundImage: "radial-gradient(closest-side, color-mix(in oklab, currentColor 22%, transparent), transparent)" }}
+    >
+      {props.icon === "crown" ? (
+        <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
+          <span className="block size-full animate-chest-rays-in">
+            <span
+              className="block size-full animate-chest-rays-spin rounded-full"
+              style={{
+                backgroundImage: "repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--color-accent) 32%, transparent) 0deg 7deg, transparent 7deg 22deg)",
+                maskImage: "radial-gradient(closest-side, black 30%, transparent 85%)",
+              }}
+            />
+          </span>
+        </span>
+      ) : null}
+      {props.icon === "crown" ? <Crown size={22} aria-hidden="true" /> : <Skull size={22} aria-hidden="true" />}
+    </span>
+  );
+}
+
+/**
  * Части экрана смерти (design/screens/death.html): шаг со вторым шансом и
  * шаги итогов. Вынесены из `DeathOverlay.tsx`, чтобы окно собиралось из
  * частей, а не росло одним файлом.
