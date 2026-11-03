@@ -343,6 +343,12 @@ const balanceTargetsSchema = z.strictObject({
     rankEventsDensityRatioMin: num,
     hardMaxAliveMulMax: num,
   }),
+  // Необязательное: снимок, сохранённый до рубежа (T-0120), коридора не знает.
+  rubezh: z.strictObject({ guardHpMinRatio: num, reachedRatioMax: num, clearedRatioMax: num }).optional(),
+  // Необязательное: снимок, сохранённый до пролога (T-0278), коридоров пролога не знает.
+  prologue: z
+    .strictObject({ seeds: num, winRatioMin: num, endSec: range, guardLifeSec: range, firstChestSec: range })
+    .optional(),
   evolutionPowerRatio: range,
 });
 

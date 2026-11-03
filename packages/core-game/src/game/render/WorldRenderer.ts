@@ -574,9 +574,9 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
-      if (kind === SIM_EVENT.shield) {
-        // Щит принял удар: кольцо от игрока вместо вспышки урона — видно, что
-        // спасло, и что щита больше нет.
+      if (kind === SIM_EVENT.shield || kind === SIM_EVENT.ward) {
+        // Щит или оберег принял удар: кольцо от игрока вместо вспышки урона — видно,
+        // что спасло. Оберег рисуется тем же знаком и под тем же переключателем эффектов.
         this.startBlast(events.x[slot], events.y[slot], SHIELD_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
@@ -722,6 +722,7 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.dynamite]: "bh-dynamite",
   [SIM_EVENT.freeze]: "bh-freeze",
   [SIM_EVENT.shield]: "bh-magnet",
+  [SIM_EVENT.ward]: "bh-magnet",
 };
 /** Радиус кольца сработавшего щита, игровые единицы. */
 const SHIELD_RING_UNITS = 60;

@@ -1,5 +1,6 @@
-import type { DifficultyId, RunHuntEntry, RunLoadout } from "@bh/shared-types";
+import type { DifficultyId, RunHuntEntry, RunLoadout, RunRubezh } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
+import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { buildScore } from "../run/hunt-log";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
@@ -7,6 +8,7 @@ import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { buildScoreOf } from "../sim/player-power";
 import { isPressureActive } from "../sim/pressure";
+import { describeRubezh } from "../sim/rubezh";
 import { stepWorld } from "../sim/step";
 import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
@@ -102,6 +104,11 @@ export interface BalanceRunResult {
   buildCompleteSec: number;
   /** сколько выборов уровня сделано к секунде сборки, а без сборки — за весь прогон */
   buildPicks: number;
+  /**
+   * рубеж: пришёл ли страж и взят ли он — доли забегов бота в коридорах калибровки.
+   * Прогон отдаёт его всегда; необязательное, чтобы фикстуры воркера не знали о рубеже
+   */
+  rubezh?: RunRubezh;
   /** забег упёрся в аварийный потолок, а не кончился смертью или сборкой набора */
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
@@ -144,6 +151,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    rubezh: RUBEZH,
     limits: content.limits,
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,
@@ -226,6 +234,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     evolutions: world.loadout.weapons.filter((slot) => world.weaponTypes[slot.typeIndex]?.evolvedFrom !== undefined).length,
     buildCompleteSec,
     buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
+    rubezh: describeRubezh(world),
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
     startPower: pressured ? world.difficulty.startPower : 0,

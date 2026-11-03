@@ -58,6 +58,7 @@ export class CueTracker {
       const kind = events.kind[slot];
       // Удар, погашенный щитом, — всё равно удар: игрок должен его почувствовать.
       if (kind === SIM_EVENT.playerHit || kind === SIM_EVENT.shield) cues.playerHit++;
+      else if (kind === SIM_EVENT.ward) cues.ward = (cues.ward ?? 0) + 1;
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
@@ -170,6 +171,7 @@ function emptyCues(): RunCues {
     magnet: 0,
     dynamite: 0,
     freeze: 0,
+    ward: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
@@ -191,6 +193,7 @@ function resetCues(cues: RunCues): void {
   cues.magnet = 0;
   cues.dynamite = 0;
   cues.freeze = 0;
+  cues.ward = 0;
   cues.explosions = 0;
   cues.explosionsNear = 0;
   cues.strikes = 0;

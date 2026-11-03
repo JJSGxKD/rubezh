@@ -29,6 +29,8 @@ import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
 import { PRESSURE } from "./pressure";
+import { PROLOGUE } from "./prologue";
+import { RUBEZH } from "./rubezh";
 import { SECRETS } from "./secrets";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
@@ -134,7 +136,8 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
  *
  * Считается по полям, влияющим на забег, в порядке `ContentSnapshot`. Версия
  * схемы и коридоры калибровки в него не входят: правка цели отчёта не должна
- * объявлять новую версию баланса.
+ * объявлять новую версию баланса. Рубеж (`RUBEZH`) в снимке не лежит, но на забег
+ * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`).
  *
  * Порядок ключей внутри объектов — порядок записи в `JSON.stringify`, и хэш
  * умолчания обязан остаться прежним, поэтому он от порядка зависит. Копия
@@ -169,6 +172,8 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.cardToolRules,
     snapshot.limits,
     snapshot.pressure,
+    RUBEZH,
+    PROLOGUE,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.
