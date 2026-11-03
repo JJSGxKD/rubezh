@@ -35,7 +35,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: design/art/mockups/prologue-v2.html
-batch: 6
+batch: 3
 ---
 
 # T-0280. Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов

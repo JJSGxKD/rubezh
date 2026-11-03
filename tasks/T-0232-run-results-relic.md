@@ -22,7 +22,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: design/art/direction-v2.md
-batch: 4
+batch: 3
 ---
 
 # T-0232. Итоги забега — окно-реликвия, как сундук и уровень

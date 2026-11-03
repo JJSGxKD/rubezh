@@ -37,7 +37,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0124. Рубеж — цель забега, оболочка: баннеры, «до рубежа N с», отметка в рейтинге
