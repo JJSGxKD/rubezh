@@ -46,6 +46,16 @@ const signedLoadoutSchema = z.object({
   signature: z.string().min(1).max(128),
 });
 
+/**
+ * Рубеж в итоге (T-0121): форма `RunRubezh` из `shared-types`. Границы — от
+ * битых данных; правдоподобие победы по времени решает вердикт.
+ */
+const rubezhSchema = z.object({
+  reached: z.boolean(),
+  clearedSec: z.number().int().min(0).max(86_400).nullable(),
+  guardHpPercent: z.number().int().min(0).max(100).nullable(),
+});
+
 /** Итог забега. */
 export const runFinishSchema = z
   .object({
@@ -76,6 +86,8 @@ export const runFinishSchema = z
     // Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4):
     // на вердикт не влияют. Сборки до листа их не шлют.
     passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
+    // Нет поля — сборка до рубежа; победа в такой сборке невозможна.
+    rubezh: rubezhSchema.optional(),
     stats: z
       .object({
         damageTaken: z.number().min(0).max(1e12),

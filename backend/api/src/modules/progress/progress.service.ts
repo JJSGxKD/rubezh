@@ -1,6 +1,6 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { levelCap } from "../items/item-rules.js";
-import { MAX_LEVEL, levelReward, xpForLevel, type LevelReward } from "./progress-rules.js";
+import { MAX_LEVEL, RUBEZH_REWARD_MUL, levelReward, rubezhPaid, xpForLevel, type LevelReward } from "./progress-rules.js";
 import { PROGRESS_REPOSITORY, type ProgressRepository } from "./progress.repository.js";
 
 /**
@@ -39,7 +39,17 @@ export type RunRewardView =
   /** задание очереди ещё не дошло — экран итогов спросит снова */
   | { status: "pending" }
   | { status: "none"; reason: string }
-  | { status: "granted"; coins: number; coinsCapped: boolean; xp: number; levelBefore: number; levelAfter: number; progress: ProgressView };
+  | {
+      status: "granted";
+      coins: number;
+      coinsCapped: boolean;
+      xp: number;
+      levelBefore: number;
+      levelAfter: number;
+      /** `2` — победа над стражем рубежа оплачена (T-0121); `null` — нет: оболочка «Награда ×2» сама не считает */
+      rubezhMul: number | null;
+      progress: ProgressView;
+    };
 
 @Injectable()
 export class ProgressService {
@@ -53,6 +63,7 @@ export class ProgressService {
     const row = await this.progress.reward(runId, accountId);
     if (row === null || (row.skipped === null && row.coinsCredited === null)) return { status: "pending" };
     if (row.skipped !== null) return { status: "none", reason: row.skipped };
+    const rubezh = await this.progress.rubezh(runId, accountId);
     return {
       status: "granted",
       coins: row.coinsCredited ?? 0,
@@ -60,6 +71,7 @@ export class ProgressService {
       xp: row.xp,
       levelBefore: row.levelBefore,
       levelAfter: row.levelAfter,
+      rubezhMul: rubezh !== null && rubezhPaid({ ...rubezh, skipped: row.skipped }) ? RUBEZH_REWARD_MUL : null,
       progress: await this.view(accountId),
     };
   }

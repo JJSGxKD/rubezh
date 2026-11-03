@@ -50,6 +50,9 @@ export class MemoryRunsRepository implements RunsRepository {
       verdict: row.verdict,
       ranked: row.ranked,
       ratingRestricted: row.ratingRestricted,
+      cheats: row.record?.cheats ?? false,
+      rubezhReached: row.record?.rubezhReached ?? false,
+      rubezhClearedSec: row.record?.rubezhClearedSec ?? null,
     };
   }
 
@@ -67,6 +70,9 @@ export class MemoryRunsRepository implements RunsRepository {
       verdict: null,
       ranked: false,
       ratingRestricted: null,
+      cheats: false,
+      rubezhReached: false,
+      rubezhClearedSec: null,
     });
     return "created";
   }
@@ -86,6 +92,9 @@ export class MemoryRunsRepository implements RunsRepository {
       verdict: record.verdict,
       ranked: record.ranked,
       ratingRestricted: record.ratingRestricted,
+      cheats: record.cheats,
+      rubezhReached: record.rubezhReached,
+      rubezhClearedSec: record.rubezhClearedSec,
       record,
     });
     return "finished";
@@ -207,6 +216,13 @@ export class MemoryRunsRepository implements RunsRepository {
       }));
   }
 
+  async rubezhWinners(difficulty: Difficulty, since: Date | null, only?: readonly string[]): Promise<string[]> {
+    const winners = this.rankedOf(difficulty, since).filter(
+      (record) => record.verdict === "ok" && !record.cheats && record.rubezhReached && record.rubezhClearedSec !== null && (only === undefined || only.includes(record.accountId)),
+    );
+    return [...new Set(winners.map((record) => record.accountId))];
+  }
+
   private finishedOf(accountId: string): RunFinishRecord[] {
     return [...this.rows.values()].flatMap((row) => (row.record !== undefined && row.accountId === accountId ? [row.record] : []));
   }
@@ -222,9 +238,12 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   failSubmit = false;
   /** по доске и сложности, как два ключа в Redis: правила те же, что у `RedisLeaderboardStore` */
   private readonly boards = new Map<string, Map<string, number>>();
+  /** набор победителей над стражем по сложности, как `lb:rubezh:<сложность>` */
+  private readonly winners = new Map<Difficulty, Set<string>>();
 
-  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[]): Promise<{ improved: boolean }> {
+  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[], rubezh = false): Promise<{ improved: boolean }> {
     if (this.failSubmit) throw new Error("Redis недоступен");
+    if (rubezh) this.winnersOf(difficulty).add(accountId);
     let improved = false;
     for (const side of boards) {
       const board = this.board(difficulty, side);
@@ -246,7 +265,9 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   }
 
   async top(difficulty: Difficulty, limit: number, side: Board): Promise<LeaderboardEntry[]> {
-    return this.sorted(difficulty, side).slice(0, limit);
+    return this.sorted(difficulty, side)
+      .slice(0, limit)
+      .map((entry) => (this.winnersOf(difficulty).has(entry.accountId) ? { ...entry, rubezh: true as const } : entry));
   }
 
   async count(difficulty: Difficulty, side: Board): Promise<number> {
@@ -276,6 +297,24 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
 
   async replace(difficulty: Difficulty, side: Board, entries: readonly LeaderboardEntry[]): Promise<void> {
     this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
+  }
+
+  async replaceRubezh(difficulty: Difficulty, accountIds: readonly string[]): Promise<void> {
+    this.winners.set(difficulty, new Set(accountIds));
+  }
+
+  async setRubezh(difficulty: Difficulty, accountId: string, won: boolean): Promise<void> {
+    if (won) this.winnersOf(difficulty).add(accountId);
+    else this.winnersOf(difficulty).delete(accountId);
+  }
+
+  private winnersOf(difficulty: Difficulty): Set<string> {
+    let set = this.winners.get(difficulty);
+    if (set === undefined) {
+      set = new Set();
+      this.winners.set(difficulty, set);
+    }
+    return set;
   }
 
   private board(difficulty: Difficulty, side: Board): Map<string, number> {
