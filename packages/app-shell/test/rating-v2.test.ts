@@ -27,7 +27,8 @@ import { STYLE_GLYPHS } from "../src/screens/game-glyphs";
 import { ANALYTICS_EVENTS } from "../src/state/analytics";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { leaderboardSchema } from "../src/state/runs-api";
-import { createSeasonsApi, createStyleApi } from "../src/state/seasons-api";
+import { createSeasonsApi, createStyleApi, type SeasonBoard, type SeasonData } from "../src/state/seasons-api";
+import { SeasonTab, type BoardState } from "../src/screens/meta/rating-season";
 
 // Рейтинг v2 (tasks/T-0296): главное число — очки (или время в сезоне по
 // времени), пьедестал, «Ты» с очками до следующего места, дивизион и «Твой
@@ -72,7 +73,7 @@ describe("до следующего места", () => {
   });
 
   it("ровно столько же очков — разрыв не нулевой: чтобы обойти, нужно хоть чуть больше", () => {
-    expect(nextPlace({ rank: 5, points: 4_345, survivalSec: 600 }, above, "points")).toMatchObject({ kind: "gap", gap: 1 });
+    expect(nextPlace({ rank: 38, points: 4_345, survivalSec: 600 }, above, "points")).toMatchObject({ kind: "gap", gap: 1 });
   });
 
   it("сезон по времени — разрыв в секундах", () => {
@@ -429,5 +430,91 @@ describe("события рейтинга", () => {
   it("круг и «Твой стиль» — в словаре клиента", () => {
     expect(ANALYTICS_EVENTS).toContain("rating_circle_changed");
     expect(ANALYTICS_EVENTS).toContain("rating_style_opened");
+  });
+});
+
+describe("вкладка недели", () => {
+  const data: SeasonData = {
+    startsAt: null,
+    season: { key: "2026-11-02", startsAt: "2026-11-02T00:00:00.000Z", endsAt: "2026-11-09T00:00:00.000Z", secondsLeft: 273_600 },
+    minBoard: 10,
+    thresholds: { hard: 180 },
+    thresholdPoints: 2_000,
+    scoring: "points",
+    thresholdReward: { coins: 100, prestige: 5 },
+    placeLadder: [],
+    difficultyMul: { hard: 1.7 },
+    mine: { hard: 612 },
+    minePoints: { hard: 4_205 },
+    division: { hard: "silver" },
+    pending: [],
+    history: [],
+  };
+  const row = (rank: number, division: string): SeasonBoard["entries"][number] => ({
+    rank,
+    name: `Игрок${rank}`,
+    photoUrl: null,
+    survivalSec: 600,
+    level: 10,
+    startingWeaponId: "spark",
+    enemiesKilled: 100,
+    isMe: false,
+    points: 9_000 - rank,
+    style: "t",
+    division,
+  });
+  const board: SeasonBoard = {
+    seasonKey: "2026-11-02",
+    difficulty: "hard",
+    scoring: "points",
+    total: 1_000,
+    entries: [row(1, "ruby"), row(2, "ruby"), row(3, "ruby"), row(4, "ruby"), row(100, "gold"), row(140, "silver"), row(141, "silver")],
+    me: { rank: 150, survivalSec: 612, points: 4_205, style: "c", division: "silver" },
+  };
+  const render = (circle: "all" | "friends" | "division", overrides: Partial<SeasonData> = {}, state: BoardState = { status: "ready", board }): string =>
+    text(
+      renderToStaticMarkup(
+        createElement(SeasonTab, {
+          circle,
+          onCircle: () => undefined,
+          data: { ...data, ...overrides },
+          receivedAt: 0,
+          reload: async () => undefined,
+          restriction: [],
+          board: { state, retry: () => undefined },
+          list: (view) => createElement("div", null, `${view.podium ? "подиум" : "список"}:${view.entries.map((entry) => `${entry.name}=${view.placeOf?.(entry) ?? entry.rank}`).join(",")}`),
+          onInvite: () => undefined,
+        }),
+      ),
+    );
+
+  it("подпись сезона, плашка дивизиона и круги", () => {
+    const body = render("all");
+    expect(body).toContain("Сезон 2–8 ноября · ещё 4 дн.");
+    expect(body).toContain("Ты — серебро");
+    expect(body).toContain("топ-35% сезона");
+    expect(body).toContain("лучший забег 4 205");
+    for (const circle of ["Все", "Друзья", "Мой дивизион"]) expect(body).toContain(circle);
+    expect(body).toContain("подиум:Игрок1=1");
+  });
+
+  it("«Мой дивизион» — только игроки серебра, место считается от начала дивизиона, без пьедестала", () => {
+    const body = render("division");
+    expect(body).toContain("список:Игрок140=40,Игрок141=41");
+    expect(body).not.toContain("Игрок1=1");
+  });
+
+  it("дивизиона нет и в показанных строках нет — «Сыграй…» или пояснение, а не пустая вкладка", () => {
+    expect(render("division", { division: {} }, { status: "ready", board: { ...board, me: null } })).toContain("Сыграй рейтинговый забег");
+    expect(render("division", {}, { status: "ready", board: { ...board, entries: board.entries.slice(0, 4) } })).toContain("среди первых пятидесяти");
+  });
+
+  it("сезон по времени — плашка со временем, а не с очками", () => {
+    const body = render("all", { scoring: "time" }, { status: "ready", board: { ...board, scoring: "time" } });
+    expect(body).toContain("лучший забег 10:12");
+  });
+
+  it("ошибка загрузки — с «Повторить»", () => {
+    expect(render("all", {}, { status: "failed" })).toContain("Повторить");
   });
 });
