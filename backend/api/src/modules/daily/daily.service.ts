@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { ProgressService } from "../progress/progress.service.js";
+import { PrologueService } from "../runs/prologue.service.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { DAYS_IN_WEEK, dailyReward, dayPosition, stepMul } from "./daily-rules.js";
 import { DAILY_REPOSITORY, type DailyRepository } from "./daily.repository.js";
@@ -58,6 +59,8 @@ export class DailyService {
     @Inject(DAILY_REPOSITORY) private readonly repository: DailyRepository,
     private readonly progress: ProgressService,
     private readonly wallet: WalletService,
+    // Нет сервиса пролога (старый состав модуля) — награда открыта.
+    @Optional() private readonly prologue?: PrologueService,
   ) {}
 
   async view(accountId: string, at = new Date()): Promise<DailyView> {
@@ -66,6 +69,8 @@ export class DailyService {
   }
 
   async claim(accountId: string, at = new Date()): Promise<DailyClaimResult> {
+    // Закрыто до победы в прологе (Р151): новичка не встречает кнопка до первого забега.
+    await this.prologue?.requireOpen(accountId);
     const [state, level] = await Promise.all([this.state(accountId, at), this.level(accountId)]);
     if (state.claimedToday) return { claimed: false, coins: 0, shards: 0, view: viewOf(state.claimedDays, true, level) };
 
@@ -84,6 +89,8 @@ export class DailyService {
 
   /** Знак меню: 1 — награда этих суток ждёт. */
   async badge(accountId: string, at = new Date()): Promise<number> {
+    // Закрытая награда знака не даёт: он позвал бы туда, куда нельзя.
+    if (this.prologue !== undefined && !(await this.prologue.isDone(accountId))) return 0;
     return (await this.state(accountId, at)).claimedToday ? 0 : 1;
   }
 

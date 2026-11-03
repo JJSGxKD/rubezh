@@ -40,3 +40,11 @@ export const MAX_WEAPONS = 4;
  * продолжение не продаёт.
  */
 export const CONTINUES_PER_RUN = 1;
+
+/**
+ * Режимы забега (Р151, tasks/T-0279): копия `RUN_MODES` из `shared-types`, по
+ * той же причине, что и остальное здесь. `prologue` — первый забег аккаунта:
+ * сложность только `easy`, вне рейтинга и заданий (`prologue-rules.ts`).
+ */
+export const RUN_MODES = ["endless", "prologue"] as const;
+export type RunMode = (typeof RUN_MODES)[number];
