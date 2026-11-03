@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, UserPlus } from "lucide-react";
+import { DIFFICULTY_IDS, type DifficultyId } from "@bh/shared-types";
 import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
@@ -103,9 +104,28 @@ export function describeNotification(item: NotificationItem): Described | null {
       return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
     case "app_update":
       return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), ...(changelogAvailable() ? { target: "changelog" as const, over: true } : { target: null }) } : null;
+    // Напоминания бота (tasks/T-0128): тот же текст, что в сообщении бота, чтобы колокольчик не показал «1» над пустой лентой.
+    case "season_overtaken": {
+      const difficulty = difficultyOf(item.data.difficulty);
+      const place = typeof item.data.place === "number" && Number.isSafeInteger(item.data.place) && item.data.place >= 1 ? item.data.place : null;
+      return difficulty === null || place === null ? null : { icon: <Trophy size={20} />, text: t("notification.season_overtaken", { difficulty: t(`difficulty.${difficulty}.name`), place }), target: "rating" };
+    }
+    case "season_closing": {
+      const endsAt = typeof item.data.endsAt === "string" ? Date.parse(item.data.endsAt) : Number.NaN;
+      return Number.isFinite(endsAt) ? { icon: <Trophy size={20} />, text: t("notification.season_closing", { time: MOSCOW_TIME.format(new Date(endsAt)) }), target: "rating" } : null;
+    }
+    case "daily_reward_ready":
+      return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
     default:
       return null;
   }
+}
+
+/** Сезон кончается в 03:00 по Москве, и игроку важно именно московское время. */
+const MOSCOW_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+function difficultyOf(value: unknown): DifficultyId | null {
+  return DIFFICULTY_IDS.find((id) => id === value) ?? null;
 }
 
 function refundText(data: Record<string, unknown>): string {

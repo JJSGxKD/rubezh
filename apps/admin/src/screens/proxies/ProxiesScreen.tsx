@@ -9,6 +9,7 @@ import { useApi } from "../../ui/use-api";
 import { ModesPanel } from "./ModesPanel";
 import { ProxyCard } from "./ProxyCard";
 import { ProxyDialog } from "./ProxyDialog";
+import { SubscriptionPanel } from "./SubscriptionPanel";
 
 /**
  * Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, tasks/T-0065):
@@ -48,6 +49,7 @@ export function ProxiesScreen() {
           <code className="font-mono">SECRETS_ENCRYPTION_KEY</code> в .env сервера (<code className="font-mono">openssl rand -base64 32</code>) и перезапустите API. Прокси без пароля работают и сейчас.
         </Notice>
       )}
+      <SubscriptionPanel canEdit={canEdit} />
       <Panel
         title="Прокси"
         help={HELP.proxies.list}

@@ -21,6 +21,9 @@ import type { RunsRepository } from "./runs.repository.js";
  * записывает пустые — и возвращает для них нули. Пересборка из базы даёт то же,
  * что собрала живая проекция.
  *
+ * Вместе с досками пересобирается набор победителей над стражем рубежа
+ * (T-0121): тот же источник — рейтинговые забеги с вердиктом `ok`.
+ *
  * Возвращает, сколько игроков оказалось в каждой доске каждой сложности.
  */
 export interface BoardCounts {
@@ -40,6 +43,7 @@ export async function rebuildLeaderboard(
     if (!isRatedDifficulty(difficulty)) {
       await leaderboard.replace(difficulty, "full", []);
       await leaderboard.replace(difficulty, "common", []);
+      await leaderboard.replaceRubezh(difficulty, []);
       counts[difficulty] = { full: 0, common: 0 };
       continue;
     }
@@ -47,6 +51,12 @@ export async function rebuildLeaderboard(
     const common = full.filter((entry) => !separate.has(entry.accountId));
     await leaderboard.replace(difficulty, "full", full);
     await leaderboard.replace(difficulty, "common", common);
+    // Победа засчитана, вердикт ok, забег шёл в рейтинг; закрытым аккаунтам отметка не нужна — их нет в досках.
+    const onBoard = new Set(full.map((entry) => entry.accountId));
+    await leaderboard.replaceRubezh(
+      difficulty,
+      (await runs.rubezhWinners(difficulty, since)).filter((accountId) => onBoard.has(accountId)),
+    );
     counts[difficulty] = { full: full.length, common: common.length };
   }
   return counts;

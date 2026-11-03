@@ -9,6 +9,9 @@ import { isNotificationKind, type NotificationKind } from "../notifications/noti
  * Редкая добыча и возврат бустов случаются, пока игрок в игре, — писать о них
  * в бота незачем.
  *
+ * Напоминания (`reminder: true`, tasks/T-0128) идут тем же путём, но под общими
+ * правилами из настроек: включатель, тихие часы и одно окно на все виды.
+ *
  * Умолчания повторяет клиент (`app-shell/src/state/bot-notifications.ts`):
  * расхождение ловит `scripts/test/account-settings-keys.test.ts`.
  */
@@ -20,6 +23,12 @@ export interface BotNotifyRule {
   byDefault: boolean;
   /** не чаще одного сообщения этого вида игроку за столько секунд; 0 — без потолка */
   throttleSec: number;
+  /**
+   * Напоминание (tasks/T-0128): работает, только пока включён `reminders.enabled`,
+   * молчит в тихие часы, делит окно потолка с остальными напоминаниями
+   * (`reminders.min-gap-hours`, вместо `throttleSec`) и уходит с кнопкой «Не напоминать».
+   */
+  reminder?: true;
 }
 
 export const BOT_NOTIFY: Partial<Record<NotificationKind, BotNotifyRule>> = {
@@ -31,6 +40,12 @@ export const BOT_NOTIFY: Partial<Record<NotificationKind, BotNotifyRule>> = {
   friend_gift: { setting: "bot.friendGift", byDefault: false, throttleSec: 86_400 },
   // Сообщение команды редкое и адресное: потолка нет.
   team_message: { setting: "bot.teamMessage", byDefault: true, throttleSec: 0 },
+  // Три напоминания — один ключ игрока и одно окно потолка на все: одно сообщение
+  // в сутки, как бы ни совпали виды. Умолчание «включено»: писать можно только тому,
+  // кто сам разрешил боту, а каждое сообщение несёт кнопку выхода.
+  season_overtaken: { setting: "bot.reminders", byDefault: true, throttleSec: 0, reminder: true },
+  season_closing: { setting: "bot.reminders", byDefault: true, throttleSec: 0, reminder: true },
+  daily_reward_ready: { setting: "bot.reminders", byDefault: true, throttleSec: 0, reminder: true },
 };
 
 export function botRuleOf(kind: string): BotNotifyRule | undefined {

@@ -22,7 +22,9 @@ import { stepWorld, type SimInput } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type CreateWorldOptions, type SecretSite, type World } from "../src/game/sim/world";
 import { takeCordonEvents } from "../src/game/sim/cordon";
 import { damageEnemy } from "../src/game/sim/combat";
+import { RUBEZH } from "../src/content/rubezh";
 import { TEST_PRESSURE } from "./helpers/pressure-fixture";
+import { aliveRubezhGuards, jumpToSec } from "./helpers/rubezh-run";
 import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
 
 // Продолжение прерванного забега (game/run/snapshot.ts): снимок, записанный в
@@ -360,8 +362,14 @@ describe("счётчики в сводке снимка (tasks/T-0163)", () => {
     expect(summary).toContain("xpCollected: world.stats.xpCollected");
   });
 
-  it("подстройка давления (T-0195) подняла формат снимка забега до 8", () => {
-    expect(RUN_SNAPSHOT_FORMAT).toBe(8);
+  it("формат снимка забега не ниже восьмого: подстройка давления и уборка вражеских снарядов", () => {
+    expect(RUN_SNAPSHOT_FORMAT).toBeGreaterThan(8);
+  });
+
+  it("в снимке нет массивов вражеского снаряда", () => {
+    const saved = roundTrip(newRun(1)) as { projectiles: { arrays: Record<string, unknown> } };
+    expect(Object.keys(saved.projectiles.arrays)).not.toContain("fromPlayer");
+    expect(Object.keys(saved.projectiles.arrays)).not.toContain("ownerType");
   });
 });
 
@@ -674,15 +682,15 @@ describe("снимок посреди формирования и ожидани
 describe("снимок с подстройкой давления (tasks/T-0195)", () => {
   const WITH_PRESSURE = { pressure: TEST_PRESSURE, loadout: { modifiers: { damage: 1 }, boosts: [], accountLevel: 5, deviceClass: "light" as const } };
 
-  it("версия мира поднята до 15: в числах сложности появились поля подстройки", () => {
-    expect(WORLD_SNAPSHOT_VERSION).toBe(15);
+  it("версия мира не ниже 15: в числах сложности появились поля подстройки", () => {
+    expect(WORLD_SNAPSHOT_VERSION).toBeGreaterThanOrEqual(15);
   });
 
   it("снимок прежней версии отвергается понятной ошибкой", () => {
     const run = newRun(1, WITH_PRESSURE);
     const saved = roundTrip(run) as Record<string, unknown>;
-    expect(() => restoreWorld(newRun(1, WITH_PRESSURE).world, newRun(1, WITH_PRESSURE).director, { ...saved, version: 14 })).toThrow(
-      /версия 14, ожидалась 15/,
+    expect(() => restoreWorld(newRun(1, WITH_PRESSURE).world, newRun(1, WITH_PRESSURE).director, { ...saved, version: WORLD_SNAPSHOT_VERSION - 1 })).toThrow(
+      new RegExp(`версия ${WORLD_SNAPSHOT_VERSION - 1}, ожидалась ${WORLD_SNAPSHOT_VERSION}`),
     );
   });
 
@@ -704,5 +712,98 @@ describe("снимок с подстройкой давления (tasks/T-0195)
     const saved = roundTrip(run) as { difficulty: Record<string, unknown> };
     delete saved.difficulty.spawnMul;
     expect(() => restoreWorld(newRun(5, WITH_PRESSURE).world, newRun(5, WITH_PRESSURE).director, saved)).toThrow(SnapshotError);
+  });
+});
+
+describe("рубеж в снимке (T-0120)", () => {
+  const WITH_RUBEZH: Partial<CreateWorldOptions> = { rubezh: RUBEZH };
+
+  /** Шаги без директора: часы переставлены прыжком, догонять таймлайн незачем. */
+  function stepOnly(run: Run, ticks: number): void {
+    for (let i = 0; i < ticks && run.world.player.alive; i++) {
+      if (isAwaitingChoice(run.world)) {
+        chooseUpgrade(run.world, run.world.progression.offers[0].id);
+        continue;
+      }
+      stepWorld(run.world, DIRECTIONS[Math.floor(run.world.stats.tick / 90) % DIRECTIONS.length]);
+    }
+  }
+
+  function newRubezhRun(seed: number): Run {
+    const run = newRun(seed, WITH_RUBEZH);
+    run.world.cheats.godMode = true;
+    return run;
+  }
+
+  it("слепок с живым стражем восстанавливается с той же суммой и идёт дальше так же", () => {
+    const original = newRubezhRun(77);
+    jumpToSec(original.world, RUBEZH.atSec);
+    stepOnly(original, 120);
+    expect(original.world.rubezh.phase).toBe("guard");
+    expect(aliveRubezhGuards(original.world)).toHaveLength(1);
+
+    const resumed = newRubezhRun(77);
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    expect(resumed.world.rubezh.phase).toBe("guard");
+    expect(resumed.world.rubezh.rng.getState()).toBe(original.world.rubezh.rng.getState());
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+
+    stepOnly(original, 600);
+    stepOnly(resumed, 600);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(aliveRubezhGuards(resumed.world)).toHaveLength(1);
+  });
+
+  it("взятый рубеж переносится с секундой победы, второй страж не приходит", () => {
+    const original = newRubezhRun(78);
+    jumpToSec(original.world, RUBEZH.atSec);
+    stepOnly(original, 30);
+    damageEnemy(original.world, aliveRubezhGuards(original.world)[0], 1e9, 0);
+    // награда стража — опыт и сундук: выбор улучшения не должен остановить шаги
+    while (isAwaitingChoice(original.world)) chooseUpgrade(original.world, original.world.progression.offers[0].id);
+    const clearedSec = original.world.rubezh.clearedSec;
+    expect(clearedSec).not.toBeNull();
+
+    const resumed = newRubezhRun(78);
+    restoreWorld(resumed.world, resumed.director, roundTrip(original));
+    expect(resumed.world.rubezh.phase).toBe("cleared");
+    expect(resumed.world.rubezh.clearedSec).toBe(clearedSec);
+
+    stepOnly(resumed, 1200);
+    expect(aliveRubezhGuards(resumed.world)).toHaveLength(0);
+  });
+
+  it("слепок прежнего формата без поля до отметки читается как «ждёт»", () => {
+    const original = newRubezhRun(79);
+    jumpToSec(original.world, 100);
+    stepOnly(original, 60);
+    const saved = roundTrip(original) as Record<string, unknown>;
+    delete saved.rubezh;
+
+    const resumed = newRubezhRun(79);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(resumed.world.rubezh.phase).toBe("pending");
+  });
+
+  it("слепок без поля после отметки читается как «пропущен»: страж в начатый забег не вмешивается", () => {
+    const original = newRun(80);
+    original.world.cheats.godMode = true;
+    jumpToSec(original.world, RUBEZH.atSec + 60);
+    stepOnly(original, 60);
+    const saved = roundTrip(original) as Record<string, unknown>;
+    delete saved.rubezh;
+
+    const resumed = newRubezhRun(80);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(resumed.world.rubezh.phase).toBe("skipped");
+    stepOnly(resumed, 600);
+    expect(aliveRubezhGuards(resumed.world)).toHaveLength(0);
+  });
+
+  it("повреждённое поле рубежа не читается", () => {
+    const original = newRubezhRun(81);
+    const saved = roundTrip(original) as { rubezh: Record<string, unknown> };
+    saved.rubezh.phase = "победа";
+    expect(() => restoreWorld(newRubezhRun(81).world, newRubezhRun(81).director, saved)).toThrow(SnapshotError);
   });
 });

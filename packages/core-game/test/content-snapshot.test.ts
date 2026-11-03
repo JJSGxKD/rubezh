@@ -20,6 +20,7 @@ import { BALANCE_TARGETS, EVOLUTION_POWER_RATIO } from "../src/content/balance-t
 import { ENEMIES } from "../src/content/enemies";
 import { PRESSURE } from "../src/content/pressure";
 import { SECRETS } from "../src/content/secrets";
+import { LIMITS } from "../src/content/upgrades";
 import { TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { simulateBalanceRun } from "../src/game/balance";
@@ -80,6 +81,7 @@ describe("снимок контента: состав и хэш", () => {
       "maxBoostsPerRun",
       "cardToolUnlocks",
       "cardToolRules",
+      "limits",
       "pressure",
       "balanceTargets",
     ]);
@@ -117,6 +119,40 @@ describe("снимок контента: состав и хэш", () => {
     expect(hashSnapshot(longer)).not.toBe(CONTENT_HASH);
     const blessed = { ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, blessings: SECRETS.blessings.slice(1) } };
     expect(hashSnapshot(blessed)).not.toBe(CONTENT_HASH);
+  });
+
+  it("«Предел» входит в снимок и хэш: правка шага — новая версия баланса", () => {
+    expect(CONTENT_SNAPSHOT.limits).toBe(LIMITS);
+    const stepped = { ...CONTENT_SNAPSHOT, limits: LIMITS.map((def, index) => (index === 0 ? { ...def, step: def.step / 2 } : def)) };
+    expect(hashSnapshot(stepped)).not.toBe(CONTENT_HASH);
+  });
+
+  it("«Предел» в схеме: принимает умолчание, отвергает лишнее поле и снимок без limits", () => {
+    expect(contentSnapshotSchema.safeParse(viaJson(CONTENT_SNAPSHOT)).success).toBe(true);
+    const withExtra = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, limits: LIMITS.map((def) => ({ ...def, bonus: 1 })) }));
+    expect(contentSnapshotSchema.safeParse(withExtra).success).toBe(false);
+    const { limits: _limits, ...withoutLimits } = CONTENT_SNAPSHOT;
+    void _limits;
+    expect(contentSnapshotSchema.safeParse(withoutLimits).success).toBe(false);
+  });
+
+  it("findContentProblems называет запись «Предела» с нулевым шагом", () => {
+    const broken = { ...CONTENT_SNAPSHOT, limits: LIMITS.map((def, index) => (index === 0 ? { ...def, step: 0 } : def)) };
+    const problems = findContentProblems(broken).filter((problem) => problem.path === "limits");
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.some((problem) => problem.message.includes(LIMITS[0].id))).toBe(true);
+  });
+
+  it("мир забега берёт записи «Предела» из снимка", () => {
+    const only = LIMITS.slice(0, 1);
+    const { world } = createRunWorld({
+      seed: 1,
+      mapId: CONTENT_SNAPSHOT.maps[0].id,
+      difficultyId: DEFAULT_DIFFICULTY_ID,
+      unitScale: 1,
+      content: { ...CONTENT_SNAPSHOT, limits: only },
+    });
+    expect(world.limitTypes).toEqual(only);
   });
 
   it("подстройка давления входит в снимок и в хэш: правка числа — новая версия баланса", () => {

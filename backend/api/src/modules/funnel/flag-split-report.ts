@@ -2,6 +2,7 @@ import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import type { FlagRule } from "../flags/flag-rollout.js";
+import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 
 /**
  * Доля флага против остальных (docs/35-stage4-plan.md WP12, часть 10b): то,
@@ -107,7 +108,7 @@ export async function flagSplitReport(prisma: PrismaClient, rule: FlagRule, from
      ),
      purchases AS (
        SELECT account_id, sum(charged_stars)::bigint AS stars FROM purchase
-       WHERE mode = 'live' AND status = 'paid' AND account_id IN (SELECT account_id FROM cohort)
+       WHERE mode = 'live' AND product <> '${DONATION_PRODUCT}' AND status = 'paid' AND account_id IN (SELECT account_id FROM cohort)
        GROUP BY account_id
      ),
      runs AS (

@@ -193,7 +193,7 @@ export function SettingsScreen(): ReactNode {
                 <ListItem
                   key={key}
                   title={t(`settings.bot.${key}`)}
-                  {...(key === "friendGift" ? { hint: t("settings.bot.friendGift.hint") } : {})}
+                  {...(key === "friendGift" || key === "reminders" ? { hint: t(`settings.bot.${key}.hint`) } : {})}
                   toggle={{ checked: bot[key], onChange: () => noteAccountSetting(BOT_NOTIFY_ACCOUNT_KEYS[key], bot.toggle(key)) }}
                 />
               ))}

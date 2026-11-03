@@ -58,6 +58,8 @@ export interface LeaderboardView {
     isMe: boolean;
     /** очки престижа за достижения (tasks/T-0107); ноль — значок не рисуется */
     prestige: number;
+    /** отметка рубежа (T-0121): у аккаунта засчитана победа над стражем; поля нет — не засчитана */
+    rubezh?: true;
   }[];
   me: { rank: number; survivalSec: number } | null;
   totalPlayers: number;
@@ -161,6 +163,7 @@ export class RunsViewService {
             enemiesKilled: row.enemiesKilled,
             isMe: entry.accountId === accountId,
             prestige: prestige.get(entry.accountId) ?? 0,
+            ...(entry.rubezh === true ? { rubezh: true as const } : {}),
           },
         ];
       }),

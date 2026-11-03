@@ -111,8 +111,24 @@ describe.skipIf(DATABASE_URL === "")("ежедневная статистика 
     expect(stats.active).toBe(2);
     expect(stats.sessions).toBe(3);
     expect(stats.runs).toEqual({ finished: 3, players: 2, medianSurvivalSec: 200 });
-    expect(stats.revenue).toEqual({ stars: 8, purchases: 2, refunds: 1 });
+    expect(stats.revenue).toEqual({ stars: 8, purchases: 2, refunds: 1, purchaseStars: 8, donations: 0, donationStars: 0 });
     expect(stats.funnel).toEqual({ entered: 2, appOpened: 1, firstRun: 1, runs5: 0, returnedD1: 1, returnedD7: 0, firstPurchase: 1 });
+  });
+
+  it("донат отдельно от покупки: покупка 50 и донат 100 — покупок 1 на 50, донатов 1 на 100, доход 150 (T-0364)", async () => {
+    const day = dayWindow("2033-05-10");
+    const when = new Date(day.from.getTime() + 3_600_000);
+    const payer = await account(when, "organic");
+    const row = (product: "shop_item" | "donation", stars: number) => ({
+      purchaseId: randomUUID(), accountId: payer, product, sku: product === "donation" ? "donation" : "gems_60", priceStars: stars, chargedStars: stars,
+      mode: "live" as const, status: "paid" as const, invoicedAt: when, paidAt: when,
+    });
+    await prisma.purchase.createMany({ data: [row("shop_item", 50), row("donation", 100)] });
+    const repository = new PrismaDailyStatsRepository(prisma);
+    const stats = await repository.day(day);
+    expect(stats.revenue).toEqual({ stars: 150, purchases: 1, refunds: 0, purchaseStars: 50, donations: 1, donationStars: 100 });
+    const [point] = await repository.series(day.from, day.to);
+    expect(point).toMatchObject({ stars: 150, purchases: 1 });
   });
 
   it("игроки с касанием «прямая ссылка» и «ссылка с метками» — источник «по ссылке», а не «неизвестно» (T-0363)", async () => {

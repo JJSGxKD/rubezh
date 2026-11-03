@@ -116,8 +116,12 @@ describe("режим сервиса по умолчанию", () => {
     expect(defaultModeOf("telegram.bot")).toBe("direct_only");
   });
 
+  it("адрес подписки Xray секретный целиком — тоже только напрямую", () => {
+    expect(defaultModeOf("proxy.subscription")).toBe("direct_only");
+  });
+
   it("остальные сервисы — сначала напрямую", () => {
-    for (const service of OUTBOUND_SERVICES.filter((item) => item !== "telegram.bot")) expect(defaultModeOf(service), service).toBe("direct_first");
+    for (const service of OUTBOUND_SERVICES.filter((item) => item !== "telegram.bot" && item !== "proxy.subscription")) expect(defaultModeOf(service), service).toBe("direct_first");
   });
 
   it("пределы и память: 3 с напрямую, 5 с через прокси, 10 минут", () => {

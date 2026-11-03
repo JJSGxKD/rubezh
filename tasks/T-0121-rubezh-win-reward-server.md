@@ -3,8 +3,8 @@ id: T-0121
 title: Рубеж — цель забега, сервер: проверка победы, награда ×2, отметка в рейтинге
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0120, T-0113, T-0191, T-0193, T-0196]
@@ -28,6 +28,10 @@ shared:
   - docs/32-balance.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/modules/progress/progress.repository.ts
+  - backend/api/src/modules/progress/progress.service.ts
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
 runner: any
 executor: sonnet-5.5
 effort: high

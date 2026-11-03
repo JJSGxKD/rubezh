@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import { withTimeout } from "../../common/with-timeout.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
@@ -8,6 +8,7 @@ import { REDIS } from "../../infra/redis.js";
 import { SecretUnreadableError, type SecretCipher } from "../secrets/secret-cipher.js";
 import { PROXY_CIPHER, hasPassword, openPassword } from "./proxy-password.js";
 import { PROXIES_REPOSITORY, type ProxiesRepository, type StoredProxy } from "./proxies.repository.js";
+import { SubscriptionRoutes } from "./subscription/subscription-routes.js";
 
 /**
  * Прокси и режимы сервисов для клиента исходящих в памяти процесса
@@ -46,6 +47,8 @@ export class ProxyRoutes implements OutboundRoutes, OnModuleInit, OnModuleDestro
     @Inject(PROXIES_REPOSITORY) private readonly repository: ProxiesRepository,
     @Inject(PROXY_CIPHER) private readonly cipher: SecretCipher | null,
     @Inject(REDIS) private readonly redis: Redis,
+    // Узлы подписки Xray (Р101): после ручных прокси; без подписки их нет.
+    @Optional() private readonly subscription?: SubscriptionRoutes,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -62,8 +65,10 @@ export class ProxyRoutes implements OutboundRoutes, OnModuleInit, OnModuleDestro
     this.subscriber?.disconnect();
   }
 
+  /** Ручные прокси по приоритету, затем лучшие узлы подписки Xray. */
   list(): readonly OutboundProxy[] {
-    return this.proxies;
+    const nodes = this.subscription?.list(this.proxies.reduce((max, proxy) => Math.max(max, proxy.priority), 0)) ?? [];
+    return nodes.length === 0 ? this.proxies : [...this.proxies, ...nodes];
   }
 
   modeOf(service: OutboundService): OutboundMode {
@@ -75,6 +80,7 @@ export class ProxyRoutes implements OutboundRoutes, OnModuleInit, OnModuleDestro
       const [rows, modeRows] = await withTimeout(Promise.all([this.repository.list(), this.repository.modes()]), DB_TIMEOUT_MS, "прокси и режимы");
       this.proxies = rows.flatMap((row) => this.routeOf(row));
       this.modes = new Map(modeRows.flatMap((row) => (isMode(row.mode) ? [[row.service, row.mode] as const] : [])));
+      await withTimeout(this.subscription?.reload() ?? Promise.resolve(null), DB_TIMEOUT_MS, "подписка Xray");
     } catch (error: unknown) {
       const now = Date.now();
       if (now - this.lastFailureLogAt < FAILURE_LOG_MS) return;

@@ -13,6 +13,9 @@ export type RefundReason = "test_mode" | "unused" | "external" | "undeliverable"
  */
 export type PurchaseProduct = "continue_run" | "shop_item" | "vip" | "donation";
 
+/** Донат — поддержка, а не покупка (Р109): отчёты, цели сетей и разрезы считают покупки как `product <> DONATION_PRODUCT`. */
+export const DONATION_PRODUCT = "donation" satisfies PurchaseProduct;
+
 /**
  * Подписка площадки (Р20): площадка списывает каждый период сама, по тому же
  * счёту. Каждое списание — своя строка покупки со ссылкой на первую.

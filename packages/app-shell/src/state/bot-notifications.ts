@@ -5,7 +5,9 @@ import { reportError, track, useShell } from "./shell";
 
 /**
  * Что дублировать в бота (docs/35-stage4-plan.md Р51, WP28): заявку в
- * друзья, подарок друга, сообщение команды. О выходе версии бот не пишет (T-0019). Выбор — за
+ * друзья, подарок друга, сообщение команды и напоминания (обогнали в сезоне,
+ * сезон закрывается, награда дня ждёт — один переключатель на три вида,
+ * T-0128). О выходе версии бот не пишет (T-0019). Выбор — за
  * аккаунтом, решает по нему сервер, когда пишет в бота; здесь его копия для переключателей и то,
  * что выбрано и ещё не дошло.
  *
@@ -20,7 +22,7 @@ import { reportError, track, useShell } from "./shell";
  * импорт замкнул бы их друг на друга.
  */
 
-export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true } as const;
+export const BOT_NOTIFY_DEFAULTS = { friendRequest: true, friendGift: false, teamMessage: true, reminders: true } as const;
 
 export type BotNotifyKey = keyof typeof BOT_NOTIFY_DEFAULTS;
 export type BotNotifySettings = Record<BotNotifyKey, boolean>;
@@ -30,18 +32,20 @@ export const BOT_NOTIFY_ACCOUNT_KEYS = {
   friendRequest: "bot.friendRequest",
   friendGift: "bot.friendGift",
   teamMessage: "bot.teamMessage",
+  reminders: "bot.reminders",
 } as const satisfies Record<BotNotifyKey, string>;
 
 export type BotNotifyAccountKey = (typeof BOT_NOTIFY_ACCOUNT_KEYS)[BotNotifyKey];
 
-export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage"];
+export const BOT_NOTIFY_KEYS: readonly BotNotifyKey[] = ["friendRequest", "friendGift", "teamMessage", "reminders"];
 
 const STORAGE_KEY = "bh.bot-notifications.v1";
 /**
  * Не `strict`: у выбора, сохранённого раньше, бывают поля, которых больше нет
  * (`updates`), — они отбрасываются, а остальной выбор не сбрасывается как битый.
+ * Напоминания появились позже остальных: у выбора, сохранённого до них, поля нет, и оно берёт умолчание.
  */
-const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean() });
+const schema = z.object({ friendRequest: z.boolean(), friendGift: z.boolean(), teamMessage: z.boolean(), reminders: z.optional(z.boolean()) });
 type Stored = z.infer<typeof schema>;
 
 export interface BotNotifyStore extends BotNotifySettings {
@@ -75,11 +79,11 @@ export function botNotifyKeyOf(accountKey: string): BotNotifyKey | undefined {
 
 function readStored(): BotNotifySettings {
   const stored = value().read();
-  return { friendRequest: stored.friendRequest, friendGift: stored.friendGift, teamMessage: stored.teamMessage };
+  return { friendRequest: stored.friendRequest, friendGift: stored.friendGift, teamMessage: stored.teamMessage, reminders: stored.reminders ?? BOT_NOTIFY_DEFAULTS.reminders };
 }
 
 function persist(state: BotNotifySettings): void {
-  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage });
+  value().write({ friendRequest: state.friendRequest, friendGift: state.friendGift, teamMessage: state.teamMessage, reminders: state.reminders });
 }
 
 function value(): ReturnType<typeof createPersistedValue<Stored>> {
