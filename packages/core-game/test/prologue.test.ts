@@ -40,11 +40,12 @@ describe("описание пролога в контенте", () => {
     expect(findPrologueProblems(PROLOGUE, ENEMIES, RUBEZH)).toEqual([]);
   });
 
-  it("стартовые числа решения: оберег 25%, сундук на три награды, подбор 1,5, Страж 0,12", () => {
+  it("числа решения: оберег 25%, сундук на три награды, подбор 1,5; Страж откалиброван по боту", () => {
     expect(PROLOGUE.hpFloorRatio).toBe(0.25);
     expect(PROLOGUE.firstChestSize).toBe(3);
     expect(PROLOGUE.pickupRadiusMul).toBe(1.5);
-    expect(PROLOGUE.guardHpMul).toBe(0.12);
+    // Стартовые 0,12 давали бой в 2–10 секунд против коридора 25–50 (docs/32-balance.md «Пролог»).
+    expect(PROLOGUE.guardHpMul).toBe(2);
     expect(PROLOGUE.levelCurve).toEqual({ baseXp: 3, growth: 1.18 });
     expect(PROLOGUE.recommendFirstOffer).toBe("new_weapon");
     expect(PROLOGUE_DIFFICULTY_ID).toBe("easy");
@@ -101,9 +102,9 @@ describe("описание пролога в контенте", () => {
       expect(check({ hpFloorRatio: 0.5 })).toEqual([]);
     });
 
-    it("здоровье Стража не больше нуля или больше единицы", () => {
+    it("множитель здоровья Стража не больше нуля или выше четырёх", () => {
       expect(check({ guardHpMul: 0 }).join("\n")).toContain("guardHpMul");
-      expect(check({ guardHpMul: 1.5 }).join("\n")).toContain("guardHpMul");
+      expect(check({ guardHpMul: 5 }).join("\n")).toContain("guardHpMul");
     });
 
     it("размер первого сундука не из 1, 3, 5", () => {
@@ -436,7 +437,9 @@ describe("детерминизм", () => {
 
     const resumed = createPrologueRun(32);
     restoreWorld(resumed.world, resumed.spawner, saved);
-    const seen = stepSeconds(resumed, 30, { input: scriptedInput });
+    // Скриптовый ход не собирает кристаллы целенаправленно: первый уровень приходит около 35-й секунды.
+    const seen = stepSeconds(resumed, 70, { input: scriptedInput });
+    expect(seen.length).toBeGreaterThan(0);
     expect(seen[0].filter((offer) => offer.recommended === true)).toHaveLength(1);
   });
 
@@ -458,7 +461,7 @@ describe("детерминизм", () => {
 
   it("сцена хранит режим в снимке забега и берёт его при продолжении", () => {
     expect(SCENE_SOURCE).toMatch(/mode:\s*world\.mode|\.\.\.\(world\.mode/);
-    expect(SCENE_SOURCE).toContain("resume?.mode");
+    expect(SCENE_SOURCE).toContain("resume.mode");
     expect(API_SOURCE).toMatch(/RunOptions[\s\S]*mode:\s*RunMode/);
   });
 });
@@ -520,7 +523,7 @@ describe("проводка в сцену и контент", () => {
 
   it("сцена подставляет режим из опций и ставит победу над Стражем концом забега", () => {
     expect(SCENE_SOURCE).toContain("isPrologueWon");
-    expect(SCENE_SOURCE).toMatch(/mode:\s*data\.mode|resume\?\.mode/);
+    expect(SCENE_SOURCE).toContain("data.mode");
   });
 
   it("оберег виден шине: сигналы забега несут ward", () => {

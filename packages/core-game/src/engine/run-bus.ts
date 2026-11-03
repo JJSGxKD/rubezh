@@ -28,6 +28,7 @@ export class RunBus {
     ringEnded: new Set(),
     rubezhGuardSpawned: new Set(),
     rubezhCleared: new Set(),
+    prologueWon: new Set(),
     paused: new Set(),
     resumed: new Set(),
     devInfo: new Set(),
