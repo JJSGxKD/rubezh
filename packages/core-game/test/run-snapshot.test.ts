@@ -23,6 +23,8 @@ import { createWorld, TICK_SEC, type CreateWorldOptions, type SecretSite, type W
 import { takeCordonEvents } from "../src/game/sim/cordon";
 import { damageEnemy } from "../src/game/sim/combat";
 import { RUBEZH } from "../src/content/rubezh";
+import { RUN_MODIFIERS } from "../src/content/modifiers";
+import { BASE_DIFFICULTY, composeDifficulty } from "../src/game/sim/difficulty";
 import { TEST_PRESSURE } from "./helpers/pressure-fixture";
 import { aliveRubezhGuards, jumpToSec } from "./helpers/rubezh-run";
 import { advanceRun, aliveGuards, checksumWorld, CORDON_RING, createCordonRun, ELITE } from "./helpers/scripted-run";
@@ -805,5 +807,58 @@ describe("рубеж в снимке (T-0120)", () => {
     const saved = roundTrip(original) as { rubezh: Record<string, unknown> };
     saved.rubezh.phase = "победа";
     expect(() => restoreWorld(newRubezhRun(81).world, newRubezhRun(81).director, saved)).toThrow(SnapshotError);
+  });
+});
+
+describe("модификатор забега в снимке (T-0119)", () => {
+  const withModifier = (seed: number, ids: readonly ("hurry" | "inverse")[] = ["hurry"]): Run =>
+    newRun(seed, { difficulty: composeDifficulty(BASE_DIFFICULTY, ids, RUN_MODIFIERS), modifierIds: ids });
+
+  it("снимок с «Спешкой» восстанавливается с той же суммой и идёт дальше так же", { timeout: 30_000 }, () => {
+    const original = withModifier(808);
+    advance(original, 70 * 60);
+    const saved = roundTrip(original);
+
+    const resumed = withModifier(808);
+    restoreWorld(resumed.world, resumed.director, saved);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+
+    advance(original, 40 * 60);
+    advance(resumed, 40 * 60);
+    expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    expect(resumed.world.stats).toEqual(original.world.stats);
+    expect(resumed.world.modifierIds).toEqual(["hurry"]);
+  });
+
+  it("снимок несёт модификатор, а у забега без него поля нет: старые снимки читаются", () => {
+    const modified = withModifier(809, ["inverse"]);
+    advance(modified, 30);
+    expect(captureWorld(modified.world, modified.director).modifierIds).toEqual(["inverse"]);
+
+    const plain = newRun(809);
+    advance(plain, 30);
+    const saved = roundTrip(plain) as Record<string, unknown>;
+    expect("modifierIds" in saved).toBe(false);
+
+    const resumed = newRun(809);
+    expect(() => restoreWorld(resumed.world, resumed.director, saved)).not.toThrow();
+    expect(resumed.world.modifierIds).toEqual([]);
+  });
+
+  it("снимок с модификатором в мир без него и наоборот не ложится: ошибка, а не другой забег", () => {
+    const modified = withModifier(810);
+    advance(modified, 30);
+    const withMod = roundTrip(modified);
+    const plain = newRun(810);
+    expect(() => restoreWorld(plain.world, plain.director, withMod)).toThrow(SnapshotError);
+    expect(() => restoreWorld(plain.world, plain.director, withMod)).toThrow(/модификатор/);
+
+    const other = withModifier(810, ["inverse"]);
+    expect(() => restoreWorld(other.world, other.director, withMod)).toThrow(/модификатор/);
+
+    const unmodified = newRun(810);
+    advance(unmodified, 30);
+    const target = withModifier(810);
+    expect(() => restoreWorld(target.world, target.director, roundTrip(unmodified))).toThrow(/модификатор/);
   });
 });

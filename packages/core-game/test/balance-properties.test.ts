@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
-import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { BALANCE_TARGETS, MODIFIER_TARGETS } from "../src/content/balance-targets";
+import { RUN_MODIFIER_IDS } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
@@ -221,5 +222,60 @@ describe("подстройка под силу: лесенка профилей"
     const withPressure = medianOf(POWER_PROFILES.full, true) / medianOf(POWER_PROFILES.average, true);
     const without = medianOf(POWER_PROFILES.full, false) / medianOf(POWER_PROFILES.average, false);
     expect(withPressure).toBeGreaterThanOrEqual(Math.sqrt(without));
+  });
+});
+
+// Модификаторы забега (tasks/T-0119, Р105): коридор — отношение медианы выживания
+// уклоняющегося бота с модификатором к медиане без него на «Сложной» (Р126), те же
+// оружия и seed. Вне коридора правятся множители таблицы `RUN_MODIFIERS`, а не коридор
+// (docs/32-balance.md «Модификаторы забега»).
+describe("модификаторы забега: коридор медианы", () => {
+  const modifierCache = new Map<string, BalanceRunResult[]>();
+
+  function modifierRuns(id: string): BalanceRunResult[] {
+    const known = modifierCache.get(id);
+    if (known !== undefined) return known;
+    const runs: BalanceRunResult[] = [];
+    for (const startingWeaponId of STARTING_WEAPONS) {
+      for (const seed of SEEDS) {
+        runs.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 900, modifierIds: [id] }));
+      }
+    }
+    modifierCache.set(id, runs);
+    return runs;
+  }
+
+  it("коридор задан для каждого модификатора и согласован", () => {
+    for (const id of RUN_MODIFIER_IDS) {
+      const range = MODIFIER_TARGETS.modifierMedianRatio[id];
+      expect(range.min, id).toBeGreaterThan(0);
+      expect(range.max, id).toBeGreaterThan(range.min);
+    }
+    expect(MODIFIER_TARGETS.modifierMedianRatio.hurry).toEqual({ min: 0.5, max: 0.95 });
+    expect(MODIFIER_TARGETS.modifierMedianRatio.inverse).toEqual({ min: 0.6, max: 1.3 });
+  });
+
+  for (const id of RUN_MODIFIER_IDS) {
+    it(`медиана уклоняющегося бота с «${id}» — в коридоре от медианы «Сложной»`, { timeout: 120_000 }, () => {
+      const baseline = summarizeRuns(dodgingRuns()).medianSurvivalSec;
+      const median = summarizeRuns(modifierRuns(id)).medianSurvivalSec;
+      const range = MODIFIER_TARGETS.modifierMedianRatio[id];
+
+      expect(median / baseline, `${id}: ${median.toFixed(1)} с против ${baseline.toFixed(1)} с`).toBeGreaterThanOrEqual(range.min);
+      expect(median / baseline, `${id}: ${median.toFixed(1)} с против ${baseline.toFixed(1)} с`).toBeLessThanOrEqual(range.max);
+    });
+  }
+
+  it("прогон с модификатором детерминирован и отличается от прогона без него", { timeout: 60_000 }, () => {
+    const first = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300, modifierIds: ["hurry"] });
+    const second = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300, modifierIds: ["hurry"] });
+    const plain = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300 });
+    expect(second).toEqual(first);
+    expect(first).not.toEqual(plain);
+  });
+
+  it("пустой список модификаторов — тот же забег, что без поля", { timeout: 60_000 }, () => {
+    const plain = simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200 });
+    expect(simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200, modifierIds: [] })).toEqual(plain);
   });
 });

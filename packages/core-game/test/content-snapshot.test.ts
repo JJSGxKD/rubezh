@@ -18,6 +18,7 @@ import { CONTENT_SNAPSHOT, hashSnapshot, type ContentSnapshot } from "../src/con
 import { contentSnapshotSchema } from "../src/content/snapshot-schema";
 import { BALANCE_TARGETS, EVOLUTION_POWER_RATIO } from "../src/content/balance-targets";
 import { ENEMIES } from "../src/content/enemies";
+import { RUN_MODIFIERS } from "../src/content/modifiers";
 import { PRESSURE } from "../src/content/pressure";
 import { SECRETS } from "../src/content/secrets";
 import { LIMITS } from "../src/content/upgrades";
@@ -119,6 +120,27 @@ describe("снимок контента: состав и хэш", () => {
     expect(hashSnapshot(longer)).not.toBe(CONTENT_HASH);
     const blessed = { ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, blessings: SECRETS.blessings.slice(1) } };
     expect(hashSnapshot(blessed)).not.toBe(CONTENT_HASH);
+  });
+
+  it("модификаторы забега входят в хэш, хоть и лежат вне снимка (T-0119)", () => {
+    const first = RUN_MODIFIERS[0];
+    const original = first.xpMul;
+    try {
+      first.xpMul = original + 0.1;
+      expect(hashSnapshot(CONTENT_SNAPSHOT)).not.toBe(CONTENT_HASH);
+    } finally {
+      first.xpMul = original;
+    }
+    expect(hashSnapshot(CONTENT_SNAPSHOT)).toBe(CONTENT_HASH);
+  });
+
+  it("схема принимает строку лестницы с модификаторами и отвергает не-строки в ней", () => {
+    expect(CONTENT_SNAPSHOT.accountUnlocks.some((row) => row.modifiers !== undefined)).toBe(true);
+    expect(contentSnapshotSchema.safeParse(viaJson(CONTENT_SNAPSHOT)).success).toBe(true);
+    const bad = JSON.parse(JSON.stringify(CONTENT_SNAPSHOT)) as { accountUnlocks: { modifiers?: unknown }[] };
+    const row = bad.accountUnlocks.find((candidate) => candidate.modifiers !== undefined);
+    if (row !== undefined) row.modifiers = [1];
+    expect(contentSnapshotSchema.safeParse(bad).success).toBe(false);
   });
 
   it("«Предел» входит в снимок и хэш: правка шага — новая версия баланса", () => {
