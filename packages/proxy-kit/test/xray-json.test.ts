@@ -114,6 +114,11 @@ describe("узел из JSON равен узлу из ссылки", () => {
     expect(parse(J.config("x", outbound)).nodes).toEqual([fromLink]);
   });
 
+  it("плоская форма есть только у vless: у vmess без vnext — пропуск", () => {
+    const outbound = J.patched(J.OUT_VMESS_WS_TLS, { settings: { address: "example.com", port: 443, id: L.UUID } });
+    expect(parse(J.config("x", outbound)).skipped).toMatchObject([{ scheme: "vmess", reason: "malformed", detail: "vnext" }]);
+  });
+
   it("raw — новое имя tcp; пустое security — без безопасности; UUID в верхнем регистре", () => {
     const outbound = J.patched(J.OUT_VLESS_IPV6, {
       settings: { vnext: [{ address: "2001:db8::10", port: 443, users: [{ id: L.UUID.toUpperCase(), encryption: "none", flow: "" }] }] },
@@ -155,6 +160,12 @@ describe("пропуски", () => {
     ["цепочка через proxySettings", J.patched(J.OUT_VLESS_WS_TLS, { proxySettings: { tag: "first-hop" } }), "unsupported_option", "proxySettings"],
     ["два сервера в vnext", J.patched(J.OUT_VLESS_WS_TLS, { settings: { vnext: [vnextEntry("a.example.com"), vnextEntry("b.example.com")] } }), "unsupported_option", "vnext"],
     ["два пользователя", J.patched(J.OUT_VLESS_WS_TLS, { settings: { vnext: [{ address: "example.com", port: 443, users: [{ id: L.UUID }, { id: L.UUID.replace("1111", "2222") }] }] } }), "unsupported_option", "users"],
+    ["плоский vless: не UUID", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: "not-a-uuid" } }), "malformed", "uuid"],
+    ["плоский vless: нет id", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443 } }), "malformed", "uuid"],
+    ["плоский vless: нет адреса", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { port: 443, id: L.UUID } }), "malformed", "address"],
+    ["плоский vless: порт 0", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 0, id: L.UUID } }), "malformed", "port"],
+    ["плоский vless: чужой flow", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, flow: "xtls-rprx-vision-udp443" } }), "unsupported_option", "flow"],
+    ["плоский vless: постквантовое шифрование", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, encryption: "mlkem768x25519plus.native.0rtt.AAAA" } }), "unsupported_option", "encryption"],
     ["шифр vmess zero", withVmess({ security: "zero" }), "unsupported_cipher", "scy"],
     ["шифр shadowsocks rc4-md5", withServer(J.OUT_SS_SIP002, { method: "rc4-md5" }), "unsupported_cipher", "method"],
     ["не UUID", withVless({ id: "not-a-uuid" }), "malformed", "uuid"],

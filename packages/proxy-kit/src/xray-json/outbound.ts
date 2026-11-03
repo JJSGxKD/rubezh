@@ -9,8 +9,8 @@ import { streamFromSettings } from "./stream.js";
 /**
  * Один выход Xray (`outbounds[]` конфига) в `ProxyNode` — тот же узел, что даёт
  * разбор ссылки, и с теми же отказами. Соответствие полей — обратное к
- * `xray-config.ts`: `settings.vnext[].users[]` у vless и vmess,
- * `settings.servers[]` у trojan и shadowsocks. Не бросает: выход — вход из сети.
+ * `xray-config.ts`: `settings.vnext[].users[]` у vless и vmess (у vless — и плоская
+ * форма Xray 25+), `settings.servers[]` у trojan и shadowsocks. Не бросает: выход — вход из сети.
  */
 
 const PROTOCOLS: ReadonlySet<string> = new Set<NodeProtocol>(["vless", "vmess", "trojan", "shadowsocks"]);
@@ -77,8 +77,17 @@ function convert(protocol: string, raw: unknown, remarks: string): ShareLinkResu
   };
 }
 
-/** vless и vmess: `settings.vnext[0]` и его единственный пользователь. */
+/**
+ * vless и vmess: `settings.vnext[0]` и его единственный пользователь. У vless
+ * есть и плоская форма Xray 25+ — `settings: { address, port, id, flow, encryption }`
+ * без `vnext`: адрес и пользователь лежат в самих настройках.
+ */
 function vnextEndpoint(protocol: "vless" | "vmess", settings: unknown): Step<Endpoint> {
+  if (protocol === "vless" && isFlatVless(settings)) {
+    const address = addressOf(settings);
+    return address.ok ? vlessCredentials(address, settings) : address;
+  }
+
   const vnext = listOf(settings, "vnext");
   if (!vnext.ok) return vnext;
   const server = single(vnext.list, "vnext");
@@ -89,21 +98,30 @@ function vnextEndpoint(protocol: "vless" | "vmess", settings: unknown): Step<End
   if (!users.ok) return users;
   const one = single(users.list, "users");
   if (!one.ok) return one;
+  return protocol === "vless" ? vlessCredentials(address, one.item) : vmessCredentials(address, one.item);
+}
 
-  if (protocol === "vless") {
-    const user = vlessUser.safeParse(one.item);
-    if (!user.success) return fail("malformed", "users");
-    const secret = uuidOf(user.data.id);
-    if (secret === null) return fail("malformed", "uuid");
-    // Шифрование VLESS в обычных подписках — `none`; постквантовое и прочее мы пропускаем.
-    const encryption = user.data.encryption ?? "none";
-    if (encryption !== "none" && encryption !== "") return fail("unsupported_option", "encryption");
-    const flow = user.data.flow ?? "";
-    if (flow !== "" && flow !== "xtls-rprx-vision") return fail("unsupported_option", "flow");
-    return { ...address, ok: true, secret, flow: flow === "" ? null : flow, cipher: null };
-  }
+/** Плоская форма: `vnext` нет, а адрес или `id` лежат в самих настройках. */
+function isFlatVless(settings: unknown): boolean {
+  const parsed = record.safeParse(settings);
+  return parsed.success && parsed.data["vnext"] === undefined && (parsed.data["address"] !== undefined || parsed.data["id"] !== undefined);
+}
 
-  const user = vmessUser.safeParse(one.item);
+function vlessCredentials(address: { host: string; port: number }, item: unknown): Step<Endpoint> {
+  const user = vlessUser.safeParse(item);
+  if (!user.success) return fail("malformed", "users");
+  const secret = uuidOf(user.data.id);
+  if (secret === null) return fail("malformed", "uuid");
+  // Шифрование VLESS в обычных подписках — `none`; постквантовое и прочее мы пропускаем.
+  const encryption = user.data.encryption ?? "none";
+  if (encryption !== "none" && encryption !== "") return fail("unsupported_option", "encryption");
+  const flow = user.data.flow ?? "";
+  if (flow !== "" && flow !== "xtls-rprx-vision") return fail("unsupported_option", "flow");
+  return { ...address, ok: true, secret, flow: flow === "" ? null : flow, cipher: null };
+}
+
+function vmessCredentials(address: { host: string; port: number }, item: unknown): Step<Endpoint> {
+  const user = vmessUser.safeParse(item);
   if (!user.success) return fail("malformed", "users");
   const secret = uuidOf(user.data.id);
   if (secret === null) return fail("malformed", "uuid");

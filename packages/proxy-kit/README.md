@@ -10,7 +10,8 @@ Nest и Prisma; сеть, время и DNS приходят аргумента�
 - Подписка: base64 (обычный или URL-safe, с `=` или без) либо открытый текст со
   списком ссылок, либо JSON Xray — массив полных конфигов `[{ remarks, outbounds }]`
   или один конфиг (так отдают Remnawave, Marzban, Happ): узел — каждый выход vless,
-  vmess, trojan или shadowsocks, имя — `remarks`; `freedom`, `blackhole` и `dns`
+  vmess, trojan или shadowsocks (у vless — и плоская форма настроек Xray 25+ без
+  `vnext`), имя — `remarks`; `freedom`, `blackhole` и `dns`
   молча пропускаются. Clash YAML, sing-box JSON и SIP008 не поддерживаются.
 - Загрузка подписки шлёт `User-Agent` и `x-device-os: Linux`; необязательный `hwid`
   уходит заголовком `x-hwid` для подписок с ограничением числа устройств.

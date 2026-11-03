@@ -21,6 +21,12 @@ export const OUT_VLESS_REALITY: Json = {
   mux: { enabled: false },
 };
 
+/** Плоская форма настроек VLESS (Xray 25+): без `vnext`, адрес и пользователь в самих `settings`. */
+export const OUT_VLESS_REALITY_FLAT: Json = {
+  ...OUT_VLESS_REALITY,
+  settings: { address: "203.0.113.10", port: 443, id: L.UUID, encryption: "none", flow: "xtls-rprx-vision", level: 8 },
+};
+
 export const OUT_VLESS_WS_TLS: Json = {
   tag: "proxy",
   protocol: "vless",
@@ -32,6 +38,9 @@ export const OUT_VLESS_WS_TLS: Json = {
     wsSettings: { path: "/ws", headers: { Host: "cdn.example.com" } },
   },
 };
+
+/** Та же ws+tls, но в плоской форме. */
+export const OUT_VLESS_WS_TLS_FLAT: Json = { ...OUT_VLESS_WS_TLS, settings: { address: "example.com", port: "443", id: L.UUID, encryption: "none" } };
 
 export const OUT_VLESS_GRPC: Json = {
   tag: "proxy",
@@ -125,6 +134,8 @@ export const OUT_SS_LEGACY: Json = {
 export const PAIRS: readonly [name: string, link: string, outbound: Json][] = [
   ["vless reality tcp", L.VLESS_REALITY, OUT_VLESS_REALITY],
   ["vless ws tls", L.VLESS_WS_TLS, OUT_VLESS_WS_TLS],
+  ["vless reality tcp, плоская форма настроек (Xray 25+)", L.VLESS_REALITY, OUT_VLESS_REALITY_FLAT],
+  ["vless ws tls, плоская форма настроек (Xray 25+)", L.VLESS_WS_TLS, OUT_VLESS_WS_TLS_FLAT],
   ["vless grpc tls", L.VLESS_GRPC, OUT_VLESS_GRPC],
   ["vless xhttp reality", L.VLESS_XHTTP, OUT_VLESS_XHTTP],
   ["vless httpupgrade", L.VLESS_HTTPUPGRADE, OUT_VLESS_HTTPUPGRADE],
