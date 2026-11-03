@@ -4,7 +4,7 @@ title: Сводка «чего достигли» в панели — итоги
 epic: E7
 priority: P2
 status: done
-owner: claude-10 / sonnet-5.5 / extra
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-1
 size: M
 depends_on: [T-0052, T-0115]
