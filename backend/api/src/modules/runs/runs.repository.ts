@@ -60,6 +60,10 @@ export interface RunFinishRecord {
   ratingRestricted: RatingRestricted | null;
   verdict: RunVerdict;
   verdictReasons: VerdictReason[];
+  /** страж рубежа пришёл — со слов итога (T-0121); победой её делает вердикт `ok` */
+  rubezhReached: boolean;
+  /** секунда победы со слов итога; `null` — страж не пал */
+  rubezhClearedSec: number | null;
 }
 
 export interface StoredRun {
@@ -75,6 +79,9 @@ export interface StoredRun {
   verdict: RunVerdict | null;
   ranked: boolean;
   ratingRestricted: RatingRestricted | null;
+  cheats: boolean;
+  rubezhReached: boolean;
+  rubezhClearedSec: number | null;
 }
 
 /** `foreign` — забег с таким ключом уже принадлежит другому аккаунту. */
@@ -181,6 +188,13 @@ export interface RunsRepository {
    */
   setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null>;
   review(limit: number): Promise<ReviewRow[]>;
+  /**
+   * Аккаунты с засчитанной победой над стражем на этой сложности: рейтинговый
+   * забег, вердикт `ok`, победа заявлена (T-0121). Источник пересборки набора
+   * `lb:rubezh:*`; `only` сужает выборку одним-двумя аккаунтами (снятие забега
+   * модератором). Нерейтинговая сложность — пусто, без запроса.
+   */
+  rubezhWinners(difficulty: Difficulty, since: Date | null, only?: readonly string[]): Promise<string[]>;
 }
 
 @Injectable()
@@ -201,6 +215,9 @@ export class PrismaRunsRepository implements RunsRepository {
         verdict: true,
         ranked: true,
         ratingRestricted: true,
+        cheats: true,
+        rubezhReached: true,
+        rubezhClearedSec: true,
       },
     });
     return row === null ? null : { ...row, ratingRestricted: ratingRestrictedOf(row.ratingRestricted) };
@@ -239,6 +256,8 @@ export class PrismaRunsRepository implements RunsRepository {
       ratingRestricted: record.ratingRestricted,
       verdict: record.verdict,
       verdictReasons: record.verdictReasons,
+      rubezhReached: record.rubezhReached,
+      rubezhClearedSec: record.rubezhClearedSec,
     };
 
     if (existing !== null) {
@@ -464,6 +483,23 @@ export class PrismaRunsRepository implements RunsRepository {
       },
     });
     return rows.map((row) => ({ ...row, verdict: row.verdict ?? "suspicious" }));
+  }
+
+  async rubezhWinners(difficulty: Difficulty, since: Date | null, only?: readonly string[]): Promise<string[]> {
+    if (!isRatedDifficulty(difficulty) || only?.length === 0) return [];
+    const rows = await this.prisma.run.groupBy({
+      by: ["accountId"],
+      where: {
+        ...ratedWhere(since),
+        difficulty,
+        ranked: true,
+        verdict: "ok",
+        rubezhReached: true,
+        rubezhClearedSec: { not: null },
+        ...(only === undefined ? {} : { accountId: { in: [...only] } }),
+      },
+    });
+    return rows.map((row) => row.accountId);
   }
 }
 
