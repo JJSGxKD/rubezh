@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ELEMENT_KEYS } from "../run-counters.js";
-import { DIFFICULTIES } from "../run-rules.js";
+import { DIFFICULTIES, RUN_MODES } from "../run-rules.js";
 
 /**
  * Тела запросов забегов (docs/34-stage3-plan.md, WP4). Границы здесь — форма
@@ -15,6 +15,8 @@ const weaponId = z.string().min(1).max(64);
 export const runStartSchema = z.object({
   runId,
   difficultyId: z.enum(DIFFICULTIES),
+  // Нет поля — сборка до пролога: бесконечный забег (T-0279).
+  mode: z.enum(RUN_MODES).optional(),
   startingWeaponId: weaponId,
   contentHash: z.string().max(32),
   // Сколько секунд забега прошло к отправке: сообщение могло пролежать в
@@ -56,11 +58,22 @@ const rubezhSchema = z.object({
   guardHpPercent: z.number().int().min(0).max(100).nullable(),
 });
 
+/**
+ * Пролог в итоге (T-0278, `RunPrologue` из `shared-types`): победа и секунда.
+ * Границы — от битых данных; победой это делает вердикт, а не флаг.
+ */
+const prologueSchema = z.object({
+  won: z.boolean(),
+  sec: z.number().min(0).max(86_400),
+});
+
 /** Итог забега. */
 export const runFinishSchema = z
   .object({
     runId,
     difficultyId: z.enum(DIFFICULTIES),
+    // Нет поля — сборка до пролога: бесконечный забег (T-0279).
+    mode: z.enum(RUN_MODES).optional(),
     outcome: z.enum(["died", "abandoned"]),
     survivalSec: z.number().min(0).max(86_400),
     level: z.number().int().min(1).max(999),
@@ -88,6 +101,8 @@ export const runFinishSchema = z
     passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
     // Нет поля — сборка до рубежа; победа в такой сборке невозможна.
     rubezh: rubezhSchema.optional(),
+    // Есть только у забега в режиме пролога; победа приходит как `abandoned` с этим итогом.
+    prologue: prologueSchema.optional(),
     stats: z
       .object({
         damageTaken: z.number().min(0).max(1e12),

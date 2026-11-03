@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { ProgressModule } from "../progress/progress.module.js";
+import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { DailyController } from "./daily.controller.js";
 import { DAILY_REPOSITORY, PrismaDailyRepository } from "./daily.repository.js";
@@ -11,7 +12,7 @@ import { DailyService } from "./daily.service.js";
  * недель, множитель уровня. Монеты и осколки кладёт кошелёк ключом дня.
  */
 @Module({
-  imports: [AuthModule, ProgressModule, WalletModule],
+  imports: [AuthModule, ProgressModule, RunsModule, WalletModule],
   controllers: [DailyController],
   providers: [DailyService, { provide: DAILY_REPOSITORY, useClass: PrismaDailyRepository }],
   exports: [DailyService],
