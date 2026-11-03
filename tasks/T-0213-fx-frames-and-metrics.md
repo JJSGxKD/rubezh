@@ -3,8 +3,8 @@ id: T-0213
 title: Раскадровка эффекта и замеры — `pnpm fx:frames <сцена>`
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0212]
@@ -16,6 +16,7 @@ zones:
   - packages/app-shell/src/dev/fx-stand.ts
 shared:
   - packages/core-game/src/run-api.ts
+  - packages/core-game/src/engine/run-engine.ts
   - package.json
   - docs/17-testing-strategy.md
 runner: local
