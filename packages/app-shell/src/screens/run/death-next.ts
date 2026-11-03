@@ -1,3 +1,4 @@
+import { RUBEZH_AT_SEC, type RunRubezh } from "@bh/shared-types";
 import { formatDuration, t } from "../../i18n";
 import { unlockLabel, type LevelUnlock } from "../../state/level-unlocks";
 import type { RunRewardView } from "../../state/progress";
@@ -19,6 +20,13 @@ export const MAX_GOALS = 3;
 /** Рекорд — цель, если забег не короче его половины: до «почти» дотягиваются, до «вдвое меньше» — нет. */
 export const RECORD_CLOSE = 0.5;
 
+/**
+ * Рубеж — цель, если забег дожил не меньше чем до половины отметки стража: до
+ * «почти» дотягиваются, а с трети пути «до рубежа ещё 400 с» не мотивирует,
+ * а отпугивает. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_CLOSE = 0.5;
+
 /** Уровень — цель, если пройдено не меньше 40% полосы: свежая полоса «до уровня» ещё не мотивирует. */
 export const LEVEL_CLOSE = 0.4;
 
@@ -33,6 +41,8 @@ const RUN_TASK_KINDS: readonly string[] = ["runs", "kills", "survive_sec", "best
 
 export type NextGoal =
   | { kind: "record"; closeness: number; gapSec: number; bestSec: number }
+  | { kind: "rubezh"; stage: "approach"; closeness: number; leftSec: number }
+  | { kind: "rubezh"; stage: "guard"; closeness: number; guardHpPercent: number }
   | { kind: "level"; closeness: number; level: number; xpLeft: number; unlocks: LevelUnlock[] }
   | { kind: "task"; closeness: number; period: "daily" | "weekly"; value: number; target: number }
   | { kind: "unlock"; closeness: number; level: number; unlocks: LevelUnlock[] };
@@ -46,10 +56,12 @@ export interface NextGoalsInput {
   level: { level: number; fraction: number; xpLeft: number } | null;
   tasks: readonly { id: string; period: string; kind: string; value: number; target: number; done: boolean }[];
   nextUnlock: { level: number; unlocks: LevelUnlock[] } | null;
+  /** рубеж забега; нет — итог сборки до рубежа, цели «рубеж» тогда считаются по секундам */
+  rubezh?: RunRubezh | undefined;
 }
 
-/** При равной близости раньше то, что игрок может сделать прямо сейчас: рекорд, задание, потом уровень и открытие. */
-const KIND_ORDER: Record<NextGoal["kind"], number> = { record: 0, task: 1, level: 2, unlock: 3 };
+/** При равной близости раньше то, что игрок может сделать прямо сейчас: рекорд, рубеж, задание, потом уровень и открытие. */
+const KIND_ORDER: Record<NextGoal["kind"], number> = { record: 0, rubezh: 1, task: 2, level: 3, unlock: 4 };
 
 function recordGoal(input: NextGoalsInput): NextGoal | null {
   const { bestSec, survivalSec } = input;
@@ -57,6 +69,28 @@ function recordGoal(input: NextGoalsInput): NextGoal | null {
   if (input.isNewRecord || bestSec === null || bestSec <= 0 || survivalSec >= bestSec) return null;
   const closeness = survivalSec / bestSec;
   return closeness < RECORD_CLOSE ? null : { kind: "record", closeness, gapSec: bestSec - survivalSec, bestSec };
+}
+
+/**
+ * Рубеж (T-0124): до прихода стража — секунды до отметки, после — остаток его
+ * здоровья. Победа цели не оставляет. Близость стража считается от половины:
+ * дожить до него уже полпути, дальше растёт с тем, сколько здоровья снято.
+ */
+function rubezhGoal(input: NextGoalsInput): NextGoal | null {
+  const rubezh = input.rubezh;
+  if (rubezh !== undefined && rubezh.clearedSec !== null) return null;
+  if (rubezh?.reached === true) {
+    // Остатка нет — говорить «почти пал» нечем.
+    if (rubezh.guardHpPercent === null) return null;
+    const closeness = 0.5 + 0.5 * (1 - rubezh.guardHpPercent / 100);
+    return { kind: "rubezh", stage: "guard", closeness, guardHpPercent: rubezh.guardHpPercent };
+  }
+  const { survivalSec } = input;
+  // Дожил до отметки, а страж не пришёл (итог без поля или без стража): считать нечего.
+  if (survivalSec >= RUBEZH_AT_SEC) return null;
+  const closeness = survivalSec / RUBEZH_AT_SEC;
+  if (closeness < RUBEZH_CLOSE) return null;
+  return { kind: "rubezh", stage: "approach", closeness, leftSec: Math.ceil(RUBEZH_AT_SEC - survivalSec) };
 }
 
 /** Из заданий дня и недели — одно, с большей долей; при равенстве ежедневное раньше недельного, дальше меньший id. */
@@ -85,6 +119,8 @@ export function pickNextGoals(input: NextGoalsInput): NextGoal[] {
   const goals: NextGoal[] = [];
   const record = recordGoal(input);
   if (record !== null) goals.push(record);
+  const rubezh = rubezhGoal(input);
+  if (rubezh !== null) goals.push(rubezh);
   const task = taskGoal(input);
   if (task !== null) goals.push(task);
 
@@ -105,6 +141,10 @@ export function goalText(goal: NextGoal): string {
   switch (goal.kind) {
     case "record":
       return t("run.next.record", { gap: formatDuration(goal.gapSec), best: formatDuration(goal.bestSec) });
+    case "rubezh":
+      return goal.stage === "approach"
+        ? t("run.next.rubezh", { sec: goal.leftSec })
+        : t("run.next.rubezh.guard", { percent: goal.guardHpPercent });
     case "task":
       return t(goal.period === "daily" ? "run.next.task.daily" : "run.next.task.weekly", { value: goal.value, target: goal.target });
     case "level":
