@@ -60,6 +60,34 @@ describe("загрузка подписки", () => {
     expect(result.updateIntervalHours).toBeNull();
   });
 
+  it("hwid уходит заголовком x-hwid вместе с x-device-os; на переходе тоже", async () => {
+    const hwid = "0123456789abcdef0123456789abcdef";
+    const { calls, options } = setup((_url, call) => (call === 1 ? new Response(null, { status: 302, headers: { location: "/moved" } }) : new Response(BODY)), { hwid });
+    await fetchSubscription(URL_SECRET, options);
+
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      const headers = new Headers(call.init.headers);
+      expect(headers.get("x-hwid")).toBe(hwid);
+      expect(headers.get("x-device-os")).toBe("Linux");
+      expect(headers.get("user-agent")).toBe("v2rayN/7.0");
+    }
+  });
+
+  it("без hwid заголовка x-hwid нет: устройство подписке не представляется", async () => {
+    const { calls, options } = setup(() => new Response(BODY));
+    await fetchSubscription(URL_SECRET, options);
+    expect(new Headers(calls[0]?.init.headers).has("x-hwid")).toBe(false);
+  });
+
+  it("hwid, который нельзя отправить заголовком, — RangeError до запроса, а не «сеть недоступна»", async () => {
+    for (const hwid of ["", "с кириллицей", "line\nbreak", "x".repeat(129)]) {
+      const { calls, options } = setup(() => new Response(BODY), { hwid });
+      await expect(fetchSubscription(URL_SECRET, options), JSON.stringify(hwid)).rejects.toBeInstanceOf(RangeError);
+      expect(calls, JSON.stringify(hwid)).toHaveLength(0);
+    }
+  });
+
   it("адрес и каждый переход проверяются: сначала форма адреса, затем assertAllowed", async () => {
     const { checked, calls, options } = setup((_url, call) => (call === 1 ? new Response(null, { status: 302, headers: { location: "/moved?x=1" } }) : new Response(BODY)));
     const result = await fetchSubscription(URL_SECRET, options);
