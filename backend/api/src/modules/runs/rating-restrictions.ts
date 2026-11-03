@@ -215,8 +215,9 @@ export class RatingRestrictions implements OnModuleInit, OnApplicationBootstrap,
     for (const difficulty of RATED_DIFFICULTIES) {
       // Лучший рейтинговый: сданные под ограничением рейтинговыми не стали.
       const best = await withTimeout(this.runs.bestRunOf(accountId, difficulty, false, since), DB_TIMEOUT_MS, "runs: база");
-      if (best === null) continue;
-      await this.redisCall(this.leaderboard.submit(difficulty, accountId, best.survivalSec, boards));
+      // Забег без очков в доске по очкам не стоит (T-0294): вернётся, когда `runs:rescore` его досчитает.
+      if (best === null || best.points === null) continue;
+      await this.redisCall(this.leaderboard.submit(difficulty, accountId, best.points, boards));
       restored += 1;
     }
     return restored;
