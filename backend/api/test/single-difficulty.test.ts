@@ -85,6 +85,8 @@ function legacy(accountId: string, difficulty: Difficulty, survivalSec: number, 
     ratingRestricted: null,
     verdict: "ok",
     verdictReasons: [],
+    rubezhReached: false,
+    rubezhClearedSec: null,
   };
 }
 

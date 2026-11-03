@@ -1,13 +1,13 @@
 ---
 id: T-0296
-title: Экран рейтинга v2 — очки вместо времени, пьедестал топ-3 обликами, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
+title: Экран рейтинга v2 — очки вместо времени, пьедестал топ-3, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
 epic: E12
 priority: P2
 status: ready
 owner:
 author: claude-lead-1
 size: M
-depends_on: [T-0295, T-0238, T-0111]
+depends_on: [T-0295, T-0111]
 zones:
   - packages/app-shell/src/screens/meta/rating-podium.tsx
   - packages/app-shell/src/screens/meta/rating-style.tsx
@@ -35,9 +35,9 @@ design: design/art/mockups/rating-v2.html
 batch: 7
 ---
 
-# T-0296. Экран рейтинга v2 — очки вместо времени, пьедестал топ-3 обликами, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
+# T-0296. Экран рейтинга v2 — очки вместо времени, пьедестал топ-3, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json)](README.md#значки-статуса) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](T-0295-rating-divisions-and-style.md) [![T-0238](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0238.json&label=T-0238)](T-0238-appearance-shell.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](T-0111-weekly-season-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json)](README.md#значки-статуса) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](T-0295-rating-divisions-and-style.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](T-0111-weekly-season-screen.md)
 
 ## Зачем
 
@@ -65,14 +65,14 @@ batch: 7
   будет рейтинг чата; пустой вкладки нет.
 - **Периоды** — «Неделя» (это и есть сезон, понедельник UTC) и «Всё время».
   Подпись над списком: «Сезон {n} · ещё {days} дн.».
-- **Пьедестал** — первые три места, облик целиком (портрет облика T-0238 по
-  `appearanceId` из `PublicIdentity`):
+- **Пьедестал** — первые три места, нынешний аватар игрока крупно (`Avatar`
+  из дизайн-системы, как в строках доски; Р184 — облики подключит T-0238):
   - 2 · 1 · 3 по высоте ступеней;
   - имя и очки под ступенью.
 
   Меньше трёх игроков — столько ступеней, сколько есть.
 - **Строки** с 4-го места:
-  - место, аватар-знак, имя со знаком (T-0236);
+  - место, аватар-знак, имя со знаком (T-0236; пока она не влита — имя без знака);
   - значок стиля и его имя мелко;
   - очки крупно, время забега — подписью.
 - **«Ты»** — закреплено внизу всегда, если тебя нет на экране:
@@ -101,7 +101,7 @@ batch: 7
 - **Экран** — `screens/meta/rating.tsx` (по времени, по сложностям).
 - **Сезон** — после T-0111: `rating-season.tsx`, правила — `rating-rules.ts`,
   данные — `state/seasons-api.ts`.
-- **Облик** — портреты и головы — после T-0238 (`hero-portrait.ts`, `appearanceId`);
+- **Облик** — пока аватар `Avatar` (Р184); портреты и головы обликов — T-0238;
   знаки у имени — T-0236.
 - **Данные** — `state/runs-api.ts`, `state/seasons-api.ts`; после T-0294,
   T-0295 — `points`, `style`, `division`, `GET /rating/me/style`.

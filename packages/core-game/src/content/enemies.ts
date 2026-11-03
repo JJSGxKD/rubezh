@@ -156,4 +156,22 @@ export const ENEMIES: EnemyDef[] = [
     params: { triggerDistance: 300, telegraphSec: 0.9, dashSpeed: 520, dashDurationSec: 0.8, recoverSec: 1.8 },
     resist: { cold: 0.4, lightning: -0.4 },
   },
+  // Страж рубежа — цель забега (docs/39-retention-mechanics.md Б6, T-0120): приходит
+  // один раз на отметке `RUBEZH_AT_SEC`, его смерть — победа. Паттерн `rush`: проносится
+  // насквозь и заходит снова, без снарядов (Р69). Здоровье не ниже 1,3 от самого
+  // крепкого из прочих боссов (`findRubezhProblems`). `size` 2: без него страж на
+  // рое-паттерне вышел бы меньше героя (Р144). Стоит в конце массива, чтобы индексы
+  // прежних типов не сдвигались; в таймлайн и в поток его не вносят — приходит
+  // от `game/sim/rubezh.ts`.
+  {
+    id: "rubezh_guard",
+    hp: 1400,
+    speed: 58,
+    damage: 24,
+    xp: 120,
+    threat: 300,
+    rank: "boss",
+    pattern: "rush",
+    size: 2,
+  },
 ];

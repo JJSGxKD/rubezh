@@ -5,13 +5,14 @@ import { damageEnemy, inflictDamage } from "./combat";
 import { pushPlayerOutOfGuards, updateCordon } from "./cordon";
 import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
 import { isTimeFrozen, tickFreeze } from "./freeze";
+import { stepRubezh } from "./rubezh";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
 import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
-import { clampToBounds, damagePlayer, despawnProjectile, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
+import { clampToBounds, damagePlayer, despawnProjectile, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик — направление, а не координаты курсора: так один и тот же
@@ -56,6 +57,8 @@ export function stepWorld(world: World, input: SimInput): void {
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
   recycleLostEnemies(world);
+  // Страж рубежа — после переноса отставших: свежий страж стоит на кольце спавна и сразу в сетке этого тика.
+  stepRubezh(world);
   // Кольцо стражей — после переноса отставших и до сетки: исчезнувшие по времени
   // стражи не должны попасть в сетку этого тика.
   updateCordon(world, dt);
@@ -261,8 +264,6 @@ function updateEnemies(world: World, dt: number): void {
 
 function updateProjectiles(world: World, dt: number): void {
   const projectiles = world.projectiles;
-  const player = world.player;
-  const playerRadius = world.config.player.radius;
   const projectileRadius = world.config.player.projectileRadius;
 
   for (let p = 0; p < projectiles.count; p++) {
@@ -277,20 +278,7 @@ function updateProjectiles(world: World, dt: number): void {
       continue;
     }
 
-    if (projectiles.fromPlayer[p] === 1) {
-      hitEnemies(world, p, projectileRadius);
-      continue;
-    }
-
-    if (!player.alive) continue;
-    const dx = player.x - projectiles.x[p];
-    const dy = player.y - projectiles.y[p];
-    const contact = playerRadius + projectileRadius;
-    if (dx * dx + dy * dy <= contact * contact) {
-      const owner = projectiles.ownerType[p];
-      damagePlayer(world, projectiles.damage[p], owner === NO_OWNER_TYPE ? -1 : owner);
-      despawnProjectile(world, p);
-    }
+    hitEnemies(world, p, projectileRadius);
   }
 }
 

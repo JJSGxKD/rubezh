@@ -54,7 +54,10 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    networks: [edge, data]
+    # tunnel — до контейнера Xray: узлы подписки для прокси исходящих запросов (Р101).
+    networks: [edge, data, tunnel]
+    volumes:
+      - xray-config:/xray-config
     # Готовность, а не жизнь: выкат не признает здоровой версию без базы или Redis.
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
@@ -180,6 +183,35 @@ services:
     cpus: 1
     mem_limit: 768m
 
+  # Спутник Xray (docs/35-stage4-plan.md, Р101; tasks/T-0093): держит узлы
+  # подписки прокси. На узел один локальный SOCKS-вход (без TUN: он требует
+  # NET_ADMIN и заворачивает весь трафик контейнера); порты наружу не
+  # публикуются — контейнер в сети tunnel только вместе с API. Выход к узлам —
+  # через отдельную сеть tunnel-egress. Конфиг пишет API в общий том, run.sh
+  # раз в 5 секунд сверяет хеш и перезапускает Xray, проверив новый конфиг.
+  # Образ собирается из официального (версия и digest — в xray/Dockerfile):
+  # в официальном нет оболочки, а run.sh она нужна.
+  xray:
+    logging: *logging
+    build: ./xray
+    restart: unless-stopped
+    # Бит исполняемости из Windows не выставить, поэтому скрипт запускается через sh.
+    entrypoint: ["/bin/sh", "/xray-run.sh"]
+    volumes:
+      - ./xray/run.sh:/xray-run.sh:ro
+      - xray-config:/etc/xray:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pidof xray > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks: [tunnel, tunnel-egress]
+
   # Туннели разработчиков (docs/20-env-and-ports.md §4): Caddy принимает
   # frpc по WebSocket на frp.<домен> и отдаёт dev-адреса в vhost frps.
   frps:
@@ -199,6 +231,11 @@ networks:
   data:
     internal: true
   backup-egress: {}
+  # Между API и Xray: без выхода наружу. Порты входов Xray здесь и остаются.
+  tunnel:
+    internal: true
+  # Выход Xray к узлам подписки; у API его нет.
+  tunnel-egress: {}
 
 volumes:
   postgres-data: {}
@@ -207,3 +244,4 @@ volumes:
   redis-data: {}
   caddy-data: {}
   caddy-config: {}
+  xray-config: {}

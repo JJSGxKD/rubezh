@@ -68,6 +68,8 @@ export function submitRunResult(
   result: RunResult,
 ): RecordUpdate {
   const previous = loadBestSurvivalSec(storage, result.difficultyId);
+  // Пролог — рассказ, а не забег на время: рекорд «Лёгкой» он не трогает (T-0278).
+  if (result.prologue !== undefined) return { bestSurvivalSec: previous, isNewRecord: false };
   const survived = Number.isFinite(result.survivalSec) ? result.survivalSec : 0;
 
   if (survived <= previous) return { bestSurvivalSec: previous, isNewRecord: false };

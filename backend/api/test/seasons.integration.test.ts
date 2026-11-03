@@ -209,6 +209,8 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
       ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
+      rubezhReached: false,
+      rubezhClearedSec: null,
       ...rest,
     };
   }

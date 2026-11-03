@@ -3,17 +3,16 @@ id: T-0120
 title: Рубеж — цель забега, движок: страж на отметке, победа в итоге забега
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
-depends_on: [T-0099, T-0102, T-0170, T-0190, T-0192, T-0193, T-0194, T-0195, T-0196, T-0197, T-0229]
+depends_on: [T-0099, T-0102, T-0170, T-0190, T-0192, T-0193, T-0194, T-0195, T-0197, T-0229]
 zones:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/rubezh.ts
   - packages/core-game/src/content/enemies.ts
   - packages/core-game/src/content/hash.ts
-  - packages/core-game/src/content/balance-targets.ts
   - packages/core-game/src/game/sim/rubezh.ts
   - packages/core-game/src/game/sim/step.ts
   - packages/core-game/src/game/sim/combat.ts
@@ -26,13 +25,22 @@ zones:
   - packages/core-game/src/game/MainScene.ts
   - packages/core-game/src/run-api.ts
   - packages/core-game/src/index.ts
-  - packages/core-game/test/**
-  - scripts/balance/balance-sim.ts
 shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/32-balance.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
+  - packages/core-game/src/content/balance-targets.ts
+  - scripts/balance/balance-sim.ts
+  - packages/core-game/test/**
+  - CLAUDE.md
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/run-world.ts
+  - packages/core-game/src/game/sim/rng.ts
+  - packages/core-game/src/game/sim/spawner.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -43,7 +51,7 @@ batch: 3
 
 # T-0120. Рубеж — цель забега, движок: страж на отметке, победа в итоге забега
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](archive/T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](archive/T-0170-cordon-ring-engine.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0192](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json&label=T-0192)](archive/T-0192-pressure-after-minute-8.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0194](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0194.json&label=T-0194)](T-0194-limit-break-offers.md) [![T-0195](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0195.json&label=T-0195)](T-0195-player-power-pressure-engine.md) [![T-0196](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0196.json&label=T-0196)](T-0196-player-power-pressure-wiring.md) [![T-0197](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0197.json&label=T-0197)](T-0197-second-boss-no-projectiles.md) [![T-0229](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json&label=T-0229)](archive/T-0229-enemy-size-field.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0120.json)](README.md#значки-статуса) [![T-0099](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0099.json&label=T-0099)](archive/T-0099-run-chest-engine.md) [![T-0102](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0102.json&label=T-0102)](archive/T-0102-weapon-evolutions-data-and-engine.md) [![T-0170](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0170.json&label=T-0170)](archive/T-0170-cordon-ring-engine.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0192](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0192.json&label=T-0192)](archive/T-0192-pressure-after-minute-8.md) [![T-0193](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0193.json&label=T-0193)](T-0193-longer-run-progression.md) [![T-0194](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0194.json&label=T-0194)](T-0194-limit-break-offers.md) [![T-0195](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0195.json&label=T-0195)](T-0195-player-power-pressure-engine.md) [![T-0197](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0197.json&label=T-0197)](T-0197-second-boss-no-projectiles.md) [![T-0229](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0229.json&label=T-0229)](archive/T-0229-enemy-size-field.md)
 
 ## Зачем
 
@@ -55,6 +63,8 @@ batch: 3
 пачкой, **отдельно ни одна из трёх в игру не выходит**.
 
 ## Решения
+
+**Поправка `claude-lead-1` от 02.11.2026 (Р184).** Зависимость от T-0196 снята, `balance-targets.ts`, `balance-sim.ts` и `packages/core-game/test/**` перенесены из `zones` в `shared`: общие с ней только файлы баланса (`balance-targets.ts`, `balance-sim.ts`, `docs/32`), а не код. Влита T-0196 раньше — свести ветку с `dev` и пересчитать эталоны; позже — то же сделает она.
 
 **Поправка `claude-lead-1` от 20.10.2026 (Р126, единая сложность).** Рейтинговая сложность одна — `hard`. После T-0192 событие Матрёшки по формуле таймлайна приходит на 570 с — за 30 с до стража на 600 с. Страж остаётся на 600 с; событие босса ближе 60 с к нему сдвигается на 660 с или позже, с отметкой и замером `balance:sim` в описании PR.
 

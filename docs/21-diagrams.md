@@ -163,6 +163,8 @@ erDiagram
         string rating_restricted "nullable: notified|silent — сдан под ограничением рейтинга, в рейтинг не идёт и потом"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
+        boolean rubezh_reached "страж рубежа пришёл (со слов итога); победу засчитывает вердикт ok"
+        int rubezh_cleared_sec "nullable: секунда, на которой пал страж (T-0121)"
     }
 
     ACCOUNT_SESSION {
@@ -1003,6 +1005,44 @@ erDiagram
         datetime updated_at
     }
 
+    PROXY_SUBSCRIPTION {
+        string key PK "одна строка: main (CHECK)"
+        string name
+        bytes url_iv "12 байт: адрес подписки только шифртекстом"
+        bytes url_tag "16 байт подписи GCM"
+        bytes url_ct "шифртекст адреса"
+        string url_key_id "отпечаток ключа шифрования"
+        string url_hint "хост …abcd: сверить с кабинетом поставщика"
+        boolean enabled
+        string[] countries "ISO-коды стран узлов; пусто — любые"
+        datetime last_refresh_at "nullable"
+        boolean last_refresh_ok "nullable"
+        string last_refresh_note "nullable: итог словами, без адреса"
+        int provider_interval_hours "nullable: Profile-Update-Interval"
+        bigint traffic_used_bytes "nullable"
+        bigint traffic_total_bytes "nullable"
+        datetime expires_at "nullable"
+        uuid updated_by "без внешнего ключа"
+        datetime updated_at
+    }
+
+    PROXY_SUBSCRIPTION_NODE {
+        string subscription_key PK "и FK на PROXY_SUBSCRIPTION: удаление подписки уносит узлы"
+        string node_key PK "16 hex от параметров узла, название не влияет"
+        int slot UK "вход Xray: порт = XRAY_SOCKS_PORT_BASE + slot"
+        string protocol "vless, vmess, trojan или shadowsocks"
+        string name
+        string country "nullable: из названия узла"
+        string host
+        string state "unknown, healthy или down (CHECK)"
+        int failures
+        int latency_ms "nullable"
+        datetime last_probe_at "nullable"
+        datetime next_probe_at
+    }
+
+    PROXY_SUBSCRIPTION ||--o{ PROXY_SUBSCRIPTION_NODE : "узлы подписки"
+
     ACCOUNT_RESTRICTION {
         uuid restriction_id PK
         uuid account_id FK "удалённый аккаунт уносит свои строки"
@@ -1219,6 +1259,10 @@ erDiagram
   дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
   пишется один раз, повтор задания его не перепишет. Пусто — в бота не
   уходило: вид не дублируется, игрок выключил его или писать нельзя.
+  Напоминания (T-0128) — три вида в той же таблице: `season_overtaken`
+  (ключ `season_overtaken:сезон:игровой день`), `season_closing`
+  (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
+  день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -1615,6 +1659,14 @@ erDiagram
   `proxy:<id>`, поэтому строку не переложить под другой прокси. Ни связей с
   аккаунтом, ни внешних ключей: «кто менял» переживает человека. При вайпе
   таблицы остаются — это настройка команды, а не данные игрока.
+- **`PROXY_SUBSCRIPTION` и `PROXY_SUBSCRIPTION_NODE` — подписка Xray для
+  прокси** (Р101, T-0093, поток — §4.30). Одна подписка на систему (`key =
+  'main'`). Адрес — только шифртекстом `SecretCipher` (имя шифртекста
+  `proxy_subscription:main`); в панель уходит подсказка «хост …abcd». Секретов
+  узла (UUID, пароль) в таблицах нет — они только в конфиге Xray и в ответе
+  поставщика. Слот узла уникален: порт входа Xray = база + слот, и узел не
+  меняет порт между обновлениями. При вайпе таблицы остаются — это настройка
+  команды.
 - **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
   §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
   забег, ни оплата: проход раз в минуту выводит их из фактов — первого
@@ -1923,6 +1975,7 @@ flowchart TD
     CG --> ST
     API --> ST
     API --> FX
+    API --> PK
     SH --> DT
     ADM --> DT
 ```
@@ -2105,6 +2158,7 @@ flowchart LR
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
         PROXIES["proxies<br/>прокси для исходящих запросов:<br/>список и режимы сервисов из панели,<br/>пароль шифртекстом, снимок маршрутов<br/>в памяти, реализовано"]
+        SUBSCR["proxies/subscription<br/>подписка Xray: обновление под замком,<br/>слоты узлов, конфиг в общий том,<br/>проверки узлов, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
@@ -2129,6 +2183,7 @@ flowchart LR
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2283,6 +2338,12 @@ flowchart LR
     PROXIES -- "канал proxies:changed" --> REDIS
     PROXIES -. пароль прокси: тот же шифр, что у ключей .-> SECRETS
     OUTBOUND -. "маршруты: прокси и режимы (снимок в памяти)" .-> PROXIES
+    PROXIES -. "узлы подписки после ручных прокси" .-> SUBSCR
+    SUBSCR -- "proxy_subscription, proxy_subscription_node" --> PG
+    SUBSCR -. "адрес подписки: тот же шифр" .-> SECRETS
+    SUBSCR -. "proxy.subscription: только напрямую" .-> OUTBOUND
+    SUBSCR -- "замок proxy-subscription:refresh:lock" --> REDIS
+    ADMINAPI -. "подписка: обновить, проверить, права proxies.*" .-> SUBSCR
     OUTBOUND -- "outbound:route:сервис — какой прокси сработал, 10 минут" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
@@ -2368,6 +2429,13 @@ flowchart LR
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
     NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    REMINDERS -. "season_overtaken, season_closing, daily_reward_ready: notify" .-> NOTIF
+    REMINDERS -- "награда дня, рейтинговые забеги, account_messaging, итог суток" --> PG
+    REMINDERS -- "лок прохода, курсоры, снимок, окна потолка" --> REDIS
+    REMINDERS -. "расписание сезона, таблица недели" .-> SEASONS
+    REMINDERS -. "bot.reminders" .-> ACCSET
+    REMINDERS -. "порт Messengers: sendToChat, суточный отчёт" .-> TGADP
+    TGADP -. "кнопка rm:off: bot.reminders = false" .-> ACCSET
     CADDY -- "/api/v1/me/badges" --> BADGES
     BADGES -. "новые предметы" .-> ITEMS
     BADGES -. "подарки и заявки" .-> FRIENDS
@@ -2520,12 +2588,13 @@ sequenceDiagram
             RU->>RU: вердикт: слоты оружия, время по часам сервера,<br/>темп убийств и уровней, отпечаток контента
             RU->>DB: итог с вердиктом и причинами
             opt вердикт ok и без читов
-                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:{сложность} (общая)<br/>и runs:leaderboard:full:{сложность} (полная)
+                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:{сложность} (общая)<br/>и runs:leaderboard:full:{сложность} (полная);<br/>победа над стражем — ещё SADD в lb:rubezh:{сложность}
             end
             RU-->>Q: место, лучшее время, вердикт
             RU--)H: записан новый забег
             H--)R: сводка плейтеста — счётчики
             H--)R: подозрительный — карточка в очередь admin-notify,<br/>не чаще раза в час на аккаунт
+            H--)DB: награда в очередь rewards: победа над стражем<br/>при вердикте ok платится ×2 (RUBEZH_REWARD_MUL)
         end
     end
 ```
@@ -2548,6 +2617,13 @@ sequenceDiagram
   обе доски, аккаунт со скрытым ограничением «Отдельная доска» — только в
   полную, а ответ на итог, место и профиль берутся из доски того, кто
   смотрит. Форма ответа у всех одна (`14-scalability.md`, §4.2).
+- **победа над стражем рубежа** (T-0121, Р102). Итог несёт `rubezh`; победу
+  сервер проверяет сам: страж не мог пасть раньше отметки плюс минимального боя
+  и позже конца забега, иначе причина `rubezh_implausible` — подозрение без
+  множителя и без рейтинга. Засчитанная победа пишется в набор Redis
+  `lb:rubezh:{сложность}` (accountId) вместе с рекордом, а доска читает флаги
+  всей страницы одним `SMISMEMBER`. Набор — проекция, как и доски:
+  пересборка собирает его заново по `run.rubezh_*` и `ranked`.
 
 ### 4.3 Награда за просмотр рекламы (этап 4, реализовано ядро)
 
@@ -3982,6 +4058,53 @@ sequenceDiagram
 - **Память маршрута — подсказка:** Redis лёг — план без запомненного, вызов
   не падает и не ждёт дольше 300 мс.
 
+#### Подписка Xray: от адреса до SOCKS-входа (Р101, T-0093)
+
+Адрес подписки обновляется по расписанию (раз в `proxy.subscription.refresh-hours`,
+не меньше интервала поставщика, потолок 168 часов) и кнопкой «Обновить сейчас»,
+не чаще раза в минуту. Узлы становятся прокси для клиента исходящих: на узел один
+SOCKS-вход контейнера Xray в сети `tunnel` (без выхода наружу, порты не
+публикуются).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as ProxySubscription (расписание, кнопка)
+    participant R as Redis (замок)
+    participant P as Поставщик подписки
+    participant K as @bh/proxy-kit
+    participant V as Том xray-config
+    participant X as Контейнер Xray (run.sh)
+    participant O as Outbound (клиент исходящих)
+    participant N as Узел подписки
+
+    S->>R: SET proxy-subscription:refresh:lock NX PX 120000
+    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***)
+    P-->>S: список ссылок (base64 или текст)
+    S->>K: parseSubscription, assignSlots, buildXrayConfig
+    S->>V: config.json атомарно: временный файл и rename
+    S->>S: транзакция: узлы upsert, пропавшие удалены, итог, трафик, срок
+    X->>V: раз в 5 с: хеш конфига изменился?
+    X->>X: xray run -test; принят — перезапуск, нет — прежний конфиг остаётся
+    S->>O: узлы в перебор: socks5://xray:порт, лучшие по задержке после ручных прокси
+    O->>X: запрос через SOCKS-вход узла
+    X->>N: исходящее подключение узла (VLESS, VMess, Trojan, Shadowsocks)
+```
+
+- **Сбой поставщика не обнуляет пул:** сеть, код ответа, формат, ноль подходящих
+  узлов, нет каталога тома — узлы и конфиг остаются прежними, меняется только
+  итог в строке подписки. Повтор после неудачи — через 15 минут.
+- **Файла конфига нет** (том пересоздан, сервер переехал), а подписка свежая:
+  тик обновляет её сразу, не через период. Каталога тома нет или прошлое
+  обновление провалилось — не трогаем, действует повтор через 15 минут.
+- **Конфиг пишется раньше таблицы:** нет контейнера Xray — узлы, которых он не
+  видит, в таблицу не попадают.
+- **Проверка узла** — запрос на ipify через узел (как «Проверить» у ручного
+  прокси), не раньше 20 секунд после записи конфига: Xray перезапускается.
+  Проверяет та реплика, что держит замок; остальные собирают пул из таблицы.
+- **В перебор не все узлы:** `proxy.subscription.candidates` лучших здоровых
+  (по задержке, фильтр стран подписки), после ручных прокси.
+
 ### 4.31 Донат проекту: заказ, оплата, знак, возврат (этап 4, реализовано серверная часть)
 
 Игрок поддерживает проект звёздами на любую целую сумму в пределах способа
@@ -4215,6 +4338,57 @@ sequenceDiagram
 - **Отчёт по умолчанию — свод калибровки:** те же сценарии, зёрна и функции, что у
   `pnpm balance:sim`; черновик и база сравниваются по медианам и по коридорам
   `balance-targets` своего снимка.
+
+### 4.34 Напоминания бота: проход, лента, очередь, бот (этап 4, реализовано)
+
+Включается ключом `reminders.enabled` (по умолчанию выключен). Проход идёт
+раз в 10 минут; лента и очередь дубля уже работают для заявок и подарков —
+напоминания лишь новые виды в них (`35-stage4-plan.md` WP28, `tasks/T-0128`).
+
+```mermaid
+sequenceDiagram
+    participant S as RemindersScanner<br/>(каждая реплика)
+    participant R as Redis
+    participant P as Postgres
+    participant N as notifications<br/>(лента)
+    participant Q as notifications-bot<br/>(очередь BullMQ)
+    participant T as Telegram
+    participant U as Игрок
+
+    S->>R: SET reminders:scan:lock NX PX (токен)
+    alt лок у другой реплики
+        R-->>S: nil — проход пропущен
+    else лок взят
+        S->>R: метка отчёта reminders:report:день NX (после 00:10 по Москве)
+        S->>S: тихий час или нет сезона — на этом всё, снимок не трогаем
+        S->>R: снимок reminders:snap:сезон:сложность, ZREVRANGE таблицы недели
+        S->>P: reachable(обогнанные): без бана, can_message
+        S->>P: closingPage / dailyPage — страница по account_id, не больше 500
+        S->>R: EXISTS bot-notify:аккаунт:reminder — конвейером на всех
+        S->>S: chooseKind — один вид на игрока по приоритету
+        S->>N: notify(вид, dedupeKey) — повтор строки не заводит
+        N-->>Q: onCreated: задание, jobId = id уведомления
+        S->>R: курсоры и новый снимок — после записи строк
+        S->>R: DEL лок только своим токеном
+    end
+    Q->>Q: включатель, тихие часы, аккаунт, can_message, bot.reminders
+    Q->>R: SET bot-notify:аккаунт:reminder NX EX (окно потолка)
+    Q->>T: sendMessage: текст, «Открыть игру» и «Не напоминать» (rm:off)
+    T-->>U: сообщение
+    U->>T: нажал «Не напоминать»
+    T->>S: callback_query rm:off (через BotRouter) → bot.reminders = false
+```
+
+- **Одно напоминание на игрока в окно.** Планировщик выбирает один вид и не
+  заводит строку там, где окно занято, а отправитель держит окно второй раз
+  (`SET NX`): две реплики, перезапуск и застрявшее задание второго сообщения
+  не дадут. Окно — `reminders.min-gap-hours`, скользящее.
+- **Тихие часы** проверяются дважды: проход в тихий час ничего не читает и снимок
+  не двигает (обгон за ночь виден утром), а задание, застрявшее до 21:00, в
+  21:05 не уходит и окно не занимает.
+- **Курсор двигается после записи.** Упавший проход повторит страницу; ключ
+  события (`daily_reward_ready:день`, `season_closing:сезон`,
+  `season_overtaken:сезон:день`) не даст второй строки ленты.
 
 ## 5. Топология развёртывания
 

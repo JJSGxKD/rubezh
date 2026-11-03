@@ -65,6 +65,7 @@ export const ANALYTICS_EVENTS = [
   "home_slide_viewed",
   "home_slide_clicked",
   "home_widget_clicked",
+  "feed_event_viewed",
   "test_notice_accepted",
   "changelog_opened",
   "ad_shown",

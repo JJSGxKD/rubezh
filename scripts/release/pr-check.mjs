@@ -138,13 +138,14 @@ export function checkTaskLine(body, headRefName, taskFiles) {
   return [];
 }
 
-const RUNNER_LINE = /^Поток:\s*claude-\d+\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
+const RUNNER_LINE = /^Поток:\s*claude-(?:lead-)?\d+\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
 const LAUNCHER_LINE = /^Запустил:\s*(владелец|помощник\s+[\p{L}\p{N}_-]{2,32})\s*$/u;
 
 /**
  * Две строки с начала строки в описании PR ветки задачи: `Поток:` — кто
  * работал (модель и уровень из списков задач), `Запустил:` — кто запустил
  * поток. По ним доска считает вклад и по потокам, и по людям (T-0207).
+ * Задачу, которую тимлид делает сам, подписывает его имя `claude-lead-N`.
  */
 export function checkRunnerLines(body, headRefName) {
   if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];

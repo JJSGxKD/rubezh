@@ -3,8 +3,8 @@ id: T-0093
 title: Подписка Xray для прокси — хранение, обновление, контейнер Xray, раздел панели
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-11
 size: M
 depends_on: [T-0092, T-0065]
@@ -38,6 +38,16 @@ shared:
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - .github/workflows/deploy.yml
+  - apps/admin/src/api/proxies.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/helpers/memory-subscription.ts
+  - backend/api/test/outbound-proxy.test.ts
+  - backend/api/test/outbound.test.ts
+  - backend/api/test/player-address.test.ts
+  - backend/api/test/proxies.test.ts
+  - backend/api/test/wipe-plan.test.ts
+  - infra/prod/api.env.example
 runner: local
 executor: sonnet-5.5
 effort: extra
