@@ -34,6 +34,9 @@ shared:
   - backend/api/src/modules/tasks/task-rules.ts
   - backend/api/src/modules/diagnostics/dto/run-report.dto.ts
   - scripts/test/run-rules.test.ts
+  - backend/api/src/modules/reminders/reminders.repository.ts
+  - backend/api/test/reminders.integration.test.ts
+  - docs/22-analytics-and-metrics.md
 runner: any
 executor: sonnet-5.5
 effort: extra
