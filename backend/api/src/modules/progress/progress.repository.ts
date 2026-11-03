@@ -37,6 +37,14 @@ export interface Progress {
   level: number;
 }
 
+/** Что забег заявил о рубеже и как его оценил сервер: из этого видно, оплачена ли победа (T-0121). */
+export interface RunRubezh {
+  /** победа заявлена: страж пришёл и пал */
+  cleared: boolean;
+  verdict: "ok" | "suspicious" | "rejected";
+  cheats: boolean;
+}
+
 export const PROGRESS_REPOSITORY = Symbol("PROGRESS_REPOSITORY");
 
 export interface ProgressRepository {
@@ -45,6 +53,8 @@ export interface ProgressRepository {
   /** монеты легли в кошелёк — сколько на самом деле, после потолка суток */
   markCredited(runId: string, coinsCredited: number): Promise<void>;
   reward(runId: string, accountId: string): Promise<RunRewardRow | null>;
+  /** рубеж записанного забега; незнакомый или чужой забег — `null` */
+  rubezh(runId: string, accountId: string): Promise<RunRubezh | null>;
   progress(accountId: string): Promise<Progress>;
 }
 
@@ -121,6 +131,12 @@ export class PrismaProgressRepository implements ProgressRepository {
     // Чужую награду не отдаём: забег принадлежит аккаунту, и идентификатор
     // забега — не пропуск к чужим числам.
     return await this.prisma.runReward.findFirst({ where: { runId, accountId }, select: SELECT });
+  }
+
+  async rubezh(runId: string, accountId: string): Promise<RunRubezh | null> {
+    const row = await this.prisma.run.findFirst({ where: { runId, accountId }, select: { rubezhReached: true, rubezhClearedSec: true, verdict: true, cheats: true } });
+    if (row === null) return null;
+    return { cleared: row.rubezhReached && row.rubezhClearedSec !== null, verdict: row.verdict ?? "suspicious", cheats: row.cheats };
   }
 
   async progress(accountId: string): Promise<Progress> {

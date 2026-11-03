@@ -43,6 +43,11 @@ export interface RecordedRun {
   verdict: RunVerdict;
   reasons: VerdictReason[];
   finishedAt: Date;
+  /**
+   * Победа над стражем рубежа заявлена и не вызвала подозрения (T-0121). Платит
+   * за неё награда при вердикте `ok` и без читов; поля нет — победы нет.
+   */
+  rubezhCleared?: boolean;
 }
 
 export type RunListener = (run: RecordedRun) => Promise<void>;

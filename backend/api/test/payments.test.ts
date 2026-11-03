@@ -145,6 +145,8 @@ describe("счёт второго шанса", () => {
       ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
+      rubezhReached: false,
+      rubezhClearedSec: null,
     });
 
     expect(await codeOf(service.invoice(me, { runId, continueNo: 1, elapsedSec: 300 }, NOW))).toBe("continue_unavailable");

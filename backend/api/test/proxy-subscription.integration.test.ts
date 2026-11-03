@@ -20,7 +20,8 @@ import { testPrisma } from "./helpers/test-prisma.js";
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 13);
+// Сдвиг 7: соседи по базе не делают `flushdb` (на сдвиге 13 её чистят другие файлы).
+const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 7);
 const ACTOR_ID = "00000000-0000-4000-8000-000000000001";
 const URL_SECRET = "https://sub.example.com/api/v1/client/tok-9f8e7d6c5b4a?key=SECRETKEY";
 const UUID = "11111111-1111-4111-8111-111111111111";

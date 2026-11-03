@@ -73,6 +73,10 @@ const runOutcome = payload({
   // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
   noHitSec: count.optional(),
   noKillSec: count.optional(),
+  // Рубеж (tasks/T-0121, Р102): дошёл до стража и победил ли; секунда победы.
+  // Необязательные: сборки до рубежа полей не шлют, версия прежняя.
+  rubezh: z.enum(["none", "reached", "cleared"]).optional(),
+  rubezhClearedSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -345,6 +349,10 @@ export const EVENT_DICTIONARY = {
   // срабатывает — готовое к забору, отсчёт, рекорд — и на каком месте сетки.
   // Порядок виджетов — правилом, и событие показывает, правильное ли оно.
   home_widget_clicked: { version: 1, payload: payload({ widget: id, state: id, position: count }) },
+  // Лента живых событий под «Играть» (Р114, tasks/T-0176): какие виды событий
+  // игроки успевают увидеть. Клиент шлёт, когда событие было на виду не меньше
+  // секунды, раз на событие за запуск; игрока в нём нет.
+  feed_event_viewed: { version: 1, payload: payload({ kind: id, position: count }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел
