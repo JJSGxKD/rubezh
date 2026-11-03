@@ -139,7 +139,11 @@ export class SeasonsViewService {
       ];
     });
     // Тень в таблице друзей уже вложена в `standing.me`: свой счёт среди друзей, а не место недели.
-    const me = shadow && !friendsScope ? await this.shadowStanding(accountId, season, boardKey, difficulty, board, scoring) : this.meOf(standing.me, rows.get(accountId), scoring);
+    // Подписи тени — из её лучшего забега недели: сданные молча рейтинговыми не стали, строки в `rows` у неё нет.
+    let me;
+    if (!shadow) me = this.meOf(standing.me, rows.get(accountId), scoring);
+    else if (!friendsScope) me = await this.shadowStanding(accountId, season, boardKey, difficulty, board, scoring);
+    else me = standing.me !== null && standing.own !== null ? shadowMe(standing.me.rank, standing.own, scoring) : null;
     return boardViewSchema.parse({ seasonKey: season.key, difficulty, scoring, total: standing.total, entries, me });
   }
 
@@ -162,7 +166,7 @@ export class SeasonsViewService {
       this.store.rank(boardKey, difficulty, accountId, board),
       this.store.best(boardKey, difficulty, accountId, board),
     ]);
-    return { top, total, me: rank === null || best === null ? null : { rank, score: best } };
+    return { top, total, me: rank === null || best === null ? null : { rank, score: best }, own: null };
   }
 
   /**
@@ -174,14 +178,15 @@ export class SeasonsViewService {
     // Полная таблица: друг с отдельной доской виден и обычному игроку, с его счётом недели.
     const scores = await withTimeout(this.store.scores(boardKey, difficulty, [accountId, ...friends.map((friend) => friend.accountId)], "full"), REDIS_TIMEOUT_MS, "seasons: таблица недели");
     // Молчаливо ограниченного в таблице нет, а себя он видит: его счёт из тени встаёт среди друзей.
+    let own: WeekBest | null = null;
     if (shadow) {
-      const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: лучший забег недели");
-      if (mine !== null) scores.set(accountId, mine.score);
+      own = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: лучший забег недели");
+      if (own !== null) scores.set(accountId, own.score);
     }
     // Как у Redis при равном счёте: выше идентификатор.
     const ordered = [...scores.entries()].sort(([leftId, left], [rightId, right]) => right - left || (leftId < rightId ? 1 : -1)).map(([id, score]) => ({ accountId: id, score }));
     const place = ordered.findIndex((entry) => entry.accountId === accountId);
-    return { top: ordered.slice(0, BOARD_LIMIT), total: ordered.length, me: place < 0 ? null : { rank: place + 1, score: ordered[place]?.score ?? 0 } };
+    return { top: ordered.slice(0, BOARD_LIMIT), total: ordered.length, me: place < 0 ? null : { rank: place + 1, score: ordered[place]?.score ?? 0 }, own };
   }
 
   /** Место игрока из тени: лучший забег недели вместе со сданными молча, среди настоящих игроков. */
@@ -189,7 +194,7 @@ export class SeasonsViewService {
     const mine = await withTimeout(this.repository.bestRun(accountId, difficulty, season, true, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: лучший забег недели");
     if (mine === null) return null;
     const above = await withTimeout(this.store.countAbove(boardKey, difficulty, mine.score, board), REDIS_TIMEOUT_MS, "seasons: таблица недели");
-    return { rank: above + 1, points: scoring === "points" ? mine.score : mine.points, survivalSec: mine.survivalSec, style: mine.style };
+    return shadowMe(above + 1, mine, scoring);
   }
 
   /** Лучший забег недели игрока на каждой сложности: время и очки. */
@@ -224,6 +229,11 @@ export class SeasonsViewService {
   private async restrictionOf(accountId: string, at: Date) {
     return await withTimeout(this.restrictions.status(accountId, "leaderboard", at), DB_TIMEOUT_MS, "seasons: ограничения");
   }
+}
+
+/** Строка «меня» тени: подписи — из её лучшего забега недели, а не из рейтинговых строк. */
+function shadowMe(rank: number, mine: WeekBest, scoring: Scoring) {
+  return { rank, points: scoring === "points" ? mine.score : mine.points, survivalSec: mine.survivalSec, style: mine.style };
 }
 
 function nothing(): Record<Difficulty, number | null> {
