@@ -14,6 +14,7 @@ zones:
   - packages/app-shell/test/prologue-shell.test.ts
 shared:
   - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/index.tsx
   - packages/app-shell/src/state/first-run.ts
   - packages/app-shell/src/state/hints.ts
   - packages/app-shell/src/state/run.ts

@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
-import type { RunProfile, RunResult, UpgradeOption } from "@bh/shared-types";
+import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter, type RunProfile, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import { t } from "../src/i18n";
 import "../src/i18n/run";
 import { PrologueWinView } from "../src/screens/run/PrologueWin";
@@ -22,6 +24,7 @@ import {
 } from "../src/state/prologue";
 import { toStart, toSubmission, useRuns } from "../src/state/runs";
 import { useSession } from "../src/state/session";
+import { initShell } from "../src/state/shell";
 
 // Пролог в оболочке (tasks/T-0280, Р151): первый запуск без меню, подсказки по
 // событию, «Советуем», окно «Рубеж удержан!», разделы открываются победой.
@@ -367,5 +370,74 @@ describe("«Советуем» и тексты пролога", () => {
     expect(t("lobby.prologue.first")).toBe("Первый бой — три минуты");
     expect(t("lobby.prologue.next")).toBe("Дальше — бесконечный рубеж: сколько продержишься?");
     expect(t("lobby.new")).toBe("Новое");
+  });
+});
+
+describe("метки пролога переживают перезапуск", () => {
+  const KEY = "bh.prologue.v1";
+  const NO_MARKS = { daily: false, tasks: false, play: false };
+
+  function memoryStorage(): KeyValueStorage & { values: Record<string, string> } {
+    const values: Record<string, string> = {};
+    return {
+      values,
+      get: (key) => values[key] ?? null,
+      set: (key, value) => {
+        values[key] = value;
+      },
+      remove: (key) => {
+        delete values[key];
+      },
+    };
+  }
+
+  function bootWith(storage: KeyValueStorage): void {
+    initShell({
+      adapter: { ui: createNoopPlatformUi(), haptic: () => undefined } as unknown as PlatformAdapter,
+      capabilities: { platformAvailable: true, botUrl: "", diagnosticsByDefault: false },
+      storage,
+      analytics: () => undefined,
+      build: { version: "test", contentHash: "abc", platform: "telegram" },
+    });
+  }
+
+  it("победа и метки «Новое», записанные до закрытия, возвращаются после hydrate", () => {
+    const storage = memoryStorage();
+    bootWith(storage);
+    usePrologue.getState().markWon();
+    usePrologue.getState().acknowledge("daily");
+    expect(JSON.parse(storage.values[KEY] ?? "{}")).toEqual({ wonLocal: true, fresh: { daily: false, tasks: true, play: true } });
+
+    // «Перезапуск»: стор в памяти пуст, хранилище устройства то же.
+    usePrologue.setState({ wonLocal: false, fresh: NO_MARKS });
+    usePrologue.getState().hydrate();
+
+    expect(usePrologue.getState().wonLocal).toBe(true);
+    expect(usePrologue.getState().fresh).toEqual({ daily: false, tasks: true, play: true });
+  });
+
+  it("запуск оболочки читает хранилище пролога: hydrate вызван в index.tsx", () => {
+    const source = readFileSync(resolve(__dirname, "../src/index.tsx"), "utf8");
+    expect(source).toContain("usePrologue.getState().hydrate()");
+  });
+
+  it("в хранилище пусто — отметок нет", () => {
+    bootWith(memoryStorage());
+    usePrologue.setState({ wonLocal: true, fresh: { daily: true, tasks: true, play: true } });
+    usePrologue.getState().hydrate();
+    expect(usePrologue.getState().wonLocal).toBe(false);
+    expect(usePrologue.getState().fresh).toEqual(NO_MARKS);
+  });
+
+  it("повреждённое значение даёт запасное и не падает", () => {
+    const storage = memoryStorage();
+    bootWith(storage);
+    for (const broken of ["не json", JSON.stringify({ wonLocal: "yes" }), JSON.stringify({ wonLocal: true })]) {
+      storage.values[KEY] = broken;
+      usePrologue.setState({ wonLocal: true, fresh: { daily: true, tasks: true, play: true } });
+      expect(() => usePrologue.getState().hydrate()).not.toThrow();
+      expect(usePrologue.getState().wonLocal).toBe(false);
+      expect(usePrologue.getState().fresh).toEqual(NO_MARKS);
+    }
   });
 });
