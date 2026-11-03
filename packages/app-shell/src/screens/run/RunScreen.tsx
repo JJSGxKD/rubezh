@@ -123,6 +123,14 @@ export function RunScreen(): ReactNode {
     if (prologueGivenUp) navigation.resetTo("lobby");
   }, [prologueGivenUp, navigation]);
 
+  // Смерти в прологе нет (оберег, T-0278), и окна смерти в нём тоже нет. Если
+  // урон однажды пройдёт мимо оберега, мир встал бы без выхода: такой забег
+  // закрывается как сданный — главная, и «Играть» начнёт пролог заново.
+  const prologueDowned = prologue && run.phase === "downed";
+  useEffect(() => {
+    if (prologueDowned) useRun.getState().declineContinue();
+  }, [prologueDowned]);
+
   // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
   // чтобы смерть не ждала сети.
   const running = run.phase === "running";

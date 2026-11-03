@@ -421,6 +421,12 @@ describe("метки пролога переживают перезапуск", 
     expect(source).toContain("usePrologue.getState().hydrate()");
   });
 
+  it("упавший в прологе забег закрывается как сданный, а не стоит без окна", () => {
+    const source = readFileSync(resolve(__dirname, "../src/screens/run/RunScreen.tsx"), "utf8");
+    expect(source).toContain('const prologueDowned = prologue && run.phase === "downed";');
+    expect(source).toContain("if (prologueDowned) useRun.getState().declineContinue();");
+  });
+
   it("в хранилище пусто — отметок нет", () => {
     bootWith(memoryStorage());
     usePrologue.setState({ wonLocal: true, fresh: { daily: true, tasks: true, play: true } });
