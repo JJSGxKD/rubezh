@@ -202,13 +202,12 @@ describe("заморозка: таймер мира", () => {
     children.forEach((slot, k) => expect(world.enemies.x[slot]).toBe(startX[k]));
   });
 
-  it("вражеский снаряд в полёте не замирает", () => {
+  it("снаряд в полёте не замирает", () => {
     const world = setup();
     startFreeze(world);
     const slot = world.projectiles.alive.indexOf(0);
     world.projectiles.alive[slot] = 1;
     world.projectiles.count = slot + 1;
-    world.projectiles.fromPlayer[slot] = 0;
     world.projectiles.x[slot] = 200;
     world.projectiles.y[slot] = 0;
     world.projectiles.vx[slot] = -100;

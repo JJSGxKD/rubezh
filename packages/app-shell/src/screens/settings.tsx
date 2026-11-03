@@ -17,6 +17,7 @@ import { noteAccountSetting } from "../state/account-settings";
 import { botAccessSupported, useBotAccess } from "../state/bot-access";
 import { hydrateBotAccess, loadBotAccess, requestBotAccess } from "./home-bot-access";
 import { BOT_NOTIFY_ACCOUNT_KEYS, BOT_NOTIFY_KEYS, useBotNotifications } from "../state/bot-notifications";
+import { contactHref, openContact, useContact } from "../state/contact";
 import { useDiagnostics } from "../state/diagnostics";
 import { useDraftArtAllowed } from "../state/flags";
 import { useGraphics } from "../state/graphics";
@@ -40,6 +41,7 @@ export function SettingsScreen(): ReactNode {
   const navigation = useNavigation();
   const settings = useSettings();
   const diagnostics = useDiagnostics((state) => state.enabled);
+  const contact = contactHref(useContact((state) => state.url));
   const graphics = useGraphics();
   const artAllowed = useDraftArtAllowed();
   const radar = useRadarSetting((state) => state.position);
@@ -191,7 +193,7 @@ export function SettingsScreen(): ReactNode {
                 <ListItem
                   key={key}
                   title={t(`settings.bot.${key}`)}
-                  {...(key === "friendGift" ? { hint: t("settings.bot.friendGift.hint") } : {})}
+                  {...(key === "friendGift" || key === "reminders" ? { hint: t(`settings.bot.${key}.hint`) } : {})}
                   toggle={{ checked: bot[key], onChange: () => noteAccountSetting(BOT_NOTIFY_ACCOUNT_KEYS[key], bot.toggle(key)) }}
                 />
               ))}
@@ -203,6 +205,7 @@ export function SettingsScreen(): ReactNode {
 
         <SectionTitle>{t("settings.testers")}</SectionTitle>
         <ListGroup>
+          {contact === null ? null : <ListItem title={t("menu.contact")} hint={t("menu.contact.hint")} onClick={openContact} />}
           <ListItem title={t("settings.testers")} onClick={() => navigation.push("testers")} />
           {diagnostics ? (
             <ListItem title={t("diagnostics.title")} onClick={() => navigation.push("diagnostics")} />
@@ -215,13 +218,13 @@ export function SettingsScreen(): ReactNode {
 }
 
 /**
- * Громкость по регуляторам (docs/31-audio-and-haptics.md §5). Общая — поверх
- * всех; эффекты и интерфейс — отдельно: игрок вправе оставить бой и
- * убрать щелчки кнопок. Экспорт — для лаборатории звука, те же регуляторы.
+ * Громкость по регуляторам (docs/31-audio-and-haptics.md §6). Общая — поверх
+ * всех; эффекты, интерфейс и музыка — отдельно: игрок вправе оставить бой и
+ * убрать щелчки кнопок или музыку. Экспорт — для лаборатории звука, те же регуляторы.
  */
 export function VolumeSliders(): ReactNode {
   const volumes = useSettings((state) => state.volumes);
-  const keys: readonly VolumeKey[] = ["master", "effects", "ui"];
+  const keys: readonly VolumeKey[] = ["master", "effects", "ui", "music"];
   return (
     <ListGroup>
       {keys.map((key) => (
@@ -292,6 +295,13 @@ export function TestersScreen(): ReactNode {
                 title={t("testers.soundLab")}
                 hint={t("testers.soundLab.hint")}
                 onClick={() => navigation.push("soundLab")}
+              />
+            ) : null}
+            {access.admin ? (
+              <ListItem
+                title={t("testers.adsCheck")}
+                hint={t("testers.adsCheck.hint")}
+                onClick={() => navigation.push("adsCheck")}
               />
             ) : null}
             {/* Сведения об устройстве — всем (Р56): поделиться ими с командой

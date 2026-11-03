@@ -21,6 +21,8 @@ const SIZE_PX = 88;
 const BLIP_PX = 2.5;
 const ELITE_PX = 4.5;
 const PICKUP_PX = 4;
+/** Тайник крупнее подбора: найденное место — цель, а не добыча по дороге. */
+const SECRET_PX = 5;
 
 /** Форма по коду вида из снимка: рисунок решает таблица `RADAR_SHAPES`. */
 const SHAPE_OF_BLIP: readonly (typeof RADAR_SHAPES)[keyof typeof RADAR_SHAPES][] = (() => {
@@ -125,6 +127,14 @@ function draw(context: CanvasRenderingContext2D, radar: RadarSnapshot, size: num
         context.lineTo(x - size * 0.7, y + size * 0.7);
         context.stroke();
         break;
+      case "pillar":
+      case "gem":
+      case "triangle":
+      case "fir":
+      case "crack":
+      case "spark":
+        secret(context, shape, x, y, SECRET_PX * ratio, ratio, SECRET_COLORS[blipOf(shape)]);
+        break;
       case "dot":
       case undefined:
         break;
@@ -155,6 +165,91 @@ function marked(context: CanvasRenderingContext2D, x: number, y: number, radius:
   context.stroke();
   context.fillStyle = COLORS.text;
   dot(context, x, y, radius * 0.35);
+}
+
+/** Цвет тайника по его форме: форма — один к одному вид. */
+const SECRET_COLORS = {
+  shrine: RADAR_COLORS.shrine,
+  hoard: RADAR_COLORS.hoard,
+  stone: RADAR_COLORS.stone,
+  tree: RADAR_COLORS.tree,
+  rift: RADAR_COLORS.rift,
+  wisp: RADAR_COLORS.wisp,
+} as const;
+
+const SECRET_OF_SHAPE = {
+  pillar: "shrine",
+  gem: "hoard",
+  triangle: "stone",
+  fir: "tree",
+  crack: "rift",
+  spark: "wisp",
+} as const;
+
+function blipOf(shape: keyof typeof SECRET_OF_SHAPE): keyof typeof SECRET_COLORS {
+  return SECRET_OF_SHAPE[shape];
+}
+
+/**
+ * Тайник рубежа: знак вида — столб, ромб, треугольник, ёлочка, трещина, искра —
+ * в круге, как на земле. Форма, а не только цвет, различает виды: тона
+ * у них близки (§4.4).
+ */
+function secret(context: CanvasRenderingContext2D, shape: keyof typeof SECRET_OF_SHAPE, x: number, y: number, half: number, ratio: number, color: string): void {
+  context.fillStyle = withAlpha(COLORS.bg, 0.9);
+  dot(context, x, y, half * 1.25);
+  context.strokeStyle = color;
+  context.lineWidth = 1.2 * ratio;
+  context.beginPath();
+  context.arc(x, y, half * 1.25, 0, Math.PI * 2);
+  context.stroke();
+  context.fillStyle = color;
+  context.lineWidth = 1.4 * ratio;
+  switch (shape) {
+    case "pillar":
+      context.fillRect(x - half * 0.22, y - half * 0.8, half * 0.44, half * 1.6);
+      return;
+    case "gem":
+      diamond(context, x, y, half * 0.8);
+      return;
+    case "triangle":
+      context.beginPath();
+      context.moveTo(x, y - half * 0.8);
+      context.lineTo(x + half * 0.75, y + half * 0.6);
+      context.lineTo(x - half * 0.75, y + half * 0.6);
+      context.closePath();
+      context.fill();
+      return;
+    case "fir":
+      context.beginPath();
+      context.moveTo(x, y - half * 0.85);
+      context.lineTo(x + half * 0.6, y - half * 0.05);
+      context.lineTo(x - half * 0.6, y - half * 0.05);
+      context.closePath();
+      context.moveTo(x, y - half * 0.2);
+      context.lineTo(x + half * 0.8, y + half * 0.75);
+      context.lineTo(x - half * 0.8, y + half * 0.75);
+      context.closePath();
+      context.fill();
+      return;
+    case "crack":
+      context.beginPath();
+      context.moveTo(x + half * 0.2, y - half * 0.8);
+      context.lineTo(x - half * 0.3, y - half * 0.1);
+      context.lineTo(x + half * 0.3, y + half * 0.15);
+      context.lineTo(x - half * 0.2, y + half * 0.8);
+      context.stroke();
+      return;
+    case "spark":
+      dot(context, x + half * 0.25, y, half * 0.38);
+      context.beginPath();
+      context.moveTo(x - half * 0.7, y);
+      context.lineTo(x, y - half * 0.28);
+      context.lineTo(x, y + half * 0.28);
+      context.closePath();
+      context.fill();
+      return;
+  }
 }
 
 /** Подбор — крестом, а не только зелёным цветом (§4.4). */

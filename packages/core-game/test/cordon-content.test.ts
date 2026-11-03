@@ -2,12 +2,12 @@ import type { CordonRingDef, EndlessCurveDef, EnemyDef, TimelineEventDef, Timeli
 import { describe, expect, it } from "vitest";
 import { ENDLESS_CURVE } from "../src/content/waves";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
-import { CORDON_RING, GUARD, RAT } from "./helpers/scripted-run";
+import { BOSS, CORDON_RING, ELITE, GUARD, RAT } from "./helpers/scripted-run";
 
 // Проверка таймлайна для кольца (tasks/T-0170, шаг 7): сообщения называют
 // отрезок и поле, потому что читает их геймдизайнер в выводе CI.
 
-const ENEMIES: EnemyDef[] = [GUARD, RAT];
+const ENEMIES: EnemyDef[] = [GUARD, RAT, ELITE, BOSS];
 const CURVE: EndlessCurveDef = { ...ENDLESS_CURVE, pool: ["rat"], startTypes: 1, mixSize: 1, events: [] };
 
 const event = (patch: Partial<TimelineEventDef> = {}, ring: Partial<CordonRingDef> | null = {}): TimelineEventDef => ({
@@ -57,8 +57,8 @@ describe("кольцо в таймлайне", () => {
     expect(problems(event({}, { minRadius: 60 }))).toEqual([]);
   });
 
-  it("radius не больше 420", () => {
-    expect(problems(event({}, { radius: 421 }))).toContainEqual(expect.stringMatching(/отрезок на 60s:.*radius.*420/));
+  it("radius не больше 420: строй должен целиком помещаться в карту", () => {
+    expect(problems(event({}, { radius: 421 }))).toContainEqual(expect.stringMatching(/отрезок на 60s:.*radius.*420.*помещаться в карту/));
     expect(problems(event({}, { radius: 420 }))).toEqual([]);
   });
 
@@ -81,5 +81,48 @@ describe("кольцо в таймлайне", () => {
   it("событие кривой проверяется так же, как в расписанном отрезке", () => {
     const curve: EndlessCurveDef = { ...CURVE, events: [{ everySegments: 2, kind: "cordon", enemy: "guard", count: 40, ring: { ...CORDON_RING, lifeSec: 4 } }] };
     expect(findTimelineProblems(timeline(), curve, ENEMIES)).toContainEqual(expect.stringMatching(/кривая:.*lifeSec/));
+  });
+});
+
+describe("ring.inner: элита и босс внутри строя", () => {
+  const withInner = (inner: unknown) => problems(event({}, { inner: inner as CordonRingDef["inner"] }));
+  const wherePattern = /отрезок на 60s:.*ring\.inner/;
+
+  it("годные записи — без замечаний, в том числе fromSec и босс", () => {
+    expect(withInner([{ enemy: "elite_test", count: 2 }])).toEqual([]);
+    expect(withInner([{ enemy: "elite_test", count: 3, fromSec: 0 }, { enemy: "boss_test", count: 1, fromSec: 600 }])).toEqual([]);
+    expect(withInner(undefined)).toEqual([]);
+  });
+
+  it("пустой массив и больше четырёх записей", () => {
+    expect(withInner([])).toContainEqual(expect.stringMatching(wherePattern));
+    const five = Array.from({ length: 5 }, () => ({ enemy: "elite_test", count: 1 }));
+    expect(withInner(five)).toContainEqual(expect.stringMatching(wherePattern));
+  });
+
+  it("враг без ранга, страж кольца и неизвестный id", () => {
+    expect(withInner([{ enemy: "rat", count: 1 }])).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner\[0\].*rat.*не элита и не босс/));
+    expect(withInner([{ enemy: "guard", count: 1 }])).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner\[0\].*guard/));
+    expect(withInner([{ enemy: "no_such", count: 1 }])).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner\[0\].*no_such/));
+  });
+
+  it("count — целое от 1 до 4", () => {
+    for (const count of [0, 5, 1.5]) expect(withInner([{ enemy: "elite_test", count }]), String(count)).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner\[0\].*count.*1 до 4/));
+  });
+
+  it("всего внутренних на кольцо не больше шести", () => {
+    const seven = [{ enemy: "elite_test", count: 4 }, { enemy: "boss_test", count: 3 }];
+    expect(withInner(seven)).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner.*6/));
+    const six = [{ enemy: "elite_test", count: 4 }, { enemy: "boss_test", count: 2 }];
+    expect(withInner(six)).toEqual([]);
+  });
+
+  it("fromSec не отрицательный", () => {
+    expect(withInner([{ enemy: "elite_test", count: 1, fromSec: -1 }])).toContainEqual(expect.stringMatching(/отрезок на 60s:.*ring\.inner\[0\].*fromSec/));
+  });
+
+  it("событие кривой проверяется так же", () => {
+    const curve: EndlessCurveDef = { ...CURVE, events: [{ everySegments: 2, kind: "cordon", enemy: "guard", count: 40, ring: { ...CORDON_RING, inner: [{ enemy: "rat", count: 1 }] } }] };
+    expect(findTimelineProblems(timeline(), curve, ENEMIES)).toContainEqual(expect.stringMatching(/кривая:.*ring\.inner/));
   });
 });

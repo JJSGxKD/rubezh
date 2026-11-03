@@ -1,4 +1,9 @@
 {
+  "feed.label": "Что происходит в игре",
+  "feed.longRun": "{name}: {minutes} мин в одном забеге",
+  "feed.weekRecord": "{name}: новый рекорд недели — {time}",
+  "feed.boss": "{name}: босс повержен",
+  "feed.chest": "{name}: открыт редкий сундук",
   "home.carousel": "Сейчас в игре",
   "home.carousel.role": "карусель",
   "home.carousel.position": "Слайд {n} из {total}",
@@ -50,7 +55,6 @@
   "widget.tasks.idle": "Награды за забеги",
   "widget.record.title": "Лучший забег",
   "widget.record.short": "Рекорд",
-  "widget.record.on": "Лучший забег · {difficulty}",
   "widget.record.gap": "не хватило {time}",
   "widget.record.fresh": "в последнем забеге",
   "widget.record.none": "Первый забег ещё впереди",

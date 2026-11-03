@@ -29,14 +29,12 @@ export class CueTracker {
   private readonly enemyAlive: Uint8Array;
   private readonly enemyType: Uint8Array;
   private readonly enemyPhase: Uint8Array;
-  private readonly enemyCooldown: Float32Array;
 
   constructor(private readonly world: World) {
     const capacity = world.enemies.alive.length;
     this.enemyAlive = new Uint8Array(capacity);
     this.enemyType = new Uint8Array(capacity);
     this.enemyPhase = new Uint8Array(capacity);
-    this.enemyCooldown = new Float32Array(capacity);
     this.eventsRead = world.events.written;
     this.kills = world.stats.enemiesKilled;
     this.eliteKills = countEliteKills(world);
@@ -60,6 +58,7 @@ export class CueTracker {
       const kind = events.kind[slot];
       // Удар, погашенный щитом, — всё равно удар: игрок должен его почувствовать.
       if (kind === SIM_EVENT.playerHit || kind === SIM_EVENT.shield) cues.playerHit++;
+      else if (kind === SIM_EVENT.ward) cues.ward = (cues.ward ?? 0) + 1;
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
@@ -98,7 +97,7 @@ export class CueTracker {
     this.xp = xp;
 
     const elitesAlive = this.scanEnemies(cues);
-    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.enemyShots > 0 || cues.bossSpawns > 0) any = true;
+    if (cues.fuses > 0 || cues.dashWarns > 0 || cues.dashes > 0 || cues.bossSpawns > 0) any = true;
     // Появление элиты — это рост числа живых сверх убитых за то же окно.
     const spawned = elitesAlive - this.elitesAlive + cues.eliteKills;
     if (spawned > 0) {
@@ -133,7 +132,7 @@ export class CueTracker {
 
   /**
    * Один проход по врагам: начала угроз — переход в фазу фитиля, телеграфа
-   * или рывка, взведённая перезарядка стрелка — и число живых элит. Сравнение
+   * или рывка — и число живых элит. Сравнение
    * идёт с тем же врагом в слоте: только что появившийся не «начинает» угрозу.
    * Босс считается по новому слоту, а не по разнице живых: он один на
    * событие, а элиты рядом с ним могут выйти и пасть в том же окне.
@@ -146,7 +145,6 @@ export class CueTracker {
       const alive = enemies.alive[i] === 1;
       const typeIndex = enemies.type[i];
       const phase = enemies.phase[i];
-      const cooldown = enemies.attackCooldown[i];
       const same = alive && this.enemyAlive[i] === 1 && this.enemyType[i] === typeIndex;
       if (alive) {
         const type = world.enemyTypes[typeIndex];
@@ -157,14 +155,10 @@ export class CueTracker {
           else if (type.pattern === "dash" && phase === DASH_PHASE.telegraph) cues.dashWarns++;
           else if (type.pattern === "dash" && phase === DASH_PHASE.dash) cues.dashes++;
         }
-        if (same && cues !== null && type?.pattern === "kite_and_shoot" && cooldown > this.enemyCooldown[i] + 1e-6) {
-          cues.enemyShots++;
-        }
       }
       this.enemyAlive[i] = alive ? 1 : 0;
       this.enemyType[i] = typeIndex;
       this.enemyPhase[i] = phase;
-      this.enemyCooldown[i] = cooldown;
     }
     return elites;
   }
@@ -177,6 +171,7 @@ function emptyCues(): RunCues {
     magnet: 0,
     dynamite: 0,
     freeze: 0,
+    ward: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
@@ -188,7 +183,6 @@ function emptyCues(): RunCues {
     fuses: 0,
     dashWarns: 0,
     dashes: 0,
-    enemyShots: 0,
     weapons: {},
   };
 }
@@ -199,6 +193,7 @@ function resetCues(cues: RunCues): void {
   cues.magnet = 0;
   cues.dynamite = 0;
   cues.freeze = 0;
+  cues.ward = 0;
   cues.explosions = 0;
   cues.explosionsNear = 0;
   cues.strikes = 0;
@@ -210,7 +205,6 @@ function resetCues(cues: RunCues): void {
   cues.fuses = 0;
   cues.dashWarns = 0;
   cues.dashes = 0;
-  cues.enemyShots = 0;
   for (const id of Object.keys(cues.weapons)) cues.weapons[id] = 0;
 }
 

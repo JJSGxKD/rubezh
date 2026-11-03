@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { ForbiddenError, ValidationError } from "../../common/domain-error.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
+import { canManage } from "../roles/role-levels.js";
 import { ROLE_PERMISSIONS, ROLES, type Permission, type Role } from "../roles/permissions.js";
 import type { AuditQuery, AuditRecord } from "../roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
@@ -47,6 +48,8 @@ export interface RoleAssignmentView {
   /** кто выдал — по имени; `null` — система или аккаунта уже нет */
   grantedByName: string | null;
   grantedAt: string;
+  /** действующий вправе снять эту роль: она ниже его уровня и аккаунт ниже него (T-0216) */
+  revocable: boolean;
 }
 
 /**
@@ -57,6 +60,8 @@ export interface RoleAssignmentView {
 export interface RoleCatalogEntry {
   role: Role;
   permissions: readonly Permission[];
+  /** действующий вправе выдать эту роль кому-то ниже себя: её уровень ниже его (T-0216) */
+  grantable: boolean;
 }
 
 export interface RoleAssignments {
@@ -84,6 +89,10 @@ export class AdminRolesService {
 
   async assignments(actor: AccountRef): Promise<RoleAssignments> {
     const rows = await this.roles.assignments(actor);
+    const mine = await this.roles.rolesFor(actor);
+    // Роли каждого аккаунта — из тех же строк: уровень цели нужен, чтобы не показывать крестик там, где снять нельзя.
+    const rolesByAccount = new Map<string, Role[]>();
+    for (const row of rows) rolesByAccount.set(row.accountId, [...(rolesByAccount.get(row.accountId) ?? []), row.role]);
     // Имя в списке избавляет от второго похода в карточку — и у того, кому выдали, и у того, кто выдал.
     const ids = new Set(rows.flatMap((row) => (row.grantedBy === null ? [row.accountId] : [row.accountId, row.grantedBy])));
     const names = await this.accounts.displayNames([...ids]);
@@ -95,8 +104,9 @@ export class AdminRolesService {
         grantedBy: row.grantedBy,
         grantedByName: row.grantedBy === null ? null : (names.get(row.grantedBy) ?? null),
         grantedAt: row.grantedAt.toISOString(),
+        revocable: row.accountId !== actor.accountId && canManage(mine, rolesByAccount.get(row.accountId) ?? [], row.role),
       })),
-      roles: ROLES.map((role) => ({ role, permissions: ROLE_PERMISSIONS[role] })),
+      roles: ROLES.map((role) => ({ role, permissions: ROLE_PERMISSIONS[role], grantable: canManage(mine, [], role) })),
     };
   }
 
@@ -130,6 +140,7 @@ export class AdminRolesService {
     // Права и запрет выдачи себе проверяются до запроса: бот не должен просить подтвердить заведомо невозможное.
     await this.roles.require(actor, "roles.assign");
     if (actor.accountId === accountId) throw new ForbiddenError("Выдать роль себе нельзя");
+    await this.roles.ensureLevel(actor, accountId, role, "выдать");
     return { granted: false, confirm: await this.confirmations.open(actor, accountId, role) };
   }
 

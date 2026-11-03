@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Controller, Get, Global, Logger, Module, Param } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { Redis } from "ioredis";
+import { Prisma } from "../src/generated/prisma/client.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
@@ -18,7 +19,9 @@ import {
   OUTBOUND_BUFFER_MAX,
   ROLLUP_GRACE_MS,
   bucketOf,
+  isConnectionError,
   isServiceRoute,
+  logReason,
   minuteKey,
   outboundRow,
   quantileMs,
@@ -226,13 +229,15 @@ class FakeStore implements RequestJournalRepository {
   readonly inboundCleanups: { cutoff: Date; limit: number }[] = [];
   /** сколько ближайших записей в базу падает */
   failures = 0;
+  /** чем падает запись; по умолчанию обычной ошибкой */
+  failWith: unknown = new Error("база недоступна");
   /** сколько строк «удалила» каждая очередная пачка уборки */
   deletions: number[] = [];
 
   private maybeFail(): void {
     if (this.failures > 0) {
       this.failures -= 1;
-      throw new Error("база недоступна");
+      throw this.failWith;
     }
   }
 
@@ -813,5 +818,74 @@ describe("приёмник исходящих в приложении", () => {
     } finally {
       await context.close();
     }
+  });
+});
+
+describe("сбой связи с базой", () => {
+  const noConnection = (): Error => new Prisma.PrismaClientInitializationError("нет связи", "test");
+
+  it("связи нет 5 сбросов подряд, потом база принимает: записаны все, ни одна не выброшена", async () => {
+    const store = new FakeStore();
+    store.failWith = noConnection();
+    store.failures = 5;
+    const sink = new BufferedOutboundSink(store);
+    fill(sink, 4);
+
+    for (let index = 0; index < 5; index += 1) await sink.flush();
+    expect(sink.size).toBe(4);
+    expect(await sink.flush()).toBe(4);
+
+    expect(sink.dropped).toBe(0);
+    expect(store.outbound.flat()).toHaveLength(4);
+  });
+
+  it("обычная ошибка 3 раза подряд: пачка выброшена, как раньше", async () => {
+    const store = new FakeStore();
+    store.failures = 3;
+    const sink = new BufferedOutboundSink(store);
+    fill(sink, 4);
+
+    for (let index = 0; index < 3; index += 1) await sink.flush();
+
+    expect(sink.size).toBe(0);
+    expect(sink.dropped).toBe(4);
+  });
+
+  it("связи нет, буфер полон: сбрасываются самые старые, новые на месте", async () => {
+    const store = new FakeStore();
+    store.failWith = noConnection();
+    store.failures = 1;
+    const sink = new BufferedOutboundSink(store);
+    fill(sink, OUTBOUND_BUFFER_MAX);
+    const flushing = sink.flush();
+    sink.write(record({ durationMs: 7001 }));
+    sink.write(record({ durationMs: 7002 }));
+    await flushing;
+
+    expect(sink.size).toBe(OUTBOUND_BUFFER_MAX);
+    expect(sink.dropped).toBe(2);
+    await sink.flush();
+    const written = store.outbound.flat();
+    expect(written[0]?.durationMs).toBe(2);
+    expect(written.slice(-2).map((item) => item.durationMs)).toEqual([7001, 7002]);
+  });
+
+  it("logReason: 500 знаков становятся 200, последний «…»", () => {
+    const reason = logReason(new Error("а".repeat(500)));
+
+    expect(reason).toHaveLength(200);
+    expect(reason.endsWith("…")).toBe(true);
+    expect(logReason(new Error("коротко"))).toBe("коротко");
+    expect(logReason("строка")).toBe("unknown");
+  });
+
+  it("isConnectionError: P1001 и P1017 — да, P2002 и строка — нет", () => {
+    const known = (code: string): Error => new Prisma.PrismaClientKnownRequestError("x", { code, clientVersion: "test" });
+
+    expect(isConnectionError(known("P1001"))).toBe(true);
+    expect(isConnectionError(known("P1017"))).toBe(true);
+    expect(isConnectionError(noConnection())).toBe(true);
+    expect(isConnectionError(known("P2002"))).toBe(false);
+    expect(isConnectionError("строка")).toBe(false);
   });
 });

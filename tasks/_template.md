@@ -16,6 +16,7 @@ runner: any
 executor: sonnet-5.5
 effort: medium
 release: patch
+merge: lead
 design: null
 batch: 1
 ---

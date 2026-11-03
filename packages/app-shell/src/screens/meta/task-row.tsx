@@ -82,12 +82,11 @@ export function TaskRow(props: {
   // «Проверить» есть и у невыполненной цели. Ссылку и бота выполняет переход.
   const waitsAction = link !== null && !task.done && !props.closed;
   const opens = waitsAction && isOpenKind(task.kind);
-  const name = achievementName(task);
   // Места считаются при отрисовке, без тикающего таймера: экран заданий
   // перечитывается при каждом открытии и после каждого действия.
   const place = props.closed ? null : slotsText(task.slots, Date.now());
-  const title = task.title ?? name ?? goalText(task);
-  const hint = task.title === null && name !== null ? goalText(task) : (repeatHint(task) ?? null);
+  const title = taskTitle(task);
+  const hint = taskHint(task);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
@@ -129,8 +128,12 @@ export function TaskRow(props: {
           ) : null}
         </div>
         {/* Метка — откуда вылетает награда при заборе (`reward-burst.tsx`). */}
-        <span data-task-reward={task.id} className="shrink-0">
+        <span data-task-reward={task.id} className="flex shrink-0 flex-col items-end gap-1">
           <RewardChips reward={task.reward} />
+          {/* Очки идут в полосу дня или недели; у партнёрских целей и достижений их нет. */}
+          {task.passPoints > 0 && (task.period === "daily" || task.period === "weekly") && tabOf(task) !== "partner" ? (
+            <span className="font-display text-xs font-semibold tabular-nums text-accent">{t("tasks.points.task", { points: formatNumber(task.passPoints) })}</span>
+          ) : null}
         </span>
       </div>
       {/* Под строкой и во всю ширину: в правой колонке кнопка сжимала полосу
@@ -165,7 +168,7 @@ export function TaskRow(props: {
   );
 }
 
-function ProgressLine(props: { task: TaskItem }): ReactNode {
+export function ProgressLine(props: { task: Pick<TaskItem, "kind" | "value" | "target"> }): ReactNode {
   const { task } = props;
   const format = (value: number): string => (TIME_KINDS.has(task.kind) ? formatDuration(value) : formatNumber(value));
   const text = `${format(task.value)} / ${format(task.target)}`;
@@ -191,10 +194,32 @@ function repeatHint(task: TaskItem): string | null {
   return t(task.period === "daily" ? "tasks.repeat.daily" : "tasks.repeat.weekly");
 }
 
-/** Имя достижения из словаря — у достижений по умолчанию; у своих из панели — заголовок каталога. */
-function achievementName(task: TaskItem): string | null {
+/** Достижение игрока: срок «достижение», но не партнёрская цель — её рисует вкладка партнёров. */
+function isAchievement(task: Pick<TaskItem, "period" | "category">): boolean {
+  return task.period === "achievement" && tabOf(task) !== "partner";
+}
+
+/**
+ * Название строки. У достижения это именно название: заголовок каталога правится
+ * из панели без релиза (tasks/T-0106), словарь клиента остался девяти старым, а
+ * без обоих показывается id — чужому достижению с сервера новее клиента лучше
+ * честный id, чем пустая строка. У остальных заданий заголовок каталога или
+ * текст цели по виду со склонением числа.
+ */
+export function taskTitle(task: TaskItem): string {
+  if (task.title !== null) return task.title;
+  if (!isAchievement(task)) return goalText(task);
   const key = `achievement.${task.id}.name`;
-  return task.period === "achievement" && hasTranslation(key) ? t(key) : null;
+  return hasTranslation(key) ? t(key) : task.id;
+}
+
+/**
+ * Строка под названием. У достижения название не объясняет цель, поэтому цель
+ * словами стоит под ним; у повторяемой партнёрской подписки — когда следующая
+ * награда.
+ */
+export function taskHint(task: TaskItem): string | null {
+  return isAchievement(task) ? goalText(task) : repeatHint(task);
 }
 
 /**
@@ -202,7 +227,7 @@ function achievementName(task: TaskItem): string | null {
  * с разрядами, как в полосе прогресса. Незнакомый вид без заголовка — просто
  * число цели.
  */
-function goalText(task: TaskItem): string {
+export function goalText(task: Pick<TaskItem, "kind" | "target"> & { filter?: TaskItem["filter"] }): string {
   const key = `task.kind.${task.kind}`;
   if (!hasTranslation(key)) return formatNumber(task.target);
   return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000), ...goalFilterParams(task) });

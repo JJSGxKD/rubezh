@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { ChevronRight } from "lucide-react";
 import type { ApiError } from "../api/client";
+import { SortableItem, SortableList } from "./sortable-list";
 import { useNarrow } from "./use-media";
 
 /**
@@ -24,13 +25,42 @@ const BUTTON_TONES = {
     "bg-[color-mix(in_oklab,var(--color-danger)_8%,var(--color-bg))] text-danger border border-danger/40 hover:bg-[color-mix(in_oklab,var(--color-danger)_14%,var(--color-bg))]",
 } as const;
 
-export function Button({ tone = "secondary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { tone?: keyof typeof BUTTON_TONES }) {
+/**
+ * Причина, по которой главная кнопка недоступна, — одной строкой справа от неё.
+ * Показывается, только когда кнопка выключена и причина не пуста: пока идёт
+ * запрос, «идёт сохранение» видно по самой кнопке.
+ */
+export function blockedReason(disabled: boolean | undefined, blockedBy: string | null | undefined): string | null {
+  const text = blockedBy?.trim() ?? "";
+  return disabled === true && text !== "" ? text : null;
+}
+
+export function Button({
+  tone = "secondary",
+  className = "",
+  blockedBy,
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: keyof typeof BUTTON_TONES;
+  /** почему кнопка выключена; показывается справа и связана с кнопкой через `aria-describedby` */
+  blockedBy?: string | null;
+}) {
+  const reasonId = useId();
+  const reason = blockedReason(props.disabled, blockedBy);
   return (
-    <button
-      type="button"
-      {...props}
-      className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-10 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
-    />
+    <>
+      <button
+        type="button"
+        {...props}
+        {...(reason === null ? {} : { "aria-describedby": reasonId })}
+        className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-10 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_TONES[tone]} ${className}`}
+      />
+      {reason === null ? null : (
+        <span id={reasonId} className="text-xs text-text-muted">
+          {reason}
+        </span>
+      )}
+    </>
   );
 }
 
@@ -154,6 +184,24 @@ export function Field({ label, hint, help, error, children }: { label: string; h
   );
 }
 
+/**
+ * Ряд полей формы. Поля выровнены по верху — подпись к подписи, поле к полю:
+ * подсказка и ошибка стоят под своим полем и соседей не сдвигают. Всё, что не
+ * поле (флажок, кнопка, текст), оборачивается в `RowItem`.
+ */
+export function FieldRow({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-start gap-2">{children}</div>;
+}
+
+/** Не-поле в `FieldRow`: сдвинут вниз на строку подписи поля (20 px) и стоит вровень с полями. */
+export function RowItem({ children }: { children: ReactNode }) {
+  return (
+    <div className="pt-5">
+      <div className="flex min-h-[34px] items-center gap-2 max-md:min-h-10">{children}</div>
+    </div>
+  );
+}
+
 export function Panel({ title, help, actions, children }: { title: string; help?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <section className="rounded-md border border-border bg-surface">
@@ -238,89 +286,177 @@ export function hasPhoneValue(node: ReactNode): boolean {
   return node !== null && node !== undefined && typeof node !== "boolean" && node !== "";
 }
 
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, empty = "Пусто" }: { columns: Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; onRowClick?: (row: T) => void; empty?: string }) {
+/** Перестановка строк перетаскиванием (tasks/T-0167): подпись строки для диктора и новый порядок id одним вызовом. */
+export interface TableReorder<T> {
+  labelOf: (row: T) => string;
+  onReorder: (ids: string[]) => void;
+  disabled?: boolean;
+}
+
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  empty = "Пусто",
+  reorder,
+}: {
+  columns: Column<T>[];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  empty?: ReactNode;
+  reorder?: TableReorder<T>;
+}) {
   const narrow = useNarrow();
   if (rows.length === 0) return <p className="text-sm text-text-muted">{empty}</p>;
-  if (narrow) return <PhoneCards columns={columns} rows={rows} rowKey={rowKey} onRowClick={onRowClick} />;
+  if (narrow) return <PhoneCards columns={columns} rows={rows} rowKey={rowKey} onRowClick={onRowClick} reorder={reorder} />;
+
+  const head = (
+    <thead>
+      <tr className="border-b border-border text-xs text-text-muted">
+        {/* Столбец ручки без текста: для диктора он называется «Порядок». */}
+        {reorder === undefined ? null : (
+          <th className="w-10 px-1 py-1.5">
+            <span className="sr-only">Порядок</span>
+          </th>
+        )}
+        {columns.map((column) => (
+          <th key={column.title} className={`px-2 py-1.5 font-medium ${column.align === "right" ? "text-right" : ""}`}>
+            {column.help === undefined ? (
+              column.title
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                {column.title}
+                <Help text={column.help} />
+              </span>
+            )}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+  const cells = (row: T) =>
+    columns.map((column) => (
+      <td key={column.title} className={`px-2 py-1.5 align-top tabular-nums ${column.align === "right" ? "text-right" : ""}`}>
+        {column.render(row)}
+      </td>
+    ));
+  const rowClass = `border-b border-border/60 ${onRowClick === undefined ? "" : "cursor-pointer hover:bg-surface-raised/50"}`;
+  const click = (row: T) => (onRowClick === undefined ? undefined : () => onRowClick(row));
+
+  if (reorder === undefined) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-sm">
+          {head}
+          <tbody>
+            {rows.map((row) => (
+              <tr key={rowKey(row)} onClick={click(row)} className={rowClass}>
+                {cells(row)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  const labels = new Map(rows.map((row) => [rowKey(row), reorder.labelOf(row)]));
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-border text-xs text-text-muted">
-            {columns.map((column) => (
-              <th key={column.title} className={`px-2 py-1.5 font-medium ${column.align === "right" ? "text-right" : ""}`}>
-                {column.help === undefined ? (
-                  column.title
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    {column.title}
-                    <Help text={column.help} />
-                  </span>
+      <SortableList ids={rows.map(rowKey)} labelOf={(id) => labels.get(id) ?? id} onReorder={reorder.onReorder} disabled={reorder.disabled === true}>
+        <table className="w-full border-collapse text-left text-sm">
+          {head}
+          <tbody>
+            {rows.map((row) => (
+              <SortableItem key={rowKey(row)} id={rowKey(row)} as="tr" className={rowClass} {...(onRowClick === undefined ? {} : { onClick: () => onRowClick(row) })}>
+                {(handle) => (
+                  <>
+                    <td className="w-10 px-1 py-1.5 align-top">{handle}</td>
+                    {cells(row)}
+                  </>
                 )}
-              </th>
+              </SortableItem>
             ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={rowKey(row)}
-              onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
-              className={`border-b border-border/60 ${onRowClick === undefined ? "" : "cursor-pointer hover:bg-surface-raised/50"}`}
-            >
-              {columns.map((column) => (
-                <td key={column.title} className={`px-2 py-1.5 align-top tabular-nums ${column.align === "right" ? "text-right" : ""}`}>
-                  {column.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </SortableList>
     </div>
   );
 }
 
 /** Таблица на телефоне — список карточек: боковая прокрутка пальцем неудобна и прячет колонки. */
-function PhoneCards<T>({ columns, rows, rowKey, onRowClick }: { columns: readonly Column<T>[]; rows: readonly T[]; rowKey: (row: T) => string; onRowClick: ((row: T) => void) | undefined }) {
+function PhoneCards<T>({
+  columns,
+  rows,
+  rowKey,
+  onRowClick,
+  reorder,
+}: {
+  columns: readonly Column<T>[];
+  rows: readonly T[];
+  rowKey: (row: T) => string;
+  onRowClick: ((row: T) => void) | undefined;
+  reorder: TableReorder<T> | undefined;
+}) {
   const { primary, pairs, actions } = phoneLayout(columns);
+  // Перенос: четыре кнопки действий рядом с текстом на 390 не помещаются — уходят строкой ниже.
+  const cardClass = `flex flex-wrap items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5 ${onRowClick === undefined ? "" : "cursor-pointer active:bg-surface-raised"}`;
+  const body = (row: T, handle: ReactNode) => (
+    <>
+      {handle}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="min-w-0 text-sm font-semibold">{primary.render(row)}</div>
+        {pairs.length === 0 ? null : (
+          <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+            {pairs.map((column) => {
+              const value = column.render(row);
+              if (!hasPhoneValue(value)) return null;
+              return (
+                <div key={column.title} className="flex min-w-0 gap-1.5">
+                  <dt className="text-text-muted">{column.title}</dt>
+                  <dd className="min-w-0 tabular-nums text-text">{value}</dd>
+                </div>
+              );
+            })}
+          </dl>
+        )}
+      </div>
+      {actions.length === 0 ? null : (
+        <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
+          {actions.map((column, index) => (
+            <span key={index}>{column.render(row)}</span>
+          ))}
+        </div>
+      )}
+      {onRowClick === undefined ? null : <ChevronRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-disabled" />}
+    </>
+  );
+
+  if (reorder === undefined) {
+    return (
+      <ul className="flex flex-col gap-2">
+        {rows.map((row) => (
+          <li key={rowKey(row)} onClick={onRowClick === undefined ? undefined : () => onRowClick(row)} className={cardClass}>
+            {body(row, null)}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  const labels = new Map(rows.map((row) => [rowKey(row), reorder.labelOf(row)]));
   return (
-    <ul className="flex flex-col gap-2">
-      {rows.map((row) => (
-        <li
-          key={rowKey(row)}
-          onClick={onRowClick === undefined ? undefined : () => onRowClick(row)}
-          // Перенос: четыре кнопки действий рядом с текстом на 390 не помещаются — уходят строкой ниже.
-          className={`flex flex-wrap items-start gap-2 rounded-md border border-border bg-surface px-3 py-2.5 ${onRowClick === undefined ? "" : "cursor-pointer active:bg-surface-raised"}`}
-        >
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <div className="min-w-0 text-sm font-semibold">{primary.render(row)}</div>
-            {pairs.length === 0 ? null : (
-              <dl className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                {pairs.map((column) => {
-                  const value = column.render(row);
-                  if (!hasPhoneValue(value)) return null;
-                  return (
-                    <div key={column.title} className="flex min-w-0 gap-1.5">
-                      <dt className="text-text-muted">{column.title}</dt>
-                      <dd className="min-w-0 tabular-nums text-text">{value}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            )}
-          </div>
-          {actions.length === 0 ? null : (
-            <div className="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()}>
-              {actions.map((column, index) => (
-                <span key={index}>{column.render(row)}</span>
-              ))}
-            </div>
-          )}
-          {onRowClick === undefined ? null : <ChevronRight size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-text-disabled" />}
-        </li>
-      ))}
-    </ul>
+    <SortableList ids={rows.map(rowKey)} labelOf={(id) => labels.get(id) ?? id} onReorder={reorder.onReorder} disabled={reorder.disabled === true}>
+      <ul className="flex flex-col gap-2">
+        {rows.map((row) => (
+          <SortableItem key={rowKey(row)} id={rowKey(row)} as="li" className={cardClass} {...(onRowClick === undefined ? {} : { onClick: () => onRowClick(row) })}>
+            {(handle) => body(row, handle)}
+          </SortableItem>
+        ))}
+      </ul>
+    </SortableList>
   );
 }
 

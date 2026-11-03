@@ -165,15 +165,15 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     });
   }
 
-  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number } = {}) {
+  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number; donation?: boolean } = {}) {
     const purchaseId = randomUUID();
     const paidAt = new Date(Date.now() - paidMinutesAgo * MINUTE);
     await prisma.purchase.create({
       data: {
         purchaseId,
         accountId,
-        product: "shop_item",
-        sku: "gems_small",
+        product: patch.donation === true ? "donation" : "shop_item",
+        sku: patch.donation === true ? "donation" : "gems_small",
         priceStars: 50,
         chargedStars: patch.chargedStars ?? 50,
         mode: patch.mode ?? "live",
@@ -223,6 +223,23 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     expect(await ofAccount(player.accountId)).toMatchObject([{ goal: 1, status: "pending" }]);
   });
 
+  it("аккаунт под отдельной доской уходит в сеть как обычный игрок: те же строки и состояния (T-0115)", async () => {
+    const code = await adsgramLink();
+    const plain = await playerFromClick(code);
+    const marked = await playerFromClick(code);
+    await prisma.accountRestriction.create({ data: { accountId: marked.accountId, kind: "separate_board", startsAt: new Date(Date.now() - 60 * MINUTE), reason: "other", notify: false } });
+    for (const player of [plain, marked]) {
+      await finishedRun(player.accountId, 95);
+      await purchase(player.accountId, 40);
+    }
+
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+    const shape = (rows: Awaited<ReturnType<typeof ofAccount>>) => rows.map((row) => [row.goal, row.status, row.destination, row.reason]);
+    expect(shape(await ofAccount(marked.accountId))).toEqual(shape(await ofAccount(plain.accountId)));
+    expect(await ofAccount(marked.accountId)).toHaveLength(2);
+  });
+
   it("старый игрок, открывший игру по рекламе, — не конверсия сети; аккаунт команды — пропущен", async () => {
     const code = await adsgramLink("launch");
     const old = await playerFromClick(code);
@@ -258,6 +275,16 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     // Через десять минут отлежится и свежая — повторной.
     await conversions.sweep(new Date(Date.now() + 15 * MINUTE));
     expect((await ofAccount(player.accountId)).find((row) => row.purchaseId === fresh)).toMatchObject({ goal: 3 });
+  });
+
+  it("донат — не покупка: донат первым, покупка вторым — цель 2 у покупки, у доната цели нет (T-0364)", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromClick(code);
+    await purchase(player.accountId, 40, { donation: true });
+    const bought = await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    const rows = (await ofAccount(player.accountId)).filter((row) => row.goal !== 1);
+    expect(rows.map((row) => [row.goal, row.purchaseId])).toEqual([[2, bought]]);
   });
 
   it("журнал, счёт по ссылке, отправка и повтор неотправленной", async () => {

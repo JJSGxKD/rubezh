@@ -10,7 +10,7 @@ import type { ShopSku } from "./shop-catalog.js";
  * больше, чем выигрывает.
  */
 
-export type ShopBadge = "hit" | "best";
+export type ShopBadge = "hit" | "choice" | "best";
 
 /** Цена набора у способа оплаты игрока; `null` — этот способ товар не продаёт. */
 export type PriceOf = (sku: ShopSku) => number | null;
@@ -41,16 +41,27 @@ export function gemValuePct(skus: readonly ShopSku[], price: PriceOf): Map<strin
   return result;
 }
 
-/** Бейдж товара: ручной «Хит» у каталога сильнее «Лучшей цены»; лучшая — одна, у самого выгодного набора самоцветов. */
-export function badgesOf(skus: readonly ShopSku[], price: PriceOf): Map<string, ShopBadge> {
-  const result = new Map<string, ShopBadge>();
+/** Набор с лучшей ценой самоцвета — по расчёту, независимо от того, какая метка на нём в итоге стоит. */
+export function bestPriceId(skus: readonly ShopSku[], price: PriceOf): string | null {
   let best: { id: string; rate: number } | null = null;
   for (const sku of skus) {
-    if (sku.badge !== undefined) result.set(sku.id, sku.badge);
     const rate = gemsPerStar(sku, price);
     if (rate !== null && (best === null || rate > best.rate)) best = { id: sku.id, rate };
   }
-  if (best !== null && !result.has(best.id)) result.set(best.id, "best");
+  return best?.id ?? null;
+}
+
+/**
+ * Бейдж товара, одна метка на набор: «Хит» команды → «Выбор игроков» (`choiceId` —
+ * набор, посчитанный в `shop-choice.ts`) → «Лучшая цена» у самого выгодного набора
+ * самоцветов. Метка, уступившая место, на другой набор не переезжает.
+ */
+export function badgesOf(skus: readonly ShopSku[], price: PriceOf, choiceId: string | null = null): Map<string, ShopBadge> {
+  const result = new Map<string, ShopBadge>();
+  for (const sku of skus) if (sku.badge !== undefined) result.set(sku.id, sku.badge);
+  if (choiceId !== null && !result.has(choiceId)) result.set(choiceId, "choice");
+  const best = bestPriceId(skus, price);
+  if (best !== null && !result.has(best)) result.set(best, "best");
   return result;
 }
 
@@ -72,6 +83,7 @@ export function recommendedSku(skus: readonly ShopSku[], price: PriceOf, input: 
   if (starter !== undefined) return starter.id;
   const bundle = sellable.find((sku) => sku.kind === "bundle");
   if (input.equipped > 0 && bundle !== undefined) return bundle.id;
-  const best = [...badgesOf(sellable, price)].find(([, badge]) => badge === "best")?.[0];
+  // Лучшая цена — по расчёту, а не по метке: «Выбор игроков» мог занять её место.
+  const best = bestPriceId(sellable, price);
   return best ?? sellable[0]?.id ?? null;
 }

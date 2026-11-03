@@ -51,6 +51,19 @@ export const RUN_FILTER_KEYS = {
   difficulty_survive_sec: "difficulty",
 } as const;
 
+/**
+ * Категории достижений (docs/39-retention-mechanics.md К1): «Бой», «Коллекция»,
+ * «Мастерство», «Друзья». Названия показывает клиент.
+ */
+export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
+export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
+
+/** Поля достижения у обычного задания: категории, лестницы и престижа у него нет. */
+export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+
+/** Потолок очков престижа одного достижения — от опечатки в панели. */
+export const PRESTIGE_MAX = 10_000;
+
 /** Ступени пула ротации (docs/39-retention-mechanics.md П1). */
 export const POOL_TIERS = ["easy", "medium", "hard"] as const;
 export type PoolTier = (typeof POOL_TIERS)[number];
@@ -120,6 +133,21 @@ export const RUN_KINDS = {
 export type RunKind = keyof typeof RUN_KINDS;
 
 /**
+ * Состояния игрока (tasks/T-0106): число друзей и уровень аккаунта забег не
+ * двигает, поэтому они не в `RUN_KINDS`. Сервер читает их при открытии витрины
+ * достижений и дописывает прогресс с действием «максимум» — значение не убывает:
+ * друзей стало меньше, а выполненное осталось выполненным.
+ */
+export const STATE_KINDS = {
+  /** друзья в списке */
+  friends: { op: "max" },
+  /** уровень аккаунта */
+  account_level: { op: "max" },
+} as const satisfies Record<string, { op: "max" }>;
+
+export type StateKind = keyof typeof STATE_KINDS;
+
+/**
  * Партнёрские цели (Р52): их выполняет не забег, а действие игрока вне игры,
  * и у игрока они — своей категорией. `channel` — подписаться на канал или
  * вступить в чат, проверяет бот площадки по нажатию «Проверить»; `link` —
@@ -139,11 +167,15 @@ export type CheckedKind = (typeof CHECKED_KINDS)[number];
 /** Цели, которые засчитывает сам переход: проверить их у площадки нечем. */
 export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot"]);
 
-export type TaskKind = RunKind | CheckedKind;
-export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...CHECKED_KINDS];
+export type TaskKind = RunKind | StateKind | CheckedKind;
+export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...(Object.keys(STATE_KINDS) as StateKind[]), ...CHECKED_KINDS];
 
 export function isRunKind(kind: TaskKind): kind is RunKind {
   return Object.hasOwn(RUN_KINDS, kind);
+}
+
+export function isStateKind(kind: TaskKind): kind is StateKind {
+  return Object.hasOwn(STATE_KINDS, kind);
 }
 
 /** Категория цели у игрока: партнёрские — своей вкладкой, остальные — по сроку. */
@@ -213,10 +245,16 @@ export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
  */
 export const TASK_LIMIT_GRACE_MIN = 60;
 
+/** Идентификатор задания: латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков. */
+const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
+
+/** Идентификатор лестницы достижений — по тому же образцу, до 32 знаков. */
+const LADDER_ID = /^[a-z][a-z0-9_]{0,31}$/;
+
 /** Строка каталога — как её правит панель и читает сервер. */
 export const taskDefSchema = z
   .object({
-    taskId: z.string().regex(/^[a-z][a-z0-9_]{1,47}$/, "id — латиница, цифры и подчёркивание, до 48 знаков"),
+    taskId: z.string().regex(TASK_ID, "id — латиница, цифры и подчёркивание, до 48 знаков"),
     period: z.enum(TASK_PERIODS),
     kind: z.enum(TASK_KIND_IDS as [TaskKind, ...TaskKind[]]),
     /** партнёрская цель — куда вести и что проверять; у целей забега — пусто, и панель до партнёрских целей поля не слала */
@@ -229,7 +267,8 @@ export const taskDefSchema = z
     shards: z.number().int().nonnegative().max(1_000),
     /** очки батл-пасса (WP26) */
     passPoints: z.number().int().nonnegative().max(10_000),
-    sort: z.number().int().min(0).max(10_000),
+    /** место в списке: на входе игнорируется, его задаёт сервер — запросом порядка, а новому заданию — «конец списка» */
+    sort: z.number().int().min(0).max(10_000).default(0),
     active: z.boolean(),
     /** ступень пула ротации; `null` — строка в игре всегда (партнёрские цели, достижения, добавленные руками) */
     tier: z.enum(POOL_TIERS).nullable().default(null),
@@ -239,6 +278,17 @@ export const taskDefSchema = z
     limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
     /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
     image: z.string().regex(IMAGE_ID).nullable().default(null),
+    /** категория достижения; `null` — не достижение, и панель до престижа поля не слала */
+    category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
+    /** лестница: достижения с общим `ladder` идут ступенями `rung` с единицы */
+    ladder: z.string().regex(LADDER_ID, "лестница — латиница, цифры и подчёркивание, до 32 знаков").nullable().default(null),
+    rung: z.number().int().min(1).max(100).nullable().default(null),
+    /** скрытое, пока не выполнено: до выполнения игрок видит только подсказку */
+    hidden: z.boolean().default(false),
+    /** подсказка у закрытого скрытого достижения; у открытых и обычных допустима, но не обязательна */
+    hint: z.string().trim().min(1).max(120).nullable().default(null),
+    /** очки престижа за выполненное достижение */
+    prestige: z.number().int().min(0).max(PRESTIGE_MAX).default(0),
   })
   .strict()
   .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
@@ -273,6 +323,29 @@ export const taskDefSchema = z
       ctx.addIssue({ code: "custom", message: `у этого вида нужен фильтр: ${FILTER_LABELS[key]}`, path: ["filter"] });
     }
   })
+  .superRefine((task, ctx) => {
+    // Категория, лестница, подсказка, скрытость и престиж — у достижений забега и состояний.
+    // Партнёрскую цель рисует вкладка партнёров, а у ежедневных и недельных престижа нет.
+    const achievement = task.period === "achievement" && !isCheckedKind(task.kind);
+    if (!achievement) {
+      const present = [
+        ["category", task.category !== null],
+        ["ladder", task.ladder !== null],
+        ["rung", task.rung !== null],
+        ["hint", task.hint !== null],
+        ["hidden", task.hidden],
+        ["prestige", task.prestige !== 0],
+      ] as const;
+      for (const [field, set] of present) {
+        if (set) ctx.addIssue({ code: "custom", message: "категория, лестница, подсказка, скрытость и престиж — только у достижений забега", path: [field] });
+      }
+    }
+    if ((task.ladder === null) !== (task.rung === null)) ctx.addIssue({ code: "custom", message: "лестница и ступень задаются вместе", path: [task.ladder === null ? "ladder" : "rung"] });
+    if (task.hidden && task.hint === null) ctx.addIssue({ code: "custom", message: "у скрытого достижения нужна подсказка — её игрок видит, пока оно закрыто", path: ["hint"] });
+    // Друзей и уровень аккаунта читает витрина достижений: у ежедневной цели срок сбрасывал бы
+    // прогресс, который до экрана заданий никто не обновляет.
+    if (isStateKind(task.kind) && task.period !== "achievement") ctx.addIssue({ code: "custom", message: "друзья и уровень аккаунта — только у достижений", path: ["kind"] });
+  })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по
   // ссылке платил бы каждый день за одно и то же нажатие.
@@ -293,6 +366,29 @@ export function isCheckedKind(kind: TaskKind): boolean {
 }
 
 export type TaskDef = z.infer<typeof taskDefSchema>;
+
+/** Потолок места в списке — тот же, что у схемы строки каталога. */
+export const TASK_SORT_MAX = 10_000;
+
+/**
+ * Список с ручным порядком в панели: три срока и партнёрские цели отдельным
+ * списком, какой бы срок у них ни был — так их видит игрок.
+ */
+export const TASK_GROUPS = ["daily", "weekly", "achievement", "partner"] as const;
+export type TaskGroup = (typeof TASK_GROUPS)[number];
+
+export function taskGroup(def: Pick<TaskDef, "kind" | "period">): TaskGroup {
+  return isCheckedKind(def.kind) ? "partner" : def.period;
+}
+
+/** Запрос «новый порядок списка»: все id группы в нужном порядке, без повторов. */
+export const taskOrderSchema = z
+  .object({
+    group: z.enum(TASK_GROUPS),
+    ids: z.array(z.string().regex(TASK_ID)).min(1).max(TASK_SORT_MAX),
+  })
+  .strict()
+  .refine((order) => new Set(order.ids).size === order.ids.length, { message: "id не повторяются", path: ["ids"] });
 
 /** Что игрок знает о своём месте в задании с лимитом; без лимита и для выполнивших — ничего. */
 export interface TaskSlots {

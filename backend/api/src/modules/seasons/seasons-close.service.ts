@@ -64,11 +64,13 @@ export class SeasonsCloseService {
       if (todo.length === 0) return [];
       // Кому рейтинг закрыт на момент закрытия — в итогах нет и награды не получит.
       const excluded = await withTimeout(this.restrictions.restrictedAccounts("leaderboard", now), DB_TIMEOUT_MS, "seasons: ограничения");
+      // Отсечка рейтинга (Р126) читается один раз на проход: все просроченные сезоны закрываются по одному её значению.
+      const since = this.schedule.ratingSince();
 
       const result: SeasonClosed[] = [];
       for (const season of todo) {
         const startedAt = Date.now();
-        const outcome = await withTimeout(this.repository.close(season, excluded, now), CLOSE_TIMEOUT_MS, `seasons: закрытие ${season.key}`);
+        const outcome = await withTimeout(this.repository.close(season, excluded, now, since), CLOSE_TIMEOUT_MS, `seasons: закрытие ${season.key}`);
         // `null` — сезон успела закрыть другая реплика: событие её, не наше.
         if (outcome === null) continue;
         result.push(outcome);

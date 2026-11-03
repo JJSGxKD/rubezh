@@ -1,6 +1,6 @@
 import ruTasks from "../src/i18n/ru-tasks.json";
 import { describe, expect, it } from "vitest";
-import { buttonKey, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
+import { buttonKey, collapsedStreak, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
 import type { BotMentionTask, BotMentionView } from "../src/state/bot-mention-api";
 
 // Правила блока «юзернейм бота» (tasks/T-0160): что показать, какая строка
@@ -106,5 +106,37 @@ describe("тексты", () => {
     expect(texts["botMention.best"]).toBe("Лучшая серия: {n}");
     expect(texts["botMention.outcome.present"]).toBe("Нашли! Получено: {what}");
     expect(texts["botMention.status.hidden"]).toBe("Не видим твоё bio: оно пустое или закрыто настройками приватности.");
+  });
+});
+
+describe("свёрнутая серия (Р167)", () => {
+  const done = (patch: Partial<BotMentionTask>) => task({ rewardedToday: true, ...patch });
+
+  it("награда получена у обоих видов — наибольшая из серий", () => {
+    expect(collapsedStreak([done({ kind: "name", streak: 5 }), done({ kind: "bio", streak: 3 })])).toBe(5);
+  });
+
+  it("один показываемый вид с наградой — его серия", () => {
+    expect(collapsedStreak([done({ streak: 2 })])).toBe(2);
+  });
+
+  it("у одного вида награда получена, у другого нет — блок развёрнут", () => {
+    expect(collapsedStreak([done({ kind: "name", streak: 5 }), task({ kind: "bio", rewardedToday: false, streak: 3 })])).toBeNull();
+  });
+
+  it("ни у одного награды нет — развёрнут", () => {
+    expect(collapsedStreak([task({ streak: 4 }), task({ kind: "bio", streak: 4 })])).toBeNull();
+  });
+
+  it("пустой список — null", () => {
+    expect(collapsedStreak([])).toBeNull();
+  });
+
+  it("награда получена, а серия 0 — рассогласование ответа, блок не сворачивается", () => {
+    expect(collapsedStreak([done({ streak: 0 })])).toBeNull();
+  });
+
+  it("тексты свёртки есть в словаре", () => {
+    for (const key of ["botMention.collapsed", "botMention.expand", "botMention.collapse"]) expect(texts[key], key).toBeTypeOf("string");
   });
 });

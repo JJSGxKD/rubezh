@@ -185,6 +185,7 @@ describe("подача магазина", () => {
 
   it("бейдж словами; незнакомый от сервера новее клиента — без бейджа", () => {
     expect(badgeLabel("hit")).toBe("Хит");
+    expect(badgeLabel("choice")).toBe("Выбор игроков");
     expect(badgeLabel("best")).toBe("Лучшая цена");
     expect(badgeLabel("sale")).toBeNull();
     expect(badgeLabel(null)).toBeNull();
@@ -299,6 +300,12 @@ describe("покупка в магазине", () => {
     events = [];
     await buy({ ...request(), priceStars: 35, chargedStars: 35, promoPct: 30 }, deps("paid"));
     expect(named("purchase_initiated")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50, mode: "live" }]);
+  });
+
+  it("метка набора на витрине несёт разрез в событиях покупки", async () => {
+    await buy({ ...request(), badge: "choice" }, deps("paid"));
+    expect(named("purchase_initiated")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50, mode: "live", badge: "choice" }]);
+    expect(named("purchase_completed")).toEqual([{ product: "shop_item", sku: "gems_60", priceStars: 50, chargedStars: 50, mode: "live", badge: "choice" }]);
   });
 
   it("событие несёт цену и режим из счёта, а не из витрины: тестовая оплата не смешается с настоящей", async () => {

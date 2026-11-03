@@ -29,7 +29,7 @@ export const PLAYER_NOTE_PLATFORMS = ["telegram", "max", "vk", "web"];
 /** Потолок строки — тот же, что у журнала на сервере (`changelog-rules.ts`). */
 export const PLAYER_NOTE_TEXT_MAX = 500;
 
-const NOTHING = /^(нет|—|–|-)$/iu;
+const NOTHING = /^(нет\.?|—|–|-)$/iu;
 const LINE = /^[-*]\s+([^\s:[]+)\s*(?:\[([^\]]*)\])?\s*:\s*(.*)$/u;
 /** Разметку игрок увидит как есть: журнал показывает простой текст. */
 const MARKUP = /`|\*\*|\]\(/u;

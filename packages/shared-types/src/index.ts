@@ -463,12 +463,6 @@ export interface EnemyPatternParams {
     /** насколько быстро доворачивает к игроку, доля скорости в секунду */
     steeringPerSec?: number;
   };
-  kite_and_shoot: {
-    /** дистанция, которую стрелок держит до игрока */
-    preferredDistance?: number;
-    shotIntervalSec?: number;
-    projectileSpeed?: number;
-  };
   dash: {
     /** с какого расстояния до игрока начинается подготовка рывка */
     triggerDistance?: number;
@@ -504,17 +498,6 @@ export interface EnemyPatternParams {
      * один выстрел множит популяцию до конца пула.
      */
     children: { enemy: string; count?: number }[];
-  };
-  caster: {
-    /** дистанция, которую кастер держит до игрока */
-    preferredDistance?: number;
-    /** пауза между кастами в первой фазе боя; дальше он бьёт чаще */
-    castIntervalSec?: number;
-    /** сколько он стоит и светится перед кастом — время игрока уйти с линии */
-    telegraphSec?: number;
-    /** сколько шаров в кольце и в стене на первой фазе */
-    burstCount?: number;
-    projectileSpeed?: number;
   };
   rush: {
     /**
@@ -742,7 +725,7 @@ export type TimelineEventKind = "ring" | "flank" | "cordon";
  * на плотность экрана. Границы допустимого проверяет `findTimelineProblems`.
  */
 export interface CordonRingDef {
-  /** на каком расстоянии от центра стражи встают в строй: меньше расстояния спавна, чтобы приходили снаружи экрана */
+  /** на каком расстоянии от центра стражи встают в строй сразу, со вспышкой */
   radius: number;
   /** до какого радиуса строй сжимается и дальше не идёт: иначе игрока раздавит стенкой */
   minRadius: number;
@@ -750,6 +733,18 @@ export interface CordonRingDef {
   shrinkPerSec: number;
   /** сколько секунд кольцо живёт, если строй не пробили: потом стражи исчезают */
   lifeSec: number;
+  /** кто появляется внутри строя с телеграфом: элита и босс, не стражи */
+  inner?: CordonInnerDef[];
+}
+
+/** Элита или босс внутри кольца (Р166, tasks/T-0335). */
+export interface CordonInnerDef {
+  /** id элиты или босса из контента */
+  enemy: string;
+  /** сколько их, от 1 до 4 */
+  count: number;
+  /** с какой секунды забега запись действует; не задано — с любой */
+  fromSec?: number;
 }
 
 export interface TimelineEventDef {
@@ -909,6 +904,11 @@ export const LOADOUT_STATS = [
 
 export type LoadoutStat = (typeof LOADOUT_STATS)[number];
 
+/** Класс устройства игрока: от него зависит потолок живых врагов (подстройка давления, Р67). */
+export const DEVICE_CLASSES = ["standard", "light"] as const;
+
+export type DeviceClass = (typeof DEVICE_CLASSES)[number];
+
 /**
  * Набор на забег: модификаторы параметров и активные бусты. Пишется в запись
  * и снимок забега — иначе повтор и продолженный забег разошлись бы с
@@ -925,6 +925,13 @@ export interface RunLoadout {
    * баланса. Оболочка на новом забеге ставит его всегда.
    */
   accountLevel?: number;
+  /**
+   * Класс устройства (docs/35-stage4-plan.md, Р67): на слабом телефоне потолок
+   * живых врагов ниже. Класс влияет на бой, значит обязан попасть в запись и
+   * снимок забега, а набор туда уже попадает — отдельное поле не нужно. Нет
+   * поля — обычное устройство: `"standard"` в набор не пишется.
+   */
+  deviceClass?: DeviceClass;
 }
 
 /**
@@ -1141,10 +1148,203 @@ export interface ChestsDef {
   xpRatio: number;
   /** сундуков на поле одновременно; 0 — сундуков нет */
   maxOnField: number;
+  /**
+   * Поздние сундуки скромнее: с секунды `afterSec` забега размер бросается по
+   * этой таблице, а не по `sizes`. Растянутая прокачка (Р129) держится на том,
+   * что набор не доукомплектовывается сундуками за десятой минутой: пятерной
+   * сундук с позднего босса одним касанием закрывал бы несколько уровней
+   * навыков. Схема `opening` приоритетнее и действует, как раньше.
+   */
+  late?: ChestsLateDef;
+}
+
+/** Таблица размеров поздних сундуков (`ChestsDef.late`). */
+export interface ChestsLateDef {
+  /** с какой секунды забега сундуки бросаются по `sizes`; больше нуля */
+  afterSec: number;
+  /** вес каждого размера; в среднем скромнее основной таблицы */
+  sizes: readonly { size: ChestSize; weight: number }[];
+  /** сундук с босса в это время не меньше этого размера; значение должно быть среди `sizes` */
+  bossMinSize: ChestSize;
 }
 
 /** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
-export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKind | "xp" };
+export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: Exclude<UpgradeOptionKind, "limit"> | "xp" };
+
+// --- Тайники рубежа (docs/35-stage4-plan.md, Р153; design/art/meta-v2.md §5) ---
+// Места на бесконечной карте, ради которых стоит идти: причина двигаться и
+// выбор «рискнуть или нет». Очков рейтинга не дают — дают силу.
+
+/**
+ * Вид тайника. Капище — выбор благословения, клад — сундук, камень-указатель
+ * открывает остальные тайники на радаре, огонёк летит к ближайшему неоткрытому.
+ * Порядок — канонический: в итоге забега и в кодексе виды идут по нему.
+ */
+export const SECRET_KINDS = ["shrine", "hoard", "stone", "tree", "rift", "wisp"] as const;
+
+export type SecretKind = (typeof SECRET_KINDS)[number];
+
+/**
+ * Виды, которые бывают местом на карте. Огонёк к ним не относится: он один на
+ * забег, появляется у игрока и места в кольце не занимает.
+ */
+export type SecretPlaceKind = Exclude<SecretKind, "wisp">;
+
+/** Вес вида при выборе того, что окажется на месте тайника кольца. */
+export interface SecretKindWeight {
+  kind: SecretPlaceKind;
+  /** больше нуля */
+  weight: number;
+}
+
+/**
+ * Кольцо вокруг старта: сколько тайников в нём и какие виды. Радиусы — в
+ * игровых единицах от точки старта; кольца идут по возрастанию и не
+ * пересекаются.
+ */
+export interface SecretRingDef {
+  minRadius: number;
+  maxRadius: number;
+  /** сколько мест в кольце — целое, не меньше 1; мест на карте всегда ровно столько, сколько в кольцах */
+  count: number;
+  /** виды по весам; в первом кольце — только капище, найти его должен каждый */
+  kinds: readonly SecretKindWeight[];
+}
+
+/**
+ * Благословение капища: прибавка на весь забег. Параметры и пределы — те же,
+ * что у снаряжения и бустов (`LoadoutStat`, `LOADOUT_BOUNDS`), поэтому вместе
+ * с ними оно упирается в страховку движка.
+ */
+export interface BlessingDef {
+  id: string;
+  /** ключ названия — `blessing.<id>` */
+  nameKey: string;
+  modifiers: Partial<Record<LoadoutStat, number>>;
+}
+
+/**
+ * Тайники рубежа — данные геймдизайнера (`core-game/src/content/secrets.ts`).
+ * Расстояния и радиусы — в игровых единицах, скорость — единиц в секунду.
+ */
+export interface SecretsDef {
+  /** кольца от старта; пусто — на карте тайников нет */
+  rings: readonly SecretRingDef[];
+  /** минимальное расстояние между тайниками на земле, единицы; 0 — без требования */
+  minGapUnits: number;
+  /** капище: постоять в круге `holdSec` секунд, выбрать одно из `offers` благословений */
+  shrine: { radius: number; holdSec: number; offers: number };
+  /** клад: постоять в круге `holdSec` секунд, получить сундук размера `chestSize` */
+  hoard: { radius: number; holdSec: number; chestSize: ChestSize };
+  /** камень-указатель: коснуться — все тайники видны на радаре */
+  stone: { radius: number };
+  /**
+   * древо-оберег: пока игрок в круге, лечит `healPerSec` долей максимума здоровья в секунду и раз в
+   * `shieldEverySec` секунд даёт щит на одно попадание; не исчезает, отошёл — прекращается
+   */
+  tree: { radius: number; healPerSec: number; shieldEverySec: number };
+  /**
+   * разлом Нави: войти в круг — выходит волна из `elites` элит кольцом `ringRadius` вокруг разлома,
+   * мимо потолка живых; типы элит — те, что таймлайн к этой секунде уже выпускал. Убиты все — сундук
+   * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
+   */
+  rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
+  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
+  wisp: { appearSec: number; speed: number };
+  /** набор благословений капища */
+  blessings: readonly BlessingDef[];
+}
+
+/** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
+export interface RunSecretsSummary {
+  found: SecretKind[];
+  used: SecretKind[];
+}
+
+/**
+ * Отметка рубежа — секунда забега, на которой приходит страж (Р102, Р105,
+ * docs/39-retention-mechanics.md Б6). Одна константа на движок и сервер: движок
+ * ставит стража, сервер проверяет заявленную победу (`clearedSec` не раньше
+ * отметки); второй копии нет. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_AT_SEC = 600;
+
+/**
+ * Минимальная длительность боя со стражем, секунды (T-0121): стража нельзя убить
+ * быстрее. Сервер не принимает победу раньше `RUBEZH_AT_SEC + RUBEZH_MIN_FIGHT_SEC`.
+ * Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_MIN_FIGHT_SEC = 5;
+
+/**
+ * Во сколько раз победа над стражем умножает награду забега — монеты и опыт
+ * аккаунта, один раз за забег, поверх множителя сложности и до потолков забега
+ * (T-0121, Р102, docs/32-balance.md). Платит сервер, оболочка читает готовое
+ * `rubezhMul` из ответа награды. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_REWARD_MUL = 2;
+
+/** Правила рубежа: когда приходит страж и кто он (`content/rubezh.ts`). */
+export interface RubezhDef {
+  /** секунда забега, на которой приходит страж */
+  atSec: number;
+  /** id врага из контента: босс без снарядов */
+  guard: string;
+}
+
+/**
+ * Рубеж в итоге забега (T-0120). Победа — убитый страж, а не конец забега: она
+ * записывается в итог и не сбрасывается смертью или сдачей.
+ */
+export interface RunRubezh {
+  /** страж пришёл: забег дожил до отметки */
+  reached: boolean;
+  /** секунда забега, на которой страж пал; `null` — не пал */
+  clearedSec: number | null;
+  /** остаток здоровья живого стража целым процентом 1–100 к концу забега; `null` — стража нет или он убит */
+  guardHpPercent: number | null;
+}
+
+/**
+ * Режим забега (T-0278, Р151). `endless` — обычный бесконечный; `prologue` —
+ * пролог, первый забег аккаунта на три минуты: свой таймлайн, оберег, большой
+ * первый сундук, «Советуем» и победа над Стражем рубежа. Сложность пролога
+ * движок ставит сам — «лёгкая».
+ */
+export type RunMode = "endless" | "prologue";
+
+export const RUN_MODES: readonly RunMode[] = ["endless", "prologue"];
+
+/**
+ * Пролог первого забега — данные геймдизайнера (`core-game/src/content/prologue.ts`,
+ * docs/35-stage4-plan.md Р151). Таймлайн того же вида, что у бесконечного режима;
+ * кривая бесконечного режима в прологе не работает: после последнего отрезка поток
+ * держится как есть.
+ */
+export interface PrologueDef {
+  /** отрезки пролога; последним событием идёт Страж рубежа */
+  timeline: TimelineSegmentDef[];
+  /** множитель здоровья Стража в прологе: бой должен занимать 25–50 секунд при набранной за три минуты силе */
+  guardHpMul: number;
+  /** оберег: здоровье не падает ниже этой доли максимума, смерть в прологе невозможна */
+  hpFloorRatio: number;
+  /** размер первого выпавшего сундука вместо `ChestsDef.opening[0]` */
+  firstChestSize: ChestSize;
+  /** своя кривая опыта: первый уровень почти сразу */
+  levelCurve: LevelCurveDef;
+  /** во сколько раз дальше берутся кристаллы и подборы */
+  pickupRadiusMul: number;
+  /** что советуем на первом выборе улучшения */
+  recommendFirstOffer: "new_weapon";
+}
+
+/** Пролог в итоге забега: победа над Стражем и секунда, на которой забег кончился. */
+export interface RunPrologue {
+  /** Страж пал */
+  won: boolean;
+  /** секунда победы, а у забега без победы — секунда выхода */
+  sec: number;
+}
 
 /**
  * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
@@ -1170,6 +1370,66 @@ export interface DifficultyDef {
   spawnRateMul: number;
   /** потолок живых врагов одновременно */
   maxAliveMul: number;
+}
+
+/** Наклоны рычагов подстройки: на сколько множитель меняется на единицу уровня давления. */
+export interface PressureLeversDef {
+  /** здоровье врагов */
+  hp: number;
+  /** урон врагов */
+  damage: number;
+  /** темп спавна */
+  spawn: number;
+  /** потолок живых */
+  alive: number;
+  /** на сколько отрезков раньше приходят события элит и боссов кривой на единицу уровня */
+  leadPerLevel: number;
+}
+
+/**
+ * Подстройка давления под силу игрока и устройство (docs/35-stage4-plan.md,
+ * Р131, Р65, Р67, Р183) — данные геймдизайнера
+ * (`core-game/src/content/pressure.ts`). Подробности — `docs/32-balance.md` §2.7.
+ */
+export interface PressureDef {
+  power: {
+    /** очков за один слот: оружия и навыков всех категорий */
+    slotPoints: number;
+    /** очков за единицу прибавки параметра снаряжения; параметр без записи не считается */
+    gear: Partial<Record<LoadoutStat, number>>;
+    /** очков за долю набора, которой игроку не хватает до расписания */
+    buildPoints: number;
+    /** потолок помощи отстающему, очки; сама помощь только вычитает */
+    buildCap: number;
+    /** ожидаемая доля набора по секундам: пары «секунда, доля» */
+    buildSchedule: [number, number][];
+  };
+  /** сила, при которой давление не поправляется: ровно кривая единой сложности */
+  reference: number;
+  /** очков выше опорной, на которые уровень давления вырастает на единицу */
+  spanUp: number;
+  /** очков ниже опорной, на которые уровень давления падает на единицу */
+  spanDown: number;
+  minLevel: number;
+  maxLevel: number;
+  levers: {
+    /** слабее опорного: работают все рычаги */
+    down: PressureLeversDef & { stageShiftSec: number };
+    /** сильнее опорного: толпа и события, здоровье и урон едва-едва, ступени не сдвигаются */
+    up: PressureLeversDef;
+  };
+  /** пределы сдвига событий по рангу врага, в отрезках */
+  leads: { elite: { min: number; max: number }; boss: { min: number; max: number } };
+  devices: {
+    /** потолок живых врагов по классу устройства */
+    caps: Record<DeviceClass, number>;
+    /** с какой секунды забега урезанное потолком добирают здоровье и урон */
+    compensateFromSec: number;
+    hpComp: number;
+    damageComp: number;
+    /** во сколько раз добор не больше */
+    maxShortfall: number;
+  };
 }
 
 /** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
@@ -1203,6 +1463,16 @@ export interface LevelCurveDef {
   baseXp: number;
   /** во сколько раз дороже следующий уровень */
   growth: number;
+  /**
+   * Другой рост поздних уровней: с уровня `fromLevel` каждый следующий
+   * дороже предыдущего в `late.growth` раз, а не в `growth`. Набор в забеге
+   * растянут до 15-й минуты (Р127): при двух навыках по шесть уровней и
+   * четырёх оружиях по восемь нужно около семидесяти выборов, а геометрия
+   * 1,22 за уровень к 15-й минуте столько уровней не даёт — хвост приходится
+   * подбирать отдельно, и он может быть положе основного участка. Не задан —
+   * весь рост идёт по `growth`.
+   */
+  late?: { fromLevel: number; growth: number };
 }
 
 export type UpgradeOptionKind =
@@ -1211,7 +1481,32 @@ export type UpgradeOptionKind =
   | "passive_new"
   | "passive_level"
   | "weapon_evolve"
-  | "heal";
+  | "heal"
+  /** малая прибавка «Предела»: предлагается, только когда прокачивать нечего */
+  | "limit";
+
+/**
+ * Запись «Предела» (docs/35-stage4-plan.md, Р130): малая прибавка к параметру,
+ * которую можно брать без счёта, когда в наборе всё взято и прокачано. Данные
+ * геймдизайнера (`core-game/src/content/upgrades.ts`, `LIMITS`); складывается
+ * со снаряжением и бустами и упирается в те же пределы движка.
+ */
+export interface LimitDef {
+  /** id записи; карточка получает id `limit:<id>` */
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  /** параметр, к которому идёт прибавка, — тот же, что у снаряжения */
+  stat: LoadoutStat;
+  /**
+   * Прибавка за одно нажатие в шкале `LoadoutStat`: у перезарядки это
+   * ускорение (0,02 — на 2% короче), у здоровья — число. Больше нуля и не
+   * больше 5% предела параметра.
+   */
+  step: number;
+  /** вес при выборе карточек; не задан — 1 */
+  weight?: number;
+}
 
 /**
  * Вариант выбора при наборе уровня. `id` устойчив между прогонами — именно он
@@ -1226,6 +1521,11 @@ export interface UpgradeOption {
   level: number;
   nameKey: string;
   descriptionKey: string;
+  /**
+   * «Советуем»: карточка, на которую пролог указывает пальцем (T-0278). Есть
+   * только у предложения первого выбора пролога; выбор не навязан.
+   */
+  recommended?: boolean;
   /**
    * Что именно даёт вариант — по строке на характеристику. Без этого «Искра,
    * уровень 3» ничего не говорит: больше снарядов, быстрее или сильнее? Для
@@ -1280,6 +1580,28 @@ export interface RunPassiveSummary {
   level: number;
 }
 
+/** Сила игрока и уровень давления на старте забега (подстройка, Р131); числа округлены до сотых. */
+export interface RunPressureStart {
+  power: number;
+  level: number;
+  deviceClass: DeviceClass;
+}
+
+/** То же на конец забега: сравнение со стартом показывает, насколько набор отстал от расписания. */
+export interface RunPressureResult extends RunPressureStart {
+  powerEnd: number;
+  levelEnd: number;
+}
+
+/** Убитая элита или босс: сколько жила и сколько стоила (tasks/T-0292, Р152). */
+export interface RunHuntEntry {
+  rank: "elite" | "boss";
+  /** опыт врага из контента */
+  value: number;
+  /** секунд от появления до смерти */
+  aliveSec: number;
+}
+
 export interface RunResult {
   runId: string;
   /** seed забега: с ним и логом ввода забег воспроизводится целиком */
@@ -1307,6 +1629,28 @@ export interface RunResult {
   level: number;
   xpCollected: number;
   enemiesKilled: number;
+  /** убитые игроком боссы и элиты: потомки делящегося босса рядовые и не в счёте */
+  bossKills: number;
+  eliteKills: number;
+  /** открытые сундуки забега */
+  chestsOpened: number;
+  /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
+  crystalsCollected: number;
+  /**
+   * Найденные и использованные тайники рубежа. Необязательное: оболочка и
+   * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
+   */
+  secrets?: RunSecretsSummary;
+  /**
+   * Рубеж: пришёл ли страж, пал ли он и сколько здоровья у него осталось —
+   * «почти победил» для экрана смерти (T-0120). Необязательное: итог прошлой
+   * сборки поля не знает, а движок отдаёт его всегда.
+   */
+  rubezh?: RunRubezh;
+  /** режим забега; нет поля — `endless`, а у итога прошлой сборки режима и не было */
+  mode?: RunMode;
+  /** пролог: победа и секунда; есть только у забега в режиме `prologue` (T-0278) */
+  prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
   damageDealt: number;
@@ -1317,6 +1661,19 @@ export interface RunResult {
    * не попадают — как враги без убийств в `killsByEnemy`.
    */
   damageByElement: Partial<Record<ElementId, number>>;
+  /**
+   * Самая долгая серия без попадания, целые секунды вниз (Р161, tasks/T-0321):
+   * лучшая из закрытых попаданием и текущей на конец забега. Попадание — любой
+   * урон, дошедший до игрока сквозь неуязвимость, и удар в щит буста тоже.
+   */
+  noHitSec: number;
+  /**
+   * Самая долгая серия без убийства, целые секунды вниз: только закрытые
+   * убийством — хвост до смерти или сдачи не считается.
+   */
+  noKillSec: number;
+  /** убийства по стихии добивающего удара; физических в словаре нет, стихии без убийств не попадают */
+  killsByElement: Partial<Record<ElementId, number>>;
   weapons: RunWeaponSummary[];
   passives: RunPassiveSummary[];
   /** id врага, нанёсшего смертельный урон; null — забег кончился не смертью */
@@ -1343,6 +1700,15 @@ export interface RunResult {
    * итог прошлой сборки.
    */
   boosts?: string[];
+  /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
+  pressure?: RunPressureResult;
+  /**
+   * Журнал охоты: запись на каждую убитую элиту и босса, до 64 (tasks/T-0292).
+   * Необязательный: итог прошлой сборки поля не знает.
+   */
+  huntLog?: RunHuntEntry[];
+  /** Оценка сборки: эволюции × 2 + оружие и навыки на максимуме (tasks/T-0292). */
+  buildScore?: number;
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
@@ -1412,6 +1778,21 @@ export interface RunFinishStats {
   waveReached: number;
   /** кого больше всего убил — пятёрка по убыванию */
   topKills: { enemy: string; count: number }[];
+  /**
+   * Счётчики для заданий и достижений (tasks/T-0125). Необязательные: сборки
+   * и записи очереди до них полей не знают.
+   */
+  bossKills?: number;
+  eliteKills?: number;
+  chestsOpened?: number;
+  crystals?: number;
+  /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
+  noHitSec?: number;
+  noKillSec?: number;
+  killsByElement?: Partial<Record<ElementId, number>>;
+  /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
+  huntLog?: RunHuntEntry[];
+  buildScore?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
@@ -1461,6 +1842,8 @@ export interface LeaderboardEntry {
   isMe: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
+  prestige?: number | undefined;
 }
 
 export interface Leaderboard {

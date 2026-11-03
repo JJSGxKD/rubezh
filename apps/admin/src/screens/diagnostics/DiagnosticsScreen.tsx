@@ -81,7 +81,7 @@ function ReportList() {
             rows={rows}
             rowKey={(row) => row.reportId}
             onRowClick={(row) => navigate({ section: "diagnostics", id: row.reportId })}
-            empty="Отчётов нет"
+            empty="Отчётов нет — они приходят, когда тестер включает режим диагностики в настройках игры"
             columns={[
               { title: "Получен", render: (row) => formatDateTime(row.receivedAt) },
               { title: "Вид", render: (row) => <Badge tone={row.kind === "bench" ? "info" : "neutral"}>{row.kind === "bench" ? "стресс-тест" : "забег"}</Badge> },

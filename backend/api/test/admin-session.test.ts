@@ -175,7 +175,7 @@ describe("проверка сессии", () => {
 
     const before = await plain.service.identity({ accountId: account.accountId, platform: "telegram", platformUserId: "777" });
     expect(before.roles).toEqual(["moderator"]);
-    expect(before.permissions).toEqual(["players.view", "players.ban", "players.restrict", "players.message"]);
+    expect(before.permissions).toEqual(["players.view", "players.ban", "players.restrict", "players.message", "names.edit"]);
 
     await plain.roles.revoke(account.accountId, "moderator");
     await expect(plain.service.authenticate("mod", NOW)).rejects.toBeInstanceOf(PanelAccessError);

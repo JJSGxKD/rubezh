@@ -25,6 +25,13 @@ import { AdminRestrictionsController } from "./admin-restrictions.controller.js"
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
+import { AdminNameRuleCandidatesController } from "./admin-name-rule-candidates.controller.js";
+import { AdminNameRulesRecleanController } from "./admin-name-rules-reclean.controller.js";
+import { AdminNameRulesController } from "./admin-name-rules.controller.js";
+import { AdminNameRulesStatsController } from "./admin-name-rules-stats.controller.js";
+import { AdminProxiesController } from "./admin-proxies.controller.js";
+import { AdminProxySubscriptionController } from "./admin-proxy-subscription.controller.js";
+import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
 import { AdminOverviewController } from "./admin-overview.controller.js";
@@ -52,6 +59,7 @@ import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { AdminDiagnosticsController } from "./admin-diagnostics.controller.js";
 import { AdminRequestsController } from "./admin-requests.controller.js";
+import { AdminUiClicksController } from "./admin-ui-clicks.controller.js";
 import { AdminExportsController } from "./admin-exports.controller.js";
 import { AdminExportsService } from "./admin-exports.service.js";
 import { AdminFxController } from "./admin-fx.controller.js";
@@ -70,6 +78,7 @@ import { RequestJournalService } from "../request-journal/request-journal.servic
 import { PanelLoginService } from "./panel-login.service.js";
 import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js";
 import { RoleConfirmations } from "./role-confirmations.js";
+import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js";
 
 /**
  * Серверная часть админ-панели (docs/35-stage4-plan.md, WP17;
@@ -80,7 +89,7 @@ import { RoleConfirmations } from "./role-confirmations.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -104,10 +113,17 @@ import { RoleConfirmations } from "./role-confirmations.js";
     AdminRestrictionsController,
     AdminPurchasesController,
     AdminAdsController,
+    AdminNameRulesController,
+    AdminNameRulesStatsController,
+    AdminNameRuleCandidatesController,
+    AdminProxiesController,
+    AdminProxySubscriptionController,
+    AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
     AdminRequestsController,
+    AdminUiClicksController,
   ],
   providers: [
     AdminSessionService,
@@ -123,6 +139,8 @@ import { RoleConfirmations } from "./role-confirmations.js";
     PanelLoginService,
     { provide: PANEL_LOGIN_STORE, useClass: RedisPanelLoginStore },
     RoleConfirmations,
+    // Метку «Отдельная доска» читают только отчёты панели (T-0115)
+    { provide: BOARD_MARK_READER, useClass: PrismaBoardMarkReader },
     // Журнал запросов читает только панель; запись — в глобальном `RequestJournalModule`
     { provide: REQUEST_JOURNAL_READER, useClass: PrismaRequestJournalRepository },
     RequestJournalService,

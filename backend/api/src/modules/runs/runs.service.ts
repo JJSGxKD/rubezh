@@ -4,11 +4,13 @@ import { DomainError, ValidationError } from "../../common/domain-error.js";
 import type { AccountRef } from "../roles/roles.service.js";
 import { RolesService } from "../roles/roles.service.js";
 import type { RunFinish, RunStart } from "./dto/runs.dto.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
-import { rebuildLeaderboard } from "./leaderboard-rebuild.js";
-import type { Difficulty } from "./run-rules.js";
-import { judgeRun, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
-import { RatingRestrictions } from "./rating-restrictions.js";
+import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
+import { rebuildLeaderboard, type BoardCounts } from "./leaderboard-rebuild.js";
+import { isRatedRun } from "./rated-runs.js";
+import { countersOf } from "./run-counters.js";
+import { isRatedDifficulty, type Difficulty } from "./run-rules.js";
+import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
+import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
@@ -30,6 +32,14 @@ import { RunNotFoundError } from "./runs-view.service.js";
  * котором сообщили — ответ «не в рейтинге». Молчаливое — тень: ответ такой,
  * будто забег засчитан, с местом среди настоящих игроков, а в доски он не
  * идёт.
+ *
+ * **Единая сложность** (Р126, tasks/T-0191): в рейтинг идёт только забег
+ * рейтинговой сложности, законченный не раньше отсечки `rating.since-date`
+ * (`rated-runs.ts`). Остальные принимаются, оцениваются антифродом и
+ * награждаются по-прежнему, пишутся в историю — но `ranked = false`, а ответ
+ * «не в рейтинге» отдаётся без обращения к Redis. Отсечку сервис спрашивает у
+ * `RatingRestrictions` на каждый вызов: она читается из памяти настроек, а не
+ * из базы.
  */
 
 /** Менять нечего: снимают уже снятый или возвращают тот, что не был снят модератором. */
@@ -90,8 +100,10 @@ export class RunsService {
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
     ]);
+    const counters = countersOf(run.stats);
     const judged = judgeRun(
       {
+        counters,
         survivalSec: run.survivalSec,
         level: run.level,
         enemiesKilled: run.enemiesKilled,
@@ -105,14 +117,19 @@ export class RunsService {
         cheats: run.cheats,
         loadout,
         boosts,
+        rubezh: run.rubezh ?? null,
       },
       this.config.runs,
     );
-    const rankable = judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
+    // Победа для рейтинга и награды: заявлена, правдоподобна, без читов. Вердикт `ok` и рейтинговость проверяет `ranked`.
+    const rubezhCleared = rubezhWinOf(run.rubezh, judged.reasons);
+    // Нерейтинговый забег ограничений рейтинга не касается: `held` для него не нужен и не вычисляется.
+    const rated = isRatedRun(run.difficultyId, new Date(nowMs), this.rating.since());
+    const rankable = rated && judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
     const held = rankable ? await this.rating.hold(account.accountId, new Date(nowMs)) : null;
     const ranked = rankable && held === null;
     // Лучшее в тени — до записи этого забега: иначе не понять, новый ли это рекорд.
-    const shadowBefore = held === "silent" ? ((await this.runs.bestRunOf(account.accountId, run.difficultyId, true))?.survivalSec ?? null) : undefined;
+    const shadowBefore = held === "silent" ? ((await this.runs.bestRunOf(account.accountId, run.difficultyId, true, this.rating.since()))?.survivalSec ?? null) : undefined;
 
     const outcome = await this.runs.finish({
       runId: run.runId,
@@ -134,13 +151,15 @@ export class RunsService {
       ratingRestricted: held,
       verdict: judged.verdict,
       verdictReasons: judged.reasons,
+      rubezhReached: run.rubezh?.reached ?? false,
+      rubezhClearedSec: run.rubezh?.clearedSec ?? null,
     });
     if (outcome === "foreign") throw new ValidationError("Некорректный забег");
     // Параллельный повтор успел раньше — отвечаем тем, что записал он.
     if (outcome === "duplicate") return await this.replay(account, run.runId);
 
     if (judged.verdict !== "ok") this.logSuspicious(account, run.runId, judged.verdict, judged.reasons);
-    const result = await this.resultOf(account, run.difficultyId, run.survivalSec, judged.verdict, ranked, held, shadowBefore);
+    const result = await this.resultOf(account, run.difficultyId, run.survivalSec, judged.verdict, ranked, held, rubezhCleared && !run.cheats, shadowBefore);
     // Слушатели — после записи и без ожидания: ответ игроку не ждёт ни
     // сводки, ни очереди уведомлений.
     void this.hooks.emit({
@@ -155,6 +174,8 @@ export class RunsService {
       weapons: run.weapons.map((weapon) => ({ id: weapon.id, level: weapon.level })),
       boosts: boosts === "paid" ? [...run.boosts] : [],
       xpCollected: run.stats?.xpCollected ?? null,
+      // Неправдоподобные счётчики в задания и достижения не идут.
+      counters: judged.reasons.includes("counters_implausible") ? null : counters,
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues.length,
@@ -162,6 +183,7 @@ export class RunsService {
       verdict: judged.verdict,
       reasons: judged.reasons,
       finishedAt: new Date(nowMs),
+      rubezhCleared,
     });
     return result;
   }
@@ -170,8 +192,9 @@ export class RunsService {
    * Пересобрать рейтинг из базы. Проекция в Redis — кеш: потерялась или
    * разошлась с базой — эта команда возвращает её к источнику истины.
    */
-  async rebuildLeaderboard(): Promise<Record<string, number>> {
-    return await rebuildLeaderboard(this.runs, this.leaderboard, new Set(await this.rating.excluded()));
+  async rebuildLeaderboard(): Promise<Record<string, BoardCounts>> {
+    const [excluded, separate] = await Promise.all([this.rating.excluded(), this.rating.separate()]);
+    return await rebuildLeaderboard(this.runs, this.leaderboard, new Set(excluded), new Set(separate), this.rating.since());
   }
 
   /**
@@ -185,15 +208,21 @@ export class RunsService {
     await this.roles.require(actor, "players.restrict");
     const stored = await this.runs.find(runId);
     if (stored === null || stored.status !== "finished") throw new RunNotFoundError();
-    const changed = await this.runs.setRanked(runId, ranked);
+    // Нерейтинговую сложность и забег раньше отсечки база не меняет: условие — в самом обновлении.
+    const since = this.rating.since();
+    const changed = await this.runs.setRanked(runId, ranked, since);
     if (changed === null) throw new RunRankingConflictError(ranked);
 
     if ((await this.rating.hold(changed.accountId)) === null) {
-      const best = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
-      await this.leaderboard.set(changed.difficulty, changed.accountId, best?.survivalSec ?? null);
+      // Правится то, что положено аккаунту: отдельная доска — только полная, остальные — обе.
+      const boards = await this.rating.boardsFor(changed.accountId);
+      const best = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false, since);
+      await this.leaderboard.set(changed.difficulty, changed.accountId, best?.survivalSec ?? null, boards);
+      // Отметка рубежа идёт за лучшими забегами: снятый победный забег её не оставляет, если другой победы нет.
+      await this.leaderboard.setRubezh(changed.difficulty, changed.accountId, (await this.runs.rubezhWinners(changed.difficulty, since, [changed.accountId])).length > 0);
       // Забег, сданный между чтением и записью, затёрт точной записью; итог пишет базу раньше доски — второе чтение его видит.
-      const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false);
-      if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec);
+      const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false, since);
+      if (after !== null && after.survivalSec !== best?.survivalSec) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.survivalSec, boards);
     }
     // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
     await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
@@ -216,7 +245,12 @@ export class RunsService {
   private async replay(account: AccountRef, runId: string): Promise<FinishResult> {
     const stored = await this.runs.find(runId);
     if (stored === null || stored.survivalSec === null) throw new ValidationError("Некорректный забег");
-    return await this.resultOf(account, stored.difficulty, stored.survivalSec, stored.verdict ?? "ok", stored.ranked, stored.ratingRestricted);
+    // Отсечку могли сдвинуть, а доску пересобрать после первого ответа: забег, который ей уже не удовлетворяет,
+    // в чистую доску не пишется, как бы ни была помечена его строка (легаси: `ranked = true` у всех сложностей).
+    const ranked = stored.ranked && stored.finishedAt !== null && isRatedRun(stored.difficulty, stored.finishedAt, this.rating.since());
+    // Победа — по записанному забегу: упавший Redis чинится повтором вместе с отметкой.
+    const rubezhWon = stored.verdict === "ok" && !stored.cheats && rubezhClaimsWin({ reached: stored.rubezhReached, clearedSec: stored.rubezhClearedSec });
+    return await this.resultOf(account, stored.difficulty, stored.survivalSec, stored.verdict ?? "ok", ranked, stored.ratingRestricted, rubezhWon);
   }
 
   private async resultOf(
@@ -226,34 +260,36 @@ export class RunsService {
     verdict: RunVerdict,
     ranked: boolean,
     held: RatingRestricted | null,
+    rubezhWon: boolean,
     shadowBefore?: number | null,
   ): Promise<FinishResult> {
+    // Нерейтинговая сложность: ни места, ни лучшего, и Redis не нужен — ни на первом ответе, ни на повторе.
+    if (!isRatedDifficulty(difficulty)) return { recorded: false, verdict, bestSurvivalSec: 0, isNewBest: false, rank: null };
     // Рейтинговый забег на повторе: ограничение могли наложить между итогом
     // и повтором — тогда в доску его не пишем.
     const hold = held ?? (ranked ? await this.rating.hold(account.accountId) : null);
-    if (hold === "silent") return await this.shadowResult(account, difficulty, survivalSec, verdict, shadowBefore);
+    // Доска читается один раз: пишется в неё же, оттуда же берутся лучшее и место.
+    const board = await this.rating.boardOf(account.accountId);
+    if (hold === "silent") return await this.shadowResult(account, difficulty, survivalSec, verdict, shadowBefore, board);
     // В рейтинг пишется и на повторе: упал Redis после записи в базу — клиент
     // повторит итог, и именно этот повтор допишет место. Без этого забег
     // остался бы в базе рейтинговым, а в рейтинге отсутствовал бы до ручной
     // пересборки. Повтор безопасен сам по себе: `ZADD GT` не меняет равное
     // время и не отвечает на него «новым рекордом».
-    const improved = ranked && hold === null ? (await this.leaderboard.submit(difficulty, account.accountId, survivalSec)).improved : false;
-    const [best, rank] = await Promise.all([
-      this.leaderboard.best(difficulty, account.accountId),
-      this.leaderboard.rank(difficulty, account.accountId),
-    ]);
+    const improved = ranked && hold === null ? (await this.leaderboard.submit(difficulty, account.accountId, survivalSec, boardsOf(board), rubezhWon)).improved : false;
+    const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, account.accountId, board), this.leaderboard.rank(difficulty, account.accountId, board)]);
     return { recorded: ranked, verdict, bestSurvivalSec: best ?? 0, isNewBest: improved, rank };
   }
 
   /**
    * Ответ в тени: лучшее — со сданными под молчаливым ограничением, место —
-   * среди настоящих игроков доски, как если бы он в ней был. Повтор итога
+   * среди настоящих игроков его доски, как если бы он в ней был. Повтор итога
    * (`shadowBefore` не передан) рекордом не называется — как и у настоящей
    * доски.
    */
-  private async shadowResult(account: AccountRef, difficulty: Difficulty, survivalSec: number, verdict: RunVerdict, shadowBefore: number | null | undefined): Promise<FinishResult> {
-    const best = Math.max(survivalSec, (await this.runs.bestRunOf(account.accountId, difficulty, true))?.survivalSec ?? 0);
-    const rank = (await this.leaderboard.countAbove(difficulty, best)) + 1;
+  private async shadowResult(account: AccountRef, difficulty: Difficulty, survivalSec: number, verdict: RunVerdict, shadowBefore: number | null | undefined, board: Board): Promise<FinishResult> {
+    const best = Math.max(survivalSec, (await this.runs.bestRunOf(account.accountId, difficulty, true, this.rating.since()))?.survivalSec ?? 0);
+    const rank = (await this.leaderboard.countAbove(difficulty, best, board)) + 1;
     const isNewBest = shadowBefore !== undefined && (shadowBefore === null || survivalSec > shadowBefore);
     return { recorded: true, verdict, bestSurvivalSec: best, isNewBest, rank };
   }

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
@@ -12,6 +13,8 @@ import { parse } from "./admin-parse.js";
 import { AdminPlayersService, type BanResult, type MessageResult, type PlayerCard, type PlayerRow } from "./admin-players.service.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 import { accountIdSchema, adminWalletAdjustSchema, banSchema, playerMessageSchema, playerSearchSchema } from "./dto/admin.dto.js";
+
+const playerNameSchema = z.object({ name: z.string().min(1).max(64) }).strict();
 
 /**
  * Игроки в панели (docs/29-admin-panel.md §2). Логики нет — разбор границы,
@@ -63,6 +66,24 @@ export class AdminPlayersController {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
     return { data: await this.players.unban(actor, parseAccountId(accountId)) };
+  }
+
+  /** Ручная смена ника с закреплением (tasks/T-0151): право блокировки, ник проходит чистку. */
+  @Post(":accountId/name")
+  @RequirePermission("players.ban")
+  async rename(@Req() request: unknown, @Param("accountId") accountId: string, @Body() body: unknown): Promise<{ data: { account: PlayerRow } }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    const { name } = parse(() => playerNameSchema.parse(body), "Нужен ник — до 64 символов");
+    return { data: await this.players.rename(actor, parseAccountId(accountId), name) };
+  }
+
+  @Post(":accountId/name/unlock")
+  @RequirePermission("players.ban")
+  async unlockName(@Req() request: unknown, @Param("accountId") accountId: string): Promise<{ data: { account: PlayerRow } }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    return { data: await this.players.unlockName(actor, parseAccountId(accountId)) };
   }
 
   @Post(":accountId/message")

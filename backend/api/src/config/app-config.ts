@@ -212,6 +212,14 @@ const schema = z.object({
   // ещё не записанные заново.
   SECRETS_ENCRYPTION_KEY: encryptionKey("SECRETS_ENCRYPTION_KEY"),
   SECRETS_ENCRYPTION_KEY_PREVIOUS: encryptionKey("SECRETS_ENCRYPTION_KEY_PREVIOUS"),
+  // Спутник Xray для подписки прокси (docs/35-stage4-plan.md Р101, T-0093):
+  // имя контейнера в сети tunnel, первый порт его локальных SOCKS-входов, число
+  // входов (слотов) и файл, в который API пишет конфиг. Секретов нет — адрес
+  // подписки лежит в базе шифртекстом.
+  XRAY_HOST: z.string().trim().min(1).default("xray"),
+  XRAY_SOCKS_PORT_BASE: z.coerce.number().int().min(1024).max(65_000).default(10_800),
+  XRAY_SLOT_COUNT: z.coerce.number().int().min(1).max(500).default(100),
+  XRAY_CONFIG_PATH: z.string().trim().min(1).default("/xray-config/config.json"),
   // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
   // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
   // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
@@ -318,6 +326,16 @@ export interface AppConfig {
   secrets: {
     /** ключи шифрования в base64: первый — текущий, им шифруется запись; пусто — хранилище выключено */
     encryptionKeys: readonly string[];
+  };
+  xray: {
+    /** имя контейнера Xray в сети tunnel */
+    host: string;
+    /** первый порт SOCKS-входов: порт узла — база плюс слот */
+    socksPortBase: number;
+    /** сколько входов (узлов) держит конфиг */
+    slotCount: number;
+    /** файл конфига, который пишет API и читает контейнер */
+    configPath: string;
   };
   payments: {
     /** оплата возможна: вход и чтение обновлений бота; включена ли — настройка `payments.stars` */
@@ -444,6 +462,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.SECRETS_ENCRYPTION_KEY_PREVIOUS !== "" && parsed.SECRETS_ENCRYPTION_KEY === "") {
     throw new Error("SECRETS_ENCRYPTION_KEY_PREVIOUS задан без SECRETS_ENCRYPTION_KEY: прежний ключ нужен только на время смены, текущий обязателен");
   }
+  if (parsed.XRAY_SOCKS_PORT_BASE + parsed.XRAY_SLOT_COUNT > 65_535) {
+    throw new Error("XRAY_SOCKS_PORT_BASE + XRAY_SLOT_COUNT не выше 65535: порты входов Xray не должны выходить за предел");
+  }
   const paymentsPossible = authEnabled && botUpdates;
   if (parsed.PAYMENTS_ENABLED === true && !paymentsPossible) {
     throw new Error(
@@ -511,6 +532,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     secrets: {
       encryptionKeys: [parsed.SECRETS_ENCRYPTION_KEY, parsed.SECRETS_ENCRYPTION_KEY_PREVIOUS].filter((key) => key !== ""),
     },
+    xray: { host: parsed.XRAY_HOST, socksPortBase: parsed.XRAY_SOCKS_PORT_BASE, slotCount: parsed.XRAY_SLOT_COUNT, configPath: parsed.XRAY_CONFIG_PATH },
     payments: {
       possible: paymentsPossible,
       starsEnv: parsed.PAYMENTS_ENABLED,

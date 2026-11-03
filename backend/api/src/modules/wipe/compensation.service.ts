@@ -3,7 +3,7 @@ import { DomainError } from "../../common/domain-error.js";
 import { WALLET_RESOURCES, type Balances, type WalletResource } from "../wallet/wallet-types.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { COMPENSATION_REPOSITORY, type CompensationRepository, type CompensationRow } from "./compensation.repository.js";
-import { compensationGrantsSchema, continueGems, type CompensationGrant } from "./compensation-rules.js";
+import { compensationGrantsSchema, compensationGemsForStars, type CompensationGrant } from "./compensation-rules.js";
 
 /**
  * Выдача компенсации после вайпа (docs/35-stage4-plan.md, Р87, WP33,
@@ -25,7 +25,7 @@ export interface CompensationView {
   bonusGems: number;
   /** что вернулось из купленного — суммой по ресурсу, в порядке WALLET_RESOURCES */
   restored: { resource: WalletResource; amount: number }[];
-  /** самоцветы за второй шанс, купленный за звёзды: `continueGems(continueStars)` */
+  /** самоцветы за второй шанс, купленный за звёзды: `compensationGemsForStars(continueStars)` */
   continueGems: number;
 }
 
@@ -124,6 +124,6 @@ function viewOf(row: CompensationRow, grants: readonly CompensationGrant[]): Com
       const amount = totals.get(resource);
       return amount === undefined ? [] : [{ resource, amount }];
     }),
-    continueGems: continueGems(row.continueStars),
+    continueGems: compensationGemsForStars(row.continueStars),
   };
 }

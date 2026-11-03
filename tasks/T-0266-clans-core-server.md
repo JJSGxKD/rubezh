@@ -23,7 +23,7 @@ shared:
   - docs/21-diagrams.md
   - docs/24-attribution-and-sharing.md
   - docs/35-stage4-plan.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

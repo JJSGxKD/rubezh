@@ -18,12 +18,12 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0223. Отметки удержания подписки на 1-й, 3-й и 7-й день — из перепроверки отписки

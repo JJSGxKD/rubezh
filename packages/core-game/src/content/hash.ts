@@ -1,15 +1,4 @@
-import { BOOSTS, MAX_BOOSTS_PER_RUN } from "./boosts";
-import { CHESTS } from "./chests";
-import { CONTINUE } from "./continue";
-import { DIFFICULTIES } from "./difficulty";
-import { DROPS } from "./drops";
-import { ENEMIES } from "./enemies";
-import { MAPS } from "./maps";
-import { ENEMY_STAGES } from "./stages";
-import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
-import { ENDLESS_CURVE, TIMELINE } from "./waves";
-import { WEAPONS } from "./weapons";
+import { CONTENT_SNAPSHOT, hashSnapshot } from "./snapshot";
 
 /**
  * Отпечаток игрового контента — версия баланса одним коротким числом.
@@ -20,44 +9,7 @@ import { WEAPONS } from "./weapons";
  * §5.3, docs/26-stage2-plan.md, WP4.4).
  *
  * Считается один раз при загрузке модуля: контент — это литералы в исходниках,
- * между забегами он не меняется.
+ * между забегами он не меняется. Забег на чужом снимке (редактор баланса) пишет
+ * в итог `hashSnapshot` своего снимка, а не эту константу.
  */
-export const CONTENT_HASH = hashContent();
-
-function hashContent(): string {
-  // Порядок сознательно фиксирован: JSON.stringify сохраняет порядок полей
-  // объекта, а массивы контента и так упорядочены. Перестановка врагов в файле
-  // меняет отпечаток — и это правильно: от порядка зависят индексы типов, а
-  // значит и последовательность обращений к генератору.
-  const source = JSON.stringify([
-    ENEMIES,
-    ENEMY_STAGES,
-    WEAPONS,
-    PASSIVES,
-    LEVEL_CURVE,
-    LOADOUT_LIMITS,
-    ACCOUNT_UNLOCKS,
-    TIMELINE,
-    ENDLESS_CURVE,
-    MAPS,
-    DROPS,
-    CHESTS,
-    DIFFICULTIES,
-    CONTINUE,
-    BOOSTS,
-    MAX_BOOSTS_PER_RUN,
-    CARD_TOOL_UNLOCKS,
-    CARD_TOOL_RULES,
-  ]);
-
-  // FNV-1a: короткая, без зависимостей и без криптографических претензий.
-  // Задача — различать версии контента, а не защищаться от подделки: итог
-  // забега считает клиент, и для сервера это в любом случае заявление игрока,
-  // а не факт (docs/15-engineering-standards.md §7.1).
-  let hash = 2166136261;
-  for (let i = 0; i < source.length; i++) {
-    hash ^= source.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
+export const CONTENT_HASH = hashSnapshot(CONTENT_SNAPSHOT);

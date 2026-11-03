@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, Gift, Megaphone, Newspaper, PackageOpen, Sparkles, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck, Gift, LogOut, Megaphone, Newspaper, PackageOpen, Sparkles, Trophy, UserPlus } from "lucide-react";
+import { DIFFICULTY_IDS, type DifficultyId } from "@bh/shared-types";
 import { Button, Card, ContentColumn, EmptyState, ErrorState, Screen } from "../../design-system/components";
 import { formatNumber, t } from "../../i18n";
 import "../../i18n/account";
@@ -11,8 +12,8 @@ import { track } from "../../state/shell";
 
 /**
  * Лента уведомлений (docs/35-stage4-plan.md Р51, §3.17): всё, что случилось с
- * игроком, — заявка и подарок друга, редкая добыча, возврат бустов,
- * сообщение команды, выход версии. Открыл
+ * игроком, — заявка и подарок друга, редкая добыча, возврат бустов, списание
+ * награды за отписку от канала, сообщение команды, выход версии. Открыл
  * ленту — увиденное прочитано; пришедшее, пока лента открыта, останется
  * новым. Вид, которого экран не знает, не показывается: сервер новее клиента.
  */
@@ -97,13 +98,34 @@ export function describeNotification(item: NotificationItem): Described | null {
       };
     case "boosts_refunded":
       return { icon: <PackageOpen size={20} />, text: refundText(item.data), target: null };
+    case "task_unsubscribed":
+      return { icon: <LogOut size={20} />, text: unsubscribedText(item.data), target: null };
     case "team_message":
       return typeof item.data.text === "string" ? { icon: <Megaphone size={20} />, title: t("notification.team_message"), text: item.data.text, target: null } : null;
     case "app_update":
       return typeof item.data.version === "string" ? { icon: <Newspaper size={20} />, text: t("notification.app_update", { version: item.data.version }), ...(changelogAvailable() ? { target: "changelog" as const, over: true } : { target: null }) } : null;
+    // Напоминания бота (tasks/T-0128): тот же текст, что в сообщении бота, чтобы колокольчик не показал «1» над пустой лентой.
+    case "season_overtaken": {
+      const difficulty = difficultyOf(item.data.difficulty);
+      const place = typeof item.data.place === "number" && Number.isSafeInteger(item.data.place) && item.data.place >= 1 ? item.data.place : null;
+      return difficulty === null || place === null ? null : { icon: <Trophy size={20} />, text: t("notification.season_overtaken", { difficulty: t(`difficulty.${difficulty}.name`), place }), target: "rating" };
+    }
+    case "season_closing": {
+      const endsAt = typeof item.data.endsAt === "string" ? Date.parse(item.data.endsAt) : Number.NaN;
+      return Number.isFinite(endsAt) ? { icon: <Trophy size={20} />, text: t("notification.season_closing", { time: MOSCOW_TIME.format(new Date(endsAt)) }), target: "rating" } : null;
+    }
+    case "daily_reward_ready":
+      return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
     default:
       return null;
   }
+}
+
+/** Сезон кончается в 03:00 по Москве, и игроку важно именно московское время. */
+const MOSCOW_TIME = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+function difficultyOf(value: unknown): DifficultyId | null {
+  return DIFFICULTY_IDS.find((id) => id === value) ?? null;
 }
 
 function refundText(data: Record<string, unknown>): string {
@@ -114,6 +136,30 @@ function refundText(data: Record<string, unknown>): string {
     gems > 0 ? t("notification.boosts_refunded.gems", { amount: formatNumber(gems), n: gems }) : null,
   ].filter((part): part is string => part !== null);
   return returned.length === 0 ? t("notification.boosts_refunded") : t("notification.boosts_refunded.with", { returned: returned.join(t("notification.and")) });
+}
+
+/** Срок закрытия — датой вперёд: относительное «минут назад» из `formatWhen` для будущего не годится. */
+const CLOSED_DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+
+/** Сумма из данных ленты: сервер новее клиента, поэтому всё, что не целое положительное число, — нуль. */
+function amountOf(value: unknown): number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function unsubscribedText(data: Record<string, unknown>): string {
+  const title = typeof data.title === "string" && data.title.length > 0 ? data.title : null;
+  const head = title === null ? t("notification.task_unsubscribed.head.untitled") : t("notification.task_unsubscribed.head", { title });
+  const coins = amountOf(data.coins);
+  const gems = amountOf(data.gems);
+  const shards = amountOf(data.shards);
+  const returned = [
+    coins > 0 ? t("notification.task_unsubscribed.coins", { amount: formatNumber(coins), n: coins }) : null,
+    gems > 0 ? t("notification.task_unsubscribed.gems", { amount: formatNumber(gems), n: gems }) : null,
+    shards > 0 ? t("notification.task_unsubscribed.shards", { amount: formatNumber(shards), n: shards }) : null,
+  ].filter((part): part is string => part !== null);
+  const taken = returned.length === 0 ? t("notification.task_unsubscribed.spent", { head }) : t("notification.task_unsubscribed.taken", { head, returned: returned.join(t("notification.and")) });
+  const closedAt = typeof data.closedUntil === "string" ? Date.parse(data.closedUntil) : Number.NaN;
+  return Number.isFinite(closedAt) ? `${taken} ${t("notification.task_unsubscribed.closed", { date: CLOSED_DATE.format(new Date(closedAt)) })}` : taken;
 }
 
 function NotificationRow(props: { item: NotificationItem; index: number }): ReactNode {

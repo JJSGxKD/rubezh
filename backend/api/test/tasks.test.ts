@@ -21,24 +21,31 @@ import {
   TaskNotFoundError,
   TaskNotJoinedError,
   TaskNotOpenedError,
+  TaskOrderMismatchError,
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
 import { gameDayOf, pickPool } from "../src/modules/tasks/task-pool.js";
 import {
+  NO_ACHIEVEMENT_FIELDS,
   RUN_KINDS,
+  STATE_KINDS,
   TASK_LIMIT_GRACE_MIN,
   WEAPON_ELEMENTS,
   countsForTasks,
   rewardReason,
   slotsFor,
   taskDefSchema,
+  taskGroup,
+  taskOrderSchema,
+  TASK_PERIODS,
   type PoolTier,
+  type TaskGroup,
   type TaskDef,
   type TaskParticipation,
 } from "../src/modules/tasks/task-rules.js";
 import { TasksController } from "../src/modules/tasks/tasks.controller.js";
-import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
+import { ACHIEVEMENT_PERIOD_START, type TaskDelta, type TaskProgressRow, type TaskReorderResult, type TasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService, viewOf } from "../src/modules/tasks/tasks.service.js";
 import { WEAPONS } from "../../../packages/core-game/src/content/weapons";
 import type { GrantInput, GrantResult, WalletService } from "../src/modules/wallet/wallet.service.js";
@@ -65,7 +72,7 @@ const DAY = 24 * HOUR;
 const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 
 function def(taskId: string, patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId, period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...patch };
+  return { taskId, period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 100, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS, ...patch };
 }
 
 const CATALOG: TaskDef[] = [
@@ -98,9 +105,32 @@ class MemoryTasks implements TasksRepository {
   /** забор игроков — по одному, как под блокировкой строки задания в базе */
   private queue: Promise<unknown> = Promise.resolve();
 
+  /** Как `ORDER BY period, sort, task_id` в базе. */
   async catalog(): Promise<TaskDef[]> {
     this.catalogReads++;
-    return this.defs.map((task) => ({ ...task }));
+    return this.defs
+      .map((task) => ({ ...task }))
+      .sort((a, b) => TASK_PERIODS.indexOf(a.period) - TASK_PERIODS.indexOf(b.period) || a.sort - b.sort || a.taskId.localeCompare(b.taskId));
+  }
+
+  /** Сколько раз порядок реально записывался: повтор того же порядка не пишет. */
+  reorderWrites = 0;
+
+  /** Те же правила, что у настоящего: набор id равен составу списка, `sort` — индекс, пишутся только сдвинувшиеся. */
+  async reorder(group: TaskGroup, ids: readonly string[]): Promise<TaskReorderResult> {
+    const members = this.defs
+      .filter((task) => taskGroup(task) === group)
+      .sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId));
+    const before = members.map((task) => task.taskId);
+    const same = ids.length === before.length && new Set(ids).size === ids.length && ids.every((id) => before.includes(id));
+    if (!same) return { status: "mismatch" };
+    const changed = ids.some((id, index) => before[index] !== id);
+    if (changed) this.reorderWrites++;
+    ids.forEach((id, index) => {
+      const task = this.defs.find((candidate) => candidate.taskId === id);
+      if (task !== undefined) task.sort = index;
+    });
+    return { status: "ok", before, after: [...ids], changed };
   }
 
   async progress(accountId: string, at: Date): Promise<TaskProgressRow[]> {
@@ -115,17 +145,26 @@ class MemoryTasks implements TasksRepository {
   async applyRun(input: { runId: string; accountId: string; at: Date; deltas: readonly TaskDelta[] }): Promise<boolean> {
     if (this.runs.has(input.runId)) return false;
     this.runs.add(input.runId);
-    for (const delta of input.deltas.filter((candidate) => candidate.amount > 0)) {
-      const start = periodStart(delta.period, input.at);
-      const key = `${input.accountId}|${delta.taskId}|${start}`;
-      const row = this.rows.get(key) ?? { accountId: input.accountId, taskId: delta.taskId, periodStart: start, value: 0, target: delta.target, done: false, claimed: false };
+    this.merge(input.accountId, input.at, input.deltas);
+    return true;
+  }
+
+  /** Состояние игрока (друзья, уровень аккаунта): тот же слив прогресса, но забег не занимается. */
+  async applyState(accountId: string, deltas: readonly TaskDelta[], at: Date): Promise<void> {
+    this.merge(accountId, at, deltas);
+  }
+
+  private merge(accountId: string, at: Date, deltas: readonly TaskDelta[]): void {
+    for (const delta of deltas.filter((candidate) => candidate.amount > 0)) {
+      const start = periodStart(delta.period, at);
+      const key = `${accountId}|${delta.taskId}|${start}`;
+      const row = this.rows.get(key) ?? { accountId, taskId: delta.taskId, periodStart: start, value: 0, target: delta.target, done: false, claimed: false };
       const merged = delta.op === "sum" ? row.value + delta.amount : Math.max(row.value, delta.amount);
       row.value = Math.min(delta.target, merged);
       row.target = delta.target;
       row.done = row.done || row.value >= delta.target;
       this.rows.set(key, row);
     }
-    return true;
   }
 
   async insert(task: TaskDef): Promise<boolean> {
@@ -235,6 +274,7 @@ function run(patch: Partial<RecordedRun> = {}): RecordedRun {
     weapons: [{ id: "spark", level: 3 }],
     boosts: [],
     xpCollected: null,
+    counters: null,
     deathCause: null,
     cheats: false,
     continues: 0,
@@ -871,9 +911,145 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "channel", "link", "bot"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "friends", "account_level", "channel", "link", "bot"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
+  });
+});
+
+describe("порядок заданий одним запросом (T-0167)", () => {
+  /** Каталог из заданных заданий — без остальных, чтобы порядок был виден целиком. */
+  function onlyDaily(ctx: ReturnType<typeof setup>, ...extra: TaskDef[]): void {
+    ctx.repository.defs.length = 0;
+    ctx.repository.defs.push(def("a", { sort: 0 }), def("b", { sort: 10 }), def("c", { sort: 20 }), ...extra);
+  }
+
+  const sortsOf = async (ctx: ReturnType<typeof setup>, designer: AccountRef) =>
+    Object.fromEntries((await ctx.service.catalog(designer)).tasks.map((task) => [task.taskId, task.sort]));
+
+  it("новый порядок: каталог и игрок видят его сразу, sort — 0, 1, 2", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "601", "game_designer");
+    await ctx.service.view(PLAYER, NOON);
+
+    expect(await ctx.service.reorder(designer, "daily", ["c", "a", "b"])).toEqual({ order: ["c", "a", "b"] });
+
+    expect(await sortsOf(ctx, designer)).toEqual({ c: 0, a: 1, b: 2 });
+    expect((await ctx.service.view(PLAYER, NOON)).map((task) => task.id)).toEqual(["c", "a", "b"]);
+  });
+
+  it("в аудит — одна запись «переупорядочено» с прежним и новым порядком", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "602", "game_designer");
+
+    await ctx.service.reorder(designer, "daily", ["c", "a", "b"]);
+
+    const entries = (await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder");
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ target: "daily", before: { order: ["a", "b", "c"] }, after: { order: ["c", "a", "b"] }, actorAccountId: designer.accountId });
+  });
+
+  it("повтор того же порядка идемпотентен: тот же ответ, ни записи, ни аудита", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "603", "game_designer");
+    await ctx.service.reorder(designer, "daily", ["c", "a", "b"]);
+    const writes = ctx.repository.reorderWrites;
+
+    expect(await ctx.service.reorder(designer, "daily", ["c", "a", "b"])).toEqual({ order: ["c", "a", "b"] });
+
+    expect(ctx.repository.reorderWrites).toBe(writes);
+    expect((await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder")).toHaveLength(1);
+  });
+
+  it("список изменился — 400 «task_order_mismatch», ничего не записано, аудита нет", async () => {
+    const ctx = setup();
+    onlyDaily(ctx, def("w", { period: "weekly" }));
+    const designer = await person(ctx, "604", "game_designer");
+    const cases: string[][] = [["a", "b"], ["a", "b", "c", "ghost"], ["a", "b", "w"], ["a", "b", "b"]];
+
+    for (const ids of cases) {
+      const failure = await ctx.service.reorder(designer, "daily", ids).catch((error: unknown) => error);
+      expect(failure, ids.join()).toBeInstanceOf(TaskOrderMismatchError);
+      expect(failure).toMatchObject({ code: "task_order_mismatch", status: 400 });
+    }
+    expect(await sortsOf(ctx, designer)).toEqual({ a: 0, b: 10, c: 20, w: 0 });
+    expect((await ctx.roles.recentAudit(10)).filter((entry) => entry.action === "tasks.reorder")).toHaveLength(0);
+  });
+
+  it("партнёрская группа переставляется вместе: ссылка, канал и бот; цель забега в составе — несоответствие", async () => {
+    const ctx = setup();
+    ctx.repository.defs.length = 0;
+    const partner = { params: { url: "https://example.org/x" } };
+    ctx.repository.defs.push(
+      def("p_link", { kind: "link", period: "achievement", sort: 0, ...partner }),
+      def("p_channel", { kind: "channel", period: "daily", sort: 10, params: { platform: "telegram", chat: "@x", url: "https://t.me/x" } }),
+      def("p_bot", { kind: "bot", period: "achievement", sort: 20, ...partner }),
+      def("d_runs", { sort: 0 }),
+    );
+    const designer = await person(ctx, "605", "game_designer");
+
+    await expect(ctx.service.reorder(designer, "partner", ["p_bot", "d_runs", "p_link", "p_channel"])).rejects.toBeInstanceOf(TaskOrderMismatchError);
+    expect(await ctx.service.reorder(designer, "partner", ["p_bot", "p_channel", "p_link"])).toEqual({ order: ["p_bot", "p_channel", "p_link"] });
+    expect(await sortsOf(ctx, designer)).toMatchObject({ p_bot: 0, p_channel: 1, p_link: 2, d_runs: 0 });
+  });
+
+  it("выключенное задание входит в порядок своей группы", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    ctx.repository.defs.push(def("off", { sort: 30, active: false }));
+    const designer = await person(ctx, "606", "game_designer");
+
+    await expect(ctx.service.reorder(designer, "daily", ["c", "b", "a"])).rejects.toBeInstanceOf(TaskOrderMismatchError);
+    expect(await ctx.service.reorder(designer, "daily", ["off", "c", "b", "a"])).toEqual({ order: ["off", "c", "b", "a"] });
+  });
+
+  it("без права tasks.edit — тот же отказ, что у сохранения; порядок прежний", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const moderator = await person(ctx, "607", "moderator");
+    const designer = await person(ctx, "608", "game_designer");
+
+    await expect(ctx.service.reorder(moderator, "daily", ["c", "a", "b"])).rejects.toThrow();
+
+    expect(await sortsOf(ctx, designer)).toEqual({ a: 0, b: 10, c: 20 });
+  });
+
+  it("правка существующего задания места не меняет, пришедший sort игнорируется", async () => {
+    const ctx = setup();
+    onlyDaily(ctx);
+    const designer = await person(ctx, "609", "game_designer");
+
+    await ctx.service.save(designer, def("b", { sort: 9999, coins: 250 }));
+
+    expect(await sortsOf(ctx, designer)).toMatchObject({ b: 10 });
+    expect((await ctx.service.catalog(designer)).tasks.find((task) => task.taskId === "b")?.coins).toBe(250);
+  });
+
+  it("новое задание встаёт в конец своей группы; в пустой — на ноль; потолок 10 000 держится", async () => {
+    const ctx = setup();
+    ctx.repository.defs.length = 0;
+    ctx.repository.defs.push(def("a", { sort: 0 }), def("b", { sort: 1 }), def("c", { sort: 2 }));
+    const designer = await person(ctx, "610", "game_designer");
+
+    await ctx.service.save(designer, def("d", { sort: 777 }));
+    await ctx.service.save(designer, def("w1", { period: "weekly", sort: 55 }));
+    expect(await sortsOf(ctx, designer)).toMatchObject({ d: 3, w1: 0 });
+
+    ctx.repository.defs.push(def("top", { period: "achievement", kind: "run_level", sort: 10_000, coins: 0, gems: 5 }));
+    await ctx.service.save(designer, def("late", { period: "achievement", kind: "run_level", coins: 0, gems: 5 }));
+    expect((await sortsOf(ctx, designer)).late).toBe(10_000);
+  });
+
+  it("схема запроса: чужая группа, пустой список, повтор id, id не по шаблону и лишние поля — отказ", () => {
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab", "cd"] }).success).toBe(true);
+    expect(taskOrderSchema.safeParse({ group: "other", ids: ["ab"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: [] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab", "ab"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["A b"] }).success).toBe(false);
+    expect(taskOrderSchema.safeParse({ group: "daily", ids: ["ab"], extra: 1 }).success).toBe(false);
   });
 });
 
@@ -1066,6 +1242,20 @@ describe("новые виды цели", () => {
     expect(taskDefSchema.parse(old)).toMatchObject({ tier: null, filter: null });
   });
 
+  it("порядок ответа — по sort из панели, а не по сроку; равный sort — по taskId; defs не меняется (Р118)", () => {
+    const defs = [def("weekly_a", { period: "weekly", sort: 0 }), def("daily_b", { sort: 20 }), def("daily_c", { sort: 10 })];
+    const copy = [...defs];
+    expect(viewOf(defs, [], new Map(), NOON).map((view) => view.id)).toEqual(["weekly_a", "daily_c", "daily_b"]);
+    expect(defs).toEqual(copy);
+    expect(viewOf([def("b_task", { sort: 5 }), def("a_task", { sort: 5 })], [], new Map(), NOON).map((view) => view.id)).toEqual(["a_task", "b_task"]);
+  });
+
+  it("партнёрская вкладка: ежедневная подписка с меньшим sort стоит перед достижением", () => {
+    const daily = { ...channelTask(), taskId: "daily_channel", period: "daily" as const, sort: 0 };
+    const achievement = { ...channelTask(), taskId: "ach_channel", period: "achievement" as const, sort: 1 };
+    expect(viewOf([achievement, daily], [], new Map(), NOON).map((view) => view.id)).toEqual(["daily_channel", "ach_channel"]);
+  });
+
   it("у цели с фильтром категория — срок, а не «партнёры»", () => {
     const weapon = def("daily_weapon_spark", { kind: "weapon_runs", filter: { weapon: "spark" }, tier: "easy" });
     const [view] = viewOf([weapon], [], new Map(), NOON);
@@ -1184,5 +1374,140 @@ describe("ротация: что двигает забег и что видит 
     await ctx.hooks.emit(run({ weapons: [{ id: "storm", level: 1 }] }));
     await ctx.hooks.emit(run({ weapons: [{ id: "spark", level: 1 }] }));
     expect(byId(await ctx.service.view(PLAYER, NOON), "daily_weapon_storm")).toMatchObject({ value: 1, done: false });
+  });
+});
+
+describe("достижения: состояние игрока и скрытые (T-0106)", () => {
+  const friends = () => def("ach_friends_5", { period: "achievement", kind: "friends", target: 5, coins: 200, category: "friends", ladder: "friends", rung: 2, prestige: 10 });
+  const level = () => def("ach_account_10", { period: "achievement", kind: "account_level", target: 10, coins: 200, category: "mastery", ladder: "account", rung: 1, prestige: 10 });
+  const marathon = () =>
+    def("ach_hidden_marathon", {
+      period: "achievement",
+      kind: "best_survival_sec",
+      target: 1800,
+      title: "Марафонец",
+      coins: 500,
+      category: "mastery",
+      hidden: true,
+      hint: "Продержаться очень, очень долго",
+      prestige: 40,
+    });
+
+  function withState() {
+    const ctx = setup();
+    ctx.repository.defs.push(friends(), level(), marathon());
+    ctx.service.forgetCatalog();
+    return ctx;
+  }
+
+  it("состояния — не виды забега: onRun пропускает их, а в каталоге они есть", async () => {
+    expect(STATE_KINDS.friends).toEqual({ op: "max" });
+    expect(STATE_KINDS.account_level).toEqual({ op: "max" });
+    const ctx = withState();
+    await ctx.hooks.emit(run());
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    expect(byId(tasks, "ach_friends_5")).toMatchObject({ value: 0, done: false });
+    expect(byId(tasks, "ach_account_10")).toMatchObject({ value: 0, done: false });
+    // забег остальное засчитал: пропуск — только у состояний
+    expect(byId(tasks, "ach_level_40")).toMatchObject({ value: 22 });
+    expect(ctx.repository.runs.size).toBe(1);
+  });
+
+  /** Дельта состояния, как её строит витрина: вид «максимум», срок — достижение, цель — из каталога. */
+  const state = (ctx: ReturnType<typeof setup>, taskId: string, amount: number): TaskDelta => {
+    const target = ctx.repository.defs.find((task) => task.taskId === taskId)?.target ?? 0;
+    return { taskId, period: "achievement", target, op: "max", amount };
+  };
+
+  it("applyState берёт максимум: меньше прежнего не уменьшает, больше цели не уходит", async () => {
+    const ctx = withState();
+    const value = async () => byId(await ctx.service.view(PLAYER, NOON), "ach_friends_5");
+
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 3)], NOON);
+    expect(await value()).toMatchObject({ value: 3, done: false });
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 1)], NOON);
+    expect(await value()).toMatchObject({ value: 3, done: false });
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 40)], NOON);
+    expect(await value()).toMatchObject({ value: 5, done: true });
+    // друзей стало меньше — выполненное остаётся выполненным
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 0)], NOON);
+    expect(await value()).toMatchObject({ value: 5, done: true });
+  });
+
+  it("applyState не занимает запись забега и двигает только названное", async () => {
+    const ctx = withState();
+    await ctx.service.applyState(ME, [state(ctx, "ach_account_10", 12)], NOON);
+    const tasks = await ctx.service.view(PLAYER, NOON);
+    expect(byId(tasks, "ach_account_10")).toMatchObject({ value: 10, done: true });
+    expect(byId(tasks, "ach_friends_5")).toMatchObject({ value: 0, done: false });
+    expect(ctx.repository.runs.size).toBe(0);
+  });
+
+  it("ноль строку прогресса не заводит, пустой список — тоже", async () => {
+    const ctx = withState();
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 0), state(ctx, "ach_account_10", 0)], NOON);
+    await ctx.service.applyState(ME, [], NOON);
+    expect(ctx.repository.rows.size).toBe(0);
+  });
+
+  it("забор невыполненного состояния — «не выполнено», а не ограничение партнёрских заданий", async () => {
+    const ctx = withState();
+    ctx.restrictions.restrict(ME, "partner_tasks");
+    await expect(ctx.service.claim(PLAYER, "ach_friends_5", NOON)).rejects.toBeInstanceOf(TaskNotDoneError);
+    await ctx.service.applyState(ME, [state(ctx, "ach_friends_5", 5)], NOON);
+    // выполненное состояние забирается и под ограничением партнёрских заданий: это не партнёрская цель
+    const result = await ctx.service.claim(PLAYER, "ach_friends_5", NOON);
+    expect(result.claimed).toBe(true);
+    expect(ctx.wallet.grants[0]).toMatchObject({ resource: "coins", amount: 200, reason: "achievement_reward" });
+  });
+
+  it("закрытое скрытое достижение в списке заданий не возвращается, открытое — как обычное", async () => {
+    const ctx = withState();
+    const before = await ctx.service.view(PLAYER, NOON);
+    expect(byId(before, "ach_hidden_marathon")).toBeUndefined();
+    expect(JSON.stringify(before)).not.toContain("Марафонец");
+    expect(JSON.stringify(before)).not.toContain("Продержаться очень");
+
+    // прогресс есть, но не выполнено: всё ещё закрыто
+    await ctx.hooks.emit(run({ survivalSec: 900 }));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_hidden_marathon")).toBeUndefined();
+
+    await ctx.hooks.emit(run({ survivalSec: 1900 }));
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_hidden_marathon")).toMatchObject({
+      title: "Марафонец",
+      done: true,
+      hidden: true,
+      achievementCategory: "mastery",
+      prestige: 40,
+      reward: { coins: 500, gems: 0, shards: 0 },
+    });
+    // у другого игрока оно по-прежнему закрыто
+    const other: AccountRef = { accountId: "00000000-0000-4000-8000-00000000f002", platform: "telegram", platformUserId: "555000222" };
+    expect(byId(await ctx.service.view(other, NOON), "ach_hidden_marathon")).toBeUndefined();
+  });
+
+  it("строка задания несёт категорию достижения, лестницу, ступень, престиж и признак скрытого", async () => {
+    const ctx = withState();
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_friends_5")).toMatchObject({
+      period: "achievement",
+      category: "achievement",
+      achievementCategory: "friends",
+      ladder: "friends",
+      rung: 2,
+      prestige: 10,
+      hidden: false,
+    });
+    // обычное задание: поля пустые, а вкладка осталась по сроку
+    expect(byId(await ctx.service.view(PLAYER, NOON), "daily_runs")).toMatchObject({ category: "daily", achievementCategory: null, ladder: null, rung: null, prestige: 0, hidden: false });
+  });
+
+  it("панель сохраняет поля достижения; смена категории и подсказки доходит до каталога", async () => {
+    const ctx = setup();
+    const designer = await person(ctx, "504", "game_designer");
+    const fresh = def("ach_new_one", { period: "achievement", kind: "kills", target: 777, coins: 10, category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
+    await ctx.service.save(designer, fresh);
+    expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
+    await ctx.service.save(designer, { ...fresh, category: "mastery", hint: "Другой намёк", prestige: 20 });
+    expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "mastery", hint: "Другой намёк", prestige: 20 });
   });
 });

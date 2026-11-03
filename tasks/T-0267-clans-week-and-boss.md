@@ -28,7 +28,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -38,7 +38,7 @@ batch: 5
 
 # T-0267. Дружина — неделя: босс дружины из забегов участников, рейтинг дружин, награда и подарки внутри
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0267.json)](README.md#значки-статуса) [![T-0266](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0266.json&label=T-0266)](T-0266-clans-core-server.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](T-0125-run-result-rank-chest-crystal-counters.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0267.json)](README.md#значки-статуса) [![T-0266](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0266.json&label=T-0266)](T-0266-clans-core-server.md) [![T-0125](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0125.json&label=T-0125)](archive/T-0125-run-result-rank-chest-crystal-counters.md)
 
 ## Зачем
 

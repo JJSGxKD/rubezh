@@ -3,9 +3,13 @@ import { createPrisma } from "../infra/database.js";
 import { closeRedis, createRedis } from "../infra/redis.js";
 import { AccountRestrictions } from "../modules/restrictions/account-restrictions.js";
 import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
-import { rebuildLeaderboard } from "../modules/runs/leaderboard-rebuild.js";
+import { formatBoardCounts, rebuildForRestrictions } from "../modules/runs/leaderboard-rebuild.js";
 import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
+import { ratingSinceOf } from "../modules/runs/rated-runs.js";
 import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
+import { SETTINGS } from "../modules/settings/setting-catalog.js";
+import { PrismaSettingsRepository } from "../modules/settings/settings.repository.js";
+import { SettingsService } from "../modules/settings/settings.service.js";
 
 /**
  * Пересобрать рейтинг из базы (docs/34-stage3-plan.md, Р4): после потери
@@ -16,7 +20,18 @@ import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
  * В контейнере — `node dist/cli/runs-rebuild-leaderboard.js`. Безопасно
  * повторять: рейтинг собирается во временный ключ и подменяет рабочий одной
  * командой, игроки не видят пустого рейтинга ни в какой момент. Те, кому
- * рейтинг сейчас закрыт ограничением, в доски не возвращаются.
+ * рейтинг сейчас закрыт ограничением, в доски не возвращаются; доски две —
+ * полная и общая (docs/14-scalability.md, T-0113), аккаунты с отдельной
+ * доской лежат только в полной.
+ *
+ * При выкате T-0113 команду запускают до первого наложения «Отдельной доски»:
+ * она наполняет полную доску, которой раньше не было.
+ *
+ * Единая сложность (Р126, T-0191): рейтинг собирается по рейтинговым сложностям
+ * и забегам не раньше отсечки `rating.since-date` (панель → «Настройки» →
+ * «Рейтинг»), доски остальных сложностей очищаются. После выката запускается
+ * один раз; дату отсечки команда печатает — по ней видно, с какой границей
+ * собрано.
  */
 async function main(): Promise<void> {
   const config = configFromEnvironment();
@@ -25,9 +40,14 @@ async function main(): Promise<void> {
   const redis = createRedis(config);
   try {
     await redis.connect();
-    const excluded = await new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config).restrictedAccounts("leaderboard");
-    const counts = await rebuildLeaderboard(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), new Set(excluded));
-    console.log(`рейтинг пересобран: ${Object.entries(counts).map(([difficulty, count]) => `${difficulty} — ${count}`).join(", ")}`);
+    // Отсечка лежит в настройках панели, а не в окружении: читаем её из базы, как команда пересборки сезонов.
+    const settings = new SettingsService(config, new PrismaSettingsRepository(prisma), redis);
+    await settings.refresh();
+    const since = ratingSinceOf(settings.get(SETTINGS.ratingSinceDate));
+    const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
+    const counts = await rebuildForRestrictions(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, since);
+    console.log(`отсечка рейтинга: ${since === null ? "нет" : since.toISOString().slice(0, 10)}`);
+    console.log(`рейтинг пересобран: ${formatBoardCounts(counts)}`);
   } finally {
     await prisma.$disconnect();
     await closeRedis(redis);

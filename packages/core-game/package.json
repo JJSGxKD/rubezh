@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@bh/shared-types": "workspace:*",
-    "phaser": "3.90.0"
+    "phaser": "3.90.0",
+    "zod": "4.6.4"
   }
 }

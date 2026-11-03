@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
+import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
 import { RunProbe } from "../engine/run-probe";
 import {
@@ -16,11 +17,16 @@ import {
 } from "../run-api";
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
+import { isPrologueWon } from "./run/prologue";
+import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "./progression/levels";
 import { takeChestEvents, type ChestCursor } from "./sim/chests";
+import { describePressureStart } from "./sim/pressure";
+import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -73,7 +79,7 @@ const MAX_DEV_STEP_TICKS = 600;
  * пауза, выбор улучшения и смерть обязаны быть детерминированными — иначе
  * повтор забега по логу ввода разойдётся с оригиналом.
  */
-type RunPhase = "running" | "choosing" | "chest" | "paused" | "downed" | "dead";
+type RunPhase = "running" | "choosing" | "chest" | "blessing" | "paused" | "downed" | "dead";
 
 export interface MainSceneData {
   seed: number;
@@ -81,6 +87,8 @@ export interface MainSceneData {
   unitScale: number;
   mapId: string;
   difficultyId: DifficultyId;
+  /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
+  mode?: RunMode;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -106,8 +114,10 @@ export interface MainSceneData {
    * (docs/35-stage4-plan.md §3.5). Без поля движок заводит id сам.
    */
   runId?: string;
-  /** останавливать забег на открытом сундуке до `closeChest` */
+  /** останавливать забег на открытом сундуке до `closeChest` и на капище до `chooseBlessing` */
   pauseOnChest?: boolean;
+  /** контент забега; без поля — боевой `CONTENT_SNAPSHOT` (песочница редактора баланса) */
+  content?: ContentSnapshot;
 }
 
 /**
@@ -118,6 +128,17 @@ export interface MainSceneData {
  * (docs/27-design-system-and-app-shell.md §3.2). Сцена сообщает о событиях и
  * принимает команды, а что показать игроку, решает оболочка.
  */
+/** Видимые объекты вместе с вложенными в контейнеры: контейнер сам почти ничего не рисует. */
+function countVisible(list: readonly Phaser.GameObjects.GameObject[]): number {
+  let count = 0;
+  for (const child of list) {
+    if (!("visible" in child) || child.visible !== true) continue;
+    count += 1;
+    if (child instanceof Phaser.GameObjects.Container) count += countVisible(child.list);
+  }
+  return count;
+}
+
 export class MainScene extends Phaser.Scene {
   private sceneData!: MainSceneData;
   private world!: World;
@@ -133,6 +154,8 @@ export class MainScene extends Phaser.Scene {
   };
   private phase: RunPhase = "running";
   private runId = "";
+  /** отпечаток контента этого забега: чужой снимок пишет в итог свой хэш, а не `CONTENT_HASH` */
+  private contentHash = CONTENT_HASH;
   private seed = 1;
   private accumulatorMs = 0;
   private hudTimerMs = 0;
@@ -144,8 +167,14 @@ export class MainScene extends Phaser.Scene {
   private devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
   /** сколько записей о сундуках сцена уже отдала оболочке; после снимка — с нуля */
   private chestCursor: ChestCursor = { found: 0, opened: 0 };
+  /** сколько записей о тайниках сцена уже отдала оболочке; после снимка — с нуля */
+  private secretCursor: SecretCursor = { found: 0, used: 0, blessings: 0 };
+  /** оболочка уже получила `secretBlessing` для открытого выбора; после снимка — нет, и окно просит предложение заново */
+  private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
+  /** фаза рубежа на прошлом шаге: смена фазы — повод для сообщения, после снимка отсчёт идёт от восстановленной */
+  private rubezhPhase: RubezhPhase = "pending";
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -163,6 +192,7 @@ export class MainScene extends Phaser.Scene {
     const resume = data.resume;
     this.seed = resume?.seed ?? data.seed;
     this.runId = resume?.runId ?? data.runId ?? createUuid();
+    this.contentHash = data.content === undefined ? CONTENT_HASH : hashSnapshot(data.content);
     this.accumulatorMs = 0;
     this.hudTimerMs = 0;
     this.reportedWave = -1;
@@ -172,6 +202,8 @@ export class MainScene extends Phaser.Scene {
     this.devWindow = { elapsedMs: 0, frames: 0, simMs: 0, steps: 0 };
     this.inputCode = IDLE_CODE;
     this.chestCursor = { found: 0, opened: 0 };
+    this.secretCursor = { found: 0, used: 0, blessings: 0 };
+    this.blessingAnnounced = false;
     this.cordonCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
@@ -182,12 +214,19 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       mapId: resume?.mapId ?? data.mapId,
       difficultyId: resume?.difficultyId ?? data.difficultyId,
+      // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
+      mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
+      ...(data.content === undefined ? {} : { content: data.content }),
     });
     this.world = world;
     this.spawner = spawner;
+    this.rubezhPhase = world.rubezh.phase;
+    // Выбор благословения отдан игроку только там, где оболочка умеет его показать:
+    // боты, повтор и стенд берут первое из предложенных.
+    world.secrets.manualBlessing = this.sceneData.pauseOnChest === true;
 
     // Снимок переносится до рендера и камеры: они строятся уже по
     // продолженному миру, и первый кадр не показывает пустое начало забега.
@@ -220,7 +259,8 @@ export class MainScene extends Phaser.Scene {
               mapId: world.mapId,
               difficultyId: world.difficultyLevel.id,
               startingWeaponId: this.startingWeaponId(),
-              contentHash: CONTENT_HASH,
+              ...(world.mode === "endless" ? {} : { mode: world.mode }),
+              contentHash: this.contentHash,
               unitScale: data.unitScale,
               // Продолженный забег не повторить с начала, а в забеге
               // разработчика читы и команды в лог не пишутся.
@@ -239,6 +279,16 @@ export class MainScene extends Phaser.Scene {
 
     this.applyDev(data.dev);
     this.ready = true;
+    if (data.dev !== undefined) {
+      // Дев-доступ для стенда эффектов (T-0213): оболочке до сессии из своего
+      // хранилища не дотянуться, поэтому сцена забега разработчика сама
+      // отдаёт счётчик на `window` и убирает его при закрытии.
+      const host = globalThis as { __bhRenderStats?: () => { displayObjects: number } | null };
+      host.__bhRenderStats = () => this.devRenderStats();
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        delete host.__bhRenderStats;
+      });
+    }
     if (resume === undefined) for (const command of data.dev?.start ?? []) this.devCommand(command);
     // Сигналы считаются от уже собранного мира: продолженный забег и команды
     // старта не должны прозвучать залпом на первом кадре.
@@ -247,10 +297,12 @@ export class MainScene extends Phaser.Scene {
     // До первого HUD: оболочка ставит начало в очередь раньше, чем игрок
     // успеет умереть, — порядок старта и итога в очереди важен серверу.
     if (resume === undefined) {
+      const pressure = describePressureStart(this.world);
       this.sceneData.bus.emit("started", {
         runId: this.runId,
         difficultyId: this.world.difficultyLevel.id,
         startingWeaponId: this.startingWeaponId(),
+        ...(pressure === undefined ? {} : { pressure }),
       });
     }
     this.emitHud();
@@ -293,8 +345,11 @@ export class MainScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
       steps++;
       this.emitChestEvents();
+      this.emitSecretEvents();
       this.emitCordonEvents();
-      if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest()) break;
+      this.emitRubezhEvents();
+      if (isPrologueWon(this.world)) break;
+      if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
     this.trackDevInfo(deltaMs, simMs, steps);
@@ -323,13 +378,18 @@ export class MainScene extends Phaser.Scene {
 
     this.probe.endFrame(this.world, simMs, steps, renderMs);
 
+    // Страж пролога пал: забег кончается победой, окна сундука и выбора уровня ему не помеха.
+    if (isPrologueWon(this.world)) {
+      this.winPrologue();
+      return;
+    }
     if (!this.world.player.alive) {
       this.handleDeath();
       return;
     }
     // Окно сундука идёт первым: выбор уровня, набранный той же наградой, ждёт
-    // его закрытия (`closeChest`).
-    if (this.isInChest()) return;
+    // его закрытия (`closeChest`), а окно капища — после сундука.
+    if (this.isInChest() || this.isInBlessing()) return;
     if (isAwaitingChoice(this.world)) this.enterChoice();
   }
 
@@ -465,6 +525,35 @@ export class MainScene extends Phaser.Scene {
   closeChest(): void {
     if (this.phase !== "chest") return;
     this.emitHud();
+    this.leaveOverlay();
+  }
+
+  /**
+   * Ответ оболочки на капище: одно из предложенных благословений. Неизвестный id
+   * игнорируется — он приходит снаружи, — и забег стоит дальше. Выбор — часть
+   * записи забега: на этом тике повтор применит то же.
+   */
+  chooseBlessing(id: string): void {
+    if (this.phase !== "blessing") return;
+    if (!chooseBlessing(this.world, id)) return;
+    this.probe.choice(this.world, `blessing:${id}`);
+    this.blessingAnnounced = false;
+    // Использование капища — событием, как и находка: оболочка узнаёт, что именно взято.
+    this.emitSecretEvents();
+    this.emitHud();
+    this.leaveOverlay();
+  }
+
+  /**
+   * Конец окна сундука или капища: следующее окно по очереди (капище, выбор
+   * уровня) или возврат в забег. Окна идут в порядке сундук → капище → уровень:
+   * награда клада могла набрать уровень, а капище могло встать в тот же шаг.
+   */
+  private leaveOverlay(): void {
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) {
+      this.showBlessing();
+      return;
+    }
     if (isAwaitingChoice(this.world)) {
       this.enterChoice();
       return;
@@ -473,16 +562,8 @@ export class MainScene extends Phaser.Scene {
     this.sceneData.bus.emit("resumed", { elapsedSec: this.world.stats.elapsedSec });
   }
 
-  restartRun(seed: number): void {
-    // «Ещё раз» — новый забег, а не повтор продолженного: со своим id и без
-    // бустов. Буст — расходник на один забег, и перенести его на следующий
-    // значило бы дать его даром, а сервер отклонил бы такой забег как
-    // неоплаченный. Снаряжение остаётся: снимок надетого всё тот же.
-    const next: MainSceneData = { ...this.sceneData, seed };
-    delete next.resume;
-    delete next.runId;
-    if (next.loadout !== undefined) next.loadout = { ...next.loadout, boosts: [] };
-    this.scene.restart(next);
+  restartRun(seed: number, difficultyId?: DifficultyId): void {
+    this.scene.restart(restartSceneData(this.sceneData, seed, difficultyId));
   }
 
   /**
@@ -513,6 +594,15 @@ export class MainScene extends Phaser.Scene {
     if (isAwaitingChoice(this.world)) this.enterChoice();
   }
 
+  /**
+   * Сколько видимых объектов рисует сцена (дев-доступ стенда эффектов, Р142).
+   * Игроку счётчик не нужен: у забега без `dev` — `null`.
+   */
+  devRenderStats(): { displayObjects: number } | null {
+    if (!this.ready || this.sceneData.dev === undefined) return null;
+    return { displayObjects: countVisible(this.children.list) };
+  }
+
   /** Характеристики забега для листа «Характеристики». */
   inspect(): RunInspection | null {
     return this.ready ? inspectWorld(this.world) : null;
@@ -529,12 +619,13 @@ export class MainScene extends Phaser.Scene {
     const world = this.world;
     return {
       format: RUN_SNAPSHOT_FORMAT,
-      contentHash: CONTENT_HASH,
+      contentHash: this.contentHash,
       runId: this.runId,
       seed: this.seed,
       mapId: world.mapId,
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
+      ...(world.mode === "endless" ? {} : { mode: world.mode }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
@@ -582,8 +673,10 @@ export class MainScene extends Phaser.Scene {
       this.step(IDLE_INPUT);
       this.probe.stepped(IDLE_CODE, this.world);
       this.emitChestEvents();
+      this.emitSecretEvents();
       this.emitCordonEvents();
-      if (!this.world.player.alive || isAwaitingChoice(this.world)) break;
+      this.emitRubezhEvents();
+      if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
     this.worldRenderer.sync(1);
     this.emitHud();
@@ -645,10 +738,12 @@ export class MainScene extends Phaser.Scene {
       if (snapshot.format !== RUN_SNAPSHOT_FORMAT) {
         throw new SnapshotError(`формат ${snapshot.format}, ожидался ${RUN_SNAPSHOT_FORMAT}`);
       }
-      if (snapshot.contentHash !== CONTENT_HASH) {
+      if (snapshot.contentHash !== this.contentHash) {
         throw new SnapshotError("снят на другой версии контента");
       }
       restoreWorld(this.world, this.spawner, snapshot.world);
+      // Страж, пришедший до сохранения, баннера не повторяет: отсчёт — от восстановленной фазы.
+      this.rubezhPhase = this.world.rubezh.phase;
       return true;
     } catch (error: unknown) {
       this.phase = "dead";
@@ -662,6 +757,10 @@ export class MainScene extends Phaser.Scene {
    * враги не должны нападать, пока он ищет палец для джойстика.
    */
   private enterRestored(): void {
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) {
+      this.enterBlessing();
+      return;
+    }
     if (isAwaitingChoice(this.world)) {
       this.enterChoice();
       return;
@@ -689,12 +788,48 @@ export class MainScene extends Phaser.Scene {
     if (events.opened.length > 0 && this.sceneData.pauseOnChest === true) this.enterChest();
   }
 
+  /**
+   * Новые события тайников — оболочке. Капище с отданным игроку выбором
+   * останавливает забег: мир стоит, пока оболочка не ответит `chooseBlessing`.
+   */
+  private emitSecretEvents(): void {
+    const events = takeSecretEvents(this.world, this.secretCursor);
+    this.secretCursor = events.cursor;
+    const bus = this.sceneData.bus;
+    for (const found of events.found) bus.emit("secretFound", found);
+    for (const offered of events.blessings) {
+      bus.emit("secretBlessing", offered);
+      this.blessingAnnounced = this.world.secrets.manualBlessing;
+    }
+    for (const used of events.used) bus.emit("secretUsed", used);
+    if (this.world.secrets.manualBlessing && isAwaitingBlessing(this.world)) this.enterBlessing();
+  }
+
   /** Закончившиеся кольца — оболочке, для аналитики. Журнал после восстановления снимка пуст. */
   private emitCordonEvents(): void {
     settleCordonDeath(this.world);
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /**
+   * Рубеж — оболочке. Фаза сравнивается с прошлой: смена одна, поэтому каждое
+   * сообщение уходит ровно один раз за забег, а журнала в мире не нужно.
+   */
+  private emitRubezhEvents(): void {
+    const state = this.world.rubezh;
+    if (state.phase === this.rubezhPhase) return;
+    const previous = this.rubezhPhase;
+    this.rubezhPhase = state.phase;
+    const bus = this.sceneData.bus;
+    const elapsedSec = this.world.stats.elapsedSec;
+    if (previous === "pending" && (state.phase === "guard" || state.phase === "cleared")) {
+      bus.emit("rubezhGuardSpawned", { enemyId: this.world.enemyTypes[state.guardType].id, elapsedSec });
+    }
+    if (state.phase === "cleared" && state.clearedSec !== null) {
+      bus.emit("rubezhCleared", { clearedSec: state.clearedSec, elapsedSec });
+    }
   }
 
   /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
@@ -706,6 +841,33 @@ export class MainScene extends Phaser.Scene {
     if (this.phase !== "running") return;
     this.phase = "chest";
     this.joystick.setVisible(false);
+    this.emitHud();
+  }
+
+  private isInBlessing(): boolean {
+    return this.phase === "blessing";
+  }
+
+  /** Окно капища: открытый сундук его не перебивает — выбор подождёт `closeChest`. */
+  private enterBlessing(): void {
+    if (this.phase !== "running") return;
+    this.joystick.setVisible(false);
+    this.showBlessing();
+  }
+
+  /**
+   * Поставить мир на выбор благословения. Предложение оболочка получает с
+   * событием `secretBlessing`; продолженный из снимка забег журналов не помнит,
+   * и предложение отправляется заново — иначе окну нечего показать.
+   */
+  private showBlessing(): void {
+    this.phase = "blessing";
+    const offer = this.world.secrets.offer;
+    if (!this.blessingAnnounced && offer !== null) {
+      const options = offer.options.flatMap((id) => this.world.secretRules.blessings.filter((blessing) => blessing.id === id));
+      this.sceneData.bus.emit("secretBlessing", { index: offer.siteIndex, options, elapsedSec: this.world.stats.elapsedSec });
+      this.blessingAnnounced = true;
+    }
     this.emitHud();
   }
 
@@ -762,9 +924,23 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       outcome,
       startingWeaponId: this.startingWeaponId(),
-      contentHash: CONTENT_HASH,
+      contentHash: this.contentHash,
       cheats: this.cheatsUsed,
     });
+  }
+
+  /**
+   * Победа в прологе: оболочка узнаёт о ней сообщением `prologueWon`, а забег
+   * закрывается обычным путём — `abandoned` с итогом, где `prologue.won = true`,
+   * чтобы отправка итога, рекорд и диагностика шли теми же дорогами.
+   */
+  private winPrologue(): void {
+    if (this.phase === "dead") return;
+    this.sceneData.bus.emit("prologueWon", {
+      result: this.resultOf("abandoned"),
+      elapsedSec: this.world.stats.elapsedSec,
+    });
+    this.finishRun("abandoned");
   }
 
   private finishRun(outcome: RunOutcome): void {

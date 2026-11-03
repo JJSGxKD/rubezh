@@ -8,12 +8,15 @@
  * - `taddy.api`, `taddy.exchange` — реклама и лента заданий Taddy;
  * - `ads.creatives` — креативы сетей;
  * - `ads.postback` — постбэки конверсий в кабинет сети;
- * - `secrets.check` — проверка ключа интеграции из панели.
+ * - `secrets.check` — проверка ключа интеграции из панели;
+ * - `proxy.subscription` — загрузка подписки Xray (Р101): адрес секретный, поэтому
+ *   только напрямую (`direct_only`) и без пути в журнале.
  */
 export const OUTBOUND_SERVICES = [
   "fx.cbr",
   "fx.ecb",
   "fx.erapi",
+  "fx.forexrateapi",
   "fx.coingecko",
   "fx.coinmarketcap",
   "fx.tonapi",
@@ -24,6 +27,10 @@ export const OUTBOUND_SERVICES = [
   "ads.creatives",
   "ads.postback",
   "secrets.check",
+  "proxy.subscription",
 ] as const;
+
+/** Сервисы, чей адрес целиком секретный: в журнале у них путь всегда `/***`. */
+export const SECRET_PATH_SERVICES: readonly OutboundService[] = ["proxy.subscription"];
 
 export type OutboundService = (typeof OUTBOUND_SERVICES)[number];

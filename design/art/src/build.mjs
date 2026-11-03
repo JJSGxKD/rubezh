@@ -12,7 +12,8 @@ import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { ENEMY_ART } from "./creatures.mjs";
-import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, heroDefs, withHeroPalette } from "./hero.mjs";
+import { HERO_DEFS, HERO_RADIUS, HERO_SKINS, HERO_STATES, HERO_VIEWS, heroDefs, withHeroPalette } from "./hero.mjs";
+import { SECRETS } from "./secrets.mjs";
 import { creaturePalette, enemyBody, enemyEye, GOLD_RIM, hex, NAV_GLOW, STAGES } from "./palette.mjs";
 import { FX } from "./fx.mjs";
 import { PICKUPS } from "./pickups.mjs";
@@ -52,7 +53,14 @@ function rimFilter(id, color, radius) {
  * рисунок не знает, рядовой он, элита или вариант для сравнения.
  * Толщина каймы — в игровых единицах, как `enemyRim` в looks.ts (2 у элиты, 3 у босса).
  */
-export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile = false } = {}) {
+/**
+ * Кадр врага: рисунок в клетке −50…50, кайма ранга, свечение Нави под ногами.
+ * `pad` — запас клетки для рисунка, который выходит за неё (копьё, рог, меч):
+ * клетка шире во столько раз, а масштаб рисунка тот же — движок берёт размер
+ * из пикселей кадра, и тело в мире не меняется. Сколько запаса нужно, меряет
+ * `node design/art/src/frame-fit.mjs`.
+ */
+export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile = false, pad = 1 } = {}) {
   const unitsPerBox = (radius * 2 * CELL_K) / 100;
   let filters = defs;
   let body = inner;
@@ -76,15 +84,19 @@ export function svgFrame(inner, { rank, radius, style = "C", defs = "", hostile 
     body = `<g filter="url(#rimB)">${body}</g>`;
   }
   const under = hostile ? `<ellipse cx="0" cy="42" rx="34" ry="9" fill="url(#nav)"/>` : "";
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${filters}</defs>${under}${body}</svg>`;
+  const box = pad === 1 ? "-50 -50 100 100" : `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${filters}</defs>${under}${body}</svg>`;
 }
 
 function enemyFrames(art, stage, style = "C", version = 2) {
-  const body = enemyBody(art.pattern, art.rank, stage, art.id, version);
+  // У босса с фазами (`phases`) номер «ступени» кадра — фаза боя: тон тела
+  // прежний, меняется рисунок (у Горыныча гаснут головы).
+  const tint = art.phases === undefined ? stage : 0;
+  const body = enemyBody(art.pattern, art.rank, tint, art.id, version);
   const palette =
-    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(stage, version));
+    style === "B" ? creaturePalette(0x3a1830, 0xff6a5a) : creaturePalette(body, enemyEye(tint, version));
   const hostile = version === 2 && style === "C";
-  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette), { rank: art.rank, radius: art.radius, style, hostile }));
+  return Array.from({ length: WALK_FRAMES }, (_, k) => svgFrame(art.draw(k / WALK_FRAMES, palette, stage), { rank: art.rank, radius: art.radius, style, hostile, pad: art.pad }));
 }
 
 export { CELL_K };
@@ -95,33 +107,59 @@ export function cellSize(radius, k = CELL_K) {
 
 /** Все кадры атласов: имя → { svg, size }. */
 export function collectFrames() {
-  const packs = { core: [], late: [], env: decorFrames(PPU), skins: [] };
-  for (const [state, frames] of Object.entries(HERO_STATES)) {
-    frames.forEach((draw, k) => {
-      packs.core.push({
-        name: `hero/${state}${k}`,
-        svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${draw()}</svg>`,
-        size: cellSize(HERO_RADIUS, 2.6),
-      });
-    });
+  // `r157` — новый контент Р157 (T-0281…T-0285): свой пак, чтобы `late` не
+  // перерос 2048 px по высоте и видеопамять не росла, пока этих врагов нет в
+  // забеге. Движок подключит пак вместе с контентом.
+  const packs = { core: [], late: [], r157: [], env: decorFrames(PPU) };
+  // Тайники — в паке мира рядом с декором: грузятся вместе с землёй, а их
+  // кадров немного. Имя — `secret/<вид>/<состояние>`, вид — как `SecretKind`
+  // в движке; центр кадра — центр тайника (T-0260).
+  for (const secret of SECRETS) {
+    for (const [state, draw] of Object.entries(secret.states)) {
+      packs.env.push({ name: `secret/${secret.id}/${state}`, svg: draw(), size: Math.ceil(secret.units * PPU) });
+    }
   }
-  // Облики — свой пак: грузятся, когда игрок открывает раздел или выбрал облик
-  // (docs/27 §3.5). Только покой и шаг: ранение и смерть — кадры обычного героя.
-  for (const skin of HERO_SKINS.slice(1)) {
-    for (const state of ["idle", "walk"]) {
-      HERO_STATES[state].forEach((draw, k) => {
-        const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${heroDefs()}</defs>${draw()}</svg>`);
-        packs.skins.push({ name: `hero-${skin.id}/${state}${k}`, svg, size: cellSize(HERO_RADIUS, 2.6) });
+  // Вид сбоку — `hero/<состояние>k`, как раньше; спереди и спиной —
+  // `hero/front/…` и `hero/back/…` (Р143, characters.md §4.1).
+  const heroViews = [["", HERO_STATES], ["front/", HERO_VIEWS.front], ["back/", HERO_VIEWS.back]];
+  for (const [view, states] of heroViews) {
+    for (const [state, frames] of Object.entries(states)) {
+      frames.forEach((draw, k) => {
+        packs.core.push({
+          name: `hero/${view}${state}${k}`,
+          svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><defs>${HERO_DEFS}</defs>${draw()}</svg>`,
+          size: cellSize(HERO_RADIUS, 2.6),
+        });
       });
     }
   }
+  // Облики — пак на облик (`skin-<id>`): в забеге нужен только свой, и с каждым
+  // окрасом пасса общий пак рос бы для всех. Только покой и шаг: ранение и
+  // смерть — кадры обычного героя. Имена кадров — `hero-<id>/…`, как раньше,
+  // спереди и спиной — `hero-<id>/front/…` и `hero-<id>/back/…`.
+  for (const skin of HERO_SKINS.slice(1)) {
+    const frames = [];
+    for (const [view, states] of heroViews) {
+      for (const state of ["idle", "walk"]) {
+        states[state].forEach((draw, k) => {
+          // Запас клетки (`pad`) — для головы архетипа выше общей позы: шлем,
+          // венец, бубенцы. Масштаб рисунка тот же, тело героя в мире прежнее.
+          const pad = skin.pad ?? 1;
+          const box = `${-50 * pad} ${-50 * pad} ${100 * pad} ${100 * pad}`;
+          const svg = withHeroPalette(skin.palette, () => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}"><defs>${heroDefs()}</defs>${draw()}</svg>`);
+          frames.push({ name: `hero-${skin.id}/${view}${state}${k}`, svg, size: cellSize(HERO_RADIUS * pad, 2.6) });
+        });
+      }
+    }
+    packs[`skin-${skin.id}`] = frames;
+  }
   for (const art of ENEMY_ART) {
-    const pack = CORE_ENEMIES.has(art.id) ? packs.core : packs.late;
+    const pack = CORE_ENEMIES.has(art.id) ? packs.core : art.pack === "r157" ? packs.r157 : packs.late;
     // Ступени — только у рядовых: элита и боссы ступеней не получают (content/stages.ts).
-    const stages = art.rank === undefined ? STAGES.length : 1;
+    const stages = art.rank === undefined ? STAGES.length : (art.phases ?? 1);
     for (let stage = 0; stage < stages; stage++) {
       enemyFrames(art, stage).forEach((svg, k) => {
-        pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius) });
+        pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius * (art.pad ?? 1)) });
       });
     }
   }
@@ -130,7 +168,8 @@ export function collectFrames() {
     pickup.frames.forEach((svg, k) => packs.core.push({ name: `pickup/${pickup.id}/${k}`, svg, size: Math.ceil(pickup.units * PPU) }));
   }
   for (const fx of FX) {
-    fx.frames.forEach((svg, k) => packs.core.push({ name: `fx/${fx.id}${k}`, svg, size: Math.ceil(fx.units * PPU) }));
+    const pack = fx.pack === "r157" ? packs.r157 : packs.core;
+    fx.frames.forEach((svg, k) => pack.push({ name: `fx/${fx.id}${k}`, svg, size: Math.ceil(fx.units * PPU) }));
   }
   return packs;
 }
@@ -146,6 +185,7 @@ export function pack(frames, maxWidth = 1024, pad = 2) {
   let x = pad;
   let y = pad;
   let shelf = 0;
+  let right = 0;
   for (const frame of sorted) {
     if (x + w(frame) + pad > maxWidth) {
       x = pad;
@@ -155,12 +195,15 @@ export function pack(frames, maxWidth = 1024, pad = 2) {
     frame.x = x;
     frame.y = y;
     x += w(frame) + pad;
+    right = Math.max(right, x);
     shelf = Math.max(shelf, h(frame));
   }
-  // Высота — кратная четырём, а не степень двойки: WebGL2 и Phaser держат
+  // Высота и ширина — кратные четырём, а не степень двойки: WebGL2 и Phaser держат
   // такие текстуры без мип-карт, а степень двойки съедала бы до половины атласа.
+  // Ширина — по самому правому кадру: пак облика в шесть кадров не тянет полосу в 1024.
+  const width = Math.min(maxWidth, Math.ceil(right / 4) * 4);
   const height = Math.ceil((y + shelf + pad) / 4) * 4;
-  return { width: maxWidth, height, frames: sorted };
+  return { width, height, frames: sorted };
 }
 
 async function loadPlaywright() {

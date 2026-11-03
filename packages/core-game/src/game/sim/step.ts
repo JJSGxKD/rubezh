@@ -1,16 +1,18 @@
-import { applyPattern, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
+import { applyPattern, CORDON_PHASE, isBoss, MAX_PATTERN_RADIUS } from "../patterns";
 import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
 import { pushPlayerOutOfGuards, updateCordon } from "./cordon";
 import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
 import { isTimeFrozen, tickFreeze } from "./freeze";
+import { stepRubezh } from "./rubezh";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
+import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
 import { vectorLength } from "./vector";
-import { clampToBounds, damagePlayer, despawnProjectile, NO_OWNER_TYPE, TICK_SEC, type World } from "./world";
+import { clampToBounds, damagePlayer, despawnProjectile, TICK_SEC, type World } from "./world";
 
 /**
  * Ввод игрока за тик — направление, а не координаты курсора: так один и тот же
@@ -33,8 +35,8 @@ const MELEE_INTERVAL_SEC = 0.6;
  * воспроизводимость, а вместе с ней golden-прогоны и разбор баг-репортов.
  * Накопление реального времени и вызов нужного числа шагов — забота рендера.
  *
- * Пока игрок выбирает улучшение, мир стоит: шаг не делается вовсе. Так пауза
- * получается детерминированной — в логе ввода выбор приходит на конкретный
+ * Пока игрок выбирает улучшение или благословение капища, мир стоит: шаг не
+ * делается вовсе. Так пауза получается детерминированной — в логе ввода выбор приходит на конкретный
  * тик, и повтор забега попадает в тот же момент (docs/26-stage2-plan.md, WP2).
  */
 /** Урон по времени за тик — один объект на модуль: без аллокаций в цикле по врагам. */
@@ -42,7 +44,7 @@ const statusTick: StatusTick = { burn: 0, poison: 0 };
 
 export function stepWorld(world: World, input: SimInput): void {
   const dt = TICK_SEC;
-  if (isAwaitingChoice(world)) return;
+  if (isAwaitingChoice(world) || isAwaitingBlessing(world)) return;
 
   // Неуязвимость после второго шанса тикает вместе с миром: пауза и выбор
   // улучшения её не съедают.
@@ -55,6 +57,8 @@ export function stepWorld(world: World, input: SimInput): void {
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.
   recycleLostEnemies(world);
+  // Страж рубежа — после переноса отставших: свежий страж стоит на кольце спавна и сразу в сетке этого тика.
+  stepRubezh(world);
   // Кольцо стражей — после переноса отставших и до сетки: исчезнувшие по времени
   // стражи не должны попасть в сетку этого тика.
   updateCordon(world, dt);
@@ -75,6 +79,9 @@ export function stepWorld(world: World, input: SimInput): void {
     updatePickups(world);
   }
   if (world.config.progressionEnabled) {
+    // Тайники — до подготовки выбора: клад выдаёт сундук, а сундук мог набрать
+    // уровень, и выбор встанет в этот же шаг.
+    updateSecrets(world);
     // Варианты готовятся в конце шага: игрок увидит их на следующем кадре, а
     // мир к этому моменту уже в согласованном состоянии.
     prepareOffers(world);
@@ -237,6 +244,8 @@ function updateEnemies(world: World, dt: number): void {
     // Бьёт ли касанием — возможность паттерна, а не проверка его имени: у
     // стрелка таймер занят перезарядкой выстрела, подрывник бьёт взрывом.
     if (!type.contactDamage) continue;
+    // Пока горит вспышка строя, страж не кусает.
+    if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) continue;
 
     const dx = player.x - enemies.x[i];
     const dy = player.y - enemies.y[i];
@@ -255,8 +264,6 @@ function updateEnemies(world: World, dt: number): void {
 
 function updateProjectiles(world: World, dt: number): void {
   const projectiles = world.projectiles;
-  const player = world.player;
-  const playerRadius = world.config.player.radius;
   const projectileRadius = world.config.player.projectileRadius;
 
   for (let p = 0; p < projectiles.count; p++) {
@@ -271,20 +278,7 @@ function updateProjectiles(world: World, dt: number): void {
       continue;
     }
 
-    if (projectiles.fromPlayer[p] === 1) {
-      hitEnemies(world, p, projectileRadius);
-      continue;
-    }
-
-    if (!player.alive) continue;
-    const dx = player.x - projectiles.x[p];
-    const dy = player.y - projectiles.y[p];
-    const contact = playerRadius + projectileRadius;
-    if (dx * dx + dy * dy <= contact * contact) {
-      const owner = projectiles.ownerType[p];
-      damagePlayer(world, projectiles.damage[p], owner === NO_OWNER_TYPE ? -1 : owner);
-      despawnProjectile(world, p);
-    }
+    hitEnemies(world, p, projectileRadius);
   }
 }
 

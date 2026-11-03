@@ -46,6 +46,7 @@ export function RestrictDialog({
   active,
   canBan,
   canRestrict,
+  initialKinds,
   onDone,
 }: {
   open: boolean;
@@ -56,6 +57,8 @@ export function RestrictDialog({
   active: readonly Restriction[];
   canBan: boolean;
   canRestrict: boolean;
+  /** что отмечено при открытии: «Заблокировать…» открывает окно с блокировкой «всё» */
+  initialKinds?: readonly string[];
   onDone: () => void;
 }) {
   const [draft, setDraft] = useState<RestrictDraft>(emptyDraft);
@@ -67,7 +70,7 @@ export function RestrictDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDraft(emptyDraft());
+    setDraft({ ...emptyDraft(), kinds: [...(initialKinds ?? [])] });
     setNow(new Date());
     setPreview(null);
     setError(null);

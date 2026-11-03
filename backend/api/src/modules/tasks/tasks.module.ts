@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
@@ -8,6 +9,8 @@ import { WalletModule } from "../wallet/wallet.module.js";
 import { TasksController } from "./tasks.controller.js";
 import { NETWORK_TASKS_REPOSITORY, PrismaNetworkTasksRepository } from "./network-tasks.repository.js";
 import { NetworkTasksService } from "./network-tasks.service.js";
+import { PrismaTaskPointsRepository, TASK_POINTS_REPOSITORY } from "./task-points.repository.js";
+import { TaskPointsService } from "./task-points.service.js";
 import { PrismaTasksRepository, TASKS_REPOSITORY } from "./tasks.repository.js";
 import { TasksService } from "./tasks.service.js";
 
@@ -16,17 +19,24 @@ import { TasksService } from "./tasks.service.js";
  * прогресс от записанных забегов, награда — кошельком по ключу задания и
  * срока. Сервис экспортируется знакам меню и панели.
  *
+ * Очки заданий (T-0105) — `TaskPointsService`: полоса дня и недели и награды
+ * за ступени; знак меню берёт готовые ступени через фасад `TasksService`.
+ *
+ * Очки батл-пасса (T-0311) забранное задание прибавляет через `BattlePassService`.
+ *
  * Задания рекламных сетей (WP13, часть 6) — `NetworkTasksService`: модуль
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
  * них, решает он.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule],
   controllers: [TasksController],
   providers: [
     TasksService,
+    TaskPointsService,
     NetworkTasksService,
     { provide: TASKS_REPOSITORY, useClass: PrismaTasksRepository },
+    { provide: TASK_POINTS_REPOSITORY, useClass: PrismaTaskPointsRepository },
     { provide: NETWORK_TASKS_REPOSITORY, useClass: PrismaNetworkTasksRepository },
   ],
   exports: [TasksService, NetworkTasksService],

@@ -110,7 +110,7 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
     await recorder.record(entry(me, `c-${await click(code)}`, at));
 
     expect(await bindings(me)).toEqual([{ accountId: me, partnerId, campaignId: null, linkCode: code, boundAt: at }]);
-    expect(await partners.bindingOf(me)).toMatchObject({ partnerId, name: "Канал", campaignTitle: null, code: null });
+    expect(await partners.bindingOf(me)).toMatchObject({ partnerId, name: "Канал", campaignTitle: null, code: null, linkCode: code });
   });
 
   it("тот же вход по прямой ссылке l-<код> — привязка", async () => {

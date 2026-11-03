@@ -13,7 +13,7 @@ import {
   createTonApiSource,
   parseCoinMarketCap,
 } from "../src/sources/crypto.js";
-import { ERAPI_TARIFFS, createCbrSource, createEcbSource, createErApiSource } from "../src/sources/fiat.js";
+import { ERAPI_TARIFFS, FOREXRATEAPI_TARIFF, createCbrSource, createEcbSource, createErApiSource, createForexRateApiSource } from "../src/sources/fiat.js";
 import { retryAfterMs, type FetchLike } from "../src/sources/http.js";
 import { SourceRateLimitedError, SourceUnavailableError } from "../src/sources.js";
 import type { Quote } from "../src/quote.js";
@@ -261,6 +261,49 @@ describe("tonapi и erapi: ключ необязателен", () => {
     for (const key of [valid.slice(1), "abcdef12", "a", `${valid}0`, `${valid.slice(1)}g`]) {
       expect(() => createErApiSource({ fetch: answering("{}").fetch, key }), key).toThrow(RangeError);
     }
+  });
+});
+
+describe("ForexRateAPI: голос рубля и евро, только с ключом", () => {
+  const KEY = "0123456789abcdef0123456789abcdef";
+
+  // Фикстура forexrateapi-latest.json собрана по документации forexrateapi.com, а не снята
+  // с источника: заменить снятой, когда будет ключ.
+  it("курсы рубля и евро, момент — из timestamp, лишние валюты отброшены", async () => {
+    const quotes = await createForexRateApiSource({ ...answering(fixture("forexrateapi-latest.json")), key: KEY }).fetch(signal);
+    expect(quotes.map((quote) => quote.currency).sort()).toEqual(["EUR", "RUB"]);
+    expect(new Decimal(usd(quotes, "RUB") ?? "0").mul("84.5").toDecimalPlaces(20).toString()).toBe("1");
+    expect(quotes[0]?.observedAt).toEqual(new Date(1_790_294_400_000));
+  });
+
+  it("ключ уходит заголовком X-API-KEY, в адресе его нет", async () => {
+    const served = answering(fixture("forexrateapi-latest.json"));
+    await createForexRateApiSource({ ...served, key: KEY }).fetch(signal);
+    expect(served.calls[0]?.url).toBe("https://api.forexrateapi.com/v1/latest?base=USD&currencies=RUB,EUR");
+    expect(served.calls[0]?.url).not.toContain(KEY);
+    expect(served.calls[0]?.headers).toMatchObject({ "X-API-KEY": KEY });
+  });
+
+  it("success: false — источник недоступен", async () => {
+    const refused = JSON.stringify({ success: false, error: { code: 105, info: "лимит исчерпан" } });
+    await expect(createForexRateApiSource({ ...answering(refused), key: KEY }).fetch(signal)).rejects.toBeInstanceOf(SourceUnavailableError);
+  });
+
+  it("429 — лимит, а не поломка", async () => {
+    const limited = createForexRateApiSource({ ...answering("{}", { status: 429, headers: { "retry-after": "60" } }), key: KEY });
+    await expect(limited.fetch(signal)).rejects.toBeInstanceOf(SourceRateLimitedError);
+  });
+
+  it("тариф Free: 100 в месяц, раз в 12 часов", () => {
+    const source = createForexRateApiSource({ fetch: answering("{}").fetch, key: KEY });
+    expect(source.id).toBe("forexrateapi");
+    expect(source.tariff).toBe(FOREXRATEAPI_TARIFF);
+    expect(FOREXRATEAPI_TARIFF.perMonth).toBe(100);
+    expect(FOREXRATEAPI_TARIFF.minIntervalMs).toBe(12 * 3_600_000);
+  });
+
+  it("пустой ключ — RangeError", () => {
+    expect(() => createForexRateApiSource({ fetch: answering("{}").fetch, key: "" })).toThrow(RangeError);
   });
 });
 

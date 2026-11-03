@@ -23,7 +23,7 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor

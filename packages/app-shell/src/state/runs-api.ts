@@ -35,7 +35,7 @@ const finishSchema = z.object({
   verdict: z.enum(["ok", "suspicious", "rejected"]),
 });
 
-const leaderboardSchema = z.object({
+export const leaderboardSchema = z.object({
   difficultyId: difficultySchema,
   entries: z.array(
     z.object({
@@ -48,6 +48,8 @@ const leaderboardSchema = z.object({
       enemiesKilled: z.number(),
       isMe: z.boolean(),
       tester: z.optional(z.literal(true)),
+      /** очки престижа (T-0107); сервер до достижений поля не отдавал */
+      prestige: z.optional(z.number()),
     }),
   ),
   me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),

@@ -20,13 +20,22 @@ export function canOfferPaidContinue(): boolean {
 }
 
 /**
- * Ждать ли на экране смерти: второй шанс можно купить или взять за рекламу
- * (WP11). Есть ли реклама сейчас, скажет сервер — не будет ни её, ни
- * покупки, забег закроется смертью сразу (`second-chance-offers.ts`).
+ * Можно ли предложить второй шанс за самоцветы (Р162): они есть на любой
+ * площадке, нужен только вход в аккаунт — списывает и записывает продолжение
+ * сервер. Хватает ли самоцветов, скажет сам сервер вместе с ценой.
+ */
+export function canOfferGemContinue(): boolean {
+  const { capabilities } = useShell.getState();
+  return capabilities.platformAvailable && capabilities.auth !== undefined;
+}
+
+/**
+ * Ждать ли на экране смерти: второй шанс можно купить, взять за самоцветы или
+ * за рекламу (WP11, Р162). Есть ли реклама сейчас, скажет сервер — не будет
+ * ни её, ни покупки, забег закроется смертью сразу (`second-chance-offers.ts`).
  */
 export function canOfferContinue(): boolean {
-  const { adapter, capabilities } = useShell.getState();
-  return canOfferPaidContinue() || (adapter.showAd !== undefined && capabilities.platformAvailable && capabilities.auth !== undefined);
+  return canOfferPaidContinue() || canOfferGemContinue();
 }
 
 /** Сервер ответил, что оплаты нет или этому аккаунту платить нечем. */

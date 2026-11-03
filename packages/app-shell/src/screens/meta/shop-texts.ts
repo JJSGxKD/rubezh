@@ -120,6 +120,7 @@ export function vipWaiting(vip: VipView | null): number {
 /** Бейдж товара словами; незнакомый от сервера новее клиента — без бейджа. */
 export function badgeLabel(badge: string | null | undefined): string | null {
   if (badge === "hit") return t("shop.badge.hit");
+  if (badge === "choice") return t("shop.badge.choice");
   if (badge === "best") return t("shop.badge.best");
   return null;
 }

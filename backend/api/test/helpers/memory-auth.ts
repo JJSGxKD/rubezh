@@ -1,4 +1,4 @@
-import type { Account, AccountArrival, AccountBan, AccountRepository, RecipientsPage } from "../../src/modules/auth/account.repository.js";
+import { storedNameFor, type Account, type AccountArrival, type AccountBan, type AccountRepository, type RecipientsPage } from "../../src/modules/auth/account.repository.js";
 import type { RefreshSession, RefreshStore, RefreshTake } from "../../src/modules/auth/refresh.store.js";
 
 /**
@@ -17,8 +17,10 @@ export class MemoryAccountRepository implements AccountRepository {
     const existing = this.byKey.get(key);
 
     if (existing !== undefined) {
-      const { photoUrl, ...rest } = identity;
-      const updated: Account = { ...existing, ...rest, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
+      const { photoUrl, displayName, ...rest } = identity;
+      // Как в Prisma-реализации: закреплённый модератором ник вход не перезаписывает.
+      const shown = existing.nameLockedAt != null ? existing.displayName : storedNameFor(displayName, identity.username, existing.accountId).name;
+      const updated: Account = { ...existing, ...rest, displayName: shown, platformName: displayName, ...(photoUrl === undefined ? {} : { photoUrl }), created: false };
       this.byKey.set(key, updated);
       return updated;
     }
@@ -26,6 +28,8 @@ export class MemoryAccountRepository implements AccountRepository {
     const account: Account = {
       accountId: crypto.randomUUID(),
       ...identity,
+      platformName: identity.displayName,
+      nameLockedAt: null,
       photoUrl: identity.photoUrl ?? null,
       createdAt: new Date(nowMs),
       bannedAt: null,
@@ -72,6 +76,16 @@ export class MemoryAccountRepository implements AccountRepository {
     for (const [key, account] of this.byKey.entries()) {
       if (account.accountId !== accountId) continue;
       const updated: Account = { ...account, bannedAt: ban?.at ?? null, banReason: ban?.reason ?? null, created: false };
+      this.byKey.set(key, updated);
+      return updated;
+    }
+    return null;
+  }
+
+  async setName(accountId: string, displayName: string, lockedAt: Date | null): Promise<Account | null> {
+    for (const [key, account] of this.byKey.entries()) {
+      if (account.accountId !== accountId) continue;
+      const updated: Account = { ...account, displayName, nameLockedAt: lockedAt, created: false };
       this.byKey.set(key, updated);
       return updated;
     }

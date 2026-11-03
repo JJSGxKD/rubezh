@@ -26,7 +26,7 @@ const EMPTY: DayStats = {
   active: 0,
   sessions: 0,
   runs: { finished: 0, players: 0, medianSurvivalSec: null },
-  revenue: { stars: 0, purchases: 0, refunds: 0 },
+  revenue: { stars: 0, purchases: 0, refunds: 0, purchaseStars: 0, donations: 0, donationStars: 0 },
   funnel: { entered: 0, appOpened: 0, firstRun: 0, runs5: 0, returnedD1: 0, returnedD7: 0, firstPurchase: 0 },
 };
 
@@ -35,7 +35,7 @@ const BUSY: DayStats = {
   active: 45,
   sessions: 120,
   runs: { finished: 230, players: 38, medianSurvivalSec: 252.4 },
-  revenue: { stars: 21, purchases: 5, refunds: 1 },
+  revenue: { stars: 21, purchases: 5, refunds: 1, purchaseStars: 21, donations: 0, donationStars: 0 },
   funnel: { entered: 12, appOpened: 10, firstRun: 9, runs5: 3, returnedD1: 4, returnedD7: 1, firstPurchase: 1 },
 };
 
@@ -63,9 +63,14 @@ describe("текст отчёта", () => {
     expect(text).toContain("органика 7 · ссылки 3 · друзья 2");
     expect(text).toContain("Активных: 45 (+45) · запусков 120");
     expect(text).toContain("медиана 4:12");
-    expect(text).toContain("Выручка: 21 звезда (+21) · покупок 5 · возвратов 1");
+    expect(text).toContain("Выручка: 21 звезда (+21) · покупок 5 на 21 ⭐ · возвратов 1");
     expect(statsText("2026-09-28", EMPTY, BUSY)).toContain("Новых аккаунтов: 0 (−12)");
     expect(statsText("2026-09-28", BUSY, BUSY)).toContain("Активных: 45 (=)");
+  });
+
+  it("текст и цифры суток метки «Отдельная доска» не знают (T-0115)", () => {
+    expect(Object.keys(BUSY)).not.toContain("boardMark");
+    expect(statsText("2026-09-28", BUSY, EMPTY)).not.toMatch(/доск/i);
   });
 
   it("идущие сутки — без разницы: неполный день против полного соврал бы", () => {
@@ -74,8 +79,19 @@ describe("текст отчёта", () => {
     expect(text).not.toMatch(/\(\+|\(−|\(=\)/);
   });
 
+  it("донаты — отдельной строкой, а доход — покупки плюс донаты (T-0364)", () => {
+    const withDonation: DayStats = { ...EMPTY, revenue: { stars: 150, purchases: 1, refunds: 0, purchaseStars: 50, donations: 1, donationStars: 100 } };
+    const text = statsText("2026-09-28", withDonation, null);
+    expect(text).toContain("Выручка: 150 звёзд · покупок 1 на 50 ⭐ · возвратов 0");
+    expect(text).toContain("Донаты: 1 на 100 ⭐");
+  });
+
+  it("строки донатов нет, когда их ноль (T-0364)", () => {
+    expect(statsText("2026-09-28", BUSY, EMPTY)).not.toContain("Донаты");
+  });
+
   it("звёзды склоняются", () => {
-    const stars = (count: number) => statsText("2026-09-28", { ...EMPTY, revenue: { stars: count, purchases: 0, refunds: 0 } }, null);
+    const stars = (count: number) => statsText("2026-09-28", { ...EMPTY, revenue: { stars: count, purchases: 0, refunds: 0, purchaseStars: count, donations: 0, donationStars: 0 } }, null);
     expect(stars(1)).toContain("1 звезда");
     expect(stars(3)).toContain("3 звезды");
     expect(stars(11)).toContain("11 звёзд");
@@ -116,7 +132,7 @@ function reporter(locks: DailyStatsLocks, options: { cfg?: AppConfig; fail?: () 
       return sent.length;
     },
   };
-  const repository: DailyStatsRepository = { day: async () => BUSY, series: async () => [] };
+  const repository: DailyStatsRepository = { day: async () => BUSY, series: async () => [], boardMark: async () => ({ marked: 3, active: 2, newAccounts: 1, runs: 9 }) };
   const router = new BotRouter();
   const roles = new RolesService(cfg, new MemoryRolesRepository(), new MemoryAccountRepository());
   const instance = new DailyStatsReporter(cfg, targetsOf(cfg), router, repository, locks, api, roles);

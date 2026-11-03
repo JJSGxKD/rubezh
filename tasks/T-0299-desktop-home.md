@@ -30,7 +30,7 @@ batch: 8
 
 # T-0299. Раскладка для ПК — главная: баннер, «Играть» и выбор забега в центре без листа, последний забег; виджеты справа
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0299.json)](README.md#значки-статуса) [![T-0298](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json&label=T-0298)](T-0298-desktop-shell-rail.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0299.json)](README.md#значки-статуса) [![T-0298](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0298.json&label=T-0298)](archive/T-0298-desktop-shell-rail.md)
 
 **Черновик по Р72.** Главная ещё меняется: пролог (T-0280), серия дней
 (T-0263), Дружина и Застава (T-0268, T-0270) добавляют на неё входы.

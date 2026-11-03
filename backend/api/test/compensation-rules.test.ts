@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { CONTINUE_RATE, TESTER_BONUS, bonusGems, compensationGrantsSchema, continueGems, grantOfKey } from "../src/modules/wipe/compensation-rules.js";
+import { CONTINUE_RATE } from "../src/modules/payments/continue-price.js";
+import { TESTER_BONUS, bonusGems, compensationGemsForStars, compensationGrantsSchema, grantOfKey } from "../src/modules/wipe/compensation-rules.js";
 
 /**
  * Правила компенсации тестеру (docs/35-stage4-plan.md, Р87, tasks/T-0040):
@@ -120,10 +121,10 @@ describe("компенсация второго шанса (T-0042)", () => {
     [10, 12],
     [50, 60],
   ])("%i ⭐ второго шанса — %i самоцветов, вверх до целого", (stars, gems) => {
-    expect(continueGems(stars)).toBe(gems);
+    expect(compensationGemsForStars(stars)).toBe(gems);
   });
 
   it("всегда целое число самоцветов", () => {
-    for (let stars = 0; stars <= 200; stars += 1) expect(Number.isInteger(continueGems(stars))).toBe(true);
+    for (let stars = 0; stars <= 200; stars += 1) expect(Number.isInteger(compensationGemsForStars(stars))).toBe(true);
   });
 });

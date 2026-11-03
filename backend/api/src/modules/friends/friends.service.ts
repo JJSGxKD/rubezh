@@ -100,6 +100,9 @@ export class FriendsService implements OnModuleInit {
       this.friends.bonusClaimed(accountId),
     ]);
     const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+    // Игрок увидел заявки на экране друзей — колокольчик про них гаснет (Р135).
+    // Знак вкладки считает ожидающее ответа и от этого не меняется.
+    await this.notifications.readFor(accountId, "friend_request");
     return {
       friends,
       incoming,
@@ -121,6 +124,11 @@ export class FriendsService implements OnModuleInit {
       this.friends.claimedToday(accountId),
     ]);
     return incoming.length + Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+  }
+
+  /** Сколько у игрока друзей — для достижений «друзья»: одним запросом на счёт, без списка. */
+  async friendCount(accountId: string): Promise<number> {
+    return await this.friends.count(accountId);
   }
 
   /**
@@ -203,6 +211,7 @@ export class FriendsService implements OnModuleInit {
       coins += result.credited;
       await this.friends.markClaimed(gift.fromAccountId, actor.accountId, gift.day);
     }
+    await this.notifications.readFor(actor.accountId, "friend_gift", { key: "fromAccountId", values: [...new Set(gifts.map((gift) => gift.fromAccountId))] });
     return { claimed: gifts.length, coins };
   }
 
@@ -243,11 +252,15 @@ export class FriendsService implements OnModuleInit {
       );
     }
     if (result.outcome === "added") this.log("friend_added", { accountId: actor.accountId, friendId: fromId, source: "request" });
+    await this.notifications.readFor(actor.accountId, "friend_request", { key: "fromAccountId", values: [fromId] });
     return { status: "friends" };
   }
 
   async decline(actor: AccessTokenClaims, fromId: string): Promise<{ declined: boolean }> {
-    return { declined: await this.friends.dropRequest(fromId, actor.accountId) };
+    const declined = await this.friends.dropRequest(fromId, actor.accountId);
+    // Заявки уже нет, даже если отклонять было нечего, — уведомление о ней тоже.
+    await this.notifications.readFor(actor.accountId, "friend_request", { key: "fromAccountId", values: [fromId] });
+    return { declined };
   }
 
   async cancel(actor: AccessTokenClaims, toId: string): Promise<{ cancelled: boolean }> {

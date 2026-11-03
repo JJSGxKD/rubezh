@@ -6,7 +6,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { IdempotencyConflictError } from "./wallet-errors.js";
 import { debitWithin, InsufficientBalance, type Tx } from "./wallet-ledger.js";
-import { emptyBalances, REVOKE_REASON, type ADMIN_REASON, type Balances, type GrantReason, type SpendReason, type WalletResource } from "./wallet-types.js";
+import { emptyBalances, REVOKE_REASON, type ADMIN_REASON, type Balances, type GrantReason, type RevokeReason, type SpendReason, type WalletResource } from "./wallet-types.js";
 
 /**
  * Журнал и балансы кошелька (docs/35-stage4-plan.md, Р12, §3.2).
@@ -73,6 +73,8 @@ export interface RevokeInput {
   /** ключ самого отзыва: повтор с ним ничего не списывает второй раз */
   idempotencyKey: string;
   source: string | null;
+  /** причина записи журнала; не задана — возврат звёзд. Ключ, занятый записью с другой причиной, — конфликт. */
+  reason?: RevokeReason;
   at: Date;
 }
 
@@ -183,6 +185,7 @@ export class PrismaWalletRepository implements WalletRepository {
   }
 
   async revokeUpTo(input: RevokeInput): Promise<RevokeOutcome> {
+    const reason = input.reason ?? REVOKE_REASON;
     return await this.prisma.$transaction(async (tx) => {
       // Строка баланса — первой и с блокировкой: параллельные отзывы и траты
       // встают в очередь и видят уже уменьшенный остаток, а повтор того же
@@ -206,8 +209,8 @@ export class PrismaWalletRepository implements WalletRepository {
         WHERE idempotency_key = ${input.idempotencyKey}
       `;
       if (doneRow !== undefined) {
-        // Ключ занят не отзывом этого игрока и ресурса — ошибка того, кто его собрал.
-        if (doneRow.account_id !== input.accountId || doneRow.resource !== input.resource || doneRow.reason !== REVOKE_REASON) throw new IdempotencyConflictError();
+        // Ключ занят не отзывом этого игрока, ресурса и причины — ошибка того, кто его собрал.
+        if (doneRow.account_id !== input.accountId || doneRow.resource !== input.resource || doneRow.reason !== reason) throw new IdempotencyConflictError();
         return { status: "duplicate", revoked: -Number(doneRow.amount), granted };
       }
 
@@ -219,7 +222,7 @@ export class PrismaWalletRepository implements WalletRepository {
       const [claimed] = await tx.$queryRaw<{ entry_id: string }[]>`
         INSERT INTO wallet_entry (entry_id, account_id, resource, amount, reason, source, idempotency_key, created_at)
         VALUES (${randomUUID()}::uuid, ${input.accountId}::uuid, ${input.resource}::"WalletResource", ${BigInt(-take)},
-                ${REVOKE_REASON}, ${input.source}, ${input.idempotencyKey}, ${input.at})
+                ${reason}, ${input.source}, ${input.idempotencyKey}, ${input.at})
         ON CONFLICT (idempotency_key) DO NOTHING
         RETURNING entry_id
       `;

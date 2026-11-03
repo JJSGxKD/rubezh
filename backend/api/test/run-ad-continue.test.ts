@@ -14,8 +14,8 @@ import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js"
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RunAdContinueController } from "../src/modules/runs/run-ad-continue.controller.js";
-import { AD_CONTINUES_PER_DAY, RunAdContinueService, type ContinuePlayer } from "../src/modules/runs/run-ad-continue.service.js";
-import type { AdContinueGrant, GrantOutcome, RunAdContinuesRepository } from "../src/modules/runs/run-ad-continues.repository.js";
+import { RunAdContinueService, type ContinuePlayer } from "../src/modules/runs/run-ad-continue.service.js";
+import { continueScopeOf, type AdContinueGrant, type ContinueScope, type GrantOutcome, type RunAdContinuesRepository } from "../src/modules/runs/run-ad-continues.repository.js";
 import { AdContinueDailyCapError, AdContinueUnavailableError, ContinueRunUnverifiedError, ContinueTakenError } from "../src/modules/runs/run-continue-errors.js";
 import { RunContinues, type ContinueLedger } from "../src/modules/runs/run-continues.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -23,13 +23,16 @@ import { FakeCreatives, MemoryAds, adBlock, interstitialGate } from "./helpers/m
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
+import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 
 /**
- * Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4): только своим
- * незаконченным забегом, только первое продолжение и не больше
- * `AD_CONTINUES_PER_DAY` в сутки; досмотренная сессия не тратится на забег,
- * который продолжить нельзя; номер, купленный за звёзды, за рекламу не
- * выдаётся; итог забега сверяется с обеими книгами.
+ * Второй шанс за рекламу (docs/35-stage4-plan.md WP11, Р4, Р162): только
+ * своим незаконченным забегом, только первое продолжение и не больше
+ * `continue.ad-per-day` в сутки (по умолчанию одно), у VIP — свои
+ * `continue.vip-per-day` (по умолчанию пять); досмотренная сессия не
+ * тратится на забег, который продолжить нельзя; номер, купленный за звёзды
+ * или самоцветы, за рекламу не выдаётся; итог забега сверяется со всеми
+ * книгами.
  */
 
 const ME = "00000000-0000-4000-8000-00000000c001";
@@ -43,11 +46,15 @@ const MOSCOW_MS = 3 * 60 * MINUTE;
 
 class MemoryAdContinues implements RunAdContinuesRepository {
   readonly rows: AdContinueGrant[] = [];
+  /** номера, занятые за самоцветы: так база видит таблицу рядом внутри той же транзакции */
+  readonly gemRows = new Map<string, number[]>();
 
-  async grant(grant: AdContinueGrant): Promise<GrantOutcome> {
+  async grant(grant: AdContinueGrant, perDay: number): Promise<GrantOutcome> {
     const same = this.rows.find((row) => row.sessionId === grant.sessionId && row.runId === grant.runId && row.continueNo === grant.continueNo);
     if (same !== undefined) return "repeat";
     if (this.rows.some((row) => row.sessionId === grant.sessionId || (row.runId === grant.runId && row.continueNo === grant.continueNo))) return "taken";
+    if ((this.gemRows.get(grant.runId) ?? []).includes(grant.continueNo)) return "taken";
+    if ((await this.todayCount(grant.accountId, grant.grantedAt, continueScopeOf(grant.networkKey))) >= perDay) return "capped";
     this.rows.push({ ...grant });
     return "granted";
   }
@@ -61,10 +68,12 @@ class MemoryAdContinues implements RunAdContinuesRepository {
     return this.rows.filter((row) => row.runId === runId).map((row) => row.continueNo);
   }
 
-  async todayCount(accountId: string, time: Date): Promise<number> {
+  async todayCount(accountId: string, time: Date, scope: ContinueScope): Promise<number> {
     const dayStart = Math.floor((time.getTime() + MOSCOW_MS) / (24 * 60 * MINUTE)) * 24 * 60 * MINUTE - MOSCOW_MS;
     const day = 24 * 60 * MINUTE;
-    return this.rows.filter((row) => row.accountId === accountId && row.grantedAt.getTime() >= dayStart && row.grantedAt.getTime() < dayStart + day).length;
+    return this.rows.filter(
+      (row) => row.accountId === accountId && continueScopeOf(row.networkKey) === scope && row.grantedAt.getTime() >= dayStart && row.grantedAt.getTime() < dayStart + day,
+    ).length;
   }
 }
 
@@ -81,7 +90,7 @@ class StarsLedger implements ContinueLedger {
 
 const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
 
-function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adBlock("adsonar", 20, { place: "second_chance" })]) {
+function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adBlock("adsonar", 20, { place: "second_chance" })], settings = panelSettings()) {
   const runs = new MemoryRunsRepository();
   const repository = new MemoryAdContinues();
   const adsRepository = new MemoryAds();
@@ -91,9 +100,9 @@ function setup(blocks = [adBlock("adsgram", 10, { place: "second_chance" }), adB
   const continues = new RunContinues();
   const stars = new StarsLedger();
   continues.provide(stars);
-  const service = new RunAdContinueService(config(), runs, repository, ads, continues);
+  const service = new RunAdContinueService(config(), runs, repository, ads, continues, settings);
   service.onModuleInit();
-  return { runs, repository, adsRepository, ads, passes, continues, stars, service };
+  return { runs, repository, adsRepository, ads, passes, continues, stars, service, settings };
 }
 
 async function started(runs: MemoryRunsRepository, runId: string, accountId = ME): Promise<void> {
@@ -183,17 +192,86 @@ describe("продолжение за рекламу", () => {
     await expect(service.claim(PLAYER, "run-2", sessionId, at(4))).rejects.toBeInstanceOf(ContinueTakenError);
   });
 
-  it(`не больше ${String(AD_CONTINUES_PER_DAY)} в игровые сутки; в полночь по Москве — снова`, async () => {
+  it("по умолчанию одно в игровые сутки: второе — daily_cap; в полночь по Москве — снова", async () => {
     const { service, runs, ads } = setup();
-    for (let index = 0; index < AD_CONTINUES_PER_DAY; index++) {
+    await started(runs, "first");
+    await service.claim(PLAYER, "first", await watched(ads, at(0)), at(0));
+    await started(runs, "late");
+    expect(await service.view(PLAYER, "late", at(60))).toEqual({ status: "unavailable", reason: "daily_cap" });
+    await expect(service.claim(PLAYER, "late", await watched(ads, at(60)), at(60))).rejects.toBeInstanceOf(AdContinueDailyCapError);
+    // 12:00 по Москве + 12 ч = полночь: новые сутки.
+    expect(await service.view(PLAYER, "late", at(12 * 60))).toMatchObject({ status: "available" });
+  });
+
+  it("число в сутки берётся из ключа continue.ad-per-day: три — три, правка из панели действует сразу", async () => {
+    const settings = panelSettings({ "continue.ad-per-day": 3 });
+    const { service, runs, ads } = setup(undefined, settings);
+    for (let index = 0; index < 3; index++) {
       await started(runs, `run-${String(index)}`);
       await service.claim(PLAYER, `run-${String(index)}`, await watched(ads, at(index * 10)), at(index * 10));
     }
     await started(runs, "late");
     expect(await service.view(PLAYER, "late", at(60))).toEqual({ status: "unavailable", reason: "daily_cap" });
     await expect(service.claim(PLAYER, "late", await watched(ads, at(60)), at(60))).rejects.toBeInstanceOf(AdContinueDailyCapError);
-    // 12:00 по Москве + 12 ч = полночь: новые сутки.
-    expect(await service.view(PLAYER, "late", at(12 * 60))).toMatchObject({ status: "available" });
+    settings.set("continue.ad-per-day", 4);
+    expect(await service.view(PLAYER, "late", at(60))).toMatchObject({ status: "available" });
+    settings.set("continue.ad-per-day", 0);
+    expect(await service.view(PLAYER, "late", at(60))).toEqual({ status: "unavailable", reason: "daily_cap" });
+  });
+
+  it("потолок в базе держит и тогда, когда проверка перед забором его пропустила (параллельный забор)", async () => {
+    const { service, runs, ads, repository } = setup();
+    await started(runs, "first");
+    await service.claim(PLAYER, "first", await watched(ads, at(0)), at(0));
+    await started(runs, "second");
+    const sessionId = await watched(ads, at(30));
+    // Проверка видит ноль, а в базе к моменту записи уже одно.
+    const real = repository.todayCount.bind(repository);
+    let calls = 0;
+    repository.todayCount = async (accountId, time, scope) => (calls++ === 0 ? 0 : await real(accountId, time, scope));
+    await expect(service.claim(PLAYER, "second", sessionId, at(30))).rejects.toBeInstanceOf(AdContinueDailyCapError);
+    expect(repository.rows).toHaveLength(1);
+  });
+
+  it("VIP — пять за сутки по умолчанию; своё число — ключ continue.vip-per-day", async () => {
+    const settings = panelSettings();
+    const { service, runs, ads, passes } = setup([], settings);
+    passes.register("vip", async (accountId) => accountId === ME);
+    for (let index = 0; index < 5; index++) {
+      await started(runs, `run-${String(index)}`);
+      const offer = await ads.offer({ ...PLAYER, device: "android" }, "second_chance", at(index * 10));
+      if (!offer.available) throw new Error("пропуска нет");
+      await service.claim(PLAYER, `run-${String(index)}`, offer.sessionId, at(index * 10));
+    }
+    await started(runs, "late");
+    expect(await service.view(PLAYER, "late", at(60))).toEqual({ status: "unavailable", reason: "daily_cap" });
+    settings.set("continue.vip-per-day", 6);
+    expect(await service.view(PLAYER, "late", at(60))).toEqual({ status: "available", continueNo: 1, pass: "vip" });
+  });
+
+  it("рекламные и VIP-продолжения считаются порознь: потолок одних не съедает другие", async () => {
+    const { service, runs, ads, passes } = setup();
+    await started(runs, "ad-run");
+    await service.claim(PLAYER, "ad-run", await watched(ads, at(0)), at(0));
+    await started(runs, "vip-run");
+    // Рекламных на сутки больше нет, а VIP, оформивший подписку позже, берёт своё.
+    expect(await service.view(PLAYER, "vip-run", at(30))).toEqual({ status: "unavailable", reason: "daily_cap" });
+    passes.register("vip", async (accountId) => accountId === ME);
+    expect(await service.view(PLAYER, "vip-run", at(30))).toEqual({ status: "available", continueNo: 1, pass: "vip" });
+    const offer = await ads.offer({ ...PLAYER, device: "android" }, "second_chance", at(30));
+    if (!offer.available) throw new Error("пропуска нет");
+    expect(await service.claim(PLAYER, "vip-run", offer.sessionId, at(30))).toEqual({ continueNo: 1 });
+  });
+
+  it("номер, купленный за самоцветы, за рекламу не выдаётся", async () => {
+    const { service, runs, ads, repository, continues } = setup();
+    await started(runs, "run-1");
+    const sessionId = await watched(ads, at(3));
+    // Книга самоцветов видна сводной книге; запись в базе — гонка между проверкой и записью.
+    repository.gemRows.set("run-1", [1]);
+    await expect(service.claim(PLAYER, "run-1", sessionId, at(3))).rejects.toBeInstanceOf(ContinueTakenError);
+    expect(repository.rows).toEqual([]);
+    expect(await continues.taken("run-1")).toEqual(new Set());
   });
 
   it("VIP — пропуск вместо ролика забирается так же, как досмотр", async () => {
@@ -205,6 +283,20 @@ describe("продолжение за рекламу", () => {
     expect(offer.pass).toBe("vip");
     expect(await service.claim(PLAYER, "run-1", offer.sessionId, at(3))).toEqual({ continueNo: 1 });
     expect(repository.rows[0]?.networkKey).toBe("vip");
+  });
+});
+
+describe("ключи панели для суточного потолка продолжений", () => {
+  it("рекламное — одно в сутки, VIP — пять; оба числа правятся без релиза и не берутся из окружения", () => {
+    expect(SETTINGS.continueAdPerDay).toMatchObject({ key: "continue.ad-per-day", fallback: 1, kind: "number" });
+    expect(SETTINGS.continueVipPerDay).toMatchObject({ key: "continue.vip-per-day", fallback: 5, kind: "number" });
+    for (const setting of [SETTINGS.continueAdPerDay, SETTINGS.continueVipPerDay]) {
+      expect(setting.fromEnv(config())).toBeNull();
+      expect(setting.schema.safeParse(setting.fallback).success).toBe(true);
+      expect(setting.schema.safeParse(-1).success).toBe(false);
+      expect(setting.schema.safeParse(1.5).success).toBe(false);
+      expect(setting.schema.safeParse(1_000).success).toBe(false);
+    }
   });
 });
 

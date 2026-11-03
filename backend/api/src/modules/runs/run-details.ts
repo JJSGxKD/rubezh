@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
+import type { CounterFields } from "./run-counters.js";
 
 /**
  * Подробности забега для листа в профиле (docs/35-stage4-plan.md, WP4,
@@ -22,6 +23,15 @@ export const storedDetailsSchema = z.object({
   xpCollected: count.nullable(),
   waveReached: count.nullable(),
   topKills: z.array(z.object({ enemy: id, count })),
+  // Счётчики итога (tasks/T-0125): строка прошлой сборки ключей не несёт и читается как null.
+  bossKills: count.nullable().default(null),
+  eliteKills: count.nullable().default(null),
+  chestsOpened: count.nullable().default(null),
+  crystals: count.nullable().default(null),
+  // Серии и убийства по стихиям (tasks/T-0321): так же — строка прошлой сборки их не несёт.
+  noHitSec: count.nullable().default(null),
+  noKillSec: count.nullable().default(null),
+  killsByElement: z.record(z.string(), count).nullable().default(null),
 });
 
 export type StoredDetails = z.infer<typeof storedDetailsSchema>;
@@ -32,7 +42,7 @@ export const TOP_KILLS_SHOWN = 5;
 /** Что пришло в итоге сверх рейтинга — подробности; без них колонка пустая. */
 export interface FinishDetailsInput {
   passives: { id: string; level: number }[];
-  stats?: { damageTaken: number; xpCollected: number; waveReached: number; topKills: { enemy: string; count: number }[] } | undefined;
+  stats?: (CounterFields & { damageTaken: number; xpCollected: number; waveReached: number; topKills: { enemy: string; count: number }[] }) | undefined;
 }
 
 export function detailsOf(input: FinishDetailsInput): StoredDetails | null {
@@ -45,6 +55,14 @@ export function detailsOf(input: FinishDetailsInput): StoredDetails | null {
     // Клиент шлёт свою пятёрку, но порядок и потолок держит сервер: лист не
     // должен зависеть от того, как сборка отсортировала.
     topKills: [...(input.stats?.topKills ?? [])].sort((a, b) => b.count - a.count).slice(0, TOP_KILLS_SHOWN),
+    // Счётчики кладутся как пришли, в том числе неправдоподобные: для разбора.
+    bossKills: input.stats?.bossKills ?? null,
+    eliteKills: input.stats?.eliteKills ?? null,
+    chestsOpened: input.stats?.chestsOpened ?? null,
+    crystals: input.stats?.crystals ?? null,
+    noHitSec: input.stats?.noHitSec ?? null,
+    noKillSec: input.stats?.noKillSec ?? null,
+    killsByElement: input.stats?.killsByElement ?? null,
   };
 }
 

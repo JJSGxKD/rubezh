@@ -21,6 +21,13 @@ export class TaskShapeLockedError extends DomainError {
   }
 }
 
+/** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
+export class TaskOrderMismatchError extends DomainError {
+  constructor() {
+    super("task_order_mismatch", "Список изменился — обнови страницу и переставь ещё раз", 400);
+  }
+}
+
 /** Площадка не видит игрока в канале — подписки нет или она ещё не дошла. */
 export class TaskNotJoinedError extends DomainError {
   constructor() {
@@ -49,5 +56,19 @@ export class TaskNotOpenedError extends DomainError {
 export class TaskLimitReachedError extends DomainError {
   constructor() {
     super("task_limit_reached", "Места в задании закончились", 409);
+  }
+}
+
+/** Ступени очков с таким порогом нет в таблице: клиент ошибся или таблица ушла вперёд него. */
+export class TaskPointsStepNotFoundError extends DomainError {
+  constructor() {
+    super("task_points_step_not_found", "Такой награды за очки нет", 404);
+  }
+}
+
+/** Очков на ступень пока не хватает — клиент по коду перечитывает задания и полосу. */
+export class TaskPointsNotReachedError extends DomainError {
+  constructor() {
+    super("task_points_not_reached", "Очков на эту награду пока не хватает", 409);
   }
 }

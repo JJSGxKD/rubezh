@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DIFFICULTIES } from "../runs/run-rules.js";
 
 /**
  * Виды уведомлений и их данные (docs/35-stage4-plan.md Р51, §3.17). Данные —
@@ -25,10 +26,24 @@ export const NOTIFICATION_KINDS = {
   rare_loot: z.object({ itemId: z.string().uuid(), slot: id, rarity: id, salvaged: z.boolean() }),
   /** бусты вернулись: забег так и не начался */
   boosts_refunded: z.object({ runId: id, boosts: z.array(id).max(8), coins: z.number().int().nonnegative(), gems: z.number().int().nonnegative() }),
+  /** отписка от канала после награды: награда списана, при повторе задания закрыты */
+  task_unsubscribed: z.object({
+    title: z.string().min(1).max(120).nullable(),
+    coins: z.number().int().nonnegative(),
+    gems: z.number().int().nonnegative(),
+    shards: z.number().int().nonnegative(),
+    closedUntil: z.iso.datetime().nullable(),
+  }),
   /** сообщение команды из панели — простой текст: разметка из панели ломает строку ленты */
   team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
   /** вышла версия — что нового, в журнале обновлений (WP31) */
   app_update: z.object({ version: z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/) }),
+  /** напоминание: в таблице недели игрока обогнали (tasks/T-0128); сложность — доска, на которой это случилось */
+  season_overtaken: z.object({ difficulty: z.enum(DIFFICULTIES), place: z.number().int().min(1) }),
+  /** напоминание: игровые сутки перед закрытием сезона; `endsAt` — конец сезона, ISO */
+  season_closing: z.object({ endsAt: z.iso.datetime() }),
+  /** напоминание: награда дня сегодня не забрана */
+  daily_reward_ready: z.object({}),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

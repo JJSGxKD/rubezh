@@ -26,7 +26,7 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -36,11 +36,11 @@ batch: 4
 
 # T-0237. Облики-архетипы — сервер: каталог, кто чем владеет, выбор облика и аватара, облик в списках
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json)](README.md#значки-статуса) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md) [![T-0240](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0240.json&label=T-0240)](T-0240-public-identity-in-lists.md) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](T-0105-task-points-and-rewards.md) [![T-0126](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json&label=T-0126)](T-0126-tasks-kinds-bosses-elites-chests-evolutions.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0237.json)](README.md#значки-статуса) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md) [![T-0240](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0240.json&label=T-0240)](T-0240-public-identity-in-lists.md) [![T-0105](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0105.json&label=T-0105)](archive/T-0105-task-points-and-rewards.md) [![T-0126](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json&label=T-0126)](T-0126-tasks-kinds-bosses-elites-chests-evolutions.md)
 
 ## Зачем
 
-Дизайнер нарисовал героя в шести архетипах и трёх окрасах (атлас `skins`,
+Дизайнер нарисовал героя в шести архетипах и трёх окрасах (атласы `atlas-skin-<id>`,
 портреты `design/art/out/*-hero-*.svg`), но у игрока облика нет: все — один
 Хранитель. После задачи сервер знает каталог обликов и откуда каждый берётся.
 Он сам считает, какими обликами владеет игрок, хранит выбранный облик и
@@ -106,8 +106,8 @@ batch: 4
 ## Как сейчас
 
 - Каталога обликов и выбора нет. Герой в забеге — фигура, в режиме арта —
-  кадры `hero/…` атласа `core`. Кадры остальных — атлас `skins`
-  (`design/art/out/atlas-skins.json`): `hero-<id>/idle0…1`, `walk0…3`.
+  кадры `hero/…` атласа `core`. Кадры остальных — у каждого облика свой
+  атлас `design/art/out/atlas-skin-<id>.json`: `hero-<id>/idle0…1`, `walk0…3`.
 - Портреты: `portrait-hero-<id>.svg` (арсенал), `avatar-hero-<id>.svg`
   (голова в круге), `card-hero-<id>.svg` (карточка) — у всех десяти id.
 - После T-0240 есть порт `common/public-identity.ts` и `PublicMark`. Рейтинг,

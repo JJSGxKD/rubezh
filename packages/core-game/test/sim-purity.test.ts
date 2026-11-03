@@ -90,7 +90,7 @@ describe("чистота слоя симуляции", () => {
 
   it("покрывает каждый паттерн поведения — новые файлы не выпадают из проверки", () => {
     const files = sources.map(({ path }) => path.replace(/\\/g, "/"));
-    for (const name of ["swarm", "chase", "kite-and-shoot", "dash", "orbit", "exploder", "splitter"]) {
+    for (const name of ["swarm", "chase", "dash", "orbit", "exploder", "splitter"]) {
       expect(files.some((file) => file.endsWith(`/patterns/${name}.ts`)), name).toBe(true);
     }
   });
@@ -119,6 +119,14 @@ describe("чистота слоя симуляции", () => {
     for (const { path, source } of sources) {
       expect(source, path).not.toMatch(forbidden);
     }
+  });
+
+  it("рубеж (T-0120) в проверяемом слое и берёт случайность только из своего потока", () => {
+    const file = sources.find(({ path }) => path.replace(/\\/g, "/").endsWith("/sim/rubezh.ts"));
+    expect(file, "game/sim/rubezh.ts").toBeDefined();
+    // world.rng рубеж не трогает: место стража берётся из rubezh.rng, иначе приход
+    // стража сдвинул бы все golden-прогоны и предложения уровней.
+    expect(file?.source).not.toMatch(/world\.rng/);
   });
 
   it("не использует Date.now, new Date и performance.now", () => {

@@ -10,7 +10,7 @@ name: PR checks
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, labeled, unlabeled, reopened]
+    types: [opened, edited, synchronize, labeled, unlabeled, reopened, ready_for_review]
 
 permissions:
   contents: read
@@ -33,6 +33,19 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
+
+      # Метка статуса задачи (Р172, docs/09-ci-cd.md §8.1): страховка ДО проверки,
+      # в том же джобе. Метки, поставленные GITHUB_TOKEN, не запускают другие
+      # workflow, поэтому pr-check читает их свежим запросом, а не из события.
+      # Только ветки задач из этого же репозитория: у форков токен без записи.
+      - if: ${{ startsWith(github.head_ref, 'task/T-') && github.event.pull_request.head.repo.full_name == github.repository && contains(fromJSON('["opened","reopened","ready_for_review","labeled"]'), github.event.action) }}
+        run: node scripts/release/pr-status-label.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
 
       - run: node scripts/release/pr-check.mjs
         env:

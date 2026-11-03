@@ -26,7 +26,7 @@ shared:
   - docs/19-content-admin.md
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -36,7 +36,7 @@ batch: 7
 
 # T-0303. Контент на сервере — версии и черновики в базе, версия 0 из репозитория, правка черновика, проверка через sim-worker и разница с базой
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0303.json)](README.md#значки-статуса) [![T-0302](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json&label=T-0302)](T-0302-sim-worker.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0303.json)](README.md#значки-статуса) [![T-0302](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0302.json&label=T-0302)](archive/T-0302-sim-worker.md)
 
 ## Зачем
 

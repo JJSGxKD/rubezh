@@ -26,6 +26,20 @@ describe("маршруты панели", () => {
     expect(parseRoute(hrefOf({ section: "players", id: "a b" }))).toEqual({ section: "players", id: "a b" });
   });
 
+  it("третья часть адреса — вкладка объекта: карточка игрока открывается на нужной", () => {
+    expect(parseRoute("#/players/abc/purchases")).toEqual({ section: "players", id: "abc", tab: "purchases" });
+    expect(parseRoute("#/players/abc")).toEqual({ section: "players", id: "abc" });
+    expect(parseRoute("#/players/abc")).not.toHaveProperty("tab");
+    expect(parseRoute("#/players/a%20b/runs")).toEqual({ section: "players", id: "a b", tab: "runs" });
+    expect(hrefOf({ section: "players", id: "abc", tab: "purchases" })).toBe("#/players/abc/purchases");
+    expect(hrefOf({ section: "players", id: "abc" })).toBe("#/players/abc");
+    expect(parseRoute(hrefOf({ section: "players", id: "a b", tab: "wallet" }))).toEqual({ section: "players", id: "a b", tab: "wallet" });
+  });
+
+  it("вкладка без объекта в адрес не попадает", () => {
+    expect(hrefOf({ section: "players", id: null, tab: "runs" })).toBe("#/players");
+  });
+
   it("показывает только разделы, на которые есть право", () => {
     expect(visibleSections(["players.view"], SECTIONS).map((section) => section.id)).toEqual(["players"]);
     expect(visibleSections([], SECTIONS)).toEqual([]);

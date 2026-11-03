@@ -16,6 +16,8 @@ export const reviewRowSchema = z.object({
   level: z.number().nullable(),
   enemiesKilled: z.number().nullable(),
   finishedAt: z.string().nullable(),
+  /** есть только у держателя права `players.board.restrict` (T-0115) */
+  boardMarked: z.boolean().optional(),
 });
 
 export type ReviewRow = z.infer<typeof reviewRowSchema>;
@@ -45,6 +47,7 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
   loadout_stale: "снаряжение сменилось после выдачи снимка",
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
+  counters_implausible: "счётчики забега не сходятся с ходом боя",
 };
 
 export function reasonTitle(code: string): string {

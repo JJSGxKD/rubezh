@@ -14,6 +14,8 @@ import { ADS_CATALOG_REPOSITORY, PrismaAdsCatalogRepository } from "./ads-catalo
 import { AdPasses } from "./ads-passes.js";
 import { AdsCatalogService } from "./ads-catalog.service.js";
 import { AdsController } from "./ads.controller.js";
+import { AdsToolsController } from "./ads-tools.controller.js";
+import { AdsToolsService } from "./ads-tools.service.js";
 import { ADS_REPOSITORY, PrismaAdsRepository } from "./ads.repository.js";
 import { ADS_ROLL, AdsService, cryptoRoll } from "./ads.service.js";
 import { INTERSTITIAL_FLAGS, InterstitialGate } from "./interstitial-gate.js";
@@ -42,9 +44,10 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
  */
 @Module({
   imports: [AuthModule, ClientScriptsModule, FlagsModule, RestrictionsModule],
-  controllers: [AdsController, AdsgramRewardController],
+  controllers: [AdsController, AdsgramRewardController, AdsToolsController],
   providers: [
     AdsService,
+    AdsToolsService,
     AdTasks,
     AdTaskFeeds,
     AdTaskHooks,

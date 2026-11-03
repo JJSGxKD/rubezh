@@ -136,10 +136,13 @@ export function createAdsgram(): NetworkShow {
     const sdk = env.globals().Adsgram;
     if (sdk === undefined) return failed("load_failed");
 
-    let controller = controllers.get(request.blockId);
+    // Режим входит в ключ: команда проверяет оба режима за один запуск, а
+    // `init` фиксирует `debug` навсегда.
+    const cacheKey = `${request.blockId}|${env.debug ? "debug" : "live"}`;
+    let controller = controllers.get(cacheKey);
     if (controller === undefined) {
       controller = sdk.init({ blockId: request.blockId, debug: env.debug });
-      controllers.set(request.blockId, controller);
+      controllers.set(cacheKey, controller);
     }
     let noFill = false;
     const onNotFound = () => {
@@ -220,7 +223,8 @@ export function createRichads(): NetworkShow {
     const Controller = env.globals().TelegramAdsController;
     if (Controller === undefined) return failed("load_failed");
 
-    const key = `${pubId}:${appId}`;
+    // Режим в ключе по той же причине, что у AdsGram: `initialize` его не меняет.
+    const key = `${pubId}:${appId}:${env.debug ? "debug" : "live"}`;
     if (controller === null || controller.key !== key) {
       const instance = new Controller();
       instance.initialize({ pubId, appId, debug: env.debug });

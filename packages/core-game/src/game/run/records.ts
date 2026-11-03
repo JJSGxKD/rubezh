@@ -35,7 +35,16 @@ export interface RecordUpdate {
   isNewRecord: boolean;
 }
 
+/**
+ * Единая сложность занимает место `hard` (docs/35-stage4-plan.md, Р126), но
+ * рекорд прежней «Сложной» поставлен на более лёгком контенте: до него на
+ * единой не дотянуться, и «До рекорда ещё…» звало бы к недостижимому числу.
+ * Поэтому у неё свой версионный ключ, а старый не читается и не стирается.
+ */
+const SINGLE_DIFFICULTY_KEY = "bh.meta.v2.bestSurvivalSec.hard";
+
 function bestKey(difficultyId: DifficultyId): string {
+  if (difficultyId === "hard") return SINGLE_DIFFICULTY_KEY;
   return `${BEST_KEY_PREFIX}.${difficultyId}`;
 }
 
@@ -59,6 +68,8 @@ export function submitRunResult(
   result: RunResult,
 ): RecordUpdate {
   const previous = loadBestSurvivalSec(storage, result.difficultyId);
+  // Пролог — рассказ, а не забег на время: рекорд «Лёгкой» он не трогает (T-0278).
+  if (result.prologue !== undefined) return { bestSurvivalSec: previous, isNewRecord: false };
   const survived = Number.isFinite(result.survivalSec) ? result.survivalSec : 0;
 
   if (survived <= previous) return { bestSurvivalSec: previous, isNewRecord: false };

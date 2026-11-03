@@ -7,7 +7,7 @@ import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { networkTaskSchema } from "../tasks/network-task-rules.js";
 import { NetworkTasksService, type NetworkTaskAdminView } from "../tasks/network-tasks.service.js";
-import { taskDefSchema, type TaskDef } from "../tasks/task-rules.js";
+import { taskDefSchema, taskOrderSchema, type TaskDef } from "../tasks/task-rules.js";
 import { TasksService, type TaskCatalogView } from "../tasks/tasks.service.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -47,6 +47,16 @@ export class AdminTasksController {
     await this.limit(actor.accountId);
     const task = parse(() => taskDefSchema.parse(body), "Некорректное задание");
     return { data: await this.tasks.save(actor, task) };
+  }
+
+  /** Новый порядок списка: id группы в нужном порядке, одной транзакцией. */
+  @Post("order")
+  @RequirePermission("tasks.edit")
+  async order(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { order: string[] } }> {
+    const actor = accountOf(request);
+    await this.limit(actor.accountId);
+    const { group, ids } = parse(() => taskOrderSchema.parse(body), "Некорректный порядок заданий");
+    return { data: await this.tasks.reorder(actor, group, ids) };
   }
 
   /** Строка заданий сети: ключ сети — из адреса, числа — из тела. */

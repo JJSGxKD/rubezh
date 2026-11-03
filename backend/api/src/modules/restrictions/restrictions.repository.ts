@@ -44,13 +44,45 @@ export const RESTRICTIONS_REPOSITORY = Symbol("RESTRICTIONS_REPOSITORY");
 /** Новое ограничение того же вида заменяет действующее — у прежнего так и записано. */
 export const REPLACED_COMMENT = "Заменено новым ограничением";
 
+export interface ImposeOptions {
+  /**
+   * Не ослаблять то, что уже стоит: если действует блокировка целиком или
+   * ограничение того же вида не короче нового, ничего не пишется и ответ —
+   * `kept`. Проверка идёт после блокировки аккаунта в той же транзакции, под
+   * которой пишут модераторы. Только для одной строки.
+   */
+  keepIfStanding?: boolean;
+}
+
+export interface ImposeResult {
+  created: RestrictionRow[];
+  replaced: RestrictionRow[];
+  /** `true` — наложение не понадобилось: стоящее держит новое (только с `keepIfStanding`) */
+  kept: boolean;
+}
+
+/** Ошибка вызова, а не данных: опцию `keepIfStanding` придумали под одну строку системного наложения. */
+export const KEEP_IF_STANDING_ONE_ROW = "keepIfStanding — только для одной строки";
+
+/**
+ * Держит ли стоящее ограничение новое: блокировка целиком — любое, вид — если
+ * стоящее бессрочно или кончается не раньше нового. Короче — новое заменит
+ * стоящее, как у человека. Одно правило на базу и на память тестов.
+ */
+export function holdsNewRestriction(standing: Pick<RestrictionRow, "kind" | "endsAt">, incoming: Pick<NewRestriction, "kind" | "endsAt">): boolean {
+  if (standing.kind === "all") return true;
+  if (standing.kind !== incoming.kind) return false;
+  if (standing.endsAt === null) return true;
+  return incoming.endsAt !== null && standing.endsAt.getTime() >= incoming.endsAt.getTime();
+}
+
 export interface RestrictionsRepository {
   /**
    * Наложить ограничения одного аккаунта. Действующие того же вида
    * снимаются в той же транзакции: у игрока одно ограничение вида, а не
    * стопка, и снятие из панели снимает его целиком.
    */
-  impose(rows: readonly NewRestriction[], at: Date): Promise<{ created: RestrictionRow[]; replaced: RestrictionRow[] }>;
+  impose(rows: readonly NewRestriction[], at: Date, options?: ImposeOptions): Promise<ImposeResult>;
   /** Снять действующее; `null` — его нет, уже снято или срок вышел. */
   lift(restrictionId: string, liftedBy: string, comment: string, at: Date): Promise<RestrictionRow | null>;
   byId(restrictionId: string): Promise<RestrictionRow | null>;
@@ -70,13 +102,21 @@ const activeAt = (at: Date) => ({ liftedAt: null, OR: [{ endsAt: null }, { endsA
 export class PrismaRestrictionsRepository implements RestrictionsRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async impose(rows: readonly NewRestriction[], at: Date): Promise<{ created: RestrictionRow[]; replaced: RestrictionRow[] }> {
+  async impose(rows: readonly NewRestriction[], at: Date, options?: ImposeOptions): Promise<ImposeResult> {
+    const keepIfStanding = options?.keepIfStanding === true;
+    if (keepIfStanding && rows.length !== 1) throw new Error(KEEP_IF_STANDING_ONE_ROW);
     const first = rows[0];
-    if (first === undefined) return { created: [], replaced: [] };
+    if (first === undefined) return { created: [], replaced: [], kept: false };
     const { accountId, imposedBy } = first;
     return await this.prisma.$transaction(async (tx) => {
       // Два модератора разом не заведут по ограничению одного вида каждый.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`restrictions:${accountId}`}))`;
+      if (keepIfStanding) {
+        // Читается уже под блокировкой: всё, что наложил модератор до нас, зафиксировано и видно, а
+        // кто придёт следом, подождёт. Прочитанное до блокировки к записи устарело бы.
+        const standing = await tx.accountRestriction.findMany({ where: { accountId, kind: { in: ["all", first.kind] }, ...activeAt(at) } });
+        if (standing.some((row) => holdsNewRestriction(row, first))) return { created: [], replaced: [], kept: true };
+      }
       const replaced = await tx.accountRestriction.findMany({ where: { accountId, kind: { in: rows.map((row) => row.kind) }, ...activeAt(at) } });
       if (replaced.length > 0) {
         await tx.accountRestriction.updateMany({
@@ -86,7 +126,7 @@ export class PrismaRestrictionsRepository implements RestrictionsRepository {
       }
       const created: RestrictionRow[] = [];
       for (const row of rows) created.push(await tx.accountRestriction.create({ data: row }));
-      return { created, replaced: replaced.map((row) => ({ ...row, liftedAt: at, liftedBy: imposedBy, liftComment: REPLACED_COMMENT })) };
+      return { created, replaced: replaced.map((row) => ({ ...row, liftedAt: at, liftedBy: imposedBy, liftComment: REPLACED_COMMENT })), kept: false };
     });
   }
 

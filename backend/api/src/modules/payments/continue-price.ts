@@ -27,3 +27,26 @@ export function startedMinutes(elapsedSec: number): number {
 export function continuePrice(elapsedSec: number, rules: ContinuePriceRules): number {
   return Math.min(rules.maxStars, startedMinutes(elapsedSec) * rules.starsPerMinute);
 }
+
+/**
+ * Курс второго шанса (Р87, Р162): самоцветов за звёзды — «60 самоцветов за
+ * 50 ⭐». Парой целых, а не 1.2: дробный множитель даёт шум плавающей точки в
+ * округлении вверх. Это правило товара: по нему цена в самоцветах считается из
+ * цены в звёздах, а компенсация после вайпа переводит в самоцветы уплаченные
+ * звёзды (`wipe/compensation-rules.ts`).
+ */
+export const CONTINUE_RATE = { gems: 6, stars: 5 } as const;
+
+/** Звёзды второго шанса → самоцветы, вверх до целого: 10 ⭐ → 12, 3 ⭐ → 4. */
+export function starsToGems(stars: number): number {
+  return Math.ceil((stars * CONTINUE_RATE.gems) / CONTINUE_RATE.stars);
+}
+
+/**
+ * Цена второго шанса в самоцветах (Р162): цена в звёздах от начатых минут по
+ * курсу `CONTINUE_RATE`. Звёздные `starsPerMinute` и `maxStars` те же, поэтому
+ * потолок звёзд даёт и потолок самоцветов.
+ */
+export function continueGems(elapsedSec: number, rules: ContinuePriceRules): number {
+  return starsToGems(continuePrice(elapsedSec, rules));
+}

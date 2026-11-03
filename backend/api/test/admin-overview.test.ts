@@ -14,7 +14,8 @@ import { AdminOverviewService } from "../src/modules/admin/admin-overview.servic
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
 import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admin-session.store.js";
-import type { AdFunnelRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { AdFunnelRow, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { BoardMark } from "../src/modules/restrictions/board-mark.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -49,7 +50,7 @@ function stats(active: number): DayStats {
     active,
     sessions: active * 2,
     runs: { finished: 10, players: 4, medianSurvivalSec: 300 },
-    revenue: { stars: 150, purchases: 3, refunds: 0 },
+    revenue: { stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 },
     funnel: { entered: 5, appOpened: 5, firstRun: 4, runs5: 1, returnedD1: 2, returnedD7: 0, firstPurchase: 1 },
   };
 }
@@ -57,6 +58,14 @@ function stats(active: number): DayStats {
 class FakeStats implements DailyStatsRepository {
   readonly windows: DayWindow[] = [];
   seriesRange: [Date, Date] | null = null;
+  readonly boardWindows: DayWindow[] = [];
+  boardFails = false;
+  /** Метка «Отдельная доска» (T-0115): числа зависят от окна, чтобы сегодня и вчера не спутать. */
+  async boardMark(window: DayWindow): Promise<BoardMark> {
+    this.boardWindows.push(window);
+    if (this.boardFails) throw new Error("база не ответила");
+    return { marked: 5, active: 3, newAccounts: 1, runs: window.day === "2026-10-01" ? 20 : 12 };
+  }
   async day(window: DayWindow): Promise<DayStats> {
     this.windows.push(window);
     return stats(window.day === "2026-10-01" ? 40 : 30);
@@ -66,7 +75,7 @@ class FakeStats implements DailyStatsRepository {
     // Сутки от `from` до `to` — как у настоящего ряда: длину графика проверяет тест.
     const points: DayPoint[] = [];
     for (let at = from.getTime(); at < to.getTime(); at += 86_400_000) {
-      points.push({ day: new Date(at + 3 * HOUR).toISOString().slice(0, 10), newAccounts: 5, active: 40, finishedRuns: 10, stars: 150, purchases: 3, adsCompleted: 7 });
+      points.push({ day: new Date(at + 3 * HOUR).toISOString().slice(0, 10), newAccounts: 5, active: 40, finishedRuns: 10, stars: 150, purchases: 3, adsCompleted: 7, adsPassed: 2 });
     }
     return points;
   }
@@ -75,10 +84,21 @@ class FakeStats implements DailyStatsRepository {
 const TOTALS = { offered: 0, shown: 0, clicked: 0, completed: 0, claimed: 0, failed: 0 };
 const row = (networkKey: string, place: AdFunnelRow["place"], values: Partial<Omit<AdFunnelRow, "networkKey" | "place">>): AdFunnelRow => ({ networkKey, place, ...TOTALS, ...values });
 
-/** Воронка рекламы: сейчас — два места у двух сетей, до этого — одно. */
+/** Воронка рекламы: сейчас — два места у двух сетей, до этого — одно. Пропуски VIP — отдельной таблицей (Р99). */
 class FakeAds {
   readonly calls: [Date, Date][] = [];
+  readonly passCalls: [Date, Date][] = [];
   failing = false;
+  failingPasses = false;
+  async passes(from: Date, to: Date): Promise<AdPassRow[]> {
+    this.passCalls.push([from, to]);
+    if (this.failingPasses) throw new Error("база не ответила");
+    if (this.passCalls.length === 2) return [{ passName: "vip", place: "wheel_spin", used: 1, players: 1, claimed: 0 }];
+    return [
+      { passName: "vip", place: "wheel_spin", used: 4, players: 3, claimed: 2 },
+      { passName: "vip", place: "run_double", used: 2, players: 2, claimed: 1 },
+    ];
+  }
   async funnel(from: Date, to: Date): Promise<AdFunnelRow[]> {
     this.calls.push([from, to]);
     if (this.failing) throw new Error("база не ответила");
@@ -174,17 +194,38 @@ describe("сводка панели", () => {
       [new Date("2026-09-29T21:00:00.000Z"), new Date("2026-09-30T18:30:00.000Z")],
     ]);
     expect(overview.ads).toEqual({
-      now: { offered: 31, shown: 25, completed: 19, claimed: 18, failed: 3 },
-      before: { offered: 10, shown: 8, completed: 6, claimed: 5, failed: 1 },
+      now: { offered: 31, shown: 25, completed: 19, claimed: 18, failed: 3, passed: 6 },
+      before: { offered: 10, shown: 8, completed: 6, claimed: 5, failed: 1, passed: 1 },
       places: [
-        { place: "second_chance", offered: 6, shown: 5, completed: 4, claimed: 4, failed: 1 },
-        { place: "wheel_spin", offered: 25, shown: 20, completed: 15, claimed: 14, failed: 2 },
+        { place: "second_chance", offered: 6, shown: 5, completed: 4, claimed: 4, failed: 1, passed: 0 },
+        { place: "wheel_spin", offered: 25, shown: 20, completed: 15, claimed: 14, failed: 2, passed: 4 },
+        // В воронке места нет — только пропуски: строка из нулей с пропусками.
+        { place: "run_double", offered: 0, shown: 0, completed: 0, claimed: 0, failed: 0, passed: 2 },
       ],
       networks: [
         { networkKey: "adsgram", completed: 16 },
         { networkKey: "taddy", completed: 3 },
       ],
     });
+  });
+
+  it("пропуски VIP — отдельной меткой: за те же окна, не в досмотрах и не в сетях", async () => {
+    const { service, ads, owner } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(ads.passCalls).toEqual(ads.calls);
+    expect(overview.ads?.now.passed).toBe(6);
+    expect(overview.ads?.before.passed).toBe(1);
+    expect(overview.ads?.now.completed).toBe(19);
+    expect(overview.ads?.networks.map((network) => network.networkKey)).toEqual(["adsgram", "taddy"]);
+    expect(overview.ads?.places.map((place) => place.place)).toEqual(["second_chance", "wheel_spin", "run_double"]);
+  });
+
+  it("чтение пропусков упало — без рекламы, но со всем остальным", async () => {
+    const { service, ads, owner } = await setup();
+    ads.failingPasses = true;
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.ads).toBeNull();
+    expect(overview.today.active).toBe(40);
   });
 
   it("семь дней — последние семь суток против предыдущих семи, ряд всё равно четырнадцать", async () => {
@@ -207,6 +248,7 @@ describe("сводка панели", () => {
   it("тридцать дней — ряд тридцать суток", async () => {
     const { service, stats, owner } = await setup();
     const overview = await service.overview(owner, 30, NOW);
+    expect(overview.series.every((point) => point.adsCompleted === 7)).toBe(true);
     expect(overview.series).toHaveLength(30);
     expect(stats.seriesRange).toEqual([new Date("2026-09-01T21:00:00.000Z"), NOW]);
     expect(stats.windows[0]).toEqual({ day: "2026-09-02", from: new Date("2026-09-01T21:00:00.000Z"), to: NOW });
@@ -217,7 +259,9 @@ describe("сводка панели", () => {
     const analyst = await person("3", "analyst");
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.ads).toBeNull();
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(ads.calls).toEqual([]);
+    expect(ads.passCalls).toEqual([]);
   });
 
   it("чтение рекламы упало — без рекламы, но со всем остальным", async () => {
@@ -232,7 +276,7 @@ describe("сводка панели", () => {
   it("владельцу — выручка и всё, что ждёт: рассылки коллег, свежий разбор; черновики версий не напоминаются (Р125)", async () => {
     const { service, owner } = await setup();
     const overview = await service.overview(owner, 1, NOW);
-    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0 });
+    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 });
     expect(overview.series[0]?.stars).toBe(150);
     expect(overview.series[0]?.purchases).toBe(3);
     expect(overview.attention).toEqual([
@@ -255,9 +299,9 @@ describe("сводка панели", () => {
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.today.revenue).toBeNull();
     expect(overview.series[0]?.stars).toBeNull();
-    // Покупки — деньги, как звёзды; досмотренная реклама — нет.
     expect(overview.series[0]?.purchases).toBeNull();
-    expect(overview.series[0]?.adsCompleted).toBe(7);
+    // Досмотры — часть рекламы: без ads.view их в ряду нет.
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(overview.attention).toEqual([]);
     expect(overview.ads).toBeNull();
 
@@ -265,10 +309,57 @@ describe("сводка панели", () => {
     await expect(service.overview(moderator, 1, NOW)).rejects.toMatchObject({ code: "forbidden" });
   });
 
+  it("владельцу — метка «Отдельная доска» за те же окна; admin и аналитику — null, и репозиторий не зовётся (T-0115)", async () => {
+    const { service, stats, owner, person } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.boardMark).toEqual({
+      today: { marked: 5, active: 3, newAccounts: 1, runs: 20 },
+      yesterday: { marked: 5, active: 3, newAccounts: 1, runs: 12 },
+    });
+    expect(stats.boardWindows).toEqual(stats.windows);
+
+    const calls = stats.boardWindows.length;
+    for (const [id, role] of [["5", "admin"], ["6", "analyst"]] as const) {
+      const other = await person(id, role);
+      expect((await service.overview(other, 1, NOW)).boardMark).toBeNull();
+    }
+    expect(stats.boardWindows).toHaveLength(calls);
+  });
+
+  it("метка не ответила — null, остальная сводка цела (T-0115)", async () => {
+    const { service, stats, owner } = await setup();
+    stats.boardFails = true;
+    const overview = await service.overview(owner, 1, NOW);
+    expect(overview.boardMark).toBeNull();
+    expect(overview.today.active).toBe(40);
+    expect(overview.attention.length).toBeGreaterThan(0);
+  });
+
   it("источник, который не ответил, — без своей строки, а не без сводки", async () => {
     const { service, owner } = await setup({ changelogFails: true });
     const overview = await service.overview(owner, 1, NOW);
     expect(overview.attention.map((item) => item.section)).toEqual(["broadcasts", "review"]);
+  });
+});
+
+describe("«Ждёт вас» отдельным запросом (T-0359)", () => {
+  it("attentionFor отдаёт тот же список, что и сводка", async () => {
+    const { service, owner } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(await service.attentionFor(owner, NOW)).toEqual(overview.attention);
+    expect(overview.attention.length).toBeGreaterThan(0);
+  });
+
+  it("список — по правам: рассылки коллег видит тот, кто запускает, остальным их нет", async () => {
+    const { service, owner, person } = await setup();
+    expect((await service.attentionFor(owner, NOW)).map((item) => item.section)).toContain("broadcasts");
+    const analyst = await person("3", "analyst");
+    expect((await service.attentionFor(analyst, NOW)).map((item) => item.section)).not.toContain("broadcasts");
+  });
+
+  it("источник, который не ответил, пропускается, а не роняет запрос", async () => {
+    const { service, owner } = await setup({ changelogFails: true });
+    await expect(service.attentionFor(owner, NOW)).resolves.toBeInstanceOf(Array);
   });
 });
 
@@ -289,7 +380,10 @@ describe("сводка по HTTP", () => {
     await rolesRepository.grant(owner.accountId, "owner", null);
     await store.put(hashSessionToken("own"), { accountId: owner.accountId, platform: "telegram", platformUserId: "1", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
     const asked: number[] = [];
-    const overview = { overview: async (_actor: unknown, days: number) => (asked.push(days), { days }) };
+    const overview = {
+      overview: async (_actor: unknown, days: number) => (asked.push(days), { days }),
+      attentionFor: async () => [{ section: "broadcasts", count: 2, text: "Рассылки коллег в черновиках" }],
+    };
 
     @Module({
       controllers: [AdminOverviewController],
@@ -329,5 +423,13 @@ describe("сводка по HTTP", () => {
       expect(response.json().error.message).toBe("Период — 1, 7 или 30 дней");
     }
     expect(asked).toEqual([1, 7, 30]);
+  });
+
+  it("GET /admin/attention: только сессия панели, ответ — { items }", async () => {
+    const { app: server } = await start();
+    const response = await server.inject({ method: "GET", url: "/api/v1/admin/attention", headers: { cookie: `${ADMIN_SESSION_COOKIE}=own` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { items: [{ section: "broadcasts", count: 2, text: "Рассылки коллег в черновиках" }] } });
+    expect((await server.inject({ method: "GET", url: "/api/v1/admin/attention" })).statusCode).toBe(401);
   });
 });

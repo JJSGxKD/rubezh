@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
-import { ART_WALK_FRAMES, enemyFrameName, faceLeft, heroPose, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
+import { ART_MOVING_EPSILON, ART_WALK_FRAMES, enemyFrameName, faceLeft, frameForEnemy, heroPose, isMoving, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
 
 // Черновой арт забега за переключателем разработчика (design/art/README.md):
 // рендер, на исход забега не влияет.
@@ -78,5 +78,53 @@ describe("поза героя-спрайта", () => {
   it("кадр отдачи лежит в атласе core", () => {
     const atlas = JSON.parse(readFileSync(new URL("../../../design/art/out/atlas-core.json", import.meta.url), "utf8")) as { frames: Record<string, unknown> };
     expect(atlas.frames["hero/hurt0"]).toBeDefined();
+  });
+});
+
+describe("кадр шага врага по движению", () => {
+  it("движется — листает, как раньше, последний кадр не влияет", () => {
+    expect([0, 8, 16, 24, 32].map((tick) => frameForEnemy(tick, 0, true, 3))).toEqual([0, 1, 2, 3, 0]);
+  });
+
+  it("стоит — держит последний кадр, время не важно", () => {
+    for (const tick of [100, 101, 130, 999]) expect(frameForEnemy(tick, 5, false, 2)).toBe(2);
+  });
+
+  it("появился стоя — кадр нулевой", () => {
+    expect(frameForEnemy(57, 3, false, -1)).toBe(0);
+  });
+
+  it("замерший держит кадр, на котором остановился, а после разморозки идёт снова", () => {
+    let last = -1;
+    const frames: number[] = [];
+    for (let step = 0; step < 16; step++) {
+      last = frameForEnemy(step * 4, 2, step < 8, last);
+      frames.push(last);
+    }
+    const stopped = frames.slice(8);
+    expect(new Set(stopped)).toEqual(new Set([frames[7]]));
+    expect(frameForEnemy(200, 2, true, last)).toBe(walkFrame(200, 2));
+  });
+
+  it("всегда в пределах кадров атласа", () => {
+    for (let tick = 0; tick < 100; tick += 9) for (let slot = 0; slot < 20; slot += 3) for (const moving of [true, false]) for (let last = -1; last < ART_WALK_FRAMES; last++) {
+      const frame = frameForEnemy(tick, slot, moving, last);
+      expect(frame).toBeGreaterThanOrEqual(0);
+      expect(frame).toBeLessThan(ART_WALK_FRAMES);
+    }
+  });
+
+  it("порог движения строгий, по сумме модулей скоростей", () => {
+    expect(isMoving(0, 0)).toBe(false);
+    expect(isMoving(ART_MOVING_EPSILON, 0)).toBe(false);
+    expect(isMoving(0.002, 0)).toBe(true);
+    expect(isMoving(-0.002, 0.0001)).toBe(true);
+    expect(isMoving(0.0004, -0.0004)).toBe(false);
+  });
+
+  it("рендер передаёт скорость врага и освобождает слот погибшего", () => {
+    const source = readFileSync(new URL("../src/game/render/WorldRenderer.ts", import.meta.url), "utf8");
+    expect(source).toContain("applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])");
+    expect(source).toContain("releaseEnemy(i)");
   });
 });

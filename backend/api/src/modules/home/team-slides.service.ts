@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { MediaService } from "../media/media.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { TeamSlideNotFoundError, TeamSlidePeriodError } from "./home-errors.js";
+import { TeamSlideNotFoundError, TeamSlideOrderMismatchError, TeamSlidePeriodError } from "./home-errors.js";
 import {
   TEAM_SLIDE_AUDIENCES,
   TEAM_SLIDE_ICONS,
@@ -13,6 +13,7 @@ import {
   teamSlidesFor,
   teamSlideState,
   type AudienceFacts,
+  type TeamSlideGroup,
   type TeamSlideInput,
   type TeamSlideRow,
   type TeamSlideState,
@@ -86,7 +87,9 @@ export class TeamSlidesService {
     if (problem !== null) throw new TeamSlidePeriodError(problem);
     // Картинка — загруженная и того вида, что нужен слайду: квадрат.
     if (input.imageId !== null) await this.media.require(input.imageId, "home_slide");
-    const row = await this.db(this.repository.create(randomUUID(), input, actor.accountId, at));
+    // Новый слайд встаёт последним в своей группе; место потом меняется перетаскиванием.
+    const position = await this.db(this.repository.nextPosition(input.pinned));
+    const row = await this.db(this.repository.create(randomUUID(), input, position, actor.accountId, at));
     await this.roles.audit({ actorAccountId: actor.accountId, action: "home.slide.create", target: row.slideId, after: auditOf(row) });
     this.forget();
     this.log("team_slide_created", { slideId: row.slideId, audience: row.audience, startsAt: row.startsAt, endsAt: row.endsAt, actor: actor.accountId });
@@ -102,7 +105,9 @@ export class TeamSlidesService {
     if (problem !== null) throw new TeamSlidePeriodError(problem);
     // Прежнюю картинку не перепроверяем — она уже у игроков.
     if (input.imageId !== null && input.imageId !== before.imageId) await this.media.require(input.imageId, "home_slide");
-    const row = await this.db(this.repository.update(slideId, input, actor.accountId, at));
+    // Место правка не трогает, пока слайд остаётся в своей группе; смена закрепления уводит его в конец другой.
+    const position = input.pinned === before.pinned ? null : await this.db(this.repository.nextPosition(input.pinned));
+    const row = await this.db(this.repository.update(slideId, input, position, actor.accountId, at));
     if (row === null) throw new TeamSlideNotFoundError();
     await this.roles.audit({ actorAccountId: actor.accountId, action: "home.slide.update", target: slideId, before: auditOf(before), after: auditOf(row) });
     this.forget();
@@ -118,6 +123,31 @@ export class TeamSlidesService {
     this.forget();
     this.log("team_slide_archived", { slideId, actor: actor.accountId });
     return { ...row, state: teamSlideState(row, at) };
+  }
+
+  /**
+   * Новый порядок группы из панели (Р120, T-0189): `ids` — ровно не снятые
+   * слайды группы в нужном порядке. Повтор того же порядка ничего не пишет и в
+   * аудит не идёт. Состав не совпал — список изменился у другого администратора,
+   * и панель просят обновиться, а не молча перезаписывают.
+   */
+  async reorder(actor: AccountRef, group: TeamSlideGroup, ids: readonly string[], at = new Date()): Promise<{ order: string[] }> {
+    await this.roles.require(actor, "home.edit");
+    const result = await this.db(this.repository.reorder(group, ids, actor.accountId, at));
+    if (result.status === "mismatch") throw new TeamSlideOrderMismatchError();
+    if (result.changed) {
+      // В журнале нужны названия, а не UUID; повтор названий допустим.
+      await this.roles.audit({
+        actorAccountId: actor.accountId,
+        action: "home.slides.reorder",
+        target: group,
+        before: { order: result.before.map((slide) => slide.title) },
+        after: { order: result.after.map((slide) => slide.title) },
+      });
+      this.forget();
+      this.log("team_slides_reordered", { group, actor: actor.accountId });
+    }
+    return { order: [...ids] };
   }
 
   private async current(at: Date): Promise<TeamSlideRow[]> {

@@ -30,6 +30,8 @@ export interface BuyRequest {
   mode: "live" | "test";
   /** скидка акции на витрине — разрез «продаёт ли акция» */
   promoPct?: number;
+  /** метка набора на витрине в момент покупки — разрез «продаёт ли метка» */
+  badge?: "hit" | "choice" | "best";
   order(): Promise<ApiResult<ShopInvoice>>;
 }
 
@@ -107,5 +109,5 @@ function retryable(answer: Extract<ApiResult<unknown>, { ok: false }>): boolean 
 /** Разрез событий покупки (docs/22-analytics-and-metrics.md §3.3): тестовые оплаты отделяются режимом. */
 function fieldsOf(request: BuyRequest): Record<string, string | number> {
   const fields = { product: request.product, sku: request.sku, priceStars: request.priceStars, chargedStars: request.chargedStars, mode: request.mode };
-  return request.promoPct === undefined ? fields : { ...fields, promoPct: request.promoPct };
+  return { ...fields, ...(request.promoPct === undefined ? {} : { promoPct: request.promoPct }), ...(request.badge === undefined ? {} : { badge: request.badge }) };
 }

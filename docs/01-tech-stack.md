@@ -18,6 +18,8 @@
   /web-max             <- сборка под MAX (env=max)
   /web-vk              <- сборка под VK (env=vk, опционально)
   /web-browser         <- отдельная браузерная сборка (env=web, фаза 2)
+  /admin               <- панель команды (29-admin-panel.md)
+  /sim-worker          <- отдельный процесс со своей сборкой движка: проверка черновика контента ботом калибровки (очередь content-check), позже — перепроверка забегов (35-stage4-plan.md, Р15)
 /backend
   /api                 <- NestJS, единая точка входа для всех платформ
 ```
@@ -63,6 +65,7 @@ interface PlatformAdapter {
 - **PostgreSQL + Prisma** — пользователи, забеги, покупки, лидерборды
 - **Redis** — кэш лидербордов (сортированные множества, ZSET, отдаются мгновенно)
 - **BullMQ** — асинхронная обработка вебхуков оплаты (идемпотентность, ретраи)
+- **sim-worker** — отдельный процесс (`apps/sim-worker`, Node LTS) со своей сборкой движка в один файл: собранный бэкенд исходники `core-game` не импортирует, и симуляция живёт отдельно. Берёт задания очереди BullMQ `content-check` в том же Redis, проверяет снимок контента схемой и проверками, гоняет ботов калибровки на черновике и на базе и возвращает отчёт тем же заданием (конкурентность 1, снимок до 2 МБ, прогон до 120 с, ждущих до пяти). Метрики Prometheus — на `SIM_WORKER_METRICS_PORT`
 - **Docker Compose** — деплой по образцу текущей инфры
 
 ### Модули бэкенда
@@ -179,13 +182,13 @@ interface PlatformAdapter {
 export const ENEMIES: EnemyDef[] = [
   { id: "swarm_rat", hp: 5, speed: 90, damage: 3, pattern: "swarm" },
   { id: "tank_ghoul", hp: 60, speed: 30, damage: 8, pattern: "chase" },
-  { id: "shooter_wisp", hp: 12, speed: 40, damage: 5, pattern: "kite_and_shoot" },
+  { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, pattern: "dash" },
 ];
 
 // content/waves.ts
 export const WAVES: WaveDef[] = [
   { second: 0,  spawns: [{ enemy: "swarm_rat", count: 10 }] },
-  { second: 60, spawns: [{ enemy: "swarm_rat", count: 15 }, { enemy: "shooter_wisp", count: 3 }] },
+  { second: 60, spawns: [{ enemy: "swarm_rat", count: 15 }, { enemy: "dasher_wolf", count: 3 }] },
 ];
 
 // content/upgrades.ts, content/economy.ts — аналогично

@@ -1,14 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { manualRateSchema, sourceLimitSchema, sourceUsedSchema } from "../fx/dto/fx.dto.js";
-import { FxService, type FxOverview, type ManualView, type SourceView } from "../fx/fx.service.js";
+import { FxService, type FxOverview, type ManualView, type RefreshNowResult, type SourceView } from "../fx/fx.service.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
+
+/** «Обновить сейчас» ходит на сторонний API и тратит его лимит — десяток в минуту хватит с запасом. */
+const REFRESH_LIMIT = { scope: "admin:fx-refresh", limit: 10, windowSec: 60 };
 
 /**
  * Курсы валют в панели (docs/35-stage4-plan.md, §3.12): обзор со свежестью
@@ -35,6 +38,16 @@ export class AdminFxController {
     const actor = accountOf(request);
     if (!(await this.limiter.consume(ADMIN_LIMITS.mutate, actor.accountId))) throw new RateLimitedError("Слишком много действий — подождите минуту");
     return { data: await this.fx.setManual(actor, parse(() => manualRateSchema.parse(body), "Некорректный курс")) };
+  }
+
+  /** «Обновить сейчас»: источник спрашивается сразу, в пределах лимитов; не больше десяти нажатий в минуту на человека. */
+  @Post("sources/:source/refresh")
+  @HttpCode(200)
+  @RequirePermission("fx.rates.edit")
+  async refresh(@Req() request: unknown, @Param("source") source: string): Promise<{ data: RefreshNowResult }> {
+    const actor = accountOf(request);
+    if (!(await this.limiter.consume(REFRESH_LIMIT, actor.accountId))) throw new RateLimitedError("Слишком много обновлений — подождите минуту");
+    return { data: await this.fx.refreshNow(actor, source) };
   }
 
   /** Месячный лимит источника вместо тарифа из кода; `perMonth: null` — без лимита. */

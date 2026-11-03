@@ -35,6 +35,7 @@ describe("раздел «Для игроков»", () => {
     expect(parsePlayerNotes("## Что и почему\nТекст")).toEqual({ notes: [], errors: [] });
     expect(parsePlayerNotes(body())).toEqual({ notes: [], errors: [] });
     expect(parsePlayerNotes(body("нет"))).toEqual({ notes: [], errors: [] });
+    expect(parsePlayerNotes(body("Нет."))).toEqual({ notes: [], errors: [] });
     expect(parsePlayerNotes(null)).toEqual({ notes: [], errors: [] });
   });
 

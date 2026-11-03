@@ -127,6 +127,7 @@ export const RESTRICTION_REASONS = {
   promo_abuse: { title: "Злоупотребление промокодами", player: "Промокоды использовались не по правилам" },
   abuse: { title: "Оскорбления или спам", player: "Оскорбления или спам" },
   payment_refund: { title: "Возврат оплаты", player: "Возврат звёзд за покупку" },
+  task_unsubscribe: { title: "Отписка после награды", player: "Отписка от канала после награды за подписку" },
   other: { title: "Другое", player: "Нарушение правил игры" },
 } as const satisfies Record<string, { title: string; player: string }>;
 

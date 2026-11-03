@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 /**
@@ -110,9 +111,16 @@ const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
 
+const CONTINUE_GROUP = "Второй шанс";
+
 const HOME_GROUP = "Главная";
 
 const DONATE_GROUP = "Донаты";
+
+const CONTACT_GROUP = "Связь с разработчиком";
+
+/** Подпись к ссылкам кнопки «Связаться с разработчиком»: у всех четырёх площадок одна. */
+const CONTACT_HINT = "Куда ведёт кнопка «Связаться с разработчиком» у игроков этой площадки — ссылка https://… Для Telegram — сообщения канала разработчика. Пусто — кнопки нет";
 
 /** Готовые суммы доната: от одной до восьми, целые, через запятую (`parseAmounts`). */
 const amountsSchema = z
@@ -124,11 +132,22 @@ const CLIENT_SCRIPTS_GROUP = "Внешние скрипты клиента";
 
 const ONLINE_GROUP = "Онлайн";
 
+const FEED_GROUP = "Лента событий";
+
 const AUTO_SOURCES_GROUP = "Автоисточники";
 
 const SEASONS_GROUP = "Сезоны рейтинга";
 
+const RATING_GROUP = "Рейтинг";
+
 const BOT_MENTION_GROUP = "Юзернейм бота";
+
+const ACHIEVEMENTS_GROUP = "Достижения";
+
+const PASS_GROUP = "Батл-пасс";
+
+const PROXY_GROUP = "Прокси";
+const REMINDERS_GROUP = "Напоминания";
 
 /**
  * Предел награды за сутки — суточный потолок причины `task_reward`
@@ -140,6 +159,9 @@ const MENTION_SHARDS = { min: 0, max: 100, unit: ["осколок", "оскол�
 
 /** Последняя допустимая дата старта сезонов: понедельник 28 декабря 2099. */
 const SEASONS_START_MAX = 20_991_228;
+
+/** Последняя допустимая дата отсечки рейтинга: 31 декабря 2099. */
+const RATING_SINCE_MAX = 20_991_231;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -194,6 +216,13 @@ export const SETTINGS = {
   ),
   // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
   chatOps: chat("notify.chat.ops", "Сбои сервера", "Всплеск ошибок 5xx API: 20 за минуту и больше. Пусто — общий чат", () => ""),
+  // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
+  chatReminders: chat(
+    "notify.chat.reminders",
+    "Напоминания",
+    "Раз в игровые сутки одно сообщение: сколько напоминаний бота отправлено вчера, сколько не доставлено и сколько игроков заблокировали бота. Пусто — общий чат",
+    () => "",
+  ),
   notifyReports: {
     key: "notify.reports",
     group: NOTIFY_GROUP,
@@ -249,6 +278,14 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  shopChoiceMinBuyers: integer(
+    "shop.choice-min-buyers",
+    SHOP_GROUP,
+    "«Выбор игроков»: покупателей для метки",
+    "Сколько разных игроков должно купить набор самоцветов за 30 дней, чтобы у лидера появилась метка «Выбор игроков». Меньше — метки нет",
+    { min: 1, max: 10_000, unit: ["игрок", "игрока", "игроков"] },
+    20,
+  ),
   /**
    * Домен ссылок Telegram (docs/35-stage4-plan.md, Р100): t.me бывает
    * недоступен, и домен выбирается настройкой, без релиза. Окружения у ключа
@@ -313,6 +350,46 @@ export const SETTINGS = {
     group: DONATE_GROUP,
     title: "Tribute для веба",
     hint: "То же для игроков в вебе. Пусто — кнопки нет",
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlTelegram: {
+    key: "contact.url-telegram",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: Telegram",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlMax: {
+    key: "contact.url-max",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: MAX",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlVk: {
+    key: "contact.url-vk",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: VK",
+    hint: CONTACT_HINT,
+    kind: "url",
+    schema: urlSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  contactUrlWeb: {
+    key: "contact.url-web",
+    group: CONTACT_GROUP,
+    title: "Связь с разработчиком: веб",
+    hint: CONTACT_HINT,
     kind: "url",
     schema: urlSchema,
     fromEnv: () => null,
@@ -411,6 +488,29 @@ export const SETTINGS = {
     10,
   ),
   /**
+   * Второй шанс за ролик и у VIP (docs/35-stage4-plan.md, Р162, Р4): сколько
+   * продолжений в игровые сутки. Дальше — самоцветы или звёзды. Рекламные и
+   * VIP-продолжения считаются порознь: VIP платит за «без ролика», и урезать
+   * ему прежнее число незачем. Без окружения: продуктовые числа правятся в
+   * панели.
+   */
+  continueAdPerDay: integer(
+    "continue.ad-per-day",
+    CONTINUE_GROUP,
+    "Второй шанс за ролик: в сутки",
+    "Сколько раз в игровые сутки (по Москве) игрок продолжает забег за ролик; дальше — самоцветы или звёзды. 0 — за ролик продолжить нельзя. Изменение действует со следующего запроса",
+    { min: 0, max: 20, unit: ["продолжение", "продолжения", "продолжений"] },
+    1,
+  ),
+  continueVipPerDay: integer(
+    "continue.vip-per-day",
+    CONTINUE_GROUP,
+    "Второй шанс у VIP: в сутки",
+    "Сколько раз в игровые сутки (по Москве) VIP продолжает забег без ролика; дальше — самоцветы или звёзды. 0 — VIP платит с первого продолжения",
+    { min: 0, max: 20, unit: ["продолжение", "продолжения", "продолжений"] },
+    5,
+  ),
+  /**
    * Старт недельных сезонов рейтинга (docs/39-retention-mechanics.md Р1,
    * tasks/T-0110): «ключ задан — включено» (Р53). Дата — числом ГГГГММДД,
    * потому что редактор панели знает числа, адреса, ссылки и переключатели, а
@@ -436,6 +536,30 @@ export const SETTINGS = {
       const start = parseStartDate(value);
       return start !== null && start.getTime() < seasonOf(now).startsAt.getTime() ? "Старт сезонов не может быть в прошлом — укажите понедельник этой или следующей недели" : null;
     },
+  } satisfies SettingDefinition<number>,
+  /**
+   * Отсечка рейтинга единой сложности (docs/35-stage4-plan.md, Р126,
+   * tasks/T-0191): в общий рейтинг и сезоны идут забеги рейтинговой сложности,
+   * законченные не раньше этих суток UTC. Выкат — событие среды, а не кода, поэтому
+   * дата лежит в настройке: миграция ставит её днём применения на каждой среде,
+   * тимлид сдвигает в панели без релиза. Без окружения; число ГГГГММДД, как у
+   * `seasons.start-date`, — редактор панели даты не знает.
+   */
+  ratingSinceDate: {
+    key: "rating.since-date",
+    group: RATING_GROUP,
+    title: "Рейтинг считается с даты",
+    hint: "Дата выката единой сложности числом ГГГГММДД, например 20261026. Забеги, законченные раньше, в рейтинг и в сезоны не идут; они остаются в истории. 0 — без отсечки",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(RATING_SINCE_MAX, { message: `не больше ${String(RATING_SINCE_MAX)}` })
+      .refine((value) => value === 0 || ratingSinceOf(value) !== null, { message: "дата в виде ГГГГММДД, например 20261026, или 0" }),
+    range: { min: 0, max: RATING_SINCE_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
   } satisfies SettingDefinition<number>,
   paymentsStars: feature(
     "payments.stars",
@@ -511,6 +635,42 @@ export const SETTINGS = {
     { min: 0, max: 100000, unit: ["аккаунт", "аккаунта", "аккаунтов"] },
     5,
   ),
+  /**
+   * Лента живых событий на главной (Р114, tasks/T-0174): что считается событием
+   * и сколько их видно. Без окружения: продуктовые числа правятся в панели.
+   */
+  feedLongRunSec: integer(
+    "feed.long-run-sec",
+    FEED_GROUP,
+    "Длинный забег от, с",
+    "Забег не короче этого попадает в ленту",
+    { min: 60, max: 3600, unit: ["секунда", "секунды", "секунд"] },
+    600,
+  ),
+  feedMaxShown: integer(
+    "feed.max-shown",
+    FEED_GROUP,
+    "Событий в ленте",
+    "Сколько последних событий отдаётся клиенту за один запрос",
+    { min: 1, max: 50, unit: ["событие", "события", "событий"] },
+    20,
+  ),
+  feedPerPlayer: integer(
+    "feed.per-player",
+    FEED_GROUP,
+    "Событий одного игрока",
+    "Больше — ленту заполнит один игрок",
+    { min: 1, max: 10, unit: ["событие", "события", "событий"] },
+    2,
+  ),
+  feedRefreshSec: integer(
+    "feed.refresh-sec",
+    FEED_GROUP,
+    "Как часто клиент обновляет ленту, с",
+    "Клиент спрашивает ленту раз в столько секунд, пока открыта главная",
+    { min: 60, max: 3600, unit: ["секунда", "секунды", "секунд"] },
+    300,
+  ),
   // Переключатель — через `feature`, но в своей группе: награды лежат рядом, а не в «Функциях сервера».
   botMentionEnabled: {
     ...feature(
@@ -528,6 +688,90 @@ export const SETTINGS = {
   botMentionBioCoins: integer("bot-mention.bio.coins", BOT_MENTION_GROUP, "Bio: монеты за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_COINS, 0),
   botMentionBioGems: integer("bot-mention.bio.gems", BOT_MENTION_GROUP, "Bio: самоцветы за сутки", "Награда за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_GEMS, 0),
   botMentionBioShards: integer("bot-mention.bio.shards", BOT_MENTION_GROUP, "Bio: осколки за сутки", "Обычные осколки за сутки, пока юзернейм бота стоит в bio. 0 — награды нет", MENTION_SHARDS, 0),
+  /**
+   * Редкость достижений (docs/39-retention-mechanics.md К1, tasks/T-0106): процент
+   * «есть у N%» показывается от порога населения, иначе у трёх игроков будет «100%».
+   * Без окружения: продуктовые числа правятся в панели. Ключи через дефис — как у соседей:
+   * формат ключа не знает подчёркивания (`SETTING_KEY`).
+   */
+  achievementsRarityMinPlayers: integer(
+    "achievements.rarity-min-players",
+    ACHIEVEMENTS_GROUP,
+    "Редкость: порог числа игроков",
+    "Процент «есть у N% игроков» у достижений показывается, когда в счёте не меньше стольких игроков (игроки хотя бы с одним записанным забегом). Ниже — процента нет вовсе. На закрытом тесте до сотни не дойти — поставьте меньше",
+    { min: 1, max: 100_000, unit: ["игрок", "игрока", "игроков"] },
+    100,
+  ),
+  achievementsRarityRefreshMin: integer(
+    "achievements.rarity-refresh-min",
+    ACHIEVEMENTS_GROUP,
+    "Редкость: период пересчёта",
+    "Как часто пересчитывается «есть у N%». Пересчёт идёт фоновой задачей по всем игрокам с забегом, а проверяет её раз в десять минут, поэтому меньше десяти минут ставить нельзя",
+    { min: 10, max: 10_080, unit: ["минута", "минуты", "минут"] },
+    360,
+  ),
+  /**
+   * Шаг ступени батл-пасса (docs/35-stage4-plan.md Р46, tasks/T-0311): ступень —
+   * `floor(очки / шаг)`, не больше 30. Очки заданий калибруются под «примерно
+   * ступень в день» у того, кто делает задания дня и недели; шаг и очки заданий
+   * правятся вместе. Без окружения: продуктовое число правится в панели.
+   */
+  passPointsPerTier: integer(
+    "pass.points-per-tier",
+    PASS_GROUP,
+    "Пасс: очков на ступень",
+    "Сколько очков пасса нужно на одну ступень из 30. Очки приносят забранные задания (поле «Очки заданий»). Изменение действует со следующего запроса и для набранных очков тоже: ступень считается от очков каждый раз заново",
+    { min: 1, max: 10_000, unit: ["очко", "очка", "очков"] },
+    100,
+  ),
+  /**
+   * Напоминания бота (docs/39-retention-mechanics.md П5, tasks/T-0128): включатель
+   * выключен, пока команда не посмотрит тексты на деве. Окно потолка скользящее,
+   * тихие часы — по Москве, как игровые сутки. Без окружения: числа правятся в
+   * панели. Ключи через дефис: формат ключа не знает подчёркивания (`SETTING_KEY`).
+   */
+  remindersEnabled: {
+    ...feature(
+      "reminders.enabled",
+      "Напоминания через бота",
+      "Бот пишет игрокам, которые разрешили ему писать: обогнали в сезоне, сезон закрывается, награда дня ждёт. Выключено — не пишет и не создаёт строк в ленте. Включайте после просмотра текстов на деве",
+      () => null,
+      false,
+    ),
+    group: REMINDERS_GROUP,
+  } satisfies SettingDefinition<boolean>,
+  remindersMinGapHours: integer(
+    "reminders.min-gap-hours",
+    REMINDERS_GROUP,
+    "Не чаще одного напоминания за",
+    "Окно скользящее, на все три вида вместе: между двумя напоминаниями игроку проходит не меньше этого времени, даже на стыке суток",
+    { min: 12, max: 168, unit: ["час", "часа", "часов"] },
+    20,
+  ),
+  remindersQuietFromHour: integer(
+    "reminders.quiet-from-hour",
+    REMINDERS_GROUP,
+    "Тихие часы: с",
+    "Час по Москве, с которого бот не пишет. Окно может переходить через полночь: с 21 до 10 бот пишет с 10:00 до 21:00. Равные начало и конец — тихих часов нет",
+    { min: 0, max: 23, unit: ["час", "часа", "часов"] },
+    21,
+  ),
+  remindersQuietToHour: integer(
+    "reminders.quiet-to-hour",
+    REMINDERS_GROUP,
+    "Тихие часы: до",
+    "Час по Москве, с которого бот снова пишет. Равные начало и конец — тихих часов нет",
+    { min: 0, max: 23, unit: ["час", "часа", "часов"] },
+    10,
+  ),
+  remindersLapseDays: integer(
+    "reminders.lapse-days",
+    REMINDERS_GROUP,
+    "Награда дня: не напоминать тем, кто не забирал её дольше",
+    "Игроку, который не забирал награду дня дольше этого срока, бот о ней не напоминает: он ушёл, а не забыл",
+    { min: 1, max: 60, unit: ["день", "дня", "дней"] },
+    14,
+  ),
   linksAutoDailyCap: integer(
     "links.auto-daily-cap",
     AUTO_SOURCES_GROUP,
@@ -535,6 +779,34 @@ export const SETTINGS = {
     "Сколько новых источников в сутки сервер заводит сам по ссылкам с метками. Нуль — не заводить; запуски по таким ссылкам всё равно записываются и подхватятся, когда источник появится",
     { min: 0, max: 500, unit: ["источник", "источника", "источников"] },
     20,
+  ),
+  /**
+   * Подписка Xray для прокси (docs/35-stage4-plan.md Р101, tasks/T-0093).
+   * Без окружения: числа правятся в панели без релиза.
+   */
+  proxySubscriptionRefreshHours: integer(
+    "proxy.subscription.refresh-hours",
+    PROXY_GROUP,
+    "Подписка Xray: как часто обновлять",
+    "Период обновления списка узлов. Если поставщик сообщил свой интервал (Profile-Update-Interval), берётся больший из двух, но не больше 168 часов. Кнопка «Обновить сейчас» в разделе «Прокси» работает в любое время, не чаще раза в минуту",
+    { min: 1, max: 168, unit: ["час", "часа", "часов"] },
+    6,
+  ),
+  proxySubscriptionCandidates: integer(
+    "proxy.subscription.candidates",
+    PROXY_GROUP,
+    "Подписка Xray: сколько узлов в переборе",
+    "Сколько лучших здоровых узлов (по задержке) подписка отдаёт в перебор клиенту исходящих после ручных прокси. Остальные ждут: перебирать все сто узлов на каждом запросе незачем",
+    { min: 1, max: 10, unit: ["узел", "узла", "узлов"] },
+    3,
+  ),
+  proxySubscriptionProbeMinutes: integer(
+    "proxy.subscription.probe-minutes",
+    PROXY_GROUP,
+    "Подписка Xray: как часто проверять узлы",
+    "Пауза между проверками здорового узла (запрос на ipify через него). Не отвечающий узел проверяется реже, с ростом паузы до часа. Действует со следующей проверки, без перезапуска",
+    { min: 1, max: 60, unit: ["минута", "минуты", "минут"] },
+    5,
   ),
 } as const;
 

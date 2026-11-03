@@ -100,7 +100,11 @@ export class ItemsService {
 
   /** Открытые листы — больше не новые; чужие и убранные пропускаются. */
   async markSeen(accountId: string, itemIds: readonly string[], at = new Date()): Promise<number> {
-    return await this.items.markSeen(accountId, [...new Set(itemIds)], at);
+    const unique = [...new Set(itemIds)];
+    const marked = await this.items.markSeen(accountId, unique, at);
+    // Лист открыт — редкая добыча этого предмета больше не новость (Р135).
+    await this.notifications.readFor(accountId, "rare_loot", { key: "itemId", values: unique });
+    return marked;
   }
 
   /** Сколько новых предметов у игрока — число на вкладке арсенала. */

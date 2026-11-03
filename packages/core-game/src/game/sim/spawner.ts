@@ -1,6 +1,7 @@
 import type { EnemyPattern } from "@bh/shared-types";
 import { isElite } from "../patterns";
 import { createDirection, directionInArc, randomDirection, type Direction } from "./directions";
+import type { Rng } from "./rng";
 import { vectorLength } from "./vector";
 import { clampToBounds, spawnEnemy, type World } from "./world";
 
@@ -42,14 +43,17 @@ const point = { x: 0, y: 0 };
 /**
  * Поставить врага на кольцо спавна в заданном направлении.
  *
+ * Случайность разброса радиуса берётся из `rng`: событие с собственным потоком
+ * (страж рубежа) не двигает основной.
+ *
  * Радиус кольца считается от максимальной видимой области и не зависит от
  * устройства (docs/26-stage2-plan.md, WP4.3): ни зум, ни поворот экрана, ни
  * широкий монитор не показывают момент появления врага.
  */
-export function spawnOnRing(world: World, typeIndex: number, dirX: number, dirY: number): number {
+export function spawnOnRing(world: World, typeIndex: number, dirX: number, dirY: number, rng: Rng = world.rng): number {
   const radius =
     world.config.view.spawnRadius +
-    world.rng.nextRange(0, SPAWN_JITTER_UNITS * world.config.unitScale);
+    rng.nextRange(0, SPAWN_JITTER_UNITS * world.config.unitScale);
 
   resolveRingPoint(world, dirX, dirY, radius, point);
   return spawnEnemy(world, typeIndex, point.x, point.y);
@@ -204,7 +208,6 @@ export function rampTargetAt(options: RampOptions, elapsedSec: number): number {
 const DEFAULT_WEIGHTS: Partial<Record<EnemyPattern, number>> = {
   swarm: 7,
   chase: 2,
-  kite_and_shoot: 1,
 };
 
 function createPopulationSpawner(

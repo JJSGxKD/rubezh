@@ -23,6 +23,7 @@ import {
   AdCatalogNotFoundError,
   AdNetworkIncompleteError,
   AdNetworkKeysError,
+  AdNetworkOrderMismatchError,
 } from "./ads-errors.js";
 import { AD_DEVICES, AD_PLACES, AD_SUCCESS, type AdPlace, type AdSuccess } from "./ads-rules.js";
 import { AdsService } from "./ads.service.js";
@@ -30,6 +31,7 @@ import {
   ADS_CATALOG_REPOSITORY,
   type AdBlockDef,
   type AdFunnelRow,
+  type AdPassRow,
   type AdNetworkEdit,
   type AdNetworkRow,
   type AdsCatalogRepository,
@@ -54,11 +56,18 @@ export const networkEditSchema = z
   .object({
     networkKey: z.string().min(1).max(32),
     active: z.boolean(),
-    priority: z.number().int().min(0).max(10_000),
+    // Порядок задаёт запрос порядка; поле оставлено, чтобы вкладка панели со старой сборкой не получила 400.
+    priority: z.number().int().min(0).max(10_000).optional(),
     keys: z.record(z.string().min(1).max(32), z.string().trim().max(128)).optional(),
   })
   .strict();
 export type NetworkEdit = z.infer<typeof networkEditSchema>;
+
+/** Новый порядок всех сетей: id без повторов, полнота набора — на стороне базы, под блокировкой. */
+export const networkOrderSchema = z
+  .object({ ids: z.array(z.string().min(1).max(32)).min(1).max(100) })
+  .strict()
+  .refine((value) => new Set(value.ids).size === value.ids.length, { message: "id не повторяются", path: ["ids"] });
 
 const unique = (values: readonly string[]) => new Set(values).size === values.length;
 
@@ -103,6 +112,8 @@ export interface AdsCatalogView {
   networks: AdNetworkView[];
   blocks: AdBlockView[];
   funnel: AdFunnelRow[];
+  /** пропуск VIP за то же окно — не досмотр, в воронку не входит (Р99) */
+  passes: AdPassRow[];
   days: FunnelDays;
   places: readonly AdPlace[];
   /** что каждая сеть умеет и что ей нужно — по ним панель строит формы */
@@ -126,15 +137,18 @@ export class AdsCatalogService {
 
   async view(actor: AccountRef, days: FunnelDays, at = new Date()): Promise<AdsCatalogView> {
     await this.roles.require(actor, "ads.view");
-    const [networks, blocks, funnel] = await Promise.all([
+    const from = new Date(at.getTime() - days * DAY_MS);
+    const [networks, blocks, funnel, passes] = await Promise.all([
       this.db(this.repository.networks()),
       this.db(this.repository.blocks()),
-      this.db(this.repository.funnel(new Date(at.getTime() - days * DAY_MS), at)),
+      this.db(this.repository.funnel(from, at)),
+      this.db(this.repository.passes(from, at)),
     ]);
     return {
       networks: networks.map((network) => networkView(network)),
       blocks: blocks.map((block) => ({ ...block, problem: blockShapeProblem(block) })),
       funnel,
+      passes,
       days,
       places: AD_PLACES,
       profiles: AD_NETWORK_PROFILES,
@@ -144,7 +158,7 @@ export class AdsCatalogService {
   }
 
   /**
-   * Сеть из панели: место в круге, ключи и включённость. Ключи — по виду из
+   * Сеть из панели: ключи и включённость. Место в круге меняет только запрос порядка. Ключи — по виду из
    * профиля; включить сеть без обязательных ключей нельзя — SDK без них
    * ничего не покажет, и место молча осталось бы пустым.
    */
@@ -162,12 +176,28 @@ export class AdsCatalogService {
       const missing = missingKeys(profile, keys);
       if (input.active && missing.length > 0) throw new AdNetworkIncompleteError(`Чтобы включить ${profile.title}, задайте: ${missing.join(", ")}`);
     }
-    const edit: AdNetworkEdit = { networkKey: input.networkKey, active: input.active, priority: input.priority, keys };
+    const edit: AdNetworkEdit = { networkKey: input.networkKey, active: input.active, keys };
     if (!(await this.db(this.repository.updateNetwork(edit, at)))) throw new AdCatalogNotFoundError("network");
-    const after: AdNetworkRow = { ...before, active: edit.active, priority: edit.priority, keys };
+    const after: AdNetworkRow = { ...before, active: edit.active, keys };
     await this.roles.audit({ actorAccountId: actor.accountId, action: "ads.network.update", target: edit.networkKey, before, after });
     this.changed({ event: "ad_network_updated", networkKey: edit.networkKey, actor: actor.accountId });
     return networkView(after);
+  }
+
+  /**
+   * Порядок сетей в круге одним запросом: полный список ключей в новом
+   * порядке. Набор не совпал с каталогом — 400, ничего не записано. Тот же
+   * порядок повторно — ответ тот же, аудита и сброса запаса блоков нет.
+   */
+  async reorderNetworks(actor: AccountRef, ids: readonly string[], at = new Date()): Promise<{ order: string[] }> {
+    await this.roles.require(actor, "ads.edit");
+    const result = await this.db(this.repository.reorderNetworks(ids, at));
+    if (result.status === "mismatch") throw new AdNetworkOrderMismatchError();
+    if (result.changed) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "ads.networks.reorder", target: "networks", before: { order: result.before }, after: { order: result.after } });
+      this.changed({ event: "ad_networks_reordered", actor: actor.accountId });
+    }
+    return { order: result.after };
   }
 
   /**

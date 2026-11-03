@@ -16,7 +16,7 @@ shared:
   - backend/api/src/modules/tasks/task-rules.ts
   - CLAUDE.md
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
@@ -87,6 +87,10 @@ batch: 6
 
 - Сами виды оружия и их числа.
 - «Коллекционера» — цель он считает сам (T-0322).
+- Значки знаков «Мастеров»: у нового оружия своего значка ещё нет (п. 5
+  очереди дизайнера), поэтому знак рисуется значком категории. Когда значок
+  оружия появится в `WEAPON_GLYPHS`, дизайнер добавит строку в `BORROWED`
+  `design/art/src/emblem-glyphs.mjs`.
 
 ## Тесты
 

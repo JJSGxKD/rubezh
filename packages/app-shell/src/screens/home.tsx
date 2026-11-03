@@ -24,7 +24,8 @@ const PRELOAD_DELAY_MS = 1500;
  * рекорд и друзья — и «Играть», которая открывает лист «Перед забегом»
  * (docs/27-design-system-and-app-shell.md §6,
  * docs/35-stage4-plan.md WP42). Карусель и виджеты — одним чанком после
- * первого кадра (`home-live.ts`): первой загрузке они не нужны.
+ * первого кадра (`home-live.ts`): первой загрузке они не нужны. Под кнопкой —
+ * строка ленты живых событий (Р114, `home-feed.tsx`).
  */
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
@@ -43,7 +44,8 @@ export function LobbyScreen(): ReactNode {
     <div className="relative h-full">
     <Screen
       footer={
-        saved === null ? (
+        <>
+        {saved === null ? (
           <Button track="play" size="l" block glow cut shine onClick={() => setPreRunOpen(true)}>
             <Play size={22} fill="currentColor" />
             {t("lobby.play")}
@@ -69,7 +71,9 @@ export function LobbyScreen(): ReactNode {
               {t("lobby.newRun")}
             </Button>
           </div>
-        )
+        )}
+        <FeedSlot />
+        </>
       }
     >
       <ContentColumn>
@@ -235,6 +239,24 @@ function CarouselSlot(): ReactNode {
       ) : (
         <live.HomeCarousel />
       )}
+    </div>
+  );
+}
+
+/**
+ * Лента живых событий (Р114) — под кнопкой «Играть» или под «Продолжить» и
+ * «Новый забег», тем же чанком. Заглушки нет: нет события — нет строки, а
+ * чанк, который не приехал, ничего не стоит. Гостю без входа ленты нет:
+ * события собирает сервер. В низком ландшафте телефона под кнопкой не
+ * остаётся места — там её тоже нет.
+ */
+function FeedSlot(): ReactNode {
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const live = useHomeLive();
+  if (!withAccount || live === null) return null;
+  return (
+    <div className="[@media(max-height:480px)]:hidden">
+      <live.HomeFeed />
     </div>
   );
 }

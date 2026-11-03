@@ -24,7 +24,7 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/24-attribution-and-sharing.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -47,6 +47,9 @@ batch: 4
 Кнопка ведёт в игру с реферальной меткой, как сейчас.
 
 ## Решения
+
+Числа раскладки на 1200×675 — `design/art/meta-v2.md` §3.4 (дизайнер,
+31.10.2026); макет — в поле `design`.
 
 Решения владельца — `docs/35-stage4-plan.md`:
 - **Р156** — приглашение и итог забега для «Поделиться» — с картинкой мира

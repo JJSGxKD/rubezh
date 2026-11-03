@@ -28,6 +28,8 @@ const manualSchema = z.object({
   setBy: z.string(),
   expiresAt: z.string(),
   note: z.string(),
+  /** запасной курс рыночной валюты, который сейчас в снимке вместо рыночного; сервер до Р90 поля не отдавал */
+  fallback: z.boolean().default(false),
 });
 
 const sourceSchema = z.object({
@@ -55,8 +57,30 @@ export type FxOverview = z.infer<typeof fxOverviewSchema>;
 export type ManualRate = z.infer<typeof manualSchema>;
 export type SourceRow = z.infer<typeof sourceSchema>;
 
-/** Валюты площадок, курс которых задаётся руками, и валюты котировки — те же списки, что у сервера. */
+/**
+ * Ручной курс — любой валюте, кроме доллара (Р90). У валюты площадки он
+ * основной, у рыночной — запасной: работает, только пока источники не дают
+ * свежего курса.
+ */
+export const MANUAL_CURRENCIES = [
+  ["XTR", "звёзды"],
+  ["RUB", "рубль"],
+  ["EUR", "евро"],
+  ["GRAM", "Gram"],
+  ["USDT", "USDT"],
+] as const;
+
 export const PLATFORM_CURRENCIES = ["XTR"] as const;
+
+/** Рыночная валюта — у неё есть источники, и ручной курс запасной. */
+export function isMarketCurrency(code: string): boolean {
+  return !(PLATFORM_CURRENCIES as readonly string[]).includes(code);
+}
+
+/** Запасной курс — не дольше недели (`MARKET_MANUAL_MAX_DAYS` на сервере). */
+export const MARKET_MANUAL_MAX_DAYS = 7;
+export const MARKET_MANUAL_RULE = "У рыночной валюты ручной курс — запасной: в долларах и только для цен";
+
 export const QUOTE_CURRENCIES = ["USD", "EUR", "RUB"] as const;
 export const MANUAL_PURPOSES = [
   ["price", "для цен"],
@@ -70,6 +94,55 @@ export interface ManualRateInput {
   quote: string;
   expiresInDays: number;
   note: string;
+}
+
+const refreshResultSchema = z.object({
+  source: z.string(),
+  ok: z.boolean(),
+  error: z.string().nullable(),
+  quotes: z.array(z.object({ currency: z.string(), usdPerUnit: z.string(), status: z.enum(["accepted", "rejected", "waiting"]) })),
+  snapshotId: z.string(),
+});
+
+export type RefreshResult = z.infer<typeof refreshResultSchema>;
+
+/** «Обновить сейчас»: источник спрашивается сразу; ответ — что он вернул и принят ли каждый курс. */
+export function refreshSource(api: AdminApi, source: string): Promise<ApiResult<RefreshResult>> {
+  return api.request(`/fx/sources/${encodeURIComponent(source)}/refresh`, { method: "POST", schema: refreshResultSchema });
+}
+
+const SOURCE_TITLES: Readonly<Record<string, string>> = {
+  coingecko: "CoinGecko",
+  coinmarketcap: "CoinMarketCap",
+  cbr: "ЦБ РФ",
+  ecb: "ЕЦБ",
+  erapi: "ExchangeRate-API",
+  forexrateapi: "ForexRateAPI",
+  tonapi: "TonAPI",
+  binance: "Binance",
+};
+
+const CURRENCY_TITLES: Readonly<Record<string, string>> = { GRAM: "Gram", USDT: "USDT", RUB: "рубль", EUR: "евро", XTR: "звезда" };
+
+const QUOTE_STATUS_TITLES = { accepted: "принят", rejected: "отклонён", waiting: "ждёт других источников" } as const;
+
+export function sourceTitle(source: string): string {
+  return SOURCE_TITLES[source] ?? source;
+}
+
+/** Цена в долларах для человека: запятая, не меньше двух знаков после неё, остальные — как пришли. */
+function dollars(usdPerUnit: string): string {
+  const [whole = "0", fraction = ""] = usdPerUnit.split(".");
+  return `${whole},${fraction.padEnd(2, "0")} $`;
+}
+
+/** Итог «Обновить сейчас» одной строкой: что ответил источник и принят ли каждый курс, либо причина сбоя. */
+export function refreshSummary(result: RefreshResult): string {
+  const title = sourceTitle(result.source);
+  if (!result.ok) return `${title} не ответил: ${result.error ?? "причина неизвестна"}`;
+  if (result.quotes.length === 0) return `${title} ответил, но курсов не прислал`;
+  const quotes = result.quotes.map((quote) => `${CURRENCY_TITLES[quote.currency] ?? quote.currency} ${dollars(quote.usdPerUnit)} — ${QUOTE_STATUS_TITLES[quote.status]}`);
+  return `${title} ответил: ${quotes.join(", ")}`;
 }
 
 export function fetchFxOverview(api: AdminApi): Promise<ApiResult<FxOverview>> {
@@ -168,7 +241,13 @@ export function usedProblem(input: UsedInput): string | null {
 export function manualRateProblem(input: ManualRateInput): string | null {
   if (!/^\d{1,12}(\.\d{1,40})?$/.test(input.price)) return "Цена — число с точкой: 0.013";
   if (/^0+(\.0+)?$/.test(input.price)) return "Цена не может быть нулевой";
-  if (!Number.isInteger(input.expiresInDays) || input.expiresInDays < 1 || input.expiresInDays > 90) return "Срок — от 1 до 90 дней: заданный курс без срока устаревал бы молча";
+  const market = isMarketCurrency(input.currency);
+  // Запасной курс рыночной валюты (Р90): те же границы, что у `manualRateSchema` на сервере.
+  if (market && (input.quote !== "USD" || input.purpose !== "price")) return MARKET_MANUAL_RULE;
+  const maxDays = market ? MARKET_MANUAL_MAX_DAYS : 90;
+  if (!Number.isInteger(input.expiresInDays) || input.expiresInDays < 1 || input.expiresInDays > maxDays) {
+    return market ? `Срок запасного курса — от 1 до ${String(MARKET_MANUAL_MAX_DAYS)} дней: это запас на время сбоя` : "Срок — от 1 до 90 дней: заданный курс без срока устаревал бы молча";
+  }
   const note = input.note.trim().length;
   if (note < 3 || note > 200) return "Причина — от 3 до 200 символов: она попадёт в аудит";
   return null;

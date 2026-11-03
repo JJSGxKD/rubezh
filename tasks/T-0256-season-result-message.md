@@ -23,7 +23,7 @@ shared:
   - packages/app-shell/src/i18n/ru-bot.json
   - packages/app-shell/src/screens/meta/notifications.tsx
   - docs/35-stage4-plan.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: medium
 release: minor
@@ -43,6 +43,9 @@ batch: 4
 «Забрать награды».
 
 ## Решения
+
+Числа раскладки на 1200×675 — `design/art/meta-v2.md` §3.4 (дизайнер,
+31.10.2026); макет — в поле `design`.
 
 Решения владельца — `docs/35-stage4-plan.md`:
 - **Р156** — итог сезона картинкой, при закрытии сезона, тем, кто играл;

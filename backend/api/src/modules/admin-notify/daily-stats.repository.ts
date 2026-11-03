@@ -2,6 +2,8 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { DONATION_PRODUCT } from "../payments/purchase-types.js";
+import { boardMark, type BoardMark } from "../restrictions/board-mark.js";
 import { teamDay, type DayStats, type DayWindow, type SourceKind } from "./daily-stats.js";
 
 /**
@@ -20,12 +22,14 @@ export interface DayPoint {
   newAccounts: number;
   active: number;
   finishedRuns: number;
-  /** только настоящие звёзды, оплаченные в эти сутки */
+  /** только настоящие звёзды, оплаченные в эти сутки: весь доход, с донатами */
   stars: number;
-  /** живые оплаты за сутки — их число, а не сумма */
+  /** живые оплаты за сутки без донатов — их число, а не сумма */
   purchases: number;
-  /** досмотренные показы рекламы за сутки */
+  /** досмотренные показы рекламы за сутки; пропуски VIP — не они (Р99) */
   adsCompleted: number;
+  /** пропуски VIP за сутки: награда места без ролика */
+  adsPassed: number;
 }
 
 export interface DailyStatsRepository {
@@ -36,6 +40,11 @@ export interface DailyStatsRepository {
    * Сутки без событий — нулями: провал на графике должен быть виден.
    */
   series(from: Date, to: Date): Promise<DayPoint[]>;
+  /**
+   * Метка «Отдельная доска» за окно (T-0115) — только для сводки панели,
+   * держателю права. Отчёт в чат и `/stats` её не читают: `day()` метки не знает.
+   */
+  boardMark(window: DayWindow): Promise<BoardMark>;
 }
 
 const SOURCES: readonly SourceKind[] = ["organic", "click", "invite", "telegram_affiliate", "friend", "unknown"];
@@ -44,8 +53,9 @@ const count = z.coerce.number().int().nonnegative();
 const accountsSchema = z.array(z.object({ kind: z.string().nullable(), n: count }));
 const activeSchema = z.array(z.object({ active: count, sessions: count }));
 const runsSchema = z.array(z.object({ finished: count, players: count, median: z.coerce.number().nullable() }));
-const revenueSchema = z.array(z.object({ stars: count, purchases: count, refunds: count }));
+const revenueSchema = z.array(z.object({ stars: count, purchases: count, refunds: count, purchase_stars: count, donations: count, donation_stars: count }));
 const pointSchema = z.array(z.object({ day: z.string(), n: count }));
+const adsSchema = z.array(z.object({ day: z.string(), views: count, passes: count }));
 const funnelSchema = z.array(
   z.object({ entered: count, app_opened: count, first_run: count, runs5: count, returned_d1: count, returned_d7: count, first_purchase: count }),
 );
@@ -72,8 +82,11 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
       this.prisma.$queryRaw`
         SELECT
           coalesce(sum(charged_stars) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to}), 0) AS stars,
-          count(*) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to}) AS purchases,
-          count(*) FILTER (WHERE refunded_at >= ${from} AND refunded_at < ${to}) AS refunds
+          count(*) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to} AND product::text <> ${DONATION_PRODUCT}) AS purchases,
+          count(*) FILTER (WHERE refunded_at >= ${from} AND refunded_at < ${to}) AS refunds,
+          coalesce(sum(charged_stars) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to} AND product::text <> ${DONATION_PRODUCT}), 0) AS purchase_stars,
+          count(*) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to} AND product::text = ${DONATION_PRODUCT}) AS donations,
+          coalesce(sum(charged_stars) FILTER (WHERE paid_at >= ${from} AND paid_at < ${to} AND product::text = ${DONATION_PRODUCT}), 0) AS donation_stars
         FROM purchase
         WHERE mode = 'live' AND ((paid_at >= ${from} AND paid_at < ${to}) OR (refunded_at >= ${from} AND refunded_at < ${to}))`,
       this.prisma.$queryRaw`
@@ -90,7 +103,8 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
 
     const bySource: Partial<Record<SourceKind, number>> = {};
     for (const row of accountsSchema.parse(accounts)) {
-      const kind = SOURCES.find((source) => source === row.kind) ?? "unknown";
+      // Прямая ссылка и ссылка с метками — тоже переход по нашей ссылке; разрез по ним — в разделе «Ссылки».
+      const kind = row.kind === "link" || row.kind === "tagged" ? "click" : (SOURCES.find((source) => source === row.kind) ?? "unknown");
       bySource[kind] = (bySource[kind] ?? 0) + row.n;
     }
     const [act] = activeSchema.parse(active);
@@ -102,7 +116,14 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
       active: act?.active ?? 0,
       sessions: act?.sessions ?? 0,
       runs: { finished: run?.finished ?? 0, players: run?.players ?? 0, medianSurvivalSec: run?.median ?? null },
-      revenue: { stars: money?.stars ?? 0, purchases: money?.purchases ?? 0, refunds: money?.refunds ?? 0 },
+      revenue: {
+        stars: money?.stars ?? 0,
+        purchases: money?.purchases ?? 0,
+        refunds: money?.refunds ?? 0,
+        purchaseStars: money?.purchase_stars ?? 0,
+        donations: money?.donations ?? 0,
+        donationStars: money?.donation_stars ?? 0,
+      },
       funnel: {
         entered: steps?.entered ?? 0,
         appOpened: steps?.app_opened ?? 0,
@@ -113,6 +134,10 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
         firstPurchase: steps?.first_purchase ?? 0,
       },
     };
+  }
+
+  async boardMark({ from, to }: DayWindow): Promise<BoardMark> {
+    return await boardMark(this.prisma, { from, to });
   }
 
   async series(from: Date, to: Date): Promise<DayPoint[]> {
@@ -132,13 +157,17 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
         FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
       this.prisma.$queryRaw`
         SELECT to_char(paid_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
-        FROM purchase WHERE mode = 'live' AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+        FROM purchase WHERE mode = 'live' AND product::text <> ${DONATION_PRODUCT} AND paid_at >= ${from} AND paid_at < ${to} GROUP BY 1`,
+      // Настоящие показы — с блоком, пропуск VIP — без него (Р99); одним проходом по таблице.
       this.prisma.$queryRaw`
-        SELECT to_char(completed_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day, count(*) AS n
+        SELECT to_char(completed_at AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD') AS day,
+               count(*) FILTER (WHERE block_id IS NOT NULL) AS views,
+               count(*) FILTER (WHERE block_id IS NULL) AS passes
         FROM ad_session WHERE completed_at >= ${from} AND completed_at < ${to} GROUP BY 1`,
     ]);
     const byDay = (rows: unknown) => new Map(pointSchema.parse(rows).map((row) => [row.day, row.n]));
-    const [newAccounts, activeByDay, runsByDay, starsByDay, purchasesByDay, adsByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars), byDay(purchases), byDay(ads)];
+    const [newAccounts, activeByDay, runsByDay, starsByDay, purchasesByDay] = [byDay(accounts), byDay(active), byDay(runs), byDay(stars), byDay(purchases)];
+    const adsByDay = new Map(adsSchema.parse(ads).map((row) => [row.day, row]));
     const points: DayPoint[] = [];
     for (let day = teamDay(from.getTime()), last = teamDay(to.getTime() - 1); day <= last; day = nextDay(day)) {
       points.push({
@@ -148,7 +177,8 @@ export class PrismaDailyStatsRepository implements DailyStatsRepository {
         finishedRuns: runsByDay.get(day) ?? 0,
         stars: starsByDay.get(day) ?? 0,
         purchases: purchasesByDay.get(day) ?? 0,
-        adsCompleted: adsByDay.get(day) ?? 0,
+        adsCompleted: adsByDay.get(day)?.views ?? 0,
+        adsPassed: adsByDay.get(day)?.passes ?? 0,
       });
     }
     return points;

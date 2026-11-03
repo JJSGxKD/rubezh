@@ -55,13 +55,15 @@ export const assignmentSchema = z.object({
   grantedBy: z.string().nullable(),
   grantedByName: z.string().nullable(),
   grantedAt: z.string(),
+  /** можно ли снять роль тому, кто смотрит (уровни ролей, T-0216); сервер без уровней поля не отдавал */
+  revocable: z.boolean().default(true),
 });
 
 export type Assignment = z.infer<typeof assignmentSchema>;
 
 const assignmentsSchema = z.object({
   assignments: z.array(assignmentSchema),
-  roles: z.array(z.object({ role: z.string(), permissions: z.array(z.string()) })),
+  roles: z.array(z.object({ role: z.string(), permissions: z.array(z.string()), /** можно ли выдать роль тому, кто смотрит */ grantable: z.boolean().default(true) })),
 });
 export type Assignments = z.infer<typeof assignmentsSchema>;
 

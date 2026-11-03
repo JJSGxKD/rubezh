@@ -31,7 +31,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
     fromSec: 60,
     spawns: [
       { enemy: "swarm_rat", perSec: 2.2 },
-      { enemy: "shooter_wisp", perSec: 0.3, burst: 2 },
       { enemy: "bone_walker", perSec: 0.5, burst: 4 },
     ],
   },
@@ -51,7 +50,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.4 },
       { enemy: "circler_crow", perSec: 0.9 },
-      { enemy: "shooter_wisp", perSec: 0.25 },
       { enemy: "bone_walker", perSec: 0.4 },
       { enemy: "tank_ghoul", perSec: 0.12, burst: 1 },
     ],
@@ -71,15 +69,14 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 2.6 },
       { enemy: "circler_crow", perSec: 1.6 },
-      { enemy: "shooter_wisp", perSec: 0.35 },
       { enemy: "mire_shambler", perSec: 0.22, burst: 2 },
     ],
     events: [
       { kind: "ring", enemy: "circler_crow", count: 16 },
-      // Первое кольцо редкое и слабое: 24 стража на 30 секунд, из них около 14
-      // строй «держит» — стражам нужно время, чтобы дойти. Дальше кольца
-      // крепнут: больше стражей, дольше и быстрее сжимаются.
-      { kind: "cordon", enemy: "cordon_guard", count: 24, ring: { radius: 170, minRadius: 90, shrinkPerSec: 3, lifeSec: 30 } },
+      // Первое кольцо слабее следующих, но не пустое: 32 стража встают сразу и
+      // держат строй 45 секунд. Элиты внутри нет: сундук с неё ускорял сборку
+      // набора, элиту в строй ставят только кольца кривой.
+      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 170, minRadius: 90, shrinkPerSec: 1.5, lifeSec: 45 } },
     ],
   },
   {
@@ -112,7 +109,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 2.8 },
       { enemy: "circler_crow", perSec: 1.1 },
       { enemy: "rushing_bats", perSec: 0.8 },
-      { enemy: "shooter_wisp", perSec: 0.3 },
       { enemy: "mire_shambler", perSec: 0.2 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
@@ -125,7 +121,6 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "swarm_rat", perSec: 3 },
       { enemy: "circler_crow", perSec: 1.8 },
       { enemy: "rushing_bats", perSec: 1 },
-      { enemy: "shooter_wisp", perSec: 0.45 },
       { enemy: "bone_walker", perSec: 0.7 },
       { enemy: "dasher_wolf", perSec: 0.4 },
     ],
@@ -133,7 +128,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     // а не выпадает случайно из смеси.
     events: [
       { kind: "ring", enemy: "elite_ghoul", count: 1 },
-      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 200, minRadius: 90, shrinkPerSec: 4, lifeSec: 35 } },
+      { kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 200, minRadius: 90, shrinkPerSec: 2, lifeSec: 50 } },
     ],
   },
 ];
@@ -152,16 +147,15 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   fromSec: 330,
   segmentSec: 60,
   threatPerSec: 14.4,
-  threatGrowth: 1.18,
+  threatGrowth: 1.22,
   maxAlive: 240,
-  hpGrowth: 1.12,
-  damageGrowth: 1.06,
+  hpGrowth: 1.14,
+  damageGrowth: 1.08,
   pool: [
     "swarm_rat",
     "circler_crow",
     "rushing_bats",
     "dasher_wolf",
-    "shooter_wisp",
     "bomber_imp",
     "splitter_slime",
     "tank_ghoul",
@@ -177,10 +171,27 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 4, kind: "ring", enemy: "elite_ghoul", count: 2 },
     { everySegments: 6, kind: "flank", enemy: "elite_grave_knight", count: 1 },
     { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
-    { everySegments: 7, kind: "ring", enemy: "boss_seer", count: 1 },
+    // После 8-й минуты элиты и боссы приходят чаще. Боссы чередуются: Матрёшка
+    // каждые пять минут, Таран каждые восемь — Таран отдан тому, что в ритм
+    // Матрёшки не попадает.
+    { everySegments: 7, kind: "ring", enemy: "elite_ghoul", count: 3 },
+    { everySegments: 8, kind: "ring", enemy: "boss_ram", count: 1 },
+    { everySegments: 9, kind: "flank", enemy: "elite_grave_knight", count: 2 },
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
     // параметры кольца с отрезка на отрезок не растут.
-    { everySegments: 3, kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 240, minRadius: 100, shrinkPerSec: 5, lifeSec: 45 } },
+    {
+      everySegments: 3,
+      kind: "cordon",
+      enemy: "cordon_guard",
+      count: 56,
+      ring: {
+        radius: 240,
+        minRadius: 100,
+        shrinkPerSec: 2.5,
+        lifeSec: 60,
+        inner: [{ enemy: "elite_ghoul", count: 1 }],
+      },
+    },
   ],
 };

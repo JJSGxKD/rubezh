@@ -1,9 +1,10 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { DomainError } from "../../common/domain-error.js";
-import { LEADERBOARD_STORE, type LeaderboardStore } from "./leaderboard.store.js";
+import { LEADERBOARD_STORE, type Board, type LeaderboardStore } from "./leaderboard.store.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunExtras, type RunLootPart, type RunRewardPart } from "./run-details.js";
-import { DIFFICULTIES, type Difficulty } from "./run-rules.js";
+import { RunPrestige } from "./run-prestige.js";
+import { DIFFICULTIES, isRatedDifficulty, type Difficulty } from "./run-rules.js";
 import { RUNS_REPOSITORY, type ReviewRow, type RunDetailRow, type RunsRepository } from "./runs.repository.js";
 
 /**
@@ -14,6 +15,16 @@ import { RUNS_REPOSITORY, type ReviewRow, type RunDetailRow, type RunsRepository
  * Игрок под молчаливым ограничением рейтинга (docs/35-stage4-plan.md WP44,
  * О40) видит доску и профиль из тени: себя — на месте, которое занял бы
  * лучшим забегом, остальных — как есть. Другие его не видят: в доске его нет.
+ *
+ * Читается доска смотрящего (Р104, T-0113): аккаунт со скрытым ограничением
+ * «Отдельная доска» читает полную, остальные — общую. Место, «всего
+ * игроков», профиль и размер доски считаются по ней; форма ответов у всех
+ * одна, поля «доска» нет. Каждый метод узнаёт доску один раз в начале.
+ *
+ * Единая сложность (Р126, T-0191): доски, лучшее и размер доски есть только у
+ * рейтинговых сложностей; у остальных форма ответа та же, но пустая — `null`,
+ * `0`, пустой список, — и ни Redis, ни база для них не читаются. Старый клиент
+ * по-прежнему просит `easy` и `normal` и получает пустую доску, а не ошибку.
  */
 
 export const LEADERBOARD_LIMIT = 50;
@@ -45,6 +56,10 @@ export interface LeaderboardView {
     startingWeaponId: string;
     enemiesKilled: number;
     isMe: boolean;
+    /** очки престижа за достижения (tasks/T-0107); ноль — значок не рисуется */
+    prestige: number;
+    /** отметка рубежа (T-0121): у аккаунта засчитана победа над стражем; поля нет — не засчитана */
+    rubezh?: true;
   }[];
   me: { rank: number; survivalSec: number } | null;
   totalPlayers: number;
@@ -106,20 +121,26 @@ export class RunsViewService {
     @Inject(LEADERBOARD_STORE) private readonly leaderboard: LeaderboardStore,
     private readonly extras: RunExtras,
     private readonly rating: RatingRestrictions,
+    private readonly prestige: RunPrestige,
   ) {}
 
   async leaderboardFor(accountId: string, difficulty: Difficulty): Promise<LeaderboardView> {
+    if (!isRatedDifficulty(difficulty)) return { difficultyId: difficulty, entries: [], me: null, totalPlayers: 0 };
+    const board = await this.rating.boardOf(accountId);
     const [top, total, rank, best, hold] = await Promise.all([
-      this.leaderboard.top(difficulty, LEADERBOARD_LIMIT),
-      this.leaderboard.count(difficulty),
-      this.leaderboard.rank(difficulty, accountId),
-      this.leaderboard.best(difficulty, accountId),
+      this.leaderboard.top(difficulty, LEADERBOARD_LIMIT, board),
+      this.leaderboard.count(difficulty, board),
+      this.leaderboard.rank(difficulty, accountId, board),
+      this.leaderboard.best(difficulty, accountId, board),
       this.rating.hold(accountId),
     ]);
 
     // Порядок и места — из проекции, подробности лучшего забега — из базы
-    // одним запросом на всю страницу.
-    const details = new Map((await this.runs.bestRuns(top.map((entry) => entry.accountId), difficulty)).map((row) => [row.accountId, row]));
+    // одним запросом на всю страницу, престиж — одним запросом к достижениям:
+    // игрок в тени добавляет в него себя, его строку рисует `fromShadow`.
+    const ids = top.map((entry) => entry.accountId);
+    const [rows, prestige] = await Promise.all([this.runs.bestRuns(ids, difficulty, this.rating.since()), this.prestige.of(hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids)]);
+    const details = new Map(rows.map((row) => [row.accountId, row]));
 
     const view: LeaderboardView = {
       difficultyId: difficulty,
@@ -141,27 +162,29 @@ export class RunsViewService {
             startingWeaponId: row.startingWeaponId,
             enemiesKilled: row.enemiesKilled,
             isMe: entry.accountId === accountId,
+            prestige: prestige.get(entry.accountId) ?? 0,
+            ...(entry.rubezh === true ? { rubezh: true as const } : {}),
           },
         ];
       }),
       me: rank === null || best === null ? null : { rank, survivalSec: best },
       totalPlayers: total,
     };
-    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view) : view;
+    return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board, prestige.get(accountId) ?? 0) : view;
   }
 
   /**
    * Доска глазами игрока в тени: он — на месте, которое занял бы лучшим
    * забегом, включая сданные в тени, а те, кто ниже, сдвинуты на строку.
    */
-  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView): Promise<LeaderboardView> {
-    const mine = await this.runs.bestRunOf(accountId, difficulty, true);
+  private async fromShadow(accountId: string, difficulty: Difficulty, view: LeaderboardView, board: Board, ownPrestige: number): Promise<LeaderboardView> {
+    const mine = await this.runs.bestRunOf(accountId, difficulty, true, this.rating.since());
     // До обхода игрок мог остаться в доске гонкой с наложением — себя он видит один раз.
     const others = view.entries.filter((entry) => !entry.isMe);
     const players = view.totalPlayers - (view.me === null ? 0 : 1);
     if (mine === null) return { ...view, entries: others, me: null, totalPlayers: players };
 
-    const rank = (await this.leaderboard.countAbove(difficulty, mine.survivalSec)) + 1;
+    const rank = (await this.leaderboard.countAbove(difficulty, mine.survivalSec, board)) + 1;
     const own = {
       rank,
       name: mine.displayName,
@@ -172,6 +195,7 @@ export class RunsViewService {
       startingWeaponId: mine.startingWeaponId,
       enemiesKilled: mine.enemiesKilled,
       isMe: true,
+      prestige: ownPrestige,
     };
     const entries = [...others.map((entry) => (entry.rank >= rank ? { ...entry, rank: entry.rank + 1 } : entry)), own]
       .filter((entry) => entry.rank <= LEADERBOARD_LIMIT)
@@ -184,11 +208,13 @@ export class RunsViewService {
    * у неё без места в рейтинге.
    */
   async profile(accountId: string, audience: "player" | "team" = "player"): Promise<ProfileView> {
+    // Для команды место такое же, как у владельца профиля: по доске аккаунта.
+    const board = await this.rating.boardOf(accountId);
     const shadow = audience === "player" && (await this.rating.hold(accountId)) === "silent";
     const [stats, recent, ...bests] = await Promise.all([
       this.runs.stats(accountId),
       this.runs.recent(accountId, RECENT_RUNS_SHOWN),
-      ...DIFFICULTIES.map(async (difficulty) => (shadow ? await this.shadowBest(accountId, difficulty) : await this.boardBest(accountId, difficulty))),
+      ...DIFFICULTIES.map(async (difficulty) => (shadow ? await this.shadowBest(accountId, difficulty, board) : await this.boardBest(accountId, difficulty, board))),
     ]);
 
     return {
@@ -207,28 +233,34 @@ export class RunsViewService {
 
   /** Сколько игроков в доске глазами игрока: в тени он видит в ней и себя. */
   async boardSize(accountId: string, difficulty: Difficulty): Promise<number> {
-    const [total, hold] = await Promise.all([this.leaderboard.count(difficulty), this.rating.hold(accountId)]);
-    if (hold !== "silent" || (await this.leaderboard.best(difficulty, accountId)) !== null) return total;
-    return (await this.runs.bestRunOf(accountId, difficulty, true)) === null ? total : total + 1;
+    if (!isRatedDifficulty(difficulty)) return 0;
+    const board = await this.rating.boardOf(accountId);
+    const [total, hold] = await Promise.all([this.leaderboard.count(difficulty, board), this.rating.hold(accountId)]);
+    if (hold !== "silent" || (await this.leaderboard.best(difficulty, accountId, board)) !== null) return total;
+    return (await this.runs.bestRunOf(accountId, difficulty, true, this.rating.since())) === null ? total : total + 1;
   }
 
   /** Лучшие рейтинговые и снятые модератором забеги по сложностям — для карточки игрока в панели. */
   async moderationRuns(accountId: string): Promise<Record<Difficulty, ModerationRunView[]>> {
-    const lists = await Promise.all(DIFFICULTIES.map(async (difficulty) => await this.runs.moderationRuns(accountId, difficulty, MODERATION_RUNS_SHOWN)));
+    // Нерейтингового забега модератор не снимает и не возвращает: списки easy и normal пусты, форма ответа прежняя.
+    const since = this.rating.since();
+    const lists = await Promise.all(DIFFICULTIES.map(async (difficulty) => (isRatedDifficulty(difficulty) ? await this.runs.moderationRuns(accountId, difficulty, MODERATION_RUNS_SHOWN, since) : [])));
     const view = (rows: Awaited<ReturnType<RunsRepository["moderationRuns"]>>) =>
       rows.map((row) => ({ runId: row.runId, survivalSec: row.survivalSec, level: row.level, enemiesKilled: row.enemiesKilled, startingWeaponId: row.startingWeaponId, finishedAt: row.finishedAt.toISOString(), ranked: row.ranked }));
     return { easy: view(lists[0] ?? []), normal: view(lists[1] ?? []), hard: view(lists[2] ?? []) };
   }
 
-  private async boardBest(accountId: string, difficulty: Difficulty): Promise<{ survivalSec: number; rank: number } | null> {
-    const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, accountId), this.leaderboard.rank(difficulty, accountId)]);
+  private async boardBest(accountId: string, difficulty: Difficulty, board: Board): Promise<{ survivalSec: number; rank: number } | null> {
+    if (!isRatedDifficulty(difficulty)) return null;
+    const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, accountId, board), this.leaderboard.rank(difficulty, accountId, board)]);
     return best === null || rank === null ? null : { survivalSec: best, rank };
   }
 
-  private async shadowBest(accountId: string, difficulty: Difficulty): Promise<{ survivalSec: number; rank: number } | null> {
-    const mine = await this.runs.bestRunOf(accountId, difficulty, true);
+  private async shadowBest(accountId: string, difficulty: Difficulty, board: Board): Promise<{ survivalSec: number; rank: number } | null> {
+    if (!isRatedDifficulty(difficulty)) return null;
+    const mine = await this.runs.bestRunOf(accountId, difficulty, true, this.rating.since());
     if (mine === null) return null;
-    return { survivalSec: mine.survivalSec, rank: (await this.leaderboard.countAbove(difficulty, mine.survivalSec)) + 1 };
+    return { survivalSec: mine.survivalSec, rank: (await this.leaderboard.countAbove(difficulty, mine.survivalSec, board)) + 1 };
   }
 
   async detail(accountId: string, runId: string): Promise<RunDetailView> {

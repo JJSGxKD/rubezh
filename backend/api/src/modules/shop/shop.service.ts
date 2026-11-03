@@ -15,6 +15,7 @@ import { WALLET_RESOURCES } from "../wallet/wallet-types.js";
 import type { RevokeOutcome } from "../wallet/wallet.repository.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { badgesOf, gemValuePct, recommendedSku, type ShopBadge } from "./shop-marketing.js";
+import { ShopChoice, choiceOf } from "./shop-choice.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
 import { promoOffer, type PromoRow } from "./shop-promo-rules.js";
 import { ShopPromoService } from "./shop-promo.service.js";
@@ -45,7 +46,7 @@ export interface ShopItemView {
   once: boolean;
   /** разовый товар уже куплен */
   owned: boolean;
-  /** «Хит» — от команды, «Лучшая цена» — у самого выгодного набора самоцветов */
+  /** «Хит» — от команды, «Выбор игроков» — у набора с наибольшим числом покупателей за 30 дней, «Лучшая цена» — у самого выгодного набора самоцветов */
   badge: ShopBadge | null;
   /** на сколько процентов самоцвет здесь дешевле, чем в самом дорогом наборе; `null` — не набор самоцветов или это он и есть */
   valuePct: number | null;
@@ -86,6 +87,7 @@ export class ShopService implements OnModuleInit {
     // Реестр нужен модулю, а не каждому тесту магазина: без него отзыв регистрируется в своём, пустом.
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
     private readonly restrictions: AccountRestrictions,
+    private readonly choice: ShopChoice,
   ) {}
 
   onModuleInit(): void {
@@ -104,7 +106,9 @@ export class ShopService implements OnModuleInit {
     const full = (sku: ShopSku) => (method === undefined ? null : priceIn(priceProduct(sku), method));
     // «Лучшая цена», выгода и подбор считаются от того, что игрок заплатит сейчас, — со скидкой.
     const price = (sku: ShopSku) => promoOffer(full(sku), promos.get(sku.id))?.price ?? full(sku);
-    const badges = badgesOf(skus, price);
+    const sellable = skus.filter((sku) => price(sku) !== null);
+    const choiceId = choiceOf(await this.choice.counts(at), sellable, this.settings.get(SETTINGS.shopChoiceMinBuyers));
+    const badges = badgesOf(skus, price, choiceId);
     const value = gemValuePct(skus, price);
     const inventory = await withTimeout(this.items.inventory(account.accountId), DB_TIMEOUT_MS, "магазин");
     const tribute = this.settings.get(SETTINGS.shopTributeUrl);

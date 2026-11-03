@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
-import { compactJson, fetchCandidate, grantRole, revokeRole, roleName, rolePurpose, roleTargetOf, sectionsOfRole, teamOf, ROLE_NAMES, type Assignment } from "../src/api/roles";
+import { compactJson, fetchAssignments, fetchCandidate, grantRole, revokeRole, roleName, rolePurpose, roleTargetOf, sectionsOfRole, teamOf, ROLE_NAMES, type Assignment } from "../src/api/roles";
 import { SECTIONS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -44,9 +44,29 @@ describe("роли", () => {
   });
 });
 
+describe("уровни ролей (T-0216)", () => {
+  const entry = { accountId: "a", displayName: "Ира", role: "analyst", grantedBy: null, grantedByName: null, grantedAt: "2026-09-01T10:00:00.000Z" };
+
+  it("сервер присылает, что можно выдать и снять; старый сервер без флагов — всё можно, отказ даст сам сервер", async () => {
+    const { fetch } = fakeFetch(
+      json(200, { data: { assignments: [{ ...entry, revocable: false }], roles: [{ role: "admin", permissions: [], grantable: false }, { role: "analyst", permissions: [], grantable: true }] } }),
+      json(200, { data: { assignments: [entry], roles: [{ role: "admin", permissions: [] }] } }),
+    );
+    const api = new AdminApi(fetch);
+
+    const levelled = await fetchAssignments(api);
+    expect(levelled.ok && levelled.data.assignments[0]?.revocable).toBe(false);
+    expect(levelled.ok && levelled.data.roles.map((role) => role.grantable)).toEqual([false, true]);
+
+    const legacy = await fetchAssignments(api);
+    expect(legacy.ok && legacy.data.assignments[0]?.revocable).toBe(true);
+    expect(legacy.ok && legacy.data.roles[0]?.grantable).toBe(true);
+  });
+});
+
 describe("команда", () => {
   const at = (day: number) => `2026-09-${String(day).padStart(2, "0")}T10:00:00.000Z`;
-  const row = (accountId: string, role: string, day: number): Assignment => ({ accountId, displayName: accountId, role, grantedBy: null, grantedByName: null, grantedAt: at(day) });
+  const row = (accountId: string, role: string, day: number): Assignment => ({ accountId, displayName: accountId, role, grantedBy: null, grantedByName: null, grantedAt: at(day), revocable: true });
 
   it("человек — одной строкой со всеми ролями; старшие роли и люди — первыми", () => {
     const team = teamOf([row("lena", "analyst", 20), row("ira", "marketer", 12), row("lena", "marketer", 10), row("ira", "owner", 15)]);

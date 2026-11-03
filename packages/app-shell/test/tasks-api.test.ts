@@ -2,6 +2,7 @@ import ru from "../src/i18n/ru.json";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
+import { taskHint, taskTitle } from "../src/screens/meta/task-row";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
   NETWORK_TASK_CHECKS_MS,
@@ -17,9 +18,11 @@ import {
   slotsText,
   taskImageUrl,
   openTaskLink,
+  pointsFailureKey,
   sortTasks,
   tabOf,
   taskLink,
+  type TaskItem,
 } from "../src/state/tasks-api";
 
 // Клиент заданий (docs/35-stage4-plan.md WP13): цели с прогрессом — GET,
@@ -108,9 +111,9 @@ describe("клиент заданий", () => {
     expect(broken.ok).toBe(false);
   });
 
-  it("порядок: можно забрать — сверху, в работе — посередине, полученное — внизу; похожие цели рядом и по величине", () => {
+  it("порядок: можно забрать — сверху, в работе — посередине, полученное — внизу; внутри — порядок входа, вид и величина цели не влияют", () => {
     const task = (id: string, kind: string, target: number, done: boolean, claimed: boolean) => ({ ...TASK, id, kind, target, done, claimed });
-    const sorted = sortTasks([
+    const input = [
       task("claimed_runs", "runs", 3, true, true),
       task("kills_big", "kills", 5000, false, false),
       task("runs_10", "runs", 10, false, false),
@@ -119,8 +122,12 @@ describe("клиент заданий", () => {
       task("mystery", "elites", 1, false, false),
       task("runs_3", "runs", 3, false, false),
       task("ready_runs", "runs", 5, true, false),
-    ]);
-    expect(sorted.map((item) => item.id)).toEqual(["ready_runs", "ready_kills", "runs_3", "runs_10", "kills_small", "kills_big", "mystery", "claimed_runs"]);
+    ];
+    const before = input.map((item) => item.id);
+    const sorted = sortTasks(input);
+    expect(sorted.map((item) => item.id)).toEqual(["ready_kills", "ready_runs", "kills_big", "runs_10", "kills_small", "mystery", "runs_3", "claimed_runs"]);
+    expect(input.map((item) => item.id)).toEqual(before);
+    expect(sortTasks([])).toEqual([]);
     expect(isClaimable({ done: true, claimed: false })).toBe(true);
     expect(isClaimable({ done: true, claimed: true })).toBe(false);
     expect(isClaimable({ done: false, claimed: false })).toBe(false);
@@ -282,5 +289,126 @@ describe("ротация заданий и новые виды цели", () => 
     // нет фильтра — без аргументов, экран не падает
     expect(goalFilterParams({ kind: "weapon_runs", filter: null })).toEqual({});
     expect(goalFilterParams({ kind: "runs" })).toEqual({});
+  });
+});
+
+// Очки заданий (docs/39-retention-mechanics.md П2, tasks/T-0105): полоса дня и
+// недели приходит вместе с заданиями, ступень забирается отдельной ручкой.
+
+const STEP = (points: number, coins: number, shards: number, state: string) => ({ points, reward: { coins, gems: 0, shards }, state });
+const POINTS = {
+  daily: { total: 30, steps: [STEP(20, 40, 0, "ready"), STEP(50, 80, 0, "locked"), STEP(100, 150, 3, "locked")] },
+  weekly: { total: 30, steps: [STEP(150, 150, 0, "locked"), STEP(400, 300, 5, "locked"), STEP(700, 600, 10, "locked")] },
+};
+
+describe("очки заданий в клиенте", () => {
+  it("ответ без points разбирается (сервер до очков его не отдавал); с points — тоже, со всеми ступенями", async () => {
+    const old = await createTasksApi(server([], { tasks: [TASK] })).view();
+    expect(old.ok && old.data.points).toBeUndefined();
+
+    const view = await createTasksApi(server([], { tasks: [TASK], points: POINTS })).view();
+    expect(view.ok && view.data.points?.daily.total).toBe(30);
+    expect(view.ok && view.data.points?.daily.steps.map((step) => step.state)).toEqual(["ready", "locked", "locked"]);
+    expect(view.ok && view.data.points?.weekly.steps[2]).toEqual({ points: 700, reward: { coins: 600, gems: 0, shards: 10 }, state: "locked" });
+  });
+
+  it("ступень вне известных состояний — отказ схемы, а не молча закрытая полоса", async () => {
+    const broken = await createTasksApi(server([], { tasks: [TASK], points: { ...POINTS, daily: { total: 0, steps: [STEP(20, 40, 0, "maybe")] } } })).view();
+    expect(broken.ok).toBe(false);
+  });
+
+  it("забор ступени — POST без тела: период и порог в адресе; ответ несёт, сколько легло", async () => {
+    const sent: Sent[] = [];
+    const answer = { claimed: true, credited: { coins: 40, gems: 0, shards: 0 }, points: 20 };
+
+    const claim = await createTasksApi(server(sent, answer)).claimPoints("daily", 20);
+
+    expect(claim.ok && claim.data).toEqual(answer);
+    expect(sent).toEqual([{ method: "POST", path: "/api/v1/tasks/points/daily/20/claim", body: undefined }]);
+    await createTasksApi(server(sent, answer)).claimPoints("weekly", 400);
+    expect(sent[1]?.path).toBe("/api/v1/tasks/points/weekly/400/claim");
+  });
+
+  it("отказ в заборе: не хватает очков — «обновили прогресс», остальное — «попробуй ещё раз»", () => {
+    expect(pointsFailureKey("task_points_not_reached")).toBe("tasks.points.notReached");
+    expect(pointsFailureKey("task_points_step_not_found")).toBe("tasks.points.failed");
+    expect(pointsFailureKey("rate_limited")).toBe("tasks.points.failed");
+    expect(pointsFailureKey(undefined)).toBe("tasks.points.failed");
+  });
+
+  it("тексты полосы — в словаре дословно: названия полос, склонение очков, строки «до награды» и отказов", () => {
+    const words = ruTasks as Record<string, string>;
+    expect(words["tasks.points.daily"]).toBe("Очки дня");
+    expect(words["tasks.points.weekly"]).toBe("Очки недели");
+    expect(words["tasks.points.total"]).toBe("{points} {points, plural, one {очко} few {очка} many {очков} other {очка}}");
+    expect(words["tasks.points.task"]).toBe("+{points} оч.");
+    expect(words["tasks.points.left"]).toBe("До награды ещё {left} {left, plural, one {очко} few {очка} many {очков} other {очка}}");
+    expect(words["tasks.points.allDone.daily"]).toBe("Все награды дня получены");
+    expect(words["tasks.points.allDone.weekly"]).toBe("Все награды недели получены");
+    expect(words["tasks.points.weeklyHint"]).toBe("В очки недели идут и ежедневные задания");
+    expect(words["tasks.points.failed"]).toBe("Не удалось забрать награду за очки — попробуй ещё раз");
+    expect(words["tasks.points.notReached"]).toBe("Очков пока не хватает — обновили прогресс");
+  });
+
+  it("существующие ключи для ячеек ступеней — «Забрать», «Получено», «Получено: …» — на месте", () => {
+    const words = ruTasks as Record<string, string>;
+    expect(words["tasks.claim"]).toBe("Забрать");
+    expect(words["tasks.claimed"]).toBe("Получено");
+    expect(words["tasks.got"]).toContain("{what}");
+  });
+});
+
+// Название достижения (tasks/T-0106): название лежит в каталоге, а не в словаре
+// клиента, поэтому строка берёт заголовок каталога, потом словарь, потом id.
+
+describe("название достижения в строке задания", () => {
+  /** Строка, как её разобрал клиент: срок и поля — в типах, а не строками. */
+  function row(patch: Partial<TaskItem> = {}): TaskItem {
+    return { id: "daily_runs", period: "daily", kind: "runs", title: null, target: 3, value: 3, done: true, claimed: false, reward: { coins: 120, gems: 0, shards: 0 }, passPoints: 0, ...patch };
+  }
+  const achievement = (patch: Partial<TaskItem> = {}) => row({ id: "ach_kills_1k", period: "achievement", kind: "kills", target: 1000, value: 10, done: false, ...patch });
+
+  it("заголовок каталога — первым, и в словаре его искать не нужно", () => {
+    expect(taskTitle(achievement({ title: "Тысячник" }))).toBe("Тысячник");
+    // даже у достижения, которое есть в словаре: название из каталога правится из панели без релиза
+    expect(taskTitle(achievement({ id: "ach_survive_5", kind: "best_survival_sec", title: "Держи рубеж!" }))).toBe("Держи рубеж!");
+  });
+
+  it("заголовка нет, а достижение есть в словаре — имя из словаря", () => {
+    expect(taskTitle(achievement({ id: "ach_survive_5", kind: "best_survival_sec", target: 300 }))).toBe("Держи рубеж");
+    expect(taskTitle(achievement({ id: "ach_level_40", kind: "run_level", target: 40 }))).toBe("Мастер забега");
+  });
+
+  it("ни заголовка, ни словаря — id достижения, а не пустая строка", () => {
+    expect(taskTitle(achievement())).toBe("ach_kills_1k");
+  });
+
+  it("задание не достижение: заголовок каталога или текст цели по виду — как раньше", () => {
+    expect(taskTitle(row({ title: "Свой текст" }))).toBe("Свой текст");
+    expect(taskTitle(row())).toContain("забег");
+    // id ежедневного в словаре достижений не ищется
+    expect(taskTitle(row({ id: "ach_survive_5" }))).toContain("забег");
+  });
+
+  it("партнёрская цель с периодом «достижение» остаётся с текстом цели по виду", () => {
+    expect(taskTitle(row({ id: "ach_site", period: "achievement", category: "partner", kind: "link" }))).toBe("Перейди по ссылке партнёра");
+  });
+
+  it("под названием достижения — цель словами, потому что название её не объясняет", () => {
+    expect(taskHint(achievement({ title: "Тысячник" }))).toContain("врагов");
+    expect(taskHint(achievement({ id: "ach_survive_5", kind: "best_survival_sec", target: 300 }))).toContain("в одном забеге");
+    // без названия стоит id, и цель тем более нужна
+    expect(taskHint(achievement())).toContain("врагов");
+  });
+
+  it("цель «друзья» и «уровень аккаунта» читается словами, а не голым числом", () => {
+    expect(taskHint(achievement({ id: "ach_friends_5", kind: "friends", target: 5 }))).toBe("Набери друзей: 5");
+    expect(taskHint(achievement({ id: "ach_friends_1", kind: "friends", target: 1 }))).toBe("Набери друзей: 1");
+    expect(taskHint(achievement({ id: "ach_account_10", kind: "account_level", target: 10 }))).toBe("Дорасти до 10 уровня аккаунта");
+  });
+
+  it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {
+    expect(taskHint(row())).toBeNull();
+    expect(taskHint(row({ category: "partner", kind: "channel" }))).toContain("Награда каждый день");
   });
 });

@@ -1,4 +1,4 @@
-/** Снаряд без владельца-врага: выпущен игроком. */
+/** «Нет владельца»: у снаряда — не задано оружие игрока, у врага — не задан тип. */
 export const NO_OWNER_TYPE = 255;
 
 /** Тик «попаданий не было»: заведомо раньше любого тика забега. */
@@ -48,7 +48,7 @@ export interface EnemyPool {
    * и кольцевой буфер эффектов они вытеснили бы целиком.
    */
   hitTick: Int32Array;
-  /** таймер до следующей атаки: и контактной, и выстрела для kite_and_shoot */
+  /** таймер до следующей контактной атаки */
   attackCooldown: Float32Array;
   type: Uint8Array;
   /**
@@ -98,10 +98,6 @@ export interface ProjectilePool {
   vy: Float32Array;
   damage: Float32Array;
   ttl: Float32Array;
-  /** 1 — снаряд игрока, 0 — снаряд врага */
-  fromPlayer: Uint8Array;
-  /** индекс типа врага, выпустившего снаряд; NO_OWNER_TYPE — снаряд игрока */
-  ownerType: Uint8Array;
   /** индекс оружия игрока — по нему считается урон по оружиям для итогов */
   ownerWeapon: Uint8Array;
   /** сколько врагов снаряд ещё может пробить, прежде чем исчезнуть */
@@ -247,8 +243,6 @@ export function createProjectilePool(capacity: number): ProjectilePool {
     vy: new Float32Array(capacity),
     damage: new Float32Array(capacity),
     ttl: new Float32Array(capacity),
-    fromPlayer: new Uint8Array(capacity),
-    ownerType: new Uint8Array(capacity).fill(NO_OWNER_TYPE),
     ownerWeapon: new Uint8Array(capacity).fill(NO_OWNER_TYPE),
     pierce: new Uint8Array(capacity),
     lastHit: new Int16Array(capacity).fill(-1),

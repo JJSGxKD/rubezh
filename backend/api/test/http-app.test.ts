@@ -13,10 +13,12 @@ import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { LEADERBOARD_STORE } from "../src/modules/runs/leaderboard.store.js";
+import { RunProofsService } from "../src/modules/runs/run-proofs.service.js";
 import { RunsController } from "../src/modules/runs/runs.controller.js";
 import { RatingRestrictions } from "../src/modules/runs/rating-restrictions.js";
 import { RUNS_REPOSITORY } from "../src/modules/runs/runs.repository.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 import { RunsViewService } from "../src/modules/runs/runs-view.service.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
 import { RunExtras } from "../src/modules/runs/run-details.js";
@@ -59,6 +61,9 @@ function moduleFor(env: Record<string, string>): Type<unknown> {
       RunExtras,
       RunsService,
       RunsViewService,
+      RunPrestige,
+      // Запись для проверки этим тестам не нужна: маршрут её не трогает.
+      { provide: RunProofsService, useValue: {} },
     ],
   })
   class TestModule {}

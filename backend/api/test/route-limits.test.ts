@@ -7,6 +7,7 @@ import { AdsgramRewardController } from "../src/modules/ads/adsgram-reward.contr
 import { AuthController } from "../src/modules/auth/auth.controller.js";
 import type { RateLimit } from "../src/modules/ingest/rate-limiter.js";
 import { RolesController } from "../src/modules/roles/roles.controller.js";
+import { AdsToolsController } from "../src/modules/ads/ads-tools.controller.js";
 import { ToolsController } from "../src/modules/roles/tools.controller.js";
 import { RunsController } from "../src/modules/runs/runs.controller.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -102,13 +103,44 @@ const ROUTES: RouteCase[] = [
     },
   },
   {
+    name: "GET /tools/ads/catalog",
+    scope: "ads_tools_catalog",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const catalog = vi.fn(ok);
+      const controller = new AdsToolsController({ catalog } as never, { can: async () => true } as never, limiter as never);
+      return { call: async () => await controller.catalog(request), service: catalog };
+    },
+  },
+  {
+    name: "POST /tools/ads/test-results",
+    scope: "ads_tools_result",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const recordResult = vi.fn(ok);
+      const controller = new AdsToolsController({ recordResult } as never, { can: async () => true } as never, limiter as never);
+      const body = { network: "adsgram", format: "rewarded", blockId: null, live: false, outcome: "completed", ms: 100 };
+      return { call: async () => await controller.testResult(request, body), service: recordResult };
+    },
+  },
+  {
     name: "GET /runs/leaderboard",
     scope: "runs:leaderboard",
     key: ACCOUNT_ID,
     build: (limiter) => {
       const leaderboardFor = vi.fn(ok);
-      const controller = new RunsController({} as never, { leaderboardFor } as never, limiter as never);
+      const controller = new RunsController({} as never, { leaderboardFor } as never, limiter as never, {} as never);
       return { call: async () => await controller.leaderboard(request, "easy"), service: leaderboardFor };
+    },
+  },
+  {
+    name: "PUT /runs/:runId/proof",
+    scope: "runs:proof",
+    key: ACCOUNT_ID,
+    build: (limiter) => {
+      const receive = vi.fn(ok);
+      const controller = new RunsController({} as never, {} as never, limiter as never, { receive } as never);
+      return { call: async () => await controller.proof(request, "00000000-0000-4000-8000-000000000099", { proof: "AA==" }), service: receive };
     },
   },
   {
@@ -117,7 +149,7 @@ const ROUTES: RouteCase[] = [
     key: ACCOUNT_ID,
     build: (limiter) => {
       const profile = vi.fn(ok);
-      const controller = new RunsController({} as never, { profile } as never, limiter as never);
+      const controller = new RunsController({} as never, { profile } as never, limiter as never, {} as never);
       return { call: async () => await controller.me(request), service: profile };
     },
   },

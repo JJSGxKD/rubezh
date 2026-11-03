@@ -1,39 +1,219 @@
 [
  {
   "pack": "core",
-  "frames": 141,
-  "atlas": "1024×900",
-  "fill": "78%",
-  "trim": "63% ячейки",
-  "png": "79 КБ",
-  "gpu": "3.5 МБ"
+  "frames": 155,
+  "atlas": "1020×1012",
+  "fill": "81%",
+  "trim": "60% ячейки",
+  "png": "94 КБ",
+  "gpu": "3.9 МБ"
  },
  {
   "pack": "late",
   "frames": 92,
-  "atlas": "1024×1548",
+  "atlas": "1024×1588",
+  "fill": "81%",
+  "trim": "73% ячейки",
+  "png": "113 КБ",
+  "gpu": "6.2 МБ"
+ },
+ {
+  "pack": "r157",
+  "frames": 80,
+  "atlas": "1008×1716",
   "fill": "80%",
-  "trim": "79% ячейки",
-  "png": "112 КБ",
-  "gpu": "6.0 МБ"
+  "trim": "66% ячейки",
+  "png": "125 КБ",
+  "gpu": "6.6 МБ"
  },
  {
   "pack": "env",
-  "frames": 21,
-  "atlas": "1024×168",
-  "fill": "38%",
-  "trim": "57% ячейки",
-  "png": "9 КБ",
-  "gpu": "0.7 МБ"
+  "frames": 33,
+  "atlas": "1020×324",
+  "fill": "61%",
+  "trim": "62% ячейки",
+  "png": "23 КБ",
+  "gpu": "1.3 МБ"
  },
  {
-  "pack": "skins",
-  "frames": 54,
-  "atlas": "1024×596",
-  "fill": "81%",
-  "trim": "54% ячейки",
-  "png": "64 КБ",
-  "gpu": "2.3 МБ"
+  "pack": "skin-herbalist",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-frost",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-gilded",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-dawn",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-keeper_ember",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "19 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-keeper_rushnik",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "22 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-keeper_storm",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-leaf_fall",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-pine_wood",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "19 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-maple",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "21 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-pine_mist",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "23 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-vityaz",
+  "frames": 18,
+  "atlas": "960×264",
+  "fill": "60%",
+  "trim": "36% ячейки",
+  "png": "20 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-vedunya",
+  "frames": 18,
+  "atlas": "976×232",
+  "fill": "78%",
+  "trim": "58% ячейки",
+  "png": "24 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-ohotnitsa",
+  "frames": 18,
+  "atlas": "980×256",
+  "fill": "66%",
+  "trim": "44% ячейки",
+  "png": "21 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-knyaz",
+  "frames": 18,
+  "atlas": "964×256",
+  "fill": "66%",
+  "trim": "42% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
+ },
+ {
+  "pack": "skin-skomoroh",
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "22 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-skomoroh_night",
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "20 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-skomoroh_maslenitsa",
+  "frames": 18,
+  "atlas": "1016×260",
+  "fill": "65%",
+  "trim": "43% ячейки",
+  "png": "22 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-listven",
+  "frames": 18,
+  "atlas": "1024×264",
+  "fill": "69%",
+  "trim": "41% ячейки",
+  "png": "24 КБ",
+  "gpu": "1.0 МБ"
+ },
+ {
+  "pack": "skin-navi",
+  "frames": 18,
+  "atlas": "956×236",
+  "fill": "67%",
+  "trim": "49% ячейки",
+  "png": "20 КБ",
+  "gpu": "0.9 МБ"
  },
  {
   "pack": "ground-neutral",

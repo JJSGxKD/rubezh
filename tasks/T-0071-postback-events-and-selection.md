@@ -27,7 +27,7 @@ shared:
   - docs/30-configuration-map.md
   - docs/23-referral-and-partner-program.md
   - docs/35-stage4-plan.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

@@ -124,18 +124,22 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 19 таблиц плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 26 таблиц плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
  */
 export const WIPE_LOCK_TABLES: readonly string[] = [
   "run_ad_continue",
+  "run_gem_continue",
+  "run_proof",
   "run_reward",
   "run_boost",
   "task_run",
   "run",
   "task_progress",
+  "task_points_claim",
+  "achievement_favorite",
   "showcase_offer",
   "item_event",
   "item",
@@ -149,6 +153,9 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "vip_daily",
   "notification",
   "bot_mention_task",
+  "pass_progress",
+  "pass_claim",
+  "boost_credit",
   "purchase",
   "tester_compensation",
 ];
@@ -170,7 +177,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 19 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 26 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -178,6 +185,10 @@ export const deleteAll: Deleter = async (tx, model) => {
   switch (model) {
     case "RunAdContinue":
       return await tx.runAdContinue.deleteMany({});
+    case "RunGemContinue":
+      return await tx.runGemContinue.deleteMany({});
+    case "RunProof":
+      return await tx.runProof.deleteMany({});
     case "RunReward":
       return await tx.runReward.deleteMany({});
     case "RunBoost":
@@ -188,6 +199,10 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.run.deleteMany({});
     case "TaskProgress":
       return await tx.taskProgress.deleteMany({});
+    case "TaskPointsClaim":
+      return await tx.taskPointsClaim.deleteMany({});
+    case "AchievementFavorite":
+      return await tx.achievementFavorite.deleteMany({});
     case "ShowcaseOffer":
       return await tx.showcaseOffer.deleteMany({});
     case "ItemEvent":
@@ -214,6 +229,12 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.notification.deleteMany({});
     case "BotMentionTask":
       return await tx.botMentionTask.deleteMany({});
+    case "PassProgress":
+      return await tx.passProgress.deleteMany({});
+    case "PassClaim":
+      return await tx.passClaim.deleteMany({});
+    case "BoostCredit":
+      return await tx.boostCredit.deleteMany({});
     default:
       throw new Error(`Модель ${model} не входит в план стирания`);
   }

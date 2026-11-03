@@ -34,7 +34,7 @@
   (`docs/27` §3.5).
 - Интерфейс — React-оболочка на токенах «Сумеречного рубежа», в хорошем
   состоянии; находки — точечные (переносы, свечение, вкладки).
-- Звук — процедурные рецепты с шинами и правилами грани; музыка удалена.
+- Звук — процедурные рецепты с шинами и правилами грани; музыка удалена (с 31.10 — своя, кодом, Р180).
 
 ## Что сделано
 
@@ -107,7 +107,7 @@
 | 3 | Знак под ногами (F-05) | принят — вместе с артом; у героя-фигуры кольца остаются, пока фигура — облик по умолчанию. Р143 |
 | 4 | Вкладки строкой (U-04) | **больше трёх пунктов — строкой** с прокруткой. Р145 |
 | 5 | Размер врага (A-03) | **поле `size`** в контенте, коридор 0,7–2,5. Р144 |
-| 6 | Музыка (S-05) | **ИИ-генератор с коммерческой лицензией**, три трека по брифу `sound.md`, выключатель. Р147 |
+| 6 | Музыка (S-05) | ~~ИИ-генератор с коммерческой лицензией~~ — генератора нет: **три круга кодом** по брифу `sound.md` §4, выключатель. Р147, Р180 |
 | 7 | Облики как монетизация (G-05) | **архетипы целиком**, окрасы палитрами; за деньги — конкретный облик, видный до покупки. Р150 |
 | 8 | Материалы v2 у игрока | приняты; **выключатель «Живой фон»** — сразу (фон, блик, блеск); итоги — реликвией задачей. Р145 |
 | 9 | Размер Стража рубежа (A-09) | решается полем `size` до T-0120. Р144 |
@@ -143,21 +143,26 @@
 ```bash
 node design/art/src/build.mjs          # атласы, земля, отчёт о весе
 node design/art/src/previews.mjs       # листы концепций, бестиария, героя, эффектов
+node design/art/src/frame-fit.mjs      # влезают ли враги и облики героя в кадр: нужный запас `pad` и сверка собранных атласов
 node design/art/src/portraits.mjs      # портреты героя вектором для меню (после build.mjs)
 node design/art/src/logo.mjs           # логотип v2: словесный знак, руна, значок приложения, иконка вкладки → out/brand и оболочка
 node design/art/src/bot-art.mjs        # бренд для картинок бота → backend/api/src/common/card/brand-art.ts (после logo.mjs и portraits.mjs)
 node design/art/src/promo.mjs          # промо 1:1, 16:9, 21:9: сила, награда, вызов → out/promo/*.png и mockups/promo-*.html
+node design/art/src/prologue-board.mjs # раскадровка пролога: 11 кадров на 320 из спрайтов игры → mockups/prologue-v2.html
+node design/art/src/promo-presets.mjs  # стартовые пресеты генератора промо: фоны WebP и документы promo-kit → apps/admin/src/screens/promo/art-starters, mockups/promo-presets-v2.html
 node design/art/src/platform-kit.mjs   # значки площадок 16…1024 и превью Mini App 640×360 → out/platform (после logo.mjs и promo.mjs)
 python3 design/art/src/cvd.py кадр.png -o полоса.png  # кадр глазами дейтеранопа, протанопа и тританопа — проверка нового цвета
 pnpm dev:telegram                       # нужен для следующей строки
 node design/art/src/render-sounds.mjs  # OGG предложенных звуков
+node design/art/src/music.mjs          # музыка: лобби, пульс, босс → packages/app-shell/src/audio/music (нужен ffmpeg с libopus)
 node design/art/src/admin-overflow.mjs # админка на 390 без боковой прокрутки (нужна запущенная панель)
 STATE=state.json PREVIEWS=1 node design/art/src/contrast-audit.mjs  # контраст подписей на экранах и окнах забега из витрины — по пикселям под текстом (нужна запущенная оболочка)
 STATE=state.json node design/art/src/a11y-audit.mjs  # зона касания, имена для диктора, крупный шрифт 130 и 150 % (нужна запущенная оболочка)
 npx http-server . -p 8090               # затем открыть в браузере:
 #   /design/art/prototype/arena.html — прототип
 #   /design/art/mockups/ui-fixes.html — макеты интерфейса
-#   /design/art/audio/index.html — прослушка
+#   /design/art/audio/index.html — прослушка звуков
+#   /design/art/audio/music.html — прослушка музыки, пульс с боссом вместе
 ```
 
 Сборке нужны Playwright с Chromium (`PLAYWRIGHT_MODULE`), Pillow и ffmpeg.

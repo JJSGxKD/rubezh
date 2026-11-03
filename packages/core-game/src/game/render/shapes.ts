@@ -103,13 +103,6 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       // не как подбираемый ромб.
       graphics.fillPoints(points(r, CHEVRON), true);
       return;
-    case "eye":
-      // Кольцо со зрачком: кастер не похож ни на кого из тех, кто бежит на
-      // игрока, и виден в толпе даже без полосы здоровья на экране.
-      graphics.lineStyle(Math.max(2, r * 0.22), spec.color, 1);
-      graphics.strokeCircle(r, r, r * 0.78);
-      graphics.fillCircle(r, r, r * 0.38);
-      return;
     case "mote":
       // Четыре тонких луча: рой не похож ни на тех, кто идёт на игрока, ни на
       // кристалл — у кристалла грани и свет, здесь только острые лучи.
@@ -120,16 +113,6 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       return;
     case "gem_rich":
       drawGem(graphics, spec, true);
-      return;
-    case "bolt":
-      // Снаряд врага: тёмный ореол, цветное тело и почти белое ядро. Раньше
-      // это был ровный красный кружок, и его путали с мелким врагом.
-      graphics.fillStyle(spec.color, 0.25);
-      graphics.fillCircle(r, r, r);
-      graphics.fillStyle(spec.color, 1);
-      graphics.fillCircle(r, r, r * 0.68);
-      graphics.fillStyle(WORLD_COLORS.enemyProjectileCore, 1);
-      graphics.fillCircle(r, r, r * 0.3);
       return;
     case "hexagon":
       graphics.fillPoints(points(r, HEXAGON), true);

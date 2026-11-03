@@ -28,7 +28,7 @@ shared:
   - packages/app-shell/src/i18n/ru-tasks.json
   - packages/app-shell/test/tasks-api.test.ts
   - docs/39-retention-mechanics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -38,7 +38,7 @@ batch: 4
 
 # T-0322. Достижения v2 — «Без единой царапины», «Пацифист», стихийники, «Коллекционер», «Мастер Метеора», «Душа компании»; знаки у трудных
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0322.json)](README.md#значки-статуса) [![T-0321](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0321.json&label=T-0321)](T-0321-run-result-streaks-and-element-kills.md) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](T-0106-achievements-prestige-server.md) [![T-0126](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json&label=T-0126)](T-0126-tasks-kinds-bosses-elites-chests-evolutions.md) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0322.json)](README.md#значки-статуса) [![T-0321](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0321.json&label=T-0321)](archive/T-0321-run-result-streaks-and-element-kills.md) [![T-0106](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0106.json&label=T-0106)](archive/T-0106-achievements-prestige-server.md) [![T-0126](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0126.json&label=T-0126)](T-0126-tasks-kinds-bosses-elites-chests-evolutions.md) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md)
 
 ## Зачем
 
@@ -145,8 +145,9 @@ batch: 4
 
 - Счётчики итога забега — T-0321.
 - «Мастеров» оружия Р157 — T-0323.
-- Значки знаков — дизайнер (`design/art/backlog.md`, п. 18); пока их нет,
-  знак рисуется значком категории (T-0236).
+- Значки знаков — готовы в `screens/meta/emblem-glyphs.tsx` (п. 18 очереди
+  дизайнера, 31.10.2026): у «Без единой царапины» и «Коллекционера» — свои, у
+  стихийников — значок стихии, у «Мастера Метеора» — значок «Метеора».
 
 ## Тесты
 

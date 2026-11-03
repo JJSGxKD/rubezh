@@ -1,10 +1,13 @@
-import type { CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
+import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
+import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
+import type { RubezhState } from "./rubezh";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -16,6 +19,7 @@ import { NEVER_HIT, NO_OWNER_TYPE, type EnemyPool, type GemPool, type PickupPool
 import { pushSimEvent, SIM_EVENT } from "./events";
 import { isElite } from "../patterns";
 import { pickStage, type EnemyStage } from "./stages";
+import { registerPlayerHit } from "./streaks";
 
 export type { EnemyType } from "../patterns/enemy-types";
 export { findStageProblems, pickStage, resolveStages, stageOf, MAX_STAGES, type EnemyStage } from "./stages";
@@ -140,9 +144,34 @@ export interface RunStats {
   elapsedSec: number;
   enemiesSpawned: number;
   enemiesKilled: number;
+  /**
+   * Убитые игроком боссы и элиты — для заданий и достижений. Потомки
+   * делящегося босса рядовые и сюда не идут; растёт только в `killEnemy`,
+   * рядом с `enemiesKilled`, поэтому сумма не превышает общего числа убитых.
+   */
+  bossKills: number;
+  eliteKills: number;
   /** убийства игроком по индексу типа врага */
   killsByType: Uint32Array;
   damageTaken: number;
+  /**
+   * Серии для достижений (Р161, tasks/T-0321) — в тиках: пауза и ожидание
+   * решения о втором шансе тиков не двигают, и серия по ним не растёт.
+   * Без попаданий: тик последнего попадания и самая долгая закрытая серия;
+   * попаданием считается любой урон, дошедший до игрока сквозь неуязвимость, —
+   * в том числе в щит буста, до брони и сопротивления.
+   */
+  lastHitTick: number;
+  longestNoHitTicks: number;
+  /**
+   * Без убийств: тик последнего убийства и самая долгая серия, закрытая
+   * убийством. Хвост от последнего убийства до конца забега не считается —
+   * иначе «отбежать минуту и сдаться» давало бы «Пацифиста».
+   */
+  lastKillTick: number;
+  longestNoKillTicks: number;
+  /** убийства по стихии добивающего удара (индекс — `sim/element-ids.ts`); динамит и прочее без стихии — физическое */
+  killsByElement: Float64Array;
   /** индекс типа врага, нанёсшего смертельный урон; -1 — игрок жив */
   deathCauseType: number;
   shotsFired: number;
@@ -159,6 +188,11 @@ export interface RunStats {
   /** нанесённый урон по индексу стихии (`sim/element-ids.ts`) */
   damageByElement: Float64Array;
   xpCollected: number;
+  /**
+   * Подобранные кристаллы опыта: слитый с соседним — один, улетевший за радиус
+   * удержания и запасной опыт сундука не считаются.
+   */
+  crystalsCollected: number;
   /** подобранные аптечки */
   medkitsCollected: number;
   /** подобранные магниты */
@@ -228,6 +262,106 @@ export interface ChestState {
   openings: ChestOpening[];
 }
 
+/**
+ * Тайник на карте (`sim/secrets.ts`). Позиция фиксируется при создании мира, и
+ * только у огонька она меняется по ходу полёта.
+ */
+export interface SecretSite {
+  kind: SecretKind;
+  /** номер кольца от старта, с нуля; у огонька −1: он не принадлежит кольцу */
+  ring: number;
+  x: number;
+  y: number;
+  /**
+   * Есть ли тайник на карте. У огонька мест нет: до своего часа он «спит», а
+   * потом появляется у игрока. Остальные виды активны с первого тика.
+   */
+  active: boolean;
+  /** отмечен на радаре: найденный или открытый камнем-указателем */
+  visible: boolean;
+  /** игрок вошёл в круг; у огонька — он появился */
+  found: boolean;
+  /** израсходован: капище и клад сработали, камень задет */
+  used: boolean;
+  /**
+   * сколько подряд тиков игрок простоял в круге; вышел — ноль. У древа отсчёт идёт и после
+   * находки: по нему раз в `shieldEverySec` секунд выдаётся щит
+   */
+  holdTicks: number;
+  /** разлом Нави: волна выпущена; остальные виды — всегда `false` */
+  opened: boolean;
+  /** разлом Нави: элиты волны, что ещё живы; слот пула и тип, чтобы переиспользованный слот не считался */
+  wave: SecretWaveEnemy[];
+  /** разлом Нави: сколько тиков идёт волна — по ним отсчитывается срок `timeLimitSec`; остальные виды — ноль */
+  waveTicks: number;
+}
+
+/**
+ * Шаг таблицы элит для волны разлома: с секунды `fromSec` таймлайн уже выпускал элит этих типов
+ * (индексы `enemyTypes`, в порядке появления). Таблица неизменна и собирается из контента.
+ */
+export interface ElitePoolStep {
+  fromSec: number;
+  types: number[];
+}
+
+/** Элита волны разлома: слот в пуле врагов и индекс типа, с которым она вышла. */
+export interface SecretWaveEnemy {
+  slot: number;
+  type: number;
+}
+
+/** Найденный тайник — запись для сцены и аналитики. */
+export interface SecretFound {
+  /** номер тайника в раскладке с нуля */
+  index: number;
+  kind: SecretKind;
+  elapsedSec: number;
+}
+
+/** Использованный тайник: `outcome` — что вышло (id благословения, «opened», «touched»). */
+export interface SecretUsed {
+  index: number;
+  kind: SecretKind;
+  outcome: string;
+  elapsedSec: number;
+}
+
+/** Капище предложило благословения: окно выбора рисует их по этим описаниям. */
+export interface BlessingOffered {
+  index: number;
+  options: BlessingDef[];
+  elapsedSec: number;
+}
+
+/**
+ * Тайники забега. `rng`, `sites`, `offer` и `blessings` — состояние и входят в
+ * снимок; `foundLog`, `usedLog` и `blessingLog` — выход для сцены, её курсор
+ * забирает новые записи, а после восстановления из снимка журналы пусты.
+ */
+export interface SecretState {
+  /** собственный поток случайности: `world.rng` тайники не трогают */
+  rng: Rng;
+  sites: SecretSite[];
+  /**
+   * Элиты, которые таймлайн уже выпускал, по секундам (`buildElitePool`): из них разлом Нави набирает
+   * волну. Неизменна, в снимок не входит — при восстановлении собирается заново из контента.
+   */
+  elitePool: readonly ElitePoolStep[];
+  /**
+   * Выбор благословения отдан игроку: мир стоит, пока не придёт `chooseBlessing`.
+   * Выключено — берётся первое из предложенных, как у ботов и golden-прогонов.
+   */
+  manualBlessing: boolean;
+  /** предложенные благословения; непустое значение означает, что мир ждёт выбора */
+  offer: { siteIndex: number; options: string[] } | null;
+  /** id взятых благословений, в порядке выбора */
+  blessings: string[];
+  foundLog: SecretFound[];
+  usedLog: SecretUsed[];
+  blessingLog: BlessingOffered[];
+}
+
 /** Опыт, уровень и очередь выборов внутри забега. */
 export interface ProgressionState {
   level: number;
@@ -246,6 +380,8 @@ export interface ProgressionState {
   toolsTotal: CardTools;
   /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
   banished: string[];
+  /** сколько раз нажата каждая запись «Предела», в порядке `limitTypes` (`progression/limit.ts`) */
+  limitStacks: number[];
 }
 
 /**
@@ -262,6 +398,22 @@ export interface DifficultyState {
   hpMul: number;
   damageMul: number;
   maxAlive: number;
+  /** сила игрока в очках на последнем пересчёте (подстройка, Р131); без подстройки — 0 */
+  power: number;
+  /** уровень давления на последнем пересчёте; 1 — опорный игрок, без подстройки — 1 */
+  pressureLevel: number;
+  /** сила на старте забега — для аналитики; без подстройки — 0 */
+  startPower: number;
+  /** уровень давления на старте забега; без подстройки — 1 */
+  startPressure: number;
+  /** множитель темпа спавна поверх уровня сложности; без подстройки — 1 */
+  spawnMul: number;
+  /** на сколько секунд раньше открываются ступени врагов (минус — позже); без подстройки — 0 */
+  stageShiftSec: number;
+  /** на сколько отрезков раньше приходят события элит кривой (минус — позже); без подстройки — 0 */
+  eliteLead: number;
+  /** то же для боссов; боссы только вперёд, без подстройки — 0 */
+  bossLead: number;
 }
 
 export interface World {
@@ -281,8 +433,21 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** журнал охоты и время появления врагов (`run/hunt-log.ts`, tasks/T-0292) */
+  hunt: HuntState;
+  /** подстройка давления под силу игрока; `null` — подстройки нет, и забег идёт по кривой единой сложности */
+  pressureRules: PressureDef | null;
+  /** правила тайников рубежа */
+  secretRules: SecretsDef;
+  secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
+  /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
+  rubezh: RubezhState;
+  /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
+  mode: RunMode;
+  /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */
+  prologue: PrologueState | null;
   /**
    * Отдельный поток случайности для новых карточек после переброса и
    * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется
@@ -312,6 +477,8 @@ export interface World {
   boosts: RunBoosts;
   /** прибавки снаряжения и бустов вместе — от них считаются характеристики */
   loadoutModifiers: Partial<Record<LoadoutStat, number>>;
+  /** записи «Предела»; неизменны, нажатия — в `progression.limitStacks` */
+  limitTypes: readonly LimitDef[];
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;
@@ -410,10 +577,13 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.hp[slot] = type.hp * world.difficulty.hpMul * stage.hpMul;
   pool.maxHp[slot] = pool.hp[slot];
   pool.damage[slot] = type.damage * world.difficulty.damageMul * stage.damageMul;
+  // Страж пролога слабее обычного; обычному забегу эта строка ничего не стоит.
+  if (world.prologue !== null) onPrologueSpawn(world, typeIndex, slot);
   pool.hitTick[slot] = NEVER_HIT;
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.stage[slot] = stageIndex;
+  markSpawn(world, slot);
   pool.alive[slot] = 1;
   // Состояние паттерна сбрасывается целиком: слот мог принадлежать врагу с
   // другим поведением, и его фаза рывка не должна достаться новому врагу.
@@ -460,6 +630,10 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
+  // Попадание засчитано до щита, брони и бессмертия разработчика: купленный
+  // щит не облегчает «Без единой царапины».
+  registerPlayerHit(world);
+
   // Щит буста гасит попадание целиком — вместе со стихией: игрок должен
   // понять, что его спасло, а не гадать, почему урон вышел меньше. Короткая
   // неуязвимость после — иначе толпа вокруг сняла бы его в тот же тик.
@@ -479,7 +653,8 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {
-    player.hp -= reduced;
+    // Оберег пролога не даёт здоровью упасть ниже порога; вне пролога это `hp - reduced` как было.
+    player.hp = wardHealth(world, player.hp, player.hp - reduced);
     world.stats.damageTaken += reduced;
   }
   // Рендер обязан показать момент попадания: полоска здоровья в углу — не
@@ -508,7 +683,6 @@ export function spawnProjectile(
   vy: number,
   damage: number,
   ttlSec: number,
-  fromPlayer: boolean,
 ): number {
   const pool = world.projectiles;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxProjectiles);
@@ -522,10 +696,8 @@ export function spawnProjectile(
   pool.vy[slot] = vy;
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
-  pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
-  // Владельца и пробивание выставляет стреляющий после спавна; без сброса
+  // Оружие и пробивание выставляет стреляющий после спавна; без сброса
   // снаряд унаследовал бы их от прежнего снаряда в этом слоте.
-  pool.ownerType[slot] = NO_OWNER_TYPE;
   pool.ownerWeapon[slot] = NO_OWNER_TYPE;
   pool.pierce[slot] = 0;
   pool.lastHit[slot] = -1;

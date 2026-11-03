@@ -222,5 +222,6 @@ function collect(world: World, index: number): void {
   const value = gems.value[index];
   gems.alive[index] = 0;
   gems.aliveCount--;
+  world.stats.crystalsCollected++;
   addXp(world, value);
 }

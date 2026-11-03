@@ -55,7 +55,7 @@ export const SLIDE_PLATFORM_TITLES: Record<SlidePlatform, string> = { telegram: 
 
 const targetSchema = z.discriminatedUnion("kind", [z.object({ kind: z.literal("screen"), screen: z.string() }), z.object({ kind: z.literal("link"), url: z.string() })]);
 
-const slideSchema = z.object({
+export const slideSchema = z.object({
   slideId: z.string(),
   title: z.string(),
   text: z.string(),
@@ -65,6 +65,7 @@ const slideSchema = z.object({
   platforms: z.array(z.string()),
   audience: z.string(),
   pinned: z.boolean(),
+  position: z.number(),
   startsAt: z.string(),
   endsAt: z.string(),
   createdAt: z.string(),
@@ -210,6 +211,29 @@ export function createSlide(api: AdminApi, draft: SlideDraft, now = new Date()):
 
 export function updateSlide(api: AdminApi, slideId: string, draft: SlideDraft, now = new Date()): Promise<ApiResult<TeamSlide>> {
   return api.request(`/home/slides/${encodeURIComponent(slideId)}`, { method: "POST", body: slideRequest(draft, now), schema: slideSchema });
+}
+
+const orderSchema = z.object({ order: z.array(z.string()) });
+
+export type SlideGroup = "pinned" | "regular";
+
+/** Новый порядок группы: id слайдов в нужном порядке, одним запросом. */
+export function reorderSlides(api: AdminApi, group: SlideGroup, ids: readonly string[]): Promise<ApiResult<{ order: string[] }>> {
+  return api.request("/home/slides/order", { method: "POST", body: { group, ids }, schema: orderSchema });
+}
+
+/**
+ * Список панели по группам: у закреплённых и остальных свой ручной порядок,
+ * снятые — отдельно, без ручек. Порядок внутри группы — как в ответе сервера.
+ */
+export function slideGroups(slides: readonly TeamSlide[]): { pinned: TeamSlide[]; regular: TeamSlide[]; archived: TeamSlide[] } {
+  const groups: { pinned: TeamSlide[]; regular: TeamSlide[]; archived: TeamSlide[] } = { pinned: [], regular: [], archived: [] };
+  for (const slide of slides) {
+    if (slide.state === "archived") groups.archived.push(slide);
+    else if (slide.pinned) groups.pinned.push(slide);
+    else groups.regular.push(slide);
+  }
+  return groups;
 }
 
 export function archiveSlide(api: AdminApi, slideId: string): Promise<ApiResult<TeamSlide>> {

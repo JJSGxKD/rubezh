@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type KeyValueStorage, type PlatformAdapter } from "@bh/shared-types";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { badgeText, useBadges } from "../src/state/badges";
@@ -7,6 +7,8 @@ import { useItems } from "../src/state/items";
 import { createItemsApi, markItemsSeen, type InventoryView, type ItemView } from "../src/state/items-api";
 import { createNotificationsApi, formatWhen, loadFeed, markRead } from "../src/state/notifications-api";
 import { describeNotification } from "../src/screens/meta/notifications";
+import { t } from "../src/i18n";
+import "../src/i18n/history";
 import { initShell } from "../src/state/shell";
 
 // Знаки меню и лента уведомлений на клиенте (docs/35-stage4-plan.md Р50, Р51,
@@ -21,7 +23,7 @@ interface Call {
 }
 
 function server(calls: Call[], answers: Record<string, unknown>): ApiRequest {
-  return async <T,>(path: string, schema: { parse?: unknown } & object, init: { method: "GET" | "POST" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
+  return async <T,>(path: string, schema: { parse?: unknown } & object, init: { method: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown }): Promise<ApiResult<T>> => {
     calls.push({ path, method: init.method, ...(init.body === undefined ? {} : { body: init.body }) });
     const key = Object.keys(answers).find((prefix) => path.startsWith(prefix));
     if (key === undefined) return { ok: false, failure: "unavailable" };
@@ -108,6 +110,17 @@ describe("знаки меню и уведомления на клиенте", ()
     expect(useBadges.getState().arsenal).toBe(1);
   });
 
+  it("отметка, которую сервер принял, перечитывает знаки один раз; сбой и пустой список — нет", async () => {
+    const calls: Call[] = [];
+    const refresh = vi.fn(async () => undefined);
+    await markItemsSeen(["a"], createItemsApi(server(calls, { "/api/v1/items/seen": { marked: 1 } })), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await markItemsSeen(["a"], createItemsApi(server(calls, {})), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await markItemsSeen([], createItemsApi(server(calls, { "/api/v1/items/seen": { marked: 1 } })), refresh);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
   it("сборка без входа ничего не спрашивает", async () => {
     mount(false);
     expect(await loadFeed(null)).toEqual({ ok: false, failure: "disabled" });
@@ -130,5 +143,119 @@ describe("уведомление о версии при скрытом журн�
     expect(described?.text).toContain("0.6.0");
     expect(described?.target).toBeNull();
     expect(described?.over).toBeUndefined();
+  });
+});
+
+describe("напоминания бота в ленте (T-0128)", () => {
+  const AT = "2026-11-04T09:00:00.000Z";
+  const row = (kind: string, data: Record<string, unknown>) => describeNotification({ id: "n4", kind, data, createdAt: AT, read: false });
+
+  it("обогнали: сложность и место из данных, ведёт на вкладку рейтинга", () => {
+    const described = row("season_overtaken", { difficulty: "hard", place: 7 });
+
+    expect(described?.text).toBe("Тебя обогнали в недельном сезоне «Рубежа»: на сложности «Сложная» ты теперь на 7-м месте. До закрытия сезона можно отыграться.");
+    expect(described?.target).toBe("rating");
+    expect(described?.over).toBeUndefined();
+    expect(described?.icon).toBeDefined();
+  });
+
+  it("обогнали: неизвестная сложность или место не числом — строки нет, а не «undefined» в тексте", () => {
+    expect(row("season_overtaken", { difficulty: "nightmare", place: 7 })).toBeNull();
+    expect(row("season_overtaken", { difficulty: "hard", place: "7" })).toBeNull();
+    expect(row("season_overtaken", {})).toBeNull();
+  });
+
+  it("сезон закрывается: время закрытия по Москве, ведёт на вкладку рейтинга", () => {
+    // Конец сезона — понедельник 00:00 UTC, то есть 03:00 по Москве.
+    const described = row("season_closing", { endsAt: "2026-11-09T00:00:00.000Z" });
+
+    expect(described?.text).toBe("Недельный сезон «Рубежа» закрывается завтра в 03:00 по Москве. Награды за порог и за место получат те, кто попал в таблицу, — успей улучшить результат.");
+    expect(described?.target).toBe("rating");
+  });
+
+  it("сезон закрывается: срок не датой — строки нет", () => {
+    expect(row("season_closing", { endsAt: "скоро" })).toBeNull();
+    expect(row("season_closing", {})).toBeNull();
+  });
+
+  it("награда дня: текст бота, касание открывает экран награды поверх ленты", () => {
+    const described = row("daily_reward_ready", {});
+
+    expect(described?.text).toBe("Награда дня ждёт тебя в «Рубеже». Загляни и забери её сегодня.");
+    expect(described?.target).toBe("daily");
+    expect(described?.over).toBe(true);
+  });
+});
+
+describe("уведомление об отписке от канала (T-0177)", () => {
+  const AT = "2026-10-28T10:00:00.000Z";
+  const CLOSED_UNTIL = "2026-11-27T09:00:00.000Z";
+
+  function unsubscribed(data: Record<string, unknown>) {
+    return describeNotification({ id: "n3", kind: "task_unsubscribed", data, createdAt: AT, read: false });
+  }
+
+  it("награда списана: «Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.»; никуда не ведёт, иконка есть", () => {
+    const described = unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: null });
+
+    expect(described?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.");
+    expect(described?.target).toBeNull();
+    expect(described?.icon).toBeDefined();
+    expect(described?.title).toBeUndefined();
+  });
+
+  it("все суммы нули — награда уже потрачена, списывать нечего", () => {
+    const described = unsubscribed({ title: "Рубеж", coins: 0, gems: 0, shards: 0, closedUntil: null });
+
+    expect(described?.text).toBe("Отписка от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего.");
+  });
+
+  it("срок закрытия задан — строка заканчивается фразой «Партнёрские задания закрыты до …» с датой, а не словом «только что»", () => {
+    const taken = unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL });
+    const spent = unsubscribed({ title: "Рубеж", coins: 0, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL });
+
+    expect(taken?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет. Партнёрские задания закрыты до 27 ноября.");
+    expect(spent?.text).toBe("Отписка от канала «Рубеж»: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.");
+  });
+
+  it("без названия: «Отписка от канала партнёра: …»", () => {
+    expect(unsubscribed({ title: null, coins: 100, gems: 0, shards: 0, closedUntil: null })?.text).toBe("Отписка от канала партнёра: награда за подписку списана — 100 монет.");
+    expect(unsubscribed({ title: null, coins: 0, gems: 0, shards: 0, closedUntil: CLOSED_UNTIL })?.text).toBe(
+      "Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего. Партнёрские задания закрыты до 27 ноября.",
+    );
+  });
+
+  it("части списанного — через «и», ненулевые только; склонение по числу", () => {
+    const text = (data: Record<string, unknown>) => unsubscribed({ title: "Рубеж", closedUntil: null, ...data })?.text;
+
+    expect(text({ coins: 1, gems: 0, shards: 0 })).toContain("списана — 1 монета.");
+    expect(text({ coins: 2, gems: 0, shards: 0 })).toContain("списана — 2 монеты.");
+    expect(text({ coins: 5, gems: 0, shards: 0 })).toContain("списана — 5 монет.");
+    expect(text({ coins: 0, gems: 1, shards: 0 })).toContain("списана — 1 самоцвет.");
+    expect(text({ coins: 0, gems: 3, shards: 0 })).toContain("списана — 3 самоцвета.");
+    expect(text({ coins: 0, gems: 0, shards: 11 })).toContain("списана — 11 осколков.");
+    expect(text({ coins: 0, gems: 0, shards: 21 })).toContain("списана — 21 осколок.");
+    expect(text({ coins: 100, gems: 5, shards: 0 })).toContain("списана — 100 монет и 5 самоцветов.");
+    expect(text({ coins: 100, gems: 5, shards: 2 })).toContain("списана — 100 монет и 5 самоцветов и 2 осколка.");
+  });
+
+  it("данные другого вида не роняют ленту: строка вместо числа — нуль, не-дата и не-строка — как «не заданы»", () => {
+    expect(() => unsubscribed({ title: 5, coins: "100", gems: null, shards: Number.NaN, closedUntil: 12 })).not.toThrow();
+    expect(unsubscribed({ title: 5, coins: "100", gems: null, shards: Number.NaN, closedUntil: 12 })?.text).toBe(
+      "Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего.",
+    );
+    expect(unsubscribed({ title: "Рубеж", coins: 100, gems: 0, shards: 0, closedUntil: "не дата" })?.text).toBe("Отписка от канала «Рубеж»: награда за подписку списана — 100 монет.");
+    expect(unsubscribed({})?.text).toBe("Отписка от канала партнёра: награда за подписку уже потрачена, списывать нечего.");
+    expect(unsubscribed({ coins: -5, gems: 1.5, shards: Number.POSITIVE_INFINITY })?.text).toContain("уже потрачена");
+  });
+
+  it("лишние поля игнорируются, а название со скобками подстановки читается как текст", () => {
+    const described = unsubscribed({ title: "{returned} {closed}", coins: 100, gems: 0, shards: 0, closedUntil: null, extra: "лишнее" });
+
+    expect(described?.text).toBe("Отписка от канала «{returned} {closed}»: награда за подписку списана — 100 монет.");
+  });
+
+  it("подпись причины в истории игрока — «Списание награды за отписку»", () => {
+    expect(t("history.reason.task_revoke")).toBe("Списание награды за отписку");
   });
 });

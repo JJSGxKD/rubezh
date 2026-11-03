@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import { BattlePassService } from "../battle-pass/battle-pass.service.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
 import { imagePath } from "../media/image-rules.js";
 import { MediaService } from "../media/media.service.js";
@@ -15,6 +16,7 @@ import {
   TaskNotFoundError,
   TaskNotJoinedError,
   TaskNotOpenedError,
+  TaskOrderMismatchError,
   TaskShapeLockedError,
 } from "./tasks-errors.js";
 import {
@@ -23,22 +25,28 @@ import {
   TASK_KIND_IDS,
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
+  TASK_SORT_MAX,
   countsForTasks,
   isCheckedKind,
   isRunKind,
   rewardReason,
   slotsFor,
+  taskGroup,
   visibleOn,
+  type AchievementCategory,
   type PoolTier,
   type RunFilter,
   type TaskCategory,
   type TaskDef,
+  type TaskGroup,
   type TaskKind,
   type TaskParticipation,
   type TaskPeriod,
   type TaskRun,
 } from "./task-rules.js";
 import { inPlay, rotationAt } from "./task-pool.js";
+import { readyCount, type PointsPeriod, type PointsView } from "./task-points.js";
+import { TaskPointsService, type PointsClaimResult } from "./task-points.service.js";
 import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepository } from "./tasks.repository.js";
 
 /**
@@ -89,6 +97,18 @@ export interface TaskView {
   tier: PoolTier | null;
   /** оружие, стихия или сложность цели — по ним клиент строит текст */
   filter: RunFilter | null;
+  /**
+   * Категория достижения (бой, коллекция, мастерство, друзья); у заданий — `null`. Не
+   * `category`: так уже названа вкладка игрока.
+   */
+  achievementCategory: AchievementCategory | null;
+  /** лестница достижений и номер ступени с единицы; у остальных — `null` */
+  ladder: string | null;
+  rung: number | null;
+  /** очки престижа за выполненное; у заданий — ноль */
+  prestige: number;
+  /** скрытое достижение — в список попадает уже открытым */
+  hidden: boolean;
 }
 
 export interface TaskCatalogView {
@@ -128,6 +148,8 @@ export class TasksService implements OnModuleInit {
     private readonly memberships: ChannelMemberships,
     private readonly media: MediaService,
     private readonly restrictions: AccountRestrictions,
+    @Optional() private readonly points?: TaskPointsService,
+    @Optional() private readonly pass?: BattlePassService,
   ) {}
 
   onModuleInit(): void {
@@ -139,18 +161,30 @@ export class TasksService implements OnModuleInit {
     return viewOf(defs, progress, participation, at);
   }
 
+  /** Полоса очков дня и недели; `null` — сервис очков не подключён (старый состав модуля). */
+  async pointsView(accountId: string, at = new Date()): Promise<PointsView | null> {
+    return this.points === undefined ? null : await this.points.view(accountId, at);
+  }
+
+  /** Забор награды за ступень очков — отдельный сервис, здесь только вход для ручки. */
+  async claimPoints(account: AccountRef, period: PointsPeriod, points: number, at = new Date()): Promise<PointsClaimResult> {
+    if (this.points === undefined) throw new Error("очки заданий не подключены");
+    return await this.points.claim(account, period, points, at);
+  }
+
   async claim(account: AccountRef, taskId: string, at = new Date()): Promise<TaskClaimResult> {
     const { accountId } = account;
     const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined) throw new TaskNotFoundError();
-    // Партнёрские задания закрыты ограничением (WP44); цели забега — нет.
-    if (!isRunKind(def.kind)) await this.restrictions.ensure(accountId, "partner_tasks", at);
+    // Партнёрские задания закрыты ограничением (WP44); цели забега и состояния игрока — нет.
+    if (isCheckedKind(def.kind)) await this.restrictions.ensure(accountId, "partner_tasks", at);
     // Мест нет, а игрок к цели не переходил — бота спрашивать незачем.
     if (!slotsFor(def.limit, participation.get(taskId) ?? null, at).visible) throw this.limitReached(accountId, taskId);
     let row = progress.find((candidate) => candidate.taskId === taskId);
     if (row === undefined || !row.done) {
-      if (isRunKind(def.kind)) throw new TaskNotDoneError();
+      // Забег и состояние игрока засчитывает сервер сам: нажатием их не выполнить.
+      if (!isCheckedKind(def.kind)) throw new TaskNotDoneError();
       if (OPEN_KINDS.has(def.kind)) throw new TaskNotOpenedError();
       await this.checkJoined(account, def);
       const completed = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
@@ -181,8 +215,25 @@ export class TasksService implements OnModuleInit {
       credited[field] = result.credited;
     }
     const claimed = await this.db(this.repository.markClaimed(accountId, taskId, done.periodStart, at));
-    if (claimed) this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
+    if (claimed) {
+      this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
+      await this.awardPassPoints(accountId, taskId, def.passPoints, at);
+    }
     return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at) };
+  }
+
+  /**
+   * Очки пасса за забранное задание (T-0311). Только тому, чья отметка «забрано» встала первой, —
+   * поэтому повтор и гонка очков не удваивают. Сбой очков не отменяет забор: награда уже выдана
+   * и отмечена, а упавшую прибавку команда видит по строке `pass_points_failed`.
+   */
+  private async awardPassPoints(accountId: string, taskId: string, points: number, at: Date): Promise<void> {
+    if (this.pass === undefined || points <= 0) return;
+    try {
+      await this.pass.addTaskPoints(accountId, points, at);
+    } catch (error: unknown) {
+      this.logger.error(JSON.stringify({ module: "tasks", event: "pass_points_failed", accountId, taskId, points, reason: error instanceof Error ? error.message : String(error) }));
+    }
   }
 
   /**
@@ -252,12 +303,17 @@ export class TasksService implements OnModuleInit {
     if (!joined) throw new TaskNotJoinedError();
   }
 
-  /** Знак меню: сколько наград можно забрать прямо сейчас (Р50). */
+  /**
+   * Знак меню: сколько наград можно забрать прямо сейчас (Р50) — выполненные
+   * задания и готовые ступени очков (T-0105): игрок видит «есть что забрать»
+   * и там, где задания уже забраны.
+   */
   async badge(accountId: string, at = new Date()): Promise<number> {
-    const [progress, active] = await Promise.all([this.db(this.repository.progress(accountId, at)), this.active()]);
+    const [progress, active, points] = await Promise.all([this.db(this.repository.progress(accountId, at)), this.active(), this.pointsView(accountId, at)]);
     // Невыбранное из пула забрать нельзя, значит и знак его не считает.
     const playing = new Set(inPlay(active, at).map((def) => def.taskId));
-    return progress.filter((row) => row.done && !row.claimed && playing.has(row.taskId)).length;
+    const tasks = progress.filter((row) => row.done && !row.claimed && playing.has(row.taskId)).length;
+    return tasks + (points === null ? 0 : readyCount(points));
   }
 
   /** Весь каталог, и выключенное, с видами и сроками для формы — панели. */
@@ -269,12 +325,16 @@ export class TasksService implements OnModuleInit {
 
   /**
    * Строка каталога из панели: новый id — новое задание, известный — правка
-   * цели, награды, текста, места и включённости. Срок и вид после создания
-   * не меняются. Каждое изменение — в аудит.
+   * цели, награды, текста и включённости. Срок и вид после создания не
+   * меняются. Место в списке правкой не задаётся: новое задание встаёт в конец
+   * своего списка, у существующего остаётся прежнее — его меняет только
+   * `reorder`. Каждое изменение — в аудит.
    */
-  async save(actor: AccountRef, task: TaskDef, at = new Date()): Promise<TaskDef> {
+  async save(actor: AccountRef, input: TaskDef, at = new Date()): Promise<TaskDef> {
     await this.roles.require(actor, "tasks.edit");
-    const before = (await this.db(this.repository.catalog())).find((candidate) => candidate.taskId === task.taskId) ?? null;
+    const catalog = await this.db(this.repository.catalog());
+    const before = catalog.find((candidate) => candidate.taskId === input.taskId) ?? null;
+    const task: TaskDef = { ...input, sort: before === null ? endOfList(catalog, input) : before.sort };
     // Картинка — загруженная и того вида, что нужен строке задания: квадрат, а
     // не слайд. Прежнюю не перепроверяем — она уже у игроков.
     if (task.image !== null && task.image !== before?.image) await this.media.require(task.image, "task");
@@ -289,6 +349,43 @@ export class TasksService implements OnModuleInit {
     this.forgetCatalog();
     this.logger.log(JSON.stringify({ module: "tasks", event: before === null ? "task_created" : "task_updated", taskId: task.taskId, actor: actor.accountId }));
     return task;
+  }
+
+  /**
+   * Новый порядок списка из панели (Р52, T-0167): `ids` — ровно члены группы в
+   * нужном порядке. Одной транзакцией, повтор того же порядка ничего не пишет и
+   * в аудит не идёт. Состав не совпал — список изменился у другого администратора,
+   * и панель просят обновиться, а не молча перезаписывают.
+   */
+  async reorder(actor: AccountRef, group: TaskGroup, ids: readonly string[], at = new Date()): Promise<{ order: string[] }> {
+    await this.roles.require(actor, "tasks.edit");
+    const result = await this.db(this.repository.reorder(group, ids, actor.accountId, at));
+    if (result.status === "mismatch") throw new TaskOrderMismatchError();
+    if (result.changed) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.reorder", target: group, before: { order: result.before }, after: { order: result.after } });
+      this.forgetCatalog();
+      this.logger.log(JSON.stringify({ module: "tasks", event: "tasks_reordered", group, actor: actor.accountId }));
+    }
+    return { order: result.after };
+  }
+
+  /**
+   * Состояние игрока (число друзей, уровень аккаунта) — прогресс «максимум» без записи
+   * забега. Дельты строит витрина достижений, которая и знает, какие числа прочитаны.
+   */
+  async applyState(accountId: string, deltas: readonly TaskDelta[], at = new Date()): Promise<void> {
+    if (deltas.every((delta) => delta.amount <= 0)) return;
+    await this.db(this.repository.applyState(accountId, deltas, at));
+  }
+
+  /** Включённые достижения с категорией — то, что показывает витрина; из того же кеша, что и цели забега. */
+  async achievementDefs(): Promise<TaskDef[]> {
+    return (await this.active()).filter((def) => def.period === "achievement" && def.category !== null && !isCheckedKind(def.kind));
+  }
+
+  /** Прогресс игрока по включённым целям — достижения лежат в нём с общим днём срока. */
+  async progressRows(accountId: string, at = new Date()): Promise<TaskProgressRow[]> {
+    return await this.db(this.repository.progress(accountId, at));
   }
 
   /**
@@ -338,6 +435,13 @@ export class TasksService implements OnModuleInit {
   }
 }
 
+/** Место нового задания: после последнего в своём списке, не выше потолка схемы; в пустом — ноль. */
+function endOfList(catalog: readonly TaskDef[], task: Pick<TaskDef, "kind" | "period">): number {
+  const group = taskGroup(task);
+  const sorts = catalog.filter((candidate) => taskGroup(candidate) === group).map((candidate) => candidate.sort);
+  return sorts.length === 0 ? 0 : Math.min(TASK_SORT_MAX, Math.max(...sorts) + 1);
+}
+
 /** Начало мягкого часа: переход раньше — место уже не держится. */
 function graceSince(at: Date): Date {
   return new Date(at.getTime() - TASK_LIMIT_GRACE_MIN * 60_000);
@@ -350,15 +454,22 @@ function withCompleted(participation: ReadonlyMap<string, TaskParticipation>, ta
 }
 
 /**
- * Цели в порядке каталога: срок, место, id. Не двигавшаяся цель — с нулём.
+ * Цели в порядке панели: место (`sort`), при равном — id. Каталог отдаёт их
+ * по сроку, а порядок задаёт геймдизайнер перетаскиванием, в том числе
+ * на вкладке «Партнёры», где лежат задания разных сроков (Р118). Не
+ * двигавшаяся цель — с нулём.
  * Цель с исчерпанным лимитом, к которой игрок не переходил, не показывается.
  */
 export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[], participation: ReadonlyMap<string, TaskParticipation> = new Map(), at = new Date()): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
-  return defs.flatMap((def) => {
+  // Сравнение строк, а не `localeCompare`: порядок не должен зависеть от локали сервера.
+  const ordered = [...defs].sort((a, b) => a.sort - b.sort || (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0));
+  return ordered.flatMap((def) => {
     const place = slotsFor(def.limit, participation.get(def.taskId) ?? null, at);
     if (!place.visible) return [];
     const row = byTask.get(def.taskId);
+    // Закрытое скрытое достижение не показывается вовсе: его название и цель игрок не должен узнать раньше времени.
+    if (def.hidden && !(row?.done ?? false)) return [];
     const slots = place.slots === null ? null : { left: place.slots.left, total: place.slots.total, holdUntil: place.slots.holdUntil?.toISOString() ?? null };
     return {
       id: def.taskId,
@@ -377,6 +488,11 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       image: def.image === null ? null : imagePath(def.image),
       tier: def.tier,
       filter: def.filter,
+      achievementCategory: def.category,
+      ladder: def.ladder,
+      rung: def.rung,
+      prestige: def.prestige,
+      hidden: def.hidden,
     };
   });
 }

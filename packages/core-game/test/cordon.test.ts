@@ -1,7 +1,7 @@
 import type { MapDef, TimelineSegmentDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { MAPS } from "../src/content/maps";
-import { CORDON_PHASE } from "../src/game/patterns";
+import { CORDON_FORM_SEC, CORDON_PHASE } from "../src/game/patterns";
 import { damageEnemy } from "../src/game/sim/combat";
 import { checksumWorld } from "../src/game/sim/checksum";
 import { vectorLength } from "../src/game/sim/vector";
@@ -18,15 +18,11 @@ function fromCenter(run: ReturnType<typeof createCordonRun>, index: number): num
   return vectorLength(run.world.enemies.x[index] - run.world.cordon.centerX, run.world.enemies.y[index] - run.world.cordon.centerY);
 }
 
-/** Через сколько секунд все стражи на местах: путь снаружи на скорости стража за вычетом того, что место уходит внутрь. */
-function arrivalSec(run: ReturnType<typeof createCordonRun>): number {
-  const view = run.world.config.view;
-  const speed = 40 - CORDON_RING.shrinkPerSec;
-  return (view.spawnRadius + 48 - CORDON_RING.radius) / speed + 3;
-}
+/** Строй сформирован: вспышка погасла, дальше только сжатие. */
+const FORMED_SEC = CORDON_FORM_SEC + 0.2;
 
-describe("приход стражей", () => {
-  it("событие на нулевой секунде: сорок стражей снаружи, центр — там, где стоял игрок", () => {
+describe("строй на радиусе кольца", () => {
+  it("событие на нулевой секунде: сорок стражей на радиусе кольца, центр — там, где стоял игрок", () => {
     const run = createCordonRun();
     stepRun(run);
     const guards = aliveGuards(run.world);
@@ -35,8 +31,8 @@ describe("приход стражей", () => {
     expect(run.world.cordon.active).toBe(true);
     expect(run.world.cordon.centerX).toBe(run.world.player.x);
     expect(run.world.cordon.centerY).toBe(run.world.player.y);
-    // за шаг страж уже прошёл не больше своей скорости: допуск на один шаг
-    for (const index of guards) expect(fromCenter(run, index)).toBeGreaterThanOrEqual(run.world.config.view.spawnRadius - 1);
+    // строй стоит сразу на радиусе кольца, а не на радиусе спавна за краем экрана
+    for (const index of guards) expect(Math.abs(fromCenter(run, index) - CORDON_RING.radius)).toBeLessThanOrEqual(1);
   });
 
   it("центр — позиция игрока в тик события, а не нуль", () => {
@@ -47,9 +43,9 @@ describe("приход стражей", () => {
     expect([run.world.cordon.centerX, run.world.cordon.centerY]).toEqual([123, -45]);
   });
 
-  it("все стражи доходят: фаза «держит место», на расстоянии радиуса кольца", () => {
+  it("стражи стоят на местах сразу: после вспышки фаза «держит место», на расстоянии радиуса кольца", () => {
     const run = createCordonRun();
-    advanceRun(run, arrivalSec(run));
+    advanceRun(run, FORMED_SEC);
     const guards = aliveGuards(run.world);
 
     expect(guards).toHaveLength(40);
@@ -64,7 +60,7 @@ describe("приход стражей", () => {
 describe("сжатие", () => {
   it("радиус сжимается на shrinkPerSec в секунду, стражи идут за ним; на minRadius останавливается", () => {
     const run = createCordonRun();
-    advanceRun(run, arrivalSec(run));
+    advanceRun(run, FORMED_SEC);
     const before = run.world.cordon.radius;
 
     advanceRun(run, 3);
@@ -72,7 +68,7 @@ describe("сжатие", () => {
     for (const index of aliveGuards(run.world)) expect(Math.abs(fromCenter(run, index) - run.world.cordon.radius)).toBeLessThanOrEqual(5);
 
     // радиус кончился на пределе раньше, чем вышло время кольца
-    advanceRun(run, 25 - arrivalSec(run) - 3);
+    advanceRun(run, 25 - FORMED_SEC - 3);
     expect(run.world.cordon.active).toBe(true);
     expect(run.world.cordon.radius).toBe(CORDON_RING.minRadius);
     advanceRun(run, 4);
@@ -103,7 +99,7 @@ describe("конец кольца", () => {
 
   it("по убийству: когда убиты все, на следующем тике кольцо неактивно, добыча — по обычным правилам", () => {
     const run = createCordonRun({ loot: true });
-    advanceRun(run, arrivalSec(run));
+    advanceRun(run, FORMED_SEC);
     for (const index of aliveGuards(run.world)) damageEnemy(run.world, index, 1e9, 0);
     stepRun(run);
 
@@ -114,7 +110,7 @@ describe("конец кольца", () => {
 
   it("убит не весь строй — кольцо живёт и сжимается дальше", () => {
     const run = createCordonRun();
-    advanceRun(run, arrivalSec(run));
+    advanceRun(run, FORMED_SEC);
     for (const index of aliveGuards(run.world).slice(0, 39)) damageEnemy(run.world, index, 1e9, 0);
     advanceRun(run, 1);
     expect(run.world.cordon.active).toBe(true);
@@ -178,7 +174,7 @@ describe("потолок живых", () => {
 describe("страж на своём месте", () => {
   it("не уносится вперёд, как отставший: игрок далеко, а строй стоит", () => {
     const run = createCordonRun();
-    advanceRun(run, arrivalSec(run));
+    advanceRun(run, FORMED_SEC);
     const recycled = run.world.stats.enemiesRecycled;
     const before = aliveGuards(run.world).map((index) => [run.world.enemies.x[index], run.world.enemies.y[index]]);
 

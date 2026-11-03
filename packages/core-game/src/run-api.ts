@@ -1,4 +1,5 @@
-import type { CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunOutcome, RunResult, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { ContentSnapshot } from "./content/snapshot";
+import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunMode, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -93,6 +94,13 @@ export const RADAR_BLIP = {
   dynamite: 4,
   chest: 5,
   freeze: 6,
+  // Тайники рубежа (Р153): вид читается цветом и формой, поэтому у каждого свой код.
+  shrine: 7,
+  hoard: 8,
+  stone: 9,
+  tree: 10,
+  rift: 11,
+  wisp: 12,
 } as const;
 
 export type RadarBlipKind = (typeof RADAR_BLIP)[keyof typeof RADAR_BLIP];
@@ -185,7 +193,7 @@ export type RunPauseReason = "manual" | "app_inactive" | "restored";
  * Версия формата снимка. Меняется при любой правке снимка или мира: старое
  * сохранение тогда не продолжается, а не продолжается криво.
  */
-export const RUN_SNAPSHOT_FORMAT = 7;
+export const RUN_SNAPSHOT_FORMAT = 9;
 
 /**
  * Снимок прерванного забега — по нему забег продолжается после сворачивания,
@@ -204,6 +212,8 @@ export interface RunSnapshot {
   mapId: string;
   difficultyId: DifficultyId;
   startingWeaponId: string;
+  /** режим забега; нет поля — `endless` (снимок прошлой сборки пролога не знал), формат из-за него не меняется */
+  mode?: RunMode;
   summary: RunSnapshotSummary;
   /** состояние мира; формат знает только движок */
   world: unknown;
@@ -241,8 +251,14 @@ export interface RunOptions {
   /** куда встроить канву забега */
   container: HTMLElement;
   seed: number;
-  /** на старте режим один — бесконечный (решение Р8) */
-  mode: "endless";
+  /**
+   * Режим забега. `endless` — бесконечный (решение Р8); `prologue` — пролог первого
+   * забега аккаунта (Р151, T-0278): три минуты, оберег не даёт умереть, первый сундук
+   * большой, на первом выборе «Советуем», в конце — Страж рубежа и победа. Сложность
+   * пролога движок ставит сам («лёгкая»), `difficultyId` в нём не читается. Режим
+   * попадает в снимок, итог и запись забега; продолженный забег берёт режим из снимка.
+   */
+  mode: RunMode;
   mapId: string;
   /** уровень сложности; неизвестный id — базовая сложность без поправок */
   difficultyId: DifficultyId;
@@ -284,11 +300,20 @@ export interface RunOptions {
    */
   runId?: string;
   /**
-   * Останавливать забег, когда игрок открыл сундук: оболочка показывает окно
-   * наград и отвечает `closeChest`. Без поля сундук открывается на ходу, а
-   * награды приходят событием `chestOpened`.
+   * Останавливать забег, когда игрок открыл сундук или отстоял капище: оболочка
+   * показывает окно наград и отвечает `closeChest`, у капища — окно выбора
+   * благословения и отвечает `chooseBlessing`. Без поля сундук открывается на
+   * ходу (награды приходят событием `chestOpened`), а капище берёт первое из
+   * предложенных благословений.
    */
   pauseOnChest?: boolean;
+  /**
+   * Контент забега (docs/19-content-admin.md §3). Без поля — боевой
+   * `CONTENT_SNAPSHOT`, и забег побитно прежний; песочница редактора баланса
+   * подаёт сюда черновик. Хэш чужого снимка уходит в итог забега вместо
+   * `CONTENT_HASH`.
+   */
+  content?: ContentSnapshot;
 }
 
 /**
@@ -321,9 +346,10 @@ export interface RunEvents {
    * придёт в итоге, — по нему сервер сверяет итог со своим временем начала
    * (docs/34-stage3-plan.md, WP4). Сложность и стартовое оружие — те, что
    * выбрал сам движок: пустое оружие в опциях значит «по умолчанию», и
-   * оболочка не знает, какое это.
+   * оболочка не знает, какое это. `pressure` — сила игрока и давление на старте
+   * (подстройка, Р131); нет поля — подстройки не было.
    */
-  started: { runId: string; difficultyId: DifficultyId; startingWeaponId: string };
+  started: { runId: string; difficultyId: DifficultyId; startingWeaponId: string; pressure?: RunPressureStart };
   /**
    * Игрок умер, но второй шанс ещё есть: мир стоит и ждёт решения оболочки —
    * `continueRun` или `declineContinue`. `result` — итог, каким он будет при
@@ -365,11 +391,42 @@ export interface RunEvents {
    * (аптечка, опыт).
    */
   chestOpened: { index: number; size: ChestSize; rewards: ChestReward[]; fallbacks: number; elapsedSec: number };
+  /** игрок вошёл в круг тайника (аналитика и значки радара); огонёк — он появился */
+  secretFound: { index: number; kind: SecretKind; elapsedSec: number };
+  /**
+   * Тайник использован: `outcome` — id благословения у капища, `opened` у клада,
+   * `touched` у камня-указателя. Клад отдаёт сундук тем же путём, что сундуки забега
+   * (`chestFound` / `chestOpened`).
+   */
+  secretUsed: { index: number; kind: SecretKind; outcome: string; elapsedSec: number };
+  /**
+   * Капище предложило благословения. С `pauseOnChest` мир стоит, пока оболочка не
+   * ответит `chooseBlessing`; без неё первое из предложенных уже взято.
+   */
+  secretBlessing: { index: number; options: BlessingDef[]; elapsedSec: number };
   /**
    * Кольцо стражей закончилось (аналитика, `ring_ended`): `outcome` — прорвался,
    * выстоял до конца времени или погиб в кольце; сообщение приходит один раз на кольцо.
    */
   ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
+  /**
+   * На отметке рубежа пришёл страж (T-0120): оболочка рисует баннер. Сообщение
+   * приходит один раз за забег; продолженный из снимка забег с живым стражем
+   * его не повторяет.
+   */
+  rubezhGuardSpawned: { enemyId: string; elapsedSec: number };
+  /**
+   * Страж пал — рубеж взят (T-0120). `clearedSec` — секунда забега, на которой он пал;
+   * забег идёт дальше бесконечным режимом. Один раз за забег.
+   */
+  rubezhCleared: { clearedSec: number; elapsedSec: number };
+  /**
+   * Пролог выигран: Страж рубежа пал (T-0278). Приходит один раз, ДО закрытия забега:
+   * следом сцена закрывает забег обычным `abandoned` с тем же итогом (`outcome` — не
+   * смерть, `result.prologue.won = true`), так что отправка итога на сервер идёт общим
+   * путём, а оболочка по этому сообщению показывает окно победы.
+   */
+  prologueWon: { result: RunResult; elapsedSec: number };
   paused: { reason: RunPauseReason; elapsedSec: number };
   resumed: { elapsedSec: number };
   /** техническая сводка — только с `diagnostics.fpsOverlay` или `dev.visuals.techInfo` */
@@ -426,6 +483,8 @@ export interface RunRecording {
   mapId: string;
   difficultyId: DifficultyId;
   startingWeaponId: string;
+  /** режим забега; нет поля — `endless`. Повтор собирает мир пролога только по нему */
+  mode?: RunMode;
   contentHash: string;
   /** физических пикселей на игровую единицу — мир считается в них, повтору он нужен */
   unitScale: number;
@@ -582,6 +641,12 @@ export interface RunSession {
    * набран уровень, переходит к выбору улучшения. Вне окна сундука — ничего.
    */
   closeChest(): void;
+  /**
+   * Выбрать благословение на капище при `pauseOnChest`: id — одно из предложенных
+   * событием `secretBlessing`. Неизвестный id и вызов вне выбора — ничего: забег
+   * стоит дальше.
+   */
+  chooseBlessing(id: string): void;
   pause(reason: RunPauseReason): void;
   resume(): void;
   abandon(): void;
@@ -589,8 +654,12 @@ export interface RunSession {
   continueRun(options?: RunContinueOptions): void;
   /** отказ от второго шанса: забег закрывается смертью */
   declineContinue(): void;
-  /** начать заново в уже загруженном движке: от смерти до забега один тап */
-  restart(seed: number): void;
+  /**
+   * начать заново в уже загруженном движке: от смерти до забега один тап.
+   * Сложность можно сменить: после обучающего забега следующий идёт на единой
+   * сложности. Без параметра остаётся прежняя.
+   */
+  restart(seed: number, options?: { difficultyId?: DifficultyId }): void;
   /**
    * Снять снимок для продолжения. `null`, если продолжать нечего: забег
    * кончился или сцена ещё не создана.
@@ -598,6 +667,11 @@ export interface RunSession {
   snapshot(): RunSnapshot | null;
   /** характеристики забега; `null`, пока сцена не создана */
   inspect(): RunInspection | null;
+  /**
+   * Видимые объекты отрисовки сцены — для раскадровки эффектов (Р142). Только у
+   * забега разработчика: у обычного, как и пока нет сцены, — `null`.
+   */
+  devRenderStats(): { displayObjects: number } | null;
   /**
    * Настройки режима разработчика на ходу — с паузы и перед «Ещё раз». У
    * забега, начатого без `dev`, команда ничего не делает: режим не
@@ -656,6 +730,11 @@ export interface RunDevVisuals {
    * только в режиме разработчика (design/art/characters.md, «Интеграция»).
    */
   sprites: boolean;
+  /**
+   * Светлая земля карты вместо тёмной: проверить, как читается вспышка на
+   * светлом участке. Только для стенда эффектов, у обычного забега выключено.
+   */
+  lightGround: boolean;
 }
 
 export interface RunDevCheats {
@@ -703,13 +782,14 @@ export interface RunCues {
   eliteSpawns: number;
   /** вышедшие боссы: у босса свой рог, элита рядом с ним — своим */
   bossSpawns: number;
+  /** оберег пролога удержал здоровье на пороге (T-0278); необязательное, чтобы прежние источники сигналов не менялись */
+  ward?: number;
   /** собранный опыт — кристаллы */
   xp: number;
-  /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул, стрелок выстрелил */
+  /** начала угроз: подрывник поджёг фитиль, волк замер перед рывком и рванул */
   fuses: number;
   dashWarns: number;
   dashes: number;
-  enemyShots: number;
   /** срабатывания оружия: id оружия → сколько раз */
   weapons: Record<string, number>;
 }

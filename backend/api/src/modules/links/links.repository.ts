@@ -52,6 +52,14 @@ export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   hiddenAt: Date | null;
 }
 
+/** Что меняется в показе автоисточника; не заданное не трогается. */
+export interface LinkDisplayPatch {
+  /** название для людей; `null` — сбросить, и показывается кампания */
+  title?: string | null;
+  /** `true` — скрыть из списка панели, `false` — вернуть */
+  hidden?: boolean;
+}
+
 /** Какие ссылки отдать списку: без условий — все. */
 export interface LinkFilter {
   partnerId?: string;
@@ -100,6 +108,11 @@ export interface LinksRepository {
   partnerName(partnerId: string): Promise<string | null>;
   /** Сменить цель; прошлые клики остаются. `null` — ссылки с таким кодом нет. */
   retarget(code: string, target: LinkTarget): Promise<LinkRecord | null>;
+  /**
+   * Название и скрытие — только у автоисточника (`auto`): `campaign` и `source` не меняются, по ним идут
+   * разрезы аналитики. `null` — такого автоисточника нет (в том числе код ручной ссылки).
+   */
+  setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null>;
 }
 
 @Injectable()
@@ -134,6 +147,15 @@ export class PrismaLinksRepository implements LinksRepository {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
       throw error;
     }
+  }
+
+  async setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null> {
+    const data: Prisma.LinkUpdateManyMutationInput = {};
+    if (patch.title !== undefined) data.title = patch.title;
+    if (patch.hidden !== undefined) data.hiddenAt = patch.hidden ? now : null;
+    // Условие `auto` — в самом запросе: ручная ссылка не меняется, даже если проверку обошли.
+    const { count } = await this.prisma.link.updateMany({ where: { code, auto: true }, data });
+    return count === 0 ? null : await this.byCode(code);
   }
 
   async recordClick(click: ClickInput): Promise<void> {

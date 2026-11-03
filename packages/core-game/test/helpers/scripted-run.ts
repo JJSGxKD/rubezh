@@ -1,4 +1,4 @@
-import type { CordonRingDef, EndlessCurveDef, EnemyDef, EnemyPattern, MapDef, TimelineSegmentDef, UpgradeOption } from "@bh/shared-types";
+import type { CordonRingDef, EndlessCurveDef, EnemyDef, EnemyPattern, MapDef, RubezhDef, TimelineSegmentDef, UpgradeOption } from "@bh/shared-types";
 import { ENEMIES } from "../../src/content/enemies";
 import { ENDLESS_CURVE } from "../../src/content/waves";
 import { DROPS } from "../../src/content/drops";
@@ -26,11 +26,13 @@ export interface ScriptedRunOptions {
   immortalPlayer?: boolean;
   /**
    * Доли паттернов в популяции. По умолчанию — смесь стенда испытаний этапа 1
-   * (рой, преследование, стрелок): на ней сравниваются сборки между собой.
+   * (рой, преследование): на ней сравниваются сборки между собой.
    */
   weights?: Partial<Record<EnemyPattern, number>>;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
+  /** правила рубежа (T-0120); без поля рубежа в мире нет, как в забегах до задачи */
+  rubezh?: RubezhDef;
   /**
    * Как отвечать на выбор улучшения. По умолчанию берётся первый вариант:
    * сценарий должен быть воспроизводимым, а не «как повезёт».
@@ -42,12 +44,10 @@ export interface ScriptedRunOptions {
 export const ALL_PATTERNS_WEIGHTS: Record<EnemyPattern, number> = {
   swarm: 4,
   chase: 1,
-  kite_and_shoot: 2,
   dash: 1,
   orbit: 2,
   exploder: 1,
   rush: 2,
-  caster: 1,
   splitter: 1,
   // Одинокий страж в обычной популяции бессмыслен: он держит место в строю кольца.
   cordon: 0,
@@ -71,6 +71,7 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),
+    ...(options.rubezh === undefined ? {} : { rubezh: options.rubezh }),
     // Нагрузочный прогон меряет устойчивое состояние: если игрок умирает на
     // тридцатой секунде, дальше меряется мир без выстрелов — то есть не тот
     // мир, ради которого прогон затевался.
@@ -103,6 +104,12 @@ export const GUARD: EnemyDef = { id: "guard", hp: 100000, speed: 40, damage: 5, 
 /** Рядовой враг для тестов кольца. */
 export const RAT: EnemyDef = { id: "rat", hp: 10, speed: 60, damage: 1, xp: 1, threat: 1, pattern: "swarm" };
 
+/** Элита для внутренней части строя (`ring.inner`): догоняет игрока, крепкая, но не бессмертная. */
+export const ELITE: EnemyDef = { id: "elite_test", rank: "elite", hp: 50, speed: 30, damage: 1, xp: 1, threat: 1, pattern: "chase" };
+
+/** Босс для внутренней части строя. */
+export const BOSS: EnemyDef = { id: "boss_test", rank: "boss", hp: 500, speed: 20, damage: 1, xp: 1, threat: 1, pattern: "chase" };
+
 /** Кольцо тестов: сорок стражей встают на 200 и сжимаются до 80 за двадцать секунд. */
 export const CORDON_RING: CordonRingDef = { radius: 200, minRadius: 80, shrinkPerSec: 6, lifeSec: 30 };
 
@@ -111,6 +118,8 @@ export interface CordonRunOptions {
   /** сколько стражей в кольце */
   count?: number;
   ring?: CordonRingDef;
+  /** дополнительные типы врагов после стража и крысы (их индексы — 2, 3, …) */
+  enemies?: EnemyDef[];
   /** отрезки таймлайна вместо одного с кольцом */
   timeline?: TimelineSegmentDef[];
   maxEnemies?: number;
@@ -138,7 +147,7 @@ export function createCordonRun(options: CordonRunOptions = {}): CordonRun {
   ];
   const world = createWorld({
     seed: options.seed ?? 1,
-    enemies: [GUARD, RAT],
+    enemies: [GUARD, RAT, ...(options.enemies ?? [])],
     ...(options.map === undefined ? {} : { map: options.map }),
     config: {
       progressionEnabled: false,

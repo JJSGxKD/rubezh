@@ -1,10 +1,10 @@
 import type { ChestsDef, EnemyDef, LevelCurveDef, LoadoutLimits, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { killEnemy } from "../src/game/sim/combat";
-import { dropChest, openChest, takeChestEvents } from "../src/game/sim/chests";
+import { dropChest, findChestsProblems, openChest, takeChestEvents } from "../src/game/sim/chests";
 import {
   countOnField,
   PICKUP_KIND,
@@ -367,6 +367,33 @@ describe("запасная награда", () => {
   });
 });
 
+describe("сундук и «Предел»", () => {
+  it("набор собран, «Предел» в мире есть: сундук всё равно даёт аптечку или опыт", () => {
+    const world = maxedWorld();
+    // Мир собран тем же набором, что боевой забег: записи «Предела» на месте.
+    const withLimits = createWorld({
+      seed: 3,
+      enemies: ENEMIES,
+      weapons: [SPARK],
+      passives: [MIGHT],
+      levelCurve: TINY_CURVE,
+      loadoutLimits: TINY_LIMITS,
+      chests: ROOMY,
+      limits: LIMITS,
+    });
+    withLimits.loadout.weapons[0].level = 2;
+    withLimits.loadout.passives.push({ typeIndex: 0, level: 1 });
+
+    openChest(world, 5);
+    openChest(withLimits, 5);
+
+    const kinds = withLimits.chests.openings[0].rewards.map((reward) => reward.kind);
+    expect(kinds).toEqual(world.chests.openings[0].rewards.map((reward) => reward.kind));
+    expect(kinds.every((kind) => kind === "xp" || kind === "heal")).toBe(true);
+    expect(withLimits.progression.limitStacks.every((count) => count === 0)).toBe(true);
+  });
+});
+
 describe("подбор сундука", () => {
   function dropAndLand(world: World, kind: PickupKind, dx: number, dy: number): number {
     spawnPickup(world, kind, world.player.x + dx, world.player.y + dy);
@@ -448,5 +475,130 @@ describe("события сундуков для сцены", () => {
     takeChestEvents(world, { found: 0, opened: 0 });
     expect(JSON.stringify(world.chests.founds)).toBe(before);
     expect(world.chests.dropped).toBe(1);
+  });
+});
+
+// --- Поздние сундуки скромнее (T-0193, Р129) ----------------------------------------
+
+describe("поздняя таблица сундуков", () => {
+  /** Основная таблица — всегда пятерной, поздняя — всегда одиночный: по размеру видно, какая сработала. */
+  const SPLIT: ChestsDef = {
+    ...ROOMY,
+    opening: [],
+    sizes: [{ size: 5, weight: 1 }],
+    bossMinSize: 5,
+    late: { afterSec: 600, sizes: [{ size: 1, weight: 1 }], bossMinSize: 1 },
+  };
+
+  function dropAt(world: World, elapsedSec: number, rank: "elite" | "boss" = "elite"): number {
+    world.stats.elapsedSec = elapsedSec;
+    dropChest(world, 0, 0, rank);
+    world.pickups.alive.fill(0);
+    world.pickups.aliveCount = 0;
+    return world.chests.founds[world.chests.founds.length - 1].size;
+  }
+
+  it("до afterSec размер бросается по основной таблице, с afterSec — по поздней", () => {
+    const world = setup({}, SPLIT);
+    expect(dropAt(world, 599.9)).toBe(5);
+    expect(dropAt(world, 600)).toBe(1);
+    expect(dropAt(world, 1200)).toBe(1);
+  });
+
+  it("без late размеры идут по основной таблице в любую секунду", () => {
+    const plain: ChestsDef = { ...SPLIT };
+    delete plain.late;
+    const world = setup({}, plain);
+    expect(dropAt(world, 5000)).toBe(5);
+  });
+
+  it("схема opening приоритетнее поздней таблицы и после afterSec", () => {
+    const world = setup({}, { ...SPLIT, opening: [3, 5] });
+    expect(dropAt(world, 900)).toBe(3);
+    expect(dropAt(world, 900)).toBe(5);
+    expect(dropAt(world, 900)).toBe(1);
+  });
+
+  it("сундук с босса после afterSec не ниже late.bossMinSize, до — не ниже bossMinSize", () => {
+    const mixed: ChestsDef = {
+      ...SPLIT,
+      sizes: [{ size: 1, weight: 1 }, { size: 3, weight: 1 }, { size: 5, weight: 1 }],
+      bossMinSize: 1,
+      late: { afterSec: 600, sizes: [{ size: 1, weight: 10 }, { size: 3, weight: 1 }], bossMinSize: 3 },
+    };
+    const world = setup({}, mixed);
+    let sawOne = false;
+    for (let k = 0; k < 40; k++) {
+      if (dropAt(world, 100, "boss") === 1) sawOne = true;
+    }
+    expect(sawOne).toBe(true);
+
+    const lateWorld = setup({}, mixed);
+    for (let k = 0; k < 40; k++) expect(dropAt(lateWorld, 700, "boss")).toBeGreaterThanOrEqual(3);
+  });
+
+  it("на сундук ровно один бросок по весам из потока сундуков, а world.rng не тронут", () => {
+    const world = setup({}, SPLIT, 8);
+    const untouched = setup({}, SPLIT, 8);
+    let draws = 0;
+    const rng = world.chests.rng;
+    const next = rng.nextFloat;
+    rng.nextFloat = () => {
+      draws++;
+      return next();
+    };
+    dropAt(world, 700);
+    expect(draws).toBe(1);
+    expect(world.rng.getState()).toBe(untouched.rng.getState());
+
+    // Схема opening: броска по весам нет вовсе.
+    const scripted = setup({}, { ...SPLIT, opening: [3] }, 8);
+    let scriptedDraws = 0;
+    const scriptedNext = scripted.chests.rng.nextFloat;
+    scripted.chests.rng.nextFloat = () => {
+      scriptedDraws++;
+      return scriptedNext();
+    };
+    dropAt(scripted, 700);
+    expect(scriptedDraws).toBe(0);
+  });
+
+  it("боевые числа: после afterSec одиночные сундуки чаще, чем в основной таблице", () => {
+    const late = CHESTS.late;
+    expect(late).toBeDefined();
+    if (late === undefined) return;
+    const share = (sizes: readonly { size: number; weight: number }[]): number =>
+      (sizes.find((entry) => entry.size === 1)?.weight ?? 0) / sizes.reduce((sum, entry) => sum + entry.weight, 0);
+    expect(share(late.sizes)).toBeGreaterThan(share(CHESTS.sizes));
+  });
+});
+
+describe("проверка поздней таблицы сундуков", () => {
+  const late = { afterSec: 600, sizes: [{ size: 1 as const, weight: 95 }, { size: 3 as const, weight: 5 }], bossMinSize: 3 as const };
+  const base: ChestsDef = { ...CHESTS, late };
+
+  it("корректная поздняя таблица замечаний не даёт", () => {
+    expect(findChestsProblems(base)).toEqual([]);
+  });
+
+  it("afterSec не больше нуля — замечание с путём поля", () => {
+    for (const value of [0, -5]) {
+      expect(findChestsProblems({ ...base, late: { ...late, afterSec: value } }).join("\n")).toContain("chests.late.afterSec");
+    }
+  });
+
+  it("пустая late.sizes, размер вне набора и нулевой вес — замечание с путём поля", () => {
+    expect(findChestsProblems({ ...base, late: { ...late, sizes: [] } }).join("\n")).toContain("chests.late.sizes");
+    expect(findChestsProblems({ ...base, late: { ...late, sizes: [{ size: 4 as never, weight: 1 }] } }).join("\n")).toContain("chests.late.sizes[0].size");
+    expect(findChestsProblems({ ...base, late: { ...late, sizes: [{ size: 1, weight: 0 }, { size: 3, weight: 1 }] } }).join("\n")).toContain("chests.late.sizes[0].weight");
+  });
+
+  it("late.bossMinSize не из late.sizes — замечание", () => {
+    expect(findChestsProblems({ ...base, late: { ...late, bossMinSize: 5 } }).join("\n")).toContain("chests.late.bossMinSize");
+  });
+
+  it("поздняя таблица щедрее основной — замечание", () => {
+    const generous = { afterSec: 600, sizes: [{ size: 3 as const, weight: 1 }, { size: 5 as const, weight: 1 }], bossMinSize: 3 as const };
+    expect(findChestsProblems({ ...base, late: generous }).join("\n")).toContain("chests.late.sizes");
   });
 });

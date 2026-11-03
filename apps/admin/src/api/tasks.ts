@@ -31,6 +31,8 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   difficulty_runs: "Забеги на сложности",
   difficulty_survive_sec: "Время на сложности, с",
   boost_runs: "Забеги с бустом",
+  friends: "Друзья в списке",
+  account_level: "Уровень аккаунта",
   channel: "Подписка на канал",
   link: "Переход по ссылке",
   bot: "Запуск бота",
@@ -54,7 +56,7 @@ export const FILTER_KEYS: Record<string, FilterKey> = {
 export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
 
 /** Русские имена для выбора фильтра: панель движка не знает, список сверяет только глаз команды. */
-export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало" };
+export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало", meteor: "Метеор" };
 export const ELEMENT_TITLES: Record<string, string> = { fire: "Огонь", cold: "Холод", lightning: "Молния", poison: "Яд" };
 export const DIFFICULTY_TITLES: Record<string, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
 export const FILTER_OPTIONS: Record<FilterKey, Record<string, string>> = { weapon: WEAPON_TITLES, element: ELEMENT_TITLES, difficulty: DIFFICULTY_TITLES };
@@ -72,6 +74,26 @@ export const REPEAT_TITLES: Record<TaskPeriod, string> = { achievement: "Раз�
 
 /** Партнёрские виды: ссылка вместо числа, своя группа в каталоге. */
 export const PARTNER_KINDS: ReadonlySet<string> = new Set([CHANNEL_KIND, "link", "bot"]);
+
+/**
+ * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
+ * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
+ */
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level"]);
+
+/** Категории достижений — те же, что у сервера; названия — те, что видит игрок. */
+export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
+export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
+export const CATEGORY_TITLES: Record<AchievementCategory, string> = { combat: "Бой", collection: "Коллекция", mastery: "Мастерство", friends: "Друзья" };
+/** Пусто — достижение вне витрины: игрок видит его только во вкладке заданий. */
+export const NO_CATEGORY_TITLE = "Без категории";
+
+/** Пределы полей достижения — те же, что у схемы сервера и `CHECK` базы. */
+export const HINT_MAX = 120;
+export const LADDER_MAX = 32;
+export const RUNG_MAX = 100;
+export const PRESTIGE_MAX = 10_000;
+const LADDER_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 
 /** Площадки, где есть каналы, — те же, что принимает сервер. */
 export const CHANNEL_PLATFORMS = ["telegram", "max", "vk"] as const;
@@ -137,6 +159,13 @@ const taskSchema = z.object({
   limit: z.number().nullable().default(null),
   /** картинка 1:1 партнёрской цели — id из `media`; сервер до картинок поля не отдавал */
   image: z.string().nullable().default(null),
+  /** поля достижения с престижем (T-0106); сервер до них полей не отдавал */
+  category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
+  ladder: z.string().nullable().default(null),
+  rung: z.number().nullable().default(null),
+  hidden: z.boolean().default(false),
+  hint: z.string().nullable().default(null),
+  prestige: z.number().default(0),
 });
 
 export type TaskDef = z.infer<typeof taskSchema>;
@@ -192,7 +221,17 @@ export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
 
 export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDef>> {
   const title = task.title?.trim() ?? "";
-  return api.request("/tasks", { method: "POST", body: { ...task, taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) }, schema: taskSchema });
+  // Место в списке правкой не задаётся: новое задание встаёт в конец, у существующего остаётся прежнее.
+  const body: Partial<TaskDef> = { ...task, ...cleanAchievement(task), taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) };
+  delete body.sort;
+  return api.request("/tasks", { method: "POST", body, schema: taskSchema });
+}
+
+const orderSchema = z.object({ order: z.array(z.string()) });
+
+/** Новый порядок списка заданий одним запросом: id группы в нужном порядке. */
+export function reorderTasks(api: AdminApi, group: TaskGroup, ids: readonly string[]): Promise<ApiResult<{ order: string[] }>> {
+  return api.request("/tasks/order", { method: "POST", body: { group, ids }, schema: orderSchema });
 }
 
 /**
@@ -217,6 +256,28 @@ function cleanFilter(task: Pick<TaskDef, "kind" | "filter">): TaskFilter | null 
   return key === undefined || value === undefined || value === "" ? null : { [key]: value };
 }
 
+/** Поля достижения «нет»: у ежедневных, недельных и партнёрских целей их не бывает. */
+export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+
+/** Достижение игрока: срок «достижение», но не партнёрская цель — её рисует вкладка партнёров. */
+export function isAchievement(task: Pick<TaskDef, "kind" | "period">): boolean {
+  return task.period === "achievement" && !PARTNER_KINDS.has(task.kind);
+}
+
+/** Поля достижения в том виде, что принимает сервер: обрезанные, пустое — «нет», у не-достижения — всё пусто. */
+function cleanAchievement(task: Pick<TaskDef, "kind" | "period" | "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige">): Pick<TaskDef, "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige"> {
+  if (!isAchievement(task)) return NO_ACHIEVEMENT_FIELDS;
+  const ladder = task.ladder?.trim() ?? "";
+  const hint = task.hint?.trim() ?? "";
+  return { category: task.category, ladder: ladder === "" ? null : ladder, rung: ladder === "" ? null : task.rung, hidden: task.hidden, hint: hint === "" ? null : hint, prestige: task.prestige };
+}
+
+/** Смена срока в форме: у не-достижения поля достижения остаются пустыми, а не висят скрытыми в форме. */
+export function withPeriod(task: TaskDef, period: TaskPeriod): TaskDef {
+  const next = { ...task, period };
+  return isAchievement(next) ? next : { ...next, ...NO_ACHIEVEMENT_FIELDS };
+}
+
 /** Площадки ссылки или бота; пусто — все. Запись прошлой панели с одной площадкой — список из неё. */
 export function partnerPlatforms(params: TaskParams | null): PartnerPlatform[] {
   if (params === null) return [];
@@ -238,7 +299,8 @@ export function togglePlatform(params: TaskParams | null, platform: PartnerPlatf
  * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
-  // Фильтр принадлежит виду: у другого вида он был бы чужим.
+  // Фильтр принадлежит виду: у другого вида он был бы чужим. Друзья и уровень аккаунта читает витрина достижений, поэтому срок у них — «достижение».
+  if (STATE_KINDS.has(kind)) return { ...task, kind, period: "achievement", params: null, limit: null, image: null, filter: null, tier: null };
   if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null, filter: null };
   const url = task.params?.url ?? "";
   const kept = partnerPlatforms(task.params);
@@ -247,7 +309,7 @@ export function withKind(task: TaskDef, kind: string): TaskDef {
     kind === CHANNEL_KIND ? { platform: channelPlatform, chat: task.params?.chat ?? "", url } : kept.length === 0 ? { url } : { platforms: kept, url };
   // Повтор выбирают у подписки сами; ссылка и бот — только разово.
   const period = kind === CHANNEL_KIND && task.kind === CHANNEL_KIND ? task.period : "achievement";
-  return { ...task, kind, period, target: 1, params, filter: null, tier: null };
+  return { ...task, ...NO_ACHIEVEMENT_FIELDS, kind, period, target: 1, params, filter: null, tier: null };
 }
 
 /** Площадка партнёрской цели; `undefined` — цель видна на всех площадках. */
@@ -287,6 +349,24 @@ function filterProblemOf(task: Pick<TaskDef, "kind" | "filter">): string | null 
   return null;
 }
 
+/** Поля достижения: те же правила, что у схемы сервера и `CHECK` базы. */
+function achievementProblemOf(task: TaskDef): string | null {
+  if (STATE_KINDS.has(task.kind) && task.period !== "achievement") return "Друзья и уровень аккаунта — только у достижений: срок их не сбросил бы";
+  const ladder = task.ladder?.trim() ?? "";
+  const hint = task.hint?.trim() ?? "";
+  if (!isAchievement(task)) {
+    const filled = task.category !== null || ladder !== "" || task.rung !== null || hint !== "" || task.hidden || task.prestige !== 0;
+    return filled ? "Категория, лестница, подсказка, скрытость и престиж — только у достижений забега" : null;
+  }
+  if (!Number.isInteger(task.prestige) || task.prestige < 0 || task.prestige > PRESTIGE_MAX) return `Престиж — целое от 0 до ${PRESTIGE_MAX.toLocaleString("ru-RU")}`;
+  if (ladder !== "" && !LADDER_PATTERN.test(ladder)) return `Лестница — латиница в нижнем регистре, цифры и подчёркивание, с буквы, до ${String(LADDER_MAX)} знаков`;
+  if (ladder !== "" && (task.rung === null || !Number.isInteger(task.rung) || task.rung < 1 || task.rung > RUNG_MAX)) return `Ступень лестницы — целое от 1 до ${String(RUNG_MAX)}`;
+  if (ladder === "" && task.rung !== null) return "Ступень без лестницы: укажите лестницу или очистите ступень";
+  if (hint.length > HINT_MAX) return `Подсказка — до ${String(HINT_MAX)} знаков`;
+  if (task.hidden && hint === "") return "У скрытого достижения нужна подсказка: её игрок видит, пока оно закрыто";
+  return null;
+}
+
 function nonNegativeInt(value: number): boolean {
   return Number.isInteger(value) && value >= 0;
 }
@@ -300,10 +380,12 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (!TASK_ID_PATTERN.test(id)) return "id — латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков";
   if (isNew && catalog.some((existing) => existing.taskId === id)) return "Такой id уже есть — выберите его в списке, чтобы поправить";
   if (!Number.isInteger(task.target) || task.target <= 0) return "Цель — целое число больше нуля";
-  if (![task.coins, task.gems, task.shards, task.passPoints, task.sort].every(nonNegativeInt)) return "Награда, очки пасса и порядок — целые неотрицательные";
+  if (![task.coins, task.gems, task.shards, task.passPoints].every(nonNegativeInt)) return "Награда и очки заданий — целые неотрицательные";
   if (task.coins + task.gems + task.shards === 0) return "Без награды задание некому выполнять — дайте монеты, самоцветы или осколки";
   if ((task.title?.trim().length ?? 0) > TITLE_MAX) return `Заголовок — до ${String(TITLE_MAX)} знаков`;
   if (task.tier !== null && (task.period === "achievement" || PARTNER_KINDS.has(task.kind))) return "Ступень — только у дневных и недельных заданий";
+  const achievementProblem = achievementProblemOf(task);
+  if (achievementProblem !== null) return achievementProblem;
   const filterProblem = filterProblemOf(task);
   if (filterProblem !== null) return filterProblem;
   if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
@@ -346,12 +428,16 @@ export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pic
 export type TaskGroup = TaskPeriod | "partner";
 export const GROUP_TITLES: Record<TaskGroup, string> = { ...PERIOD_TITLES, partner: "Партнёрские" };
 
+/** Группа задания: срок, а партнёрские виды — своя, какой бы срок ни был. */
+export function taskGroupOf(task: Pick<TaskDef, "kind" | "period">): TaskGroup {
+  return PARTNER_KINDS.has(task.kind) ? "partner" : task.period;
+}
+
 /** Каталог по группам в порядке показа игроку: место, потом id. */
 export function groupByPeriod(tasks: readonly TaskDef[]): { group: TaskGroup; tasks: TaskDef[] }[] {
-  const groupOf = (task: TaskDef): TaskGroup => (PARTNER_KINDS.has(task.kind) ? "partner" : task.period);
   return [...TASK_PERIODS, "partner" as const].map((group) => ({
     group,
-    tasks: tasks.filter((task) => groupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
+    tasks: tasks.filter((task) => taskGroupOf(task) === group).sort((a, b) => a.sort - b.sort || a.taskId.localeCompare(b.taskId)),
   }));
 }
 

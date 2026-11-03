@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
   FILTER_KEYS,
+  NO_ACHIEVEMENT_FIELDS,
   TASK_LIMIT_RANGE,
   TIER_TITLES,
   cadenceLabel,
@@ -10,13 +11,16 @@ import {
   groupByPeriod,
   networkTaskProblem,
   networkTaskState,
+  reorderTasks,
   rewardLabel,
   saveNetworkTask,
   saveTask,
   targetLabel,
+  taskGroupOf,
   taskPreview,
   taskProblem,
   withKind,
+  withPeriod,
   withPlatform,
   type NetworkTaskRow,
   type TaskDef,
@@ -31,7 +35,7 @@ import { fakeFetch, json } from "./helpers";
 // каталог — по срокам в порядке показа игроку.
 
 function task(patch: Partial<TaskDef> = {}): TaskDef {
-  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, image: null, ...patch };
+  return { taskId: "daily_runs", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS, ...patch };
 }
 
 describe("задания в панели", () => {
@@ -335,5 +339,118 @@ describe("ротация пула и фильтр цели", () => {
     const { fetch } = fakeFetch(json(200, { data: { tasks: [task()], kinds: ["runs"], periods: ["daily"], rotation } }));
     const list = await fetchTasks(new AdminApi(fetch));
     expect(list.ok && list.data.rotation).toEqual(rotation);
+  });
+});
+
+describe("порядок заданий перетаскиванием (T-0167)", () => {
+  it("группа задания: партнёрские виды — всегда «партнёрские», какой бы ни был срок", () => {
+    for (const kind of ["link", "bot", "channel"]) {
+      for (const period of ["daily", "weekly", "achievement"] as const) expect(taskGroupOf({ kind, period }), `${kind}/${period}`).toBe("partner");
+    }
+    expect(taskGroupOf({ kind: "runs", period: "weekly" })).toBe("weekly");
+    expect(taskGroupOf({ kind: "runs", period: "achievement" })).toBe("achievement");
+  });
+
+  it("группы каталога по-прежнему идут по месту, при равных — по id", () => {
+    const groups = groupByPeriod([task({ taskId: "b", sort: 20 }), task({ taskId: "a", sort: 20 }), task({ taskId: "c", sort: 5 })]);
+    expect(groups[0]?.tasks.map((item) => item.taskId)).toEqual(["c", "a", "b"]);
+  });
+
+  it("новый порядок уходит одним запросом: группа и id; ответ разобран, чужая форма — ошибка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { order: ["b", "a"] } }), json(200, { data: { surprise: true } }));
+    const api = new AdminApi(fetch);
+
+    const ok = await reorderTasks(api, "daily", ["b", "a"]);
+    expect(ok.ok && ok.data.order).toEqual(["b", "a"]);
+    expect(calls[0]?.url).toBe("/api/v1/admin/tasks/order");
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ group: "daily", ids: ["b", "a"] });
+
+    expect((await reorderTasks(api, "daily", ["a", "b"])).ok).toBe(false);
+  });
+
+  it("сохранение задания не шлёт порядок: его меняет только запрос порядка", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }));
+    await saveTask(new AdminApi(fetch), task({ sort: 40 }));
+    expect(JSON.parse(String(calls[0]?.init.body))).not.toHaveProperty("sort");
+  });
+
+  it("поля «Порядок» в форме нет, и проверять в нём нечего", () => {
+    expect(taskProblem(task({ taskId: "x_1", sort: -5 }), true, [])).toBeNull();
+  });
+});
+
+describe("поля достижения в форме (T-0106)", () => {
+  const achievement = (patch: Partial<TaskDef> = {}) => task({ taskId: "ach_kills_1k", period: "achievement", kind: "kills", target: 1000, coins: 200, category: "combat", ...patch });
+  const problem = (patch: Partial<TaskDef> = {}) => taskProblem(achievement(patch), true, []);
+
+  it("категория, лестница со ступенью, престиж и подсказка достижению подходят", () => {
+    expect(problem()).toBeNull();
+    expect(problem({ ladder: "kills", rung: 2, prestige: 10 })).toBeNull();
+    expect(problem({ hint: "Намёк" })).toBeNull();
+    expect(problem({ hidden: true, hint: "Продержаться очень, очень долго" })).toBeNull();
+  });
+
+  it("скрытое без подсказки — отказ, пробелы вместо подсказки — тоже", () => {
+    expect(problem({ hidden: true })).toMatch(/нужна подсказка/);
+    expect(problem({ hidden: true, hint: "   " })).toMatch(/нужна подсказка/);
+  });
+
+  it("ступень и лестница — вместе; ступень от единицы; лестница по шаблону", () => {
+    expect(problem({ ladder: "kills", rung: null })).toMatch(/Ступень лестницы/);
+    expect(problem({ ladder: "kills", rung: 0 })).toMatch(/Ступень лестницы/);
+    expect(problem({ ladder: "", rung: 3 })).toMatch(/Ступень без лестницы/);
+    expect(problem({ ladder: "Kills!", rung: 1 })).toMatch(/Лестница/);
+  });
+
+  it("престиж — целое неотрицательное в пределах; подсказка не длиннее ста двадцати знаков", () => {
+    expect(problem({ prestige: -1 })).toMatch(/Престиж/);
+    expect(problem({ prestige: 2.5 })).toMatch(/Престиж/);
+    expect(problem({ prestige: 100_000 })).toMatch(/Престиж/);
+    expect(problem({ hint: "я".repeat(121) })).toMatch(/Подсказка/);
+  });
+
+  it("ежедневному и недельному поля достижения не нужны: любое заполненное — отказ", () => {
+    for (const patch of [{ category: "combat" }, { ladder: "kills", rung: 1 }, { hint: "Намёк" }, { hidden: true, hint: "Намёк" }, { prestige: 5 }] as Partial<TaskDef>[]) {
+      expect(taskProblem(task({ taskId: "daily_x", ...patch }), true, []), JSON.stringify(patch)).toMatch(/только у достижений/);
+    }
+    expect(taskProblem(task({ taskId: "daily_x" }), true, [])).toBeNull();
+  });
+
+  it("смена срока в форме очищает поля достижения, а не прячет их в запросе", () => {
+    const filled = achievement({ ladder: "kills", rung: 2, prestige: 10, hidden: true, hint: "Намёк" });
+    expect(withPeriod(filled, "daily")).toMatchObject({ period: "daily", ...NO_ACHIEVEMENT_FIELDS });
+    expect(withPeriod(filled, "achievement")).toMatchObject({ category: "combat", ladder: "kills", rung: 2, prestige: 10, hidden: true });
+  });
+
+  it("друзья и уровень аккаунта: срок закрепляется «достижением», у ежедневного — отказ", () => {
+    for (const kind of ["friends", "account_level"]) {
+      const next = withKind(task({ period: "weekly", tier: "easy" }), kind);
+      expect(next, kind).toMatchObject({ kind, period: "achievement", tier: null, params: null, filter: null });
+      expect(taskProblem(task({ taskId: "daily_x", kind, target: 5 }), true, []), kind).toMatch(/только у достижений/);
+      expect(taskProblem({ ...next, taskId: "ach_x1", category: "friends" }, true, []), kind).toBeNull();
+    }
+  });
+
+  it("партнёрская цель достижением с категорией не бывает: смена вида на партнёрский поля очищает", () => {
+    const filled = achievement({ ladder: "kills", rung: 2, prestige: 10, hint: "Намёк" });
+    expect(withKind(filled, "link")).toMatchObject({ kind: "link", period: "achievement", target: 1, ...NO_ACHIEVEMENT_FIELDS });
+    expect(taskProblem(task({ taskId: "ach_site", period: "achievement", kind: "link", target: 1, coins: 50, params: { url: "https://example.com/p" }, category: "combat" }), true, [])).toMatch(/только у достижений/);
+  });
+
+  it("сохранение: поля достижения уходят обрезанными, пустая лестница — без ступени, у ежедневного всё пусто", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }), json(200, { data: task() }));
+    const api = new AdminApi(fetch);
+    await saveTask(api, achievement({ ladder: "  ", rung: 4, hint: "  Намёк ", prestige: 10 }));
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ category: "combat", ladder: null, rung: null, hint: "Намёк", prestige: 10, hidden: false });
+    await saveTask(api, task({ category: "combat", prestige: 9, hidden: true, hint: "Намёк" }));
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ category: null, ladder: null, rung: null, hint: null, prestige: 0, hidden: false });
+  });
+
+  it("каталог от старого сервера без полей достижения разбирается с пустыми значениями", async () => {
+    const old = { taskId: "daily_runs", period: "daily", kind: "runs", target: 3, title: null, coins: 120, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true };
+    const { fetch } = fakeFetch(json(200, { data: { tasks: [old], kinds: ["runs"], periods: ["daily"] } }));
+    const list = await fetchTasks(new AdminApi(fetch));
+    expect(list.ok && list.data.tasks[0]).toMatchObject(NO_ACHIEVEMENT_FIELDS);
   });
 });

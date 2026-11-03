@@ -26,7 +26,7 @@ shared:
   - backend/api/test/**
   - docs/10-progression-and-ladder.md
   - docs/30-configuration-map.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -36,7 +36,7 @@ batch: 7
 
 # T-0294. Доски рейтинга по очкам — общая, сезонная, друзья и скрытая; лучший забег периода, порог награды сезона в очках, переход с нового сезона
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json)](README.md#значки-статуса) [![T-0293](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0293.json&label=T-0293)](T-0293-rating-run-score-server.md) [![T-0114](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0114.json&label=T-0114)](T-0114-season-rewards-by-viewer-board.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json)](README.md#значки-статуса) [![T-0293](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0293.json&label=T-0293)](T-0293-rating-run-score-server.md) [![T-0114](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0114.json&label=T-0114)](archive/T-0114-season-rewards-by-viewer-board.md)
 
 ## Зачем
 

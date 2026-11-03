@@ -300,7 +300,7 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
             vipSubscriptions: { where: { renewal: "on" }, select: { subscriptionId: true }, take: 1 },
           },
         },
-        run: { select: { status: true, adContinues: { select: { continueNo: true } } } },
+        run: { select: { status: true, adContinues: { select: { continueNo: true } }, gemContinues: { select: { continueNo: true } } } },
       },
     });
     if (row === null) return null;
@@ -309,7 +309,8 @@ export class PrismaPurchasesRepository implements PurchasesRepository {
       purchase,
       platformUserId: account.platformUserId,
       runFinished: run?.status === "finished",
-      continueTaken: run?.adContinues.some((taken) => taken.continueNo === purchase.continueNo) === true,
+      // Номер продолжения, взятый за рекламу или самоцветы, звёздами уже не покупается (Р4, Р162).
+      continueTaken: [...(run?.adContinues ?? []), ...(run?.gemContinues ?? [])].some((taken) => taken.continueNo === purchase.continueNo),
       subscriptionLive: account.vipPeriods.length > 0 && account.vipSubscriptions.length > 0,
     };
   }

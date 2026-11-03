@@ -17,7 +17,11 @@ import { z } from "zod";
  * смысла или типа поля — новая версия, а не правка на месте.
  */
 
-const MAX_PAYLOAD_KEYS = 40;
+// Потолок растёт вместе с итогом забега: перф-поля, урон по стихиям, счётчики
+// боя и сила игрока с давлением (T-0125, T-0196) в одном событии. Лимит
+// защищает базу от мусора, а не ограничивает смысл; клиент держит запас в
+// четыре ключа (тест итога в оболочке).
+export const MAX_PAYLOAD_KEYS = 48;
 
 const flatValue = z.union([z.string().max(512), z.number().finite(), z.boolean(), z.null()]);
 const id = z.string().max(64);
@@ -49,6 +53,8 @@ const purchaseFields = {
   sku: id.optional(),
   // Скидка акции магазина в процентах — только у товара по акции (WP10, часть 8).
   promoPct: count.optional(),
+  // Метка набора на витрине в момент покупки: продаёт ли «Хит», «Выбор игроков», «Лучшая цена».
+  badge: z.enum(["hit", "choice", "best"]).optional(),
 };
 
 const runOutcome = payload({
@@ -57,6 +63,20 @@ const runOutcome = payload({
   level: count,
   wave: count,
   enemiesKilled: count,
+  // Счётчики итога для заданий и дашбордов (docs/22-analytics-and-metrics.md
+  // §3.3, tasks/T-0125). Необязательные: сборки до них полей не шлют, версия
+  // прежняя.
+  bossKills: count.optional(),
+  eliteKills: count.optional(),
+  chestsOpened: count.optional(),
+  crystals: count.optional(),
+  // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
+  noHitSec: count.optional(),
+  noKillSec: count.optional(),
+  // Рубеж (tasks/T-0121, Р102): дошёл до стража и победил ли; секунда победы.
+  // Необязательные: сборки до рубежа полей не шлют, версия прежняя.
+  rubezh: z.enum(["none", "reached", "cleared"]).optional(),
+  rubezhClearedSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -92,6 +112,13 @@ const runOutcome = payload({
   damageCold: count.optional(),
   damageLightning: count.optional(),
   damagePoison: count.optional(),
+  // Сила и давление на старте и в конце забега, класс устройства (T-0196):
+  // по ним сверяют лесенку длины забега у игроков разной силы. Необязательные.
+  power: amount.optional(),
+  pressure: amount.optional(),
+  powerEnd: amount.optional(),
+  pressureEnd: amount.optional(),
+  deviceClass: id.optional(),
 });
 
 export const EVENT_DICTIONARY = {
@@ -132,6 +159,12 @@ export const EVENT_DICTIONARY = {
       screenMode: id,
       orientation: id,
       devMode: z.boolean(),
+      // Сила игрока (очки) и уровень давления на старте, класс устройства
+      // (docs/22-analytics-and-metrics.md §3.3, T-0196). Необязательные: забег
+      // разработчика и сборки до подстройки их не шлют, версия прежняя.
+      power: amount.optional(),
+      pressure: amount.optional(),
+      deviceClass: id.optional(),
     }),
   },
   run_resumed: { version: 1, payload: payload({ seed: z.number().int(), elapsedSec: seconds, level: count }) },
@@ -152,6 +185,10 @@ export const EVENT_DICTIONARY = {
   // (`broken`), выстоял до конца времени (`held`) или погиб в кольце (`died`);
   // `guards` вышло в строй, `killed` убито к концу, `lifeSec` — сколько
   // кольцо просуществовало.
+  // Тайники рубежа (tasks/T-0260, Р153): найден — игрок вошёл в круг; использован —
+  // отработал (`outcome` — что вышло: id благословения, `opened`, `touched`, `cleared`, `left`).
+  secret_found: { version: 1, payload: payload({ kind: id, sec: seconds }) },
+  secret_used: { version: 1, payload: payload({ kind: id, outcome: id }) },
   ring_ended: {
     version: 1,
     payload: payload({
@@ -182,12 +219,17 @@ export const EVENT_DICTIONARY = {
     payload: payload({ tester: z.boolean(), bonusGems: count, restoredGems: count, continueGems: count }),
   },
   // Второй шанс взят (docs/07-monetization-and-ads.md §8): откуда — `dev`
-  // (бесплатно в забеге разработчика), `premium` (за Stars), позже `ad`;
-  // на какой секунде и волне забега.
+  // (бесплатно в забеге разработчика), `premium` (за Stars), `gems` (за
+  // самоцветы, Р162), `ad` (за ролик), `pass` (с VIP); на какой секунде и
+  // волне забега.
   continue_used: { version: 1, payload: payload({ source: id, elapsedSec: seconds, wave: count }) },
   // Шаг второго шанса показан (tasks/T-0045): сколько раз предложили и чем —
-  // ролик, звёзды, VIP. Доля `continue_used` от этого — конверсия второго шанса.
-  continue_offered: { version: 1, payload: payload({ ad: z.boolean(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }) },
+  // ролик, самоцветы, звёзды, VIP. Доля `continue_used` от этого — конверсия
+  // второго шанса. `gems` необязателен: сборки до Р162 его не шлют.
+  continue_offered: {
+    version: 1,
+    payload: payload({ ad: z.boolean(), gems: z.boolean().optional(), stars: z.boolean(), vip: z.boolean(), elapsedSec: seconds }),
+  },
   // Сервер подтвердил покупку буста на забег (WP8): по событию на буст.
   boost_used: { version: 1, payload: payload({ boost: id, source: id, amount, count }) },
   // Нажал «продолжить за звёзды» — счёт запрошен; в магазине — счёт выставлен.
@@ -250,13 +292,30 @@ export const EVENT_DICTIONARY = {
   // цели доходят до награды и за какой срок. Прогресс и забор — таблица
   // task_progress, начисленное — журнал кошелька (task_reward,
   // achievement_reward); событие шлёт клиент после ответа сервера.
-  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id }) },
-  achievement_unlocked: { version: 1, payload: payload({ achievement: id, kind: id }) },
+  // `tier` — ступень пула ротации (T-0104): видно, какие ступени доходят до награды.
+  task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id, tier: z.enum(["easy", "medium", "hard"]).optional() }) },
+  // Забрал награду за ступень очков заданий (T-0105): `step` — порог ступени.
+  task_points_claimed: { version: 1, payload: payload({ period: z.enum(["daily", "weekly"]), step: z.number().int().min(1).max(100_000) }) },
+  // Необязательные `category` и `prestige` (T-0106): какие категории закрывают и за какой престиж;
+  // у партнёрской цели их нет. Событие шлёт клиент после забора, смысл прежний.
+  achievement_unlocked: {
+    version: 1,
+    payload: payload({
+      achievement: id,
+      kind: id,
+      category: z.enum(["combat", "collection", "mastery", "friends"]).optional(),
+      prestige: z.number().int().min(0).max(10_000).optional(),
+    }),
+  },
+  // Сохранил любимые достижения для профиля (T-0107): `count` — сколько их стало.
+  // Событие шлёт клиент после ответа сервера; пустой список («убрал все») — тоже сохранение.
+  achievement_favorites_set: { version: 1, payload: payload({ count: z.number().int().min(0).max(3) }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У
   // задания рекламной сети (WP13, часть 6) — `kind: network` и `network`.
   task_link_opened: { version: 1, payload: payload({ task: id, kind: id, network: id.optional() }) },
+  task_shown: { version: 1, payload: payload({ task: id, kind: id }) },
   // Задания «юзернейм бота в имени и в bio» (docs/35-stage4-plan.md Р110, T-0160):
   // событие шлёт клиент после ответа сервера. Ночные проверки сервера клиент не
   // видит — их факты в таблице `bot_mention_task` и журнале кошелька (T-0162).
@@ -290,6 +349,10 @@ export const EVENT_DICTIONARY = {
   // срабатывает — готовое к забору, отсчёт, рекорд — и на каком месте сетки.
   // Порядок виджетов — правилом, и событие показывает, правильное ли оно.
   home_widget_clicked: { version: 1, payload: payload({ widget: id, state: id, position: count }) },
+  // Лента живых событий под «Играть» (Р114, tasks/T-0176): какие виды событий
+  // игроки успевают увидеть. Клиент шлёт, когда событие было на виду не меньше
+  // секунды, раз на событие за запуск; игрока в нём нет.
+  feed_event_viewed: { version: 1, payload: payload({ kind: id, position: count }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел
@@ -319,6 +382,20 @@ export const EVENT_DICTIONARY = {
   // `network` — у задания рекламной сети (WP13, часть 6): награду за него
   // выдал сервер по подтверждению сети, и клиент её дождался.
   ad_reward_claimed: { version: 1, payload: payload({ place: id, source: z.enum(["ad", "pass"]), network: id.optional() }) },
+  // Проверка рекламы командой (Р165, tasks/T-0333), не игровой показ: в воронку
+  // рекламы не входит. `live` — боевой показ или тестовый, `ms` — от нажатия до
+  // исхода в миллисекундах, `reason` — код отказа, только при `failed`.
+  ad_tested: {
+    version: 1,
+    payload: payload({
+      network: id,
+      format: z.enum(["rewarded", "interstitial"]),
+      live: z.boolean(),
+      outcome: z.enum(["completed", "closed", "failed"]),
+      reason: id.optional(),
+      ms: seconds,
+    }),
+  },
   // Связь с API пропала и вернулась (общая плашка «Нет связи», T-0015);
   // `downtimeSec` — сколько прошло между потерей и возвращением.
   connection_lost: { version: 1, payload: payload({}) },

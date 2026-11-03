@@ -21,6 +21,9 @@ import { fetchBytes, fetchJson, type FetchLike } from "./http.js";
  *   Условия: при показе курсов — ссылка «Rates By Exchange Rate API», данные
  *   нельзя перераспространять. Мы их не показываем и не раздаём, а берём
  *   одним из голосов медианы.
+ * - **ForexRateAPI** — рубль и евро, голос медианы наравне с ExchangeRate-API,
+ *   только с ключом (Р175): ключ — заголовком `X-API-KEY`. Тариф Free — 100
+ *   запросов в месяц; его условия некоммерческие.
  */
 
 const HOUR = 3_600_000;
@@ -150,5 +153,41 @@ export function parseErApi(body: z.infer<typeof erapiSchema>): Quote[] {
   const observedAt = new Date(body.time_last_update_unix * 1000);
   const matched = matchBySourceId<number>(ERAPI_CURRENCIES, Object.entries(body.rates ?? body.conversion_rates ?? {}));
   return [...matched].map(([code, unitsPerUsd]: [CurrencyCode, number]) => quoteFromUnitsPerUsd(code, unitsPerUsd, "erapi", observedAt));
+}
+
+export const FOREXRATEAPI_CURRENCIES: readonly SourceCurrency[] = [
+  { currency: "RUB", sourceId: "RUB" },
+  { currency: "EUR", sourceId: "EUR" },
+];
+
+/** Free: 100 запросов в месяц; раз в 12 часов — около 60 в месяц, в лимит укладываемся с запасом. */
+export const FOREXRATEAPI_TARIFF: Tariff = { name: "free", perMinute: 1, perMonth: 100, minIntervalMs: 12 * HOUR };
+
+/** Ответ с `success: false` схему не проходит — источник просто недоступен. */
+const forexRateApiSchema = z.object({
+  success: z.literal(true),
+  base: z.literal("USD"),
+  timestamp: z.number().int().positive(),
+  rates,
+});
+
+export function createForexRateApiSource(options: SourceOptions & { key: string }): RateSource {
+  if (options.key === "") throw new RangeError("ключ ForexRateAPI пуст");
+  return {
+    id: "forexrateapi",
+    currencies: FOREXRATEAPI_CURRENCIES,
+    tariff: FOREXRATEAPI_TARIFF,
+    async fetch(signal) {
+      const url = "https://api.forexrateapi.com/v1/latest?base=USD&currencies=RUB,EUR";
+      return parseForexRateApi(await fetchJson(options.fetch, "forexrateapi", url, signal, forexRateApiSchema, { "X-API-KEY": options.key }));
+    },
+  };
+}
+
+/** База — доллар, курс — сколько единиц за доллар; момент — `timestamp` источника. */
+export function parseForexRateApi(body: z.infer<typeof forexRateApiSchema>): Quote[] {
+  const observedAt = new Date(body.timestamp * 1000);
+  const matched = matchBySourceId<number>(FOREXRATEAPI_CURRENCIES, Object.entries(body.rates));
+  return [...matched].map(([code, unitsPerUsd]: [CurrencyCode, number]) => quoteFromUnitsPerUsd(code, unitsPerUsd, "forexrateapi", observedAt));
 }
 

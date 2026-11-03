@@ -108,6 +108,7 @@ const FX_SERVICE = "Курсы валют · CoinGecko";
 const CMC_SERVICE = "Курсы валют · CoinMarketCap";
 const TONAPI_SERVICE = "Курсы валют · tonapi";
 const ERAPI_SERVICE = "Курсы валют · ExchangeRate-API";
+const FOREXRATEAPI_SERVICE = "Курсы валют · ForexRateAPI";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
 
@@ -201,6 +202,24 @@ export const SECRETS = {
       url: (value) => `https://v6.exchangerate-api.com/v6/${encodeURIComponent(value)}/quota`,
       headers: () => ({}),
       refusalHint: "проверьте, что ключ скопирован целиком из кабинета ExchangeRate-API",
+    }),
+  },
+  forexrateapi: {
+    key: "fx.forexrateapi",
+    service: FOREXRATEAPI_SERVICE,
+    title: "Ключ ForexRateAPI",
+    hint: "Ещё один голос курсов рубля и евро. Без ключа источник выключен",
+    cabinetUrl: "https://forexrateapi.com/dashboard",
+    // Формат ключа в документации не описан: шаблон отсекает мусор и знаки, которым не место в заголовке.
+    pattern: /^[A-Za-z0-9_-]{16,128}$/,
+    example: "0123456789abcdef0123456789abcdef",
+    fromEnv: () => null,
+    // `/v1/usage` квоту тарифа не расходует.
+    check: keyCheck({
+      service: "ForexRateAPI",
+      url: () => "https://api.forexrateapi.com/v1/usage",
+      headers: (value) => ({ "X-API-KEY": value }),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета ForexRateAPI",
     }),
   },
   adsgramConversionToken: {

@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { ApiError } from "../../api/client";
 import {
   AUDIENCE_TITLES,
@@ -17,10 +17,13 @@ import {
   emptyDraft,
   fetchSlides,
   oneLine,
+  reorderSlides,
+  slideGroups,
   targetLabel,
   updateSlide,
   type SlideCatalog,
   type SlideDraft,
+  type SlideGroup,
   type TeamSlide,
 } from "../../api/home-slides";
 import { imageUrl } from "../../api/media";
@@ -30,7 +33,8 @@ import { ChoiceCards } from "../../ui/choice";
 import { HELP } from "../../ui/help";
 import { ImageField } from "../../ui/image-field";
 import { PhonePreview } from "../../ui/phone-preview";
-import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { applyOrder } from "../../ui/sortable-order";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Help, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -56,9 +60,29 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
+  /** Новый порядок группы сразу, пока запрос в пути: без него строка прыгала бы назад и вперёд. */
+  const [override, setOverride] = useState<{ group: SlideGroup; ids: string[] } | null>(null);
+  /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
+  const [reordering, setReordering] = useState(false);
   const { limits } = catalog;
   const problem = draftProblem(draft, limits, new Date(), editing !== null);
   const extra = crowded(catalog.slides, limits);
+
+  const groups = slideGroups(catalog.slides);
+  // Показанный порядок держится, пока не придёт перечитанный список: иначе строки на мгновение прыгали бы назад.
+  useEffect(() => setOverride(null), [catalog]);
+
+  const move = async (group: SlideGroup, ids: string[]) => {
+    setOverride({ group, ids });
+    setReordering(true);
+    setOutcome(null);
+    const result = await reorderSlides(api, group, ids);
+    setReordering(false);
+    // При ошибке (в том числе 400: список мог измениться у другого администратора) порядок возвращается к серверному.
+    if (!result.ok) setOverride(null);
+    setOutcome(result.ok ? { tone: "success", text: "Порядок слайдов сохранён — игроки увидят его в течение полуминуты" } : { tone: "danger", error: result.error });
+    reload();
+  };
 
   const set = (patch: Partial<SlideDraft>) => setDraft({ ...draft, ...patch });
   const reset = () => {
@@ -96,6 +120,65 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
     setOutcome({ tone: "success", text: `Слайд «${slide.title}» снят — из карусели он уйдёт в течение полуминуты` });
     if (editing?.slideId === slide.slideId) reset();
     reload();
+  };
+
+  const columns = [
+    { title: "Слайд", render: (slide: TeamSlide) => <SlideCell slide={slide} /> },
+    { title: "Куда ведёт", render: (slide: TeamSlide) => <span className="break-all">{targetLabel(slide)}</span> },
+    { title: "Кому и где", render: (slide: TeamSlide) => audienceLabel(slide) },
+    { title: "Срок", render: (slide: TeamSlide) => <span className="whitespace-nowrap">{`${formatDateTime(slide.startsAt)} — ${formatDateTime(slide.endsAt)}`}</span> },
+    {
+      title: "Состояние",
+      render: (slide: TeamSlide) => (
+        <span className="inline-flex items-center gap-1.5">
+          <Badge tone={STATE_TONES[slide.state] ?? "neutral"}>{SLIDE_STATE_TITLES[slide.state] ?? slide.state}</Badge>
+          {slide.pinned ? <Badge tone="info">первым</Badge> : null}
+        </span>
+      ),
+    },
+    {
+      title: "",
+      render: (slide: TeamSlide) => {
+        if (!EDITABLE.has(slide.state)) return null;
+        // Вернуть снятый нельзя — второе нажатие подтверждает.
+        return (
+          // Нажатие по кнопке — не нажатие по строке: строка открыла бы правку.
+          <span className="flex flex-wrap gap-2 max-md:flex-col" onClick={(event) => event.stopPropagation()}>
+            {confirmArchive === slide.slideId ? (
+              <>
+                <Button tone="danger" onClick={() => void archive(slide)}>
+                  Да, снять
+                </Button>
+                <Button onClick={() => setConfirmArchive(null)}>Отмена</Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => edit(slide)}>Изменить</Button>
+                <Button onClick={() => setConfirmArchive(slide.slideId)}>Снять</Button>
+              </>
+            )}
+          </span>
+        );
+      },
+    },
+  ];
+
+  /** Таблица одной группы; `null` — снятые: без ручек и без порядка. */
+  const slidesTable = (group: SlideGroup | null, title: string, empty: string) => {
+    const rows = group === null ? groups.archived : groups[group];
+    return (
+      <section key={title} className="flex flex-col gap-2">
+        <h3 className="text-sm font-medium">{title}</h3>
+        <DataTable
+          rows={group !== null && override?.group === group ? applyOrder(rows, override.ids, (slide) => slide.slideId) : rows}
+          rowKey={(slide) => slide.slideId}
+          onRowClick={edit}
+          empty={empty}
+          columns={columns}
+          {...(group === null ? {} : { reorder: { labelOf: (slide: TeamSlide) => slide.title, onReorder: (ids: string[]) => void move(group, ids), disabled: reordering } })}
+        />
+      </section>
+    );
   };
 
   const titleLength = oneLine(draft.title).length;
@@ -176,27 +259,28 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
             </div>
           </fieldset>
 
-          <div className="flex flex-wrap items-end gap-3">
+          <FieldRow>
             <Field label="Начало" help={HELP.home.term} hint={editing === null ? "пусто — сразу" : undefined}>
               <Input type="datetime-local" value={draft.startsAt} onChange={(event) => set({ startsAt: event.target.value })} />
             </Field>
             <Field label="Конец" hint={`не дольше ${String(limits.maxDays)} дней`}>
               <Input type="datetime-local" value={draft.endsAt} onChange={(event) => set({ endsAt: event.target.value })} />
             </Field>
-            <label className="flex items-center gap-1.5 pb-2 text-sm">
-              <input type="checkbox" checked={draft.pinned} onChange={(event) => set({ pinned: event.target.checked })} />
-              Первым в карусели
-              <Help text={HELP.home.pinned} />
-            </label>
-          </div>
+            <RowItem>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" checked={draft.pinned} onChange={(event) => set({ pinned: event.target.checked })} />
+                Первым в карусели
+                <Help text={HELP.home.pinned} />
+              </label>
+            </RowItem>
+          </FieldRow>
 
           <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               {editing === null ? "Завести" : "Сохранить"}
             </Button>
             {editing === null ? null : <Button onClick={reset}>Отмена</Button>}
           </div>
-          {problem === null || (draft.title === "" && editing === null) ? null : <Notice tone="info">{problem}</Notice>}
         </form>
           {/* Слайд так, как его увидит игрок: тот же компонент в странице клиента (Р83). */}
           <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
@@ -210,57 +294,24 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
         {extra > 0 ? (
           <div className="mb-3">
             <Notice tone="warning">
-              Идут {String(extra + limits.shownMax)} — в карусели разом не больше {String(limits.shownMax)}: игрок видит закреплённые, потом начавшиеся позже. Остальные ждут, пока
-              первые кончатся.
+              Идут {String(extra + limits.shownMax)} — в карусели разом не больше {String(limits.shownMax)}: игрок видит сначала закреплённые, потом остальные, внутри — в порядке списка. Остальные
+              ждут, пока первые кончатся.
             </Notice>
           </div>
         ) : null}
-        <DataTable
-          rows={catalog.slides}
-          rowKey={(slide) => slide.slideId}
-          onRowClick={edit}
-          empty="Слайдов ещё не было — заведите первый выше"
-          columns={[
-            { title: "Слайд", render: (slide) => <SlideCell slide={slide} /> },
-            { title: "Куда ведёт", render: (slide) => <span className="break-all">{targetLabel(slide)}</span> },
-            { title: "Кому и где", render: (slide) => audienceLabel(slide) },
-            { title: "Срок", render: (slide) => <span className="whitespace-nowrap">{`${formatDateTime(slide.startsAt)} — ${formatDateTime(slide.endsAt)}`}</span> },
-            {
-              title: "Состояние",
-              render: (slide) => (
-                <span className="inline-flex items-center gap-1.5">
-                  <Badge tone={STATE_TONES[slide.state] ?? "neutral"}>{SLIDE_STATE_TITLES[slide.state] ?? slide.state}</Badge>
-                  {slide.pinned ? <Badge tone="info">первым</Badge> : null}
-                </span>
-              ),
-            },
-            {
-              title: "",
-              render: (slide) => {
-                if (!EDITABLE.has(slide.state)) return null;
-                // Вернуть снятый нельзя — второе нажатие подтверждает.
-                return (
-                  // Нажатие по кнопке — не нажатие по строке: строка открыла бы правку.
-                  <span className="flex gap-2" onClick={(event) => event.stopPropagation()}>
-                    {confirmArchive === slide.slideId ? (
-                      <>
-                        <Button tone="danger" onClick={() => void archive(slide)}>
-                          Да, снять
-                        </Button>
-                        <Button onClick={() => setConfirmArchive(null)}>Отмена</Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button onClick={() => edit(slide)}>Изменить</Button>
-                        <Button onClick={() => setConfirmArchive(slide.slideId)}>Снять</Button>
-                      </>
-                    )}
-                  </span>
-                );
-              },
-            },
-          ]}
-        />
+        {catalog.slides.length === 0 ? (
+          <DataTable rows={[]} rowKey={(slide: TeamSlide) => slide.slideId} columns={[{ title: "Слайд", render: () => null }]} empty="Слайдов ещё не было — заведите первый выше" />
+        ) : (
+          <div className="flex flex-col gap-5">
+            <p className="flex items-center gap-1.5 text-sm text-text-muted">
+              Порядок слайдов
+              <Help text={HELP.home.order} />
+            </p>
+            {slidesTable("pinned", "Закреплённые", "Нет закреплённых слайдов")}
+            {slidesTable("regular", "Остальные", "Нет слайдов без закрепления")}
+            {groups.archived.length === 0 ? null : slidesTable(null, "Снятые", "")}
+          </div>
+        )}
       </Panel>
     </div>
   );

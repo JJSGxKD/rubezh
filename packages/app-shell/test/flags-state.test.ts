@@ -91,7 +91,7 @@ describe("флаги клиента", () => {
   it("спрашивает именно GET /api/v1/flags", async () => {
     signIn(false);
     let asked: { path: string; method: string } | null = null;
-    const spy: ApiRequest = async <T>(path: string, _schema: z.ZodMiniType<T>, init: { method: "GET" | "POST" | "DELETE" }) => {
+    const spy: ApiRequest = async <T>(path: string, _schema: z.ZodMiniType<T>, init: { method: "GET" | "POST" | "PUT" | "DELETE" }) => {
       asked = { path, method: init.method };
       return { ok: false, failure: "offline" } satisfies ApiResult<T>;
     };

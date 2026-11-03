@@ -29,7 +29,7 @@ export interface FullLoadPreset {
 }
 
 export const BENCH_FULL_LOAD: FullLoadPreset = {
-  weights: { swarm: 6, chase: 2, kite_and_shoot: 2, dash: 1, orbit: 1, exploder: 1, splitter: 1 },
+  weights: { swarm: 6, chase: 2, dash: 1, orbit: 1, exploder: 1, splitter: 1 },
   eliteEverySec: 20,
   elitesPerWave: 2,
 };

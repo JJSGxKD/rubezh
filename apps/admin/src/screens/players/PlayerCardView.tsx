@@ -1,28 +1,33 @@
 import { api } from "../../services";
-import { fetchPlayerCard, FUNNEL_MILESTONES, purchaseLabel, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
-import { BAN_KIND, fetchRestrictions, type Restriction } from "../../api/restrictions";
+import { fetchPlayerCard, FUNNEL_MILESTONES, resourceName, WALLET_RESOURCES, type PlayerCard } from "../../api/players";
+import { BAN_KIND, fetchRestrictions } from "../../api/restrictions";
 import { difficultyTitle } from "../../api/review";
 import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../../format";
-import { can } from "../../state/session";
-import { useSession } from "../../state/use-session";
-import { Badge, Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from "../../ui/kit";
+import { Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
-import { navigate } from "../../ui/router";
+import { navigate, useHashRoute } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
-import { MessagePanel, WalletAdjustPanel } from "./PlayerActions";
+import { CARD_TABS, cardTabOf, tabCounts, type CardTab } from "./card-rules";
+import { PlayerHeader } from "./PlayerHeader";
+import { PlayerSummary } from "./PlayerSummary";
+import { PurchasesPanel } from "./PurchasesPanel";
 import { RatingRunsPanel } from "./RatingRunsPanel";
 import { RestrictionsPanel } from "./RestrictionsPanel";
 import { SocialPanel } from "./SocialPanel";
 
 /**
- * Карточка игрока (docs/29-admin-panel.md §2, «Игроки»). Что в ней видно,
- * решил сервер: без права на персональные данные нет ID и юзернейма, без
- * права на выручку — покупок. Панель честно пишет «скрыто», а не рисует пустоту.
+ * Карточка игрока вкладками (docs/29-admin-panel.md §2, «Игроки»): шапка с
+ * действиями и «Сводка · Забеги · Покупки · Кошелёк · Друзья · Ограничения».
+ * Что в ней видно, решил сервер: без права на персональные данные нет ID и
+ * юзернейма, без права на выручку — покупок. Панель честно пишет «скрыто», а
+ * не рисует пустоту. Вкладка — в адресе (`#/players/<id>/<вкладка>`): ссылка из
+ * чата открывает нужную, «назад» возвращает прежнюю; смена вкладки карточку не
+ * перечитывает.
  */
 export function PlayerCardView({ accountId }: { accountId: string }) {
   const { state, reload } = useApi(() => fetchPlayerCard(api, accountId), [accountId]);
   const restrictions = useApi(() => fetchRestrictions(api, accountId), [accountId]);
-  const view = useSession((session) => session.view);
+  const tab = cardTabOf(useHashRoute()?.tab);
   // Блокировка — тоже ограничение: после наложения и снятия обновляются и шапка, и список.
   const changed = () => {
     reload();
@@ -31,78 +36,60 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
   const active = restrictions.state.status === "ok" ? restrictions.state.data.restrictions.filter((row) => row.state === "active") : [];
   // Блокировка закрывает и рейтинг — так же, как на сервере (`RATING_KINDS`).
   const ratingClosed = active.some((row) => row.kind === "leaderboard" || row.kind === BAN_KIND);
+  const open = (next: CardTab) => navigate({ section: "players", id: accountId, ...(next === "summary" ? {} : { tab: next }) });
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <Button onClick={() => navigate({ section: "players", id: null })}>← К поиску</Button>
+        <Button onClick={() => navigate({ section: "players", id: null })}>← Игроки</Button>
       </div>
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok" ? (
         <>
-          <Header card={state.data} active={active} />
-          <RestrictionsPanel accountId={accountId} playerName={state.data.account.displayName} restrictions={restrictions.state} onChanged={changed} />
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Funnel card={state.data} />
-            <Acquisition card={state.data} />
-            <Runs card={state.data} />
-            <Wallet card={state.data} />
-            {/* Таблица с действием в строке в половину ширины не влезает — рекорды на всю ширину сразу под забегами. */}
-            <div className="xl:col-span-2">
+          <PlayerHeader card={state.data} active={active} onChanged={changed} />
+          <Tabs active={tab} counts={tabCounts(state.data, active)} onSelect={open} />
+          {tab === "summary" ? <PlayerSummary card={state.data} onTab={open} /> : null}
+          {tab === "runs" ? (
+            <div className="flex flex-col gap-4">
+              <Runs card={state.data} />
+              {/* Таблица с действием в строке — на всю ширину. */}
               <RatingRunsPanel accountId={accountId} ratingClosed={ratingClosed} onChanged={reload} />
+              <Funnel card={state.data} />
             </div>
-            <SocialPanel accountId={accountId} />
-            {can(view, "players.message") ? <MessagePanel card={state.data} /> : null}
-            {can(view, "players.wallet.adjust") ? <WalletAdjustPanel card={state.data} onChanged={reload} /> : null}
-          </div>
-          <Purchases card={state.data} />
+          ) : null}
+          {tab === "purchases" ? <PurchasesPanel card={state.data} onChanged={reload} /> : null}
+          {tab === "wallet" ? <Wallet card={state.data} /> : null}
+          {tab === "friends" ? <SocialPanel accountId={accountId} /> : null}
+          {tab === "restrictions" ? <RestrictionsPanel accountId={accountId} playerName={state.data.account.displayName} restrictions={restrictions.state} onChanged={changed} /> : null}
         </>
       ) : null}
     </div>
   );
 }
 
-function Header({ card, active }: { card: PlayerCard; active: readonly Restriction[] }) {
-  const { account, progress } = card;
-  const share = progress.xpForNext === null || progress.xpForNext === 0 ? 1 : Math.min(1, progress.xpIntoLevel / progress.xpForNext);
-  // Блокировку шапка знает из аккаунта, остальное — из списка ограничений: модератор видит их, не листая карточку.
-  const limited = active.filter((row) => row.kind !== "all");
+/** Вкладки строкой под шапкой: активная — черта акцента снизу, число ожидающего — значком; на телефоне прокручивается строка, не страница. */
+function Tabs({ active, counts, onSelect }: { active: CardTab; counts: Partial<Record<CardTab, number>>; onSelect: (tab: CardTab) => void }) {
   return (
-    <Panel
-      title={account.displayName}
-      actions={
-        <span className="flex flex-wrap gap-1.5">
-          {limited.length === 0 ? null : <Badge tone="warning">закрыто: {limited.map((row) => (row.notify ? row.title : `${row.title} (молча)`)).join(", ")}</Badge>}
-          {account.banned === null ? null : <Badge tone="danger">заблокирован {formatDateTime(account.banned.at)}</Badge>}
-        </span>
-      }
-    >
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <KeyValue
-          items={[
-            ["Аккаунт", <code className="text-xs">{account.accountId}</code>],
-            ["Площадка", account.platform],
-            ["ID на площадке", account.pii?.platformUserId ?? "скрыт — нет права на персональные данные"],
-            ["Юзернейм", account.pii === null ? "скрыт" : account.pii.username === null ? "—" : `@${account.pii.username}`],
-            ["С нами с", formatDateTime(account.createdAt)],
-            ["Роли", card.roles.length === 0 ? "—" : card.roles.join(", ")],
-          ]}
-        />
-        <div className="flex flex-col gap-2">
-          <KeyValue
-            items={[
-              ["Уровень", `${progress.level}, опыт ${formatNumber(progress.xp)}`],
-              ["Писать в бота", card.messaging === null ? "не знаем" : card.messaging.canMessage ? `можно (${card.messaging.reason})` : `нельзя (${card.messaging.reason})`],
-              ["Предупреждение о тесте", testNoticeLabel(card.testNotice)],
-            ]}
-          />
-          <div className="h-1.5 overflow-hidden rounded-pill bg-surface-sunken" title="Опыт внутри уровня">
-            <div className="h-full bg-xp" style={{ width: `${Math.round(share * 100)}%` }} />
-          </div>
-        </div>
-      </div>
-    </Panel>
+    <div role="tablist" aria-label="Карточка игрока" className="flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none]">
+      {CARD_TABS.map((item) => {
+        const selected = item.id === active;
+        const count = counts[item.id];
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onSelect(item.id)}
+            className={`-mb-px flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-colors ${selected ? "border-accent text-text" : "border-transparent text-text-muted hover:text-text"}`}
+          >
+            {item.title}
+            {count === undefined ? null : <span className="inline-flex min-w-5 justify-center rounded-pill bg-warning/15 px-1.5 text-xs font-semibold text-warning tabular-nums">{count}</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -114,26 +101,6 @@ function Funnel({ card }: { card: PlayerCard }) {
         <p className="text-sm text-text-muted">Вех нет: игрок ни разу не входил.</p>
       ) : (
         <KeyValue items={[...FUNNEL_MILESTONES.map(([key, label]): [string, string] => [label, formatDateTime(funnel[key])]), ["Забегов записано", formatNumber(funnel.runsRecorded)]]} />
-      )}
-    </Panel>
-  );
-}
-
-function Acquisition({ card }: { card: PlayerCard }) {
-  const { acquisition } = card;
-  const touch = (kind: string | null, ref: string | null) => (kind === null ? "—" : ref === null ? kind : `${kind}: ${ref}`);
-  return (
-    <Panel title="Откуда пришёл" help={HELP.players.origin}>
-      {acquisition === null ? (
-        <p className="text-sm text-text-muted">Касаний нет.</p>
-      ) : (
-        <KeyValue
-          items={[
-            ["Первое касание", `${formatDateTime(acquisition.firstAt)} — ${touch(acquisition.firstStartKind, acquisition.firstStartRef)}`],
-            ["Последнее касание", acquisition.lastTouchAt === null ? "—" : `${formatDateTime(acquisition.lastTouchAt)} — ${touch(acquisition.lastStartKind, acquisition.lastStartRef)}`],
-            ["Последний заход", formatDateTime(acquisition.lastSeenAt)],
-          ]}
-        />
       )}
     </Panel>
   );
@@ -195,38 +162,4 @@ function Wallet({ card }: { card: PlayerCard }) {
       </div>
     </Panel>
   );
-}
-
-function Purchases({ card }: { card: PlayerCard }) {
-  return (
-    <Panel title="Покупки">
-      {card.purchases === null ? (
-        <p className="text-sm text-text-muted">Скрыто: нет права на аналитику выручки.</p>
-      ) : (
-        <DataTable
-          rows={card.purchases}
-          rowKey={(purchase) => purchase.purchaseId}
-          empty="Покупок нет"
-          columns={[
-            { title: "Счёт", render: (purchase) => formatDateTime(purchase.invoicedAt) },
-            { title: "Статус", render: (purchase) => purchase.status },
-            { title: "Режим", render: (purchase) => purchase.mode },
-            { title: "Что", render: (purchase) => purchaseLabel(purchase) },
-            { title: "Цена, ⭐", render: (purchase) => formatNumber(purchase.priceStars), align: "right" },
-            { title: "Списано, ⭐", render: (purchase) => formatNumber(purchase.chargedStars), align: "right" },
-            { title: "Оплачен", render: (purchase) => formatDateTime(purchase.paidAt) },
-            { title: "Возврат", render: (purchase) => (purchase.refundedAt === null ? "—" : `${formatDateTime(purchase.refundedAt)} (${purchase.refundReason ?? "—"})`) },
-          ]}
-        />
-      )}
-    </Panel>
-  );
-}
-
-/** Видел ли игрок предупреждение об открытом тесте и когда впервые — к спору о вайпе и покупках (WP33). */
-function testNoticeLabel(notice: PlayerCard["testNotice"]): string {
-  if (notice === undefined) return "не знаем";
-  if (notice === null) return "не принимал";
-  const first = formatDateTime(notice.firstAcceptedAt);
-  return notice.version > 1 ? `принял ${first}, текст версии ${String(notice.version)} — ${formatDateTime(notice.acceptedAt)}` : `принял ${first}`;
 }

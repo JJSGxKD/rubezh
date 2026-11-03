@@ -53,6 +53,13 @@ export function checksumWorld(world: World): number {
     fold(world.cordon.centerY);
     fold(world.cordon.radius);
     fold(world.cordon.timeLeftSec);
+    fold(world.cordon.pending.length);
+    for (const entry of world.cordon.pending) {
+      fold(entry.typeIndex);
+      fold(entry.x);
+      fold(entry.y);
+    }
+    fold(world.cordon.pendingLeftSec);
   }
 
   for (let i = 0; i < world.enemies.count; i++) {

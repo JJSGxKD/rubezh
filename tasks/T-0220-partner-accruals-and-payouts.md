@@ -25,7 +25,7 @@ shared:
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
   - docs/37-accounting.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor

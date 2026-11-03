@@ -1,9 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query, Req, UseGuards } from "@nestjs/common";
 import { ZodError } from "zod";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { AuthGuard, accountOf } from "../auth/auth.guard.js";
 import { RateLimiter, type RateLimit } from "../ingest/rate-limiter.js";
+import { runProofBodySchema } from "./dto/run-proof.dto.js";
 import { difficultyQuerySchema, runFinishSchema, runIdParamSchema, runStartSchema } from "./dto/runs.dto.js";
+import { RunProofsService, type ProofReceipt } from "./run-proofs.service.js";
 import { RUNS_LIMITS } from "./runs-limits.js";
 import { RunsService, type FinishResult } from "./runs.service.js";
 import { RunsViewService, type LeaderboardView, type ProfileView, type RunDetailView } from "./runs-view.service.js";
@@ -21,6 +23,7 @@ export class RunsController {
     private readonly runs: RunsService,
     private readonly view: RunsViewService,
     private readonly limiter: RateLimiter,
+    private readonly proofs: RunProofsService,
   ) {}
 
   @Post("start")
@@ -37,6 +40,22 @@ export class RunsController {
     await this.limit(RUNS_LIMITS.finish, account.accountId);
     const run = parse(() => runFinishSchema.parse(body), "Некорректный итог забега");
     return { data: await this.runs.finish(account, run) };
+  }
+
+  /**
+   * Запись для проверки (docs/35-stage4-plan.md WP5, tasks/T-0317): клиент
+   * шлёт её после записи забега, сжатой gzip-ом и в base64. 200 — принята или
+   * уже была та же; 404 — забег чужой или неизвестен; 409 — к забегу уже принята
+   * другая запись; 422 — не прошла проверку.
+   */
+  @Put(":runId/proof")
+  @HttpCode(200)
+  async proof(@Req() request: unknown, @Param("runId") runId: string, @Body() body: unknown): Promise<{ data: ProofReceipt }> {
+    const account = accountOf(request);
+    await this.limit(RUNS_LIMITS.proof, account.accountId, "Слишком часто — попробуй позже");
+    const id = parse(() => runIdParamSchema.parse(runId), "Некорректный забег");
+    const { proof } = parse(() => runProofBodySchema.parse(body), "Некорректная запись");
+    return { data: await this.proofs.receive(account.accountId, id, proof) };
   }
 
   @Get("leaderboard")

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import { claimResultSchema, type ClaimResult } from "./dto/seasons.dto.js";
+import { assertInGameReward } from "./season-rules.js";
 import { SeasonRewardNotFoundError } from "./seasons-errors.js";
 import { SEASONS_REPOSITORY, type SeasonsRepository } from "./seasons.repository.js";
 
@@ -35,6 +36,8 @@ export class SeasonsClaimService {
     const reward = await withTimeout(this.repository.rewardOf(seasonKey, accountId), DB_TIMEOUT_MS, "seasons: награда");
     if (reward === null) throw new SeasonRewardNotFoundError();
     if (reward.status !== "pending") return NOT_CLAIMED;
+    // Призы сезона — только внутриигровые: монеты через кошелёк, больше ничего ни на одной доске.
+    assertInGameReward({ coins: reward.coins, prestige: reward.prestige });
 
     const granted = await withTimeout(
       this.wallet.grant({ accountId, resource: "coins", amount: reward.coins, reason: "season_reward", source: `season:${seasonKey}`, idempotencyKey: `season:${seasonKey}:${accountId}`, at }),

@@ -28,3 +28,15 @@ export function parseDevUser(value: string): DevUser | null {
 export function isDeveloperAccount(account: { platform: string; platformUserId: string }): boolean {
   return account.platform === "telegram" && DEV_ID.test(account.platformUserId);
 }
+
+/** Вход `dev-player-<id>` — разработчик в роли обычного игрока: автоматической роли владельца нет. */
+const PLAYER_PREFIX = "dev-player-";
+
+/**
+ * Получает ли аккаунт разработчика роль владельца автоматически. `dev-player-<id>`
+ * — нет: так игру видно глазами игрока, без вкладок режимов и инструментов
+ * команды; роли у него только те, что выданы в базе.
+ */
+export function isDeveloperOwner(account: { platform: string; platformUserId: string }): boolean {
+  return isDeveloperAccount(account) && !account.platformUserId.startsWith(PLAYER_PREFIX);
+}

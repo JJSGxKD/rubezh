@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { ApiError } from "../../api/client";
 import {
+  ACHIEVEMENT_CATEGORIES,
+  CATEGORY_TITLES,
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
@@ -8,14 +10,21 @@ import {
   FILTER_LABELS,
   FILTER_OPTIONS,
   GROUP_TITLES,
+  HINT_MAX,
   KIND_TITLES,
+  LADDER_MAX,
+  NO_ACHIEVEMENT_FIELDS,
+  NO_CATEGORY_TITLE,
   NO_TIER_TITLE,
   PARTNER_KINDS,
   PARTNER_PLATFORMS,
   PARTNER_PLATFORM_TITLES,
   PERIOD_TITLES,
   POOL_TIERS,
+  PRESTIGE_MAX,
   REPEAT_TITLES,
+  RUNG_MAX,
+  STATE_KINDS,
   TASK_LIMIT_RANGE,
   TASK_PERIODS,
   TIER_TITLES,
@@ -24,7 +33,9 @@ import {
   completionsLabel,
   fetchTasks,
   groupByPeriod,
+  isAchievement,
   partnerPlatforms,
+  reorderTasks,
   rewardLabel,
   saveTask,
   targetLabel,
@@ -32,8 +43,10 @@ import {
   taskProblem,
   togglePlatform,
   withKind,
+  withPeriod,
   withPlatform,
   type PoolTier,
+  type TaskGroup,
   type TaskParams,
   type TaskDef,
 } from "../../api/tasks";
@@ -41,14 +54,15 @@ import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
 import { PhonePreview } from "../../ui/phone-preview";
-import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
+import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
-const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null };
+const EMPTY: TaskDef = { taskId: "", period: "daily", kind: "runs", params: null, filter: null, tier: null, target: 1, title: null, coins: 0, gems: 0, shards: 0, passPoints: 0, sort: 0, active: true, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS };
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): что игроку делать
@@ -69,6 +83,10 @@ export function TasksScreen() {
   const [original, setOriginal] = useState<TaskDef | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
+  /** Новый порядок группы сразу, пока запрос в пути: без него строка прыгала бы назад и вперёд. */
+  const [override, setOverride] = useState<{ group: TaskGroup; ids: string[] } | null>(null);
+  /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
+  const [reordering, setReordering] = useState(false);
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
@@ -94,10 +112,28 @@ export function TasksScreen() {
   const partner = PARTNER_KINDS.has(input.kind);
   const filterKey = FILTER_KEYS[input.kind];
   const pooled = !partner && input.period !== "achievement";
+  const achievement = isAchievement(input);
+  const stateKind = STATE_KINDS.has(input.kind);
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
-  const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints" | "sort") => ({
+  // Показанный порядок держится, пока не придёт перечитанный каталог: иначе строки на мгновение прыгали бы назад.
+  const loaded = state.status === "ok" ? state.data : null;
+  useEffect(() => setOverride(null), [loaded]);
+
+  const move = async (group: TaskGroup, ids: string[]) => {
+    setOverride({ group, ids });
+    setReordering(true);
+    setOutcome(null);
+    const result = await reorderTasks(api, group, ids);
+    setReordering(false);
+    // При ошибке (в том числе 400: список мог измениться у другого администратора) порядок возвращается к серверному.
+    if (!result.ok) setOverride(null);
+    setOutcome(result.ok ? { tone: "success", text: "Порядок сохранён" } : { tone: "danger", error: result.error });
+    reload();
+  };
+
+  const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints") => ({
     value: String(input[field]),
     onChange: (event: { target: { value: string } }) => setInput({ ...input, [field]: event.target.value === "" ? 0 : Number(event.target.value) }),
     type: "number",
@@ -111,7 +147,7 @@ export function TasksScreen() {
       <Panel title={original === null ? "Новое задание" : `Задание ${original.taskId}`}>
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
         <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
             </Field>
@@ -127,7 +163,7 @@ export function TasksScreen() {
               </Field>
             ) : (
               <Field label="Срок" help={HELP.tasks.period}>
-                <Select value={input.period} disabled={original !== null || partner} onChange={(event) => setInput({ ...input, period: TASK_PERIODS.find((period) => period === event.target.value) ?? "daily" })}>
+                <Select value={input.period} disabled={original !== null || partner || stateKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
                   {TASK_PERIODS.map((period) => (
                     <option key={period} value={period}>
                       {PERIOD_TITLES[period]}
@@ -177,12 +213,12 @@ export function TasksScreen() {
                 <Input {...number("target")} min={1} />
               </Field>
             )}
-          </div>
+          </FieldRow>
           {partner ? (
             <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
           ) : null}
           {partner ? (
-            <div className="flex flex-wrap items-end gap-2">
+            <FieldRow>
               {channel ? (
                 <Field label="Площадка" hint="игроки других площадок задания не увидят">
                   <Select
@@ -240,7 +276,7 @@ export function TasksScreen() {
                   className="w-72"
                 />
               </Field>
-            </div>
+            </FieldRow>
           ) : null}
           {channel ? (
             <Notice tone="info">
@@ -251,7 +287,62 @@ export function TasksScreen() {
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
-          <div className="flex flex-wrap items-end gap-2">
+          {achievement ? (
+            <FieldRow>
+              <Field label="Категория" help={HELP.tasks.category}>
+                <Select value={input.category ?? ""} onChange={(event) => setInput({ ...input, category: ACHIEVEMENT_CATEGORIES.find((category) => category === event.target.value) ?? null })}>
+                  <option value="">{NO_CATEGORY_TITLE}</option>
+                  {ACHIEVEMENT_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {CATEGORY_TITLES[category]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Лестница" help={HELP.tasks.ladder} hint="латиница, пусто — без лестницы">
+                <Input
+                  value={input.ladder ?? ""}
+                  onChange={(event) => setInput({ ...input, ladder: event.target.value === "" ? null : event.target.value.trim(), rung: event.target.value.trim() === "" ? null : (input.rung ?? 1) })}
+                  placeholder="kills"
+                  maxLength={LADDER_MAX}
+                  className="w-32"
+                />
+              </Field>
+              <Field label="Ступень лестницы" help={HELP.tasks.ladder}>
+                <Input
+                  value={input.rung === null ? "" : String(input.rung)}
+                  disabled={(input.ladder ?? "") === ""}
+                  onChange={(event) => setInput({ ...input, rung: event.target.value.trim() === "" ? null : Number(event.target.value) })}
+                  type="number"
+                  min={1}
+                  max={RUNG_MAX}
+                  step={1}
+                  className="w-24"
+                />
+              </Field>
+              <Field label="Престиж" help={HELP.tasks.prestige} hint={`0–${PRESTIGE_MAX.toLocaleString("ru-RU")}`}>
+                <Input
+                  value={String(input.prestige)}
+                  onChange={(event) => setInput({ ...input, prestige: event.target.value === "" ? 0 : Number(event.target.value) })}
+                  type="number"
+                  min={0}
+                  max={PRESTIGE_MAX}
+                  step={1}
+                  className="w-24"
+                />
+              </Field>
+              <RowItem>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input type="checkbox" checked={input.hidden} onChange={(event) => setInput({ ...input, hidden: event.target.checked })} />
+                  скрытое
+                </label>
+              </RowItem>
+              <Field label={`Подсказка — ${String(input.hint?.trim().length ?? 0)} из ${String(HINT_MAX)}`} help={HELP.tasks.hint}>
+                <Input value={input.hint ?? ""} onChange={(event) => setInput({ ...input, hint: event.target.value === "" ? null : event.target.value })} maxLength={HINT_MAX + 20} className="w-80" />
+              </Field>
+            </FieldRow>
+          ) : null}
+          <FieldRow>
             <Field label="Монеты">
               <Input {...number("coins")} />
             </Field>
@@ -261,28 +352,26 @@ export function TasksScreen() {
             <Field label="Осколки">
               <Input {...number("shards")} />
             </Field>
-            <Field label="Очки пасса" help={HELP.tasks.passPoints}>
+            <Field label="Очки заданий" help={HELP.tasks.passPoints}>
               <Input {...number("passPoints")} />
             </Field>
-            <Field label="Порядок" help={HELP.tasks.order}>
-              <Input {...number("sort")} />
-            </Field>
-            <label className="flex items-center gap-1.5 pb-1.5 text-sm">
-              <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
-              включено
-            </label>
-          </div>
+            <RowItem>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
+                включено
+              </label>
+            </RowItem>
+          </FieldRow>
           <Field label={`Заголовок — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`} hint="пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»)">
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
-          <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               {original === null ? "Завести" : "Сохранить"}
             </Button>
             {original === null ? null : <Button onClick={reset}>Отмена</Button>}
           </div>
-          {problem !== null && input.taskId !== "" ? <Notice tone="info">{problem}</Notice> : null}
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
           <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
@@ -297,9 +386,10 @@ export function TasksScreen() {
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
         ? groupByPeriod(state.data.tasks).map((group) => (
-            <Panel key={group.group} title={GROUP_TITLES[group.group]}>
+            <Panel key={group.group} title={GROUP_TITLES[group.group]} help={HELP.tasks.order}>
               <DataTable
-                rows={group.tasks}
+                rows={override?.group === group.group ? applyOrder(group.tasks, override.ids, (task) => task.taskId) : group.tasks}
+                reorder={{ labelOf: (task) => task.taskId, onReorder: (ids) => void move(group.group, ids), disabled: reordering }}
                 rowKey={(task) => task.taskId}
                 onRowClick={(task) => {
                   setInput({ ...task });
@@ -325,6 +415,22 @@ export function TasksScreen() {
                       </span>
                     ),
                   },
+                  // Категория, лестница и престиж — у достижений: по ним витрина раскладывает список.
+                  ...(group.group === "achievement"
+                    ? [
+                        {
+                          title: "Категория",
+                          help: HELP.tasks.category,
+                          render: (task: TaskDef) => (task.category === null ? <span className="text-text-muted">нет</span> : CATEGORY_TITLES[task.category]),
+                        },
+                        {
+                          title: "Лестница",
+                          render: (task: TaskDef) =>
+                            task.ladder === null ? <span className="text-text-muted">нет</span> : <span className="whitespace-nowrap font-mono text-xs">{`${task.ladder} · ${String(task.rung ?? "?")}`}</span>,
+                        },
+                        { title: "Престиж", help: HELP.tasks.prestige, align: "right" as const, render: (task: TaskDef) => String(task.prestige) },
+                      ]
+                    : []),
                   { title: "Награда", render: (task) => rewardLabel(task) },
                   // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
                   ...(group.group === "partner"
@@ -345,9 +451,16 @@ export function TasksScreen() {
                         },
                       ]
                     : []),
-                  { title: "Пасс", align: "right", render: (task) => String(task.passPoints) },
-                  { title: "Порядок", align: "right", render: (task) => String(task.sort) },
-                  { title: "", render: (task) => (task.active ? null : <Badge tone="warning">выключено</Badge>) },
+                  { title: "Очки", align: "right", render: (task) => String(task.passPoints) },
+                  {
+                    title: "",
+                    render: (task) => (
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        {task.hidden ? <Badge tone="neutral">скрытое</Badge> : null}
+                        {task.active ? null : <Badge tone="warning">выключено</Badge>}
+                      </span>
+                    ),
+                  },
                 ]}
               />
             </Panel>

@@ -38,6 +38,7 @@ const loaders = {
   runInterrupted: () => import("../screens/meta/run-interrupted"),
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
+  adsCheck: () => import("../screens/ads-check"),
   diagnostics: () => import("../screens/diagnostics"),
   menu: () => import("./MainMenu"),
 };
@@ -89,6 +90,7 @@ export const StressScreen = screen(loaders.stress, "StressScreen");
  */
 export const MainMenu = lazy(async () => ({ default: (await loaders.menu()).MainMenu }));
 export const SoundLabScreen = screen(loaders.soundLab, "SoundLabScreen");
+export const AdsCheckScreen = screen(loaders.adsCheck, "AdsCheckScreen");
 
 /**
  * Подтянуть чанки экранов заранее. Неудача здесь не ошибка: экран попробует

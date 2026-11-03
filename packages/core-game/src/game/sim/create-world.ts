@@ -1,3 +1,4 @@
+import { createHuntState } from "../run/hunt-log";
 import type {
   BoostDef,
   CardToolRules,
@@ -9,10 +10,17 @@ import type {
   EnemyDef,
   EnemyStageDef,
   LevelCurveDef,
+  LimitDef,
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  PressureDef,
   RunLoadout,
+  EndlessCurveDef,
+  PrologueDef,
+  RubezhDef,
+  SecretsDef,
+  TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
 import { ELEMENTS } from "@bh/shared-types";
@@ -20,13 +28,19 @@ import { resolveEnemyTypes } from "../patterns/enemy-types";
 import { computePlayerStats, resolvePassiveTypes, type PlayerStatsBase } from "../progression/passives";
 import { EMPTY_LOADOUT, sanitizeLoadout } from "../progression/run-loadout";
 import { combineModifiers, findBoostProblems, resolveBoosts } from "../progression/boosts";
+import { findLimitProblems } from "../progression/limit";
 import { addWeapon, createLoadout } from "../progression/loadout";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { xpForLevel } from "../progression/levels";
 import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
+import { createSecretState, findSecretsProblems } from "./secrets";
+import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
+import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
+import { createRubezhState } from "./rubezh";
+import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
@@ -82,6 +96,23 @@ const FALLBACK_CHESTS: ChestsDef = {
   lowHpRatio: 0.7,
   xpRatio: 0.5,
   maxOnField: 0,
+};
+
+/**
+ * Тайников в тестах симуляции нет: без колец раскладка пуста и поток тайников
+ * не тратится. Остальные поля — минимальные допустимые значения, чтобы запасные
+ * правила проходили ту же проверку, что и боевые.
+ */
+const FALLBACK_SECRETS: SecretsDef = {
+  rings: [],
+  minGapUnits: 0,
+  shrine: { radius: 60, holdSec: 3, offers: 1 },
+  hoard: { radius: 40, holdSec: 2, chestSize: 3 },
+  stone: { radius: 30 },
+  tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
+  rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5, timeLimitSec: 90 },
+  wisp: { appearSec: 90, speed: 80 },
+  blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
 
 /**
@@ -153,6 +184,27 @@ export interface CreateWorldOptions {
   drops?: DropsDef;
   /** сундук забега; по умолчанию — без сундуков */
   chests?: ChestsDef;
+  /** тайники рубежа; по умолчанию — без тайников */
+  secrets?: SecretsDef;
+  /** правила рубежа (страж на отметке); по умолчанию рубежа нет: стража в мире не будет */
+  rubezh?: RubezhDef;
+  /**
+   * Пролог первого забега (T-0278): оберег, большой первый сундук, «Советуем», Страж
+   * по силе набранного и своя кривая опыта. Без поля — обычный бесконечный забег.
+   * Таймлайн пролога подаётся отдельно (`timeline`): мир его не хранит.
+   */
+  prologue?: PrologueDef;
+  /**
+   * подстройка давления под силу игрока; заглушки нет: не передана — подстройки нет, и забег идёт по
+   * кривой единой сложности. Включается, только если у набора забега есть уровень аккаунта
+   */
+  pressure?: PressureDef;
+  /**
+   * Таймлайн спавна и кривая бесконечного режима — только чтобы знать, каких элит таймлайн уже выпускал
+   * (волна разлома Нави). Директор спавна живёт отдельно; без них у разлома нет элит и он не открывается.
+   */
+  timeline?: readonly TimelineSegmentDef[];
+  endlessCurve?: EndlessCurveDef;
   /** заряды карточек от уровня аккаунта; по умолчанию — нули */
   cardTools?: Partial<CardTools>;
   /** правила действий с карточками; по умолчанию — пропуск платит 30% пути */
@@ -173,6 +225,8 @@ export interface CreateWorldOptions {
   boosts?: readonly BoostDef[];
   /** сколько бустов действует на забег; по умолчанию — все из набора */
   maxBoostsPerRun?: number;
+  /** записи «Предела»; по умолчанию — пусто, и при полной прокачке остаётся одно лечение */
+  limits?: readonly LimitDef[];
   config?: Partial<SimConfig>;
 }
 
@@ -217,6 +271,20 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректный контент сундуков:\n${chestProblems.join("\n")}`);
   }
 
+  const secretRules = options.secrets ?? FALLBACK_SECRETS;
+  const secretProblems = findSecretsProblems(secretRules);
+  if (secretProblems.length > 0) {
+    throw new Error(`Некорректный контент тайников:\n${secretProblems.join("\n")}`);
+  }
+
+  const pressureRules = options.pressure ?? null;
+  if (pressureRules !== null) {
+    const pressureProblems = findPressureProblems(pressureRules);
+    if (pressureProblems.length > 0) {
+      throw new Error(`Некорректная подстройка давления:\n${pressureProblems.join("\n")}`);
+    }
+  }
+
   const continueRules = options.continueRules ?? FALLBACK_CONTINUE;
   const continueProblems = findContinueProblems(continueRules);
   if (continueProblems.length > 0) {
@@ -234,11 +302,13 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректные ступени врагов:\n${stageProblems.join("\n")}`);
   }
 
-  const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
+  const prologueRules = options.prologue ?? null;
+  const levelCurve = prologueRules?.levelCurve ?? options.levelCurve ?? FALLBACK_LEVEL_CURVE;
   const loadoutLimits = options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS;
   const playerStatsBase: PlayerStatsBase = {
     maxHp: config.player.maxHp,
-    pickupRadius: config.player.pickupRadiusPx,
+    // Пролог: кристаллы летят щедро — радиус подбора шире с первой секунды.
+    pickupRadius: config.player.pickupRadiusPx * (prologueRules?.pickupRadiusMul ?? 1),
   };
 
   const loadout = createLoadout();
@@ -248,6 +318,11 @@ export function createWorld(options: CreateWorldOptions): World {
   const boostProblems = findBoostProblems(options.boosts ?? []);
   if (boostProblems.length > 0) {
     throw new Error(`Некорректные бусты:\n${boostProblems.join("\n")}`);
+  }
+  const limitTypes = options.limits ?? [];
+  const limitProblems = findLimitProblems(limitTypes);
+  if (limitProblems.length > 0) {
+    throw new Error(`Некорректные записи «Предела»:\n${limitProblems.join("\n")}`);
   }
   const runLoadout = sanitizeLoadout(options.loadout ?? EMPTY_LOADOUT);
   const boosts = resolveBoosts(options.boosts ?? [], runLoadout.boosts, options.maxBoostsPerRun ?? runLoadout.boosts.length);
@@ -264,7 +339,7 @@ export function createWorld(options: CreateWorldOptions): World {
   };
 
   const cellSize = gridCellSize(scale);
-  return {
+  const world: World = {
     config,
     mapId: map.id,
     rng: createRng(options.seed),
@@ -276,6 +351,7 @@ export function createWorld(options: CreateWorldOptions): World {
     loadoutLimits,
     drops,
     chestRules,
+    hunt: createHuntState(maxEnemies),
     chests: {
       rng: createRng(deriveSeed(options.seed, STREAM_SALT.chest)),
       dropped: 0,
@@ -283,7 +359,21 @@ export function createWorld(options: CreateWorldOptions): World {
       founds: [],
       openings: [],
     },
+    pressureRules,
+    secretRules,
+    secrets: createSecretState(
+      createRng(deriveSeed(options.seed, STREAM_SALT.secret)),
+      secretRules,
+      scale,
+      map.bounds,
+      options.timeline !== undefined && options.endlessCurve !== undefined
+        ? buildElitePool(options.timeline, options.endlessCurve, enemyTypes)
+        : [],
+    ),
     cordon: createCordonState(),
+    rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
+    mode: prologueRules === null ? "endless" : "prologue",
+    prologue: prologueRules === null ? null : createPrologueState(prologueRules),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,
@@ -292,6 +382,7 @@ export function createWorld(options: CreateWorldOptions): World {
     runLoadout,
     boosts,
     loadoutModifiers,
+    limitTypes,
     playerStatsBase,
     loadout,
     progression: {
@@ -304,6 +395,7 @@ export function createWorld(options: CreateWorldOptions): World {
       tools: { ...toolsTotal },
       toolsTotal,
       banished: [],
+      limitStacks: limitTypes.map(() => 0),
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
     // спавна — стенд испытаний, тесты паттернов — она такой и остаётся.
@@ -313,6 +405,15 @@ export function createWorld(options: CreateWorldOptions): World {
       hpMul: 1,
       damageMul: 1,
       maxAlive: maxEnemies,
+      // Без подстройки — нейтральные значения: множители единицы, сдвиги нули.
+      power: 0,
+      pressureLevel: 1,
+      startPower: 0,
+      startPressure: 1,
+      spawnMul: 1,
+      stageShiftSec: 0,
+      eliteLead: 0,
+      bossLead: 0,
     },
     // Игрок стартует в начале координат: центр карты, если у неё есть
     // границы, и просто точка отсчёта, если мир бесконечен.
@@ -359,14 +460,22 @@ export function createWorld(options: CreateWorldOptions): World {
       elapsedSec: 0,
       enemiesSpawned: 0,
       enemiesKilled: 0,
+      bossKills: 0,
+      eliteKills: 0,
       killsByType: new Uint32Array(enemyTypes.length),
       damageTaken: 0,
+      lastHitTick: 0,
+      longestNoHitTicks: 0,
+      lastKillTick: 0,
+      longestNoKillTicks: 0,
+      killsByElement: new Float64Array(ELEMENTS.length),
       deathCauseType: -1,
       shotsFired: 0,
       damageDealt: 0,
       damageByWeapon: new Float64Array(Math.max(1, loadoutLimits.weapons)),
       damageByElement: new Float64Array(ELEMENTS.length),
       xpCollected: 0,
+      crystalsCollected: 0,
       medkitsCollected: 0,
       magnetsCollected: 0,
       dynamiteCollected: 0,
@@ -390,6 +499,9 @@ export function createWorld(options: CreateWorldOptions): World {
     chainBuffer: new Int32Array(maxEnemies),
     cheats: { ...NO_CHEATS },
   };
+  // Стартовая сила нужна событию `started` и аналитике до первого отрезка таймлайна.
+  if (isPressureActive(world)) initPressure(world);
+  return world;
 }
 
 function scalePlayerConfig(player: PlayerConfig, scale: number): PlayerConfig {

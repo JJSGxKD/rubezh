@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Check, Info, Lock, X } from "lucide-react";
 import { t } from "../../i18n";
 import { useBackLayer } from "../../state/back-stack";
+import { useWide } from "../../state/wide";
 import { uiFeedback } from "../../state/ui-feedback";
 import { Button, IconButton } from "./Button";
 import { CutFrame } from "./CutFrame";
@@ -11,6 +12,7 @@ import { Badge } from "./Data";
 import { useModalHost } from "./modal-host";
 import { modalFooterPlacement, modalMount } from "./modal-rules";
 import { RelicFrame } from "./RelicFrame";
+import { modalPlacementOn } from "./wide-rules";
 
 /**
  * Задержка лесенки появления: n-й элемент выезжает на n шагов позже. Шаг — из
@@ -139,7 +141,10 @@ export interface ModalProps {
    * действует. Выключено по умолчанию — модалки забега тесные (§5.3).
    */
   pinFooter?: boolean;
-  /** снизу — лист подтверждения, по центру — модалка забега */
+  /**
+   * Снизу — лист подтверждения, по центру — модалка забега. Лист снизу на
+   * wide (с 1024 px) открывается панелью справа: `modalPlacementOn`.
+   */
   placement?: "center" | "bottom";
   /** широкая — для трёх карточек в ряд в ландшафте (§5.3) */
   size?: "m" | "l";
@@ -165,7 +170,10 @@ export interface ModalProps {
 }
 
 export function Modal(props: ModalProps): ReactNode {
-  const bottom = props.placement === "bottom";
+  const wideScreen = useWide((state) => state.wide);
+  const placement = modalPlacementOn(props.placement, wideScreen);
+  const bottom = placement === "bottom";
+  const side = placement === "side";
   const wide = props.size === "l";
   const { onDismiss } = props;
   const host = useModalHost();
@@ -175,11 +183,12 @@ export function Modal(props: ModalProps): ReactNode {
 
   // Лист снизу шуршит на открытии и закрытии; модалки забега — уровень,
   // пауза, смерть — звучат своими звуками событий, а не листом.
+  const sheet = bottom || side;
   useEffect(() => {
-    if (!bottom) return;
+    if (!sheet) return;
     uiFeedback("sheetOpen");
     return () => uiFeedback("sheetClose");
-  }, [bottom]);
+  }, [sheet]);
 
   // «Назад» площадки и Esc закрывают верхнюю модалку, а не уводят экран из-под
   // неё (WP45): слой стека живёт, пока модалка открыта.
@@ -192,45 +201,51 @@ export function Modal(props: ModalProps): ReactNode {
   const headerTitle = closable && props.icon === undefined;
   const footerPlacement = modalFooterPlacement({ hasFooter: props.footer !== undefined, pinFooter: props.pinFooter === true });
 
+  // Вариантов `short:` и `landscape:` у панели сбоку нет: монитор всегда в
+  // ландшафте, и телефонное уплотнение сжало бы её без причины.
+  const dense = (classes: string): string => (side ? "" : classes);
+
   const panel = (
     <Panel
       cut={props.cut === true}
       relic={props.relic}
+      side={side}
       className={[
-        wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
+        side ? "h-full max-w-(--side-panel-width)" : wide ? "max-w-[420px] landscape:max-w-[760px]" : "max-w-[420px]",
         props.hero === undefined ? "" : "min-h-0",
-        bottom ? "animate-sheet-in" : "animate-pop-in",
+        side ? "animate-panel-in" : bottom ? "animate-sheet-in" : "animate-pop-in",
       ].join(" ")}
     >
       {/* Закрываемую модалку закрывают там, где палец, — сверху (Р81).
           Шапка не прокручивается: крестик виден и в конце длинного листа. */}
       {closable ? (
-        <header className="flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 short:pl-4 landscape:pl-4">
+        <header className={`flex shrink-0 items-start gap-2 py-2 pr-2 pl-5 ${dense("short:pl-4 landscape:pl-4")}`}>
           {headerTitle ? <h2 className="min-w-0 flex-1 pt-2 font-display text-xl font-bold text-text">{props.title}</h2> : <span className="flex-1" />}
-          <IconButton track="close" label={t("app.close")} feedback={bottom ? null : "back"} onClick={onDismiss}>
+          <IconButton track="close" label={t("app.close")} feedback={sheet ? null : "back"} onClick={onDismiss}>
             <X size={22} />
           </IconButton>
         </header>
       ) : null}
       <div
         className={[
-          "min-h-0 overflow-y-auto overscroll-contain px-5 short:px-4 landscape:px-4",
-          footerPlacement === "pinned" ? "" : "pb-5 short:pb-4 landscape:pb-4",
-          closable ? "" : "pt-5 short:pt-4 landscape:pt-4",
+          "min-h-0 overflow-y-auto overscroll-contain px-5",
+          dense("short:px-4 landscape:px-4"),
+          footerPlacement === "pinned" ? "" : `pb-5 ${dense("short:pb-4 landscape:pb-4")}`,
+          closable ? "" : `pt-5 ${dense("short:pt-4 landscape:pt-4")}`,
         ].join(" ")}
       >
         {/* На невысоком экране и в ландшафте значок прячется: каждая строка на
             счету — карточки выбора и кнопка «Ещё раз» не должны уходить под
             прокрутку (§5.3). */}
         {props.icon === undefined ? null : (
-          <div className="mb-2 flex justify-center short:hidden landscape:hidden">
+          <div className={`mb-2 flex justify-center ${dense("short:hidden landscape:hidden")}`}>
             <IconEmblem>{props.icon}</IconEmblem>
           </div>
         )}
         {props.title === undefined || headerTitle ? null : (
           <h2
             className={[
-              "mb-3 font-display text-2xl font-bold text-text short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl",
+              `mb-3 font-display text-2xl font-bold text-text ${dense("short:mb-2 short:text-xl landscape:mb-1 landscape:text-xl")}`,
               props.icon === undefined ? "" : "text-center",
             ].join(" ")}
           >
@@ -241,7 +256,7 @@ export function Modal(props: ModalProps): ReactNode {
         {footerPlacement === "scroll" ? <div className="mt-5 grid gap-2">{props.footer}</div> : null}
       </div>
       {footerPlacement === "pinned" ? (
-        <div className="grid shrink-0 gap-2 px-5 pt-5 pb-5 short:px-4 short:pb-4 landscape:px-4 landscape:pb-4">{props.footer}</div>
+        <div className={`grid shrink-0 gap-2 px-5 pt-5 pb-5 ${dense("short:px-4 short:pb-4 landscape:px-4 landscape:pb-4")}`}>{props.footer}</div>
       ) : null}
     </Panel>
   );
@@ -257,15 +272,21 @@ export function Modal(props: ModalProps): ReactNode {
       // вокруг всего экрана ничего не говорит — его нет.
       tabIndex={-1}
       className={[
-        "pointer-events-auto absolute inset-0 flex px-4 focus-visible:outline-none",
-        "pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
-        "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
-        bottom ? "items-end justify-center" : "items-center justify-center",
+        "pointer-events-auto absolute inset-0 flex focus-visible:outline-none",
+        // Панель сбоку прижата к краю окна: полей вокруг неё нет, только вырез камеры.
+        side
+          ? "items-stretch justify-end pt-(--app-inset-top) pr-(--app-inset-right) pb-(--app-inset-bottom)"
+          : [
+              "px-4 pt-[calc(1rem+var(--app-inset-top))] pb-[calc(1rem+var(--app-inset-bottom))]",
+              "pr-[calc(1rem+var(--app-inset-right))] pl-[calc(1rem+var(--app-inset-left))]",
+              bottom ? "items-end justify-center" : "items-center justify-center",
+            ].join(" "),
       ].join(" ")}
       style={{ zIndex: "var(--z-modal)" }}
     >
       <div aria-hidden="true" className="absolute inset-0 animate-fade-in bg-bg/80" onClick={onDismiss} />
-      {props.hero === undefined ? (
+      {props.hero === undefined || side ? (
+        // Сцена над панелью — вид для центра и нижнего листа; панель сбоку идёт во всю высоту без неё.
         panel
       ) : (
         // Сцена и панель — одной колонкой: панель сжимается под прокрутку,
@@ -283,7 +304,7 @@ export function Modal(props: ModalProps): ReactNode {
 }
 
 /** Панель модалки: со срезом — `CutFrame`, без него — прежняя поверхность со скруглением. */
-function Panel(props: { cut: boolean; relic?: string | undefined; className: string; children: ReactNode }): ReactNode {
+function Panel(props: { cut: boolean; relic?: string | undefined; side?: boolean; className: string; children: ReactNode }): ReactNode {
   if (props.relic !== undefined) {
     return (
       <RelicFrame tone={props.relic} className={props.className}>
@@ -298,8 +319,10 @@ function Panel(props: { cut: boolean; relic?: string | undefined; className: str
       </CutFrame>
     );
   }
+  // Панель сбоку — во всю высоту окна, скруглена только со стороны содержимого.
+  const shape = props.side === true ? "h-full rounded-l-xl" : "rounded-xl";
   return (
-    <div className={`surface-panel relative flex max-h-full w-full flex-col overflow-hidden rounded-xl ${props.className}`}>
+    <div className={`surface-panel relative flex max-h-full w-full flex-col overflow-hidden ${shape} ${props.className}`}>
       {props.children}
     </div>
   );

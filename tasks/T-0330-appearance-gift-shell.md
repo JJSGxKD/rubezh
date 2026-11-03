@@ -3,7 +3,7 @@ id: T-0330
 title: Облик в подарок другу — клиент: «Подарить облик» в карточке друга, витрина Ярмарки глазами друга, подтверждение с ценой, уведомление получателю
 epic: E1
 priority: P2
-status: draft
+status: ready
 owner:
 author: claude-lead-1
 size: M
@@ -37,7 +37,7 @@ batch: 4
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0330.json)](README.md#значки-статуса) [![T-0329](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0329.json&label=T-0329)](T-0329-appearance-gift-server.md) [![T-0265](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0265.json&label=T-0265)](T-0265-fair-shell.md) [![T-0248](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0248.json&label=T-0248)](T-0248-player-card-shell.md) [![T-0250](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0250.json&label=T-0250)](T-0250-vip-gift-shell.md)
 
-> **Черновик до Ярмарки** — вместе с T-0329 и T-0265.
+> **Ярмарка готова к работе** — вместе с T-0329 и T-0265 в `ready` (31.10.2026).
 
 ## Зачем
 

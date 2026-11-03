@@ -3,11 +3,15 @@ import { AdminApi } from "../src/api/client";
 import {
   budgetTone,
   correctSourceUsed,
+  MANUAL_CURRENCIES,
   fetchFxOverview,
+  isMarketCurrency,
   limitCaption,
   limitProblem,
   manualRateProblem,
   parseCount,
+  refreshSource,
+  refreshSummary,
   resetSourceLimit,
   setManualRate,
   setSourceLimit,
@@ -15,6 +19,7 @@ import {
   usageText,
   usedProblem,
   type ManualRateInput,
+  type RefreshResult,
 } from "../src/api/fx";
 import { formatNumber } from "../src/format";
 import { SECTIONS } from "../src/routes";
@@ -191,5 +196,65 @@ describe("лимиты источников", () => {
 describe("меню", () => {
   it("раздел — за правом его маршрутов на сервере", () => {
     expect(SECTIONS.find((section) => section.id === "fx")?.permission).toBe("analytics.revenue.view");
+  });
+});
+
+describe("«Обновить сейчас» и запасной ручной курс (T-0064)", () => {
+  const RESULT: RefreshResult = {
+    source: "coingecko",
+    ok: true,
+    error: null,
+    quotes: [
+      { currency: "GRAM", usdPerUnit: "5.41", status: "accepted" },
+      { currency: "USDT", usdPerUnit: "1", status: "accepted" },
+    ],
+    snapshotId: "s1",
+  };
+
+  it("запрос идёт на адрес источника, ответ разбирается схемой", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: RESULT }));
+    const result = await refreshSource(new AdminApi(fetch), "coingecko");
+
+    expect(result.ok && result.data.quotes).toHaveLength(2);
+    expect([calls[0]?.url, calls[0]?.init.method]).toEqual(["/api/v1/admin/fx/sources/coingecko/refresh", "POST"]);
+  });
+
+  it("отказ сервера (лимит, пауза, занято) приходит текстом", async () => {
+    const { fetch } = fakeFetch(json(429, { error: { code: "fx_refresh_too_soon", message: "Источник спрашивали только что — повторите через 5 с" } }));
+    const result = await refreshSource(new AdminApi(fetch), "coingecko");
+    expect(!result.ok && result.error).toMatchObject({ status: 429, message: "Источник спрашивали только что — повторите через 5 с" });
+  });
+
+  it("итог словами: что ответил источник, принят ли каждый курс, или причина сбоя", () => {
+    expect(refreshSummary(RESULT)).toBe("CoinGecko ответил: Gram 5,41 $ — принят, USDT 1,00 $ — принят");
+    expect(refreshSummary({ ...RESULT, quotes: [{ currency: "GRAM", usdPerUnit: "5.41", status: "rejected" }] })).toBe("CoinGecko ответил: Gram 5,41 $ — отклонён");
+    expect(refreshSummary({ ...RESULT, quotes: [{ currency: "RUB", usdPerUnit: "0.0111", status: "waiting" }] })).toBe("CoinGecko ответил: рубль 0,0111 $ — ждёт других источников");
+    expect(refreshSummary({ ...RESULT, ok: false, error: "HTTP 502", quotes: [] })).toBe("CoinGecko не ответил: HTTP 502");
+    expect(refreshSummary({ ...RESULT, source: "cbr", quotes: [] })).toBe("ЦБ РФ ответил, но курсов не прислал");
+  });
+
+  it("ручной курс — любой валюте, кроме доллара; рыночная отличается от валюты площадки", () => {
+    expect(MANUAL_CURRENCIES.map(([code]) => code)).toEqual(["XTR", "RUB", "EUR", "GRAM", "USDT"]);
+    expect(isMarketCurrency("RUB")).toBe(true);
+    expect(isMarketCurrency("GRAM")).toBe(true);
+    expect(isMarketCurrency("XTR")).toBe(false);
+  });
+
+  it("форма: у рыночной валюты — только доллар, цена и до 7 дней; у звёзд всё как было, до 90", () => {
+    const rub: ManualRateInput = { currency: "RUB", purpose: "price", price: "0.011", quote: "USD", expiresInDays: 7, note: "источники легли" };
+    expect(manualRateProblem(rub)).toBeNull();
+    expect(manualRateProblem({ ...rub, expiresInDays: 8 })).toMatch(/7/);
+    expect(manualRateProblem({ ...rub, quote: "EUR" })).toMatch(/в долларах/);
+    expect(manualRateProblem({ ...rub, purpose: "payout" })).toMatch(/только для цен/);
+    expect(manualRateProblem({ ...MANUAL, expiresInDays: 90 })).toBeNull();
+    expect(manualRateProblem({ ...MANUAL, expiresInDays: 91 })).not.toBeNull();
+  });
+
+  it("метка «запасной»: сервер говорит, что курс сейчас в работе; старый сервер без поля — не запасной", async () => {
+    const base = { currency: "RUB", purpose: "price", price: "0.011", quote: "USD", usdPerUnit: "0.011", sources: ["manual:a1"], observedAt: AT, freshness: "fresh", setBy: "a1", expiresAt: AT, note: "запас" };
+    const overview = { enabled: true, rates: [], missing: ["RUB"], sources: [], manual: [{ ...base, fallback: true }, { ...base, currency: "XTR" }] };
+    const result = await fetchFxOverview(new AdminApi(fakeFetch(json(200, { data: overview })).fetch));
+
+    expect(result.ok && result.data.manual.map((rate) => rate.fallback)).toEqual([true, false]);
   });
 });

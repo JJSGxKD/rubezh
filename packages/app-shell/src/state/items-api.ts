@@ -2,6 +2,7 @@ import type { SignedLoadout } from "@bh/shared-types";
 import { z } from "zod/mini";
 import { apiRequest, type ApiFailure, type ApiRequest, type ApiResult } from "./api-request";
 import { useBadges } from "./badges";
+import { loadBadges } from "./badges-api";
 import { useItems } from "./items";
 import { saveEquippedLoadout, signedLoadoutSchema } from "./run-loadouts";
 import { useShell } from "./shell";
@@ -114,7 +115,7 @@ export async function refreshLoadout(api?: ItemsApi): Promise<ApiFailure | null>
  * знак на арсенале гаснет без ожидания сети, а сервер узнаёт следом. Не
  * дошло — предмет останется новым до следующего открытия, беды в этом нет.
  */
-export async function markItemsSeen(itemIds: readonly string[], api?: ItemsApi): Promise<void> {
+export async function markItemsSeen(itemIds: readonly string[], api?: ItemsApi, refresh: () => Promise<void> = loadBadges): Promise<void> {
   if (disabled(api) || itemIds.length === 0) return;
   const ids = new Set(itemIds);
   const inventory = useItems.getState().inventory;
@@ -123,7 +124,9 @@ export async function markItemsSeen(itemIds: readonly string[], api?: ItemsApi):
     useItems.setState({ inventory: { ...inventory, items: inventory.items.map((item) => (ids.has(item.itemId) ? { ...item, isNew: false } : item)) } });
     if (fresh > 0) useBadges.setState((state) => ({ arsenal: Math.max(0, state.arsenal - fresh) }));
   }
-  await (api ?? createItemsApi()).seen([...ids]);
+  const response = await (api ?? createItemsApi()).seen([...ids]);
+  // Сервер погасил уведомления про предмет: знаки перечитываем после его ответа.
+  if (response.ok) void refresh();
 }
 
 export type ItemAction =

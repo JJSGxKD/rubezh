@@ -22,7 +22,7 @@ import { SECRETS_READER, type SecretsReader } from "../secrets/secrets.service.j
 import { FeatureSwitches } from "../settings/feature-switches.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { effectiveTariff, usedShare } from "./fx-limits.js";
-import { fxSources } from "./fx.refresher.js";
+import { FxRefreshBusyError, FxRefreshLimitError, FxRefreshPausedError, FxRefresher, fxSources, type RefreshNowResult } from "./fx.refresher.js";
 import { FX_STORE, type FxStore, type SourceLimit } from "./fx.store.js";
 
 /**
@@ -37,6 +37,15 @@ const DAY_MS = 86_400_000;
 export class FxSourceNotFoundError extends DomainError {
   constructor() {
     super("fx_source_not_found", "Источника курсов с таким именем нет", 404);
+  }
+}
+
+export type { RefreshNowResult };
+
+/** «Обновить сейчас» отказано: тексты — из решения Р90, статус — как у соседних ошибок панели. */
+export class FxRefreshRefusedError extends DomainError {
+  constructor(code: string, message: string, status: number) {
+    super(code, message, status);
   }
 }
 
@@ -60,6 +69,11 @@ export interface ManualView extends Omit<RateView, "usdPerUnit" | "unitsPerUsd">
   setBy: string;
   expiresAt: string;
   note: string;
+  /**
+   * Курс рыночной валюты — запасной, и именно он сейчас в снимке: рыночного нет
+   * или он просрочен. У валюты площадки и у запасного в простое — `false`.
+   */
+  fallback: boolean;
 }
 
 export interface SourceView {
@@ -103,6 +117,8 @@ export class FxService {
     @Inject(SECRETS_READER) private readonly secrets: SecretsReader,
     private readonly roles: RolesService,
     private readonly switches: FeatureSwitches,
+    // Только «Обновить сейчас»; проход по расписанию сервису не нужен.
+    @Inject(FxRefresher) private readonly refresher: Pick<FxRefresher, "refreshNow">,
   ) {}
 
   async overview(now = new Date()): Promise<FxOverview> {
@@ -123,6 +139,12 @@ export class FxService {
         if (rate === null) continue;
         manual.push(await this.manualView(rate, now));
       }
+    }
+    // Запасные ручные курсы рыночных валют (Р90): в списке заданных, с меткой «в работе».
+    for (const code of Object.keys(CURRENCIES) as CurrencyCode[]) {
+      if (code === BASE_CURRENCY || CURRENCIES[code].kind === "platform") continue;
+      const reserve = await this.store.currentManual(code, "price");
+      if (reserve !== null) manual.push(await this.manualView(reserve, now));
     }
 
     const limits = await this.store.limits();
@@ -209,6 +231,32 @@ export class FxService {
     return await this.afterEdit(known, now);
   }
 
+  /**
+   * «Обновить сейчас» (Р90, T-0064): источник спрашивается сразу, в пределах
+   * лимитов, под общим локом; в аудит — источник и исход. Отказы — лимит 409,
+   * пауза 429 с секундами, занято 409; в аудит они не идут: ничего не менялось.
+   */
+  async refreshNow(actor: AccountRef, source: string, now = new Date()): Promise<RefreshNowResult> {
+    await this.roles.require(actor, "fx.rates.edit");
+    const known = this.sourceOf(source);
+    let result: RefreshNowResult;
+    try {
+      result = await this.refresher.refreshNow(known.id, now);
+    } catch (error: unknown) {
+      if (error instanceof FxRefreshLimitError) throw new FxRefreshRefusedError("fx_refresh_limit", "Лимит источника на месяц исчерпан", 409);
+      if (error instanceof FxRefreshPausedError) throw new FxRefreshRefusedError("fx_refresh_too_soon", `Источник спрашивали только что — повторите через ${String(error.seconds)} с`, 429);
+      if (error instanceof FxRefreshBusyError) throw new FxRefreshRefusedError("fx_refresh_busy", "Идёт обновление по расписанию, повторите через минуту", 409);
+      throw error;
+    }
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "fx.refresh.now",
+      target: source,
+      after: { ok: result.ok, error: result.error, quotes: result.quotes.map((quote) => ({ currency: quote.currency, status: quote.status })) },
+    });
+    return result;
+  }
+
   private sourceOf(id: string): RateSource {
     const source = fxSources(this.secrets).find((candidate) => candidate.id === id);
     if (source === undefined) throw new FxSourceNotFoundError();
@@ -233,13 +281,12 @@ export class FxService {
 
   /**
    * Заданный курс валюты площадки (§3.12): под правом, с причиной, сроком
-   * годности и записью в аудит. Курс рыночной валюты руками не ставится —
-   * иначе ручная правка тихо перебивала бы медиану источников.
+   * годности и записью в аудит. У рыночной валюты ручной курс запасной
+   * (Р90): в долларах, на цену, не дольше недели — и работает, только пока
+   * источники не дают свежего, а не перебивает медиану.
    */
   async setManual(actor: AccountRef, input: ManualInput, now = new Date()): Promise<ManualView> {
     await this.roles.require(actor, "fx.rates.edit");
-    if (CURRENCIES[input.currency].kind !== "platform") throw new ValidationError("Руками задаётся курс только валюты площадки");
-
     let rate: ManualRate;
     try {
       rate = manualRate({
@@ -271,6 +318,9 @@ export class FxService {
 
   /** Заданный курс для панели: как поставили и сколько это в долларах сейчас. */
   private async manualView(rate: ManualRate, now: Date): Promise<ManualView> {
+    const kind = CURRENCIES[rate.currency].kind;
+    const market = kind === "platform" ? null : await this.store.currentRate(rate.currency);
+    const fallback = kind !== "platform" && (market === null || freshness(market.observedAt, now, FRESHNESS_POLICY[kind]) === "expired") && rate.expiresAt >= now;
     const quoteUsd = rate.quote === BASE_CURRENCY ? new Decimal(1) : (await this.store.currentRate(rate.quote))?.usdPerUnit;
     return {
       currency: rate.currency,
@@ -284,6 +334,7 @@ export class FxService {
       setBy: rate.setBy,
       expiresAt: rate.expiresAt.toISOString(),
       note: rate.note,
+      fallback,
     };
   }
 

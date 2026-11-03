@@ -37,11 +37,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов, пешими врагами рядом с огоньком и подбором «Заморозка».
+ * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed).
  * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 3;
+const GOLDEN_SEED = 1;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -125,6 +125,11 @@ describe("статистика забега", () => {
     expect(world.stats.elapsedSec).toBeCloseTo(world.stats.tick / 60, 9);
   });
 
+  it("несёт рубеж в итоге: забег короче отметки — страж не приходил (T-0120)", () => {
+    expect(world.stats.elapsedSec).toBeLessThan(600);
+    expect(resultOf(world, GOLDEN_SEED).rubezh).toEqual({ reached: false, clearedSec: null, guardHpPercent: null });
+  });
+
   it("копит собранный опыт вместе с прогрессией", () => {
     expect(world.stats.xpCollected).toBeCloseTo(world.progression.totalXp, 9);
   });
@@ -173,34 +178,38 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 29.88,
-      level: 5,
-      xpCollected: 45,
-      enemiesKilled: 44,
+      survivalSec: 319.93,
+      level: 17,
+      xpCollected: 718,
+      enemiesKilled: 1625,
       killsByEnemy: {
-        swarm_rat: 15,
-        shooter_wisp: 3,
-        bone_walker: 4,
-        mire_shambler: 3,
-        dasher_wolf: 1,
-        circler_crow: 9,
-        bomber_imp: 3,
-        rushing_bats: 6,
+        swarm_rat: 568,
+        tank_ghoul: 94,
+        bone_walker: 78,
+        mire_shambler: 315,
+        dasher_wolf: 90,
+        circler_crow: 173,
+        bomber_imp: 79,
+        rushing_bats: 149,
+        splitter_slime: 79,
       },
-      damageDealt: 705,
-      damageTaken: 122,
+      damageDealt: 25790,
+      damageTaken: 164,
       weapons: [
-        { id: "spark", level: 1, damage: 527 },
-        { id: "meteor", level: 1, damage: 179 },
+        { id: "spark", level: 2, damage: 7582 },
+        { id: "meteor", level: 5, damage: 11358 },
+        { id: "knife", level: 3, damage: 5692 },
+        { id: "hearth", level: 2, damage: 1158 },
       ],
       passives: [
-        { id: "reach", level: 1 },
-        { id: "vitality", level: 1 },
         { id: "haste", level: 1 },
+        { id: "ward", level: 2 },
+        { id: "volley", level: 1 },
+        { id: "swiftness", level: 1 },
       ],
       deathCause: "rushing_bats",
-      distance: 4474,
-      peakEnemies: 28,
+      distance: 50031,
+      peakEnemies: 32,
     });
   });
 
@@ -228,6 +237,13 @@ describe("итог забега", () => {
     return world;
   }
 
+  it("сценарий без набора подстройки не несёт: в итоге нет поля pressure", () => {
+    const world = worldWithEnemyAt(DUMMY, 200);
+    const result = resultOf(world, 1);
+    expect(result.pressure).toBeUndefined();
+    expect("pressure" in result).toBe(false);
+  });
+
   it("называет врага, который добил игрока", () => {
     const world = worldWithEnemyAt(BITER, 8);
     for (let tick = 0; tick < 60 * 20 && world.player.alive; tick++) {
@@ -244,6 +260,23 @@ describe("итог забега", () => {
     expect(world.player.alive).toBe(false);
     expect(result.outcome).toBe("died");
     expect(result.deathCause).toBe("biter");
+  });
+
+  it("несёт счётчики боссов, элит, сундуков и кристаллов из мира", () => {
+    const world = worldWithEnemyAt(DUMMY, 40);
+    world.stats.bossKills = 1;
+    world.stats.eliteKills = 4;
+    world.stats.chestsOpened = 3;
+    world.stats.crystalsCollected = 250;
+
+    const result = buildRunResult(world, {
+      runId: "r3",
+      seed: 42,
+      outcome: "died",
+      startingWeaponId: "spark",
+      contentHash: "test-hash",
+    });
+    expect(result).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 3, crystalsCollected: 250 });
   });
 
   it("у сдачи нет причины смерти: сдавшийся забег — не убийство", () => {
@@ -327,10 +360,17 @@ describe("локальный рекорд", () => {
       level: 1,
       xpCollected: 0,
       enemiesKilled: 0,
+      bossKills: 0,
+      eliteKills: 0,
+      chestsOpened: 0,
+      crystalsCollected: 0,
       killsByEnemy: {},
       damageDealt: 0,
       damageTaken: 0,
       damageByElement: {},
+      noHitSec: 0,
+      noKillSec: 0,
+      killsByElement: {},
       weapons: [],
       passives: [],
       deathCause: null,

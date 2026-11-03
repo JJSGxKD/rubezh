@@ -30,7 +30,6 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     fuses: 0,
     dashWarns: 0,
     dashes: 0,
-    enemyShots: 0,
     weapons: {},
     ...patch,
   };
@@ -93,7 +92,7 @@ describe("план звуков забега", () => {
   });
 
   it("атаки врагов не звучат — только попадание по игроку; «Гроза» звучит ударом, а не срабатыванием", () => {
-    const attacks = planCueSounds(cues({ explosions: 2, explosionsNear: 1, fuses: 1, dashWarns: 1, dashes: 1, enemyShots: 1 }), 0);
+    const attacks = planCueSounds(cues({ explosions: 2, explosionsNear: 1, fuses: 1, dashWarns: 1, dashes: 1 }), 0);
     expect(attacks).toEqual([]);
     expect(planCueSounds(cues({ playerHit: 1, explosionsNear: 1 }), 0).map((request) => request.id)).toEqual(["hurt"]);
     const storm = planCueSounds(cues({ weapons: { storm: 1, spark: 1 } }), 0).map((request) => request.id);
@@ -197,6 +196,7 @@ describe("сцены и громкость", () => {
     it("выключенный игроком звук не заигрывает после обновления", () => {
       useSettings.getState().hydrate("normal");
       expect(useSettings.getState().volumes).toEqual({ ...DEFAULT_VOLUMES, effects: 0, ui: 0 });
+      expect(useSettings.getState().volumes.music).toBe(40);
     });
   });
 
@@ -217,10 +217,10 @@ describe("сцены и громкость", () => {
       });
     });
 
-    it("громкость музыки отбрасывается, а остальные настройки игрока не сбрасываются", () => {
+    it("сохранённая громкость музыки читается как есть, а остальные настройки игрока не сбрасываются", () => {
       useSettings.getState().hydrate("normal");
       const state = useSettings.getState();
-      expect(state.volumes).toEqual({ master: 40, effects: 70, ui: 50 });
+      expect(state.volumes).toEqual({ master: 40, effects: 70, ui: 50, music: 55 });
       // Сброс настроек выглядел бы так: вибрация вернулась бы к умолчанию.
       expect(state.haptics).toBe(false);
     });

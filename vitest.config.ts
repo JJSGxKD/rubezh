@@ -20,6 +20,8 @@ export default defineConfig({
       "apps/admin/test/**/*.test.ts",
       // Логика клиента Telegram без DOM.
       "apps/web-telegram/test/**/*.test.ts",
+      // Воркер симуляции: проверка черновика контента, очередь, метрики.
+      "apps/sim-worker/test/**/*.test.ts",
     ],
     exclude: ["**/node_modules/**", "**/dist/**"],
     // Тесты не зависят друг от друга и от порядка
@@ -34,6 +36,7 @@ export default defineConfig({
       // иначе прогон тестов зависел бы от того, собран ли пакет.
       "@bh/fx": `${repoRoot}packages/fx/src/index.ts`,
       "@bh/proxy-kit": `${repoRoot}packages/proxy-kit/src/index.ts`,
+      "@bh/promo-kit": `${repoRoot}packages/promo-kit/src/index.ts`,
     },
   },
 });

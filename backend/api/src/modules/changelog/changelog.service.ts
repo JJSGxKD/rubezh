@@ -4,6 +4,7 @@ import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
+import { NotificationsService } from "../notifications/notifications.service.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { ChangelogEntryNotFoundError } from "./changelog-errors.js";
 import { ChangelogFanout } from "./changelog-fanout.js";
@@ -61,6 +62,7 @@ export class ChangelogService {
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: Pick<AccountRepository, "byId">,
     private readonly roles: RolesService,
     private readonly fanout: ChangelogFanout,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /** Журнал игрока: версии его площадки новыми сверху, по курсору. */
@@ -87,6 +89,8 @@ export class ChangelogService {
   async markSeen(accountId: string, upTo: Date, now = new Date()): Promise<void> {
     const at = new Date(Math.min(upTo.getTime(), now.getTime()));
     await withTimeout(this.repository.markSeen(accountId, at), DB_TIMEOUT_MS, "журнал прочитан");
+    // Журнал открыт — уведомления о версиях тоже прочитаны (Р135).
+    await this.notifications.readFor(accountId, "app_update");
   }
 
   async list(actor: AccountRef): Promise<ChangelogAdminView> {

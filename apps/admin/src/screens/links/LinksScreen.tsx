@@ -8,6 +8,7 @@ import {
   freshRow,
   LAUNCHES_HELP,
   launchesLabel,
+  linkTitle,
   LINK_TARGETS,
   NETWORK_TITLES,
   OWNER_HELP,
@@ -26,17 +27,19 @@ import {
   type LinkRow,
   type LinkTarget,
   type RegistrationOn,
+  visibleLinks,
 } from "../../api/links";
 import { activePartners, fetchPartners } from "../../api/partners";
 import { formatDateTime, formatNumber } from "../../format";
 import { ChoiceCards } from "../../ui/choice";
-import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Help, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { LinkCard } from "./LinkCard";
 import { TokenNotice } from "./TokenNotice";
+import { UnknownKeys } from "./UnknownKeys";
 
 /**
  * Ссылки кампаний: завести ссылку `/r/<код>` для поста, канала, партнёра
@@ -72,6 +75,8 @@ export function LinksScreen({ id }: { id: string | null }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [openCode, setOpenCode] = useState<string | null>(id);
   const [created, setCreated] = useState<Link | null>(null);
+  // Скрытые автоисточники по умолчанию не показываются; запуски по ним считаются как раньше.
+  const [showHidden, setShowHidden] = useState(false);
 
   // Из карточки партнёра — мастер с ним выбранным; по коду ссылки — её карточка.
   useEffect(() => {
@@ -126,6 +131,7 @@ export function LinksScreen({ id }: { id: string | null }) {
 
   const links = state.status === "ok" ? state.data.links : [];
   const open = links.find((link) => link.code === openCode) ?? (created !== null && created.code === openCode ? freshRow(created) : null);
+  const hiddenCount = links.filter((link) => link.hiddenAt !== null).length;
   const adsgramToken = state.status === "ok" ? state.data.postback.adsgramToken : true;
 
   return (
@@ -218,7 +224,7 @@ export function LinksScreen({ id }: { id: string | null }) {
               )}
             </>
           )}
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="Кампания" hint="латиница, цифры, дефис" help={HELP.links.campaign}>
               <Input value={campaign} onChange={(event) => setCampaign(event.target.value.trim().toLowerCase())} placeholder="launch-post" maxLength={64} />
             </Field>
@@ -228,10 +234,12 @@ export function LinksScreen({ id }: { id: string | null }) {
             <Field label="Заметка">
               <Input value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} className="w-72" />
             </Field>
-            <Button tone="primary" type="submit" disabled={!valid}>
-              Завести
-            </Button>
-          </div>
+            <RowItem>
+              <Button tone="primary" type="submit" disabled={!valid}>
+                Завести
+              </Button>
+            </RowItem>
+          </FieldRow>
         </form>
         {error === null ? null : (
           <div className="mt-3">
@@ -240,20 +248,28 @@ export function LinksScreen({ id }: { id: string | null }) {
         )}
       </Panel>
       <Panel title="Ссылки" help={HELP.links.links} actions={<Button onClick={reload}>Обновить</Button>}>
+        {state.status === "ok" && hiddenCount > 0 ? (
+          <label className="mb-3 flex items-center gap-1.5 text-sm">
+            <input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} />
+            Показывать скрытые ({String(hiddenCount)})
+          </label>
+        ) : null}
         {state.status === "loading" ? <Loading /> : null}
         {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
         {state.status === "ok" ? (
           <DataTable
-            rows={links}
+            rows={visibleLinks(links, showHidden)}
             rowKey={(row) => row.code}
-            empty="Ссылок ещё нет"
+            empty="Ссылок ещё нет — заведите первую для поста или рекламы кнопкой выше"
             onRowClick={(row) => navigate({ section: "links", id: row.code })}
             columns={[
               {
                 title: "Кампания",
                 render: (row) => (
-                  <span className="inline-flex flex-wrap items-center gap-1.5">
-                    {row.campaign}
+                  <span className={`inline-flex flex-wrap items-center gap-1.5 ${row.hiddenAt === null ? "" : "text-text-muted"}`}>
+                    {linkTitle(row)}
+                    {row.auto ? <Badge>авто</Badge> : null}
+                    {row.hiddenAt === null ? null : <Badge tone="warning">скрыта</Badge>}
                     {row.network === null ? null : <Badge tone="accent">{NETWORK_TITLES[row.network]}</Badge>}
                     {row.target === "app" ? null : <Badge>{TARGET_TITLES[row.target]}</Badge>}
                   </span>
@@ -265,7 +281,7 @@ export function LinksScreen({ id }: { id: string | null }) {
                 render: (row) => (row.partner === null ? <span className="text-text-muted">{ownerLabel(null)}</span> : <Badge tone="info">{ownerLabel(row.partner)}</Badge>),
               },
               { title: "Источник", render: (row) => row.source ?? "—" },
-              { title: "Адрес", render: (row) => <code className="text-xs">{row.url}</code> },
+              { title: "Адрес", render: (row) => <code className="text-xs break-all">{row.url}</code> },
               { title: "Кликов", render: (row) => formatNumber(row.clicks), align: "right" },
               { title: "За 30 дней", render: (row) => formatNumber(row.clicks30d), align: "right" },
               { title: "Запусков", help: LAUNCHES_HELP, render: (row) => <span className="whitespace-nowrap">{launchesLabel(row)}</span>, align: "right" },
@@ -277,6 +293,7 @@ export function LinksScreen({ id }: { id: string | null }) {
           />
         ) : null}
       </Panel>
+      <UnknownKeys />
       {openCode === null ? null : (
         <LinkCard
           link={open}

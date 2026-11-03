@@ -12,6 +12,7 @@
 import { posix } from "node:path";
 import { minimumReleaseLevel, parsePrTitle } from "../release/pr-check.mjs";
 import { compareReleaseLevels } from "../release/semver.mjs";
+import { matches } from "./zones.mjs";
 
 export const FILE_NAME_RE = /^(T-\d{4})-[a-z0-9-]+\.md$/;
 const ID_RE = /^T-\d{4}$/;
@@ -26,6 +27,8 @@ export const STATUSES = ["draft", "ready", "in-progress", "done", "cancelled"];
 export const SIZES = ["S", "M"];
 export const RUNNERS = ["any", "local", "owner", "human"];
 export const RELEASES = ["none", "patch", "minor"];
+/** Кто вливает PR задачи: `lead` — тимлид (умолчание), `self` — сам поток (Р176, tasks/README.md, «Самостоятельный мердж»). */
+export const MERGES = ["self", "lead"];
 export const EFFORTS = ["low", "medium", "high", "extra"];
 /** Повторяет таблицу исполнителей в tasks/README.md («Исполнители и effort»): новый исполнитель — правка и там, и здесь. */
 export const EXECUTORS = ["sonnet-5.5", "haiku-5.5"];
@@ -47,12 +50,75 @@ export const FIELDS = [
   "executor",
   "effort",
   "release",
+  "merge",
   "design",
   "batch",
 ];
 
 /** Необязательные поля: задачи, заведённые до них, остаются как были. */
-export const OPTIONAL_FIELDS = new Set(["author", "batch"]);
+export const OPTIONAL_FIELDS = new Set(["author", "batch", "merge"]);
+
+/**
+ * Белый список путей `merge: self` (Р176, поправка claude-lead-1 от 28.10.2026):
+ * задача допустима, только если каждый путь её `zones` и `shared`, а при мердже
+ * и каждый реально изменённый файл PR лежит здесь. Всё остальное — бэкенд,
+ * экраны игрока, `scripts/**`, `.github/**`, `.claude/**`, `CLAUDE.md`,
+ * `AGENTS.md`, `tasks/README.md`, `pnpm-*`, `infra/**`, адаптеры — закрыто тем,
+ * что в списке его нет. Плюс файл самой задачи `tasks/<её файл>`. Повторяет
+ * tasks/README.md, «Самостоятельный мердж»: правка списка — и там, и здесь.
+ */
+export const SELF_MERGE_ALLOWED = [
+  "docs/**",
+  "design/**",
+  "packages/core-game/src/content/**",
+  "packages/core-game/src/game/**",
+  "packages/core-game/test/**",
+  "packages/app-shell/src/i18n/**",
+  "apps/admin/src/**",
+  "apps/admin/test/**",
+];
+
+/** Закрыто даже внутри белого списка: решение о зависимостях и настройке гейта принимает тимлид. */
+export const SELF_MERGE_FORBIDDEN = ["docs/35-stage4-plan.md", "**/package.json", "**/tsconfig*.json", "**/vitest.config.*", "**/eslint.config.*"];
+
+/** Начало текста ошибки `merge: self`; за ним через двоеточие идёт, что именно мешает. */
+export const SELF_MERGE_MESSAGE = "merge: self — только для задач без денег, авторизации, миграций, конкурентности, антифрода, прода и экранов игрока (Р176)";
+
+/**
+ * Что не так с путём или шаблоном для `merge: self`: текст причины или `null`.
+ * `fileName` — файл самой задачи (`T-NNNN-slug.md`), его правка всегда можно.
+ * Шаблон со звёздочками проходит, только если он целиком внутри белого списка:
+ * текст шаблона сверяется с белыми шаблонами как путь, поэтому `docs/**` и
+ * `packages/core-game/src/content/*.ts` проходят, а `backend/**`, `packages/**`
+ * и `**` + `/*.ts` — нет. Закрытый путь внутри шаблона ловит проверка реального
+ * диффа в `pnpm task merge`.
+ */
+export function selfMergePathProblem(path, fileName) {
+  if (/(^|\/)\.\.(\/|$)/.test(path) || path.includes("\\") || path.includes('"')) return `${path} — путь с «..», обратной чертой или кавычкой не годится`;
+  const forbidden = SELF_MERGE_FORBIDDEN.find((pattern) => matches(path, [pattern]));
+  if (forbidden !== undefined) return `${path} закрыт для merge: self (${forbidden})`;
+  if (path === `tasks/${fileName}` || matches(path, SELF_MERGE_ALLOWED)) return null;
+  return `${path} вне белого списка merge: self (${SELF_MERGE_ALLOWED.join(", ")} и файл самой задачи)`;
+}
+
+/**
+ * Что мешает `merge: self` у задачи: список причин, пустой — ничего. Читает
+ * `effort`, `runner`, `zones` и `shared`; значение самого `merge` не смотрит.
+ */
+export function selfMergeProblems(data, fileName) {
+  const reasons = [];
+  if (data.effort === "extra") reasons.push("effort: extra");
+  if (data.runner === "owner" || data.runner === "human") reasons.push(`runner: ${data.runner}`);
+  for (const field of ["zones", "shared"]) {
+    if (!Array.isArray(data[field])) continue;
+    for (const path of data[field]) {
+      if (typeof path !== "string") continue;
+      const problem = selfMergePathProblem(path, fileName);
+      if (problem !== null) reasons.push(`${field}: ${problem}`);
+    }
+  }
+  return reasons;
+}
 
 /** Пачка очереди, с которой задача уходит в main (docs/38-release-plan.md): целое число от 1 без ведущих нулей. */
 export const BATCH_RE = /^[1-9]\d*$/;
@@ -384,6 +450,7 @@ export function validateTask(fileName, data, context) {
   expectEnum("executor", EXECUTORS);
   expectEnum("effort", EFFORTS);
   expectEnum("release", RELEASES);
+  expectEnum("merge", MERGES);
 
   if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
   if (Object.hasOwn(data, "batch") && (text("batch") === null || !BATCH_RE.test(data.batch))) {
@@ -411,6 +478,11 @@ export function validateTask(fileName, data, context) {
       const problem = pathProblem(path);
       if (problem !== null) fail(field, `${problem}: ${path}`);
     }
+  }
+
+  if (data.merge === "self") {
+    const reasons = selfMergeProblems(data, fileName);
+    if (reasons.length > 0) errors.push(`${fileName}: ${SELF_MERGE_MESSAGE}: ${reasons.join("; ")}`);
   }
 
   const working = data.status === "ready" || data.status === "in-progress";

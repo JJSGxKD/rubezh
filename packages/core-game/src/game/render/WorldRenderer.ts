@@ -2,22 +2,23 @@ import Phaser from "phaser";
 import type { EnemyPattern } from "@bh/shared-types";
 import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
+import { CORDON_INNER_SEC } from "../sim/cordon";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
-import { CASTER_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
+import { CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
 import { isTimeFrozen } from "../sim/freeze";
 import { ORBITER_RADIUS, type OrbiterPoint } from "../weapons";
 import { CombatFeedback } from "./combat-feedback";
 import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
-import { projectileLook, type ProjectileLook } from "./projectile-look";
+import { SecretsRenderer } from "./secrets-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { artFlashStart, NO_FLASH } from "./hit-flash";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
-import { AIM_TELEGRAPH_SEC, Telegraphs } from "./telegraphs";
+import { Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
 import { invulnerableAlpha } from "./invulnerable";
@@ -26,7 +27,6 @@ import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
-const lookScratch: ProjectileLook = { texture: "", rotation: 0, scaleX: 1, scaleY: 1 };
 /** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
 const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
@@ -98,6 +98,7 @@ export class WorldRenderer {
   private readonly orbiterSprites: Phaser.GameObjects.Image[] = [];
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly pickups: PickupRenderer;
+  private readonly secrets: SecretsRenderer;
   private readonly telegraphs: Telegraphs;
   /** граница «Очага» и молнии «Грозы» */
   private readonly weaponEffects: WeaponEffects;
@@ -154,16 +155,13 @@ export class WorldRenderer {
     const scale = world.config.unitScale;
     this.ensureGroundTexture(scale);
     this.ground = scene.add
-      .tileSprite(0, 0, scene.scale.width, scene.scale.height, "bh-ground")
+      .tileSprite(0, 0, scene.scale.width, scene.scale.height, GROUND_KEY)
       .setOrigin(0, 0)
       .setDepth(-10);
     this.layer = scene.add.container(0, 0).setDepth(0);
 
     ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player", { shadow: true });
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
-    // Снаряд врага крупнее и другой формы: он должен читаться как летящая
-    // угроза, а не как мелкий враг, на которого можно бежать.
-    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius * 1.35, WORLD_COLORS.enemyProjectile, "bolt");
     ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.blast, "ring");
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
@@ -174,6 +172,9 @@ export class WorldRenderer {
     this.telegraphs = new Telegraphs(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
+    // Тайники — на земле, под героем, врагами и подборами; порядок в режиме арта выставляет `applyArtMode`.
+    this.secrets = new SecretsRenderer(scene, world, this.layer);
+    this.secrets.place(this.layer, false);
     this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
@@ -221,6 +222,7 @@ export class WorldRenderer {
    */
   sync(alpha: number): void {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+    this.secrets.sync();
     this.syncEnemies(t);
     this.syncProjectiles(t);
     this.pickups.sync(t);
@@ -264,6 +266,7 @@ export class WorldRenderer {
   setDevVisuals(visuals: RunDevVisuals | null): void {
     this.visuals = visuals;
     this.applyEffectSwitches();
+    this.ground.setTexture(visuals?.lightGround === true ? this.ensureGroundTexture(this.world.config.unitScale, true) : GROUND_KEY);
     const wantsDebug =
       visuals !== null &&
       (visuals.hitboxes || visuals.pickupRadius || visuals.weaponRadii || visuals.spawnRings || visuals.bounds || visuals.grid);
@@ -282,6 +285,7 @@ export class WorldRenderer {
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
       this.pickups.setArt(this.art.pickupArt());
+      this.secrets.setArt(this.art.secretArt(), this.art.scale);
       this.feedback.setDeathArt(this.art.deathArt());
       // Спрайты крупнее фигур, и толпа поверх героя прятала его целиком: в
       // режиме арта враги под героем, без него — прежний порядок.
@@ -295,6 +299,8 @@ export class WorldRenderer {
       this.artGround?.setVisible(this.art.on);
       // Знак под ногами — на земле: сразу над землёй и декором, под всеми, кто по ней ходит.
       if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
+      // Тайники — следом за землёй, декором и знаком под ногами; без арта — в самом низу слоя.
+      this.secrets.place(this.layer, this.art.on);
       this.ground.setVisible(!this.art.on);
     });
   }
@@ -362,8 +368,6 @@ export class WorldRenderer {
   private syncEnemies(t: number): void {
     const enemies = this.world.enemies;
     const tick = this.world.stats.tick;
-    const playerX = lerp(this.world.player.prevX, this.world.player.x, t);
-    const playerY = lerp(this.world.player.prevY, this.world.player.y, t);
     const telegraphsOn = this.visuals?.telegraphs ?? this.graphics?.telegraphs ?? true;
     // Тон состояния — эффект оружия: кто выключил эффекты ради тишины на
     // экране, не хочет и мерцания толпы (docs/27-design-system-and-app-shell.md §7.1).
@@ -379,12 +383,13 @@ export class WorldRenderer {
       const sprite = this.enemySprite(i);
       if (enemies.alive[i] === 0) {
         if (sprite.visible) sprite.setVisible(false);
+        this.art.releaseEnemy(i);
         continue;
       }
 
       const typeIndex = enemies.type[i];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
-      if (this.art.applyEnemy(sprite, i, texture, tick)) {
+      if (this.art.applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])) {
         this.enemySpriteType[i] = -1;
       } else if (this.enemySpriteType[i] !== texture) {
         sprite.setTexture(this.textureKeyByType[texture]);
@@ -452,15 +457,17 @@ export class WorldRenderer {
         const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
         this.telegraphs.lane(x, y, enemies.dirX[i], enemies.dirY[i], length, type.radius, progress);
       }
-      if (type.pattern === "caster" && enemies.phase[i] === CASTER_PHASE.windup) {
-        // Кольцо вокруг кастера растёт к моменту удара — та же грамматика
-        // телеграфа, что у фитиля подрывника: круг заполняется — сейчас будет.
-        const progress = 1 - enemies.phaseTimer[i] / type.params.telegraphSec;
-        this.telegraphs.ring(x, y, type.params.preferredDistance * 0.35, progress);
+      if (type.anchored && enemies.phase[i] === CORDON_PHASE.forming) {
+        this.telegraphs.flash(x, y, type.radius * CORDON_FLASH_RADIUS_MUL, 1 - enemies.phaseTimer[i] / CORDON_FORM_SEC);
       }
-      if (type.pattern === "kite_and_shoot" && enemies.attackCooldown[i] < AIM_TELEGRAPH_SEC) {
-        const progress = 1 - enemies.attackCooldown[i] / AIM_TELEGRAPH_SEC;
-        this.telegraphs.aim(x, y, playerX, playerY, progress);
+    }
+
+    // Места элиты и босса внутри строя: кольцо замыкается, пока они не вышли.
+    const cordon = this.world.cordon;
+    if (telegraphsOn && cordon.active) {
+      const progress = 1 - cordon.pendingLeftSec / CORDON_INNER_SEC;
+      for (const entry of cordon.pending) {
+        this.telegraphs.ring(entry.x, entry.y, this.world.enemyTypes[entry.typeIndex].radius * CORDON_INNER_RING_MUL, progress);
       }
     }
 
@@ -477,19 +484,11 @@ export class WorldRenderer {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      const look = projectileLook(projectiles.fromPlayer[p] === 1, projectiles.vx[p], projectiles.vy[p], lookScratch);
-      // Спрайты переиспользуются, поэтому текстура меняется только при смене вида:
-      // setTexture на каждый снаряд каждый кадр — лишняя работа.
-      if (sprite.texture.key !== look.texture) sprite.setTexture(look.texture);
       sprite.setVisible(true);
       sprite.setPosition(
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
-      // Поворот и масштаб — всегда: свой снаряд в слоте, где летел вражеский,
-      // не должен остаться повёрнутым и сплюснутым.
-      sprite.setRotation(look.rotation);
-      sprite.setScale(look.scaleX, look.scaleY);
     }
   }
 
@@ -575,9 +574,9 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
-      if (kind === SIM_EVENT.shield) {
-        // Щит принял удар: кольцо от игрока вместо вспышки урона — видно, что
-        // спасло, и что щита больше нет.
+      if (kind === SIM_EVENT.shield || kind === SIM_EVENT.ward) {
+        // Щит или оберег принял удар: кольцо от игрока вместо вспышки урона — видно,
+        // что спасло. Оберег рисуется тем же знаком и под тем же переключателем эффектов.
         this.startBlast(events.x[slot], events.y[slot], SHIELD_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
@@ -688,25 +687,30 @@ export class WorldRenderer {
    * обязана быть одинаковой на любом устройстве, иначе на телефоне с высокой
    * плотностью она превращается в мелкую рябь.
    */
-  private ensureGroundTexture(scale: number): void {
-    const key = "bh-ground";
-    if (this.scene.textures.exists(key)) return;
+  private ensureGroundTexture(scale: number, light = false): string {
+    const key = light ? GROUND_LIGHT_KEY : GROUND_KEY;
+    if (this.scene.textures.exists(key)) return key;
 
     const size = Math.max(2, Math.round(GROUND_TILE_UNITS * scale));
     const graphics = this.scene.make.graphics({ x: 0, y: 0 }, false);
-    graphics.fillStyle(WORLD_COLORS.ground, 1);
+    graphics.fillStyle(light ? LIGHT_GROUND_COLOR : WORLD_COLORS.ground, 1);
     graphics.fillRect(0, 0, size, size);
     graphics.fillStyle(WORLD_COLORS.groundLine, 1);
     graphics.fillRect(0, 0, size, Math.max(1, Math.round(scale)));
     graphics.fillRect(0, 0, Math.max(1, Math.round(scale)), size);
     graphics.generateTexture(key, size, size);
     graphics.destroy();
+    return key;
   }
 }
 
 
 /** Сколько взрывов показывается одновременно; дальше перезаписываются старые. */
 const MAX_BLASTS = 24;
+const GROUND_KEY = "bh-ground";
+const GROUND_LIGHT_KEY = "bh-ground-light";
+/** Проверочная светлая земля — только для стенда эффектов, не цвет игры. */
+const LIGHT_GROUND_COLOR = 0xc8c4b8;
 /** Сторона плитки фона в игровых единицах. */
 const GROUND_TILE_UNITS = 64;
 const BLAST_LIFETIME_TICKS = 18;
@@ -718,6 +722,7 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.dynamite]: "bh-dynamite",
   [SIM_EVENT.freeze]: "bh-freeze",
   [SIM_EVENT.shield]: "bh-magnet",
+  [SIM_EVENT.ward]: "bh-magnet",
 };
 /** Радиус кольца сработавшего щита, игровые единицы. */
 const SHIELD_RING_UNITS = 60;
@@ -735,6 +740,11 @@ const HEAL_RING_UNITS = 40;
 
 /** За сколько тиков до конца заморозка начинает мигать: две секунды. */
 const FREEZE_BLINK_TICKS = 120;
+
+/** Во сколько раз вспышка строя шире тела стража: вокруг стража, а не поверх него. */
+const CORDON_FLASH_RADIUS_MUL = 2.4;
+/** Во сколько раз кольцо места внутреннего врага шире его тела. */
+const CORDON_INNER_RING_MUL = 2.2;
 
 /** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
 const HIT_FLASH_TICKS = 7;
@@ -779,9 +789,6 @@ function lookFor(pattern: EnemyPattern, phase: number, tick: number): number {
   }
   if (pattern === "exploder" && phase === EXPLODER_PHASE.fuse) {
     return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.dim;
-  }
-  if (pattern === "caster" && phase === CASTER_PHASE.windup) {
-    return (tick >> 2) % 2 === 0 ? LOOK.warning : LOOK.normal;
   }
   return LOOK.normal;
 }

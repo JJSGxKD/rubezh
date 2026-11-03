@@ -29,7 +29,7 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
@@ -39,7 +39,7 @@ batch: 6
 
 # T-0279. Пролог — сервер: запись забега-пролога, награда один раз, признак «пролог пройден» и открытие награды дня и заданий
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json)](README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](T-0278-prologue-engine.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](T-0191-single-difficulty-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json)](README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](archive/T-0278-prologue-engine.md) [![T-0191](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0191.json&label=T-0191)](archive/T-0191-single-difficulty-server.md)
 
 ## Зачем
 

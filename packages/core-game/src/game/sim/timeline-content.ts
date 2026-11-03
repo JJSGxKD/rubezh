@@ -1,4 +1,5 @@
 import type {
+  CordonInnerDef,
   CordonRingDef,
   EndlessCurveDef,
   EnemyDef,
@@ -107,7 +108,7 @@ function findEventProblems(
       if (enemyById.has(event.enemy) && !guard) {
         problems.push(`${where}: враг ${event.enemy} в событии cordon — не паттерна cordon`);
       }
-      if (event.ring !== undefined) problems.push(...findRingProblems(event.ring, where, enemyById.get(event.enemy)));
+      if (event.ring !== undefined) problems.push(...findRingProblems(event.ring, where, enemyById.get(event.enemy), enemyById));
       continue;
     }
     if (event.ring !== undefined) problems.push(`${where}: ring задаётся только у события cordon, а не ${event.kind}`);
@@ -129,13 +130,13 @@ const CORDON_MAX_RADIUS = 420;
 const CORDON_MIN_RADIUS_FLOOR = 60;
 const CORDON_LIFE_SEC = { min: 5, max: 120 } as const;
 
-function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined): string[] {
+function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
   const problems: string[] = [];
   if (!(ring.minRadius >= CORDON_MIN_RADIUS_FLOOR)) {
     problems.push(`${where}: ring.minRadius — не меньше ${CORDON_MIN_RADIUS_FLOOR}: теснее строй раздавит игрока`);
   }
   if (!(ring.radius <= CORDON_MAX_RADIUS)) {
-    problems.push(`${where}: ring.radius — не больше ${CORDON_MAX_RADIUS}: стражи обязаны приходить снаружи экрана`);
+    problems.push(`${where}: ring.radius — не больше ${CORDON_MAX_RADIUS}: строй должен целиком помещаться в карту`);
   }
   if (!(ring.minRadius < ring.radius)) problems.push(`${where}: ring.minRadius должен быть меньше ring.radius`);
   if (!(ring.shrinkPerSec > 0)) problems.push(`${where}: ring.shrinkPerSec должен быть больше нуля`);
@@ -145,6 +146,36 @@ function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | 
   if (!(ring.lifeSec >= CORDON_LIFE_SEC.min && ring.lifeSec <= CORDON_LIFE_SEC.max)) {
     problems.push(`${where}: ring.lifeSec — от ${CORDON_LIFE_SEC.min} до ${CORDON_LIFE_SEC.max} секунд`);
   }
+  if (ring.inner !== undefined) problems.push(...findInnerProblems(ring.inner, where, enemyById));
+  return problems;
+}
+
+/** Внутренних врагов кольца: записей, штук в записи и всего на кольцо. */
+const INNER_MAX_ENTRIES = 4;
+const INNER_MAX_COUNT = 4;
+const INNER_MAX_TOTAL = 6;
+
+function findInnerProblems(inner: readonly CordonInnerDef[], where: string, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
+  const problems: string[] = [];
+  if (!Array.isArray(inner) || inner.length < 1 || inner.length > INNER_MAX_ENTRIES) {
+    return [`${where}: ring.inner — от 1 до ${INNER_MAX_ENTRIES} записей, а не пустой и не длиннее`];
+  }
+
+  let total = 0;
+  inner.forEach((entry, index) => {
+    const at = `${where}: ring.inner[${index}]`;
+    const def = enemyById.get(entry.enemy);
+    if (def === undefined) problems.push(`${at} — врага ${entry.enemy} нет в контенте`);
+    else if (def.rank !== "elite" && def.rank !== "boss") problems.push(`${at} — враг ${entry.enemy} не элита и не босс`);
+    else if (def.pattern === "cordon") problems.push(`${at} — страж ${entry.enemy} не может быть внутри строя`);
+    if (!Number.isInteger(entry.count) || entry.count < 1 || entry.count > INNER_MAX_COUNT) {
+      problems.push(`${at}: count — целое от 1 до ${INNER_MAX_COUNT}`);
+    } else {
+      total += entry.count;
+    }
+    if (entry.fromSec !== undefined && !(entry.fromSec >= 0)) problems.push(`${at}: fromSec — число не меньше 0`);
+  });
+  if (total > INNER_MAX_TOTAL) problems.push(`${where}: ring.inner — всего внутренних не больше ${INNER_MAX_TOTAL}, а записано ${total}`);
   return problems;
 }
 

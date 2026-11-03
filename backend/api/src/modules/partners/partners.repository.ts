@@ -36,6 +36,8 @@ export interface PartnerBindingView {
   /** кампания и код, которым привязан; `null` — кампании уже нет */
   campaignTitle: string | null;
   code: string | null;
+  /** ссылка партнёра, по которой пришёл игрок; `null` — привязка по коду */
+  linkCode: string | null;
 }
 
 export interface PartnersRepository {
@@ -282,7 +284,7 @@ export class PrismaPartnersRepository implements PartnersRepository {
 
   async bindingOf(accountId: string): Promise<PartnerBindingView | null> {
     const [raw] = await this.prisma.$queryRaw<unknown[]>`
-      SELECT b.partner_id::text, p.name, b.bound_at, c.title AS campaign_title, pc.display AS code
+      SELECT b.partner_id::text, p.name, b.bound_at, c.title AS campaign_title, pc.display AS code, b.link_code
       FROM partner_binding b
       JOIN partner p ON p.partner_id = b.partner_id
       LEFT JOIN promo_campaign c ON c.campaign_id = b.campaign_id
@@ -290,7 +292,7 @@ export class PrismaPartnersRepository implements PartnersRepository {
       LEFT JOIN promo_code pc ON pc.code = r.code
       WHERE b.account_id = ${accountId}::uuid`;
     if (raw === undefined) return null;
-    const row = z.object({ partner_id: z.string(), name: z.string(), bound_at: z.date(), campaign_title: z.string().nullable(), code: z.string().nullable() }).parse(raw);
-    return { partnerId: row.partner_id, name: row.name, boundAt: row.bound_at, campaignTitle: row.campaign_title, code: row.code };
+    const row = z.object({ partner_id: z.string(), name: z.string(), bound_at: z.date(), campaign_title: z.string().nullable(), code: z.string().nullable(), link_code: z.string().nullable() }).parse(raw);
+    return { partnerId: row.partner_id, name: row.name, boundAt: row.bound_at, campaignTitle: row.campaign_title, code: row.code, linkCode: row.link_code };
   }
 }

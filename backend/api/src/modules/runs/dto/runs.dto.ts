@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ELEMENT_KEYS } from "../run-counters.js";
 import { DIFFICULTIES } from "../run-rules.js";
 
 /**
@@ -45,6 +46,16 @@ const signedLoadoutSchema = z.object({
   signature: z.string().min(1).max(128),
 });
 
+/**
+ * Рубеж в итоге (T-0121): форма `RunRubezh` из `shared-types`. Границы — от
+ * битых данных; правдоподобие победы по времени решает вердикт.
+ */
+const rubezhSchema = z.object({
+  reached: z.boolean(),
+  clearedSec: z.number().int().min(0).max(86_400).nullable(),
+  guardHpPercent: z.number().int().min(0).max(100).nullable(),
+});
+
 /** Итог забега. */
 export const runFinishSchema = z
   .object({
@@ -75,12 +86,36 @@ export const runFinishSchema = z
     // Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4):
     // на вердикт не влияют. Сборки до листа их не шлют.
     passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
+    // Нет поля — сборка до рубежа; победа в такой сборке невозможна.
+    rubezh: rubezhSchema.optional(),
     stats: z
       .object({
         damageTaken: z.number().min(0).max(1e12),
         xpCollected: z.number().int().min(0).max(1e9),
         waveReached: z.number().int().min(0).max(10_000),
         topKills: z.array(z.object({ enemy: weaponId, count: z.number().int().min(0).max(1_000_000) })).max(8),
+        // Счётчики для заданий (tasks/T-0125): потолки формы, а не правила игры. Старые сборки полей не шлют.
+        bossKills: z.number().int().min(0).max(1_000_000).optional(),
+        eliteKills: z.number().int().min(0).max(1_000_000).optional(),
+        chestsOpened: z.number().int().min(0).max(1_000_000).optional(),
+        crystals: z.number().int().min(0).max(10_000_000).optional(),
+        // Серии и убийства по стихиям для достижений (tasks/T-0321): потолок — сутки, как у секунд забега;
+        // физических убийств в словаре нет. Старые сборки полей не шлют.
+        noHitSec: z.number().int().min(0).max(86_400).optional(),
+        noKillSec: z.number().int().min(0).max(86_400).optional(),
+        killsByElement: z.partialRecord(z.enum(ELEMENT_KEYS), z.number().int().min(0).max(1_000_000)).optional(),
+        // Журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): потолки формы, старые сборки полей не шлют.
+        huntLog: z
+          .array(
+            z.object({
+              rank: z.enum(["elite", "boss"]),
+              value: z.number().min(0).max(10_000),
+              aliveSec: z.number().min(0).max(7_200),
+            }),
+          )
+          .max(64)
+          .optional(),
+        buildScore: z.number().min(0).max(64).optional(),
       })
       .optional(),
   })

@@ -24,7 +24,7 @@ shared:
   - backend/api/src/common/public-identity.ts
   - docs/10-progression-and-ladder.md
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor

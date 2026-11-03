@@ -6,35 +6,40 @@ import { track } from "./shell";
  * (docs/27-design-system-and-app-shell.md §7). Адресной строки в Mini App нет,
  * история браузера во WebView ведёт себя непредсказуемо, а глубокие ссылки
  * приходят через `startParam` и разбираются в экран на старте.
+ *
+ * Массив id нужен, чтобы проверить строку из адреса (state/dev-url.ts).
  */
-export type ScreenId =
-  | "lobby"
-  | "run"
-  | "stress"
-  | "arsenal"
-  | "shop"
-  | "rating"
-  | "friends"
-  | "profile"
-  | "level"
-  | "history"
-  | "notifications"
-  | "changelog"
-  | "tasks"
-  | "daily"
-  | "wheel"
-  | "settings"
-  | "testers"
-  | "diagnostics"
-  | "gallery"
-  | "guide"
-  | "feedback"
-  | "soundLab"
-  | "about"
-  | "testNotice"
-  | "testerThanks"
-  | "runInterrupted"
-  | "promoCode";
+export const SCREEN_IDS = [
+  "lobby",
+  "run",
+  "stress",
+  "arsenal",
+  "shop",
+  "rating",
+  "friends",
+  "profile",
+  "level",
+  "history",
+  "notifications",
+  "changelog",
+  "tasks",
+  "daily",
+  "wheel",
+  "settings",
+  "testers",
+  "diagnostics",
+  "gallery",
+  "guide",
+  "feedback",
+  "soundLab",
+  "adsCheck",
+  "about",
+  "testNotice",
+  "testerThanks",
+  "runInterrupted",
+  "promoCode",
+] as const;
+export type ScreenId = (typeof SCREEN_IDS)[number];
 
 /** Корни разделов нижней панели: переключение вкладки сбрасывает стек. */
 export const TAB_ROOTS = ["shop", "arsenal", "lobby", "tasks", "rating", "friends"] as const;

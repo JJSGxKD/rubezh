@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, BlessingDef, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -35,10 +35,12 @@ import { BootScreen } from "./gates";
 import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
+import { BlessingOverlay } from "./run/BlessingOverlay";
 import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
+import type { GemContinueStage } from "../state/gem-continue";
 import type { ContinueStage } from "../state/continue-purchase";
 
 /**
@@ -52,7 +54,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -84,6 +86,8 @@ export function GalleryScreen(): ReactNode {
             title={t("gallery.preview.levelUpLong")}
             onClick={() => setPreview("levelUpLong")}
           />
+          <ListItem title={t("gallery.preview.levelUpLimit")} onClick={() => setPreview("levelUpLimit")} />
+          <ListItem title={t("gallery.preview.levelUpLimitHurt")} onClick={() => setPreview("levelUpLimitHurt")} />
           <ListItem title={t("gallery.preview.pause")} onClick={() => setPreview("pause")} />
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
@@ -91,6 +95,8 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
+          <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
+          <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -223,6 +229,11 @@ export function GalleryScreen(): ReactNode {
           ))}
           {AD_STAGES.map(([ad, paid], index) => (
             <SecondChance key={`ad-${String(index)}`} adPreview={ad} {...(paid === null ? {} : { paidPreview: paid })} />
+          ))}
+          {/* Самоцветы (Р162): с роликом он главный, без ролика главные самоцветы;
+              нехватка — выключенная кнопка с подписью. */}
+          {GEM_STAGES.map(([gems, ad, paid], index) => (
+            <SecondChance key={`gems-${String(index)}`} gemsPreview={gems} {...(ad === null ? {} : { adPreview: ad })} {...(paid === null ? {} : { paidPreview: paid })} />
           ))}
         </div>
 
@@ -371,11 +382,41 @@ function RarityPreview(): ReactNode {
   );
 }
 
+/**
+ * Экран со второй колонкой (T-0298): на wide (с 1024 px) `aside` стоит справа,
+ * уже — под основным содержимым. Без `aside` экран — обычная одна колонка, как
+ * сама витрина.
+ */
+function AsidePreview(): ReactNode {
+  return (
+    <Screen
+      title={t("gallery.preview.aside")}
+      aside={
+        <Card>
+          <h3 className="font-display text-base font-bold text-text">{t("gallery.aside.side")}</h3>
+          <p className="mt-1 text-sm text-text-muted">{t("gallery.aside.sideText")}</p>
+        </Card>
+      }
+    >
+      <SectionTitle>{t("gallery.aside.main")}</SectionTitle>
+      <div className="grid gap-2">
+        {Array.from({ length: 6 }, (_, index) => (
+          <Card key={index}>
+            <span className="text-sm text-text">{t("gallery.modal.line", { n: index + 1 })}</span>
+          </Card>
+        ))}
+      </div>
+    </Screen>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
   const shareNoop = (): Promise<null> => Promise.resolve(null);
 
   switch (preview) {
+    case "aside":
+      return <AsidePreview />;
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":
@@ -413,12 +454,32 @@ function renderPreview(preview: Preview): ReactNode {
           onStats={noop}
         />
       );
+    case "levelUpLimit":
+    case "levelUpLimitHurt":
+      return (
+        <LevelUpOverlay
+          level={31}
+          offers={preview === "levelUpLimit" ? LIMIT_OFFERS : LIMIT_OFFERS_HURT}
+          queued={1}
+          loadout={{
+            weapons: [
+              { id: "spark", level: 8 },
+              { id: "knife", level: 8 },
+            ],
+            passives: [{ id: "might", level: 6 }],
+          }}
+          onChoose={noop}
+          onStats={noop}
+        />
+      );
     case "chest1":
     case "chest3":
     case "chest5": {
       const size = preview === "chest1" ? 1 : preview === "chest3" ? 3 : 5;
       return <ChestOverlay chest={{ index: size, size, rewards: SAMPLE_CHEST.slice(0, size) }} onTake={noop} />;
     }
+    case "blessing":
+      return <BlessingOverlay options={SAMPLE_BLESSINGS} onChoose={noop} />;
     case "pause":
       return <PauseOverlay elapsedSec={187} onResume={noop} onSettings={noop} onSurrender={noop} onStats={noop} />;
     case "death":
@@ -499,6 +560,23 @@ const AD_STAGES: readonly (readonly [AdContinueStage, ContinueStage | null])[] =
   [{ kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
 ];
 
+const GEM_OFFER = { continueNo: 1, priceGems: 5, balance: 12 } as const;
+
+/**
+ * Второй шанс за самоцветы: цена и баланс, нехватка, загрузка, обрыв сети,
+ * отпавший способ — рядом с роликом и звёздами и без них.
+ */
+const GEM_STAGES: readonly (readonly [GemContinueStage, AdContinueStage | null, ContinueStage | null])[] = [
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, { kind: "unavailable", reason: "daily_cap" }, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: { ...GEM_OFFER, balance: 3 }, notice: null }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+  [{ kind: "ready", offer: GEM_OFFER, notice: "offline" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "loading" }, { kind: "unavailable", reason: "daily_cap" }, null],
+  [{ kind: "buying", offer: GEM_OFFER }, AD_READY, null],
+  [{ kind: "unavailable", reason: "insufficient_funds" }, AD_READY, { kind: "ready", offer: LIVE_OFFER }],
+];
+
 function change(
   labelKey: string,
   from: number | null,
@@ -552,12 +630,65 @@ const SAMPLE_OFFERS: UpgradeOption[] = [
 ];
 
 /** Сундук: все виды наград — новое, уровни, лечение и опыт. */
+/** Предложение капища для витрины: три из набора контента, как их отдаёт движок. */
+const SAMPLE_BLESSINGS: BlessingDef[] = [
+  { id: "fury", nameKey: "blessing.fury", modifiers: { damage: 0.1 } },
+  { id: "wind", nameKey: "blessing.wind", modifiers: { moveSpeed: 0.08 } },
+  { id: "fortress", nameKey: "blessing.fortress", modifiers: { maxHp: 10 } },
+];
+
 const SAMPLE_CHEST: ChestReward[] = [
   { ...SAMPLE_OFFERS[1]!, kind: "weapon_level" },
   { ...KNIFE_NEW, kind: "weapon_new" },
   { ...SAMPLE_OFFERS[2]!, kind: "passive_level" },
   { id: "heal", kind: "heal", refId: "", level: 0, nameKey: "upgrade.heal.name", descriptionKey: "upgrade.heal.description", changes: [] },
   { id: "xp", kind: "xp", refId: "", level: 0, nameKey: "upgrade.xp.name", descriptionKey: "upgrade.xp.description", changes: [change("upgrade.xp.label", null, 40, "plus")] },
+];
+
+/** «Предел» (T-0194): накопленное «было → стало» и самое длинное название. */
+const LIMIT_OFFERS: UpgradeOption[] = [
+  {
+    id: "limit:damage",
+    kind: "limit",
+    refId: "damage",
+    level: 3,
+    nameKey: "upgrade.limit.damage.name",
+    descriptionKey: "upgrade.limit.damage.description",
+    changes: [change("upgrade.stat.passive.damage", 1.06, 1.09, "percent")],
+  },
+  {
+    id: "limit:cooldown",
+    kind: "limit",
+    refId: "cooldown",
+    level: 12,
+    nameKey: "upgrade.limit.cooldown.name",
+    descriptionKey: "upgrade.limit.cooldown.description",
+    changes: [change("upgrade.stat.passive.cooldown", 0.78, 0.76, "percent", true)],
+  },
+  {
+    id: "limit:regen",
+    kind: "limit",
+    refId: "regen",
+    level: 1,
+    nameKey: "upgrade.limit.regen.name",
+    descriptionKey: "upgrade.limit.regen.description",
+    changes: [change("upgrade.stat.passive.regenPerSec", 0, 0.1, "plus")],
+  },
+];
+
+/** Здоровье ниже половины: две прибавки и лечение последним. */
+const LIMIT_OFFERS_HURT: UpgradeOption[] = [
+  LIMIT_OFFERS[0]!,
+  LIMIT_OFFERS[1]!,
+  {
+    id: "heal",
+    kind: "heal",
+    refId: "",
+    level: 0,
+    nameKey: "upgrade.heal.name",
+    descriptionKey: "upgrade.heal.description",
+    changes: [change("upgrade.stat.heal", null, 30)],
+  },
 ];
 
 /** Самые длинные тексты словаря — на них вёрстка ломается первой (§4.3). */
@@ -609,6 +740,13 @@ const SAMPLE_RESULT: RunResult = {
   damageDealt: 48210,
   damageTaken: 930,
   damageByElement: { physical: 9400, fire: 2100, cold: 800, lightning: 1600 },
+  noHitSec: 0,
+  noKillSec: 0,
+  killsByElement: {},
+  bossKills: 1,
+  eliteKills: 6,
+  chestsOpened: 3,
+  crystalsCollected: 640,
   weapons: [
     { id: "spark", level: 5, damage: 21840 },
     { id: "wardstone", level: 3, damage: 15320 },

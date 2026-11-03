@@ -34,12 +34,12 @@ shared:
   - docs/07-monetization-and-ads.md
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0242. Награда дня ×2 за ролик — новое место рекламы daily_double, сервер

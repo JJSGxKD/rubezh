@@ -34,13 +34,13 @@ runner: any
 executor: sonnet-5.5
 effort: extra
 release: minor
-design: design/art/meta-v2.md
+design: design/art/mockups/prologue-v2.html
 batch: 6
 ---
 
 # T-0280. Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0280.json)](README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](T-0278-prologue-engine.md) [![T-0279](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json&label=T-0279)](T-0279-prologue-server.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](T-0190-single-difficulty-shell.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](T-0232-run-results-relic.md) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0280.json)](README.md#значки-статуса) [![T-0278](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0278.json&label=T-0278)](archive/T-0278-prologue-engine.md) [![T-0279](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0279.json&label=T-0279)](T-0279-prologue-server.md) [![T-0190](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0190.json&label=T-0190)](archive/T-0190-single-difficulty-shell.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](T-0232-run-results-relic.md) [![T-0124](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0124.json&label=T-0124)](T-0124-rubezh-banners-and-death-screen.md)
 
 ## Зачем
 
@@ -61,8 +61,11 @@ batch: 6
 - Р151 — пролог, подсказки по событию, окно победы;
 - 25.10.2026 — за пролог монеты и самоцветы, разделы открываются победой.
 
-Сценарий и раскадровка — `design/art/meta-v2.md` §4.2,
-`design/art/mockups/first-run-v2.html`.
+Сценарий — `design/art/meta-v2.md` §4.2. Раскадровка экранов —
+`design/art/mockups/prologue-v2.html` (31.10.2026, `src/prologue-board.mjs`):
+11 кадров на 320 — подсказки, «Советуем», оберег, сундук, Страж, окно
+победы, выход и главная до и после. Ранний набросок по времени —
+`mockups/first-run-v2.html`.
 
 Решения `claude-lead-1` от 25.10.2026:
 
@@ -84,8 +87,10 @@ batch: 6
   2. `gems` — первый кристалл на поле;
   3. `choose` (новая) — первый выбор улучшения: «Выбери улучшение — «Советуем»
      подойдёт для начала»;
-  4. `dodge` — появилась первая элита: «Элита бьёт по кругу — отойди, когда
-     земля засветится».
+  4. `dodge` — появилась первая элита: «Золотая кайма — элита: бьёт больнее.
+     Держись на расстоянии — с неё упадёт сундук». Ударов по кругу у упыря
+     пролога нет (паттерн `chase`) — прежний текст про светящуюся землю
+     обещал то, чего игрок не увидит (поправка дизайнера 31.10.2026).
 
   В прологе подсказки показываются всегда, даже если их уже видели на этом
   устройстве: пролог — первый забег аккаунта.
@@ -153,7 +158,7 @@ batch: 6
 10. **Тексты** `ru.json`, `ru-run.json` — дословно:
     - «Навь идёт к рубежу. Держи его»;
     - «Выбери улучшение — «Советуем» подойдёт для начала»;
-    - «Элита бьёт по кругу — отойди, когда земля засветится»;
+    - «Золотая кайма — элита: бьёт больнее. Держись на расстоянии — с неё упадёт сундук»;
     - «Оберег не даст пасть в первом бою»;
     - «Советуем»;
     - «Рубеж удержан!», «Открыты Награда дня и Задания», «На 10-м уровне — облик Знахарки», «На главную»;

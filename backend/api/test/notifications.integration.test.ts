@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -108,6 +109,75 @@ describe.skipIf(DATABASE_URL === "")("уведомления на живом Pos
     expect(newest?.read).toBe(false);
     expect(await service.read(me, undefined)).toEqual({ unread: 0 });
     expect(await service.unread(other)).toBe(1);
+  });
+
+  describe("прочитанное действием", () => {
+    const request = (to: string, from: string, key: string) =>
+      service.notify({ accountId: to, kind: "friend_request", payload: { fromAccountId: from, fromName: "Дым" }, dedupeKey: key });
+    const readAtOf = async (accountId: string, from: string, kind: string) =>
+      (await prisma.notification.findMany({ where: { accountId, kind }, select: { readAt: true, payload: true } })).find((row) => (row.payload as { fromAccountId: string }).fromAccountId === from)?.readAt;
+
+    it("с совпадением гасит только названных, число — сколько погашено", async () => {
+      const me = await account();
+      const [a, b, c] = [randomUUID(), randomUUID(), randomUUID()];
+      for (const from of [a, b, c]) await request(me, from, `req:${from}`);
+
+      expect(await repository.markReadOf(me, "friend_request", { key: "fromAccountId", values: [b] }, new Date())).toBe(1);
+
+      expect(await service.unread(me)).toBe(2);
+      expect(await readAtOf(me, a, "friend_request")).toBeNull();
+      expect(await readAtOf(me, b, "friend_request")).not.toBeNull();
+      expect(await readAtOf(me, c, "friend_request")).toBeNull();
+    });
+
+    it("без совпадения гасит весь вид, другой вид остаётся", async () => {
+      const me = await account();
+      await request(me, randomUUID(), "req:1");
+      await request(me, randomUUID(), "req:2");
+      await gift(me, "gift:1", new Date());
+
+      expect(await repository.markReadOf(me, "friend_request", undefined, new Date())).toBe(2);
+
+      expect(await service.unread(me)).toBe(1);
+    });
+
+    it("прочитанное повторно не трогается", async () => {
+      const me = await account();
+      const from = randomUUID();
+      await request(me, from, "req:1");
+      const first = new Date(Date.UTC(2026, 9, 24, 10));
+      expect(await repository.markReadOf(me, "friend_request", undefined, first)).toBe(1);
+
+      expect(await repository.markReadOf(me, "friend_request", undefined, new Date())).toBe(0);
+      expect((await readAtOf(me, from, "friend_request"))?.toISOString()).toBe(first.toISOString());
+    });
+
+    it("чужой аккаунт не задет, пустой список — ноль", async () => {
+      const me = await account();
+      const other = await account();
+      const from = randomUUID();
+      await request(me, from, "req:1");
+      await request(other, from, "req:1");
+
+      expect(await repository.markReadOf(me, "friend_request", { key: "fromAccountId", values: [] }, new Date())).toBe(0);
+      expect(await repository.markReadOf(me, "friend_request", { key: "fromAccountId", values: [from] }, new Date())).toBe(1);
+
+      expect(await service.unread(other)).toBe(1);
+    });
+
+    it("сервис: readFor гасит, а при сбое базы не бросает", async () => {
+      const me = await account();
+      await request(me, randomUUID(), "req:1");
+      await service.readFor(me, "friend_request");
+      expect(await service.unread(me)).toBe(0);
+
+      const broken = new NotificationsService({
+        markReadOf: async () => {
+          throw new Error("сбой");
+        },
+      } as unknown as PrismaNotificationsRepository);
+      await expect(broken.readFor(me, "friend_request")).resolves.toBeUndefined();
+    });
   });
 
   it("чистка — только старше границы и не больше пачки", async () => {

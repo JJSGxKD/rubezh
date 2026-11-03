@@ -1,0 +1,374 @@
+{
+ "frames": {
+  "hero-vedunya/back/walk1": {
+   "frame": {
+    "x": 2,
+    "y": 2,
+    "w": 83,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 37,
+    "y": 3,
+    "w": 83,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/back/walk3": {
+   "frame": {
+    "x": 87,
+    "y": 2,
+    "w": 87,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 3,
+    "w": 87,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/walk1": {
+   "frame": {
+    "x": 176,
+    "y": 2,
+    "w": 87,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 10,
+    "y": 3,
+    "w": 87,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/walk3": {
+   "frame": {
+    "x": 265,
+    "y": 2,
+    "w": 83,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 10,
+    "y": 3,
+    "w": 83,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/walk1": {
+   "frame": {
+    "x": 350,
+    "y": 2,
+    "w": 98,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 22,
+    "y": 3,
+    "w": 98,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/walk3": {
+   "frame": {
+    "x": 450,
+    "y": 2,
+    "w": 87,
+    "h": 115
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 33,
+    "y": 3,
+    "w": 87,
+    "h": 115
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/back/idle0": {
+   "frame": {
+    "x": 539,
+    "y": 2,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/back/walk0": {
+   "frame": {
+    "x": 626,
+    "y": 2,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/back/walk2": {
+   "frame": {
+    "x": 713,
+    "y": 2,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/idle0": {
+   "frame": {
+    "x": 800,
+    "y": 2,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 10,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/walk0": {
+   "frame": {
+    "x": 887,
+    "y": 2,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 10,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/walk2": {
+   "frame": {
+    "x": 2,
+    "y": 119,
+    "w": 85,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 10,
+    "y": 7,
+    "w": 85,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/idle0": {
+   "frame": {
+    "x": 89,
+    "y": 119,
+    "w": 93,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 7,
+    "w": 93,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/walk0": {
+   "frame": {
+    "x": 184,
+    "y": 119,
+    "w": 93,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 7,
+    "w": 93,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/walk2": {
+   "frame": {
+    "x": 279,
+    "y": 119,
+    "w": 93,
+    "h": 111
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 27,
+    "y": 7,
+    "w": 93,
+    "h": 111
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/back/idle1": {
+   "frame": {
+    "x": 374,
+    "y": 119,
+    "w": 86,
+    "h": 110
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 35,
+    "y": 8,
+    "w": 86,
+    "h": 110
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/front/idle1": {
+   "frame": {
+    "x": 462,
+    "y": 119,
+    "w": 87,
+    "h": 110
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 9,
+    "y": 8,
+    "w": 87,
+    "h": 110
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  },
+  "hero-vedunya/idle1": {
+   "frame": {
+    "x": 551,
+    "y": 119,
+    "w": 97,
+    "h": 110
+   },
+   "rotated": false,
+   "trimmed": true,
+   "spriteSourceSize": {
+    "x": 24,
+    "y": 8,
+    "w": 97,
+    "h": 110
+   },
+   "sourceSize": {
+    "w": 130,
+    "h": 130
+   }
+  }
+ },
+ "meta": {
+  "app": "design/art/src/build.mjs",
+  "image": "atlas-skin-vedunya.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 976,
+   "h": 232
+  },
+  "scale": "2.5"
+ }
+}

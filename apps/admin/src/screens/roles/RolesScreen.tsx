@@ -102,9 +102,13 @@ function RoleChip({ assignment, onRevoke }: { assignment: Assignment; onRevoke: 
   return (
     <span title={`Выдана ${formatDateTime(assignment.grantedAt)}, кем: ${by}`} className="inline-flex items-center gap-1 rounded-pill bg-accent/15 py-0.5 pr-1 pl-2.5 text-xs text-accent">
       {roleName(assignment.role)}
-      <button type="button" onClick={onRevoke} aria-label={`Снять роль «${roleName(assignment.role)}»`} className="rounded-pill px-1 leading-none hover:bg-accent/25">
-        ×
-      </button>
+      {assignment.revocable ? (
+        <button type="button" onClick={onRevoke} aria-label={`Снять роль «${roleName(assignment.role)}»`} className="rounded-pill px-1 leading-none hover:bg-accent/25">
+          ×
+        </button>
+      ) : (
+        <span className="pr-1.5" />
+      )}
     </span>
   );
 }
@@ -220,7 +224,8 @@ function GrantDialog({ catalog, accountId, onClose, onGranted }: { catalog: Assi
             label="Роль"
             value={role}
             onChange={setRole}
-            choices={ROLE_NAMES.map(([id, name]) => ({
+            // Только роли ниже уровня того, кто выдаёт: недоступных в списке нет (T-0216).
+            choices={ROLE_NAMES.filter(([id]) => catalog.find((entry) => entry.role === id)?.grantable ?? true).map(([id, name]) => ({
               value: id,
               title: name,
               aside: has(id) ? <Badge>уже есть</Badge> : id === "owner" ? <Badge tone="warning">всё</Badge> : undefined,

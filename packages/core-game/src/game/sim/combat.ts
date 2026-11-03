@@ -1,8 +1,11 @@
 import { isElite, onEnemyKilled } from "../patterns";
+import { recordHunt } from "../run/hunt-log";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { dropChest } from "./chests";
+import { onRubezhEnemyKilled } from "./rubezh";
 import { stageOf } from "./stages";
+import { registerKill } from "./streaks";
 import { CHAIN_SHARE, chainTargets, damageMultiplier, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
 
@@ -78,6 +81,8 @@ export function inflictDamage(
   }
 
   if (enemies.hp[index] > 0) return applied;
+  // Стихия добивающего удара: динамит и прочее без стихии идут мимо `inflictDamage` и физическими.
+  world.stats.killsByElement[element]++;
   killEnemy(world, index);
   return applied;
 }
@@ -94,6 +99,11 @@ export function killEnemy(world: World, index: number): void {
 
   world.stats.enemiesKilled++;
   world.stats.killsByType[typeIndex]++;
+  registerKill(world);
+  recordHunt(world, index, type);
+  if (type.rank === "boss") world.stats.bossKills++;
+  else if (type.rank === "elite") world.stats.eliteKills++;
+  onRubezhEnemyKilled(world, typeIndex);
 
   const x = world.enemies.x[index];
   const y = world.enemies.y[index];

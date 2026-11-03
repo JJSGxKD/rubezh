@@ -3,10 +3,12 @@ import { ChevronLeft } from "lucide-react";
 import { t } from "../../i18n";
 import { trackGroupClick } from "../../state/ui-clicks";
 import { uiFeedback } from "../../state/ui-feedback";
+import { useWide } from "../../state/wide";
 import { IconButton } from "./Button";
 import { ConnectionBanner } from "./ConnectionBanner";
-import { segmentFitClass, segmentedLayout, type SegmentedSize } from "./segmented-rules";
+import { edgeFade, edgeFadeMask, segmentFitClass, segmentedLayout, type EdgeFade, type SegmentedSize } from "./segmented-rules";
 import { tabLabelMode, type TabLabelMode } from "./tab-labels";
+import { contentColumnClass, screenColumns } from "./wide-rules";
 
 /**
  * Каркас экрана: верхняя панель, прокручиваемое тело, опциональное дно.
@@ -23,9 +25,17 @@ export interface ScreenProps {
   children: ReactNode;
   /** закреплённое дно: основное действие экрана видно без прокрутки */
   footer?: ReactNode;
+  /**
+   * Вторая колонка справа (T-0298). На wide (с 1024 px) стоит рядом с основным
+   * содержимым, уже — под ним. Экран отдаёт её, когда ему есть что показать
+   * рядом; остальные экраны остаются в одной колонке.
+   */
+  aside?: ReactNode;
 }
 
 export function Screen(props: ScreenProps): ReactNode {
+  const wide = useWide((state) => state.wide);
+  const columns = screenColumns({ wide, hasAside: props.aside !== undefined });
   return (
     <div className="flex h-full min-h-0 flex-col">
       {props.title === undefined && props.onBack === undefined && props.actions === undefined ? null : (
@@ -33,13 +43,22 @@ export function Screen(props: ScreenProps): ReactNode {
       )}
       {/* Под шапкой разделов — отступ её высоты: содержимое начинается под ней,
           а при прокрутке уходит под стекло. Внутри раздела отступ нулевой. */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-[var(--app-header-h)] pb-4">
+      <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[var(--app-header-h)] pb-4 ${wide ? "px-7" : "px-4"}`}>
         <ConnectionBanner />
-        {props.children}
+        {props.aside === undefined ? (
+          props.children
+        ) : (
+          <div className={contentColumnClass(wide)}>
+            <div className={columns === "split" ? "grid grid-cols-[minmax(0,1fr)_var(--aside-width)] items-start gap-6" : "grid grid-cols-1 gap-4"}>
+              <div className="min-w-0">{props.children}</div>
+              <aside className="min-w-0">{props.aside}</aside>
+            </div>
+          </div>
+        )}
       </div>
       {props.footer === undefined ? null : (
-        <div className="px-4 pt-2 pb-[calc(0.75rem+var(--app-inset-bottom))]">
-          <div className="mx-auto w-full max-w-[480px]">{props.footer}</div>
+        <div className={`pt-2 pb-[calc(0.75rem+var(--app-inset-bottom))] ${wide ? "px-7" : "px-4"}`}>
+          <div className={contentColumnClass(wide)}>{props.footer}</div>
         </div>
       )}
     </div>
@@ -240,9 +259,10 @@ export interface SegmentedItem {
  * Подписи не обрезаются: обрезанное «Партнё…» не говорит, что внутри.
  * До трёх сегментов — одной строкой, сегмент не уже своего текста, а
  * свободное место делится поровну; не поместились (экран уже 360) — строка
- * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — сеткой
- * в два столбца: четыре русские подписи со знаками в 328 px не помещаются
- * ни при каком читаемом шрифте, а лента на два экрана прячет половину видов.
+ * прокручивается вбок, и выбранный всегда в кадре. Четыре и больше — строка
+ * вкладок без лунки: выбранная подчёркнута полосой акцента, остальные
+ * приглушены, строка листается вбок, а край, за которым есть ещё вкладки,
+ * затухает (Р145; сетка 2×2 читалась как два переключателя друг над другом).
  *
  * `size="s"` — для тесных мест: на узком экране подписи сжимаются
  * (`segmented-rules.ts`), а не уходят за край.
@@ -258,6 +278,18 @@ export function SegmentedControl(props: {
   track: string;
 }): ReactNode {
   const list = useRef<HTMLDivElement>(null);
+  const tabs = segmentedLayout(props.items.length) === "tabs";
+  const [fade, setFade] = useState<EdgeFade>({ left: false, right: false });
+  const [underline, setUnderline] = useState<{ left: number; width: number } | null>(null);
+
+  // Полоса — под выбранной вкладкой: её место меняют и выбор, и ширина подписей
+  // (загрузка шрифта, поворот экрана, крупный шрифт системы).
+  const placeUnderline = (element: HTMLElement): void => {
+    const active = element.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!tabs || active === null) return;
+    setUnderline((prev) => (prev?.left === active.offsetLeft && prev.width === active.offsetWidth ? prev : { left: active.offsetLeft, width: active.offsetWidth }));
+  };
+
   // Только вбок и только внутри ленты: `scrollIntoView` двигал бы и страницу.
   useEffect(() => {
     const element = list.current;
@@ -266,18 +298,88 @@ export function SegmentedControl(props: {
     const right = active.offsetLeft + active.offsetWidth;
     if (active.offsetLeft < element.scrollLeft) element.scrollLeft = active.offsetLeft;
     else if (right > element.scrollLeft + element.clientWidth) element.scrollLeft = right - element.clientWidth;
-  }, [props.activeId]);
+    placeUnderline(element);
+  }, [props.activeId, props.items.length, tabs]);
+
+  // Затухание у краёв: состояние меняется, только когда меняется пара флагов, а не на каждый пиксель прокрутки.
+  useEffect(() => {
+    const element = list.current;
+    if (!tabs || element === null) return;
+    const update = (): void => {
+      const next = edgeFade(element.scrollLeft, element.clientWidth, element.scrollWidth);
+      setFade((prev) => (prev.left === next.left && prev.right === next.right ? prev : next));
+    };
+    const resize = (): void => {
+      update();
+      placeUnderline(element);
+    };
+    update();
+    element.addEventListener("scroll", update, { passive: true });
+    // За кнопками тоже: ширина подписи меняется и без смены ширины ленты.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
+    observer?.observe(element);
+    element.querySelectorAll("[role=tab]").forEach((tab) => observer?.observe(tab));
+    return () => {
+      element.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [tabs, props.items.length]);
+
+  const select = (id: string, active: boolean): void => {
+    if (active) return;
+    uiFeedback("select");
+    trackGroupClick(props.track, id);
+    props.onSelect(id);
+  };
+  const badge = (item: SegmentedItem): ReactNode =>
+    item.badge === undefined || item.badge <= 0 ? null : (
+      <span className="ml-1.5 inline-block min-w-5 rounded-pill bg-danger px-1 text-center text-xs font-bold text-text">{item.badge}</span>
+    );
+
+  if (tabs) {
+    return (
+      <div className="relative border-b border-border">
+        <div
+          ref={list}
+          role="tablist"
+          aria-label={props.label}
+          className="relative flex overflow-x-auto [scrollbar-width:none]"
+          style={{ maskImage: edgeFadeMask(fade), WebkitMaskImage: edgeFadeMask(fade) }}
+        >
+          {props.items.map((item) => {
+            const active = item.id === props.activeId;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => select(item.id, active)}
+                className={[
+                  "relative inline-flex min-h-11 shrink-0 items-center justify-center px-3 font-display text-sm font-semibold whitespace-nowrap",
+                  "focus-visible:-outline-offset-2",
+                  active ? "text-text" : "text-text-muted",
+                ].join(" ")}
+              >
+                {item.label}
+                {badge(item)}
+              </button>
+            );
+          })}
+          {underline === null ? null : (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-pill bg-accent transition-transform duration-(--duration-fast) ease-base motion-reduce:transition-none"
+              style={{ width: underline.width, transform: `translateX(${String(underline.left)}px)` }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      ref={list}
-      role="tablist"
-      aria-label={props.label}
-      className={[
-        "surface-sunken relative gap-1 rounded-lg p-1",
-        segmentedLayout(props.items.length) === "grid" ? "grid grid-cols-2" : "flex overflow-x-auto [scrollbar-width:none]",
-      ].join(" ")}
-    >
+    <div ref={list} role="tablist" aria-label={props.label} className="surface-sunken relative flex gap-1 overflow-x-auto rounded-lg p-1 [scrollbar-width:none]">
       {props.items.map((item) => {
         const active = item.id === props.activeId;
         return (
@@ -286,12 +388,7 @@ export function SegmentedControl(props: {
             type="button"
             role="tab"
             aria-selected={active}
-            onClick={() => {
-              if (active) return;
-              uiFeedback("select");
-              trackGroupClick(props.track, item.id);
-              props.onSelect(item.id);
-            }}
+            onClick={() => select(item.id, active)}
             className={[
               "relative inline-flex min-h-11 flex-1 shrink-0 items-center justify-center rounded-md font-display font-semibold whitespace-nowrap",
               segmentFitClass(props.size ?? "m"),
@@ -300,9 +397,7 @@ export function SegmentedControl(props: {
             ].join(" ")}
           >
             {item.label}
-            {item.badge === undefined || item.badge <= 0 ? null : (
-              <span className="ml-1.5 inline-block min-w-5 rounded-pill bg-danger px-1 text-center text-xs font-bold text-text">{item.badge}</span>
-            )}
+            {badge(item)}
           </button>
         );
       })}
@@ -312,14 +407,19 @@ export function SegmentedControl(props: {
 
 /** Колонка контента: на широком экране игра не растягивается на весь монитор. */
 export function ContentColumn(props: { children: ReactNode }): ReactNode {
-  return <div className="mx-auto w-full max-w-[480px]">{props.children}</div>;
+  const wide = useWide((state) => state.wide);
+  return <div className={contentColumnClass(wide)}>{props.children}</div>;
 }
 
 /**
  * Заголовок раздела нижней панели. Верхней панели у раздела нет — над ним
  * шапка приложения, — и заголовок живёт в контенте, а не отнимает строку.
+ * На wide название раздела стоит в шапке крупно, и второй раз здесь не
+ * рисуется.
  */
 export function PageTitle(props: { children: ReactNode }): ReactNode {
+  const wide = useWide((state) => state.wide);
+  if (wide) return null;
   return <h1 className="mt-2 mb-1 font-display text-2xl font-bold text-text">{props.children}</h1>;
 }
 

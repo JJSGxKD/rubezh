@@ -38,10 +38,14 @@ on:
   workflow_dispatch:
 
 # contents: write — только чтобы пушить ветку task-board; pull-requests: read —
-# список открытых PR для колонки «На ревью».
+# список открытых PR для колонки «На ревью»; checks и statuses: read — итог CI
+# у PR (поле statusCheckRollup, колонка «Чего ждёт»): без них gh pr list
+# падает целиком, и все задачи с PR видны как «в работе».
 permissions:
   contents: write
   pull-requests: read
+  checks: read
+  statuses: read
 
 jobs:
   board:

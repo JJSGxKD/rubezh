@@ -13,3 +13,10 @@ export class TeamSlideNotFoundError extends DomainError {
     super("team_slide_not_found", "Слайда нет, или он уже снят", 404);
   }
 }
+
+/** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
+export class TeamSlideOrderMismatchError extends DomainError {
+  constructor() {
+    super("team_slide_order_mismatch", "Список слайдов изменился — обновите страницу и переставьте ещё раз", 400);
+  }
+}

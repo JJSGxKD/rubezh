@@ -478,6 +478,7 @@ describe("возвраты звёзд", () => {
       weapons: [],
       boosts: [],
       xpCollected: null,
+      counters: null,
       deathCause: "swarm_rat",
       cheats: false,
       continues: 0,

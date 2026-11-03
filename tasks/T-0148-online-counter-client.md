@@ -25,17 +25,17 @@ shared:
   - apps/admin/src/ui/help.ts
   - docs/27-design-system-and-app-shell.md
   - docs/29-admin-panel.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/planned-meta-2.html
-batch: 3
+batch: 4
 ---
 
 # T-0148. Счётчик онлайна — клиент и панель: шапка, кнопка «Играть», разбивка
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json)](README.md#значки-статуса) [![T-0147](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0147.json&label=T-0147)](archive/T-0147-online-counter-backend.md) [![T-0176](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0176.json&label=T-0176)](T-0176-live-feed-client.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0148.json)](README.md#значки-статуса) [![T-0147](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0147.json&label=T-0147)](archive/T-0147-online-counter-backend.md) [![T-0176](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0176.json&label=T-0176)](archive/T-0176-live-feed-client.md)
 
 ## Зачем
 

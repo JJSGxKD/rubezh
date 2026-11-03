@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { BotOutcome, FeedCursor, InsertedNotification, NewNotification, NewNotificationBatch, NotificationsRepository, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
+import type { BotOutcome, FeedCursor, InsertedNotification, NewNotification, NewNotificationBatch, NotificationsRepository, ReadMatch, StoredNotification } from "../../src/modules/notifications/notifications.repository.js";
 import { NotificationsService } from "../../src/modules/notifications/notifications.service.js";
 
 /**
@@ -46,6 +46,17 @@ export class MemoryNotificationsRepository implements NotificationsRepository {
     for (const row of this.rows) {
       if (row.accountId === accountId && row.readAt === null && (upTo === null || row.createdAt <= upTo)) row.readAt = at;
     }
+  }
+
+  async markReadOf(accountId: string, kind: string, match: ReadMatch | undefined, at: Date): Promise<number> {
+    let marked = 0;
+    for (const row of this.rows) {
+      if (row.accountId !== accountId || row.kind !== kind || row.readAt !== null) continue;
+      if (match !== undefined && !match.values.includes(String((row.payload as Record<string, unknown>)[match.key]))) continue;
+      row.readAt = at;
+      marked++;
+    }
+    return marked;
   }
 
   async createdAtOf(accountId: string, notificationId: string): Promise<Date | null> {

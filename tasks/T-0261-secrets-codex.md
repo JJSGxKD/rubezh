@@ -25,7 +25,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - docs/21-diagrams.md
-runner: local
+runner: any
 executor: sonnet-5.5
 effort: high
 release: minor
@@ -35,7 +35,7 @@ batch: 4
 
 # T-0261. Кодекс тайников — найденные за всё время на сервере, раздел гайдбука с преданиями, достижение и знак «Следопыт»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0261.json)](README.md#значки-статуса) [![T-0260](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json&label=T-0260)](T-0260-secrets-look-and-blessing.md) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0261.json)](README.md#значки-статуса) [![T-0260](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0260.json&label=T-0260)](archive/T-0260-secrets-look-and-blessing.md) [![T-0235](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0235.json&label=T-0235)](T-0235-emblems-server.md)
 
 ## Зачем
 

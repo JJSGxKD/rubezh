@@ -12,6 +12,7 @@
   "shop.tab.gear": "Снаряжение",
   "shop.tabs": "Разделы магазина",
   "shop.badge.hit": "Хит",
+  "shop.badge.choice": "Выбор игроков",
   "shop.badge.best": "Лучшая цена",
   "shop.value": "+{pct}% выгоды",
   "shop.gems.word": "{n, plural, one {самоцвет} few {самоцвета} many {самоцветов} other {самоцвета}}",

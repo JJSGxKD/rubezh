@@ -25,7 +25,6 @@ export interface AdNetworkRow {
 export interface AdNetworkEdit {
   networkKey: string;
   active: boolean;
-  priority: number;
   keys: Record<string, string>;
 }
 
@@ -53,6 +52,23 @@ export interface AdFunnelRow {
   failed: number;
 }
 
+/**
+ * Пропуск рекламы за окно (Р99): награда места без ролика, которую получает
+ * VIP. Не показ и не досмотр: в воронку, сети и выручку он не входит.
+ */
+export interface AdPassRow {
+  passName: string;
+  place: AdPlace;
+  /** сколько раз выдан */
+  used: number;
+  players: number;
+  /** сколько наград забрано */
+  claimed: number;
+}
+
+/** Итог перестановки: `mismatch` — набор не равен набору сетей, ничего не записано. */
+export type AdNetworksReorderResult = { status: "mismatch" } | { status: "ok"; before: string[]; after: string[]; changed: boolean };
+
 export const ADS_CATALOG_REPOSITORY = Symbol("ADS_CATALOG_REPOSITORY");
 
 export interface AdsCatalogRepository {
@@ -60,14 +76,24 @@ export interface AdsCatalogRepository {
   blocks(): Promise<AdBlockDef[]>;
   /** `false` — такой сети нет */
   updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean>;
+  /**
+   * Новый порядок всех сетей одной транзакцией под блокировкой: `priority` —
+   * место в `ids`, переписываются только сдвинувшиеся строки. Порядок уже
+   * такой — `changed: false`, записей нет.
+   */
+  reorderNetworks(ids: readonly string[], at: Date): Promise<AdNetworksReorderResult>;
   /** новый блок — идентификатор выдаёт база; `null` — сети нет */
   insertBlock(block: Omit<AdBlockDef, "blockId">, actorAccountId: string, at: Date): Promise<AdBlockDef | null>;
   /** сеть и место у блока не меняются; `false` — блока нет */
   updateBlock(block: AdBlockDef, actorAccountId: string, at: Date): Promise<boolean>;
+  /** воронка настоящих показов; пропуски VIP — не здесь, а в `passes` */
   funnel(from: Date, to: Date): Promise<AdFunnelRow[]>;
+  passes(from: Date, to: Date): Promise<AdPassRow[]>;
 }
 
 export const networkKeysSchema = z.record(z.string(), z.string());
+
+const orderRowSchema = z.object({ network_key: z.string(), priority: z.number().int() });
 
 const networkSchema = z.object({ network_key: z.string(), name: z.string(), active: z.boolean(), priority: z.number().int(), keys: networkKeysSchema });
 
@@ -93,6 +119,8 @@ const funnelSchema = z.object({
   claimed: count,
   failed: count,
 });
+
+const passSchema = z.object({ pass_name: z.string(), place: z.enum(AD_PLACES), used: count, players: count, claimed: count });
 
 @Injectable()
 export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
@@ -128,9 +156,31 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
   async updateNetwork(edit: AdNetworkEdit, at: Date): Promise<boolean> {
     return (
       (await this.prisma.$executeRaw`
-        UPDATE ad_network SET active = ${edit.active}, priority = ${edit.priority}, keys = ${JSON.stringify(edit.keys)}::jsonb, updated_at = ${at}
+        UPDATE ad_network SET active = ${edit.active}, keys = ${JSON.stringify(edit.keys)}::jsonb, updated_at = ${at}
         WHERE network_key = ${edit.networkKey}`) > 0
     );
+  }
+
+  async reorderNetworks(ids: readonly string[], at: Date): Promise<AdNetworksReorderResult> {
+    return await this.prisma.$transaction(async (tx) => {
+      // Все сети — под блокировкой: второй запрос ждёт здесь и читает уже новый порядок.
+      const rows = await tx.$queryRaw<unknown[]>`SELECT network_key, priority FROM ad_network ORDER BY priority, network_key FOR UPDATE`;
+      const members = rows.map((raw) => orderRowSchema.parse(raw));
+      const before = members.map((row) => row.network_key);
+      const known = new Set(before);
+      if (ids.length !== before.length || new Set(ids).size !== ids.length || !ids.every((id) => known.has(id))) return { status: "mismatch" };
+      if (!ids.some((id, index) => before[index] !== id)) return { status: "ok", before, after: [...ids], changed: false };
+
+      const current = new Map(members.map((row) => [row.network_key, row.priority]));
+      const moving = ids.flatMap((id, index) => (current.get(id) === index ? [] : [{ id, priority: index }]));
+      if (moving.length > 0) {
+        await tx.$executeRaw`
+          UPDATE ad_network SET priority = u.priority, updated_at = ${at}
+          FROM unnest(${moving.map((row) => row.id)}::text[], ${moving.map((row) => row.priority)}::int[]) AS u(network_key, priority)
+          WHERE ad_network.network_key = u.network_key`;
+      }
+      return { status: "ok", before, after: [...ids], changed: true };
+    });
   }
 
   async insertBlock(block: Omit<AdBlockDef, "blockId">, actorAccountId: string, at: Date): Promise<AdBlockDef | null> {
@@ -180,11 +230,28 @@ export class PrismaAdsCatalogRepository implements AdsCatalogRepository {
     const rows = await this.prisma.$queryRaw<unknown[]>`
       SELECT network_key, place::text, count(*) AS offered, count(shown_at) AS shown, count(clicked_at) AS clicked,
              count(completed_at) AS completed, count(claimed_at) AS claimed, count(failed_at) AS failed
-      FROM ad_session WHERE created_at >= ${from} AND created_at < ${to}
+      FROM ad_session WHERE created_at >= ${from} AND created_at < ${to} AND block_id IS NOT NULL
       GROUP BY network_key, place ORDER BY place, network_key`;
     return rows.map((raw) => {
       const row = funnelSchema.parse(raw);
       return { networkKey: row.network_key, place: row.place, offered: row.offered, shown: row.shown, clicked: row.clicked, completed: row.completed, claimed: row.claimed, failed: row.failed };
+    });
+  }
+
+  /**
+   * Пропуск — строка сессии без блока: отдельной колонки признака нет, его
+   * держит `ad_session_pass_check` (пустой блок — только выполненный показ).
+   * Записи до задачи считаются так же, миграция не нужна.
+   */
+  async passes(from: Date, to: Date): Promise<AdPassRow[]> {
+    const rows = await this.prisma.$queryRaw<unknown[]>`
+      SELECT network_key AS pass_name, place::text, count(*) AS used,
+             count(DISTINCT account_id) AS players, count(claimed_at) AS claimed
+      FROM ad_session WHERE created_at >= ${from} AND created_at < ${to} AND block_id IS NULL
+      GROUP BY network_key, place ORDER BY place, network_key`;
+    return rows.map((raw) => {
+      const row = passSchema.parse(raw);
+      return { passName: row.pass_name, place: row.place, used: row.used, players: row.players, claimed: row.claimed };
     });
   }
 }

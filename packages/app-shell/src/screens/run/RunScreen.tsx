@@ -6,9 +6,10 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
+import { difficultyForNextRun } from "../../state/difficulty";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
-import { canOfferPaidContinue } from "../../state/payments-availability";
+import { canOfferGemContinue, canOfferPaidContinue } from "../../state/payments-availability";
 import { usePlatform } from "../../state/platform";
 import { useRuns } from "../../state/runs";
 import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
@@ -31,6 +32,10 @@ import type { SecondChanceProps } from "./SecondChance";
  */
 const loadChestOverlay = (): Promise<typeof import("./ChestOverlay")> => import("./ChestOverlay");
 const ChestOverlay = lazy(async () => ({ default: (await loadChestOverlay()).ChestOverlay }));
+
+/** Окно капища «Выбери благословение» — тем же способом: до первого капища оно не нужно. */
+const loadBlessingOverlay = (): Promise<typeof import("./BlessingOverlay")> => import("./BlessingOverlay");
+const BlessingOverlay = lazy(async () => ({ default: (await loadBlessingOverlay()).BlessingOverlay }));
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -81,7 +86,7 @@ export function RunScreen(): ReactNode {
       container,
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
-      difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
+      difficultyId: resume?.difficultyId ?? difficultyForNextRun(useMeta.getState().runs),
       beforeNewRun: interstitialBeforeNewRun,
     });
 
@@ -109,6 +114,7 @@ export function RunScreen(): ReactNode {
     prefetchDeathOverlay();
     // Не догрузилось — не беда: `lazy` попробует снова, когда сундук откроют.
     loadChestOverlay().catch(() => undefined);
+    loadBlessingOverlay().catch(() => undefined);
   }, [running]);
 
   return (
@@ -176,6 +182,14 @@ export function RunScreen(): ReactNode {
         </Suspense>
       ) : null}
 
+      {/* Капище: мир стоит, пока игрок не выберет благословение. Как и у сундука,
+          лист «Характеристики» и панель разработчика в этой фазе не открываются. */}
+      {run.phase === "blessing" && run.blessing !== null ? (
+        <Suspense fallback={null}>
+          <BlessingOverlay options={run.blessing.options} onChoose={(id) => useRun.getState().chooseBlessing(id)} />
+        </Suspense>
+      ) : null}
+
       {/* Лист закрывается сам, если мир снова пошёл: характеристики — снимок
           стоящего мира, над бегущим они врали бы. */}
       {stats !== null && (run.phase === "paused" || run.phase === "levelUp") ? (
@@ -216,8 +230,9 @@ export function RunScreen(): ReactNode {
 
 /**
  * Что можно на экране смерти: купить продолжение звёздами — где площадка
- * умеет оплату, — взять за рекламу или с VIP — где она показывает ролики и
- * есть вход (WP11), — а в забеге разработчика ещё и бесплатно.
+ * умеет оплату, — взять за самоцветы — где есть вход (Р162), — за рекламу или
+ * с VIP — где площадка показывает ролики и есть вход (WP11), — а в забеге
+ * разработчика ещё и бесплатно.
  */
 function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps {
   const { adapter, capabilities } = useShell.getState();
@@ -226,6 +241,7 @@ function secondChanceFor(result: RunResult, devRun: boolean): SecondChanceProps 
     ...(devRun ? { onDevContinue: () => useRun.getState().continueRun("dev") } : {}),
     ...(canOfferPaidContinue() ? { paidFor: result } : {}),
     ...(ads ? { adFor: result } : {}),
+    ...(canOfferGemContinue() ? { gemsFor: result } : {}),
   };
 }
 

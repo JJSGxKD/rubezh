@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { NameRulesCoreModule } from "../name-rules/name-rules-core.module.js";
 import { ONLINE_ACTIVITY } from "../online/online-activity.js";
 import { OnlineCoreModule } from "../online/online-core.module.js";
 import { OnlineService } from "../online/online.service.js";
@@ -31,9 +32,14 @@ import { RedisRefreshStore } from "./redis-refresh.store.js";
  * `OnlineCoreModule` ничего не импортирует из авторизации, поэтому цикла с
  * `OnlineModule` нет. Без настроек (сборка модуля в тесте руками) сервиса нет,
  * порт пуст, и гард работает как раньше.
+ *
+ * Правила фильтра имён (`NAME_RULES`) приходят из `NameRulesCoreModule`:
+ * хранилище аккаунтов чистит по ним ник при входе. Подключается именно ядро,
+ * а не `NameRulesModule`: админская часть берёт права из `RolesModule`, а тот
+ * импортирует этот модуль — получился бы цикл.
  */
 @Module({
-  imports: [OnlineCoreModule],
+  imports: [OnlineCoreModule, NameRulesCoreModule],
   controllers: [AuthController],
   providers: [
     AuthService,

@@ -12,11 +12,28 @@
  * кто играл. Пороги — в конфигурации (`app-config.ts`, `RUNS_*`).
  */
 
+/**
+ * Единая сложность — `hard`, обучающий забег — `easy`; `normal` приходит
+ * только от старых клиентов (Р126). Значения enum остаются прежними: сведение
+ * в одно значение — отдельной задачей позже.
+ */
 export const DIFFICULTIES = ["easy", "normal", "hard"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
 
+/**
+ * Сложности, забеги которых идут в рейтинг и сезоны (Р126). Остальные
+ * принимаются, оцениваются антифродом и награждаются по прежним множителям,
+ * но в доски не попадают. `scripts/test/run-rules.test.ts` следит, чтобы
+ * каждая была в контенте.
+ */
+export const RATED_DIFFICULTIES = ["hard"] as const satisfies readonly Difficulty[];
+
+export function isRatedDifficulty(difficulty: Difficulty): boolean {
+  return (RATED_DIFFICULTIES as readonly Difficulty[]).includes(difficulty);
+}
+
 /** Сколько оружий может быть у игрока одновременно (`LOADOUT_LIMITS.weapons`). */
-export const MAX_WEAPONS = 3;
+export const MAX_WEAPONS = 4;
 
 /**
  * Сколько вторых шансов за забег (`CONTINUE.perRun`): сверх этого сервер

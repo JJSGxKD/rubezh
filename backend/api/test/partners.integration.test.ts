@@ -88,7 +88,7 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
     const me = await player();
     expect(await redeem(me, own, first)).toEqual({ status: "redeemed", bound: true });
     expect(await redeem(me, other, second)).toEqual({ status: "redeemed", bound: false });
-    expect(await partners.bindingOf(me)).toMatchObject({ partnerId: first, name: "Первый", campaignTitle: "Код канала", code: own.display });
+    expect(await partners.bindingOf(me)).toMatchObject({ partnerId: first, name: "Первый", campaignTitle: "Код канала", code: own.display, linkCode: null });
     // Привязка без кода партнёра (`partnerId = null`) не пишется вовсе.
     const plain = await campaign(null);
     const newbie = await player();
@@ -163,6 +163,24 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
       ]),
     );
     expect(await partners.daily(partnerId, new Date(NOW.getTime() - DAY))).toEqual([{ day: "2026-10-02", count: 2 }]);
+  });
+
+  it("игрок под отдельной доской в кабинете партнёра и выплатах считается как обычный (T-0115)", async () => {
+    const partnerId = await partner("Канал с доской");
+    const shared = await campaign(partnerId);
+    const [plain, marked] = await Promise.all([player(), player()]);
+    await redeem(plain, shared, partnerId);
+    await redeem(marked, shared, partnerId);
+    await prisma.accountRestriction.create({ data: { accountId: marked, kind: "separate_board", startsAt: new Date(NOW.getTime() - DAY), reason: "other", notify: false } });
+    for (const accountId of [plain, marked]) {
+      await prisma.$executeRaw`INSERT INTO account_funnel (account_id, first_run_finished_at) VALUES (${accountId}::uuid, ${NOW})`;
+      await prisma.$executeRaw`
+        INSERT INTO purchase (purchase_id, account_id, product, sku, price_stars, charged_stars, mode, status, invoiced_at, paid_at)
+        VALUES (${randomUUID()}::uuid, ${accountId}::uuid, 'shop_item', 'gems_60', 50, 50, 'live'::"PaymentMode", 'paid'::"PurchaseStatus", ${new Date(NOW.getTime() + HOUR)}, ${new Date(NOW.getTime() + HOUR)})`;
+    }
+
+    const view = await partners.byId(partnerId, NOW);
+    expect(view?.stats).toEqual({ codes: 1, activeCodes: 1, redeemed: 2, bound: 2, played: 2, payers: 2, stars: 100 });
   });
 
   it("условия партнёра: записаны и читаются; без них партнёр активен, а процент хранится с двумя знаками", async () => {
