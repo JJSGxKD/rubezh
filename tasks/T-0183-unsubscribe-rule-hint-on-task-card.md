@@ -23,7 +23,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0183. Подсказка о правиле подписки на карточке партнёрского задания
