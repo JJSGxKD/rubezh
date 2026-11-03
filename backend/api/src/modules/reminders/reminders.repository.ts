@@ -42,7 +42,9 @@ export interface RemindersRepository {
   /**
    * Игроки, не забравшие награду дня сегодня и забиравшие её не позже
    * `lapseDays` суток назад, после курсора. Строки награды нет у тех, кто не
-   * забирал её никогда, — им напоминать не о чем.
+   * забирал её никогда, — им напоминать не о чем. Аккаунт без `prologue_done_at`
+   * не зовём: «Награда дня» закрыта, пока не пройден пролог (Р151), и
+   * напоминание привело бы к 409.
    */
   dailyPage(query: { today: string; lapseDays: number }, after: string | null, limit: number): Promise<ReminderTarget[]>;
   /** Цифры суток по ленте уведомлений и состоянию «можно ли писать». */
@@ -91,7 +93,7 @@ export class PrismaRemindersRepository implements RemindersRepository {
     const rows = await this.prisma.$queryRaw<unknown[]>`
       SELECT d.account_id, a.platform
       FROM daily_reward d
-      JOIN account a ON a.account_id = d.account_id AND a.banned_at IS NULL
+      JOIN account a ON a.account_id = d.account_id AND a.banned_at IS NULL AND a.prologue_done_at IS NOT NULL
       JOIN account_messaging m ON m.account_id = d.account_id AND m.can_message
       WHERE d.account_id > ${after ?? FROM_START}::uuid
         AND d.last_claim_day < ${query.today}::date

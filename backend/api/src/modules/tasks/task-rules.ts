@@ -219,7 +219,7 @@ export function visibleOn(params: TaskParams | null, platform: PlatformId): bool
   return params.platform === undefined || params.platform === platform;
 }
 
-export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
+export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
 
 /**
  * Засчитывается тот же забег, что приносит награду: с читами, отклонённый
@@ -227,6 +227,8 @@ export type TaskRun = Pick<RecordedRun, "difficulty" | "survivalSec" | "enemiesK
  * короткими забегами.
  */
 export function countsForTasks(run: TaskRun): boolean {
+  // Пролог задания не двигает (Р151): это обучение, а не охота за целью.
+  if (run.mode === "prologue") return false;
   return runReward(run).skipped === null;
 }
 

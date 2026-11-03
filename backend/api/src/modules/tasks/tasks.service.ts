@@ -6,6 +6,7 @@ import { imagePath } from "../media/image-rules.js";
 import { MediaService } from "../media/media.service.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { PrologueService } from "../runs/prologue.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
@@ -150,6 +151,7 @@ export class TasksService implements OnModuleInit {
     private readonly restrictions: AccountRestrictions,
     @Optional() private readonly points?: TaskPointsService,
     @Optional() private readonly pass?: BattlePassService,
+    @Optional() private readonly prologue?: PrologueService,
   ) {}
 
   onModuleInit(): void {
@@ -169,11 +171,14 @@ export class TasksService implements OnModuleInit {
   /** Забор награды за ступень очков — отдельный сервис, здесь только вход для ручки. */
   async claimPoints(account: AccountRef, period: PointsPeriod, points: number, at = new Date()): Promise<PointsClaimResult> {
     if (this.points === undefined) throw new Error("очки заданий не подключены");
+    await this.prologue?.requireOpen(account.accountId);
     return await this.points.claim(account, period, points, at);
   }
 
   async claim(account: AccountRef, taskId: string, at = new Date()): Promise<TaskClaimResult> {
     const { accountId } = account;
+    // Закрыто до победы в прологе (Р151); список заданий отдаётся как обычно — оболочка его просто не показывает.
+    await this.prologue?.requireOpen(accountId);
     const { defs, progress, participation } = await this.state(account, at);
     const def = defs.find((candidate) => candidate.taskId === taskId);
     if (def === undefined) throw new TaskNotFoundError();
