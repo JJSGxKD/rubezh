@@ -33,6 +33,11 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - CLAUDE.md
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/run-api.ts
+  - packages/core-game/src/game/MainScene.ts
 runner: any
 executor: sonnet-5.5
 effort: high
