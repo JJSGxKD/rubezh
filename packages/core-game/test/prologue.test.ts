@@ -12,7 +12,7 @@ import { RunPerfTracker } from "../src/game/diagnostics/run-perf";
 import { RunRecorder } from "../src/game/diagnostics/run-recorder";
 import { replayRecording } from "../src/game/diagnostics/replay";
 import { addXp, chooseUpgrade, isAwaitingChoice, prepareOffers } from "../src/game/progression/levels";
-import { describePrologue, isPrologueWon } from "../src/game/run/prologue";
+import { describePrologue, isPrologueWon, WARD_COOLDOWN_SEC, WARD_COOLDOWN_TICKS } from "../src/game/run/prologue";
 import { submitRunResult } from "../src/game/run/records";
 import { buildRunResult } from "../src/game/run/run-result";
 import { captureWorld, restoreWorld } from "../src/game/run/snapshot";
@@ -211,6 +211,10 @@ describe("оберег", () => {
     damagePlayer(world, 1000, -1);
     expect(world.player.alive).toBe(false);
     expect(wardEvents(world)).toBe(0);
+  });
+
+  it("пауза оберега в тиках равна двум секундам шага мира", () => {
+    expect(WARD_COOLDOWN_TICKS).toBe(WARD_COOLDOWN_SEC * TICK_HZ);
   });
 
   it("событие ward — новое, отдельное от щита", () => {

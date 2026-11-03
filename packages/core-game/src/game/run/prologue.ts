@@ -1,7 +1,7 @@
 import type { ChestSize, EndlessCurveDef, PrologueDef, RubezhDef, RunPrologue, UpgradeOption } from "@bh/shared-types";
 import { drawWeighted, type Candidate } from "../progression/levels";
 import { pushSimEvent, SIM_EVENT } from "../sim/events";
-import { TICK_HZ, type World } from "../sim/world";
+import type { World } from "../sim/world";
 
 /**
  * Пролог первого забега — применение `PrologueDef` к миру (T-0278, Р151,
@@ -17,6 +17,14 @@ import { TICK_HZ, type World } from "../sim/world";
 
 /** Оберег пишет событие не чаще, чем раз в столько секунд: удары в упор не должны превратить кольцо в мигалку. */
 export const WARD_COOLDOWN_SEC = 2;
+
+/**
+ * Те же две секунды в тиках (шаг мира — 60 Гц, `TICK_HZ`). Число, а не произведение:
+ * значение `TICK_HZ` лежит в `sim/world.ts`, а этот файл тянет в первую загрузку оболочки
+ * `levels.ts` (`xpForLevel`), и вместе с ним не должен уехать весь мир. Согласованность
+ * держит `prologue.test.ts`.
+ */
+export const WARD_COOLDOWN_TICKS = 120;
 
 /** Тик «оберег ещё не срабатывал»: достаточно давний, чтобы первое срабатывание прошло. */
 const NO_WARD_TICK = -1_000_000;
@@ -68,7 +76,7 @@ export function wardHealth(world: World, before: number, after: number): number 
   if (after >= lowest) return after;
 
   const tick = world.stats.tick;
-  if (tick - state.lastWardTick >= WARD_COOLDOWN_SEC * TICK_HZ) {
+  if (tick - state.lastWardTick >= WARD_COOLDOWN_TICKS) {
     state.lastWardTick = tick;
     pushSimEvent(world.events, {
       kind: SIM_EVENT.ward,
