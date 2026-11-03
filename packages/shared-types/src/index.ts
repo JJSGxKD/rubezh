@@ -1793,6 +1793,11 @@ export interface RunFinishStats {
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
+  /**
+   * Сила игрока на старте забега, очки (`RunPressureResult.power`): по ней сервер берёт полосу
+   * ожидаемого для очков эффективности (tasks/T-0293). Нет поля — подстройки не было, полоса средняя.
+   */
+  power?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
@@ -1829,6 +1834,28 @@ export interface RunFinishResult {
   /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
   recorded: boolean;
   verdict: RunVerdict;
+  /**
+   * Очки эффективности забега (tasks/T-0293, Р152). `null` — очков нет: пролог и обучение,
+   * сбой подсчёта. Нет поля — ответ сервера до очков.
+   */
+  score?: RunScoreView | null;
+}
+
+/** Ось очков: Стойкость, Натиск, Охота, Чистота, Сборка. */
+export type RunScoreAxis = "t" | "k" | "h" | "c" | "b";
+
+/** Стиль забега — сильнейшая ось: Стена, Ураган, Охотник, Тень, Мастер. */
+export type RunScoreStyle = RunScoreAxis;
+
+/** Очки эффективности в ответе записи забега: индексы осей — 1 значит ровно ожидаемое. */
+export interface RunScoreView {
+  points: number;
+  axes: Record<RunScoreAxis, number>;
+  style: RunScoreStyle;
+  /** полоса силы, по которой взято ожидаемое */
+  band: string;
+  /** очки забега той же длины, сыгранного ровно по ожидаемому: черта «ожидаемое» */
+  expectedPoints: number;
 }
 
 export interface LeaderboardEntry {

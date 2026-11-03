@@ -273,7 +273,7 @@ describe("очередь забегов", () => {
 
   it("запись очереди хранит журнал охоты, сборку и силу и отправляет их на сервер как есть (T-0293)", async () => {
     const hunt = [{ rank: "elite" as const, value: 12, aliveSec: 14.5 }];
-    const queued = toSubmission(result("run-00000001", { huntLog: hunt, buildScore: 7, pressure: { power: 2.4, level: 1, deviceClass: "normal", powerEnd: 2.9, levelEnd: 1.1 } }));
+    const queued = toSubmission(result("run-00000001", { huntLog: hunt, buildScore: 7, pressure: { power: 2.4, level: 1, deviceClass: "standard", powerEnd: 2.9, levelEnd: 1.1 } }));
     storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...queued }]));
 
     reply = async () => json(200, FINISHED);
@@ -392,7 +392,7 @@ describe("очки эффективности: журнал охоты, сбор
       result("run-00000001", {
         huntLog: hunt,
         buildScore: 7,
-        pressure: { power: 2.4, level: 1, deviceClass: "normal", powerEnd: 2.9, levelEnd: 1.1 },
+        pressure: { power: 2.4, level: 1, deviceClass: "standard", powerEnd: 2.9, levelEnd: 1.1 },
       }),
     );
 
