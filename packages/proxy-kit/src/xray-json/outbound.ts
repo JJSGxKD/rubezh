@@ -24,6 +24,11 @@ const vlessUser = z.object({ id: z.string().optional(), encryption: z.string().o
 const vmessUser = z.object({ id: z.string().optional(), alterId: z.union([z.number(), z.string()]).optional(), security: z.string().optional() });
 const serverEntry = z.object({ password: z.string().optional(), method: z.string().optional() });
 
+/** Предел имени хоста (DNS). */
+const ADDRESS_MAX = 253;
+/** Знаки, которых в адресе узла не бывает: пробелы, управляющие и части пути или логина. */
+const BAD_ADDRESS = /[\s\u0000-\u001f\u007f-\u009f/\\@]/;
+
 /** Что уже известно об узле, когда разобрана часть выхода с адресом и учётными данными. */
 interface Endpoint {
   host: string;
@@ -158,8 +163,8 @@ function serversEndpoint(protocol: "trojan" | "shadowsocks", settings: unknown):
 function addressOf(entry: unknown): Step<{ host: string; port: number }> {
   const parsed = endpoint.safeParse(entry);
   if (!parsed.success) return fail("malformed", "settings");
-  const host = bareHost((parsed.data.address ?? "").trim());
-  if (host === "") return fail("malformed", "address");
+  const host = bareHost(parsed.data.address ?? "");
+  if (host === "" || host.length > ADDRESS_MAX || BAD_ADDRESS.test(host)) return fail("malformed", "address");
   const port = parsePort(String(parsed.data.port ?? ""));
   return port === null ? fail("malformed", "port") : { ok: true, host, port };
 }

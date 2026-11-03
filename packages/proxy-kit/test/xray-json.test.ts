@@ -119,6 +119,15 @@ describe("узел из JSON равен узлу из ссылки", () => {
     expect(parse(J.config("x", outbound)).skipped).toMatchObject([{ scheme: "vmess", reason: "malformed", detail: "vnext" }]);
   });
 
+  it("адрес: ровно 253 знака и IPv6 в скобках проходят", () => {
+    const longest = `${"a".repeat(63)}.${"b".repeat(63)}.${"c".repeat(63)}.${"d".repeat(61)}`;
+    expect(longest).toHaveLength(253);
+    const vless = (address: string): J.Json => J.patched(J.OUT_VLESS_WS_TLS, { settings: { vnext: [{ address, port: 443, users: [{ id: L.UUID }] }] } });
+
+    expect(parse(J.config("x", vless(longest))).nodes[0]?.host).toBe(longest);
+    expect(parse(J.config("x", vless("[2001:db8::10]"))).nodes[0]?.host).toBe("2001:db8::10");
+  });
+
   it("raw — новое имя tcp; пустое security — без безопасности; UUID в верхнем регистре", () => {
     const outbound = J.patched(J.OUT_VLESS_IPV6, {
       settings: { vnext: [{ address: "2001:db8::10", port: 443, users: [{ id: L.UUID.toUpperCase(), encryption: "none", flow: "" }] }] },
@@ -166,6 +175,16 @@ describe("пропуски", () => {
     ["плоский vless: порт 0", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 0, id: L.UUID } }), "malformed", "port"],
     ["плоский vless: чужой flow", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, flow: "xtls-rprx-vision-udp443" } }), "unsupported_option", "flow"],
     ["плоский vless: постквантовое шифрование", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, encryption: "mlkem768x25519plus.native.0rtt.AAAA" } }), "unsupported_option", "encryption"],
+    ["адрес с пробелом", withVless({}, "exa mple.com"), "malformed", "address"],
+    ["адрес с пробелом по краям", withVless({}, " example.com "), "malformed", "address"],
+    ["адрес с переводом строки", withVless({}, "example.com\n"), "malformed", "address"],
+    ["адрес с управляющим знаком", withVless({}, "exa\u0007mple.com"), "malformed", "address"],
+    ["адрес с «/»", withVless({}, "example.com/path"), "malformed", "address"],
+    ["адрес с «\\»", withVless({}, "example.com\\path"), "malformed", "address"],
+    ["адрес с «@»", withVless({}, "user@example.com"), "malformed", "address"],
+    ["адрес длиннее 253 знаков", withVless({}, "a".repeat(254)), "malformed", "address"],
+    ["адрес trojan с «/»", withServer(J.OUT_TROJAN_GRPC, { address: "example.com/x" }), "malformed", "address"],
+    ["адрес плоского vless с «@»", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "a@b.example.com", port: 443, id: L.UUID } }), "malformed", "address"],
     ["шифр vmess zero", withVmess({ security: "zero" }), "unsupported_cipher", "scy"],
     ["шифр shadowsocks rc4-md5", withServer(J.OUT_SS_SIP002, { method: "rc4-md5" }), "unsupported_cipher", "method"],
     ["не UUID", withVless({ id: "not-a-uuid" }), "malformed", "uuid"],
@@ -211,6 +230,59 @@ describe("пропуски", () => {
     );
     const text = JSON.stringify(parsed.skipped);
     for (const secret of [L.UUID, "p@ss", "secret", "cGFzc3dvcmQ", "PUBLICKEY1", "example.com", "cdn.example.com"]) expect(text, secret).not.toContain(secret);
+  });
+});
+
+describe("мусор среди конфигов", () => {
+  it("не-объекты в массиве, конфиг без выходов и выходы без protocol — в skipped как malformed, узлы целы", () => {
+    const parsed = parse([
+      J.config("хороший", J.OUT_TROJAN_GRPC),
+      5,
+      null,
+      "text",
+      [],
+      { remarks: "без выходов" },
+      { remarks: "x", outbounds: [{ type: "vless" }, 7, null, { protocol: 5 }] },
+    ]);
+
+    expect(parsed.nodes.map((node) => node.name)).toEqual(["хороший"]);
+    expect(parsed.skipped).toEqual([
+      { index: 1, scheme: "unknown", reason: "malformed", detail: "config" },
+      { index: 2, scheme: "unknown", reason: "malformed", detail: "config" },
+      { index: 3, scheme: "unknown", reason: "malformed", detail: "config" },
+      { index: 4, scheme: "unknown", reason: "malformed", detail: "config" },
+      { index: 5, scheme: "unknown", reason: "malformed", detail: "outbounds" },
+      { index: 6, scheme: "unknown", reason: "malformed", detail: "protocol" },
+      { index: 7, scheme: "unknown", reason: "malformed", detail: "protocol" },
+      { index: 8, scheme: "unknown", reason: "malformed", detail: "protocol" },
+      { index: 9, scheme: "unknown", reason: "malformed", detail: "protocol" },
+    ]);
+  });
+
+  it("один конфиг-объект: выход без protocol среди выходов — пропуск, узел цел", () => {
+    const parsed = parse({ outbounds: [J.OUT_TROJAN_GRPC, 5, { tag: "x" }] });
+    expect(parsed.nodes).toHaveLength(1);
+    expect(parsed.skipped).toEqual([
+      { index: 1, scheme: "unknown", reason: "malformed", detail: "protocol" },
+      { index: 2, scheme: "unknown", reason: "malformed", detail: "protocol" },
+    ]);
+  });
+
+  it("мусор считается в maxLinks, а длинный хвост мусора не раздувает результат", () => {
+    const parsed = parse([J.config("хороший", J.OUT_TROJAN_GRPC), ...Array.from({ length: 100_000 }, () => 0)]);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.nodes).toHaveLength(1);
+    expect(parsed.skipped).toHaveLength(999);
+
+    const small = parse([J.config("хороший", J.OUT_TROJAN_GRPC), 1, 2, 3], { maxLinks: 2 });
+    expect(small).toMatchObject({ truncated: true });
+    expect(small.skipped).toHaveLength(1);
+  });
+
+  it("только служебные выходы и мусор: узлов нет, мусор в skipped, а не empty", () => {
+    const parsed = parse([J.config("a", []), 5]);
+    expect(parsed.nodes).toEqual([]);
+    expect(parsed.skipped).toEqual([{ index: 0, scheme: "unknown", reason: "malformed", detail: "config" }]);
   });
 });
 
