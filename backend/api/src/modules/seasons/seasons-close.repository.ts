@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { Prisma } from "../../generated/prisma/client.js";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { divisionCaseSql } from "../rating/division-rules.js";
 import { DIFFICULTIES, RATED_DIFFICULTIES, type Difficulty } from "../runs/run-rules.js";
 import { assertInGameReward, rewardFor, type PrizeRules, type Season } from "./season-rules.js";
 
@@ -31,6 +32,10 @@ import { assertInGameReward, rewardFor, type PrizeRules, type Season } from "./s
  * итоги не идёт. Число пишется в ту же колонку `best_sec`: что в ней лежит, знает
  * режим сезона (`SeasonSchedule.scoringOf`), а порог награды участника берётся
  * из тех же правил.
+ *
+ * Дивизион (tasks/T-0295, Р152) пишется в `season_result.division` сразу после
+ * мест: по месту и размеру таблицы своей доски (`rating/division-rules.ts`).
+ * Награды дивизион не трогает — лестница мест прежняя.
  *
  * Единая сложность (Р126, T-0191): в итоги идут только рейтинговые сложности, а
  * нижняя граница окна — не раньше отсечки рейтинга, `[max(начало недели,
@@ -128,6 +133,9 @@ export class PrismaSeasonCloseRepository implements SeasonCloseRepository {
           UNION ALL
           SELECT ${season.key}, f.account_id, f.difficulty, f.best_sec, f.place, f.board_size, 'full' FROM complete f WHERE f.separate
           ON CONFLICT DO NOTHING`;
+
+        // Дивизион — по месту и размеру доски из той же строки итога; награды он не меняет (T-0295).
+        await tx.$executeRaw`UPDATE season_result SET division = ${divisionCaseSql()} WHERE season_key = ${season.key}`;
 
         await this.assignRewards(tx, season.key, rules);
 

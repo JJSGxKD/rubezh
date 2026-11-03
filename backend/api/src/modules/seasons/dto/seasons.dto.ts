@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DIVISIONS } from "../../rating/division-rules.js";
 import { DIFFICULTIES } from "../../runs/run-rules.js";
 import { seasonByKey } from "../season-rules.js";
 
@@ -27,6 +28,9 @@ const reward = z.object({ coins: count, prestige: count });
 /** По чему ранжирован сезон: до понедельника перехода (`rating.points-from`) — по времени, дальше по очкам (T-0294). */
 const scoring = z.enum(["time", "points"]);
 
+/** Дивизион по доле сезонной доски (T-0295); `null` — рейтингового забега сезона нет, а у старых итогов дивизиона не было. */
+const division = z.enum(DIVISIONS).nullable();
+
 const perDifficulty = <T extends z.ZodType>(value: T) => z.record(difficulty, value);
 
 export const overviewSchema = z.object({
@@ -48,6 +52,8 @@ export const overviewSchema = z.object({
   mine: perDifficulty(z.number().nullable()),
   /** очки лучшего забега недели; `null` — забегов с очками нет, а в сезоне по времени очки в таблицу не идут */
   minePoints: perDifficulty(z.number().nullable()),
+  /** дивизион игрока на доске сезона по месту и размеру доски; `null` — забега сезона на сложности нет */
+  division: perDifficulty(division),
   pending: z.array(
     z.object({
       seasonKey: z.string(),
@@ -65,7 +71,7 @@ export const overviewSchema = z.object({
       endsAt: z.string(),
       /** по чему ранжирован сезон: от этого зависит, секунды или очки в `bestSec` */
       scoring,
-      results: z.array(z.object({ difficulty, bestSec: z.number(), place: count, boardSize: count })),
+      results: z.array(z.object({ difficulty, bestSec: z.number(), place: count, boardSize: count, division })),
       reward: reward.extend({ claimed: z.boolean() }).nullable(),
     }),
   ),
@@ -86,6 +92,8 @@ const boardEntry = z.object({
   survivalSec: z.number(),
   /** стиль забега (T-0293); `null` — очков нет */
   style: z.string().nullable(),
+  /** дивизион строки по её месту и размеру общей таблицы; в таблице друзей — `null`: место среди друзей не место на доске сезона */
+  division,
   level: count,
   startingWeaponId: z.string(),
   enemiesKilled: count,
@@ -100,7 +108,7 @@ export const boardViewSchema = z.object({
   scoring,
   total: count,
   entries: z.array(boardEntry),
-  me: z.object({ rank: count, points: z.number().nullable(), survivalSec: z.number(), style: z.string().nullable() }).nullable(),
+  me: z.object({ rank: count, points: z.number().nullable(), survivalSec: z.number(), style: z.string().nullable(), division }).nullable(),
 });
 
 export type BoardView = z.infer<typeof boardViewSchema>;

@@ -430,7 +430,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
   }
 
   /** Таблица недели в памяти: ровно то, что нужно проекции. */
-  class MemorySeasonStore implements Pick<SeasonBoardStore, "submit" | "set" | "replace" | "best" | "count" | "remove"> {
+  class MemorySeasonStore implements Pick<SeasonBoardStore, "submit" | "set" | "replace" | "best" | "rank" | "count" | "remove"> {
     readonly tables = new Map<string, Map<string, number>>();
     readonly replaced: string[] = [];
     private table(seasonKey: string, difficulty: string, board: Board): Map<string, number> {
@@ -458,6 +458,11 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
     }
     async best(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
       return this.table(seasonKey, difficulty, board).get(accountId) ?? null;
+    }
+    async rank(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
+      const table = this.table(seasonKey, difficulty, board);
+      const own = table.get(accountId);
+      return own === undefined ? null : 1 + [...table.values()].filter((score) => score > own).length;
     }
     async count(seasonKey: string, difficulty: string, board: Board = "common"): Promise<number> {
       return this.table(seasonKey, difficulty, board).size;
