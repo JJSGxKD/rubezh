@@ -194,12 +194,14 @@ describe("победа над стражем в приёме забегов", ()
     await expect(w.service.finish(me, finish({ runId, rubezh: WIN }))).rejects.toThrow("Redis недоступен");
 
     w.board.failSubmit = false;
+    const recordedBefore = w.recorded.length;
     // Повтор приходит с другим телом: победу берём из записанного забега, а не из повтора.
     await w.service.finish(me, finish({ runId, rubezh: undefined }));
     await w.service.finish(me, finish({ runId, rubezh: WIN }));
 
     expect((await w.view.leaderboardFor(me.accountId, "hard")).entries[0]).toMatchObject({ rubezh: true });
-    expect(w.recorded).toHaveLength(1);
+    // Повтор слушателей не зовёт: награда второй раз не уходит.
+    expect(w.recorded).toHaveLength(recordedBefore);
   });
 
   it("победа в нерейтинговой сложности отметку не ставит", async () => {
