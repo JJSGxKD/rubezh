@@ -132,8 +132,10 @@ export function RunScreen(): ReactNode {
         />
       )}
 
-      {/* Баннеры рубежа: страж пришёл, рубеж взят. Слой без касаний, гаснет сам. */}
-      {run.hud === null || run.phase === "finished" || run.phase === "downed" ? null : <RubezhBanner notice={run.rubezhNotice} />}
+      {/* Баннеры рубежа: страж пришёл, рубеж взят. Слой без касаний, гаснет сам.
+          Не размонтируется на смерти и итоге: после второго шанса свежий баннер
+          показал бы прежнее сообщение снова. Слой на z-hud, оверлей смерти выше. */}
+      {run.hud === null ? null : <RubezhBanner notice={run.rubezhNotice} />}
 
       {run.devInfo !== null && run.phase !== "finished" && run.phase !== "downed" && (run.devRun ? devTechInfo : fpsOverlay) ? (
         <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />

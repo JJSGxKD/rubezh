@@ -35,6 +35,16 @@ export interface ShownBanner {
   phase: BannerPhase;
 }
 
+/**
+ * Номер последнего показанного сообщения. Живёт вне компонента: размонтированный
+ * и смонтированный заново баннер (экран пересобрался, например после второго
+ * шанса) не повторяет то, что уже было показано. Номера сообщений общие на
+ * сессию и не повторяются, поэтому чужое сообщение за показанное не сойдёт.
+ */
+export interface BannerMemory {
+  seq: number | null;
+}
+
 export interface BannerTimeline {
   /** Показать сообщение; то же (по номеру) ничего не меняет, `null` убирает баннер сразу. */
   show(notice: RubezhNotice | null): void;
@@ -47,9 +57,11 @@ export interface BannerTimeline {
  * Новое сообщение снимает таймеры старого и показывается целиком — тексты двух
  * подряд не склеиваются и не гасят друг друга.
  */
-export function createBannerTimeline(onChange: (shown: ShownBanner | null) => void): BannerTimeline {
+export function createBannerTimeline(
+  onChange: (shown: ShownBanner | null) => void,
+  memory: BannerMemory = { seq: null },
+): BannerTimeline {
   let timers: ReturnType<typeof setTimeout>[] = [];
-  let lastSeq: number | null = null;
 
   const clear = (): void => {
     for (const timer of timers) clearTimeout(timer);
@@ -62,30 +74,33 @@ export function createBannerTimeline(onChange: (shown: ShownBanner | null) => vo
         clear();
         // Сообщения нет вовсе — новый забег: то же сообщение с тем же номером
         // после этого снова новое.
-        if (lastSeq !== null) onChange(null);
-        lastSeq = null;
+        if (memory.seq !== null) onChange(null);
+        memory.seq = null;
         return;
       }
-      if (notice.seq === lastSeq) return;
-      lastSeq = notice.seq;
+      if (notice.seq === memory.seq) return;
+      memory.seq = notice.seq;
       clear();
       onChange({ notice, phase: "in" });
       timers.push(setTimeout(() => onChange({ notice, phase: "out" }), BANNER_MS - BANNER_FADE_MS));
       timers.push(setTimeout(() => onChange(null), BANNER_MS));
     },
+    // Память не трогаем: следующий баннер продолжит с того же места.
     dispose(): void {
       clear();
-      lastSeq = null;
     },
   };
 }
+
+/** Память баннера экрана боя: одна на сессию, переживает размонтирование. */
+const screenMemory: BannerMemory = { seq: null };
 
 export function RubezhBanner(props: { notice: RubezhNotice | null }): ReactNode {
   const [shown, setShown] = useState<ShownBanner | null>(null);
   const timeline = useRef<BannerTimeline | null>(null);
 
   useEffect(() => {
-    const created = createBannerTimeline(setShown);
+    const created = createBannerTimeline(setShown, screenMemory);
     timeline.current = created;
     return () => {
       created.dispose();

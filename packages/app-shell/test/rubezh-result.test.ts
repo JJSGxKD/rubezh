@@ -71,6 +71,13 @@ describe("карточка рубежа: разметка", () => {
     expect(html).toContain("Награда ×2");
   });
 
+  it("награда стоит под временем в колонке текста, а не сбоку: на 320 px рядом она сжимала заголовок", () => {
+    const html = render(won, granted(2));
+    expect(html.indexOf("Награда ×2")).toBeGreaterThan(html.indexOf("Страж пал на"));
+    // Метка в колонке текста: после неё закрывается колонка, а не карточка со вторым столбцом.
+    expect(html.slice(html.indexOf("Награда ×2"))).toMatch(/^[^<]*<\/span><\/span><\/div><\/div>$/);
+  });
+
   it("победа без награды: карточка видна сразу, обещания «×2» нет", () => {
     const html = render(won, undefined);
     expect(html).toContain("Рубеж взят");

@@ -44,6 +44,15 @@ describe("значок рубежа в рейтинге", () => {
   });
 });
 
+describe("строка рейтинга на узком экране", () => {
+  it("метки переносятся на вторую строку, а имя режется многоточием и не вытесняется", () => {
+    const html = row({ rubezh: true, tester: true, prestige: 1240, isMe: true });
+    // Не сжимающиеся метки без переноса выдавили бы имя в ноль на 320 px.
+    expect(html).toMatch(/<p class="[^"]*\bflex-wrap\b[^"]*">/);
+    expect(html).toContain('<span class="max-w-full truncate">Мира</span>');
+  });
+});
+
 describe("схема ответа доски", () => {
   const board = (entry: Record<string, unknown>) => ({
     difficultyId: "normal",

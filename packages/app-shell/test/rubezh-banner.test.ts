@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "../src/i18n/run";
-import { BANNER_FADE_MS, BANNER_MS, RubezhBannerView, createBannerTimeline, type ShownBanner } from "../src/screens/run/RubezhBanner";
+import { BANNER_FADE_MS, BANNER_MS, RubezhBannerView, createBannerTimeline, type BannerMemory, type ShownBanner } from "../src/screens/run/RubezhBanner";
 import type { RubezhNotice } from "../src/state/run";
 
 // Баннеры рубежа (tasks/T-0124): появляются по сообщению шины, гаснут сами и
@@ -130,6 +132,43 @@ describe("баннер рубежа: время жизни", () => {
     timeline.show(null);
     timeline.show(spawned);
     expect(changes.at(-1)).toEqual({ notice: spawned, phase: "in" });
+  });
+
+  it("размонтирование и новый баннер с общей памятью: показанное сообщение второй раз не появляется", () => {
+    // Смерть в бою со стражем, второй шанс: экран пересобрал баннер, а в сторе
+    // осталось прежнее сообщение с прежним номером.
+    const memory: BannerMemory = { seq: null };
+    const first: ShownBanner[] = [];
+    const a = createBannerTimeline((shown) => shown && first.push(shown), memory);
+    a.show(spawned);
+    expect(first).toHaveLength(1);
+    a.dispose();
+
+    const second: (ShownBanner | null)[] = [];
+    const b = createBannerTimeline((shown) => second.push(shown), memory);
+    b.show(spawned);
+    expect(second).toEqual([]);
+    vi.advanceTimersByTime(BANNER_MS * 2);
+    expect(second).toEqual([]);
+  });
+
+  it("с общей памятью новое сообщение после перемонтирования показывается", () => {
+    const memory: BannerMemory = { seq: null };
+    const a = createBannerTimeline(() => undefined, memory);
+    a.show(spawned);
+    a.dispose();
+
+    const changes: (ShownBanner | null)[] = [];
+    const b = createBannerTimeline((shown) => changes.push(shown), memory);
+    b.show(cleared);
+    expect(changes[0]).toEqual({ notice: cleared, phase: "in" });
+  });
+
+  it("экран боя не размонтирует баннер на смерти и итоге", () => {
+    const source = readFileSync(resolve(__dirname, "../src/screens/run/RunScreen.tsx"), "utf8");
+    const line = source.split("\n").find((row) => row.includes("<RubezhBanner")) ?? "";
+    expect(line).not.toContain("downed");
+    expect(line).not.toContain("finished");
   });
 
   it("dispose снимает таймеры: после ухода с экрана перерисовок нет", () => {
