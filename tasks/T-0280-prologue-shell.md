@@ -3,7 +3,7 @@ id: T-0280
 title: Пролог — оболочка: первый запуск без меню, подсказки по событию, «Советуем», окно «Рубеж удержан!» и открытие разделов
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -30,6 +30,12 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/state/runs-api.ts
+  - packages/app-shell/src/screens/home-showcase.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/test/hints.test.ts
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
