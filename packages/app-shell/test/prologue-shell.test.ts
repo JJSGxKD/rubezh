@@ -20,7 +20,7 @@ import {
   usePrologue,
   type FreshMarks,
 } from "../src/state/prologue";
-import { useRuns } from "../src/state/runs";
+import { toStart, toSubmission, useRuns } from "../src/state/runs";
 import { useSession } from "../src/state/session";
 
 // Пролог в оболочке (tasks/T-0280, Р151): первый запуск без меню, подсказки по
@@ -263,6 +263,67 @@ describe("окно «Рубеж удержан!»", () => {
     expect(prologueRewardOf([wallet("coins", 40, "run_reward"), wallet("coins", 500, "prologue_reward"), wallet("gems", 10, "prologue_reward")])).toEqual({ coins: 500, gems: 10 });
     expect(prologueRewardOf([wallet("coins", 40, "run_reward")])).toBeNull();
     expect(prologueRewardOf([])).toBeNull();
+  });
+});
+
+describe("запись пролога на сервер", () => {
+  const base = {
+    runId: "run-9",
+    seed: 1,
+    outcome: "abandoned",
+    startingWeaponId: "spark",
+    mapId: "frontier",
+    difficultyId: "easy",
+    contentHash: "abc",
+    waveReached: 6,
+    survivalSec: 184,
+    level: 12,
+    xpCollected: 1,
+    enemiesKilled: 10,
+    killsByEnemy: {},
+    damageDealt: 1,
+    damageTaken: 1,
+    damageByElement: {},
+    noHitSec: 0,
+    noKillSec: 0,
+    killsByElement: {},
+    bossKills: 0,
+    eliteKills: 0,
+    chestsOpened: 0,
+    crystalsCollected: 0,
+    weapons: [],
+    passives: [],
+    deathCause: null,
+    distance: 1,
+    peakEnemies: 1,
+    cheats: false,
+    continues: [],
+  } as unknown as RunResult;
+
+  it("итог несёт режим и победу — без них сервер не выдал бы награду", () => {
+    const body = toSubmission({ ...base, mode: "prologue", prologue: { won: true, sec: 184 } });
+    expect(body.mode).toBe("prologue");
+    expect(body.prologue).toEqual({ won: true, sec: 184 });
+  });
+
+  it("у обычного забега режима и пролога в теле нет", () => {
+    const body = toSubmission(base);
+    expect(body).not.toHaveProperty("mode");
+    expect(body).not.toHaveProperty("prologue");
+  });
+
+  it("старт пролога несёт режим", () => {
+    const start = { kind: "start" as const, runId: "r", difficultyId: "easy" as const, startingWeaponId: "spark", contentHash: "h", startedAtMs: 0, mode: "prologue" as const };
+    expect(toStart(start, 1000).mode).toBe("prologue");
+    expect(toStart({ ...start, mode: undefined }, 1000)).not.toHaveProperty("mode");
+  });
+
+  it("сданный до победы пролог не считается сыгранным забегом; победа — считается, рекорда не ставит", () => {
+    useMeta.setState({ runs: 0 });
+    expect(useMeta.getState().submitRun({ ...base, mode: "prologue", prologue: { won: false, sec: 40 } })).toBe(false);
+    expect(useMeta.getState().runs).toBe(0);
+    expect(useMeta.getState().submitRun({ ...base, mode: "prologue", prologue: { won: true, sec: 184 } })).toBe(false);
+    expect(useMeta.getState().runs).toBe(1);
   });
 });
 
