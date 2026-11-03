@@ -1,5 +1,6 @@
 import type { ChestReward, ChestSize, ChestSource, ChestsDef, ChestsLateDef, EnemyRank } from "@bh/shared-types";
 import { readyEvolutionOption } from "../progression/evolutions";
+import { prologueChestSize } from "../run/prologue";
 import { addXp, applyUpgrade, collectCandidates, drawWeighted, healOption } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import { countOnField, MAX_PICKUPS_OF_KIND, PICKUP_KIND, SCATTER_MAX_UNITS, SCATTER_MIN_UNITS, spawnPickup, type PickupKind } from "./pickups";
@@ -155,10 +156,11 @@ function activeTable(world: World): Pick<ChestsDef, "sizes" | "bossMinSize"> {
 /**
  * Размер очередного сундука: сначала схема `opening` (она приоритетнее и
  * поздней таблицы), потом бросок по весам — ровно одно обращение к потоку
- * сундуков, как и раньше.
+ * сундуков, как и раньше. В прологе первый сундук задан его данными и броска
+ * не тратит; дальше схема та же.
  */
 function rollSize(world: World, table: Pick<ChestsDef, "sizes">): ChestSize {
-  const scripted = world.chestRules.opening[world.chests.dropped];
+  const scripted = prologueChestSize(world) ?? world.chestRules.opening[world.chests.dropped];
   if (scripted !== undefined) return scripted;
 
   const index = drawWeighted(world.chests.rng, table.sizes);

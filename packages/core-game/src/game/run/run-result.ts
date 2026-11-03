@@ -2,6 +2,7 @@ import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type
 import { buildScore } from "./hunt-log";
 import { continueSeconds } from "../sim/continue";
 import { describePressureResult } from "../sim/pressure";
+import { describePrologue } from "./prologue";
 import { describeRubezh } from "../sim/rubezh";
 import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
 import { TICK_HZ, type World } from "../sim/world";
@@ -54,6 +55,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     crystalsCollected: stats.crystalsCollected,
     secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
     rubezh: describeRubezh(world),
+    ...(world.prologue === null ? {} : { mode: world.mode, prologue: describePrologue(world) }),
     killsByEnemy: killsByEnemy(world),
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,

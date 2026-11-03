@@ -113,6 +113,11 @@ export interface WorldSnapshot {
    * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
    */
   rubezh?: { rng: number; phase: RubezhPhase; clearedSec: number | null };
+  /**
+   * Пролог: только у снимка забега в режиме `prologue` (T-0278). Снимок обычного забега
+   * поля не несёт, и в мир пролога он не грузится — как и наоборот.
+   */
+  prologue?: { lastWardTick: number; firstOfferMade: boolean };
   /** журнал охоты; в снимках без поля — пуст, а время появления живых элит неизвестно (tasks/T-0292) */
   hunt?: HuntSnapshot;
   spawner: unknown;
@@ -143,6 +148,9 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
     rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
+    ...(world.prologue === null
+      ? {}
+      : { prologue: { lastWardTick: world.prologue.lastWardTick, firstOfferMade: world.prologue.firstOfferMade } }),
     hunt: captureHunt(world),
     spawner: spawner.saveState?.() ?? null,
   };
@@ -185,6 +193,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.openings = [];
   restoreCordon(world, snapshot.cordon);
   restoreRubezh(world, snapshot.rubezh);
+  restorePrologue(world, snapshot.prologue);
   restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
 
@@ -385,6 +394,23 @@ function restoreRubezh(world: World, input: unknown): void {
   state.rng.setState(asNumber(raw.rng, "rubezh.rng"));
   state.phase = state.guardType < 0 ? "skipped" : restored;
   state.clearedSec = clearedSec;
+}
+
+/**
+ * Пролог. Режим мира собран заранее по режиму снимка забега, поэтому здесь только
+ * сверка: снимок пролога в мир обычного забега (и наоборот) не грузится — иначе
+ * забег продолжился бы на чужом таймлайне.
+ */
+function restorePrologue(world: World, input: unknown): void {
+  const state = world.prologue;
+  if (state === null) {
+    if (input !== undefined) throw new SnapshotError("prologue: снимок пролога, а мир обычного забега");
+    return;
+  }
+  if (input === undefined) throw new SnapshotError("prologue: снимок обычного забега, а мир пролога");
+  const raw = asRecord(input, "prologue");
+  state.lastWardTick = asNumber(raw.lastWardTick, "prologue.lastWardTick");
+  state.firstOfferMade = asBoolean(raw.firstOfferMade, "prologue.firstOfferMade");
 }
 
 // --- Набор и прогрессия -------------------------------------------------------
