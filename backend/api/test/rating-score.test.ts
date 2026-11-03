@@ -155,13 +155,13 @@ describe("оси и очки", () => {
     expect(slow.h).toBeCloseTo(0.5, 6);
   });
 
-  it("Охота: босс, которого таблица не знает (ожидаемое время нуль), считается без поправки на скорость", () => {
+  it("Охота: босс, которого таблица не знает (ожидаемое время нуль), получает нижний край коридора скорости", () => {
     const input = onTarget(10);
-    const value = (input.huntLog?.[0]?.value ?? 0) * 2;
+    const value = (input.huntLog?.[0]?.value ?? 0) * 4;
     const withBoss = { ...input, huntLog: [{ rank: "boss" as const, value, aliveSec: 40 }] };
 
     expect(expectedRowOf(table(), "average", 10).huntKillSec.boss).toBe(0);
-    expect(indexesOf(withBoss).h).toBeCloseTo(2, 6);
+    expect(indexesOf(withBoss).h).toBeCloseTo(2, 6); // 4 × 0,5
   });
 
   it("Чистота: нулевой урон — верх коридора, два; урон втрое больше ожидаемого — нижний край 0,3 не пробивается", () => {

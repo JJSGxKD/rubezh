@@ -83,21 +83,23 @@ export function axisIndexes(input: ScoreInput, expected: ExpectedRow, params: Sc
  * Охота: ценность убитых элит и боссов, умноженная на скорость убийства,
  * в минуту — к ожидаемой. Ранние минуты без элит (`huntPerMin = 0`) и забег
  * без журнала — единица: охотиться там было не на кого или нечем измерить.
- * Ожидаемое время убийства, которого таблица не знает (нуль), скорость не
- * поправляет — множитель единица.
+ * Ожидаемое время убийства, которого таблица не знает (нуль: такого убитого в
+ * прогонах калибровки ещё не было), даёт нижний край коридора — по формуле
+ * спецификации, без особого случая.
  */
 function huntIndex(log: readonly HuntLogEntry[] | null, expected: ExpectedRow, minutes: number): number {
   if (log === null || expected.huntPerMin <= 0) return 1;
   let sum = 0;
   for (const entry of log) {
     const expectedSec = expected.huntKillSec[entry.rank];
-    sum += entry.value * (expectedSec <= 0 ? 1 : speedFactor(expectedSec, entry.aliveSec));
+    sum += entry.value * speedFactor(expectedSec, entry.aliveSec);
   }
   return sum / minutes / expected.huntPerMin;
 }
 
 /** Скорость убийства: ожидаемое время к фактическому, в коридоре. Мгновенное убийство — верх коридора. */
 function speedFactor(expectedSec: number, aliveSec: number): number {
+  if (expectedSec <= 0) return HUNT_SPEED_MIN;
   if (aliveSec <= 0) return HUNT_SPEED_MAX;
   return Math.min(HUNT_SPEED_MAX, Math.max(HUNT_SPEED_MIN, expectedSec / aliveSec));
 }
