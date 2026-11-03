@@ -41,7 +41,7 @@ describe("атлас покрывает контент", () => {
   // Новый враг без арта рисуется фигурой — это не ошибка, но черновик арта
   // обязан покрывать нынешний ростер, иначе сравнение в забеге неполное.
   const frames = new Set<string>();
-  for (const pack of ["core", "late"]) {
+  for (const pack of ["core", "late", "r157"]) {
     const atlas = JSON.parse(readFileSync(new URL(`../../../design/art/out/atlas-${pack}.json`, import.meta.url), "utf8")) as { frames: Record<string, unknown> };
     for (const name of Object.keys(atlas.frames)) frames.add(name);
   }

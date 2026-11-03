@@ -49,6 +49,11 @@ const ATLASES = [
     json: new URL("../../../../../design/art/out/atlas-late.json", import.meta.url).href,
   },
   {
+    key: "art-r157",
+    png: new URL("../../../../../design/art/out/atlas-r157.png", import.meta.url).href,
+    json: new URL("../../../../../design/art/out/atlas-r157.json", import.meta.url).href,
+  },
+  {
     key: ART_ENV_KEY,
     png: new URL("../../../../../design/art/out/atlas-env.png", import.meta.url).href,
     json: new URL("../../../../../design/art/out/atlas-env.json", import.meta.url).href,

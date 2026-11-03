@@ -65,6 +65,8 @@ const WEAPON_SOUNDS: Partial<Record<string, SoundId>> = {
   spark: "spark",
   knife: "knife",
   wardstone: "wardstone",
+  flail: "flail",
+  whirl: "flail",
   sting: "sting",
 };
 
