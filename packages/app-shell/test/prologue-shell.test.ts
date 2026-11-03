@@ -282,7 +282,9 @@ describe("«Советуем» и тексты пролога", () => {
     const withMark = renderToStaticMarkup(
       createElement(LevelUpOverlay, { level: 2, offers: [offer("a", true), offer("b", false), offer("c", false)], queued: 0, onChoose: () => undefined }),
     );
-    expect(withMark.match(/Советуем/g)?.length).toBe(1);
+    // Метка на одной карточке; ещё раз слово встречается в подсказке под карточками.
+    expect(withMark.match(/data-recommended/g)?.length).toBe(1);
+    expect(withMark).toContain("Выбери улучшение — «Советуем» подойдёт для начала");
 
     const plain = renderToStaticMarkup(
       createElement(LevelUpOverlay, { level: 2, offers: [offer("a", false), offer("b", false)], queued: 0, onChoose: () => undefined }),
