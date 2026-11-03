@@ -8,7 +8,12 @@ Nest и Prisma; сеть, время и DNS приходят аргумента�
 ## Что умеет
 
 - Подписка: base64 (обычный или URL-safe, с `=` или без) либо открытый текст со
-  списком ссылок. Clash YAML, sing-box JSON и SIP008 не поддерживаются.
+  списком ссылок, либо JSON Xray — массив полных конфигов `[{ remarks, outbounds }]`
+  или один конфиг (так отдают Remnawave, Marzban, Happ): узел — каждый выход vless,
+  vmess, trojan или shadowsocks, имя — `remarks`; `freedom`, `blackhole` и `dns`
+  молча пропускаются. Clash YAML, sing-box JSON и SIP008 не поддерживаются.
+- Загрузка подписки шлёт `User-Agent` и `x-device-os: Linux`; необязательный `hwid`
+  уходит заголовком `x-hwid` для подписок с ограничением числа устройств.
 - Ссылки: `vless://`, `vmess://` (JSON и адресная форма), `trojan://`, `ss://`.
   Транспорты `tcp`, `ws`, `grpc`, `httpupgrade`, `xhttp`; безопасность `none`,
   `tls`, `reality`. Что не умеем — пропускается с причиной, а не угадывается.
