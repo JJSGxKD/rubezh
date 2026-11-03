@@ -3,7 +3,7 @@ id: T-0296
 title: Экран рейтинга v2 — очки вместо времени, пьедестал топ-3, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -24,9 +24,14 @@ shared:
   - packages/app-shell/src/screens/meta/hero-portrait.ts
   - packages/app-shell/src/screens/gallery.tsx
   - packages/app-shell/src/i18n/ru.json
+  - packages/app-shell/src/i18n/ru-season.json
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/screens/meta/rating-rewards.tsx
+  - packages/shared-types/src/index.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
