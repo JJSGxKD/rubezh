@@ -50,6 +50,8 @@ export const leaderboardSchema = z.object({
       tester: z.optional(z.literal(true)),
       /** очки престижа (T-0107); сервер до достижений поля не отдавал */
       prestige: z.optional(z.number()),
+      /** победа над стражем рубежа засчитана (T-0121); сервер шлёт только `true` или ничего */
+      rubezh: z.optional(z.literal(true)),
     }),
   ),
   me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),

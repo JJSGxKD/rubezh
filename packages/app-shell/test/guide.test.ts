@@ -1,8 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BOOSTS, DROPS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
-import { hasTranslation, t } from "../src/i18n";
+import { BOOSTS, DROPS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { RUBEZH_REWARD_MUL } from "@bh/shared-types";
+import { formatDuration, hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
 import "../src/i18n/guide";
 import {
@@ -13,6 +14,7 @@ import {
   passiveCategories,
   passiveRange,
   regularEnemies,
+  rubezhGuide,
   speedClass,
   weaponElements,
   weaponGrowth,
@@ -211,4 +213,19 @@ describe("гайдбук", () => {
       expect(text, word).toContain(word);
     }
   });
+
+  it("раздел «Рубеж»: страж, время прихода и множитель награды берутся из контента", () => {
+    const guide = rubezhGuide();
+    expect(guide).not.toBeNull();
+    expect(guide?.guard.id).toBe(RUBEZH.guard);
+    expect(guide?.atSec).toBe(RUBEZH.atSec);
+    expect(guide?.rewardMul).toBe(RUBEZH_REWARD_MUL);
+    // Страж без ключа имени показал бы в гайдбуке id — тест падает на нём.
+    expect(hasTranslation(`enemy.${RUBEZH.guard}.name`)).toBe(true);
+    const markup = renderToStaticMarkup(createElement(GuideScreen));
+    expect(markup).toContain(t(`enemy.${RUBEZH.guard}.name`));
+    expect(markup).toContain(formatDuration(RUBEZH.atSec));
+    expect(markup).toContain(`×${String(RUBEZH_REWARD_MUL)}`);
+  });
 });
+

@@ -45,6 +45,10 @@ const resultSchema = z.object({
   noHitSec: z._default(z.number(), 0),
   noKillSec: z._default(z.number(), 0),
   killsByElement: z._default(z.partialRecord(z.enum(ELEMENTS), z.number()), {}),
+  // Рубеж (T-0120): без поля схема отбросила бы победу над стражем, и забег,
+  // брошенный на экране смерти, ушёл бы в аналитику без неё. Записи прошлой
+  // сборки поля не несут.
+  rubezh: z.optional(z.object({ reached: z.boolean(), clearedSec: z.nullable(z.number()), guardHpPercent: z.nullable(z.number()) })),
   weapons: z.array(z.object({ id: z.string(), level: z.number(), damage: z.number() })),
   passives: z.array(z.object({ id: z.string(), level: z.number() })),
   deathCause: z.nullable(z.string()),

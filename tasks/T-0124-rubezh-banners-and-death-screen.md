@@ -3,8 +3,8 @@ id: T-0124
 title: Рубеж — цель забега, оболочка: баннеры, «до рубежа N с», отметка в рейтинге
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0121, T-0109, T-0186, T-0190, T-0193, T-0196]
@@ -25,6 +25,13 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/27-design-system-and-app-shell.md
   - packages/app-shell/src/state/analytics.ts
+  - packages/app-shell/src/state/progress-api.ts
+  - packages/app-shell/src/state/downed-run.ts
+  - packages/app-shell/src/screens/guide/GuideScreen.tsx
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/src/screens/run/DeathNext.tsx
+  - packages/shared-types/src/index.ts
+  - docs/39-retention-mechanics.md
 runner: any
 executor: sonnet-5.5
 effort: high
