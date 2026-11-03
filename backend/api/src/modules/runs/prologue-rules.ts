@@ -44,13 +44,36 @@ export function admitMode(input: { mode: RunMode | undefined; difficulty: Diffic
 }
 
 /**
- * Победа в прологе — флаг клиента (`result.prologue.won`) и вердикт не
- * «отклонён». Исход забега (`outcome`) не смотрим: победа приходит как
- * `abandoned` с тем же итогом. Подозрительный забег — повод посмотреть, а не
- * приговор, как у награды за забег.
+ * Минимальная длина пролога, секунды: Страж приходит на 160-й секунде (последний
+ * отрезок таймлайна `content/prologue.ts`), победа раньше него невозможна. Сервер
+ * пакет `core-game` не импортирует, поэтому число продублировано, а равенство
+ * с контентом держит `scripts/test/run-rules.test.ts`.
  */
-export function isPrologueWin(input: { mode: RunMode; won: boolean | undefined; verdict: RunVerdict }): boolean {
-  return input.mode === "prologue" && input.won === true && input.verdict !== "rejected";
+export const PROLOGUE_MIN_SEC = 160;
+
+/** Допуск между секундой победы и длиной забега, секунды: округление клиента (как у рубежа). */
+const PROLOGUE_TOLERANCE_SEC = 1;
+
+/**
+ * Победа в прологе — флаг клиента (`result.prologue.won`), вердикт не «отклонён» и
+ * правдоподобная длина: секунда победы сходится с длиной забега (допуск
+ * `PROLOGUE_TOLERANCE_SEC`), а сам забег не короче пролога (`PROLOGUE_MIN_SEC`).
+ * Без правдоподобия флаг подделывает любой клиент: «победа» на тридцатой секунде
+ * платила бы награду. Такой забег записывается, но признак не ставится и награды нет.
+ * Исход забега (`outcome`) не смотрим: победа приходит как `abandoned` с тем же итогом.
+ * Подозрительный забег — повод посмотреть, а не приговор, как у награды за забег.
+ */
+export function isPrologueWin(input: {
+  mode: RunMode;
+  won: boolean | undefined;
+  /** секунда победы со слов итога (`result.prologue.sec`) */
+  sec: number | undefined;
+  survivalSec: number;
+  verdict: RunVerdict;
+}): boolean {
+  if (input.mode !== "prologue" || input.won !== true || input.verdict === "rejected") return false;
+  if (input.sec === undefined || Math.abs(input.sec - input.survivalSec) > PROLOGUE_TOLERANCE_SEC) return false;
+  return input.survivalSec >= PROLOGUE_MIN_SEC;
 }
 
 /** Разделы открыты, когда пролог пройден (у старых аккаунтов признак ставит миграция). */

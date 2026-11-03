@@ -3,6 +3,7 @@ import { runRecordingSchema } from "../src/modules/diagnostics/dto/run-report.dt
 import { DomainError } from "../src/common/domain-error.js";
 import {
   PROLOGUE_DIFFICULTY,
+  PROLOGUE_MIN_SEC,
   PrologueDifficultyError,
   PrologueRequiredError,
   admitMode,
@@ -78,23 +79,48 @@ describe("запись забега для перепроверки", () => {
 });
 
 describe("победа в прологе", () => {
+  const win = { mode: "prologue", won: true, sec: 170, survivalSec: 170, verdict: "ok" } as const;
+
   it("победа — флаг клиента в прологе и вердикт, не равный отказу", () => {
-    expect(isPrologueWin({ mode: "prologue", won: true, verdict: "ok" })).toBe(true);
+    expect(isPrologueWin(win)).toBe(true);
     // Подозрительный забег — повод посмотреть, а не приговор (как у награды за забег).
-    expect(isPrologueWin({ mode: "prologue", won: true, verdict: "suspicious" })).toBe(true);
+    expect(isPrologueWin({ ...win, verdict: "suspicious" })).toBe(true);
   });
 
   it("отклонённый забег пролога не выигран, даже с флагом победы", () => {
-    expect(isPrologueWin({ mode: "prologue", won: true, verdict: "rejected" })).toBe(false);
+    expect(isPrologueWin({ ...win, verdict: "rejected" })).toBe(false);
   });
 
   it("выход без победы и тело без поля пролога — не победа", () => {
-    expect(isPrologueWin({ mode: "prologue", won: false, verdict: "ok" })).toBe(false);
-    expect(isPrologueWin({ mode: "prologue", won: undefined, verdict: "ok" })).toBe(false);
+    expect(isPrologueWin({ ...win, won: false })).toBe(false);
+    expect(isPrologueWin({ ...win, won: undefined, sec: undefined })).toBe(false);
   });
 
   it("флаг победы в обычном забеге ничего не значит: награды пролога им не получить", () => {
-    expect(isPrologueWin({ mode: "endless", won: true, verdict: "ok" })).toBe(false);
+    expect(isPrologueWin({ ...win, mode: "endless" })).toBe(false);
+  });
+
+  it("подделка: победа на тридцатой секунде — не победа, Страж приходит на 160-й", () => {
+    expect(isPrologueWin({ ...win, sec: 30, survivalSec: 30 })).toBe(false);
+    // Секунда победы сходится с длиной, но забег короче пролога.
+    expect(isPrologueWin({ ...win, sec: PROLOGUE_MIN_SEC - 1, survivalSec: PROLOGUE_MIN_SEC - 1 })).toBe(false);
+  });
+
+  it("подделка: секунда победы не сходится с длиной забега больше чем на секунду", () => {
+    // Длинный забег с «победой» на короткой секунде и наоборот.
+    expect(isPrologueWin({ ...win, sec: 30, survivalSec: 170 })).toBe(false);
+    expect(isPrologueWin({ ...win, sec: 300, survivalSec: 170 })).toBe(false);
+    expect(isPrologueWin({ ...win, sec: 168.9, survivalSec: 170 })).toBe(false);
+  });
+
+  it("границы: ровно секунда расхождения и ровно минимальная длина проходят", () => {
+    expect(isPrologueWin({ ...win, sec: 169, survivalSec: 170 })).toBe(true);
+    expect(isPrologueWin({ ...win, sec: 171, survivalSec: 170 })).toBe(true);
+    expect(isPrologueWin({ ...win, sec: PROLOGUE_MIN_SEC, survivalSec: PROLOGUE_MIN_SEC })).toBe(true);
+  });
+
+  it("победа без секунды в теле не засчитывается", () => {
+    expect(isPrologueWin({ ...win, sec: undefined })).toBe(false);
   });
 });
 

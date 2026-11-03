@@ -141,7 +141,7 @@ export class RunsService {
 
     // Награда пролога и признак — до записи забега: упал приём посередине, повтор итога пройдёт этот путь целиком,
     // а начисление по ключу аккаунта не удвоится. Повтор уже записанного итога сюда не доходит (`replay` выше).
-    if (this.prologue !== undefined && isPrologueWin({ mode, won: run.prologue?.won, verdict: judged.verdict })) {
+    if (this.prologue !== undefined && isPrologueWin({ mode, won: run.prologue?.won, sec: run.prologue?.sec, survivalSec: run.survivalSec, verdict: judged.verdict })) {
       await this.prologue.settle({ accountId: account.accountId, at: new Date(nowMs), ...(run.prologue === undefined ? {} : { sec: run.prologue.sec }) });
     }
     const outcome = await this.runs.finish({

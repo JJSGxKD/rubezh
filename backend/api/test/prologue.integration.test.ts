@@ -241,6 +241,20 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
       expect(await doneAt(me.accountId)).not.toBeNull();
     });
 
+    it("тот же итог после успеха: режим остаётся prologue, награды второй раз нет", async () => {
+      const me = await person();
+      const runId = randomUUID();
+      await service.finish(me, prologueBody(runId), NOON.getTime());
+
+      const again = await service.finish(me, prologueBody(runId), NOON.getTime() + 60_000);
+
+      expect(again.recorded).toBe(false);
+      expect(await modeOf(runId)).toBe("prologue");
+      expect(await balances(me.accountId)).toEqual({ coins: 500, gems: 10 });
+      expect(await prologueEntries(me.accountId)).toHaveLength(2);
+      expect(await prisma.run.count({ where: { runId } })).toBe(1);
+    });
+
     it("повторный пролог пройденного аккаунта — обычный забег: награды нет, режим endless", async () => {
       const me = await person();
       await service.finish(me, prologueBody(randomUUID()), NOON.getTime());
@@ -259,6 +273,28 @@ describe.skipIf(DATABASE_URL === "")("пролог на живом Postgres", ()
       const weapons = Array.from({ length: 5 }, (_, index) => ({ id: `w${String(index)}`, level: 1 }));
 
       await service.finish(me, prologueBody(randomUUID(), { weapons }), NOON.getTime());
+
+      expect(await doneAt(me.accountId)).toBeNull();
+      expect(await balances(me.accountId)).toEqual({ coins: 0, gems: 0 });
+    });
+  });
+
+  describe("подделка победы", () => {
+    it("prologue.won на тридцатой секунде: забег записан, признак пуст, награды нет", async () => {
+      const me = await person();
+      const runId = randomUUID();
+
+      await service.finish(me, prologueBody(runId, { survivalSec: 30, prologue: { won: true, sec: 30 } }), NOON.getTime());
+
+      expect(await modeOf(runId)).toBe("prologue");
+      expect(await doneAt(me.accountId)).toBeNull();
+      expect(await balances(me.accountId)).toEqual({ coins: 0, gems: 0 });
+    });
+
+    it("секунда победы расходится с длиной забега больше чем на секунду: награды нет", async () => {
+      const me = await person();
+
+      await service.finish(me, prologueBody(randomUUID(), { survivalSec: 170, prologue: { won: true, sec: 100 } }), NOON.getTime());
 
       expect(await doneAt(me.accountId)).toBeNull();
       expect(await balances(me.accountId)).toEqual({ coins: 0, gems: 0 });
