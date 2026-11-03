@@ -28,6 +28,7 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { RUN_MODIFIERS } from "./modifiers";
 import { PRESSURE } from "./pressure";
 import { PROLOGUE } from "./prologue";
 import { RUBEZH } from "./rubezh";
@@ -137,7 +138,8 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
  * Считается по полям, влияющим на забег, в порядке `ContentSnapshot`. Версия
  * схемы и коридоры калибровки в него не входят: правка цели отчёта не должна
  * объявлять новую версию баланса. Рубеж (`RUBEZH`) в снимке не лежит, но на забег
- * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`).
+ * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`) и модификаторы
+ * забега (`RUN_MODIFIERS`, T-0119).
  *
  * Порядок ключей внутри объектов — порядок записи в `JSON.stringify`, и хэш
  * умолчания обязан остаться прежним, поэтому он от порядка зависит. Копия
@@ -174,6 +176,7 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.pressure,
     RUBEZH,
     PROLOGUE,
+    RUN_MODIFIERS,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.
