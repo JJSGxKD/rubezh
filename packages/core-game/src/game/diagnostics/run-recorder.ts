@@ -1,4 +1,4 @@
-import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
 import {
   RUN_RECORDING_SCHEMA,
   type RunPerfSummary,
@@ -32,6 +32,8 @@ export interface RunRecordingHeader {
   mapId: string;
   difficultyId: DifficultyId;
   startingWeaponId: string;
+  /** режим забега; у обычного забега поля нет */
+  mode?: RunMode;
   contentHash: string;
   unitScale: number;
   replayBlocker: Exclude<RunReplayBlocker, "input_overflow"> | null;
