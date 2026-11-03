@@ -16,6 +16,7 @@ import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
 import { RunHud } from "./RunHud";
+import { RubezhBanner } from "./RubezhBanner";
 import { RunLoading } from "./RunLoading";
 import { LevelUpOverlay, PauseOverlay } from "./overlays";
 import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
@@ -130,6 +131,9 @@ export function RunScreen(): ReactNode {
           {...(run.devRun ? { onDev: openDev } : {})}
         />
       )}
+
+      {/* Баннеры рубежа: страж пришёл, рубеж взят. Слой без касаний, гаснет сам. */}
+      {run.hud === null || run.phase === "finished" || run.phase === "downed" ? null : <RubezhBanner notice={run.rubezhNotice} />}
 
       {run.devInfo !== null && run.phase !== "finished" && run.phase !== "downed" && (run.devRun ? devTechInfo : fpsOverlay) ? (
         <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />
