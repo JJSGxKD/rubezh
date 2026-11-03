@@ -54,7 +54,7 @@ export function boardsOf(board: BoardView): readonly Board[] {
   return board === "full" ? FULL_ONLY : ALL_BOARDS;
 }
 
-const RELEASE_SCRIPT = `
+export const RELEASE_SCRIPT = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
   return redis.call("DEL", KEYS[1])
 end
