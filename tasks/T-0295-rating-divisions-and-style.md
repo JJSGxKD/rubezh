@@ -3,8 +3,8 @@ id: T-0295
 title: Дивизионы сезона по доле доски и стиль игрока — сильнейшая ось лучшего забега, «Твой стиль» с подсказкой, что поднимет слабую ось
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0294]
