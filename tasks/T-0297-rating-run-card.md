@@ -40,7 +40,7 @@ batch: 7
 
 # T-0297. Карточка забега — «паутина» пяти осей против ожидаемого, разбор очков полосами и сборка; открывается из рейтинга и с экрана итогов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0297.json)](README.md#значки-статуса) [![T-0296](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json&label=T-0296)](T-0296-rating-screen-v2.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](T-0232-run-results-relic.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0297.json)](README.md#значки-статуса) [![T-0296](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json&label=T-0296)](T-0296-rating-screen-v2.md) [![T-0232](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0232.json&label=T-0232)](archive/T-0232-run-results-relic.md)
 
 ## Зачем
 
