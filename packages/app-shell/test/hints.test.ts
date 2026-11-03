@@ -29,8 +29,9 @@ describe("подсказки первого забега", () => {
   it("идут по порядку и заканчиваются", () => {
     expect(currentHint([])).toBe("move");
     expect(currentHint(["move"])).toBe("gems");
-    expect(currentHint(["move", "gems"])).toBe("dodge");
-    expect(currentHint(["move", "gems", "dodge"])).toBeNull();
+    expect(currentHint(["move", "gems"])).toBe("choose");
+    expect(currentHint(["move", "gems", "choose"])).toBe("dodge");
+    expect(currentHint(["move", "gems", "choose", "dodge"])).toBeNull();
   });
 
   it("про движение — гаснет, когда игрок прошёл заметное расстояние, а не от случайного касания", () => {
