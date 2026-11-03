@@ -35,12 +35,14 @@ import { redisDatabase } from "./helpers/redis-database.js";
  *
  * Каждый тест живёт на своей неделе далёкого будущего: база общая для всех
  * прогонов и файлов, а запросы планировщика идут по всей таблице награды дня.
- * Redis — база со сдвигом 13, общая с соседями, поэтому не `flushdb`: ключи
- * напоминаний несут дату своей недели, а лок и окна потолка убираются поимённо.
+ * Redis — база со сдвигом 14: сосед по ней (`shop-choice`) не делает `flushdb`,
+ * а на сдвиге 13 её делают достижения и упоминания бота и посреди теста
+ * стирали окно потолка. Сами не `flushdb`: ключи напоминаний несут дату своей
+ * недели, а лок и окна потолка убираются поимённо.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 13);
+const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 14);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
 
 const DAY = 86_400_000;
