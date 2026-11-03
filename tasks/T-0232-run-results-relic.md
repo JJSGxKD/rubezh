@@ -15,6 +15,7 @@ shared:
   - packages/app-shell/src/screens/run/DeathOverlay.tsx
   - packages/app-shell/src/screens/run/death-parts.tsx
   - packages/app-shell/src/screens/gallery.tsx
+  - packages/app-shell/src/i18n/ru-gallery.json
   - docs/27-design-system-and-app-shell.md
 runner: any
 executor: sonnet-5.5
