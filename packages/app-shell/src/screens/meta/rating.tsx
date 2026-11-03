@@ -208,9 +208,10 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number }
       <RankMark rank={entry.rank} />
       <Avatar name={entry.name} url={entry.photoUrl} size={36} />
       <div className="min-w-0 flex-1">
-        <p className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-text">
+        {/* Метки не сжимаются, поэтому на узком экране уходят на вторую строку, а не выдавливают имя и не наезжают на время. */}
+        <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm font-semibold text-text">
           {entry.rank === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
-          <span className="truncate">{entry.name}</span>
+          <span className="max-w-full truncate">{entry.name}</span>
           {entry.tester === true ? <TesterBadge /> : null}
           {entry.rubezh === true ? <RubezhMark /> : null}
           {entry.prestige !== undefined && entry.prestige > 0 ? <PrestigeMark points={entry.prestige} /> : null}
