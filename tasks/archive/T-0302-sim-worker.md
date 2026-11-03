@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: extra
 release: patch
 design: null
-batch: 7
+batch: 3
 ---
 
 # T-0302. sim-worker — отдельный процесс со своей сборкой движка: очередь проверки и симуляции черновика контента, отчёт против текущей версии

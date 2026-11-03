@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0348. Курсы фиата — ForexRateAPI ещё одним голосом рубля и евро, включается ключом из панели

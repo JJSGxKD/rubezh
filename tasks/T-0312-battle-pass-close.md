@@ -31,7 +31,7 @@ batch: 8
 
 # T-0312. Батл-пасс — закрытие месяца: незабранное выдаётся само под локом, уведомление в игре и в боте; бусты-подарки тратятся при включении буста
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0312.json)](README.md#значки-статуса) [![T-0311](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json&label=T-0311)](T-0311-battle-pass-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0312.json)](README.md#значки-статуса) [![T-0311](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json&label=T-0311)](archive/T-0311-battle-pass-server.md)
 
 ## Зачем
 

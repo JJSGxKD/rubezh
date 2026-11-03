@@ -9,6 +9,7 @@
   },
   "scripts": {
     "screens": "node scripts/screens/shoot.mjs",
+    "fx:frames": "node scripts/fx/frames.mjs",
     "dev": "pnpm --parallel --filter backend-api --filter web-telegram run dev",
     "dev:all": "pnpm --parallel --filter backend-api --filter \"web-*\" run dev",
     "tunnel": "frpc -c infra/frpc/frpc.local.toml",

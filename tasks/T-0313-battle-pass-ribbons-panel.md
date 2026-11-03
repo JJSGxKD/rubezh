@@ -32,7 +32,7 @@ batch: 8
 
 # T-0313. Батл-пасс — ленты месяца в панели: 30 ступеней двух лент, награды по схеме без случайного, копия прошлого месяца, предпросмотр
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0313.json)](README.md#значки-статуса) [![T-0311](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json&label=T-0311)](T-0311-battle-pass-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0313.json)](README.md#значки-статуса) [![T-0311](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0311.json&label=T-0311)](archive/T-0311-battle-pass-server.md)
 
 ## Зачем
 

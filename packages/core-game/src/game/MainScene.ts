@@ -128,6 +128,17 @@ export interface MainSceneData {
  * (docs/27-design-system-and-app-shell.md §3.2). Сцена сообщает о событиях и
  * принимает команды, а что показать игроку, решает оболочка.
  */
+/** Видимые объекты вместе с вложенными в контейнеры: контейнер сам почти ничего не рисует. */
+function countVisible(list: readonly Phaser.GameObjects.GameObject[]): number {
+  let count = 0;
+  for (const child of list) {
+    if (!("visible" in child) || child.visible !== true) continue;
+    count += 1;
+    if (child instanceof Phaser.GameObjects.Container) count += countVisible(child.list);
+  }
+  return count;
+}
+
 export class MainScene extends Phaser.Scene {
   private sceneData!: MainSceneData;
   private world!: World;
@@ -268,6 +279,16 @@ export class MainScene extends Phaser.Scene {
 
     this.applyDev(data.dev);
     this.ready = true;
+    if (data.dev !== undefined) {
+      // Дев-доступ для стенда эффектов (T-0213): оболочке до сессии из своего
+      // хранилища не дотянуться, поэтому сцена забега разработчика сама
+      // отдаёт счётчик на `window` и убирает его при закрытии.
+      const host = globalThis as { __bhRenderStats?: () => { displayObjects: number } | null };
+      host.__bhRenderStats = () => this.devRenderStats();
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        delete host.__bhRenderStats;
+      });
+    }
     if (resume === undefined) for (const command of data.dev?.start ?? []) this.devCommand(command);
     // Сигналы считаются от уже собранного мира: продолженный забег и команды
     // старта не должны прозвучать залпом на первом кадре.
@@ -571,6 +592,15 @@ export class MainScene extends Phaser.Scene {
     this.emitHud();
     this.reportWave();
     if (isAwaitingChoice(this.world)) this.enterChoice();
+  }
+
+  /**
+   * Сколько видимых объектов рисует сцена (дев-доступ стенда эффектов, Р142).
+   * Игроку счётчик не нужен: у забега без `dev` — `null`.
+   */
+  devRenderStats(): { displayObjects: number } | null {
+    if (!this.ready || this.sceneData.dev === undefined) return null;
+    return { displayObjects: countVisible(this.children.list) };
   }
 
   /** Характеристики забега для листа «Характеристики». */
