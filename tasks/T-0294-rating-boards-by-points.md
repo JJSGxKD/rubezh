@@ -22,6 +22,11 @@ shared:
   - backend/api/src/modules/reminders/reminders.scanner.ts
   - backend/api/src/modules/runs/dto/**
   - backend/api/src/modules/seasons/**
+  - backend/api/src/modules/rating/run-scores.repository.ts
+  - backend/api/src/modules/rating/runs-rescore.ts
+  - backend/api/src/modules/runs/leaderboard-warmup.ts
+  - backend/api/src/modules/runs/runs.module.ts
+  - docs/20-env-and-ports.md
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
