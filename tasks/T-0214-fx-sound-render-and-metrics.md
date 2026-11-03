@@ -25,12 +25,12 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 3
+batch: 4
 ---
 
 # T-0214. Рендер звуков в WAV и замеры — `pnpm fx:sound [звук…]`
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0214.json)](README.md#значки-статуса) [![T-0212](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0212.json&label=T-0212)](T-0212-fx-scene-by-url.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0214.json)](README.md#значки-статуса) [![T-0212](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0212.json&label=T-0212)](archive/T-0212-fx-scene-by-url.md)
 
 ## Зачем
 

@@ -30,7 +30,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: design/art/mockups/desktop-v2.html
-batch: 8
+batch: 3
 ---
 
 # T-0298. Раскладка для ПК, основа — с 1024 px боковое меню вместо нижнего, шапка с кошельком, две колонки экрана, листы становятся панелями сбоку

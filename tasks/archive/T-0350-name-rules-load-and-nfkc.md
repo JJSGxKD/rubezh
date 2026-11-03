@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: medium
 release: patch
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0350. Фильтр имён — потолок регулярок, прогон один раз на шаблон, медленное правило видно в логе, NFKC до правил закреплён тестом

@@ -36,7 +36,7 @@ executor: sonnet-5.5
 effort: high
 release: patch
 design: null
-batch: 7
+batch: 3
 ---
 
 # T-0301. Снимок контента ContentSnapshot — весь контент одним объектом со схемой, проверки контента чистой функцией, движок и бот принимают снимок

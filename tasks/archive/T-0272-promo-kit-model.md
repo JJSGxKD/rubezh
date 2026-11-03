@@ -25,7 +25,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 5
+batch: 3
 ---
 
 # T-0272. Пакет promo-kit — документ промо-материала, форматы, подстановка кода и ссылки, правила правки партнёром
