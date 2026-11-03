@@ -3,8 +3,8 @@ id: T-0296
 title: Экран рейтинга v2 — очки вместо времени, пьедестал топ-3, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0295, T-0111]
