@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
@@ -17,6 +17,7 @@ import {
 } from "../run-api";
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
+import { isPrologueWon } from "./run/prologue";
 import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
@@ -86,6 +87,8 @@ export interface MainSceneData {
   unitScale: number;
   mapId: string;
   difficultyId: DifficultyId;
+  /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
+  mode?: RunMode;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -200,6 +203,8 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       mapId: resume?.mapId ?? data.mapId,
       difficultyId: resume?.difficultyId ?? data.difficultyId,
+      // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
+      mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
@@ -243,6 +248,7 @@ export class MainScene extends Phaser.Scene {
               mapId: world.mapId,
               difficultyId: world.difficultyLevel.id,
               startingWeaponId: this.startingWeaponId(),
+              ...(world.mode === "endless" ? {} : { mode: world.mode }),
               contentHash: this.contentHash,
               unitScale: data.unitScale,
               // Продолженный забег не повторить с начала, а в забеге
@@ -321,6 +327,7 @@ export class MainScene extends Phaser.Scene {
       this.emitSecretEvents();
       this.emitCordonEvents();
       this.emitRubezhEvents();
+      if (isPrologueWon(this.world)) break;
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
@@ -350,6 +357,11 @@ export class MainScene extends Phaser.Scene {
 
     this.probe.endFrame(this.world, simMs, steps, renderMs);
 
+    // Страж пролога пал: забег кончается победой, окна сундука и выбора уровня ему не помеха.
+    if (isPrologueWon(this.world)) {
+      this.winPrologue();
+      return;
+    }
     if (!this.world.player.alive) {
       this.handleDeath();
       return;
@@ -583,6 +595,7 @@ export class MainScene extends Phaser.Scene {
       mapId: world.mapId,
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
+      ...(world.mode === "endless" ? {} : { mode: world.mode }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
@@ -884,6 +897,20 @@ export class MainScene extends Phaser.Scene {
       contentHash: this.contentHash,
       cheats: this.cheatsUsed,
     });
+  }
+
+  /**
+   * Победа в прологе: оболочка узнаёт о ней сообщением `prologueWon`, а забег
+   * закрывается обычным путём — `abandoned` с итогом, где `prologue.won = true`,
+   * чтобы отправка итога, рекорд и диагностика шли теми же дорогами.
+   */
+  private winPrologue(): void {
+    if (this.phase === "dead") return;
+    this.sceneData.bus.emit("prologueWon", {
+      result: this.resultOf("abandoned"),
+      elapsedSec: this.world.stats.elapsedSec,
+    });
+    this.finishRun("abandoned");
   }
 
   private finishRun(outcome: RunOutcome): void {

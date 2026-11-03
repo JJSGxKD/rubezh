@@ -17,6 +17,7 @@ import type {
   PressureDef,
   RunLoadout,
   EndlessCurveDef,
+  PrologueDef,
   RubezhDef,
   SecretsDef,
   TimelineSegmentDef,
@@ -39,6 +40,7 @@ import { findPressureProblems, initPressure, isPressureActive } from "./pressure
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
 import { createRubezhState } from "./rubezh";
+import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
 import { createSimEvents } from "./events";
@@ -187,6 +189,12 @@ export interface CreateWorldOptions {
   /** правила рубежа (страж на отметке); по умолчанию рубежа нет: стража в мире не будет */
   rubezh?: RubezhDef;
   /**
+   * Пролог первого забега (T-0278): оберег, большой первый сундук, «Советуем», Страж
+   * по силе набранного и своя кривая опыта. Без поля — обычный бесконечный забег.
+   * Таймлайн пролога подаётся отдельно (`timeline`): мир его не хранит.
+   */
+  prologue?: PrologueDef;
+  /**
    * подстройка давления под силу игрока; заглушки нет: не передана — подстройки нет, и забег идёт по
    * кривой единой сложности. Включается, только если у набора забега есть уровень аккаунта
    */
@@ -294,11 +302,13 @@ export function createWorld(options: CreateWorldOptions): World {
     throw new Error(`Некорректные ступени врагов:\n${stageProblems.join("\n")}`);
   }
 
-  const levelCurve = options.levelCurve ?? FALLBACK_LEVEL_CURVE;
+  const prologueRules = options.prologue ?? null;
+  const levelCurve = prologueRules?.levelCurve ?? options.levelCurve ?? FALLBACK_LEVEL_CURVE;
   const loadoutLimits = options.loadoutLimits ?? FALLBACK_LOADOUT_LIMITS;
   const playerStatsBase: PlayerStatsBase = {
     maxHp: config.player.maxHp,
-    pickupRadius: config.player.pickupRadiusPx,
+    // Пролог: кристаллы летят щедро — радиус подбора шире с первой секунды.
+    pickupRadius: config.player.pickupRadiusPx * (prologueRules?.pickupRadiusMul ?? 1),
   };
 
   const loadout = createLoadout();
@@ -362,6 +372,8 @@ export function createWorld(options: CreateWorldOptions): World {
     ),
     cordon: createCordonState(),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
+    mode: prologueRules === null ? "endless" : "prologue",
+    prologue: prologueRules === null ? null : createPrologueState(prologueRules),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,

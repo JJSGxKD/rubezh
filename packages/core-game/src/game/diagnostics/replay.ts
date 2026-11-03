@@ -74,6 +74,7 @@ export function replayRecording(recording: RunRecording, contentHash: string = C
     seed: recording.seed,
     mapId: recording.mapId,
     difficultyId: recording.difficultyId,
+    ...(recording.mode === undefined ? {} : { mode: recording.mode }),
     ...(recording.startingWeaponId === "" ? {} : { startingWeaponId: recording.startingWeaponId }),
     unitScale: recording.unitScale,
     ...(recording.loadout === undefined ? {} : { loadout: recording.loadout }),

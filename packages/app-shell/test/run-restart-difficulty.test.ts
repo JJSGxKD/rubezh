@@ -4,7 +4,8 @@ import type { RunEngine, RunEvents, RunSession } from "@bh/core-game";
 
 // «Ещё раз» после обучающего забега (T-0190, Р126): «Ещё раз» бывает только
 // после забега, значит первого забега уже нет, и следующий идёт на единой
-// сложности — и в движке, и в аналитике.
+// сложности — и в движке, и в аналитике. `run_started` уходит из события
+// движка `started` (T-0196), поэтому фальшивый движок шлёт его и на старте, и на перезапуске.
 
 const engine = vi.hoisted(() => ({ load: vi.fn() }));
 
@@ -27,7 +28,14 @@ function fakeEngine(): {
   emit<E extends keyof RunEvents>(event: E, payload: RunEvents[E]): void;
 } {
   const handlers: Handlers = {};
-  const restart = vi.fn();
+  // Перезапуск сцены, как в движке: новое `started` с той сложностью, что передали.
+  const restart = vi.fn((_seed: number, options?: { difficultyId?: "easy" | "normal" | "hard" }) => {
+    (handlers.started as ((value: RunEvents["started"]) => void) | undefined)?.({
+      runId: "run-restarted",
+      difficultyId: options?.difficultyId ?? "easy",
+      startingWeaponId: "spark",
+    });
+  });
   const declineContinue = vi.fn();
   const session = {
     on<E extends keyof RunEvents>(event: E, handler: (payload: RunEvents[E]) => void) {
@@ -77,6 +85,7 @@ describe("«Ещё раз» и сложность", () => {
     const fake = fakeEngine();
     engine.load.mockResolvedValue(fake.engine);
     await useRun.getState().start({ container: {} as HTMLElement, startingWeaponId: "spark", mapId: "frontier", difficultyId: "easy" });
+    fake.emit("started", { runId: "run-tutorial", difficultyId: "easy", startingWeaponId: "spark" });
     return fake;
   }
 

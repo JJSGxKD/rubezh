@@ -17,7 +17,11 @@ import { z } from "zod";
  * смысла или типа поля — новая версия, а не правка на месте.
  */
 
-const MAX_PAYLOAD_KEYS = 40;
+// Потолок растёт вместе с итогом забега: перф-поля, урон по стихиям, счётчики
+// боя и сила игрока с давлением (T-0125, T-0196) в одном событии. Лимит
+// защищает базу от мусора, а не ограничивает смысл; клиент держит запас в
+// четыре ключа (тест итога в оболочке).
+export const MAX_PAYLOAD_KEYS = 48;
 
 const flatValue = z.union([z.string().max(512), z.number().finite(), z.boolean(), z.null()]);
 const id = z.string().max(64);
@@ -108,6 +112,13 @@ const runOutcome = payload({
   damageCold: count.optional(),
   damageLightning: count.optional(),
   damagePoison: count.optional(),
+  // Сила и давление на старте и в конце забега, класс устройства (T-0196):
+  // по ним сверяют лесенку длины забега у игроков разной силы. Необязательные.
+  power: amount.optional(),
+  pressure: amount.optional(),
+  powerEnd: amount.optional(),
+  pressureEnd: amount.optional(),
+  deviceClass: id.optional(),
 });
 
 export const EVENT_DICTIONARY = {
@@ -148,6 +159,12 @@ export const EVENT_DICTIONARY = {
       screenMode: id,
       orientation: id,
       devMode: z.boolean(),
+      // Сила игрока (очки) и уровень давления на старте, класс устройства
+      // (docs/22-analytics-and-metrics.md §3.3, T-0196). Необязательные: забег
+      // разработчика и сборки до подстройки их не шлют, версия прежняя.
+      power: amount.optional(),
+      pressure: amount.optional(),
+      deviceClass: id.optional(),
     }),
   },
   run_resumed: { version: 1, payload: payload({ seed: z.number().int(), elapsedSec: seconds, level: count }) },
