@@ -20,6 +20,8 @@ shared:
   - package.json
   - docs/32-balance.md
   - docs/30-configuration-map.md
+  - apps/sim-worker/test/check.test.ts
+  - apps/sim-worker/test/queue.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
