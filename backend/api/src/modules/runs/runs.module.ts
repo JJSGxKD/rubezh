@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { RatingModule } from "../rating/rating.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { LEADERBOARD_STORE, RedisLeaderboardStore } from "./leaderboard.store.js";
@@ -39,7 +40,7 @@ import { RunsViewService } from "./runs-view.service.js";
  * экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule],
+  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule],
   controllers: [RunsController, RunAdContinueController, RunGemContinueController],
   providers: [
     RunsService,

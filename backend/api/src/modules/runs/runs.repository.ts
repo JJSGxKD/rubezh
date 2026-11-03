@@ -3,6 +3,7 @@ import type { PrismaClient } from "../../generated/prisma/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { ratedWhere } from "./rated-runs.js";
+import { storedScoreOf, type StoredScore, type StoredScoreInput } from "../rating/score-types.js";
 import { storedDetailsSchema, storedWeaponsSchema, type StoredDetails } from "./run-details.js";
 import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
@@ -68,6 +69,10 @@ export interface RunFinishRecord {
   rubezhReached: boolean;
   /** секунда победы со слов итога; `null` — страж не пал */
   rubezhClearedSec: number | null;
+  /** очки эффективности (T-0293); `null` — пролог, обучение или сбой подсчёта */
+  score?: StoredScore | null | undefined;
+  /** исходные числа для пересчёта очков; `null` — нерейтинговая сложность */
+  scoreInput?: StoredScoreInput | null | undefined;
 }
 
 export interface StoredRun {
@@ -86,6 +91,8 @@ export interface StoredRun {
   cheats: boolean;
   rubezhReached: boolean;
   rubezhClearedSec: number | null;
+  /** записанные очки; `null` — очков нет */
+  score: StoredScore | null;
 }
 
 /** `foreign` — забег с таким ключом уже принадлежит другому аккаунту. */
@@ -222,9 +229,15 @@ export class PrismaRunsRepository implements RunsRepository {
         cheats: true,
         rubezhReached: true,
         rubezhClearedSec: true,
+        points: true,
+        axes: true,
+        style: true,
+        band: true,
       },
     });
-    return row === null ? null : { ...row, ratingRestricted: ratingRestrictedOf(row.ratingRestricted) };
+    if (row === null) return null;
+    const { points, axes, style, band, ...rest } = row;
+    return { ...rest, ratingRestricted: ratingRestrictedOf(row.ratingRestricted), score: storedScoreOf({ points, axes, style, band }) };
   }
 
   async start(record: RunStartRecord): Promise<StartOutcome> {
@@ -263,6 +276,11 @@ export class PrismaRunsRepository implements RunsRepository {
       verdictReasons: record.verdictReasons,
       rubezhReached: record.rubezhReached,
       rubezhClearedSec: record.rubezhClearedSec,
+      points: record.score?.points ?? null,
+      axes: record.score?.axes ?? Prisma.DbNull,
+      style: record.score?.style ?? null,
+      band: record.score?.band ?? null,
+      scoreInput: record.scoreInput ?? Prisma.DbNull,
     };
 
     if (existing !== null) {

@@ -131,6 +131,8 @@ export const runFinishSchema = z
           .max(64)
           .optional(),
         buildScore: z.number().min(0).max(64).optional(),
+        // Сила игрока на старте (очки подстройки): по ней сервер берёт полосу ожидаемого. Потолок формы; нет поля — полоса средняя.
+        power: z.number().min(0).max(1_000).optional(),
       })
       .optional(),
   })

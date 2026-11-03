@@ -53,6 +53,7 @@ export class MemoryRunsRepository implements RunsRepository {
       cheats: row.record?.cheats ?? false,
       rubezhReached: row.record?.rubezhReached ?? false,
       rubezhClearedSec: row.record?.rubezhClearedSec ?? null,
+      score: row.record?.score ?? null,
     };
   }
 
@@ -73,6 +74,7 @@ export class MemoryRunsRepository implements RunsRepository {
       cheats: false,
       rubezhReached: false,
       rubezhClearedSec: null,
+      score: null,
     });
     return "created";
   }
@@ -95,6 +97,7 @@ export class MemoryRunsRepository implements RunsRepository {
       cheats: record.cheats,
       rubezhReached: record.rubezhReached,
       rubezhClearedSec: record.rubezhClearedSec,
+      score: record.score ?? null,
       record,
     });
     return "finished";

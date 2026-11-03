@@ -165,6 +165,9 @@ const SEASONS_START_MAX = 20_991_228;
 /** Последняя допустимая дата отсечки рейтинга: 31 декабря 2099. */
 const RATING_SINCE_MAX = 20_991_231;
 
+/** Вес оси очков эффективности, проценты. */
+const RATING_WEIGHT = { min: 0, max: 100, unit: ["процент", "процента", "процентов"] } as const satisfies SettingRange;
+
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
  * проверит то же самое, что сервер. Без окружения: такие числа — продуктовые
@@ -563,6 +566,35 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: 0,
   } satisfies SettingDefinition<number>,
+  /**
+   * Очки эффективности (docs/35-stage4-plan.md, Р152, tasks/T-0293): веса пяти
+   * осей и показатель Стойкости подбирают калибровкой, поэтому лежат в панели.
+   * Редактор панели принимает только целые, поэтому веса — проценты (40 — это
+   * 0,40), показатель — сотые (130 — это 1,3). Сумма весов не 100 — сервер
+   * нормирует её к единице и пишет предупреждение в лог. Правка действует на
+   * новые забеги; прошлые пересчитывает `pnpm runs:rescore`.
+   */
+  ratingWeightEndurance: integer("rating.weight-endurance", RATING_GROUP, "Очки: вес Стойкости", "Доля Стойкости (время жизни) в очках эффективности, проценты: 40 — это 0,40", RATING_WEIGHT, 40),
+  ratingWeightOnslaught: integer("rating.weight-onslaught", RATING_GROUP, "Очки: вес Натиска", "Доля Натиска (темп убийств) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightHunt: integer("rating.weight-hunt", RATING_GROUP, "Очки: вес Охоты", "Доля Охоты (элиты и боссы) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightClean: integer("rating.weight-clean", RATING_GROUP, "Очки: вес Чистоты", "Доля Чистоты (полученный урон) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingWeightBuild: integer("rating.weight-build", RATING_GROUP, "Очки: вес Сборки", "Доля Сборки (эволюции и оружие на максимуме) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingEnduranceExponent: integer(
+    "rating.endurance-exponent",
+    RATING_GROUP,
+    "Очки: показатель Стойкости",
+    "Стойкость растёт как (время / 600 с) в этой степени, в сотых: 130 — это 1,3. Больше — глубокий забег весит больше",
+    { min: 100, max: 300, unit: ["сотая", "сотые", "сотых"] },
+    130,
+  ),
+  ratingIndexCap: integer(
+    "rating.index-cap",
+    RATING_GROUP,
+    "Очки: потолок индекса оси",
+    "Выше этого значения индекс оси в очки не идёт; индекс выше двойного потолка — подозрение антифрода",
+    { min: 1, max: 10, unit: ["раз", "раза", "раз"] },
+    3,
+  ),
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

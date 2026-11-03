@@ -22,6 +22,7 @@ export const ANALYTICS_EVENTS = [
   "run_started",
   "run_resumed",
   "run_finished",
+  "run_scored",
   "run_abandoned",
   "run_paused",
   "upgrade_offered",

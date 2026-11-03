@@ -3,8 +3,8 @@ id: T-0293
 title: Очки эффективности на сервере — пять осей против ожидаемого, стиль забега, веса ключами панели, пересчёт прошлых забегов
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0291, T-0292, T-0191]
@@ -28,6 +28,16 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - docs/20-env-and-ports.md
+  - backend/api/tsconfig.json
+  - backend/api/src/modules/runs/runs.repository.ts
+  - backend/api/src/modules/events/events.module.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
+  - backend/api/test/helpers/memory-runs.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/state/analytics.ts
+  - packages/app-shell/test/runs.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -109,9 +119,12 @@ T-0294, экраны — T-0296, T-0297.
 
   Считается при записи каждого забега, кроме пролога. Сбой подсчёта не
   мешает записи: очки `null`, в лог — ошибка.
-- **Честность** — сырой индекс любой оси выше `2 × cap` — причина вердикта
-  `axis_out_of_range` (подозрение): забег не идёт в рейтинг и ждёт разбора
-  (`run-verdict.ts`). Это флаг, а не очки.
+- **Честность** — сырой индекс Натиска, Охоты, Чистоты или Сборки выше
+  `2 × cap` — причина вердикта `axis_out_of_range` (подозрение): забег не идёт
+  в рейтинг и ждёт разбора (`run-verdict.ts`). Это флаг, а не очки. Решение
+  тимлида по ревью: Стойкость в проверку не входит (длину забега проверяет
+  `longer_than_wall_clock`, а рекордный забег за рубежом честно даёт индекс
+  выше 6), Сборка не проверяется, когда ожидаемая в таблице ниже двух.
 - **Таблица отстала** — `contentHash` файла не совпал с хэшем контента
   забега: очки считаются, в лог — предупреждение раз в час.
 - **Ответ записи забега** — `score: { points, axes, style, band, expectedPoints }`.
