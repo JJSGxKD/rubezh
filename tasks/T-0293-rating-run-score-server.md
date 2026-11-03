@@ -3,7 +3,7 @@ id: T-0293
 title: Очки эффективности на сервере — пять осей против ожидаемого, стиль забега, веса ключами панели, пересчёт прошлых забегов
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M

@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_scored`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
 | Интерфейс | `screen_viewed`, `ui_clicked`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42); `feed_event_viewed` (лента живых событий под «Играть», Р114) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); `ad_tested` (проверка рекламы командой, T-0333); выдача показа — строка `ad_session`, а не событие |
@@ -539,6 +539,26 @@ Grafana id кнопок не выводятся (высокая кардинал
   победивших: знаменатель — `run_started`, а не число итогов. Серверная
   проверка победы (`rubezh_implausible`) к событию не относится — клиент пишет
   то, что видит. Поля необязательные, версия не меняется;
+- `run_scored` — **серверное** событие (T-0293, Р152): сервер посчитал очки
+  эффективности записанного рейтингового забега (пролог и обучение очков не
+  получают). Поля: `runId`, `points` (целое), `endurance`, `onslaught`, `hunt`,
+  `clean`, `build` — сырые индексы пяти осей с тремя знаками, 1 — ровно
+  ожидаемое для силы и минуты забега, `style` — ключ сильнейшей оси (`t`
+  Стойкость → Стена, `k` Натиск → Ураган, `h` Охота → Охотник, `c` Чистота →
+  Тень, `b` Сборка → Мастер), `strengthBand` — полоса силы ожидаемого
+  (`novice`, `novice_average`, `average`, `average_full`, `full`). Из них
+  распределение очков и стилей по полосам и то, какая ось тянет игроков вниз.
+  Идентификатора игрока в нагрузке нет. Пишется один раз при первой записи
+  итога, повтор итога и `runs:rescore` события не порождают. **Конверт:** у
+  сервера нет устройства, поэтому `install_id = 'server'`, `session_id` — id
+  забега, `app_version = 'server'`, площадка — игрока; в выборках по установкам
+  (DAU, воронки по `install_id`) строки `install_id = 'server'` исключаются.
+  Это первое серверное событие словаря — см. «отложено» выше; полноценный
+  серверный вид события в конвейере (отдельная колонка вместо договорённости об
+  `install_id`) — отдельная задача. Клиент событие не шлёт;
+  **заготовка метрики** (кода нет: Prometheus в бэкенде появится вместе с
+  метриками): гистограмма `rating_run_points{band}` — очки забега, метка `band`
+  из пяти полос, без `run_id`;
 - `run_abandoned` — `interrupted: "update"`: забег прервало обновление игры, и
   при следующем запуске сохранение другой сборки засчитано брошенным
   (`state/run-interrupted.ts`). Время и уровень — из сохранения, `enemiesKilled`
