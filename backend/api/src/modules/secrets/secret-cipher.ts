@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from "node:crypto";
 
 /**
  * Шифрование ключей интеграций (docs/35-stage4-plan.md Р84, WP46):
@@ -84,6 +84,17 @@ export class SecretCipher {
       // другого ключа. Причина у GCM одна и та же — подробностей нет.
       throw new SecretUnreadableError("подпись шифртекста не сходится");
     }
+  }
+
+  /**
+   * Стабильный идентификатор из текущего ключа шифрования: 32 hex от HMAC-SHA256.
+   * `purpose` разделяет назначения (идентификатор устройства для поставщика не
+   * совпадёт с чем-то иным от того же `label`), `label` различает объекты. Ключ
+   * по идентификатору не восстановить, а без ключа его не получить. Меняется
+   * вместе с текущим ключом — при смене ключа идентификатор тоже новый.
+   */
+  deriveId(purpose: string, label: string): string {
+    return createHmac("sha256", this.current().key).update(`rubezh:derived-id:${purpose}:${label}`, "utf8").digest("hex").slice(0, 32);
   }
 
   private current(): { id: string; key: Buffer } {

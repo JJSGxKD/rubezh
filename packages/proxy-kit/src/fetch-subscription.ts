@@ -6,6 +6,14 @@ export interface FetchSubscriptionOptions {
   /** бросает, если нельзя ходить на этот адрес; зовётся для адреса и для каждого `Location` */
   assertAllowed: (url: URL) => Promise<void>;
   userAgent?: string;
+  /**
+   * Постоянный идентификатор установки: уходит заголовком `x-hwid` на каждый запрос
+   * (и на переходы). Подписки с ограничением числа устройств (Remnawave HWID)
+   * без него отказывают. Не случайный на каждый запрос — иначе каждый запрос
+   * занимал бы новое «устройство»; вызывающий выводит его из чего-то стойкого.
+   * Видимые знаки ASCII, 1–128.
+   */
+  hwid?: string;
   timeoutMs?: number;
   /** считается по потоку, а не по заголовку */
   maxBytes?: number;
@@ -37,6 +45,11 @@ export class SubscriptionFetchError extends Error {
   }
 }
 
+/** Устройство, под которым мы представляемся подписке рядом с `x-hwid`. */
+const DEVICE_OS = "Linux";
+/** Видимые знаки ASCII (от `!` до `~`), 1–128. */
+const HWID_FORMAT = /^[!-~]{1,128}$/;
+
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
 export interface FetchedSubscription {
@@ -52,6 +65,11 @@ export interface FetchedSubscription {
  * на закрытый.
  */
 export async function fetchSubscription(url: string, options: FetchSubscriptionOptions): Promise<FetchedSubscription> {
+  // Значение, которое нельзя отправить заголовком, — ошибка вызывающего, а не «сервер недоступен».
+  if (options.hwid !== undefined && !HWID_FORMAT.test(options.hwid)) throw new RangeError("hwid: нужны видимые знаки ASCII, от 1 до 128");
+  const headers: Record<string, string> = { "user-agent": options.userAgent ?? "v2rayN/7.0", accept: "*/*", "x-device-os": DEVICE_OS };
+  if (options.hwid !== undefined) headers["x-hwid"] = options.hwid;
+
   const timeoutMs = options.timeoutMs ?? 15_000;
   const maxBytes = options.maxBytes ?? 2 * 1024 * 1024;
   const maxRedirects = options.maxRedirects ?? 3;
@@ -92,7 +110,7 @@ export async function fetchSubscription(url: string, options: FetchSubscriptionO
             method: "GET",
             redirect: "manual",
             signal: controller.signal,
-            headers: { "user-agent": options.userAgent ?? "v2rayN/7.0", accept: "*/*" },
+            headers,
           }),
         );
       } catch (error) {
