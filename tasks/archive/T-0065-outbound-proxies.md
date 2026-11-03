@@ -39,7 +39,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0065. Прокси для исходящих запросов — список в панели, перебор после неудачи напрямую
