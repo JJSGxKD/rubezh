@@ -35,6 +35,15 @@ const finishSchema = z.object({
   verdict: z.enum(["ok", "suspicious", "rejected"]),
 });
 
+/** Своя строка доски: место и числа лучшего забега; очки, стиль и дивизион — у сервера не старше T-0294. */
+export const meSchema = z.object({
+  rank: z.number(),
+  survivalSec: z.number(),
+  points: z.optional(z.nullable(z.number())),
+  style: z.optional(z.nullable(z.string())),
+  division: z.optional(z.nullable(z.string())),
+});
+
 export const leaderboardSchema = z.object({
   difficultyId: difficultySchema,
   entries: z.array(
@@ -52,9 +61,15 @@ export const leaderboardSchema = z.object({
       prestige: z.optional(z.number()),
       /** победа над стражем рубежа засчитана (T-0121); сервер шлёт только `true` или ничего */
       rubezh: z.optional(z.literal(true)),
+      /** очки эффективности (T-0294); сервер до очков поля не отдавал */
+      points: z.optional(z.nullable(z.number())),
+      /** стиль забега (T-0293) — ось строкой: незнакомую экран просто не рисует */
+      style: z.optional(z.nullable(z.string())),
+      /** дивизион сезона (T-0295); в «Всё время» его нет */
+      division: z.optional(z.nullable(z.string())),
     }),
   ),
-  me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),
+  me: z.nullable(meSchema),
   totalPlayers: z.number(),
 });
 

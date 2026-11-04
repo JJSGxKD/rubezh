@@ -16,6 +16,8 @@ export interface RescoreOptions {
   /** считать только забеги, законченные не раньше этой даты; `null` — все рейтинговые */
   since: Date | null;
   batchSize: number;
+  /** считать только забеги без очков: так досчитывает при старте сервис, не трогая посчитанные */
+  onlyUnscored?: boolean;
   log?: (message: string) => void;
 }
 
@@ -30,7 +32,7 @@ export async function rescoreRuns(repository: RunScoresRepository, scorer: RunSc
   const report: RescoreReport = { scanned: 0, rescored: 0, unscored: 0 };
   let after: string | null = null;
   for (;;) {
-    const rows = await repository.page(after, options.since, options.batchSize);
+    const rows = await repository.page(after, options.since, options.batchSize, options.onlyUnscored ?? false);
     if (rows.length === 0) break;
     const scores: { runId: string; score: StoredScore }[] = [];
     for (const row of rows) {

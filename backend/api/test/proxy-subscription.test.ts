@@ -26,6 +26,7 @@ import { SUBSCRIPTION_REPOSITORY, type StoredNode, type StoredSubscription } fro
 import { SubscriptionScheduler } from "../src/modules/proxies/subscription/subscription.scheduler.js";
 import { ProxySubscriptionService } from "../src/modules/proxies/subscription/subscription.service.js";
 import { SubscriptionSync } from "../src/modules/proxies/subscription/subscription.sync.js";
+import { SUBSCRIPTION_USER_AGENT, subscriptionHwid } from "../src/modules/proxies/subscription/subscription-download.js";
 import { sealUrl } from "../src/modules/proxies/subscription/subscription-url.js";
 import { CONFIG_WRITER, SidecarMissingError } from "../src/modules/proxies/subscription/xray-config-writer.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
@@ -174,9 +175,86 @@ describe("обновление подписки", () => {
     expect(r.repository.subscription?.expiresAt?.getTime()).toBe(1795000000 * 1000);
   });
 
+  it("JSON-подписка: массив конфигов Xray даёт узлы, служебные выходы не считаются пропущенными", async () => {
+    const r = rig();
+    await seed(r);
+    const config = (remarks: string, host: string): unknown => ({
+      remarks,
+      outbounds: [
+        {
+          tag: "proxy",
+          protocol: "vless",
+          settings: { vnext: [{ address: host, port: 443, users: [{ id: UUID, encryption: "none" }] }] },
+          streamSettings: { network: "ws", security: "tls", tlsSettings: { serverName: host }, wsSettings: { path: "/ws" } },
+        },
+        { tag: "direct", protocol: "freedom" },
+        { tag: "block", protocol: "blackhole" },
+      ],
+    });
+    r.fetch.mockResolvedValueOnce(answer(JSON.stringify([config("[DE] Берлин", "de.example.org"), config("[NL] Амстердам", "nl.example.org")])));
+
+    const result = await r.sync.refresh(NOW);
+
+    expect(result).toEqual({ status: "ok", note: "2 узла" });
+    expect(r.repository.nodes.map((node) => [node.name, node.country, node.host])).toEqual([
+      ["[DE] Берлин", "DE", "de.example.org"],
+      ["[NL] Амстердам", "NL", "nl.example.org"],
+    ]);
+  });
+
+  describe("заголовки запроса подписки", () => {
+    const headersOf = (r: Rig, call = 0): Headers => new Headers(r.fetch.mock.calls[call]?.[1]?.headers);
+
+    it("User-Agent v2rayN/7.0, x-device-os: Linux и x-hwid из 32 hex; адреса подписки в заголовках нет", async () => {
+      const r = rig();
+      await seed(r);
+      await r.sync.refresh(NOW);
+
+      const headers = headersOf(r);
+      expect(headers.get("user-agent")).toBe(SUBSCRIPTION_USER_AGENT);
+      expect(SUBSCRIPTION_USER_AGENT).toBe("v2rayN/7.0");
+      expect(headers.get("x-device-os")).toBe("Linux");
+      expect(headers.get("x-hwid")).toMatch(/^[0-9a-f]{32}$/);
+      const all: string[] = [];
+      headers.forEach((value, name) => all.push(`${name}: ${value}`));
+      expect(all.join(" | ")).not.toMatch(/tok-9f8e7d6c5b4a|SECRETKEY|sub\.example\.com/);
+    });
+
+    it("hwid постоянный: каждое обновление подписки приходит с одним и тем же", async () => {
+      const r = rig();
+      await seed(r);
+      await r.sync.refresh(NOW);
+      await r.sync.refresh(new Date(NOW.getTime() + 3_600_000));
+
+      expect(r.fetch).toHaveBeenCalledTimes(2);
+      expect(headersOf(r, 1).get("x-hwid")).toBe(headersOf(r, 0).get("x-hwid"));
+    });
+
+    it("смена адреса подписки hwid не меняет: устройство то же, лимит устройств у поставщика не растёт", async () => {
+      const r = rig();
+      await seed(r);
+      await r.sync.refresh(NOW);
+      await seed(r, {}, "https://other.example.net/sub/NEW-TOKEN");
+      await r.sync.refresh(new Date(NOW.getTime() + 3_600_000));
+
+      expect(headersOf(r, 1).get("x-hwid")).toBe(headersOf(r, 0).get("x-hwid"));
+    });
+
+    it("hwid зависит от ключа подписки и от ключа шифрования; при смене ключа берётся текущий", () => {
+      const key = randomBytes(32).toString("base64");
+      const same = subscriptionHwid(new SecretCipher([key]), "main");
+
+      expect(same).toMatch(/^[0-9a-f]{32}$/);
+      expect(subscriptionHwid(new SecretCipher([key]), "main")).toBe(same);
+      expect(subscriptionHwid(new SecretCipher([key, randomBytes(32).toString("base64")]), "main")).toBe(same);
+      expect(subscriptionHwid(new SecretCipher([key]), "second")).not.toBe(same);
+      expect(subscriptionHwid(new SecretCipher([randomBytes(32).toString("base64")]), "main")).not.toBe(same);
+    });
+  });
+
   const FAILURES: [string, () => Response | Promise<Response>, string][] = [
     ["HTTP 500", () => new Response("сбой", { status: 500 }), "Поставщик ответил кодом 500"],
-    ["формат Clash", () => answer("proxies:\n  - name: a\n    type: vless\n"), "Формат подписки не поддерживается: нужен список ссылок (base64 или текст)"],
+    ["формат Clash", () => answer("proxies:\n  - name: a\n    type: vless\n"), "Формат подписки не поддерживается: нужен список ссылок (base64 или текст) или JSON-конфиг Xray"],
     ["пустое тело", () => answer(""), "Подписка пустая"],
     ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов (пропущено 2)"],
     ["сеть упала", () => Promise.reject(new TypeError("fetch failed")), "Не удалось связаться с поставщиком"],

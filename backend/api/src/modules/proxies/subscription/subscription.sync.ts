@@ -1,7 +1,7 @@
 import { assignSlots, buildXrayConfig, parseSubscription, SubscriptionFetchError, SubscriptionFormatError, type ProxyNode } from "@bh/proxy-kit";
 import type { Outbound } from "../../../infra/outbound/outbound.js";
 import { SecretUnreadableError, type SecretCipher } from "../../secrets/secret-cipher.js";
-import { loadSubscription, type HostResolver } from "./subscription-download.js";
+import { loadSubscription, subscriptionHwid, type HostResolver } from "./subscription-download.js";
 import { REFRESH_LOCK_KEY, REFRESH_LOCK_TTL_MS, withLock, type LockRedis } from "./subscription-lock.js";
 import { fetchErrorNote, formatErrorNote, joinNotes, noNodesNote, NOTES, overflowNote, successNote } from "./subscription.messages.js";
 import type { StoredNode, StoredSubscription, SubscriptionRepository } from "./subscription.repository.js";
@@ -63,12 +63,12 @@ export class SubscriptionSync {
       return { status: "failed", note };
     };
 
-    const url = this.urlOf(snapshot.subscription);
-    if (typeof url !== "string") return await failed(url.note);
+    const source = this.sourceOf(snapshot.subscription);
+    if ("note" in source) return await failed(source.note);
 
     let fetched;
     try {
-      fetched = await loadSubscription(this.deps.outbound, this.deps.resolve, url);
+      fetched = await loadSubscription(this.deps.outbound, this.deps.resolve, source.url, source.hwid);
     } catch (error: unknown) {
       return await failed(error instanceof SubscriptionFetchError ? fetchErrorNote(error) : NOTES.network);
     }
@@ -116,11 +116,12 @@ export class SubscriptionSync {
     return { status: "ok", note };
   }
 
-  /** Адрес открытым текстом либо причина, по которой его не прочитать. */
-  private urlOf(subscription: StoredSubscription): string | { note: string } {
-    if (this.deps.cipher === null) return { note: NOTES.noCipher };
+  /** Адрес открытым текстом и идентификатор устройства либо причина, по которой адрес не прочитать. */
+  private sourceOf(subscription: StoredSubscription): { url: string; hwid: string } | { note: string } {
+    const cipher = this.deps.cipher;
+    if (cipher === null) return { note: NOTES.noCipher };
     try {
-      return openUrl(this.deps.cipher, subscription);
+      return { url: openUrl(cipher, subscription), hwid: subscriptionHwid(cipher, subscription.key) };
     } catch (error: unknown) {
       if (error instanceof SecretUnreadableError) return { note: NOTES.unreadable };
       throw error;
