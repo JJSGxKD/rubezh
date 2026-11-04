@@ -1,8 +1,9 @@
 import { decodeBase64 } from "./internal/base64.js";
 import type { ProxyNode, SkipReason } from "./node.js";
 import { parseShareLink } from "./share-link.js";
+import { looksLikeJson, parseXrayJson } from "./xray-json/document.js";
 
-/** Сколько ссылок разбирается из одной подписки; остальное — `truncated`. */
+/** Сколько ссылок (в JSON — выходов-узлов) разбирается из одной подписки; остальное — `truncated`. */
 const DEFAULT_MAX_LINKS = 1000;
 
 export interface SkippedLink {
@@ -16,19 +17,19 @@ export interface SkippedLink {
 }
 
 export interface SubscriptionParse {
-  format: "base64" | "plain";
+  format: "base64" | "plain" | "json";
   nodes: ProxyNode[];
   skipped: SkippedLink[];
-  /** ссылок оказалось больше `maxLinks`: остальные не разбирались */
+  /** ссылок (выходов) оказалось больше `maxLinks`: остальные не разбирались */
   truncated: boolean;
 }
 
-/** Тело подписки — не тот формат, который мы умеем (Clash, sing-box, JSON), либо пустое. */
+/** Тело подписки — не тот формат, который мы умеем (Clash, sing-box, чужой JSON), либо пустое. */
 export class SubscriptionFormatError extends Error {
   readonly code: "unsupported_format" | "empty";
 
   constructor(code: "unsupported_format" | "empty") {
-    super(code === "empty" ? "Подписка пуста" : "Формат подписки не поддерживается: ждём список ссылок открытым текстом или в base64");
+    super(code === "empty" ? "Подписка пуста" : "Формат подписки не поддерживается: ждём список ссылок открытым текстом или в base64 либо JSON-конфиг Xray");
     this.name = "SubscriptionFormatError";
     this.code = code;
   }
@@ -36,14 +37,21 @@ export class SubscriptionFormatError extends Error {
 
 /**
  * Подписка — список ссылок по одной в строке, открытым текстом или в base64
- * (обычном или URL-safe, с `=` или без). Остальные форматы не угадываются.
- * Плохая ссылка уходит в `skipped` с причиной и не роняет остальные; одинаковые
- * узлы (один `key`) схлопываются.
+ * (обычном или URL-safe, с `=` или без), либо JSON Xray: массив конфигов с
+ * `remarks` и `outbounds` или один конфиг (`xray-json/document.ts`). Остальные
+ * форматы не угадываются. Плохая ссылка (выход) уходит в `skipped` с причиной и
+ * не роняет остальные; одинаковые узлы (один `key`) схлопываются.
  */
 export function parseSubscription(body: string, options: { maxLinks?: number } = {}): SubscriptionParse {
   const maxLinks = options.maxLinks ?? DEFAULT_MAX_LINKS;
   const text = body.replace(/^﻿/, "").trim();
   if (text === "") throw new SubscriptionFormatError("empty");
+
+  if (looksLikeJson(text)) {
+    const json = parseXrayJson(text, maxLinks);
+    if (json.kind !== "ok") throw new SubscriptionFormatError(json.kind);
+    return { format: "json", nodes: json.nodes, skipped: json.skipped, truncated: json.truncated };
+  }
 
   let format: SubscriptionParse["format"] = "plain";
   let links = linkLines(text);
