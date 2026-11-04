@@ -8,6 +8,15 @@
   --chest-wood: #6b4128;
   --chest-wood-lo: #46291a;
   --chest-wood-hi: #8a5a37;
+  /*
+   * Дивизионы сезона (T-0296, Р152): текст этих тонов держит 4,5:1 на всех
+   * поверхностях и на своей плашке `badge-tinted` (rating-v2.test.ts). Рубин
+   * светлее «мифического» красного — на поднятой карточке тот не дотягивал.
+   */
+  --division-ruby: #ff7686;
+  --division-gold: #ffd15c;
+  --division-silver: #d9dde8;
+  --division-bronze: #d9976a;
 }
 
 /*

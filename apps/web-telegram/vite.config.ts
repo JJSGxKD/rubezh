@@ -55,6 +55,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/tasks",
       "/api/v1/achievements",
       "/api/v1/seasons",
+      "/api/v1/rating",
       "/api/v1/promo-codes",
       "/api/v1/ads",
       "/api/v1/tools",
