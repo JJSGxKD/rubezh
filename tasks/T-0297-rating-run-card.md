@@ -3,8 +3,8 @@ id: T-0297
 title: Карточка забега — «паутина» пяти осей против ожидаемого, разбор очков полосами и сборка; открывается из рейтинга и с экрана итогов
 epic: E12
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0296, T-0232]
