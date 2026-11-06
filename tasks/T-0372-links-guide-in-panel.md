@@ -3,8 +3,8 @@ id: T-0372
 title: Справка по ссылкам в панели — виды ссылок, путь клика, поля, ключи и счётчики
 epic: E14
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-50 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
