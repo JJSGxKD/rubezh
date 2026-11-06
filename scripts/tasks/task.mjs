@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
 import { contributionRows } from "./contribution.mjs";
-import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
+import { checkAheadPr, checkClaim, takeOverClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
 import { BASE, ROOT, addPrLabel, claimedAt, dependencyChangedFiles, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergeDependencyBranches, mergedPrs, readBranchFile, readOriginTasks, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { runMerge } from "./merge.mjs";
@@ -68,7 +68,7 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function taskLine({ task, reason, pr, aheadOver, ripe }, owner) {
+function taskLine({ task, reason, pr, aheadOver, ripe }, owner, abandonedNote) {
   const batch = batchNumber(task);
   const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
@@ -77,6 +77,7 @@ function taskLine({ task, reason, pr, aheadOver, ripe }, owner) {
   if (ripe === true) notes.push("задел созрел: зависимости влиты");
   if (aheadOver !== undefined) notes.push(`заделом поверх ${aheadOver.join(", ")}`);
   if (reason !== undefined) notes.push(reason);
+  if (abandonedNote !== undefined) notes.push(abandonedNote);
   return `  ${parts.join("  ")}${notes.length > 0 ? `\n${" ".repeat(10)}↳ ${notes.join("; ")}` : ""}`;
 }
 
@@ -85,6 +86,14 @@ function ownerOf(task, emptyIfUnknown = false) {
   const text = readBranchFile(task.id, task.fileName);
   const owner = text === null ? "" : (parseFrontmatter(text).data.owner ?? "");
   return owner === "" && !emptyIfUnknown ? "неизвестно" : owner;
+}
+
+/** Пометка брошенного захвата (T-0371) для `next` и `board`: чей он и сколько часов в ветке тишина; у живого захвата — `undefined`. */
+function abandonedNoteOf(entry, state, now = Date.now()) {
+  if (entry.abandoned !== true) return undefined;
+  const last = Date.parse(state.lastCommits?.[entry.task.id] ?? "");
+  const ago = Number.isNaN(last) ? "давно" : `${String(Math.floor((now - last) / 3_600_000))} ч назад`;
+  return `брошенный захват ${ownerOf(entry.task)}, ${ago}`;
 }
 
 function printState(state) {
@@ -98,17 +107,17 @@ function loadBoard() {
   fetchOrigin();
   const state = loadRegistryState();
   printState(state);
-  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder) };
+  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder, state.abandoned) };
 }
 
 function runBoard(flags) {
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   for (const column of COLUMNS) {
     if (column.key === "cancelled" && flags.all !== true) continue;
     const entries = board[column.key];
     console.log(`\n${column.title} (${String(entries.length)})`);
     const busy = ["inProgress", "review", "rework", "ahead"].includes(column.key);
-    for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined));
+    for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined, abandonedNoteOf(entry, state)));
   }
 }
 
@@ -142,7 +151,7 @@ function runStreams(flags) {
 }
 
 function runNext(flags) {
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const filters = { runner: flags.runner ?? "any", executor: flags.executor, effort: flags.effort };
   const order = nextOrder(board, filters);
   if (order.length === 0) {
@@ -161,7 +170,7 @@ function runNext(flags) {
     const entries = order.filter((item) => item.kind === kind).map((item) => item.entry);
     if (entries.length === 0) continue;
     console.log(title);
-    for (const entry of entries) console.log(taskLine(entry, withOwner ? ownerOf(entry.task) : undefined));
+    for (const entry of entries) console.log(taskLine(entry, withOwner ? ownerOf(entry.task) : undefined, abandonedNoteOf(entry, state)));
   }
 }
 
@@ -249,7 +258,7 @@ function runClaim(positional, flags) {
 
   if (git(["status", "--porcelain"]) !== "") fail("Рабочая копия не чистая: закоммить или убери изменения, потом бери задачу.");
 
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const all = COLUMNS.flatMap((column) => board[column.key].map((entry) => ({ ...entry, column })));
   const found = all.find((entry) => entry.task.id === id);
   if (found === undefined) fail(`Задачи ${id} нет в ${BASE}.`);
@@ -276,6 +285,33 @@ function runClaim(positional, flags) {
     tryGit(["switch", previous]);
     tryGit(["branch", "-D", branch]);
   };
+
+  if (state.abandoned.has(id)) {
+    // Захват брошен (T-0371): ветка прежнего владельца остаётся, поверх неё ложится коммит перехвата.
+    if (ahead) fail(`Захват ${id} брошен, но зависимости не влиты: перехватить его заделом нельзя — возьми задачу без --ahead после их мерджа или выбери другую.`);
+    const takeover = takeOverClaim({
+      id,
+      fileName: task.fileName,
+      owner,
+      git,
+      tryGit,
+      readFile: (name) => readFileSync(join(ROOT, "tasks", name), "utf8"),
+      writeFile: (name, text) => writeFileSync(join(ROOT, "tasks", name), text),
+      rewrite: (text, newOwner) => {
+        const updated = withClaim(text, newOwner);
+        const parsed = parseFrontmatter(updated);
+        return { text: updated, problems: [...parsed.errors, ...validateTask(task.fileName, parsed.data)] };
+      },
+    });
+    if (!takeover.ok) {
+      returnBack();
+      fail(takeover.message);
+    }
+    console.log(`Задача ${id} перехвачена: захват был брошен, ветка ${branch} продолжена, владелец «${owner}». Ветку прежнего владельца не удаляем.`);
+    console.log(`Прежний владелец, вернувшись, пишет тимлиду, а не пушит поверх (tasks/README.md, «Брошенный захват»).`);
+    console.log(`Уровень effort в сессии — ${task.effort}. Дальше — тесты первым коммитом (tasks/README.md, шаг 5).`);
+    return;
+  }
 
   git(["switch", "-c", branch, BASE]);
   if (ahead) {
