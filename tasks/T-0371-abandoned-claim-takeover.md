@@ -3,8 +3,8 @@ id: T-0371
 title: Брошенный захват — ветка без работы дольше суток не держит зоны, задачу можно перехватить
 epic: E0
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-49 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
