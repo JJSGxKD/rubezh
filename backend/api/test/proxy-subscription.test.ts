@@ -4,6 +4,7 @@ import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { SkipReason, SkippedLink } from "@bh/proxy-kit";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { Outbound, type OutboundRecord } from "../src/infra/outbound/outbound.js";
@@ -25,6 +26,7 @@ import { SubscriptionRoutes } from "../src/modules/proxies/subscription/subscrip
 import { SUBSCRIPTION_REPOSITORY, type StoredNode, type StoredSubscription } from "../src/modules/proxies/subscription/subscription.repository.js";
 import { SubscriptionScheduler } from "../src/modules/proxies/subscription/subscription.scheduler.js";
 import { ProxySubscriptionService } from "../src/modules/proxies/subscription/subscription.service.js";
+import { noNodesNote } from "../src/modules/proxies/subscription/subscription.messages.js";
 import { SubscriptionSync } from "../src/modules/proxies/subscription/subscription.sync.js";
 import { SUBSCRIPTION_USER_AGENT, subscriptionHwid } from "../src/modules/proxies/subscription/subscription-download.js";
 import { sealUrl } from "../src/modules/proxies/subscription/subscription-url.js";
@@ -61,6 +63,10 @@ const nodeLink = (index: number, name = `[DE] Узел ${String(index)}`): strin
   `vless://${UUID}@n${String(index)}.example.org:443?type=ws&security=tls&sni=n${String(index)}.example.org&path=%2Fws#${encodeURIComponent(name)}`;
 const HYSTERIA = "hysteria2://secret@h.example.org:443#hy";
 const bodyOf = (...lines: string[]): string => lines.join("\n");
+/** Ссылки, которые разбор пропускает: транспорт kcp, неподдерживаемый параметр безопасности, битый uuid. */
+const SKIPPED_TRANSPORT = `vless://${UUID}@k.example.org:443?type=kcp#kcp`;
+const SKIPPED_OPTION = `vless://${UUID}@o.example.org:443?type=ws&security=tls&ech=abc#ech`;
+const SKIPPED_MALFORMED = "vless://not-a-uuid@m.example.org:443?type=ws#bad";
 
 const answer = (body: string, init: ResponseInit = {}): Response => new Response(body, { status: 200, ...init });
 
@@ -256,7 +262,8 @@ describe("обновление подписки", () => {
     ["HTTP 500", () => new Response("сбой", { status: 500 }), "Поставщик ответил кодом 500"],
     ["формат Clash", () => answer("proxies:\n  - name: a\n    type: vless\n"), "Формат подписки не поддерживается: нужен список ссылок (base64 или текст) или JSON-конфиг Xray"],
     ["пустое тело", () => answer(""), "Подписка пустая"],
-    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов (пропущено 2)"],
+    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов: пропущено 2 (протокол: 2)"],
+    ["все узлы отсеяны по разным причинам", () => answer(bodyOf(HYSTERIA, HYSTERIA, SKIPPED_TRANSPORT, SKIPPED_OPTION, SKIPPED_MALFORMED)), "В подписке нет подходящих узлов: пропущено 5 (протокол: 2, транспорт: 1, параметры: 1, ссылка: 1)"],
     ["сеть упала", () => Promise.reject(new TypeError("fetch failed")), "Не удалось связаться с поставщиком"],
     ["слишком большой ответ", () => answer("x", { headers: { "content-length": String(3 * 1024 * 1024) } }), "Ответ поставщика больше 2 МБ"],
   ];
@@ -280,6 +287,22 @@ describe("обновление подписки", () => {
       expect(JSON.stringify(r.repository.subscription?.lastRefreshNote)).not.toMatch(/tok-9f8e7d6c5b4a|SECRETKEY|sub\.example\.com/);
     });
   }
+
+  describe("заметка о подписке без подходящих узлов", () => {
+    const skip = (reason: SkipReason, count: number): SkippedLink[] => Array.from({ length: count }, (_, index) => ({ index, scheme: "vless", reason, detail: "x" }));
+
+    it("причины идут в порядке словаря, числа складываются в общее", () => {
+      expect(noNodesNote([...skip("unsupported_option", 3), ...skip("unsupported_scheme", 9)])).toBe("В подписке нет подходящих узлов: пропущено 12 (протокол: 9, параметры: 3)");
+    });
+
+    it("ничего не пропущено — без разбивки", () => {
+      expect(noNodesNote([])).toBe("В подписке нет подходящих узлов");
+    });
+
+    it("разбивка не выходит за предел колонки", () => {
+      expect(noNodesNote(skip("malformed", 100_000)).length).toBeLessThanOrEqual(300);
+    });
+  });
 
   describe("защита от SSRF", () => {
     const NOT_ALLOWED = "Адрес подписки не подходит: нужен публичный https-адрес";
