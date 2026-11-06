@@ -3,7 +3,7 @@ id: T-0372
 title: Справка по ссылкам в панели — виды ссылок, путь клика, поля, ключи и счётчики
 epic: E14
 priority: P1
-status: in-progress
+status: done
 owner: claude-50 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -13,7 +13,8 @@ zones:
   - apps/admin/src/screens/links/links-guide.ts
   - apps/admin/src/screens/links/LinksScreen.tsx
   - apps/admin/test/links-guide.test.ts
-shared: []
+shared:
+  - apps/admin/src/ui/help.ts
 runner: any
 executor: sonnet-5.5
 effort: high
