@@ -189,9 +189,12 @@ function closedWithoutMerge(dependency, branches, openPrs) {
  *   PR), «доработка» — «Доработка», «на ревью» и «ждёт владельца» — «На ревью», «задел» — «Задел»;
  *   ветка без PR — «В работе». У записей «На ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
  * - `repoFiles` — файлы репозитория для пересечения зон;
- * - `epicOrder` — эпики в порядке `epics.md`.
+ * - `epicOrder` — эпики в порядке `epics.md`;
+ * - `abandoned` — id задач с брошенным захватом (T-0371, `isAbandonedClaim`): ветка без работы
+ *   дольше суток. Такая задача не «в работе» и зон не держит: она в «Свободно» (или в той колонке,
+ *   куда ведут её зависимости) с `abandoned: true`, её можно перехватить.
  *
- * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
+ * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith?, abandoned? }] }`,
  * внутри колонки порядок: пачка, приоритет, эпик, id. У заблокированных `waitingFor` —
  * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
  *
@@ -201,7 +204,7 @@ function closedWithoutMerge(dependency, branches, openPrs) {
  * `aheadFree` с `aheadOver` (поверх каких зависимостей). Задел, чью зависимость закрыли без
  * мерджа, уходит в `blocked` с причиной.
  */
-export function classify(tasks, taken, prs, repoFiles, epicOrder) {
+export function classify(tasks, taken, prs, repoFiles, epicOrder, abandoned = new Set()) {
   const branches = new Set(taken);
   const openPrs = new Map((prs ?? []).map((pr) => [pr.headRefName, pr]));
   const byId = new Map(tasks.map((task) => [task.id, task]));
@@ -212,7 +215,7 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     if (task.status === "done") result.done.push({ task });
     else if (task.status === "cancelled") result.cancelled.push({ task });
     else if (task.status === "draft") result.draft.push({ task });
-    else if (branches.has(task.id)) {
+    else if (branches.has(task.id) && !(abandoned.has(task.id) && !openPrs.has(`task/${task.id}`))) {
       const pr = openPrs.get(`task/${task.id}`);
       if (pr === undefined) result.inProgress.push({ task });
       else {
@@ -228,7 +231,7 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
           } else result.ahead.push({ task, pr: pr.number, ripe: waitingFor.length === 0, waitingFor });
         } else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
       }
-    } else if (task.status === "in-progress") {
+    } else if (task.status === "in-progress" && !abandoned.has(task.id)) {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
       // задачу всё равно считаем занятой — статус в файле говорит, что её взяли.
       result.inProgress.push({ task });
@@ -246,6 +249,7 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   ];
 
   for (const task of waiting) {
+    const mark = abandoned.has(task.id) ? { abandoned: true } : {};
     const reasons = [];
     // Те же причины списками id — из них собирается значок статуса, текст не разбирается обратно.
     const waitingFor = [];
@@ -266,11 +270,11 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
         busyWith.push(other.task.id);
       }
     }
-    if (reasons.length === 0) result.free.push({ task });
+    if (reasons.length === 0) result.free.push({ task, ...mark });
     else if (busyWith.length === 0 && waitingFor.length > 0 && aheadCheck(task, tasks, prs).problems.length === 0) {
       // Все зависимости ждут ревью, зоны свободны: задачу можно начать заделом (Р178).
-      result.aheadFree.push({ task, aheadOver: waitingFor });
-    } else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith });
+      result.aheadFree.push({ task, aheadOver: waitingFor, ...mark });
+    } else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith, ...mark });
   }
 
   const compare = compareTasks(epicOrder);
