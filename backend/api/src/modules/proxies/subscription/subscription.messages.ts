@@ -59,7 +59,15 @@ export function successNote(nodes: number, skipped: readonly SkippedLink[]): str
   return clip(skipped.length === 0 ? nodesWord(nodes) : `${nodesWord(nodes)}, пропущено ${String(skipped.length)} (${skippedBreakdown(skipped)})`);
 }
 
-export const noNodesNote = (skipped: number): string => `В подписке нет подходящих узлов (пропущено ${String(skipped)})`;
+/**
+ * «В подписке нет подходящих узлов: пропущено 12 (протокол: 9, параметры: 3)».
+ * Причины и числа — чтобы по заметке было видно, что отсеяло подписку: заглушки
+ * поставщика, формат или параметры узлов. Ни адреса, ни куска ссылки здесь нет.
+ */
+export function noNodesNote(skipped: readonly SkippedLink[]): string {
+  const base = "В подписке нет подходящих узлов";
+  return clip(skipped.length === 0 ? base : `${base}: пропущено ${String(skipped.length)} (${skippedBreakdown(skipped)})`);
+}
 
 /** Входов Xray не хватило на все узлы. */
 export function overflowNote(count: number): string {

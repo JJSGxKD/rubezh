@@ -36,6 +36,14 @@ describe("переводы", () => {
     expect(t("runDetail.continues", { n: 2 })).toBe("второй шанс 2 раза");
   });
 
+  it("склоняет и уже отформатированное число: «17 800 очков», а не сырой шаблон", async () => {
+    await import("../src/i18n/tasks");
+    expect(t("tasks.points.total", { points: "70" })).toBe("70 очков");
+    expect(t("tasks.points.total", { points: "21" })).toBe("21 очко");
+    expect(t("tasks.points.total", { points: "17\u202F802" })).toBe("17\u202F802 очка");
+    expect(t("lobby.runs", { count: "не число" })).toContain("plural");
+  });
+
   it("склоняет число участников в рейтинге", () => {
     expect(t("rating.me.of", { total: 1 })).toBe("из 1 участника");
     expect(t("rating.me.of", { total: 5 })).toBe("из 5 участников");

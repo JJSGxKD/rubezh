@@ -237,7 +237,6 @@ export function TasksScreen(): ReactNode {
     <Screen>
       <ContentColumn>
         <PageTitle>{t("tasks.title")}</PageTitle>
-        <BotMentionRows />
         <div className="mt-2 grid gap-3">
           <SegmentedControl track="view"
             label={t("tasks.title")}
@@ -252,6 +251,9 @@ export function TasksScreen(): ReactNode {
           />
           {!tasksAvailable() && view !== "achievements" ? <InfoNotice text={t("tasks.guest")} /> : null}
         </div>
+
+        {/* Юзернейм бота приоритетнее заданий, но не выше вкладок: первым под ними, на любой вкладке. */}
+        <BotMentionRows />
 
         {/* Витрина грузит себя сама: сбой списка заданий её не закрывает, знак вкладки лишь не обновится. */}
         {view === "achievements" ? <Achievements onChanged={() => void refresh()} /> : null}

@@ -11,7 +11,7 @@ RUN apk add --no-cache \
       curl=8.23.0-r0 \
       git=2.54.0-r0 \
       postgresql17-client=17.11-r0 \
-      rclone=1.74.1-r3 \
+      rclone=1.75.2-r0 \
       zstd=1.5.7-r2
 
 COPY backupctl.sh /usr/local/bin/backupctl
