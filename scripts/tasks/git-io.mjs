@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { isAbandonedClaim } from "./claim.mjs";
 import { isTaskFile, parseEpics, readTasks } from "./registry.mjs";
 
 /**
@@ -198,10 +199,12 @@ export function openPrs() {
 
 /**
  * Дата коммита захвата задачи (`chore(tasks): Взять T-NNNN в работу`) в ветке
- * `origin/task/T-NNNN` — ISO-строка или `null`, если ветки или коммита нет.
+ * `origin/task/T-NNNN` — ISO-строка или `null`, если ветки или коммита нет. Если захват
+ * перехвачен, берётся коммит «Перехватить …».
  */
 export function claimedAt(id) {
-  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, `origin/task/${id}`]);
+  // Два заголовка: захват и перехват брошенного захвата (T-0371) — время считается от позднего.
+  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, "--grep", `^chore(tasks): Перехватить ${id} — захват брошен$`, `origin/task/${id}`]);
   return result.ok && result.stdout !== "" ? result.stdout : null;
 }
 
@@ -284,20 +287,56 @@ export function addedTaskSpecs(base = BASE) {
   return [...specs.values()];
 }
 
-/** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs }`; задачи и файлы — из `base`. */
+/** Дата последнего коммита ветки `origin/task/T-NNNN` (ISO) или `null`, если git не ответил. */
+export function lastCommitAt(id) {
+  const result = tryGit(["log", "-1", "--format=%cI", `origin/task/${id}`]);
+  return result.ok && result.stdout !== "" ? result.stdout : null;
+}
+
+/** Файлы, изменённые веткой `origin/task/T-NNNN` относительно `base`, или `null`, если дифф не получился. */
+export function branchChangedFiles(id, base = BASE) {
+  const result = tryGit(["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...origin/task/${id}`]);
+  return result.ok ? result.stdout.split("\n").filter((line) => line !== "") : null;
+}
+
+/**
+ * id задач с брошенным захватом (T-0371, `isAbandonedClaim`) и время последнего коммита их веток.
+ * Список PR неизвестен (`prs === null`) — считаем, что открытого PR нет: иначе без `gh`
+ * брошенный захват нельзя отличить вовсе, а его признак (в ветке один захват, суток тишины)
+ * жёсткий и сам по себе. Два вызова git на ветку, веток десятки.
+ */
+function findAbandoned(taken, tasks, prs, base, now) {
+  const withPr = new Set((prs ?? []).map((pr) => /^task\/(T-\d{4})$/.exec(pr.headRefName)?.[1]));
+  const abandoned = new Set();
+  const lastCommits = {};
+  for (const id of taken) {
+    const task = tasks.find((candidate) => candidate.id === id);
+    if (task === undefined || (task.status !== "ready" && task.status !== "in-progress")) continue;
+    const last = lastCommitAt(id);
+    lastCommits[id] = last;
+    if (isAbandonedClaim({ changedFiles: branchChangedFiles(id, base), lastCommitAt: last, hasOpenPr: withPr.has(id), taskFileName: task.fileName, now })) abandoned.add(id);
+  }
+  return { abandoned, lastCommits };
+}
+
+/** Всё, что нужно доске, из origin: `{ tasks, errors, epicOrder, repoFiles, taken, prs, claims, abandoned, lastCommits }`; задачи и файлы — из `base`. */
 export function loadRegistryState(base = BASE) {
   const files = readOriginTasks(base);
   const taken = takenIds();
   const { tasks, errors } = readTasks(files);
   const epics = files.find((file) => file.name === "epics.md");
+  const prs = openPrs();
+  const { abandoned, lastCommits } = findAbandoned(taken, tasks, prs, base, Date.now());
   return {
     tasks,
     errors,
     epicOrder: epics === undefined ? [] : parseEpics(epics.text),
     repoFiles: readOriginFileList(base),
     taken,
-    prs: openPrs(),
+    prs,
     claims: Object.fromEntries(taken.map((id) => [id, claimedAt(id)])),
+    abandoned,
+    lastCommits,
   };
 }
 

@@ -528,7 +528,7 @@ describe("перехват брошенного захвата: takeOverClaim", 
   it("push отклонён — «захват ожил», успеха нет", () => {
     const result = setup({ pushError: "! [rejected] HEAD -> task/T-0005 (non-fast-forward)" }).run();
     expect(result.ok).toBe(false);
-    expect(result.message).toContain("захват ожил");
+    expect(result.message).toContain("Захват ожил");
   });
 
   it("merge dev с конфликтом — отказ, слияние отменено", () => {
