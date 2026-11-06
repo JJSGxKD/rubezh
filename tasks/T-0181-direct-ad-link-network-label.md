@@ -3,8 +3,8 @@ id: T-0181
 title: Прямая ссылка на Mini App для рекламы AdsGram — метки сети в стартовом параметре и конверсия по запуску
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-51 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0179, T-0180]
