@@ -592,6 +592,9 @@ erDiagram
         string partner_tag "nullable: метка prt-… (Р116), не владелец; к карточке партнёра не привязана"
         string title "nullable: название из панели; пусто — показывается кампания"
         datetime hidden_at "nullable: скрыт в панели; запуски по нему считаются"
+        string postback_url "nullable: адрес постбэка с макросами (T-0070); пусто — у ссылки своего адреса нет, действует общий адрес партнёра"
+        datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
+        string_array postback_events "по умолчанию registration; CHECK: только registration, purchase_first, purchase_repeat, d1_return"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -605,20 +608,20 @@ erDiagram
         string device_class "nullable"
         string ip_prefix "nullable: подсеть, не адрес"
         string language "nullable"
-        json network_params "nullable: подставленные сетью макросы; обнуляются через 31 сутки"
+        json network_params "nullable: подставленные сетью макросы и, у ссылки с партнёром или адресом постбэка, click_id и sub1…sub5; обнуляются через 31 сутки"
     }
 
     AD_CONVERSION {
         uuid conversion_id PK "идентификатор события для приёмника: один на событие и назначение"
         string network "имя назначения, как destination: колонка нужна откату кода"
-        string destination "adsgram|s2s|partner; CHECK"
+        string destination "adsgram|s2s|partner; CHECK. s2s — адрес ссылки без владельца, partner — адрес ссылки партнёра или общий адрес партнёра (T-0070)"
         string link_code FK
         string click_id FK "nullable: пуст у запуска по прямой ссылке; с целью и назначением при цели 1, 2, 4 уникален: одна регистрация, первая покупка и возврат на клик, а без клика — на аккаунт"
         uuid account_id FK
         int goal "код события: 1 регистрация, 2 первая покупка, 3 повторная, 4 возврат на следующий день; CHECK 1–4"
         uuid purchase_id FK "nullable, уникален с назначением: у целей 2 и 3 — всегда, у остальных — никогда"
         enum status "pending|sent|failed|skipped"
-        string reason "nullable: no_token, team, no_macros"
+        string reason "nullable: no_token, team, no_macros, no_address (адрес постбэка снят), no_click_id (в шаблоне {click_id}, а в клике его не было)"
         int attempts
         datetime next_attempt_at "очередь отправки"
         int http_status "nullable: последний ответ сети"
@@ -947,6 +950,9 @@ erDiagram
         string payout_currency "nullable: код из ядра курсов"
         string payout_method "nullable: реквизиты словами"
         decimal share_percent "nullable, 0–100: записывается, не начисляется до модели учёта (О44)"
+        string postback_url "nullable: общий адрес постбэка партнёра с макросами (T-0070); действует на ссылки партнёра без своего адреса"
+        datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
+        string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
     }
 
     PARTNER_BINDING {
@@ -1696,7 +1702,11 @@ erDiagram
   (оплата, назначение). Запуск по прямой ссылке на Mini App (T-0181, Р121)
   клика не оставляет: `click_id` пуст, метки сети лежат на самой строке в
   `network_params`, а регистрацию, первую покупку и возврат держит ключ на
-  (аккаунт, цель, назначение) при пустом `click_id`.
+  (аккаунт, цель, назначение) при пустом `click_id`. Назначения `s2s` и
+  `partner` (T-0070) — отправка на адрес постбэка ссылки или, если его нет,
+  партнёра-владельца: адреса лежат в `link` и `partner`
+  (`postback_url`, `postback_since`, `postback_events`), строки по ним
+  выводятся только из кликов, прямой запуск их не порождает.
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -3563,7 +3573,9 @@ sequenceDiagram
 `d1_return`), а получатели — назначения `adsgram`, `s2s`, `partner` — адаптеры
 с общим контрактом. Какое назначение что получает, проход берёт из одного
 набора (`destinations/destination-targets.ts`); сервис отправляет то, что
-подготовило назначение. Сейчас подключён один адаптер — AdsGram.
+подготовило назначение. Подключены три адаптера: AdsGram, «адрес сети» (`s2s`) и
+«партнёр» (`partner`) — последние два на общем шаблоне адреса постбэка
+(T-0070, схема ниже).
 
 ```mermaid
 sequenceDiagram
@@ -3612,6 +3624,50 @@ sequenceDiagram
 Токен в логи не попадает: адрес постбэка пишется с `token=***`. Аккаунты
 команды пишутся пропущенными (`team`) — их отправляют руками, чтобы
 проверить связку с кабинетом.
+
+Постбэки на свой адрес (`s2s` и `partner`, T-0070): партнёр дописывает к ссылке
+`click_id` и `sub1`…`sub5`, переходник сохраняет их на клике, а регистрация
+новичка уходит GET-запросом на адрес ссылки или партнёра. Прямой запуск
+`l-<код>` этим назначениям строк не даёт — у него нет клика.
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant L as links (/r/:код)
+    participant DB as PostgreSQL
+    participant C as ad-conversions (под локом)
+    participant T as назначения s2s и partner
+    participant R as приёмник постбэка
+
+    U->>L: клик: /r/<код>?click_id=…&sub1=…
+    L--)DB: link_click.network_params: click_id, sub1…sub5<br/>(ссылка с партнёром или своим адресом)
+    L-->>U: запуск игры с c-<клик>
+
+    loop раз в минуту
+        C->>DB: набор назначений: адрес ссылки, иначе адрес партнёра;<br/>события и postback_since — у того, чей адрес действует
+        C->>DB: дописать события по кликам после postback_since<br/>(прямые запуски s2s и partner не порождают)
+        C->>DB: созревшие pending + адрес ссылки или партнёра
+        C->>T: подготовить запрос
+        alt адрес снят
+            C->>DB: skipped, причина no_address
+        else в шаблоне {click_id}, а в клике его не было
+            C->>DB: skipped, причина no_click_id
+        else адрес не прошёл проверку: не https, логин, порт,<br/>внутренний адрес по имени или по тому, во что оно разрешается
+            C->>DB: failed без повтора (имя не разрешилось — повтор)
+        else
+            T->>R: GET адрес с макросами, redirect: manual, event_id = conversion_id
+            alt 2xx
+                C->>DB: sent
+            else 408, 429, 5xx, таймаут
+                C->>DB: повтор по расписанию, тот же event_id
+            else 3xx, 4xx
+                C->>DB: failed — перенаправления не выполняются
+            end
+        end
+    end
+```
+
+В лог идёт `https://host/path?***`, в журнал — текст без адреса и без тела ответа.
 
 ### 4.21 Ограничение рейтинга (этап 4, реализовано)
 
