@@ -74,6 +74,9 @@ const rowSchema = z.object({
   payout_currency: z.string().nullable(),
   payout_method: z.string().nullable(),
   share_percent: z.string().nullable(),
+  postback_url: z.string().nullable(),
+  postback_since: z.date().nullable(),
+  postback_events: z.array(z.string()),
 });
 
 const statsSchema = z.object({
@@ -102,6 +105,9 @@ function toRow(raw: unknown): PartnerRow {
     payoutCurrency: row.payout_currency,
     payoutMethod: row.payout_method,
     sharePercent: row.share_percent,
+    postbackUrl: row.postback_url,
+    postbackSince: row.postback_since,
+    postbackEvents: row.postback_events,
   };
 }
 
@@ -112,7 +118,8 @@ function toStats(raw: unknown): PartnerStats {
 
 // Процент — текстом: десятичная доля не должна пройти через двоичную дробь.
 const COLUMNS = Prisma.sql`p.partner_id::text, p.name, p.contact, p.note, p.created_by::text, p.created_at, p.updated_at,
-  p.telegram_id, p.status, p.country, p.payout_currency, p.payout_method, p.share_percent::text AS share_percent`;
+  p.telegram_id, p.status, p.country, p.payout_currency, p.payout_method, p.share_percent::text AS share_percent,
+  p.postback_url, p.postback_since, p.postback_events`;
 
 /**
  * Колонки, которые правка может менять. Имена — из этой константы, а не из ввода: идентификатор в
@@ -128,6 +135,8 @@ const PATCH_COLUMNS = {
   payoutCurrency: "payout_currency",
   payoutMethod: "payout_method",
   sharePercent: "share_percent",
+  postbackUrl: "postback_url",
+  postbackSince: "postback_since",
 } as const satisfies Record<keyof PartnerPatch, string>;
 
 /** Нарушение уникальности TG id: код Postgres 23505 приходит то как P2002, то в `meta` сырого запроса. */
