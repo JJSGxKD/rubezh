@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
-import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { BALANCE_TARGETS, buildCompleteCorridorSec } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
+import { ENEMY_STAGES } from "../src/content/stages";
+import { ENDLESS_CURVE } from "../src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -221,5 +223,110 @@ describe("подстройка под силу: лесенка профилей"
     const withPressure = medianOf(POWER_PROFILES.full, true) / medianOf(POWER_PROFILES.average, true);
     const without = medianOf(POWER_PROFILES.full, false) / medianOf(POWER_PROFILES.average, false);
     expect(withPressure).toBeGreaterThanOrEqual(Math.sqrt(without));
+  });
+});
+
+// Враги жирнее с 2,5 минуты, набор к 15-й (Р194, T-0388).
+
+/**
+ * Значения до T-0388: `hpMul` ступеней обычных врагов и `ENDLESS_CURVE.hpGrowth`.
+ * Они нужны только для сравнения «было → стало»; правка контента их не двигает.
+ */
+const HP_MUL_BEFORE_T0388 = [
+  { fromSec: 0, hpMul: 1 },
+  { fromSec: 150, hpMul: 1.9 },
+  { fromSec: 330, hpMul: 3.6 },
+  { fromSec: 480, hpMul: 5 },
+  { fromSec: 660, hpMul: 7 },
+  { fromSec: 840, hpMul: 9.5 },
+] as const;
+const HP_GROWTH_BEFORE_T0388 = 1.14;
+
+/** Степень умножением в цикле: как в симуляции, без `Math.pow`. */
+function growthPower(base: number, steps: number): number {
+  let value = 1;
+  for (let i = 0; i < steps; i++) value *= base;
+  return value;
+}
+
+/**
+ * Множитель здоровья обычного врага на секунде `sec`, без «Сложной» и подстройки:
+ * `hpMul` ступени, открытой к этой секунде (последней из открытых), на рост
+ * бесконечной кривой за прошедшие отрезки. Враг, вышедший в эту секунду из новейшей
+ * ступени, получает ровно это число; рулетка весов подмешивает прежние ступени, но
+ * Р194 говорит о том, насколько крепче стал новый враг.
+ */
+function stageHpMulAt(sec: number, stages: readonly { fromSec: number; hpMul: number }[], hpGrowth: number): number {
+  let hpMul = stages[0].hpMul;
+  for (const stage of stages) if (stage.fromSec <= sec) hpMul = stage.hpMul;
+  const steps = sec < ENDLESS_CURVE.fromSec ? 0 : Math.floor((sec - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec);
+  return hpMul * growthPower(hpGrowth, steps);
+}
+
+/** Во сколько раз здоровье обычного врага крепче, чем до T-0388, на секунде `sec`. */
+const hpRatioAt = (sec: number): number =>
+  stageHpMulAt(sec, ENEMY_STAGES, ENDLESS_CURVE.hpGrowth) / stageHpMulAt(sec, HP_MUL_BEFORE_T0388, HP_GROWTH_BEFORE_T0388);
+
+describe("враги жирнее с 2,5 минуты (Р194, T-0388)", () => {
+  it("до второй ступени здоровье прежнее: ранний бой и пролог не меняются", () => {
+    expect(hpRatioAt(0)).toBe(1);
+    expect(hpRatioAt(60)).toBe(1);
+    expect(hpRatioAt(120)).toBe(1);
+    expect(hpRatioAt(149)).toBe(1);
+  });
+
+  it("со второй ступени (150 с) здоровье вдвое выше прежнего, ±5%", () => {
+    expect(hpRatioAt(150)).toBeGreaterThanOrEqual(2 * 0.95);
+    expect(hpRatioAt(150)).toBeLessThanOrEqual(2 * 1.05);
+  });
+
+  it("к 600 с здоровье втрое выше прежнего, ±7%", () => {
+    expect(hpRatioAt(600)).toBeGreaterThanOrEqual(3 * 0.93);
+    expect(hpRatioAt(600)).toBeLessThanOrEqual(3 * 1.07);
+  });
+
+  it("после 600 с здоровье растёт быстрее прежнего: на 900 с не меньше ×3,4", () => {
+    expect(hpRatioAt(900)).toBeGreaterThanOrEqual(3.4);
+    expect(ENDLESS_CURVE.hpGrowth).toBeGreaterThan(HP_GROWTH_BEFORE_T0388);
+  });
+
+  it("отношение к прежнему не убывает по ступеням: каждая следующая крепче на столько же или больше", () => {
+    let previous = 0;
+    for (const stage of ENEMY_STAGES) {
+      const before = HP_MUL_BEFORE_T0388.find((candidate) => candidate.fromSec === stage.fromSec);
+      expect(before, `ступень на ${stage.fromSec} с есть среди прежних`).toBeDefined();
+      const ratio = stage.hpMul / (before?.hpMul ?? 1);
+      expect(ratio, `ступень на ${stage.fromSec} с`).toBeGreaterThanOrEqual(previous);
+      previous = ratio;
+    }
+  });
+});
+
+describe("сборка набора к 15-й минуте (Р194, T-0388)", () => {
+  /** Не раньше этой секунды: живой собирает набор в 1,7 раза быстрее бессмертного бота, а цель — к 900 с. */
+  const BUILD_MEDIAN_MIN_SEC = 1450;
+  const BUILD_SEEDS = 10;
+
+  it("бессмертный бот собирает набор не раньше 1450 с и в коридоре", { timeout: 600_000 }, () => {
+    const corridor = buildCompleteCorridorSec();
+    const runs: BalanceRunResult[] = [];
+    for (let seed = 1; seed <= BUILD_SEEDS; seed++) {
+      runs.push(
+        simulateBalanceRun({
+          seed,
+          skill: "dodging",
+          startingWeaponId: "spark",
+          godMode: true,
+          stopOnBuild: true,
+          maxSec: Math.ceil(corridor.max * 1.15),
+        }),
+      );
+    }
+    // как в balance:sim: медиана по собравшим, а собрать обязаны не менее 60% seed
+    const summary = summarizeRuns(runs);
+    expect(summary.buildCompleteRatio).toBeGreaterThanOrEqual(0.6);
+    expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(BUILD_MEDIAN_MIN_SEC);
+    expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(corridor.min);
+    expect(summary.medianBuildCompleteSec).toBeLessThanOrEqual(corridor.max);
   });
 });
