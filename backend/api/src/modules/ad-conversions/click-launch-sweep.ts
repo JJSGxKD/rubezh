@@ -113,11 +113,12 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
   // Возвраты на следующий день: засчитанный забег в игровые сутки (полночь по Москве, `GAME_DAY_TIME_ZONE`) сразу
   // за днём регистрации. День регистрации — день первого засчитанного забега, а не создания аккаунта, и этот забег
   // обязан уложиться в окно регистрации от клика: иначе регистрации не было и возвращаться не к чему. Сутки
-  // считаются границами — `[полночь дня + 1, полночь дня + 2)` — а не сравнением дат: так работает индекс забегов
-  // аккаунта `(account_id, finished_at)`. Кандидаты — по первому касанию за окно просмотра (индекс
-  // `(first_start_kind, first_at)`); назначения без `d1_return` отсекает `ANY(t.events)` до обращения к забегам, а
-  // уже заведённые — `NOT EXISTS` по уникальному индексу, чтобы раз в минуту не пересчитывать забеги тех, кому всё
-  // отправлено. Игровые сутки считает база: она же хранит время забегов.
+  // считаются границами — `[полночь дня + 1, полночь дня + 2)` — а не сравнением дат: так второй LATERAL берёт
+  // забеги по индексу `(account_id, finished_at)` и читает только их, а не всю историю игрока. Первый LATERAL —
+  // `ORDER BY … LIMIT 1`, а не `min()`: с `min()` планировщик прячет границу в подзапрос и индексом её не берёт.
+  // Кандидаты — по первому касанию за окно просмотра (индекс `(first_start_kind, first_at)`); назначения без
+  // `d1_return` отсекает `ANY(t.events)` до обращения к забегам, а уже заведённые — `NOT EXISTS` по уникальному
+  // ключу, чтобы раз в минуту не пересчитывать забеги тех, кому всё отправлено.
   const returns = await prisma.$executeRaw`
       WITH ${targets}
       INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, status, reason, next_attempt_at, created_at)
@@ -131,24 +132,29 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
       JOIN acquisition q ON q.first_start_ref = c.click_id
       JOIN account a ON a.account_id = q.account_id AND a.created_at >= c.at - interval '1 minute'
       JOIN LATERAL (
-        SELECT (min(f.finished_at) AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date AS day
+        SELECT (((f.finished_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 1)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AS from_at,
+               (((f.finished_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 2)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AS to_at
         FROM run f
         WHERE f.account_id = q.account_id
           AND ${countedRun("f")}
           AND f.finished_at <= c.at + make_interval(days => ${registrationDays})
-      ) reg ON reg.day IS NOT NULL
+        ORDER BY f.finished_at
+        LIMIT 1
+      ) reg ON true
+      JOIN LATERAL (
+        SELECT 1
+        FROM run r
+        WHERE r.account_id = q.account_id
+          AND ${countedRun("r")}
+          AND r.finished_at >= reg.from_at
+          AND r.finished_at < reg.to_at
+        LIMIT 1
+      ) ret ON true
       WHERE q.first_start_kind = 'click'
         AND q.first_at > ${now}::timestamptz - make_interval(days => ${returnLookbackDays})
         AND ${returned}::text = ANY(t.events)
         AND c.at >= t.since
         AND NOT EXISTS (SELECT 1 FROM ad_conversion v WHERE v.click_id = c.click_id AND v.goal = ${RETURN_GOAL} AND v.destination = t.destination)
-        AND EXISTS (
-          SELECT 1 FROM run r
-          WHERE r.account_id = q.account_id
-            AND ${countedRun("r")}
-            AND r.finished_at >= ((reg.day + 1)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE})
-            AND r.finished_at < ((reg.day + 2)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE})
-        )
       ON CONFLICT DO NOTHING`;
   return { registrations, purchases, returns };
 }
