@@ -39,6 +39,7 @@ effort: high
 release: minor
 design: null
 batch: 4
+attempt: 2
 ---
 
 # T-0119. Модификаторы забега «Спешка» и «Инверсия»: данные и движок
