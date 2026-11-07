@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
+import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, previousAttemptNote, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
-import { parseTaskBranch, taskBranch } from "./branch.mjs";
+import { attemptOf, currentBranchOf, parseTaskBranch } from "./branch.mjs";
 import { contributionRows } from "./contribution.mjs";
 import { checkAheadPr, checkClaim, takeOverClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
@@ -69,7 +69,7 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function taskLine({ task, reason, pr, aheadOver, ripe }, owner, abandonedNote) {
+function taskLine({ task, reason, pr, aheadOver, ripe, previousBranch }, owner, abandonedNote) {
   const batch = batchNumber(task);
   const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
@@ -79,12 +79,15 @@ function taskLine({ task, reason, pr, aheadOver, ripe }, owner, abandonedNote) {
   if (aheadOver !== undefined) notes.push(`заделом поверх ${aheadOver.join(", ")}`);
   if (reason !== undefined) notes.push(reason);
   if (abandonedNote !== undefined) notes.push(abandonedNote);
+  // Подсказка про работу прежней попытки (Р195) — последней в строке.
+  const previousNote = previousAttemptNote({ task, previousBranch });
+  if (previousNote !== undefined) notes.push(previousNote);
   return `  ${parts.join("  ")}${notes.length > 0 ? `\n${" ".repeat(10)}↳ ${notes.join("; ")}` : ""}`;
 }
 
 /** Кто взял задачу: поле owner из её ветки на origin (на dev оно пустое — статус живёт в ветке). */
 function ownerOf(task, emptyIfUnknown = false) {
-  const text = readBranchFile(task.id, task.fileName);
+  const text = readBranchFile(task);
   const owner = text === null ? "" : (parseFrontmatter(text).data.owner ?? "");
   return owner === "" && !emptyIfUnknown ? "неизвестно" : owner;
 }
@@ -108,7 +111,7 @@ function loadBoard() {
   fetchOrigin();
   const state = loadRegistryState();
   printState(state);
-  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder, state.abandoned) };
+  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder, state.abandoned, state.previousWork) };
 }
 
 function runBoard(flags) {
@@ -592,7 +595,7 @@ function boardDetails(entry, columnKey, owner, prsByNumber, now) {
   return {
     owner,
     launchedBy: launchedBy(pr?.body),
-    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task.id) : pr?.createdAt, now),
+    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task) : pr?.createdAt, now),
     rounds: reworkRounds(pr, entry.task.id),
   };
 }
