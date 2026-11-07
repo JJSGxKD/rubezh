@@ -1148,6 +1148,12 @@ model Link {
   title          String?          @db.VarChar(80)
   /// скрыт в панели; запуски по нему считаются
   hiddenAt       DateTime?        @map("hidden_at") @db.Timestamptz(3)
+  /// адрес постбэка с макросами (T-0070): события игрока по кликам уходят на него GET-запросом; `null` — не отправляем
+  postbackUrl    String?          @map("postback_url") @db.VarChar(1024)
+  /// с какого времени по кликам действует адрес: клики раньше не отправляются, прошлое не досылается; задан тогда и только тогда, когда задан адрес
+  postbackSince  DateTime?        @map("postback_since") @db.Timestamptz(3)
+  /// какие события уходят на адрес: registration, purchase_first, purchase_repeat, d1_return; по умолчанию одна регистрация
+  postbackEvents String[]         @default(["registration"]) @map("postback_events") @db.VarChar(24)
   clicks         LinkClick[]
   conversions    AdConversion[]
   bindings       PartnerBinding[]
@@ -2158,6 +2164,12 @@ model Partner {
   payoutMethod   String?  @map("payout_method") @db.VarChar(200)
   /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
   sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
+  /// общий адрес постбэка партнёра с макросами (T-0070): действует на ссылки партнёра, у которых нет своего адреса; `null` — не отправляем
+  postbackUrl    String?   @map("postback_url") @db.VarChar(1024)
+  /// с какого времени по кликам действует адрес: клики раньше не отправляются; задан тогда и только тогда, когда задан адрес
+  postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
+  /// какие события уходят на адрес; по умолчанию одна регистрация
+  postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
 
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
