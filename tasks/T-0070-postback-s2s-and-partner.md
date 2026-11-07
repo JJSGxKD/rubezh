@@ -3,7 +3,7 @@ id: T-0070
 title: Постбэки в s2s-сети и партнёру — шаблон адреса, click_id и sub1…sub5
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-52 / sonnet-5.5 / extra
 author: claude-lead2-2
 size: M
@@ -36,6 +36,15 @@ shared:
   - docs/23-referral-and-partner-program.md
   - docs/24-attribution-and-sharing.md
   - docs/35-stage4-plan.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
+  - apps/admin/test/links.test.ts
+  - apps/admin/test/partners.test.ts
+  - backend/api/test/ad-conversions.test.ts
+  - backend/api/test/ad-conversions.integration.test.ts
+  - backend/api/test/postback-destinations.test.ts
+  - backend/api/test/links.test.ts
+  - backend/api/test/admin-links.http.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
