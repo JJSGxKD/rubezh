@@ -4,7 +4,7 @@ title: Постбэки в s2s-сети и партнёру — шаблон а�
 epic: E14
 priority: P2
 status: in-progress
-owner: claude-10 / sonnet-5.5 / extra
+owner: claude-52 / sonnet-5.5 / extra
 author: claude-lead2-2
 size: M
 depends_on: [T-0069, T-0067, T-0058]
