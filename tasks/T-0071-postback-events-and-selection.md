@@ -3,8 +3,8 @@ id: T-0071
 title: Постбэки — покупки и возврат на следующий день, выбор событий у назначения
 epic: E14
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-53 / sonnet-5.5 / high
 author: claude-lead2-2
 size: M
 depends_on: [T-0069, T-0070]
