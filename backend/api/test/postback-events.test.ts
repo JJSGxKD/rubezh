@@ -369,7 +369,7 @@ describe("выбор событий по HTTP панели", () => {
     expect(ctx.partnersRepository.rows.get(partnerId)?.postbackEvents ?? ["registration"]).toEqual(["registration"]);
 
     const saved = await postPartner(partnerId, { ...BODY, postbackUrl: ADDRESS, postbackEvents: ["d1_return", "registration"] }, ctx.owner);
-    expect(saved.statusCode).toBe(200);
+    expect(saved.statusCode).toBe(201);
     expect(saved.json<PartnerReply>().data).toMatchObject({ postbackUrl: ADDRESS, postbackEvents: ["registration", "d1_return"] });
   });
 
@@ -392,7 +392,7 @@ describe("выбор событий по HTTP панели", () => {
     });
     // Тот же выбор ещё раз — не запись в аудит.
     const count = entries.length;
-    await postPartner(partnerId, { ...BODY, postbackEvents: ["purchase_repeat", "purchase_first", "registration"] }, ctx.owner);
+    await postPartner(partnerId, { ...BODY, name: "Канал 2", postbackEvents: ["purchase_repeat", "purchase_first", "registration"] }, ctx.owner);
     expect(ctx.roles.entries.filter((entry) => entry.action === "partner.update" && entry.target === partnerId)).toHaveLength(count);
   });
 

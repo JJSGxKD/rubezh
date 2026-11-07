@@ -137,6 +137,7 @@ const PATCH_COLUMNS = {
   sharePercent: "share_percent",
   postbackUrl: "postback_url",
   postbackSince: "postback_since",
+  postbackEvents: "postback_events",
 } as const satisfies Record<keyof PartnerPatch, string>;
 
 /** Нарушение уникальности TG id: код Postgres 23505 приходит то как P2002, то в `meta` сырого запроса. */
@@ -260,7 +261,10 @@ export class PrismaPartnersRepository implements PartnersRepository {
     const named = (Object.keys(PATCH_COLUMNS) as (keyof PartnerPatch)[]).filter((key) => patch[key] !== undefined);
     const assignments = named.map((key) => {
       const value = patch[key];
-      return key === "sharePercent" ? Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}::numeric` : Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}`;
+      if (key === "sharePercent") return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}::numeric`;
+      // Список событий — массив строк колонки `varchar(24)[]`: приведение явное, чтобы драйвер не увидел `text[]`.
+      if (key === "postbackEvents") return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${Array.isArray(value) ? value : []}::varchar(24)[]`;
+      return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}`;
     });
     try {
       return await this.prisma.$transaction(async (tx) => {
