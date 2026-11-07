@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../services";
 import {
+  ADSGRAM_EVENTS_LINE,
   AUTO_SOURCE_HELP,
   autoPairs,
   conversion,
@@ -13,6 +14,7 @@ import {
   GOAL_TITLES,
   GOALS,
   goalCounts,
+  linkEventsView,
   linkTitle,
   LINK_TARGETS,
   NETWORK_DIRECT_HINT,
@@ -31,6 +33,7 @@ import {
   retargetLink,
   setLinkHidden,
   setLinkPostback,
+  setLinkPostbackEvents,
   TARGET_HELP,
   TARGET_HINTS,
   TARGET_TITLES,
@@ -131,9 +134,10 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
             <li>Если модерация сети не принимает переходник, вставьте прямую ссылку для рекламы вместо него.</li>
             <li>
               Регистрация уходит в сеть {link.registrationOn === "launch" ? "при первом запуске игры" : "после первого забега от 30 секунд, если он был в течение 7 дней после клика"}. Первая
-              покупка — отдельной целью, следующие — повторными; возвраты и тестовые оплаты не уходят.
+              покупка — отдельной целью, следующие — повторными; возвращённые и тестовые оплаты не уходят.
             </li>
           </ol>
+          <p className="text-xs text-text-muted">{ADSGRAM_EVENTS_LINE}</p>
           {adsgramToken ? null : <TokenNotice />}
           <AddressBox label="Адрес без меток — для проверки" url={link.url} hint="Переход по нему засчитается кликом, но в сеть не уйдёт: сеть не знает такого клика." />
         </section>
@@ -154,13 +158,14 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
 
       {can(view, "links.manage") ? (
         <PostbackBlock
-          key={`${link.postbackUrl ?? ""}|${link.postbackSince ?? ""}`}
+          key={`${link.postbackUrl ?? ""}|${link.postbackSince ?? ""}|${link.postbackEvents.join()}|${link.partner?.postbackEvents?.join() ?? ""}`}
           title={POSTBACK_BLOCK_TITLE}
           label={link.partner === null ? POSTBACK_LINK_LABEL : POSTBACK_LINK_OWNED_LABEL}
           address={link.postbackUrl}
           since={link.postbackSince}
-          events={link.postbackEvents}
+          events={linkEventsView(link)}
           save={(url) => setLinkPostback(api, link.code, url)}
+          saveEvents={(events) => setLinkPostbackEvents(api, link.code, events)}
           onSaved={onChanged}
         />
       ) : null}

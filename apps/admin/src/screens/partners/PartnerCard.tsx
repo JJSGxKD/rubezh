@@ -12,6 +12,7 @@ import {
   bindsNewPlayers,
   fetchPartner,
   setPartnerPostback,
+  setPartnerPostbackEvents,
   share,
   statusTone,
   type PartnerDetail,
@@ -219,13 +220,14 @@ function CardBody({
 
       {canEdit ? (
         <PostbackBlock
-          key={`${detail.partner.postbackUrl ?? ""}|${detail.partner.postbackSince ?? ""}`}
+          key={`${detail.partner.postbackUrl ?? ""}|${detail.partner.postbackSince ?? ""}|${detail.partner.postbackEvents.join()}`}
           title={POSTBACK_PARTNER_BLOCK_TITLE}
           label={POSTBACK_PARTNER_LABEL}
           address={detail.partner.postbackUrl}
           since={detail.partner.postbackSince}
-          events={detail.partner.postbackEvents}
+          events={detail.partner.postbackUrl === null ? { kind: "none" } : { kind: "own", events: detail.partner.postbackEvents }}
           save={(url) => setPartnerPostback(api, detail.partner, url)}
+          saveEvents={(events) => setPartnerPostbackEvents(api, detail.partner, events)}
           onSaved={onChanged}
         />
       ) : null}
