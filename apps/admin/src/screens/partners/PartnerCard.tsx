@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { LINK_PARTNER_ROUTE, NETWORK_TITLES, TARGET_TITLES, launchesLabel } from "../../api/links";
+import { LINK_PARTNER_ROUTE, NETWORK_TITLES, POSTBACK_PARTNER_BLOCK_TITLE, POSTBACK_PARTNER_LABEL, TARGET_TITLES, launchesLabel } from "../../api/links";
 import {
   LINKS_BOUND_HELP,
   LINKS_HELP,
@@ -11,6 +11,7 @@ import {
   TERMS_HELP,
   bindsNewPlayers,
   fetchPartner,
+  setPartnerPostback,
   share,
   statusTone,
   type PartnerDetail,
@@ -26,6 +27,7 @@ import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Help, KeyValue, Loading } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
+import { PostbackBlock } from "../links/PostbackBlock";
 import { PartnerDialog } from "./PartnerDialog";
 import { PartnerFunnelBlock } from "./partner-funnel";
 import { PartnerStatusDialog } from "./PartnerStatusDialog";
@@ -45,6 +47,10 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
   const [editing, setEditing] = useState(false);
   const [changingStatus, setChangingStatus] = useState(false);
   const detail = state.status === "ok" ? state.data : null;
+  const refresh = () => {
+    reload();
+    onChanged();
+  };
 
   if (editing && detail !== null) {
     return (
@@ -106,12 +112,24 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
     >
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {detail === null ? null : <CardBody detail={detail} canEdit={canEdit} canLink={canLink} onChangeStatus={() => setChangingStatus(true)} />}
+      {detail === null ? null : <CardBody detail={detail} canEdit={canEdit} canLink={canLink} onChangeStatus={() => setChangingStatus(true)} onChanged={refresh} />}
     </Dialog>
   );
 }
 
-function CardBody({ detail, canEdit, canLink, onChangeStatus }: { detail: PartnerDetail; canEdit: boolean; canLink: boolean; onChangeStatus: () => void }) {
+function CardBody({
+  detail,
+  canEdit,
+  canLink,
+  onChangeStatus,
+  onChanged,
+}: {
+  detail: PartnerDetail;
+  canEdit: boolean;
+  canLink: boolean;
+  onChangeStatus: () => void;
+  onChanged: () => void;
+}) {
   const { stats, status } = detail.partner;
   return (
     <div className="flex flex-col gap-5">
@@ -198,6 +216,19 @@ function CardBody({ detail, canEdit, canLink, onChangeStatus }: { detail: Partne
           ]}
         />
       </section>
+
+      {canEdit ? (
+        <PostbackBlock
+          key={`${detail.partner.postbackUrl ?? ""}|${detail.partner.postbackSince ?? ""}`}
+          title={POSTBACK_PARTNER_BLOCK_TITLE}
+          label={POSTBACK_PARTNER_LABEL}
+          address={detail.partner.postbackUrl}
+          since={detail.partner.postbackSince}
+          events={detail.partner.postbackEvents}
+          save={(url) => setPartnerPostback(api, detail.partner, url)}
+          onSaved={onChanged}
+        />
+      ) : null}
 
       <PartnerFunnelBlock partnerId={detail.partner.partnerId} />
 

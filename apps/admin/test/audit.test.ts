@@ -233,6 +233,9 @@ describe("действия поддержки покупок, партнёров
     expect(actionTitle("payments.fulfill")).toBe("Повторная выдача покупки");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
+    expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");
+    expect(fieldTitle("postback")).toBe("адрес постбэка");
+    expect(fieldTitle("postbackUrl")).toBe("адрес постбэка");
     const refund = entry({ action: "payments.refund", target: "acc-1", targetName: "Игрок" });
     expect(auditObject(refund)).toMatchObject({ kind: "игрок", route: { section: "players", id: "acc-1" } });
   });

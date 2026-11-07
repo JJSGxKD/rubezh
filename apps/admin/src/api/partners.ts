@@ -87,6 +87,11 @@ const partnerSchema = z.object({
   payoutMethod: z.string().nullable(),
   /** процент строкой с двумя знаками: «12.50» */
   sharePercent: z.string().nullable(),
+  // Общий адрес постбэка (T-0070). Полный адрес приходит тем, у кого есть право на правку, остальным — без запроса.
+  // Сервер старее панели или мусор в поле: адреса нет, события — одна регистрация.
+  postbackUrl: z.string().nullable().catch(null),
+  postbackSince: z.string().nullable().catch(null),
+  postbackEvents: z.array(z.string()).catch(["registration"]),
   stats: statsSchema,
 });
 export type Partner = z.infer<typeof partnerSchema>;
@@ -257,6 +262,19 @@ export function createPartner(api: AdminApi, form: PartnerForm): Promise<ApiResu
 
 export function updatePartner(api: AdminApi, partnerId: string, form: PartnerForm): Promise<ApiResult<Partner>> {
   return api.request(`/partners/${encodeURIComponent(partnerId)}`, { method: "POST", body: bodyOf(form), schema: partnerSchema });
+}
+
+/**
+ * Задать, сменить или снять общий адрес постбэка партнёра (T-0070). Сервер правит партнёра целиком по названным
+ * полям, поэтому уходят все поля карточки как они есть — условия выплат не стираются; пустой адрес снимает его.
+ */
+export function setPartnerPostback(api: AdminApi, partner: Partner, url: string | null): Promise<ApiResult<Partner>> {
+  const trimmed = url?.trim() ?? "";
+  return api.request(`/partners/${encodeURIComponent(partner.partnerId)}`, {
+    method: "POST",
+    body: { ...bodyOf(partnerFormOf(partner)), postbackUrl: trimmed === "" ? null : trimmed },
+    schema: partnerSchema,
+  });
 }
 
 /** Сменить статус: причина обязательна, уходит в аудит. */
