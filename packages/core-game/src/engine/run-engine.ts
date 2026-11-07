@@ -27,6 +27,7 @@ export function createRunEngine(): RunEngine {
         mapId: options.mapId,
         difficultyId: options.difficultyId,
         mode: options.mode,
+        ...(options.modifierIds === undefined ? {} : { modifierIds: options.modifierIds }),
         ...(options.startingWeaponId === ""
           ? {}
           : { startingWeaponId: options.startingWeaponId }),

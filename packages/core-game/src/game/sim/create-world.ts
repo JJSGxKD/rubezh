@@ -8,6 +8,7 @@ import type {
   DifficultyDef,
   DropsDef,
   EnemyDef,
+  RunModifierId,
   EnemyStageDef,
   LevelCurveDef,
   LimitDef,
@@ -211,8 +212,13 @@ export interface CreateWorldOptions {
   cardRules?: CardToolRules;
   /** второй шанс; по умолчанию — одно продолжение */
   continueRules?: ContinueDef;
-  /** уровень сложности; по умолчанию — без поправок */
+  /** уровень сложности; по умолчанию — без поправок. С модификатором — уже составленный (`composeDifficulty`) */
   difficulty?: DifficultyDef;
+  /**
+   * Модификаторы забега (T-0119), уже отобранные `resolveModifierIds`: мир их только
+   * помнит — для снимка, итога и записи. Их действие уже внутри `difficulty`.
+   */
+  modifierIds?: readonly RunModifierId[];
   /** ступени врагов; по умолчанию — одна базовая, без усиления */
   stages?: readonly EnemyStageDef[];
   /** карта: границы мира и параметры, от которых считается кольцо спавна */
@@ -378,6 +384,7 @@ export function createWorld(options: CreateWorldOptions): World {
     cardRules: options.cardRules ?? FALLBACK_CARD_RULES,
     continueRules,
     difficultyLevel,
+    modifierIds: [...(options.modifierIds ?? [])],
     playerStats,
     runLoadout,
     boosts,

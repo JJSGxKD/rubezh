@@ -1,4 +1,5 @@
 import type { DifficultyId, MapDef, RunLoadout, RunMode } from "@bh/shared-types";
+import { MAX_MODIFIERS_PER_RUN, RUN_MODIFIERS } from "../content/modifiers";
 import { DEFAULT_DIFFICULTY_ID } from "../content/difficulty";
 import { PROLOGUE, PROLOGUE_DIFFICULTY_ID } from "../content/prologue";
 import { RUBEZH } from "../content/rubezh";
@@ -6,6 +7,7 @@ import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../content/snapshot";
 import { cardToolsAt, unlocksAt, weaponsOpenAt } from "./progression/unlocks";
 import { prologueCurve, prologueRubezh } from "./run/prologue";
 import { createTimelineDirector } from "./sim/director";
+import { BASE_DIFFICULTY, composeDifficulty, resolveModifierIds } from "./sim/difficulty";
 import type { Spawner } from "./sim/spawner";
 import { createWorld, type World } from "./sim/world";
 
@@ -25,6 +27,13 @@ export interface RunWorldOptions {
    * тайников и подстройки давления в нём нет (T-0278).
    */
   mode?: RunMode;
+  /**
+   * Модификаторы забега (T-0119, Р105): оси ложатся на сложность умножением, опыт в бою
+   * растёт. Берутся только известные и открытые уровнем аккаунта, не больше
+   * `MAX_MODIFIERS_PER_RUN`, остальное отбрасывается; в прологе их нет. Без поля — забег
+   * без модификатора.
+   */
+  modifierIds?: readonly string[];
   /** по умолчанию — первое открытое оружие контента */
   startingWeaponId?: string;
   /** физических пикселей на игровую единицу: мир считается в них */
@@ -59,6 +68,10 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
   // Без уровня — открыто всё: запись и снимок прошлой сборки, стенд, тесты.
   const level = options.loadout?.accountLevel;
   const open = level === undefined ? null : unlocksAt(content.accountUnlocks, level);
+  // Модификатор — условие обычного забега: у пролога своя сложность, и менять её нечем.
+  const modifierIds = prologue ? [] : resolveModifierIds(options.modifierIds, RUN_MODIFIERS, MAX_MODIFIERS_PER_RUN, open === null ? null : open.modifiers);
+  const composed =
+    modifierIds.length === 0 ? difficulty : composeDifficulty(difficulty ?? BASE_DIFFICULTY, modifierIds, RUN_MODIFIERS);
   // Таймлайн пролога — свой, а кривая бесконечного режима отодвинута: после последнего отрезка поток держится как есть.
   const timeline = prologue ? PROLOGUE.timeline : content.timeline;
   const endlessCurve = prologue ? prologueCurve(content.endlessCurve) : content.endlessCurve;
@@ -87,7 +100,8 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     ...(level === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, level) }),
     cardRules: content.cardToolRules,
     map,
-    ...(difficulty === undefined ? {} : { difficulty }),
+    ...(composed === undefined ? {} : { difficulty: composed }),
+    modifierIds,
     ...(options.startingWeaponId === undefined ? {} : { startingWeaponId: options.startingWeaponId }),
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
     config: { unitScale: options.unitScale },

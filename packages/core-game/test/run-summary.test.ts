@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { DROPS } from "../src/content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { RUN_MODIFIERS } from "../src/content/modifiers";
 import { WEAPONS } from "../src/content/weapons";
+import { BASE_DIFFICULTY, composeDifficulty } from "../src/game/sim/difficulty";
 import { benchInput } from "../src/game/bench/autopilot";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "../src/game/run/records";
@@ -236,6 +238,22 @@ describe("итог забега", () => {
     spawnEnemy(world, typeIndex, world.player.x + offset, world.player.y);
     return world;
   }
+
+  it("итог несёт модификатор забега, а без него поля нет (T-0119)", () => {
+    const plain = worldWithEnemyAt(DUMMY, 200);
+    expect(resultOf(plain, 1).modifierIds).toBeUndefined();
+    expect("modifierIds" in resultOf(plain, 1)).toBe(false);
+
+    const world = createWorld({
+      seed: 1,
+      enemies: [DUMMY, BITER],
+      weapons: [SPARK],
+      difficulty: composeDifficulty(BASE_DIFFICULTY, ["inverse"], RUN_MODIFIERS),
+      modifierIds: ["inverse"],
+    });
+    expect(resultOf(world, 1).modifierIds).toEqual(["inverse"]);
+    expect(resultOf(world, 1).difficultyId).toBe("easy");
+  });
 
   it("сценарий без набора подстройки не несёт: в итоге нет поля pressure", () => {
     const world = worldWithEnemyAt(DUMMY, 200);

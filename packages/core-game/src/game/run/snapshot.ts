@@ -96,6 +96,11 @@ export interface WorldSnapshot {
   loadout: World["loadout"];
   progression: World["progression"];
   difficulty: World["difficulty"];
+  /**
+   * Модификатор забега (T-0119): нужен для сверки, а не для восстановления — его действие
+   * мир берёт из параметров создания. В снимках без поля — забег без модификатора.
+   */
+  modifierIds?: readonly string[];
   gemMergeCursor: number;
   stats: EncodedPool;
   enemies: EncodedPool;
@@ -137,6 +142,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     loadout: cloneJson(world.loadout),
     progression: cloneJson(world.progression),
     difficulty: { ...world.difficulty },
+    ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
     gemMergeCursor: world.gemMergeCursor,
     stats: encodeRecord(world.stats, Number.POSITIVE_INFINITY),
     enemies: encodeRecord(world.enemies, world.enemies.count),
@@ -167,6 +173,8 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   if (snapshot.version !== WORLD_SNAPSHOT_VERSION) {
     throw new SnapshotError(`версия ${String(snapshot.version)}, ожидалась ${WORLD_SNAPSHOT_VERSION}`);
   }
+
+  checkModifiers(world, snapshot.modifierIds);
 
   world.rng.setState(asNumber(snapshot.rng, "rng"));
   world.cardRng.setState(asNumber(snapshot.cardRng, "cardRng"));
@@ -200,6 +208,19 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
   world.events.written = 0;
+}
+
+/**
+ * Модификатор снимка обязан совпасть с модификатором мира, в который он ложится: оси
+ * сложности берутся из параметров создания, и снимок «Спешки» в мир без неё продолжил бы
+ * другой забег с тем же номером.
+ */
+function checkModifiers(world: World, input: unknown): void {
+  const saved = input === undefined ? [] : asArray(input, "modifierIds").map((id, i) => asString(id, `modifierIds[${i}]`));
+  if (saved.length !== world.modifierIds.length || saved.some((id, i) => id !== world.modifierIds[i])) {
+    const name = (ids: readonly string[]): string => (ids.length === 0 ? "без модификатора" : ids.join(", "));
+    throw new SnapshotError(`модификатор забега: в снимке ${name(saved)}, в мире ${name(world.modifierIds)}`);
+  }
 }
 
 function capturedSecrets(world: World): SecretsSnapshot {

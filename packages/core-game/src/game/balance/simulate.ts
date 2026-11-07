@@ -1,11 +1,13 @@
 import type { DifficultyId, RunHuntEntry, RunLoadout, RunRubezh } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
+import { MAX_MODIFIERS_PER_RUN, RUN_MODIFIERS } from "../../content/modifiers";
 import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { buildScore } from "../run/hunt-log";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
 import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
+import { composeDifficulty, resolveModifierIds } from "../sim/difficulty";
 import { buildScoreOf } from "../sim/player-power";
 import { isPressureActive } from "../sim/pressure";
 import { describeRubezh } from "../sim/rubezh";
@@ -35,6 +37,11 @@ export interface BalanceRunOptions {
    * калибровки заданы для неё; обучающая «Лёгкая» меряется отдельно
    */
   difficultyId?: DifficultyId;
+  /**
+   * Модификаторы забега (T-0119): как в игре, оси ложатся поверх сложности. С уровнем
+   * аккаунта берутся только открытые им; без уровня открыто всё. Без поля — как раньше.
+   */
+  modifierIds?: readonly string[];
   /** чем начинать забег; по умолчанию — первое открытое оружие контента */
   startingWeaponId?: string;
   /**
@@ -136,6 +143,8 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? DEFAULT_DIFFICULTY_ID));
   const accountLevel = options.loadout?.accountLevel ?? options.accountLevel;
   const open = accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, accountLevel);
+  const modifierIds = resolveModifierIds(options.modifierIds, RUN_MODIFIERS, MAX_MODIFIERS_PER_RUN, open === null ? null : open.modifiers);
+  const composed = difficulty !== undefined && modifierIds.length > 0 ? composeDifficulty(difficulty, modifierIds, RUN_MODIFIERS) : difficulty;
   const world = createWorld({
     seed: options.seed,
     enemies: content.enemies,
@@ -156,7 +165,8 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,
     map: content.maps[0],
-    ...(difficulty === undefined ? {} : { difficulty }),
+    ...(composed === undefined ? {} : { difficulty: composed }),
+    modifierIds,
     ...(options.startingWeaponId === undefined
       ? {}
       : { startingWeaponId: options.startingWeaponId }),
