@@ -3,8 +3,8 @@ id: T-0148
 title: Счётчик онлайна — клиент и панель: шапка, кнопка «Играть», разбивка
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0147, T-0176]
