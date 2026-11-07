@@ -29,6 +29,7 @@ shared:
   - docs/35-stage4-plan.md
   - docs/24-attribution-and-sharing.md
   - backend/api/test/postback-settings.test.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
