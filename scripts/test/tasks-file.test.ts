@@ -693,7 +693,7 @@ describe("withRestartedHeader: шапка после снятия захвата
 
   it("поле уже есть — заменяется на месте, второй строки нет", () => {
     const again = withRestartedHeader(withRestartedHeader(taken, 2), 3);
-    expect(again.match(/^attempt:/gm)).toEqual(["attempt: 3"]);
+    expect(again.match(/^attempt:.*$/gm)).toEqual(["attempt: 3"]);
     expect(parseFrontmatter(again).data.attempt).toBe("3");
     expect(parseFrontmatter(again).errors).toEqual([]);
   });
