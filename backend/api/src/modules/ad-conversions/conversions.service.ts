@@ -39,6 +39,7 @@ return 0
 export interface TickReport {
   registrations: number;
   purchases: number;
+  returns: number;
   sent: number;
   failed: number;
   deferred: number;
@@ -105,7 +106,7 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
 
   private async pass(now: Date, fetchImpl: typeof fetch): Promise<TickReport> {
     const found = await withTimeout(this.repository.sweep(now), DB_TIMEOUT_MS, "поиск конверсий");
-    const report: TickReport = { ...found, sent: 0, failed: 0, deferred: 0, skipped: 0, purged: 0 };
+    const report: TickReport = { registrations: found.registrations, purchases: found.purchases, returns: found.returns ?? 0, sent: 0, failed: 0, deferred: 0, skipped: 0, purged: 0 };
     const due = await withTimeout(this.repository.due(now, SEND_BATCH), DB_TIMEOUT_MS, "очередь конверсий");
     for (const conversion of due) {
       const outcome = await this.send(conversion, now, fetchImpl);
