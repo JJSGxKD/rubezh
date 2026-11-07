@@ -149,26 +149,34 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
     }
   }
 
-  /** Отправить готовый запрос и записать исход: ответ сети, сбой или таймаут. В лог — только `logUrl`. */
+  /**
+   * Отправить готовый запрос и записать исход: ответ сети, сбой или таймаут. В лог — только `logUrl`. У `quiet`
+   * запроса ни текст сбоя, ни тело ответа не несут адреса: приёмник мог вернуть запрос в теле, а сбой —
+   * назвать адрес целиком.
+   */
   private async deliver(conversion: DueConversion, prepared: Extract<Prepared, { kind: "request" }>, now: Date, fetchImpl: typeof fetch): Promise<Outcome> {
     const timeout = AbortSignal.timeout(POSTBACK_TIMEOUT_MS);
     const own = prepared.init?.signal;
+    const quiet = prepared.quiet === true;
     let response: Response;
     try {
       response = await fetchImpl(prepared.url, { ...prepared.init, signal: own === undefined || own === null ? timeout : AbortSignal.any([own, timeout]) });
     } catch (error: unknown) {
       const isTimeout = error instanceof Error && error.name === "TimeoutError";
-      const outcome = await this.fail(conversion, now, true, null, isTimeout ? "сеть не ответила за 5 секунд" : `сеть недоступна: ${reasonOf(error)}`);
-      this.log("warn", "postback_failed", { conversionId: conversion.conversionId, destination: conversion.destination, url: prepared.logUrl, reason: reasonOf(error), retry: outcome === "deferred" });
+      const reason = quiet ? withoutAddress(reasonOf(error), prepared.url) : reasonOf(error);
+      const outcome = await this.fail(conversion, now, true, null, isTimeout ? "сеть не ответила за 5 секунд" : `сеть недоступна: ${reason}`);
+      this.log("warn", "postback_failed", { conversionId: conversion.conversionId, destination: conversion.destination, url: prepared.logUrl, reason, retry: outcome === "deferred" });
       return outcome;
     }
 
+    // Тело quiet-ответа не читаем и не пишем, но соединение освобождаем.
+    if (quiet) void response.body?.cancel().catch(() => undefined);
     const verdict = verdictOf(response.status);
     if (verdict === "sent") {
       await this.repository.markSent(conversion.conversionId, response.status, now);
       return "sent";
     }
-    const body = (await response.text().catch(() => "")).slice(0, 160);
+    const body = quiet ? "" : (await response.text().catch(() => "")).slice(0, 160);
     const outcome = await this.fail(conversion, now, verdict === "retry", response.status, `ответ ${String(response.status)}${body === "" ? "" : `: ${body}`}`);
     this.log("warn", "postback_rejected", { conversionId: conversion.conversionId, destination: conversion.destination, status: response.status, url: prepared.logUrl, retry: outcome === "deferred" });
     return outcome;
@@ -189,4 +197,11 @@ export class AdConversionsService implements OnApplicationBootstrap, OnModuleDes
 
 function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : "unknown";
+}
+
+/** Текст без адреса запроса и его запроса (`?token=…`): они — секрет приёмника, в журнал и лог не идут. */
+function withoutAddress(text: string, url: URL): string {
+  let result = text.split(url.href).join("***");
+  if (url.search.length > 1) result = result.split(url.search).join("?***").split(url.search.slice(1)).join("***");
+  return result;
 }

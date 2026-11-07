@@ -44,6 +44,9 @@ const PARTNER = {
   payoutCurrency: null,
   payoutMethod: null,
   sharePercent: null,
+  postbackUrl: null as string | null,
+  postbackSince: null as string | null,
+  postbackEvents: ["registration"],
   stats: { codes: 1, activeCodes: 1, redeemed: 10, bound: 4, played: 3, payers: 1, stars: 250 },
 };
 

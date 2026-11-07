@@ -8,6 +8,7 @@ import {
   deviceRows,
   DIRECT_HINT,
   DIRECT_UNAVAILABLE,
+  destinationTitle,
   fetchConversions,
   GOAL_TITLES,
   GOALS,
@@ -21,11 +22,15 @@ import {
   NETWORK_TITLES,
   OWNER_HELP,
   OWNER_TITLES,
+  POSTBACK_BLOCK_TITLE,
+  POSTBACK_LINK_LABEL,
+  POSTBACK_LINK_OWNED_LABEL,
   RENAME_HELP,
   renameLink,
   resendConversion,
   retargetLink,
   setLinkHidden,
+  setLinkPostback,
   TARGET_HELP,
   TARGET_HINTS,
   TARGET_TITLES,
@@ -45,6 +50,7 @@ import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Help, Input, KeyValue, Loading, Notice, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
+import { PostbackBlock } from "./PostbackBlock";
 import { TokenNotice } from "./TokenNotice";
 
 /**
@@ -54,6 +60,9 @@ import { TokenNotice } from "./TokenNotice";
  * адрес с метками для кабинета, прямая ссылка для рекламы, которую модерация сети не
  * пускает через переходник (Р121), и путь от клика до конверсии: что вставить в
  * кабинет, что считается регистрацией и покупкой, что ушло в сеть и что нет.
+ *
+ * Ссылка может отправлять события на свой адрес постбэка (T-0070): блок «Постбэк по этой ссылке» виден тем, у кого
+ * есть право на ссылки, а журнал показывает и такие отправки — с назначением в отдельной колонке.
  */
 export function LinkCard({
   link,
@@ -90,8 +99,11 @@ function copy(text: string, what: string): void {
 }
 
 function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramToken: boolean; onChanged: () => void }) {
+  const view = useSession((session) => session.view);
   const rate = conversion(link);
   const devices = deviceRows(link.devices);
+  // Журнал нужен ссылке сети и ссылке с постбэком: своим адресом, а у ссылки партнёра — ещё и общим адресом партнёра.
+  const hasJournal = link.conversions !== null || link.postbackUrl !== null || link.partner !== null;
   return (
     <div className="flex flex-col gap-5">
       {link.network === null || link.networkUrl === null ? (
@@ -140,6 +152,19 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         ]}
       />
 
+      {can(view, "links.manage") ? (
+        <PostbackBlock
+          key={`${link.postbackUrl ?? ""}|${link.postbackSince ?? ""}`}
+          title={POSTBACK_BLOCK_TITLE}
+          label={link.partner === null ? POSTBACK_LINK_LABEL : POSTBACK_LINK_OWNED_LABEL}
+          address={link.postbackUrl}
+          since={link.postbackSince}
+          events={link.postbackEvents}
+          save={(url) => setLinkPostback(api, link.code, url)}
+          onSaved={onChanged}
+        />
+      ) : null}
+
       {devices.length === 0 ? null : (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Клики по устройствам</h3>
@@ -151,12 +176,8 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </section>
       )}
 
-      {link.conversions === null ? null : (
-        <>
-          <GoalTable summary={link.conversions} />
-          <Journal code={link.code} onChanged={onChanged} />
-        </>
-      )}
+      {link.conversions === null ? null : <GoalTable summary={link.conversions} />}
+      {hasJournal ? <Journal code={link.code} onChanged={onChanged} /> : null}
     </div>
   );
 }
@@ -405,9 +426,10 @@ function Journal({ code, onChanged }: { code: string; onChanged: () => void }) {
         <DataTable
           rows={rows}
           rowKey={(row) => row.conversionId}
-          empty="Конверсий ещё нет. Первая появится, когда новичок из рекламы пройдёт регистрацию."
+          empty="Конверсий ещё нет. Первая появится, когда новичок по этой ссылке пройдёт регистрацию."
           columns={[
             { title: "Когда", render: (row) => <span className="whitespace-nowrap">{formatDateTime(row.createdAt)}</span> },
+            { title: "Назначение", render: (row) => <span className="whitespace-nowrap">{destinationTitle(row.destination)}</span> },
             { title: "Цель", render: (row) => <span className="whitespace-nowrap">{GOAL_TITLES[row.goal]}</span> },
             {
               title: "Что с ней",

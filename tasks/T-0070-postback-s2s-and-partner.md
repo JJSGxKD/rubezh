@@ -3,8 +3,8 @@ id: T-0070
 title: Постбэки в s2s-сети и партнёру — шаблон адреса, click_id и sub1…sub5
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-52 / sonnet-5.5 / extra
 author: claude-lead2-2
 size: M
 depends_on: [T-0069, T-0067, T-0058]
@@ -36,6 +36,15 @@ shared:
   - docs/23-referral-and-partner-program.md
   - docs/24-attribution-and-sharing.md
   - docs/35-stage4-plan.md
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
+  - apps/admin/test/links.test.ts
+  - apps/admin/test/partners.test.ts
+  - backend/api/test/ad-conversions.test.ts
+  - backend/api/test/ad-conversions.integration.test.ts
+  - backend/api/test/postback-destinations.test.ts
+  - backend/api/test/links.test.ts
+  - backend/api/test/admin-links.http.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
@@ -330,6 +339,51 @@ batch: 4
   дополняет его; у ссылки без партнёра адрес — назначение `s2s`.
 - Подтверждено `claude-lead-1` 13.10.2026: проверка внутренних адресов — до отправки; закрепление
   проверенного IP на время соединения — задача общего клиента.
+
+## Уточнения claude-lead-1 от 07.11.2026
+
+Спецификация писалась до T-0181 (прямая ссылка AdsGram, PR #680) и T-0372 (справка по
+ссылкам, PR #679). Решения выше не меняются; здесь — как выполнить их на нынешнем коде.
+
+1. **Прямой запуск событий не порождает и у новых назначений.**
+   - Что изменилось. После T-0181 у прохода конверсий есть вторая ветка —
+     `ad-conversions/direct-launch-sweep.ts`: конверсии по запуску `l-<код>` без клика.
+     Ветка берёт тот же набор `targets` (`TARGETS_CTE`).
+   - В чём проблема. Без правки ветки назначения `s2s` и `partner` из шага 6 начали бы
+     получать строки по прямым запускам — без `click_id` и `sub`. Это противоречит
+     подтверждённому решению «постбэки идут только по кликам после задания адреса»
+     («Вопросы к тимлиду») и разделу «Чего не трогаем».
+   - Правило. Прямая ветка отбирает только назначения рекламных сетей — те, чьё имя входит
+     в `LINK_NETWORKS` (сейчас `adsgram`). `s2s` и `partner` получают строки только из
+     прохода по кликам. Отбор делается в SQL прямой ветки; `TARGETS_CTE` остаётся общим и
+     под неё не меняется.
+   - Тесты в `postback-s2s.integration.test.ts`: ссылка партнёра с адресом, новичок пришёл
+     по `l-<код>` и сыграл засчитанный забег — строк `partner` нет; ссылка AdsGram со своим
+     адресом, прямой запуск с метками — ровно одна строка `adsgram`, строки `s2s` нет.
+     Существующие тесты прямой ветки в `ad-conversions.integration.test.ts` не правятся.
+2. **Декомпозиция `conversions.repository.ts`.** Файл уже 323 строки, а задача добавит к
+   `due` ещё. Отдельным коммитом рефакторинга, до изменения поведения: SQL прохода по
+   кликам (регистрации и покупки из `sweep`) уходит в новый
+   `ad-conversions/click-launch-sweep.ts` по образцу `direct-launch-sweep.ts`, функция —
+   `sweepClickLaunches(prisma, now, targets)`. Поведение не меняется, существующие тесты
+   проходят без правок. После задачи `conversions.repository.ts` не длиннее 300 строк.
+3. **«Как сейчас» сдвинулось.** `due` уже читает метки как
+   `COALESCE(c.network_params, v.network_params)` через `LEFT JOIN link_click c`: у прямых
+   конверсий клика нет; `LEFT JOIN link l` и `partner p` добавляются рядом, `COALESCE` меток
+   не трогается. `ad_conversion.click_id` необязателен; для строк без клика есть частичный
+   уникальный индекс `ad_conversion_account_goal_destination_direct_key`. В
+   `link-networks.ts` проверка значения — функция `isMacroValue` (рядом `MACRO_VALUE`); её
+   экспортируют для `click-params.ts`, второго правила не заводят. Номера строк в «Как
+   сейчас» устарели — ориентироваться по именам функций.
+4. **Справка в панели** — `apps/admin/src/screens/links/links-guide.ts` (T-0372), в зонах
+   через `screens/links/**`. Дописать: в таблице «Какие бывают ссылки», в строке ссылки
+   партнёра — адрес постбэка; в «Поля ссылки» — «Адрес постбэка» (что значит, можно ли
+   менять, с какого момента действует, `postback_since`); отдельным блоком в подходящем
+   разделе — постбэки в s2s и партнёру (макросы, что уходит по прямой ссылке — ничего,
+   только по кликам, проверки адреса); в «Если ссылка не работает» — пункт «постбэк не
+   пришёл». Правила T-0372: текст только по коду, без имён функций и файлов, безлично или на
+   «вы»; в описании PR — таблица «утверждение → файл:строка». Разделов ровно восемь, новых
+   не добавлять; `apps/admin/test/links-guide.test.ts` остаётся зелёным.
 
 ## Критерии приёмки
 

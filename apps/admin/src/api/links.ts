@@ -98,6 +98,10 @@ export const linkSchema = z.object({
   partnerTag: z.string().nullable().catch(null),
   title: z.string().nullable().catch(null),
   hiddenAt: z.string().nullable().catch(null),
+  // Адрес постбэка (T-0070): сервер старее панели или мусор в поле — адреса нет, события — одна регистрация.
+  postbackUrl: z.string().nullable().catch(null),
+  postbackSince: z.string().nullable().catch(null),
+  postbackEvents: z.array(z.string()).catch(["registration"]),
 });
 
 /** Клики по классу устройства; без класса и незнакомый класс сервер сводит в `unknown`. */
@@ -165,6 +169,15 @@ export function createLink(api: AdminApi, input: NewLink): Promise<ApiResult<Lin
 /** Сменить цель: прошлые клики остаются, новые идут по-новому. */
 export function retargetLink(api: AdminApi, code: string, target: LinkTarget): Promise<ApiResult<Link>> {
   return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { target }, schema: linkSchema });
+}
+
+/**
+ * Задать, сменить или снять адрес постбэка ссылки (T-0070). Пустой адрес и из одних пробелов снимают его; недопустимый
+ * сервер отклоняет понятным текстом, и он доходит как есть.
+ */
+export function setLinkPostback(api: AdminApi, code: string, url: string | null): Promise<ApiResult<Link>> {
+  const trimmed = url?.trim() ?? "";
+  return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { postbackUrl: trimmed === "" ? null : trimmed }, schema: linkSchema });
 }
 
 /** Дать автоисточнику название; пустое сбрасывает, и в списке снова кампания. Кампания и источник не меняются. */
@@ -253,6 +266,53 @@ export function conversion(row: Pick<LinkRow, "clicks" | "launches">): number | 
   return row.clicks === 0 ? null : Math.round((row.launches / row.clicks) * 100);
 }
 
+// --- Адрес постбэка (T-0070) ---
+
+/** Подписи и подсказки блока адреса. Словарь подсказок панели (`ui/help.ts`) вне зон T-0070, поэтому тексты — рядом с блоком. */
+export const POSTBACK_BLOCK_TITLE = "Постбэк по этой ссылке";
+export const POSTBACK_LINK_LABEL = "Адрес постбэка";
+export const POSTBACK_LINK_OWNED_LABEL = "Адрес для этой ссылки (если пусто — общий адрес партнёра)";
+export const POSTBACK_PARTNER_BLOCK_TITLE = "Постбэк партнёра";
+export const POSTBACK_PARTNER_LABEL = "Общий адрес постбэка партнёра";
+export const POSTBACK_HINT =
+  "Мы отправим GET-запрос по этому адресу. Подставляются: {click_id}, {sub1}…{sub5} — значения из ссылки, {event} — событие, {event_id} — наш идентификатор события, по нему приёмник отсекает повторы, {amount} и {currency} — сумма и валюта платежа (звёзды — XTR). Адрес только https, без логина, пароля и порта.";
+export const POSTBACK_PARAMS_NOTE = "К адресу ссылки можно добавить click_id и sub1…sub5 — мы сохраним их и вернём в постбэке.";
+export const POSTBACK_OFFLINE = "Не удалось сохранить — проверьте связь";
+/** Пример адреса: подставляется кнопкой «Вставить пример». */
+export const POSTBACK_EXAMPLE = "https://example.com/postback?click_id={click_id}&event={event}&event_id={event_id}&amount={amount}&currency={currency}&sub1={sub1}";
+
+/** Что отправляем сейчас: с какого времени идут клики или что адреса нет. Адрес без момента (в базе не бывает) — тоже «не задан». */
+export function postbackState(setting: { postbackUrl: string | null; postbackSince: string | null }): string {
+  if (setting.postbackUrl === null || setting.postbackSince === null) return "Адрес не задан — ничего не отправляем.";
+  return `Отправляем по кликам с ${formatDateTime(setting.postbackSince)}. События по более ранним кликам не отправляются.`;
+}
+
+const POSTBACK_EVENT_TITLES: Readonly<Record<string, string>> = {
+  registration: "регистрация",
+  purchase_first: "первая покупка",
+  purchase_repeat: "повторная покупка",
+  d1_return: "возврат на следующий день",
+};
+
+/** «Получает: регистрация.» — события словами; незнакомое событие показывается как есть. */
+export function postbackEventsLine(events: readonly string[]): string {
+  if (events.length === 0) return "Получает: ничего.";
+  return `Получает: ${events.map((event) => POSTBACK_EVENT_TITLES[event] ?? event).join(", ")}.`;
+}
+
+/** Ошибка сохранения словами для поля: нет сети — наш текст, остальное — как ответил сервер, введённое остаётся. */
+export function postbackSaveError(error: { kind: string; message: string }): string {
+  return error.kind === "offline" ? POSTBACK_OFFLINE : error.message;
+}
+
+/** Назначения постбэков в журнале (T-0069, T-0070); сервер знает тот же список (`destination.ts`). */
+export const DESTINATION_TITLES = { adsgram: "AdsGram", s2s: "Адрес сети", partner: "Партнёр" } as const;
+
+/** Подпись назначения; назначение, о котором панель ещё не знает, показывается как есть. */
+export function destinationTitle(destination: string): string {
+  return (DESTINATION_TITLES as Readonly<Record<string, string>>)[destination] ?? destination;
+}
+
 // --- Конверсии сети ---
 
 export type ConversionGoal = 1 | 2 | 3;
@@ -264,6 +324,8 @@ export const GOAL_TITLES: Record<ConversionGoal, string> = { 1: "Регистр�
 export const conversionSchema = z.object({
   conversionId: z.string(),
   goal: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  // Куда уходит строка. Сервер старее панели: до постбэков назначение было одно — AdsGram.
+  destination: z.string().catch("adsgram"),
   status: z.enum(["pending", "sent", "failed", "skipped"]),
   reason: z.string().nullable(),
   attempts: z.number(),
@@ -302,6 +364,8 @@ const SKIP_REASONS: Record<string, string> = {
   team: "аккаунт команды: свои проверки сети ни к чему. Проверяете связку с кабинетом — отправьте руками",
   no_macros: "в клике или параметре запуска нет меток сети — переход не из рекламы: превью кабинета или проверка ссылки руками",
   unknown_network: "сеть ссылки больше не поддерживается",
+  no_address: "адрес постбэка снят",
+  no_click_id: "в ссылке не было click_id",
 };
 
 export function conversionState(row: Conversion): ConversionState {

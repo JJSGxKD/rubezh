@@ -51,6 +51,9 @@ class MemoryLinks implements LinksRepository {
       partnerTag: null,
       title: null,
       hiddenAt: null,
+      postbackUrl: null,
+      postbackSince: null,
+      postbackEvents: ["registration"],
     };
     this.links.set(link.code, record);
     return record;
@@ -67,6 +70,13 @@ class MemoryLinks implements LinksRepository {
   }
   async byCode(code: string): Promise<LinkRecord | null> {
     return this.links.get(code) ?? null;
+  }
+  async setPostback(code: string, postback: { url: string | null; since: Date | null }): Promise<LinkRecord | null> {
+    const link = this.links.get(code);
+    if (link === undefined) return null;
+    const next = { ...link, postbackUrl: postback.url, postbackSince: postback.since };
+    this.links.set(code, next);
+    return next;
   }
   async setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null> {
     const link = this.links.get(code);
@@ -407,6 +417,9 @@ describe("автоисточники: название, скрытие и сво
       partnerTag: null,
       title: null,
       hiddenAt: null,
+      postbackUrl: null,
+      postbackSince: null,
+      postbackEvents: ["registration"],
     };
     repository.links.set(code, record);
     return record;
