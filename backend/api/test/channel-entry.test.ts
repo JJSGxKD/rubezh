@@ -4,7 +4,7 @@ import { AuthHooks, type LoginEvent } from "../src/modules/auth/auth-hooks.js";
 import { AuthService } from "../src/modules/auth/auth.service.js";
 import { launchVerifiersFor } from "../src/platforms/platforms.module.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
-import { launchFor } from "./helpers/init-data.js";
+import { launchFor, signInitData } from "./helpers/init-data.js";
 import { MemoryAccountRepository, MemoryRefreshStore } from "./helpers/memory-auth.js";
 
 // Вход в канал площадки до приложения (docs/35-stage4-plan.md, Р29): /start
@@ -61,3 +61,60 @@ describe("вход в канал площадки", () => {
   });
 });
 
+// Два предела Telegram на параметр запуска (T-0181): у /start бота — 64 знака, у Mini App — 512.
+describe("длина параметра запуска по каналу", () => {
+  const CODE = "AbC123xyz9";
+  /** Прямая ссылка сети нужной длины: код, ключ record и добивка до `length` знаков. */
+  const directOf = (length: number) => {
+    const head = `l-${CODE}_record-`;
+    return head + "r".repeat(length - head.length);
+  };
+  const entry = (startParam: string) => ({ platform: "telegram" as const, platformUserId: "555", displayName: "Анна", username: null, startParam });
+
+  /** Служба входа и список запусков, которые услышали слушатели. */
+  function harness(): { auth: AuthService; logins: LoginEvent[] } {
+    const hooks = new AuthHooks();
+    const logins: LoginEvent[] = [];
+    hooks.onLogin("test", async (login) => void logins.push(login));
+    return { auth: service(new MemoryAccountRepository(), hooks), logins };
+  }
+
+  it("бот: параметр l-<код>_… длиной 64 — ссылка с метками, 65 — не хранится даже сырым", async () => {
+    const { auth, logins } = harness();
+    await auth.enterChannel(entry(directOf(64)), NOW);
+    await auth.enterChannel({ ...entry(directOf(65)), platformUserId: "556" }, NOW);
+    await Promise.resolve();
+
+    expect(logins[0]).toMatchObject({ place: "channel", startParam: { kind: "link", raw: directOf(64), ref: CODE, networkParams: { record: "r".repeat(64 - `l-${CODE}_record-`.length) } } });
+    expect(logins[1]?.startParam).toEqual({ kind: "unknown", raw: null, ref: null });
+  });
+
+  it("Mini App: start_param длиной 512 (подписанные данные) — ссылка, 513 — не хранится даже сырым", async () => {
+    const { auth, logins } = harness();
+    const launch = (userId: number, startParam: string) =>
+      signInitData(
+        { auth_date: String(Math.floor(NOW / 1000) - 60), user: JSON.stringify({ id: userId, first_name: "Анна" }), start_param: startParam },
+        AUTH_ENV.TELEGRAM_BOT_TOKEN,
+      );
+
+    const long = await auth.loginWithLaunch("telegram", launch(777, directOf(512)), undefined, NOW);
+    const tooLong = await auth.loginWithLaunch("telegram", launch(778, directOf(513)), undefined, NOW);
+    await Promise.resolve();
+
+    expect(long.startParam).toMatchObject({ kind: "link", raw: directOf(512), ref: CODE });
+    expect(tooLong.startParam).toEqual({ kind: "unknown", raw: null, ref: null });
+    expect(logins.map((login) => login.startParam.kind)).toEqual(["link", "unknown"]);
+  });
+
+  it("Mini App: полный образец AdsGram с метками доходит до слушателей разобранным", async () => {
+    const { auth, logins } = harness();
+    const raw = `l-${CODE}_campaign-55_clickid-3f2a-9c_record-rec_123`;
+    const initData = signInitData(
+      { auth_date: String(Math.floor(NOW / 1000) - 60), user: JSON.stringify({ id: 779, first_name: "Анна" }), start_param: raw },
+      AUTH_ENV.TELEGRAM_BOT_TOKEN,
+    );
+    await auth.loginWithLaunch("telegram", initData, undefined, NOW);
+    await Promise.resolve();
+    expect(logins[0]?.startParam).toEqual({ kind: "link", raw, ref: CODE, networkParams: { campaign: "55", clickid: "3f2a-9c", record: "rec_123" } });
+  });
+});
