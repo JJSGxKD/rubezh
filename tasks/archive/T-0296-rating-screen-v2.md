@@ -42,7 +42,7 @@ batch: 7
 
 # T-0296. Экран рейтинга v2 — очки вместо времени, пьедестал топ-3, стиль у имени, «Ты» и «до следующего места», дивизион и «Твой стиль»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json)](README.md#значки-статуса) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](T-0295-rating-divisions-and-style.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](archive/T-0111-weekly-season-screen.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0296.json)](../README.md#значки-статуса) [![T-0295](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json&label=T-0295)](T-0295-rating-divisions-and-style.md) [![T-0111](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0111.json&label=T-0111)](T-0111-weekly-season-screen.md)
 
 ## Зачем
 
