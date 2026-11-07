@@ -1,3 +1,4 @@
+import { parseTaskBranch } from "./branch.mjs";
 import { launchedBy, reworkRounds } from "./board.mjs";
 
 /**
@@ -97,7 +98,7 @@ export function contributionRows({ tasks, mergedPrs, specs, now }) {
   }
 
   for (const pr of mergedPrs ?? []) {
-    const taskId = /^task\/(T-\d{4})$/.exec(pr.headRefName ?? "")?.[1];
+    const taskId = parseTaskBranch(pr.headRefName)?.id;
     if (taskId !== undefined) {
       const task = taskById.get(taskId);
       const account = parseRunnerLine(pr.body) ?? accountOfOwner(task?.owner) ?? "не указан";
