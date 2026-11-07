@@ -46,6 +46,8 @@ export interface DueConversion {
   telegramId: string | null;
   /** оплата событий-покупок; у остальных — `null` */
   purchase: { amount: number; currency: string } | null;
+  /** адрес постбэка с макросами: у ссылки, а если его нет — у партнёра-владельца; `null` — адреса нет (T-0070) */
+  postbackUrl: string | null;
 }
 
 export interface ConversionRow {
@@ -132,13 +134,26 @@ export class PrismaConversionsRepository implements ConversionsRepository {
     // откате), в очередь не попадают: иначе одна такая строка останавливала бы
     // проход, а читать её как регистрацию нельзя.
     const rows = await this.prisma.$queryRaw<
-      { conversion_id: string; destination: string; goal: number; attempts: number; params: unknown; platform: string; platform_user_id: string; charged_stars: number | null }[]
+      {
+        conversion_id: string;
+        destination: string;
+        goal: number;
+        attempts: number;
+        params: unknown;
+        platform: string;
+        platform_user_id: string;
+        charged_stars: number | null;
+        postback_url: string | null;
+      }[]
     >`
-      SELECT v.conversion_id, v.destination, v.goal, v.attempts, COALESCE(c.network_params, v.network_params) AS params, a.platform, a.platform_user_id, p.charged_stars
+      SELECT v.conversion_id, v.destination, v.goal, v.attempts, COALESCE(c.network_params, v.network_params) AS params, a.platform, a.platform_user_id, p.charged_stars,
+             COALESCE(l.postback_url, pt.postback_url) AS postback_url
       FROM ad_conversion v
       LEFT JOIN link_click c ON c.click_id = v.click_id
       JOIN account a ON a.account_id = v.account_id
       LEFT JOIN purchase p ON p.purchase_id = v.purchase_id
+      LEFT JOIN link l ON l.code = v.link_code
+      LEFT JOIN partner pt ON pt.partner_id = l.partner_id
       WHERE v.status = 'pending' AND v.next_attempt_at <= ${now}
         AND v.goal IN (${Prisma.join(KNOWN_GOALS)})
         AND v.destination IN (${Prisma.join(DESTINATION_KINDS)})
@@ -152,6 +167,7 @@ export class PrismaConversionsRepository implements ConversionsRepository {
       params: paramsSchema.parse(row.params),
       telegramId: row.platform === "telegram" ? row.platform_user_id : null,
       purchase: row.charged_stars === null ? null : { amount: row.charged_stars, currency: PAYMENT_CURRENCY },
+      postbackUrl: row.postback_url,
     }));
   }
 
