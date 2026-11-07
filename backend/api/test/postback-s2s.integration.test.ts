@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
-import type { PrismaClient } from "../src/generated/prisma/client.js";
+import { Prisma, type PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
 import { PrismaConversionsRepository, type DueConversion } from "../src/modules/ad-conversions/conversions.repository.js";
 import { AdConversionsService } from "../src/modules/ad-conversions/conversions.service.js";
 import { AdsgramDestination } from "../src/modules/ad-conversions/destinations/adsgram.destination.js";
+import { TARGETS_SELECT } from "../src/modules/ad-conversions/destinations/destination-targets.js";
 import { TemplateDestination } from "../src/modules/ad-conversions/destinations/template.destination.js";
 import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.repository.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
@@ -25,7 +26,29 @@ const ADDRESS = "https://track.example.com/pb?cid={click_id}&e={event}&id={event
 const PARAMS = { click_id: "k1", sub1: "x-y" };
 const PUBLIC_IP = async () => ["93.184.216.34"];
 
-/** Очередь только из названных конверсий: в общей схеме лежат строки соседних тестов. */
+/**
+ * Проход по настоящему набору назначений, но только по ссылкам этого файла: схема общая, и проход по всем
+ * ссылкам заводил бы строки соседним тестам посреди их работы. Запрос набора тот же, что в проходе, — отбор
+ * ссылок оборачивает его снаружи.
+ */
+class Scoped extends PrismaConversionsRepository {
+  constructor(
+    prisma: PrismaClient,
+    private readonly codes: readonly string[],
+  ) {
+    super(prisma);
+  }
+  protected override targets(): Prisma.Sql {
+    return Prisma.sql`all_targets(link_code, destination, events, since) AS (${TARGETS_SELECT}),
+      targets(link_code, destination, events, since) AS (SELECT * FROM all_targets WHERE link_code IN (${Prisma.join(this.codes)}))`;
+  }
+}
+
+/**
+ * Очередь только из названных конверсий: в общей схеме лежат строки соседних тестов. Срок повтора не смотрим —
+ * проход соседнего файла мог записать строку с будущим временем; обнуление параметров не трогаем — оно общее
+ * для всей схемы, и чужой тест мог как раз состарить свой клик.
+ */
 class OnlyThese extends PrismaConversionsRepository {
   constructor(
     prisma: PrismaClient,
@@ -36,8 +59,11 @@ class OnlyThese extends PrismaConversionsRepository {
   override async sweep(): Promise<{ registrations: number; purchases: number }> {
     return { registrations: 0, purchases: 0 };
   }
-  override async due(now: Date, limit: number): Promise<DueConversion[]> {
-    return (await super.due(now, 1_000)).filter((row) => this.ids.includes(row.conversionId)).slice(0, limit);
+  override async due(_now: Date, limit: number): Promise<DueConversion[]> {
+    return (await super.due(new Date(Date.now() + 40 * DAY), 1_000)).filter((row) => this.ids.includes(row.conversionId)).slice(0, limit);
+  }
+  override async purgeParams(): Promise<number> {
+    return 0;
   }
 }
 
@@ -58,7 +84,7 @@ const PARTNER_SINCE_CHECK = /partner_postback_since_check/;
 
 describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и партнёру на живом Postgres", () => {
   let prisma: PrismaClient;
-  let conversions: PrismaConversionsRepository;
+  let conversions: Scoped;
   let links: PrismaLinksRepository;
   let accounts: PrismaAccountRepository;
   let sessions: PrismaSessionsRepository;
@@ -67,7 +93,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
 
   beforeAll(() => {
     prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
-    conversions = new PrismaConversionsRepository(prisma);
+    conversions = new Scoped(prisma, linkCodes);
     links = new PrismaLinksRepository(prisma);
     accounts = new PrismaAccountRepository(prisma);
     sessions = new PrismaSessionsRepository(prisma);
@@ -125,7 +151,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
     return code;
   }
 
-  async function playerFromClick(code: string, params: Record<string, string> | null = PARAMS, minutesAgo = 5) {
+  async function playerFromClick(code: string, params: Record<string, string> | null = PARAMS, minutesAgo = 5, team = false) {
     const clickId = newClickId();
     await links.recordClick({
       clickId,
@@ -142,6 +168,8 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
       { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "Из рекламы", username: null, photoUrl: null },
       Date.now(),
     );
+    // Роль — до первой сессии: пока касания нет, чужой проход по общей схеме аккаунта не видит.
+    if (team) await prisma.accountRole.create({ data: { accountId: account.accountId, role: "marketer" } });
     await launch(account.accountId, "click", `c-${clickId}`, clickId);
     return { clickId, accountId: account.accountId };
   }
@@ -202,6 +230,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
     return purchaseId;
   }
 
+  const dueOf = (ids: readonly string[]) => new OnlyThese(prisma, ids).due(new Date(), 1_000);
   const ofAccount = (accountId: string) => prisma.adConversion.findMany({ where: { accountId }, orderBy: [{ goal: "asc" }, { destination: "asc" }] });
   const shape = async (accountId: string) => (await ofAccount(accountId)).map((row) => [row.goal, row.destination, row.network]);
 
@@ -261,7 +290,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
     const [row] = await ofAccount(player.accountId);
     expect(row).toMatchObject({ goal: 1, destination: "partner", network: "partner" });
 
-    const queued = (await conversions.due(new Date(), 500)).find((item) => item.conversionId === row?.conversionId);
+    const queued = (await dueOf([row?.conversionId ?? ""]))[0];
     expect(queued).toMatchObject({ destination: "partner", event: "registration", params: PARAMS, postbackUrl: ADDRESS, purchase: null });
   });
 
@@ -285,11 +314,10 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
       [2, "partner", "partner"],
     ]);
 
-    const queue = await conversions.due(new Date(), 500);
     const ownRow = (await ofAccount(ownPlayer.accountId))[0];
     const partnerRow = (await ofAccount(partnerPlayer.accountId))[0];
-    expect(queue.find((item) => item.conversionId === ownRow?.conversionId)?.postbackUrl).toBe(own);
-    expect(queue.find((item) => item.conversionId === partnerRow?.conversionId)?.postbackUrl).toBe(ADDRESS);
+    expect((await dueOf([ownRow?.conversionId ?? ""]))[0]?.postbackUrl).toBe(own);
+    expect((await dueOf([partnerRow?.conversionId ?? ""]))[0]?.postbackUrl).toBe(ADDRESS);
   });
 
   it("ссылка партнёра без адреса у обоих — строк нет, хотя параметры клика сохранены", async () => {
@@ -385,8 +413,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
     const partnerLink = await newLink({ partnerId });
     const plain = await newLink({ address: { url: ADDRESS, sinceMinutesAgo: 60 } });
     for (const code of [partnerLink, plain]) {
-      const team = await playerFromClick(code);
-      await prisma.accountRole.create({ data: { accountId: team.accountId, role: "marketer" } });
+      const team = await playerFromClick(code, PARAMS, 5, true);
       await conversions.sweep(new Date());
       expect(await ofAccount(team.accountId)).toMatchObject([{ goal: 1, status: "skipped", reason: "team" }]);
     }
@@ -411,8 +438,11 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
     const code = await newLink({ partnerId });
     const stale = await playerFromClick(code);
     const fresh = await playerFromClick(code);
-    await prisma.linkClick.update({ where: { clickId: stale.clickId }, data: { at: new Date(Date.now() - 32 * DAY) } });
-    await conversions.purgeParams(new Date(), 500);
+    // Проход вызывается с «сейчас» в 2000 году: старше окна оказываются только эти клики, чужие не задеваются.
+    const longAgo = new Date("2000-03-01T00:00:00Z");
+    await prisma.linkClick.update({ where: { clickId: stale.clickId }, data: { at: new Date("2000-01-01T00:00:00Z") } });
+    await prisma.linkClick.update({ where: { clickId: fresh.clickId }, data: { at: new Date("2000-02-20T00:00:00Z") } });
+    expect(await conversions.purgeParams(longAgo, 500)).toBe(1);
     expect((await prisma.linkClick.findUniqueOrThrow({ where: { clickId: stale.clickId } })).networkParams).toBeNull();
     expect((await prisma.linkClick.findUniqueOrThrow({ where: { clickId: fresh.clickId } })).networkParams).toEqual(PARAMS);
   });
@@ -493,7 +523,7 @@ describe.skipIf(DATABASE_URL === "")("постбэки в s2s-сети и пар
       const [row] = (await ofAccount(player.accountId)).filter((item) => item.destination !== "adsgram" || code === plain);
       rows.set(code, row?.conversionId ?? "");
     }
-    const queue = await conversions.due(new Date(), 500);
+    const queue = await dueOf([...rows.values()]);
     const urlOf = (code: string) => queue.find((item) => item.conversionId === rows.get(code))?.postbackUrl;
     expect(urlOf(own)).toBe(ADDRESS);
     expect(urlOf(shared)).toBe("https://partner.example.com/in?c={click_id}");
