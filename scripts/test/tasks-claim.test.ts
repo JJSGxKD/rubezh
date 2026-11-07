@@ -664,7 +664,30 @@ describe("hasWorkBeyondClaim: в ветке есть работа кроме з�
 });
 
 describe("снятие захвата: restartClaim", () => {
-  const TEXT = ["---", "id: T-0119", "status: in-progress", "owner: claude-10 / sonnet-5.5 / medium", "size: S", "batch: 4", "---", "", "# T-0119. Заголовок", ""].join("\n");
+  const TEXT = [
+    "---",
+    "id: T-0119",
+    "title: Задача",
+    "epic: E0",
+    "priority: P1",
+    "status: in-progress",
+    "owner: claude-10 / sonnet-5.5 / medium",
+    "size: S",
+    "depends_on: []",
+    "zones:",
+    "  - zones/T-0119/**",
+    "shared: []",
+    "runner: any",
+    "executor: sonnet-5.5",
+    "effort: medium",
+    "release: patch",
+    "design: null",
+    "batch: 4",
+    "---",
+    "",
+    "# T-0119. Заголовок",
+    "",
+  ].join("\n");
   const FILE = "T-0119-x.md";
 
   type Call = string[];
@@ -913,6 +936,8 @@ describe("claim --from на настоящем git (временный репо�
   beforeEach(() => {
     repo = mkdtempSync(join(tmpdir(), "rubezh-from-"));
     git("init", "--quiet", "-b", "dev");
+    // origin — этот же репозиторий: fetch ветки прежней попытки отрабатывает без сети.
+    git("remote", "add", "origin", repo);
     git("config", "user.name", "test");
     git("config", "user.email", "test@example.com");
     git("config", "commit.gpgsign", "false");

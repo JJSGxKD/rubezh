@@ -47,6 +47,12 @@ export function attemptsMap(tasks) {
   return new Map([...tasks].map((task) => [task.id, attemptOf(task)]));
 }
 
+/** `id → ветка текущей попытки` по реестру; задачи нет в реестре — ветка попытки 1. */
+export function branchResolver(tasks) {
+  const attempts = attemptsMap(tasks);
+  return (id) => taskBranch(id, attempts.get(id) ?? 1);
+}
+
 /**
  * id задач, у которых на `origin` есть ветка **текущей** попытки. Ветка прежней
  * (и будущей) попытки задачу не занимает и зоны не держит. `branches` — имена
