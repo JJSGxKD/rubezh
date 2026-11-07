@@ -1,3 +1,4 @@
+import { taskBranch } from "./branch.mjs";
 import { BATCH_RE, EFFORTS, EXECUTORS, batchNumber } from "./task-file.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
@@ -160,7 +161,7 @@ export function aheadCheck(task, tasks, prs, { atClaim = true } = {}) {
     const dependency = byId.get(id);
     if (dependency?.status === "done") continue;
     unclosed.push(id);
-    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(`task/${id}`), prs !== null, atClaim);
+    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(taskBranch(id)), prs !== null, atClaim);
     if (problem !== null) problems.push(problem);
   }
   return { unclosed, problems };
@@ -174,7 +175,7 @@ export function aheadCheck(task, tasks, prs, { atClaim = true } = {}) {
 function closedWithoutMerge(dependency, branches, openPrs) {
   if (dependency === undefined || dependency.status === "done") return false;
   if (dependency.status === "cancelled") return true;
-  const live = branches.has(dependency.id) || openPrs.has(`task/${dependency.id}`);
+  const live = branches.has(dependency.id) || openPrs.has(taskBranch(dependency.id));
   return (dependency.status === "ready" || dependency.status === "in-progress") && !live;
 }
 
@@ -215,8 +216,8 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder, abandoned = ne
     if (task.status === "done") result.done.push({ task });
     else if (task.status === "cancelled") result.cancelled.push({ task });
     else if (task.status === "draft") result.draft.push({ task });
-    else if (branches.has(task.id) && !(abandoned.has(task.id) && !openPrs.has(`task/${task.id}`))) {
-      const pr = openPrs.get(`task/${task.id}`);
+    else if (branches.has(task.id) && !(abandoned.has(task.id) && !openPrs.has(taskBranch(task.id)))) {
+      const pr = openPrs.get(taskBranch(task.id));
       if (pr === undefined) result.inProgress.push({ task });
       else {
         const status = prStatus(pr);

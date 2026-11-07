@@ -1,3 +1,4 @@
+import { parseTaskBranch } from "./branch.mjs";
 import { PERIOD_TITLES, SIZE_POINTS } from "./contribution.mjs";
 import { BADGE_CACHE_SECONDS, accountStreams, boardCounters, flowPrompt, knownAccounts, moscowDay, streamLabel, streamRows, streamsSummary } from "./board.mjs";
 import { REPOSITORY } from "./task-file.mjs";
@@ -37,7 +38,7 @@ export function taskCredits(doneEntries, mergedPrs) {
   const credits = new Map();
   for (const { task } of doneEntries) {
     const latest = (mergedPrs ?? [])
-      .filter((pr) => pr.headRefName === `task/${task.id}`)
+      .filter((pr) => parseTaskBranch(pr.headRefName)?.id === task.id)
       .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt))[0];
     credits.set(task.id, {
       login: latest?.login ?? null,

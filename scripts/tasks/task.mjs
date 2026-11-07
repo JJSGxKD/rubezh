@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { parseTaskBranch, taskBranch } from "./branch.mjs";
 import { contributionRows } from "./contribution.mjs";
 import { checkAheadPr, checkClaim, takeOverClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
@@ -275,7 +276,7 @@ function runClaim(positional, flags) {
   const { task } = found;
   const owner = ownerFor(task, flags, "claim");
 
-  const branch = `task/${id}`;
+  const branch = taskBranch(id);
   if (tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).ok) {
     fail(`Локальная ветка ${branch} уже есть: удали её (git branch -D ${branch}) или вернись на неё и продолжай работу.`);
   }
@@ -389,7 +390,7 @@ function runResume(positional, flags) {
   const { task, pr } = found;
   const owner = ownerFor(task, flags, "resume");
 
-  const branch = `task/${id}`;
+  const branch = taskBranch(id);
   const remote = `origin/${branch}`;
   const previous = git(["branch", "--show-current"]) || git(["rev-parse", "HEAD"]);
   const hadLocal = tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
@@ -493,7 +494,7 @@ function runHolds(positional) {
 function runRelease(positional, flags) {
   const id = positional[0];
   if (id === undefined || !TASK_ID_RE.test(id)) fail("Укажи задачу: pnpm task release T-NNNN --yes");
-  const branch = `task/${id}`;
+  const branch = taskBranch(id);
   if (flags.yes !== true) {
     console.log(`Будет выполнено: git push origin --delete ${branch}\nЭто освободит задачу. Отдавай только свою ветку. Подтверди флагом --yes.`);
     return;
@@ -513,7 +514,7 @@ function withoutOpenDependencyFiles(changed, id, base) {
   const unclosed = unclosedDependenciesOnBase(id, tasks);
   if (unclosed.length === 0) return changed;
   // Ветки зависимостей могли обновиться после последнего fetch; нет сети — берём что есть.
-  for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/task/${dependencyId}:refs/remotes/origin/task/${dependencyId}`, "--quiet"]);
+  for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/${taskBranch(dependencyId)}:refs/remotes/origin/${taskBranch(dependencyId)}`, "--quiet"]);
   const { files, missing } = dependencyChangedFiles(unclosed, { base });
   if (missing.length > 0) console.error(`предупреждение: веток зависимостей ${missing.join(", ")} на origin нет — их файлы из диффа не вычтены`);
   return withoutDependencyFiles(changed, files);
@@ -521,12 +522,12 @@ function withoutOpenDependencyFiles(changed, id, base) {
 
 function runDiffCheck(flags) {
   const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
-  const match = /^task\/(T-\d{4})$/.exec(head);
-  if (match === null) {
+  const parsed = parseTaskBranch(head);
+  if (parsed === null) {
     console.log(`Ветка «${head}» — не ветка задачи, проверка зон пропущена.`);
     return;
   }
-  const id = match[1];
+  const id = parsed.id;
   const base = flags.base ?? BASE;
 
   const found = readWorkingTasks().find((file) => file.name.split("/").at(-1).startsWith(`${id}-`) && file.name.endsWith(".md"));
@@ -554,9 +555,9 @@ function runDiffCheck(flags) {
 /** Ветка PR в виде `task/T-NNNN` → id; иначе `null`: проверки только для веток задач. */
 function taskIdOfHead() {
   const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
-  const match = /^task\/(T-\d{4})$/.exec(head);
-  if (match === null) console.log(`Ветка «${head}» — не ветка задачи, проверка захвата пропущена.`);
-  return match === null ? null : { id: match[1], head };
+  const parsed = parseTaskBranch(head);
+  if (parsed === null) console.log(`Ветка «${head}» — не ветка задачи, проверка захвата пропущена.`);
+  return parsed === null ? null : { id: parsed.id, head };
 }
 
 function runClaimCheck(flags) {

@@ -1,4 +1,5 @@
 import { AHEAD_LABEL, aheadCheck, prStatus } from "./board.mjs";
+import { parseTaskBranch, taskBranch } from "./branch.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
 /**
@@ -7,8 +8,6 @@ import { zonesOverlap } from "./zones.mjs";
  * правилам, что в `pnpm task claim`. Чистая функция — состояние git и GitHub
  * приходит снаружи, тесты — scripts/test/tasks-claim.test.ts.
  */
-
-const BRANCH_RE = /^task\/(T-\d{4})$/;
 
 /**
  * Сколько часов ветка с одним лишь захватом держит задачу (T-0371). Лимит
@@ -52,7 +51,7 @@ export function isAbandonedClaim({ changedFiles, lastCommitAt, hasOpenPr, taskFi
  * message }`; убрать локальную ветку после отказа — дело вызывающего.
  */
 export function takeOverClaim({ id, fileName, owner, git, tryGit, readFile, writeFile, rewrite }) {
-  const branch = `task/${id}`;
+  const branch = taskBranch(id);
   const remote = `origin/${branch}`;
   const fetched = tryGit(["fetch", "origin", branch]);
   if (!fetched.ok) return { ok: false, message: `Не удалось получить ветку ${branch} с origin: ${fetched.stderr}` };
@@ -110,7 +109,7 @@ export function takeOverClaim({ id, fileName, owner, git, tryGit, readFile, writ
  */
 export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahead = false, abandoned = new Set() }) {
   const task = tasks.find((candidate) => candidate.id === id);
-  if (task === undefined) return [`задачи ${id} нет в реестре на базе PR: ветку task/${id} заводят под существующую задачу`];
+  if (task === undefined) return [`задачи ${id} нет в реестре на базе PR: ветку ${taskBranch(id)} заводят под существующую задачу`];
 
   const problems = [];
   if (task.status !== "ready" && task.status !== "in-progress") {
@@ -131,9 +130,9 @@ export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahea
   // заняты не считаются: так же считает доска (classify). Свои зависимости — не помеха по определению.
   const withBranch = new Set([
     ...taken,
-    ...(prs ?? []).map((pr) => BRANCH_RE.exec(pr.headRefName)?.[1]).filter((value) => value !== undefined),
+    ...(prs ?? []).map((pr) => parseTaskBranch(pr.headRefName)?.id).filter((value) => value !== undefined),
   ]);
-  const prOf = new Map((prs ?? []).map((pr) => [BRANCH_RE.exec(pr.headRefName)?.[1], pr]));
+  const prOf = new Map((prs ?? []).map((pr) => [parseTaskBranch(pr.headRefName)?.id, pr]));
   const mine = claimTime(claims[id], Infinity);
   for (const other of tasks) {
     if (other.id === id || task.depends_on.includes(other.id) || !withBranch.has(other.id)) continue;

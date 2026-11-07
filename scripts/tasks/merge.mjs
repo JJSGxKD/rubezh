@@ -1,4 +1,5 @@
 import { AHEAD_LABEL, REVIEW_LABEL, STATUS_LABELS } from "./board.mjs";
+import { parseTaskBranch, taskBranch } from "./branch.mjs";
 import { BASE, diffNumstat, fetchOrigin, gh, hasCommit, isAncestor, readFileAt, readOriginTasks, taskFileNameAt, toolsMatchBase } from "./git-io.mjs";
 import { readTasks as readRegistryTasks } from "./registry.mjs";
 import { SELF_MERGE_MESSAGE, parseFrontmatter, parseOwner, selfMergePathProblem, selfMergeProblems } from "./task-file.mjs";
@@ -17,7 +18,6 @@ import { matches } from "./zones.mjs";
  */
 
 const TASK_ID_RE = /^T-\d{4}$/;
-const BRANCH_RE = /^task\/(T-\d{4})$/;
 const FULL_SHA_RE = /^[0-9a-f]{40}$/i;
 
 /** Проверки, которые не мешают мерджу: доска (`board`) сама зависит от состояния PR. */
@@ -210,7 +210,7 @@ export function selfCheckProblems(comments, headSha, stream, { prAuthor, headCom
  */
 export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comments, headSha, changes, upToDate, toolsMatchDev, dependencyStatuses }) {
   const problems = [];
-  const id = BRANCH_RE.exec(pr?.headRefName ?? "")?.[1];
+  const id = parseTaskBranch(pr?.headRefName)?.id;
   if (id === undefined) problems.push(`ветка PR «${String(pr?.headRefName)}» — не task/T-NNNN: самостоятельно вливаются только PR задач`);
   const name = id ?? "задачи";
 
@@ -318,9 +318,9 @@ function readJson(args, what) {
 
 /** Единственный открытый PR ветки задачи со всеми полями; `UNKNOWN` в `mergeable` перечитывается один раз. */
 function loadPr(id) {
-  const list = readJson(["pr", "list", "--head", `task/${id}`, "--state", "open", "--json", "number"], "gh pr list");
-  if (!Array.isArray(list) || list.length === 0) throw new Error(`Открытого PR ветки task/${id} нет: вливать нечего.`);
-  if (list.length > 1) throw new Error(`Открытых PR ветки task/${id} несколько (${list.map((pr) => `#${String(pr.number)}`).join(", ")}): оставь один.`);
+  const list = readJson(["pr", "list", "--head", taskBranch(id), "--state", "open", "--json", "number"], "gh pr list");
+  if (!Array.isArray(list) || list.length === 0) throw new Error(`Открытого PR ветки ${taskBranch(id)} нет: вливать нечего.`);
+  if (list.length > 1) throw new Error(`Открытых PR ветки ${taskBranch(id)} несколько (${list.map((pr) => `#${String(pr.number)}`).join(", ")}): оставь один.`);
   const view = () => readJson(["pr", "view", String(list[0].number), "--json", PR_FIELDS], "gh pr view");
   const first = view();
   if (first.mergeable !== "UNKNOWN") return first;

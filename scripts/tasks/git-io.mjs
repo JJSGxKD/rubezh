@@ -1,5 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseTaskBranch, taskBranch } from "./branch.mjs";
 import { isAbandonedClaim } from "./claim.mjs";
 import { isTaskFile, parseEpics, readTasks } from "./registry.mjs";
 
@@ -58,7 +59,7 @@ export function readOriginFileList(base = BASE) {
 /** id задач, у которых на origin есть ветка task/T-NNNN. */
 export function takenIds() {
   return listLines(["ls-remote", "--heads", "origin", "task/*"])
-    .map((line) => /refs\/heads\/task\/(T-\d{4})$/.exec(line)?.[1])
+    .map((line) => parseTaskBranch(line.split("\t")[1])?.id)
     .filter((id) => id !== undefined);
 }
 
@@ -116,7 +117,7 @@ export function toolsMatchBase(base) {
  */
 export function mergeDependencyBranches(deps, { cwd = ROOT, remote = "origin" } = {}) {
   for (const id of deps) {
-    const ref = `${remote}/task/${id}`;
+    const ref = `${remote}/${taskBranch(id)}`;
     if (!tryGitIn(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).ok) {
       return { ok: false, dependency: id, missing: true, conflicts: [], stderr: `ветки ${ref} нет` };
     }
@@ -138,7 +139,7 @@ export function dependencyChangedFiles(deps, { base, cwd = ROOT, remote = "origi
   const files = new Set();
   const missing = [];
   for (const id of deps) {
-    const result = tryGitIn(cwd, ["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...${remote}/task/${id}`]);
+    const result = tryGitIn(cwd, ["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...${remote}/${taskBranch(id)}`]);
     if (!result.ok) {
       missing.push(id);
       continue;
@@ -204,7 +205,7 @@ export function openPrs() {
  */
 export function claimedAt(id) {
   // Два заголовка: захват и перехват брошенного захвата (T-0371) — время считается от позднего.
-  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, "--grep", `^chore(tasks): Перехватить ${id} — захват брошен$`, `origin/task/${id}`]);
+  const result = tryGit(["log", "-1", "--format=%cI", "--grep", `^chore(tasks): Взять ${id} в работу$`, "--grep", `^chore(tasks): Перехватить ${id} — захват брошен$`, `origin/${taskBranch(id)}`]);
   return result.ok && result.stdout !== "" ? result.stdout : null;
 }
 
@@ -235,7 +236,7 @@ export function parseMergedPrs(parsed) {
 /** Из влитых PR — только ветки задач `task/T-NNNN` в виде `{ number, headRefName, login, mergedAt }` для `taskCredits`. */
 export function taskPrsOf(prs) {
   return prs
-    .filter((pr) => /^task\/T-\d{4}$/.test(pr.headRefName))
+    .filter((pr) => parseTaskBranch(pr.headRefName) !== null)
     .map(({ number, headRefName, login, mergedAt }) => ({ number, headRefName, login, mergedAt }));
 }
 
@@ -289,13 +290,13 @@ export function addedTaskSpecs(base = BASE) {
 
 /** Дата последнего коммита ветки `origin/task/T-NNNN` (ISO) или `null`, если git не ответил. */
 export function lastCommitAt(id) {
-  const result = tryGit(["log", "-1", "--format=%cI", `origin/task/${id}`]);
+  const result = tryGit(["log", "-1", "--format=%cI", `origin/${taskBranch(id)}`]);
   return result.ok && result.stdout !== "" ? result.stdout : null;
 }
 
 /** Файлы, изменённые веткой `origin/task/T-NNNN` относительно `base`, или `null`, если дифф не получился. */
 export function branchChangedFiles(id, base = BASE) {
-  const result = tryGit(["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...origin/task/${id}`]);
+  const result = tryGit(["-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", `${base}...origin/${taskBranch(id)}`]);
   return result.ok ? result.stdout.split("\n").filter((line) => line !== "") : null;
 }
 
@@ -306,7 +307,7 @@ export function branchChangedFiles(id, base = BASE) {
  * жёсткий и сам по себе. Два вызова git на ветку, веток десятки.
  */
 function findAbandoned(taken, tasks, prs, base, now) {
-  const withPr = new Set((prs ?? []).map((pr) => /^task\/(T-\d{4})$/.exec(pr.headRefName)?.[1]));
+  const withPr = new Set((prs ?? []).map((pr) => parseTaskBranch(pr.headRefName)?.id));
   const abandoned = new Set();
   const lastCommits = {};
   for (const id of taken) {
@@ -343,7 +344,7 @@ export function loadRegistryState(base = BASE) {
 /** Текст файла задачи в ветке `task/T-NNNN` на origin — оттуда видно, кто взял; файл ищется наверху и в архиве. */
 export function readBranchFile(id, fileName) {
   for (const path of [`tasks/${fileName}`, `tasks/archive/${fileName}`]) {
-    const result = tryGit(["show", `origin/task/${id}:${path}`]);
+    const result = tryGit(["show", `origin/${taskBranch(id)}:${path}`]);
     if (result.ok) return result.stdout;
   }
   return null;
