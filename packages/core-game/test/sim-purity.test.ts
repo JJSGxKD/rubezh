@@ -129,6 +129,20 @@ describe("чистота слоя симуляции", () => {
     expect(file?.source).not.toMatch(/world\.rng/);
   });
 
+  it("модификаторы забега (T-0119) в проверяемом слое: составление сложности, опыт, лестница, снимок, итог, запись", () => {
+    const files = sources.map(({ path }) => path.replace(/\\/g, "/"));
+    for (const name of ["sim/difficulty.ts", "sim/gems.ts", "progression/unlocks.ts", "run/snapshot.ts", "run/run-result.ts", "diagnostics/replay.ts", "diagnostics/run-recorder.ts", "balance/simulate.ts"]) {
+      expect(files.some((file) => file.endsWith(`/game/${name}`)), name).toBe(true);
+    }
+  });
+
+  it("составление сложности округляет и умножает: степеней нет, а xpMul в симуляции читается только из сложности мира", () => {
+    const difficulty = sources.find(({ path }) => path.replace(/\\/g, "/").endsWith("/sim/difficulty.ts"));
+    expect(difficulty?.source).not.toMatch(/Math\.pow|\*\*/);
+    const gems = sources.find(({ path }) => path.replace(/\\/g, "/").endsWith("/sim/gems.ts"));
+    expect(gems?.source).toMatch(/Math\.round/);
+  });
+
   it("не использует Date.now, new Date и performance.now", () => {
     for (const { path, source } of sources) {
       expect(source, path).not.toMatch(/Date\.now|new Date\(|performance\.now/);

@@ -151,3 +151,30 @@ describe("рубеж и детерминизм (T-0120)", () => {
     expect(sumOf(true)).not.toBe(sumOf(false));
   });
 });
+
+describe("модификатор забега и детерминизм (T-0119)", () => {
+  const scenario = { seed: 20260912, ticks: 1800, population: 80, weights: ALL_PATTERNS_WEIGHTS, immortalPlayer: true };
+
+  it("пустой список модификаторов считается побитово так же, как забег без поля", () => {
+    const plain = runScripted(scenario);
+    const empty = runScripted({ ...scenario, modifierIds: [] });
+    expect(empty.checksum).toBe(plain.checksum);
+    expect(empty.world.stats).toEqual(plain.world.stats);
+  });
+
+  it("два мира с одним seed и «Спешкой» дают одну сумму", () => {
+    const first = runScripted({ ...scenario, modifierIds: ["hurry"] });
+    const second = runScripted({ ...scenario, modifierIds: ["hurry"] });
+    expect(second.checksum).toBe(first.checksum);
+    expect(second.world.stats).toEqual(first.world.stats);
+  });
+
+  it("то же для «Инверсии», а модификатор меняет сумму: опыт в бою растёт быстрее", () => {
+    const plain = runScripted(scenario);
+    const first = runScripted({ ...scenario, modifierIds: ["inverse"] });
+    const second = runScripted({ ...scenario, modifierIds: ["inverse"] });
+    expect(second.checksum).toBe(first.checksum);
+    expect(first.checksum).not.toBe(plain.checksum);
+    expect(first.world.stats.xpCollected).toBeGreaterThan(plain.world.stats.xpCollected);
+  });
+});

@@ -3,7 +3,9 @@ import { ENEMIES } from "../../src/content/enemies";
 import { ENDLESS_CURVE } from "../../src/content/waves";
 import { DROPS } from "../../src/content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../../src/content/upgrades";
+import { RUN_MODIFIERS } from "../../src/content/modifiers";
 import { WEAPONS } from "../../src/content/weapons";
+import { BASE_DIFFICULTY, composeDifficulty, resolveModifierIds } from "../../src/game/sim/difficulty";
 import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/levels";
 import { createWorld, DEFAULT_SIM_CONFIG, TICK_SEC, type World } from "../../src/game/sim/world";
 import { createTimelineDirector } from "../../src/game/sim/director";
@@ -33,6 +35,8 @@ export interface ScriptedRunOptions {
   startingWeaponId?: string;
   /** правила рубежа (T-0120); без поля рубежа в мире нет, как в забегах до задачи */
   rubezh?: RubezhDef;
+  /** модификатор забега (T-0119): его оси ложатся на базовую сложность; без поля — забег без него */
+  modifierIds?: readonly string[];
   /**
    * Как отвечать на выбор улучшения. По умолчанию берётся первый вариант:
    * сценарий должен быть воспроизводимым, а не «как повезёт».
@@ -72,6 +76,9 @@ export function runScripted(options: ScriptedRunOptions): ScriptedRunResult {
       ? {}
       : { startingWeaponId: options.startingWeaponId }),
     ...(options.rubezh === undefined ? {} : { rubezh: options.rubezh }),
+    ...(options.modifierIds === undefined
+      ? {}
+      : { difficulty: composeDifficulty(BASE_DIFFICULTY, options.modifierIds, RUN_MODIFIERS), modifierIds: resolveModifierIds(options.modifierIds, RUN_MODIFIERS, 1, null) }),
     // Нагрузочный прогон меряет устойчивое состояние: если игрок умирает на
     // тридцатой секунде, дальше меряется мир без выстрелов — то есть не тот
     // мир, ради которого прогон затевался.

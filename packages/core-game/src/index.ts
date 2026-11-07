@@ -26,6 +26,7 @@ export * from "./content/prologue";
 export * from "./content/stages";
 export * from "./content/boosts";
 export * from "./content/unlocks";
+export * from "./content/modifiers";
 export * from "./game/bench";
 
 // Как выглядит мир забега — без Phaser: гайдбук оболочки рисует врагов и
@@ -94,6 +95,8 @@ export { readSnapshotCounters, type SnapshotCounters } from "./snapshot-counters
 // Прокачка внутри забега: оболочка показывает варианты и возвращает выбор
 // игрока (docs/27-design-system-and-app-shell.md §3.1).
 export { xpForLevel, OFFERS_PER_LEVEL } from "./game/progression/levels";
+// Модификаторы забега (T-0119): сервер и лист «Перед забегом» составляют ту же сложность и отбирают те же id.
+export { composeDifficulty, findModifierProblems, resolveModifierIds } from "./game/sim/difficulty";
 export { unlocksAt, unlockLevelOf, unlocksOfLevel, weaponsOpenAt, type AccountUnlocks } from "./game/progression/unlocks";
 // Эволюции оружия: состояние рецепта для экрана и разбор эволюции для аналитики.
 export { describeEvolution, evolutionProgress, type EvolutionProgress, type EvolutionState, type LoadoutIds } from "./game/progression/evolutions";

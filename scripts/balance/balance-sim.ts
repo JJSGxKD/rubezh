@@ -2,11 +2,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
-import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, PRESSURE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
+import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, MODIFIER_TARGETS, PRESSURE_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { PRESSURE } from "../../packages/core-game/src/content/pressure";
 import { createRunWorld } from "../../packages/core-game/src/game/run-world";
 import { buildScoreOf } from "../../packages/core-game/src/game/sim/player-power";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
+import { RUN_MODIFIERS } from "../../packages/core-game/src/content/modifiers";
 import { ENEMY_STAGES } from "../../packages/core-game/src/content/stages";
 import { ENDLESS_CURVE, TIMELINE } from "../../packages/core-game/src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
@@ -124,6 +125,17 @@ it("подстройка под силу и расписание сборки", 
   writeFileSync(powerPath, `${rows.join("\n")}\n`, "utf8");
   console.log(rows.join("\n"));
   console.log(`\nТаблица сохранена: ${powerPath}`);
+});
+
+// Модификаторы забега (T-0119, Р105): отдельным тестом, как подстройка, — калибровка
+// гоняет только их (`-t "модификаторы"`). Строки: «Сложная» без модификатора и с каждым.
+it("модификаторы забега", { timeout: 1_800_000 }, () => {
+  const rows = modifierLines();
+  mkdirSync(dirname(REPORT_PATH), { recursive: true });
+  const modifierPath = join(dirname(REPORT_PATH), "balance-modifiers.md");
+  writeFileSync(modifierPath, `${rows.join("\n")}\n`, "utf8");
+  console.log(rows.join("\n"));
+  console.log(`\nТаблица сохранена: ${modifierPath}`);
 });
 
 function buildScenarios(): Scenario[] {
@@ -600,6 +612,51 @@ function levelLines(): string[] {
     }
   }
   return lines;
+}
+
+/**
+ * Модификаторы забега: уклоняющийся бот на «Сложной», стартовые оружия первого уровня
+ * аккаунта, те же seed. Коридор — отношение медианы к медиане без модификатора
+ * (`MODIFIER_TARGETS`); вне коридора правятся множители `RUN_MODIFIERS`, а не коридор.
+ * Бот двугорбый (гибнет на стене около 100-й секунды или живёт 10+ минут), поэтому рядом
+ * с медианой стоят p10 и p90 и доля забегов, пережитых 5 минут.
+ */
+function modifierLines(): string[] {
+  const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
+  const starting = BASE_WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
+  const runsOf = (modifierIds: string[]): BalanceRunResult[] => {
+    const runs: BalanceRunResult[] = [];
+    for (const startingWeaponId of starting) {
+      for (let seed = 1; seed <= SEEDS; seed++) {
+        runs.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, modifierIds }));
+      }
+    }
+    return runs;
+  };
+
+  const baseline = summarizeRuns(runsOf([]));
+  const lines = [
+    "## Модификаторы забега (Р105)",
+    "",
+    `Уклоняющийся бот, «${BASE_DIFFICULTY_ID}», оружие первого уровня (${starting.join(", ")}), ${SEEDS} seed на оружие.`,
+    "",
+    "| Модификатор | медиана, с | p10 | p90 | до минуты | уровень | во сколько раз к «без модификатора» | коридор |",
+    "|---|---|---|---|---|---|---|---|",
+    `| без модификатора | ${fixed(baseline.medianSurvivalSec)} | ${fixed(baseline.p10SurvivalSec)} | ${fixed(baseline.p90SurvivalSec)} | ` +
+      `${percent(baseline.deathsBeforeMinuteRatio)} | ${baseline.medianLevel} | ×1.00 | — |`,
+  ];
+  const verdicts: string[] = [];
+  for (const modifier of RUN_MODIFIERS) {
+    const summary = summarizeRuns(runsOf([modifier.id]));
+    const ratio = summary.medianSurvivalSec / baseline.medianSurvivalSec;
+    const range = MODIFIER_TARGETS.modifierMedianRatio[modifier.id];
+    lines.push(
+      `| ${modifier.id} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ${fixed(summary.p90SurvivalSec)} | ` +
+        `${percent(summary.deathsBeforeMinuteRatio)} | ${summary.medianLevel} | ×${ratio.toFixed(2)} | ×${range.min}–×${range.max} |`,
+    );
+    verdicts.push(verdict(`${modifier.id}: медиана к «без модификатора» в ×${range.min}–×${range.max}`, ratio >= range.min && ratio <= range.max, `×${ratio.toFixed(2)}`));
+  }
+  return [...lines, "", ...verdicts];
 }
 
 function isOtherDifficulty(name: string): boolean {

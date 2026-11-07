@@ -172,6 +172,7 @@ const unlockSchema = z.strictObject({
   level: z.int().positive(),
   weapons: z.array(text).optional(),
   passives: z.array(text).optional(),
+  modifiers: z.array(text).optional(),
   slots: z
     .strictObject({
       weapons: count.optional(),

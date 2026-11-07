@@ -584,6 +584,36 @@ golden-тесты, и тест контента требует, чтобы он�
 (`game/progression/boosts.ts`), новый буст на готовых эффектах и любые числа
 — данные.
 
+## Как добавить модификатор забега
+
+Модификатор — условие, которое игрок берёт на себя перед забегом ради награды
+(`docs/39-retention-mechanics.md` Б8, `docs/35-stage4-plan.md` Р105). Множители
+ложатся умножением поверх выбранной сложности по тем же четырём осям, что в
+`content/difficulty.ts`, плюс `xpMul` — опыт в бою:
+
+```ts
+// packages/core-game/src/content/modifiers.ts — id обязан быть в RUN_MODIFIER_IDS (shared-types)
+{ id: "hurry", nameKey: "modifier.hurry.name", descriptionKey: "modifier.hurry.description",
+  enemyHpMul: 1, enemyDamageMul: 1.1, spawnRateMul: 1.5, maxAliveMul: 1.25, xpMul: 1.5 }
+```
+
+Что ещё нужно, чтобы модификатор появился: id и множитель **награды** за забег — в
+`shared-types` (`RUN_MODIFIER_IDS`, `RUN_MODIFIER_REWARD_MUL`: награду читают сервер и
+лист «Перед забегом», движок — нет); строка в `content/unlocks.ts` с полем
+`modifiers: ["id"]` — каждый модификатор открывается ровно на одном уровне аккаунта;
+имя и описание — ключи `modifier.<id>.name` и `.description` в `ru.json`; коридор
+медианы бота — `MODIFIER_TARGETS` в `content/balance-targets.ts`; пределы вердикта
+сервера — T-0122. Правила списка проверяет `findModifierProblems`: оси конечны и больше
+нуля, модификатор чем-то отличается от «без модификатора», здоровье · темп спавна и
+`xpMul` не меньше единицы.
+
+Модификатор — параметр мира, а не контента снимка: он входит в `RunWorldOptions`,
+снимок, запись, повтор и `RunResult.modifierIds`, а `RUN_MODIFIERS` — в отпечаток
+контента. Один модификатор на забег (`MAX_MODIFIERS_PER_RUN`); закрытый уровнем
+аккаунта в мир не попадает. Сумма кристаллов за врага с модификатором — `round(xp ·
+xpMul)`. Сложность составляет `composeDifficulty`: `id` остаётся базовым, без
+модификатора сложность не меняется. Правка чисел меняет `CONTENT_HASH`.
+
 ## Как настроить сундук забега
 
 Сундук — награда за элиту и босса (`docs/39-retention-mechanics.md` Б1,

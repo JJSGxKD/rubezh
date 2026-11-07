@@ -6,7 +6,8 @@ import {
 } from "@bh/shared-types";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES, findDifficulty } from "../src/content/difficulty";
-import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
+import { findDifficultyContentProblems, findModifierProblems } from "../src/game/sim/difficulty";
+import { MAX_MODIFIERS_PER_RUN, RUN_MODIFIERS } from "../src/content/modifiers";
 import { findStageProblems } from "../src/game/sim/stages";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { describe, expect, it } from "vitest";
@@ -1119,5 +1120,52 @@ describe("контент подстройки давления (tasks/T-0195)", 
     expect(PRESSURE.devices.caps.standard).toBeGreaterThanOrEqual(Math.round(ENDLESS_CURVE.maxAlive * hard.maxAliveMul));
     expect(PRESSURE.devices.caps.standard).toBeLessThanOrEqual(DEFAULT_SIM_CONFIG.maxEnemies);
     expect(PRESSURE.devices.caps.light).toBeLessThan(PRESSURE.devices.caps.standard);
+  });
+});
+
+describe("модификаторы забега в контенте (T-0119)", () => {
+  it("список проходит проверку, а потолок на забег — один", () => {
+    expect(findModifierProblems(RUN_MODIFIERS)).toEqual([]);
+    expect(MAX_MODIFIERS_PER_RUN).toBe(1);
+  });
+
+  it("каждый модификатор открывается ровно на одном уровне: «Спешка» на 9-м, «Инверсия» на 12-м", () => {
+    expect(unlockLevelOf(ACCOUNT_UNLOCKS, "modifier", "hurry")).toBe(9);
+    expect(unlockLevelOf(ACCOUNT_UNLOCKS, "modifier", "inverse")).toBe(12);
+    for (const modifier of RUN_MODIFIERS) {
+      const rows = ACCOUNT_UNLOCKS.filter((row) => row.modifiers?.includes(modifier.id) === true);
+      expect(rows, modifier.id).toHaveLength(1);
+    }
+  });
+
+  it("лестница с модификаторами проходит проверку без замечаний", () => {
+    const baseWeapons = CONTENT_SNAPSHOT.weapons.filter((weapon) => weapon.evolvedFrom === undefined);
+    const passives = new Map(CONTENT_SNAPSHOT.passives.map((passive) => [passive.id, passive.category] as const));
+    expect(
+      findUnlockProblems(
+        CONTENT_SNAPSHOT.accountUnlocks,
+        { weapons: baseWeapons.map((weapon) => weapon.id), passives, modifiers: RUN_MODIFIERS.map((modifier) => modifier.id) },
+        CONTENT_SNAPSHOT.loadoutLimits,
+      ),
+    ).toEqual([]);
+  });
+
+  it("проверка лестницы ловит модификатор без уровня, дубль и чужого", () => {
+    const problems = findUnlockProblems(
+      [
+        { level: 1, weapons: ["spark"], passives: ["might"], slots: { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } }, modifiers: ["hurry", "ghost"] },
+        { level: 2, modifiers: ["hurry"] },
+      ],
+      { weapons: ["spark"], passives: new Map([["might", "attack"]]), modifiers: ["hurry", "inverse"] },
+      { weapons: 1, passives: { attack: 0, defense: 0, mobility: 0 } },
+    ).join("\n");
+    expect(problems).toMatch(/модификатор inverse не открывается ни на одном уровне/);
+    expect(problems).toMatch(/модификатор hurry открывается на уровнях 1, 2/);
+    expect(problems).toMatch(/уровень 1: модификатора ghost нет в контенте/);
+  });
+
+  it("стартовый набор не меняется: на первом уровне модификаторов нет", () => {
+    expect(ACCOUNT_UNLOCKS.find((row) => row.level === 1)?.modifiers).toBeUndefined();
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 1).modifiers.size).toBe(0);
   });
 });
