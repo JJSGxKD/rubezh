@@ -89,7 +89,11 @@ const FRIEND = /^f-([A-Za-z0-9]{8,32})$/;
 const NOTIFICATION = /^n-([a-z_]{3,32})$/;
 /** Прямая ссылка кампании: префикс, дальше — код ссылки по `LINK_CODE`. */
 const DIRECT_LINK_PREFIX = "l-";
-/** Приглашение друга — `app-shell/src/screens/meta/friends.tsx`, `INVITE_START_PARAM`. */
+/**
+ * Прежнее приглашение друга без кода: теперь приглашают ссылкой дружбы `f-<код>`
+ * (`app-shell/src/state/friends-api.ts`, `friendInviteUrl`), а разосланные раньше
+ * ссылки с `invite` по-прежнему узнаются.
+ */
 const INVITE = "invite";
 
 const ORGANIC: StartParam = { kind: "organic", raw: null, ref: null };
