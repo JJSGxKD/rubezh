@@ -3,6 +3,7 @@ import { parseStartParam } from "../attribution/start-param.js";
 import { LINK_NETWORKS, isLinkNetwork, networkParamsOf } from "../links/link-networks.js";
 import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 import { CONVERSION_WINDOWS } from "./conversion-rules.js";
+import { countedRun } from "./counted-run.js";
 import { destinationOf, type DestinationKind } from "./destinations/destination.js";
 import { EVENT_GOAL } from "./postback-events.js";
 
@@ -141,7 +142,7 @@ async function insert(prisma: PrismaClient, rows: readonly DirectRow[]): Promise
  * что у прохода по кликам. Возвращает, сколько строк вставлено.
  */
 export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targets: Prisma.Sql): Promise<{ registrations: number; purchases: number }> {
-  const { registrationDays, purchaseDays, purchaseSettleMin, minRunSec } = CONVERSION_WINDOWS;
+  const { registrationDays, purchaseDays, purchaseSettleMin } = CONVERSION_WINDOWS;
   const registration = "registration";
   const first = "purchase_first";
   const repeat = "purchase_repeat";
@@ -166,11 +167,8 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
         OR EXISTS (
           SELECT 1 FROM run r
           WHERE r.account_id = q.account_id
-            AND r.finished_at IS NOT NULL
+            AND ${countedRun("r")}
             AND r.finished_at <= q.first_at + make_interval(days => ${registrationDays})
-            AND r.cheats = false
-            AND r.survival_sec >= ${minRunSec}
-            AND (r.verdict IS NULL OR r.verdict <> 'rejected')
         )
       )
     ORDER BY q.first_at, q.account_id, t.destination

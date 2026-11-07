@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
 import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 import { CONVERSION_WINDOWS } from "./conversion-rules.js";
+import { countedRun } from "./counted-run.js";
 import { EVENT_GOAL, type PostbackEvent } from "./postback-events.js";
 
 /**
@@ -22,7 +23,7 @@ import { EVENT_GOAL, type PostbackEvent } from "./postback-events.js";
  * сколько строк вставлено.
  */
 export async function sweepClickLaunches(prisma: PrismaClient, now: Date, targets: Prisma.Sql): Promise<{ registrations: number; purchases: number }> {
-  const { registrationDays, purchaseDays, purchaseSettleMin, minRunSec } = CONVERSION_WINDOWS;
+  const { registrationDays, purchaseDays, purchaseSettleMin } = CONVERSION_WINDOWS;
   const registration: PostbackEvent = "registration";
   const first: PostbackEvent = "purchase_first";
   const repeat: PostbackEvent = "purchase_repeat";
@@ -51,11 +52,8 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
           OR EXISTS (
             SELECT 1 FROM run r
             WHERE r.account_id = q.account_id
-              AND r.finished_at IS NOT NULL
+              AND ${countedRun("r")}
               AND r.finished_at <= c.at + make_interval(days => ${registrationDays})
-              AND r.cheats = false
-              AND r.survival_sec >= ${minRunSec}
-              AND (r.verdict IS NULL OR r.verdict <> 'rejected')
           )
         )
       ON CONFLICT DO NOTHING`;
