@@ -86,10 +86,11 @@ export type PartnerInput = z.infer<typeof partnerInputSchema>;
 /**
  * Правка существующего партнёра: те же поля и адрес постбэка (T-0070). Адрес — строка разумной длины, правила
  * шаблона проверяет сервис и отвечает первой проблемой словами; пустая строка и `null` снимают адрес, не названный
- * остаётся как был. Момент `postback_since` и события клиент не присылает: лишнее поле — отказ. В заведении
- * нового партнёра адреса нет — он появляется правкой.
+ * остаётся как был. События общего адреса (T-0071) схема не разбирает: «не список», «пусто» и «незнакомое» отвечает
+ * `eventsProblems` своими словами, а выбрать их можно, только когда адрес задан. Момент `postback_since` клиент не
+ * присылает: лишнее поле — отказ. В заведении нового партнёра адреса нет — он появляется правкой.
  */
-export const partnerUpdateSchema = partnerInputSchema.extend({ postbackUrl: z.string().max(4_096).nullable().optional() });
+export const partnerUpdateSchema = partnerInputSchema.extend({ postbackUrl: z.string().max(4_096).nullable().optional(), postbackEvents: z.unknown().optional() });
 
 export type PartnerUpdateInput = z.infer<typeof partnerUpdateSchema>;
 
@@ -150,7 +151,12 @@ export function withTerms<T extends PartnerRow>(row: T): T & PartnerTerms {
  * Правка партнёра: название, связь и условия — то, что названо; статус — той же правкой, но только из `setStatus`.
  * Адрес постбэка и момент, с которого он действует, сервис присылает парой: поодиночке база их не принимает.
  */
-export type PartnerPatch = Partial<PartnerInput> & { status?: PartnerStatus; postbackUrl?: string | null; postbackSince?: Date | null };
+export type PartnerPatch = Partial<PartnerInput> & {
+  status?: PartnerStatus;
+  postbackUrl?: string | null;
+  postbackSince?: Date | null;
+  postbackEvents?: readonly string[];
+};
 
 /** Что партнёр принёс — для списка и карточки. Платящие и звёзды — живые оплаты после привязки, без возвращённых. */
 export interface PartnerStats {

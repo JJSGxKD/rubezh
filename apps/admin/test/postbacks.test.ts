@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  ADSGRAM_EVENTS_LINE,
   DESTINATION_TITLES,
+  GOAL_TITLES,
+  INHERITED_EVENTS_CAPTION,
+  POSTBACK_EVENTS_LATER_NOTE,
+  POSTBACK_EVENT_OPTIONS,
   POSTBACK_EXAMPLE,
   conversionSchema,
   conversionState,
   destinationTitle,
+  eventsChoice,
+  linkEventsView,
   linkSchema,
   postbackEventsLine,
   postbackState,
   setLinkPostback,
+  setLinkPostbackEvents,
   type Conversion,
 } from "../src/api/links";
-import { fetchPartner, partnerFormOf, setPartnerPostback, type Partner } from "../src/api/partners";
+import { fetchPartner, partnerFormOf, setPartnerPostback, setPartnerPostbackEvents, type Partner } from "../src/api/partners";
 import { formatDateTime } from "../src/format";
 import { fakeFetch, json } from "./helpers";
 
@@ -201,5 +209,110 @@ describe("сохранение адреса", () => {
     const { fetch, calls } = fakeFetch(json(200, { data: PARTNER }));
     await setPartnerPostback(new AdminApi(fetch), PARTNER, "  ");
     expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ postbackUrl: null });
+  });
+});
+
+// Выбор событий (tasks/T-0071, Р86, Р96): флажки в блоке «Постбэк», возврат на следующий день в журнале.
+
+describe("события постбэка: подписи и выбор", () => {
+  it("четыре флажка в каноническом порядке, подсказки дословно", () => {
+    expect(POSTBACK_EVENT_OPTIONS.map((option) => [option.event, option.title])).toEqual([
+      ["registration", "Регистрация"],
+      ["purchase_first", "Первая покупка"],
+      ["purchase_repeat", "Повторная покупка"],
+      ["d1_return", "Возврат на следующий день"],
+    ]);
+    expect(POSTBACK_EVENT_OPTIONS.map((option) => option.hint)).toEqual([
+      "Новый игрок зарегистрировался — по правилу ссылки",
+      "Первая настоящая оплата игрока в течение 30 дней после клика",
+      "Каждая следующая оплата",
+      "Игрок вернулся и сыграл засчитанный забег на следующие игровые сутки после дня регистрации; сутки — по Москве. По умолчанию выключено",
+    ]);
+    expect(POSTBACK_EVENTS_LATER_NOTE).toBe("Событие, включённое позже, уйдёт и по игрокам, которые пришли после даты начала отправки, пока не закрылось его окно.");
+  });
+
+  it("«Получает: …» — события словами в каноническом порядке, незнакомое в конце", () => {
+    expect(postbackEventsLine(["d1_return", "registration"])).toBe("Получает: регистрация, возврат на следующий день.");
+    expect(postbackEventsLine(["purchase_repeat", "purchase_first"])).toBe("Получает: первая покупка, повторная покупка.");
+    expect(postbackEventsLine(["future_event", "registration"])).toBe("Получает: регистрация, future_event.");
+  });
+
+  it("пустой выбор не отправляется: «Выберите хотя бы одно событие»; выбранное уходит в каноническом порядке без повторов", () => {
+    expect(eventsChoice([])).toEqual({ ok: false, error: "Выберите хотя бы одно событие" });
+    expect(eventsChoice(["d1_return", "registration", "d1_return"])).toEqual({ ok: true, events: ["registration", "d1_return"] });
+  });
+
+  it("журнал: событие 4 подписано «Возврат на следующий день» и разбирается", () => {
+    expect(GOAL_TITLES[4]).toBe("Возврат на следующий день");
+    expect(conversionSchema.parse({ ...CONVERSION, goal: 4 }).goal).toBe(4);
+    expect(conversionSchema.safeParse({ ...CONVERSION, goal: 5 }).success).toBe(false);
+  });
+});
+
+describe("флажки у ссылки: какие события и можно ли менять", () => {
+  const partnerWith = (patch: Partial<{ postbackSet: boolean; postbackEvents: string[] }>) => ({
+    partnerId: PARTNER.partnerId,
+    name: "Канал",
+    postbackSet: true,
+    postbackEvents: ["registration", "d1_return"],
+    ...patch,
+  });
+
+  it("свой адрес — флажки меняются, события ссылки", () => {
+    const link = linkSchema.parse({ ...LINK, postbackUrl: ADDRESS, postbackSince: "2026-11-08T09:30:00.000Z", postbackEvents: ["registration", "purchase_first"] });
+    expect(linkEventsView(link)).toEqual({ kind: "own", events: ["registration", "purchase_first"] });
+  });
+
+  it("ссылка партнёра без своего адреса: события общего адреса партнёра, флажки недоступны", () => {
+    const link = linkSchema.parse({ ...LINK, partner: partnerWith({}) });
+    expect(INHERITED_EVENTS_CAPTION).toBe("События общего адреса партнёра");
+    expect(linkEventsView(link)).toEqual({ kind: "inherited", events: ["registration", "d1_return"] });
+  });
+
+  it("свой адрес ссылки партнёра важнее общего: события ссылки, флажки меняются", () => {
+    const link = linkSchema.parse({ ...LINK, partner: partnerWith({}), postbackUrl: ADDRESS, postbackSince: "2026-11-08T09:30:00.000Z", postbackEvents: ["registration"] });
+    expect(linkEventsView(link)).toEqual({ kind: "own", events: ["registration"] });
+  });
+
+  it("адреса нет ни у ссылки, ни у партнёра — флажков нет", () => {
+    expect(linkEventsView(linkSchema.parse(LINK))).toEqual({ kind: "none" });
+    expect(linkEventsView(linkSchema.parse({ ...LINK, partner: partnerWith({ postbackSet: false }) }))).toEqual({ kind: "none" });
+  });
+
+  it("сервер старее: у партнёра ссылки нет полей событий — адреса партнёра как не бывало", () => {
+    const link = linkSchema.parse({ ...LINK, partner: { partnerId: PARTNER.partnerId, name: "Канал" } });
+    expect(linkEventsView(link)).toEqual({ kind: "none" });
+  });
+
+  it("у AdsGram выбора нет: строка дословно", () => {
+    expect(ADSGRAM_EVENTS_LINE).toBe("AdsGram получает: регистрация, первая покупка, повторная покупка. Возврат на следующий день AdsGram не принимает.");
+  });
+});
+
+describe("сохранение событий", () => {
+  it("ссылка: PATCH /links/<код> с postbackEvents в каноническом порядке", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { ...LINK, postbackUrl: ADDRESS, postbackSince: "2026-11-08T09:30:00.000Z", postbackEvents: ["registration", "d1_return"] } }));
+    const saved = await setLinkPostbackEvents(new AdminApi(fetch), "Ab12Cd34Ef", ["d1_return", "registration"]);
+    expect(saved.ok && saved.data.postbackEvents).toEqual(["registration", "d1_return"]);
+    expect(calls.map((call) => [call.init.method, call.url.replace(/^.*\/api\/v1\/admin/, ""), JSON.parse(String(call.init.body))])).toEqual([
+      ["PATCH", "/links/Ab12Cd34Ef", { postbackEvents: ["registration", "d1_return"] }],
+    ]);
+  });
+
+  it("ошибка сервера доходит как есть — выбор остаётся", async () => {
+    const { fetch } = fakeFetch(json(400, { error: { code: "validation", message: "Сначала задайте адрес постбэка" } }));
+    const result = await setLinkPostbackEvents(new AdminApi(fetch), "Ab12Cd34Ef", ["registration"]);
+    expect(!result.ok && result.error.message).toBe("Сначала задайте адрес постбэка");
+  });
+
+  it("партнёр: POST /partners/<id> со всеми полями карточки и postbackEvents, без postbackUrl — адрес не трогается", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: { ...PARTNER, postbackEvents: ["registration", "purchase_first"] } }));
+    const saved = await setPartnerPostbackEvents(new AdminApi(fetch), PARTNER, ["purchase_first", "registration"]);
+    expect(saved.ok && saved.data.postbackEvents).toEqual(["registration", "purchase_first"]);
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(calls[0]?.url).toContain(`/partners/${PARTNER.partnerId}`);
+    const body = JSON.parse(String(calls[0]?.init.body));
+    expect(body).toMatchObject({ name: "Канал", country: "KZ", sharePercent: "12.50", postbackEvents: ["registration", "purchase_first"] });
+    expect(body).not.toHaveProperty("postbackUrl");
   });
 });

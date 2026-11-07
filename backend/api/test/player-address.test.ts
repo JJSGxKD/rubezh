@@ -70,6 +70,9 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "fulfill_failed", fragment: "подробности в логе сервера" },
   { code: "promo_campaign_used", fragment: "поставьте на паузу" },
   { code: "team_slide_order_mismatch", fragment: "обновите страницу и переставьте ещё раз" },
+  // выбор событий постбэка в панели (T-0071): тексты задаёт спецификация
+  { code: "postback_events_empty", fragment: "Выберите хотя бы одно событие" },
+  { code: "postback_events_no_address", fragment: "Сначала задайте адрес постбэка" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];

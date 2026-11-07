@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
-import { checkedPostbackUrl, nextPostback, postbackLogForm } from "../ad-conversions/postback-settings.js";
+import { NO_POSTBACK_ADDRESS, checkedPostbackEvents, checkedPostbackUrl, nextPostback, postbackLogForm, sameEvents } from "../ad-conversions/postback-settings.js";
 import { partnerFunnelView, type PartnerFunnelView } from "../funnel/funnel-report.js";
 import { PARTNER_FUNNEL, type PartnerFunnelSource } from "../funnel/funnel.repository.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
@@ -32,7 +32,7 @@ import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, 
 export type PartnerView = PartnerFull & { stats: PartnerStats };
 
 /** Поля, чья правка попадает в аудит «было → стало»; статус — отдельным действием `partner.status`. */
-const AUDITED_FIELDS = ["name", "contact", "note", "telegramId", "country", "payoutCurrency", "payoutMethod", "sharePercent", "postbackUrl"] as const;
+const AUDITED_FIELDS = ["name", "contact", "note", "telegramId", "country", "payoutCurrency", "payoutMethod", "sharePercent", "postbackUrl", "postbackEvents"] as const;
 
 /** Причина смены статуса: от трёх до двухсот знаков без пробелов по краям. */
 const REASON_MIN = 3;
@@ -134,23 +134,29 @@ export class PartnersService {
   /**
    * Правка названия, связи и условий: названное меняется, не названное остаётся. В аудит — только изменённые поля,
    * адрес постбэка — без запроса. Адрес проверяется правилами шаблона до записи; первое задание ставит
-   * `postback_since`, смена на другой адрес момент не трогает, снятие обнуляет (`nextPostback`).
+   * `postback_since`, смена на другой адрес момент не трогает, снятие обнуляет и возвращает события к одной
+   * регистрации (`nextPostback`). События общего адреса (T-0071) выбираются, только когда адрес задан — уже или в этом же
+   * запросе; снять адрес и выбрать события одним запросом нельзя.
    */
   async update(actor: AccountRef, partnerId: string, input: PartnerUpdateInput, at = new Date()): Promise<PartnerView> {
     await this.roles.require(actor, "partners.edit");
     if (typeof input.telegramId === "string") await this.assertTelegramFree(input.telegramId, partnerId);
-    const { postbackUrl: rawUrl, ...fields } = input;
+    const { postbackUrl: rawUrl, postbackEvents: rawEvents, ...fields } = input;
     const patch: PartnerPatch = fields;
-    if (rawUrl !== undefined) {
-      const url = checkedPostbackUrl(rawUrl);
+    const events = rawEvents === undefined ? undefined : checkedPostbackEvents(rawEvents);
+    const url = rawUrl === undefined ? undefined : checkedPostbackUrl(rawUrl);
+    if (url !== undefined || events !== undefined) {
       const current = await this.db(this.repository.byId(partnerId, at));
       if (current === null) throw new PartnerNotFoundError();
       const terms = withTerms(current);
-      if (terms.postbackUrl !== url) {
+      if (events !== undefined && (url === undefined ? terms.postbackUrl : url) === null) throw new ValidationError(NO_POSTBACK_ADDRESS);
+      if (url !== undefined && terms.postbackUrl !== url) {
         const next = nextPostback({ url: terms.postbackUrl, since: terms.postbackSince }, url, at);
         patch.postbackUrl = next.url;
         patch.postbackSince = next.since;
+        if (next.events !== undefined) patch.postbackEvents = next.events;
       }
+      if (events !== undefined && !sameEvents(terms.postbackEvents, events)) patch.postbackEvents = events;
     }
     const changed = await this.db(this.repository.update(partnerId, patch, at));
     if (changed === null) throw new PartnerNotFoundError();
@@ -221,7 +227,7 @@ function changedFields(before: PartnerFull, after: PartnerFull): { before: Recor
   const was: Record<string, unknown> = {};
   const now: Record<string, unknown> = {};
   for (const field of AUDITED_FIELDS) {
-    if (before[field] === after[field]) continue;
+    if (field === "postbackEvents" ? sameEvents(before.postbackEvents, after.postbackEvents) : before[field] === after[field]) continue;
     // Адрес постбэка идёт в аудит без запроса: в нём бывает секрет приёмника.
     was[field] = field === "postbackUrl" ? postbackLogForm(before.postbackUrl) : before[field];
     now[field] = field === "postbackUrl" ? postbackLogForm(after.postbackUrl) : after[field];

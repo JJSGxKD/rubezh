@@ -82,9 +82,19 @@ export type ConversionSummary = Record<ConversionGoal, GoalCounts>;
 
 export const CONVERSIONS_REPOSITORY = Symbol("CONVERSIONS_REPOSITORY");
 
+/**
+ * Сколько строк дописал проход. `returns` — возвраты на следующий день: он необязателен, чтобы заглушки репозитория,
+ * написанные до событий (T-0071), не знали о нём; нет поля — возвратов ноль.
+ */
+export interface SweepFound {
+  registrations: number;
+  purchases: number;
+  returns?: number;
+}
+
 export interface ConversionsRepository {
-  /** Дописать регистрации и покупки, которых ещё нет. Сколько дописано. */
-  sweep(now: Date): Promise<{ registrations: number; purchases: number }>;
+  /** Дописать регистрации, покупки и возвраты, которых ещё нет. Сколько дописано. */
+  sweep(now: Date): Promise<SweepFound>;
   due(now: Date, limit: number): Promise<DueConversion[]>;
   markSent(conversionId: string, httpStatus: number, now: Date): Promise<void>;
   /** Неудача: повторить в `nextAt` или, если `null`, — больше не пробовать. */
@@ -122,11 +132,11 @@ export class PrismaConversionsRepository implements ConversionsRepository {
     return TARGETS_CTE;
   }
 
-  async sweep(now: Date): Promise<{ registrations: number; purchases: number }> {
+  async sweep(now: Date): Promise<SweepFound> {
     const targets = this.targets();
     const clicks = await sweepClickLaunches(this.prisma, now, targets);
     const direct = await sweepDirectLaunches(this.prisma, now, targets);
-    return { registrations: clicks.registrations + direct.registrations, purchases: clicks.purchases + direct.purchases };
+    return { registrations: clicks.registrations + direct.registrations, purchases: clicks.purchases + direct.purchases, returns: clicks.returns };
   }
 
   async due(now: Date, limit: number): Promise<DueConversion[]> {

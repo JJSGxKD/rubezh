@@ -62,7 +62,15 @@ export const TARGET_HINTS: Record<LinkTarget, string> = {
 };
 
 /** Владелец-партнёр ссылки; ссылка команды и сервер старше партнёрских ссылок дают `null`. */
-const linkPartnerSchema = z.object({ partnerId: z.string(), name: z.string() });
+// Событий и признака общего адреса партнёра у сервера старее T-0071 нет: тогда общего адреса как не бывало.
+const linkPartnerSchema = z.object({
+  partnerId: z.string(),
+  name: z.string(),
+  /** задан ли у партнёра общий адрес постбэка; сам адрес в ссылку не приходит */
+  postbackSet: z.boolean().optional().catch(undefined),
+  /** какие события уходят на общий адрес партнёра */
+  postbackEvents: z.array(z.string()).optional().catch(undefined),
+});
 export type LinkPartner = z.infer<typeof linkPartnerSchema>;
 
 const goalCountsSchema = z.object({ pending: z.number(), sent: z.number(), failed: z.number(), skipped: z.number() });
@@ -180,6 +188,14 @@ export function setLinkPostback(api: AdminApi, code: string, url: string | null)
   return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { postbackUrl: trimmed === "" ? null : trimmed }, schema: linkSchema });
 }
 
+/**
+ * Выбрать события, которые уходят на адрес ссылки (T-0071). Уходят в каноническом порядке и без повторов; пустой
+ * выбор до сервера не доходит — его останавливает `eventsChoice`. Без своего адреса у ссылки сервер ответит отказом.
+ */
+export function setLinkPostbackEvents(api: AdminApi, code: string, events: readonly string[]): Promise<ApiResult<Link>> {
+  return api.request(`/links/${encodeURIComponent(code)}`, { method: "PATCH", body: { postbackEvents: canonicalEvents(events) }, schema: linkSchema });
+}
+
 /** Дать автоисточнику название; пустое сбрасывает, и в списке снова кампания. Кампания и источник не меняются. */
 export function renameLink(api: AdminApi, code: string, title: string): Promise<ApiResult<Link>> {
   const trimmed = title.trim();
@@ -287,17 +303,56 @@ export function postbackState(setting: { postbackUrl: string | null; postbackSin
   return `Отправляем по кликам с ${formatDateTime(setting.postbackSince)}. События по более ранним кликам не отправляются.`;
 }
 
-const POSTBACK_EVENT_TITLES: Readonly<Record<string, string>> = {
-  registration: "регистрация",
-  purchase_first: "первая покупка",
-  purchase_repeat: "повторная покупка",
-  d1_return: "возврат на следующий день",
-};
+/** Событие постбэка, его название флажка и подсказка к нему. Порядок — канонический, как на сервере (`postback-events.ts`). */
+export const POSTBACK_EVENT_OPTIONS = [
+  { event: "registration", title: "Регистрация", hint: "Новый игрок зарегистрировался — по правилу ссылки" },
+  { event: "purchase_first", title: "Первая покупка", hint: "Первая настоящая оплата игрока в течение 30 дней после клика" },
+  { event: "purchase_repeat", title: "Повторная покупка", hint: "Каждая следующая оплата" },
+  {
+    event: "d1_return",
+    title: "Возврат на следующий день",
+    hint: "Игрок вернулся и сыграл засчитанный забег на следующие игровые сутки после дня регистрации; сутки — по Москве. По умолчанию выключено",
+  },
+] as const;
 
-/** «Получает: регистрация.» — события словами; незнакомое событие показывается как есть. */
+export const POSTBACK_EVENTS_LATER_NOTE = "Событие, включённое позже, уйдёт и по игрокам, которые пришли после даты начала отправки, пока не закрылось его окно.";
+export const INHERITED_EVENTS_CAPTION = "События общего адреса партнёра";
+export const INHERITED_EVENTS_NOTE = "Меняются в карточке партнёра.";
+export const NO_EVENTS_CHOSEN = "Выберите хотя бы одно событие";
+/** У AdsGram выбора нет: три фиксированных события, возврат он не принимает (`adsgram.destination.ts`). */
+export const ADSGRAM_EVENTS_LINE = "AdsGram получает: регистрация, первая покупка, повторная покупка. Возврат на следующий день AdsGram не принимает.";
+
+const POSTBACK_EVENT_TITLES: Readonly<Record<string, string>> = Object.fromEntries(POSTBACK_EVENT_OPTIONS.map((option) => [option.event, option.title.toLowerCase()]));
+
+/** Известные события в каноническом порядке и без повторов; незнакомое (сервер новее панели) отбрасывается. */
+export function canonicalEvents(events: readonly string[]): string[] {
+  return POSTBACK_EVENT_OPTIONS.map((option) => option.event).filter((event) => events.includes(event));
+}
+
+/** «Получает: регистрация.» — события словами в каноническом порядке; незнакомое событие показывается как есть, в конце. */
 export function postbackEventsLine(events: readonly string[]): string {
   if (events.length === 0) return "Получает: ничего.";
-  return `Получает: ${events.map((event) => POSTBACK_EVENT_TITLES[event] ?? event).join(", ")}.`;
+  const unknown = events.filter((event) => POSTBACK_EVENT_TITLES[event] === undefined);
+  const titles = [...canonicalEvents(events).map((event) => POSTBACK_EVENT_TITLES[event] ?? event), ...unknown];
+  return `Получает: ${titles.join(", ")}.`;
+}
+
+/** Что отправить по отмеченным флажкам: список в каноническом порядке или, если ничего не отмечено, — отказ словами, запрос не уходит. */
+export function eventsChoice(selected: readonly string[]): { ok: true; events: string[] } | { ok: false; error: string } {
+  const events = canonicalEvents(selected);
+  return events.length === 0 ? { ok: false, error: NO_EVENTS_CHOSEN } : { ok: true, events };
+}
+
+/**
+ * Чьи события показывает блок ссылки: свои (адрес ссылки задан — флажки меняются), общего адреса партнёра (у ссылки
+ * своего нет, у партнёра есть — флажки недоступны) или никаких (адреса нет нигде, ничего не отправляем).
+ */
+export type LinkEventsView = { kind: "none" } | { kind: "own"; events: string[] } | { kind: "inherited"; events: string[] };
+
+export function linkEventsView(link: Pick<Link, "postbackUrl" | "postbackEvents" | "partner">): LinkEventsView {
+  if (link.postbackUrl !== null) return { kind: "own", events: link.postbackEvents };
+  if (link.partner?.postbackSet === true) return { kind: "inherited", events: link.partner.postbackEvents ?? ["registration"] };
+  return { kind: "none" };
 }
 
 /** Ошибка сохранения словами для поля: нет сети — наш текст, остальное — как ответил сервер, введённое остаётся. */
@@ -315,15 +370,18 @@ export function destinationTitle(destination: string): string {
 
 // --- Конверсии сети ---
 
-export type ConversionGoal = 1 | 2 | 3;
+/** Цели, по которым сервер ведёт счёт ссылки: регистрация и покупки; возврат на следующий день в счёт не входит. */
+export type SummaryGoal = 1 | 2 | 3;
+/** Код события в журнале: 1–3 как `goaltype` AdsGram, 4 — возврат на следующий день (T-0071). */
+export type ConversionGoal = SummaryGoal | 4;
 
-export const GOALS: readonly ConversionGoal[] = [1, 2, 3];
+export const GOALS: readonly SummaryGoal[] = [1, 2, 3];
 
-export const GOAL_TITLES: Record<ConversionGoal, string> = { 1: "Регистрация", 2: "Первая покупка", 3: "Повторная покупка" };
+export const GOAL_TITLES: Record<ConversionGoal, string> = { 1: "Регистрация", 2: "Первая покупка", 3: "Повторная покупка", 4: "Возврат на следующий день" };
 
 export const conversionSchema = z.object({
   conversionId: z.string(),
-  goal: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  goal: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   // Куда уходит строка. Сервер старее панели: до постбэков назначение было одно — AdsGram.
   destination: z.string().catch("adsgram"),
   status: z.enum(["pending", "sent", "failed", "skipped"]),
@@ -393,7 +451,7 @@ export function conversionState(row: Conversion): ConversionState {
 
 const GOAL_KEYS = { 1: "1", 2: "2", 3: "3" } as const;
 
-export function goalCounts(summary: ConversionSummary, goal: ConversionGoal): GoalCounts {
+export function goalCounts(summary: ConversionSummary, goal: SummaryGoal): GoalCounts {
   return summary[GOAL_KEYS[goal]];
 }
 

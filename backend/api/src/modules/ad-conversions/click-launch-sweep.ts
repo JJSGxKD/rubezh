@@ -1,6 +1,8 @@
-import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
+import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 import { CONVERSION_WINDOWS } from "./conversion-rules.js";
+import { countedRun } from "./counted-run.js";
 import { EVENT_GOAL, type PostbackEvent } from "./postback-events.js";
 
 /**
@@ -15,14 +17,28 @@ import { EVENT_GOAL, type PostbackEvent } from "./postback-events.js";
  *
  * Кому и что отправлять, решает набор назначений (`destinations/destination-targets.ts`): запросы
  * берут из него ссылки, события и момент, с которого клики учитываются.
+ *
+ * Возвраты на следующий день (T-0071) бывают только у клика: у прямого запуска нет ни клика, ни
+ * адреса, куда их отправлять, а AdsGram их не принимает.
  */
 
+/** Сколько строк вставил каждый из запросов: регистрации, покупки, возвраты на следующий день. */
+export interface ClickSweep {
+  registrations: number;
+  purchases: number;
+  returns: number;
+}
+
+/** Литерал вместо параметра: по нему планировщик подбирает частичный уникальный индекс на цели 1, 2, 4. */
+const RETURN_GOAL = Prisma.raw(String(EVENT_GOAL.d1_return));
+
 /**
- * Дописать регистрации и покупки по кликам. `targets` — набор назначений прохода. Возвращает,
+ * Дописать регистрации, покупки и возвраты по кликам. `targets` — набор назначений прохода. Возвращает,
  * сколько строк вставлено.
  */
-export async function sweepClickLaunches(prisma: PrismaClient, now: Date, targets: Prisma.Sql): Promise<{ registrations: number; purchases: number }> {
-  const { registrationDays, purchaseDays, purchaseSettleMin, minRunSec } = CONVERSION_WINDOWS;
+export async function sweepClickLaunches(prisma: PrismaClient, now: Date, targets: Prisma.Sql): Promise<ClickSweep> {
+  const { registrationDays, returnLookbackDays, purchaseDays, purchaseSettleMin } = CONVERSION_WINDOWS;
+  const returned: PostbackEvent = "d1_return";
   const registration: PostbackEvent = "registration";
   const first: PostbackEvent = "purchase_first";
   const repeat: PostbackEvent = "purchase_repeat";
@@ -51,11 +67,8 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
           OR EXISTS (
             SELECT 1 FROM run r
             WHERE r.account_id = q.account_id
-              AND r.finished_at IS NOT NULL
+              AND ${countedRun("r")}
               AND r.finished_at <= c.at + make_interval(days => ${registrationDays})
-              AND r.cheats = false
-              AND r.survival_sec >= ${minRunSec}
-              AND (r.verdict IS NULL OR r.verdict <> 'rejected')
           )
         )
       ON CONFLICT DO NOTHING`;
@@ -96,5 +109,52 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
         AND paid.paid_at <= ${now}::timestamptz - make_interval(mins => ${purchaseSettleMin})
         AND (CASE WHEN paid.n = 1 THEN ${first}::text ELSE ${repeat}::text END) = ANY(t.events)
       ON CONFLICT DO NOTHING`;
-  return { registrations, purchases };
+
+  // Возвраты на следующий день: засчитанный забег в игровые сутки (полночь по Москве, `GAME_DAY_TIME_ZONE`) сразу
+  // за днём регистрации. День регистрации — день первого засчитанного забега, а не создания аккаунта, и этот забег
+  // обязан уложиться в окно регистрации от клика: иначе регистрации не было и возвращаться не к чему. Сутки
+  // считаются границами — `[полночь дня + 1, полночь дня + 2)` — а не сравнением дат: так второй LATERAL берёт
+  // забеги по индексу `(account_id, finished_at)` и читает только их, а не всю историю игрока. Первый LATERAL —
+  // `ORDER BY … LIMIT 1`, а не `min()`: с `min()` планировщик прячет границу в подзапрос и индексом её не берёт.
+  // Кандидаты — по первому касанию за окно просмотра (индекс `(first_start_kind, first_at)`); назначения без
+  // `d1_return` отсекает `ANY(t.events)` до обращения к забегам, а уже заведённые — `NOT EXISTS` по уникальному
+  // ключу, чтобы раз в минуту не пересчитывать забеги тех, кому всё отправлено.
+  const returns = await prisma.$executeRaw`
+      WITH ${targets}
+      INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, status, reason, next_attempt_at, created_at)
+      SELECT gen_random_uuid(), t.destination, t.destination, l.code, c.click_id, q.account_id, ${EVENT_GOAL.d1_return}::smallint,
+             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
+             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'team' END,
+             ${now}, ${now}
+      FROM targets t
+      JOIN link l ON l.code = t.link_code
+      JOIN link_click c ON c.link_code = l.code
+      JOIN acquisition q ON q.first_start_ref = c.click_id
+      JOIN account a ON a.account_id = q.account_id AND a.created_at >= c.at - interval '1 minute'
+      JOIN LATERAL (
+        SELECT (((f.finished_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 1)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AS from_at,
+               (((f.finished_at AT TIME ZONE ${GAME_DAY_TIME_ZONE})::date + 2)::timestamp AT TIME ZONE ${GAME_DAY_TIME_ZONE}) AS to_at
+        FROM run f
+        WHERE f.account_id = q.account_id
+          AND ${countedRun("f")}
+          AND f.finished_at <= c.at + make_interval(days => ${registrationDays})
+        ORDER BY f.finished_at
+        LIMIT 1
+      ) reg ON true
+      JOIN LATERAL (
+        SELECT 1
+        FROM run r
+        WHERE r.account_id = q.account_id
+          AND ${countedRun("r")}
+          AND r.finished_at >= reg.from_at
+          AND r.finished_at < reg.to_at
+        LIMIT 1
+      ) ret ON true
+      WHERE q.first_start_kind = 'click'
+        AND q.first_at > ${now}::timestamptz - make_interval(days => ${returnLookbackDays})
+        AND ${returned}::text = ANY(t.events)
+        AND c.at >= t.since
+        AND NOT EXISTS (SELECT 1 FROM ad_conversion v WHERE v.click_id = c.click_id AND v.goal = ${RETURN_GOAL} AND v.destination = t.destination)
+      ON CONFLICT DO NOTHING`;
+  return { registrations, purchases, returns };
 }

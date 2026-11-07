@@ -366,7 +366,7 @@ describe("адрес постбэка по HTTP панели", () => {
     const renamed = (await postPartner(partnerId, { ...BODY, name: "Канал 2" }, owner)).json<PartnerReply>().data;
     expect(renamed).toMatchObject({ name: "Канал 2", postbackUrl: OTHER_ADDRESS, postbackSince: first.postbackSince });
 
-    expect((await postPartner(partnerId, { ...BODY, postbackUrl: ADDRESS, postbackEvents: ["purchase_first"] }, owner)).statusCode).toBe(400);
+    expect((await postPartner(partnerId, { ...BODY, postbackUrl: ADDRESS, postbackEvents: ["teleport"] }, owner)).statusCode).toBe(400);
     expect((await postPartner(partnerId, { ...BODY, postbackSince: "2020-01-01T00:00:00Z" }, owner)).statusCode).toBe(400);
     expect((await postPartner(partnerId, { ...BODY, postbackUrl: 5 }, owner)).statusCode).toBe(400);
 
