@@ -50,6 +50,12 @@ export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   title: string | null;
   /** скрыт в панели; запуски по нему считаются */
   hiddenAt: Date | null;
+  /** адрес постбэка с макросами (T-0070); `null` — у ссылки своего адреса нет, действует общий адрес партнёра, если он есть */
+  postbackUrl: string | null;
+  /** с какого времени по кликам действует адрес; задан тогда и только тогда, когда задан адрес */
+  postbackSince: Date | null;
+  /** какие события уходят на адрес; по умолчанию одна регистрация */
+  postbackEvents: string[];
 }
 
 /** Что меняется в показе автоисточника; не заданное не трогается. */
@@ -113,6 +119,8 @@ export interface LinksRepository {
    * разрезы аналитики. `null` — такого автоисточника нет (в том числе код ручной ссылки).
    */
   setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null>;
+  /** Записать адрес постбэка и момент, с которого он действует (оба `null` — адрес снят). `null` — ссылки с таким кодом нет. */
+  setPostback(code: string, postback: { url: string | null; since: Date | null }): Promise<LinkRecord | null>;
 }
 
 @Injectable()
@@ -142,6 +150,16 @@ export class PrismaLinksRepository implements LinksRepository {
   async retarget(code: string, target: LinkTarget): Promise<LinkRecord | null> {
     try {
       return recordOf(await this.prisma.link.update({ where: { code }, data: { target }, include: WITH_OWNER }));
+    } catch (error: unknown) {
+      // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
+      throw error;
+    }
+  }
+
+  async setPostback(code: string, postback: { url: string | null; since: Date | null }): Promise<LinkRecord | null> {
+    try {
+      return recordOf(await this.prisma.link.update({ where: { code }, data: { postbackUrl: postback.url, postbackSince: postback.since }, include: WITH_OWNER }));
     } catch (error: unknown) {
       // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;

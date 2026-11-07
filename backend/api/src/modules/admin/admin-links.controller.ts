@@ -3,6 +3,7 @@ import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { ConversionsJournal, parseCursor } from "../ad-conversions/conversions-journal.service.js";
+import { checkedPostbackUrl } from "../ad-conversions/postback-settings.js";
 import { emptySummary, type ConversionRow, type ConversionSummary } from "../ad-conversions/conversions.repository.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
@@ -32,6 +33,9 @@ import { AdminSessionGuard } from "./admin-session.guard.js";
  * Ссылка партнёра (Р96, T-0067) — та же ссылка с владельцем `partnerId`: он
  * задаётся при создании, `PATCH` его не принимает, а список фильтруется
  * по `?partner=<id>`.
+ *
+ * Адрес постбэка (T-0070) задаётся тем же `PATCH`: ссылка сообщает на него о регистрации
+ * пришедшего игрока. Полный адрес видят те, кто его правит (`links.manage`).
  */
 const slug = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/, "латиница в нижнем регистре, цифры, дефис и подчёркивание");
 const newLinkSchema = z.object({
@@ -44,8 +48,15 @@ const newLinkSchema = z.object({
   target: z.enum(LINK_TARGETS).optional(),
   partnerId: z.uuid().optional(),
 });
-// Строго: владельца после создания не сменить, и лишнее поле в теле — ошибка, а не молчаливо брошенный `partnerId`.
-const retargetSchema = z.object({ target: z.enum(LINK_TARGETS) }).strict();
+/**
+ * Правка ссылки: цель и адрес постбэка (T-0070), хотя бы одно. Строго: владельца и сеть после создания не сменить,
+ * и лишнее поле в теле — ошибка, а не молчаливо брошенный `partnerId`. Адрес здесь только строка разумной длины:
+ * правила шаблона проверяет сервис и отвечает первой проблемой словами. Пустая строка и `null` снимают адрес.
+ */
+const linkPatchSchema = z
+  .object({ target: z.enum(LINK_TARGETS).optional(), postbackUrl: z.string().max(4_096).nullable().optional() })
+  .strict()
+  .refine((value) => value.target !== undefined || value.postbackUrl !== undefined, { message: "нужна цель или адрес постбэка" });
 /**
  * Название и скрытие автоисточника (T-0180): хотя бы одно поле, лишних нет. Название — одна строка
  * без управляющих знаков, 1–80 после обрезки; пустая строка и `null` сбрасывают его.
@@ -116,14 +127,24 @@ export class AdminLinksController {
     };
   }
 
-  /** Сменить цель: прошлые клики остаются, новые идут по-новому. Сеть, код и владелец не меняются. */
+  /**
+   * Сменить цель и задать адрес постбэка: прошлые клики остаются, новые идут по-новому. Сеть, код и владелец не
+   * меняются. Адрес проверяется до цели: недопустимый адрес не оставляет после себя смены цели.
+   */
   @Patch(":code")
   @RequirePermission("links.manage")
   async retarget(@Req() request: unknown, @Param("code") code: string, @Body() body: unknown): Promise<{ data: LinkView }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
-    const { target } = parse(() => retargetSchema.parse(body), "Меняется только цель ссылки — Mini App, бот или лендинг; владельца после создания не сменить");
-    const link = await this.links.retarget(actor, await this.linkCode(code), target);
+    const { target, postbackUrl } = parse(
+      () => linkPatchSchema.parse(body),
+      "Меняются цель ссылки — Mini App, бот или лендинг — и адрес постбэка; владельца и сеть после создания не сменить",
+    );
+    const id = await this.linkCode(code);
+    if (postbackUrl !== undefined) checkedPostbackUrl(postbackUrl);
+    let link: LinkView | null = null;
+    if (target !== undefined) link = await this.links.retarget(actor, id, target);
+    if (postbackUrl !== undefined) link = await this.links.setPostback(actor, id, postbackUrl);
     if (link === null) throw new LinkNotFoundError("Ссылки с таким кодом нет");
     return { data: link };
   }
