@@ -684,8 +684,8 @@ model AccountSession {
   platform       Platform
   place          SessionPlace
   startKind      StartKind    @map("start_kind")
-  /// параметр запуска как пришёл, из подписанных данных; `null` — не было или мусор
-  startParam     String?      @map("start_param") @db.VarChar(64)
+  /// параметр запуска как пришёл, из подписанных данных, до 512 знаков (предел `startapp` Mini App); `null` — не было или мусор
+  startParam     String?      @map("start_param") @db.VarChar(512)
   /// идентификатор внутри параметра: код клика, id партнёра Telegram
   startRef       String?      @map("start_ref") @db.VarChar(64)
   /// что клиент говорит о себе (`tgWebAppPlatform`) — подсказка, не факт
@@ -720,7 +720,7 @@ model Acquisition {
   accountId           String      @id @map("account_id") @db.Uuid
   firstAt             DateTime    @map("first_at") @db.Timestamptz(3)
   firstStartKind      StartKind   @map("first_start_kind")
-  firstStartParam     String?     @map("first_start_param") @db.VarChar(64)
+  firstStartParam     String?     @map("first_start_param") @db.VarChar(512)
   firstStartRef       String?     @map("first_start_ref") @db.VarChar(64)
   firstClientPlatform String?     @map("first_client_platform") @db.VarChar(16)
   firstDeviceClass    DeviceClass @map("first_device_class")
@@ -729,7 +729,7 @@ model Acquisition {
   /// последняя сессия по ссылке; `null` — по ссылкам не приходил ни разу
   lastTouchAt         DateTime?   @map("last_touch_at") @db.Timestamptz(3)
   lastStartKind       StartKind?  @map("last_start_kind")
-  lastStartParam      String?     @map("last_start_param") @db.VarChar(64)
+  lastStartParam      String?     @map("last_start_param") @db.VarChar(512)
   lastStartRef        String?     @map("last_start_ref") @db.VarChar(64)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
@@ -2381,13 +2381,19 @@ model HomeSlide {
 // назначения. Ключи: оплата и назначение; клик, цель и назначение — частичным
 // индексом `ad_conversion_click_id_goal_destination_key` для целей 1, 2, 4
 // (повторных покупок на клик много). Prisma частичные индексы не описывает,
-// он только в миграции.
+// они только в миграции.
+//
+// Запуск по прямой ссылке на Mini App (T-0181, Р121): клика нет, `click_id`
+// пуст, а метки сети лежат на самой строке (`network_params`). Регистрация,
+// первая покупка и возврат такой строки — по одной на аккаунт и назначение:
+// частичный индекс `ad_conversion_account_goal_destination_direct_key`.
 model AdConversion {
   conversionId  String             @id @default(uuid()) @map("conversion_id") @db.Uuid
   /// имя назначения, как `destination`; колонка осталась от первой версии — откату кода она нужна
   network       String             @db.VarChar(16)
   linkCode      String             @map("link_code") @db.VarChar(16)
-  clickId       String             @map("click_id") @db.VarChar(16)
+  /// клик по переходнику; `null` — запуск по прямой ссылке на Mini App
+  clickId       String?            @map("click_id") @db.VarChar(16)
   accountId     String             @map("account_id") @db.Uuid
   /// код события: 1 — регистрация, 2 — первая покупка, 3 — повторная (совпадают с `goaltype` AdsGram), 4 — возврат на следующий день
   goal          Int                @db.SmallInt
@@ -2405,9 +2411,11 @@ model AdConversion {
   lastError     String?            @map("last_error") @db.VarChar(200)
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   sentAt        DateTime?          @map("sent_at") @db.Timestamptz(3)
+  /// метки сети с прямого запуска: те же ключи, что у `link_click.network_params`; у конверсии по клику пусто, метки лежат на клике; обнуляются через 31 сутки
+  networkParams Json?              @map("network_params")
 
-  link     Link      @relation(fields: [linkCode], references: [code], onDelete: Cascade)
-  click    LinkClick @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  link     Link       @relation(fields: [linkCode], references: [code], onDelete: Cascade)
+  click    LinkClick? @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
   account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
