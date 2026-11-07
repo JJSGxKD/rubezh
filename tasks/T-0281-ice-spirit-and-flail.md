@@ -25,6 +25,9 @@ shared:
   - packages/app-shell/test/**
   - backend/api/src/modules/tasks/task-rules.ts
   - docs/32-balance.md
+  - apps/admin/src/api/tasks.ts
+  - packages/core-game/src/game/balance/power-profiles.ts
+  - packages/app-shell/src/i18n/ru-team.json
 runner: any
 executor: sonnet-5.5
 effort: medium
