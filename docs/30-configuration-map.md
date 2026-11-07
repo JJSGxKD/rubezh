@@ -197,7 +197,7 @@
 | Значки оружия и пассивок | `app-shell/src/screens/item-icons.tsx` → `WEAPON_ICONS`, `PASSIVE_ICONS`; нет значка — общий | владелец |
 | Любой текст интерфейса, включая имена оружия и пассивок | `app-shell/src/i18n/ru.json` | владелец |
 | Подсказки на экране загрузки забега | `ru.json` → `run.tip.1`…`run.tip.N` и число `TIP_COUNT` в `screens/run/RunLoading.tsx` | владелец |
-| Приглашение друга: текст и параметр запуска в ссылке | `ru.json` → `friends.invite.text`; `screens/meta/friends.tsx` → `INVITE_START_PARAM`; адрес бота — `VITE_TELEGRAM_BOT_USERNAME` | владелец |
+| Приглашение друга: текст и параметр запуска в ссылке | `ru.json` → `friends.invite.text`; ссылка дружбы `f-<код>` — `state/friends-api.ts` → `friendInviteUrl` (без аккаунта — адрес бота без параметра); адрес бота — `VITE_TELEGRAM_BOT_USERNAME` | владелец |
 | Гайдбук: тексты поведения и советы, имена врагов; пороги «медленный / быстрый»; мини-сцены | `ru.json` → `guide.*`, `enemy.<id>.name`; `screens/guide/guide-data.ts` → `speedClass`; `screens/guide/scenes.tsx`, анимации — `tokens.css` → `guide-*`. Числа врагов, оружия и пассивок — из контента, в гайдбуке их не правят | владелец |
 | Пример снаряжения в заглушке арсенала: слоты, редкости, предметы | `app-shell/src/screens/meta/arsenal.tsx` → `EQUIPPED`, `INVENTORY`, `RARITY_TONE` | геймдизайнер, визуальный стиль |
 | Граница суток и недели для заданий и награды дня | `screens/meta/schedule.ts` → `MOSCOW_OFFSET_MS`, `MONDAY` | владелец |
