@@ -3,8 +3,8 @@ id: T-0178
 title: Отписка от канала после награды — перепроверка 7 суток, списание, закрытие заданий
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0177, T-0167, T-0169, T-0345]
