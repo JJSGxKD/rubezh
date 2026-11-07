@@ -3,15 +3,18 @@ import { ENEMIES } from "../src/content/enemies";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 
-// Числа колец до Р166 (tasks/T-0342): сжатие обязано стать вдвое медленнее.
-const SHRINK_BEFORE_R166 = { 180: 3, 300: 4, curve: 5 } as const;
+// Строй не должен стать тесным и коротким: он встаёт дальше зоны «Очага» (до 140),
+// иначе зона достаёт стражей сразу, а сжатие занимает около минуты на любом радиусе.
+const MIN_RING_RADIUS = 255;
+const MIN_RING_INNER_RADIUS = 120;
+const MIN_SHRINK_PATH_SEC = 50;
 
 const cordonEventAt = (fromSec: number) =>
   TIMELINE.find((segment) => segment.fromSec === fromSec)?.events?.find((event) => event.kind === "cordon");
 const curveCordon = ENDLESS_CURVE.events.find((event) => event.kind === "cordon");
 
 describe("числа кольца стражей (Р166)", () => {
-  it("страж падает от стартового оружия за 10–15 с", () => {
+  it("страж падает от стартового оружия в одиночку за 25–30 с: проход открывают несколько оружий разом", () => {
     // Стартовое оружие по умолчанию — первое не эволюционное (findStartingWeapon).
     const weapon = WEAPONS.find((candidate) => candidate.evolvedFrom === undefined);
     const level = weapon?.levels[0];
@@ -22,14 +25,31 @@ describe("числа кольца стражей (Р166)", () => {
     expect(guard).toBeDefined();
     const dps = (level?.damage ?? 0) / (level?.cooldownSec ?? 1);
     const seconds = (guard?.hp ?? 0) / dps;
-    expect(seconds, `оружие ${weapon?.id}`).toBeGreaterThanOrEqual(10);
-    expect(seconds, `оружие ${weapon?.id}`).toBeLessThanOrEqual(15);
+    expect(seconds, `оружие ${weapon?.id}`).toBeGreaterThanOrEqual(25);
+    expect(seconds, `оружие ${weapon?.id}`).toBeLessThanOrEqual(30);
   });
 
-  it("сжатие вдвое медленнее прежнего", () => {
-    expect(cordonEventAt(180)?.ring?.shrinkPerSec).toBeLessThanOrEqual(SHRINK_BEFORE_R166[180] / 2);
-    expect(cordonEventAt(300)?.ring?.shrinkPerSec).toBeLessThanOrEqual(SHRINK_BEFORE_R166[300] / 2);
-    expect(curveCordon?.ring?.shrinkPerSec).toBeLessThanOrEqual(SHRINK_BEFORE_R166.curve / 2);
+  it("строй встаёт широко: радиус не меньше 255, предел сжатия не меньше 120", () => {
+    for (const [where, ring] of [
+      ["180 с", cordonEventAt(180)?.ring],
+      ["300 с", cordonEventAt(300)?.ring],
+      ["кривая", curveCordon?.ring],
+    ] as const) {
+      expect(ring?.radius, `радиус кольца ${where}`).toBeGreaterThanOrEqual(MIN_RING_RADIUS);
+      expect(ring?.minRadius, `minRadius кольца ${where}`).toBeGreaterThanOrEqual(MIN_RING_INNER_RADIUS);
+    }
+  });
+
+  it("сжатие медленное: путь от radius до minRadius занимает не меньше 50 с, как бы широко ни встал строй", () => {
+    for (const [where, ring] of [
+      ["180 с", cordonEventAt(180)?.ring],
+      ["300 с", cordonEventAt(300)?.ring],
+      ["кривая", curveCordon?.ring],
+    ] as const) {
+      expect(ring, `кольцо ${where}`).toBeDefined();
+      const pathSec = ((ring?.radius ?? 0) - (ring?.minRadius ?? 0)) / (ring?.shrinkPerSec ?? 1);
+      expect(pathSec, `путь сжатия кольца ${where}`).toBeGreaterThanOrEqual(MIN_SHRINK_PATH_SEC);
+    }
   });
 
   it("элита внутри строя — только у колец кривой, ручные кольца без неё; боссов внутри нет нигде", () => {

@@ -24,8 +24,8 @@ export interface RescoreRow {
 }
 
 export interface RunScoresRepository {
-  /** Законченные рейтинговые забеги после ключа `after` по возрастанию ключа. */
-  page(after: string | null, since: Date | null, limit: number): Promise<RescoreRow[]>;
+  /** Законченные рейтинговые забеги после ключа `after` по возрастанию ключа; `onlyUnscored` — только без очков. */
+  page(after: string | null, since: Date | null, limit: number, onlyUnscored?: boolean): Promise<RescoreRow[]>;
   /** Записать очки пачки одной транзакцией. */
   save(scores: readonly { runId: string; score: StoredScore }[]): Promise<void>;
 }
@@ -36,9 +36,9 @@ export const RUN_SCORES_REPOSITORY = Symbol("RUN_SCORES_REPOSITORY");
 export class PrismaRunScoresRepository implements RunScoresRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async page(after: string | null, since: Date | null, limit: number): Promise<RescoreRow[]> {
+  async page(after: string | null, since: Date | null, limit: number, onlyUnscored = false): Promise<RescoreRow[]> {
     const rows = await this.prisma.run.findMany({
-      where: { status: "finished", survivalSec: { not: null }, enemiesKilled: { not: null }, ...ratedWhere(since), ...(after === null ? {} : { runId: { gt: after } }) },
+      where: { status: "finished", survivalSec: { not: null }, enemiesKilled: { not: null }, ...ratedWhere(since), ...(onlyUnscored ? { points: null } : {}), ...(after === null ? {} : { runId: { gt: after } }) },
       orderBy: { runId: "asc" },
       take: limit,
       select: { runId: true, survivalSec: true, enemiesKilled: true, details: true, contentHash: true, scoreInput: true },

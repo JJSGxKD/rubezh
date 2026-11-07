@@ -10,9 +10,12 @@
  *   страница.
  *
  * Прямая ссылка идёт без переходника: короче и без лишней страницы, но клика
- * нет, а макросы сети пишет только переходник — поэтому у ссылки сети прямой
- * нет.
+ * нет, есть только запуск. У ссылки сети она тоже есть, но только у цели `app`
+ * (Р121): метки клика едут в стартовом параметре Mini App (до 512 знаков), а в
+ * `/start` бота (до 64) они не умещаются, у лендинга параметра запуска нет.
  */
+
+import { directMacroTail, isLinkNetwork } from "./link-networks.js";
 
 export const LINK_TARGETS = ["app", "bot", "landing"] as const;
 export type LinkTarget = (typeof LINK_TARGETS)[number];
@@ -22,8 +25,8 @@ export function isLinkTarget(value: string): value is LinkTarget {
 }
 
 export interface LinkTargetBuilders {
-  /** адрес Mini App с параметром запуска; `null` — сейчас не собрать */
-  launch(param: string): string | null;
+  /** адрес Mini App с параметром запуска; `rawTail` дописывается без кодирования; `null` — сейчас не собрать */
+  launch(param: string, rawTail?: string): string | null;
   /** адрес чата с ботом с параметром `/start`; `null` — сейчас не собрать */
   chat(param: string): string | null;
   /** домен лендинга без завершающей косой черты; пустой — адреса нет */
@@ -66,8 +69,12 @@ export function clickDeepTarget(
   }
 }
 
-/** Прямая ссылка; `null` — у ссылки с сетью её нет или площадку сейчас не собрать. */
+/**
+ * Прямая ссылка; `null` — у ссылки сети с целью не `app` её нет, сеть неизвестна или площадку сейчас
+ * не собрать. У ссылки сети в адресе макросы сети без кодирования — их подставляет сама сеть.
+ */
 export function directUrl(link: { code: string; target: LinkTarget; network: string | null }, builders: LinkTargetBuilders): string | null {
-  if (link.network !== null) return null;
-  return addressOf(link.target, `l-${link.code}`, "l", link.code, builders);
+  if (link.network === null) return addressOf(link.target, `l-${link.code}`, "l", link.code, builders);
+  if (!isLinkNetwork(link.network) || link.target !== "app") return null;
+  return builders.launch(`l-${link.code}`, directMacroTail(link.network));
 }

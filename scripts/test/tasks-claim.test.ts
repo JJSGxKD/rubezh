@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "../tasks/claim.mjs";
+import { ABANDONED_CLAIM_HOURS, checkAheadPr, checkClaim, isAbandonedClaim, takeOverClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "../tasks/claim.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { outOfZone } from "../tasks/zones.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
@@ -414,5 +414,132 @@ describe("ветка задела и дифф на настоящем git (вр�
     const { files, missing } = dependencyChangedFiles(["T-0001", "T-0009"], { base: "origin/dev", cwd: repo });
     expect([...files]).toEqual(["dep1/a.ts"]);
     expect(missing).toEqual(["T-0009"]);
+  });
+});
+
+// T-0371: ветка с одним захватом старше суток не держит зоны, задачу можно перехватить.
+describe("брошенный захват: isAbandonedClaim", () => {
+  const NOW = Date.parse("2026-11-06T12:00:00Z");
+  const hoursAgo = (hours: number): string => new Date(NOW - hours * 3_600_000).toISOString();
+  const base = { changedFiles: ["tasks/T-0005-x.md"], lastCommitAt: hoursAgo(25), hasOpenPr: false, taskFileName: "T-0005-x.md", now: NOW };
+
+  it("порог — сутки", () => {
+    expect(ABANDONED_CLAIM_HOURS).toBe(24);
+  });
+
+  it("только файл задачи, 25 часов, без PR — брошен", () => {
+    expect(isAbandonedClaim(base)).toBe(true);
+  });
+
+  it("23 часа — захват живой", () => {
+    expect(isAbandonedClaim({ ...base, lastCommitAt: hoursAgo(23) })).toBe(false);
+  });
+
+  it("файл задачи и ещё один файл — живой", () => {
+    expect(isAbandonedClaim({ ...base, changedFiles: ["tasks/T-0005-x.md", "scripts/a.ts"] })).toBe(false);
+  });
+
+  it("чужой файл в tasks/ — не файл задачи, живой", () => {
+    expect(isAbandonedClaim({ ...base, changedFiles: ["tasks/T-0006-y.md"] })).toBe(false);
+  });
+
+  it("открытый PR любого вида — живой", () => {
+    expect(isAbandonedClaim({ ...base, hasOpenPr: true })).toBe(false);
+  });
+
+  it("время или дифф неизвестны — живой", () => {
+    expect(isAbandonedClaim({ ...base, lastCommitAt: null })).toBe(false);
+    expect(isAbandonedClaim({ ...base, lastCommitAt: "не дата" })).toBe(false);
+    expect(isAbandonedClaim({ ...base, changedFiles: null })).toBe(false);
+  });
+
+  it("файл задачи из архива считается файлом задачи", () => {
+    expect(isAbandonedClaim({ ...base, changedFiles: ["tasks/archive/T-0005-x.md"] })).toBe(true);
+  });
+});
+
+describe("брошенный захват: checkClaim", () => {
+  const tasks = [task("T-0004", { zones: ["a/**"] }), task("T-0005", { zones: ["a/b.ts"] })];
+  const input = { tasks, taken: ["T-0005", "T-0004"], prs: [], repoFiles: ["a/b.ts"] };
+
+  it("захват соседа брошен — задачу можно брать", () => {
+    expect(checkClaim("T-0005", { ...input, abandoned: new Set(["T-0004"]) })).toEqual([]);
+  });
+
+  it("захват соседа живой — прежний отказ «зоны пересекаются»", () => {
+    for (const abandoned of [undefined, new Set<string>()]) {
+      const problems = checkClaim("T-0005", { ...input, abandoned });
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("зоны пересекаются с T-0004");
+    }
+  });
+});
+
+describe("перехват брошенного захвата: takeOverClaim", () => {
+  type Call = string[];
+  function setup(options: { pushError?: string; mergeFails?: boolean; fetchFails?: boolean } = {}) {
+    const calls: Call[] = [];
+    const files: Record<string, string> = { "T-0005-x.md": "---\nstatus: in-progress\nowner: claude-1 / sonnet-5.5 / medium\n---\nтекст" };
+    const result = (ok: boolean, stderr = "") => ({ ok, stdout: "", stderr });
+    const tryGit = (args: Call) => {
+      calls.push(args);
+      if (args[0] === "fetch") return result(options.fetchFails !== true, "fetch упал");
+      if (args[0] === "merge" && args[1] === "--no-edit") return result(options.mergeFails !== true, "конфликт");
+      if (args[0] === "push") return options.pushError === undefined ? result(true) : result(false, options.pushError);
+      return result(true);
+    };
+    const git = (args: Call) => {
+      calls.push(args);
+      return args[0] === "log" ? "2026-11-03T10:00:00+00:00" : "";
+    };
+    const run = () =>
+      takeOverClaim({
+        id: "T-0005",
+        fileName: "T-0005-x.md",
+        owner: "claude-9 / sonnet-5.5 / medium",
+        git,
+        tryGit,
+        readFile: (name: string) => files[name],
+        writeFile: (name: string, text: string) => {
+          files[name] = text;
+        },
+        rewrite: (text: string, owner: string) => ({ text: text.replace(/^owner:.*$/m, `owner: ${owner}`), problems: [] }),
+      });
+    return { calls, files, run };
+  }
+
+  it("ветка с origin, merge dev, новый owner, коммит и push без --force", () => {
+    const { calls, files, run } = setup();
+    expect(run()).toEqual({ ok: true });
+    const lines = calls.map((call) => call.join(" "));
+    expect(lines.some((line) => line.startsWith("fetch origin task/T-0005"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("switch -c task/T-0005 origin/task/T-0005"))).toBe(true);
+    expect(lines).toContain("merge --no-edit origin/dev");
+    expect(files["T-0005-x.md"]).toContain("owner: claude-9 / sonnet-5.5 / medium");
+    const commit = calls.find((call) => call[0] === "commit")?.join("\n") ?? "";
+    expect(commit).toContain("chore(tasks): Перехватить T-0005 — захват брошен");
+    expect(commit).toContain("claude-1 / sonnet-5.5 / medium");
+    expect(commit).toContain("2026-11-03T10:00:00+00:00");
+    expect(calls.find((call) => call[0] === "push")).toEqual(["push", "origin", "HEAD:refs/heads/task/T-0005"]);
+    expect(lines.join(" ")).not.toContain("--force");
+    expect(lines.join(" ")).not.toContain("branch -D");
+  });
+
+  it("push отклонён — «захват ожил», успеха нет", () => {
+    const result = setup({ pushError: "! [rejected] HEAD -> task/T-0005 (non-fast-forward)" }).run();
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Захват ожил");
+  });
+
+  it("merge dev с конфликтом — отказ, слияние отменено", () => {
+    const { calls, run } = setup({ mergeFails: true });
+    expect(run().ok).toBe(false);
+    expect(calls.some((call) => call[0] === "merge" && call[1] === "--abort")).toBe(true);
+  });
+
+  it("ветку не получить — отказ без коммита", () => {
+    const { calls, run } = setup({ fetchFails: true });
+    expect(run().ok).toBe(false);
+    expect(calls.some((call) => call[0] === "commit")).toBe(false);
   });
 });

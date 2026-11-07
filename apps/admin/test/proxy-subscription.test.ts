@@ -11,7 +11,7 @@ import {
   type SubscriptionOverview,
 } from "../src/api/proxy-subscription";
 import { formatTime } from "../src/format";
-import { countriesProblem, nodeRows, refreshLine, subscriptionUrlProblem, trafficLine } from "../src/screens/proxies/subscription-view";
+import { countriesProblem, nodeRows, normalizeSubscriptionUrl, refreshLine, subscriptionUrlProblem, trafficLine } from "../src/screens/proxies/subscription-view";
 import { HELP } from "../src/ui/help";
 import { fakeFetch, json } from "./helpers";
 
@@ -42,19 +42,29 @@ const OVERVIEW: SubscriptionOverview = { encryption: true, sidecar: { connected:
 const FORM: SubscriptionForm = { name: "  Основная ", url: " https://sub.example.com/s/abc ", countries: "de, nl  ,", enabled: true };
 
 describe("адрес подписки до отправки", () => {
-  it("пусто, http, логин, мусор — одно понятное правило; публичный https годится", () => {
+  it("каждая ошибка — своим текстом; публичный https годится", () => {
     expect(subscriptionUrlProblem("")).toBe("Укажите адрес подписки");
-    expect(subscriptionUrlProblem("http://sub.example.com/s")).toBe("Нужен публичный https-адрес без логина и пароля");
-    expect(subscriptionUrlProblem("https://user:pass@sub.example.com/s")).toBe("Нужен публичный https-адрес без логина и пароля");
-    expect(subscriptionUrlProblem("не адрес")).toBe("Нужен публичный https-адрес без логина и пароля");
-    expect(subscriptionUrlProblem("https://10.0.0.5/s")).toBe("Нужен публичный https-адрес без логина и пароля");
-    expect(subscriptionUrlProblem("https://redis/s")).toBe("Нужен публичный https-адрес без логина и пароля");
+    expect(subscriptionUrlProblem("http://sub.example.com/s")).toBe("Нужен адрес https:// — http и другие схемы не подходят");
+    expect(subscriptionUrlProblem("https://user:pass@sub.example.com/s")).toBe("Уберите логин и пароль из адреса: подписке они не нужны");
+    expect(subscriptionUrlProblem("не адрес")).toBe("Не похоже на адрес подписки: скопируйте ссылку целиком");
+    expect(subscriptionUrlProblem("https://10.0.0.5/s")).toBe("Это адрес локальной сети — нужен адрес поставщика в интернете");
+    expect(subscriptionUrlProblem("https://redis/s")).toBe("Это адрес локальной сети — нужен адрес поставщика в интернете");
+    expect(subscriptionUrlProblem("happ://crypt5/abcdef")).toBe("Зашифрованная ссылка Happ не подойдёт: нужен исходный адрес подписки https://");
     expect(subscriptionUrlProblem("  https://sub.example.com/s?token=abc ")).toBeNull();
+    expect(subscriptionUrlProblem("https://sotto.libhub.link/3jk_M2xYz")).toBeNull();
+  });
+
+  it("ссылку без схемы и обёртку Happ принимает и отправляет как https", () => {
+    expect(subscriptionUrlProblem("sotto.libhub.link/3jk_M2xYz")).toBeNull();
+    expect(normalizeSubscriptionUrl(" sotto.libhub.link/3jk_M2xYz ")).toBe("https://sotto.libhub.link/3jk_M2xYz");
+    expect(normalizeSubscriptionUrl("happ://add/https://sotto.libhub.link/3jk")).toBe("https://sotto.libhub.link/3jk");
+    expect(normalizeSubscriptionUrl("https://sub.example.com/s")).toBe("https://sub.example.com/s");
+    expect(normalizeSubscriptionUrl("")).toBe("");
   });
 
   it("при правке пустой адрес значит «оставить прежний»", () => {
     expect(subscriptionUrlProblem("", { keep: true })).toBeNull();
-    expect(subscriptionUrlProblem("http://x.example.com", { keep: true })).toBe("Нужен публичный https-адрес без логина и пароля");
+    expect(subscriptionUrlProblem("http://x.example.com", { keep: true })).toBe("Нужен адрес https:// — http и другие схемы не подходят");
   });
 });
 

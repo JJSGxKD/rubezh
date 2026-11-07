@@ -11,6 +11,81 @@ import { zonesOverlap } from "./zones.mjs";
 const BRANCH_RE = /^task\/(T-\d{4})$/;
 
 /**
+ * Сколько часов ветка с одним лишь захватом держит задачу (T-0371). Лимит
+ * аккаунта сбрасывается за 5 часов, так что тишина дольше — не пауза, а уход
+ * потока; сутки — запас на ночь и выходной человека, чтобы не перехватить
+ * захват у того, кто просто спит.
+ */
+export const ABANDONED_CLAIM_HOURS = 24;
+
+const HOUR_MS = 3_600_000;
+
+/**
+ * Брошен ли захват задачи (T-0371): ветка `task/T-NNNN` без открытого PR, в
+ * которой изменён только файл самой задачи (то есть один захват), а последний
+ * коммит старше `ABANDONED_CLAIM_HOURS`. Чистая функция — данные git приходят снаружи.
+ * Нет файлов диффа, времени коммита или оно не разбирается — захват живой: брать
+ * чужую задачу по догадке нельзя. Файл задачи в архиве (`tasks/archive/…`) — тоже файл задачи.
+ */
+export function isAbandonedClaim({ changedFiles, lastCommitAt, hasOpenPr, taskFileName, now }) {
+  if (hasOpenPr === true || !Array.isArray(changedFiles) || typeof taskFileName !== "string") return false;
+  const last = typeof lastCommitAt === "string" ? Date.parse(lastCommitAt) : Number.NaN;
+  const nowMs = new Date(now).getTime();
+  if (Number.isNaN(last) || Number.isNaN(nowMs)) return false;
+  const name = taskFileName.replace(/^archive\//, "");
+  const own = [`tasks/${name}`, `tasks/archive/${name}`];
+  if (!changedFiles.every((path) => own.includes(path))) return false;
+  return nowMs - last > ABANDONED_CLAIM_HOURS * HOUR_MS;
+}
+
+/**
+ * Перехват брошенного захвата (T-0371, решение 6) в текущем репозитории: локальная
+ * ветка от `origin/task/T-NNNN`, в неё влит `origin/dev`, в файле задачи новый
+ * `owner`, коммит «Перехватить …» и push **без `--force`**. Ветку прежнего владельца
+ * не удаляем: перехват — коммит сверху. Если он успел запушить работу, push
+ * отклонится — захват ожил, и вызывающий берёт другую задачу.
+ *
+ * Git и файлы приходят снаружи (тесты подставляют свои): `git` бросает при ошибке,
+ * `tryGit` возвращает `{ ok, stdout, stderr }`; `readFile`/`writeFile` работают по
+ * имени файла задачи; `rewrite(text, owner)` возвращает `{ text, problems }` — новый
+ * текст файла и ошибки проверки шапки. Ответ — `{ ok: true }` или `{ ok: false,
+ * message }`; убрать локальную ветку после отказа — дело вызывающего.
+ */
+export function takeOverClaim({ id, fileName, owner, git, tryGit, readFile, writeFile, rewrite }) {
+  const branch = `task/${id}`;
+  const remote = `origin/${branch}`;
+  const fetched = tryGit(["fetch", "origin", branch]);
+  if (!fetched.ok) return { ok: false, message: `Не удалось получить ветку ${branch} с origin: ${fetched.stderr}` };
+  const lastCommit = git(["log", "-1", "--format=%cI", remote]);
+  const switched = tryGit(["switch", "-c", branch, remote]);
+  if (!switched.ok) return { ok: false, message: `Не удалось создать локальную ветку ${branch} от ${remote}: ${switched.stderr}` };
+
+  const merged = tryGit(["merge", "--no-edit", "origin/dev"]);
+  if (!merged.ok) {
+    tryGit(["merge", "--abort"]);
+    return { ok: false, message: `origin/dev не влился в ${branch}: ${merged.stderr || merged.stdout}` };
+  }
+
+  const text = readFile(fileName);
+  const previousOwner = /^owner:[ \t]*(.*)$/m.exec(text)?.[1]?.trim() || "неизвестен";
+  const rewritten = rewrite(text, owner);
+  if (rewritten.problems.length > 0) {
+    return { ok: false, message: `Файл задачи после перехвата не прошёл бы проверку (owner с кавычками или пустой?):\n${rewritten.problems.join("\n")}` };
+  }
+  writeFile(fileName, rewritten.text);
+  git(["commit", "--quiet", "-m", `chore(tasks): Перехватить ${id} — захват брошен`, "-m", `Прежний владелец: ${previousOwner}\nПоследний коммит ветки: ${lastCommit}`, "--", `tasks/${fileName}`]);
+
+  const pushed = tryGit(["push", "origin", `HEAD:refs/heads/${branch}`]);
+  if (!pushed.ok) {
+    if (/rejected|non-fast-forward|fetch first/i.test(pushed.stderr)) {
+      return { ok: false, message: `Захват ожил: прежний владелец успел запушить в ${branch}. Выбери другую задачу — pnpm task next.` };
+    }
+    return { ok: false, message: `Push не удался:\n${pushed.stderr}` };
+  }
+  return { ok: true };
+}
+
+/**
  * Что не так с захватом задачи `id`: список ошибок, пустой — всё в порядке.
  *
  * - `tasks` — задачи **на базе** PR (`origin/dev`), а не из ветки: иначе PR
@@ -19,6 +94,8 @@ const BRANCH_RE = /^task\/(T-\d{4})$/;
  * - `prs` — открытые PR `{ headRefName, isDraft, labels }` или `null`, если список не получить;
  * - `repoFiles` — файлы репозитория для пересечения зон;
  * - `claims` — время коммита захвата по id задачи (ISO), если известно;
+ * - `abandoned` — id задач с брошенным захватом (`isAbandonedClaim`): ветка без работы
+ *   дольше суток зон не держит, как PR на ревью;
  * - `ahead` — задача взята заделом (Р178): у PR метка «задел». Тогда незакрытые
  *   зависимости допустимы, если у каждой открыт PR и сама она не задел (`aheadCheck`, в CI
  *   без требования «на ревью»: зависимость могли вернуть в работу уже после захвата);
@@ -31,7 +108,7 @@ const BRANCH_RE = /^task\/(T-\d{4})$/;
  * ревью» — кто вливается вторым, перебазируется, конфликт правит тимлид.
  * Время захвата неизвестно — держит, как раньше.
  */
-export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahead = false }) {
+export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahead = false, abandoned = new Set() }) {
   const task = tasks.find((candidate) => candidate.id === id);
   if (task === undefined) return [`задачи ${id} нет в реестре на базе PR: ветку task/${id} заводят под существующую задачу`];
 
@@ -61,7 +138,7 @@ export function checkClaim(id, { tasks, taken, prs, repoFiles, claims = {}, ahea
   for (const other of tasks) {
     if (other.id === id || task.depends_on.includes(other.id) || !withBranch.has(other.id)) continue;
     if (other.status !== "ready" && other.status !== "in-progress") continue;
-    if (waitsForReview(prOf.get(other.id))) continue;
+    if (waitsForReview(prOf.get(other.id)) || abandoned.has(other.id)) continue;
     if (claimTime(claims[other.id], -Infinity) > mine) continue;
     if (zonesOverlap(task.zones, other.zones, repoFiles)) {
       problems.push(`зоны пересекаются с ${other.id}: она взята раньше и ещё в работе (ветка без PR, PR «в работе» или «доработка»)`);

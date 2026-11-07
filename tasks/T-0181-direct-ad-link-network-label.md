@@ -3,8 +3,8 @@ id: T-0181
 title: Прямая ссылка на Mini App для рекламы AdsGram — метки сети в стартовом параметре и конверсия по запуску
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-51 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0179, T-0180]
@@ -29,6 +29,9 @@ zones:
   - backend/api/test/attribution.integration.test.ts
   - apps/admin/test/links.test.ts
 shared:
+  - apps/admin/src/screens/links/links-guide.ts
+  - backend/api/test/links.test.ts
+  - backend/api/test/start-param-pairs.test.ts
   - docs/21-diagrams.md
   - docs/24-attribution-and-sharing.md
   - docs/29-admin-panel.md
@@ -427,6 +430,14 @@ App; код ссылки и метки клика сети едут в стар�
 См. шаг 9: `docs/24` (§3.4, §3.5, §5), `docs/21`, `docs/29`, `docs/30`, `docs/33` §5.1.
 Если тест границ слоёв или словарь потребует правки — в тех же файлах. `pnpm docs:check` —
 в гейте.
+
+## Справка по ссылкам
+
+Если к моменту PR влита T-0372 (справка «Как устроены ссылки» в панели), в
+`apps/admin/src/screens/links/links-guide.ts` добавляется строка «Прямая
+ссылка AdsGram» в таблицу видов ссылок и абзац в раздел «Ссылки закупки в
+сети»: что копировать в кабинет AdsGram и как считается запуск. Не влита — не
+трогать, справку дополнит тимлид (решение `claude-lead-1`, 06.11.2026).
 
 ## Критерии приёмки
 

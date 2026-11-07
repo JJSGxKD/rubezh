@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { CONVERSION_WINDOWS, PAYMENT_CURRENCY, isConversionGoal, type ConversionGoal } from "./conversion-rules.js";
+import { purgeDirectParams, sweepDirectLaunches } from "./direct-launch-sweep.js";
 import { DESTINATION_KINDS, destinationOf, type DestinationKind } from "./destinations/destination.js";
 import { TARGETS_CTE } from "./destinations/destination-targets.js";
 import { DONATION_PRODUCT } from "../payments/purchase-types.js";
@@ -20,6 +21,10 @@ import { EVENT_GOAL, KNOWN_GOALS, eventOfGoal, type PostbackEvent } from "./post
  *
  * Игрок — **новый аккаунт**: создан после клика. Старый игрок, заново
  * открывший игру по рекламе, сети не отдаётся — его привела не она.
+ *
+ * Запуск по прямой ссылке на Mini App клика не оставляет: его конверсии
+ * выводит `direct-launch-sweep.ts` из первого касания `link`, а метки сети
+ * хранит сама строка.
  *
  * Кому и какие события отдавать, решает не этот файл, а набор
  * `destinations/destination-targets.ts` (T-0069): запросы прохода берут из
@@ -85,7 +90,7 @@ export interface ConversionsRepository {
   defer(conversionId: string, nextAt: Date, reason: string): Promise<void>;
   /** Не отправлять вовсе — сети не узнать, чья это конверсия. */
   skip(conversionId: string, reason: string): Promise<void>;
-  /** Обнулить макросы кликов старше окна. Сколько обнулено. */
+  /** Обнулить макросы кликов и метки прямых запусков старше окна. Сколько обнулено. */
   purgeParams(now: Date, limit: number): Promise<number>;
   /** Счёт по ссылкам и целям назначения; строки других назначений в него не попадают. */
   summaries(linkCodes: readonly string[], destination?: DestinationKind): Promise<Map<string, ConversionSummary>>;
@@ -190,7 +195,8 @@ export class PrismaConversionsRepository implements ConversionsRepository {
         AND paid.paid_at <= ${now}::timestamptz - make_interval(mins => ${purchaseSettleMin})
         AND (CASE WHEN paid.n = 1 THEN ${first}::text ELSE ${repeat}::text END) = ANY(t.events)
       ON CONFLICT DO NOTHING`;
-    return { registrations, purchases };
+    const direct = await sweepDirectLaunches(this.prisma, now, targets);
+    return { registrations: registrations + direct.registrations, purchases: purchases + direct.purchases };
   }
 
   async due(now: Date, limit: number): Promise<DueConversion[]> {
@@ -200,9 +206,9 @@ export class PrismaConversionsRepository implements ConversionsRepository {
     const rows = await this.prisma.$queryRaw<
       { conversion_id: string; destination: string; goal: number; attempts: number; params: unknown; platform: string; platform_user_id: string; charged_stars: number | null }[]
     >`
-      SELECT v.conversion_id, v.destination, v.goal, v.attempts, c.network_params AS params, a.platform, a.platform_user_id, p.charged_stars
+      SELECT v.conversion_id, v.destination, v.goal, v.attempts, COALESCE(c.network_params, v.network_params) AS params, a.platform, a.platform_user_id, p.charged_stars
       FROM ad_conversion v
-      JOIN link_click c ON c.click_id = v.click_id
+      LEFT JOIN link_click c ON c.click_id = v.click_id
       JOIN account a ON a.account_id = v.account_id
       LEFT JOIN purchase p ON p.purchase_id = v.purchase_id
       WHERE v.status = 'pending' AND v.next_attempt_at <= ${now}
@@ -246,13 +252,15 @@ export class PrismaConversionsRepository implements ConversionsRepository {
   }
 
   async purgeParams(now: Date, limit: number): Promise<number> {
-    return await this.prisma.$executeRaw`
+    const clicks = await this.prisma.$executeRaw`
       UPDATE link_click SET network_params = NULL
       WHERE click_id IN (
         SELECT click_id FROM link_click
         WHERE network_params IS NOT NULL AND at < ${now}::timestamptz - make_interval(days => ${CONVERSION_WINDOWS.paramsKeepDays})
         LIMIT ${limit}
       )`;
+    const conversions = await purgeDirectParams(this.prisma, now, limit);
+    return clicks + conversions;
   }
 
   async summaries(linkCodes: readonly string[], destination: DestinationKind = "adsgram"): Promise<Map<string, ConversionSummary>> {

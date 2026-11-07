@@ -1927,13 +1927,28 @@ export interface LeaderboardEntry {
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
   rubezh?: true | undefined;
+  /** очки эффективности лучшего забега (T-0294) — по ним ранжирована доска; нет поля — сервер до очков, `null` — в сезоне по времени очков в таблице нет */
+  points?: number | null | undefined;
+  /** стиль забега (T-0293): ось `t`, `k`, `h`, `c`, `b`; `null` — очков нет */
+  style?: string | null | undefined;
+  /** дивизион сезона (T-0295); `null` — места на доске сезона нет */
+  division?: string | null | undefined;
+}
+
+/** Своя строка доски: место и числа лучшего забега, даже если оно ниже показанных строк. */
+export interface LeaderboardMe {
+  rank: number;
+  survivalSec: number;
+  points?: number | null | undefined;
+  style?: string | null | undefined;
+  division?: string | null | undefined;
 }
 
 export interface Leaderboard {
   difficultyId: DifficultyId;
   entries: LeaderboardEntry[];
   /** своё место, даже если оно ниже показанных строк */
-  me: { rank: number; survivalSec: number } | null;
+  me: LeaderboardMe | null;
   totalPlayers: number;
 }
 

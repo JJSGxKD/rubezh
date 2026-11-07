@@ -3,6 +3,13 @@ import type { BotIdentity } from "./bot-identity.js";
 import { deepLink, fixedLinkOrigin, webLink, type LinkOrigin } from "./telegram-link-format.js";
 
 /**
+ * Хвост, который дописывается к параметру без кодирования: только знаки параметра Telegram и
+ * фигурные скобки макросов. Всё остальное (`&`, `?`, `#`, пробел) начало бы новый параметр адреса
+ * или оборвало бы его, поэтому такой адрес не собираем вовсе.
+ */
+const RAW_TAIL = /^[A-Za-z0-9_\-{}]+$/;
+
+/**
  * Ссылки через бота: на Mini App — `t.me/<бот>?startapp=<параметр>`, на чат с
  * ботом — `t.me/<бот>?start=<параметр>`. Диплинки `tg://resolve` открывают
  * установленное приложение сразу, без страницы t.me с кнопкой «Открыть в
@@ -17,9 +24,12 @@ export class TelegramAppLinks implements AppLinkBuilder {
     private readonly origin: LinkOrigin = fixedLinkOrigin,
   ) {}
 
-  launch(startParam: string): string | null {
+  launch(startParam: string, rawTail?: string): string | null {
     const base = this.identity.miniAppLink;
-    return base === null ? null : `${base}=${encodeURIComponent(startParam)}`;
+    if (base === null) return null;
+    const head = `${base}=${encodeURIComponent(startParam)}`;
+    if (rawTail === undefined || rawTail === "") return head;
+    return RAW_TAIL.test(rawTail) ? `${head}${rawTail}` : null;
   }
 
   chat(startParam: string): string | null {
