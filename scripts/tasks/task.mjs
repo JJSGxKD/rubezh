@@ -525,12 +525,12 @@ function withoutOpenDependencyFiles(changed, id, base) {
 
 function runDiffCheck(flags) {
   const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
-  const parsed = parseTaskBranch(head);
-  if (parsed === null) {
+  const onBranch = parseTaskBranch(head);
+  if (onBranch === null) {
     console.log(`Ветка «${head}» — не ветка задачи, проверка зон пропущена.`);
     return;
   }
-  const id = parsed.id;
+  const id = onBranch.id;
   const base = flags.base ?? BASE;
 
   const found = readWorkingTasks().find((file) => file.name.split("/").at(-1).startsWith(`${id}-`) && file.name.endsWith(".md"));
