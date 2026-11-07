@@ -22,6 +22,7 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/item-icons.tsx
   - packages/app-shell/src/audio/recipes.ts
+  - packages/app-shell/src/audio/sound-director.ts
   - packages/app-shell/test/**
   - backend/api/src/modules/tasks/task-rules.ts
   - docs/32-balance.md
