@@ -6,7 +6,7 @@ import { fail, finishNode, listOf, networkOf, streamFromParams, UUID } from "./c
 import { isFail, parseUri } from "./uri.js";
 
 /** Шифры VMess, которые собирает Xray из ссылки. */
-const CIPHERS: ReadonlySet<string> = new Set(["auto", "aes-128-gcm", "chacha20-poly1305", "none"]);
+export const VMESS_CIPHERS: ReadonlySet<string> = new Set(["auto", "aes-128-gcm", "chacha20-poly1305", "none"]);
 
 /** Поле JSON-формы приходит то строкой, то числом, то отсутствует. */
 const loose = z.union([z.string(), z.number(), z.boolean()]).optional();
@@ -45,7 +45,7 @@ function parseAddressForm(link: string): ShareLinkResult {
   if (!UUID.test(uri.username)) return fail("malformed", "uuid");
 
   const cipher = uri.params.get("encryption") ?? "auto";
-  if (!CIPHERS.has(cipher)) return fail("unsupported_cipher", "encryption");
+  if (!VMESS_CIPHERS.has(cipher)) return fail("unsupported_cipher", "encryption");
   const aid = uri.params.get("aid") ?? "0";
   if (aid !== "0" && aid !== "") return fail("unsupported_option", "aid");
 
@@ -80,7 +80,7 @@ function parseJsonForm(link: string): ShareLinkResult {
   if (aid !== "" && aid !== "0") return fail("unsupported_option", "aid");
   if (["1", "true", "yes"].includes(text(data.allowInsecure).toLowerCase())) return fail("unsupported_option", "allowInsecure");
   const cipher = text(data.scy) === "" ? "auto" : text(data.scy);
-  if (!CIPHERS.has(cipher)) return fail("unsupported_cipher", "scy");
+  if (!VMESS_CIPHERS.has(cipher)) return fail("unsupported_cipher", "scy");
 
   const network = networkOf(text(data.net) === "" ? "tcp" : text(data.net));
   if (network === null) return fail("unsupported_transport", "net");

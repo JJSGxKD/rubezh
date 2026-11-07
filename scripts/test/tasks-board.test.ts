@@ -1135,3 +1135,29 @@ describe("задел: потоки", () => {
     expect(stream.queue.map((item: { id: string }) => item.id)).toEqual(["T-0004"]);
   });
 });
+
+// T-0371: брошенный захват (ветка без работы дольше суток) задачу не занимает.
+describe("брошенный захват на доске", () => {
+  const tasks = [task("T-0010", { zones: ["a/**"] }), task("T-0011", { zones: ["a/b.ts"] }), task("T-0012")];
+  const taken = ["T-0010", "T-0012"];
+  type Entry = { task: { id: string }; abandoned?: boolean };
+
+  it("брошенная задача — в свободных, с пометкой; живая — в работе", () => {
+    const board = classify(tasks, taken, [], [], EPIC_ORDER, new Set(["T-0010"]));
+    expect(board.free.find((entry: Entry) => entry.task.id === "T-0010")?.abandoned).toBe(true);
+    expect(ids(board.inProgress)).toEqual(["T-0012"]);
+    expect(board.free.find((entry: Entry) => entry.task.id === "T-0012")).toBeUndefined();
+  });
+
+  it("брошенная не держит зоны соседа", () => {
+    const board = classify(tasks, taken, [], ["a/b.ts"], EPIC_ORDER, new Set(["T-0010"]));
+    expect(ids(board.free)).toEqual(expect.arrayContaining(["T-0010", "T-0011"]));
+    const live = classify(tasks, taken, [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(live.blocked)).toContain("T-0011");
+  });
+
+  it("без набора брошенных доска прежняя", () => {
+    const board = classify(tasks, taken, [], [], EPIC_ORDER);
+    expect(ids(board.inProgress)).toEqual(["T-0010", "T-0012"]);
+  });
+});

@@ -9,6 +9,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { rebuildForRestrictions, rebuildLeaderboard } from "../src/modules/runs/leaderboard-rebuild.js";
 import { ALL_BOARDS, COMMON_ONLY, RedisLeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
+import { secondsScore } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 
 /**
@@ -67,6 +68,8 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       verdictReasons: [],
       rubezhReached: false,
       rubezhClearedSec: null,
+      // Доска ранжирует по очкам (T-0294): в тестах очки равны секундам, если забегу не заданы свои.
+      score: secondsScore(patch.survivalSec ?? 120),
       ...patch,
     };
   }
@@ -170,13 +173,13 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     await runs.finish(finished(randomUUID(), slow, { difficulty: "hard", survivalSec: 100 }));
     await runs.finish(finished(randomUUID(), fast, { difficulty: "hard", survivalSec: 500 }));
     // Мусор в проекции, которого в базе нет, — пересборка его уберёт.
-    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:hard", 99_999, "призрак");
 
     await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
 
     expect(await board.rank("hard", "призрак", "common")).toBeNull();
     expect((await board.rank("hard", fast, "common")) ?? 0).toBeLessThan((await board.rank("hard", slow, "common")) ?? 0);
-    expect(await redis.exists("runs:leaderboard:hard:rebuild")).toBe(0);
+    expect(await redis.exists("runs:leaderboard:pts:hard:rebuild")).toBe(0);
   });
 
   it("ограничение рейтинга: лучший для возврата — только рейтинговые, для тени — и сданные молча; база держит пометку только у нерейтингового", async () => {
@@ -248,14 +251,14 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
     expect(await board.submit("normal", onlyFull, 300, ["full"])).toEqual({ improved: true });
     // Общего ключа не появилось: пишется только в полную.
-    expect(await redis.exists("runs:leaderboard:normal")).toBe(0);
-    expect(await redis.zscore("runs:leaderboard:full:normal", onlyFull)).toBe("300");
+    expect(await redis.exists("runs:leaderboard:pts:normal")).toBe(0);
+    expect(await redis.zscore("runs:leaderboard:pts:full:normal", onlyFull)).toBe("300");
     expect(await board.best("normal", onlyFull, "common")).toBeNull();
 
     expect(await board.submit("normal", both, 200, ALL_BOARDS)).toEqual({ improved: true });
     expect(await board.best("normal", both, "full")).toBe(200);
     expect(await board.best("normal", both, "common")).toBe(200);
-    expect(await redis.zscore("runs:leaderboard:normal", both)).toBe("200");
+    expect(await redis.zscore("runs:leaderboard:pts:normal", both)).toBe("200");
 
     // GT на каждой доске: худшее и равное время ничего не меняют.
     expect(await board.submit("normal", both, 150, ALL_BOARDS)).toEqual({ improved: false });
@@ -285,11 +288,11 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await board.rank("hard", c, "full")).toBeNull();
     expect(await board.countAbove("hard", 150, "full")).toBe(2);
     expect(await board.countAbove("hard", 150, "common")).toBe(1);
-    expect((await board.top("hard", 10, "full")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+    expect((await board.top("hard", 10, "full")).map((entry) => [entry.accountId, entry.score])).toEqual([
       [a, 400],
       [b, 200],
     ]);
-    expect((await board.top("hard", 10, "common")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+    expect((await board.top("hard", 10, "common")).map((entry) => [entry.accountId, entry.score])).toEqual([
       [b, 200],
       [c, 100],
     ]);
@@ -335,12 +338,12 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const [a, b] = [await account(), await account()];
     await board.submit("normal", a, 100, ALL_BOARDS);
 
-    await board.replace("normal", "full", [{ accountId: b, survivalSec: 900 }]);
+    await board.replace("normal", "full", [{ accountId: b, score: 900 }]);
 
     expect((await board.top("normal", 10, "full")).map((entry) => entry.accountId)).toEqual([b]);
     expect((await board.top("normal", 10, "common")).map((entry) => entry.accountId)).toEqual([a]);
-    expect(await redis.keys("runs:leaderboard:*:rebuild")).toEqual([]);
-    expect(await redis.keys("runs:leaderboard:rebuild*")).toEqual([]);
+    expect(await redis.keys("runs:leaderboard:pts:*:rebuild")).toEqual([]);
+    expect(await redis.keys("runs:leaderboard:pts:rebuild*")).toEqual([]);
 
     await board.replace("normal", "common", []);
     expect(await board.count("normal", "common")).toBe(0);
@@ -352,8 +355,8 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const [closed, separate, plain] = [await account("Закрытый"), await account("Отдельная"), await account("Обычный")];
     for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 640 }));
     // Мусор, которого в базе нет, уходит из обеих проекций.
-    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
-    await redis.zadd("runs:leaderboard:full:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:full:hard", 99_999, "призрак");
 
     const counts = await rebuildLeaderboard(runs, board, new Set([closed]), new Set([separate]), null);
 
@@ -488,7 +491,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await redis.sismember("lb:rubezh:hard", plain)).toBe(0);
 
     const spy = vi.spyOn(redis, "smismember");
-    const top = await board.top("hard", 50, "common");
+    const top = await board.top("hard", 10_000, "common");
     expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
     expect(top.find((entry) => entry.accountId === winner)).toMatchObject({ rubezh: true });

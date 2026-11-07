@@ -308,6 +308,8 @@ describe("ключи панели", () => {
       "rating.weight-build": 10,
       "rating.endurance-exponent": 130,
       "rating.index-cap": 3,
+      "rating.points-from": 0,
+      "rating.season-threshold-points": 800,
     });
   });
 
@@ -361,7 +363,9 @@ describe("подсчёт очков забега (RunScorer)", () => {
   });
 
   it("ключ панели меняет очки: вес Охоты 50 из 130 вместо 20 из 100", () => {
-    const input = { ...onTarget(10), huntLog: [{ rank: "elite" as const, value: 15.5 * 10 * 2, aliveSec: 14.6 }] };
+    // Охота вдвое выше ожидаемого: число и время убийства берутся из строки таблицы, а не из памяти.
+    const row = expectedRowOf(table(), "average", 10);
+    const input = { ...onTarget(10), huntLog: [{ rank: "elite" as const, value: row.huntPerMin * 10 * 2, aliveSec: row.huntKillSec.elite }] };
 
     const byDefault = scorer().score(input);
     const heavy = scorer({ "rating.weight-hunt": 50 }).score(input);
@@ -496,12 +500,14 @@ describe("запись забега с очками", () => {
       outcome: "died",
       survivalSec: input.survivalSec,
       level: 8 + minute,
-      enemiesKilled: Math.round(input.enemiesKilled),
+      // Округление убитых вниз, а урона вверх: на ровном «по таблице» забеге индексы Натиска и Чистоты
+      // не выше единицы, и стиль решает порядок осей, а не то, в какую сторону округлилась запись.
+      enemiesKilled: Math.floor(input.enemiesKilled),
       startingWeaponId: "knife",
       weapons: [{ id: "knife", level: 2 }],
       contentHash: input.contentHash,
       stats: {
-        damageTaken: Math.round(input.damageTaken ?? 0),
+        damageTaken: Math.ceil(input.damageTaken ?? 0),
         xpCollected: 100,
         waveReached: minute,
         topKills: [],

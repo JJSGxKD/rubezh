@@ -39,9 +39,12 @@ const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 15);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
 
-const NOW = new Date("2026-11-04T12:00:00.000Z");
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
+// «Сейчас» теста — настоящие часы, а не дата: сервис ставит отметку записи по
+// `Date.now()` и отбрасывает события старше суток. С датой в коде тест
+// краснел через сутки после неё — на любой ветке, без единой правки ленты.
+const NOW = new Date();
 
 function recorded(accountId: string, patch: Partial<RecordedRun> = {}): RecordedRun {
   return {

@@ -59,12 +59,14 @@ describe.skipIf(!live)("очки эффективности на живом Post
       outcome: "died",
       survivalSec: 600,
       level: 18,
-      enemiesKilled: Math.round(row.killsPerMin * 10),
+      // Убитые округляются вниз, урон вверх: ровный забег не выше единицы по Натиску и Чистоте,
+      // и стиль решает порядок осей, а не округление записи.
+      enemiesKilled: Math.floor(row.killsPerMin * 10),
       startingWeaponId: "knife",
       weapons: [{ id: "knife", level: 2 }],
       contentHash: table.contentHash,
       stats: {
-        damageTaken: Math.round(row.damageTakenPerMin * 10),
+        damageTaken: Math.ceil(row.damageTakenPerMin * 10),
         xpCollected: 100,
         waveReached: 10,
         topKills: [],

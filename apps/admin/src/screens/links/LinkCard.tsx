@@ -14,7 +14,10 @@ import {
   goalCounts,
   linkTitle,
   LINK_TARGETS,
-  NETWORK_NO_DIRECT,
+  NETWORK_DIRECT_HINT,
+  NETWORK_DIRECT_LABEL,
+  NETWORK_DIRECT_NEEDS_APP,
+  networkDirectState,
   NETWORK_TITLES,
   OWNER_HELP,
   OWNER_TITLES,
@@ -48,7 +51,8 @@ import { TokenNotice } from "./TokenNotice";
  * Карточка ссылки. У обычной — адрес переходника, прямая ссылка без него и
  * цифры; цель (Mini App, бот, лендинг) меняется здесь же, а владелец —
  * наша команда или партнёр (T-0067) — только показывается. У ссылки сети главное —
- * адрес с метками для кабинета и путь от клика до конверсии: что вставить в
+ * адрес с метками для кабинета, прямая ссылка для рекламы, которую модерация сети не
+ * пускает через переходник (Р121), и путь от клика до конверсии: что вставить в
  * кабинет, что считается регистрацией и покупкой, что ушло в сеть и что нет.
  */
 export function LinkCard({
@@ -102,6 +106,7 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
       ) : (
         <section className="flex flex-col gap-3">
           <AddressBox label={`Адрес для кабинета ${NETWORK_TITLES[link.network]}`} url={link.networkUrl} primary />
+          <NetworkDirect link={link} />
           <ol className="list-decimal space-y-1 pl-5 text-sm text-text-muted">
             <li>
               В кампании AdsGram вставьте этот адрес в поле ссылки <span className="text-text">целиком, вместе с метками в фигурных скобках</span> — сеть сама
@@ -111,6 +116,7 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
               Токен конверсий из кабинета AdsGram задаётся один раз на все ссылки, в «Ключах интеграций».{" "}
               {adsgramToken ? <Badge tone="success">задан</Badge> : null}
             </li>
+            <li>Если модерация сети не принимает переходник, вставьте прямую ссылку для рекламы вместо него.</li>
             <li>
               Регистрация уходит в сеть {link.registrationOn === "launch" ? "при первом запуске игры" : "после первого забега от 30 секунд, если он был в течение 7 дней после клика"}. Первая
               покупка — отдельной целью, следующие — повторными; возвраты и тестовые оплаты не уходят.
@@ -118,7 +124,6 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
           </ol>
           {adsgramToken ? null : <TokenNotice />}
           <AddressBox label="Адрес без меток — для проверки" url={link.url} hint="Переход по нему засчитается кликом, но в сеть не уйдёт: сеть не знает такого клика." />
-          <p className="text-xs text-text-muted">{NETWORK_NO_DIRECT}</p>
         </section>
       )}
 
@@ -154,6 +159,18 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
       )}
     </div>
   );
+}
+
+/** Второй адрес ссылки сети: прямая ссылка на Mini App с метками — для рекламы, которую модерация сети не пускает через переходник. */
+function NetworkDirect({ link }: { link: LinkRow }) {
+  switch (networkDirectState(link)) {
+    case "ready":
+      return link.directUrl === null ? null : <AddressBox label={NETWORK_DIRECT_LABEL} url={link.directUrl} hint={NETWORK_DIRECT_HINT} />;
+    case "needs_app":
+      return <p className="text-xs text-text-muted">{NETWORK_DIRECT_NEEDS_APP}</p>;
+    case "unavailable":
+      return <p className="text-xs text-text-muted">{DIRECT_UNAVAILABLE}</p>;
+  }
 }
 
 /**

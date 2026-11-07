@@ -8,8 +8,12 @@ import type { PlatformId } from "./platform.js";
  */
 export interface AppLinkBuilder {
   readonly platform: PlatformId;
-  /** `null` — ссылку сейчас не собрать: бот ещё не представился или площадка без приложения */
-  launch(startParam: string): string | null;
+  /**
+   * `null` — ссылку сейчас не собрать: бот ещё не представился, площадка без приложения или
+   * `rawTail` недопустим. `rawTail` дописывается к параметру как есть, без кодирования: так едут
+   * макросы рекламной сети (`{click_id}`), которые сеть ищет в адресе буквально (Р121).
+   */
+  launch(startParam: string, rawTail?: string): string | null;
   /**
    * Ссылка на чат с ботом площадки со стартовым параметром — не приложение,
    * а сам бот: так подтверждают вход в панель. `null` — не собрать.
@@ -31,8 +35,10 @@ export class AppLinks {
     this.builders = new Map(builders.map((builder) => [builder.platform, builder]));
   }
 
-  launch(platform: PlatformId, startParam: string): string | null {
-    return this.builders.get(platform)?.launch(startParam) ?? null;
+  launch(platform: PlatformId, startParam: string, rawTail?: string): string | null {
+    const builder = this.builders.get(platform);
+    if (builder === undefined) return null;
+    return (rawTail === undefined ? builder.launch(startParam) : builder.launch(startParam, rawTail)) ?? null;
   }
 
   chat(platform: PlatformId, startParam: string): string | null {

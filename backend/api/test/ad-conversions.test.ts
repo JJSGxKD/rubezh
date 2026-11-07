@@ -15,7 +15,10 @@ import { AdConversionsService } from "../src/modules/ad-conversions/conversions.
 import { AdsgramDestination } from "../src/modules/ad-conversions/destinations/adsgram.destination.js";
 import type { DestinationKind, PostbackDestination, Prepared } from "../src/modules/ad-conversions/destinations/destination.js";
 import type { PostbackEvent } from "../src/modules/ad-conversions/postback-events.js";
-import { macroQuery, networkParamsOf } from "../src/modules/links/link-networks.js";
+import { parseStartParam } from "../src/modules/attribution/start-param.js";
+import { directConversionRows, type DirectCandidate } from "../src/modules/ad-conversions/direct-launch-sweep.js";
+import { directMacroTail, LINK_NETWORK_PROFILES, macroQuery, networkParamsOf, networkTailParams } from "../src/modules/links/link-networks.js";
+import { directUrl } from "../src/modules/links/link-targets.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
 import type { SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import type { SecretsReader } from "../src/modules/secrets/secrets.service.js";
@@ -159,6 +162,145 @@ describe("ссылка с макросами", () => {
     expect(networkParamsOf("adsgram", { campaign: " 55 ", record: "7f3a", pub: "{publisher_id}", banner: "has space", junk: "1" })).toEqual({ campaign: "55", record: "7f3a" });
     expect(networkParamsOf("adsgram", { record: "{record_data}" })).toBeNull();
     expect(networkParamsOf("adsgram", { record: "x".repeat(257) })).toBeNull();
+  });
+});
+
+// Прямая ссылка на Mini App (Р117, Р121, T-0181): метки сети едут в стартовом параметре, а конверсия
+// выводится из первого касания `link`, а не из клика.
+describe("метки сети в прямой ссылке (T-0181)", () => {
+  const CODE = "AbC123xyz9";
+  const TAIL = "_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}";
+  const SAMPLE = `l-${CODE}_campaign-55_clickid-3f2a-9c_record-rec123`;
+
+  it("directMacroTail: ключи прямой ссылки AdsGram, значения — макросы профиля, без кодирования", () => {
+    expect(directMacroTail("adsgram")).toBe(TAIL);
+  });
+
+  it("профиль: прямые ключи входят в макросы, record последний, в хвосте только знаки Telegram и скобки", () => {
+    const profile = LINK_NETWORK_PROFILES.adsgram;
+    expect(profile.direct).toEqual(["campaign", "clickid", "record"]);
+    for (const key of profile.direct) expect(Object.keys(profile.macros), key).toContain(key);
+    expect(profile.direct.at(-1)).toBe("record");
+    expect(directMacroTail("adsgram")).toMatch(/^[A-Za-z0-9_\-{}]+$/);
+    // banner и pub в прямую ссылку не входят.
+    expect(directMacroTail("adsgram")).not.toMatch(/banner|pub/);
+  });
+
+  it("networkTailParams: хвост после кода разбирается по ключам сети; чужой хвост — null", () => {
+    expect(networkTailParams("_campaign-55_clickid-3f2a-9c_record-r_5-aB_9")).toEqual({ campaign: "55", clickid: "3f2a-9c", record: "r_5-aB_9" });
+    expect(networkTailParams("_banner-9_pub-3")).toEqual({ banner: "9", pub: "3" });
+    expect(networkTailParams("_campaign-_clickid-77_record-")).toEqual({ clickid: "77" });
+    expect(networkTailParams("_campaign-1_campaign-2")).toEqual({ campaign: "1" });
+    for (const tail of ["", "_", "_hello", "_foo-1", "campaign-5", "_hello_campaign-5", "_campaign-", "_campaign-_record-", "_Campaign-5"]) {
+      expect(networkTailParams(tail), tail).toBeNull();
+    }
+  });
+
+  it("круг: адрес из панели, подставленные сетью значения и разбор запуска дают те же метки", () => {
+    const builders = {
+      launch: (param: string, rawTail?: string) => `https://t.me/rubezh_bot?startapp=${encodeURIComponent(param)}${rawTail ?? ""}`,
+      chat: () => null,
+      landingBase: "",
+    };
+    const url = directUrl({ code: CODE, target: "app", network: "adsgram" }, builders);
+    expect(url).not.toBeNull();
+    // Сеть подставляет значения вместо макросов в адрес, и Telegram отдаёт игре часть после `startapp=`.
+    const substituted = (url ?? "").replace("{campaign_id}", "55").replace("{click_id}", "3f2a-9c").replace("{record_data}", "r_5-aB_9");
+    const startParam = substituted.split("startapp=")[1] ?? "";
+    expect(parseStartParam(startParam)).toEqual({ kind: "link", raw: startParam, ref: CODE, networkParams: { campaign: "55", clickid: "3f2a-9c", record: "r_5-aB_9" } });
+    // Тот же запуск без подстановки (макросы остались буквальными) в игру не попадёт: скобок нет в алфавите Telegram.
+    expect(parseStartParam((url ?? "").split("startapp=")[1])).toEqual({ kind: "unknown", raw: null, ref: null });
+  });
+
+  describe("directConversionRows", () => {
+    const candidate = (patch: Partial<DirectCandidate> = {}): DirectCandidate => ({
+      accountId: "acc-1",
+      linkCode: CODE,
+      network: "adsgram",
+      destination: "adsgram",
+      goal: 1,
+      purchaseId: null,
+      startParam: SAMPLE,
+      team: false,
+      ...patch,
+    });
+
+    it("полный образец: метки из трёх ключей, клика нет, строка ждёт отправки с временем прохода", () => {
+      const [row] = directConversionRows([candidate()], NOW);
+      expect(row).toMatchObject({
+        accountId: "acc-1",
+        linkCode: CODE,
+        destination: "adsgram",
+        network: "adsgram",
+        goal: 1,
+        purchaseId: null,
+        clickId: null,
+        status: "pending",
+        reason: null,
+        networkParams: { campaign: "55", clickid: "3f2a-9c", record: "rec123" },
+        createdAt: NOW,
+        nextAttemptAt: NOW,
+      });
+    });
+
+    it("покупка несёт оплату и цель; метки те же", () => {
+      const rows = directConversionRows([candidate({ goal: 2, purchaseId: "p-1" }), candidate({ goal: 3, purchaseId: "p-2" })], NOW);
+      expect(rows.map((row) => [row.goal, row.purchaseId, row.networkParams])).toEqual([
+        [2, "p-1", { campaign: "55", clickid: "3f2a-9c", record: "rec123" }],
+        [3, "p-2", { campaign: "55", clickid: "3f2a-9c", record: "rec123" }],
+      ]);
+    });
+
+    it("аккаунт команды пропущен с причиной team, но строка пишется: повтор из панели возможен", () => {
+      const [row] = directConversionRows([candidate({ team: true })], NOW);
+      expect(row).toMatchObject({ status: "skipped", reason: "team", networkParams: { record: "rec123" } });
+    });
+
+    it("параметр другого вида, пустой или с чужим кодом — меток нет, строка всё равно пишется", () => {
+      const cases = ["c-AbCdEf123456", "invite", "src-tgads_cmp-oct", `l-ZzZ999zzz9_record-rec123`, null, "мусор"];
+      const rows = directConversionRows(cases.map((startParam) => candidate({ startParam })), NOW);
+      expect(rows).toHaveLength(cases.length);
+      for (const row of rows) expect(row, String(row.networkParams)).toMatchObject({ networkParams: null, status: "pending", clickId: null });
+    });
+
+    it("запуск без разобранных меток (`l-<код>` или нераспознанный хвост) — метки пусты", () => {
+      const rows = directConversionRows([candidate({ startParam: `l-${CODE}` }), candidate({ startParam: `l-${CODE}_hello` })], NOW);
+      expect(rows.map((row) => row.networkParams)).toEqual([null, null]);
+    });
+
+    it("ссылка без сети или сеть, о которой сервер не знает, — метки отбрасываются по профилю ссылки", () => {
+      const rows = directConversionRows([candidate({ network: null }), candidate({ network: "future-net" })], NOW);
+      expect(rows.map((row) => row.networkParams)).toEqual([null, null]);
+    });
+
+    it("метки фильтруются как у клика: только ключи профиля, только печатные значения до 256 знаков", () => {
+      const [row] = directConversionRows([candidate({ startParam: `l-${CODE}_campaign-5_banner-9_pub-3_clickid-c1_record-r1` })], NOW);
+      expect(row?.networkParams).toEqual({ campaign: "5", banner: "9", pub: "3", clickid: "c1", record: "r1" });
+    });
+
+    it("назначение берётся из кандидата: тот же запуск у двух назначений — две строки, каждая со своим именем", () => {
+      const rows = directConversionRows([candidate(), candidate({ destination: "s2s" })], NOW);
+      expect(rows.map((row) => [row.destination, row.network])).toEqual([
+        ["adsgram", "adsgram"],
+        ["s2s", "s2s"],
+      ]);
+    });
+
+    it("пустой список — пусто", () => {
+      expect(directConversionRows([], NOW)).toEqual([]);
+    });
+  });
+
+  it("постбэк из прямых меток: record + goaltype; только campaign и Telegram ID — tgid + campaignid; без меток — нет", () => {
+    expect(adsgramPostbackUrl(TOKEN, { goal: 1, params: { campaign: "55", clickid: "3f2a-9c", record: "rec123" }, telegramId: "790807933" })?.toString()).toBe(
+      `https://api.adsgram.ai/confirm_conversion?token=${TOKEN}&record=rec123&goaltype=1`,
+    );
+    expect(adsgramPostbackUrl(TOKEN, { goal: 3, params: { campaign: "55" }, telegramId: "790807933" })?.toString()).toBe(
+      `https://api.adsgram.ai/confirm_conversion?token=${TOKEN}&tgid=790807933&campaignid=55&goaltype=3`,
+    );
+    // Только clickid — для постбэка метка бесполезна: сеть не узнает конверсию.
+    expect(adsgramPostbackUrl(TOKEN, { goal: 1, params: { clickid: "3f2a-9c" }, telegramId: "790807933" })).toBeNull();
+    expect(adsgramPostbackUrl(TOKEN, { goal: 1, params: null, telegramId: "790807933" })).toBeNull();
   });
 });
 

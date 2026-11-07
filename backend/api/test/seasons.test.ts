@@ -41,7 +41,7 @@ import {
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 
 /**
  * Недельный сезон рейтинга: правила без базы (tasks/T-0110). Границы недели —
@@ -299,7 +299,7 @@ describe("RunsService.setRanked: слушатели узнают о смене �
     const board = new MemoryLeaderboardStore();
     const hooks = new RunsHooks();
     const roles = new RolesService(config, rolesRepository, accounts);
-    const service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    const service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, survivalScorer());
     const player = async (name: string) => {
       const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
       return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };
@@ -430,7 +430,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
   }
 
   /** Таблица недели в памяти: ровно то, что нужно проекции. */
-  class MemorySeasonStore implements Pick<SeasonBoardStore, "submit" | "set" | "replace" | "best" | "count" | "remove"> {
+  class MemorySeasonStore implements Pick<SeasonBoardStore, "submit" | "set" | "replace" | "best" | "rank" | "count" | "remove"> {
     readonly tables = new Map<string, Map<string, number>>();
     readonly replaced: string[] = [];
     private table(seasonKey: string, difficulty: string, board: Board): Map<string, number> {
@@ -454,10 +454,15 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
     }
     async replace(season: { key: string }, difficulty: string, entries: readonly SeasonBoardEntry[], board: Board = "common"): Promise<void> {
       this.replaced.push(`${difficulty}:${board}`);
-      this.tables.set(`${season.key}:${board}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
+      this.tables.set(`${season.key}:${board}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.score])));
     }
     async best(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
       return this.table(seasonKey, difficulty, board).get(accountId) ?? null;
+    }
+    async rank(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
+      const table = this.table(seasonKey, difficulty, board);
+      const own = table.get(accountId);
+      return own === undefined ? null : 1 + [...table.values()].filter((score) => score > own).length;
     }
     async count(seasonKey: string, difficulty: string, board: Board = "common"): Promise<number> {
       return this.table(seasonKey, difficulty, board).size;
@@ -466,7 +471,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
   }
 
   /** Репозиторий сезона с записью обращений: что спросили у базы и с какой отсечкой. */
-  function repositoryOf(rows: Record<string, { accountId: string; survivalSec: number }[]> = {}) {
+  function repositoryOf(rows: Record<string, { accountId: string; score: number }[]> = {}) {
     const asked: { method: string; difficulty: string; since: Date | null }[] = [];
     const repository = {
       async weekBests(difficulty: string, _season: unknown, _excluded: unknown, since: Date | null) {
@@ -481,7 +486,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
     return { repository: repository as unknown as SeasonsRepository, asked };
   }
 
-  function projectionOf(settingValues: Record<string, number>, rows: Record<string, { accountId: string; survivalSec: number }[]> = {}) {
+  function projectionOf(settingValues: Record<string, number>, rows: Record<string, { accountId: string; score: number }[]> = {}) {
     const schedule = new SeasonSchedule(panelSettings({ [SETTINGS.seasonsStartDate.key]: 20261102, ...settingValues }));
     const store = new MemorySeasonStore();
     const { repository, asked } = repositoryOf(rows);
@@ -607,7 +612,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
 
     it("rebuild: hard берётся из базы с отсечкой, таблицы easy и normal очищаются на обеих досках, счётчики по трём ключам", async () => {
       const first = randomUUID();
-      const { projection, store, asked } = projectionOf({ [SETTINGS.ratingSinceDate.key]: 20261104 }, { hard: [{ accountId: first, survivalSec: 321 }] });
+      const { projection, store, asked } = projectionOf({ [SETTINGS.ratingSinceDate.key]: 20261104 }, { hard: [{ accountId: first, score: 321 }] });
       for (const stale of ["easy", "normal", "hard"] as const) {
         await store.set(SEASON, stale, "старый", 999);
         await store.set(SEASON, stale, "призрак", 111);
@@ -651,7 +656,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
 
       for (const difficulty of ["easy", "normal"] as const) {
         for (const scope of ["all", "friends"] as const) {
-          expect(await view.board(randomUUID(), { difficulty, scope }, at)).toEqual({ seasonKey: SEASON.key, difficulty, total: 0, entries: [], me: null });
+          expect(await view.board(randomUUID(), { difficulty, scope }, at)).toEqual({ seasonKey: SEASON.key, difficulty, scoring: "time", total: 0, entries: [], me: null });
         }
       }
     });

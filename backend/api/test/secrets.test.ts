@@ -105,6 +105,27 @@ describe("шифрование", () => {
     expect(() => cipher.open("fx.coingecko-pro", { ...sealed, ciphertext: tampered })).toThrow(SecretUnreadableError);
   });
 
+  it("deriveId: 32 hex, стабилен, различает назначение, объект и ключ, не раскрывает ключ", () => {
+    const cipher = new SecretCipher([KEY]);
+    const id = cipher.deriveId("proxy.subscription.hwid", "main");
+
+    expect(id).toMatch(/^[0-9a-f]{32}$/);
+    expect(new SecretCipher([KEY]).deriveId("proxy.subscription.hwid", "main")).toBe(id);
+    expect(cipher.deriveId("proxy.subscription.hwid", "other")).not.toBe(id);
+    expect(cipher.deriveId("another.purpose", "main")).not.toBe(id);
+    expect(new SecretCipher([OLD_KEY]).deriveId("proxy.subscription.hwid", "main")).not.toBe(id);
+    // Склейка назначения и объекта не должна давать совпадений: «a:b» + «c» и «a» + «b:c» — разные пары.
+    expect(cipher.deriveId("a:b", "c")).not.toBe(cipher.deriveId("a", "b:c"));
+    // Отпечаток ключа и сам ключ в идентификатор не попадают.
+    expect(id).not.toBe(keyIdOf(Buffer.from(KEY, "base64")));
+    expect(Buffer.from(KEY, "base64").toString("hex")).not.toContain(id);
+  });
+
+  it("deriveId берёт текущий ключ: при смене ключа идентификатор меняется, прежний ключ на него не влияет", () => {
+    expect(new SecretCipher([KEY, OLD_KEY]).deriveId("p", "l")).toBe(new SecretCipher([KEY]).deriveId("p", "l"));
+    expect(new SecretCipher([OLD_KEY, KEY]).deriveId("p", "l")).not.toBe(new SecretCipher([KEY]).deriveId("p", "l"));
+  });
+
   it("прежний ключ читает старые строки, новые пишутся текущим; без прежнего — не читается", () => {
     const old = new SecretCipher([OLD_KEY]).seal("fx.coingecko-pro", PRO);
     const rotated = new SecretCipher([KEY, OLD_KEY]);

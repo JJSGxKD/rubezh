@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import { withTimeout } from "../../common/with-timeout.js";
+import { scoreOf } from "../rating/rating-switch.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsHooks, type RestrictionChange } from "../restrictions/restrictions-hooks.js";
 import { RatingRestrictions } from "../runs/rating-restrictions.js";
@@ -16,7 +17,8 @@ import { SEASONS_REPOSITORY, type SeasonsRepository } from "./seasons.repository
  * (tasks/T-0110). Модули забегов и ограничений о сезонах не знают: слушатели
  * подписываются сами, как у `RatingRestrictions`.
  *
- * - записан рейтинговый забег — время ложится в таблицу недели;
+ * - записан рейтинговый забег — его счёт ложится в таблицу недели: секунды в
+ *   сезоне по времени, очки в сезоне по очкам (tasks/T-0294, `SeasonSchedule.scoringOf`);
  * - модератор снял забег или вернул его — таблица игрока пересчитывается из базы;
  * - рейтинг игроку закрыт — он уходит из таблицы сразу, открыт — возвращается;
  * - скрытое ограничение «Отдельная доска» (T-0114, Р104) — игрок уходит из общей
@@ -73,8 +75,11 @@ export class SeasonsProjection implements OnModuleInit {
     if (!run.ranked || !isRatedRun(run.difficulty, run.finishedAt, this.schedule.ratingSince())) return;
     const season = this.schedule.current(run.finishedAt);
     if (season === null) return;
+    // Забег без очков в сезоне по очкам не стоит: пролог и сбой подсчёта таблицу не трогают.
+    const score = scoreOf({ survivalSec: run.survivalSec, points: run.points }, this.schedule.scoringOf(season));
+    if (score === null) return;
     const boards = await withTimeout(this.rating.boardsFor(run.accountId, run.finishedAt), DB_TIMEOUT_MS, "seasons: доски аккаунта");
-    await withTimeout(this.store.submit(season, run.difficulty, run.accountId, run.survivalSec, boards), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+    await withTimeout(this.store.submit(this.schedule.boardSeason(season), run.difficulty, run.accountId, score, boards), REDIS_TIMEOUT_MS, "seasons: таблица недели");
   }
 
   /**
@@ -87,11 +92,13 @@ export class SeasonsProjection implements OnModuleInit {
     if (season === null) return;
     // Игрок с закрытым рейтингом из таблицы убран и вернётся по сроку — уже без снятого забега.
     if ((await this.restrictionOf(accountId, at)) !== null) return;
-    const best = await withTimeout(this.repository.bestRun(accountId, difficulty, season, false, this.schedule.ratingSince()), DB_TIMEOUT_MS, "seasons: лучший забег недели");
+    const scoring = this.schedule.scoringOf(season);
+    const target = this.schedule.boardSeason(season);
+    const best = await withTimeout(this.repository.bestRun(accountId, difficulty, season, false, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: лучший забег недели");
     const boards = await withTimeout(this.rating.boardsFor(accountId, at), DB_TIMEOUT_MS, "seasons: доски аккаунта");
-    await withTimeout(this.store.set(season, difficulty, accountId, best?.survivalSec ?? null, boards), REDIS_TIMEOUT_MS, "seasons: таблица недели");
-    // Отдельная доска: общая таблица игрока не держит, даже если время из базы осталось.
-    if (!boards.includes("common")) await withTimeout(this.store.set(season, difficulty, accountId, null, COMMON_ONLY), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+    await withTimeout(this.store.set(target, difficulty, accountId, best?.score ?? null, boards), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+    // Отдельная доска: общая таблица игрока не держит, даже если счёт из базы остался.
+    if (!boards.includes("common")) await withTimeout(this.store.set(target, difficulty, accountId, null, COMMON_ONLY), REDIS_TIMEOUT_MS, "seasons: таблица недели");
   }
 
   /** Пересобрать таблицы текущей недели из базы; возвращает, сколько игроков на каждой сложности. */
@@ -105,12 +112,14 @@ export class SeasonsProjection implements OnModuleInit {
     ]);
     const apart = new Set(separate);
     const since = this.schedule.ratingSince();
+    const scoring = this.schedule.scoringOf(season);
+    const target = this.schedule.boardSeason(season);
     for (const difficulty of DIFFICULTIES) {
       // Полная — все рейтинговые, общая — те же без аккаунтов с отдельной доской;
       // у нерейтинговой сложности базе вопросов нет (пусто), и обе таблицы очищаются.
-      const entries = isRatedDifficulty(difficulty) ? await this.repository.weekBests(difficulty, season, excluded, since) : [];
-      await this.store.replace(season, difficulty, entries, "full");
-      await this.store.replace(season, difficulty, entries.filter((entry) => !apart.has(entry.accountId)), "common");
+      const entries = isRatedDifficulty(difficulty) ? await this.repository.weekBests(difficulty, season, excluded, since, scoring) : [];
+      await this.store.replace(target, difficulty, entries, "full");
+      await this.store.replace(target, difficulty, entries.filter((entry) => !apart.has(entry.accountId)), "common");
       counts[difficulty] = entries.length;
     }
     return counts;
@@ -120,7 +129,7 @@ export class SeasonsProjection implements OnModuleInit {
     if (!change.kinds.some((kind) => RATING_KINDS.has(kind))) return;
     const season = this.schedule.current(change.at);
     if (season === null) return;
-    await withTimeout(this.store.remove(season.key, [change.accountId]), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+    await withTimeout(this.store.remove(this.schedule.boardSeason(season).key, [change.accountId]), REDIS_TIMEOUT_MS, "seasons: таблица недели");
     this.logger.log(JSON.stringify({ module: "seasons", event: "season_restricted", accountId: change.accountId }));
   }
 
@@ -129,7 +138,7 @@ export class SeasonsProjection implements OnModuleInit {
     if (!change.kinds.includes("separate_board")) return;
     const season = this.schedule.current(change.at);
     if (season === null) return;
-    await withTimeout(this.store.remove(season.key, [change.accountId], COMMON_ONLY), REDIS_TIMEOUT_MS, "seasons: таблица недели");
+    await withTimeout(this.store.remove(this.schedule.boardSeason(season).key, [change.accountId], COMMON_ONLY), REDIS_TIMEOUT_MS, "seasons: таблица недели");
     this.logger.log(JSON.stringify({ module: "seasons", event: "season_board_separated", accountId: change.accountId }));
   }
 

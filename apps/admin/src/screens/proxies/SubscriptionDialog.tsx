@@ -4,7 +4,7 @@ import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { Button, Field, Input, Notice } from "../../ui/kit";
 import { toast } from "../../ui/toast";
-import { countriesProblem, subscriptionUrlProblem } from "./subscription-view";
+import { countriesProblem, normalizeSubscriptionUrl, subscriptionUrlProblem } from "./subscription-view";
 
 /**
  * Окно подписки Xray: подключение и правка. Адрес живёт только в состоянии окна:
@@ -34,7 +34,7 @@ export function SubscriptionDialog({
     setTouched(true);
     if (problem !== null || saving) return;
     setSaving(true);
-    const result = await saveSubscription(api, form);
+    const result = await saveSubscription(api, { ...form, url: normalizeSubscriptionUrl(form.url) });
     setSaving(false);
     if (!result.ok) return void toast.error(result.error.message);
     onSaved(result.data, existing === null);
@@ -63,7 +63,7 @@ export function SubscriptionDialog({
           <Input value={form.name} onChange={(event) => set({ name: event.target.value })} maxLength={60} placeholder="Основная подписка" autoFocus />
         </Field>
         <Field label="Адрес подписки" hint={existing === null ? "Адрес секретный: после сохранения он не показывается" : "Пусто — адрес останется прежним. Новый адрес заменит узлы целиком"}>
-          <Input type="password" value={form.url} onChange={(event) => set({ url: event.target.value })} placeholder={existing === null ? "https://" : "••••••••"} autoComplete="new-password" spellCheck={false} className="font-mono" />
+          <Input type="text" value={form.url} onChange={(event) => set({ url: event.target.value })} placeholder={existing === null ? "https://" : "••••••••"} autoComplete="off" data-1p-ignore data-lpignore="true" spellCheck={false} className="font-mono" />
         </Field>
         <Field label="Страны узлов" hint="Коды стран через запятую, например DE, NL. Пусто — любые">
           <Input value={form.countries} onChange={(event) => set({ countries: event.target.value.toUpperCase() })} placeholder="DE, NL" spellCheck={false} className="font-mono uppercase" />
