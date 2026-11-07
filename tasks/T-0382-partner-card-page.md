@@ -30,6 +30,8 @@ batch: 5
 
 # T-0382. Карточка партнёра — страница с вкладками вместо окна
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0382.json)](README.md#значки-статуса) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md) [![T-0221](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json&label=T-0221)](T-0221-partner-materials.md)
+
 ## Зачем
 
 Карточка партнёра — окно поверх списка, и в нём всё подряд: статус, плитки,

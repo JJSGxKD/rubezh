@@ -55,6 +55,8 @@ batch: 4
 
 # T-0374. Ошибки запросов в панели — код, статус, номер запроса и причина внутренней ошибки по праву
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0374.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Когда запрос панели падает, команда видит текст вроде «Внутренняя ошибка

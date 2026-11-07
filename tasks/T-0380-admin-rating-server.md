@@ -30,6 +30,8 @@ batch: 5
 
 # T-0380. Рейтинг в панели — сервер: доски, архив сезонов, места игрока
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0380.json)](README.md#значки-статуса)
+
 ## Зачем
 
 Команда не видит рейтинг иначе как глазами игрока: доски по сложностям, кто

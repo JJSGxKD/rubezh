@@ -30,6 +30,8 @@ batch: 5
 
 # T-0381. Рейтинг в панели — раздел: доски, архив сезонов, места игрока в карточке
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0381.json)](README.md#значки-статуса) [![T-0380](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0380.json&label=T-0380)](T-0380-admin-rating-server.md)
+
 ## Зачем
 
 После T-0380 у сервера есть ручки рейтинга, а в панели их не видно. После

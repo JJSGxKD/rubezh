@@ -37,6 +37,8 @@ batch: 5
 
 # T-0383. Реклама игроков партнёра — доли по сетям, местам и блокам во вкладке карточки
 
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0383.json)](README.md#значки-статуса) [![T-0382](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0382.json&label=T-0382)](T-0382-partner-card-page.md)
+
 ## Зачем
 
 Команда решает, давать ли партнёру бонус, а видит только, сколько игроков он
