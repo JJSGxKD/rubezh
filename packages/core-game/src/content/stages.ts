@@ -52,16 +52,16 @@ export const ENEMY_STAGES: EnemyStageDef[] = [
     hpMul: 14.5,
     damageMul: 1.8,
     speedMul: 1.16,
-    xpMul: 7.5,
+    xpMul: 7.6,
     nameKey: "enemy.stage.savage",
   },
   {
     fromSec: 660,
     weight: 0.7,
-    hpMul: 19.5,
+    hpMul: 19.7,
     damageMul: 2.1,
     speedMul: 1.2,
-    xpMul: 10.1,
+    xpMul: 10.4,
     nameKey: "enemy.stage.frenzied",
   },
   {
@@ -70,7 +70,7 @@ export const ENEMY_STAGES: EnemyStageDef[] = [
     hpMul: 28,
     damageMul: 2.5,
     speedMul: 1.24,
-    xpMul: 14.4,
+    xpMul: 14.8,
     nameKey: "enemy.stage.merciless",
   },
 ];
