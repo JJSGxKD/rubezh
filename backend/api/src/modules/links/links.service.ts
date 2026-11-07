@@ -26,8 +26,9 @@ import { LINKS_REPOSITORY, type LinkFilter, type LinkRecord, type LinksRepositor
  * игрок всё равно попадает в игру.
  *
  * Куда ведёт переход, решает цель ссылки (Р95): Mini App, чат с ботом или
- * лендинг. Кроме переходника у ссылки без сети есть прямая — сразу в бота или
- * Mini App, без клика (`link-targets.ts`).
+ * лендинг. Кроме переходника у ссылки есть прямая — сразу в бота или Mini App,
+ * без клика; у ссылки сети — только с целью Mini App, с метками сети в
+ * стартовом параметре (`link-targets.ts`, Р121).
  *
  * У ссылки может быть владелец-партнёр (docs/35-stage4-plan.md Р96, T-0067):
  * пришедший по ней новичок записывается за партнёром при первом входе
@@ -73,7 +74,8 @@ export interface NewLink {
 
 /**
  * Ссылка для панели: адрес переходника, у ссылки сети — адрес с макросами (его
- * вставляют в кабинет сети), у ссылки без сети — прямой адрес без переходника.
+ * вставляют в кабинет сети), прямой адрес без переходника. У ссылки сети прямой
+ * адрес — для рекламы внутри Telegram: метки клика сеть подставляет в стартовый параметр.
  */
 export type LinkView<T extends LinkRecord = LinkRecord> = T & { url: string; networkUrl: string | null; directUrl: string | null };
 
@@ -239,7 +241,7 @@ export class LinksService {
   /** Построители адресов цели: Mini App и чат — у адаптера площадки, лендинг — на домене переходника. */
   private builders(platform: PlatformId): LinkTargetBuilders {
     return {
-      launch: (param) => this.appLinks.launch(platform, param),
+      launch: (param, rawTail) => this.appLinks.launch(platform, param, rawTail),
       chat: (param) => this.appLinks.chat(platform, param),
       landingBase: this.landingBase(),
     };

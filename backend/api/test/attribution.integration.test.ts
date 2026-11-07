@@ -151,6 +151,24 @@ describe.skipIf(!live)("сессии и касания на живых Postgres 
     await expect(sessions.acquisition(id)).resolves.toMatchObject({ firstAt: new Date(T0), lastTouchAt: new Date(T0 + 5000) });
   });
 
+  it("параметр запуска из 512 знаков (прямая ссылка сети) пишется целиком в сессию и оба касания (T-0181)", async () => {
+    const id = await account();
+    const head = "l-AbC123xyz9_campaign-55_clickid-3f2a-9c_record-";
+    const startParam = head + "r".repeat(512 - head.length);
+    expect(startParam).toHaveLength(512);
+
+    await expect(sessions.record(session(id, "link", T0, { startParam, startRef: "AbC123xyz9" }))).resolves.toBe("recorded");
+
+    expect((await prisma.accountSession.findFirstOrThrow({ where: { accountId: id } })).startParam).toBe(startParam);
+    expect(await prisma.acquisition.findUniqueOrThrow({ where: { accountId: id } })).toMatchObject({
+      firstStartKind: "link",
+      firstStartParam: startParam,
+      firstStartRef: "AbC123xyz9",
+      lastStartParam: startParam,
+      lastStartRef: "AbC123xyz9",
+    });
+  });
+
   it("окно в Redis отсекает повтор запуска, но не запуск по новой ссылке", async () => {
     const dedupe = new RedisSessionDedupe(redis);
     const id = randomUUID();

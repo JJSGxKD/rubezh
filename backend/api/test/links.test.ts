@@ -269,8 +269,11 @@ describe("цель ссылки и прямая ссылка", () => {
     expect(target.endsWith(`c=${repository.clicks[0]?.clickId}`)).toBe(true);
   });
 
-  it("у ссылки сети прямой ссылки нет при любой цели", async () => {
-    for (const target of ["app", "bot", "landing"] as const) {
+  it("у ссылки сети прямая ссылка есть только при цели «Mini App» и несёт метки сети без кодирования (T-0181)", async () => {
+    const app = await guarded.create(actor, { ...plain, target: "app", network: "adsgram" });
+    expect(app.directUrl).toBe(`https://t.me/rubezh_bot?startapp=l-${app.code}_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}`);
+    expect(app.networkUrl).not.toBeNull();
+    for (const target of ["bot", "landing"] as const) {
       const link = await guarded.create(actor, { ...plain, target, network: "adsgram" });
       expect(link.directUrl, target).toBeNull();
       expect(link.networkUrl).not.toBeNull();
@@ -355,14 +358,14 @@ describe("ссылки в панели: цель", () => {
     expect(repository.links.get(link.code)?.target).toBe("app");
   });
 
-  it("список отдаёт цель, прямую ссылку и прямые запуски; у ссылки сети прямой нет", async () => {
+  it("список отдаёт цель, прямую ссылку и прямые запуски; у ссылки сети с целью «Mini App» прямая ссылка с метками", async () => {
     const panel = controller();
     await panel.create(request, { campaign: "launch", target: "bot" });
     await panel.create(request, { campaign: "ag", network: "adsgram" });
     const rows = (await panel.list(request, {})).data.links;
     expect(rows.map((row) => [row.target, row.directUrl === null, row.directLaunches])).toEqual([
       ["bot", false, 0],
-      ["app", true, 0],
+      ["app", false, 0],
     ]);
   });
 });
@@ -605,7 +608,7 @@ describe("ссылки партнёра", () => {
     expect(link.partner?.partnerId).toBe(partnerId);
     expect(link.network).toBe("adsgram");
     expect(link.networkUrl).toContain("{record_data}");
-    expect(link.directUrl).toBeNull();
+    expect(link.directUrl).toBe(`https://t.me/rubezh_bot?startapp=l-${link.code}_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}`);
   });
 
   it("список: без фильтра все ссылки, с фильтром — только ссылки партнёра", async () => {
