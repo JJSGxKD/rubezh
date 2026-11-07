@@ -358,6 +358,7 @@
 | Отправка на сервер: адрес, размер пачки, таймер, потолок очереди, пауза после сбоя, тело keepalive | `capabilities.telemetry` в `apps/web-telegram/src/main.tsx`; `app-shell/src/state/telemetry.ts` → `TELEMETRY_BATCH_SIZE`, `FLUSH_AT`, `FLUSH_INTERVAL_MS`, `TELEMETRY_MAX_QUEUED`, `MAX_BACKOFF_MS`, `KEEPALIVE_MAX_BYTES` |
 | Сколько `client_error` уходит: повтор одной ошибки, потолок на запуск | `app-shell/src/state/shell.ts` → `ERROR_REPEAT_MS`, `ERRORS_PER_LAUNCH` |
 | Консоль событий на устройстве разработчика | `apps/web-*/src/main.tsx`, функция `createAnalytics` |
+| Панель «Чего достигли» (T-0203): ключ кеша `admin:all-time:v1`, срок 300 с, замок пересчёта 30 с, ожидание результата соседней реплики 5 с с опросом раз в 250 мс; ночной снимок аудитории: расписание `20 0 * * *` в зоне Europe/Moscow, потолок бэкфилла 400 суток за проход. Константы кода, без релиза не меняются | `backend/api/src/modules/admin/admin-all-time.service.ts` → `ALL_TIME_*`; `backend/api/src/modules/admin-notify/activity-snapshot.ts` → `SNAPSHOT_CRON`, `SNAPSHOT_TIME_ZONE`, `SNAPSHOT_BACKFILL_LIMIT` |
 
 Порядок обязателен: имя сначала в словарь, потом в код. Иначе в базе заводятся
 `run_end`, `runFinished` и `end_run` одновременно, и ни один отчёт не сходится.

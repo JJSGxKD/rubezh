@@ -8,6 +8,7 @@ import { DailyBars } from "../../ui/daily-bars";
 import { HELP } from "../../ui/help";
 import { Button, ErrorNotice, Loading, Panel } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
+import { AllTimePanel } from "./AllTimePanel";
 import { AdsPanel, Attention, BoardMarkPanel, Chart, FunnelBars, PeriodSwitch, Tile } from "./overview-parts";
 
 const PERIOD_KEY = "admin.overview.days";
@@ -62,6 +63,7 @@ export function OverviewScreen() {
       {overview.ads === null ? null : <AdsPanel ads={overview.ads} days={days} />}
       <BoardMarkPanel mark={overview.boardMark} today={overview.today} />
       <Series overview={overview} />
+      <AllTimePanel />
     </div>
   );
 }
