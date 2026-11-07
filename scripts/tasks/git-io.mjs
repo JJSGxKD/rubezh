@@ -344,7 +344,7 @@ export function loadRegistryState(base = BASE) {
     repoFiles: readOriginFileList(base),
     taken,
     prs,
-    claims: Object.fromEntries(taken.map((id) => [id, claimedAt(byId.get(id))])),
+    claims: Object.fromEntries(taken.map((id) => [id, claimedAt(byId.get(id) ?? { id })])),
     abandoned,
     lastCommits,
     previousWork: findPreviousWork(tasks, taken, branches, base),
