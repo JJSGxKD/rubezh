@@ -145,6 +145,9 @@ export const TIMELINE: TimelineSegmentDef[] = [
  * (docs/25-week1-fps-trials.md §6.5).
  *
  * В `pool` только обычные враги: элиты и мини-боссы приходят событиями.
+ *
+ * Рост здоровья `hpGrowth` — 1,16 за отрезок (Р194, было 1,14): 1,18 из решения
+ * выводит индекс силы за три минуты за коридор `latePressure` (docs/32-balance.md §2.6).
  */
 export const ENDLESS_CURVE: EndlessCurveDef = {
   fromSec: 330,
@@ -152,7 +155,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   threatPerSec: 14.4,
   threatGrowth: 1.22,
   maxAlive: 240,
-  hpGrowth: 1.14,
+  hpGrowth: 1.16,
   damageGrowth: 1.08,
   pool: [
     "swarm_rat",
