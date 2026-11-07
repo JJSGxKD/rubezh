@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
 import type { FunnelRow, Period } from "./funnel";
-import { LINK_NETWORKS, LINK_TARGETS } from "./links";
+import { LINK_NETWORKS, LINK_TARGETS, canonicalEvents } from "./links";
 
 /**
  * Партнёры (`/admin/partners`, docs/35-stage4-plan.md WP41, часть 2): кто
@@ -273,6 +273,18 @@ export function setPartnerPostback(api: AdminApi, partner: Partner, url: string 
   return api.request(`/partners/${encodeURIComponent(partner.partnerId)}`, {
     method: "POST",
     body: { ...bodyOf(partnerFormOf(partner)), postbackUrl: trimmed === "" ? null : trimmed },
+    schema: partnerSchema,
+  });
+}
+
+/**
+ * Выбрать события общего адреса партнёра (T-0071). Как и у адреса, уходят все поля карточки, чтобы условия выплат не
+ * стёрлись; `postbackUrl` не названо — адрес остаётся как был. События — в каноническом порядке и без повторов.
+ */
+export function setPartnerPostbackEvents(api: AdminApi, partner: Partner, events: readonly string[]): Promise<ApiResult<Partner>> {
+  return api.request(`/partners/${encodeURIComponent(partner.partnerId)}`, {
+    method: "POST",
+    body: { ...bodyOf(partnerFormOf(partner)), postbackEvents: canonicalEvents(events) },
     schema: partnerSchema,
   });
 }
