@@ -38,6 +38,7 @@ import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { LinkCard } from "./LinkCard";
+import { LinksGuide } from "./LinksGuide";
 import { TokenNotice } from "./TokenNotice";
 import { UnknownKeys } from "./UnknownKeys";
 
@@ -77,6 +78,8 @@ export function LinksScreen({ id }: { id: string | null }) {
   const [created, setCreated] = useState<Link | null>(null);
   // Скрытые автоисточники по умолчанию не показываются; запуски по ним считаются как раньше.
   const [showHidden, setShowHidden] = useState(false);
+  // Справка монтируется только открытой: закрыл и открыл снова — окно с начала.
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Из карточки партнёра — мастер с ним выбранным; по коду ссылки — её карточка.
   useEffect(() => {
@@ -136,7 +139,14 @@ export function LinksScreen({ id }: { id: string | null }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Новая ссылка">
+      <Panel
+        title="Новая ссылка"
+        actions={
+          <Button tone="secondary" onClick={() => setGuideOpen(true)}>
+            Как устроены ссылки
+          </Button>
+        }
+      >
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <ChoiceGroup label="Чья ссылка" help={OWNER_HELP}>
             <ChoiceCards<LinkOwnerKind>
@@ -294,6 +304,7 @@ export function LinksScreen({ id }: { id: string | null }) {
         ) : null}
       </Panel>
       <UnknownKeys />
+      {guideOpen ? <LinksGuide onClose={() => setGuideOpen(false)} /> : null}
       {openCode === null ? null : (
         <LinkCard
           link={open}

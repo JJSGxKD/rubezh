@@ -3,8 +3,8 @@ id: T-0294
 title: Доски рейтинга по очкам — общая, сезонная, друзья и скрытая; лучший забег периода, порог награды сезона в очках, переход с нового сезона
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0293, T-0114]
@@ -18,13 +18,21 @@ shared:
   - backend/api/src/modules/runs/runs.service.ts
   - backend/api/src/modules/runs/runs.repository.ts
   - backend/api/src/modules/runs/rating-restrictions.ts
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/reminders/reminders.scanner.ts
   - backend/api/src/modules/runs/dto/**
   - backend/api/src/modules/seasons/**
+  - backend/api/src/modules/rating/run-scores.repository.ts
+  - backend/api/src/modules/rating/runs-rescore.ts
+  - backend/api/src/modules/runs/leaderboard-warmup.ts
+  - backend/api/src/modules/runs/runs.module.ts
+  - docs/20-env-and-ports.md
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
   - backend/api/test/**
   - docs/10-progression-and-ladder.md
+  - docs/21-diagrams.md
   - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5

@@ -14,8 +14,12 @@ import { BOARD_TTL_AFTER_END_MS, type Season } from "./season-rules.js";
  * из базы за окно текущей недели. Закрытие сезона считает из базы, а не отсюда,
  * поэтому расхождение проекции на итоги не влияет.
  *
- * Член множества — идентификатор аккаунта, очки — лучшее время недели.
- * `ZADD GT` не опускает его ни повтором, ни худшим забегом. При равном времени
+ * Член множества — идентификатор аккаунта, счёт — лучший результат недели:
+ * секунды в сезоне по времени, очки эффективности в сезоне по очкам
+ * (tasks/T-0294). Сезон по очкам лежит под ключом `pts:<ключ сезона>` —
+ * вызывающий передаёт сезон уже с ним (`SeasonSchedule.boardSeason`), а время
+ * лучшего забега идёт подписью из базы. `ZADD GT` не опускает его ни повтором,
+ * ни худшим забегом. При равном счёте
  * Redis держит порядок по идентификатору; окончательные места при ничьей
  * решает ранний забег (`seasons-close.repository.ts`), и экран этого
  * соответствия не обещает.
@@ -33,23 +37,23 @@ export const SEASON_BOARD_STORE = Symbol("SEASON_BOARD_STORE");
 
 export interface SeasonBoardEntry {
   accountId: string;
-  survivalSec: number;
+  score: number;
 }
 
 export interface SeasonBoardStore {
-  /** Учесть забег. `improved` — это новое лучшее время игрока недели. */
-  submit(season: Season, difficulty: Difficulty, accountId: string, survivalSec: number, boards?: readonly Board[]): Promise<{ improved: boolean }>;
+  /** Учесть забег. `improved` — это новый лучший счёт игрока недели. */
+  submit(season: Season, difficulty: Difficulty, accountId: string, score: number, boards?: readonly Board[]): Promise<{ improved: boolean }>;
   /** Место с единицы; `null` — игрока в таблице нет. */
   rank(seasonKey: string, difficulty: Difficulty, accountId: string, board?: Board): Promise<number | null>;
   best(seasonKey: string, difficulty: Difficulty, accountId: string, board?: Board): Promise<number | null>;
-  /** Времена сразу нескольких игроков одним обращением; кого в таблице нет — не попадает в ответ. */
+  /** Счета сразу нескольких игроков одним обращением; кого в таблице нет — не попадает в ответ. */
   scores(seasonKey: string, difficulty: Difficulty, accountIds: readonly string[], board?: Board): Promise<Map<string, number>>;
   top(seasonKey: string, difficulty: Difficulty, limit: number, board?: Board): Promise<SeasonBoardEntry[]>;
   count(seasonKey: string, difficulty: Difficulty, board?: Board): Promise<number>;
-  /** Сколько игроков с временем строго больше — место того, кого в таблице нет. */
-  countAbove(seasonKey: string, difficulty: Difficulty, survivalSec: number, board?: Board): Promise<number>;
-  /** Поставить ровно это время на этих досках, даже если оно хуже; `null` — убрать игрока с них. */
-  set(season: Season, difficulty: Difficulty, accountId: string, survivalSec: number | null, boards?: readonly Board[]): Promise<void>;
+  /** Сколько игроков со счётом строго больше — место того, кого в таблице нет. */
+  countAbove(seasonKey: string, difficulty: Difficulty, score: number, board?: Board): Promise<number>;
+  /** Поставить ровно этот счёт на этих досках, даже если он хуже; `null` — убрать игрока с них. */
+  set(season: Season, difficulty: Difficulty, accountId: string, score: number | null, boards?: readonly Board[]): Promise<void>;
   /** Убрать аккаунты из таблиц всех сложностей сезона на этих досках — ограничение рейтинга (обе) или отдельная доска (общая). */
   remove(seasonKey: string, accountIds: readonly string[], boards?: readonly Board[]): Promise<void>;
   /** Заменить таблицу сложности одной доски целиком — пересборка из базы. */
@@ -63,12 +67,12 @@ const REBUILD_BATCH = 1_000;
 export class RedisSeasonBoardStore implements SeasonBoardStore {
   constructor(@Inject(REDIS) private readonly redis: Redis) {}
 
-  async submit(season: Season, difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[] = ALL_BOARDS): Promise<{ improved: boolean }> {
+  async submit(season: Season, difficulty: Difficulty, accountId: string, score: number, boards: readonly Board[] = ALL_BOARDS): Promise<{ improved: boolean }> {
     let improved = false;
     for (const board of boards) {
       const target = key(season.key, difficulty, board);
       // Срок ставится вместе с записью: ключ не должен остаться вечным, если упадёт вторая команда.
-      const results = await this.redis.multi().zadd(target, "GT", "CH", survivalSec, accountId).pexpireat(target, expiresAt(season)).exec();
+      const results = await this.redis.multi().zadd(target, "GT", "CH", score, accountId).pexpireat(target, expiresAt(season)).exec();
       if (Number(firstResult(results)) > 0) improved = true;
     }
     return { improved };
@@ -101,7 +105,7 @@ export class RedisSeasonBoardStore implements SeasonBoardStore {
   async top(seasonKey: string, difficulty: Difficulty, limit: number, board: Board = "common"): Promise<SeasonBoardEntry[]> {
     const flat = await this.redis.zrevrange(key(seasonKey, difficulty, board), 0, limit - 1, "WITHSCORES");
     const entries: SeasonBoardEntry[] = [];
-    for (let index = 0; index + 1 < flat.length; index += 2) entries.push({ accountId: flat[index] ?? "", survivalSec: Number(flat[index + 1]) });
+    for (let index = 0; index + 1 < flat.length; index += 2) entries.push({ accountId: flat[index] ?? "", score: Number(flat[index + 1]) });
     return entries;
   }
 
@@ -109,18 +113,18 @@ export class RedisSeasonBoardStore implements SeasonBoardStore {
     return await this.redis.zcard(key(seasonKey, difficulty, board));
   }
 
-  async countAbove(seasonKey: string, difficulty: Difficulty, survivalSec: number, board: Board = "common"): Promise<number> {
-    return await this.redis.zcount(key(seasonKey, difficulty, board), `(${String(survivalSec)}`, "+inf");
+  async countAbove(seasonKey: string, difficulty: Difficulty, score: number, board: Board = "common"): Promise<number> {
+    return await this.redis.zcount(key(seasonKey, difficulty, board), `(${String(score)}`, "+inf");
   }
 
-  async set(season: Season, difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[] = ALL_BOARDS): Promise<void> {
+  async set(season: Season, difficulty: Difficulty, accountId: string, score: number | null, boards: readonly Board[] = ALL_BOARDS): Promise<void> {
     for (const board of boards) {
       const target = key(season.key, difficulty, board);
-      if (survivalSec === null) {
+      if (score === null) {
         await this.redis.zrem(target, accountId);
         continue;
       }
-      await this.redis.multi().zadd(target, survivalSec, accountId).pexpireat(target, expiresAt(season)).exec();
+      await this.redis.multi().zadd(target, score, accountId).pexpireat(target, expiresAt(season)).exec();
     }
   }
 
@@ -142,7 +146,7 @@ export class RedisSeasonBoardStore implements SeasonBoardStore {
       return;
     }
     for (let start = 0; start < entries.length; start += REBUILD_BATCH) {
-      const batch = entries.slice(start, start + REBUILD_BATCH).flatMap((entry) => [entry.survivalSec, entry.accountId]);
+      const batch = entries.slice(start, start + REBUILD_BATCH).flatMap((entry) => [entry.score, entry.accountId]);
       await this.redis.zadd(temporary, ...batch);
     }
     await this.redis.pexpireat(temporary, expiresAt(season));

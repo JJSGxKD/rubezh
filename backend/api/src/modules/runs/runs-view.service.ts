@@ -22,6 +22,11 @@ import { RUNS_REPOSITORY, type ReviewRow, type RunDetailRow, type RunsRepository
  * игроков», профиль и размер доски считаются по ней; форма ответов у всех
  * одна, поля «доска» нет. Каждый метод узнаёт доску один раз в начале.
  *
+ * Доски ранжируют по очкам эффективности лучшего забега (tasks/T-0294, Р66):
+ * `points` — главное число строки, `survivalSec` — время того же забега,
+ * подпись; `style` — стиль забега (T-0293). Старые клиенты читают прежнее поле
+ * времени, пока экран не переедет на очки (T-0296).
+ *
  * Единая сложность (Р126, T-0191): доски, лучшее и размер доски есть только у
  * рейтинговых сложностей; у остальных форма ответа та же, но пустая — `null`,
  * `0`, пустой список, — и ни Redis, ни база для них не читаются. Старый клиент
@@ -37,6 +42,8 @@ const MODERATION_RUNS_SHOWN = 10;
 export interface ModerationRunView {
   runId: string;
   survivalSec: number;
+  /** очки эффективности; `null` — очков нет */
+  points: number | null;
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
@@ -52,7 +59,12 @@ export interface LeaderboardView {
     photoUrl: string | null;
     /** знак «Тестер» (Р87); поля нет — не тестер */
     tester?: true;
+    /** очки эффективности лучшего забега — по ним ранжируется доска */
+    points: number;
+    /** время того же забега — подпись к очкам */
     survivalSec: number;
+    /** стиль забега (T-0293) */
+    style: string | null;
     level: number;
     startingWeaponId: string;
     enemiesKilled: number;
@@ -62,15 +74,23 @@ export interface LeaderboardView {
     /** отметка рубежа (T-0121): у аккаунта засчитана победа над стражем; поля нет — не засчитана */
     rubezh?: true;
   }[];
-  me: { rank: number; survivalSec: number } | null;
+  me: { rank: number; points: number; survivalSec: number; style: string | null } | null;
   totalPlayers: number;
+}
+
+/** Лучший забег игрока на доске: очки, их место, время и стиль того же забега. */
+export interface BestView {
+  points: number;
+  survivalSec: number;
+  style: string | null;
+  rank: number;
 }
 
 export interface ProfileView {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<Difficulty, { survivalSec: number; rank: number } | null>;
+  best: Record<Difficulty, BestView | null>;
   recent: { runId: string; difficultyId: Difficulty; survivalSec: number; level: number; startingWeaponId: string; at: number }[];
   /** пролог пройден (T-0279): `false` — «Награда дня» и «Задания» закрыты, следующий запуск снова пролог; у аккаунтов до пролога — `true` */
   prologueDone: boolean;
@@ -144,7 +164,9 @@ export class RunsViewService {
     // одним запросом на всю страницу, престиж — одним запросом к достижениям:
     // игрок в тени добавляет в него себя, его строку рисует `fromShadow`.
     const ids = top.map((entry) => entry.accountId);
-    const [rows, prestige] = await Promise.all([this.runs.bestRuns(ids, difficulty, this.rating.since()), this.prestige.of(hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids)]);
+    // Свой забег подписи (время, стиль) берётся тем же запросом, если игрока нет в первой странице.
+    const withMe = rank !== null && !ids.includes(accountId) ? [...ids, accountId] : ids;
+    const [rows, prestige] = await Promise.all([this.runs.bestRuns(withMe, difficulty, this.rating.since()), this.prestige.of(hold === "silent" && !ids.includes(accountId) ? [...ids, accountId] : ids)]);
     const details = new Map(rows.map((row) => [row.accountId, row]));
 
     const view: LeaderboardView = {
@@ -162,7 +184,9 @@ export class RunsViewService {
             name: row.displayName,
             photoUrl: row.photoUrl,
             ...(row.tester ? { tester: true as const } : {}),
-            survivalSec: entry.survivalSec,
+            points: entry.score,
+            survivalSec: row.survivalSec,
+            style: row.style,
             level: row.level,
             startingWeaponId: row.startingWeaponId,
             enemiesKilled: row.enemiesKilled,
@@ -172,7 +196,7 @@ export class RunsViewService {
           },
         ];
       }),
-      me: rank === null || best === null ? null : { rank, survivalSec: best },
+      me: rank === null || best === null ? null : { rank, points: best, survivalSec: details.get(accountId)?.survivalSec ?? 0, style: details.get(accountId)?.style ?? null },
       totalPlayers: total,
     };
     return hold === "silent" ? await this.fromShadow(accountId, difficulty, view, board, prestige.get(accountId) ?? 0) : view;
@@ -187,15 +211,17 @@ export class RunsViewService {
     // До обхода игрок мог остаться в доске гонкой с наложением — себя он видит один раз.
     const others = view.entries.filter((entry) => !entry.isMe);
     const players = view.totalPlayers - (view.me === null ? 0 : 1);
-    if (mine === null) return { ...view, entries: others, me: null, totalPlayers: players };
+    if (mine === null || mine.points === null) return { ...view, entries: others, me: null, totalPlayers: players };
 
-    const rank = (await this.leaderboard.countAbove(difficulty, mine.survivalSec, board)) + 1;
+    const rank = (await this.leaderboard.countAbove(difficulty, mine.points, board)) + 1;
     const own = {
       rank,
       name: mine.displayName,
       photoUrl: mine.photoUrl,
       ...(mine.tester ? { tester: true as const } : {}),
+      points: mine.points,
       survivalSec: mine.survivalSec,
+      style: mine.style,
       level: mine.level,
       startingWeaponId: mine.startingWeaponId,
       enemiesKilled: mine.enemiesKilled,
@@ -205,7 +231,7 @@ export class RunsViewService {
     const entries = [...others.map((entry) => (entry.rank >= rank ? { ...entry, rank: entry.rank + 1 } : entry)), own]
       .filter((entry) => entry.rank <= LEADERBOARD_LIMIT)
       .sort((left, right) => left.rank - right.rank);
-    return { ...view, entries, me: { rank, survivalSec: mine.survivalSec }, totalPlayers: players + 1 };
+    return { ...view, entries, me: { rank, points: mine.points, survivalSec: mine.survivalSec, style: mine.style }, totalPlayers: players + 1 };
   }
 
   /**
@@ -253,21 +279,24 @@ export class RunsViewService {
     const since = this.rating.since();
     const lists = await Promise.all(DIFFICULTIES.map(async (difficulty) => (isRatedDifficulty(difficulty) ? await this.runs.moderationRuns(accountId, difficulty, MODERATION_RUNS_SHOWN, since) : [])));
     const view = (rows: Awaited<ReturnType<RunsRepository["moderationRuns"]>>) =>
-      rows.map((row) => ({ runId: row.runId, survivalSec: row.survivalSec, level: row.level, enemiesKilled: row.enemiesKilled, startingWeaponId: row.startingWeaponId, finishedAt: row.finishedAt.toISOString(), ranked: row.ranked }));
+      rows.map((row) => ({ runId: row.runId, survivalSec: row.survivalSec, points: row.points, level: row.level, enemiesKilled: row.enemiesKilled, startingWeaponId: row.startingWeaponId, finishedAt: row.finishedAt.toISOString(), ranked: row.ranked }));
     return { easy: view(lists[0] ?? []), normal: view(lists[1] ?? []), hard: view(lists[2] ?? []) };
   }
 
-  private async boardBest(accountId: string, difficulty: Difficulty, board: Board): Promise<{ survivalSec: number; rank: number } | null> {
+  private async boardBest(accountId: string, difficulty: Difficulty, board: Board): Promise<BestView | null> {
     if (!isRatedDifficulty(difficulty)) return null;
     const [best, rank] = await Promise.all([this.leaderboard.best(difficulty, accountId, board), this.leaderboard.rank(difficulty, accountId, board)]);
-    return best === null || rank === null ? null : { survivalSec: best, rank };
+    if (best === null || rank === null) return null;
+    // Время и стиль — у того же забега, что держит очки на доске.
+    const run = await this.runs.bestRunOf(accountId, difficulty, false, this.rating.since());
+    return { points: best, survivalSec: run?.survivalSec ?? 0, style: run?.style ?? null, rank };
   }
 
-  private async shadowBest(accountId: string, difficulty: Difficulty, board: Board): Promise<{ survivalSec: number; rank: number } | null> {
+  private async shadowBest(accountId: string, difficulty: Difficulty, board: Board): Promise<BestView | null> {
     if (!isRatedDifficulty(difficulty)) return null;
     const mine = await this.runs.bestRunOf(accountId, difficulty, true, this.rating.since());
-    if (mine === null) return null;
-    return { survivalSec: mine.survivalSec, rank: (await this.leaderboard.countAbove(difficulty, mine.survivalSec, board)) + 1 };
+    if (mine === null || mine.points === null) return null;
+    return { points: mine.points, survivalSec: mine.survivalSec, style: mine.style, rank: (await this.leaderboard.countAbove(difficulty, mine.points, board)) + 1 };
   }
 
   async detail(accountId: string, runId: string): Promise<RunDetailView> {

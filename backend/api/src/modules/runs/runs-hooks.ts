@@ -21,6 +21,8 @@ export interface RecordedRun {
   mode?: RunMode;
   outcome: "died" | "abandoned";
   survivalSec: number;
+  /** очки эффективности (T-0293); `null` — очков нет: пролог, нерейтинговая сложность, сбой подсчёта; поля нет — то же */
+  points?: number | null;
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;

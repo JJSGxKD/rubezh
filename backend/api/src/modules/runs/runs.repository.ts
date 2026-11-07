@@ -21,6 +21,11 @@ import type { RunVerdict, VerdictReason } from "./run-verdict.js";
  * забеги нерейтинговой сложности и законченные раньше неё не видны. Для
  * нерейтинговой сложности запрос в базу не уходит вовсе. История (`recent`,
  * `stats`, `detail`, `review`) остаётся полной.
+ *
+ * **Доска всех времён ранжирует по очкам** (tasks/T-0294): лучший забег — с
+ * наибольшим `points`, при равных раньше законченный; забег без очков (пролог,
+ * сбой подсчёта, забег до очков и не пересчитанный) в выборку не входит, а
+ * время лучшего забега идёт подписью.
  */
 
 /**
@@ -115,6 +120,10 @@ export interface BestRunRow {
   /** знак «Тестер» (Р87); поля нет — не тестер, а дата знака наружу не отдаётся */
   tester?: true;
   survivalSec: number;
+  /** очки эффективности забега; `null` — очков нет */
+  points: number | null;
+  /** стиль забега (T-0293); `null` — очков нет */
+  style: string | null;
   level: number;
   startingWeaponId: string;
   enemiesKilled: number;
@@ -125,6 +134,8 @@ export interface ModerationRunRow {
   runId: string;
   difficulty: Difficulty;
   survivalSec: number;
+  /** очки эффективности; `null` — очков нет */
+  points: number | null;
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
@@ -175,19 +186,19 @@ export interface RunsRepository {
   recent(accountId: string, limit: number): Promise<RecentRun[]>;
   /** свой законченный забег; чужой, незаконченный и незнакомый — `null` */
   detail(accountId: string, runId: string): Promise<RunDetailRow | null>;
-  /** Лучший рейтинговый забег каждого из аккаунтов — для строк лидерборда */
+  /** Лучший по очкам рейтинговый забег каждого из аккаунтов — для строк лидерборда */
   bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]>;
-  /** Лучшее рейтинговое время каждого аккаунта — источник пересборки проекции */
-  bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]>;
+  /** Лучшие рейтинговые очки каждого аккаунта — источник пересборки проекции */
+  bestScores(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; score: number }[]>;
   /**
-   * Лучший рейтинговый забег игрока — вернуть его в доску, когда ограничение
+   * Лучший по очкам рейтинговый забег игрока — вернуть его в доску, когда ограничение
    * рейтинга снято. `shadow` — вместе со сданными под молчаливым
    * ограничением: так игрок видит себя сам.
    */
   bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null>;
   /**
    * Забеги игрока, которые модератор может снять с рейтинга или вернуть:
-   * рейтинговые и снятые модератором, лучшие первыми.
+   * рейтинговые и снятые модератором, лучшие по очкам первыми.
    */
   moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]>;
   /**
@@ -394,14 +405,16 @@ export class PrismaRunsRepository implements RunsRepository {
   async bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]> {
     if (accountIds.length === 0 || !isRatedDifficulty(difficulty)) return [];
     // Один запрос на всю страницу, а не по запросу на строку: `distinct` с
-    // сортировкой по времени берёт лучший забег каждого аккаунта.
+    // сортировкой по очкам берёт лучший забег каждого аккаунта.
     const rows = await this.prisma.run.findMany({
-      where: { ...ratedWhere(since), accountId: { in: [...accountIds] }, difficulty, ranked: true },
-      orderBy: [{ accountId: "asc" }, { survivalSec: "desc" }],
+      where: { ...ratedWhere(since), accountId: { in: [...accountIds] }, difficulty, ranked: true, points: { not: null } },
+      orderBy: [{ accountId: "asc" }, { points: "desc" }, { finishedAt: "asc" }],
       distinct: ["accountId"],
       select: {
         accountId: true,
         survivalSec: true,
+        points: true,
+        style: true,
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
@@ -414,30 +427,34 @@ export class PrismaRunsRepository implements RunsRepository {
       photoUrl: row.account.photoUrl,
       ...(row.account.testerAt === null ? {} : { tester: true as const }),
       survivalSec: row.survivalSec ?? 0,
+      points: row.points,
+      style: row.style,
       level: row.level ?? 1,
       startingWeaponId: row.startingWeaponId,
       enemiesKilled: row.enemiesKilled ?? 0,
     }));
   }
 
-  async bestTimes(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; survivalSec: number }[]> {
+  async bestScores(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; score: number }[]> {
     if (!isRatedDifficulty(difficulty)) return [];
     const rows = await this.prisma.run.groupBy({
       by: ["accountId"],
-      where: { ...ratedWhere(since), difficulty, ranked: true },
-      _max: { survivalSec: true },
+      where: { ...ratedWhere(since), difficulty, ranked: true, points: { not: null } },
+      _max: { points: true },
     });
-    return rows.map((row) => ({ accountId: row.accountId, survivalSec: row._max.survivalSec ?? 0 }));
+    return rows.map((row) => ({ accountId: row.accountId, score: row._max.points ?? 0 }));
   }
 
   async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null> {
     if (!isRatedDifficulty(difficulty)) return null;
     const row = await this.prisma.run.findFirst({
-      where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }] },
-      orderBy: { survivalSec: "desc" },
+      where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }], points: { not: null } },
+      orderBy: [{ points: "desc" }, { finishedAt: "asc" }],
       select: {
         accountId: true,
         survivalSec: true,
+        points: true,
+        style: true,
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
@@ -451,6 +468,8 @@ export class PrismaRunsRepository implements RunsRepository {
       photoUrl: row.account.photoUrl,
       ...(row.account.testerAt === null ? {} : { tester: true as const }),
       survivalSec: row.survivalSec ?? 0,
+      points: row.points,
+      style: row.style,
       level: row.level ?? 1,
       startingWeaponId: row.startingWeaponId,
       enemiesKilled: row.enemiesKilled ?? 0,
@@ -461,14 +480,15 @@ export class PrismaRunsRepository implements RunsRepository {
     if (!isRatedDifficulty(difficulty)) return [];
     const rows = await this.prisma.run.findMany({
       where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: [{ ranked: true }, UNRANKED_BY_MODERATOR] },
-      orderBy: [{ survivalSec: "desc" }, { finishedAt: "desc" }],
+      orderBy: [{ points: { sort: "desc", nulls: "last" } }, { survivalSec: "desc" }, { finishedAt: "desc" }],
       take: limit,
-      select: { runId: true, difficulty: true, survivalSec: true, level: true, enemiesKilled: true, startingWeaponId: true, finishedAt: true, ranked: true },
+      select: { runId: true, difficulty: true, survivalSec: true, points: true, level: true, enemiesKilled: true, startingWeaponId: true, finishedAt: true, ranked: true },
     });
     return rows.map((row) => ({
       runId: row.runId,
       difficulty: row.difficulty,
       survivalSec: row.survivalSec ?? 0,
+      points: row.points,
       level: row.level ?? 1,
       enemiesKilled: row.enemiesKilled ?? 0,
       startingWeaponId: row.startingWeaponId,

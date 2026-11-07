@@ -3,8 +3,8 @@ id: T-0295
 title: Дивизионы сезона по доле доски и стиль игрока — сильнейшая ось лучшего забега, «Твой стиль» с подсказкой, что поднимет слабую ось
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0294]
@@ -20,10 +20,16 @@ shared:
   - backend/api/src/modules/rating/rating.module.ts
   - backend/api/src/modules/seasons/seasons-view.service.ts
   - backend/api/src/modules/seasons/seasons-close.service.ts
+  - backend/api/src/modules/seasons/seasons-close.repository.ts
+  - backend/api/src/modules/seasons/seasons.repository.ts
   - backend/api/src/modules/seasons/dto/**
   - backend/api/src/common/public-identity.ts
   - docs/10-progression-and-ladder.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/rating-boards.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

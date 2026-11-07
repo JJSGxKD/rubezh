@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, BlessingDef, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, BlessingDef, LeaderboardEntry, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -34,6 +34,9 @@ import { homeFace } from "../state/prologue";
 import type { ItemView } from "../state/items-api";
 import { BootScreen } from "./gates";
 import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
+import { LeaderboardRow, YouStrip } from "./meta/rating";
+import { Podium } from "./meta/rating-podium";
+import { DivisionPlaque, StyleCard } from "./meta/rating-style";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
 import { BlessingOverlay } from "./run/BlessingOverlay";
@@ -56,7 +59,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -107,6 +110,7 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
           <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
+          <ListItem title={t("gallery.preview.rating")} onClick={() => setPreview("rating")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -420,6 +424,62 @@ function AsidePreview(): ReactNode {
   );
 }
 
+/** Игроки рейтинга на тестовых данных (T-0296): пьедестал, строки, «Ты» и «Твой стиль» во всех состояниях. */
+const RATING_SAMPLE: LeaderboardEntry[] = [
+  ["Велимир", 9_812, "t", "ruby"],
+  ["Ярослава", 9_440, "k", "ruby"],
+  ["Мирон", 8_905, "h", "gold"],
+  ["Злата", 8_120, "h", "gold"],
+  ["Тимур", 7_760, "b", "gold"],
+].map(([name, points, style, division], index) => ({
+  rank: index + 1,
+  name: String(name),
+  photoUrl: null,
+  survivalSec: 1_908 - index * 120,
+  level: 41 - index,
+  startingWeaponId: "spark",
+  enemiesKilled: 2_400 - index * 150,
+  isMe: false,
+  points: Number(points),
+  style: String(style),
+  division: String(division),
+}));
+
+function RatingPreview(): ReactNode {
+  const me = { rank: 38, survivalSec: 612, points: 4_205, style: "c", division: "silver" };
+  const above = RATING_SAMPLE.slice(4, 5).map((entry) => ({ ...entry, rank: 37, points: 4_345 }));
+  return (
+    <Screen title={t("gallery.preview.rating")}>
+      <ContentColumn>
+        <SectionTitle>{t("gallery.rating.podium")}</SectionTitle>
+        <div className="grid gap-2">
+          <Podium entries={RATING_SAMPLE} scoring="points" />
+          <ol className="grid gap-2">
+            {RATING_SAMPLE.slice(3).map((entry, index) => (
+              <LeaderboardRow key={entry.rank} entry={entry} index={index} scoring="points" />
+            ))}
+          </ol>
+        </div>
+        <SectionTitle>{t("gallery.rating.podiumTwo")}</SectionTitle>
+        <Podium entries={RATING_SAMPLE.slice(0, 2)} scoring="points" />
+        <SectionTitle>{t("gallery.rating.you")}</SectionTitle>
+        <div className="grid gap-2">
+          <YouStrip me={me} entries={above} scoring="points" total={900} />
+          <YouStrip me={{ ...me, rank: 1, points: 9_999, division: "ruby" }} entries={[]} scoring="points" total={900} />
+          <YouStrip me={null} entries={[]} scoring="points" total={0} />
+        </div>
+        <SectionTitle>{t("gallery.rating.plaque")}</SectionTitle>
+        <DivisionPlaque division="silver" best={{ kind: "points", value: 4_205 }} next={{ next: "gold", gap: 610, unit: "points" }} />
+        <SectionTitle>{t("gallery.rating.style")}</SectionTitle>
+        <div className="grid gap-2">
+          <StyleCard summary={{ style: "c", strong: "c", weak: "k", axes: { t: 1.2, k: 0.6, h: 0.9, c: 1.5, b: 1 }, runs: 10, missing: 0 }} />
+          <StyleCard summary={{ style: null, strong: null, weak: null, axes: null, runs: 1, missing: 2 }} />
+        </div>
+      </ContentColumn>
+    </Screen>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
   const shareNoop = (): Promise<null> => Promise.resolve(null);
@@ -427,6 +487,8 @@ function renderPreview(preview: Preview): ReactNode {
   switch (preview) {
     case "aside":
       return <AsidePreview />;
+    case "rating":
+      return <RatingPreview />;
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":

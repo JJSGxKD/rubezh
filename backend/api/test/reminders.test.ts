@@ -404,10 +404,10 @@ class FakeBoard {
     return [...this.scores.entries()].sort((left, right) => right[1] - left[1] || (left[0] < right[0] ? 1 : -1)).map(([id]) => id);
   }
 
-  async top(_season: string, _difficulty: string, limit: number): Promise<{ accountId: string; survivalSec: number }[]> {
+  async top(_season: string, _difficulty: string, limit: number): Promise<{ accountId: string; score: number }[]> {
     return this.order()
       .slice(0, limit)
-      .map((accountId) => ({ accountId, survivalSec: this.scores.get(accountId) ?? 0 }));
+      .map((accountId) => ({ accountId, score: this.scores.get(accountId) ?? 0 }));
   }
 
   async rank(_season: string, _difficulty: string, accountId: string): Promise<number | null> {

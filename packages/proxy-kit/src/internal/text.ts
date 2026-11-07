@@ -10,12 +10,16 @@ export function safeDecode(value: string): string {
   }
 }
 
-/** Название из фрагмента ссылки: декодировано, без управляющих символов, не длиннее 80 знаков. */
-export function cleanName(fragment: string, fallback: string): string {
-  const decoded = safeDecode(fragment.replace(/^#/, ""));
-  const cleaned = decoded.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
+/** Название узла как есть: без управляющих символов, не длиннее 80 знаков; пустое заменяется на `fallback`. */
+export function cleanLabel(label: string, fallback: string): string {
+  const cleaned = label.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
   const name = [...cleaned].slice(0, NAME_LIMIT).join("");
   return name === "" ? fallback : name;
+}
+
+/** Название из фрагмента ссылки: сперва декодируется, дальше как `cleanLabel`. */
+export function cleanName(fragment: string, fallback: string): string {
+  return cleanLabel(safeDecode(fragment.replace(/^#/, "")), fallback);
 }
 
 /** Хост без квадратных скобок IPv6. */

@@ -15,6 +15,10 @@ import {
   linkSchema,
   linkTitle,
   LINK_PARTNER_ROUTE,
+  networkDirectState,
+  NETWORK_DIRECT_HINT,
+  NETWORK_DIRECT_LABEL,
+  NETWORK_DIRECT_NEEDS_APP,
   OWNER_TITLES,
   ownerLabel,
   partnerOfLinkRoute,
@@ -106,14 +110,16 @@ describe("ссылки кампаний", () => {
     expect(list.ok && list.data.links[0]?.network).toBeNull();
   });
 
-  it("цель и прямая ссылка: разбираются из ответа, у ссылки сети прямой ссылки нет", async () => {
-    const network = { ...LINK, network: "adsgram", networkUrl: `${LINK.url}?record={record_data}`, target: "bot", directUrl: null };
+  it("цель и прямая ссылка: разбираются из ответа; у ссылки сети с целью Mini App адрес с метками, с другой целью — null (T-0181)", async () => {
+    const macros = "l-Ab12Cd34Ef_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}";
+    const network = { ...LINK, network: "adsgram", networkUrl: `${LINK.url}?record={record_data}` };
     const { fetch } = fakeFetch(
       json(200, {
         data: {
           links: [
             { ...LINK, target: "landing", clicks: 5, clicks30d: 5, launches: 1, directLaunches: 2, conversions: null },
-            { ...network, clicks: 9, clicks30d: 9, launches: 4, directLaunches: 0, conversions: { "1": counts(), "2": counts(), "3": counts() } },
+            { ...network, target: "app", directUrl: `https://t.me/rubezh_bot?startapp=${macros}`, clicks: 9, clicks30d: 9, launches: 4, directLaunches: 0, conversions: { "1": counts(), "2": counts(), "3": counts() } },
+            { ...network, target: "bot", directUrl: null, clicks: 9, clicks30d: 9, launches: 4, directLaunches: 0, conversions: { "1": counts(), "2": counts(), "3": counts() } },
           ],
           postback: { adsgramToken: true },
         },
@@ -122,8 +128,29 @@ describe("ссылки кампаний", () => {
     const list = await fetchLinks(new AdminApi(fetch));
     expect(list.ok && list.data.links.map((link) => [link.target, link.directUrl])).toEqual([
       ["landing", "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef"],
+      ["app", `https://t.me/rubezh_bot?startapp=${macros}`],
       ["bot", null],
     ]);
+    // Макросы в адресе остаются буквально: сеть ищет `{click_id}`, а не `%7Bclick_id%7D`.
+    expect(list.ok && list.data.links[1]?.directUrl).toContain("{record_data}");
+    expect(list.ok && list.data.links[1]?.directUrl).not.toContain("%7B");
+  });
+
+  it("прямая ссылка для рекламы: готова, нужна цель Mini App или ещё недоступна", () => {
+    const direct = "https://t.me/rubezh_bot?startapp=l-Ab12Cd34Ef_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}";
+    expect(networkDirectState({ target: "app", directUrl: direct })).toBe("ready");
+    expect(networkDirectState({ target: "bot", directUrl: null })).toBe("needs_app");
+    expect(networkDirectState({ target: "landing", directUrl: null })).toBe("needs_app");
+    expect(networkDirectState({ target: "app", directUrl: null })).toBe("unavailable");
+    // Адрес есть — готова, какой бы ни была цель в ответе старого сервера.
+    expect(networkDirectState({ target: "bot", directUrl: direct })).toBe("ready");
+  });
+
+  it("тексты прямой ссылки для рекламы: подпись, подсказка про запуски и объяснение для цели не Mini App", () => {
+    expect(NETWORK_DIRECT_LABEL).toBe("Прямая ссылка для рекламы");
+    expect(NETWORK_DIRECT_HINT).toContain("только запуск");
+    expect(NETWORK_DIRECT_HINT).toContain("кабинете AdsGram");
+    expect(NETWORK_DIRECT_NEEDS_APP).toContain("64 знаков");
   });
 
   it("цель, о которой панель не знает, — Mini App, а не сломанный список", async () => {

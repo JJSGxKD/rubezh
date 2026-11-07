@@ -86,7 +86,7 @@ erDiagram
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
     LINK |o..o{ ACCOUNT_SESSION : "start_ref = auto_key, вид tagged (Р116), без внешнего ключа"
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
-    LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
+    LINK_CLICK |o--o{ AD_CONVERSION : "клик, который привёл новичка; у запуска по прямой ссылке клика нет"
     ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
     PURCHASE |o--o{ AD_CONVERSION : "оплата — первая или повторная покупка, по строке на назначение"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
@@ -180,7 +180,7 @@ erDiagram
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
         enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|tagged|unknown"
-        string start_param "nullable: из подписанного initData"
+        string start_param "nullable: из подписанного initData, до 512 знаков; у прямой ссылки сети — l-<код>_<метки>"
         string start_ref "nullable: код клика, id партнёра Telegram, набор пар ссылки с метками"
         string client_platform "nullable: подсказка клиента"
         string client_version "nullable"
@@ -194,14 +194,14 @@ erDiagram
         uuid account_id PK,FK
         datetime first_at "самая ранняя сессия"
         enum first_start_kind
-        string first_start_param "nullable"
+        string first_start_param "nullable: до 512 знаков"
         string first_start_ref "nullable"
         string first_client_platform "nullable"
         enum first_device_class
         datetime last_seen_at
         datetime last_touch_at "nullable: последняя сессия по ссылке"
         enum last_start_kind "nullable"
-        string last_start_param "nullable"
+        string last_start_param "nullable: до 512 знаков"
         string last_start_ref "nullable"
     }
 
@@ -613,7 +613,7 @@ erDiagram
         string network "имя назначения, как destination: колонка нужна откату кода"
         string destination "adsgram|s2s|partner; CHECK"
         string link_code FK
-        string click_id FK "уникален с целью и назначением при цели 1, 2, 4: одна регистрация, первая покупка и возврат на клик"
+        string click_id FK "nullable: пуст у запуска по прямой ссылке; с целью и назначением при цели 1, 2, 4 уникален: одна регистрация, первая покупка и возврат на клик, а без клика — на аккаунт"
         uuid account_id FK
         int goal "код события: 1 регистрация, 2 первая покупка, 3 повторная, 4 возврат на следующий день; CHECK 1–4"
         uuid purchase_id FK "nullable, уникален с назначением: у целей 2 и 3 — всегда, у остальных — никогда"
@@ -625,6 +625,7 @@ erDiagram
         string last_error "nullable: ответ сети, без токена"
         datetime created_at
         datetime sent_at "nullable: есть ровно у отправленной, CHECK"
+        json network_params "nullable: метки сети с прямого запуска, как у link_click; у конверсии по клику пусто; обнуляются через 31 сутки"
     }
 
     FEATURE_FLAG {
@@ -1094,6 +1095,7 @@ erDiagram
         int place "с единицы; при равном времени выше показавший раньше"
         int board_size "игроков в таблице своей доски аккаунта"
         string board "common / full: доска аккаунта на момент закрытия (T-0114), по умолчанию common"
+        string division "ruby / gold / silver / bronze: по месту и размеру доски на закрытии (T-0295); null у сезонов, закрытых раньше"
     }
 
     SEASON_REWARD {
@@ -1477,14 +1479,20 @@ erDiagram
   первой, и её первичный ключ делает закрытие идемпотентным при любом числе
   реплик. Незакрытых сезонов в таблице нет — идущую неделю показывает живая
   таблица в Redis (`seasons:<сезон>:<сложность>` — общая — и
-  `seasons:<сезон>:full:<сложность>` — полная, проекции `run`). Итог
-  считается из `run` (`ranked`, `finished_at` в окне недели), а не из Redis,
+  `seasons:<сезон>:full:<сложность>` — полная, проекции `run`; сезон по очкам —
+  те же ключи с `pts:` перед ключом сезона, `tasks/T-0294`). Итог
+  считается из `run` (`ranked`, `finished_at` в окне недели; в сезоне по очкам —
+  по `points`, в сезоне по времени — по `survival_sec`, в `best_sec` лежит то
+  число, что ранжировало сезон), а не из Redis,
   поэтому снятие забега модератором до закрытия учтено само. Награда одна на
   пару (сезон, аккаунт) и ждёт «Забрать». Таблиц две на сложность (Р104,
   `tasks/T-0114`): аккаунт со скрытым ограничением «Отдельная доска» на момент
   закрытия ранжируется в полной среди всех, остальные — в общей без таких
   аккаунтов; `season_result.board` и `board_size` — своей доски, награды те же и
-  только внутриигровые (монеты и престиж). Монеты кладёт кошелёк ключом
+  только внутриигровые (монеты и престиж). Дивизион (`season_result.division`,
+  `tasks/T-0295`, Р152) пишется при закрытии тем же проходом по месту и размеру
+  доски (рубин — первый процент, золото — 10 %, серебро — 35 %, остальные —
+  бронза) и наград не меняет; у сезонов, закрытых до задачи, он `null`. Монеты кладёт кошелёк ключом
   `season:<сезон>:<аккаунт>` с причиной `season_reward`, потом `status`
   становится `claimed` условным `UPDATE`. Проверки вида, статуса и места —
   `CHECK` в миграции. Всё уходит вместе с аккаунтом; план вайпа оставляет
@@ -1685,7 +1693,10 @@ erDiagram
   событие для одного назначения (T-0069): `destination` — `adsgram`, `s2s`
   или `partner`, `goal` — код события (`registration`, `purchase_first`,
   `purchase_repeat`, `d1_return`), ключи — на (клик, цель, назначение) и
-  (оплата, назначение).
+  (оплата, назначение). Запуск по прямой ссылке на Mini App (T-0181, Р121)
+  клика не оставляет: `click_id` пуст, метки сети лежат на самой строке в
+  `network_params`, а регистрацию, первую покупку и возврат держит ключ на
+  (аккаунт, цель, назначение) при пустом `click_id`.
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -2421,7 +2432,7 @@ flowchart LR
     WIPE -. "начисления по ключам покупок и wipe:*" .-> WALLET
     CADDY -- "/api/v1/seasons" --> SEASONS
     SEASONS -- "season, season_result, season_reward; итоги из run" --> PG
-    SEASONS -- "seasons:сезон:сложность, лок закрытия" --> REDIS
+    SEASONS -- "seasons:[pts:]сезон:сложность, лок закрытия" --> REDIS
     RUNS -. "записанный забег и смена ранга, RunsHooks" .-> SEASONS
     SEASONS -. "награда ключом season:сезон:аккаунт" .-> WALLET
     SEASONS -. "принятые друзья для таблицы друзей" .-> FRIENDS
@@ -2595,9 +2606,9 @@ sequenceDiagram
             RU->>RU: вердикт: слоты оружия, время по часам сервера,<br/>темп убийств и уровней, отпечаток контента
             RU->>DB: итог с вердиктом и причинами
             opt вердикт ok и без читов
-                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:{сложность} (общая)<br/>и runs:leaderboard:full:{сложность} (полная);<br/>победа над стражем — ещё SADD в lb:rubezh:{сложность}
+                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:pts:{сложность} (общая)<br/>и runs:leaderboard:pts:full:{сложность} (полная) —<br/>счёт доски — очки забега;<br/>победа над стражем — ещё SADD в lb:rubezh:{сложность}
             end
-            RU-->>Q: место, лучшее время, вердикт
+            RU-->>Q: место, время лучшего по очкам забега, вердикт
             RU--)H: записан новый забег
             H--)R: сводка плейтеста — счётчики
             H--)R: подозрительный — карточка в очередь admin-notify,<br/>не чаще раза в час на аккаунт
@@ -3569,10 +3580,13 @@ sequenceDiagram
     L--)DB: link_click + network_params (белый список профиля сети)
     L-->>U: запуск игры с c-<клик>
     Note over U,DB: вход: acquisition.first_start_ref = клик, аккаунт создан после клика
+    AG-->>U: прямая ссылка: t.me/<бот>?startapp=l-<код>_campaign-…_clickid-…_record-…
+    Note over U,DB: клика у сервера нет: вход по подписанному initData, first_start_kind = link,<br/>first_start_param = весь параметр с метками (до 512 знаков)
 
     loop раз в минуту
         C->>DB: дописать регистрации: первый забег от 30 с за 7 суток или первый запуск
         C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
+        C->>DB: то же для запуска по прямой ссылке (direct-launch-sweep): метки из first_start_param в network_params строки, click_id пуст
         Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
         C->>DB: созревшие pending, до 100
         C->>D: подготовить запрос по событию
@@ -3591,7 +3605,7 @@ sequenceDiagram
                 C->>DB: failed — повторить можно из панели
             end
         end
-        C->>DB: макросы кликов старше 31 суток → NULL
+        C->>DB: макросы кликов и network_params конверсий старше 31 суток → NULL
     end
 ```
 
@@ -3886,6 +3900,7 @@ sequenceDiagram
                 P-->>S: 0 строк — пропустить, события нет
             else вставлена
                 S->>P: INSERT season_result — два rank(): общая без аккаунтов с отдельной доской, полная по всем; строка из доски аккаунта
+                S->>P: UPDATE season_result: division по place и board_size (рубин / золото / серебро / бронза)
                 S->>P: INSERT season_reward пачками — награда за место или за порог
                 S->>P: UPDATE season: players, rewarded
                 P-->>S: коммит
@@ -4088,8 +4103,8 @@ sequenceDiagram
     participant N as Узел подписки
 
     S->>R: SET proxy-subscription:refresh:lock NX PX 120000
-    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***)
-    P-->>S: список ссылок (base64 или текст)
+    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***, заголовки User-Agent, x-hwid и x-device-os)
+    P-->>S: список ссылок (base64 или текст) либо JSON-конфиги Xray
     S->>K: parseSubscription, assignSlots, buildXrayConfig
     S->>V: config.json атомарно: временный файл и rename
     S->>S: транзакция: узлы upsert, пропавшие удалены, итог, трафик, срок

@@ -4,7 +4,7 @@ import type { ShareLinkResult } from "../node.js";
 import { fail, finishNode } from "./common.js";
 
 /** Шифры Xray; ключ — как называют в ссылках, значение — имя в конфиге. */
-const METHODS: ReadonlyMap<string, string> = new Map([
+export const SHADOWSOCKS_METHODS: ReadonlyMap<string, string> = new Map([
   ["aes-128-gcm", "aes-128-gcm"],
   ["aes-256-gcm", "aes-256-gcm"],
   ["chacha20-poly1305", "chacha20-poly1305"],
@@ -63,7 +63,7 @@ export function parseShadowsocks(link: string): ShareLinkResult {
   if (host === "" || port === null) return fail("malformed", "port");
 
   if (query.has("plugin")) return fail("unsupported_option", "plugin");
-  const cipher = METHODS.get(method.toLowerCase());
+  const cipher = SHADOWSOCKS_METHODS.get(method.toLowerCase());
   if (cipher === undefined) return fail("unsupported_cipher", "method");
 
   return {

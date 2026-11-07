@@ -170,3 +170,40 @@ describe("Caddyfile: панель за CDN", () => {
     expect(comment).toMatch(/Клиент, лендинг и панель — за CDN Bunny/);
   });
 });
+
+// Политика источников сборки (`csp.txt` → сниппет `edge/<приложение>.caddy`) —
+// политика страниц приложения, а не всего домена. Подключённая на уровне домена,
+// она ложится и на `/r/*`: страница переходника ставит свою политику с хэшем
+// единственного скрипта, браузер исполняет обе, и клиентская режет переход в
+// Telegram — человек остаётся на странице с кнопками (02.11 → 06.11.2026).
+describe("Caddyfile: политика сборки — только страницам приложения", () => {
+  const cases = [
+    { domain: "tg.{$DOMAIN}", snippet: "import edge/web-telegram*.caddy", spa: "import spa web-telegram" },
+    { domain: ADMIN_DOMAIN, snippet: "import edge/admin*.caddy", spa: "import spa admin" },
+  ];
+
+  for (const { domain, snippet, spa } of cases) {
+    it(`${domain}: сниппет политики — внутри handle приложения, рядом с ${spa}`, () => {
+      const block = blockOf(domain);
+      // На отступе в одну табуляцию — значит, на уровне домена.
+      expect(block.split("\n"), "политика на уровне домена").not.toContain(`\t${snippet}`);
+      const app = handleBody(block, "handle {");
+      expect(app, "у домена нет handle приложения").toBeDefined();
+      expect(app).toContain(snippet);
+      expect(app).toContain(spa);
+    });
+
+    it(`${domain}: в маршруты бэкенда политика сборки не попадает`, () => {
+      const block = blockOf(domain);
+      for (const route of ["handle /r/* {", "handle /api/* {", ADMIN_PREFIX]) {
+        const body = handleBody(block, route);
+        if (body !== undefined) expect(body, route).not.toContain("import edge/");
+      }
+    });
+  }
+
+  it("переходник /r/* на доменах с политикой сборки уходит в API без чужих заголовков", () => {
+    const body = handleBody(blockOf("tg.{$DOMAIN}"), "handle /r/* {");
+    expect(body?.trim()).toBe(PROXY_API);
+  });
+});
