@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
 import { checkRunnerLines } from "../release/pr-check.mjs";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { AHEAD_LABEL, COLUMNS, OWNER_LABEL, REVIEW_LABEL, REWORK_LABEL, STATUS_LABELS, WORK_LABEL, aheadCheck, nextOrder, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank } from "../tasks/board.mjs";
+import { AHEAD_LABEL, COLUMNS, OWNER_LABEL, REVIEW_LABEL, REWORK_LABEL, STATUS_LABELS, WORK_LABEL, aheadCheck, nextOrder, prStatus, accountStreams, boardCounters, flowPrompt, knownAccounts, hangingDays, launchedBy, reworkRounds, classify, epicStreamsBadge, isCiRed, nextTasks, waitingOn, renderStreamsText, statusBadge, streamRows, streamsSummary, batchRank, previousAttemptNote } from "../tasks/board.mjs";
 
 // Доска задач: каждая задача — ровно в одной колонке.
 
@@ -1159,5 +1159,74 @@ describe("брошенный захват на доске", () => {
   it("без набора брошенных доска прежняя", () => {
     const board = classify(tasks, taken, [], [], EPIC_ORDER);
     expect(ids(board.inProgress)).toEqual(["T-0010", "T-0012"]);
+  });
+});
+
+// T-0390, Р195: ветка прежней попытки ничего не держит, подсказка про работу прежней попытки.
+describe("попытки на доске", () => {
+  const tasks = [
+    task("T-0019", { zones: ["a/**"], attempt: "2" }),
+    task("T-0020", { zones: ["a/b.ts"] }),
+    task("T-0021", { attempt: "2" }),
+  ];
+
+  it("задача с attempt: 2 и только прежней веткой — свободна, зон не держит", () => {
+    const board = classify(tasks, [], [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(board.free)).toEqual(["T-0019", "T-0020", "T-0021"]);
+    expect(board.inProgress).toEqual([]);
+  });
+
+  it("задача с веткой текущей попытки — в работе и держит зоны соседа", () => {
+    const board = classify(tasks, ["T-0019"], [], ["a/b.ts"], EPIC_ORDER);
+    expect(ids(board.inProgress)).toEqual(["T-0019"]);
+    expect(ids(board.blocked)).toEqual(["T-0020"]);
+  });
+
+  it("PR из прежней ветки не делает задачу «на ревью» и не держит её", () => {
+    const prs = [{ number: 41, headRefName: "task/T-0021", isDraft: false, labels: [{ name: "на ревью" }] }];
+    const board = classify(tasks, [], prs, [], EPIC_ORDER);
+    expect(ids(board.review)).toEqual([]);
+    expect(ids(board.free)).toContain("T-0021");
+  });
+
+  it("PR из ветки текущей попытки «на ревью» — колонка «На ревью» с номером PR", () => {
+    const prs = [{ number: 42, headRefName: "task/T-0021-2", isDraft: false, labels: [{ name: "на ревью" }] }];
+    const board = classify(tasks, ["T-0021"], prs, [], EPIC_ORDER);
+    expect(board.review.map((entry: { task: { id: string }; pr: number }) => [entry.task.id, entry.pr])).toEqual([["T-0021", 42]]);
+  });
+
+  it("PR из ветки текущей попытки на доработке — «Доработка»", () => {
+    const prs = [{ number: 43, headRefName: "task/T-0021-2", isDraft: false, labels: [{ name: "доработка" }] }];
+    const board = classify(tasks, ["T-0021"], prs, [], EPIC_ORDER);
+    expect(ids(board.rework)).toEqual(["T-0021"]);
+  });
+
+  it("зависимость в попытке 2: задел берётся по её PR текущей попытки", () => {
+    const withDependency = [task("T-0030", { attempt: "2" }), task("T-0031", { depends_on: ["T-0030"] })];
+    const old = [{ number: 50, headRefName: "task/T-0030", isDraft: false, labels: [{ name: "на ревью" }] }];
+    expect(aheadCheck(withDependency[1], withDependency, old).problems).toHaveLength(1);
+    const current = [{ number: 51, headRefName: "task/T-0030-2", isDraft: false, labels: [{ name: "на ревью" }] }];
+    expect(aheadCheck(withDependency[1], withDependency, current).problems).toEqual([]);
+  });
+
+  it("прежняя работа: свободная задача получает previousBranch, остальным он не нужен", () => {
+    const previousWork = new Map([["T-0021", "task/T-0021"]]);
+    const board = classify(tasks, [], [], [], EPIC_ORDER, new Set(), previousWork);
+    const entry = board.free.find((candidate: { task: { id: string } }) => candidate.task.id === "T-0021");
+    expect(entry.previousBranch).toBe("task/T-0021");
+    expect(board.free.find((candidate: { task: { id: string } }) => candidate.task.id === "T-0019").previousBranch).toBeUndefined();
+  });
+
+  it("подсказка: «попытка N, работа прежней попытки — task/T-NNNN (--from)»", () => {
+    expect(previousAttemptNote({ task: task("T-0021", { attempt: "2" }), previousBranch: "task/T-0021" })).toBe("попытка 2, работа прежней попытки — task/T-0021 (--from)");
+    expect(previousAttemptNote({ task: task("T-0021", { attempt: "3" }), previousBranch: "task/T-0021-2" })).toBe("попытка 3, работа прежней попытки — task/T-0021-2 (--from)");
+    expect(previousAttemptNote({ task: task("T-0021", { attempt: "2" }) })).toBeUndefined();
+  });
+
+  it("классификация без попыток прежняя: ветка task/T-NNNN занимает задачу", () => {
+    const plain = [task("T-0050"), task("T-0051")];
+    const board = classify(plain, ["T-0050"], [], [], EPIC_ORDER);
+    expect(ids(board.inProgress)).toEqual(["T-0050"]);
+    expect(ids(board.free)).toEqual(["T-0051"]);
   });
 });

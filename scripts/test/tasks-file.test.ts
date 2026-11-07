@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 // @ts-expect-error — утилита на чистом JS, типов у неё нет
-import { SELF_MERGE_ALLOWED, SELF_MERGE_FORBIDDEN, badgeLine, checkPrSection, parseFrontmatter, parseOwner, relativeTaskLink, selfMergePathProblem, taskBadge, validateTask, withBadgeLine, withTaskLinks } from "../tasks/task-file.mjs";
+import { SELF_MERGE_ALLOWED, SELF_MERGE_FORBIDDEN, badgeLine, checkPrSection, parseFrontmatter, parseOwner, relativeTaskLink, selfMergePathProblem, taskBadge, validateTask, withBadgeLine, withRestartedHeader, withTaskLinks } from "../tasks/task-file.mjs";
 
 // Шапка задачи — строгое подмножество YAML (tasks/T-0002-task-cli.md, «Решения»):
 // разбирает свой парсер, любая другая конструкция — ошибка с номером строки.
@@ -209,6 +209,36 @@ describe("исполнители, автор и поток", () => {
       expect(errors[0], String(bad)).toContain("T-0003-x.md: поле batch");
       expect(errors[0], String(bad)).toContain("пачки");
     }
+  });
+
+  it("attempt необязательна: нет поля — без ошибок; от 2 — без ошибок", () => {
+    expect(validateTask("T-0003-x.md", valid())).toEqual([]);
+    for (const good of ["2", "3", "9", "10", "42"]) {
+      expect(validateTask("T-0003-x.md", { ...valid(), attempt: good }), good).toEqual([]);
+    }
+  });
+
+  it("attempt: 1 — ошибка «попытка 1 пишется без поля»", () => {
+    const errors = validateTask("T-0003-x.md", { ...valid(), attempt: "1" });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("T-0003-x.md: поле attempt");
+    expect(errors[0]).toContain("попытка 1 пишется без поля");
+  });
+
+  it("attempt: 0, дробь, текст, ведущий ноль, пусто и null — ошибка «целое число от 2»", () => {
+    for (const bad of ["0", "2.5", "два", "02", "-2", "", null]) {
+      const errors = validateTask("T-0003-x.md", { ...valid(), attempt: bad });
+      expect(errors, String(bad)).toHaveLength(1);
+      expect(errors[0], String(bad)).toContain("T-0003-x.md: поле attempt");
+      expect(errors[0], String(bad)).toContain("целое число от 2");
+    }
+  });
+
+  it("шапка с attempt последней строкой разбирается и проходит проверку", () => {
+    const parsed = parseFrontmatter(headerWith((lines) => lines.splice(lines.indexOf("---", 1), 0, "batch: 2", "attempt: 2")));
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.data.attempt).toBe("2");
+    expect(validateTask("T-0003-x.md", parsed.data)).toEqual([]);
   });
 
   it("version больше не допускается: одна ошибка, которая называет замену", () => {
@@ -645,5 +675,26 @@ describe("selfMergePathProblem: путь изменённого файла", () 
   it("путь в кавычках git и с «..» не проходит", () => {
     expect(selfMergePathProblem('"docs/\\321\\204.md"', "T-0003-x.md")).not.toBeNull();
     expect(selfMergePathProblem("docs/../backend/x.ts", "T-0003-x.md")).not.toBeNull();
+  });
+});
+
+describe("withRestartedHeader: шапка после снятия захвата", () => {
+  const taken = ["---", "id: T-0003", "status: in-progress", "owner: claude-1 / sonnet-5.5 / medium", "size: S", "batch: 4", "---", "", "# T-0003. Заголовок", "", "status: тело не трогаем", ""].join("\n");
+
+  it("попытка 2: status ready, owner пустой, attempt — последняя строка шапки после batch", () => {
+    const updated = withRestartedHeader(taken, 2);
+    const header = updated.slice(0, updated.indexOf("\n---", 4)).split("\n");
+    expect(header.at(-1)).toBe("attempt: 2");
+    expect(header.at(-2)).toBe("batch: 4");
+    expect(header).toContain("status: ready");
+    expect(header).toContain("owner:");
+    expect(updated.endsWith("status: тело не трогаем\n")).toBe(true);
+  });
+
+  it("поле уже есть — заменяется на месте, второй строки нет", () => {
+    const again = withRestartedHeader(withRestartedHeader(taken, 2), 3);
+    expect(again.match(/^attempt:/gm)).toEqual(["attempt: 3"]);
+    expect(parseFrontmatter(again).data.attempt).toBe("3");
+    expect(parseFrontmatter(again).errors).toEqual([]);
   });
 });
