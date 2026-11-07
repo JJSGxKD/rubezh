@@ -183,7 +183,7 @@ function closedWithoutMerge(dependency, branches, openPrs) {
  * Раскладывает задачи по колонкам.
  *
  * - `tasks` — поля задач с `fileName` (как в `readTasks`);
- * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
+ * - `taken` — id задач, у которых на `origin` есть ветка текущей попытки (`task/T-NNNN` или `task/T-NNNN-N`);
  * - `prs` — открытые PR `{ number, headRefName, isDraft, labels?, body?, statusCheckRollup? }`
  *   или `null`, если список получить не удалось (нет `gh`): тогда «На ревью» сливается с
  *   «В работе». Колонку PR задаёт `prStatus` (метка, Р172): «в работе» — «В работе» (с номером
@@ -633,7 +633,7 @@ export function flowPrompt({ account, executor, effort, runner }) {
     `своей модели и уровня — pnpm task next --executor ${executor} --effort ${effort}${runnerFlag},`,
     "доработку первой (pnpm task resume), иначе pnpm task claim T-NNNN",
     `--owner "${account} / ${executor} / ${effort}". Делай строго по спецификации,`,
-    "только в ветке task/T-NNNN, в описании PR — строки Поток и Запустил, в dev и main не пушь, PR не вливай — вливают",
+    "только в ветке task/T-NNNN (после снятия захвата — task/T-NNNN-N), в описании PR — строки Поток и Запустил, в dev и main не пушь, PR не вливай — вливают",
     "тимлиды. Неясно — черновик PR с разделом «Вопросы» и цитатой строки",
     "спецификации, независимые шаги продолжай. PR открыт — сразу следующая",
     "задача, ответа не жди: закончит PR тот поток, что первым возьмёт его на",
