@@ -29,6 +29,7 @@ import {
   passiveRange,
   regularEnemies,
   rubezhGuide,
+  siegeGuide,
   speedClass,
   firstLevelWeapons,
   levelWeapons,
@@ -105,6 +106,7 @@ function Basics(): ReactNode {
   }));
 
   const rubezh = rubezhGuide();
+  const siege = siegeGuide();
 
   return (
     <>
@@ -119,6 +121,14 @@ function Basics(): ReactNode {
           text={t("guide.basics.rubezh.text", { time: formatDuration(rubezh.atSec), guard: t(`enemy.${rubezh.guard.id}.name`), mul: `×${String(rubezh.rewardMul)}` })}
         />
       )}
+
+      {/* Осада стоящего: кольцо на земле — обязательное чтение боя, поэтому правило есть и в гайдбуке (T-0392). */}
+      <Topic
+        index={1}
+        icon={<Swords size={20} />}
+        title={t("guide.siege.title")}
+        text={t("guide.siege.text", { time: formatDuration(siege.fromSec), hold: String(Math.round(siege.holdSec)) })}
+      />
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>
         <div className="mx-auto max-w-[300px]">
