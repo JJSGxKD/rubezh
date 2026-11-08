@@ -3,8 +3,9 @@ import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { buildScore } from "../run/hunt-log";
+import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
-import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
+import { cardToolsAt, unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { buildScoreOf } from "../sim/player-power";
 import { isPressureActive } from "../sim/pressure";
@@ -157,6 +158,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    // Переброс и изгнание даёт уровень аккаунта, как в забеге (`run-world.ts`); пользуется ими
+    // только сильный бот, остальные боты заряды не тратят, и их забеги от этого не меняются.
+    ...(accountLevel === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, accountLevel) }),
     rubezh: RUBEZH,
     limits: content.limits,
     timeline: content.timeline,
@@ -193,8 +197,19 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     // вхолостую до конца прогона.
     if (isAwaitingChoice(world)) {
       if (firstLevelUpSec === 0) firstLevelUpSec = world.stats.elapsedSec;
-      chooseUpgrade(world, bot.choose(world.progression.offers, world));
-      picks++;
+      const choice = bot.choose(world.progression.offers, world);
+      // Переброс и изгнание выбора не закрывают: мир ждёт дальше, а заряды конечны.
+      if (isCardToolCommand(choice) && applyCardTool(world, choice) !== null) {
+        continue;
+      }
+      if (isCardToolCommand(choice)) {
+        // Команда не сработала (заряда нет): первая карточка, иначе мир ждал бы вечно.
+        chooseUpgrade(world, world.progression.offers[0].id);
+        picks++;
+      } else {
+        chooseUpgrade(world, choice);
+        picks++;
+      }
       continue;
     }
 

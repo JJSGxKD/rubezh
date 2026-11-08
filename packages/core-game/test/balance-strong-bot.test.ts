@@ -1,5 +1,7 @@
 import type { EnemyDef, UpgradeOption } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
+import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { WEAPONS } from "../src/content/weapons";
 import { POWER_PROFILES, simulateBalanceRun } from "../src/game/balance";
 import { createStrongBot, STRONG_BOT, STAND_FROM_SEC } from "../src/game/balance/strong-bot";
 import { spawnGem } from "../src/game/sim/gems";
@@ -150,6 +152,70 @@ describe("выбор карточек", () => {
     const bot = createStrongBot({ stance: "kite" });
     const offers = [offer("heal", ""), offer("limit", "speed")];
     expect(bot.choose(offers)).toBe(offers[0].id);
+  });
+});
+
+/** Мир, который ждёт выбора карточки: настоящий контент, заряды переброса и изгнания, заданные карточки. */
+function worldWaiting(offers: UpgradeOption[], tools: { reroll: number; banish: number }): World {
+  const w = createWorld({
+    seed: 1,
+    enemies: [RAT],
+    weapons: WEAPONS,
+    passives: PASSIVES,
+    loadoutLimits: LOADOUT_LIMITS,
+    startingWeaponId: "spark",
+    cardTools: tools,
+    config: { progressionEnabled: true },
+  });
+  w.progression.offers = offers;
+  return w;
+}
+
+describe("переброс и изгнание карточек", () => {
+  it("в плане ещё есть «Очаг», а на карточках его нет — переброс", () => {
+    const offers = [offer("passive_new", "reach"), offer("passive_new", "volley"), offer("weapon_new", "knife")];
+    const w = worldWaiting(offers, { reroll: 1, banish: 0 });
+    expect(createStrongBot({ stance: "kite" }).choose(offers, w)).toBe("~reroll");
+  });
+
+  it("нет заряда переброса — берёт лучшую из показанного", () => {
+    const offers = [offer("passive_new", "reach"), offer("passive_new", "might")];
+    const w = worldWaiting(offers, { reroll: 0, banish: 0 });
+    expect(createStrongBot({ stance: "kite" }).choose(offers, w)).toBe("passive_new:might:1");
+  });
+
+  it("на карточках есть «Очаг» — не перебрасывает: заряд остаётся на потом", () => {
+    const offers = [offer("passive_new", "reach"), offer("weapon_new", "hearth")];
+    const w = worldWaiting(offers, { reroll: 2, banish: 1 });
+    expect(createStrongBot({ stance: "kite" }).choose(offers, w)).toBe("weapon_new:hearth:1");
+  });
+
+  it("лучшее из показанного закрывает слот связке, перебросить нельзя — изгоняет его", () => {
+    // «Быстрота» заняла бы единственный слот подвижности, который ждёт «Магнит»
+    const offers = [offer("passive_new", "swiftness")];
+    const w = worldWaiting(offers, { reroll: 0, banish: 1 });
+    expect(createStrongBot({ stance: "kite" }).choose(offers, w)).toBe("~banish:passive_new:swiftness:1");
+  });
+
+  it("прогон с заданными зарядами заканчивается: команды расходуют заряды, а не зацикливаются", { timeout: 60_000 }, () => {
+    const run = simulateBalanceRun({ seed: 3, skill: "strong", stance: "kite", maxSec: 120, loadout: POWER_PROFILES.full.loadout });
+    expect(run.survivalSec).toBeGreaterThan(0);
+  });
+});
+
+describe("просвет в кольце врагов", () => {
+  it("кольцо врагов со всех сторон, кроме одной, — бот идёт в просвет", () => {
+    const w = world();
+    // кольцо по шестнадцати направлениям, пустое справа
+    const ring: [number, number][] = [];
+    const around: [number, number][] = [
+      [-1, 0], [-0.92, 0.38], [-0.92, -0.38], [-0.7, 0.7], [-0.7, -0.7], [-0.38, 0.92], [-0.38, -0.92],
+      [0, 1], [0, -1], [0.38, 0.92], [0.38, -0.92], [0.7, 0.7], [0.7, -0.7],
+    ];
+    for (const [x, y] of around) ring.push([x * 90, y * 90]);
+    placeEnemies(w, ring);
+
+    expect(createStrongBot({ stance: "kite" }).input(w).moveX).toBeGreaterThan(0.5);
   });
 });
 
