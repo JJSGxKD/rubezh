@@ -152,6 +152,9 @@ const RECIPE_PASSIVE = new Map<string, string>(
   WEAPONS.flatMap((weapon) => (weapon.evolvedFrom === undefined || weapon.recipe === undefined ? [] : [[weapon.evolvedFrom, weapon.recipe.passive] as const])),
 );
 
+/** До какого уровня единственное оружие качается раньше нового из плана. */
+const LONE_WEAPON_LEVELS = 3;
+
 /** Оценка карточки, меньше — лучше: ступень × 100 плюс место в таблице. */
 const RANK = { evolve: 0, planNew: 1, weaponLevel: 2, passiveLevel: 3, limit: 4, otherLevel: 5, rest: 6, blocker: 9 } as const;
 
@@ -236,6 +239,9 @@ function scoreOf(offer: UpgradeOption, context: PickContext): number {
       return (SLOT_BLOCKERS.includes(offer.refId) ? RANK.blocker : RANK.rest) * 100;
     }
     case "weapon_level":
+      // Единственное оружие качают первым, пока оно слабо: «Искра» первого уровня первые минуты никого
+      // не останавливает, а у владельца роль единственного играл «Очаг», и до его уровней дело не доходило.
+      if (context.weapons.size <= 1 && offer.level <= LONE_WEAPON_LEVELS && isLeading(offer.refId, context)) return RANK.evolve * 100 + 50;
       if (isLeading(offer.refId, context)) return RANK.weaponLevel * 100 + Math.max(0, PLAN.indexOf(`weapon:${offer.refId}`));
       return RANK.otherLevel * 100;
     case "passive_level": {

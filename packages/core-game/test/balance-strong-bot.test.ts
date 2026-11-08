@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { POWER_PROFILES, simulateBalanceRun } from "../src/game/balance";
-import { decodeInputLog } from "../src/game/diagnostics/input-log";
+import { decodeInputLog, INPUT_LOG_ENCODING } from "../src/game/diagnostics/input-log";
 import { pickCard, createStrongBot, STRONG_BOT, STAND_FROM_SEC, STAND_STEP } from "../src/game/balance/strong-bot";
 import veteranRun from "./fixtures/veteran-run-v0122.json";
 import { spawnGem } from "../src/game/sim/gems";
@@ -59,14 +59,24 @@ describe("стойка", () => {
     expect(stander().input(w).moveX).toBeLessThan(0);
   });
 
-  it("с 180 с без врагов рядом не двигается", () => {
+  it("с 180 с без врагов и добычи рядом не двигается", () => {
     const w = world();
     placeEnemies(w, [[STAND_STEP.radiusUnits + 60, 0]]);
-    placeGem(w, 150, 0);
 
     w.stats.elapsedSec = STAND_FROM_SEC;
     const bot = stander();
     for (let call = 0; call < 40; call++) expect(bot.input(w), `вызов ${String(call)}`).toEqual({ moveX: 0, moveY: 0 });
+  });
+
+  it("с 180 с без врагов рядом — короткий шаг к добыче, потом пауза", () => {
+    const w = world();
+    placeGem(w, 150, 0);
+    w.stats.elapsedSec = STAND_FROM_SEC;
+
+    const bot = stander();
+    for (let call = 0; call < STAND_STEP.ticks; call++) expect(bot.input(w).moveX, `шаг ${String(call)}`).toBeGreaterThan(0.99);
+    for (let call = 0; call < STAND_STEP.cooldownTicks; call++) expect(bot.input(w), `пауза ${String(call)}`).toEqual({ moveX: 0, moveY: 0 });
+    expect(bot.input(w).moveX).toBeGreaterThan(0.99);
   });
 
   it("с 180 с враг ближе радиуса шага — короткий шаг от него, потом снова стоит", () => {
@@ -174,7 +184,17 @@ describe("выбор карточек", () => {
 
   it("новое из плана идёт раньше развития оружия: так брал владелец", () => {
     const bot = createStrongBot({ stance: "kite" });
+    // оружия уже два: единственное оружие качается первым (следующий тест)
+    bot.choose([offer("weapon_new", "hearth")]);
+    bot.choose([offer("weapon_new", "spark")]);
     expect(bot.choose([offer("weapon_level", "spark", 2), offer("passive_new", "mending")])).toBe("passive_new:mending:1");
+  });
+
+  it("единственное оружие качается первым, пока ниже 4-го уровня", () => {
+    const bot = createStrongBot({ stance: "kite" });
+    bot.choose([offer("weapon_new", "spark")]);
+    expect(bot.choose([offer("passive_new", "vitality"), offer("weapon_level", "spark", 2)])).toBe("weapon_level:spark:2");
+    expect(bot.choose([offer("passive_new", "vitality"), offer("weapon_level", "spark", 4)])).toBe("passive_new:vitality:1");
   });
 
   it("оружие, чей навык рецепта уже взят, тоже ведёт к эволюции — и развивается первым", () => {
@@ -199,7 +219,10 @@ describe("выбор карточек", () => {
 });
 
 describe("запись забега владельца (v0.12.2, Р196)", () => {
-  const codes = decodeInputLog(veteranRun.input);
+  // JSON даёт кодировке тип `string`: сужаем проверкой значения, а не приведением типа.
+  const { input } = veteranRun;
+  if (input.encoding !== INPUT_LOG_ENCODING) throw new Error(`Фикстура: неожиданная кодировка ${input.encoding}`);
+  const codes = decodeInputLog({ encoding: input.encoding, ticks: input.ticks, data: input.data });
   const share = (fromSec: number, toSec: number): number => {
     const slice = codes.slice(fromSec * 60, Math.min(codes.length, toSec * 60));
     return slice.filter((code) => code >= 0).length / slice.length;
@@ -327,7 +350,7 @@ describe("сильный бот против уклоняющегося", () => 
       let dodgingSurvival = 0;
       let strongXp = 0;
       let dodgingXp = 0;
-      for (const seed of [1, 2, 3, 4, 5]) {
+      for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
         const common = { seed, startingWeaponId: "spark", maxSec: 300, loadout: POWER_PROFILES.average.loadout } as const;
         const strong = simulateBalanceRun({ ...common, skill: "strong", stance: "kite" });
         const dodging = simulateBalanceRun({ ...common, skill: "dodging" });
