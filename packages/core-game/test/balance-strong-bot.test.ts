@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { POWER_PROFILES, simulateBalanceRun } from "../src/game/balance";
-import { createStrongBot, STRONG_BOT, STAND_FROM_SEC } from "../src/game/balance/strong-bot";
+import { decodeInputLog } from "../src/game/diagnostics/input-log";
+import { pickCard, createStrongBot, STRONG_BOT, STAND_FROM_SEC, STAND_STEP } from "../src/game/balance/strong-bot";
+import veteranRun from "./fixtures/veteran-run-v0122.json";
 import { spawnGem } from "../src/game/sim/gems";
 import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 
@@ -47,17 +49,37 @@ describe("детерминизм", () => {
 });
 
 describe("стойка", () => {
-  it("«стоит» до 180 с двигается, а с 180 с не двигается", () => {
+  const stander = (): ReturnType<typeof createStrongBot> => createStrongBot({ stance: "stand" });
+
+  it("«стоит» до 180 с двигается как «бегает»", () => {
     const w = world();
     placeEnemies(w, [[100, 0]]);
 
     w.stats.elapsedSec = STAND_FROM_SEC - 1;
-    expect(createStrongBot({ stance: "stand" }).input(w).moveX).toBeLessThan(0);
+    expect(stander().input(w).moveX).toBeLessThan(0);
+  });
+
+  it("с 180 с без врагов рядом не двигается", () => {
+    const w = world();
+    placeEnemies(w, [[STAND_STEP.radiusUnits + 60, 0]]);
+    placeGem(w, 150, 0);
 
     w.stats.elapsedSec = STAND_FROM_SEC;
-    expect(createStrongBot({ stance: "stand" }).input(w)).toEqual({ moveX: 0, moveY: 0 });
-    w.stats.elapsedSec = STAND_FROM_SEC + 400;
-    expect(createStrongBot({ stance: "stand" }).input(w)).toEqual({ moveX: 0, moveY: 0 });
+    const bot = stander();
+    for (let call = 0; call < 40; call++) expect(bot.input(w), `вызов ${String(call)}`).toEqual({ moveX: 0, moveY: 0 });
+  });
+
+  it("с 180 с враг ближе радиуса шага — короткий шаг от него, потом снова стоит", () => {
+    const w = world();
+    placeEnemies(w, [[STAND_STEP.radiusUnits - 10, 0]]);
+    w.stats.elapsedSec = STAND_FROM_SEC + 30;
+
+    const bot = stander();
+    for (let call = 0; call < STAND_STEP.ticks; call++) expect(bot.input(w).moveX, `шаг ${String(call)}`).toBeLessThan(0);
+    // враг остался рядом, но шаг не повторяется, пока не прошла пауза
+    expect(bot.input(w)).toEqual({ moveX: 0, moveY: 0 });
+    for (let call = 0; call < STAND_STEP.cooldownTicks - 1; call++) bot.input(w);
+    expect(bot.input(w).moveX).toBeLessThan(0);
   });
 
   it("«бегает» не останавливается и после 180 с", () => {
@@ -152,6 +174,60 @@ describe("выбор карточек", () => {
     const bot = createStrongBot({ stance: "kite" });
     const offers = [offer("heal", ""), offer("limit", "speed")];
     expect(bot.choose(offers)).toBe(offers[0].id);
+  });
+});
+
+describe("запись забега владельца (v0.12.2, Р196)", () => {
+  const codes = decodeInputLog(veteranRun.input);
+  const share = (fromSec: number, toSec: number): number => {
+    const slice = codes.slice(fromSec * 60, Math.min(codes.length, toSec * 60));
+    return slice.filter((code) => code >= 0).length / slice.length;
+  };
+
+  it("фикстура — только игровые поля, без следов игрока и устройства", () => {
+    const text = JSON.stringify(veteranRun);
+    for (const field of ["reportId", "runId", "platformUserId", "installId", "device", "gpu", "perf", "timeline", "startedAt"]) {
+      expect(text, field).not.toContain(`"${field}"`);
+    }
+    expect(veteranRun.startingWeaponId).toBe("hearth");
+  });
+
+  it("профиль «ветеран» равен набору из записи", () => {
+    expect(POWER_PROFILES.veteran.loadout).toEqual(veteranRun.loadout);
+    expect(POWER_PROFILES.veteran.startingWeaponId).toBe(veteranRun.startingWeaponId);
+  });
+
+  it("доля движения владельца: половина до 3-й минуты, 44% до 10-й, 4% после", () => {
+    expect(codes.length).toBe(veteranRun.input.ticks);
+    expect(share(0, 180)).toBeCloseTo(0.5, 2);
+    expect(share(180, 600)).toBeCloseTo(0.44, 2);
+    expect(share(600, 1242)).toBeCloseTo(0.037, 2);
+  });
+
+  it("первые двадцать выборов бота совпадают с выбором владельца", () => {
+    // Бот видит те же карточки и тот же набор, что и владелец: набор копится по выборам владельца.
+    const passives = new Set<string>();
+    const weapons = new Set<string>([veteranRun.startingWeaponId]);
+    const asOffer = (id: string): UpgradeOption => {
+      const [kind, refId, level] = id.split(":");
+      return offer(kind as UpgradeOption["kind"], refId, Number(level));
+    };
+    const choices = new Map(veteranRun.choices.map(([tick, id]) => [tick as number, id as string]));
+    const mismatches: string[] = [];
+    let compared = 0;
+    for (const [tick, ids] of veteranRun.offers) {
+      const owner = choices.get(tick as number);
+      if (owner === undefined || compared >= 20) continue;
+      const offers = (ids as string).split(",").map(asOffer);
+      const picked = pickCard(offers, { passives, weapons, freeWeaponSlots: null, planIncomplete: false });
+      if (picked.id !== owner) mismatches.push(`${String(tick)}: бот ${picked.id}, владелец ${owner}`);
+      compared++;
+      const ownerOffer = asOffer(owner);
+      if (ownerOffer.kind === "passive_new" || ownerOffer.kind === "passive_level") passives.add(ownerOffer.refId);
+      if (ownerOffer.kind === "weapon_new" || ownerOffer.kind === "weapon_level") weapons.add(ownerOffer.refId);
+    }
+    expect(compared).toBe(20);
+    expect(mismatches, mismatches.join("; ")).toHaveLength(0);
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STRONG_BOT_TARGETS } from "../src/content/balance-targets";
+import { contentBeforeT0388 } from "./helpers/content-before-t0388";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -45,6 +46,25 @@ function strongRuns(profile: PowerProfile, stance: StrongStance): BalanceRunResu
   return runs;
 }
 
+/** Прогоны «стоит» с профилем «ветеран»: стартовое оружие — «Очаг» из записи; контент нынешний или до T-0388. */
+function veteranStandRuns(content?: ReturnType<typeof contentBeforeT0388>): BalanceRunResult[] {
+  const runs: BalanceRunResult[] = [];
+  for (let seed = 1; seed <= STRONG_BOT_TARGETS.stand.seeds; seed++) {
+    runs.push(
+      simulateBalanceRun({
+        seed,
+        skill: "strong",
+        stance: "stand",
+        startingWeaponId: POWER_PROFILES.veteran.startingWeaponId,
+        maxSec: 2400,
+        loadout: POWER_PROFILES.veteran.loadout,
+        ...(content === undefined ? {} : { content }),
+      }),
+    );
+  }
+  return runs;
+}
+
 const strongMedian = (profile: PowerProfile, stance: StrongStance): number => summarizeRuns(strongRuns(profile, stance)).medianSurvivalSec;
 
 describe("сильный бот: лесенка профилей (Р183, Р194)", () => {
@@ -70,25 +90,24 @@ describe("сильный бот: лесенка профилей (Р183, Р194)"
     expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThan(strongMedian(POWER_PROFILES.average, "kite"));
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThan(strongMedian(POWER_PROFILES.full, "kite"));
   });
+});
 
-  it("«стоит» с полным арсеналом живёт меньше, чем «бегает»: кайт чего-то стоит", { timeout: 600_000 }, () => {
-    expect(strongMedian(POWER_PROFILES.full, "stand")).toBeLessThan(strongMedian(POWER_PROFILES.full, "kite"));
+describe("сильный бот: стойка по забегу владельца (Р196)", () => {
+  it("«стоит» + «ветеран» на числах до T-0388 живёт не меньше 1020 с: бот не слабее человека (1242 с)", { timeout: 900_000 }, () => {
+    const median = summarizeRuns(veteranStandRuns(contentBeforeT0388())).medianSurvivalSec;
+    expect(median).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stand.oldNumbersMinSec);
   });
 
-  // Не сходится: сейчас медиана ниже коридора, а рычаги T-0389 (здоровье ступеней, рост кривой, поздние
-  // уровни) её не двигают — разбор в «Вопросах тимлиду» PR и в docs/32-balance.md (Р194, T-0389).
-  it.skip("«стоит» с полным арсеналом: падает к 6–8-й минуте, а не живёт до 20-й", { timeout: 600_000 }, () => {
-    const { min, max } = STRONG_BOT_TARGETS.stand.full;
-    const median = strongMedian(POWER_PROFILES.full, "stand");
+  it("«стоит» + «ветеран» на нынешних числах падает к 6–8-й минуте", { timeout: 900_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.stand.veteran;
+    const median = summarizeRuns(veteranStandRuns()).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(min);
     expect(median).toBeLessThanOrEqual(max);
   });
 });
 
 describe("сильный бот: сборка набора около 15-й минуты (Р127, Р194)", () => {
-  // Не сходится вместе с прежней сборкой уклоняющегося бота (≥ 1450 с, 60% зёрен до потолка): разбор
-  // в «Вопросах тимлиду» PR и в docs/32-balance.md (Р194, T-0389).
-  it.skip("бессмертный «бегает» со средним профилем собирает набор в коридоре", { timeout: 900_000 }, () => {
+  it("бессмертный «бегает» со средним профилем собирает набор в коридоре", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.build.average;
     const runs: BalanceRunResult[] = [];
     for (let seed = 1; seed <= STRONG_BOT_TARGETS.seeds; seed++) {
