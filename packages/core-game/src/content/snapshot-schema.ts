@@ -329,6 +329,20 @@ const pressureSchema = z.strictObject({
   }),
 });
 
+// Осада стоящего: форма — здесь, коридоры и связи между полями — `findSiegeProblems`.
+const siegeSchema = z.strictObject({
+  fromSec: num,
+  radius: num,
+  holdSec: num,
+  warnSec: num,
+  cooldownSec: num,
+  calmSec: num,
+  growth: num,
+  maxLevel: num,
+  cordon: z.strictObject({ enemy: text, count: num, ring: ringSchema }),
+  eliteCount: num,
+});
+
 const balanceTargetsSchema = z.strictObject({
   passiveDeathBeforeSec: positive,
   dodgingMedianSec: range,
@@ -375,6 +389,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   cardToolRules: z.strictObject({ skipXpRatio: num }),
   limits: z.array(limitSchema),
   pressure: pressureSchema,
+  siege: siegeSchema,
   balanceTargets: balanceTargetsSchema,
 });
 
