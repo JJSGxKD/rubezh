@@ -29,7 +29,7 @@ batch: 4
 
 # T-0388. Враги жирнее с 2,5 минуты и набор к 15-й — числа здоровья и опыта
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0388.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0388.json)](../README.md#значки-статуса)
 
 ## Зачем
 
