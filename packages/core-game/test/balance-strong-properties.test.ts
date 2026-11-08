@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STRONG_BOT_TARGETS } from "../src/content/balance-targets";
-import { contentBeforeT0388 } from "./helpers/content-before-t0388";
+import { contentBeforeT0388, withoutSiege } from "./helpers/content-before-t0388";
+import type { ContentSnapshot } from "../src/content/snapshot";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -85,16 +86,69 @@ describe("сильный бот: лесенка профилей (Р183, Р194)"
 });
 
 describe("сильный бот: стойка по забегу владельца (Р196)", () => {
-  it("«стоит» + «ветеран» на числах до T-0388 живёт не меньше 1020 с: бот не слабее человека (1242 с)", { timeout: 900_000 }, () => {
+  it("«стоит» + «ветеран» на числах до T-0388 без осады живёт не меньше 1020 с: бот не слабее человека (1242 с)", { timeout: 900_000 }, () => {
     const median = summarizeRuns(veteranStandRuns(contentBeforeT0388())).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stand.oldNumbersMinSec);
   });
 
-  it("«стоит» + «ветеран» на нынешних числах падает к 12–16-й минуте (Р197)", { timeout: 900_000 }, () => {
+  it("«стоит» + «ветеран» на нынешних числах с осадой падает к 6–10-й минуте (Р197, T-0392)", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.stand.veteran;
     const median = summarizeRuns(veteranStandRuns()).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(min);
     expect(median).toBeLessThanOrEqual(max);
+  });
+});
+
+/**
+ * Прогоны «бегает» профиля: с осадой и без неё. Забег, в котором осада не наступила, побитово равен
+ * забегу без неё (осада читает мир и берёт случайность из своего потока), поэтому без осады
+ * перегоняются только забеги, где она была, — иначе проверка вдвое дольше ради тех же чисел.
+ */
+function kiteWithAndWithoutSiege(profile: PowerProfile): { with: BalanceRunResult[]; without: BalanceRunResult[]; sieged: number } {
+  const profileWeapons = profile.startingWeaponId === undefined ? STARTING_WEAPONS : [profile.startingWeaponId];
+  const seeds = profile.id === "veteran" ? STRONG_BOT_TARGETS.stand.seeds : STRONG_BOT_TARGETS.seeds;
+  const off: ContentSnapshot = withoutSiege();
+  const withSiege: BalanceRunResult[] = [];
+  const without: BalanceRunResult[] = [];
+  let sieged = 0;
+  for (const startingWeaponId of profileWeapons) {
+    for (let seed = 1; seed <= seeds; seed++) {
+      const options = { seed, skill: "strong", stance: "kite", startingWeaponId, maxSec: 1800, loadout: profile.loadout } as const;
+      const run = simulateBalanceRun(options);
+      withSiege.push(run);
+      if ((run.sieges ?? 0) === 0) {
+        without.push(run);
+        continue;
+      }
+      sieged++;
+      without.push(simulateBalanceRun({ ...options, content: off }));
+    }
+  }
+  return { with: withSiege, without, sieged };
+}
+
+describe("сильный бот: осада не наказывает того, кто двигается (T-0392)", () => {
+  const profiles = [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full, POWER_PROFILES.veteran];
+
+  for (const profile of profiles) {
+    it(`«бегает», ${profile.titleRu}: медиана с осадой и без неё расходится не больше чем на 5%`, { timeout: 900_000 }, () => {
+      const { with: withSiege, without } = kiteWithAndWithoutSiege(profile);
+      const medianWith = summarizeRuns(withSiege).medianSurvivalSec;
+      const medianWithout = summarizeRuns(without).medianSurvivalSec;
+      expect(Math.abs(medianWith - medianWithout) / medianWithout, `${String(medianWith)} с с осадой против ${String(medianWithout)} без неё`).toBeLessThanOrEqual(
+        STRONG_BOT_TARGETS.siege.kiteShiftMax,
+      );
+    });
+  }
+
+  it("забег, в котором осада не наступила, побитово равен забегу без неё", { timeout: 300_000 }, () => {
+    const off = withoutSiege();
+    for (let seed = 1; seed <= 3; seed++) {
+      const options = { seed, skill: "strong", stance: "kite", startingWeaponId: STARTING_WEAPONS[0], maxSec: 400, loadout: POWER_PROFILES.average.loadout } as const;
+      const run = simulateBalanceRun(options);
+      expect(run.sieges ?? 0, `seed ${String(seed)}`).toBe(0);
+      expect(simulateBalanceRun({ ...options, content: off }).survivalSec).toBe(run.survivalSec);
+    }
   });
 });
 
