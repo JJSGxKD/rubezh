@@ -22,6 +22,7 @@ import { startCordon } from "../src/game/sim/cordon";
 import { createTimelineDirector } from "../src/game/sim/director";
 import { createRng, deriveSeed, STREAM_SALT } from "../src/game/sim/rng";
 import { findSiegeProblems, siegeWarning, takeSiegeEvents, type SiegeEvent } from "../src/game/sim/siege";
+import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
 import { createWorld, TICK_SEC, type World } from "../src/game/sim/world";
 
@@ -128,7 +129,8 @@ function aliveOfRank(world: World, pattern: "cordon" | "elite"): number {
 describe("осада: когда она начинается", () => {
   it("до fromSec осады нет, сколько ни стой", () => {
     const run = setup({ siege: RULES });
-    advance(run, RULES.fromSec + RULES.holdSec - 0.5);
+    // Предупреждение пришло бы на 16-й секунде; если бы счёт шёл с нуля, оно прозвучало бы на 6-й.
+    advance(run, RULES.fromSec + RULES.holdSec - RULES.warnSec - 0.5);
 
     expect(run.log).toHaveLength(0);
     expect(run.world.siege.count).toBe(0);
@@ -345,6 +347,8 @@ describe("осада: где её нет", () => {
       let starts = 0;
       const ticks = Math.round((SIEGE.fromSec + SIEGE.holdSec + 6) / TICK_SEC);
       for (let i = 0; i < ticks; i++) {
+        // Стоящий отвечает на выбор уровня первой карточкой: пока выбор не сделан, мир стоит.
+        if (isAwaitingChoice(world)) chooseUpgrade(world, world.progression.offers[0].id);
         spawner.update(world, TICK_SEC);
         stepWorld(world, IDLE_INPUT);
         const taken = takeSiegeEvents(world, cursor);
@@ -432,7 +436,8 @@ describe("осада: снимок прерванного забега", () => {
     expect(siegeWarning(copy.world)).toEqual(siegeWarning(run.world));
     expect(checksumWorld(copy.world)).toBe(checksumWorld(run.world));
     sameFuture(run, copy, RULES.holdSec + 20);
-    expect(copy.world.siege.count).toBe(1);
+    expect(copy.world.siege.count).toBe(run.world.siege.count);
+    expect(copy.world.siege.count).toBeGreaterThanOrEqual(1);
   });
 
   it("посреди осады и в перезарядке: уровень, перезарядка, отсчёт calmSec и поток вернулись", () => {
@@ -546,10 +551,10 @@ describe("осада: контент и проверка", () => {
 
   it("числа кольца — в коридорах события cordon", () => {
     const ring = SIEGE.cordon.ring;
-    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, minRadius: 10 } } }).join("\n")).toMatch(/siege\.cordon\.ring\.minRadius/);
-    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, radius: 999 } } }).join("\n")).toMatch(/siege\.cordon\.ring\.radius/);
-    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, lifeSec: 1 } } }).join("\n")).toMatch(/siege\.cordon\.ring\.lifeSec/);
-    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, shrinkPerSec: 0 } } }).join("\n")).toMatch(/siege\.cordon\.ring\.shrinkPerSec/);
+    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, minRadius: 10 } } }).join("\n")).toMatch(/siege\.cordon: ring\.minRadius/);
+    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, radius: 999 } } }).join("\n")).toMatch(/siege\.cordon: ring\.radius/);
+    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, lifeSec: 1 } } }).join("\n")).toMatch(/siege\.cordon: ring\.lifeSec/);
+    expect(problems({ cordon: { ...SIEGE.cordon, ring: { ...ring, shrinkPerSec: 0 } } }).join("\n")).toMatch(/siege\.cordon: ring\.shrinkPerSec/);
   });
 
   it("враг строя — страж паттерна cordon из контента", () => {
