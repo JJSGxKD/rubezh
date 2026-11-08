@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -8,6 +8,7 @@ import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
+import type { SiegeState } from "./siege";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -444,6 +445,12 @@ export interface World {
   cordon: CordonState;
   /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
   rubezh: RubezhState;
+  /**
+   * осада стоящего (Р197): правила и состояние. Правил нет (`null`) в прологе, на «Лёгкой», в мире без
+   * них (стенды, тесты паттернов) — тогда осада не идёт. Состояние входит в снимок
+   */
+  siegeRules: SiegeDef | null;
+  siege: SiegeState;
   /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
   mode: RunMode;
   /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */

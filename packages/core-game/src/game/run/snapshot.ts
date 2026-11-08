@@ -4,6 +4,8 @@ import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { createCordonState, type CordonState } from "../sim/cordon";
 import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
+import { createSiegeState, type SiegeState } from "../sim/siege";
+import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
 
@@ -85,6 +87,9 @@ interface SecretsSnapshot {
   blessings: string[];
 }
 
+/** Состояние осады; журнал событий для сцены (`log`) в снимок не входит. */
+type SiegeSnapshot = Omit<SiegeState, "rng" | "log"> & { rng: number };
+
 export interface WorldSnapshot {
   version: number;
   rng: number;
@@ -108,6 +113,8 @@ export interface WorldSnapshot {
   secrets: SecretsSnapshot;
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
   cordon?: Omit<CordonState, "ended">;
+  /** осада стоящего: поток, якорь, счётчик, уровень, перезарядка; в снимках без поля осада начинается заново (T-0392) */
+  siege?: SiegeSnapshot;
   /**
    * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
    * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
@@ -145,6 +152,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     pickups: encodeRecord(world.pickups, world.pickups.count),
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
     secrets: capturedSecrets(world),
+    siege: capturedSiege(world.siege),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
     rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
@@ -196,6 +204,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   restorePrologue(world, snapshot.prologue);
   restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
+  restoreSiege(world, snapshot.siege);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
@@ -310,6 +319,52 @@ function restoreHunt(world: World, input: unknown): void {
   });
   world.hunt.log = entries;
   for (const spawn of spawns) world.hunt.spawnTick[spawn.slot] = spawn.tick;
+}
+
+function capturedSiege(state: SiegeState): SiegeSnapshot {
+  return {
+    rng: state.rng.getState(),
+    anchored: state.anchored,
+    anchorX: state.anchorX,
+    anchorY: state.anchorY,
+    holdTicks: state.holdTicks,
+    warned: state.warned,
+    level: state.level,
+    active: state.active,
+    activeLevel: state.activeLevel,
+    cooldownTicks: state.cooldownTicks,
+    calmTicks: state.calmTicks,
+    count: state.count,
+  };
+}
+
+/**
+ * Осада. Отсутствие поля — снимок до осады: версию формата не поднимали, старый снимок читается, и
+ * отсчёт стояния идёт с нуля. Числа проверяются как счётчики: целые, не отрицательные.
+ */
+function restoreSiege(world: World, input: unknown): void {
+  const state = world.siege;
+  state.log = [];
+  if (input === undefined) {
+    Object.assign(state, createSiegeState(state.rng));
+    return;
+  }
+  const raw = asRecord(input, "siege");
+  const restored = {
+    anchored: asBoolean(raw.anchored, "siege.anchored"),
+    anchorX: asNumber(raw.anchorX, "siege.anchorX"),
+    anchorY: asNumber(raw.anchorY, "siege.anchorY"),
+    holdTicks: asCount(raw.holdTicks, "siege.holdTicks"),
+    warned: asBoolean(raw.warned, "siege.warned"),
+    level: asCount(raw.level, "siege.level", SIEGE_LEVEL_CEILING),
+    active: asBoolean(raw.active, "siege.active"),
+    activeLevel: asCount(raw.activeLevel, "siege.activeLevel", SIEGE_LEVEL_CEILING),
+    cooldownTicks: asCount(raw.cooldownTicks, "siege.cooldownTicks"),
+    calmTicks: asCount(raw.calmTicks, "siege.calmTicks"),
+    count: asCount(raw.count, "siege.count"),
+  };
+  state.rng.setState(asNumber(raw.rng, "siege.rng"));
+  Object.assign(state, restored);
 }
 
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
@@ -628,6 +683,13 @@ function asString(value: unknown, path: string): string {
 function asBoolean(value: unknown, path: string): boolean {
   if (typeof value !== "boolean") throw new SnapshotError(`${path}: ожидался признак`);
   return value;
+}
+
+/** Счётчик: целое от нуля до `max` включительно. */
+function asCount(value: unknown, path: string, max = Number.MAX_SAFE_INTEGER): number {
+  const count = asNumber(value, path);
+  if (!Number.isInteger(count) || count < 0 || count > max) throw new SnapshotError(`${path}: ${count} вне [0, ${max}]`);
+  return count;
 }
 
 function asIndex(value: unknown, length: number, path: string): number {

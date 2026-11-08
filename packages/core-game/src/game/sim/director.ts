@@ -8,6 +8,7 @@ import {
 } from "./directions";
 import { startCordon } from "./cordon";
 import { applySegmentPressure, isPressureActive, refreshPressure } from "./pressure";
+import { updateSiege } from "./siege";
 import { spawnOnRing, spawnRandomOnRing, type Spawner } from "./spawner";
 import { planSegment, segmentStartSec, type SegmentEvent, type SegmentPlan } from "./timeline";
 import type { World } from "./world";
@@ -94,6 +95,8 @@ export function createTimelineDirector(
       debt = saved.debt;
     },
     update(world, dtSec) {
+      // Осада стоящего идёт под директором: мир без него (стенды, сценарные эталоны) её не знает.
+      updateSiege(world);
       let steps = 0;
       while (
         steps++ < MAX_SEGMENT_STEPS_PER_TICK &&

@@ -2,6 +2,7 @@ import type { ContinueDef } from "@bh/shared-types";
 import { clearFreeze } from "./freeze";
 import { clearPlayerStatuses } from "./player-status";
 import { closeOpenRifts } from "./secrets";
+import { resetSiege } from "./siege";
 import { despawnEnemy, MAX_CONTINUES_PER_RUN, TICK_SEC, type World } from "./world";
 
 /**
@@ -31,6 +32,8 @@ export function applyContinue(world: World): boolean {
   }
   // Элиты волны разлома только что убраны вместе со всеми: пустая волна не должна дать сундук.
   closeOpenRifts(world);
+  // Игрок вернулся на то же место без врагов: отсчёт стояния начинается заново, кольцо на земле гаснет.
+  resetSiege(world);
 
   const rules = world.continueRules;
   const player = world.player;

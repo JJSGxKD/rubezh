@@ -116,6 +116,8 @@ export interface BalanceRunResult {
    * Прогон отдаёт его всегда; необязательное, чтобы фикстуры воркера не знали о рубеже
    */
   rubezh?: RunRubezh;
+  /** сколько раз рубеж брал бота в осаду за стояние (Р197); необязательное: фикстуры воркера о ней не знают */
+  sieges?: number;
   /** забег упёрся в аварийный потолок, а не кончился смертью или сборкой набора */
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
@@ -154,6 +156,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    siege: content.siege,
     ...(options.pressure === false ? {} : { pressure: content.pressure }),
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
@@ -256,6 +259,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     buildCompleteSec,
     buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
     rubezh: describeRubezh(world),
+    sieges: world.siege.count,
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
     startPower: pressured ? world.difficulty.startPower : 0,
