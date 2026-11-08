@@ -3,7 +3,7 @@ id: T-0389
 title: Бот калибровки «как человек» — сбор опыта, связки, стойка и бег, коридоры по лесенке Р183
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-56 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
