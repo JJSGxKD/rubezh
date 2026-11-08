@@ -3,8 +3,8 @@ id: T-0392
 title: Осада стоящего — строй и элиты вокруг игрока, который долго стоит на месте
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-58 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0389]
