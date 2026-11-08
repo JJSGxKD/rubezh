@@ -556,7 +556,7 @@ export function clampToBounds(value: number, halfExtent: number): number {
  * вышедший на пятой минуте, не должен крепчать вместе с таймлайном, пока
  * игрок его добивает.
  */
-export function spawnEnemy(world: World, typeIndex: number, x: number, y: number): number {
+export function spawnEnemy(world: World, typeIndex: number, x: number, y: number, rng: Rng = world.rng): number {
   const pool = world.enemies;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxEnemies);
   if (slot < 0) return -1;
@@ -564,7 +564,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   const type = world.enemyTypes[typeIndex];
   // Элита ступеней не получает: она сама и есть контрольная точка сложности,
   // и приходит событием таймлайна в назначенную минуту.
-  const stageIndex = isElite(type) ? 0 : pickStage(world);
+  const stageIndex = isElite(type) ? 0 : pickStage(world, rng);
   const stage = world.stages[stageIndex] ?? world.stages[0];
   pool.x[slot] = x;
   pool.y[slot] = y;

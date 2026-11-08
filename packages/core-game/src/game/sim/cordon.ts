@@ -1,6 +1,7 @@
 import type { CordonRingDef } from "@bh/shared-types";
 import { CORDON_FORM_SEC, CORDON_PHASE } from "../patterns/cordon";
 import { createDirection, randomRingOffset, ringDirection } from "./directions";
+import type { Rng } from "./rng";
 import { vectorLength } from "./vector";
 import { clampToBounds, despawnEnemy, spawnEnemy, type World } from "./world";
 
@@ -92,6 +93,16 @@ export function createCordonState(): CordonState {
 
 const direction = createDirection();
 
+/**
+ * Откуда и чьей случайностью встаёт строй, если не как обычно: событие таймлайна ставит кольцо вокруг
+ * игрока и бросает `world.rng`, а осада стоящего — вокруг якоря и из своего потока (Р197).
+ */
+export interface CordonOrigin {
+  x: number;
+  y: number;
+  rng: Rng;
+}
+
 /** Ниже этого расстояния направление выталкивания не определено. */
 const MIN_PUSH_DISTANCE = 1e-3;
 
@@ -102,24 +113,25 @@ const MIN_PUSH_DISTANCE = 1e-3;
  * живых не мешает: стражи создаются, пока есть свободные слоты пула, не хватило —
  * встаёт сколько влезло. Ни один не встал — кольца нет.
  */
-export function startCordon(world: World, typeIndex: number, count: number, ring: CordonRingDef): void {
+export function startCordon(world: World, typeIndex: number, count: number, ring: CordonRingDef, origin?: CordonOrigin): void {
   const state = world.cordon;
   if (state.active) return;
 
   const scale = world.config.unitScale;
   const radius = ring.radius * scale;
-  const offset = randomRingOffset(world.rng);
+  const rng = origin?.rng ?? world.rng;
+  const offset = randomRingOffset(rng);
   const enemies = world.enemies;
   const guardRadius = world.enemyTypes[typeIndex].radius;
   const bounds = world.config.bounds;
-  const centerX = world.player.x;
-  const centerY = world.player.y;
+  const centerX = origin?.x ?? world.player.x;
+  const centerY = origin?.y ?? world.player.y;
   let spawned = 0;
   for (let k = 0; k < count; k++) {
     ringDirection(offset, k, count, direction);
     const x = clampToBounds(centerX + direction.x * radius, bounds.halfWidth - guardRadius);
     const y = clampToBounds(centerY + direction.y * radius, bounds.halfHeight - guardRadius);
-    const slot = spawnEnemy(world, typeIndex, x, y);
+    const slot = spawnEnemy(world, typeIndex, x, y, rng);
     if (slot < 0) break;
     // Место в строю — это направление: страж стоит на нём и дальше следует за сжатием.
     enemies.dirX[slot] = direction.x;
@@ -141,17 +153,17 @@ export function startCordon(world: World, typeIndex: number, count: number, ring
   state.guards = spawned;
   state.pending = [];
   state.pendingLeftSec = 0;
-  planInner(world, ring, radius);
+  planInner(world, ring, radius, rng);
 }
 
 /**
  * Выбрать места внутренним врагам кольца: элита и босс выходят на половине
  * радиуса через `CORDON_INNER_SEC`, пока горит их телеграф. Записи, до которых
  * забег ещё не дошёл по времени, и враги, которых нет в мире, пропускаются без
- * ошибки. Второй поворот из `world.rng` берётся только если есть кого ставить:
+ * ошибки. Второй поворот из потока кольца берётся только если есть кого ставить:
  * кольцо без внутренних тратит случайность так же, как до Р166.
  */
-function planInner(world: World, ring: CordonRingDef, radius: number): void {
+function planInner(world: World, ring: CordonRingDef, radius: number, rng: Rng): void {
   const entries = (ring.inner ?? []).filter((entry) => entry.fromSec === undefined || world.stats.elapsedSec >= entry.fromSec);
   const typeIndexes: number[] = [];
   for (const entry of entries) {
@@ -163,7 +175,7 @@ function planInner(world: World, ring: CordonRingDef, radius: number): void {
 
   const state = world.cordon;
   const bounds = world.config.bounds;
-  const offset = randomRingOffset(world.rng);
+  const offset = randomRingOffset(rng);
   for (let k = 0; k < typeIndexes.length; k++) {
     ringDirection(offset, k, typeIndexes.length, direction);
     const typeIndex = typeIndexes[k];
