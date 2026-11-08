@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STRONG_BOT_TARGETS } from "../src/content/balance-targets";
+import { PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../src/content/balance-targets";
 import { contentBeforeT0388 } from "./helpers/content-before-t0388";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
@@ -67,20 +67,47 @@ function veteranStandRuns(content?: ReturnType<typeof contentBeforeT0388>): Bala
 
 const strongMedian = (profile: PowerProfile, stance: StrongStance): number => summarizeRuns(strongRuns(profile, stance)).medianSurvivalSec;
 
-// В тестах — коридоры, принятые владельцем (Р196, Р197). «Бегает» у новичка и порядок лесенки — вердикты
-// `pnpm balance:sim -t "сильный бот"`: их вернёт задача подстройки T-0391, тест, который заведомо красный,
-// или `it.skip` — не контроль (docs/32-balance.md §3.2).
-describe("сильный бот: лесенка профилей (Р183, Р194)", () => {
+// Лесенка Р183 по сильному боту (Р197, T-0391): подстройка под силу калибруется им, а не уклоняющимся.
+// Медианы «бегает» считаются один раз на файл и переиспользуются свойствами ниже.
+describe("сильный бот: лесенка профилей (Р183, Р194, Р197)", () => {
+  it("«бегает»: новичок живёт около 7 минут", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.kite.novice;
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeGreaterThanOrEqual(min);
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThanOrEqual(max);
+  });
+
   it("«бегает»: средний игрок живёт около 10 минут", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.average;
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThanOrEqual(max);
   });
 
-  it("«бегает»: полный арсенал — в коридоре по замеру (Р197)", { timeout: 600_000 }, () => {
+  it("«бегает»: полный арсенал — в коридоре лесенки", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.full;
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeLessThanOrEqual(max);
+  });
+
+  it("порядок лесенки: новичок < средний < полный арсенал, с подстройкой", { timeout: 600_000 }, () => {
+    const novice = strongMedian(POWER_PROFILES.novice, "kite");
+    const average = strongMedian(POWER_PROFILES.average, "kite");
+    const full = strongMedian(POWER_PROFILES.full, "kite");
+    expect(novice).toBeLessThan(average);
+    expect(average).toBeLessThan(full);
+  });
+
+  it("новичок к среднему — в коридоре отношений (цель 0,7 = 7 / 10 минут)", { timeout: 600_000 }, () => {
+    const { min, max } = PRESSURE_TARGETS.noviceToAverage;
+    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / strongMedian(POWER_PROFILES.average, "kite");
+    expect(ratio).toBeGreaterThanOrEqual(min);
+    expect(ratio).toBeLessThanOrEqual(max);
+  });
+
+  it("полный арсенал к среднему — в коридоре отношений (цель 1,4 = 14 / 10 минут)", { timeout: 600_000 }, () => {
+    const { min, max } = PRESSURE_TARGETS.fullToAverage;
+    const ratio = strongMedian(POWER_PROFILES.full, "kite") / strongMedian(POWER_PROFILES.average, "kite");
+    expect(ratio).toBeGreaterThanOrEqual(min);
+    expect(ratio).toBeLessThanOrEqual(max);
   });
 });
 
