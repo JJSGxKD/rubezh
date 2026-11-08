@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
+import { contentBeforeT0388 } from "../../packages/core-game/test/helpers/content-before-t0388";
 import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { PRESSURE } from "../../packages/core-game/src/content/pressure";
 import { createRunWorld } from "../../packages/core-game/src/game/run-world";
@@ -22,6 +23,7 @@ import {
   type BotSkill,
   type PowerProfile,
   STAND_FROM_SEC,
+  STAND_STEP,
   type StrongStance,
 } from "../../packages/core-game/src/game/balance";
 
@@ -540,35 +542,43 @@ function powerLines(): string[] {
 function strongBotLines(): string[] {
   const targets = STRONG_BOT_TARGETS;
   const weapons = startingWeapons();
-  const profiles = [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full];
+  const profiles = [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full, POWER_PROFILES.veteran];
   const stances: StrongStance[] = ["kite", "stand"];
   const lines = [
-    "## Сильный бот (Р194)",
+    "## Сильный бот (Р194, Р196)",
     "",
-    `«${BASE_DIFFICULTY_ID}», с подстройкой, ${targets.seeds} seed × ${weapons.length} оружия. «Бегает» — всегда уклоняется и собирает добычу; «стоит» — так же до ` +
-      `${STAND_FROM_SEC} с, дальше не двигается. Набор — доля забегов, где он собран до смерти (без бессмертия, обычно не собирается), и медиана секунды сборки.`,
+    `«${BASE_DIFFICULTY_ID}», с подстройкой. Профили силы — ${targets.seeds} seed × ${weapons.length} оружия; «ветеран» (забег владельца v0.12.2, Р196) — ` +
+      `${targets.stand.seeds} seed, старт «Очаг». «Бегает» — всегда уклоняется и собирает добычу; «стоит» — так же до ${STAND_FROM_SEC} с, дальше стоит и шагает ` +
+      `(от врага ближе ${STAND_STEP.radiusUnits} ед. или за добычей, по ${STAND_STEP.ticks} тиков, пауза ${STAND_STEP.cooldownTicks}). ` +
+      "Набор — доля забегов, где он собран до смерти (без бессмертия, обычно не собирается), и медиана секунды сборки.",
     "",
     "| Профиль / стойка | медиана, с | p10 | p90 | уровень забега | набор собран | коридор, с |",
     "|---|---|---|---|---|---|---|",
   ];
   const verdicts: string[] = [];
   const medians = new Map<string, number>();
+  const rowOf = (label: string, summary: ReturnType<typeof summarizeRuns>, corridor: string): string =>
+    `| ${label} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ${fixed(summary.p90SurvivalSec)} | ` +
+    `${summary.medianLevel} | ${percent(summary.buildCompleteRatio)}${summary.buildCompleteRatio > 0 ? ` (${fixed(summary.medianBuildCompleteSec)} с)` : ""} | ${corridor} |`;
   for (const profile of profiles) {
     for (const stance of stances) {
       const runs: BalanceRunResult[] = [];
-      for (const startingWeaponId of weapons) {
-        for (let seed = 1; seed <= targets.seeds; seed++) {
-          runs.push(simulateBalanceRun({ seed, skill: "strong", stance, startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, maxSec: POWER_MAX_SEC, loadout: profile.loadout }));
+      const profileWeapons = profile.startingWeaponId === undefined ? weapons : [profile.startingWeaponId];
+      const seeds = profile.id === "veteran" ? targets.stand.seeds : targets.seeds;
+      for (const startingWeaponId of profileWeapons) {
+        for (let seed = 1; seed <= seeds; seed++) {
+          runs.push(simulateBalanceRun({ seed, skill: "strong", stance, startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, maxSec: POWER_MAX_SEC * 2, loadout: profile.loadout }));
         }
       }
       const summary = summarizeRuns(runs);
       medians.set(`${profile.id}:${stance}`, summary.medianSurvivalSec);
-      const corridor = stance === "kite" ? targets.kite[profile.id] : profile.id === "full" ? targets.stand.full : undefined;
-      lines.push(
-        `| ${profile.titleRu} / ${stance === "kite" ? "бегает" : "стоит"} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ${fixed(summary.p90SurvivalSec)} | ` +
-          `${summary.medianLevel} | ${percent(summary.buildCompleteRatio)}${summary.buildCompleteRatio > 0 ? ` (${fixed(summary.medianBuildCompleteSec)} с)` : ""} | ` +
-          `${corridor === undefined ? "—" : `${corridor.min}–${corridor.max}`} |`,
-      );
+      const corridor =
+        stance === "kite" && profile.id !== "veteran"
+          ? targets.kite[profile.id]
+          : stance === "stand" && profile.id === "veteran"
+            ? targets.stand.veteran
+            : undefined;
+      lines.push(rowOf(`${profile.titleRu} / ${stance === "kite" ? "бегает" : "стоит"}`, summary, corridor === undefined ? "—" : `${corridor.min}–${corridor.max}`));
       if (corridor !== undefined) {
         verdicts.push(
           verdict(
@@ -588,13 +598,29 @@ function strongBotLines(): string[] {
       `${fixed(at("novice", "kite"))} / ${fixed(at("average", "kite"))} / ${fixed(at("full", "kite"))} с`,
     ),
   );
-  verdicts.push(
-    verdict(
-      "полный арсенал: стоит < бегает",
-      at("full", "stand") < at("full", "kite"),
-      `${fixed(at("full", "stand"))} против ${fixed(at("full", "kite"))} с`,
-    ),
-  );
+
+  // Сверка с человеком (Р196): тот же «ветеран» на числах до T-0388. Владелец на v0.12.2 прожил 1242 с.
+  const old = contentBeforeT0388();
+  lines.push("", "### «Ветеран» на числах до T-0388", "", "Контент подменён в самом прогоне (`test/helpers/content-before-t0388.ts`). Владелец на v0.12.2 — 1242 с.", "", "| Стойка | медиана, с | p10 | p90 | уровень забега | набор собран | коридор, с |", "|---|---|---|---|---|---|---|");
+  for (const stance of stances) {
+    const runs: BalanceRunResult[] = [];
+    for (let seed = 1; seed <= targets.stand.seeds; seed++) {
+      runs.push(
+        simulateBalanceRun({ seed, skill: "strong", stance, startingWeaponId: POWER_PROFILES.veteran.startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, maxSec: POWER_MAX_SEC * 2, loadout: POWER_PROFILES.veteran.loadout, content: old }),
+      );
+    }
+    const summary = summarizeRuns(runs);
+    lines.push(rowOf(stance === "kite" ? "бегает" : "стоит", summary, stance === "stand" ? `≥ ${targets.stand.oldNumbersMinSec}` : "—"));
+    if (stance === "stand") {
+      verdicts.push(
+        verdict(
+          `ветеран, стоит, числа до T-0388: медиана не меньше ${targets.stand.oldNumbersMinSec} с`,
+          summary.medianSurvivalSec >= targets.stand.oldNumbersMinSec,
+          `${fixed(summary.medianSurvivalSec)} с`,
+        ),
+      );
+    }
+  }
 
   // Сборка: бессмертный «бегает» со средним профилем, оружие и потолок — как у прочих замеров сборки.
   const build = targets.build.average;
