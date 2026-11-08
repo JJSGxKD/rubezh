@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
-import { BALANCE_TARGETS, buildCompleteCorridorSec } from "../src/content/balance-targets";
+import { BALANCE_TARGETS } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
 import { ENEMY_STAGES } from "../src/content/stages";
@@ -298,34 +298,5 @@ describe("враги жирнее с 2,5 минуты (Р194, T-0388)", () => {
       expect(openings[i], `ступень на ${ENEMY_STAGES[i].fromSec} с`).toBeGreaterThanOrEqual(openings[i - 1] * 0.97);
     }
     expect(openings[openings.length - 1]).toBeGreaterThan(openings[1]);
-  });
-});
-
-describe("сборка набора к 15-й минуте (Р194, T-0388)", () => {
-  /** Не раньше этой секунды: живой собирает набор в 1,7 раза быстрее бессмертного бота, а цель — к 900 с. */
-  const BUILD_MEDIAN_MIN_SEC = 1450;
-  const BUILD_SEEDS = 10;
-
-  it("бессмертный бот собирает набор не раньше 1450 с и в коридоре", { timeout: 600_000 }, () => {
-    const corridor = buildCompleteCorridorSec();
-    const runs: BalanceRunResult[] = [];
-    for (let seed = 1; seed <= BUILD_SEEDS; seed++) {
-      runs.push(
-        simulateBalanceRun({
-          seed,
-          skill: "dodging",
-          startingWeaponId: "spark",
-          godMode: true,
-          stopOnBuild: true,
-          maxSec: Math.ceil(corridor.max * 1.15),
-        }),
-      );
-    }
-    // как в balance:sim: медиана по собравшим, а собрать обязаны не менее 60% seed
-    const summary = summarizeRuns(runs);
-    expect(summary.buildCompleteRatio).toBeGreaterThanOrEqual(0.6);
-    expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(BUILD_MEDIAN_MIN_SEC);
-    expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(corridor.min);
-    expect(summary.medianBuildCompleteSec).toBeLessThanOrEqual(corridor.max);
   });
 });

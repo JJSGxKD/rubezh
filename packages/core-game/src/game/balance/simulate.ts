@@ -3,8 +3,9 @@ import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
 import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
 import { buildScore } from "../run/hunt-log";
+import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
-import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
+import { cardToolsAt, unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
 import { buildScoreOf } from "../sim/player-power";
 import { isPressureActive } from "../sim/pressure";
@@ -14,6 +15,7 @@ import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 import { isBuildComplete } from "./build-complete";
+import { createStrongBot, type StrongStance } from "./strong-bot";
 
 /**
  * Прогон забега ботом на боевом контенте — вход калибровки баланса
@@ -71,6 +73,11 @@ export interface BalanceRunOptions {
   godMode?: boolean;
   /** прогон кончается, когда набор собран; `buildCompleteSec` — эта секунда */
   stopOnBuild?: boolean;
+  /**
+   * Стойка сильного бота (`skill: "strong"`): бегает всегда или стоит с 180-й
+   * секунды. Для остальных ботов не читается; по умолчанию — «бегает».
+   */
+  stance?: StrongStance;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
   /**
@@ -151,6 +158,9 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    // Переброс и изгнание даёт уровень аккаунта, как в забеге (`run-world.ts`); пользуется ими
+    // только сильный бот, остальные боты заряды не тратят, и их забеги от этого не меняются.
+    ...(accountLevel === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, accountLevel) }),
     rubezh: RUBEZH,
     limits: content.limits,
     timeline: content.timeline,
@@ -168,7 +178,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   });
   if (options.godMode === true) world.cheats.godMode = true;
   const director = createTimelineDirector(content.timeline, content.endlessCurve);
-  const bot = createBot(options.skill, options.bot);
+  const bot = options.skill === "strong" ? createStrongBot({ stance: options.stance ?? "kite" }) : createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
   const damageTakenByMinute: number[] = [];
@@ -187,8 +197,19 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     // вхолостую до конца прогона.
     if (isAwaitingChoice(world)) {
       if (firstLevelUpSec === 0) firstLevelUpSec = world.stats.elapsedSec;
-      chooseUpgrade(world, bot.choose(world.progression.offers));
-      picks++;
+      const choice = bot.choose(world.progression.offers, world);
+      // Переброс и изгнание выбора не закрывают: мир ждёт дальше, а заряды конечны.
+      if (isCardToolCommand(choice) && applyCardTool(world, choice) !== null) {
+        continue;
+      }
+      if (isCardToolCommand(choice)) {
+        // Команда не сработала (заряда нет): первая карточка, иначе мир ждал бы вечно.
+        chooseUpgrade(world, world.progression.offers[0].id);
+        picks++;
+      } else {
+        chooseUpgrade(world, choice);
+        picks++;
+      }
       continue;
     }
 
