@@ -3,6 +3,7 @@ import type { EnemyPattern } from "@bh/shared-types";
 import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { CORDON_INNER_SEC } from "../sim/cordon";
+import { siegeWarning } from "../sim/siege";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
 import { CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
@@ -470,6 +471,11 @@ export class WorldRenderer {
         this.telegraphs.ring(entry.x, entry.y, this.world.enemyTypes[entry.typeIndex].radius * CORDON_INNER_RING_MUL, progress);
       }
     }
+
+    // Кольцо осады стоящего — без выключателя: оно предупреждает о строе и элитах, и без него осада была
+    // бы внезапной. Тот же рисунок, что у взрыва, и тот же тон угрозы: замыкается к моменту осады.
+    const warning = siegeWarning(this.world);
+    if (warning !== null) this.telegraphs.ring(warning.x, warning.y, warning.radius, warning.progress);
 
     this.telegraphs.end();
     this.marks.end();
