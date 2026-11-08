@@ -38,7 +38,7 @@ batch: 5
 
 # T-0389. Бот калибровки «как человек» — сбор опыта, связки, стойка и бег, коридоры по лесенке Р183
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0389.json)](README.md#значки-статуса) [![T-0388](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0388.json&label=T-0388)](T-0388-tougher-enemies-and-slower-build.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0389.json)](../README.md#значки-статуса) [![T-0388](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0388.json&label=T-0388)](T-0388-tougher-enemies-and-slower-build.md)
 
 ## Зачем
 
