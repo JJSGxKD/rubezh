@@ -3,8 +3,8 @@ id: T-0388
 title: Враги жирнее с 2,5 минуты и набор к 15-й — числа здоровья и опыта
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-54 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
