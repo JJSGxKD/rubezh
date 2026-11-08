@@ -129,9 +129,25 @@ describe("сбор опыта", () => {
 });
 
 describe("выбор карточек", () => {
-  it("«Очаг» в предложении (значит, слот свободен) берёт раньше навыка урона и живучести", () => {
+  it("порядок владельца: «Живучесть», «Спешка», «Искра», «Обережный камень», «Заживление», «Мощь»", () => {
+    const order = [
+      offer("passive_new", "vitality"),
+      offer("passive_new", "haste"),
+      offer("weapon_new", "spark"),
+      offer("weapon_new", "wardstone"),
+      offer("passive_new", "mending"),
+      offer("passive_new", "might"),
+    ];
+    for (let from = 0; from < order.length - 1; from++) {
+      const bot = createStrongBot({ stance: "kite" });
+      expect(bot.choose(order.slice(from), undefined), `с ${order[from].id}`).toBe(order[from].id);
+      expect(bot.choose([order[order.length - 1], order[from]], undefined)).toBe(order[from].id);
+    }
+  });
+
+  it("«Очаг» в предложении (значит, слот свободен) берёт раньше навыка вне плана", () => {
     const bot = createStrongBot({ stance: "kite" });
-    const picked = bot.choose([offer("passive_new", "might"), offer("weapon_new", "hearth"), offer("passive_new", "vitality")]);
+    const picked = bot.choose([offer("passive_new", "reach"), offer("weapon_new", "hearth"), offer("passive_new", "ward")]);
     expect(picked).toBe("weapon_new:hearth:1");
   });
 
@@ -149,19 +165,24 @@ describe("выбор карточек", () => {
     expect(bot.choose([offer("weapon_new", "knife"), offer("passive_new", "mending")])).toBe("passive_new:mending:1");
   });
 
-  it("развитие оружия связки идёт раньше нового навыка", () => {
+  it("развитие оружия плана идёт раньше навыка вне плана и уровня навыка", () => {
     const bot = createStrongBot({ stance: "kite" });
-    expect(bot.choose([offer("passive_new", "vitality"), offer("weapon_level", "hearth", 2), offer("passive_new", "might")])).toBe(
+    expect(bot.choose([offer("passive_new", "reach"), offer("weapon_level", "hearth", 2), offer("passive_level", "might", 2)])).toBe(
       "weapon_level:hearth:2",
     );
+  });
+
+  it("новое из плана идёт раньше развития оружия: так брал владелец", () => {
+    const bot = createStrongBot({ stance: "kite" });
+    expect(bot.choose([offer("weapon_level", "spark", 2), offer("passive_new", "mending")])).toBe("passive_new:mending:1");
   });
 
   it("оружие, чей навык рецепта уже взят, тоже ведёт к эволюции — и развивается первым", () => {
     const bot = createStrongBot({ stance: "kite" });
     // «Быстрота» — рецепт эволюции «Ножа»; пока её нет, нож — обычное оружие
-    expect(bot.choose([offer("passive_new", "might"), offer("weapon_level", "knife", 2)])).toBe("passive_new:might:1");
+    expect(bot.choose([offer("passive_level", "might", 2), offer("weapon_level", "knife", 2)])).toBe("passive_level:might:2");
     expect(bot.choose([offer("passive_new", "swiftness")])).toBe("passive_new:swiftness:1");
-    expect(bot.choose([offer("passive_new", "might"), offer("weapon_level", "knife", 2)])).toBe("weapon_level:knife:2");
+    expect(bot.choose([offer("passive_level", "might", 2), offer("weapon_level", "knife", 2)])).toBe("weapon_level:knife:2");
   });
 
   it("урон и перезарядка — после связки и выживания, но раньше прочего", () => {
@@ -227,7 +248,9 @@ describe("запись забега владельца (v0.12.2, Р196)", () => 
       if (ownerOffer.kind === "weapon_new" || ownerOffer.kind === "weapon_level") weapons.add(ownerOffer.refId);
     }
     expect(compared).toBe(20);
-    expect(mismatches, mismatches.join("; ")).toHaveLength(0);
+    // Единственное расхождение: на 12708-м тике «Очаг» уже выше 6-го уровня (дали сундуки), и владелец
+    // развил «Обережный камень». Бот идёт по месту в плане («Очаг» раньше) и берёт «Очаг».
+    expect(mismatches).toEqual(["12708: бот weapon_level:hearth:7, владелец weapon_level:wardstone:3"]);
   });
 });
 

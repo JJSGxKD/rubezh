@@ -46,6 +46,16 @@ export interface StrongBotOptions {
 export const STAND_FROM_SEC = 180;
 
 /**
+ * Шаг стоящего бота (Р196): после `STAND_FROM_SEC` владелец не замирал совсем. В записи
+ * (`test/fixtures/veteran-run-v0122.json`) он двигался 50% тиков до 3-й минуты, 44% с 3-й по
+ * 10-ю и 4% после: короткие шаги по 24 тика (0,4 с, медиана серии), между ними пауза 84 тика
+ * (1,4 с, медиана покоя) и дольше. Правило одно: пока стоит, шагает от врага, подошедшего ближе
+ * `radiusUnits`, на `ticks` тиков, потом не шагает `cooldownTicks`. Радиус подобран так, чтобы
+ * доля движения бота после 3-й минуты на контенте до T-0388 совпала с записью (19%).
+ */
+export const STAND_STEP = { radiusUnits: 80, ticks: 24, cooldownTicks: 84 } as const;
+
+/**
  * Числа сильного бота. Единицы контента: умножаются на `world.config.unitScale`.
  * Выбраны по смыслу, а не по лучшей строке таблицы замера: бот — модель человека,
  * а не прибор, подгоняемый под коридор.
@@ -106,38 +116,44 @@ export const STRONG_BOT = {
 const CANDIDATES = 16;
 
 /**
- * Приоритеты карточек. Источник — отчёты живых игроков (полный арсенал 1242 с и
- * игрок с 4-м уровнем аккаунта 813 с, v0.12.2) и решение Р194: оба выбирали связку
- * «Очаг» (урон вокруг себя) + «Оберег» (обереги кружат), потом «Заживление» и
- * «Живучесть», «Магнит» собирает опыт со всего поля. Это же рецепты эволюций
- * «Очага» и «Оберега» (`weapons.ts`), поэтому связка ведёт к ним.
+ * План карточек — по записи забега владельца на v0.12.2 (Р196, фикстура
+ * `test/fixtures/veteran-run-v0122.json`, 1242 с, уровень 64). Он брал новое в таком порядке:
+ * «Живучесть», «Спешка», «Искра», «Обережный камень» (после «Очага», с которого начал),
+ * «Заживление», «Мощь», «Магнит»; дальше развивал оружие («Искра» до 8-го уровня, «Очаг»,
+ * «Обережный камень»), потом навыки и, когда прокачивать стало нечего, малые прибавки
+ * «Предела» (перезарядка, урон, площадь, притяжение). «Быстроту» не брал ни разу. Это же
+ * связка из отчётов Р194: «Очаг» + «Оберег» + «Заживление», рецепты их эволюций.
+ *
+ * Ключ — `weapon:<id>` или `passive:<id>`; порядок в списке — порядок взятия нового.
  */
-const CORE_WEAPONS: readonly string[] = ["hearth", "wardstone"];
-const SURVIVAL_PASSIVES: readonly string[] = ["mending", "vitality", "lodestone"];
-const DAMAGE_PASSIVES: readonly string[] = ["might", "haste"];
+const PLAN: readonly string[] = [
+  "passive:vitality",
+  "passive:haste",
+  "weapon:spark",
+  "weapon:hearth",
+  "weapon:wardstone",
+  "passive:mending",
+  "passive:might",
+  "passive:lodestone",
+];
+const PLAN_WEAPONS: readonly string[] = PLAN.filter((key) => key.startsWith("weapon:")).map((key) => key.slice("weapon:".length));
+const PLAN_PASSIVES: readonly string[] = PLAN.filter((key) => key.startsWith("passive:")).map((key) => key.slice("passive:".length));
 /**
  * Навыки, которые бот не берёт, пока есть выбор: они занимают слот категории, которого
- * ждёт навык из связки. «Быстроту» в единственном слоте подвижности опытный игрок не
- * ставит — туда идёт «Магнит» (и рецепт эволюции «Оберега»); взятая раньше, она
- * закрывает его до конца забега (`LOADOUT_LIMITS`).
+ * ждёт навык из плана. «Быструю» ногу владелец не брал: единственный слот подвижности ждал
+ * «Магнит» (и рецепт эволюции «Оберега»); взятая раньше, она закрывает его до конца забега.
  */
 const SLOT_BLOCKERS: readonly string[] = ["swiftness"];
-/** Записи «Предела» того же смысла: нечего прокачать — берётся прибавка к выживанию, потом к урону. */
-const SURVIVAL_LIMITS: readonly string[] = ["regen", "maxHp"];
-const DAMAGE_LIMITS: readonly string[] = ["damage", "cooldown"];
+/** Малые прибавки «Предела» в порядке, в котором их брал владелец чаще всего (перезарядка 14, урон 12, площадь 7, притяжение 4). */
+const LIMIT_ORDER: readonly string[] = ["cooldown", "damage", "area", "pull", "regen", "maxHp"];
 
 /** Рецепт эволюции каждого базового оружия: какой навык делает его «ведущим к эволюции». */
 const RECIPE_PASSIVE = new Map<string, string>(
   WEAPONS.flatMap((weapon) => (weapon.evolvedFrom === undefined || weapon.recipe === undefined ? [] : [[weapon.evolvedFrom, weapon.recipe.passive] as const])),
 );
 
-/** Ступени предпочтения, меньше — лучше; внутри ступени порядок таблицы выше. */
-const RANK = { evolve: 0, leading: 1, core: 2, survival: 3, damage: 4, weaponLevel: 5, rest: 6, blocker: 7 } as const;
-
-function indexIn(table: readonly string[], id: string): number {
-  const index = table.indexOf(id);
-  return index < 0 ? table.length : index;
-}
+/** Оценка карточки, меньше — лучше: ступень × 100 плюс место в таблице. */
+const RANK = { evolve: 0, planNew: 1, weaponLevel: 2, passiveLevel: 3, limit: 4, otherLevel: 5, rest: 6, blocker: 9 } as const;
 
 /** Что бот знает о своём наборе в момент выбора. */
 export interface PickContext {
@@ -169,13 +185,13 @@ function contextOf(world: World | undefined, taken: { passives: ReadonlySet<stri
 }
 
 /**
- * Осталось ли в плане то, чего в наборе нет: «Очаг» или «Оберег» при свободном слоте
- * оружия, «Заживление», «Живучесть» или «Магнит» при свободном слоте их категории.
- * Пока осталось, опытный игрок перебрасывает карточки, на которых этого нет.
+ * Осталось ли в плане то, чего в наборе нет: оружие плана при свободном слоте оружия или
+ * навык плана при свободном слоте его категории. Пока осталось, опытный игрок перебрасывает
+ * карточки, на которых плана нет.
  */
 function isPlanIncomplete(world: World, passives: ReadonlySet<string>, weapons: ReadonlySet<string>, freeWeaponSlots: number): boolean {
-  if (freeWeaponSlots > 0 && CORE_WEAPONS.some((id) => !weapons.has(id) && world.weaponTypes.some((type) => type.id === id))) return true;
-  return SURVIVAL_PASSIVES.some((id) => {
+  if (freeWeaponSlots > 0 && PLAN_WEAPONS.some((id) => !weapons.has(id) && world.weaponTypes.some((type) => type.id === id))) return true;
+  return PLAN_PASSIVES.some((id) => {
     if (passives.has(id)) return false;
     const type = world.passiveTypes.find((candidate) => candidate.id === id);
     if (type === undefined) return false;
@@ -186,23 +202,22 @@ function isPlanIncomplete(world: World, passives: ReadonlySet<string>, weapons: 
 }
 
 /**
- * Оружие «ведёт к эволюции»: оно из связки или навык его рецепта уже взят. Тогда
- * развитие идёт раньше новых навыков — сундук выдаст эволюцию, когда оба готовы.
+ * Оружие «ведёт к эволюции»: оно из плана или навык его рецепта уже взят. Развитие такого
+ * оружия идёт раньше прочих уровней — сундук выдаст эволюцию, когда оба готовы.
  */
 function isLeading(weaponId: string, context: PickContext): boolean {
-  if (CORE_WEAPONS.includes(weaponId)) return true;
+  if (PLAN_WEAPONS.includes(weaponId)) return true;
   const recipe = RECIPE_PASSIVE.get(weaponId);
   return recipe !== undefined && context.passives.has(recipe);
 }
 
 /**
- * Не отдать слоты связки чужому оружию: новое оружие вне связки берётся, только если
- * после него слотов хватит на ещё не взятые «Очаг» и «Оберег». Без мира слотов не
- * видно, и правило молчит.
+ * Не отдать слоты плана чужому оружию: новое оружие вне плана берётся, только если после
+ * него слотов хватит на ещё не взятое оружие плана. Без мира слотов не видно, и правило молчит.
  */
-function squeezesCore(context: PickContext): boolean {
+function squeezesPlan(context: PickContext): boolean {
   if (context.freeWeaponSlots === null) return false;
-  const missing = CORE_WEAPONS.filter((id) => !context.weapons.has(id)).length;
+  const missing = PLAN_WEAPONS.filter((id) => !context.weapons.has(id)).length;
   return context.freeWeaponSlots <= missing;
 }
 
@@ -210,23 +225,27 @@ function scoreOf(offer: UpgradeOption, context: PickContext): number {
   switch (offer.kind) {
     case "weapon_evolve":
       return RANK.evolve * 100;
+    case "weapon_new": {
+      const place = PLAN.indexOf(`weapon:${offer.refId}`);
+      if (place >= 0) return RANK.planNew * 100 + place;
+      return (squeezesPlan(context) ? RANK.blocker : RANK.rest) * 100;
+    }
+    case "passive_new": {
+      const place = PLAN.indexOf(`passive:${offer.refId}`);
+      if (place >= 0) return RANK.planNew * 100 + place;
+      return (SLOT_BLOCKERS.includes(offer.refId) ? RANK.blocker : RANK.rest) * 100;
+    }
     case "weapon_level":
-      if (isLeading(offer.refId, context)) return RANK.leading * 100 + indexIn(CORE_WEAPONS, offer.refId);
-      return RANK.weaponLevel * 100;
-    case "weapon_new":
-      if (CORE_WEAPONS.includes(offer.refId)) return RANK.core * 100 + indexIn(CORE_WEAPONS, offer.refId);
-      return (squeezesCore(context) ? RANK.blocker : RANK.rest) * 100;
-    case "passive_new":
-    case "passive_level":
-      if (SURVIVAL_PASSIVES.includes(offer.refId)) return RANK.survival * 100 + indexIn(SURVIVAL_PASSIVES, offer.refId);
-      if (DAMAGE_PASSIVES.includes(offer.refId)) return RANK.damage * 100 + indexIn(DAMAGE_PASSIVES, offer.refId);
-      // Уровень уже взятого блокера слот не занимает: прокачка безвредна, блокируется только первое взятие.
-      if (offer.kind === "passive_new" && SLOT_BLOCKERS.includes(offer.refId)) return RANK.blocker * 100;
-      return RANK.rest * 100;
-    case "limit":
-      if (SURVIVAL_LIMITS.includes(offer.refId)) return RANK.survival * 100 + 50 + indexIn(SURVIVAL_LIMITS, offer.refId);
-      if (DAMAGE_LIMITS.includes(offer.refId)) return RANK.damage * 100 + 50 + indexIn(DAMAGE_LIMITS, offer.refId);
-      return RANK.rest * 100;
+      if (isLeading(offer.refId, context)) return RANK.weaponLevel * 100 + Math.max(0, PLAN.indexOf(`weapon:${offer.refId}`));
+      return RANK.otherLevel * 100;
+    case "passive_level": {
+      const place = PLAN.indexOf(`passive:${offer.refId}`);
+      return (place >= 0 ? RANK.passiveLevel : RANK.otherLevel) * 100 + Math.max(0, place);
+    }
+    case "limit": {
+      const place = LIMIT_ORDER.indexOf(offer.refId);
+      return (place >= 0 ? RANK.limit : RANK.rest) * 100 + Math.max(0, place);
+    }
     default:
       return RANK.rest * 100;
   }
@@ -264,7 +283,7 @@ function rankCards(offers: readonly UpgradeOption[], context: PickContext): { be
 export function chooseCardOrTool(offers: readonly UpgradeOption[], context: PickContext, world: World | undefined): string {
   const { best, score } = rankCards(offers, context);
   if (world === undefined) return best.id;
-  if (score >= RANK.damage * 100 && context.planIncomplete && canReroll(world)) return REROLL_COMMAND;
+  if (score >= RANK.passiveLevel * 100 && context.planIncomplete && canReroll(world)) return REROLL_COMMAND;
   if (score >= RANK.blocker * 100 && world.progression.tools.banish > 0) {
     const key = itemKeyOf(best);
     if (key !== null) return `${BANISH_PREFIX}${best.id}`;
@@ -340,10 +359,10 @@ function seekLoot(world: World, out: { x: number; y: number }): boolean {
   return false;
 }
 
-/** Есть ли живой враг в безопасном радиусе. Сетка перестроена на прошлом шаге: тик задержки боту не мешает. */
-function hasThreat(world: World): boolean {
+/** Есть ли живой враг ближе `radiusUnits`. Сетка перестроена на прошлом шаге: тик задержки боту не мешает. */
+function hasEnemyWithin(world: World, radiusUnits: number): boolean {
   const player = world.player;
-  const reach = STRONG_BOT.safeRadiusUnits * world.config.unitScale;
+  const reach = radiusUnits * world.config.unitScale;
   const found = world.enemyGrid.queryInto(player.x, player.y, reach, world.queryBuffer);
   for (let k = 0; k < found; k++) {
     const i = world.queryBuffer[k];
@@ -354,6 +373,9 @@ function hasThreat(world: World): boolean {
   }
   return false;
 }
+
+/** Есть ли враг в безопасном радиусе: пока есть, бот выбирает просвет, а не идёт прямо к добыче. */
+const hasThreat = (world: World): boolean => hasEnemyWithin(world, STRONG_BOT.safeRadiusUnits);
 
 /**
  * Дистанция, на которой бот держит врагов. Берётся ближайшая из потребностей
@@ -473,10 +495,13 @@ export function createStrongBot(options: StrongBotOptions): Bot {
   let calls = 0;
   let lastX = 1;
   let lastY = 0;
+  // Шаг стоящего: сколько тиков ещё идёт и сколько тиков после него не шагает.
+  let stepLeft = 0;
+  let pauseLeft = 0;
 
   return {
     input(world): SimInput {
-      if (stance === "stand" && world.stats.elapsedSec >= STAND_FROM_SEC) return { moveX: 0, moveY: 0 };
+      if (stance === "stand" && world.stats.elapsedSec >= STAND_FROM_SEC) return standInput(world);
 
       const recalculate = calls % STRONG_BOT.reactionTicks === 0;
       calls++;
@@ -505,4 +530,36 @@ export function createStrongBot(options: StrongBotOptions): Bot {
       return id;
     },
   };
+
+  /** Ввод стоящего: покой, а при враге ближе радиуса шага — шаг от него. */
+  function standInput(world: World): SimInput {
+    if (stepLeft > 0) {
+      stepLeft--;
+      if (stepLeft === 0) pauseLeft = STAND_STEP.cooldownTicks;
+      return { moveX: lastX, moveY: lastY };
+    }
+    if (pauseLeft > 0) {
+      pauseLeft--;
+      return { moveX: 0, moveY: 0 };
+    }
+    if (!hasEnemyWithin(world, STAND_STEP.radiusUnits)) {
+      // Врага рядом нет — шаг за добычей, если она в пределах досягаемости.
+      if (!seekLoot(world, target)) return { moveX: 0, moveY: 0 };
+      lastX = target.x;
+      lastY = target.y;
+      stepLeft = STAND_STEP.ticks - 1;
+      if (stepLeft === 0) pauseLeft = STAND_STEP.cooldownTicks;
+      return { moveX: lastX, moveY: lastY };
+    }
+
+    // Прежнего курса у стоящего нет: вес курса перевесил бы опасность и повёл шаг на врага.
+    // Запас вдвое больше радиуса шага: иначе все направления за пределами радиуса одинаково безопасны,
+    // и бот шагнул бы вбок.
+    chooseGap(world, 2 * STAND_STEP.radiusUnits * world.config.unitScale, 0, 0, null, gap);
+    lastX = gap.x;
+    lastY = gap.y;
+    stepLeft = STAND_STEP.ticks - 1;
+    if (stepLeft === 0) pauseLeft = STAND_STEP.cooldownTicks;
+    return { moveX: lastX, moveY: lastY };
+  }
 }
