@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
-import { BALANCE_TARGETS, buildCompleteCorridorSec } from "../src/content/balance-targets";
+import { BALANCE_TARGETS, buildCompleteCorridorSec, STRONG_BOT_TARGETS } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
 import { ENEMY_STAGES } from "../src/content/stages";
@@ -14,6 +14,7 @@ import {
   summarizeRuns,
   type BalanceRunResult,
   type PowerProfile,
+  type StrongStance,
 } from "../src/game/balance";
 
 /**
@@ -327,5 +328,88 @@ describe("сборка набора к 15-й минуте (Р194, T-0388)", () =
     expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(BUILD_MEDIAN_MIN_SEC);
     expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(corridor.min);
     expect(summary.medianBuildCompleteSec).toBeLessThanOrEqual(corridor.max);
+  });
+});
+
+// Сильный бот по лесенке Р183 и Р194 (T-0389): модель опытного игрока, которая
+// собирает опыт и держит связку. Медиана по трём стартовым оружиям и десяти зёрнам:
+// у одного оружия разброс огромен, и пять забегов ловили бы удачу, а не баланс.
+
+const strongCache = new Map<string, BalanceRunResult[]>();
+
+/** Прогоны сильного бота: профиль, стойка; считаются один раз на файл. */
+function strongRuns(profile: PowerProfile, stance: StrongStance): BalanceRunResult[] {
+  const key = `${profile.id}:${stance}`;
+  const known = strongCache.get(key);
+  if (known !== undefined) return known;
+
+  const runs: BalanceRunResult[] = [];
+  for (const startingWeaponId of STARTING_WEAPONS) {
+    for (let seed = 1; seed <= STRONG_BOT_TARGETS.seeds; seed++) {
+      runs.push(simulateBalanceRun({ seed, skill: "strong", stance, startingWeaponId, maxSec: 1800, loadout: profile.loadout }));
+    }
+  }
+  strongCache.set(key, runs);
+  return runs;
+}
+
+const strongMedian = (profile: PowerProfile, stance: StrongStance): number => summarizeRuns(strongRuns(profile, stance)).medianSurvivalSec;
+
+describe("сильный бот: лесенка профилей (Р183, Р194)", () => {
+  it("«бегает»: новичок живёт около 7 минут", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.kite.novice;
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeGreaterThanOrEqual(min);
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThanOrEqual(max);
+  });
+
+  it("«бегает»: средний игрок живёт около 10 минут", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.kite.average;
+    expect(strongMedian(POWER_PROFILES.average, "kite")).toBeGreaterThanOrEqual(min);
+    expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThanOrEqual(max);
+  });
+
+  it("«бегает»: полный арсенал живёт около 14 минут", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.kite.full;
+    expect(strongMedian(POWER_PROFILES.full, "kite")).toBeGreaterThanOrEqual(min);
+    expect(strongMedian(POWER_PROFILES.full, "kite")).toBeLessThanOrEqual(max);
+  });
+
+  it("порядок «новичок < средний < полный арсенал» держится и с подстройкой", { timeout: 600_000 }, () => {
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThan(strongMedian(POWER_PROFILES.average, "kite"));
+    expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThan(strongMedian(POWER_PROFILES.full, "kite"));
+  });
+
+  it("«стоит» с полным арсеналом: падает к 6–8-й минуте, а не живёт до 20-й", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.stand.full;
+    const median = strongMedian(POWER_PROFILES.full, "stand");
+    expect(median).toBeGreaterThanOrEqual(min);
+    expect(median).toBeLessThanOrEqual(max);
+    // стоять хуже, чем бегать: иначе кайт ничего не даёт
+    expect(median).toBeLessThan(strongMedian(POWER_PROFILES.full, "kite"));
+  });
+});
+
+describe("сильный бот: сборка набора около 15-й минуты (Р127, Р194)", () => {
+  it("бессмертный «бегает» со средним профилем собирает набор в коридоре", { timeout: 900_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.build.average;
+    const runs: BalanceRunResult[] = [];
+    for (let seed = 1; seed <= STRONG_BOT_TARGETS.seeds; seed++) {
+      runs.push(
+        simulateBalanceRun({
+          seed,
+          skill: "strong",
+          stance: "kite",
+          startingWeaponId: "spark",
+          loadout: POWER_PROFILES.average.loadout,
+          godMode: true,
+          stopOnBuild: true,
+          maxSec: Math.ceil(max * STRONG_BOT_TARGETS.build.horizon),
+        }),
+      );
+    }
+    const summary = summarizeRuns(runs);
+    expect(summary.buildCompleteRatio).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.build.shareMin);
+    expect(summary.medianBuildCompleteSec).toBeGreaterThanOrEqual(min);
+    expect(summary.medianBuildCompleteSec).toBeLessThanOrEqual(max);
   });
 });
