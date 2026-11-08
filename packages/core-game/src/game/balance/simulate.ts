@@ -14,6 +14,7 @@ import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 import { isBuildComplete } from "./build-complete";
+import { createStrongBot, type StrongStance } from "./strong-bot";
 
 /**
  * Прогон забега ботом на боевом контенте — вход калибровки баланса
@@ -71,6 +72,11 @@ export interface BalanceRunOptions {
   godMode?: boolean;
   /** прогон кончается, когда набор собран; `buildCompleteSec` — эта секунда */
   stopOnBuild?: boolean;
+  /**
+   * Стойка сильного бота (`skill: "strong"`): бегает всегда или стоит с 180-й
+   * секунды. Для остальных ботов не читается; по умолчанию — «бегает».
+   */
+  stance?: StrongStance;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
   /**
@@ -168,7 +174,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   });
   if (options.godMode === true) world.cheats.godMode = true;
   const director = createTimelineDirector(content.timeline, content.endlessCurve);
-  const bot = createBot(options.skill, options.bot);
+  const bot = options.skill === "strong" ? createStrongBot({ stance: options.stance ?? "kite" }) : createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
   const damageTakenByMinute: number[] = [];
@@ -187,7 +193,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     // вхолостую до конца прогона.
     if (isAwaitingChoice(world)) {
       if (firstLevelUpSec === 0) firstLevelUpSec = world.stats.elapsedSec;
-      chooseUpgrade(world, bot.choose(world.progression.offers));
+      chooseUpgrade(world, bot.choose(world.progression.offers, world));
       picks++;
       continue;
     }

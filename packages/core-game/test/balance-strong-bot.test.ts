@@ -11,7 +11,7 @@ import { createWorld, spawnEnemy, type World } from "../src/game/sim/world";
 const RAT: EnemyDef = { id: "rat", hp: 10, speed: 1, damage: 1, xp: 1, pattern: "swarm" };
 
 function world(): World {
-  return createWorld({ seed: 1, enemies: [RAT], config: { progressionEnabled: false } });
+  return createWorld({ seed: 1, enemies: [RAT], config: { progressionEnabled: false, lootEnabled: true } });
 }
 
 /** Ставит врагов в единицах контента и перестраивает сетку, как это делает шаг мира. */
