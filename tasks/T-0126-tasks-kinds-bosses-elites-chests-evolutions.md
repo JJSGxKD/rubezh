@@ -3,7 +3,7 @@ id: T-0126
 title: Задания и достижения: боссы, элиты, сундуки, кристаллы, эволюции
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-20
 size: M
