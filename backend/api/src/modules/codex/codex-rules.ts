@@ -28,6 +28,7 @@ export const CODEX_ENEMY_IDS: readonly string[] = [
   "elite_grave_knight",
   "boss_matryoshka",
   "boss_ram",
+  "rubezh_guard",
 ];
 
 /** Достижение за полный кодекс: его строку клиент показывает у полосы. */
