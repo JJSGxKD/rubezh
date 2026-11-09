@@ -3,7 +3,7 @@ id: T-0374
 title: Ошибки запросов в панели — код, статус, номер запроса и причина внутренней ошибки по праву
 epic: E7
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
