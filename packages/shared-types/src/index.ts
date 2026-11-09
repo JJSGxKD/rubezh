@@ -1634,6 +1634,8 @@ export interface RunResult {
   eliteKills: number;
   /** открытые сундуки забега */
   chestsOpened: number;
+  /** из них редких: открытых сундуков наибольшего размера из таблицы весов (tasks/T-0175) */
+  rareChestsOpened: number;
   /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
   crystalsCollected: number;
   /**
@@ -1791,6 +1793,8 @@ export interface RunFinishStats {
   bossKills?: number;
   eliteKills?: number;
   chestsOpened?: number;
+  /** редкие сундуки: не больше `chestsOpened` (tasks/T-0175) */
+  rareChests?: number;
   crystals?: number;
   /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
   noHitSec?: number;
