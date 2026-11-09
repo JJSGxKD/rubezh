@@ -120,8 +120,10 @@ describe("счётчик не трогает симуляцию", () => {
   });
 
   it("в game/sim/chests.ts по-прежнему нет обращений к world.rng", () => {
+    // Комментарии файла называют `world.rng` прямо, поэтому смотрим на код без них.
     const source = readFileSync(new URL("../src/game/sim/chests.ts", import.meta.url), "utf8");
-    expect(source).not.toMatch(/world\.rng/);
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+    expect(code).not.toMatch(/world\.rng/);
   });
 });
 
