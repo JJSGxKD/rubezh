@@ -15,6 +15,7 @@ export function Dialog({
   title,
   description,
   footer,
+  size = "default",
   children,
 }: {
   open: boolean;
@@ -22,6 +23,8 @@ export function Dialog({
   title: string;
   description?: string;
   footer?: ReactNode;
+  /** `wide` — для форм с предпросмотром: форма и кадр телефона рядом */
+  size?: "default" | "wide";
   children: ReactNode;
 }) {
   const narrow = useNarrow();
@@ -35,7 +38,7 @@ export function Dialog({
           className={
             narrow
               ? "fixed inset-x-0 bottom-0 z-40 flex max-h-[90vh] flex-col rounded-t-lg border border-b-0 border-border-strong bg-surface shadow-panel focus:outline-none"
-              : "fixed top-1/2 left-1/2 z-40 flex max-h-[90vh] w-[min(760px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-md border border-border-strong bg-surface shadow-panel focus:outline-none"
+              : `fixed top-1/2 left-1/2 z-40 flex max-h-[90vh] ${size === "wide" ? "w-[min(1080px,calc(100vw-32px))]" : "w-[min(760px,calc(100vw-32px))]"} -translate-x-1/2 -translate-y-1/2 flex-col rounded-md border border-border-strong bg-surface shadow-panel focus:outline-none`
           }
         >
           <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
