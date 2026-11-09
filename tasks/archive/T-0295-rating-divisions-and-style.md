@@ -40,7 +40,7 @@ batch: 7
 
 # T-0295. Дивизионы сезона по доле доски и стиль игрока — сильнейшая ось лучшего забега, «Твой стиль» с подсказкой, что поднимет слабую ось
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json)](README.md#значки-статуса) [![T-0294](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json&label=T-0294)](T-0294-rating-boards-by-points.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0295.json)](../README.md#значки-статуса) [![T-0294](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0294.json&label=T-0294)](T-0294-rating-boards-by-points.md)
 
 ## Зачем
 
