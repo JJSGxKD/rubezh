@@ -19,7 +19,8 @@ export const CONFIRM_POLL_MS = 1_000;
 /** Сколько ждать подтверждения, прежде чем сказать «ещё подтверждается» — как у второго шанса. */
 export const CONFIRM_TIMEOUT_MS = 45_000;
 
-export type ShopProduct = "shop_item" | "vip";
+/** `donation` — поддержка проекта: игровых ценностей нет, счёт и ожидание те же (docs/35-stage4-plan.md, Р109). */
+export type ShopProduct = "shop_item" | "vip" | "donation";
 
 /** Что покупаем и почём — по витрине: для разреза событий, если счёт так и не выставится. */
 export interface BuyRequest {
