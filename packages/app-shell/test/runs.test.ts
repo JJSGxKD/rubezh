@@ -190,7 +190,7 @@ describe("очередь забегов", () => {
       deathCause: "swarm_rat",
       continues: [],
       passives: [{ id: "might", level: 2 }],
-      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} },
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -270,6 +270,22 @@ describe("очередь забегов", () => {
     expect(requests).toHaveLength(1);
     const sent = requests[0]?.body as { stats: Record<string, unknown> };
     expect(sent.stats).toEqual({ damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] });
+  });
+
+  it("запись очереди без одного только rareChests разбирается: поля нет и в отправке (T-0175)", async () => {
+    const legacy = toSubmission(result("run-old-0001"));
+    const stats: Record<string, unknown> = { ...legacy.stats };
+    delete stats.rareChests;
+    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
+
+    reply = async () => json(200, FINISHED);
+    mount();
+    await useRuns.getState().flush("launch");
+
+    expect(requests).toHaveLength(1);
+    const sent = requests[0]?.body as { stats: Record<string, unknown> };
+    expect(sent.stats).not.toHaveProperty("rareChests");
+    expect(sent.stats.chestsOpened).toBe(0);
   });
 
   it("запись очереди хранит журнал охоты, сборку и силу и отправляет их на сервер как есть (T-0293)", async () => {
@@ -384,22 +400,6 @@ describe("счётчики итога забега (T-0125)", () => {
     const submission = toSubmission(result("run-00000001", { chestsOpened: 3, rareChestsOpened: 2 }));
 
     expect(submission.stats).toMatchObject({ chestsOpened: 3, rareChests: 2 });
-  });
-
-  it("запись очереди прошлой сборки без rareChests разбирается: поля нет и в отправке (T-0175)", async () => {
-    const legacy = toSubmission(result("run-old-0001"));
-    const stats: Record<string, unknown> = { ...legacy.stats };
-    delete stats.rareChests;
-    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
-
-    reply = async () => json(200, FINISHED);
-    mount();
-    await useRuns.getState().flush("launch");
-
-    expect(requests).toHaveLength(1);
-    const sent = requests[0]?.body as { stats: Record<string, unknown> };
-    expect(sent.stats).not.toHaveProperty("rareChests");
-    expect(sent.stats.chestsOpened).toBe(0);
   });
 
 });
