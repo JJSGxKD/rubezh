@@ -2797,3 +2797,19 @@ model BoostCredit {
   @@id([accountId, boostId])
   @@map("boost_credit")
 }
+
+// Снимки аудитории по суткам (tasks/T-0203)
+
+/// Закрытые московские сутки: сколько разных аккаунтов запускало игру в них,
+/// за 7 и за 30 суток, заканчивая ими. Рекорды DAU/WAU/MAU — максимум по строкам.
+/// Строку пишет ночное задание (`admin-notify/activity-snapshot.job.ts`), историю
+/// строит из сессий запуска — их вайп не стирает
+model ActivityDaily {
+  day        String   @id @db.VarChar(10)
+  dau        Int
+  wau        Int
+  mau        Int
+  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  @@map("activity_daily")
+}

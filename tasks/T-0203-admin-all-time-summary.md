@@ -3,8 +3,8 @@ id: T-0203
 title: Сводка «чего достигли» в панели — итоги за всё время и рекорды DAU/WAU/MAU
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-1
 size: M
 depends_on: [T-0052, T-0115]
@@ -27,6 +27,7 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/29-admin-panel.md
