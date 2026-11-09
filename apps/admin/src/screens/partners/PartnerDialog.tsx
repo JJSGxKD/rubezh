@@ -17,7 +17,7 @@ import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Button, Field, Input, Select, TextArea } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 /**
  * Новый партнёр или правка: как его зовёт команда, как связаться, куда и в
@@ -32,7 +32,7 @@ export function PartnerDialog({ partner, onClose, onSaved }: { partner: Partner 
   const submit = form.handleSubmit(async (values) => {
     const result = partner === null ? await createPartner(api, values) : await updatePartner(api, partner.partnerId, values);
     if (!result.ok) {
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(partner === null ? `Партнёр заведён: ${result.data.name}` : `Сохранено: ${result.data.name}`, {

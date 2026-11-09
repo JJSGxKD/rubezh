@@ -136,6 +136,7 @@ export class SeasonsViewService {
           name: row.displayName,
           photoUrl: row.photoUrl,
           ...(row.tester ? { tester: true as const } : {}),
+          ...(row.supporter ? { supporter: true as const } : {}),
           points: scoring === "points" ? entry.score : row.points,
           // По очкам время — подпись лучшего по очкам забега, по времени — само число таблицы.
           survivalSec: scoring === "points" ? row.survivalSec : entry.score,

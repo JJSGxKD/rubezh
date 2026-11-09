@@ -29,7 +29,7 @@ import { formatDateTime, formatNumber } from "../../format";
 import { can } from "../../state/session";
 import { useSession } from "../../state/use-session";
 import { ConfirmDialog } from "../../ui/confirm-dialog";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, type Column } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -94,7 +94,7 @@ function SourcesPanel({ sources, canEdit, onChanged }: { sources: readonly Sourc
     setRefreshing(null);
     if (!result.ok) {
       setOutcome({ ok: false, text: `${source.source}: ${result.error.message}` });
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     const text = refreshSummary(result.data);
