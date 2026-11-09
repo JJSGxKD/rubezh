@@ -3,7 +3,7 @@ id: T-0297
 title: Карточка забега — «паутина» пяти осей против ожидаемого, разбор очков полосами и сборка; открывается из рейтинга и с экрана итогов
 epic: E12
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -30,6 +30,23 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - backend/api/src/modules/rating/run-scorer.service.ts
+  - backend/api/src/modules/runs/runs.repository.ts
+  - backend/api/src/modules/runs/runs-view.service.ts
+  - backend/api/src/modules/seasons/seasons.repository.ts
+  - backend/api/src/modules/seasons/seasons-view.service.ts
+  - backend/api/src/modules/seasons/dto/seasons.dto.ts
+  - backend/api/test/rating-run-card.test.ts
+  - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
+  - packages/app-shell/src/screens/meta/run-card-link.tsx
+  - packages/app-shell/src/state/run-card-start.ts
+  - packages/app-shell/src/state/run-detail-api.ts
+  - packages/app-shell/src/i18n/ru-run-card.json
+  - packages/app-shell/src/i18n/run-card.ts
+  - packages/app-shell/src/screens/meta/run-card-preview.tsx
+  - docs/10-progression-and-ladder.md
+  - docs/24-attribution-and-sharing.md
 runner: any
 executor: sonnet-5.5
 effort: high
