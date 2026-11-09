@@ -4,7 +4,7 @@ title: Осада стоящего — строй и элиты вокруг и�
 epic: E10
 priority: P1
 status: in-progress
-owner: claude-58 / sonnet-5.5 / extra
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0389]
