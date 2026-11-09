@@ -25,6 +25,7 @@ import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { Badge, Button, ErrorNotice, Field, Input, Loading, Notice, Panel, Select, TextArea } from "../../ui/kit";
+import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { useApi } from "../../ui/use-api";
 
@@ -49,6 +50,10 @@ export function ChangelogScreen() {
   const canPublish = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("changelog.publish"));
   const [input, setInput] = useState<EntryInput>(EMPTY);
   const [original, setOriginal] = useState<ChangelogEntry | null>(null);
+  // Значения при открытии окна: по ним видно, тронул ли оператор форму.
+  const [initial, setInitial] = useState<EntryInput>(EMPTY);
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [publishing, setPublishing] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -57,20 +62,35 @@ export function ChangelogScreen() {
   const problem = entryProblem(input, original);
   const lockedByPublication = original !== null && original.publishedAt !== null;
 
-  const reset = () => {
-    setInput((current) => ({ ...EMPTY, version: current.version, platforms: current.platforms }));
+  // После сохранения версия и площадки остаются для следующей строки.
+  const [lastSaved, setLastSaved] = useState<Pick<EntryInput, "version" | "platforms">>({ version: "", platforms: [] });
+
+  const openNew = () => {
+    const value: EntryInput = { ...EMPTY, version: lastSaved.version, platforms: lastSaved.platforms };
+    setInput(value);
+    setInitial(value);
     setOriginal(null);
+    setFormError(null);
+    setOpen(true);
+  };
+
+  const closeForm = () => {
+    setOpen(false);
+    setOriginal(null);
+    setFormError(null);
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (problem !== null) return;
     setPending(true);
+    setFormError(null);
     const result = await saveEntry(api, input);
     setPending(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    if (!result.ok) return setFormError(result.error.message);
+    setLastSaved({ version: input.version, platforms: input.platforms });
     setOutcome({ tone: "success", text: original === null ? `Строка добавлена в ${result.data.version} черновиком` : `Строка в ${result.data.version} сохранена` });
-    reset();
+    closeForm();
     reload();
   };
 
@@ -81,7 +101,7 @@ export function ChangelogScreen() {
     setRemoving(null);
     if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
     setOutcome({ tone: "success", text: entry.publishedAt === null ? "Черновик удалён" : "Строка удалена — игроки её больше не видят" });
-    if (original?.entryId === entry.entryId) reset();
+    if (open && original?.entryId === entry.entryId) closeForm();
     reload();
   };
 
@@ -102,16 +122,41 @@ export function ChangelogScreen() {
     }));
 
   const edit = (entry: ChangelogEntry) => {
-    setInput(toInput(entry));
+    const value = toInput(entry);
+    setInput(value);
+    setInitial(value);
     setOriginal(entry);
+    setFormError(null);
+    setOpen(true);
   };
 
   return (
     <div className="flex flex-col gap-4">
       <Notice tone="warning">Журнал скрыт у игроков (Р125): публикация сохранится, но игроки её не увидят, пока журнал не вернут.</Notice>
-      <Panel title={original === null ? "Новая строка" : `Строка в ${original.version}`}>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
+      <div className="flex justify-end">
+        <Button tone="primary" onClick={openNew}>
+          Новая строка
+        </Button>
+      </div>
+      {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
+      <FormDialog
+        open={open}
+        wide
+        title={original === null ? "Новая строка" : `Строка в ${original.version}`}
+        dirty={isDirty(initial, input)}
+        onClose={closeForm}
+        footer={(requestClose) => (
+          <>
+            {formError === null ? null : <span className="mr-auto text-sm text-danger">{formError}</span>}
+            <Button onClick={requestClose}>Отмена</Button>
+            <Button tone="primary" type="submit" form="changelog-form" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
+              {original === null ? "Добавить черновиком" : "Сохранить"}
+            </Button>
+          </>
+        )}
+      >
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form id="changelog-form" onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Версия, X.Y.Z">
               <Input value={input.version} disabled={lockedByPublication} onChange={(event) => setInput({ ...input, version: event.target.value.trim() })} placeholder="0.6.0" maxLength={16} className="w-28" />
@@ -139,15 +184,9 @@ export function ChangelogScreen() {
             <TextArea value={input.text} onChange={(event) => setInput({ ...input, text: event.target.value })} rows={3} maxLength={TEXT_MAX + 50} className="w-full max-w-2xl" />
           </Field>
           {lockedByPublication ? <Notice tone="info">Строка уже у игроков: меняются только текст и вид.</Notice> : null}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
-              {original === null ? "Добавить черновиком" : "Сохранить"}
-            </Button>
-            {original === null ? null : <Button onClick={reset}>Отмена</Button>}
-          </div>
         </form>
           {/* Версия так, как её увидит игрок в «Что нового»: та же карточка в странице клиента (Р83). */}
-          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 md:sticky md:top-0 md:self-start">
             <PhonePreview
               kind="changelog-version"
               draft={changelogPreview(input, original, state.status === "ok" ? state.data.entries : [])}
@@ -156,12 +195,11 @@ export function ChangelogScreen() {
             />
           </div>
         </div>
-        {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
-      </Panel>
+      </FormDialog>
 
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {state.status === "ok" && state.data.entries.length === 0 ? <Notice tone="info">Журнал пуст — начните с первой строки выше.</Notice> : null}
+      {state.status === "ok" && state.data.entries.length === 0 ? <Notice tone="info">Журнал пуст — начните с первой строки кнопкой «Новая строка».</Notice> : null}
       {state.status === "ok"
         ? groupByVersion(state.data.entries, state.data.releases).map((group) => (
             <Panel

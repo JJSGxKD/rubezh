@@ -38,11 +38,69 @@ describe("клиент API панели", () => {
     const api = new AdminApi(fetch);
 
     const denied = await api.request("/x", { schema });
-    expect(denied).toEqual({ ok: false, error: { kind: "forbidden", status: 403, code: "forbidden", message: "Нет права players.ban" } });
+    expect(denied).toEqual({ ok: false, error: { kind: "forbidden", status: 403, code: "forbidden", message: "Нет права players.ban", requestId: null, reason: null } });
 
     const proxy = await api.request("/x", { schema });
     expect(proxy.ok).toBe(false);
     if (!proxy.ok) expect(proxy.error).toMatchObject({ kind: "unavailable", status: 502, code: null });
+  });
+
+  describe("номер запроса и причина (Р193)", () => {
+    const ID = "3f2a1b4c-0d5e-4f6a-8b7c-9d0e1f2a3b4c";
+    const HEADER_ID = "aaaaaaaa-0d5e-4f6a-8b7c-9d0e1f2a3b4c";
+
+    function failed(status: number, body: unknown, headers: Record<string, string> = {}): Response {
+      return new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers });
+    }
+
+    it("разбирает requestId и reason из конверта", async () => {
+      const { fetch } = fakeFetch(failed(500, { error: { code: "internal_error", message: "Внутренняя ошибка сервера", requestId: ID, reason: "db is down" } }));
+      const result = await new AdminApi(fetch).request("/x", { schema });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatchObject({ requestId: ID, reason: "db is down", code: "internal_error", status: 500 });
+    });
+
+    it("без номера в конверте берёт заголовок ответа x-request-id", async () => {
+      const { fetch } = fakeFetch(failed(500, { error: { code: "internal_error", message: "Внутренняя ошибка сервера" } }, { "x-request-id": HEADER_ID }));
+      const result = await new AdminApi(fetch).request("/x", { schema });
+
+      if (!result.ok) expect(result.error).toMatchObject({ requestId: HEADER_ID, reason: null });
+    });
+
+    it("отбрасывает причину длиннее 300 знаков", async () => {
+      const { fetch } = fakeFetch(failed(500, { error: { code: "internal_error", message: "m", requestId: ID, reason: "x".repeat(301) } }));
+      const result = await new AdminApi(fetch).request("/x", { schema });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatchObject({ requestId: ID, reason: null });
+    });
+
+    it("5xx без конверта: прежний текст и номер из заголовка", async () => {
+      const { fetch } = fakeFetch(failed(502, "<html>502</html>", { "x-request-id": HEADER_ID }));
+      const result = await new AdminApi(fetch).request("/x", { schema });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe("Сервер ответил ошибкой — подробности в логе API");
+        expect(result.error.requestId).toBe(HEADER_ID);
+      }
+    });
+
+    it("нет ответа — номера нет", async () => {
+      const { fetch } = fakeFetch(new TypeError("fetch failed"));
+      const result = await new AdminApi(fetch).request("/x", { schema });
+
+      if (!result.ok) expect(result.error).toMatchObject({ requestId: null, reason: null });
+    });
+
+    it("скачивание отдаёт номер так же", async () => {
+      const { fetch } = fakeFetch(failed(500, { error: { code: "internal_error", message: "m", requestId: ID } }));
+      const result = await new AdminApi(fetch).download("/exports", {}, 1000);
+
+      if (!result.ok) expect(result.error.requestId).toBe(ID);
+      expect(result.ok).toBe(false);
+    });
   });
 
   it("401 зовёт слушателей: стор сессии возвращает панель ко входу", async () => {
