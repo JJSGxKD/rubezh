@@ -321,9 +321,12 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
         title="Слайды"
         help={HELP.home.state}
         actions={
-          <Button tone="primary" onClick={openNew}>
-            Новый слайд
-          </Button>
+          <>
+            <Help text={HELP.home.section} />
+            <Button tone="primary" onClick={openNew}>
+              Новый слайд
+            </Button>
+          </>
         }
       >
         {extra > 0 ? (
