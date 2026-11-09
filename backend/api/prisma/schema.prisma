@@ -39,6 +39,8 @@ enum Role {
   finance
   analyst
   stakeholder
+  /// внешний партнёр: пускает в панель, но только в его кабинет (T-0217, Р136); выдаётся из карточки партнёра
+  partner
 }
 
 enum Difficulty {
@@ -233,6 +235,7 @@ model Account {
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
   partnerBinding   PartnerBinding?
+  partnerCard      Partner?
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -2170,7 +2173,10 @@ model Partner {
   postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
   /// какие события уходят на адрес; по умолчанию одна регистрация
   postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
+  /// игровой аккаунт партнёра — связь кабинета (T-0217, Р136): пишется только из карточки партнёра. Остаётся и после закрытия кабинета: по ней аккаунт не привязывается к самому себе. Один аккаунт — один партнёр
+  accountId      String?   @unique @map("account_id") @db.Uuid
 
+  account   Account?        @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
