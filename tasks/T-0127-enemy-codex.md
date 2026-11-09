@@ -3,7 +3,7 @@ id: T-0127
 title: Кодекс врагов: гайдбук как коллекция, «7/11» и награда за полный
 epic: E16
 priority: P1
-status: done
+status: in-progress
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-21
 size: M
