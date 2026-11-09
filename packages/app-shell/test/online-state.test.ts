@@ -294,8 +294,10 @@ describe("сбои", () => {
     await settle();
     await test.advance(45_000);
     await test.advance(45_000);
+    expect(useOnline.getState()).toMatchObject({ online: 128, inRun: 37, failures: 2 });
+    // Третий подряд — уже плашки нет, но и мусора в стор не попало.
     await test.advance(45_000);
-    expect(useOnline.getState()).toMatchObject({ online: 128, inRun: 37, failures: 3 });
+    expect(useOnline.getState()).toMatchObject({ online: null, inRun: null, failures: 3 });
   });
 
   it("сеть пропала (запрос не ушёл) — тоже сбой, пинг не останавливается", async () => {

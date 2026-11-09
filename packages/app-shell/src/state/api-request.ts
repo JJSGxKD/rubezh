@@ -49,6 +49,13 @@ export type ApiRequest = <T>(
   init: { method: "GET" | "POST" | "PUT" | "DELETE"; body?: unknown },
 ) => Promise<ApiResult<T>>;
 
+/** Когда ушёл последний запрос к API, мс: пинг онлайна пропускается, если сервер игрока и так видел (`online.ts`). */
+let lastRequestAt = 0;
+
+export function lastApiRequestAt(): number {
+  return lastRequestAt;
+}
+
 export const apiRequest: ApiRequest = async (path, schema, init) => {
   const { authorizedFetch, useSession } = await import("./session");
 
@@ -67,6 +74,7 @@ export const apiRequest: ApiRequest = async (path, schema, init) => {
   }
   // Сессии нет — запрос и не уходил: причину знает сессия.
   if (response === null) return { ok: false, failure: sessionFailure(useSession.getState().failure) };
+  lastRequestAt = sentAt;
   // Сервер ответил — связь есть, даже если ответ ошибка: у экрана своя ошибка.
   // Шлюз без API (502–504) не ответ сервера, а его отсутствие.
   reportReachability(UNREACHABLE_STATUSES.has(response.status) ? "fail" : "reachable", Date.now(), sentAt);
