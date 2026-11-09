@@ -4,7 +4,7 @@ title: Панель — список первым, форма «Новое …»
 epic: E7
 priority: P2
 status: in-progress
-owner: claude-12 / sonnet-5.5 / medium
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
