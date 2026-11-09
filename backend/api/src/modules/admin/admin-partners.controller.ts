@@ -4,7 +4,7 @@ import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
-import { PARTNER_STATUSES, partnerInputSchema } from "../partners/partner-rules.js";
+import { PARTNER_STATUSES, partnerInputSchema, partnerUpdateSchema } from "../partners/partner-rules.js";
 import { PartnersService, type PartnerDetail, type PartnerFunnel, type PartnerView } from "../partners/partners.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
@@ -19,7 +19,8 @@ const statusSchema = z.object({ status: z.enum(PARTNER_STATUSES), reason: z.stri
  * Партнёры в панели (docs/35-stage4-plan.md WP41, часть 2; docs/29-admin-panel.md):
  * смотрят под `partners.view`, заводят и правят под `partners.edit`, каждое
  * изменение — в аудит. Удаления нет: по партнёру считаются его игроки.
- * Статус партнёра меняется отдельной ручкой, с причиной.
+ * Статус партнёра меняется отдельной ручкой, с причиной. Общий адрес постбэка (T-0070) задаётся
+ * правкой, а не заведением.
  */
 @Controller("admin/partners")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -61,7 +62,7 @@ export class AdminPartnersController {
   @RequirePermission("partners.edit")
   async update(@Req() request: unknown, @Param("partnerId") partnerId: string, @Body() body: unknown): Promise<{ data: PartnerView }> {
     const actor = await this.consume(request);
-    const input = parse(() => partnerInputSchema.parse(body), "Некорректный партнёр");
+    const input = parse(() => partnerUpdateSchema.parse(body), "Некорректный партнёр");
     return { data: await this.partners.update(actor, partnerIdOf(partnerId), input) };
   }
 

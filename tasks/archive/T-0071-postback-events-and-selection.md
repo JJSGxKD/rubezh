@@ -3,8 +3,8 @@ id: T-0071
 title: Постбэки — покупки и возврат на следующий день, выбор событий у назначения
 epic: E14
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-53 / sonnet-5.5 / high
 author: claude-lead2-2
 size: M
 depends_on: [T-0069, T-0070]
@@ -27,6 +27,9 @@ shared:
   - docs/30-configuration-map.md
   - docs/23-referral-and-partner-program.md
   - docs/35-stage4-plan.md
+  - docs/24-attribution-and-sharing.md
+  - backend/api/test/postback-settings.test.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -37,7 +40,7 @@ batch: 4
 
 # T-0071. Постбэки — покупки и возврат на следующий день, выбор событий у назначения
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0071.json)](README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](archive/T-0069-postback-destinations-layer.md) [![T-0070](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json&label=T-0070)](T-0070-postback-s2s-and-partner.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0071.json)](../README.md#значки-статуса) [![T-0069](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0069.json&label=T-0069)](T-0069-postback-destinations-layer.md) [![T-0070](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0070.json&label=T-0070)](T-0070-postback-s2s-and-partner.md)
 
 ## Зачем
 
@@ -255,17 +258,56 @@ batch: 4
 - Подтверждено `claude-lead-1` 13.10.2026: событие, включённое позже, досылается по кликам после
   `postback_since`, пока открыто его окно (7 суток для регистрации, 30 для покупок).
 
+## Уточнения claude-lead-1 от 07.11.2026
+
+Спецификация писалась до T-0181 (прямая ссылка AdsGram) и T-0070 (постбэки s2s и
+партнёру). Решения не меняются; ниже — как их выполнить на нынешнем коде.
+
+1. **Проход по кликам живёт в `ad-conversions/click-launch-sweep.ts`**
+   (`sweepClickLaunches`, T-0070), а не в `conversions.repository.ts`. Запрос
+   возвратов (шаг 4) пишется там же, рядом с регистрациями и покупками, той же
+   формы. После задачи `conversions.repository.ts` не длиннее 300 строк.
+2. **`COUNTED_RUN` (шаг 2) используют оба прохода.** Условие засчитанного забега
+   повторено и в `click-launch-sweep.ts`, и в `direct-launch-sweep.ts` (T-0181).
+   Рефакторинг — одним коммитом, поведение то же; все существующие тесты
+   регистраций обоих проходов, в том числе `ad-conversions.integration.test.ts` и
+   `postback-s2s.integration.test.ts`, остаются зелёными без правок.
+3. **Прямой запуск `l-<код>` возвратов не порождает.** Прямая ветка отбирает только
+   назначения рекламных сетей (`LINK_NETWORKS`, T-0070); AdsGram `d1_return` не
+   принимает, поэтому запроса возвратов в `direct-launch-sweep.ts` нет. Тест: ссылка
+   AdsGram, новичок по `l-<код>` играет засчитанный забег сегодня и завтра — строк
+   `goal = 4` нет.
+4. **Панель.** Блок постбэка — `apps/admin/src/screens/links/PostbackBlock.tsx`
+   (общий для ссылки и партнёра). Строку `postbackEventsLine` («Получает: …») в нём
+   заменяют флажки шага 9; сама функция остаётся для строки «Получает: …» там, где
+   выбора нет. Правка ссылки идёт через тот же `PATCH /admin/links/:code`: у строгой
+   схемы `{ target?, postbackUrl? }` с правилом «хотя бы одно поле» добавляется
+   `postbackEvents`. У партнёра правится `partnerUpdateSchema` в
+   `partners/partner-rules.ts`. Снятие адреса и `postback_since` живут в
+   `ad-conversions/postback-settings.ts` (`nextPostback`); возврат событий к
+   `["registration"]` при снятии адреса делается там же.
+5. **Справка в панели** — `apps/admin/src/screens/links/links-guide.ts` (в зонах через
+   `screens/links/**`). Сейчас там сказано, что по умолчанию уходит одна регистрация:
+   дописать выбор событий, событие «Возврат на следующий день» (правило игрового дня
+   по Москве; только следующие сутки после дня первого засчитанного забега) и что
+   AdsGram его не получает. Правила T-0372: текст только по коду, без имён функций и
+   файлов, безлично или на «вы»; разделов ровно восемь; тест
+   `apps/admin/test/links-guide.test.ts` зелёный. В описании PR — таблица
+   «утверждение → файл:строка» для каждого изменённого утверждения справки.
+6. **`docs/24-attribution-and-sharing.md` §3.5.2** («Постбэки на свой адрес», T-0070):
+   дописать выбор событий и `d1_return`, кратко, со ссылкой на `docs/23`.
+
 ## Критерии приёмки
 
-- [ ] События выбираются в карточке ссылки и партнёра; без события сохранить нельзя, без адреса выбор
+- [x] События выбираются в карточке ссылки и партнёра; без события сохранить нельзя, без адреса выбор
   недоступен.
-- [ ] Покупки уходят с суммой и валютой как заплачено (`XTR`); тестовые, возвращённые и не отлежавшие
+- [x] Покупки уходят с суммой и валютой как заплачено (`XTR`); тестовые, возвращённые и не отлежавшие
   оплаты не уходят.
-- [ ] `d1_return` создаётся ровно в следующий игровой день по Москве, один раз на клик и назначение, и
+- [x] `d1_return` создаётся ровно в следующий игровой день по Москве, один раз на клик и назначение, и
   только там, где выбран; AdsGram его не получает и не меняется.
-- [ ] Миграций нет; у назначений без `d1_return` условие `'d1_return' = ANY(t.events)` отсекает строки до
+- [x] Миграций нет; у назначений без `d1_return` условие `'d1_return' = ANY(t.events)` отсекает строки до
   подзапроса по забегам.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные; в PR — чек-листы безопасности и нагрузки
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные; в PR — чек-листы безопасности и нагрузки
   (`docs/15-engineering-standards.md` §7, §8).
 
 ## PR

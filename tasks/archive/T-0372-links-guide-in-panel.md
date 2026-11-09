@@ -26,7 +26,7 @@ batch: 4
 
 # T-0372. Справка по ссылкам в панели — виды ссылок, путь клика, поля, ключи и счётчики
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0372.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0372.json)](../README.md#значки-статуса)
 
 ## Зачем
 

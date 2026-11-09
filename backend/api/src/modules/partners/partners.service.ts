@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
+import { NO_POSTBACK_ADDRESS, checkedPostbackEvents, checkedPostbackUrl, nextPostback, postbackLogForm, sameEvents } from "../ad-conversions/postback-settings.js";
 import { partnerFunnelView, type PartnerFunnelView } from "../funnel/funnel-report.js";
 import { PARTNER_FUNNEL, type PartnerFunnelSource } from "../funnel/funnel.repository.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { PartnerNotFoundError, PartnerTelegramTakenError } from "./partner-errors.js";
 import { PARTNER_LINKS, type PartnerLinks, type PartnerLinksSource, type PartnerLinkStats } from "./partner-links.repository.js";
-import { PARTNER_RULES, PARTNER_STATUSES, withTerms, type PartnerFull, type PartnerInput, type PartnerStats, type PartnerStatus } from "./partner-rules.js";
+import { PARTNER_RULES, PARTNER_STATUSES, withTerms, type PartnerFull, type PartnerInput, type PartnerPatch, type PartnerStats, type PartnerStatus, type PartnerUpdateInput } from "./partner-rules.js";
 import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, type PartnersRepository } from "./partners.repository.js";
 
 /**
@@ -22,12 +23,16 @@ import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, 
  * способ выплаты и процент — только записываются: что и когда начисляется,
  * решит модель учёта (О44). Статус меняется отдельно, с причиной: он
  * решает, привязывает ли партнёр новых игроков.
+ *
+ * Общий адрес постбэка (T-0070) — ещё одно условие партнёра: регистрация приведённого им игрока уходит на
+ * него, если у ссылки партнёра нет своего адреса. Полный адрес видят те, кто правит партнёров
+ * (`partners.edit`): запрос адреса может нести секрет приёмника, остальным показывается без запроса.
  */
 
 export type PartnerView = PartnerFull & { stats: PartnerStats };
 
 /** Поля, чья правка попадает в аудит «было → стало»; статус — отдельным действием `partner.status`. */
-const AUDITED_FIELDS = ["name", "contact", "note", "telegramId", "country", "payoutCurrency", "payoutMethod", "sharePercent"] as const;
+const AUDITED_FIELDS = ["name", "contact", "note", "telegramId", "country", "payoutCurrency", "payoutMethod", "sharePercent", "postbackUrl", "postbackEvents"] as const;
 
 /** Причина смены статуса: от трёх до двухсот знаков без пробелов по краям. */
 const REASON_MIN = 3;
@@ -77,11 +82,13 @@ export class PartnersService {
 
   async catalog(actor: AccountRef, at = new Date()): Promise<{ partners: PartnerView[]; rules: typeof PARTNER_RULES }> {
     await this.roles.require(actor, "partners.view");
-    return { partners: (await this.db(this.repository.list(LIST_LIMIT, at))).map(withTerms), rules: PARTNER_RULES };
+    const canEdit = await this.roles.can(actor, "partners.edit");
+    return { partners: (await this.db(this.repository.list(LIST_LIMIT, at))).map((row) => seenBy(withTerms(row), canEdit)), rules: PARTNER_RULES };
   }
 
   async detail(actor: AccountRef, partnerId: string, at = new Date()): Promise<PartnerDetail> {
     await this.roles.require(actor, "partners.view");
+    const canEdit = await this.roles.can(actor, "partners.edit");
     const partner = await this.db(this.repository.byId(partnerId, at));
     if (partner === null) throw new PartnerNotFoundError();
     const [daily, codes, linked] = await Promise.all([
@@ -90,7 +97,7 @@ export class PartnersService {
       this.partnerLinks === null ? NO_LINKS : this.db(this.partnerLinks.forPartner(partnerId)),
     ]);
     return {
-      partner: withTerms(partner),
+      partner: seenBy(withTerms(partner), canEdit),
       daily,
       codes: codes.map((code) => ({ ...code, state: campaignState(code, at) })),
       links: linked.links,
@@ -124,11 +131,34 @@ export class PartnersService {
     return { ...row, stats: { codes: 0, activeCodes: 0, redeemed: 0, bound: 0, played: 0, payers: 0, stars: 0 } };
   }
 
-  /** Правка названия, связи и условий: названное меняется, не названное остаётся. В аудит — только изменённые поля. */
-  async update(actor: AccountRef, partnerId: string, input: PartnerInput, at = new Date()): Promise<PartnerView> {
+  /**
+   * Правка названия, связи и условий: названное меняется, не названное остаётся. В аудит — только изменённые поля,
+   * адрес постбэка — без запроса. Адрес проверяется правилами шаблона до записи; первое задание ставит
+   * `postback_since`, смена на другой адрес момент не трогает, снятие обнуляет и возвращает события к одной
+   * регистрации (`nextPostback`). События общего адреса (T-0071) выбираются, только когда адрес задан — уже или в этом же
+   * запросе; снять адрес и выбрать события одним запросом нельзя.
+   */
+  async update(actor: AccountRef, partnerId: string, input: PartnerUpdateInput, at = new Date()): Promise<PartnerView> {
     await this.roles.require(actor, "partners.edit");
     if (typeof input.telegramId === "string") await this.assertTelegramFree(input.telegramId, partnerId);
-    const changed = await this.db(this.repository.update(partnerId, input, at));
+    const { postbackUrl: rawUrl, postbackEvents: rawEvents, ...fields } = input;
+    const patch: PartnerPatch = fields;
+    const events = rawEvents === undefined ? undefined : checkedPostbackEvents(rawEvents);
+    const url = rawUrl === undefined ? undefined : checkedPostbackUrl(rawUrl);
+    if (url !== undefined || events !== undefined) {
+      const current = await this.db(this.repository.byId(partnerId, at));
+      if (current === null) throw new PartnerNotFoundError();
+      const terms = withTerms(current);
+      if (events !== undefined && (url === undefined ? terms.postbackUrl : url) === null) throw new ValidationError(NO_POSTBACK_ADDRESS);
+      if (url !== undefined && terms.postbackUrl !== url) {
+        const next = nextPostback({ url: terms.postbackUrl, since: terms.postbackSince }, url, at);
+        patch.postbackUrl = next.url;
+        patch.postbackSince = next.since;
+        if (next.events !== undefined) patch.postbackEvents = next.events;
+      }
+      if (events !== undefined && !sameEvents(terms.postbackEvents, events)) patch.postbackEvents = events;
+    }
+    const changed = await this.db(this.repository.update(partnerId, patch, at));
     if (changed === null) throw new PartnerNotFoundError();
     const diff = changedFields(withTerms(changed.before), withTerms(changed.after));
     if (diff !== null) await this.roles.audit({ actorAccountId: actor.accountId, action: "partner.update", target: partnerId, ...diff });
@@ -197,9 +227,15 @@ function changedFields(before: PartnerFull, after: PartnerFull): { before: Recor
   const was: Record<string, unknown> = {};
   const now: Record<string, unknown> = {};
   for (const field of AUDITED_FIELDS) {
-    if (before[field] === after[field]) continue;
-    was[field] = before[field];
-    now[field] = after[field];
+    if (field === "postbackEvents" ? sameEvents(before.postbackEvents, after.postbackEvents) : before[field] === after[field]) continue;
+    // Адрес постбэка идёт в аудит без запроса: в нём бывает секрет приёмника.
+    was[field] = field === "postbackUrl" ? postbackLogForm(before.postbackUrl) : before[field];
+    now[field] = field === "postbackUrl" ? postbackLogForm(after.postbackUrl) : after[field];
   }
   return Object.keys(now).length === 0 ? null : { before: was, after: now };
+}
+
+/** Партнёр глазами читателя: тому, у кого нет права на правку, адрес постбэка показывается без запроса. */
+function seenBy<T extends PartnerFull>(partner: T, canEdit: boolean): T {
+  return canEdit || partner.postbackUrl === null ? partner : { ...partner, postbackUrl: postbackLogForm(partner.postbackUrl) };
 }

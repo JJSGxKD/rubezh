@@ -3,6 +3,8 @@ import type { DifficultyId } from "@bh/shared-types";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
+import { ENEMY_STAGES } from "../src/content/stages";
+import { ENDLESS_CURVE } from "../src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -162,10 +164,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 316.0833333333333,
-      level: 22,
-      wave: 10,
-      enemiesKilled: 2035,
+      survivalSec: 175.68333333333334,
+      level: 13,
+      wave: 5,
+      enemiesKilled: 757,
     });
   });
 
@@ -221,5 +223,80 @@ describe("подстройка под силу: лесенка профилей"
     const withPressure = medianOf(POWER_PROFILES.full, true) / medianOf(POWER_PROFILES.average, true);
     const without = medianOf(POWER_PROFILES.full, false) / medianOf(POWER_PROFILES.average, false);
     expect(withPressure).toBeGreaterThanOrEqual(Math.sqrt(without));
+  });
+});
+
+// Враги жирнее с 2,5 минуты, набор к 15-й (Р194, T-0388).
+
+/**
+ * Значения до T-0388: `hpMul` ступеней обычных врагов и `ENDLESS_CURVE.hpGrowth`.
+ * Они нужны только для сравнения «было → стало»; правка контента их не двигает.
+ */
+const HP_MUL_BEFORE_T0388 = [
+  { fromSec: 0, hpMul: 1 },
+  { fromSec: 150, hpMul: 1.9 },
+  { fromSec: 330, hpMul: 3.6 },
+  { fromSec: 480, hpMul: 5 },
+  { fromSec: 660, hpMul: 7 },
+  { fromSec: 840, hpMul: 9.5 },
+] as const;
+const HP_GROWTH_BEFORE_T0388 = 1.14;
+
+/** Степень умножением в цикле: как в симуляции, без `Math.pow`. */
+function growthPower(base: number, steps: number): number {
+  let value = 1;
+  for (let i = 0; i < steps; i++) value *= base;
+  return value;
+}
+
+/**
+ * Множитель здоровья обычного врага на секунде `sec`, без «Сложной» и подстройки:
+ * `hpMul` ступени, открытой к этой секунде (последней из открытых), на рост
+ * бесконечной кривой за прошедшие отрезки. Враг, вышедший в эту секунду из новейшей
+ * ступени, получает ровно это число; рулетка весов подмешивает прежние ступени, но
+ * Р194 говорит о том, насколько крепче стал новый враг.
+ */
+function stageHpMulAt(sec: number, stages: readonly { fromSec: number; hpMul: number }[], hpGrowth: number): number {
+  let hpMul = stages[0].hpMul;
+  for (const stage of stages) if (stage.fromSec <= sec) hpMul = stage.hpMul;
+  const steps = sec < ENDLESS_CURVE.fromSec ? 0 : Math.floor((sec - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec);
+  return hpMul * growthPower(hpGrowth, steps);
+}
+
+/** Во сколько раз здоровье обычного врага крепче, чем до T-0388, на секунде `sec`. */
+const hpRatioAt = (sec: number): number =>
+  stageHpMulAt(sec, ENEMY_STAGES, ENDLESS_CURVE.hpGrowth) / stageHpMulAt(sec, HP_MUL_BEFORE_T0388, HP_GROWTH_BEFORE_T0388);
+
+describe("враги жирнее с 2,5 минуты (Р194, T-0388)", () => {
+  it("до второй ступени здоровье прежнее: ранний бой и пролог не меняются", () => {
+    expect(hpRatioAt(0)).toBe(1);
+    expect(hpRatioAt(60)).toBe(1);
+    expect(hpRatioAt(120)).toBe(1);
+    expect(hpRatioAt(149)).toBe(1);
+  });
+
+  it("со второй ступени (150 с) здоровье вдвое выше прежнего, ±5%", () => {
+    expect(hpRatioAt(150)).toBeGreaterThanOrEqual(2 * 0.95);
+    expect(hpRatioAt(150)).toBeLessThanOrEqual(2 * 1.05);
+  });
+
+  it("к 600 с здоровье втрое выше прежнего, ±7%", () => {
+    expect(hpRatioAt(600)).toBeGreaterThanOrEqual(3 * 0.93);
+    expect(hpRatioAt(600)).toBeLessThanOrEqual(3 * 1.07);
+  });
+
+  it("после 600 с здоровье растёт быстрее прежнего: на 900 с не меньше ×3,4", () => {
+    expect(hpRatioAt(900)).toBeGreaterThanOrEqual(3.4);
+    expect(ENDLESS_CURVE.hpGrowth).toBeGreaterThan(HP_GROWTH_BEFORE_T0388);
+  });
+
+  it("к прежнему растёт по ступеням: на открытии каждой не ниже предыдущей (с допуском 3% на шаг кривой), на последней выше, чем на второй", () => {
+    // Отношение считают ступень и кривая вместе. Между 330 и 480 с ступень растёт медленнее
+    // прежней, а лишний шаг кривой (1,16 против 1,14) ещё мал, поэтому допуск есть.
+    const openings = ENEMY_STAGES.map((stage) => hpRatioAt(stage.fromSec));
+    for (let i = 1; i < openings.length; i++) {
+      expect(openings[i], `ступень на ${ENEMY_STAGES[i].fromSec} с`).toBeGreaterThanOrEqual(openings[i - 1] * 0.97);
+    }
+    expect(openings[openings.length - 1]).toBeGreaterThan(openings[1]);
   });
 });

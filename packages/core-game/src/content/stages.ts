@@ -17,6 +17,13 @@ import type { EnemyStageDef } from "@bh/shared-types";
 // новая ступень занимает заметную долю потока, и к 14:00 ступени 4–6 дают
 // около половины врагов. Опыт при этом растёт быстрее здоровья.
 //
+// Здоровье со второй ступени вдвое выше прежнего, с «Лютого» — втрое (Р194,
+// docs/32-balance.md §2.2): стоять на месте после третьей минуты не должно
+// получаться. Рост приходится на 150-ю и 330-ю секунды, а не на поздние
+// ступени, потому что индекс силы за три минуты (`latePressure`) уже у верхней
+// границы: резкая ступень на 11:00 или 14:00 выводит его за коридор. Опыт
+// ступеней поднят следом — столько, чтобы xpMul / hpMul не убывало.
+//
 // Элиты и мини-боссы ступеней не получают: они сами и есть контрольная точка
 // сложности, и приходят событием в назначенную минуту.
 export const ENEMY_STAGES: EnemyStageDef[] = [
@@ -24,7 +31,7 @@ export const ENEMY_STAGES: EnemyStageDef[] = [
   {
     fromSec: 150,
     weight: 0.55,
-    hpMul: 1.9,
+    hpMul: 3.9,
     damageMul: 1.25,
     speedMul: 1.06,
     xpMul: 2,
@@ -33,37 +40,37 @@ export const ENEMY_STAGES: EnemyStageDef[] = [
   {
     fromSec: 330,
     weight: 0.5,
-    hpMul: 3.6,
+    hpMul: 11,
     damageMul: 1.55,
     speedMul: 1.12,
-    xpMul: 4,
+    xpMul: 5.7,
     nameKey: "enemy.stage.ravaging",
   },
   {
     fromSec: 480,
     weight: 0.6,
-    hpMul: 5,
+    hpMul: 14.5,
     damageMul: 1.8,
     speedMul: 1.16,
-    xpMul: 6,
+    xpMul: 7.6,
     nameKey: "enemy.stage.savage",
   },
   {
     fromSec: 660,
     weight: 0.7,
-    hpMul: 7,
+    hpMul: 19.7,
     damageMul: 2.1,
     speedMul: 1.2,
-    xpMul: 9,
+    xpMul: 10.4,
     nameKey: "enemy.stage.frenzied",
   },
   {
     fromSec: 840,
     weight: 0.8,
-    hpMul: 9.5,
+    hpMul: 28,
     damageMul: 2.5,
     speedMul: 1.24,
-    xpMul: 13,
+    xpMul: 14.8,
     nameKey: "enemy.stage.merciless",
   },
 ];
