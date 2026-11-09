@@ -18,7 +18,7 @@ import {
   type CardAxis,
 } from "../src/screens/meta/run-card-rules";
 import { ANALYTICS_EVENTS } from "../src/state/analytics";
-import { openRunCard, useNavigation } from "../src/state/navigation";
+import { openRunCard, openRunCardFromStart, useNavigation } from "../src/state/navigation";
 import { runCardSchema, type RunCard } from "../src/state/runs-api";
 
 // Карточка забега (tasks/T-0297, Р66, Р152): «паутина» пяти осей против
@@ -204,6 +204,17 @@ describe("адрес карточки в стартовом параметре",
     expect(parseRunCardStart("card-123")).toBeNull();
     expect(parseRunCardStart("run-../../etc")).toBeNull();
     expect(parseRunCardStart(`run-${"a".repeat(65)}`)).toBeNull();
+  });
+
+  it("openRunCardFromStart открывает экран карточки по паре run, по чужой паре — нет", () => {
+    useNavigation.setState({ stack: ["lobby"], runCardId: null });
+
+    expect(openRunCardFromStart("card-12345678")).toBe(false);
+    expect(useNavigation.getState().stack).toEqual(["lobby"]);
+
+    expect(openRunCardFromStart("run-3f2a9c1e-77b0-4c1d-9a55-0d3b6a41e8f2")).toBe(true);
+    expect(useNavigation.getState().runCardId).toBe("3f2a9c1e-77b0-4c1d-9a55-0d3b6a41e8f2");
+    expect(useNavigation.getState().stack.at(-1)).toBe("runCard");
   });
 });
 
