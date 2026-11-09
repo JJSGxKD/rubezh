@@ -32,6 +32,7 @@ import { api } from "../../services";
 import { ChoiceCards } from "../../ui/choice";
 import { HELP } from "../../ui/help";
 import { ImageField } from "../../ui/image-field";
+import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { applyOrder } from "../../ui/sortable-order";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Help, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
@@ -57,6 +58,10 @@ export function HomeSlidesScreen() {
 function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => void }) {
   const [editing, setEditing] = useState<TeamSlide | null>(null);
   const [draft, setDraft] = useState<SlideDraft>(() => emptyDraft(new Date()));
+  // Значения при открытии окна: по ним видно, тронул ли оператор форму.
+  const [initial, setInitial] = useState<SlideDraft>(draft);
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
@@ -86,25 +91,38 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
 
   const set = (patch: Partial<SlideDraft>) => setDraft({ ...draft, ...patch });
   const reset = () => {
+    setOpen(false);
     setEditing(null);
+    setFormError(null);
     setDraft(emptyDraft(new Date()));
+  };
+  const openNew = () => {
+    const value = emptyDraft(new Date());
+    setEditing(null);
+    setDraft(value);
+    setInitial(value);
+    setFormError(null);
+    setOpen(true);
   };
   const edit = (slide: TeamSlide) => {
     if (!EDITABLE.has(slide.state)) return;
+    const value = draftOf(slide);
     setEditing(slide);
-    setDraft(draftOf(slide));
+    setDraft(value);
+    setInitial(value);
     setOutcome(null);
-    // Форма — наверху: после клика по строке внизу длинного списка её иначе не видно.
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setFormError(null);
+    setOpen(true);
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (problem !== null) return;
     setPending(true);
+    setFormError(null);
     const result = editing === null ? await createSlide(api, draft) : await updateSlide(api, editing.slideId, draft);
     setPending(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    if (!result.ok) return setFormError(result.error.message);
     setOutcome({
       tone: "success",
       text: editing === null ? `Слайд «${result.data.title}» заведён — игроки увидят его в течение полуминуты после начала` : `Слайд «${result.data.title}» сохранён — игроки увидят правку в течение полуминуты`,
@@ -118,7 +136,7 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
     const result = await archiveSlide(api, slide.slideId);
     if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
     setOutcome({ tone: "success", text: `Слайд «${slide.title}» снят — из карусели он уйдёт в течение полуминуты` });
-    if (editing?.slideId === slide.slideId) reset();
+    if (open && editing?.slideId === slide.slideId) reset();
     reload();
   };
 
@@ -186,9 +204,25 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title={editing === null ? "Новый слайд" : `Слайд «${editing.title}»`} help={HELP.home.section}>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-4">
+      {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
+      <FormDialog
+        open={open}
+        wide
+        title={editing === null ? "Новый слайд" : `Слайд «${editing.title}»`}
+        dirty={isDirty(initial, draft)}
+        onClose={reset}
+        footer={(requestClose) => (
+          <>
+            {formError === null ? null : <span className="mr-auto text-sm text-danger">{formError}</span>}
+            <Button onClick={requestClose}>Отмена</Button>
+            <Button tone="primary" type="submit" form="slide-form" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
+              {editing === null ? "Завести" : "Сохранить"}
+            </Button>
+          </>
+        )}
+      >
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form id="slide-form" onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={`Заголовок — ${String(titleLength)} из ${String(limits.titleMax)}`} help={HELP.home.title} error={titleLength > limits.titleMax ? "длиннее, чем влезет" : undefined}>
               <Input value={draft.title} onChange={(event) => set({ title: event.target.value })} maxLength={limits.titleMax + 10} placeholder="Турнир выходного дня" className="w-full" />
@@ -275,22 +309,23 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
             </RowItem>
           </FieldRow>
 
-          <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
-              {editing === null ? "Завести" : "Сохранить"}
-            </Button>
-            {editing === null ? null : <Button onClick={reset}>Отмена</Button>}
-          </div>
         </form>
           {/* Слайд так, как его увидит игрок: тот же компонент в странице клиента (Р83). */}
-          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 md:sticky md:top-0 md:self-start">
             <PhonePreview kind="home-slide" draft={{ title: oneLine(draft.title), text: oneLine(draft.text), imageId: draft.imageId, icon: draft.icon }} height={132} caption="Так увидит игрок — верх главной" />
           </div>
         </div>
-        {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
-      </Panel>
+      </FormDialog>
 
-      <Panel title="Слайды" help={HELP.home.state}>
+      <Panel
+        title="Слайды"
+        help={HELP.home.state}
+        actions={
+          <Button tone="primary" onClick={openNew}>
+            Новый слайд
+          </Button>
+        }
+      >
         {extra > 0 ? (
           <div className="mb-3">
             <Notice tone="warning">
@@ -300,7 +335,7 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
           </div>
         ) : null}
         {catalog.slides.length === 0 ? (
-          <DataTable rows={[]} rowKey={(slide: TeamSlide) => slide.slideId} columns={[{ title: "Слайд", render: () => null }]} empty="Слайдов ещё не было — заведите первый выше" />
+          <DataTable rows={[]} rowKey={(slide: TeamSlide) => slide.slideId} columns={[{ title: "Слайд", render: () => null }]} empty="Слайдов ещё не было — заведите первый кнопкой «Новый слайд»" />
         ) : (
           <div className="flex flex-col gap-5">
             <p className="flex items-center gap-1.5 text-sm text-text-muted">
