@@ -3,8 +3,8 @@ id: T-0158
 title: Донаты проекту — клиент: лист доната, ссылки Tribute, знак, благодарность, слайд
 epic: E1
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0157, T-0161, T-0188, T-0190]
