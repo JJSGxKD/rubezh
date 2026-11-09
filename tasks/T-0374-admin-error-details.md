@@ -22,6 +22,9 @@ zones:
   - apps/admin/test/client.test.ts
   - apps/admin/test/error-details.test.ts
 shared:
+  - backend/api/test/donations.http.test.ts
+  - backend/api/test/partners.test.ts
+  - backend/api/test/restrictions.test.ts
   - apps/admin/src/screens/ads/BlockDialog.tsx
   - apps/admin/src/screens/ads/NetworkCards.tsx
   - apps/admin/src/screens/fx/FxScreen.tsx
