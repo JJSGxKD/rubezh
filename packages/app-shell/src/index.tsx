@@ -15,7 +15,8 @@ import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { usePrologue } from "./state/prologue";
 import { watchPlatform } from "./state/platform";
-import { useNavigation } from "./state/navigation";
+import { openRunCardFromStart, useNavigation } from "./state/navigation";
+import { launchStartParam } from "./state/run-card-start";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
@@ -124,6 +125,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   render(<App />);
   // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
   if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
+  // Ссылка на карточку забега (`?startapp=run-<id>`): по ней при запуске открывается карточка поверх главной.
+  openRunCardFromStart(launchStartParam(options.adapter.signedLaunchData()));
   // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
   // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
   const fxScene = options.capabilities.devFxScene;

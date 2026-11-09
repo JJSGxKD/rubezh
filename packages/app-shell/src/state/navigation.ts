@@ -132,10 +132,9 @@ export function openRunCard(runId: string, from: RunCardSource): void {
 }
 
 /**
- * Открыть карточку по стартовому параметру (`run-<id>`, docs/24). Вызова на
- * старте оболочки пока нет: приём `start_param` из платформы и кнопка
- * «Поделиться» — отдельная задача, поэтому по ссылке карточка пока не
- * открывается. `false` — параметр не про карточку, ничего не открыто.
+ * Открыть карточку по стартовому параметру (`run-<id>`, docs/24): зовёт
+ * `mount` при запуске оболочки, параметр берётся из данных запуска площадки
+ * (`launchStartParam`). `false` — параметр не про карточку, ничего не открыто.
  */
 export function openRunCardFromStart(param: string | null | undefined): boolean {
   const runId = parseRunCardStart(param);
