@@ -50,8 +50,8 @@ const PLACEHOLDER_PATTERN = /\{(\w+)\}/g;
 function format(template: string, params: TranslationParams): string {
   // Сначала множественное число: его формы сами содержат подстановки.
   const withPlurals = template.replace(PLURAL_PATTERN, (whole, name: string, forms: string) => {
-    const value = params[name];
-    if (typeof value !== "number") return whole;
+    const value = pluralValue(params[name]);
+    if (value === null) return whole;
     return pickForm(forms, value);
   });
 
@@ -59,6 +59,18 @@ function format(template: string, params: TranslationParams): string {
     const value = params[name];
     return value === undefined ? whole : String(value);
   });
+}
+
+/**
+ * Число для выбора формы. Экран часто подставляет уже отформатированное число
+ * («17 800» с узким пробелом из `formatNumber`): форму всё равно выбирает число,
+ * иначе игрок увидел бы сырой шаблон «{n, plural, …}».
+ */
+function pluralValue(value: TranslationParams[string] | undefined): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const parsed = Number(value.replace(/[\s\u00A0\u202F]/g, "").replace(",", "."));
+  return value.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
 }
 
 function pickForm(forms: string, value: number): string {

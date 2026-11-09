@@ -1,4 +1,5 @@
 import { LINK_CODE } from "../links/link-code.js";
+import { networkTailParams } from "../links/link-networks.js";
 import { parsePairs } from "./start-param-pairs.js";
 
 /**
@@ -10,9 +11,11 @@ import { parsePairs } from "./start-param-pairs.js";
  * Даже проверенный, он лишь говорит, по какой ссылке открыли игру, — ни
  * доступа, ни награды по нему не выдаётся.
  *
- * В параметре — один идентификатор, остальное живёт на сервере: у Mini App
- * параметр запуска ровно один, до 64 знаков из `A-Z a-z 0-9 _ -`
- * (docs/33-telegram-mini-app-pitfalls.md §5.1).
+ * У Mini App параметр запуска один, из `A-Z a-z 0-9 _ -`: до 512 знаков у
+ * `startapp` и до 64 у `/start` бота (docs/33-telegram-mini-app-pitfalls.md §5.1,
+ * Р121). Длина проверяется по каналу — `StartChannel`. В параметре обычно один
+ * идентификатор, остальное живёт на сервере; исключение — прямая ссылка сети,
+ * где вместе с кодом ссылки едут метки клика (`link`).
  *
  * - `organic` — параметра нет: открыли из меню бота, истории или поиска;
  * - `click` — `c-<код>`, ссылка через нашу редирект-страницу. Строка клика с
@@ -21,7 +24,10 @@ import { parsePairs } from "./start-param-pairs.js";
  * - `link` — `l-<код ссылки>`, прямая ссылка кампании без переходника
  *   (docs/35-stage4-plan.md Р95): клика нет, есть только запуск. Касание то
  *   же, что у `click`; код — тот же, что в `/r/<код>`, и проверяется тем же
- *   правилом `LINK_CODE`, второго правила кода нет;
+ *   правилом `LINK_CODE`, второго правила кода нет. После кода может идти хвост
+ *   меток рекламной сети `_campaign-55_clickid-…_record-…` (Р121,
+ *   `links/link-networks.ts`): разобрался — он в `networkParams`, нет — запуск
+ *   всё равно `link` с кодом, атрибуция не теряется;
  * - `invite` — приглашение друга из раздела «Друзья»;
  * - `friend` — `f-<код>`, ссылка дружбы: открыл — стал другом владельца
  *   ссылки (docs/35-stage4-plan.md §3.8). Код — ключ к строке `friend_link`,
@@ -58,10 +64,23 @@ export interface StartParam {
    * его нет вовсе.
    */
   unknownKeys?: string[];
+  /**
+   * Метки рекламной сети из хвоста прямой ссылки (`link`): ключи профиля сети, значения как пришли.
+   * Поле есть только у `link` и только если хвост разобрался — у остальных видов и у `link` без хвоста
+   * его нет вовсе.
+   */
+  networkParams?: Record<string, string>;
 }
 
-/** Алфавит и длина, которые допускает Telegram. Иное в подписанных данных — не параметр, а поломка. */
-const TELEGRAM_START_PARAM = /^[A-Za-z0-9_-]{1,64}$/;
+/**
+ * Канал, из которого пришёл параметр: у `startapp` Mini App предел 512 знаков, у `/start` бота — 64
+ * (Р121). Подписанные данные запуска приходят из Mini App, обновление бота — из чата.
+ */
+export type StartChannel = "miniapp" | "bot";
+export const START_PARAM_MAX: Readonly<Record<StartChannel, number>> = { miniapp: 512, bot: 64 };
+
+/** Алфавит, который допускает Telegram. Иное в подписанных данных — не параметр, а поломка. */
+const TELEGRAM_ALPHABET = /^[A-Za-z0-9_-]+$/;
 const CLICK = /^c-([A-Za-z0-9]{6,32})$/;
 const TELEGRAM_AFFILIATE = /^_tgr_([A-Za-z0-9_-]{1,59})$/;
 /** Ссылка дружбы — код из `modules/friends/friend-code.ts`. */
@@ -70,14 +89,23 @@ const FRIEND = /^f-([A-Za-z0-9]{8,32})$/;
 const NOTIFICATION = /^n-([a-z_]{3,32})$/;
 /** Прямая ссылка кампании: префикс, дальше — код ссылки по `LINK_CODE`. */
 const DIRECT_LINK_PREFIX = "l-";
-/** Приглашение друга — `app-shell/src/screens/meta/friends.tsx`, `INVITE_START_PARAM`. */
+/**
+ * Прежнее приглашение друга без кода: теперь приглашают ссылкой дружбы `f-<код>`
+ * (`app-shell/src/state/friends-api.ts`, `friendInviteUrl`), а разосланные раньше
+ * ссылки с `invite` по-прежнему узнаются.
+ */
 const INVITE = "invite";
 
 const ORGANIC: StartParam = { kind: "organic", raw: null, ref: null };
 
-export function parseStartParam(value: string | null | undefined): StartParam {
+/**
+ * Канал по умолчанию — Mini App: сохранённое значение разбирается повторно (автоисточники), а бот не
+ * сохраняет параметр длиннее 64 знаков, Mini App — 512, поэтому повторный разбор даёт тот же вид.
+ * Вызовы из бота передают канал явно.
+ */
+export function parseStartParam(value: string | null | undefined, channel: StartChannel = "miniapp"): StartParam {
   if (value === null || value === undefined || value === "") return ORGANIC;
-  if (!TELEGRAM_START_PARAM.test(value)) return { kind: "unknown", raw: null, ref: null };
+  if (value.length > START_PARAM_MAX[channel] || !TELEGRAM_ALPHABET.test(value)) return { kind: "unknown", raw: null, ref: null };
 
   const click = CLICK.exec(value);
   if (click !== null) return { kind: "click", raw: value, ref: click[1] ?? null };
@@ -88,8 +116,14 @@ export function parseStartParam(value: string | null | undefined): StartParam {
   const notification = NOTIFICATION.exec(value);
   if (notification !== null) return { kind: "notification", raw: value, ref: notification[1] ?? null };
   if (value.startsWith(DIRECT_LINK_PREFIX)) {
-    const code = value.slice(DIRECT_LINK_PREFIX.length);
-    if (LINK_CODE.test(code)) return { kind: "link", raw: value, ref: code };
+    const body = value.slice(DIRECT_LINK_PREFIX.length);
+    // Код ссылки — до первого `_`: в `LINK_CODE` его нет, а дальше идёт хвост меток сети.
+    const divider = body.indexOf("_");
+    const code = divider === -1 ? body : body.slice(0, divider);
+    if (LINK_CODE.test(code)) {
+      const networkParams = divider === -1 ? null : networkTailParams(body.slice(divider));
+      return networkParams === null ? { kind: "link", raw: value, ref: code } : { kind: "link", raw: value, ref: code, networkParams };
+    }
   }
   if (value === INVITE) return { kind: "invite", raw: value, ref: null };
   // Пары — последними: приставки `c-`, `l-`, `f-`, `n-` и `_tgr_` разобраны выше и пар не касаются.

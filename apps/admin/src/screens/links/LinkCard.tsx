@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../services";
 import {
+  ADSGRAM_EVENTS_LINE,
   AUTO_SOURCE_HELP,
   autoPairs,
   conversion,
@@ -8,21 +9,31 @@ import {
   deviceRows,
   DIRECT_HINT,
   DIRECT_UNAVAILABLE,
+  destinationTitle,
   fetchConversions,
   GOAL_TITLES,
   GOALS,
   goalCounts,
+  linkEventsView,
   linkTitle,
   LINK_TARGETS,
-  NETWORK_NO_DIRECT,
+  NETWORK_DIRECT_HINT,
+  NETWORK_DIRECT_LABEL,
+  NETWORK_DIRECT_NEEDS_APP,
+  networkDirectState,
   NETWORK_TITLES,
   OWNER_HELP,
   OWNER_TITLES,
+  POSTBACK_BLOCK_TITLE,
+  POSTBACK_LINK_LABEL,
+  POSTBACK_LINK_OWNED_LABEL,
   RENAME_HELP,
   renameLink,
   resendConversion,
   retargetLink,
   setLinkHidden,
+  setLinkPostback,
+  setLinkPostbackEvents,
   TARGET_HELP,
   TARGET_HINTS,
   TARGET_TITLES,
@@ -42,14 +53,19 @@ import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Help, Input, KeyValue, Loading, Notice, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
+import { PostbackBlock } from "./PostbackBlock";
 import { TokenNotice } from "./TokenNotice";
 
 /**
  * Карточка ссылки. У обычной — адрес переходника, прямая ссылка без него и
  * цифры; цель (Mini App, бот, лендинг) меняется здесь же, а владелец —
  * наша команда или партнёр (T-0067) — только показывается. У ссылки сети главное —
- * адрес с метками для кабинета и путь от клика до конверсии: что вставить в
+ * адрес с метками для кабинета, прямая ссылка для рекламы, которую модерация сети не
+ * пускает через переходник (Р121), и путь от клика до конверсии: что вставить в
  * кабинет, что считается регистрацией и покупкой, что ушло в сеть и что нет.
+ *
+ * Ссылка может отправлять события на свой адрес постбэка (T-0070): блок «Постбэк по этой ссылке» виден тем, у кого
+ * есть право на ссылки, а журнал показывает и такие отправки — с назначением в отдельной колонке.
  */
 export function LinkCard({
   link,
@@ -86,8 +102,11 @@ function copy(text: string, what: string): void {
 }
 
 function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramToken: boolean; onChanged: () => void }) {
+  const view = useSession((session) => session.view);
   const rate = conversion(link);
   const devices = deviceRows(link.devices);
+  // Журнал нужен ссылке сети и ссылке с постбэком: своим адресом, а у ссылки партнёра — ещё и общим адресом партнёра.
+  const hasJournal = link.conversions !== null || link.postbackUrl !== null || link.partner !== null;
   return (
     <div className="flex flex-col gap-5">
       {link.network === null || link.networkUrl === null ? (
@@ -102,6 +121,7 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
       ) : (
         <section className="flex flex-col gap-3">
           <AddressBox label={`Адрес для кабинета ${NETWORK_TITLES[link.network]}`} url={link.networkUrl} primary />
+          <NetworkDirect link={link} />
           <ol className="list-decimal space-y-1 pl-5 text-sm text-text-muted">
             <li>
               В кампании AdsGram вставьте этот адрес в поле ссылки <span className="text-text">целиком, вместе с метками в фигурных скобках</span> — сеть сама
@@ -111,14 +131,15 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
               Токен конверсий из кабинета AdsGram задаётся один раз на все ссылки, в «Ключах интеграций».{" "}
               {adsgramToken ? <Badge tone="success">задан</Badge> : null}
             </li>
+            <li>Если модерация сети не принимает переходник, вставьте прямую ссылку для рекламы вместо него.</li>
             <li>
               Регистрация уходит в сеть {link.registrationOn === "launch" ? "при первом запуске игры" : "после первого забега от 30 секунд, если он был в течение 7 дней после клика"}. Первая
-              покупка — отдельной целью, следующие — повторными; возвраты и тестовые оплаты не уходят.
+              покупка — отдельной целью, следующие — повторными; возвращённые и тестовые оплаты не уходят.
             </li>
           </ol>
+          <p className="text-xs text-text-muted">{ADSGRAM_EVENTS_LINE}</p>
           {adsgramToken ? null : <TokenNotice />}
           <AddressBox label="Адрес без меток — для проверки" url={link.url} hint="Переход по нему засчитается кликом, но в сеть не уйдёт: сеть не знает такого клика." />
-          <p className="text-xs text-text-muted">{NETWORK_NO_DIRECT}</p>
         </section>
       )}
 
@@ -135,6 +156,20 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         ]}
       />
 
+      {can(view, "links.manage") ? (
+        <PostbackBlock
+          key={`${link.postbackUrl ?? ""}|${link.postbackSince ?? ""}|${link.postbackEvents.join()}|${link.partner?.postbackEvents?.join() ?? ""}`}
+          title={POSTBACK_BLOCK_TITLE}
+          label={link.partner === null ? POSTBACK_LINK_LABEL : POSTBACK_LINK_OWNED_LABEL}
+          address={link.postbackUrl}
+          since={link.postbackSince}
+          events={linkEventsView(link)}
+          save={(url) => setLinkPostback(api, link.code, url)}
+          saveEvents={(events) => setLinkPostbackEvents(api, link.code, events)}
+          onSaved={onChanged}
+        />
+      ) : null}
+
       {devices.length === 0 ? null : (
         <section className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Клики по устройствам</h3>
@@ -146,14 +181,22 @@ function CardBody({ link, adsgramToken, onChanged }: { link: LinkRow; adsgramTok
         </section>
       )}
 
-      {link.conversions === null ? null : (
-        <>
-          <GoalTable summary={link.conversions} />
-          <Journal code={link.code} onChanged={onChanged} />
-        </>
-      )}
+      {link.conversions === null ? null : <GoalTable summary={link.conversions} />}
+      {hasJournal ? <Journal code={link.code} onChanged={onChanged} /> : null}
     </div>
   );
+}
+
+/** Второй адрес ссылки сети: прямая ссылка на Mini App с метками — для рекламы, которую модерация сети не пускает через переходник. */
+function NetworkDirect({ link }: { link: LinkRow }) {
+  switch (networkDirectState(link)) {
+    case "ready":
+      return link.directUrl === null ? null : <AddressBox label={NETWORK_DIRECT_LABEL} url={link.directUrl} hint={NETWORK_DIRECT_HINT} />;
+    case "needs_app":
+      return <p className="text-xs text-text-muted">{NETWORK_DIRECT_NEEDS_APP}</p>;
+    case "unavailable":
+      return <p className="text-xs text-text-muted">{DIRECT_UNAVAILABLE}</p>;
+  }
 }
 
 /**
@@ -388,9 +431,10 @@ function Journal({ code, onChanged }: { code: string; onChanged: () => void }) {
         <DataTable
           rows={rows}
           rowKey={(row) => row.conversionId}
-          empty="Конверсий ещё нет. Первая появится, когда новичок из рекламы пройдёт регистрацию."
+          empty="Конверсий ещё нет. Первая появится, когда новичок по этой ссылке пройдёт регистрацию."
           columns={[
             { title: "Когда", render: (row) => <span className="whitespace-nowrap">{formatDateTime(row.createdAt)}</span> },
+            { title: "Назначение", render: (row) => <span className="whitespace-nowrap">{destinationTitle(row.destination)}</span> },
             { title: "Цель", render: (row) => <span className="whitespace-nowrap">{GOAL_TITLES[row.goal]}</span> },
             {
               title: "Что с ней",

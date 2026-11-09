@@ -71,6 +71,9 @@ class Links implements LinksRepository {
   async retarget(): Promise<LinkRecord | null> {
     return null;
   }
+  async setPostback(): Promise<LinkRecord | null> {
+    return null;
+  }
 }
 
 class Keys implements AutoSourcesRepository {
@@ -103,6 +106,9 @@ function record(patch: Partial<LinkRecord> = {}): LinkRecord {
     partnerTag: null,
     title: null,
     hiddenAt: null,
+    postbackUrl: null,
+    postbackSince: null,
+    postbackEvents: ["registration"],
     ...patch,
   };
 }

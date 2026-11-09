@@ -79,7 +79,7 @@ export class SubscriptionSync {
     } catch (error: unknown) {
       return await failed(error instanceof SubscriptionFormatError ? formatErrorNote(error) : NOTES.unsupportedFormat);
     }
-    if (parsed.nodes.length === 0) return await failed(noNodesNote(parsed.skipped.length));
+    if (parsed.nodes.length === 0) return await failed(noNodesNote(parsed.skipped));
 
     const previous = new Map(snapshot.nodes.map((node) => [node.nodeKey, node]));
     const { slots, overflow } = assignSlots(

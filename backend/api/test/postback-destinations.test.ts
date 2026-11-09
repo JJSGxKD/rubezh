@@ -32,6 +32,7 @@ function due(patch: Partial<DueConversion> = {}): DueConversion {
     params: { record: "7f3a1b6c", campaign: "55" },
     telegramId: "790807933",
     purchase: null,
+    postbackUrl: null,
     ...patch,
   };
 }

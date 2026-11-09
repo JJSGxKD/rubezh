@@ -89,7 +89,7 @@ export class BroadcastsService {
         platform: input.platform,
       });
       // Кнопка Telegram принимает только полный адрес: без домена клиента ссылку не собрать.
-      if (!link.url.startsWith("https://")) throw new ValidationError("Кнопке нужен адрес клиента — TELEGRAM_WEBAPP_URL не задан");
+      if (!link.url.startsWith("https://")) throw new ValidationError("Кнопке нужен адрес клиента — PUBLIC_WEB_URL не задан");
       button = { linkCode: link.code, buttonUrl: link.url };
     }
 
