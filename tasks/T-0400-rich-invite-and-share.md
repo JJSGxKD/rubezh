@@ -130,7 +130,7 @@ batch: 5
        решение тимлида выше;
    - отказ Telegram на оформленной статье (400) → вторая попытка прежней
      статьёй и лог `prepared_rich_fallback` один раз за процесс;
-   - кэш `file_id` подпорт получает в `platforms.module.ts`
+   - кэш `file_id` подготовка Telegram получает в `platforms.module.ts`
      (`messagePreparersFor`).
 7. **`docs/24-attribution-and-sharing.md`** §7.7 — одна строка: при
    включённых `bot.formats.enabled` и `bot.rich.enabled` и известном
