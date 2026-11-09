@@ -49,6 +49,7 @@ import { HistoryModule } from "./modules/history/history.module.js";
 import { DailyModule } from "./modules/daily/daily.module.js";
 import { ChangelogModule } from "./modules/changelog/changelog.module.js";
 import { WheelModule } from "./modules/wheel/wheel.module.js";
+import { BattlePassModule } from "./modules/battle-pass/battle-pass.module.js";
 import { TasksModule } from "./modules/tasks/tasks.module.js";
 import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
@@ -61,12 +62,15 @@ import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
+import { FeedModule } from "./modules/feed/feed.module.js";
 import { OnlineModule } from "./modules/online/online.module.js";
 import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
 import { RequestJournalModule } from "./modules/request-journal/request-journal.module.js";
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
+import { RemindersModule } from "./modules/reminders/reminders.module.js";
+import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -160,11 +164,15 @@ export const APP_MODULES = [
   WipeModule,
   SeasonsModule,
   OnlineModule,
+  FeedModule,
   CspReportsModule,
   RequestJournalModule,
   DonationsModule,
   BotMentionModule,
   AchievementsModule,
+  BattlePassModule,
+  RemindersModule,
+  RemindersOffModule,
 ];
 
 /**

@@ -64,6 +64,8 @@ describe("журнал аудита", () => {
   });
 
   it("перечистка ников: подписи трёх действий и объект «перечистка» (T-0339)", () => {
+    expect(actionTitle("names.candidate.dismiss")).toBe("Скрыт кандидат в правила имён");
+    expect(auditObject(entry({ action: "names.candidate.dismiss", target: "00000000-0000-4000-8000-000000000007" }))).toEqual({ kind: "кандидат", label: "00000000", route: { section: "names", id: null } });
     expect(actionTitle("names.reclean.start")).toBe("Запуск перечистки ников");
     expect(actionTitle("names.reclean.stop")).toBe("Остановка перечистки ников");
     expect(actionTitle("names.reclean.finish")).toBe("Итог перечистки ников");
@@ -231,6 +233,9 @@ describe("действия поддержки покупок, партнёров
     expect(actionTitle("payments.fulfill")).toBe("Повторная выдача покупки");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
+    expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");
+    expect(fieldTitle("postback")).toBe("адрес постбэка");
+    expect(fieldTitle("postbackUrl")).toBe("адрес постбэка");
     const refund = entry({ action: "payments.refund", target: "acc-1", targetName: "Игрок" });
     expect(auditObject(refund)).toMatchObject({ kind: "игрок", route: { section: "players", id: "acc-1" } });
   });

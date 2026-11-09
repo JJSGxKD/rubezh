@@ -1,8 +1,16 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
+import { createProjectilePool } from "../src/game/sim/pools";
+import { createWorld, spawnProjectile, TICK_SEC } from "../src/game/sim/world";
+import { stepWorld } from "../src/game/sim/step";
+import { CHESTS } from "../src/content/chests";
+import { DROPS } from "../src/content/drops";
+import { MAPS } from "../src/content/maps";
+import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { WEAPONS } from "../src/content/weapons";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { IMPLEMENTED_PATTERNS } from "../src/game/patterns";
 
@@ -53,5 +61,57 @@ describe("в бою нет врагов со снарядами", () => {
       expect(ENDLESS_CURVE.pool, id).not.toContain(id);
       expect(ENDLESS_CURVE.events.map((event) => event.enemy), id).not.toContain(id);
     }
+  });
+
+  it("в пуле снарядов нет понятия вражеского", () => {
+    const pool: object = createProjectilePool(4);
+    expect(pool).not.toHaveProperty("fromPlayer");
+    expect(pool).not.toHaveProperty("ownerType");
+    expect(spawnProjectile.length).toBe(7);
+  });
+
+  it("шаг не бьёт игрока снарядом: снаряд в упор исчезает по сроку жизни", () => {
+    const world = createWorld({
+      seed: 1,
+      enemies: ENEMIES,
+      weapons: WEAPONS,
+      passives: PASSIVES,
+      levelCurve: LEVEL_CURVE,
+      loadoutLimits: LOADOUT_LIMITS,
+      drops: DROPS,
+      chests: CHESTS,
+      map: MAPS[0],
+    });
+    const hp = world.player.hp;
+    spawnProjectile(world, world.player.x, world.player.y, 0, 0, 5, 20 * TICK_SEC);
+    for (let i = 0; i < 30; i++) stepWorld(world, { moveX: 0, moveY: 0 });
+    expect(world.stats.damageTaken).toBe(0);
+    expect(world.player.hp).toBe(hp);
+    expect(world.projectiles.aliveCount).toBe(0);
+  });
+
+  it("в исходниках нет вражеских снарядов", () => {
+    const roots = [
+      fileURLToPath(new URL("../src/game", import.meta.url)),
+      fileURLToPath(new URL("../src/run-api.ts", import.meta.url)),
+      fileURLToPath(new URL("../../app-shell/src", import.meta.url)),
+    ];
+    const files: string[] = [];
+    const walk = (path: string): void => {
+      if (statSync(path).isDirectory()) {
+        for (const name of readdirSync(path)) walk(join(path, name));
+      } else if (/\.tsx?$/.test(path)) {
+        files.push(path);
+      }
+    };
+    for (const root of roots) walk(root);
+    expect(files.length).toBeGreaterThan(50);
+    for (const file of files) {
+      const source = stripComments(readFileSync(file, "utf8"));
+      expect(source, file).not.toMatch(/(enemyShots|enemyProjectile|enemyProjectileCore|fromPlayer|enemyCooldown)/);
+      expect(source, file).not.toContain("projectile-enemy");
+    }
+    const looks = stripComments(readFileSync(fileURLToPath(new URL("../src/game/render/looks.ts", import.meta.url)), "utf8"));
+    expect(looks).not.toContain('"bolt"');
   });
 });

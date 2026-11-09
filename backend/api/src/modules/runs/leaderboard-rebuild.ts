@@ -1,6 +1,6 @@
 import type { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import type { LeaderboardStore } from "./leaderboard.store.js";
-import { DIFFICULTIES } from "./run-rules.js";
+import { DIFFICULTIES, isRatedDifficulty } from "./run-rules.js";
 import type { RunsRepository } from "./runs.repository.js";
 
 /**
@@ -16,6 +16,18 @@ import type { RunsRepository } from "./runs.repository.js";
  * их прежние рейтинговые забеги остаются в базе и вернутся, когда
  * ограничение снимут.
  *
+ * Рейтинг считает единую сложность и забеги не раньше отсечки `since`
+ * (Р126, `rated-runs.ts`): доски остальных сложностей пересборка **очищает** —
+ * записывает пустые — и возвращает для них нули. Пересборка из базы даёт то же,
+ * что собрала живая проекция.
+ *
+ * Вместе с досками пересобирается набор победителей над стражем рубежа
+ * (T-0121): тот же источник — рейтинговые забеги с вердиктом `ok`.
+ *
+ * Доска всех времён ранжирует по очкам (tasks/T-0294): забеги без очков в неё
+ * не входят, пока их не досчитает `runs:rescore` — команда пересборки
+ * запускается после него.
+ *
  * Возвращает, сколько игроков оказалось в каждой доске каждой сложности.
  */
 export interface BoardCounts {
@@ -28,13 +40,27 @@ export async function rebuildLeaderboard(
   leaderboard: LeaderboardStore,
   excluded: ReadonlySet<string>,
   separate: ReadonlySet<string>,
+  since: Date | null,
 ): Promise<Record<string, BoardCounts>> {
   const counts: Record<string, BoardCounts> = {};
   for (const difficulty of DIFFICULTIES) {
-    const full = (await runs.bestTimes(difficulty)).filter((entry) => !excluded.has(entry.accountId));
+    if (!isRatedDifficulty(difficulty)) {
+      await leaderboard.replace(difficulty, "full", []);
+      await leaderboard.replace(difficulty, "common", []);
+      await leaderboard.replaceRubezh(difficulty, []);
+      counts[difficulty] = { full: 0, common: 0 };
+      continue;
+    }
+    const full = (await runs.bestScores(difficulty, since)).filter((entry) => !excluded.has(entry.accountId));
     const common = full.filter((entry) => !separate.has(entry.accountId));
     await leaderboard.replace(difficulty, "full", full);
     await leaderboard.replace(difficulty, "common", common);
+    // Победа засчитана, вердикт ok, забег шёл в рейтинг; закрытым аккаунтам отметка не нужна — их нет в досках.
+    const onBoard = new Set(full.map((entry) => entry.accountId));
+    await leaderboard.replaceRubezh(
+      difficulty,
+      (await runs.rubezhWinners(difficulty, since)).filter((accountId) => onBoard.has(accountId)),
+    );
     counts[difficulty] = { full: full.length, common: common.length };
   }
   return counts;
@@ -44,14 +70,18 @@ export async function rebuildLeaderboard(
  * Пересборка с двумя наборами исключений, которые спрашивают у ограничений
  * аккаунта: закрытый рейтинг и отдельная доска. Её зовут обе команды
  * (`runs-rebuild-leaderboard`, `wipe`), чтобы набор не разошёлся между ними.
+ *
+ * `since` — отсечка рейтинга; команда пересборки передаёт её из настроек. По
+ * умолчанию отсечки нет: так зовёт вайп, после которого забегов в базе нет.
  */
 export async function rebuildForRestrictions(
   runs: RunsRepository,
   leaderboard: LeaderboardStore,
   restrictions: Pick<AccountRestrictions, "restrictedAccounts">,
+  since: Date | null = null,
 ): Promise<Record<string, BoardCounts>> {
   const [excluded, separate] = await Promise.all([restrictions.restrictedAccounts("leaderboard"), restrictions.restrictedAccounts("separate_board")]);
-  return await rebuildLeaderboard(runs, leaderboard, new Set(excluded), new Set(separate));
+  return await rebuildLeaderboard(runs, leaderboard, new Set(excluded), new Set(separate), since);
 }
 
 /** «easy — полная 12, общая 11; …»: две доски по каждой сложности — для вывода команд. */

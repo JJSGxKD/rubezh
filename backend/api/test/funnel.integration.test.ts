@@ -184,6 +184,10 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
     await funnel.firstPurchase(ids[0]!, new Date(day));
     // Не в счёт: проверка платёжной цепочки и возврат.
     await purchase(ids[1]!, 1, "test", "paid");
+    // Донат — поддержка, а не покупка: в звёзды группы не идёт (T-0364).
+    await prisma.$executeRaw`
+      INSERT INTO purchase (purchase_id, account_id, product, sku, price_stars, charged_stars, mode, status, invoiced_at, paid_at)
+      VALUES (${randomUUID()}::uuid, ${ids[0]!}::uuid, 'donation', 'donation', 100, 100, 'live'::"PaymentMode", 'paid'::"PurchaseStatus", ${new Date(day)}, ${new Date(day)})`;
     await purchase(ids[2]!, 100, "live", "refunded");
 
     const run = (accountId: string) => prisma.$executeRaw`
@@ -401,14 +405,14 @@ describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронк�
   const WINDOW_FROM = new Date(T0 - HOUR);
   const WINDOW_TO = new Date(T0 + 24 * HOUR);
 
-  async function touchSession(accountId: string, startKind: "link" | "click", startRef: string): Promise<void> {
+  async function touchSession(accountId: string, startKind: "link" | "click" | "tagged", startRef: string): Promise<void> {
     await new PrismaSessionsRepository(prisma).record({
       sessionId: randomUUID(),
       accountId,
       platform: "telegram",
       place: "channel",
       startKind,
-      startParam: `${startKind === "link" ? "l" : "c"}-${startRef}`,
+      startParam: `${startKind === "link" ? "l" : startKind === "tagged" ? "t" : "c"}-${startRef}`,
       startRef,
       clientPlatform: null,
       clientVersion: null,
@@ -438,6 +442,20 @@ describe.skipIf(DATABASE_URL === "")("прямые ссылки и воронк�
     expect(report.filter((line) => line.startRef === campaign)).toEqual([expect.objectContaining({ platform: "telegram", startKind: "click", startSource: "tg_ads", accounts: 3, entered: 3 })]);
     // Ссылка удалена или кода нет — кампания пуста, а в строку «неизвестно» не уходит.
     expect(report.some((line) => line.startKind === "link")).toBe(false);
+  });
+
+  it("аккаунт с первым касанием «ссылка с метками» стоит под кампанией своего источника, как клик (T-0363)", async () => {
+    const campaign = `tagged-${randomUUID().slice(0, 8)}`;
+    const autoKey = `src-it_cmp-${randomUUID().slice(0, 8)}`;
+    const code = newLinkCode();
+    await prisma.link.create({ data: { code, campaign, source: "tg_ads", auto: true, autoKey } });
+    await touchSession(await account(), "tagged", autoKey);
+    await touchSession(await account(), "tagged", autoKey);
+
+    const report = await funnelReport(prisma, WINDOW_FROM, WINDOW_TO);
+
+    expect(report.filter((line) => line.startRef === campaign)).toEqual([expect.objectContaining({ platform: "telegram", startKind: "click", startSource: "tg_ads", accounts: 2, entered: 2 })]);
+    expect(report.some((line) => line.startKind === "tagged" && line.startRef === autoKey)).toBe(false);
   });
 
   /** Партнёр, ссылка и код партнёра. */

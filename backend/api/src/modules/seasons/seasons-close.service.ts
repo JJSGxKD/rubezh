@@ -5,6 +5,7 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { REDIS } from "../../infra/redis.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { SEASON_CLOSE_REPOSITORY, type SeasonClosed, type SeasonCloseRepository } from "./seasons-close.repository.js";
+import type { PrizeRules } from "./season-rules.js";
 import { SeasonSchedule } from "./seasons-schedule.js";
 
 /**
@@ -64,11 +65,15 @@ export class SeasonsCloseService {
       if (todo.length === 0) return [];
       // Кому рейтинг закрыт на момент закрытия — в итогах нет и награды не получит.
       const excluded = await withTimeout(this.restrictions.restrictedAccounts("leaderboard", now), DB_TIMEOUT_MS, "seasons: ограничения");
+      // Отсечка рейтинга (Р126) читается один раз на проход: все просроченные сезоны закрываются по одному её значению.
+      const since = this.schedule.ratingSince();
 
       const result: SeasonClosed[] = [];
       for (const season of todo) {
         const startedAt = Date.now();
-        const outcome = await withTimeout(this.repository.close(season, excluded, now), CLOSE_TIMEOUT_MS, `seasons: закрытие ${season.key}`);
+        // Режим сезона и порог участника читаются на каждый сезон: сезон до перехода закрывается по времени, после — по очкам (T-0294).
+        const rules: PrizeRules = { scoring: this.schedule.scoringOf(season), thresholdPoints: this.schedule.thresholdPoints() };
+        const outcome = await withTimeout(this.repository.close(season, excluded, now, since, rules), CLOSE_TIMEOUT_MS, `seasons: закрытие ${season.key}`);
         // `null` — сезон успела закрыть другая реплика: событие её, не наше.
         if (outcome === null) continue;
         result.push(outcome);

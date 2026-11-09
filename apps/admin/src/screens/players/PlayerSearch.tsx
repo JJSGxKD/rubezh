@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { create } from "zustand";
 import { api } from "../../services";
 import type { ApiError } from "../../api/client";
@@ -24,9 +24,16 @@ async function runSearch(query: string): Promise<void> {
   useSearch.setState({ found: result.ok ? { status: "ok", players: result.data.players } : { status: "error", error: result.error } });
 }
 
+/** Поиск с готовым запросом — из поиска разделов в меню (tasks/T-0355): тот же запрос встаёт в поле раздела. */
+export function searchPlayersFrom(query: string): Promise<void> {
+  return runSearch(query);
+}
+
 export function PlayerSearch() {
   const { query, found } = useSearch();
   const [draft, setDraft] = useState(query);
+  // Раздел уже открыт, а запрос пришёл из меню: поле показывает его, а не прежний ввод.
+  useEffect(() => setDraft(query), [query]);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();

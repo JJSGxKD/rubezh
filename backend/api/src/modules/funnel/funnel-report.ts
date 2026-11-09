@@ -1,5 +1,24 @@
-import type { PrismaClient } from "../../generated/prisma/client.js";
+import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { markedAccountIds } from "../restrictions/board-mark.js";
+
+/**
+ * Поле ссылки первого касания аккаунта — кампания или источник; один раз для
+ * списка игроков, воронки и ежедневного отчёта (tasks/T-0363). Касание
+ * `click` ведёт к ссылке через клик переходника, `link` — по коду прямой
+ * ссылки (Р95), `tagged` — по ключу автоисточника (Р116); у остальных видов
+ * и у удалённой ссылки — `NULL`. `acquisition` — псевдоним таблицы касаний в
+ * запросе: имя из кода, не ввод.
+ */
+export function touchLinkField(field: "campaign" | "source", acquisition = "q"): Prisma.Sql {
+  const kind = Prisma.raw(`${acquisition}.first_start_kind`);
+  const ref = Prisma.raw(`${acquisition}.first_start_ref`);
+  const column = Prisma.raw(`l.${field}`);
+  return Prisma.sql`CASE ${kind}
+    WHEN 'click' THEN (SELECT ${column} FROM link_click lc JOIN link l ON l.code = lc.link_code WHERE lc.click_id = ${ref})
+    WHEN 'link' THEN (SELECT ${column} FROM link l WHERE l.code = ${ref})
+    WHEN 'tagged' THEN (SELECT ${column} FROM link l WHERE l.auto_key = ${ref})
+  END`;
+}
 
 /**
  * Воронка по источнику первого касания (docs/35-stage4-plan.md, Р30): сколько
@@ -64,14 +83,14 @@ export async function funnelReport(prisma: PrismaClient, from: Date, to: Date): 
   const rows = await prisma.$queryRaw<RawRow[]>`
     SELECT
       ac.platform::text AS platform,
-      -- Прямая ссылка кампании (l-<код>, Р95) — то же, что клик по её переходнику: одна кампания, одна строка.
-      CASE WHEN q.first_start_kind = 'link' THEN 'click' ELSE COALESCE(q.first_start_kind::text, 'unknown') END AS start_kind,
+      -- Прямая ссылка кампании (l-<код>, Р95) и ссылка с метками (Р116) — то же, что клик по переходнику: одна кампания, одна строка.
+      CASE WHEN q.first_start_kind IN ('link', 'tagged') THEN 'click' ELSE COALESCE(q.first_start_kind::text, 'unknown') END AS start_kind,
       CASE
-        WHEN q.first_start_kind IN ('click', 'link') THEN l.campaign
+        WHEN q.first_start_kind IN ('click', 'link', 'tagged') THEN ${touchLinkField("campaign")}
         WHEN q.first_start_kind IN ('invite', 'friend') THEN NULL
         ELSE q.first_start_ref
       END AS start_ref,
-      CASE WHEN q.first_start_kind IN ('click', 'link') THEN l.source END AS start_source,
+      CASE WHEN q.first_start_kind IN ('click', 'link', 'tagged') THEN ${touchLinkField("source")} END AS start_source,
       count(*) AS accounts,
       count(f.entered_at) AS entered,
       count(f.app_opened_at) AS app_opened,
@@ -85,9 +104,6 @@ export async function funnelReport(prisma: PrismaClient, from: Date, to: Date): 
     FROM account_funnel f
     JOIN account ac ON ac.account_id = f.account_id
     LEFT JOIN acquisition q ON q.account_id = f.account_id
-    -- Клик — к своей ссылке и её кампании, прямая ссылка — к ссылке по коду; без ссылки (удалена) — кампания NULL.
-    LEFT JOIN link_click lc ON q.first_start_kind = 'click' AND lc.click_id = q.first_start_ref
-    LEFT JOIN link l ON l.code = CASE WHEN q.first_start_kind = 'link' THEN q.first_start_ref ELSE lc.link_code END
     -- LEAST пропускает NULL: первый контакт — вход в канал или открытие, что было.
     WHERE LEAST(f.entered_at, f.app_opened_at) >= ${from}
       AND LEAST(f.entered_at, f.app_opened_at) < ${to}

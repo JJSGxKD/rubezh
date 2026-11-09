@@ -43,6 +43,14 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   // честный игрок столько кодов за день не встретит, а собранные пачкой
   // упрутся сюда.
   promo_reward: { coins: 100_000, gems: 600, shard_common: 400, shard_uncommon: 100 },
+  // Батл-пасс (Р46, tasks/T-0311): обе ленты за все 30 ступеней с двукратным запасом.
+  // Закрытие месяца выдаёт незабранное разом (T-0312), поэтому потолок держит месяц
+  // целиком. Числа — удвоенная сумма ленты по умолчанию (`battle-pass/pass-defaults.ts`),
+  // тест сверяет; чужую ленту месяца схема не пропустит выше этого потолка.
+  pass_reward: { coins: 21_000, gems: 500, shard_common: 220, shard_uncommon: 32, shard_rare: 122, shard_epic: 8 },
+  // Награда пролога (Р151, tasks/T-0279): одно начисление на аккаунт, потолок равен самой награде —
+  // панель не поднимет её выше (пределы ключей `prologue.reward-*` те же).
+  prologue_reward: { coins: 500, gems: 10 },
 };
 
 /**

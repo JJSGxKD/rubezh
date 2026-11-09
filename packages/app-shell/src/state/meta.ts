@@ -1,17 +1,19 @@
 import { DIFFICULTY_IDS, type DifficultyId, type RunResult } from "@bh/shared-types";
-import { DEFAULT_DIFFICULTY_ID, loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "@bh/core-game";
+import { loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "@bh/core-game";
 import { create } from "zustand";
 import { z } from "zod/mini";
+import { TUTORIAL_DIFFICULTY_ID } from "./difficulty";
 import { createPersistedValue } from "./persisted";
 import { reportError, useShell } from "./shell";
 
 /**
- * Мета между забегами: локальные рекорды по сложностям, число забегов,
- * последний выбор оружия и сложности (docs/27-design-system-and-app-shell.md §7).
+ * Мета между забегами: локальный рекорд, число забегов, последний выбор
+ * оружия (docs/27-design-system-and-app-shell.md §7). Сложность игрок не
+ * выбирает: рекорд ведётся по единой (`state/difficulty.ts`).
  *
  * Рекорд ведёт движок (`submitRunResult`): он же считает итог забега, и
- * правило «рекорд — это лучшее время выживания на этой сложности» живёт в
- * одном месте. Оболочка хранит остальное и отдаёт движку порт хранилища.
+ * правило «рекорд — это лучшее время выживания» живёт в одном месте.
+ * Оболочка хранит остальное и отдаёт движку порт хранилища.
  */
 const META_KEY = "bh.meta.v1.profile";
 
@@ -19,7 +21,7 @@ const schema = z.object({
   runs: z.int().check(z.nonnegative()),
   /** запомненный выбор оружия — решение Р12 */
   lastWeaponId: z.string(),
-  /** запомненный выбор сложности; до появления сложностей поля не было */
+  /** читается и игнорируется: до единой сложности игрок выбирал её сам */
   lastDifficultyId: z.optional(z.enum(DIFFICULTY_IDS)),
   /** последний засчитанный забег — «до рекорда не хватило 0:42» на главной; до WP42 поля не было */
   lastRun: z.optional(z.object({ difficultyId: z.enum(DIFFICULTY_IDS), survivalSec: z.number().check(z.nonnegative()) })),
@@ -40,8 +42,7 @@ export interface LastRun {
 export interface MetaStore {
   runs: number;
   lastWeaponId: string;
-  lastDifficultyId: DifficultyId;
-  /** лучшее время выживания на каждой сложности; 0 — рекорда нет */
+  /** лучшее время выживания по каждому id сложности; 0 — рекорда нет. Показывается рекорд единой */
   best: BestByDifficulty;
   /** последний засчитанный забег; `null` — на этом устройстве ещё не играли */
   lastRun: LastRun | null;
@@ -50,8 +51,10 @@ export interface MetaStore {
   hydrate(): void;
   rememberWeapon(weaponId: string): void;
   rememberDeathDetails(open: boolean): void;
-  rememberDifficulty(difficultyId: DifficultyId): void;
-  /** записать итог забега; возвращает `true`, если это новый рекорд его сложности */
+  /**
+   * записать итог забега; возвращает `true`, если это новый рекорд. Обучающий
+   * забег только увеличивает счётчик: он не рекорд и не «последний забег».
+   */
   submitRun(result: RunResult, countInRating?: boolean): boolean;
   /**
    * Слить рекорды и счётчик забегов с сервера: игрок, сыгравший на телефоне,
@@ -63,7 +66,6 @@ export interface MetaStore {
 export const useMeta = create<MetaStore>((set, get) => ({
   runs: 0,
   lastWeaponId: "",
-  lastDifficultyId: DEFAULT_DIFFICULTY_ID,
   best: emptyBest(),
   lastRun: null,
   deathDetailsOpen: false,
@@ -74,7 +76,6 @@ export const useMeta = create<MetaStore>((set, get) => ({
     set({
       runs: stored.runs,
       lastWeaponId: stored.lastWeaponId,
-      lastDifficultyId: stored.lastDifficultyId ?? DEFAULT_DIFFICULTY_ID,
       lastRun: stored.lastRun ?? null,
       deathDetailsOpen: stored.deathDetailsOpen ?? false,
       best: Object.fromEntries(
@@ -88,11 +89,6 @@ export const useMeta = create<MetaStore>((set, get) => ({
     persist(get());
   },
 
-  rememberDifficulty(difficultyId: DifficultyId): void {
-    set({ lastDifficultyId: difficultyId });
-    persist(get());
-  },
-
   rememberDeathDetails(open: boolean): void {
     set({ deathDetailsOpen: open });
     persist(get());
@@ -103,6 +99,18 @@ export const useMeta = create<MetaStore>((set, get) => ({
     // бессмертный разработчик открыл бы себе все достижения. Кроме случая,
     // когда администратор нарочно проверяет рейтинг.
     if (result.cheats && !countInRating) return false;
+    // Пролог, брошенный до победы, забегом не считается: иначе без сети следующий
+    // «Играть» принял бы игрока за бывалого и пролог не начался бы заново.
+    if (result.mode === "prologue" && result.prologue?.won !== true) return false;
+    // Обучающий забег (Р126) считается сыгранным, но рекорда не ставит и в
+    // «последний забег» не идёт: до него единой сложности далеко, а «Новый
+    // рекорд» на первом же забеге обесценил бы настоящий. «Нормальная» из
+    // продолженного старого сохранения идёт как раньше.
+    if (result.difficultyId === TUTORIAL_DIFFICULTY_ID) {
+      set({ runs: get().runs + 1 });
+      persist(get());
+      return false;
+    }
     const record = submitRunResult(useShell.getState().storage, result);
     set({
       runs: get().runs + 1,
@@ -151,7 +159,6 @@ function persist(state: MetaStore): void {
   value().write({
     runs: state.runs,
     lastWeaponId: state.lastWeaponId,
-    lastDifficultyId: state.lastDifficultyId,
     ...(state.lastRun === null ? {} : { lastRun: state.lastRun }),
     deathDetailsOpen: state.deathDetailsOpen,
   });

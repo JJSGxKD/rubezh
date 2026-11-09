@@ -1,7 +1,7 @@
 import type { ChestsDef, EnemyDef, LevelCurveDef, LoadoutLimits, PassiveDef, WeaponDef } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { CHESTS } from "../src/content/chests";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { killEnemy } from "../src/game/sim/combat";
 import { dropChest, findChestsProblems, openChest, takeChestEvents } from "../src/game/sim/chests";
@@ -364,6 +364,33 @@ describe("запасная награда", () => {
     expect(world.progression.totalXp).toBe(need);
     expect(world.stats.xpCollected).toBe(collected);
     expect(world.chests.openings[0].fallbacks).toBe(1);
+  });
+});
+
+describe("сундук и «Предел»", () => {
+  it("набор собран, «Предел» в мире есть: сундук всё равно даёт аптечку или опыт", () => {
+    const world = maxedWorld();
+    // Мир собран тем же набором, что боевой забег: записи «Предела» на месте.
+    const withLimits = createWorld({
+      seed: 3,
+      enemies: ENEMIES,
+      weapons: [SPARK],
+      passives: [MIGHT],
+      levelCurve: TINY_CURVE,
+      loadoutLimits: TINY_LIMITS,
+      chests: ROOMY,
+      limits: LIMITS,
+    });
+    withLimits.loadout.weapons[0].level = 2;
+    withLimits.loadout.passives.push({ typeIndex: 0, level: 1 });
+
+    openChest(world, 5);
+    openChest(withLimits, 5);
+
+    const kinds = withLimits.chests.openings[0].rewards.map((reward) => reward.kind);
+    expect(kinds).toEqual(world.chests.openings[0].rewards.map((reward) => reward.kind));
+    expect(kinds.every((kind) => kind === "xp" || kind === "heal")).toBe(true);
+    expect(withLimits.progression.limitStacks.every((count) => count === 0)).toBe(true);
   });
 });
 

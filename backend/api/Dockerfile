@@ -44,19 +44,23 @@ COPY packages/adapter-vk/package.json packages/adapter-vk/
 COPY packages/app-shell/package.json packages/app-shell/
 COPY packages/core-game/package.json packages/core-game/
 COPY packages/fx/package.json packages/fx/
+COPY packages/proxy-kit/package.json packages/proxy-kit/
 COPY packages/shared-types/package.json packages/shared-types/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile --filter backend-api...
 
 # --- Сборка ------------------------------------------------------------------
-# Из монорепо бэкенд берёт только ядро курсов packages/fx — собранным, как
-# зависимость (docs/35-stage4-plan.md, §3.12). @bh/shared-types он не
+# Из монорепо бэкенд берёт только ядро курсов packages/fx и пакет прокси
+# packages/proxy-kit — собранными, как зависимости (docs/35-stage4-plan.md,
+# §3.12, Р101). @bh/shared-types он не
 # импортирует, и остального монорепо здесь нет. Фильтр `backend-api...`
 # собирает пакет курсов раньше бэкенда: типы бэкенд берёт из его dist.
 FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/fx/tsconfig.json packages/fx/
 COPY packages/fx/src packages/fx/src
+COPY packages/proxy-kit/tsconfig.json packages/proxy-kit/
+COPY packages/proxy-kit/src packages/proxy-kit/src
 COPY backend/api/tsconfig.json backend/api/
 COPY backend/api/src backend/api/src
 RUN pnpm --filter backend-api prisma:generate \
@@ -74,6 +78,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY backend/api/package.json backend/api/prisma.config.ts backend/api/
 COPY backend/api/prisma backend/api/prisma
 COPY packages/fx/package.json packages/fx/
+COPY packages/proxy-kit/package.json packages/proxy-kit/
 # Скрипты установки здесь не отключаются намеренно: postinstall @prisma/engines
 # кладёт движок миграций в образ. Без него Prisma полезет скачивать его при
 # старте контейнера — в прод-сети это отказ деплоя, а не задержка.
@@ -82,11 +87,16 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
 
 COPY --from=build /app/backend/api/dist backend/api/dist
 COPY --from=build /app/packages/fx/dist packages/fx/dist
+COPY --from=build /app/packages/proxy-kit/dist packages/proxy-kit/dist
 
 # Бит исполняемости не приезжает из Windows (CLAUDE.md, «Окружение команды»),
 # поэтому выставляется здесь, а не ожидается от git.
 COPY infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Том с конфигом Xray (infra/prod/compose.yml, T-0093): именованный том
+# наследует владельца каталога, и без этого API не смог бы писать в него.
+RUN mkdir -p /xray-config && chown node:node /xray-config
 
 WORKDIR /app/backend/api
 USER node

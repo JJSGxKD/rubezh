@@ -101,7 +101,6 @@ www.{$DOMAIN} {
 # cookie-сессия.
 tg.{$DOMAIN} {
 	import edge
-	import edge/web-telegram*.caddy
 	# Без слэша try_files отдал бы саму игру — и панель запустила бы её во фрейме.
 	redir /preview /preview/ permanent
 	handle /api/v1/admin/* {
@@ -113,7 +112,11 @@ tg.{$DOMAIN} {
 	handle /r/* {
 		import api
 	}
+	# Политика источников игры — только её страницам. На уровне домена она
+	# легла бы и на /r/*: страница переходника ставит свою политику с хэшем
+	# скрипта, браузер исполняет обе, и клиентская режет переход в Telegram.
 	handle {
+		import edge/web-telegram*.caddy
 		import spa web-telegram
 	}
 }
@@ -125,7 +128,6 @@ tg.{$DOMAIN} {
 # разработчиков ниже стоят прямо на сервере: им охват CDN не нужен.
 admin.{$DOMAIN} {
 	import edge
-	import edge/admin*.caddy
 	header X-Frame-Options DENY
 	handle /api/v1/admin/* {
 		import api
@@ -133,7 +135,9 @@ admin.{$DOMAIN} {
 	handle /api/* {
 		respond 404
 	}
+	# Политика панели — её страницам, как у клиента: ответы API ставят свою.
 	handle {
+		import edge/admin*.caddy
 		import spa admin
 	}
 }

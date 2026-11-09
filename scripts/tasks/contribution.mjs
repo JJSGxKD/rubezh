@@ -1,3 +1,4 @@
+import { parseTaskBranch } from "./branch.mjs";
 import { launchedBy, reworkRounds } from "./board.mjs";
 
 /**
@@ -40,7 +41,7 @@ export function periodsAt(now) {
 
 // Формат строки тот же, что в scripts/release/pr-check.mjs (T-0207), но с номером аккаунта;
 // `contribution.mjs` оттуда не импортирует, поэтому регулярка повторена, а тест сверяет их на одних примерах.
-const RUNNER_LINE = /^Поток:\s*(claude-\d+)\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
+const RUNNER_LINE = /^Поток:\s*(claude-(?:lead-)?\d+)\s*\/\s*(\S+)\s*\/\s*(\S+)\s*$/;
 const SIGNATURE = /^\*\*(claude-[a-z0-9-]+):\*\*/;
 const STREAM_ACCOUNT = /^claude-\d+$/;
 
@@ -53,7 +54,7 @@ export function parseRunnerLine(body) {
   return null;
 }
 
-const accountOfOwner = (owner) => /^(claude-\d+)(?:\s|\/|$)/.exec(owner ?? "")?.[1] ?? null;
+const accountOfOwner = (owner) => /^(claude-(?:lead-)?\d+)(?:\s|\/|$)/.exec(owner ?? "")?.[1] ?? null;
 
 /** Кодовое имя из подписи в начале текста («**claude-lead-1:** …») или `null`. */
 const signedBy = (text) => SIGNATURE.exec((text ?? "").trimStart())?.[1] ?? null;
@@ -97,7 +98,7 @@ export function contributionRows({ tasks, mergedPrs, specs, now }) {
   }
 
   for (const pr of mergedPrs ?? []) {
-    const taskId = /^task\/(T-\d{4})$/.exec(pr.headRefName ?? "")?.[1];
+    const taskId = parseTaskBranch(pr.headRefName)?.id;
     if (taskId !== undefined) {
       const task = taskById.get(taskId);
       const account = parseRunnerLine(pr.body) ?? accountOfOwner(task?.owner) ?? "не указан";

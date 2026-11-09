@@ -17,7 +17,7 @@ import {
   type ProxyFetch,
   type RouteMemory,
 } from "./outbound-route.js";
-import type { OutboundService } from "./outbound-services.js";
+import { SECRET_PATH_SERVICES, type OutboundService } from "./outbound-services.js";
 import { safePath } from "./outbound-path.js";
 import { undiciProxyFetch } from "./proxy-dispatcher.js";
 
@@ -124,7 +124,7 @@ export class Outbound {
   }
 
   private async run(service: OutboundService, attempts: readonly Attempt[], input: Input, init: RequestInit | undefined): Promise<Response> {
-    const { host, path } = safePath(urlOf(input));
+    const { host, path } = safePath(urlOf(input), { maskPath: SECRET_PATH_SERVICES.includes(service) });
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     const caller = init?.signal ?? (input instanceof Request ? input.signal : undefined);
     let lastError: unknown = null;

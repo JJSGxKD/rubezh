@@ -64,7 +64,7 @@ export function BroadcastForm({
         }}
       />
       <div className="flex flex-wrap items-center gap-2">
-        <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+        <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
           {submitLabel}
         </Button>
         <Button onClick={() => void estimateNow()} disabled={segmentProblem(input.segment) !== null}>
@@ -77,7 +77,6 @@ export function BroadcastForm({
           <span className="text-sm text-danger">{estimate.error.message}</span>
         )}
       </div>
-      {problem !== null && input.text !== "" ? <Notice tone="info">{problem}</Notice> : null}
       {error === null ? null : <Notice>{error.message}</Notice>}
     </form>
   );

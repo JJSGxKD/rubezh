@@ -5,7 +5,11 @@ import { AccountRestrictions } from "../modules/restrictions/account-restriction
 import { PrismaRestrictionsRepository } from "../modules/restrictions/restrictions.repository.js";
 import { formatBoardCounts, rebuildForRestrictions } from "../modules/runs/leaderboard-rebuild.js";
 import { RedisLeaderboardStore } from "../modules/runs/leaderboard.store.js";
+import { ratingSinceOf } from "../modules/runs/rated-runs.js";
 import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
+import { SETTINGS } from "../modules/settings/setting-catalog.js";
+import { PrismaSettingsRepository } from "../modules/settings/settings.repository.js";
+import { SettingsService } from "../modules/settings/settings.service.js";
 
 /**
  * Пересобрать рейтинг из базы (docs/34-stage3-plan.md, Р4): после потери
@@ -22,6 +26,12 @@ import { PrismaRunsRepository } from "../modules/runs/runs.repository.js";
  *
  * При выкате T-0113 команду запускают до первого наложения «Отдельной доски»:
  * она наполняет полную доску, которой раньше не было.
+ *
+ * Единая сложность (Р126, T-0191): рейтинг собирается по рейтинговым сложностям
+ * и забегам не раньше отсечки `rating.since-date` (панель → «Настройки» →
+ * «Рейтинг»), доски остальных сложностей очищаются. После выката запускается
+ * один раз; дату отсечки команда печатает — по ней видно, с какой границей
+ * собрано.
  */
 async function main(): Promise<void> {
   const config = configFromEnvironment();
@@ -30,8 +40,13 @@ async function main(): Promise<void> {
   const redis = createRedis(config);
   try {
     await redis.connect();
+    // Отсечка лежит в настройках панели, а не в окружении: читаем её из базы, как команда пересборки сезонов.
+    const settings = new SettingsService(config, new PrismaSettingsRepository(prisma), redis);
+    await settings.refresh();
+    const since = ratingSinceOf(settings.get(SETTINGS.ratingSinceDate));
     const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
-    const counts = await rebuildForRestrictions(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions);
+    const counts = await rebuildForRestrictions(new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, since);
+    console.log(`отсечка рейтинга: ${since === null ? "нет" : since.toISOString().slice(0, 10)}`);
     console.log(`рейтинг пересобран: ${formatBoardCounts(counts)}`);
   } finally {
     await prisma.$disconnect();

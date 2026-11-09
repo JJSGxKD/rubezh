@@ -32,12 +32,13 @@ import {
 import { activePartners, fetchPartners } from "../../api/partners";
 import { formatDateTime, formatNumber } from "../../format";
 import { ChoiceCards } from "../../ui/choice";
-import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Help, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { LinkCard } from "./LinkCard";
+import { LinksGuide } from "./LinksGuide";
 import { TokenNotice } from "./TokenNotice";
 import { UnknownKeys } from "./UnknownKeys";
 
@@ -77,6 +78,8 @@ export function LinksScreen({ id }: { id: string | null }) {
   const [created, setCreated] = useState<Link | null>(null);
   // Скрытые автоисточники по умолчанию не показываются; запуски по ним считаются как раньше.
   const [showHidden, setShowHidden] = useState(false);
+  // Справка монтируется только открытой: закрыл и открыл снова — окно с начала.
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Из карточки партнёра — мастер с ним выбранным; по коду ссылки — её карточка.
   useEffect(() => {
@@ -136,7 +139,14 @@ export function LinksScreen({ id }: { id: string | null }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title="Новая ссылка">
+      <Panel
+        title="Новая ссылка"
+        actions={
+          <Button tone="secondary" onClick={() => setGuideOpen(true)}>
+            Как устроены ссылки
+          </Button>
+        }
+      >
         <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-4">
           <ChoiceGroup label="Чья ссылка" help={OWNER_HELP}>
             <ChoiceCards<LinkOwnerKind>
@@ -224,7 +234,7 @@ export function LinksScreen({ id }: { id: string | null }) {
               )}
             </>
           )}
-          <div className="flex flex-wrap items-end gap-2">
+          <FieldRow>
             <Field label="Кампания" hint="латиница, цифры, дефис" help={HELP.links.campaign}>
               <Input value={campaign} onChange={(event) => setCampaign(event.target.value.trim().toLowerCase())} placeholder="launch-post" maxLength={64} />
             </Field>
@@ -234,10 +244,12 @@ export function LinksScreen({ id }: { id: string | null }) {
             <Field label="Заметка">
               <Input value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} className="w-72" />
             </Field>
-            <Button tone="primary" type="submit" disabled={!valid}>
-              Завести
-            </Button>
-          </div>
+            <RowItem>
+              <Button tone="primary" type="submit" disabled={!valid}>
+                Завести
+              </Button>
+            </RowItem>
+          </FieldRow>
         </form>
         {error === null ? null : (
           <div className="mt-3">
@@ -258,7 +270,7 @@ export function LinksScreen({ id }: { id: string | null }) {
           <DataTable
             rows={visibleLinks(links, showHidden)}
             rowKey={(row) => row.code}
-            empty="Ссылок ещё нет"
+            empty="Ссылок ещё нет — заведите первую для поста или рекламы кнопкой выше"
             onRowClick={(row) => navigate({ section: "links", id: row.code })}
             columns={[
               {
@@ -292,6 +304,7 @@ export function LinksScreen({ id }: { id: string | null }) {
         ) : null}
       </Panel>
       <UnknownKeys />
+      {guideOpen ? <LinksGuide onClose={() => setGuideOpen(false)} /> : null}
       {openCode === null ? null : (
         <LinkCard
           link={open}

@@ -1,3 +1,4 @@
+import { fxScene } from "../dev/fx-scenes";
 import { SCREEN_IDS, type ScreenId } from "./navigation";
 
 /**
@@ -9,6 +10,10 @@ import { SCREEN_IDS, type ScreenId } from "./navigation";
 export interface DevUrlOptions {
   screen: ScreenId | null;
   devUser: string | null;
+  /** id сцены стенда эффектов (`?fx=`, docs/17-testing-strategy.md) */
+  fx: string | null;
+  /** земля под сценой: карта или светлая проверочная (`&ground=light`) */
+  ground: "map" | "light";
 }
 
 const LOCAL_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1"]);
@@ -16,7 +21,7 @@ const LOCAL_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1"]);
 const NOT_OPENABLE: ReadonlySet<ScreenId> = new Set<ScreenId>(["run", "stress"]);
 const DEV_USER_MAX_LENGTH = 64;
 
-const EMPTY: DevUrlOptions = { screen: null, devUser: null };
+const EMPTY: DevUrlOptions = { screen: null, devUser: null, fx: null, ground: "map" };
 
 function isScreenId(value: string): value is ScreenId {
   return (SCREEN_IDS as readonly string[]).includes(value);
@@ -41,5 +46,13 @@ export function readDevUrl(href: string, isDev: boolean): DevUrlOptions {
 
   const rawUser = url.searchParams.get("dev-user");
   const devUser = rawUser !== null && rawUser !== "" && rawUser.length <= DEV_USER_MAX_LENGTH ? rawUser : null;
-  return { screen, devUser };
+
+  const rawFx = url.searchParams.get("fx");
+  let fx: string | null = null;
+  if (rawFx !== null && rawFx !== "") {
+    if (fxScene(rawFx) !== null) fx = rawFx;
+    else console.warn(`неизвестная сцена эффекта: ${rawFx}`);
+  }
+  const ground = url.searchParams.get("ground") === "light" ? "light" : "map";
+  return { screen, devUser, fx, ground };
 }

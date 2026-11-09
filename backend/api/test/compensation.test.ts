@@ -11,6 +11,7 @@ import { CompensationNotFoundError, CompensationService, type CompensationView }
 import type { RateLimit } from "../src/modules/ingest/rate-limiter.js";
 import type { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { emptyBalances, type Balances, type GrantReason, type WalletResource } from "../src/modules/wallet/wallet-types.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Выдача компенсации после вайпа (docs/35-stage4-plan.md, Р87, tasks/T-0042).
@@ -397,7 +398,7 @@ describe("знак «Тестер» в рейтинге", () => {
   const STRANGER = randomUUID();
 
   function best(accountId: string, patch: Partial<BestRunRow> = {}): BestRunRow {
-    return { accountId, displayName: `Игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: 300, level: 7, startingWeaponId: "knife", enemiesKilled: 90, ...patch };
+    return { accountId, displayName: `Игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: 300, points: 300, style: null, level: 7, startingWeaponId: "knife", enemiesKilled: 90, ...patch };
   }
 
   function viewOf(rows: BestRunRow[], options: { shadow?: BestRunRow | null; hold?: "silent" | null } = {}): RunsViewService {
@@ -412,14 +413,14 @@ describe("знак «Тестер» в рейтинге", () => {
       best: async () => 300,
       countAbove: async () => 0,
     };
-    const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const };
-    return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never);
+    const rating = { hold: async () => options.hold ?? null, boardOf: async () => "common" as const, since: () => null };
+    return new RunsViewService(runs as never, leaderboard as never, {} as never, rating as never, new RunPrestige());
   }
 
   it("у тестера в строке доски tester: true, у остальных поля нет вовсе", async () => {
     const view = viewOf([best(FRIEND, { tester: true }), best(STRANGER)]);
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries[0]).toMatchObject({ tester: true });
     expect(entries[1]).not.toHaveProperty("tester");
@@ -428,16 +429,16 @@ describe("знак «Тестер» в рейтинге", () => {
   it("идентификаторы чужих аккаунтов и дата знака в строку не попадают", async () => {
     const view = viewOf([best(FRIEND, { tester: true })]);
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
-    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "rank", "startingWeaponId", "survivalSec", "tester"]);
+    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "points", "prestige", "rank", "startingWeaponId", "style", "survivalSec", "tester"]);
   });
 
   it("игрок в тени видит себя со знаком, если он тестер", async () => {
     const mine = best(ME, { tester: true, survivalSec: 500 });
     const view = viewOf([best(STRANGER)], { shadow: mine, hold: "silent" });
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries.find((entry) => entry.isMe)).toMatchObject({ tester: true });
   });
@@ -445,7 +446,7 @@ describe("знак «Тестер» в рейтинге", () => {
   it("игрок в тени без знака — поля tester нет", async () => {
     const view = viewOf([best(STRANGER)], { shadow: best(ME, { survivalSec: 500 }), hold: "silent" });
 
-    const { entries } = await view.leaderboardFor(ME, "normal");
+    const { entries } = await view.leaderboardFor(ME, "hard");
 
     expect(entries.find((entry) => entry.isMe)).not.toHaveProperty("tester");
   });

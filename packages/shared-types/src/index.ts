@@ -904,6 +904,11 @@ export const LOADOUT_STATS = [
 
 export type LoadoutStat = (typeof LOADOUT_STATS)[number];
 
+/** Класс устройства игрока: от него зависит потолок живых врагов (подстройка давления, Р67). */
+export const DEVICE_CLASSES = ["standard", "light"] as const;
+
+export type DeviceClass = (typeof DEVICE_CLASSES)[number];
+
 /**
  * Набор на забег: модификаторы параметров и активные бусты. Пишется в запись
  * и снимок забега — иначе повтор и продолженный забег разошлись бы с
@@ -920,6 +925,13 @@ export interface RunLoadout {
    * баланса. Оболочка на новом забеге ставит его всегда.
    */
   accountLevel?: number;
+  /**
+   * Класс устройства (docs/35-stage4-plan.md, Р67): на слабом телефоне потолок
+   * живых врагов ниже. Класс влияет на бой, значит обязан попасть в запись и
+   * снимок забега, а набор туда уже попадает — отдельное поле не нужно. Нет
+   * поля — обычное устройство: `"standard"` в набор не пишется.
+   */
+  deviceClass?: DeviceClass;
 }
 
 /**
@@ -1157,7 +1169,7 @@ export interface ChestsLateDef {
 }
 
 /** Награда сундука: те же улучшения, что на карточках, и опыт как запасной вариант. */
-export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: UpgradeOptionKind | "xp" };
+export type ChestReward = Omit<UpgradeOption, "kind"> & { kind: Exclude<UpgradeOptionKind, "limit"> | "xp" };
 
 // --- Тайники рубежа (docs/35-stage4-plan.md, Р153; design/art/meta-v2.md §5) ---
 // Места на бесконечной карте, ради которых стоит идти: причина двигаться и
@@ -1250,6 +1262,91 @@ export interface RunSecretsSummary {
 }
 
 /**
+ * Отметка рубежа — секунда забега, на которой приходит страж (Р102, Р105,
+ * docs/39-retention-mechanics.md Б6). Одна константа на движок и сервер: движок
+ * ставит стража, сервер проверяет заявленную победу (`clearedSec` не раньше
+ * отметки); второй копии нет. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_AT_SEC = 600;
+
+/**
+ * Минимальная длительность боя со стражем, секунды (T-0121): стража нельзя убить
+ * быстрее. Сервер не принимает победу раньше `RUBEZH_AT_SEC + RUBEZH_MIN_FIGHT_SEC`.
+ * Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_MIN_FIGHT_SEC = 5;
+
+/**
+ * Во сколько раз победа над стражем умножает награду забега — монеты и опыт
+ * аккаунта, один раз за забег, поверх множителя сложности и до потолков забега
+ * (T-0121, Р102, docs/32-balance.md). Платит сервер, оболочка читает готовое
+ * `rubezhMul` из ответа награды. Число стартовое, калибрует геймдизайнер.
+ */
+export const RUBEZH_REWARD_MUL = 2;
+
+/** Правила рубежа: когда приходит страж и кто он (`content/rubezh.ts`). */
+export interface RubezhDef {
+  /** секунда забега, на которой приходит страж */
+  atSec: number;
+  /** id врага из контента: босс без снарядов */
+  guard: string;
+}
+
+/**
+ * Рубеж в итоге забега (T-0120). Победа — убитый страж, а не конец забега: она
+ * записывается в итог и не сбрасывается смертью или сдачей.
+ */
+export interface RunRubezh {
+  /** страж пришёл: забег дожил до отметки */
+  reached: boolean;
+  /** секунда забега, на которой страж пал; `null` — не пал */
+  clearedSec: number | null;
+  /** остаток здоровья живого стража целым процентом 1–100 к концу забега; `null` — стража нет или он убит */
+  guardHpPercent: number | null;
+}
+
+/**
+ * Режим забега (T-0278, Р151). `endless` — обычный бесконечный; `prologue` —
+ * пролог, первый забег аккаунта на три минуты: свой таймлайн, оберег, большой
+ * первый сундук, «Советуем» и победа над Стражем рубежа. Сложность пролога
+ * движок ставит сам — «лёгкая».
+ */
+export type RunMode = "endless" | "prologue";
+
+export const RUN_MODES: readonly RunMode[] = ["endless", "prologue"];
+
+/**
+ * Пролог первого забега — данные геймдизайнера (`core-game/src/content/prologue.ts`,
+ * docs/35-stage4-plan.md Р151). Таймлайн того же вида, что у бесконечного режима;
+ * кривая бесконечного режима в прологе не работает: после последнего отрезка поток
+ * держится как есть.
+ */
+export interface PrologueDef {
+  /** отрезки пролога; последним событием идёт Страж рубежа */
+  timeline: TimelineSegmentDef[];
+  /** множитель здоровья Стража в прологе: бой должен занимать 25–50 секунд при набранной за три минуты силе */
+  guardHpMul: number;
+  /** оберег: здоровье не падает ниже этой доли максимума, смерть в прологе невозможна */
+  hpFloorRatio: number;
+  /** размер первого выпавшего сундука вместо `ChestsDef.opening[0]` */
+  firstChestSize: ChestSize;
+  /** своя кривая опыта: первый уровень почти сразу */
+  levelCurve: LevelCurveDef;
+  /** во сколько раз дальше берутся кристаллы и подборы */
+  pickupRadiusMul: number;
+  /** что советуем на первом выборе улучшения */
+  recommendFirstOffer: "new_weapon";
+}
+
+/** Пролог в итоге забега: победа над Стражем и секунда, на которой забег кончился. */
+export interface RunPrologue {
+  /** Страж пал */
+  won: boolean;
+  /** секунда победы, а у забега без победы — секунда выхода */
+  sec: number;
+}
+
+/**
  * Уровень сложности забега. Выбирается перед забегом; рекорд и лидерборд
  * ведутся по каждому отдельно — время на «Сложной» и на «Лёгкой» несравнимо.
  */
@@ -1273,6 +1370,66 @@ export interface DifficultyDef {
   spawnRateMul: number;
   /** потолок живых врагов одновременно */
   maxAliveMul: number;
+}
+
+/** Наклоны рычагов подстройки: на сколько множитель меняется на единицу уровня давления. */
+export interface PressureLeversDef {
+  /** здоровье врагов */
+  hp: number;
+  /** урон врагов */
+  damage: number;
+  /** темп спавна */
+  spawn: number;
+  /** потолок живых */
+  alive: number;
+  /** на сколько отрезков раньше приходят события элит и боссов кривой на единицу уровня */
+  leadPerLevel: number;
+}
+
+/**
+ * Подстройка давления под силу игрока и устройство (docs/35-stage4-plan.md,
+ * Р131, Р65, Р67, Р183) — данные геймдизайнера
+ * (`core-game/src/content/pressure.ts`). Подробности — `docs/32-balance.md` §2.7.
+ */
+export interface PressureDef {
+  power: {
+    /** очков за один слот: оружия и навыков всех категорий */
+    slotPoints: number;
+    /** очков за единицу прибавки параметра снаряжения; параметр без записи не считается */
+    gear: Partial<Record<LoadoutStat, number>>;
+    /** очков за долю набора, которой игроку не хватает до расписания */
+    buildPoints: number;
+    /** потолок помощи отстающему, очки; сама помощь только вычитает */
+    buildCap: number;
+    /** ожидаемая доля набора по секундам: пары «секунда, доля» */
+    buildSchedule: [number, number][];
+  };
+  /** сила, при которой давление не поправляется: ровно кривая единой сложности */
+  reference: number;
+  /** очков выше опорной, на которые уровень давления вырастает на единицу */
+  spanUp: number;
+  /** очков ниже опорной, на которые уровень давления падает на единицу */
+  spanDown: number;
+  minLevel: number;
+  maxLevel: number;
+  levers: {
+    /** слабее опорного: работают все рычаги */
+    down: PressureLeversDef & { stageShiftSec: number };
+    /** сильнее опорного: толпа и события, здоровье и урон едва-едва, ступени не сдвигаются */
+    up: PressureLeversDef;
+  };
+  /** пределы сдвига событий по рангу врага, в отрезках */
+  leads: { elite: { min: number; max: number }; boss: { min: number; max: number } };
+  devices: {
+    /** потолок живых врагов по классу устройства */
+    caps: Record<DeviceClass, number>;
+    /** с какой секунды забега урезанное потолком добирают здоровье и урон */
+    compensateFromSec: number;
+    hpComp: number;
+    damageComp: number;
+    /** во сколько раз добор не больше */
+    maxShortfall: number;
+  };
 }
 
 /** Сколько оружий и пассивок каждой категории игрок держит одновременно. */
@@ -1324,7 +1481,32 @@ export type UpgradeOptionKind =
   | "passive_new"
   | "passive_level"
   | "weapon_evolve"
-  | "heal";
+  | "heal"
+  /** малая прибавка «Предела»: предлагается, только когда прокачивать нечего */
+  | "limit";
+
+/**
+ * Запись «Предела» (docs/35-stage4-plan.md, Р130): малая прибавка к параметру,
+ * которую можно брать без счёта, когда в наборе всё взято и прокачано. Данные
+ * геймдизайнера (`core-game/src/content/upgrades.ts`, `LIMITS`); складывается
+ * со снаряжением и бустами и упирается в те же пределы движка.
+ */
+export interface LimitDef {
+  /** id записи; карточка получает id `limit:<id>` */
+  id: string;
+  nameKey: string;
+  descriptionKey: string;
+  /** параметр, к которому идёт прибавка, — тот же, что у снаряжения */
+  stat: LoadoutStat;
+  /**
+   * Прибавка за одно нажатие в шкале `LoadoutStat`: у перезарядки это
+   * ускорение (0,02 — на 2% короче), у здоровья — число. Больше нуля и не
+   * больше 5% предела параметра.
+   */
+  step: number;
+  /** вес при выборе карточек; не задан — 1 */
+  weight?: number;
+}
 
 /**
  * Вариант выбора при наборе уровня. `id` устойчив между прогонами — именно он
@@ -1339,6 +1521,11 @@ export interface UpgradeOption {
   level: number;
   nameKey: string;
   descriptionKey: string;
+  /**
+   * «Советуем»: карточка, на которую пролог указывает пальцем (T-0278). Есть
+   * только у предложения первого выбора пролога; выбор не навязан.
+   */
+  recommended?: boolean;
   /**
    * Что именно даёт вариант — по строке на характеристику. Без этого «Искра,
    * уровень 3» ничего не говорит: больше снарядов, быстрее или сильнее? Для
@@ -1393,6 +1580,28 @@ export interface RunPassiveSummary {
   level: number;
 }
 
+/** Сила игрока и уровень давления на старте забега (подстройка, Р131); числа округлены до сотых. */
+export interface RunPressureStart {
+  power: number;
+  level: number;
+  deviceClass: DeviceClass;
+}
+
+/** То же на конец забега: сравнение со стартом показывает, насколько набор отстал от расписания. */
+export interface RunPressureResult extends RunPressureStart {
+  powerEnd: number;
+  levelEnd: number;
+}
+
+/** Убитая элита или босс: сколько жила и сколько стоила (tasks/T-0292, Р152). */
+export interface RunHuntEntry {
+  rank: "elite" | "boss";
+  /** опыт врага из контента */
+  value: number;
+  /** секунд от появления до смерти */
+  aliveSec: number;
+}
+
 export interface RunResult {
   runId: string;
   /** seed забега: с ним и логом ввода забег воспроизводится целиком */
@@ -1432,6 +1641,16 @@ export interface RunResult {
    * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
    */
   secrets?: RunSecretsSummary;
+  /**
+   * Рубеж: пришёл ли страж, пал ли он и сколько здоровья у него осталось —
+   * «почти победил» для экрана смерти (T-0120). Необязательное: итог прошлой
+   * сборки поля не знает, а движок отдаёт его всегда.
+   */
+  rubezh?: RunRubezh;
+  /** режим забега; нет поля — `endless`, а у итога прошлой сборки режима и не было */
+  mode?: RunMode;
+  /** пролог: победа и секунда; есть только у забега в режиме `prologue` (T-0278) */
+  prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
   damageDealt: number;
@@ -1481,6 +1700,15 @@ export interface RunResult {
    * итог прошлой сборки.
    */
   boosts?: string[];
+  /** Сила игрока и давление. Нет поля — подстройки не было: забег без уровня аккаунта или итог прошлой сборки. */
+  pressure?: RunPressureResult;
+  /**
+   * Журнал охоты: запись на каждую убитую элиту и босса, до 64 (tasks/T-0292).
+   * Необязательный: итог прошлой сборки поля не знает.
+   */
+  huntLog?: RunHuntEntry[];
+  /** Оценка сборки: эволюции × 2 + оружие и навыки на максимуме (tasks/T-0292). */
+  buildScore?: number;
 }
 
 // --- Забеги под аккаунтом: старт, итог, рейтинг (docs/34-stage3-plan.md, WP4) ---
@@ -1500,6 +1728,8 @@ export interface RunStartSubmission {
   contentHash: string;
   /** сколько секунд прошло от начала забега до отправки: старт мог ждать сеть */
   elapsedSec: number;
+  /** режим забега; нет поля — `endless` (T-0280, сервер T-0279) */
+  mode?: RunMode;
 }
 
 export interface RunFinishSubmission {
@@ -1542,6 +1772,10 @@ export interface RunFinishSubmission {
    */
   passives?: { id: string; level: number }[];
   stats?: RunFinishStats;
+  /** режим забега; нет поля — `endless` (T-0280, сервер T-0279) */
+  mode?: RunMode;
+  /** пролог: победа и секунда; есть только у забега в режиме `prologue`. Победа приходит как `abandoned` с этим итогом */
+  prologue?: RunPrologue;
 }
 
 export interface RunFinishStats {
@@ -1562,6 +1796,14 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
+  huntLog?: RunHuntEntry[];
+  buildScore?: number;
+  /**
+   * Сила игрока на старте забега, очки (`RunPressureResult.power`): по ней сервер берёт полосу
+   * ожидаемого для очков эффективности (tasks/T-0293). Нет поля — подстройки не было, полоса средняя.
+   */
+  power?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
@@ -1598,6 +1840,28 @@ export interface RunFinishResult {
   /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
   recorded: boolean;
   verdict: RunVerdict;
+  /**
+   * Очки эффективности забега (tasks/T-0293, Р152). Нет поля — очков нет: пролог и обучение,
+   * сбой подсчёта, ответ сервера до очков.
+   */
+  score?: RunScoreView;
+}
+
+/** Ось очков: Стойкость, Натиск, Охота, Чистота, Сборка. */
+export type RunScoreAxis = "t" | "k" | "h" | "c" | "b";
+
+/** Стиль забега — сильнейшая ось: Стена, Ураган, Охотник, Тень, Мастер. */
+export type RunScoreStyle = RunScoreAxis;
+
+/** Очки эффективности в ответе записи забега: индексы осей — 1 значит ровно ожидаемое. */
+export interface RunScoreView {
+  points: number;
+  axes: Record<RunScoreAxis, number>;
+  style: RunScoreStyle;
+  /** полоса силы, по которой взято ожидаемое */
+  band: string;
+  /** очки забега той же длины, сыгранного ровно по ожидаемому: черта «ожидаемое» */
+  expectedPoints: number;
 }
 
 export interface LeaderboardEntry {
@@ -1611,13 +1875,32 @@ export interface LeaderboardEntry {
   isMe: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
+  prestige?: number | undefined;
+  /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
+  rubezh?: true | undefined;
+  /** очки эффективности лучшего забега (T-0294) — по ним ранжирована доска; нет поля — сервер до очков, `null` — в сезоне по времени очков в таблице нет */
+  points?: number | null | undefined;
+  /** стиль забега (T-0293): ось `t`, `k`, `h`, `c`, `b`; `null` — очков нет */
+  style?: string | null | undefined;
+  /** дивизион сезона (T-0295); `null` — места на доске сезона нет */
+  division?: string | null | undefined;
+}
+
+/** Своя строка доски: место и числа лучшего забега, даже если оно ниже показанных строк. */
+export interface LeaderboardMe {
+  rank: number;
+  survivalSec: number;
+  points?: number | null | undefined;
+  style?: string | null | undefined;
+  division?: string | null | undefined;
 }
 
 export interface Leaderboard {
   difficultyId: DifficultyId;
   entries: LeaderboardEntry[];
   /** своё место, даже если оно ниже показанных строк */
-  me: { rank: number; survivalSec: number } | null;
+  me: LeaderboardMe | null;
   totalPlayers: number;
 }
 
@@ -1648,6 +1931,8 @@ export interface RunProfile {
   totalSurvivalSec: number;
   best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
   recent: RecentRun[];
+  /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
+  prologueDone?: boolean;
 }
 
 // --- Экономика / SKU, см. docs/05-game-design.md §5, docs/07-monetization-and-ads.md ---

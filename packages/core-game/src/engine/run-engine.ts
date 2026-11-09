@@ -1,3 +1,4 @@
+import type { DifficultyId } from "@bh/shared-types";
 import { MainScene, type MainSceneData } from "../game/MainScene";
 import type { RunContinueOptions, RunEngine, RunEvents, RunOptions, RunPauseReason, RunSession } from "../run-api";
 import { createPhaserHost } from "./phaser-host";
@@ -25,6 +26,7 @@ export function createRunEngine(): RunEngine {
         unitScale: host.pixelRatio,
         mapId: options.mapId,
         difficultyId: options.difficultyId,
+        mode: options.mode,
         ...(options.startingWeaponId === ""
           ? {}
           : { startingWeaponId: options.startingWeaponId }),
@@ -93,14 +95,17 @@ export function createRunEngine(): RunEngine {
         declineContinue(): void {
           scene()?.declineContinue();
         },
-        restart(seed: number): void {
-          scene()?.restartRun(seed);
+        restart(seed: number, options?: { difficultyId?: DifficultyId }): void {
+          scene()?.restartRun(seed, options?.difficultyId);
         },
         snapshot() {
           return scene()?.captureSnapshot() ?? null;
         },
         inspect() {
           return scene()?.inspect() ?? null;
+        },
+        devRenderStats() {
+          return scene()?.devRenderStats() ?? null;
         },
         setDev(dev) {
           scene()?.setDev(dev);

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Sparkles } from "lucide-react";
+import { ChevronsUp, Sparkles } from "lucide-react";
 import { GameGlyph, HEAL_GLYPH, PASSIVE_GLYPHS, WEAPON_GLYPHS } from "./game-glyphs";
 
 /**
@@ -14,10 +14,12 @@ export function hasOwnWeaponIcon(id: string): boolean {
   return WEAPON_GLYPHS[id] !== undefined;
 }
 
-export type ItemKind = "weapon" | "passive" | "heal";
+export type ItemKind = "weapon" | "passive" | "heal" | "limit";
 
 export function ItemIcon(props: { kind: ItemKind; id: string; size?: number }): ReactNode {
   const size = props.size ?? 20;
+  // «Предел» — не предмет набора, а общая прибавка: значок один на все записи.
+  if (props.kind === "limit") return <ChevronsUp size={size} aria-hidden="true" />;
   const glyph = props.kind === "heal" ? HEAL_GLYPH : (props.kind === "weapon" ? WEAPON_GLYPHS : PASSIVE_GLYPHS)[props.id];
   if (glyph !== undefined) return <GameGlyph glyph={glyph} size={size} />;
   return <Sparkles size={size} aria-hidden="true" />;
@@ -27,9 +29,10 @@ const TILE_TONE: Record<ItemKind, string> = {
   weapon: "bg-weapon/15 text-weapon",
   passive: "bg-passive/15 text-passive",
   heal: "bg-hp/15 text-hp",
+  limit: "bg-info/15 text-info",
 };
 
-/** Значок на цветной плитке: оружие жёлтое, пассивка фиолетовая, лечение зелёное. */
+/** Значок на цветной плитке: оружие жёлтое, пассивка фиолетовая, лечение зелёное, «Предел» синий. */
 export function ItemTile(props: { kind: ItemKind; id: string; size?: "s" | "m" }): ReactNode {
   if (props.size === "s") {
     // Маленькие плитки ложатся стопкой внахлёст: у полупрозрачной плитки
@@ -57,6 +60,7 @@ const MEDALLION_RING: Record<ItemKind, string> = {
   weapon: "ring-weapon text-weapon",
   passive: "ring-passive text-passive",
   heal: "ring-hp text-hp",
+  limit: "ring-info text-info",
 };
 
 /**

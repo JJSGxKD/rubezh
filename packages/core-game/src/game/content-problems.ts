@@ -5,11 +5,13 @@ import { findPassiveContentProblems } from "./progression/passives";
 import { findBoostProblems } from "./progression/boosts";
 import { findEvolutionProblems } from "./progression/evolutions";
 import { findLevelCurveProblems as findCurveShapeProblems, xpForLevel } from "./progression/levels";
+import { findLimitProblems } from "./progression/limit";
 import { findCardToolProblems, findUnlockProblems } from "./progression/unlocks";
 import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
 import { findSecretsProblems } from "./sim/secrets";
 import { findContinueProblems } from "./sim/continue";
+import { findPressureProblems } from "./sim/pressure";
 import { findDifficultyContentProblems } from "./sim/difficulty";
 import { findDropsContentProblems } from "./sim/gems";
 import { findMapContentProblems } from "./sim/map-types";
@@ -72,12 +74,14 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("chests", findChestsProblems(content.chests));
   add("chests", findPickupPoolProblems(content));
   add("secrets", findSecretsProblems(content.secrets));
+  add("limits", findLimitProblems(content.limits));
   add("difficulties", findDifficultyContentProblems(content.difficulties));
   add("difficulties", findDifficultySetProblems(content));
   add("continueRules", findContinueProblems(content.continueRules));
   add("boosts", findBoostProblems(content.boosts));
   add("maxBoostsPerRun", findBoostLimitProblems(content));
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
+  add("pressure", findPressureProblems(content.pressure));
   return problems;
 }
 

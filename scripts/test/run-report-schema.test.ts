@@ -58,6 +58,26 @@ describe("схема записи забега", () => {
     expect(parsed.data?.recording).toEqual(recording);
   });
 
+  it("и класс устройства: без него повтор у команды разошёлся бы с забегом тестера", () => {
+    const recording = recordHeadlessRun({
+      seed: 42,
+      maxTicks: 3_000,
+      steer: circling(200),
+      loadout: { modifiers: {}, boosts: [], accountLevel: 8, deviceClass: "light" },
+    });
+    const parsed = submitRunReportSchema.safeParse({ recording, client: CLIENT });
+
+    expect(recording.loadout?.deviceClass).toBe("light");
+    expect(parsed.error?.issues ?? []).toEqual([]);
+    expect(parsed.data?.recording).toEqual(recording);
+  });
+
+  it("неизвестный класс устройства приёмник отвергает", () => {
+    const recording = recordHeadlessRun({ seed: 42, maxTicks: 600, steer: circling(200), loadout: { modifiers: {}, boosts: [], accountLevel: 8 } });
+    const forged = { ...recording, loadout: { ...recording.loadout, deviceClass: "toaster" } };
+    expect(submitRunReportSchema.safeParse({ recording: forged, client: CLIENT }).success).toBe(false);
+  });
+
   it("параметры набора движка и приёмника совпадают", () => {
     expect([...SERVER_LOADOUT_STATS].sort()).toEqual([...LOADOUT_STATS].sort());
   });

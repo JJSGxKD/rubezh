@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Clock } from "lucide-react";
 import { ContentColumn, ErrorState, InfoNotice, PageTitle, Screen, SegmentedControl } from "../../design-system/components";
 import { t } from "../../i18n";
@@ -31,6 +31,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
+import { Achievements } from "./achievements";
 import { BotMentionRows } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
@@ -137,6 +138,7 @@ export function TasksScreen(): ReactNode {
     }
     setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
     if (response.data.claimed) {
+      // Достижения забирают из витрины (`achievements.tsx`); здесь остаются партнёрские цели.
       if (task.period === "achievement") track("achievement_unlocked", { achievement: task.id, kind: task.kind });
       else track("task_completed", { task: task.id, period: task.period, kind: task.kind, ...(isPoolTier(task.tier) ? { tier: task.tier } : {}) });
       setNotice({ taskId: task.id, text: t("tasks.got", { what: rewardText(response.data.credited) }) });
@@ -187,6 +189,16 @@ export function TasksScreen(): ReactNode {
   const claimable = tasks.filter(isClaimable);
   const rest = tasks.filter((task) => !isClaimable(task));
   const partner = view === "partner";
+  // Показы партнёрских заданий (T-0224): событие на задание, чья карточка
+  // нарисована на вкладке «Партнёры»; ref живёт, пока открыт экран.
+  const shownPartner = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (state.status !== "ready" || view !== "partner") return;
+    for (const item of unseenPartnerShows(state.tasks, shownPartner.current)) {
+      shownPartner.current.add(item.id);
+      track("task_shown", { task: item.id, kind: item.kind });
+    }
+  }, [state, view]);
   const partnerClosed = useRestricted(PARTNER_RESTRICTION);
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
   // К наградам заданий вкладок «День» и «Неделя» прибавляются готовые ступени их полос.
@@ -225,7 +237,6 @@ export function TasksScreen(): ReactNode {
     <Screen>
       <ContentColumn>
         <PageTitle>{t("tasks.title")}</PageTitle>
-        <BotMentionRows />
         <div className="mt-2 grid gap-3">
           <SegmentedControl track="view"
             label={t("tasks.title")}
@@ -238,13 +249,19 @@ export function TasksScreen(): ReactNode {
               { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
             ]}
           />
-          {!tasksAvailable() ? <InfoNotice text={t("tasks.guest")} /> : null}
+          {!tasksAvailable() && view !== "achievements" ? <InfoNotice text={t("tasks.guest")} /> : null}
         </div>
 
-        {state.status === "loading" && tasksAvailable() ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
-        {state.status === "failed" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+        {/* Юзернейм бота приоритетнее заданий, но не выше вкладок: первым под ними, на любой вкладке. */}
+        <BotMentionRows />
 
-        {state.status !== "ready" ? null : (
+        {/* Витрина грузит себя сама: сбой списка заданий её не закрывает, знак вкладки лишь не обновится. */}
+        {view === "achievements" ? <Achievements onChanged={() => void refresh()} /> : null}
+
+        {state.status === "loading" && tasksAvailable() && view !== "achievements" ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
+        {state.status === "failed" && view !== "achievements" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+
+        {state.status !== "ready" || view === "achievements" ? null : (
           // Ключ — вид: список монтируется заново, и лесенка появления
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
@@ -275,6 +292,11 @@ export function TasksScreen(): ReactNode {
       </ContentColumn>
     </Screen>
   );
+}
+
+/** Партнёрские задания, чей показ ещё не записан на этом открытии экрана (T-0224). */
+export function unseenPartnerShows(tasks: readonly TaskItem[], seen: ReadonlySet<string>): TaskItem[] {
+  return tasks.filter((task) => tabOf(task) === "partner" && !seen.has(task.id));
 }
 
 /** Ступень пула ротации в событии — только известная серверу: словарь событий другой не примет. */

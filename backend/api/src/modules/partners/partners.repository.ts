@@ -36,6 +36,8 @@ export interface PartnerBindingView {
   /** кампания и код, которым привязан; `null` — кампании уже нет */
   campaignTitle: string | null;
   code: string | null;
+  /** ссылка партнёра, по которой пришёл игрок; `null` — привязка по коду */
+  linkCode: string | null;
 }
 
 export interface PartnersRepository {
@@ -72,6 +74,9 @@ const rowSchema = z.object({
   payout_currency: z.string().nullable(),
   payout_method: z.string().nullable(),
   share_percent: z.string().nullable(),
+  postback_url: z.string().nullable(),
+  postback_since: z.date().nullable(),
+  postback_events: z.array(z.string()),
 });
 
 const statsSchema = z.object({
@@ -100,6 +105,9 @@ function toRow(raw: unknown): PartnerRow {
     payoutCurrency: row.payout_currency,
     payoutMethod: row.payout_method,
     sharePercent: row.share_percent,
+    postbackUrl: row.postback_url,
+    postbackSince: row.postback_since,
+    postbackEvents: row.postback_events,
   };
 }
 
@@ -110,7 +118,8 @@ function toStats(raw: unknown): PartnerStats {
 
 // Процент — текстом: десятичная доля не должна пройти через двоичную дробь.
 const COLUMNS = Prisma.sql`p.partner_id::text, p.name, p.contact, p.note, p.created_by::text, p.created_at, p.updated_at,
-  p.telegram_id, p.status, p.country, p.payout_currency, p.payout_method, p.share_percent::text AS share_percent`;
+  p.telegram_id, p.status, p.country, p.payout_currency, p.payout_method, p.share_percent::text AS share_percent,
+  p.postback_url, p.postback_since, p.postback_events`;
 
 /**
  * Колонки, которые правка может менять. Имена — из этой константы, а не из ввода: идентификатор в
@@ -126,6 +135,9 @@ const PATCH_COLUMNS = {
   payoutCurrency: "payout_currency",
   payoutMethod: "payout_method",
   sharePercent: "share_percent",
+  postbackUrl: "postback_url",
+  postbackSince: "postback_since",
+  postbackEvents: "postback_events",
 } as const satisfies Record<keyof PartnerPatch, string>;
 
 /** Нарушение уникальности TG id: код Postgres 23505 приходит то как P2002, то в `meta` сырого запроса. */
@@ -249,7 +261,10 @@ export class PrismaPartnersRepository implements PartnersRepository {
     const named = (Object.keys(PATCH_COLUMNS) as (keyof PartnerPatch)[]).filter((key) => patch[key] !== undefined);
     const assignments = named.map((key) => {
       const value = patch[key];
-      return key === "sharePercent" ? Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}::numeric` : Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}`;
+      if (key === "sharePercent") return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}::numeric`;
+      // Список событий — массив строк колонки `varchar(24)[]`: приведение явное, чтобы драйвер не увидел `text[]`.
+      if (key === "postbackEvents") return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${Array.isArray(value) ? value : []}::varchar(24)[]`;
+      return Prisma.sql`${Prisma.raw(PATCH_COLUMNS[key])} = ${value ?? null}`;
     });
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -282,7 +297,7 @@ export class PrismaPartnersRepository implements PartnersRepository {
 
   async bindingOf(accountId: string): Promise<PartnerBindingView | null> {
     const [raw] = await this.prisma.$queryRaw<unknown[]>`
-      SELECT b.partner_id::text, p.name, b.bound_at, c.title AS campaign_title, pc.display AS code
+      SELECT b.partner_id::text, p.name, b.bound_at, c.title AS campaign_title, pc.display AS code, b.link_code
       FROM partner_binding b
       JOIN partner p ON p.partner_id = b.partner_id
       LEFT JOIN promo_campaign c ON c.campaign_id = b.campaign_id
@@ -290,7 +305,7 @@ export class PrismaPartnersRepository implements PartnersRepository {
       LEFT JOIN promo_code pc ON pc.code = r.code
       WHERE b.account_id = ${accountId}::uuid`;
     if (raw === undefined) return null;
-    const row = z.object({ partner_id: z.string(), name: z.string(), bound_at: z.date(), campaign_title: z.string().nullable(), code: z.string().nullable() }).parse(raw);
-    return { partnerId: row.partner_id, name: row.name, boundAt: row.bound_at, campaignTitle: row.campaign_title, code: row.code };
+    const row = z.object({ partner_id: z.string(), name: z.string(), bound_at: z.date(), campaign_title: z.string().nullable(), code: z.string().nullable(), link_code: z.string().nullable() }).parse(raw);
+    return { partnerId: row.partner_id, name: row.name, boundAt: row.bound_at, campaignTitle: row.campaign_title, code: row.code, linkCode: row.link_code };
   }
 }

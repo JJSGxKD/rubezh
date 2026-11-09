@@ -20,15 +20,29 @@ import { PLACE_TITLES, type AdPlace } from "../../api/ads";
 import { formatNumber } from "../../format";
 import { hrefOf } from "../../routes";
 import { HELP } from "../../ui/help";
+import { useSession } from "../../state/use-session";
 import { Badge, DataTable, Help, Panel } from "../../ui/kit";
 
 const TONE_CLASS = { up: "text-success", down: "text-danger", flat: "text-text-muted" } as const;
 
 export function Attention({ overview }: { overview: Overview }) {
+  // Разбор забегов — раздел тех, кому открыты игроки: чужую ссылку не предлагаем.
+  const canReview = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("players.view"));
   return (
     <Panel title="Ждёт вас" help={HELP.overview.attention}>
       {overview.attention.length === 0 ? (
-        <p className="text-sm text-text-muted">Ничего не ждёт — всё разобрано.</p>
+        <p className="text-sm text-text-muted">
+          Ничего не ждёт — всё разобрано.
+          {canReview ? (
+            <>
+              {" "}
+              Зайдите позже или откройте{" "}
+              <a href={hrefOf({ section: "review", id: null })} className="text-accent hover:underline">
+                Разбор забегов →
+              </a>
+            </>
+          ) : null}
+        </p>
       ) : (
         <ul className="flex flex-col divide-y divide-border">
           {overview.attention.map((item) => (

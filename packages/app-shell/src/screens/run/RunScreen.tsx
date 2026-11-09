@@ -6,6 +6,8 @@ import { t } from "../../i18n";
 import "../../i18n/run";
 import { useDevMode } from "../../state/dev-mode";
 import { useDiagnostics } from "../../state/diagnostics";
+import { useHints } from "../../state/hints";
+import { difficultyForMode, usePrologue } from "../../state/prologue";
 import { useMeta } from "../../state/meta";
 import { useNavigation } from "../../state/navigation";
 import { canOfferGemContinue, canOfferPaidContinue } from "../../state/payments-availability";
@@ -14,7 +16,9 @@ import { useRuns } from "../../state/runs";
 import { interstitialBeforeNewRun } from "../../state/interstitial-gate";
 import { useRun } from "../../state/run";
 import { useShell } from "../../state/shell";
+import { PrologueIntro } from "./HintBanner";
 import { RunHud } from "./RunHud";
+import { RubezhBanner } from "./RubezhBanner";
 import { RunLoading } from "./RunLoading";
 import { LevelUpOverlay, PauseOverlay } from "./overlays";
 import { DeathOverlayLazy, prefetchDeathOverlay } from "./death-overlay-lazy";
@@ -31,6 +35,14 @@ import type { SecondChanceProps } from "./SecondChance";
  */
 const loadChestOverlay = (): Promise<typeof import("./ChestOverlay")> => import("./ChestOverlay");
 const ChestOverlay = lazy(async () => ({ default: (await loadChestOverlay()).ChestOverlay }));
+
+/** Окно капища «Выбери благословение» — тем же способом: до первого капища оно не нужно. */
+const loadBlessingOverlay = (): Promise<typeof import("./BlessingOverlay")> => import("./BlessingOverlay");
+const BlessingOverlay = lazy(async () => ({ default: (await loadBlessingOverlay()).BlessingOverlay }));
+
+/** Окно победы в прологе — отдельным чанком: до первой победы оно не нужно (как экран смерти и сундук). */
+const loadPrologueWin = (): Promise<typeof import("./PrologueWin")> => import("./PrologueWin");
+const PrologueWin = lazy(async () => ({ default: (await loadPrologueWin()).PrologueWin }));
 
 /**
  * Экран забега: канва Phaser на весь экран, HUD слоем поверх и оверлеи
@@ -77,11 +89,14 @@ export function RunScreen(): ReactNode {
     // начинать — решает стор: экран монтируется и сам, без выбора игрока.
     const intent = useRun.getState().intent;
     const resume = intent?.kind === "resume" ? intent.snapshot : null;
+    // Пролог выбирает тот, кто нажал «Играть» (state/prologue.ts); без намерения режим обычный, а у продолженного забега — из снимка.
+    const mode = intent?.kind === "new" ? (intent.mode ?? "endless") : "endless";
     void useRun.getState().enter({
       container,
       startingWeaponId: resume?.startingWeaponId ?? useMeta.getState().lastWeaponId,
       mapId: resume?.mapId ?? DEFAULT_MAP_ID,
-      difficultyId: resume?.difficultyId ?? useMeta.getState().lastDifficultyId,
+      difficultyId: resume?.difficultyId ?? difficultyForMode(mode),
+      mode,
       beforeNewRun: interstitialBeforeNewRun,
     });
 
@@ -101,14 +116,31 @@ export function RunScreen(): ReactNode {
     useRun.getState().pause("app_inactive");
   }, [isActive, expanded]);
 
+  // Сданный до победы пролог — сразу на главную, без окна смерти: следующий «Играть» начнёт его заново.
+  const prologue = run.mode === "prologue";
+  const prologueGivenUp = run.phase === "finished" && prologue && run.result?.prologue?.won !== true;
+  useEffect(() => {
+    if (prologueGivenUp) navigation.resetTo("lobby");
+  }, [prologueGivenUp, navigation]);
+
+  // Смерти в прологе нет (оберег, T-0278), и окна смерти в нём тоже нет. Если
+  // урон однажды пройдёт мимо оберега, мир встал бы без выхода: такой забег
+  // закрывается как сданный — главная, и «Играть» начнёт пролог заново.
+  const prologueDowned = prologue && run.phase === "downed";
+  useEffect(() => {
+    if (prologueDowned) useRun.getState().declineContinue();
+  }, [prologueDowned]);
+
   // Экран смерти — отдельный чанк: подтягиваем его, как только забег пошёл,
   // чтобы смерть не ждала сети.
   const running = run.phase === "running";
   useEffect(() => {
     if (!running) return;
-    prefetchDeathOverlay();
+    if (useRun.getState().mode === "prologue") loadPrologueWin().catch(() => undefined);
+    else prefetchDeathOverlay();
     // Не догрузилось — не беда: `lazy` попробует снова, когда сундук откроют.
     loadChestOverlay().catch(() => undefined);
+    loadBlessingOverlay().catch(() => undefined);
   }, [running]);
 
   return (
@@ -125,6 +157,14 @@ export function RunScreen(): ReactNode {
         />
       )}
 
+      {/* Баннеры рубежа: страж пришёл, рубеж взят. Слой без касаний, гаснет сам.
+          Не размонтируется на смерти и итоге: после второго шанса свежий баннер
+          показал бы прежнее сообщение снова. Слой на z-hud, оверлей смерти выше. */}
+      {run.hud === null ? null : <RubezhBanner notice={run.rubezhNotice} />}
+
+      {/* Начало пролога: строка на три секунды вместо листа «Перед забегом». */}
+      {prologue && run.hud !== null && run.phase === "running" ? <PrologueIntro survivalSec={run.hud.survivalSec} /> : null}
+
       {run.devInfo !== null && run.phase !== "finished" && run.phase !== "downed" && (run.devRun ? devTechInfo : fpsOverlay) ? (
         <DevTechPanelLazy info={run.devInfo} compact={!run.devRun} />
       ) : null}
@@ -137,6 +177,7 @@ export function RunScreen(): ReactNode {
           onSettings={() => navigation.push("settings")}
           onSurrender={() => useRun.getState().surrender()}
           onStats={openStats}
+          {...(prologue ? { prologue: true } : {})}
           {...(run.devRun ? { onDev: () => setDevOpen(true) } : {})}
         />
       ) : null}
@@ -151,7 +192,14 @@ export function RunScreen(): ReactNode {
           offers={run.offers}
           queued={run.queued}
           {...(run.hud === null ? {} : { loadout: run.hud })}
-          onChoose={(optionId) => useRun.getState().choose(optionId)}
+          onChoose={(optionId) => {
+            // Первый выбор пролога сделан — подсказка про него своё отработала.
+            if (prologue) {
+              usePrologue.getState().hintDone("choose");
+              useHints.getState().markSeen("choose");
+            }
+            useRun.getState().choose(optionId);
+          }}
           {...(run.toolsTotal.reroll + run.toolsTotal.skip + run.toolsTotal.banish === 0
             ? {}
             : {
@@ -176,6 +224,14 @@ export function RunScreen(): ReactNode {
         </Suspense>
       ) : null}
 
+      {/* Капище: мир стоит, пока игрок не выберет благословение. Как и у сундука,
+          лист «Характеристики» и панель разработчика в этой фазе не открываются. */}
+      {run.phase === "blessing" && run.blessing !== null ? (
+        <Suspense fallback={null}>
+          <BlessingOverlay options={run.blessing.options} onChoose={(id) => useRun.getState().chooseBlessing(id)} />
+        </Suspense>
+      ) : null}
+
       {/* Лист закрывается сам, если мир снова пошёл: характеристики — снимок
           стоящего мира, над бегущим они врали бы. */}
       {stats !== null && (run.phase === "paused" || run.phase === "levelUp") ? (
@@ -184,7 +240,15 @@ export function RunScreen(): ReactNode {
 
       {/* На экране смерти до решения о втором шансе итог предварительный:
           ни рекорда, ни места ещё нет — они появятся после отказа. */}
-      {(run.phase === "finished" || run.phase === "downed") && run.result !== null ? (
+      {/* Победа в прологе — окно «Рубеж удержан!» вместо итогов; сданный пролог окна смерти не имеет,
+          игрок сразу попадает на главную (эффект выше). */}
+      {run.phase === "finished" && prologue && run.result !== null && run.result.prologue?.won === true ? (
+        <Suspense fallback={null}>
+          <PrologueWin result={run.result} onHome={() => navigation.resetTo("lobby")} />
+        </Suspense>
+      ) : null}
+
+      {!prologue && (run.phase === "finished" || run.phase === "downed") && run.result !== null ? (
         <DeathOverlayLazy
           result={run.result}
           isNewRecord={run.isNewRecord}

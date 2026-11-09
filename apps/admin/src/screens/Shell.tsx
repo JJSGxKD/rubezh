@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { ChevronDown, LogOut, Menu, Search, X } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Search, UserSearch, X } from "lucide-react";
 import { Dialog, DropdownMenu } from "radix-ui";
 import { roleName } from "../api/roles";
 import type { AdminIdentity } from "../api/session";
-import { filterGroups, hrefOf, locateSection, resolveRoute, visibleGroups, type Route, type SectionGroup } from "../routes";
+import { filterGroups, hrefOf, locateSection, playerQuery, resolveRoute, visibleGroups, type Route, type SectionGroup } from "../routes";
+import { badgeText, useAttention } from "../state/use-attention";
 import { useSession } from "../state/use-session";
 import { Badge, Notice } from "../ui/kit";
 import { Toaster } from "../ui/toast";
-import { useHashRoute } from "../ui/router";
+import { navigate, useHashRoute } from "../ui/router";
 import { useNarrow } from "../ui/use-media";
+import { searchPlayersFrom } from "./players/PlayerSearch";
 import { SECTION_SCREENS } from "./sections";
 
 const APP_TITLE = "Рубеж — панель";
@@ -30,6 +32,8 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  // «Ждёт вас» — у «Сводки»: считается только тем, кому она открыта.
+  const attention = useAttention(groups.some((group) => group.sections.some((section) => section.id === "overview")));
 
   // Раздел — в заголовке вкладки: с пятью открытыми вкладками панели иначе
   // все они называются одинаково.
@@ -79,8 +83,9 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
         <div className="flex min-h-screen min-w-0 flex-col">
           <header className="sticky top-0 z-30 flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-bg px-3">
             <Dialog.Root open={sheetOpen} onOpenChange={setSheetOpen}>
-              <Dialog.Trigger aria-label="Меню разделов" className="grid size-9 shrink-0 place-items-center rounded-md border border-border text-text">
+              <Dialog.Trigger aria-label={attention > 0 ? `Меню разделов. Ждёт вас: ${String(attention)}` : "Меню разделов"} className="relative grid size-9 shrink-0 place-items-center rounded-md border border-border text-text">
                 <Menu size={18} aria-hidden="true" />
+                {attention > 0 ? <span aria-hidden="true" className="absolute -top-1 -right-1 size-2.5 rounded-full border-2 border-bg bg-warning" /> : null}
               </Dialog.Trigger>
               <Dialog.Portal>
                 <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60" />
@@ -97,7 +102,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
                       <X size={18} aria-hidden="true" />
                     </Dialog.Close>
                   </div>
-                  <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} onNavigate={() => setSheetOpen(false)} />
+                  <MenuColumn groups={groups} attention={attention} canFindPlayer={identity.permissions.includes("players.view")} route={route} query={query} onQuery={setQuery} searchRef={searchRef} onNavigate={() => setSheetOpen(false)} />
                   <div className="border-t border-border p-3">
                     <AccountBlock identity={identity} />
                   </div>
@@ -122,7 +127,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
           <div className="px-3 pt-3">
             <Brand />
           </div>
-          <MenuColumn groups={groups} route={route} query={query} onQuery={setQuery} searchRef={searchRef} />
+          <MenuColumn groups={groups} attention={attention} canFindPlayer={identity.permissions.includes("players.view")} route={route} query={query} onQuery={setQuery} searchRef={searchRef} />
         </aside>
         <div className="flex min-w-0 flex-col">
           <header className="flex items-center gap-3 border-b border-border px-5 py-2.5">
@@ -164,6 +169,8 @@ function Brand() {
 /** Поиск и группы разделов — одно содержимое и для колонки на ПК, и для листа на телефоне. */
 function MenuColumn({
   groups,
+  attention,
+  canFindPlayer,
   route,
   query,
   onQuery,
@@ -171,6 +178,10 @@ function MenuColumn({
   onNavigate,
 }: {
   groups: SectionGroup[];
+  /** число «Ждёт вас» — знак у «Сводки» */
+  attention: number;
+  /** есть право `players.view`: строка «Игрок …» показывается только с ним */
+  canFindPlayer: boolean;
   route: Route | null;
   query: string;
   onQuery: (query: string) => void;
@@ -179,6 +190,16 @@ function MenuColumn({
   onNavigate?: () => void;
 }) {
   const shown = filterGroups(groups, query);
+  const player = canFindPlayer ? playerQuery(query) : null;
+
+  // Выбор строки игрока: раздел «Игроки» с этим запросом; поле очищается, лист меню на телефоне закрывается.
+  const findPlayer = (found: string) => {
+    navigate({ section: "players", id: null });
+    void searchPlayersFrom(found);
+    onQuery("");
+    onNavigate?.();
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1 p-3 pt-2">
       <label className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-text-muted focus-within:border-accent">
@@ -189,6 +210,7 @@ function MenuColumn({
           onChange={(event) => onQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Escape") onQuery("");
+            if (event.key === "Enter" && player !== null) findPlayer(player);
           }}
           placeholder="Найти раздел"
           aria-label="Найти раздел"
@@ -198,7 +220,17 @@ function MenuColumn({
         <kbd className="rounded-sm border border-border-strong px-1 text-[10.5px] leading-4 text-text-muted max-md:hidden">/</kbd>
       </label>
       <nav aria-label="Разделы панели" className="min-h-0 flex-1 overflow-y-auto">
-        {shown.length === 0 ? <p className="px-2 pt-3 text-xs text-text-muted">Такого раздела нет</p> : null}
+        {player === null ? null : (
+          <button
+            type="button"
+            onClick={() => findPlayer(player)}
+            className="mt-3 flex h-[30px] w-full items-center gap-2 rounded-sm bg-surface-raised px-2 text-left text-[13.5px] text-text focus-visible:-outline-offset-2 max-md:h-10"
+          >
+            <UserSearch size={16} aria-hidden="true" className="shrink-0 text-accent" />
+            <span className="min-w-0 truncate">Игрок {player} — найти</span>
+          </button>
+        )}
+        {shown.length === 0 && player === null ? <p className="px-2 pt-3 text-xs text-text-muted">Такого раздела нет</p> : null}
         {shown.map((group) => (
           <section key={group.title} aria-label={group.title} className="flex flex-col gap-0.5 pt-3">
             <h2 className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider text-text-muted">{group.title}</h2>
@@ -219,6 +251,7 @@ function MenuColumn({
                 >
                   <Icon size={16} aria-hidden="true" className={active ? "text-accent" : ""} />
                   {section.title}
+                  {section.id === "overview" && badgeText(attention) !== null ? <AttentionBadge count={attention} /> : null}
                 </a>
               );
             })}
@@ -226,6 +259,19 @@ function MenuColumn({
         ))}
       </nav>
     </div>
+  );
+}
+
+/** Число в кружке справа от подписи пункта; обводка цвета фона меню отделяет его от соседей. */
+function AttentionBadge({ count }: { count: number }) {
+  return (
+    <span
+      role="img"
+      aria-label={`Ждёт вас: ${String(count)}`}
+      className="ml-auto grid h-[18px] min-w-[18px] place-items-center rounded-full border-2 border-surface-sunken bg-warning px-1 text-[10.5px] font-semibold leading-none text-bg"
+    >
+      {badgeText(count)}
+    </span>
   );
 }
 

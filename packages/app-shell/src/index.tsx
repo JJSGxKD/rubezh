@@ -13,6 +13,7 @@ import { useHints } from "./state/hints";
 import { useSavedRun } from "./state/run-save";
 import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
+import { usePrologue } from "./state/prologue";
 import { watchPlatform } from "./state/platform";
 import { useNavigation } from "./state/navigation";
 import { useTools } from "./state/tools";
@@ -100,6 +101,8 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   if (useInstall.getState().firstOpen) track("app_first_open");
   useDiagnostics.getState().hydrate(options.capabilities.diagnosticsByDefault);
   useMeta.getState().hydrate();
+  // Метки «Новое» и отметка победы в прологе — после меты: переживают перезапуск.
+  usePrologue.getState().hydrate();
   useHints.getState().hydrate();
   useSavedRun.getState().hydrate();
   useRuns.getState().hydrate();
@@ -121,6 +124,12 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   render(<App />);
   // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
   if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
+  // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
+  // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
+  const fxScene = options.capabilities.devFxScene;
+  if (fxScene !== undefined) {
+    void import("./dev/fx-stand").then(({ startFxStand }) => startFxStand(fxScene.id, fxScene.ground));
+  }
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
   // них игрок не должен ждать заставку. Затем профиль и кошелёк: рекорд,
   // поставленный на другом устройстве, появляется на главной, награды за

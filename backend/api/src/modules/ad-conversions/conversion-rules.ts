@@ -17,6 +17,8 @@ export function isConversionGoal(goal: number): goal is ConversionGoal {
  */
 export const PAYMENT_CURRENCY = "XTR";
 
+const REGISTRATION_DAYS = 7;
+
 /**
  * Окна (О39, **рабочие числа**):
  * - регистрация — первый засчитанный забег не позже 7 суток после клика: сеть
@@ -26,10 +28,15 @@ export const PAYMENT_CURRENCY = "XTR";
  *   уже законченного забега возвращается сразу, и такую оплату сети отдавать
  *   незачем;
  * - макросы сети живут на клике 31 сутки — дольше окна покупок с запасом на
- *   повторы отправки, потом обнуляются.
+ *   повторы отправки, потом обнуляются;
+ * - возврат на следующий день ищется среди тех, чьё первое касание не старше окна
+ *   регистрации плюс двое суток (T-0071): первый засчитанный забег бывает на седьмые
+ *   сутки после клика, а следующие игровые сутки за ним кончаются самое позднее через
+ *   ~48 часов. Выражением от окна регистрации, чтобы окна не разошлись.
  */
 export const CONVERSION_WINDOWS = {
-  registrationDays: 7,
+  registrationDays: REGISTRATION_DAYS,
+  returnLookbackDays: REGISTRATION_DAYS + 2,
   purchaseDays: 30,
   purchaseSettleMin: 10,
   paramsKeepDays: 31,

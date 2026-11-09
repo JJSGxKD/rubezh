@@ -69,6 +69,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   PromoCampaign: keep("кампании промокодов команды"),
   PromoCode: keep("коды команды"),
   TaskDef: keep("каталог заданий команды"),
+  PassSeason: keep("ленты месяцев пасса команды (T-0311) — настройка, не данные игрока"),
   ShopPromo: keep("акции магазина команды"),
   HomeSlide: keep("слайды главной команды"),
   MediaImage: keep("картинки панели"),
@@ -91,6 +92,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   IntegrationSecret: keep("ключи интеграций"),
   OutboundProxy: keep("прокси для исходящих запросов — настройка команды, к игрокам не относится; пароль только шифртекстом"),
   OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
+  ProxySubscription: keep("подписка Xray для прокси — настройка команды, к игрокам не относится; адрес только шифртекстом"),
+  ProxySubscriptionNode: keep("узлы подписки Xray — часть настройки команды"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),
@@ -107,6 +110,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   // --- остаются: журнал запросов сервера ---
   NameRule: keep("правила фильтра имён — настройка команды, не данные игрока"),
   NameRuleHitDay: keep("счётчики срабатываний правил имён"),
+  NameRuleCandidate: keep("кандидаты в правила имён"),
   OutboundCall: keep("журнал исходящих запросов — не данные игрока, сам стирается через 7 суток (Р92)"),
   InboundMinute: keep("сводка входящих запросов по маршрутам — без игроков, сама стирается через 7 суток (Р92)"),
 
@@ -133,6 +137,9 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   WheelSpin: wipe("крутки колеса"),
   VipDaily: wipe("день забора самоцветов VIP"),
   Notification: wipe("лента уведомлений"),
+  PassProgress: wipe("очки батл-пасса (T-0311) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, очки не оставляем"),
+  PassClaim: wipe("журнал забранных наград пасса (T-0311) — идёт вместе с очками и кошельком, которые вайп обнуляет"),
+  BoostCredit: wipe("бусты-подарки пасса (T-0311) — часть добычи игрока, как осколки и снаряжение"),
   BotMentionTask: wipe("серия и награждённые сутки задания «юзернейм бота» — прогресс того же рода, что награда дня; кошелёк после вайпа обнулён, серию не продолжают"),
 };
 
@@ -161,4 +168,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "VipDaily",
   "Notification",
   "BotMentionTask",
+  "PassProgress",
+  "PassClaim",
+  "BoostCredit",
 ];

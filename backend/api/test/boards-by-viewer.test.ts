@@ -20,7 +20,8 @@ import { WelcomeProgressRegistry } from "../src/platforms/telegram/welcome.comma
 import { RunsWelcomeProgress } from "../src/platforms/telegram/welcome-progress.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
+import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
  * Доски рейтинга по зрителю (T-0113, Р104): аккаунт со скрытым ограничением
@@ -34,7 +35,7 @@ const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.P
 function finish(patch: Partial<RunFinish> = {}): RunFinish {
   return {
     runId: randomUUID(),
-    difficultyId: "normal",
+    difficultyId: "hard",
     outcome: "died",
     survivalSec: 120,
     level: 6,
@@ -61,8 +62,8 @@ function build() {
   const rolesRepository = new MemoryRolesRepository();
   const roles = new RolesService(config(), rolesRepository, accounts);
   const restrictions = new RestrictionsService(rating.restrictions, accounts, roles, rating.gate, rating.hooks);
-  const service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
-  const view = new RunsViewService(runs, board, new RunExtras(), rating.rating);
+  const service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
+  const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   return { accounts, runs, board, rating, rolesRepository, restrictions, service, view };
 }
 
@@ -121,19 +122,19 @@ describe("доска по зрителю", () => {
     await world.service.finish(late, finish({ survivalSec: 200 }));
     await world.restrictions.impose(owner, late.accountId, hidden());
 
-    const middle = await world.view.leaderboardFor((plain[1] as AccountRef).accountId, "normal");
+    const middle = await world.view.leaderboardFor((plain[1] as AccountRef).accountId, "hard");
     expect(rows(middle)).toEqual([[1, 120, false], [2, 90, true], [3, 60, false]]);
-    expect(middle.me).toEqual({ rank: 2, survivalSec: 90 });
+    expect(middle.me).toMatchObject({ rank: 2, survivalSec: 90 });
     expect(middle.totalPlayers).toBe(3);
 
-    const restricted = await world.view.leaderboardFor(early.accountId, "normal");
+    const restricted = await world.view.leaderboardFor(early.accountId, "hard");
     expect(rows(restricted)).toEqual([[1, 200, false], [2, 120, false], [3, 100, true], [4, 90, false], [5, 60, false]]);
-    expect(restricted.me).toEqual({ rank: 3, survivalSec: 100 });
+    expect(restricted.me).toMatchObject({ rank: 3, survivalSec: 100 });
     expect(restricted.totalPlayers).toBe(5);
 
-    const other = await world.view.leaderboardFor(late.accountId, "normal");
+    const other = await world.view.leaderboardFor(late.accountId, "hard");
     expect(rows(other)[0]).toEqual([1, 200, true]);
-    expect(other.me).toEqual({ rank: 1, survivalSec: 200 });
+    expect(other.me).toMatchObject({ rank: 1, survivalSec: 200 });
   });
 
   it("место «как будто их нет»: на 20 наборах общая доска равна доске, посчитанной без аккаунтов с ограничением", async () => {
@@ -156,13 +157,13 @@ describe("доска по зрителю", () => {
       const plain = players.filter((entry) => !entry.separate);
       for (const viewer of players) {
         const crowd = viewer.separate ? players : plain;
-        const seen = await world.view.leaderboardFor(viewer.account.accountId, "normal");
+        const seen = await world.view.leaderboardFor(viewer.account.accountId, "hard");
         const expectedRank = 1 + crowd.filter((entry) => entry.seconds > viewer.seconds).length;
-        expect(seen.me, `seed ${seed}`).toEqual({ rank: expectedRank, survivalSec: viewer.seconds });
+        expect(seen.me, `seed ${seed}`).toMatchObject({ rank: expectedRank, survivalSec: viewer.seconds });
         expect(seen.totalPlayers, `seed ${seed}`).toBe(crowd.length);
         expect(seen.entries.map((entry) => entry.survivalSec), `seed ${seed}`).toEqual(crowd.map((entry) => entry.seconds).sort((left, right) => right - left));
         expect(seen.entries.filter((entry) => entry.isMe), `seed ${seed}`).toHaveLength(1);
-        expect((await world.view.profile(viewer.account.accountId)).best.normal, `seed ${seed}`).toEqual({ survivalSec: viewer.seconds, rank: expectedRank });
+        expect((await world.view.profile(viewer.account.accountId)).best.hard, `seed ${seed}`).toMatchObject({ survivalSec: viewer.seconds, rank: expectedRank });
       }
     }
   });
@@ -175,7 +176,7 @@ describe("доска по зрителю", () => {
     await world.service.finish(plain, finish({ survivalSec: 90 }));
     await world.service.finish(separate, finish({ survivalSec: 150 }));
 
-    const [left, right] = [await world.view.leaderboardFor(plain.accountId, "normal"), await world.view.leaderboardFor(separate.accountId, "normal")];
+    const [left, right] = [await world.view.leaderboardFor(plain.accountId, "hard"), await world.view.leaderboardFor(separate.accountId, "hard")];
 
     expect(shapeOf(left)).toEqual(shapeOf(right));
     expect(shapeOf(await world.view.profile(plain.accountId))).toEqual(shapeOf(await world.view.profile(separate.accountId)));
@@ -193,18 +194,19 @@ describe("доска по зрителю", () => {
     await world.service.finish(separate, finish({ survivalSec: 300 }));
     await world.service.finish(separate, finish({ survivalSec: 20, difficultyId: "easy" }));
 
-    expect((await world.view.profile(plain.accountId)).best.normal).toEqual({ survivalSec: 100, rank: 1 });
-    expect((await world.view.profile(separate.accountId)).best.normal).toEqual({ survivalSec: 300, rank: 1 });
-    expect((await world.view.profile(separate.accountId)).best.easy).toEqual({ survivalSec: 20, rank: 1 });
-    expect((await world.view.profile(other.accountId)).best.normal).toEqual({ survivalSec: 50, rank: 2 });
+    expect((await world.view.profile(plain.accountId)).best.hard).toMatchObject({ survivalSec: 100, rank: 1 });
+    expect((await world.view.profile(separate.accountId)).best.hard).toMatchObject({ survivalSec: 300, rank: 1 });
+    // Обучающий забег в рейтинг не идёт (Р126): его рекорда в профиле нет.
+    expect((await world.view.profile(separate.accountId)).best.easy).toBeNull();
+    expect((await world.view.profile(other.accountId)).best.hard).toMatchObject({ survivalSec: 50, rank: 2 });
     // Команда видит место так, как видит владелец профиля: по доске аккаунта.
-    expect((await world.view.profile(other.accountId, "team")).best.normal).toEqual({ survivalSec: 50, rank: 2 });
-    expect((await world.view.profile(separate.accountId, "team")).best.normal).toEqual({ survivalSec: 300, rank: 1 });
-    expect((await world.view.profile(separate.accountId, "team")).best).toEqual((await world.view.profile(separate.accountId)).best);
+    expect((await world.view.profile(other.accountId, "team")).best.hard).toMatchObject({ survivalSec: 50, rank: 2 });
+    expect((await world.view.profile(separate.accountId, "team")).best.hard).toMatchObject({ survivalSec: 300, rank: 1 });
+    expect((await world.view.profile(separate.accountId, "team")).best).toMatchObject((await world.view.profile(separate.accountId)).best);
 
-    expect(await world.view.boardSize(plain.accountId, "normal")).toBe(2);
-    expect(await world.view.boardSize(separate.accountId, "normal")).toBe(3);
-    expect(await world.view.boardSize(separate.accountId, "hard")).toBe(0);
+    expect(await world.view.boardSize(plain.accountId, "hard")).toBe(2);
+    expect(await world.view.boardSize(separate.accountId, "hard")).toBe(3);
+    expect(await world.view.boardSize(separate.accountId, "easy")).toBe(0);
   });
 
   it("«тень» вместе с ограничением: зритель видит себя на месте по полной доске, а в доске его нет", async () => {
@@ -222,21 +224,21 @@ describe("доска по зрителю", () => {
     // Тень: забег принят «как рейтинговый», в доски не идёт; место — среди полной доски, а не общей.
     const result = await world.service.finish(viewer, finish({ survivalSec: 280 }));
     expect(result).toMatchObject({ recorded: true, bestSurvivalSec: 280, rank: 3 });
-    expect(await world.board.best("normal", viewer.accountId, "full")).toBeNull();
-    expect(await world.board.best("normal", viewer.accountId, "common")).toBeNull();
+    expect(await world.board.best("hard", viewer.accountId, "full")).toBeNull();
+    expect(await world.board.best("hard", viewer.accountId, "common")).toBeNull();
 
-    const seen = await world.view.leaderboardFor(viewer.accountId, "normal");
+    const seen = await world.view.leaderboardFor(viewer.accountId, "hard");
     expect(rows(seen)).toEqual([[1, 300, false], [2, 290, false], [3, 280, true], [4, 250, false]]);
-    expect(seen.me).toEqual({ rank: 3, survivalSec: 280 });
+    expect(seen.me).toMatchObject({ rank: 3, survivalSec: 280 });
     expect(seen.totalPlayers).toBe(4);
-    expect((await world.view.profile(viewer.accountId)).best.normal).toEqual({ survivalSec: 280, rank: 3 });
-    expect(await world.view.boardSize(viewer.accountId, "normal")).toBe(4);
+    expect((await world.view.profile(viewer.accountId)).best.hard).toMatchObject({ survivalSec: 280, rank: 3 });
+    expect(await world.view.boardSize(viewer.accountId, "hard")).toBe(4);
 
     // Другие его не видят: ни обычный игрок, ни владелец отдельной доски.
-    const common = await world.view.leaderboardFor(top.accountId, "normal");
+    const common = await world.view.leaderboardFor(top.accountId, "hard");
     expect(rows(common)).toEqual([[1, 300, true]]);
     expect(common.totalPlayers).toBe(1);
-    expect(rows(await world.view.leaderboardFor(below.accountId, "normal")).map(([, seconds]) => seconds)).toEqual([300, 290, 250]);
+    expect(rows(await world.view.leaderboardFor(below.accountId, "hard")).map(([, seconds]) => seconds)).toEqual([300, 290, 250]);
   });
 
   it("ответ на конец забега — по доске: обычного не сдвигает забег аккаунта с ограничением, а тот видит и обычных", async () => {
@@ -267,21 +269,21 @@ describe("доска по зрителю", () => {
     await world.service.finish(separate, finish({ survivalSec: 150 }));
 
     await world.service.setRanked(moderator, records.separate, false, "рекорд без урона");
-    expect(await world.board.best("normal", separate.accountId, "full")).toBe(150);
-    expect(await world.board.best("normal", separate.accountId, "common")).toBeNull();
-    expect(await world.board.best("normal", plain.accountId, "common")).toBe(300);
+    expect(await world.board.best("hard", separate.accountId, "full")).toBe(150);
+    expect(await world.board.best("hard", separate.accountId, "common")).toBeNull();
+    expect(await world.board.best("hard", plain.accountId, "common")).toBe(300);
 
     await world.service.setRanked(moderator, records.plain, false, "рекорд без урона");
-    expect(await world.board.best("normal", plain.accountId, "full")).toBe(100);
-    expect(await world.board.best("normal", plain.accountId, "common")).toBe(100);
+    expect(await world.board.best("hard", plain.accountId, "full")).toBe(100);
+    expect(await world.board.best("hard", plain.accountId, "common")).toBe(100);
 
     // Вернуть — тем же правилом: лучший рейтинговый в доски, которые положены аккаунту.
     await world.service.setRanked(moderator, records.separate, true, "ошиблись");
     await world.service.setRanked(moderator, records.plain, true, "ошиблись");
-    expect(await world.board.best("normal", separate.accountId, "full")).toBe(400);
-    expect(await world.board.best("normal", separate.accountId, "common")).toBeNull();
-    expect(await world.board.best("normal", plain.accountId, "full")).toBe(300);
-    expect(await world.board.best("normal", plain.accountId, "common")).toBe(300);
+    expect(await world.board.best("hard", separate.accountId, "full")).toBe(400);
+    expect(await world.board.best("hard", separate.accountId, "common")).toBeNull();
+    expect(await world.board.best("hard", plain.accountId, "full")).toBe(300);
+    expect(await world.board.best("hard", plain.accountId, "common")).toBe(300);
   });
 
   it("пересборка по ограничениям спрашивает оба набора, и обе CLI-команды ходят через неё", () => {
@@ -298,30 +300,30 @@ describe("хранилище в памяти ведёт себя как Redis", 
   it("запись по списку досок, GT на каждой, независимые чтения, снятие и замена", async () => {
     const board = new MemoryLeaderboardStore();
 
-    expect(await board.submit("normal", "a", 300, ["full"])).toEqual({ improved: true });
-    expect(await board.best("normal", "a", "common")).toBeNull();
-    expect(await board.submit("normal", "b", 200, ALL_BOARDS)).toEqual({ improved: true });
-    expect(await board.submit("normal", "b", 150, ALL_BOARDS)).toEqual({ improved: false });
-    expect(await board.submit("normal", "a", 300, ["full"])).toEqual({ improved: false });
+    expect(await board.submit("hard", "a", 300, ["full"])).toEqual({ improved: true });
+    expect(await board.best("hard", "a", "common")).toBeNull();
+    expect(await board.submit("hard", "b", 200, ALL_BOARDS)).toEqual({ improved: true });
+    expect(await board.submit("hard", "b", 150, ALL_BOARDS)).toEqual({ improved: false });
+    expect(await board.submit("hard", "a", 300, ["full"])).toEqual({ improved: false });
 
-    expect(await board.rank("normal", "b", "full")).toBe(2);
-    expect(await board.rank("normal", "b", "common")).toBe(1);
-    expect(await board.count("normal", "full")).toBe(2);
-    expect(await board.count("normal", "common")).toBe(1);
-    expect(await board.countAbove("normal", 250, "full")).toBe(1);
-    expect(await board.countAbove("normal", 250, "common")).toBe(0);
-    expect((await board.top("normal", 10, "full")).map((entry) => entry.accountId)).toEqual(["a", "b"]);
+    expect(await board.rank("hard", "b", "full")).toBe(2);
+    expect(await board.rank("hard", "b", "common")).toBe(1);
+    expect(await board.count("hard", "full")).toBe(2);
+    expect(await board.count("hard", "common")).toBe(1);
+    expect(await board.countAbove("hard", 250, "full")).toBe(1);
+    expect(await board.countAbove("hard", 250, "common")).toBe(0);
+    expect((await board.top("hard", 10, "full")).map((entry) => entry.accountId)).toEqual(["a", "b"]);
 
     expect(await board.remove(["b", "никого"], ["common"])).toBe(1);
-    expect(await board.best("normal", "b", "full")).toBe(200);
-    await board.set("normal", "b", 50, ["common"]);
-    expect(await board.best("normal", "b", "common")).toBe(50);
-    await board.set("normal", "b", null, ALL_BOARDS);
-    expect(await board.best("normal", "b", "full")).toBeNull();
+    expect(await board.best("hard", "b", "full")).toBe(200);
+    await board.set("hard", "b", 50, ["common"]);
+    expect(await board.best("hard", "b", "common")).toBe(50);
+    await board.set("hard", "b", null, ALL_BOARDS);
+    expect(await board.best("hard", "b", "full")).toBeNull();
 
-    await board.replace("normal", "full", [{ accountId: "z", survivalSec: 9 }]);
-    expect((await board.top("normal", 10, "full")).map((entry) => entry.accountId)).toEqual(["z"]);
-    expect(await board.count("normal", "common")).toBe(0);
+    await board.replace("hard", "full", [{ accountId: "z", score: 9 }]);
+    expect((await board.top("hard", 10, "full")).map((entry) => entry.accountId)).toEqual(["z"]);
+    expect(await board.count("hard", "common")).toBe(0);
   });
 });
 
@@ -337,13 +339,13 @@ describe("карточка /start считает место по доске ак
     for (const [name, person] of people) {
       const account = await world.accounts.upsert({ platform: "telegram", platformUserId: person.telegramId, displayName: name, username: null, photoUrl: null }, Date.now());
       if (name === "separate") world.rating.restrictions.restrict(account.accountId, "separate_board", { notify: false });
-      await world.service.finish({ accountId: account.accountId, platform: "telegram", platformUserId: person.telegramId }, finish({ difficultyId: "hard", survivalSec: person.seconds }));
+      await world.service.finish({ accountId: account.accountId, platform: "telegram", platformUserId: person.telegramId }, finish({ survivalSec: person.seconds }));
     }
 
     // Обычные: общая доска из двух, отдельная в неё не входит.
-    expect(await progress.progress("102")).toEqual({ best: { difficulty: "hard", survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
-    expect(await progress.progress("101")).toEqual({ best: { difficulty: "hard", survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
+    expect(await progress.progress("102")).toEqual({ best: { survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
+    expect(await progress.progress("101")).toEqual({ best: { survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
     // Аккаунт с отдельной доской: полная из трёх, он на первом месте.
-    expect(await progress.progress("103")).toEqual({ best: { difficulty: "hard", survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
+    expect(await progress.progress("103")).toEqual({ best: { survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
   });
 });

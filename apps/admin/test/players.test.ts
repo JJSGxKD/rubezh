@@ -175,6 +175,17 @@ describe("раздел «Игроки»", () => {
     expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ reason: "ферма" });
   });
 
+  it("рефералка: привязка партнёра разбирает код ссылки и его отсутствие", async () => {
+    const partner = { partnerId: "p1", name: "Канал", boundAt: AT, campaignTitle: null, code: null };
+    const base = { friends: 0, referredBy: null, referrals: { bound: 0, activated: 0, rejected: 0 } };
+    const { fetch } = fakeFetch(json(200, { data: { ...base, partner: { ...partner, linkCode: "k7f2a" } } }), json(200, { data: { ...base, partner: { ...partner, linkCode: null } } }));
+    const api = new AdminApi(fetch);
+    const byLink = await fetchSocial(api, ACCOUNT_ID);
+    expect(byLink.ok && byLink.data.partner?.linkCode).toBe("k7f2a");
+    const byCode = await fetchSocial(api, ACCOUNT_ID);
+    expect(byCode.ok && byCode.data.partner?.linkCode).toBeNull();
+  });
+
   it("имена ресурсов — как у игрока, неизвестный — своим id", () => {
     expect(resourceName("coins")).toBe("Монеты");
     expect(resourceName("shard_mythic")).toBe("shard_mythic");

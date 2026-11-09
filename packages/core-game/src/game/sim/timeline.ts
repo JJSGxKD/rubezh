@@ -1,4 +1,5 @@
-import type { CordonRingDef, EndlessCurveDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
+import type { CordonRingDef, EndlessCurveDef, EndlessEventDef, TimelineEventKind, TimelineSegmentDef } from "@bh/shared-types";
+import { isGuardAlive, isInBossClearance } from "./rubezh";
 import type { World } from "./world";
 
 /**
@@ -163,11 +164,58 @@ function planGeneratedSegment(
     threatPerSec: mix.length === 0 ? 0 : budget,
     spawns,
     bursts: [],
-    events: resolveEvents(
-      world,
-      curve.events.filter((event) => (step + 1) % Math.max(1, event.everySegments) === 0),
-    ),
+    events: resolveEvents(world, eventsDue(world, curve, step, fromSec)),
   };
+}
+
+/**
+ * События кривой, которые срабатывают на этом шаге. Без подстройки — прежнее
+ * правило `(step + 1) % everySegments === 0`. Подстройка сдвигает только
+ * события элит и боссов (`world.difficulty.eliteLead`, `bossLead`): событие
+ * приходит на столько отрезков раньше, и считается оно от `n = step + 1 + lead`.
+ * Нулевой и отрицательный `n` — события ещё нет. События обычных врагов и
+ * расписанные руками отрезки не двигаются: первая минута и первая элита на 90-й
+ * секунде одинаковы у всех.
+ */
+function eventsDue(world: World, curve: EndlessCurveDef, step: number, fromSec: number): EndlessEventDef[] {
+  return curve.events.filter((event) => {
+    const lead = leadOf(world, event.enemy);
+    const isDue = (at: number): boolean => {
+      const n = at + 1 + lead;
+      return n > 0 && n % Math.max(1, event.everySegments) === 0;
+    };
+    if (rankOf(world, event.enemy) !== "boss") return isDue(step);
+    return isBossEventDue(world, step, fromSec, curve.segmentSec, isDue);
+  });
+}
+
+/**
+ * Событие босса с учётом рубежа. Страж приходит один, поэтому в окне вокруг отметки
+ * (`isInBossClearance`) боссов нет: событие, выпавшее на окно, переносится на первый
+ * отрезок после него — ровно один раз, а не теряется. Перенос считается по номерам
+ * отрезков, без состояния: сохранённый план отрезка и так хранит результат.
+ * Мир без стража окна не знает, и формула остаётся прежней.
+ */
+function isBossEventDue(world: World, step: number, fromSec: number, segmentSec: number, isDue: (at: number) => boolean): boolean {
+  const secOf = (at: number): number => fromSec + (at - step) * segmentSec;
+  if (isInBossClearance(world, secOf(step))) return false;
+  if (isDue(step)) return true;
+  // Отрезок сразу после окна принимает то, что выпало в нём.
+  for (let at = step - 1; at >= 0 && isInBossClearance(world, secOf(at)); at--) {
+    if (isDue(at)) return true;
+  }
+  return false;
+}
+
+function rankOf(world: World, enemyId: string): string {
+  return world.enemyTypes.find((type) => type.id === enemyId)?.rank ?? "normal";
+}
+
+function leadOf(world: World, enemyId: string): number {
+  const rank = world.enemyTypes.find((type) => type.id === enemyId)?.rank;
+  if (rank === "elite") return world.difficulty.eliteLead;
+  if (rank === "boss") return world.difficulty.bossLead;
+  return 0;
 }
 
 /**
@@ -200,8 +248,11 @@ function resolveEvents(
   defs: readonly { kind: TimelineEventKind; enemy: string; count: number; ring?: CordonRingDef | undefined }[],
 ): SegmentEvent[] {
   const events: SegmentEvent[] = [];
+  // Пока страж рубежа жив, боссы таймлайна пропускаются, а не откладываются: два босса сразу — не цель рубежа.
+  const guardAlive = isGuardAlive(world);
   for (const def of defs) {
     const typeIndex = world.enemyTypes.findIndex((type) => type.id === def.enemy);
+    if (guardAlive && typeIndex >= 0 && world.enemyTypes[typeIndex].rank === "boss") continue;
     if (typeIndex >= 0) events.push({ kind: def.kind, typeIndex, count: def.count, ...(def.ring === undefined ? {} : { ring: def.ring }) });
   }
   return events;

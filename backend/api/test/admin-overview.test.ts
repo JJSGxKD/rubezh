@@ -50,7 +50,7 @@ function stats(active: number): DayStats {
     active,
     sessions: active * 2,
     runs: { finished: 10, players: 4, medianSurvivalSec: 300 },
-    revenue: { stars: 150, purchases: 3, refunds: 0 },
+    revenue: { stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 },
     funnel: { entered: 5, appOpened: 5, firstRun: 4, runs5: 1, returnedD1: 2, returnedD7: 0, firstPurchase: 1 },
   };
 }
@@ -248,6 +248,7 @@ describe("сводка панели", () => {
   it("тридцать дней — ряд тридцать суток", async () => {
     const { service, stats, owner } = await setup();
     const overview = await service.overview(owner, 30, NOW);
+    expect(overview.series.every((point) => point.adsCompleted === 7)).toBe(true);
     expect(overview.series).toHaveLength(30);
     expect(stats.seriesRange).toEqual([new Date("2026-09-01T21:00:00.000Z"), NOW]);
     expect(stats.windows[0]).toEqual({ day: "2026-09-02", from: new Date("2026-09-01T21:00:00.000Z"), to: NOW });
@@ -258,6 +259,7 @@ describe("сводка панели", () => {
     const analyst = await person("3", "analyst");
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.ads).toBeNull();
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(ads.calls).toEqual([]);
     expect(ads.passCalls).toEqual([]);
   });
@@ -274,7 +276,7 @@ describe("сводка панели", () => {
   it("владельцу — выручка и всё, что ждёт: рассылки коллег, свежий разбор; черновики версий не напоминаются (Р125)", async () => {
     const { service, owner } = await setup();
     const overview = await service.overview(owner, 1, NOW);
-    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0 });
+    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 });
     expect(overview.series[0]?.stars).toBe(150);
     expect(overview.series[0]?.purchases).toBe(3);
     expect(overview.attention).toEqual([
@@ -297,9 +299,9 @@ describe("сводка панели", () => {
     const overview = await service.overview(analyst, 1, NOW);
     expect(overview.today.revenue).toBeNull();
     expect(overview.series[0]?.stars).toBeNull();
-    // Покупки — деньги, как звёзды; досмотренная реклама — нет.
     expect(overview.series[0]?.purchases).toBeNull();
-    expect(overview.series[0]?.adsCompleted).toBe(7);
+    // Досмотры — часть рекламы: без ads.view их в ряду нет.
+    expect(overview.series.every((point) => point.adsCompleted === null)).toBe(true);
     expect(overview.attention).toEqual([]);
     expect(overview.ads).toBeNull();
 
@@ -340,6 +342,27 @@ describe("сводка панели", () => {
   });
 });
 
+describe("«Ждёт вас» отдельным запросом (T-0359)", () => {
+  it("attentionFor отдаёт тот же список, что и сводка", async () => {
+    const { service, owner } = await setup();
+    const overview = await service.overview(owner, 1, NOW);
+    expect(await service.attentionFor(owner, NOW)).toEqual(overview.attention);
+    expect(overview.attention.length).toBeGreaterThan(0);
+  });
+
+  it("список — по правам: рассылки коллег видит тот, кто запускает, остальным их нет", async () => {
+    const { service, owner, person } = await setup();
+    expect((await service.attentionFor(owner, NOW)).map((item) => item.section)).toContain("broadcasts");
+    const analyst = await person("3", "analyst");
+    expect((await service.attentionFor(analyst, NOW)).map((item) => item.section)).not.toContain("broadcasts");
+  });
+
+  it("источник, который не ответил, пропускается, а не роняет запрос", async () => {
+    const { service, owner } = await setup({ changelogFails: true });
+    await expect(service.attentionFor(owner, NOW)).resolves.toBeInstanceOf(Array);
+  });
+});
+
 describe("сводка по HTTP", () => {
   let app: NestFastifyApplication | null = null;
 
@@ -357,7 +380,10 @@ describe("сводка по HTTP", () => {
     await rolesRepository.grant(owner.accountId, "owner", null);
     await store.put(hashSessionToken("own"), { accountId: owner.accountId, platform: "telegram", platformUserId: "1", issuedAtMs: 1, expiresAtMs: Date.now() + 60_000 });
     const asked: number[] = [];
-    const overview = { overview: async (_actor: unknown, days: number) => (asked.push(days), { days }) };
+    const overview = {
+      overview: async (_actor: unknown, days: number) => (asked.push(days), { days }),
+      attentionFor: async () => [{ section: "broadcasts", count: 2, text: "Рассылки коллег в черновиках" }],
+    };
 
     @Module({
       controllers: [AdminOverviewController],
@@ -397,5 +423,13 @@ describe("сводка по HTTP", () => {
       expect(response.json().error.message).toBe("Период — 1, 7 или 30 дней");
     }
     expect(asked).toEqual([1, 7, 30]);
+  });
+
+  it("GET /admin/attention: только сессия панели, ответ — { items }", async () => {
+    const { app: server } = await start();
+    const response = await server.inject({ method: "GET", url: "/api/v1/admin/attention", headers: { cookie: `${ADMIN_SESSION_COOKIE}=own` } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { items: [{ section: "broadcasts", count: 2, text: "Рассылки коллег в черновиках" }] } });
+    expect((await server.inject({ method: "GET", url: "/api/v1/admin/attention" })).statusCode).toBe(401);
   });
 });

@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Crown, ListChecks, Lock, Sparkles } from "lucide-react";
+import { Crown, ListChecks, Lock, ShieldAlert, Sparkles } from "lucide-react";
 import type { RunResult } from "@bh/shared-types";
 import { SectionTitle } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/run";
 // Подписи открытий — в словаре аккаунта: он приезжает с этим чанком.
 import "../../i18n/account";
+import { RATED_DIFFICULTY_ID } from "../../state/difficulty";
 import { nextUnlockAfter } from "../../state/level-unlocks";
 import { useMeta } from "../../state/meta";
 import type { RunRewardView } from "../../state/progress";
@@ -25,11 +26,11 @@ import { goalText, levelGoalInput, pickNextGoals, type NextGoal } from "./death-
 
 type Tasks = "loading" | "failed" | TaskItem[];
 
-const ICON: Record<NextGoal["kind"], typeof Crown> = { record: Crown, level: Sparkles, task: ListChecks, unlock: Lock };
+const ICON: Record<NextGoal["kind"], typeof Crown> = { record: Crown, rubezh: ShieldAlert, level: Sparkles, task: ListChecks, unlock: Lock };
 
 export function DeathNext(props: { result: RunResult; isNewRecord: boolean; reward: RunRewardView | undefined; withTasks: boolean }): ReactNode {
   const { result, reward } = props;
-  const best = useMeta((state) => state.best[result.difficultyId]);
+  const best = useMeta((state) => state.best[RATED_DIFFICULTY_ID]);
   const settled = reward !== undefined && reward.status !== "pending";
   const [tasks, setTasks] = useState<Tasks>("loading");
 
@@ -59,6 +60,7 @@ export function DeathNext(props: { result: RunResult; isNewRecord: boolean; rewa
   const goals = pickNextGoals({
     isNewRecord: props.isNewRecord,
     survivalSec: result.survivalSec,
+    rubezh: result.rubezh,
     bestSec: best ?? null,
     level,
     tasks: Array.isArray(tasks) ? tasks : [],

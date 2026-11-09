@@ -25,6 +25,10 @@ import { SettingsService } from "../modules/settings/settings.service.js";
  * таблица собирается во временный ключ и подменяет рабочий одной командой.
  * Пока `seasons.start-date` пуст или первый сезон не начался, команда ничего
  * не делает. Закрытые сезоны не затрагиваются — их итоги лежат в базе.
+ *
+ * Единая сложность (Р126): таблицы собираются по рейтинговым сложностям и
+ * забегам не раньше отсечки `rating.since-date`, таблицы остальных сложностей
+ * очищаются. После выката T-0191 запускается один раз.
  */
 async function main(): Promise<void> {
   const config = configFromEnvironment();
@@ -33,15 +37,17 @@ async function main(): Promise<void> {
   const redis = createRedis(config);
   try {
     await redis.connect();
-    // Дата старта лежит в настройках панели, а не в окружении: читаем её из базы.
+    // Дата старта и отсечка рейтинга лежат в настройках панели, а не в окружении: читаем их из базы.
     const settings = new SettingsService(config, new PrismaSettingsRepository(prisma), redis);
     await settings.refresh();
     const restrictions = new AccountRestrictions(new PrismaRestrictionsRepository(prisma), redis, config);
     // Нужны только доски аккаунта и кому отдельная доска: обход и слушатели рейтинга здесь не запускаются.
     const hooks = new RestrictionsHooks();
-    const rating = new RatingRestrictions(config, redis, new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, hooks);
+    const rating = new RatingRestrictions(config, redis, new PrismaRunsRepository(prisma), new RedisLeaderboardStore(redis), restrictions, hooks, settings);
     const projection = new SeasonsProjection(new SeasonSchedule(settings), new RedisSeasonBoardStore(redis), new PrismaSeasonsRepository(prisma), new RunsHooks(), hooks, restrictions, rating);
     const counts = await projection.rebuild();
+    const since = new SeasonSchedule(settings).ratingSince();
+    console.log(`отсечка рейтинга: ${since === null ? "нет" : since.toISOString().slice(0, 10)}`);
     const entries = Object.entries(counts);
     console.log(entries.length === 0 ? "сезонов сейчас нет — пересобирать нечего" : `таблицы недели пересобраны: ${entries.map(([difficulty, count]) => `${difficulty} — ${String(count)}`).join(", ")}`);
   } finally {

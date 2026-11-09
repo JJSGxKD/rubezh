@@ -386,11 +386,10 @@ function ManualRateForm({ onSaved }: { onSaved: () => void }) {
               <Button onClick={() => setConfirming(false)}>Отмена</Button>
             </>
           ) : (
-            <Button tone="primary" disabled={problem !== null} onClick={() => setConfirming(true)}>
+            <Button tone="primary" disabled={problem !== null} blockedBy={problem} onClick={() => setConfirming(true)}>
               Задать
             </Button>
           )}
-          {problem !== null && input.price !== "" ? <span className="text-xs text-text-muted">{problem}</span> : null}
         </div>
         {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
       </div>

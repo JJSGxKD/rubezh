@@ -24,11 +24,15 @@ import { ORBITER_RADIUS } from "../weapons";
  * два прогона одного seed давали бы разные числа, и таблица калибровки
  * перестала бы что-либо значить.
  */
-export type BotSkill = "passive" | "dodging";
+export type BotSkill = "passive" | "dodging" | "strong";
 
 export interface Bot {
   input(world: World): SimInput;
-  choose(offers: readonly UpgradeOption[]): string;
+  /**
+   * Выбор карточки уровня. Мир нужен тем, кто смотрит на набор (сильный бот);
+   * пассивный и уклоняющийся решают по одним предложениям.
+   */
+  choose(offers: readonly UpgradeOption[], world?: World): string;
 }
 
 /**
@@ -62,6 +66,9 @@ const DODGING_PRIORITY: readonly UpgradeOption["kind"][] = [
   "weapon_new",
   "passive_new",
   "passive_level",
+  // «Предел» — это прибавки к урону и живучести, лечение при полном здоровье
+  // пустое: бот берёт прибавку, а не стоит на месте.
+  "limit",
   "heal",
 ];
 
@@ -81,7 +88,12 @@ export interface DodgingBotOptions {
  */
 export const DODGING_BOT_DEFAULTS: DodgingBotOptions = { reactionTicks: 18, attentionCount: 4 };
 
-export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> = {}): Bot {
+/**
+ * Пассивный и уклоняющийся боты — ранний бой. Сильный бот (`createStrongBot`,
+ * `strong-bot.ts`) собирается отдельно: он строится поверх уклоняющегося, и общий
+ * вход здесь замкнул бы модули в круг.
+ */
+export function createBot(skill: Exclude<BotSkill, "strong">, options: Partial<DodgingBotOptions> = {}): Bot {
   if (skill === "passive") return passiveBot();
   const merged: DodgingBotOptions = { ...DODGING_BOT_DEFAULTS, ...options };
   // Имена полей берутся из самого объекта: так сообщение всегда называет
@@ -91,7 +103,7 @@ export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> =
       throw new Error(`Бот калибровки: ${name} должен быть целым числом от 1`);
     }
   }
-  return dodgingBot(merged);
+  return createDodgingBot(merged);
 }
 
 function passiveBot(): Bot {
@@ -129,7 +141,8 @@ function seekChest(world: World, out: { x: number; y: number }): boolean {
   return found;
 }
 
-function dodgingBot(options: DodgingBotOptions): Bot {
+/** Уклоняющийся бот без проверки параметров: её делает `createBot`, а сильный бот берёт проверенные константы. */
+export function createDodgingBot(options: DodgingBotOptions): Bot {
   const { reactionTicks, attentionCount } = options;
   // Последнее направление: когда вокруг пусто, бот продолжает идти, а не
   // замирает — стоящий на месте «уклоняющийся» не отличался бы от пассивного.

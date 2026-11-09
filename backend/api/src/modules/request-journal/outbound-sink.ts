@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import type { OutboundRecord, OutboundSink } from "../../infra/outbound/outbound.js";
-import { FLUSH_ATTEMPTS, JOURNAL_CLOCK, OUTBOUND_BUFFER_MAX, OUTBOUND_FLUSH_MS, WARN_EVERY_MS } from "./journal-rules.js";
+import { FLUSH_ATTEMPTS, JOURNAL_CLOCK, isConnectionError, logReason, OUTBOUND_BUFFER_MAX, OUTBOUND_FLUSH_MS, WARN_EVERY_MS } from "./journal-rules.js";
 import { REQUEST_JOURNAL_REPOSITORY, type RequestJournalRepository } from "./request-journal.repository.js";
 
 /**
@@ -83,8 +83,17 @@ export class BufferedOutboundSink implements OutboundSink, OnModuleInit, OnModul
       this.failedFlushes = 0;
       return batch.length;
     } catch (error: unknown) {
+      this.warnLimited("outbound_flush_failed", { reason: logReason(error), pending: batch.length });
+      if (isConnectionError(error)) {
+        // Базы нет, а не пачка плохая: записи ждут её в буфере, счётчик попыток не растёт.
+        // Не поместившееся сбрасывается с начала — самые старые.
+        const all = [...batch, ...this.buffer];
+        const over = Math.max(all.length - OUTBOUND_BUFFER_MAX, 0);
+        this.buffer = all.slice(over);
+        if (over > 0) this.drop(over);
+        return 0;
+      }
       this.failedFlushes += 1;
-      this.warnLimited("outbound_flush_failed", { reason: error instanceof Error ? error.message : "unknown", pending: batch.length });
       // Пачка, которую база не принимает раз за разом, не должна копиться вечно.
       if (this.failedFlushes >= FLUSH_ATTEMPTS) {
         this.failedFlushes = 0;

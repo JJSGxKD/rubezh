@@ -7,8 +7,17 @@ import type { RunFinish } from "../src/modules/runs/dto/runs.dto.js";
 import { RunContinues } from "../src/modules/runs/run-continues.js";
 import { RunLoadouts } from "../src/modules/runs/run-loadouts.js";
 import { DIFFICULTIES } from "../src/modules/runs/run-rules.js";
-import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
+import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { RunsService } from "../src/modules/runs/runs.service.js";
+import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
+import { ALL_BOARDS, type Board } from "../src/modules/runs/leaderboard.store.js";
+import type { SeasonBoardEntry, SeasonBoardStore } from "../src/modules/seasons/season-board.store.js";
+import { SeasonSchedule } from "../src/modules/seasons/seasons-schedule.js";
+import { SeasonsProjection } from "../src/modules/seasons/seasons-projection.js";
+import { SeasonsViewService } from "../src/modules/seasons/seasons-view.service.js";
+import { PrismaSeasonsRepository, windowOf, type SeasonsRepository } from "../src/modules/seasons/seasons.repository.js";
+import type { PrismaClient } from "../src/generated/prisma/client.js";
+import { panelSettings } from "./helpers/settings.js";
 import { SETTINGS, SETTING_LIST } from "../src/modules/settings/setting-catalog.js";
 import { boardQuerySchema, seasonKeyParamSchema } from "../src/modules/seasons/dto/seasons.dto.js";
 import {
@@ -32,7 +41,7 @@ import {
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 
 /**
  * Недельный сезон рейтинга: правила без базы (tasks/T-0110). Границы недели —
@@ -290,7 +299,7 @@ describe("RunsService.setRanked: слушатели узнают о смене �
     const board = new MemoryLeaderboardStore();
     const hooks = new RunsHooks();
     const roles = new RolesService(config, rolesRepository, accounts);
-    const service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating);
+    const service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), ratingRestrictions(runs, board).rating, undefined, survivalScorer());
     const player = async (name: string) => {
       const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
       return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };
@@ -408,5 +417,259 @@ describe("награды сезона — только внутриигровы�
   it("ни одно значение лестницы и порога не выходит за монеты и престиж", () => {
     for (const step of PLACE_LADDER) expect(Object.keys(step).sort()).toEqual(["coins", "fromPlace", "prestige", "toPlace"]);
     expect(Object.keys(THRESHOLD_REWARD).sort()).toEqual(["coins", "prestige"]);
+  });
+});
+
+describe("единая сложность в сезонах (T-0191, Р126)", () => {
+  const SEASON = seasonOf(new Date("2026-11-02T00:00:00Z"));
+  const WEDNESDAY = new Date("2026-11-04T00:00:00Z");
+  const at = new Date("2026-11-04T12:00:00Z");
+
+  function untouchable<T extends object>(name: string): T {
+    return new Proxy({}, { get: (_target, method) => () => Promise.reject(new Error(`${name}.${String(method)} не должен вызываться`)) }) as T;
+  }
+
+  /** Таблица недели в памяти: ровно то, что нужно проекции. */
+  class MemorySeasonStore implements Pick<SeasonBoardStore, "submit" | "set" | "replace" | "best" | "rank" | "count" | "remove"> {
+    readonly tables = new Map<string, Map<string, number>>();
+    readonly replaced: string[] = [];
+    private table(seasonKey: string, difficulty: string, board: Board): Map<string, number> {
+      const name = `${seasonKey}:${board}:${difficulty}`;
+      let found = this.tables.get(name);
+      if (found === undefined) {
+        found = new Map();
+        this.tables.set(name, found);
+      }
+      return found;
+    }
+    async submit(season: { key: string }, difficulty: string, accountId: string, survivalSec: number, boards: readonly Board[] = ALL_BOARDS): Promise<{ improved: boolean }> {
+      for (const board of boards) this.table(season.key, difficulty, board).set(accountId, Math.max(survivalSec, this.table(season.key, difficulty, board).get(accountId) ?? 0));
+      return { improved: true };
+    }
+    async set(season: { key: string }, difficulty: string, accountId: string, survivalSec: number | null, boards: readonly Board[] = ALL_BOARDS): Promise<void> {
+      for (const board of boards) {
+        if (survivalSec === null) this.table(season.key, difficulty, board).delete(accountId);
+        else this.table(season.key, difficulty, board).set(accountId, survivalSec);
+      }
+    }
+    async replace(season: { key: string }, difficulty: string, entries: readonly SeasonBoardEntry[], board: Board = "common"): Promise<void> {
+      this.replaced.push(`${difficulty}:${board}`);
+      this.tables.set(`${season.key}:${board}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.score])));
+    }
+    async best(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
+      return this.table(seasonKey, difficulty, board).get(accountId) ?? null;
+    }
+    async rank(seasonKey: string, difficulty: string, accountId: string, board: Board = "common"): Promise<number | null> {
+      const table = this.table(seasonKey, difficulty, board);
+      const own = table.get(accountId);
+      return own === undefined ? null : 1 + [...table.values()].filter((score) => score > own).length;
+    }
+    async count(seasonKey: string, difficulty: string, board: Board = "common"): Promise<number> {
+      return this.table(seasonKey, difficulty, board).size;
+    }
+    async remove(): Promise<void> {}
+  }
+
+  /** Репозиторий сезона с записью обращений: что спросили у базы и с какой отсечкой. */
+  function repositoryOf(rows: Record<string, { accountId: string; score: number }[]> = {}) {
+    const asked: { method: string; difficulty: string; since: Date | null }[] = [];
+    const repository = {
+      async weekBests(difficulty: string, _season: unknown, _excluded: unknown, since: Date | null) {
+        asked.push({ method: "weekBests", difficulty, since });
+        return rows[difficulty] ?? [];
+      },
+      async bestRun(_accountId: string, difficulty: string, _season: unknown, _shadow: boolean, since: Date | null) {
+        asked.push({ method: "bestRun", difficulty, since });
+        return null;
+      },
+    };
+    return { repository: repository as unknown as SeasonsRepository, asked };
+  }
+
+  function projectionOf(settingValues: Record<string, number>, rows: Record<string, { accountId: string; score: number }[]> = {}) {
+    const schedule = new SeasonSchedule(panelSettings({ [SETTINGS.seasonsStartDate.key]: 20261102, ...settingValues }));
+    const store = new MemorySeasonStore();
+    const { repository, asked } = repositoryOf(rows);
+    const rating = { boardsFor: async () => ALL_BOARDS, separate: async () => [] as string[] };
+    const restrictions = { restrictedAccounts: async () => [] as string[], status: async () => null };
+    const projection = new SeasonsProjection(schedule, store as unknown as SeasonBoardStore, repository, new RunsHooks(), new RestrictionsHooks(), restrictions as never, rating as never);
+    return { schedule, store, asked, projection };
+  }
+
+  function recordedRun(patch: Partial<RecordedRun> = {}): RecordedRun {
+    return {
+      runId: randomUUID(),
+      accountId: randomUUID(),
+      difficulty: "hard",
+      outcome: "died",
+      survivalSec: 300,
+      level: 6,
+      enemiesKilled: 300,
+      startingWeaponId: "knife",
+      weapons: [],
+      boosts: [],
+      xpCollected: null,
+      counters: null,
+      deathCause: null,
+      cheats: false,
+      continues: 0,
+      ranked: true,
+      verdict: "ok",
+      reasons: [],
+      finishedAt: at,
+      ...patch,
+    };
+  }
+
+  describe("SeasonSchedule.ratingSince: отсечка из настроек", () => {
+    it("число ГГГГММДД — полночь UTC; ноль и мусор — отсечки нет; правка из панели действует сразу", () => {
+      const settings = panelSettings({ [SETTINGS.ratingSinceDate.key]: 20261104 });
+      const schedule = new SeasonSchedule(settings);
+      expect(schedule.ratingSince()?.toISOString()).toBe("2026-11-04T00:00:00.000Z");
+      settings.set(SETTINGS.ratingSinceDate.key, 0);
+      expect(schedule.ratingSince()).toBeNull();
+      expect(new SeasonSchedule(panelSettings()).ratingSince()).toBeNull();
+    });
+  });
+
+  describe("windowOf: окно недели не раньше отсечки", () => {
+    it("отсечки нет или она раньше недели — окно недели целиком", () => {
+      expect(windowOf(SEASON, null)).toEqual({ status: "finished", finishedAt: { gte: SEASON.startsAt, lt: SEASON.endsAt } });
+      expect(windowOf(SEASON, new Date("2026-10-26T00:00:00Z"))).toEqual({ status: "finished", finishedAt: { gte: SEASON.startsAt, lt: SEASON.endsAt } });
+    });
+
+    it("неделя началась до отсечки — окно от отсечки; отсечка ровно в начале недели — то же окно", () => {
+      expect(windowOf(SEASON, WEDNESDAY)).toEqual({ status: "finished", finishedAt: { gte: WEDNESDAY, lt: SEASON.endsAt } });
+      expect(windowOf(SEASON, SEASON.startsAt).finishedAt).toEqual({ gte: SEASON.startsAt, lt: SEASON.endsAt });
+    });
+
+    it("отсечка после конца недели — окно пустое, но корректное: gte не меньше lt", () => {
+      const later = new Date("2026-11-20T00:00:00Z");
+      expect(windowOf(SEASON, later).finishedAt).toEqual({ gte: later, lt: SEASON.endsAt });
+    });
+  });
+
+  describe("запросы недели в базу", () => {
+    function prismaRecording() {
+      const calls: { method: string; args: { where: Record<string, unknown> } }[] = [];
+      const record = (method: string, result: unknown) => async (args: { where: Record<string, unknown> }) => {
+        calls.push({ method, args });
+        return result;
+      };
+      const prisma = { run: { groupBy: record("groupBy", []), findFirst: record("findFirst", null), findMany: record("findMany", []) } };
+      return { repository: new PrismaSeasonsRepository(prisma as unknown as PrismaClient), calls };
+    }
+
+    it("weekBests, bestRun и boardRuns для easy и normal не обращаются к базе вовсе", async () => {
+      const repository = new PrismaSeasonsRepository(untouchable<PrismaClient>("база"));
+      for (const difficulty of ["easy", "normal"] as const) {
+        expect(await repository.weekBests(difficulty, SEASON, [], WEDNESDAY)).toEqual([]);
+        expect(await repository.bestRun(randomUUID(), difficulty, SEASON, false, WEDNESDAY)).toBeNull();
+        expect(await repository.bestRun(randomUUID(), difficulty, SEASON, true, WEDNESDAY)).toBeNull();
+        expect(await repository.boardRuns([randomUUID()], difficulty, SEASON, WEDNESDAY)).toEqual([]);
+      }
+    });
+
+    it("hard: окно недели начинается с отсечки, сложность и ранг — в условии", async () => {
+      const { repository, calls } = prismaRecording();
+      const id = randomUUID();
+
+      await repository.weekBests("hard", SEASON, [], WEDNESDAY);
+      await repository.bestRun(id, "hard", SEASON, false, WEDNESDAY);
+      await repository.boardRuns([id], "hard", SEASON, WEDNESDAY);
+
+      expect(calls.map((call) => call.method)).toEqual(["groupBy", "findFirst", "findMany"]);
+      for (const call of calls) {
+        expect(call.args.where).toMatchObject({ difficulty: "hard", status: "finished", finishedAt: { gte: WEDNESDAY, lt: SEASON.endsAt } });
+      }
+    });
+  });
+
+  describe("SeasonsProjection", () => {
+    it("recorded: нерейтинговая сложность и hard раньше отсечки в таблицу недели не пишутся, hard с отсечки — пишется", async () => {
+      const { store, projection } = projectionOf({ [SETTINGS.ratingSinceDate.key]: 20261104 });
+      const [easy, normal, early, late] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+
+      // Даже если кто-то объявил забег рейтинговым: сезоны сами проверяют сложность и отсечку.
+      await projection.recorded(recordedRun({ accountId: easy, difficulty: "easy" }));
+      await projection.recorded(recordedRun({ accountId: normal, difficulty: "normal" }));
+      await projection.recorded(recordedRun({ accountId: early, finishedAt: new Date("2026-11-03T23:59:59Z") }));
+      await projection.recorded(recordedRun({ accountId: late, finishedAt: new Date("2026-11-04T00:00:00Z"), survivalSec: 250 }));
+
+      for (const difficulty of ["easy", "normal"] as const) expect(await store.count(SEASON.key, difficulty)).toBe(0);
+      expect(await store.best(SEASON.key, "hard", early)).toBeNull();
+      expect(await store.best(SEASON.key, "hard", late)).toBe(250);
+    });
+
+    it("refresh по нерейтинговой сложности ничего не делает и в базу не ходит", async () => {
+      const { projection, asked, store } = projectionOf({});
+      await store.set(SEASON, "easy", "призрак", 500);
+
+      await projection.refresh(randomUUID(), "easy", at);
+
+      expect(asked).toEqual([]);
+    });
+
+    it("rebuild: hard берётся из базы с отсечкой, таблицы easy и normal очищаются на обеих досках, счётчики по трём ключам", async () => {
+      const first = randomUUID();
+      const { projection, store, asked } = projectionOf({ [SETTINGS.ratingSinceDate.key]: 20261104 }, { hard: [{ accountId: first, score: 321 }] });
+      for (const stale of ["easy", "normal", "hard"] as const) {
+        await store.set(SEASON, stale, "старый", 999);
+        await store.set(SEASON, stale, "призрак", 111);
+      }
+
+      const counts = await projection.rebuild(at);
+
+      expect(counts).toEqual({ easy: 0, normal: 0, hard: 1 });
+      expect(asked).toEqual([{ method: "weekBests", difficulty: "hard", since: WEDNESDAY }]);
+      for (const side of ALL_BOARDS) {
+        expect(await store.count(SEASON.key, "easy", side)).toBe(0);
+        expect(await store.count(SEASON.key, "normal", side)).toBe(0);
+        expect(await store.count(SEASON.key, "hard", side)).toBe(1);
+        expect(await store.best(SEASON.key, "hard", first, side)).toBe(321);
+      }
+      expect([...store.replaced].sort()).toEqual(["easy:common", "easy:full", "hard:common", "hard:full", "normal:common", "normal:full"]);
+
+      // Второй запуск — тот же результат.
+      expect(await projection.rebuild(at)).toEqual(counts);
+    });
+  });
+
+  describe("SeasonsViewService", () => {
+    function viewOf(settingValues: Record<string, number> = {}) {
+      const schedule = new SeasonSchedule(panelSettings({ [SETTINGS.seasonsStartDate.key]: 20261102, ...settingValues }));
+      const rating = { boardOf: async () => "common" as const, boardsFor: async () => ALL_BOARDS };
+      const restrictions = { status: async () => null };
+      const store = new MemorySeasonStore();
+      const { repository } = repositoryOf();
+      const pending = {
+        pendingRewards: async () => [],
+        history: async () => [],
+      };
+      const full = { ...repository, ...pending } as unknown as SeasonsRepository;
+      return { store, view: new SeasonsViewService(schedule, full, store as unknown as SeasonBoardStore, { friends: async () => [] } as never, restrictions as never, rating as never) };
+    }
+
+    it("board по easy и normal — пустая таблица прежней формы, без обращения к проекции и базе", async () => {
+      const schedule = new SeasonSchedule(panelSettings({ [SETTINGS.seasonsStartDate.key]: 20261102 }));
+      const view = new SeasonsViewService(schedule, untouchable("база"), untouchable<SeasonBoardStore>("redis"), untouchable("друзья"), untouchable("ограничения"), untouchable("рейтинг"));
+
+      for (const difficulty of ["easy", "normal"] as const) {
+        for (const scope of ["all", "friends"] as const) {
+          expect(await view.board(randomUUID(), { difficulty, scope }, at)).toEqual({ seasonKey: SEASON.key, difficulty, scoring: "time", total: 0, entries: [], me: null });
+        }
+      }
+    });
+
+    it("overview.mine: ключи easy, normal, hard на месте, у нерейтинговых — null, даже если в старой таблице лежит время", async () => {
+      const { store, view } = viewOf();
+      const me = randomUUID();
+      await store.set(SEASON, "easy", me, 500);
+      await store.set(SEASON, "hard", me, 222);
+
+      const overview = await view.overview(me, at);
+
+      expect(overview.mine).toEqual({ easy: null, normal: null, hard: 222 });
+    });
   });
 });

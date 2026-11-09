@@ -33,9 +33,10 @@ export const ROUTE_MEMORY_SEC = 600;
 
 /**
  * Умолчание режима. Bot API — только напрямую: токен бота стоит в адресе, и
- * чужой сервер его видеть не должен, пока команда не решит иначе.
+ * чужой сервер его видеть не должен, пока команда не решит иначе. Адрес
+ * подписки Xray секретный целиком, поэтому и он — только напрямую (Р101).
  */
-const DEFAULT_MODES: Partial<Record<OutboundService, OutboundMode>> = { "telegram.bot": "direct_only" };
+const DEFAULT_MODES: Partial<Record<OutboundService, OutboundMode>> = { "telegram.bot": "direct_only", "proxy.subscription": "direct_only" };
 
 export function defaultModeOf(service: OutboundService): OutboundMode {
   return DEFAULT_MODES[service] ?? "direct_first";

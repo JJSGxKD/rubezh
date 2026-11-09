@@ -1,5 +1,8 @@
+import type { RunHuntEntry } from "@bh/shared-types";
+import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { createCordonState, type CordonState } from "../sim/cordon";
+import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
@@ -22,7 +25,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 13;
+export const WORLD_SNAPSHOT_VERSION = 16;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -105,6 +108,18 @@ export interface WorldSnapshot {
   secrets: SecretsSnapshot;
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
   cordon?: Omit<CordonState, "ended">;
+  /**
+   * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
+   * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
+   */
+  rubezh?: { rng: number; phase: RubezhPhase; clearedSec: number | null };
+  /**
+   * Пролог: только у снимка забега в режиме `prologue` (T-0278). Снимок обычного забега
+   * поля не несёт, и в мир пролога он не грузится — как и наоборот.
+   */
+  prologue?: { lastWardTick: number; firstOfferMade: boolean };
+  /** журнал охоты; в снимках без поля — пуст, а время появления живых элит неизвестно (tasks/T-0292) */
+  hunt?: HuntSnapshot;
   spawner: unknown;
 }
 
@@ -132,6 +147,11 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     secrets: capturedSecrets(world),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
+    rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
+    ...(world.prologue === null
+      ? {}
+      : { prologue: { lastWardTick: world.prologue.lastWardTick, firstOfferMade: world.prologue.firstOfferMade } }),
+    hunt: captureHunt(world),
     spawner: spawner.saveState?.() ?? null,
   };
 }
@@ -155,7 +175,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   assignNumbers(world.playerStats, snapshot.playerStats, "playerStats");
   assignNumbers(world.playerStatsBase, snapshot.playerStatsBase, "playerStatsBase");
   world.loadout = restoreLoadout(world, snapshot.loadout);
-  world.progression = restoreProgression(snapshot.progression);
+  world.progression = restoreProgression(snapshot.progression, world.limitTypes.length);
   assignNumbers(world.difficulty, snapshot.difficulty, "difficulty");
   world.gemMergeCursor = asNumber(snapshot.gemMergeCursor, "gemMergeCursor");
 
@@ -172,6 +192,9 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   world.chests.founds = [];
   world.chests.openings = [];
   restoreCordon(world, snapshot.cordon);
+  restoreRubezh(world, snapshot.rubezh);
+  restorePrologue(world, snapshot.prologue);
+  restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
@@ -264,6 +287,31 @@ function restoreSecrets(world: World, input: unknown): void {
   restoreBlessings(world, blessings);
 }
 
+/**
+ * Журнал охоты. Отсутствие поля — снимок до журнала: версию формата не
+ * поднимали, старый снимок читается, журнал в нём пуст.
+ */
+function restoreHunt(world: World, input: unknown): void {
+  world.hunt.log = [];
+  world.hunt.spawnTick.fill(0);
+  if (input === undefined) return;
+  const raw = asRecord(input, "hunt");
+  const log = asArray(raw.log, "hunt.log");
+  if (log.length > MAX_HUNT_ENTRIES) throw new SnapshotError(`hunt.log: ${log.length} записей при потолке ${MAX_HUNT_ENTRIES}`);
+  const entries = log.map((item, i): RunHuntEntry => {
+    const entry = asRecord(item, `hunt.log[${i}]`);
+    const rank = entry.rank;
+    if (rank !== "elite" && rank !== "boss") throw new SnapshotError(`hunt.log[${i}].rank: ожидался elite или boss`);
+    return { rank, value: asNumber(entry.value, `hunt.log[${i}].value`), aliveSec: asNumber(entry.aliveSec, `hunt.log[${i}].aliveSec`) };
+  });
+  const spawns = asArray(raw.spawns, "hunt.spawns").map((item, i) => {
+    const spawn = asRecord(item, `hunt.spawns[${i}]`);
+    return { slot: asIndex(spawn.slot, world.config.maxEnemies, `hunt.spawns[${i}].slot`), tick: asNumber(spawn.tick, `hunt.spawns[${i}].tick`) };
+  });
+  world.hunt.log = entries;
+  for (const spawn of spawns) world.hunt.spawnTick[spawn.slot] = spawn.tick;
+}
+
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
   return {
     active: state.active,
@@ -319,6 +367,52 @@ function restoreCordon(world: World, input: unknown): void {
   });
 }
 
+/**
+ * Рубеж. Отсутствие поля — снимок до рубежа: версию формата не поднимали. Отметка
+ * ещё впереди — страж придёт как обычно, позади — забег начат без него и страж
+ * в него не вмешивается. Мир без стража (нет правил или врага в контенте)
+ * остаётся «пропущен», что бы ни сказал снимок о фазе «ждёт».
+ */
+function restoreRubezh(world: World, input: unknown): void {
+  const state = world.rubezh;
+  if (input === undefined) {
+    if (state.guardType >= 0) state.phase = world.stats.tick < state.atTick ? "pending" : "skipped";
+    state.clearedSec = null;
+    return;
+  }
+  const raw = asRecord(input, "rubezh");
+  const phase = asString(raw.phase, "rubezh.phase");
+  if (!(RUBEZH_PHASES as readonly string[]).includes(phase)) throw new SnapshotError(`rubezh.phase: «${phase}» — неизвестная фаза`);
+  const restored = phase as RubezhPhase;
+  if (state.guardType < 0 && (restored === "guard" || restored === "cleared")) {
+    throw new SnapshotError(`rubezh.phase: ${restored}, а стража в контенте этого забега нет`);
+  }
+  const clearedSec = raw.clearedSec === null ? null : asNumber(raw.clearedSec, "rubezh.clearedSec");
+  if ((restored === "cleared") !== (clearedSec !== null)) {
+    throw new SnapshotError("rubezh.clearedSec: секунда победы задана не в той фазе");
+  }
+  state.rng.setState(asNumber(raw.rng, "rubezh.rng"));
+  state.phase = state.guardType < 0 ? "skipped" : restored;
+  state.clearedSec = clearedSec;
+}
+
+/**
+ * Пролог. Режим мира собран заранее по режиму снимка забега, поэтому здесь только
+ * сверка: снимок пролога в мир обычного забега (и наоборот) не грузится — иначе
+ * забег продолжился бы на чужом таймлайне.
+ */
+function restorePrologue(world: World, input: unknown): void {
+  const state = world.prologue;
+  if (state === null) {
+    if (input !== undefined) throw new SnapshotError("prologue: снимок пролога, а мир обычного забега");
+    return;
+  }
+  if (input === undefined) throw new SnapshotError("prologue: снимок обычного забега, а мир пролога");
+  const raw = asRecord(input, "prologue");
+  state.lastWardTick = asNumber(raw.lastWardTick, "prologue.lastWardTick");
+  state.firstOfferMade = asBoolean(raw.firstOfferMade, "prologue.firstOfferMade");
+}
+
 // --- Набор и прогрессия -------------------------------------------------------
 
 function restoreLoadout(world: World, input: unknown): World["loadout"] {
@@ -344,7 +438,7 @@ function restoreLoadout(world: World, input: unknown): World["loadout"] {
   return { weapons, passives };
 }
 
-function restoreProgression(input: unknown): World["progression"] {
+function restoreProgression(input: unknown, limitCount: number): World["progression"] {
   const progression = asRecord(input, "progression");
   return {
     level: asNumber(progression.level, "progression.level"),
@@ -359,7 +453,28 @@ function restoreProgression(input: unknown): World["progression"] {
     tools: restoreCardTools(progression.tools, "progression.tools"),
     toolsTotal: restoreCardTools(progression.toolsTotal, "progression.toolsTotal"),
     banished: asArray(progression.banished, "progression.banished").map((key, i) => asString(key, `progression.banished[${i}]`)),
+    limitStacks: restoreLimitStacks(progression.limitStacks, limitCount),
   };
+}
+
+/**
+ * Стопки «Предела»: длина обязана сойтись с записями мира, иначе снимок —
+ * другого контента, а не повод молча сдвинуть прибавки на чужие параметры.
+ * Отрицательное или дробное число отвергается: оно дало бы мир с NaN в
+ * характеристиках.
+ */
+function restoreLimitStacks(input: unknown, limitCount: number): number[] {
+  const raw = asArray(input, "progression.limitStacks");
+  if (raw.length !== limitCount) {
+    throw new SnapshotError(`progression.limitStacks: ${raw.length} записей, в мире ${limitCount}`);
+  }
+  return raw.map((value, i) => {
+    const count = asNumber(value, `progression.limitStacks[${i}]`);
+    if (!Number.isInteger(count) || count < 0) {
+      throw new SnapshotError(`progression.limitStacks[${i}]: целое от 0, а не ${count}`);
+    }
+    return count;
+  });
 }
 
 function restoreCardTools(input: unknown, path: string): World["progression"]["tools"] {

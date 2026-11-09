@@ -17,7 +17,6 @@ import {
 } from "../state/navigation";
 import { badgeText, useBadges } from "../state/badges";
 import { useConnection } from "../state/connection";
-import { useMeta } from "../state/meta";
 import { usePlatform } from "../state/platform";
 import { useProgress } from "../state/progress";
 import { useRun } from "../state/run";
@@ -29,7 +28,8 @@ import { uiFeedback } from "../state/ui-feedback";
 import { backAction, backKeyAction, useBackStack, type BackStack } from "../state/back-stack";
 import { CompactOverlay, FirstRunScreen, OutdatedScreen, OutsideScreen } from "../screens/gates";
 import { LobbyScreen } from "../screens/home";
-import { playedBefore, skipFirstRunHints } from "../state/first-run";
+import { skipFirstRunHints } from "../state/first-run";
+import { resolvePrologue, usePrologue, usePrologueOpen } from "../state/prologue";
 import {
   AboutScreen,
   ArsenalScreen,
@@ -84,8 +84,15 @@ export function App(): ReactNode {
   const tasksCount = useBadges((state) => state.tasks);
   const [modalLayer, setModalLayer] = useState<HTMLElement | null>(null);
   const wide = useWide((state) => state.wide);
+  // «Награда дня» и «Задания» закрыты, пока не пройден пролог (T-0280): ни вкладки, ни экрана по ссылке.
+  const sectionsOpen = usePrologueOpen();
 
   usePlatformButtons(stack, screen);
+  // Первое открытие раздела гасит «Новое» на главной.
+  useEffect(() => {
+    if (!sectionsOpen) return;
+    if (screen === "tasks" || screen === "daily") usePrologue.getState().acknowledge(screen);
+  }, [screen, sectionsOpen]);
 
   if (!capabilities.platformAvailable) return <OutsideScreen botUrl={capabilities.botUrl} />;
   // Версия клиента проверяется после самой площадки: вне её версии нет, и
@@ -97,7 +104,7 @@ export function App(): ReactNode {
   // Знак — только с полезной нагрузкой (Р50): новые предметы, подарки к
   // выдаче и заявки друзей, награды заданий к забору.
   const badges: Partial<Record<string, string | undefined>> = { arsenal: badgeText(arsenalCount), friends: badgeText(friendsCount), tasks: badgeText(tasksCount) };
-  const tabs = TABS.map((item) => {
+  const tabs = TABS.filter((item) => sectionsOpen || !PROLOGUE_LOCKED.includes(item.id as ScreenId)).map((item) => {
     const badge = badges[item.id];
     return badge === undefined ? item : { ...item, badge };
   });
@@ -147,7 +154,7 @@ export function App(): ReactNode {
             <ScreenBoundary key={screen}>
               <Suspense fallback={<ScreenFallback />}>
                 <ScreenTransition screenKey={screen} motion={motion}>
-                  {renderScreen(screen)}
+                  {renderScreen(sectionsOpen || !PROLOGUE_LOCKED.includes(screen) ? screen : "lobby")}
                 </ScreenTransition>
               </Suspense>
             </ScreenBoundary>
@@ -261,6 +268,9 @@ const TABS: readonly TabItem[] = [
   { id: "rating", label: t("tab.rating"), icon: <Trophy size={22} /> },
   { id: "friends", label: t("tab.friends"), icon: <Users size={22} /> },
 ];
+
+/** Разделы, закрытые до победы в прологе: сервер отвечает на них 409 `prologue_required` (T-0279). */
+const PROLOGUE_LOCKED: readonly ScreenId[] = ["tasks", "daily"];
 
 function renderScreen(screen: ScreenId): ReactNode {
   switch (screen) {
@@ -384,20 +394,19 @@ function usePlatformButtons(stack: readonly ScreenId[], screen: ScreenId): void 
  *
  * Новичок, которого высадили в лобби, видит витрину из карточек и не видит
  * игры: интерес держится на первом бою, а не на меню. Поэтому после согласия
- * забег начинается сам — на «Лёгкой», со стартовым оружием и подсказками
- * первого забега. Выйти из него можно тем же способом, что из любого другого.
+ * забег начинается сам — пролог, без листа «Перед забегом», с подсказками по
+ * событию (state/prologue.ts). Выйти из него можно тем же способом, что из
+ * любого другого.
  */
 async function acceptAndPlay(): Promise<void> {
   useInstall.getState().accept();
-  // Согласие — на устройстве, а аккаунт мог уже играть на другом: тогда
-  // учебного забега нет, игрок остаётся в лобби (state/first-run.ts).
-  if (await playedBefore()) {
+  // Согласие — на устройстве, а аккаунт мог уже пройти пролог на другом: тогда
+  // пролога нет, игрок остаётся в лобби.
+  if (!(await resolvePrologue())) {
     skipFirstRunHints();
     return;
   }
-  // Первый забег — на «Лёгкой»: она и задумана как баланс без поправок.
-  useMeta.getState().rememberDifficulty("easy");
-  useRun.getState().intend({ kind: "new" });
+  useRun.getState().intend({ kind: "new", mode: "prologue" });
   useNavigation.getState().push("run");
 }
 

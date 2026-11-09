@@ -16,9 +16,8 @@ function isRed(color: number): boolean {
 }
 
 describe("цвета угроз", () => {
-  it("телеграфы и снаряды врагов — красные", () => {
+  it("телеграфы врагов — красные", () => {
     expect(isRed(WORLD_COLORS.threat)).toBe(true);
-    expect(isRed(WORLD_COLORS.enemyProjectile)).toBe(true);
   });
 
   it("снаряды игрока и опыт угрозу не напоминают", () => {

@@ -34,7 +34,7 @@ import { HELP } from "../../ui/help";
 import { ImageField } from "../../ui/image-field";
 import { PhonePreview } from "../../ui/phone-preview";
 import { applyOrder } from "../../ui/sortable-order";
-import { Badge, Button, DataTable, ErrorNotice, Field, Help, Input, Loading, Notice, Panel, Select } from "../../ui/kit";
+import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Help, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
@@ -259,27 +259,28 @@ function HomeSlides({ catalog, reload }: { catalog: SlideCatalog; reload: () => 
             </div>
           </fieldset>
 
-          <div className="flex flex-wrap items-end gap-3">
+          <FieldRow>
             <Field label="Начало" help={HELP.home.term} hint={editing === null ? "пусто — сразу" : undefined}>
               <Input type="datetime-local" value={draft.startsAt} onChange={(event) => set({ startsAt: event.target.value })} />
             </Field>
             <Field label="Конец" hint={`не дольше ${String(limits.maxDays)} дней`}>
               <Input type="datetime-local" value={draft.endsAt} onChange={(event) => set({ endsAt: event.target.value })} />
             </Field>
-            <label className="flex items-center gap-1.5 pb-2 text-sm">
-              <input type="checkbox" checked={draft.pinned} onChange={(event) => set({ pinned: event.target.checked })} />
-              Первым в карусели
-              <Help text={HELP.home.pinned} />
-            </label>
-          </div>
+            <RowItem>
+              <label className="flex items-center gap-1.5 text-sm">
+                <input type="checkbox" checked={draft.pinned} onChange={(event) => set({ pinned: event.target.checked })} />
+                Первым в карусели
+                <Help text={HELP.home.pinned} />
+              </label>
+            </RowItem>
+          </FieldRow>
 
           <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending}>
+            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
               {editing === null ? "Завести" : "Сохранить"}
             </Button>
             {editing === null ? null : <Button onClick={reset}>Отмена</Button>}
           </div>
-          {problem === null || (draft.title === "" && editing === null) ? null : <Notice tone="info">{problem}</Notice>}
         </form>
           {/* Слайд так, как его увидит игрок: тот же компонент в странице клиента (Р83). */}
           <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">

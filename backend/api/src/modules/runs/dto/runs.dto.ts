@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ELEMENT_KEYS } from "../run-counters.js";
-import { DIFFICULTIES } from "../run-rules.js";
+import { DIFFICULTIES, RUN_MODES } from "../run-rules.js";
 
 /**
  * Тела запросов забегов (docs/34-stage3-plan.md, WP4). Границы здесь — форма
@@ -15,6 +15,8 @@ const weaponId = z.string().min(1).max(64);
 export const runStartSchema = z.object({
   runId,
   difficultyId: z.enum(DIFFICULTIES),
+  // Нет поля — сборка до пролога: бесконечный забег (T-0279).
+  mode: z.enum(RUN_MODES).optional(),
   startingWeaponId: weaponId,
   contentHash: z.string().max(32),
   // Сколько секунд забега прошло к отправке: сообщение могло пролежать в
@@ -46,11 +48,32 @@ const signedLoadoutSchema = z.object({
   signature: z.string().min(1).max(128),
 });
 
+/**
+ * Рубеж в итоге (T-0121): форма `RunRubezh` из `shared-types`. Границы — от
+ * битых данных; правдоподобие победы по времени решает вердикт.
+ */
+const rubezhSchema = z.object({
+  reached: z.boolean(),
+  clearedSec: z.number().int().min(0).max(86_400).nullable(),
+  guardHpPercent: z.number().int().min(0).max(100).nullable(),
+});
+
+/**
+ * Пролог в итоге (T-0278, `RunPrologue` из `shared-types`): победа и секунда.
+ * Границы — от битых данных; победой это делает вердикт, а не флаг.
+ */
+const prologueSchema = z.object({
+  won: z.boolean(),
+  sec: z.number().min(0).max(86_400),
+});
+
 /** Итог забега. */
 export const runFinishSchema = z
   .object({
     runId,
     difficultyId: z.enum(DIFFICULTIES),
+    // Нет поля — сборка до пролога: бесконечный забег (T-0279).
+    mode: z.enum(RUN_MODES).optional(),
     outcome: z.enum(["died", "abandoned"]),
     survivalSec: z.number().min(0).max(86_400),
     level: z.number().int().min(1).max(999),
@@ -76,6 +99,10 @@ export const runFinishSchema = z
     // Подробности для листа забега в профиле (docs/35-stage4-plan.md, WP4):
     // на вердикт не влияют. Сборки до листа их не шлют.
     passives: z.array(z.object({ id: weaponId, level: z.number().int().min(1).max(99) })).max(16).default([]),
+    // Нет поля — сборка до рубежа; победа в такой сборке невозможна.
+    rubezh: rubezhSchema.optional(),
+    // Есть только у забега в режиме пролога; победа приходит как `abandoned` с этим итогом.
+    prologue: prologueSchema.optional(),
     stats: z
       .object({
         damageTaken: z.number().min(0).max(1e12),
@@ -92,6 +119,20 @@ export const runFinishSchema = z
         noHitSec: z.number().int().min(0).max(86_400).optional(),
         noKillSec: z.number().int().min(0).max(86_400).optional(),
         killsByElement: z.partialRecord(z.enum(ELEMENT_KEYS), z.number().int().min(0).max(1_000_000)).optional(),
+        // Журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): потолки формы, старые сборки полей не шлют.
+        huntLog: z
+          .array(
+            z.object({
+              rank: z.enum(["elite", "boss"]),
+              value: z.number().min(0).max(10_000),
+              aliveSec: z.number().min(0).max(7_200),
+            }),
+          )
+          .max(64)
+          .optional(),
+        buildScore: z.number().min(0).max(64).optional(),
+        // Сила игрока на старте (очки подстройки): по ней сервер берёт полосу ожидаемого. Потолок формы; нет поля — полоса средняя.
+        power: z.number().min(0).max(1_000).optional(),
       })
       .optional(),
   })

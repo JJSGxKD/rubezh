@@ -1,14 +1,21 @@
-import type { DifficultyId } from "@bh/shared-types";
+import type { DifficultyId, RunHuntEntry, RunLoadout, RunRubezh } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../../content/difficulty";
+import { RUBEZH } from "../../content/rubezh";
 import { CONTENT_SNAPSHOT, type ContentSnapshot } from "../../content/snapshot";
+import { buildScore } from "../run/hunt-log";
+import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
-import { unlocksAt, weaponsOpenAt } from "../progression/unlocks";
+import { cardToolsAt, unlocksAt, weaponsOpenAt } from "../progression/unlocks";
 import { createTimelineDirector } from "../sim/director";
+import { buildScoreOf } from "../sim/player-power";
+import { isPressureActive } from "../sim/pressure";
+import { describeRubezh } from "../sim/rubezh";
 import { stepWorld } from "../sim/step";
 import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
 import { createWorld, TICK_SEC } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 import { isBuildComplete } from "./build-complete";
+import { createStrongBot, type StrongStance } from "./strong-bot";
 
 /**
  * Прогон забега ботом на боевом контенте — вход калибровки баланса
@@ -38,6 +45,19 @@ export interface BalanceRunOptions {
    * заданы коридоры калибровки.
    */
   accountLevel?: number;
+  /**
+   * Набор забега — снаряжение, бусты, уровень аккаунта и класс устройства
+   * (профили силы калибровки, `POWER_PROFILES`). Уровень аккаунта набора
+   * открывает оружие и навыки вместо `accountLevel` и включает подстройку под
+   * силу. Без набора бот идёт ровно как раньше.
+   */
+  loadout?: RunLoadout;
+  /**
+   * Подстройка под силу (Р131): по умолчанию включена, но работает, только если
+   * у набора есть уровень аккаунта. `false` — строка «без подстройки»: набор
+   * по-прежнему действует, а давление остаётся единой сложностью.
+   */
+  pressure?: boolean;
   maxSec?: number;
   /**
    * Зонд давления: игрок почти неуязвим, и бот идёт до `maxSec`, а не до
@@ -53,6 +73,11 @@ export interface BalanceRunOptions {
   godMode?: boolean;
   /** прогон кончается, когда набор собран; `buildCompleteSec` — эта секунда */
   stopOnBuild?: boolean;
+  /**
+   * Стойка сильного бота (`skill: "strong"`): бегает всегда или стоит с 180-й
+   * секунды. Для остальных ботов не читается; по умолчанию — «бегает».
+   */
+  stance?: StrongStance;
   /** параметры уклоняющегося бота для замера по сетке; не заданы — `DODGING_BOT_DEFAULTS` */
   bot?: Partial<DodgingBotOptions>;
   /**
@@ -86,16 +111,38 @@ export interface BalanceRunResult {
   buildCompleteSec: number;
   /** сколько выборов уровня сделано к секунде сборки, а без сборки — за весь прогон */
   buildPicks: number;
+  /**
+   * рубеж: пришёл ли страж и взят ли он — доли забегов бота в коридорах калибровки.
+   * Прогон отдаёт его всегда; необязательное, чтобы фикстуры воркера не знали о рубеже
+   */
+  rubezh?: RunRubezh;
   /** забег упёрся в аварийный потолок, а не кончился смертью или сборкой набора */
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
   damageTakenByMinute: number[];
+  /** сила игрока в очках на старте; 0 — подстройки не было */
+  startPower: number;
+  /** уровень давления на старте; 1 — подстройки не было */
+  startPressure: number;
+  /** уровень давления на последнем пересчёте; 1 — подстройки не было */
+  endPressure: number;
+  /** доля собранного набора (`buildScoreOf`) на каждой полной минуте — вход расписания сборки */
+  buildScoreByMinute: number[];
+  /** убийств с начала забега на каждой полной минуте — вход таблицы ожидаемого (T-0291) */
+  killsByMinute: number[];
+  /** сколько записей журнала охоты было на каждой полной минуте: срез `huntLog` до минуты */
+  huntLogCountByMinute: number[];
+  /** оценка сборки итога (`buildScore` из журнала охоты, не доля `buildScoreOf`) на каждой полной минуте */
+  buildPointsByMinute: number[];
+  /** журнал охоты за весь прогон: убитые элиты и боссы с ценностью и временем жизни */
+  huntLog: RunHuntEntry[];
 }
 
 export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult {
   const content = options.content ?? CONTENT_SNAPSHOT;
   const difficulty = content.difficulties.find((level) => level.id === (options.difficultyId ?? DEFAULT_DIFFICULTY_ID));
-  const open = options.accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, options.accountLevel);
+  const accountLevel = options.loadout?.accountLevel ?? options.accountLevel;
+  const open = accountLevel === undefined ? null : unlocksAt(content.accountUnlocks, accountLevel);
   const world = createWorld({
     seed: options.seed,
     enemies: content.enemies,
@@ -107,6 +154,15 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     drops: content.drops,
     chests: content.chests,
     secrets: content.secrets,
+    ...(options.pressure === false ? {} : { pressure: content.pressure }),
+    boosts: content.boosts,
+    maxBoostsPerRun: content.maxBoostsPerRun,
+    ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
+    // Переброс и изгнание даёт уровень аккаунта, как в забеге (`run-world.ts`); пользуется ими
+    // только сильный бот, остальные боты заряды не тратят, и их забеги от этого не меняются.
+    ...(accountLevel === undefined ? {} : { cardTools: cardToolsAt(content.cardToolUnlocks, accountLevel) }),
+    rubezh: RUBEZH,
+    limits: content.limits,
     timeline: content.timeline,
     endlessCurve: content.endlessCurve,
     map: content.maps[0],
@@ -122,10 +178,14 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   });
   if (options.godMode === true) world.cheats.godMode = true;
   const director = createTimelineDirector(content.timeline, content.endlessCurve);
-  const bot = createBot(options.skill, options.bot);
+  const bot = options.skill === "strong" ? createStrongBot({ stance: options.stance ?? "kite" }) : createBot(options.skill, options.bot);
   const maxTicks = Math.round((options.maxSec ?? DEFAULT_MAX_SEC) / TICK_SEC);
 
   const damageTakenByMinute: number[] = [];
+  const buildScoreByMinute: number[] = [];
+  const killsByMinute: number[] = [];
+  const huntLogCountByMinute: number[] = [];
+  const buildPointsByMinute: number[] = [];
   let damageAtMinuteStart = 0;
   let firstLevelUpSec = 0;
   let buildCompleteSec = 0;
@@ -137,8 +197,19 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     // вхолостую до конца прогона.
     if (isAwaitingChoice(world)) {
       if (firstLevelUpSec === 0) firstLevelUpSec = world.stats.elapsedSec;
-      chooseUpgrade(world, bot.choose(world.progression.offers));
-      picks++;
+      const choice = bot.choose(world.progression.offers, world);
+      // Переброс и изгнание выбора не закрывают: мир ждёт дальше, а заряды конечны.
+      if (isCardToolCommand(choice) && applyCardTool(world, choice) !== null) {
+        continue;
+      }
+      if (isCardToolCommand(choice)) {
+        // Команда не сработала (заряда нет): первая карточка, иначе мир ждал бы вечно.
+        chooseUpgrade(world, world.progression.offers[0].id);
+        picks++;
+      } else {
+        chooseUpgrade(world, choice);
+        picks++;
+      }
       continue;
     }
 
@@ -160,9 +231,14 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     if (Math.floor(world.stats.elapsedSec / 60) > damageTakenByMinute.length) {
       damageTakenByMinute.push(world.stats.damageTaken - damageAtMinuteStart);
       damageAtMinuteStart = world.stats.damageTaken;
+      buildScoreByMinute.push(buildScoreOf(world));
+      killsByMinute.push(world.stats.enemiesKilled);
+      huntLogCountByMinute.push(world.hunt.log.length);
+      buildPointsByMinute.push(buildScore(world));
     }
   }
 
+  const pressured = isPressureActive(world);
   return {
     seed: options.seed,
     skill: options.skill,
@@ -179,8 +255,17 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     evolutions: world.loadout.weapons.filter((slot) => world.weaponTypes[slot.typeIndex]?.evolvedFrom !== undefined).length,
     buildCompleteSec,
     buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
+    rubezh: describeRubezh(world),
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
+    startPower: pressured ? world.difficulty.startPower : 0,
+    startPressure: pressured ? world.difficulty.startPressure : 1,
+    endPressure: pressured ? world.difficulty.pressureLevel : 1,
+    buildScoreByMinute,
+    killsByMinute,
+    huntLogCountByMinute,
+    buildPointsByMinute,
+    huntLog: world.hunt.log.map((entry) => ({ ...entry })),
   };
 }
 

@@ -102,7 +102,7 @@ describe("бесконечный мир", () => {
 
   it("не тащит за игроком снаряды и кристаллы, оставшиеся далеко позади", () => {
     const world = makeWorld(OPEN_MAP, { progressionEnabled: true });
-    spawnProjectile(world, 0, 0, 0, 0, 5, 999, true);
+    spawnProjectile(world, 0, 0, 0, 0, 5, 999);
     spawnGem(world, 0, 0, 3);
     expect(world.projectiles.aliveCount).toBe(1);
     expect(world.gems.aliveCount).toBe(1);

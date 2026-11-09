@@ -31,7 +31,8 @@ export interface ReviewCardAccount {
   username: string | null;
 }
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
+/** Сложность одна (Р126): `hard` — основной забег, `easy` — обучающий, `normal` приходит только от старых клиентов. */
+const DIFFICULTY_LABELS: Record<Difficulty, string> = { easy: "Обучающий", normal: "Прежняя нормальная", hard: "Основной" };
 
 const VERDICT_LABELS: Record<ReviewCardRun["verdict"], string> = {
   suspicious: "подозрительный",
@@ -52,6 +53,8 @@ const REASON_LABELS: Record<VerdictReason, string> = {
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
   counters_implausible: "счётчики забега не сходятся с ходом боя",
+  rubezh_implausible: "победа над стражем рубежа невозможна по времени",
+  axis_out_of_range: "индекс оси очков эффективности выше допустимого",
 };
 
 /** Сколько знаков id аккаунта показывать: хватает найти его, не загромождая строку. */

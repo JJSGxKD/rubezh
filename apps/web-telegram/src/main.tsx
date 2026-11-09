@@ -66,6 +66,7 @@ void mountAppShell({
     // (docs/33-telegram-mini-app-pitfalls.md §2.3).
     minPlatformVersion: "7.7",
     devStartScreen: devUrl.screen ?? undefined,
+    ...(devUrl.fx === null ? {} : { devFxScene: { id: devUrl.fx, ground: devUrl.ground } }),
   },
   analytics: createAnalytics(),
 }).then(() => loadGraspil((import.meta.env.VITE_GRASPIL_KEY ?? "").trim()));

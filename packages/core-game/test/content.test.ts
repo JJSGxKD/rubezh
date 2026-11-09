@@ -1,10 +1,11 @@
 import {
   type EnemyDef,
   type PassiveDef,
+  type PressureDef,
   type WeaponDef,
 } from "@bh/shared-types";
 import { BALANCE_TARGETS } from "../src/content/balance-targets";
-import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES } from "../src/content/difficulty";
+import { DEFAULT_DIFFICULTY_ID, DIFFICULTIES, findDifficulty } from "../src/content/difficulty";
 import { findDifficultyContentProblems } from "../src/game/sim/difficulty";
 import { findStageProblems } from "../src/game/sim/stages";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
@@ -16,13 +17,16 @@ import { findContentProblems } from "../src/game/content-problems";
 import { ENEMY_STAGES } from "../src/content/stages";
 import { MAPS } from "../src/content/maps";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { BASE_WEAPONS, WEAPONS } from "../src/content/weapons";
 import { findEnemyContentProblems, IMPLEMENTED_PATTERNS, PATTERN_TRAITS } from "../src/game/patterns";
 import { findChestsProblems } from "../src/game/sim/chests";
+import { findPressureProblems } from "../src/game/sim/pressure";
+import { PRESSURE } from "../src/content/pressure";
 import { MAX_PICKUPS_OF_KIND } from "../src/game/sim/pickups";
 import { findLevelCurveProblems, xpForLevel } from "../src/game/progression/levels";
+import { findLimitProblems } from "../src/game/progression/limit";
 import { findPassiveContentProblems } from "../src/game/progression/passives";
 import { findUnlockProblems, unlockLevelOf, unlocksAt } from "../src/game/progression/unlocks";
 import { findWeaponContentProblems, IMPLEMENTED_WEAPON_BEHAVIORS } from "../src/game/weapons";
@@ -282,7 +286,7 @@ describe("контент стража кольца и колец в таймла
     expect(guard).toBeDefined();
     expect(guard?.pattern).toBe("cordon");
     expect(guard?.rank).toBeUndefined();
-    expect(guard?.hp).toBeGreaterThanOrEqual(60);
+    expect(guard?.hp).toBeGreaterThanOrEqual(240);
     expect(guard?.speed).toBeLessThanOrEqual(40);
     expect(guard?.element).toBeUndefined();
     expect(guard?.resist).toBeUndefined();
@@ -333,14 +337,72 @@ describe("контент стража кольца и колец в таймла
   });
 });
 
+describe("контент Тарана", () => {
+  const ram = ENEMIES.find((enemy) => enemy.id === "boss_ram");
+
+  it("Таран описан по таблице задачи и стоит в массиве перед стражем рубежа", () => {
+    expect(ram).toBeDefined();
+    // Страж рубежа (T-0120) дописан в конец: индексы прежних типов не сдвинулись.
+    expect(ENEMIES[ENEMIES.length - 2].id).toBe("boss_ram");
+    expect(ENEMIES[ENEMIES.length - 1].id).toBe("rubezh_guard");
+    expect(ram).toMatchObject({
+      rank: "boss",
+      pattern: "dash",
+      hp: 1000,
+      speed: 58,
+      damage: 26,
+      xp: 90,
+      threat: 250,
+      params: { triggerDistance: 300, telegraphSec: 0.9, dashSpeed: 520, dashDurationSec: 0.8, recoverSec: 1.8 },
+      resist: { cold: 0.4, lightning: -0.4 },
+    });
+    expect(ram?.element).toBeUndefined();
+  });
+
+  it("у Тарана нет снарядов", () => {
+    const params = (ram?.params ?? {}) as Record<string, unknown>;
+    expect(params).not.toHaveProperty("projectileSpeed");
+    expect(params).not.toHaveProperty("shotIntervalSec");
+    expect(findEnemyContentProblems(ENEMIES)).toEqual([]);
+  });
+
+  it("босс не слабее порога стража рубежа", () => {
+    // T-0120: страж рубежа (1400) не меньше 1,3 × здоровья любого босса.
+    expect(ram?.hp).toBeLessThanOrEqual(1076);
+  });
+});
+
 describe("боссы бесконечного режима", () => {
-  it("в кривой один вид босса — Матрёшка, два ритма: раз в пять отрезков и раз в восемь", () => {
+  it("в кривой два вида босса и они чередуются: Матрёшка раз в пять отрезков, Таран раз в восемь", () => {
     const bosses = new Set(ENEMIES.filter((enemy) => enemy.rank === "boss").map((enemy) => enemy.id));
     const onCurve = ENDLESS_CURVE.events.filter((event) => bosses.has(event.enemy));
     expect(onCurve).toEqual([
       { everySegments: 5, kind: "ring", enemy: "boss_matryoshka", count: 1 },
-      { everySegments: 8, kind: "ring", enemy: "boss_matryoshka", count: 1 },
+      { everySegments: 8, kind: "ring", enemy: "boss_ram", count: 1 },
     ]);
+    // Секунда срабатывания: (step + 1) % everySegments === 0 на fromSec + step * segmentSec.
+    const fired: { sec: number; enemy: string }[] = [];
+    for (let step = 0; step < 40; step++) {
+      const sec = ENDLESS_CURVE.fromSec + step * ENDLESS_CURVE.segmentSec;
+      if (sec < 480 || sec >= 1320) continue;
+      for (const event of onCurve) {
+        if ((step + 1) % event.everySegments === 0) fired.push({ sec, enemy: event.enemy });
+      }
+    }
+    fired.sort((a, b) => a.sec - b.sec);
+    // Формула кривой не меняется: событие на 570 с сдвигает к 690 с таймлайн мира с рубежом
+    // (`sim/timeline.ts`, T-0120, Р126) — это проверяет `rubezh.test.ts`.
+    expect(fired).toEqual([
+      { sec: 570, enemy: "boss_matryoshka" },
+      { sec: 750, enemy: "boss_ram" },
+      { sec: 870, enemy: "boss_matryoshka" },
+      { sec: 1170, enemy: "boss_matryoshka" },
+      { sec: 1230, enemy: "boss_ram" },
+    ]);
+    for (const segment of TIMELINE) {
+      for (const spawn of segment.spawns) expect(spawn.enemy).not.toBe("boss_ram");
+      for (const event of segment.events ?? []) expect(event.enemy).not.toBe("boss_ram");
+    }
   });
 
   it("смесь и стартовый набор кривой помещаются в пул из девяти врагов", () => {
@@ -949,5 +1011,113 @@ describe("поздние сундуки скромнее", () => {
     if (CHESTS.late === undefined) return;
     expect(mean(CHESTS.late.sizes)).toBeLessThan(mean(CHESTS.sizes));
     expect(CHESTS.late.afterSec).toBeGreaterThan(0);
+  });
+});
+
+describe("контент «Предела»", () => {
+  it("записи проходят проверку: шаг мал, параметр известен, id не повторяются", () => {
+    expect(findLimitProblems(LIMITS)).toEqual([]);
+  });
+
+  it("записей семь, а ключи текстов называются по id", () => {
+    expect(LIMITS.map((def) => def.id).sort()).toEqual(["area", "cooldown", "damage", "maxHp", "pull", "regen", "speed"]);
+    for (const def of LIMITS) {
+      expect(def.nameKey).toBe(`upgrade.limit.${def.id}.name`);
+      expect(def.descriptionKey).toBe(`upgrade.limit.${def.id}.description`);
+    }
+  });
+});
+
+describe("контент подстройки давления (tasks/T-0195)", () => {
+  /** Копия боевого контента с правкой: каждая проверка ловится по отдельности. */
+  type Patch = (def: PressureDef) => void;
+  const broken = (patch: Patch): string[] => {
+    const copy = JSON.parse(JSON.stringify(PRESSURE)) as PressureDef;
+    patch(copy);
+    return findPressureProblems(copy);
+  };
+
+  it("боевой контент проходит проверку без замечаний", () => {
+    expect(findPressureProblems(PRESSURE)).toEqual([]);
+  });
+
+  it("ловит неположительные reference, spanUp и spanDown и называет поле", () => {
+    expect(broken((def) => (def.reference = 0)).join("\n")).toContain("reference");
+    expect(broken((def) => (def.spanUp = 0)).join("\n")).toContain("spanUp");
+    expect(broken((def) => (def.spanDown = -1)).join("\n")).toContain("spanDown");
+  });
+
+  it("ловит пределы, не охватывающие единицу, и неположительный нижний предел", () => {
+    expect(broken((def) => (def.minLevel = 1.2)).join("\n")).toContain("minLevel");
+    expect(broken((def) => (def.maxLevel = 0.9)).join("\n")).toContain("maxLevel");
+    expect(broken((def) => (def.minLevel = 0)).join("\n")).toContain("minLevel");
+  });
+
+  it("ловит отрицательный наклон рычага", () => {
+    expect(broken((def) => (def.levers.down.hp = -0.1)).join("\n")).toContain("levers.down.hp");
+    expect(broken((def) => (def.levers.up.spawn = -0.1)).join("\n")).toContain("levers.up.spawn");
+  });
+
+  it("ловит рычаг, который на предельном уровне оставляет множитель не выше 0,25", () => {
+    // 1 + 4 × (0,75 − 1) = 0: здоровье новичка обнулилось бы.
+    expect(broken((def) => (def.levers.down.hp = 4)).join("\n")).toContain("levers.down.hp");
+  });
+
+  it("ловит вес снаряжения для неизвестного параметра и отрицательный вес", () => {
+    expect(broken((def) => Object.assign(def.power.gear, { luck: 1 })).join("\n")).toContain("luck");
+    expect(broken((def) => (def.power.gear.damage = -1)).join("\n")).toContain("power.gear.damage");
+  });
+
+  it("ловит расписание сборки: пустое, не с нуля, неубывающее по секундам и убывающее по долям", () => {
+    expect(broken((def) => (def.power.buildSchedule = [])).join("\n")).toContain("buildSchedule");
+    expect(broken((def) => (def.power.buildSchedule = [[10, 0], [20, 1]])).join("\n")).toContain("buildSchedule");
+    expect(broken((def) => (def.power.buildSchedule = [[0, 0], [20, 0.5], [20, 0.6]])).join("\n")).toContain("buildSchedule");
+    expect(broken((def) => (def.power.buildSchedule = [[0, 0.5], [20, 0.4]])).join("\n")).toContain("buildSchedule");
+    expect(broken((def) => (def.power.buildSchedule = [[0, 0], [20, 1.5]])).join("\n")).toContain("buildSchedule");
+  });
+
+  it("ловит отрицательный потолок помощи отстающему", () => {
+    expect(broken((def) => (def.power.buildCap = -1)).join("\n")).toContain("buildCap");
+  });
+
+  it("ловит не целый и перевёрнутый предел сдвига событий", () => {
+    expect(broken((def) => (def.leads.elite = { min: -1.5, max: 1 })).join("\n")).toContain("leads.elite");
+    expect(broken((def) => (def.leads.boss = { min: 1, max: 0 })).join("\n")).toContain("leads.boss");
+  });
+
+  it("ловит потолки устройств: слабое выше обычного или ниже шестидесяти", () => {
+    expect(broken((def) => (def.devices.caps.light = def.devices.caps.standard + 1)).join("\n")).toContain("devices.caps.light");
+    expect(broken((def) => (def.devices.caps.light = 59)).join("\n")).toContain("devices.caps.light");
+  });
+
+  it("ловит добор слабого устройства: maxShortfall меньше единицы и отрицательные добавки", () => {
+    expect(broken((def) => (def.devices.maxShortfall = 0.9)).join("\n")).toContain("devices.maxShortfall");
+    expect(broken((def) => (def.devices.hpComp = -0.1)).join("\n")).toContain("devices.hpComp");
+    expect(broken((def) => (def.devices.damageComp = -0.1)).join("\n")).toContain("devices.damageComp");
+    expect(broken((def) => (def.devices.compensateFromSec = -1)).join("\n")).toContain("devices.compensateFromSec");
+  });
+
+  it("держит потолки Р183: подстройка не делает из врага губку для сильного игрока", () => {
+    const span = PRESSURE.maxLevel - 1;
+    const hp = broken((def) => (def.levers.up.hp = 0.11 / span)).join("\n");
+    expect(hp).toContain("levers.up.hp");
+    expect(hp).toContain("губк");
+    const damage = broken((def) => (def.levers.up.damage = 0.16 / span)).join("\n");
+    expect(damage).toContain("levers.up.damage");
+    expect(damage).toContain("губк");
+    expect(PRESSURE.levers.up.hp * span).toBeLessThanOrEqual(0.1);
+    expect(PRESSURE.levers.up.damage * span).toBeLessThanOrEqual(0.15);
+  });
+
+  it("запрещает сдвиг ступеней вверх: поле stageShiftSec в levers.up — ошибка", () => {
+    expect(broken((def) => Object.assign(def.levers.up, { stageShiftSec: 60 })).join("\n")).toContain("levers.up.stageShiftSec");
+  });
+
+  it("потолок обычного устройства не режет «Сложную» на опорной силе и помещается в пул", () => {
+    const hard = findDifficulty("hard");
+    if (hard === undefined) throw new Error("нет сложности hard");
+    expect(PRESSURE.devices.caps.standard).toBeGreaterThanOrEqual(Math.round(ENDLESS_CURVE.maxAlive * hard.maxAliveMul));
+    expect(PRESSURE.devices.caps.standard).toBeLessThanOrEqual(DEFAULT_SIM_CONFIG.maxEnemies);
+    expect(PRESSURE.devices.caps.light).toBeLessThan(PRESSURE.devices.caps.standard);
   });
 });

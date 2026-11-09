@@ -157,6 +157,15 @@ const passiveSchema = z.strictObject({
 
 const loadoutModifiers = z.partialRecord(z.enum(LOADOUT_STATS), num);
 
+const limitSchema = z.strictObject({
+  id: text,
+  nameKey: text,
+  descriptionKey: text,
+  stat: z.enum(LOADOUT_STATS),
+  step: num,
+  weight: num.optional(),
+});
+
 const categoryCounts = z.strictObject({ attack: count, defense: count, mobility: count });
 
 const unlockSchema = z.strictObject({
@@ -171,7 +180,14 @@ const unlockSchema = z.strictObject({
     .optional(),
 });
 
-const ringSchema = z.strictObject({ radius: num, minRadius: num, shrinkPerSec: num, lifeSec: num });
+const innerSchema = z.strictObject({ enemy: text, count: num, fromSec: nonNegative.optional() });
+const ringSchema = z.strictObject({
+  radius: num,
+  minRadius: num,
+  shrinkPerSec: num,
+  lifeSec: num,
+  inner: z.array(innerSchema).optional(),
+});
 const eventKind = z.enum(["ring", "flank", "cordon"]);
 
 const segmentSchema = z.strictObject({
@@ -281,6 +297,38 @@ const boostSchema = z.strictObject({
   cardTools: z.strictObject(cardTools).optional(),
 });
 
+// Подстройка давления: форма — здесь, пределы и связи между полями — `findPressureProblems`.
+// Набор `up` без поля сдвига ступеней: вверх ступени не сдвигаются (Р183), и лишнее поле — ошибка схемы.
+const pressureLevers = { hp: num, damage: num, spawn: num, alive: num, leadPerLevel: num };
+const pressureLead = z.strictObject({ min: num, max: num });
+
+const pressureSchema = z.strictObject({
+  power: z.strictObject({
+    slotPoints: num,
+    gear: loadoutModifiers,
+    buildPoints: num,
+    buildCap: num,
+    buildSchedule: z.array(z.tuple([num, num])),
+  }),
+  reference: num,
+  spanUp: num,
+  spanDown: num,
+  minLevel: num,
+  maxLevel: num,
+  levers: z.strictObject({
+    down: z.strictObject({ ...pressureLevers, stageShiftSec: num }),
+    up: z.strictObject(pressureLevers),
+  }),
+  leads: z.strictObject({ elite: pressureLead, boss: pressureLead }),
+  devices: z.strictObject({
+    caps: z.strictObject({ standard: num, light: num }),
+    compensateFromSec: num,
+    hpComp: num,
+    damageComp: num,
+    maxShortfall: num,
+  }),
+});
+
 const balanceTargetsSchema = z.strictObject({
   passiveDeathBeforeSec: positive,
   dodgingMedianSec: range,
@@ -295,6 +343,12 @@ const balanceTargetsSchema = z.strictObject({
     rankEventsDensityRatioMin: num,
     hardMaxAliveMulMax: num,
   }),
+  // Необязательное: снимок, сохранённый до рубежа (T-0120), коридора не знает.
+  rubezh: z.strictObject({ guardHpMinRatio: num, reachedRatioMax: num, clearedRatioMax: num }).optional(),
+  // Необязательное: снимок, сохранённый до пролога (T-0278), коридоров пролога не знает.
+  prologue: z
+    .strictObject({ seeds: num, winRatioMin: num, endSec: range, guardLifeSec: range, firstChestSec: range })
+    .optional(),
   evolutionPowerRatio: range,
 });
 
@@ -319,6 +373,8 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   maxBoostsPerRun: count,
   cardToolUnlocks: z.array(z.strictObject({ level: z.int().positive(), ...cardTools })),
   cardToolRules: z.strictObject({ skipXpRatio: num }),
+  limits: z.array(limitSchema),
+  pressure: pressureSchema,
   balanceTargets: balanceTargetsSchema,
 });
 

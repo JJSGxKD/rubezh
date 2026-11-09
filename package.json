@@ -9,6 +9,7 @@
   },
   "scripts": {
     "screens": "node scripts/screens/shoot.mjs",
+    "fx:frames": "node scripts/fx/frames.mjs",
     "dev": "pnpm --parallel --filter backend-api --filter web-telegram run dev",
     "dev:all": "pnpm --parallel --filter backend-api --filter \"web-*\" run dev",
     "tunnel": "frpc -c infra/frpc/frpc.local.toml",
@@ -23,7 +24,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "balance:sim": "vitest run --config vitest.balance.config.ts",
+    "balance:sim": "vitest run --config vitest.balance.config.ts --exclude scripts/balance/expected-table.ts",
+    "balance:expected": "vitest run --config vitest.balance.config.ts scripts/balance/expected-table.ts",
     "budget": "node scripts/bundle-budget.mjs",
     "docs:check": "node scripts/docs-check.mjs",
     "content:export": "node scripts/content/run-export.mjs",

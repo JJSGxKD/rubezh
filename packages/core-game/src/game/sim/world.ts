@@ -1,10 +1,13 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LoadoutLimits, LoadoutStat, RunLoadout, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
+import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
 import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
+import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
+import type { RubezhState } from "./rubezh";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -377,6 +380,8 @@ export interface ProgressionState {
   toolsTotal: CardTools;
   /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
   banished: string[];
+  /** сколько раз нажата каждая запись «Предела», в порядке `limitTypes` (`progression/limit.ts`) */
+  limitStacks: number[];
 }
 
 /**
@@ -393,6 +398,22 @@ export interface DifficultyState {
   hpMul: number;
   damageMul: number;
   maxAlive: number;
+  /** сила игрока в очках на последнем пересчёте (подстройка, Р131); без подстройки — 0 */
+  power: number;
+  /** уровень давления на последнем пересчёте; 1 — опорный игрок, без подстройки — 1 */
+  pressureLevel: number;
+  /** сила на старте забега — для аналитики; без подстройки — 0 */
+  startPower: number;
+  /** уровень давления на старте забега; без подстройки — 1 */
+  startPressure: number;
+  /** множитель темпа спавна поверх уровня сложности; без подстройки — 1 */
+  spawnMul: number;
+  /** на сколько секунд раньше открываются ступени врагов (минус — позже); без подстройки — 0 */
+  stageShiftSec: number;
+  /** на сколько отрезков раньше приходят события элит кривой (минус — позже); без подстройки — 0 */
+  eliteLead: number;
+  /** то же для боссов; боссы только вперёд, без подстройки — 0 */
+  bossLead: number;
 }
 
 export interface World {
@@ -412,11 +433,21 @@ export interface World {
   /** правила сундука забега */
   chestRules: ChestsDef;
   chests: ChestState;
+  /** журнал охоты и время появления врагов (`run/hunt-log.ts`, tasks/T-0292) */
+  hunt: HuntState;
+  /** подстройка давления под силу игрока; `null` — подстройки нет, и забег идёт по кривой единой сложности */
+  pressureRules: PressureDef | null;
   /** правила тайников рубежа */
   secretRules: SecretsDef;
   secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
+  /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
+  rubezh: RubezhState;
+  /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
+  mode: RunMode;
+  /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */
+  prologue: PrologueState | null;
   /**
    * Отдельный поток случайности для новых карточек после переброса и
    * изгнания: `world.rng` они не трогают, и забег без зарядов не меняется
@@ -446,6 +477,8 @@ export interface World {
   boosts: RunBoosts;
   /** прибавки снаряжения и бустов вместе — от них считаются характеристики */
   loadoutModifiers: Partial<Record<LoadoutStat, number>>;
+  /** записи «Предела»; неизменны, нажатия — в `progression.limitStacks` */
+  limitTypes: readonly LimitDef[];
   loadout: LoadoutState;
   progression: ProgressionState;
   difficulty: DifficultyState;
@@ -544,10 +577,13 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.hp[slot] = type.hp * world.difficulty.hpMul * stage.hpMul;
   pool.maxHp[slot] = pool.hp[slot];
   pool.damage[slot] = type.damage * world.difficulty.damageMul * stage.damageMul;
+  // Страж пролога слабее обычного; обычному забегу эта строка ничего не стоит.
+  if (world.prologue !== null) onPrologueSpawn(world, typeIndex, slot);
   pool.hitTick[slot] = NEVER_HIT;
   pool.attackCooldown[slot] = 0;
   pool.type[slot] = typeIndex;
   pool.stage[slot] = stageIndex;
+  markSpawn(world, slot);
   pool.alive[slot] = 1;
   // Состояние паттерна сбрасывается целиком: слот мог принадлежать врагу с
   // другим поведением, и его фаза рывка не должна достаться новому врагу.
@@ -617,7 +653,8 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {
-    player.hp -= reduced;
+    // Оберег пролога не даёт здоровью упасть ниже порога; вне пролога это `hp - reduced` как было.
+    player.hp = wardHealth(world, player.hp, player.hp - reduced);
     world.stats.damageTaken += reduced;
   }
   // Рендер обязан показать момент попадания: полоска здоровья в углу — не
@@ -646,7 +683,6 @@ export function spawnProjectile(
   vy: number,
   damage: number,
   ttlSec: number,
-  fromPlayer: boolean,
 ): number {
   const pool = world.projectiles;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxProjectiles);
@@ -660,10 +696,8 @@ export function spawnProjectile(
   pool.vy[slot] = vy;
   pool.damage[slot] = damage;
   pool.ttl[slot] = ttlSec;
-  pool.fromPlayer[slot] = fromPlayer ? 1 : 0;
-  // Владельца и пробивание выставляет стреляющий после спавна; без сброса
+  // Оружие и пробивание выставляет стреляющий после спавна; без сброса
   // снаряд унаследовал бы их от прежнего снаряда в этом слоте.
-  pool.ownerType[slot] = NO_OWNER_TYPE;
   pool.ownerWeapon[slot] = NO_OWNER_TYPE;
   pool.pierce[slot] = 0;
   pool.lastHit[slot] = -1;

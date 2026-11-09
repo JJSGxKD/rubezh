@@ -1,4 +1,4 @@
-import { ELEMENTS, type CardTools, type ChestReward, type DifficultyId, type RunResult, type UpgradeOption } from "@bh/shared-types";
+import { ELEMENTS, type BlessingDef, type CardTools, type ChestReward, type DifficultyId, type RunMode, type RunPressureResult, type RunPressureStart, type RunResult, type UpgradeOption } from "@bh/shared-types";
 import {
   describeEvolution,
   loadRunEngine,
@@ -13,7 +13,9 @@ import {
   type RunSnapshot,
 } from "@bh/core-game";
 import { create } from "zustand";
+import { RATED_DIFFICULTY_ID } from "./difficulty";
 import { devModeAllowed, toRunDev, useDevMode } from "./dev-mode";
+import { deviceClassOf } from "./device";
 import { audio, bossPhaseRaised } from "../audio";
 import { haptic, hapticForCues } from "./haptics";
 import { useDiagnostics } from "./diagnostics";
@@ -23,6 +25,7 @@ import { useRuns } from "./runs";
 import { useSavedRun } from "./run-save";
 import { clearDownedRun, saveDownedRun, takeDownedRun } from "./downed-run";
 import { canOfferContinue } from "./payments-availability";
+import { usePrologue } from "./prologue";
 import { clientErrorCount, reportError, track, useShell } from "./shell";
 
 /**
@@ -36,15 +39,35 @@ import { clientErrorCount, reportError, track, useShell } from "./shell";
 /**
  * `downed` — игрок умер, но второй шанс ещё есть: мир стоит, итог отложен до
  * решения (docs/07-monetization-and-ads.md §8). `chest` — игрок открыл сундук,
- * мир стоит, пока окно с наградами не закроют (tasks/T-0100).
+ * мир стоит, пока окно с наградами не закроют (tasks/T-0100). `blessing` —
+ * игрок отстоял круг капища: мир стоит, пока он не выберет благословение
+ * (tasks/T-0260).
  */
-export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "chest" | "downed" | "finished" | "error";
+export type RunPhase = "idle" | "loading" | "running" | "paused" | "levelUp" | "chest" | "blessing" | "downed" | "finished" | "error";
+
+/** Предложение капища: из чего выбирать — пока фаза `blessing`. */
+export interface OfferedBlessings {
+  /** номер тайника в раскладке мира */
+  index: number;
+  options: BlessingDef[];
+}
 
 /** Открытый сундук: что вынул игрок, награды уже выданы движком. */
 export interface OpenedChest {
   index: number;
   size: number;
   rewards: ChestReward[];
+}
+
+/**
+ * Сообщение рубежа для баннера (tasks/T-0124): страж пришёл или пал. `seq`
+ * растёт с каждым сообщением — по нему баннер отличает новое сообщение от
+ * повторной отрисовки старого и не склеивает два подряд. Пролог (T-0280)
+ * кормит баннер тем же видом.
+ */
+export interface RubezhNotice {
+  kind: "spawned" | "cleared";
+  seq: number;
 }
 
 /**
@@ -63,7 +86,7 @@ export type ContinueSource = "dev" | "premium" | "gems" | "ad" | "pass";
  * сохранённый. Намерение нужно именно потому, что экран монтируется и сам —
  * и тогда его нет вовсе (docs/27-design-system-and-app-shell.md §7).
  */
-export type RunIntent = { kind: "new"; boosts?: BoughtBoosts } | { kind: "resume"; snapshot: RunSnapshot };
+export type RunIntent = { kind: "new"; boosts?: BoughtBoosts; mode?: RunMode } | { kind: "resume"; snapshot: RunSnapshot };
 
 /**
  * Бусты, купленные на новый забег до «В бой» (docs/35-stage4-plan.md §3.5):
@@ -90,6 +113,8 @@ export interface RunStartOptions {
   startingWeaponId: string;
   mapId: string;
   difficultyId: DifficultyId;
+  /** режим нового забега: пролог первого забега аккаунта или бесконечный (T-0280); нет поля — бесконечный */
+  mode?: RunMode;
   /** плотность экрана; стенд испытаний фиксирует её ради сравнимости замеров */
   pixelRatio?: number;
   /** продолжить сохранённый забег вместо нового */
@@ -109,6 +134,8 @@ const AUTOSAVE_SEC = 15;
 
 export interface RunStore {
   phase: RunPhase;
+  /** режим идущего забега: у пролога свои подсказки, начало, выход и окно победы */
+  mode: RunMode;
   loadingStage: RunLoadingStage | null;
   hud: HudSnapshot | null;
   offers: UpgradeOption[];
@@ -122,6 +149,10 @@ export interface RunStore {
   canReroll: boolean;
   /** открытый сундук — пока фаза `chest` */
   chest: OpenedChest | null;
+  /** последнее сообщение рубежа для баннера; `null` — в этом забеге рубеж ещё не заговорил */
+  rubezhNotice: RubezhNotice | null;
+  /** предложенные благословения — пока фаза `blessing` */
+  blessing: OfferedBlessings | null;
   level: number;
   result: RunResult | null;
   isNewRecord: boolean;
@@ -151,6 +182,8 @@ export interface RunStore {
   declineContinue(): void;
   /** Забрать награды сундука и закрыть окно: забег идёт дальше или открывается выбор уровня. */
   closeChest(): void;
+  /** Выбрать благословение капища: движок применит его, и забег пойдёт дальше. */
+  chooseBlessing(id: string): void;
   choose(optionId: string): void;
   /** Переброс карточек на выборе улучшения. */
   reroll(): void;
@@ -205,6 +238,9 @@ let startToken = 0;
 /** Когда игрок начал забег — от этой точки считается время до первого кадра. */
 let firstFrameStartedAt: number | null = null;
 
+/** Номер последнего сообщения рубежа: общий на сессию, не сбрасывается — баннер сравнивает номера. */
+let rubezhNoticeSeq = 0;
+
 /** Секунда забега, на которой он сохранялся последний раз. */
 let lastSavedSec = 0;
 
@@ -226,6 +262,7 @@ const NO_TOOLS: CardTools = { reroll: 0, skip: 0, banish: 0 };
 
 const IDLE = {
   phase: "idle" as RunPhase,
+  mode: "endless" as RunMode,
   loadingStage: null as RunLoadingStage | null,
   hud: null,
   offers: [] as UpgradeOption[],
@@ -234,6 +271,8 @@ const IDLE = {
   toolsTotal: NO_TOOLS,
   canReroll: false,
   chest: null as OpenedChest | null,
+  rubezhNotice: null as RubezhNotice | null,
+  blessing: null as OfferedBlessings | null,
   level: 1,
   result: null,
   isNewRecord: false,
@@ -280,7 +319,14 @@ export const useRun = create<RunStore>((set, get) => ({
     const resume = options.resume;
     const bought = resume === undefined ? options.boosts : undefined;
     const seed = resume?.seed ?? nextSeed();
-    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed });
+    // Продолженный забег берёт режим из снимка: пролог, сохранённый на выходе, остаётся прологом.
+    const mode: RunMode = resume?.mode ?? options.mode ?? "endless";
+    set({ ...IDLE, phase: "loading", loadingStage: "engine", seed, mode });
+    if (resume === undefined) {
+      if (mode === "prologue") usePrologue.getState().beginRun();
+      // Подпись у «Играть» после победы живёт до второго забега.
+      else usePrologue.getState().endlessRunStarted();
+    }
     startOptions = options;
     firstFrameStartedAt = performance.now();
     errorsAtRunStart = clientErrorCount();
@@ -341,7 +387,7 @@ export const useRun = create<RunStore>((set, get) => ({
       const created = engine.start({
         container: options.container,
         seed,
-        mode: "endless",
+        mode,
         mapId: options.mapId,
         difficultyId: options.difficultyId,
         startingWeaponId: options.startingWeaponId,
@@ -365,6 +411,9 @@ export const useRun = create<RunStore>((set, get) => ({
                 modifiers: signed === null || loadouts === null ? {} : loadouts.knownModifiers(signed),
                 boosts: [...boostIds],
                 ...(accountLevel === undefined ? {} : { accountLevel }),
+                // Слабое устройство (Р67): потолок врагов ниже, добор здоровьем и уроном. Обычному
+                // полю не писать; забегу разработчика оно ничего не даёт — подстройки там нет.
+                ...(accountLevel !== undefined && deviceClassOf() === "light" ? { deviceClass: "light" as const } : {}),
               },
             }),
         ...(bought === undefined ? {} : { runId: bought.runId }),
@@ -391,17 +440,8 @@ export const useRun = create<RunStore>((set, get) => ({
           elapsedSec: Math.round(resume.summary.survivalSec),
           level: resume.summary.level,
         });
-        return;
       }
-      track("run_started", {
-        seed,
-        weapon: options.startingWeaponId,
-        map: options.mapId,
-        difficulty: options.difficultyId,
-        screenMode: screenModeNow(),
-        orientation: orientationNow(),
-        devMode: devRun,
-      });
+      // run_started уходит из события движка `started` (там уже известна сила игрока).
     } catch (error: unknown) {
       reportError("run", `движок не загрузился: ${String(error)}`);
       // Забег не начался — купленные на него бусты возвращаются.
@@ -444,6 +484,12 @@ export const useRun = create<RunStore>((set, get) => ({
     // Фазу дальше ведёт движок: `resumed` или следующий выбор уровня, если он
     // накопился, пока окно было открыто, — как в `choose`.
     session?.closeChest();
+  },
+
+  chooseBlessing(id: string): void {
+    if (get().phase !== "blessing") return;
+    // Фазу дальше ведёт движок: `resumed` или следующее окно, если оно накопилось, — как у сундука.
+    session?.chooseBlessing(id);
   },
 
   choose(optionId: string): void {
@@ -534,18 +580,12 @@ function restartSession(set: SetState, get: GetState): void {
   set({ ...IDLE, phase: "running", seed, devRun });
   lastSavedSec = 0;
   errorsAtRunStart = clientErrorCount();
-  session.restart(seed);
+  // «Ещё раз» бывает только после забега, значит первого, обучающего забега
+  // уже нет: следующий идёт на единой сложности (Р126). Настоящую сложность
+  // получает и аналитика, и повторный «Ещё раз».
+  if (startOptions !== null) startOptions = { ...startOptions, difficultyId: RATED_DIFFICULTY_ID };
+  session.restart(seed, { difficultyId: RATED_DIFFICULTY_ID });
   setRunUiMode(true);
-
-  track("run_started", {
-    seed,
-    weapon: startOptions?.startingWeaponId ?? "",
-    map: startOptions?.mapId ?? "",
-    difficulty: startOptions?.difficultyId ?? "",
-    screenMode: screenModeNow(),
-    orientation: orientationNow(),
-    devMode: devRun,
-  });
 }
 
 /**
@@ -574,7 +614,19 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     // к нему привязан тогда же: итог понесёт его серверу.
     created.on("started", (started) => {
       bindLoadout?.(started.runId);
-      useRuns.getState().registerStart(started);
+      useRuns.getState().registerStart({ ...started, ...(get().mode === "prologue" ? { mode: "prologue" as const } : {}) });
+      if (get().mode === "prologue") usePrologue.getState().step("start", 0);
+      // Одно место для первого забега и для «Ещё раз»: сцена шлёт `started` в обоих случаях.
+      track("run_started", {
+        seed: get().seed,
+        weapon: started.startingWeaponId,
+        map: startOptions?.mapId ?? "",
+        difficulty: started.difficultyId,
+        screenMode: screenModeNow(),
+        orientation: orientationNow(),
+        devMode: get().devRun,
+        ...pressureStartFields(started.pressure),
+      });
     }),
     created.on("hud", (hud) => {
       // Первый снимок HUD — первый кадр забега: сцена создана и мир живёт.
@@ -597,12 +649,19 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
         hud.boss !== null,
       );
       set({ hud, loadingStage: null });
+      // С первого убитого врага на поле лежит кристалл: подсказка про сбор приходит по событию (T-0280).
+      if (get().mode === "prologue" && hud.enemiesKilled > 0) usePrologue.getState().step("first_gem", hud.survivalSec);
       if (hud.survivalSec - lastSavedSec >= AUTOSAVE_SEC && get().phase === "running") saveRun();
     }),
 
     created.on("cues", (cues) => {
       hapticForCues(cues);
       audio.cues(cues);
+      if (get().mode !== "prologue") return;
+      const sec = get().hud?.survivalSec ?? 0;
+      if (cues.eliteSpawns > 0) usePrologue.getState().step("first_elite", sec);
+      // Оберег удержал здоровье: подсказка про него — один раз за пролог.
+      if ((cues.ward ?? 0) > 0) usePrologue.getState().wardNoticed(sec);
     }),
 
     created.on("levelUp", ({ level, options, queued, tools, toolsTotal, canReroll, refreshed }) => {
@@ -615,11 +674,12 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       // Переброс и изгнание обновляют карточки того же уровня: это не новое
       // предложение, и считать его в воронку нельзя.
       if (!refreshed) track("upgrade_offered", { level, count: options.length, queued });
+      if (get().mode === "prologue") usePrologue.getState().step("first_level", get().hud?.survivalSec ?? 0);
       if (get().phase !== "levelUp") {
         haptic("levelUp");
         audio.runEvent("levelUp");
       }
-      set({ phase: "levelUp", offers: options, queued, level, chest: null, tools, toolsTotal, canReroll });
+      set({ phase: "levelUp", offers: options, queued, level, chest: null, blessing: null, tools, toolsTotal, canReroll });
       saveRun();
     }),
 
@@ -637,6 +697,22 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
     created.on("chestFound", ({ index, size, source, elapsedSec }) => {
       track("chest_found", { index, size, source, elapsedSec: Math.round(elapsedSec) });
       audio.runEvent("chestDrop");
+      if (get().mode === "prologue") usePrologue.getState().step("first_chest", elapsedSec);
+    }),
+
+    created.on("secretFound", ({ kind, elapsedSec }) => {
+      track("secret_found", { kind, sec: Math.round(elapsedSec) });
+    }),
+
+    created.on("secretUsed", ({ kind, outcome }) => {
+      track("secret_used", { kind, outcome });
+    }),
+
+    created.on("secretBlessing", ({ index, options }) => {
+      // Мир уже стоит: окно показывает предложение и ждёт выбора. Звук и отклик — как у выбора уровня.
+      haptic("levelUp");
+      audio.runEvent("levelUp");
+      set({ phase: "blessing", blessing: { index, options: [...options] } });
     }),
 
     created.on("ringEnded", ({ index, outcome, guards, killed, lifeSec, elapsedSec }) => {
@@ -654,6 +730,24 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       set({ phase: "chest", chest: { index, size, rewards } });
     }),
 
+    // Баннеры рубежа: звук и вибрация уже есть — приход стража звучит как приход
+    // босса (`cues.bossSpawns`), добыча стража — как любой сундук. Нового сигнала нет.
+    created.on("rubezhGuardSpawned", ({ elapsedSec }) => {
+      set({ rubezhNotice: { kind: "spawned", seq: ++rubezhNoticeSeq } });
+      if (get().mode === "prologue") usePrologue.getState().step("guard", elapsedSec);
+    }),
+    created.on("rubezhCleared", () => {
+      // В прологе «Рубеж взят! Бой продолжается» врёт: боя дальше нет, сразу победа. Баннер подменяет окно «Рубеж удержан!».
+      if (get().mode === "prologue") return;
+      set({ rubezhNotice: { kind: "cleared", seq: ++rubezhNoticeSeq } });
+    }),
+    // Победа в прологе: дальше движок закроет забег обычным `abandoned` с тем же итогом, и итог уйдёт общим путём.
+    created.on("prologueWon", ({ elapsedSec }) => {
+      usePrologue.getState().step("won", elapsedSec);
+      usePrologue.getState().markWon();
+      haptic("record");
+    }),
+
     created.on("paused", ({ reason, elapsedSec }) => {
       set({ phase: "paused", pauseReason: reason });
       // Сворачивание — самый частый путь к закрытию приложения: сохраняемся
@@ -664,7 +758,7 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       }
     }),
 
-    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [], chest: null })),
+    created.on("resumed", () => set({ phase: "running", pauseReason: null, offers: [], chest: null, blessing: null })),
 
     created.on("devInfo", (devInfo) => set({ devInfo })),
 
@@ -748,7 +842,8 @@ function finishRun(
 
   const diagnostics = pendingDiagnostics;
   pendingDiagnostics = null;
-  track(event, {
+  // Победа в прологе приходит от движка как `abandoned`, но это не сдача: в воронке она — завершённый забег.
+  track(result.prologue?.won === true ? "run_finished" : event, {
     ...outcomeFields(result, isNewRecord),
     ...(diagnostics === null ? {} : perfFields(diagnostics.perf)),
     ...(runArt === null ? {} : { art: runArt }),
@@ -784,6 +879,22 @@ function countsInRating(get: GetState): boolean {
   return get().devRun && useDevMode.getState().settings.countInRating;
 }
 
+/**
+ * Сила игрока и давление на старте плоскими полями (docs/22-analytics-and-metrics.md
+ * §3.3). Нет `pressure` — подстройки не было (забег разработчика, сборка без
+ * неё), и полей тоже нет.
+ */
+function pressureStartFields(pressure: RunPressureStart | undefined): Record<string, string | number> {
+  if (pressure === undefined) return {};
+  return { power: pressure.power, pressure: pressure.level, deviceClass: pressure.deviceClass };
+}
+
+/** То же на итог: старт и конец забега. */
+function pressureResultFields(pressure: RunPressureResult | undefined): Record<string, string | number> {
+  if (pressure === undefined) return {};
+  return { ...pressureStartFields(pressure), powerEnd: pressure.powerEnd, pressureEnd: pressure.levelEnd };
+}
+
 function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, string | number | boolean> {
   return {
     seed: result.seed,
@@ -806,7 +917,20 @@ function outcomeFields(result: RunResult, isNewRecord: boolean): Record<string, 
     cheats: result.cheats,
     continues: result.continues.length,
     ...elementDamageFields(result.damageByElement),
+    ...pressureResultFields(result.pressure),
+    ...rubezhFields(result.rubezh),
   };
+}
+
+/**
+ * Рубеж в итоге плоскими полями словаря событий (docs/22-analytics-and-metrics.md
+ * §3.3, T-0121): `rubezh` — none, reached или cleared; секунда победы только у
+ * cleared. Итога без рубежа (сборка движка до него) поля не несёт.
+ */
+function rubezhFields(rubezh: RunResult["rubezh"]): Record<string, string | number> {
+  if (rubezh === undefined) return {};
+  if (rubezh.clearedSec !== null) return { rubezh: "cleared", rubezhClearedSec: Math.round(rubezh.clearedSec) };
+  return { rubezh: rubezh.reached ? "reached" : "none" };
 }
 
 /**
@@ -867,9 +991,9 @@ function isLowHp(hud: HudSnapshot): boolean {
   return hud.maxHp > 0 && hud.hp / hud.maxHp <= LOW_HP_RATIO;
 }
 
-/** Забег идёт и его есть что сохранять: бег, пауза, выбор уровня или окно сундука. */
+/** Забег идёт и его есть что сохранять: бег, пауза, выбор уровня, окно сундука или капища. */
 export function isRunActivePhase(phase: RunPhase): boolean {
-  return phase === "running" || phase === "paused" || phase === "levelUp" || phase === "chest";
+  return phase === "running" || phase === "paused" || phase === "levelUp" || phase === "chest" || phase === "blessing";
 }
 
 /**

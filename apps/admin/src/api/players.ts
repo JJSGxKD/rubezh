@@ -281,7 +281,7 @@ export const socialSchema = z.object({
     .nullable(),
   /** привёл партнёр своим кодом; сервер старше партнёров поля не шлёт */
   partner: z
-    .object({ partnerId: z.string(), name: z.string(), boundAt: iso, campaignTitle: z.string().nullable(), code: z.string().nullable() })
+    .object({ partnerId: z.string(), name: z.string(), boundAt: iso, campaignTitle: z.string().nullable(), code: z.string().nullable(), linkCode: z.string().nullable().optional().transform((value) => value ?? null) })
     .nullable()
     .optional()
     .transform((value) => value ?? null),

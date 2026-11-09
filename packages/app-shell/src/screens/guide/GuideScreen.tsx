@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, ShieldAlert, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
-import { DIFFICULTIES, DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
+import { DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
 import {
   Badge,
   Card,
@@ -28,6 +28,7 @@ import {
   passiveCategories,
   passiveRange,
   regularEnemies,
+  rubezhGuide,
   speedClass,
   firstLevelWeapons,
   levelWeapons,
@@ -103,9 +104,21 @@ function Basics(): ReactNode {
     slots: LOADOUT_LIMITS.passives[category],
   }));
 
+  const rubezh = rubezhGuide();
+
   return (
     <>
       <Topic index={0} icon={<Hourglass size={20} />} title={t("guide.basics.goal.title")} text={t("guide.basics.goal.text")} />
+
+      {/* Рубеж: страж, время и множитель — из контента (T-0124). */}
+      {rubezh === null ? null : (
+        <Topic
+          index={1}
+          icon={<ShieldAlert size={20} />}
+          title={t("guide.basics.rubezh.title")}
+          text={t("guide.basics.rubezh.text", { time: formatDuration(rubezh.atSec), guard: t(`enemy.${rubezh.guard.id}.name`), mul: `×${String(rubezh.rewardMul)}` })}
+        />
+      )}
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>
         <div className="mx-auto max-w-[300px]">
@@ -164,28 +177,11 @@ function Basics(): ReactNode {
         <ElementList />
       </Topic>
 
-      <Topic index={7} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")}>
-        <ul className="grid gap-2">
-          {DIFFICULTIES.map((difficulty) => (
-            <li key={difficulty.id} className="surface-sunken rounded-md px-3 py-2">
-              <span className="block font-display text-sm font-semibold text-text">{t(difficulty.nameKey)}</span>
-              <span className="block text-xs text-text-muted">
-                {difficulty.enemyHpMul === 1 && difficulty.enemyDamageMul === 1
-                  ? t("guide.difficulty.base")
-                  : t("guide.difficulty.stats", {
-                      hp: formatDecimal(difficulty.enemyHpMul),
-                      damage: formatDecimal(difficulty.enemyDamageMul),
-                      spawn: formatDecimal(difficulty.spawnRateMul),
-                    })}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Topic>
+      <Topic index={7} icon={<Swords size={20} />} title={t("guide.basics.difficulty.title")} text={t("guide.basics.difficulty.text")} />
 
       <Topic index={8} icon={<History size={20} />} title={t("guide.basics.save.title")} text={t("guide.basics.save.text")} />
 
-      {/* Бусты — после сложности: и то и другое выбирают в листе «Перед забегом». */}
+      {/* Бусты — после сохранения забега: их выбирают в листе «Перед забегом». */}
       <Topic index={9} icon={<GameGlyph glyph={BOOST_RUN_GLYPH} size={20} />} title={t("guide.basics.boosts.title")} text={t("guide.basics.boosts.text", { max: MAX_BOOSTS_PER_RUN })}>
         <ul className="grid gap-2">
           {guideBoosts().map((boost) => {
@@ -473,7 +469,7 @@ function Upgrades(): ReactNode {
           })}
         </section>
       ))}
-      <Topic index={0} icon={<ItemIcon kind="heal" id="" size={20} />} title={t("guide.upgrades.heal.title")} text={t("guide.upgrades.heal.text")} />
+      <Topic index={0} icon={<ItemIcon kind="limit" id="" size={20} />} title={t("guide.upgrades.heal.title")} text={t("guide.upgrades.heal.text")} />
       <Topic index={1} icon={<Shuffle size={20} aria-hidden="true" />} title={t("guide.upgrades.tools.title")} text={t("guide.upgrades.tools.text")} />
     </>
   );

@@ -25,10 +25,12 @@ import { AdminRestrictionsController } from "./admin-restrictions.controller.js"
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
+import { AdminNameRuleCandidatesController } from "./admin-name-rule-candidates.controller.js";
 import { AdminNameRulesRecleanController } from "./admin-name-rules-reclean.controller.js";
 import { AdminNameRulesController } from "./admin-name-rules.controller.js";
 import { AdminNameRulesStatsController } from "./admin-name-rules-stats.controller.js";
 import { AdminProxiesController } from "./admin-proxies.controller.js";
+import { AdminProxySubscriptionController } from "./admin-proxy-subscription.controller.js";
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
@@ -113,7 +115,9 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,
+    AdminNameRuleCandidatesController,
     AdminProxiesController,
+    AdminProxySubscriptionController,
     AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,

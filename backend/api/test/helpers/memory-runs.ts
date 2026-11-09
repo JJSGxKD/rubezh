@@ -1,8 +1,11 @@
 import type { Redis } from "ioredis";
+import type { RunScorer } from "../../src/modules/rating/run-scorer.service.js";
+import type { StoredScore } from "../../src/modules/rating/score-types.js";
 import { loadAppConfig } from "../../src/config/app-config.js";
 import { RestrictionsHooks } from "../../src/modules/restrictions/restrictions-hooks.js";
 import type { Board, LeaderboardEntry, LeaderboardStore } from "../../src/modules/runs/leaderboard.store.js";
 import { RatingRestrictions } from "../../src/modules/runs/rating-restrictions.js";
+import { isRatedRun } from "../../src/modules/runs/rated-runs.js";
 import { DIFFICULTIES, type Difficulty } from "../../src/modules/runs/run-rules.js";
 import type {
   BestRunRow,
@@ -17,14 +20,43 @@ import type {
   StartOutcome,
   StoredRun,
 } from "../../src/modules/runs/runs.repository.js";
+import type { SettingsReader } from "../../src/modules/settings/settings.service.js";
 import { AUTH_ENV } from "./auth-env.js";
 import { MemoryRestrictionsRepository, restrictionsGate } from "./memory-restrictions.js";
+import { panelSettings } from "./settings.js";
 
 /**
  * Забеги и рейтинг в памяти — для тестов сервиса. Смысл тот же, что у
  * реализаций на Postgres и Redis: повтор ключа не создаёт вторую запись,
- * лучшее время только растёт. Сами реализации проверяются на живых базах.
+ * лучший счёт только растёт. Сами реализации проверяются на живых базах.
+ *
+ * Доска всех времён ранжирует по очкам (tasks/T-0294): забег без очков в ней не
+ * стоит. Сервису для очков нужен подсчёт — в тестах это `survivalScorer()`:
+ * очки равны секундам, поэтому порядок по очкам совпадает с порядком по времени.
  */
+
+/** Очки в памяти: записанные у забега или `null`. */
+function pointsOf(record: RunFinishRecord): number | null {
+  return record.score?.points ?? null;
+}
+
+/** Очки забега, равные его секундам, — запись `score` в строку для тестов доски. */
+export function secondsScore(survivalSec: number): StoredScore {
+  return { points: Math.round(survivalSec), axes: { t: 1, k: 1, h: 1, c: 1, b: 1 }, style: "t", band: "average" };
+}
+
+/**
+ * Подсчёт очков для тестов доски: очки равны секундам выживания. Остальное, что
+ * умеет настоящий `RunScorer`, этим тестам не нужно.
+ */
+export function survivalScorer(): RunScorer {
+  const scorer: Pick<RunScorer, "score" | "announce" | "expectedPointsFor"> = {
+    score: (input) => ({ points: Math.round(input.survivalSec), axes: { t: 1, k: 1, h: 1, c: 1, b: 1 }, style: "t", band: "average", expectedPoints: 0, outOfRange: false }),
+    announce: async () => {},
+    expectedPointsFor: () => 0,
+  };
+  return scorer as RunScorer;
+}
 
 interface Row extends StoredRun {
   record?: RunFinishRecord;
@@ -42,10 +74,15 @@ export class MemoryRunsRepository implements RunsRepository {
       status: row.status,
       difficulty: row.difficulty,
       startedAt: row.startedAt,
+      finishedAt: row.record?.finishedAt ?? null,
       survivalSec: row.survivalSec,
       verdict: row.verdict,
       ranked: row.ranked,
       ratingRestricted: row.ratingRestricted,
+      cheats: row.record?.cheats ?? false,
+      rubezhReached: row.record?.rubezhReached ?? false,
+      rubezhClearedSec: row.record?.rubezhClearedSec ?? null,
+      score: row.record?.score ?? null,
     };
   }
 
@@ -58,10 +95,15 @@ export class MemoryRunsRepository implements RunsRepository {
       status: "started",
       difficulty: record.difficulty,
       startedAt: record.startedAt,
+      finishedAt: null,
       survivalSec: null,
       verdict: null,
       ranked: false,
       ratingRestricted: null,
+      cheats: false,
+      rubezhReached: false,
+      rubezhClearedSec: null,
+      score: null,
     });
     return "created";
   }
@@ -76,10 +118,15 @@ export class MemoryRunsRepository implements RunsRepository {
       status: "finished",
       difficulty: record.difficulty,
       startedAt: existing?.startedAt ?? null,
+      finishedAt: record.finishedAt,
       survivalSec: record.survivalSec,
       verdict: record.verdict,
       ranked: record.ranked,
       ratingRestricted: record.ratingRestricted,
+      cheats: record.cheats,
+      rubezhReached: record.rubezhReached,
+      rubezhClearedSec: record.rubezhClearedSec,
+      score: record.score ?? null,
       record,
     });
     return "finished";
@@ -131,40 +178,54 @@ export class MemoryRunsRepository implements RunsRepository {
     };
   }
 
-  async bestRuns(accountIds: readonly string[], difficulty: Difficulty): Promise<BestRunRow[]> {
+  async bestRuns(accountIds: readonly string[], difficulty: Difficulty, since: Date | null): Promise<BestRunRow[]> {
     return accountIds.flatMap((accountId) => {
-      const best = this.rankedOf(difficulty).filter((row) => row.accountId === accountId).sort((a, b) => b.survivalSec - a.survivalSec)[0];
+      const best = this.rankedOf(difficulty, since).filter((row) => row.accountId === accountId && pointsOf(row) !== null).sort((a, b) => (pointsOf(b) ?? 0) - (pointsOf(a) ?? 0))[0];
       if (best === undefined) return [];
-      return [{ accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled }];
+      return [{ accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, points: pointsOf(best), style: best.score?.style ?? null, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled }];
     });
   }
 
-  async bestTimes(difficulty: Difficulty): Promise<{ accountId: string; survivalSec: number }[]> {
+  async bestScores(difficulty: Difficulty, since: Date | null): Promise<{ accountId: string; score: number }[]> {
     const best = new Map<string, number>();
-    for (const row of this.rankedOf(difficulty)) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, row.survivalSec));
-    return [...best.entries()].map(([accountId, survivalSec]) => ({ accountId, survivalSec }));
+    for (const row of this.rankedOf(difficulty, since)) {
+      const points = pointsOf(row);
+      if (points !== null) best.set(row.accountId, Math.max(best.get(row.accountId) ?? 0, points));
+    }
+    return [...best.entries()].map(([accountId, score]) => ({ accountId, score }));
   }
 
-  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean): Promise<BestRunRow | null> {
+  async bestRunOf(accountId: string, difficulty: Difficulty, shadow: boolean, since: Date | null): Promise<BestRunRow | null> {
     const counted = [...this.rows.values()].flatMap((row) =>
-      row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.record.ranked || (shadow && row.record.ratingRestricted === "silent")) ? [row.record] : [],
+      row.record !== undefined &&
+      row.accountId === accountId &&
+      row.record.difficulty === difficulty &&
+      isRatedRun(difficulty, row.record.finishedAt, since) &&
+      pointsOf(row.record) !== null &&
+      (row.record.ranked || (shadow && row.record.ratingRestricted === "silent"))
+        ? [row.record]
+        : [],
     );
-    const best = counted.sort((a, b) => b.survivalSec - a.survivalSec)[0];
+    const best = counted.sort((a, b) => (pointsOf(b) ?? 0) - (pointsOf(a) ?? 0))[0];
     if (best === undefined) return null;
-    return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
+    return { accountId, displayName: `игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: best.survivalSec, points: pointsOf(best), style: best.score?.style ?? null, level: best.level, startingWeaponId: best.startingWeaponId, enemiesKilled: best.enemiesKilled };
   }
 
-  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number): Promise<ModerationRunRow[]> {
+  async moderationRuns(accountId: string, difficulty: Difficulty, limit: number, since: Date | null): Promise<ModerationRunRow[]> {
     return [...this.rows.values()]
-      .flatMap((row) => (row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && (row.ranked || this.unrankedByModerator(row)) ? [{ ...row.record, ranked: row.ranked }] : []))
+      .flatMap((row) =>
+        row.record !== undefined && row.accountId === accountId && row.record.difficulty === difficulty && isRatedRun(difficulty, row.record.finishedAt, since) && (row.ranked || this.unrankedByModerator(row))
+          ? [{ ...row.record, ranked: row.ranked }]
+          : [],
+      )
       .sort((a, b) => b.survivalSec - a.survivalSec)
       .slice(0, limit)
-      .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
+      .map((record) => ({ runId: record.runId, difficulty: record.difficulty, survivalSec: record.survivalSec, points: pointsOf(record), level: record.level, enemiesKilled: record.enemiesKilled, startingWeaponId: record.startingWeaponId, finishedAt: record.finishedAt, ranked: record.ranked }));
   }
 
-  async setRanked(runId: string, ranked: boolean): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
+  async setRanked(runId: string, ranked: boolean, since: Date | null): Promise<{ accountId: string; difficulty: Difficulty; survivalSec: number } | null> {
     const row = this.rows.get(runId);
-    if (row?.record === undefined || (ranked ? !this.unrankedByModerator(row) : !row.ranked)) return null;
+    if (row?.record === undefined || !isRatedRun(row.record.difficulty, row.record.finishedAt, since) || (ranked ? !this.unrankedByModerator(row) : !row.ranked)) return null;
     row.ranked = ranked;
     row.record = { ...row.record, ranked };
     return { accountId: row.accountId, difficulty: row.record.difficulty, survivalSec: row.record.survivalSec };
@@ -191,12 +252,20 @@ export class MemoryRunsRepository implements RunsRepository {
       }));
   }
 
+  async rubezhWinners(difficulty: Difficulty, since: Date | null, only?: readonly string[]): Promise<string[]> {
+    const winners = this.rankedOf(difficulty, since).filter(
+      (record) => record.verdict === "ok" && !record.cheats && record.rubezhReached && record.rubezhClearedSec !== null && (only === undefined || only.includes(record.accountId)),
+    );
+    return [...new Set(winners.map((record) => record.accountId))];
+  }
+
   private finishedOf(accountId: string): RunFinishRecord[] {
     return [...this.rows.values()].flatMap((row) => (row.record !== undefined && row.accountId === accountId ? [row.record] : []));
   }
 
-  private rankedOf(difficulty: Difficulty): RunFinishRecord[] {
-    return [...this.rows.values()].flatMap((row) => (row.record?.ranked === true && row.record.difficulty === difficulty ? [row.record] : []));
+  /** Рейтинговые забеги сложности — то же условие, что `ratedWhere` в запросах Postgres. */
+  private rankedOf(difficulty: Difficulty, since: Date | null): RunFinishRecord[] {
+    return [...this.rows.values()].flatMap((row) => (row.record?.ranked === true && row.record.difficulty === difficulty && isRatedRun(difficulty, row.record.finishedAt, since) ? [row.record] : []));
   }
 }
 
@@ -205,15 +274,18 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   failSubmit = false;
   /** по доске и сложности, как два ключа в Redis: правила те же, что у `RedisLeaderboardStore` */
   private readonly boards = new Map<string, Map<string, number>>();
+  /** набор победителей над стражем по сложности, как `lb:rubezh:<сложность>` */
+  private readonly winners = new Map<Difficulty, Set<string>>();
 
-  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[]): Promise<{ improved: boolean }> {
+  async submit(difficulty: Difficulty, accountId: string, score: number, boards: readonly Board[], rubezh = false): Promise<{ improved: boolean }> {
     if (this.failSubmit) throw new Error("Redis недоступен");
+    if (rubezh) this.winnersOf(difficulty).add(accountId);
     let improved = false;
     for (const side of boards) {
       const board = this.board(difficulty, side);
       const previous = board.get(accountId);
-      if (previous !== undefined && previous >= survivalSec) continue;
-      board.set(accountId, survivalSec);
+      if (previous !== undefined && previous >= score) continue;
+      board.set(accountId, score);
       improved = true;
     }
     return { improved };
@@ -229,21 +301,23 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   }
 
   async top(difficulty: Difficulty, limit: number, side: Board): Promise<LeaderboardEntry[]> {
-    return this.sorted(difficulty, side).slice(0, limit);
+    return this.sorted(difficulty, side)
+      .slice(0, limit)
+      .map((entry) => (this.winnersOf(difficulty).has(entry.accountId) ? { ...entry, rubezh: true as const } : entry));
   }
 
   async count(difficulty: Difficulty, side: Board): Promise<number> {
     return this.board(difficulty, side).size;
   }
 
-  async countAbove(difficulty: Difficulty, survivalSec: number, side: Board): Promise<number> {
-    return [...this.board(difficulty, side).values()].filter((score) => score > survivalSec).length;
+  async countAbove(difficulty: Difficulty, score: number, side: Board): Promise<number> {
+    return [...this.board(difficulty, side).values()].filter((other) => other > score).length;
   }
 
-  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[]): Promise<void> {
+  async set(difficulty: Difficulty, accountId: string, score: number | null, boards: readonly Board[]): Promise<void> {
     for (const side of boards) {
-      if (survivalSec === null) this.board(difficulty, side).delete(accountId);
-      else this.board(difficulty, side).set(accountId, survivalSec);
+      if (score === null) this.board(difficulty, side).delete(accountId);
+      else this.board(difficulty, side).set(accountId, score);
     }
   }
 
@@ -258,7 +332,25 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
   }
 
   async replace(difficulty: Difficulty, side: Board, entries: readonly LeaderboardEntry[]): Promise<void> {
-    this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.survivalSec])));
+    this.boards.set(`${side}:${difficulty}`, new Map(entries.map((entry) => [entry.accountId, entry.score])));
+  }
+
+  async replaceRubezh(difficulty: Difficulty, accountIds: readonly string[]): Promise<void> {
+    this.winners.set(difficulty, new Set(accountIds));
+  }
+
+  async setRubezh(difficulty: Difficulty, accountId: string, won: boolean): Promise<void> {
+    if (won) this.winnersOf(difficulty).add(accountId);
+    else this.winnersOf(difficulty).delete(accountId);
+  }
+
+  private winnersOf(difficulty: Difficulty): Set<string> {
+    let set = this.winners.get(difficulty);
+    if (set === undefined) {
+      set = new Set();
+      this.winners.set(difficulty, set);
+    }
+    return set;
   }
 
   private board(difficulty: Difficulty, side: Board): Map<string, number> {
@@ -273,8 +365,8 @@ export class MemoryLeaderboardStore implements LeaderboardStore {
 
   private sorted(difficulty: Difficulty, side: Board): LeaderboardEntry[] {
     return [...this.board(difficulty, side).entries()]
-      .map(([accountId, survivalSec]) => ({ accountId, survivalSec }))
-      .sort((left, right) => right.survivalSec - left.survivalSec);
+      .map(([accountId, score]) => ({ accountId, score }))
+      .sort((left, right) => right.score - left.score);
   }
 }
 
@@ -292,12 +384,15 @@ export class MemoryLock {
   }
 }
 
-/** Рейтинг под ограничениями поверх памяти: ограничения кладёт тест — в `restrictions`. */
-export function ratingRestrictions(runs: RunsRepository, board: LeaderboardStore, restrictions = new MemoryRestrictionsRepository()) {
+/**
+ * Рейтинг под ограничениями поверх памяти: ограничения кладёт тест — в
+ * `restrictions`, настройки панели (отсечка `rating.since-date`) — в `settings`.
+ */
+export function ratingRestrictions(runs: RunsRepository, board: LeaderboardStore, restrictions = new MemoryRestrictionsRepository(), settings: SettingsReader = panelSettings()) {
   const gate = restrictionsGate(restrictions);
   const hooks = new RestrictionsHooks();
   const lock = new MemoryLock();
-  const rating = new RatingRestrictions(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), lock as unknown as Redis, runs, board, gate, hooks);
+  const rating = new RatingRestrictions(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv), lock as unknown as Redis, runs, board, gate, hooks, settings);
   rating.onModuleInit();
   return { rating, gate, hooks, restrictions, lock };
 }

@@ -3,6 +3,7 @@ import { OVERVIEW_REFRESH_MS, fetchOverview, newAccounts, parsePeriod, periodTit
 import { completionPct, passLine } from "../../api/overview";
 import { formatDuration, formatNumber, formatTime } from "../../format";
 import { api } from "../../services";
+import { hrefOf } from "../../routes";
 import { DailyBars } from "../../ui/daily-bars";
 import { HELP } from "../../ui/help";
 import { Button, ErrorNotice, Loading, Panel } from "../../ui/kit";
@@ -119,6 +120,17 @@ function Today({ overview, days, onPeriod, onReload }: { overview: Overview; day
   );
 }
 
+/** Следующий шаг под пустым графиком: вопрос и ссылка в раздел, где на него отвечают. */
+function NextStep({ section, label }: { section: string; label: string }) {
+  return (
+    <>
+      {label} — <a href={hrefOf({ section, id: null })} className="text-accent hover:underline">{SECTION_NAMES[section] ?? section} →</a>
+    </>
+  );
+}
+
+const SECTION_NAMES: Record<string, string> = { links: "Ссылки", diagnostics: "Диагностика" };
+
 function Series({ overview }: { overview: Overview }) {
   const length = overview.series.length;
   const of = (pick: (point: Overview["series"][number]) => number | null) => overview.series.map((point) => ({ day: point.day, count: pick(point) ?? 0 }));
@@ -128,13 +140,13 @@ function Series({ overview }: { overview: Overview }) {
     <Panel title={`За ${String(length)} дней`} help={HELP.overview.series}>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         <Chart title="Новые игроки">
-          <DailyBars daily={of((point) => point.newAccounts)} what="новых игроков" days={length} />
+          <DailyBars daily={of((point) => point.newAccounts)} what="новых игроков" days={length} emptyNext={<NextStep section="links" label="Откуда приходят" />} />
         </Chart>
         <Chart title="Играли">
           <DailyBars daily={of((point) => point.active)} what="игроков" days={length} />
         </Chart>
         <Chart title="Забеги">
-          <DailyBars daily={of((point) => point.finishedRuns)} what="забегов" days={length} />
+          <DailyBars daily={of((point) => point.finishedRuns)} what="забегов" days={length} emptyNext={<NextStep section="diagnostics" label="Открывается ли игра" />} />
         </Chart>
         {hasStars ? (
           <Chart title="Звёзды">

@@ -20,3 +20,42 @@ export function eventOfGoal(goal: number): PostbackEvent {
 
 /** Коды, которые код этого релиза умеет читать: всё остальное в базе он не трогает. */
 export const KNOWN_GOALS: readonly number[] = POSTBACK_EVENTS.map((event) => EVENT_GOAL[event]);
+
+/** Названия событий для панели и аудита; порядок ключей — канонический. */
+export const EVENT_TITLES: Record<PostbackEvent, string> = {
+  registration: "Регистрация",
+  purchase_first: "Первая покупка",
+  purchase_repeat: "Повторная покупка",
+  d1_return: "Возврат на следующий день",
+};
+
+/** События назначения, пока их не выбрали: одна регистрация. Совпадает с умолчанием колонок `postback_events`. */
+export const DEFAULT_EVENTS: readonly PostbackEvent[] = ["registration"];
+
+export function isPostbackEvent(value: unknown): value is PostbackEvent {
+  return typeof value === "string" && (POSTBACK_EVENTS as readonly string[]).includes(value);
+}
+
+/** Имя события для текста проблемы: чужой ввод короткой строкой, а не простынёй. */
+function shown(value: unknown): string {
+  return String(value).slice(0, 40);
+}
+
+/**
+ * Что не так со списком событий, выбранных у назначения; пусто — годится. Порядок и повторы не ошибка —
+ * их приводит `normalizeEvents`. Тексты видит человек в панели.
+ */
+export function eventsProblems(events: unknown): string[] {
+  if (!Array.isArray(events)) return ["События должны быть списком"];
+  if (events.length === 0) return ["Выберите хотя бы одно событие"];
+  const unknown = new Set<string>();
+  for (const event of events as unknown[]) {
+    if (!isPostbackEvent(event)) unknown.add(shown(event));
+  }
+  return [...unknown].map((name) => `Неизвестное событие: ${name}`);
+}
+
+/** Список в каноническом порядке и без повторов: так он лежит в базе и так его видят в панели. */
+export function normalizeEvents(events: readonly PostbackEvent[]): PostbackEvent[] {
+  return POSTBACK_EVENTS.filter((event) => events.includes(event));
+}

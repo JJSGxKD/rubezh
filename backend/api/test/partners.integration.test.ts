@@ -88,7 +88,7 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
     const me = await player();
     expect(await redeem(me, own, first)).toEqual({ status: "redeemed", bound: true });
     expect(await redeem(me, other, second)).toEqual({ status: "redeemed", bound: false });
-    expect(await partners.bindingOf(me)).toMatchObject({ partnerId: first, name: "Первый", campaignTitle: "Код канала", code: own.display });
+    expect(await partners.bindingOf(me)).toMatchObject({ partnerId: first, name: "Первый", campaignTitle: "Код канала", code: own.display, linkCode: null });
     // Привязка без кода партнёра (`partnerId = null`) не пишется вовсе.
     const plain = await campaign(null);
     const newbie = await player();

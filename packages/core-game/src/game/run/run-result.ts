@@ -1,5 +1,9 @@
 import { ELEMENTS, type ElementId, type RunOutcome, type RunPassiveSummary, type RunResult, type RunWeaponSummary } from "@bh/shared-types";
+import { buildScore } from "./hunt-log";
 import { continueSeconds } from "../sim/continue";
+import { describePressureResult } from "../sim/pressure";
+import { describePrologue } from "./prologue";
+import { describeRubezh } from "../sim/rubezh";
 import { secretKindsFound, secretKindsUsed } from "../sim/secrets";
 import { TICK_HZ, type World } from "../sim/world";
 
@@ -30,6 +34,7 @@ export interface RunResultOptions {
 
 export function buildRunResult(world: World, options: RunResultOptions): RunResult {
   const stats = world.stats;
+  const pressure = describePressureResult(world);
 
   return {
     runId: options.runId,
@@ -49,6 +54,8 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     chestsOpened: stats.chestsOpened,
     crystalsCollected: stats.crystalsCollected,
     secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
+    rubezh: describeRubezh(world),
+    ...(world.prologue === null ? {} : { mode: world.mode, prologue: describePrologue(world) }),
     killsByEnemy: killsByEnemy(world),
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,
@@ -68,6 +75,9 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     cheats: options.cheats === true,
     continues: continueSeconds(world),
     ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
+    ...(pressure === undefined ? {} : { pressure }),
+    huntLog: world.hunt.log.map((entry) => ({ ...entry })),
+    buildScore: buildScore(world),
   };
 }
 

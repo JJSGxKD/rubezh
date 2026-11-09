@@ -49,6 +49,7 @@ erDiagram
         string platform_name "nullable: ник с площадки как пришёл, до 256 знаков; обновляется при каждом входе, виден только в панели"
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
         datetime supporter_at "nullable: знак «Меценат» (Р109, Р149) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
+        datetime prologue_done_at "nullable: пролог пройден (T-0279, Р151) — победа в нём; аккаунтам с забегами до выката миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -85,7 +86,7 @@ erDiagram
     LINK_CLICK ||--o{ ACCOUNT_SESSION : "start_ref = click_id"
     LINK |o..o{ ACCOUNT_SESSION : "start_ref = auto_key, вид tagged (Р116), без внешнего ключа"
     LINK ||--o{ AD_CONVERSION : "конверсии в сеть ссылки"
-    LINK_CLICK ||--o{ AD_CONVERSION : "клик, который привёл новичка"
+    LINK_CLICK |o--o{ AD_CONVERSION : "клик, который привёл новичка; у запуска по прямой ссылке клика нет"
     ACCOUNT ||--o{ AD_CONVERSION : "новичок из рекламы"
     PURCHASE |o--o{ AD_CONVERSION : "оплата — первая или повторная покупка, по строке на назначение"
     FEATURE_FLAG }o..o{ ACCOUNT : "доля — хэш ключа и аккаунта, без хранения"
@@ -126,6 +127,9 @@ erDiagram
     TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
+    ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
+    ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
+    ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -144,6 +148,7 @@ erDiagram
         uuid account_id FK
         enum status "started|finished"
         enum difficulty "easy|normal|hard"
+        enum mode "endless|prologue: пролог — вне рейтинга и заданий (T-0279); без поля от старого клиента — endless"
         string starting_weapon_id
         string content_hash
         datetime started_at "nullable: по часам сервера; старт не дошёл — пусто"
@@ -160,6 +165,13 @@ erDiagram
         string rating_restricted "nullable: notified|silent — сдан под ограничением рейтинга, в рейтинг не идёт и потом"
         enum verdict "nullable: ok|suspicious|rejected"
         string[] verdict_reasons
+        boolean rubezh_reached "страж рубежа пришёл (со слов итога); победу засчитывает вердикт ok"
+        int rubezh_cleared_sec "nullable: секунда, на которой пал страж (T-0121)"
+        int points "nullable: очки эффективности (T-0293); null — пролог, обучение, сбой подсчёта"
+        jsonb axes "nullable: индексы осей t, k, h, c, b с тремя знаками, 1 — ровно ожидаемое"
+        string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
+        string band "nullable: полоса силы ожидаемого: novice…full"
+        jsonb score_input "nullable: сила на старте, журнал охоты, оценка сборки — для runs:rescore"
     }
 
     ACCOUNT_SESSION {
@@ -168,7 +180,7 @@ erDiagram
         enum platform
         enum place "miniapp|web|channel: channel — /start бота"
         enum start_kind "organic|click|invite|telegram_affiliate|friend|notification|link|tagged|unknown"
-        string start_param "nullable: из подписанного initData"
+        string start_param "nullable: из подписанного initData, до 512 знаков; у прямой ссылки сети — l-<код>_<метки>"
         string start_ref "nullable: код клика, id партнёра Telegram, набор пар ссылки с метками"
         string client_platform "nullable: подсказка клиента"
         string client_version "nullable"
@@ -182,14 +194,14 @@ erDiagram
         uuid account_id PK,FK
         datetime first_at "самая ранняя сессия"
         enum first_start_kind
-        string first_start_param "nullable"
+        string first_start_param "nullable: до 512 знаков"
         string first_start_ref "nullable"
         string first_client_platform "nullable"
         enum first_device_class
         datetime last_seen_at
         datetime last_touch_at "nullable: последняя сессия по ссылке"
         enum last_start_kind "nullable"
-        string last_start_param "nullable"
+        string last_start_param "nullable: до 512 знаков"
         string last_start_ref "nullable"
     }
 
@@ -580,6 +592,9 @@ erDiagram
         string partner_tag "nullable: метка prt-… (Р116), не владелец; к карточке партнёра не привязана"
         string title "nullable: название из панели; пусто — показывается кампания"
         datetime hidden_at "nullable: скрыт в панели; запуски по нему считаются"
+        string postback_url "nullable: адрес постбэка с макросами (T-0070); пусто — у ссылки своего адреса нет, действует общий адрес партнёра"
+        datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
+        string_array postback_events "по умолчанию registration; CHECK: только registration, purchase_first, purchase_repeat, d1_return"
         uuid created_by "nullable, без внешнего ключа"
         datetime created_at
     }
@@ -593,26 +608,27 @@ erDiagram
         string device_class "nullable"
         string ip_prefix "nullable: подсеть, не адрес"
         string language "nullable"
-        json network_params "nullable: подставленные сетью макросы; обнуляются через 31 сутки"
+        json network_params "nullable: подставленные сетью макросы и, у ссылки с партнёром или адресом постбэка, click_id и sub1…sub5; обнуляются через 31 сутки"
     }
 
     AD_CONVERSION {
         uuid conversion_id PK "идентификатор события для приёмника: один на событие и назначение"
         string network "имя назначения, как destination: колонка нужна откату кода"
-        string destination "adsgram|s2s|partner; CHECK"
+        string destination "adsgram|s2s|partner; CHECK. s2s — адрес ссылки без владельца, partner — адрес ссылки партнёра или общий адрес партнёра (T-0070)"
         string link_code FK
-        string click_id FK "уникален с целью и назначением при цели 1, 2, 4: одна регистрация, первая покупка и возврат на клик"
+        string click_id FK "nullable: пуст у запуска по прямой ссылке; с целью и назначением при цели 1, 2, 4 уникален: одна регистрация, первая покупка и возврат на клик, а без клика — на аккаунт"
         uuid account_id FK
         int goal "код события: 1 регистрация, 2 первая покупка, 3 повторная, 4 возврат на следующий день; CHECK 1–4"
         uuid purchase_id FK "nullable, уникален с назначением: у целей 2 и 3 — всегда, у остальных — никогда"
         enum status "pending|sent|failed|skipped"
-        string reason "nullable: no_token, team, no_macros"
+        string reason "nullable: no_token, team, no_macros, no_address (адрес постбэка снят), no_click_id (в шаблоне {click_id}, а в клике его не было)"
         int attempts
         datetime next_attempt_at "очередь отправки"
         int http_status "nullable: последний ответ сети"
         string last_error "nullable: ответ сети, без токена"
         datetime created_at
         datetime sent_at "nullable: есть ровно у отправленной, CHECK"
+        json network_params "nullable: метки сети с прямого запуска, как у link_click; у конверсии по клику пусто; обнуляются через 31 сутки"
     }
 
     FEATURE_FLAG {
@@ -934,6 +950,9 @@ erDiagram
         string payout_currency "nullable: код из ядра курсов"
         string payout_method "nullable: реквизиты словами"
         decimal share_percent "nullable, 0–100: записывается, не начисляется до модели учёта (О44)"
+        string postback_url "nullable: общий адрес постбэка партнёра с макросами (T-0070); действует на ссылки партнёра без своего адреса"
+        datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
+        string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
     }
 
     PARTNER_BINDING {
@@ -1000,6 +1019,44 @@ erDiagram
         datetime updated_at
     }
 
+    PROXY_SUBSCRIPTION {
+        string key PK "одна строка: main (CHECK)"
+        string name
+        bytes url_iv "12 байт: адрес подписки только шифртекстом"
+        bytes url_tag "16 байт подписи GCM"
+        bytes url_ct "шифртекст адреса"
+        string url_key_id "отпечаток ключа шифрования"
+        string url_hint "хост …abcd: сверить с кабинетом поставщика"
+        boolean enabled
+        string[] countries "ISO-коды стран узлов; пусто — любые"
+        datetime last_refresh_at "nullable"
+        boolean last_refresh_ok "nullable"
+        string last_refresh_note "nullable: итог словами, без адреса"
+        int provider_interval_hours "nullable: Profile-Update-Interval"
+        bigint traffic_used_bytes "nullable"
+        bigint traffic_total_bytes "nullable"
+        datetime expires_at "nullable"
+        uuid updated_by "без внешнего ключа"
+        datetime updated_at
+    }
+
+    PROXY_SUBSCRIPTION_NODE {
+        string subscription_key PK "и FK на PROXY_SUBSCRIPTION: удаление подписки уносит узлы"
+        string node_key PK "16 hex от параметров узла, название не влияет"
+        int slot UK "вход Xray: порт = XRAY_SOCKS_PORT_BASE + slot"
+        string protocol "vless, vmess, trojan или shadowsocks"
+        string name
+        string country "nullable: из названия узла"
+        string host
+        string state "unknown, healthy или down (CHECK)"
+        int failures
+        int latency_ms "nullable"
+        datetime last_probe_at "nullable"
+        datetime next_probe_at
+    }
+
+    PROXY_SUBSCRIPTION ||--o{ PROXY_SUBSCRIPTION_NODE : "узлы подписки"
+
     ACCOUNT_RESTRICTION {
         uuid restriction_id PK
         uuid account_id FK "удалённый аккаунт уносит свои строки"
@@ -1044,6 +1101,7 @@ erDiagram
         int place "с единицы; при равном времени выше показавший раньше"
         int board_size "игроков в таблице своей доски аккаунта"
         string board "common / full: доска аккаунта на момент закрытия (T-0114), по умолчанию common"
+        string division "ruby / gold / silver / bronze: по месту и размеру доски на закрытии (T-0295); null у сезонов, закрытых раньше"
     }
 
     SEASON_REWARD {
@@ -1120,6 +1178,17 @@ erDiagram
         int hits "сколько раз правило изменило результат входа игрока за сутки; CHECK не меньше нуля"
     }
 
+    NAME_RULE_CANDIDATE {
+        uuid candidate_id PK "кандидаты в правила имён, Р168, T-0341: только агрегат, без аккаунтов и ников"
+        enum kind "word, pair; UNIQUE вместе с token"
+        string token "слово или пара слов, до 64 знаков, в нижнем регистре"
+        int players "разных игроков за 30 суток на момент последнего расчёта; не меньше 20"
+        datetime first_seen_at
+        datetime computed_at
+        datetime dismissed_at "nullable: «Не нужно», расчёт слово не показывает и не воскрешает"
+        uuid dismissed_by "nullable: кто скрыл, без внешнего ключа"
+    }
+
     ACHIEVEMENT_RARITY {
         string task_id PK "и FK на TASK_DEF: достижение, у которого считается «есть у N%»"
         int holders "выполнили из населения"
@@ -1131,6 +1200,33 @@ erDiagram
         uuid account_id PK,FK "каскадом: удалённый аккаунт уносит избранное"
         int slot PK "1…3 (CHECK): порядок показа в профиле"
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
+    }
+
+    PASS_PROGRESS {
+        uuid account_id PK,FK "каскадом"
+        string month_key PK "ГГГГ-ММ по Москве (CHECK)"
+        int points "не меньше нуля (CHECK); растёт под UPDATE … SET points = points + n"
+        datetime updated_at
+    }
+
+    PASS_SEASON {
+        string month_key PK "ГГГГ-ММ (CHECK); нет строки на месяц — лента по умолчанию из кода"
+        jsonb tiers "ровно 30 записей { tier, free, vip } (CHECK); награда — монеты, самоцветы, осколки, буст"
+        datetime published_at
+    }
+
+    PASS_CLAIM {
+        uuid account_id PK,FK "каскадом"
+        string month_key PK "ГГГГ-ММ"
+        smallint tier PK "1…30 (CHECK)"
+        string lane PK "free или vip (CHECK)"
+        datetime claimed_at "ключ не даёт забрать награду дважды"
+    }
+
+    BOOST_CREDIT {
+        uuid account_id PK,FK "каскадом"
+        string boost_id PK "id буста из каталога бустов"
+        int count "подарки, не меньше нуля (CHECK); тратит включение буста на забег (T-0312)"
     }
 ```
 
@@ -1178,6 +1274,10 @@ erDiagram
   дубль в бота: доставлено, игрок заблокировал бота, площадка отказала;
   пишется один раз, повтор задания его не перепишет. Пусто — в бота не
   уходило: вид не дублируется, игрок выключил его или писать нельзя.
+  Напоминания (T-0128) — три вида в той же таблице: `season_overtaken`
+  (ключ `season_overtaken:сезон:игровой день`), `season_closing`
+  (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
+  день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -1258,6 +1358,24 @@ erDiagram
   до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
   транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
   вместе с прогрессом заданий, редкость не трогает.
+- **`PASS_PROGRESS`, `PASS_SEASON`, `PASS_CLAIM`, `BOOST_CREDIT` — батл-пасс**
+  (`35-stage4-plan.md` Р46, §3.15, T-0311): месяц — календарный по Москве
+  (UTC+3 без летнего времени), ключ `ГГГГ-ММ`; граница — 1-е число 00:00 МСК.
+  Очки пасса — забор задания с `task_def.pass_points > 0` прибавляет их
+  `PASS_PROGRESS` текущего месяца одной командой `points = points + n`, и
+  только тому запросу, чья отметка «забрано» встала первой. Ступень не
+  хранится: `floor(points / pass.points-per-tier)`, не больше 30. Ленты
+  месяца — `PASS_SEASON.tiers` (30 записей `{ tier, free, vip }`), нет строки —
+  лента по умолчанию из `battle-pass/pass-defaults.ts`; порченая лента
+  заменяется умолчанием, ошибка идёт в лог. Забор награды — начисление
+  кошельком по ключу `pass:{месяц}:{ступень}:{лента}:{аккаунт}:{ресурс}` с
+  причиной `pass_reward`, затем одна транзакция: `INSERT … ON CONFLICT DO
+  NOTHING` в `PASS_CLAIM` и, если награда с бустом, `BOOST_CREDIT` `+count`.
+  Упавший между кошельком и журналом забор повторяется без второго
+  начисления; проигравший гонку журнала получает `409`. VIP-лента
+  проверяется по VIP в момент забора, поэтому купленный посреди месяца VIP
+  открывает и пройденные ступени. Вайп стирает очки, журнал и подарки, ленты
+  месяца остаются.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -1367,14 +1485,20 @@ erDiagram
   первой, и её первичный ключ делает закрытие идемпотентным при любом числе
   реплик. Незакрытых сезонов в таблице нет — идущую неделю показывает живая
   таблица в Redis (`seasons:<сезон>:<сложность>` — общая — и
-  `seasons:<сезон>:full:<сложность>` — полная, проекции `run`). Итог
-  считается из `run` (`ranked`, `finished_at` в окне недели), а не из Redis,
+  `seasons:<сезон>:full:<сложность>` — полная, проекции `run`; сезон по очкам —
+  те же ключи с `pts:` перед ключом сезона, `tasks/T-0294`). Итог
+  считается из `run` (`ranked`, `finished_at` в окне недели; в сезоне по очкам —
+  по `points`, в сезоне по времени — по `survival_sec`, в `best_sec` лежит то
+  число, что ранжировало сезон), а не из Redis,
   поэтому снятие забега модератором до закрытия учтено само. Награда одна на
   пару (сезон, аккаунт) и ждёт «Забрать». Таблиц две на сложность (Р104,
   `tasks/T-0114`): аккаунт со скрытым ограничением «Отдельная доска» на момент
   закрытия ранжируется в полной среди всех, остальные — в общей без таких
   аккаунтов; `season_result.board` и `board_size` — своей доски, награды те же и
-  только внутриигровые (монеты и престиж). Монеты кладёт кошелёк ключом
+  только внутриигровые (монеты и престиж). Дивизион (`season_result.division`,
+  `tasks/T-0295`, Р152) пишется при закрытии тем же проходом по месту и размеру
+  доски (рубин — первый процент, золото — 10 %, серебро — 35 %, остальные —
+  бронза) и наград не меняет; у сезонов, закрытых до задачи, он `null`. Монеты кладёт кошелёк ключом
   `season:<сезон>:<аккаунт>` с причиной `season_reward`, потом `status`
   становится `claimed` условным `UPDATE`. Проверки вида, статуса и места —
   `CHECK` в миграции. Всё уходит вместе с аккаунтом; план вайпа оставляет
@@ -1556,6 +1680,14 @@ erDiagram
   `proxy:<id>`, поэтому строку не переложить под другой прокси. Ни связей с
   аккаунтом, ни внешних ключей: «кто менял» переживает человека. При вайпе
   таблицы остаются — это настройка команды, а не данные игрока.
+- **`PROXY_SUBSCRIPTION` и `PROXY_SUBSCRIPTION_NODE` — подписка Xray для
+  прокси** (Р101, T-0093, поток — §4.30). Одна подписка на систему (`key =
+  'main'`). Адрес — только шифртекстом `SecretCipher` (имя шифртекста
+  `proxy_subscription:main`); в панель уходит подсказка «хост …abcd». Секретов
+  узла (UUID, пароль) в таблицах нет — они только в конфиге Xray и в ответе
+  поставщика. Слот узла уникален: порт входа Xray = база + слот, и узел не
+  меняет порт между обновлениями. При вайпе таблицы остаются — это настройка
+  команды.
 - **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
   §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
   забег, ни оплата: проход раз в минуту выводит их из фактов — первого
@@ -1567,7 +1699,17 @@ erDiagram
   событие для одного назначения (T-0069): `destination` — `adsgram`, `s2s`
   или `partner`, `goal` — код события (`registration`, `purchase_first`,
   `purchase_repeat`, `d1_return`), ключи — на (клик, цель, назначение) и
-  (оплата, назначение).
+  (оплата, назначение). Запуск по прямой ссылке на Mini App (T-0181, Р121)
+  клика не оставляет: `click_id` пуст, метки сети лежат на самой строке в
+  `network_params`, а регистрацию, первую покупку и возврат держит ключ на
+  (аккаунт, цель, назначение) при пустом `click_id`. Назначения `s2s` и
+  `partner` (T-0070) — отправка на адрес постбэка ссылки или, если его нет,
+  партнёра-владельца: адреса лежат в `link` и `partner`
+  (`postback_url`, `postback_since`, `postback_events`), строки по ним
+  выводятся только из кликов, прямой запуск их не порождает. Возврат на следующий
+  день (`goal = 4`, T-0071) — третий запрос прохода по кликам: у выбравших
+  `d1_return` назначений, по засчитанному забегу в сутки сразу за днём первого
+  засчитанного забега игрока (МСК).
 - **Рассылки** (WP17, поток — §4.18). `BROADCAST` — черновик до старта,
   после — запись истории: текст неизменен, кто создал, одобрил и запустил —
   без внешних ключей. `BROADCAST_DELIVERY` — доставка каждому получателю,
@@ -1864,6 +2006,7 @@ flowchart TD
     CG --> ST
     API --> ST
     API --> FX
+    API --> PK
     SH --> DT
     ADM --> DT
 ```
@@ -2046,6 +2189,7 @@ flowchart LR
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
         PROXIES["proxies<br/>прокси для исходящих запросов:<br/>список и режимы сервисов из панели,<br/>пароль шифртекстом, снимок маршрутов<br/>в памяти, реализовано"]
+        SUBSCR["proxies/subscription<br/>подписка Xray: обновление под замком,<br/>слоты узлов, конфиг в общий том,<br/>проверки узлов, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
@@ -2065,10 +2209,12 @@ flowchart LR
         PARTNERS["partners<br/>карточки партнёров, их ссылки,<br/>привязка по первому входу, реализовано"]
         RESTR["restrictions<br/>ограничения игрока по видам и на срок:<br/>«можно ли» с кешем 30 с, снятие по сроку<br/>под локом, реализовано"]
         SEASONS["seasons<br/>недельный сезон рейтинга: таблица недели,<br/>закрытие по понедельникам UTC, награды<br/>за порог и за место, друзья, реализовано"]
+        FEED["feed<br/>лента живых событий на главной:<br/>длинный забег и рекорд недели за сутки,<br/>ответ из кэша реплики, реализовано"]
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, перебор прокси по режиму<br/>сервиса, запись о каждой попытке<br/>в приёмник, реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
-        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
@@ -2156,6 +2302,7 @@ flowchart LR
     AUTH --> REDIS
     AUTH -. читает правила: кэш, канал name-rules:changed .-> NAME_RULES
     AUTH -. вход → буфер в памяти → очередь name-rule-hits раз в 5 с → счётчик name_rule_hit_day .-> NAME_RULES
+    NAME_RULES -. ночью 03:15 UTC под замком: account → слова в памяти → name_rule_candidate; панель → правило через NameRulesService .-> PG
     NAME_RULES --> PG
     NAME_RULES -- name-rules:changed --> REDIS
     AUTH -. слушатели входа .-> ATTR
@@ -2222,6 +2369,12 @@ flowchart LR
     PROXIES -- "канал proxies:changed" --> REDIS
     PROXIES -. пароль прокси: тот же шифр, что у ключей .-> SECRETS
     OUTBOUND -. "маршруты: прокси и режимы (снимок в памяти)" .-> PROXIES
+    PROXIES -. "узлы подписки после ручных прокси" .-> SUBSCR
+    SUBSCR -- "proxy_subscription, proxy_subscription_node" --> PG
+    SUBSCR -. "адрес подписки: тот же шифр" .-> SECRETS
+    SUBSCR -. "proxy.subscription: только напрямую" .-> OUTBOUND
+    SUBSCR -- "замок proxy-subscription:refresh:lock" --> REDIS
+    ADMINAPI -. "подписка: обновить, проверить, права proxies.*" .-> SUBSCR
     OUTBOUND -- "outbound:route:сервис — какой прокси сработал, 10 минут" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
@@ -2283,6 +2436,7 @@ flowchart LR
     ACHIEV -. "определения, прогресс «максимум» для друзей и уровня" .-> TASKS
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
+    ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
@@ -2291,15 +2445,28 @@ flowchart LR
     WIPE -. "начисления по ключам покупок и wipe:*" .-> WALLET
     CADDY -- "/api/v1/seasons" --> SEASONS
     SEASONS -- "season, season_result, season_reward; итоги из run" --> PG
-    SEASONS -- "seasons:сезон:сложность, лок закрытия" --> REDIS
+    SEASONS -- "seasons:[pts:]сезон:сложность, лок закрытия" --> REDIS
     RUNS -. "записанный забег и смена ранга, RunsHooks" .-> SEASONS
     SEASONS -. "награда ключом season:сезон:аккаунт" .-> WALLET
     SEASONS -. "принятые друзья для таблицы друзей" .-> FRIENDS
     SEASONS -. "ограничение рейтинга: убрать, вернуть, исключить из итогов" .-> RESTR
+    CADDY -- "/api/v1/feed" --> FEED
+    FEED -- "feed:events, feed:week-top:сезон:сложность" --> REDIS
+    FEED -- "имена: account.display_name" --> PG
+    RUNS -. "записанный забег, RunsHooks" .-> FEED
+    FEED -. "расписание сезонов: рекорд недели" .-> SEASONS
+    FEED -. "скрытые: закрытый рейтинг и отдельная доска" .-> RESTR
     NOTIFBOT -- "задания, окно вида" --> REDIS
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
     NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    REMINDERS -. "season_overtaken, season_closing, daily_reward_ready: notify" .-> NOTIF
+    REMINDERS -- "награда дня, рейтинговые забеги, account_messaging, итог суток" --> PG
+    REMINDERS -- "лок прохода, курсоры, снимок, окна потолка" --> REDIS
+    REMINDERS -. "расписание сезона, таблица недели" .-> SEASONS
+    REMINDERS -. "bot.reminders" .-> ACCSET
+    REMINDERS -. "порт Messengers: sendToChat, суточный отчёт" .-> TGADP
+    TGADP -. "кнопка rm:off: bot.reminders = false" .-> ACCSET
     CADDY -- "/api/v1/me/badges" --> BADGES
     BADGES -. "новые предметы" .-> ITEMS
     BADGES -. "подарки и заявки" .-> FRIENDS
@@ -2452,12 +2619,13 @@ sequenceDiagram
             RU->>RU: вердикт: слоты оружия, время по часам сервера,<br/>темп убийств и уровней, отпечаток контента
             RU->>DB: итог с вердиктом и причинами
             opt вердикт ok и без читов
-                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:{сложность} (общая)<br/>и runs:leaderboard:full:{сложность} (полная)
+                RU->>R: MULTI: ZADD GT в доски аккаунта —<br/>runs:leaderboard:pts:{сложность} (общая)<br/>и runs:leaderboard:pts:full:{сложность} (полная) —<br/>счёт доски — очки забега;<br/>победа над стражем — ещё SADD в lb:rubezh:{сложность}
             end
-            RU-->>Q: место, лучшее время, вердикт
+            RU-->>Q: место, время лучшего по очкам забега, вердикт
             RU--)H: записан новый забег
             H--)R: сводка плейтеста — счётчики
             H--)R: подозрительный — карточка в очередь admin-notify,<br/>не чаще раза в час на аккаунт
+            H--)DB: награда в очередь rewards: победа над стражем<br/>при вердикте ok платится ×2 (RUBEZH_REWARD_MUL)
         end
     end
 ```
@@ -2480,6 +2648,15 @@ sequenceDiagram
   обе доски, аккаунт со скрытым ограничением «Отдельная доска» — только в
   полную, а ответ на итог, место и профиль берутся из доски того, кто
   смотрит. Форма ответа у всех одна (`14-scalability.md`, §4.2).
+- **победа над стражем рубежа** (T-0121, Р102). Итог несёт `rubezh`; победу
+  сервер проверяет сам: страж не мог пасть раньше отметки плюс минимального боя
+  и позже конца забега, иначе причина `rubezh_implausible` — подозрение без
+  множителя и без рейтинга. Засчитанная победа пишется в набор Redis
+  `lb:rubezh:{сложность}` (accountId) вместе с рекордом, а доска читает флаги
+  всей страницы одним `SMISMEMBER`. Набор — проекция, как и доски:
+  пересборка собирает его заново по `run.rubezh_*` и `ranked`.
+- **пролог** (T-0279, Р151) записывается тем же приёмом, но вне рейтинга и
+  заданий; победа и награда — отдельный поток (§4.35).
 
 ### 4.3 Награда за просмотр рекламы (этап 4, реализовано ядро)
 
@@ -3395,11 +3572,13 @@ sequenceDiagram
 фактов проходом раз в минуту — ни забег, ни оплата о сети не знают.
 
 Слой «событие → назначение» (T-0069): игра порождает события
-`registration`, `purchase_first`, `purchase_repeat` (и закладывает
-`d1_return`), а получатели — назначения `adsgram`, `s2s`, `partner` — адаптеры
+`registration`, `purchase_first`, `purchase_repeat` и `d1_return` (возврат на
+следующий день, T-0071), а получатели — назначения `adsgram`, `s2s`, `partner` — адаптеры
 с общим контрактом. Какое назначение что получает, проход берёт из одного
 набора (`destinations/destination-targets.ts`); сервис отправляет то, что
-подготовило назначение. Сейчас подключён один адаптер — AdsGram.
+подготовило назначение. Подключены три адаптера: AdsGram, «адрес сети» (`s2s`) и
+«партнёр» (`partner`) — последние два на общем шаблоне адреса постбэка
+(T-0070, схема ниже).
 
 ```mermaid
 sequenceDiagram
@@ -3416,10 +3595,13 @@ sequenceDiagram
     L--)DB: link_click + network_params (белый список профиля сети)
     L-->>U: запуск игры с c-<клик>
     Note over U,DB: вход: acquisition.first_start_ref = клик, аккаунт создан после клика
+    AG-->>U: прямая ссылка: t.me/<бот>?startapp=l-<код>_campaign-…_clickid-…_record-…
+    Note over U,DB: клика у сервера нет: вход по подписанному initData, first_start_kind = link,<br/>first_start_param = весь параметр с метками (до 512 знаков)
 
     loop раз в минуту
         C->>DB: дописать регистрации: первый забег от 30 с за 7 суток или первый запуск
         C->>DB: дописать покупки: live, оплачена, без возврата, отлежалась 10 минут, за 30 суток
+        C->>DB: то же для запуска по прямой ссылке (direct-launch-sweep): метки из first_start_param в network_params строки, click_id пуст
         Note right of DB: ON CONFLICT DO NOTHING — повтор не задваивает
         C->>DB: созревшие pending, до 100
         C->>D: подготовить запрос по событию
@@ -3438,13 +3620,61 @@ sequenceDiagram
                 C->>DB: failed — повторить можно из панели
             end
         end
-        C->>DB: макросы кликов старше 31 суток → NULL
+        C->>DB: макросы кликов и network_params конверсий старше 31 суток → NULL
     end
 ```
 
 Токен в логи не попадает: адрес постбэка пишется с `token=***`. Аккаунты
 команды пишутся пропущенными (`team`) — их отправляют руками, чтобы
 проверить связку с кабинетом.
+
+Постбэки на свой адрес (`s2s` и `partner`, T-0070): партнёр дописывает к ссылке
+`click_id` и `sub1`…`sub5`, переходник сохраняет их на клике, а события новичка
+— регистрация, покупки и возврат на следующий день, какие выбраны у адреса, —
+уходят GET-запросом на адрес ссылки или партнёра. Прямой запуск `l-<код>` этим
+назначениям строк не даёт — у него нет клика. Возврат — третий запрос прохода
+по кликам (`click-launch-sweep.ts`): засчитанный забег в игровые сутки (полночь по
+Москве) сразу за днём первого засчитанного забега.
+
+```mermaid
+sequenceDiagram
+    participant U as Игрок
+    participant L as links (/r/:код)
+    participant DB as PostgreSQL
+    participant C as ad-conversions (под локом)
+    participant T as назначения s2s и partner
+    participant R as приёмник постбэка
+
+    U->>L: клик: /r/<код>?click_id=…&sub1=…
+    L--)DB: link_click.network_params: click_id, sub1…sub5<br/>(ссылка с партнёром или своим адресом)
+    L-->>U: запуск игры с c-<клик>
+
+    loop раз в минуту
+        C->>DB: набор назначений: адрес ссылки, иначе адрес партнёра;<br/>события и postback_since — у того, чей адрес действует
+        C->>DB: дописать регистрации и покупки по кликам после postback_since<br/>(прямые запуски s2s и partner не порождают)
+        C->>DB: дописать возвраты: у выбравших d1_return, засчитанный забег<br/>в сутки сразу за днём первого засчитанного забега (МСК)
+        C->>DB: созревшие pending + адрес ссылки или партнёра
+        C->>T: подготовить запрос
+        alt адрес снят
+            C->>DB: skipped, причина no_address
+        else в шаблоне {click_id}, а в клике его не было
+            C->>DB: skipped, причина no_click_id
+        else адрес не прошёл проверку: не https, логин, порт,<br/>внутренний адрес по имени или по тому, во что оно разрешается
+            C->>DB: failed без повтора (имя не разрешилось — повтор)
+        else
+            T->>R: GET адрес с макросами, redirect: manual, event_id = conversion_id
+            alt 2xx
+                C->>DB: sent
+            else 408, 429, 5xx, таймаут
+                C->>DB: повтор по расписанию, тот же event_id
+            else 3xx, 4xx
+                C->>DB: failed — перенаправления не выполняются
+            end
+        end
+    end
+```
+
+В лог идёт `https://host/path?***`, в журнал — текст без адреса и без тела ответа.
 
 ### 4.21 Ограничение рейтинга (этап 4, реализовано)
 
@@ -3733,6 +3963,7 @@ sequenceDiagram
                 P-->>S: 0 строк — пропустить, события нет
             else вставлена
                 S->>P: INSERT season_result — два rank(): общая без аккаунтов с отдельной доской, полная по всем; строка из доски аккаунта
+                S->>P: UPDATE season_result: division по place и board_size (рубин / золото / серебро / бронза)
                 S->>P: INSERT season_reward пачками — награда за место или за порог
                 S->>P: UPDATE season: players, rewarded
                 P-->>S: коммит
@@ -3913,6 +4144,53 @@ sequenceDiagram
   запрос в обход режима; запись в журнал не пишется, попытки не было.
 - **Память маршрута — подсказка:** Redis лёг — план без запомненного, вызов
   не падает и не ждёт дольше 300 мс.
+
+#### Подписка Xray: от адреса до SOCKS-входа (Р101, T-0093)
+
+Адрес подписки обновляется по расписанию (раз в `proxy.subscription.refresh-hours`,
+не меньше интервала поставщика, потолок 168 часов) и кнопкой «Обновить сейчас»,
+не чаще раза в минуту. Узлы становятся прокси для клиента исходящих: на узел один
+SOCKS-вход контейнера Xray в сети `tunnel` (без выхода наружу, порты не
+публикуются).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as ProxySubscription (расписание, кнопка)
+    participant R as Redis (замок)
+    participant P as Поставщик подписки
+    participant K as @bh/proxy-kit
+    participant V as Том xray-config
+    participant X as Контейнер Xray (run.sh)
+    participant O as Outbound (клиент исходящих)
+    participant N as Узел подписки
+
+    S->>R: SET proxy-subscription:refresh:lock NX PX 120000
+    S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***, заголовки User-Agent, x-hwid и x-device-os)
+    P-->>S: список ссылок (base64 или текст) либо JSON-конфиги Xray
+    S->>K: parseSubscription, assignSlots, buildXrayConfig
+    S->>V: config.json атомарно: временный файл и rename
+    S->>S: транзакция: узлы upsert, пропавшие удалены, итог, трафик, срок
+    X->>V: раз в 5 с: хеш конфига изменился?
+    X->>X: xray run -test; принят — перезапуск, нет — прежний конфиг остаётся
+    S->>O: узлы в перебор: socks5://xray:порт, лучшие по задержке после ручных прокси
+    O->>X: запрос через SOCKS-вход узла
+    X->>N: исходящее подключение узла (VLESS, VMess, Trojan, Shadowsocks)
+```
+
+- **Сбой поставщика не обнуляет пул:** сеть, код ответа, формат, ноль подходящих
+  узлов, нет каталога тома — узлы и конфиг остаются прежними, меняется только
+  итог в строке подписки. Повтор после неудачи — через 15 минут.
+- **Файла конфига нет** (том пересоздан, сервер переехал), а подписка свежая:
+  тик обновляет её сразу, не через период. Каталога тома нет или прошлое
+  обновление провалилось — не трогаем, действует повтор через 15 минут.
+- **Конфиг пишется раньше таблицы:** нет контейнера Xray — узлы, которых он не
+  видит, в таблицу не попадают.
+- **Проверка узла** — запрос на ipify через узел (как «Проверить» у ручного
+  прокси), не раньше 20 секунд после записи конфига: Xray перезапускается.
+  Проверяет та реплика, что держит замок; остальные собирают пул из таблицы.
+- **В перебор не все узлы:** `proxy.subscription.candidates` лучших здоровых
+  (по задержке, фильтр стран подписки), после ручных прокси.
 
 ### 4.31 Донат проекту: заказ, оплата, знак, возврат (этап 4, реализовано серверная часть)
 
@@ -4148,6 +4426,111 @@ sequenceDiagram
   `pnpm balance:sim`; черновик и база сравниваются по медианам и по коридорам
   `balance-targets` своего снимка.
 
+### 4.34 Напоминания бота: проход, лента, очередь, бот (этап 4, реализовано)
+
+Включается ключом `reminders.enabled` (по умолчанию выключен). Проход идёт
+раз в 10 минут; лента и очередь дубля уже работают для заявок и подарков —
+напоминания лишь новые виды в них (`35-stage4-plan.md` WP28, `tasks/T-0128`).
+
+```mermaid
+sequenceDiagram
+    participant S as RemindersScanner<br/>(каждая реплика)
+    participant R as Redis
+    participant P as Postgres
+    participant N as notifications<br/>(лента)
+    participant Q as notifications-bot<br/>(очередь BullMQ)
+    participant T as Telegram
+    participant U as Игрок
+
+    S->>R: SET reminders:scan:lock NX PX (токен)
+    alt лок у другой реплики
+        R-->>S: nil — проход пропущен
+    else лок взят
+        S->>R: метка отчёта reminders:report:день NX (после 00:10 по Москве)
+        S->>S: тихий час или нет сезона — на этом всё, снимок не трогаем
+        S->>R: снимок reminders:snap:сезон:сложность, ZREVRANGE таблицы недели
+        S->>P: reachable(обогнанные): без бана, can_message
+        S->>P: closingPage / dailyPage — страница по account_id, не больше 500
+        S->>R: EXISTS bot-notify:аккаунт:reminder — конвейером на всех
+        S->>S: chooseKind — один вид на игрока по приоритету
+        S->>N: notify(вид, dedupeKey) — повтор строки не заводит
+        N-->>Q: onCreated: задание, jobId = id уведомления
+        S->>R: курсоры и новый снимок — после записи строк
+        S->>R: DEL лок только своим токеном
+    end
+    Q->>Q: включатель, тихие часы, аккаунт, can_message, bot.reminders
+    Q->>R: SET bot-notify:аккаунт:reminder NX EX (окно потолка)
+    Q->>T: sendMessage: текст, «Открыть игру» и «Не напоминать» (rm:off)
+    T-->>U: сообщение
+    U->>T: нажал «Не напоминать»
+    T->>S: callback_query rm:off (через BotRouter) → bot.reminders = false
+```
+
+- **Одно напоминание на игрока в окно.** Планировщик выбирает один вид и не
+  заводит строку там, где окно занято, а отправитель держит окно второй раз
+  (`SET NX`): две реплики, перезапуск и застрявшее задание второго сообщения
+  не дадут. Окно — `reminders.min-gap-hours`, скользящее.
+- **Тихие часы** проверяются дважды: проход в тихий час ничего не читает и снимок
+  не двигает (обгон за ночь виден утром), а задание, застрявшее до 21:00, в
+  21:05 не уходит и окно не занимает.
+- **Курсор двигается после записи.** Упавший проход повторит страницу; ключ
+  события (`daily_reward_ready:день`, `season_closing:сезон`,
+  `season_overtaken:сезон:день`) не даст второй строки ленты.
+
+### 4.35 Пролог: запись, награда один раз, закрытые разделы (этап 4, реализована серверная часть)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Клиент
+    participant R as RunsService
+    participant G as PrologueService
+    participant W as wallet
+    participant P as Postgres
+    participant D as DailyService / TasksService
+
+    C->>R: POST /runs { mode: prologue, difficultyId: easy, prologue: { won } }
+    R->>G: admit(mode, difficulty)
+    G->>P: account.prologue_done_at
+    alt сложность не easy
+        G-->>C: 400 run_invalid
+    else признак уже стоит
+        G-->>R: endless: обычный забег без наград пролога
+    else признак пуст
+        G-->>R: prologue
+    end
+    R->>R: вердикт антифрода; рейтинг и задания пролог не двигает
+    opt режим prologue, won = true, вердикт не rejected, секунда победы ≈ длине забега, длина ≥ 160 с
+        R->>G: settle(accountId)
+        G->>W: grant монеты, ключ prologue:accountId
+        G->>W: grant самоцветы, ключ prologue:accountId:gems
+        G->>P: UPDATE account SET prologue_done_at = now() WHERE prologue_done_at IS NULL
+    end
+    R->>P: запись забега с mode
+    C->>D: POST /daily/claim, POST /tasks/:id/claim
+    D->>P: account.prologue_done_at
+    alt признак пуст
+        D-->>C: 409 prologue_required
+    else
+        D-->>C: обычный ответ
+    end
+```
+
+- **Награда — один раз на аккаунт.** Ключ начисления собран из аккаунта, а не
+  забега: два запроса разом и два разных забега-пролога дают одну строку
+  журнала на ресурс. Начисление идёт раньше отметки: упали посередине — повтор
+  итога пройдёт путь целиком, а кошелёк узнает ключ и не удвоит.
+- **Победа — по `prologue.won`, а не по исходу.** Клиент присылает победу как
+  `abandoned` с этим итогом (`deathCause = null`); отклонённый антифродом забег
+  не засчитывается. Правдоподобие: `|prologue.sec − survivalSec| ≤ 1` и
+  `survivalSec` не короче пролога (160 с — приход Стража); иначе забег записан
+  без награды и признака. После сбоя записи (признак уже стоит) повтор итога
+  пишется как `endless`.
+- **Старые аккаунты пролог не проходят.** Миграция ставит признак всем, у кого
+  есть хоть один забег: разделы открыты сразу.
+- **Закрыты два раздела:** награда дня и забор задания. Список заданий
+  отдаётся как обычно — оболочка его просто не показывает.
+
 ## 5. Топология развёртывания
 
 ```mermaid
@@ -4225,3 +4608,43 @@ Staging появится, когда сервер вырастет (`20-env-and-
 продуктовая аналитика — в админ-панели (`29-admin-panel.md`).
 Этапы, на которых эта топология меняется при росте нагрузки, — 
 `14-scalability.md` §3.
+
+### 4.34 Лента живых событий: запись забега, кэш, ответ (этап 4, реализована серверная часть)
+
+Лента на главной (Р114, `35-stage4-plan.md`) — витрина настоящих событий за
+последние сутки: забег не короче порога и забег, обошедший лидера недели.
+События пишет слушатель `RunsHooks.onRecorded`, база не сканируется; игрок на
+запрос ходит только в память реплики (`feed/feed.service.ts`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as RunsHooks
+    participant F as FeedService
+    participant S as SeasonSchedule
+    participant X as Redis
+    participant C as Клиент
+    participant P as Postgres
+    participant Q as AccountRestrictions
+
+    R->>F: забег записан впервые
+    F->>F: рейтинговый, вердикт ok, без читов
+    F->>S: сезон на момент finishedAt
+    F->>X: Lua: записать, если больше, вернуть прежнее (feed:week-top)
+    F->>X: ZADD NX feed:events, убрать старше суток
+    C->>F: GET /feed
+    alt ответ моложе 30 с
+        F-->>C: готовый ответ из памяти реплики
+    else пересчёт, один за раз
+        F->>X: ZREVRANGEBYSCORE feed:events (до 500)
+        F->>Q: скрытые: leaderboard и separate_board
+        F->>P: имена выбранных, без заблокированных
+        F-->>C: события с именем, без accountId и runId
+    end
+```
+
+- **Потеря Redis не страшна.** Пропавший ключ — пустая лента, она наполняется
+  сама; ошибка пересчёта отдаёт прежний ответ, а без него — пустую ленту.
+- **Скрытые игроки** отсеиваются при чтении, а не при записи: ограничение,
+  наложенное в течение суток, убирает уже записанные события.
+- **Имя не копируется в событие** — переименование видно сразу.

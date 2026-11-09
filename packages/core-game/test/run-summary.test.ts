@@ -125,6 +125,11 @@ describe("статистика забега", () => {
     expect(world.stats.elapsedSec).toBeCloseTo(world.stats.tick / 60, 9);
   });
 
+  it("несёт рубеж в итоге: забег короче отметки — страж не приходил (T-0120)", () => {
+    expect(world.stats.elapsedSec).toBeLessThan(600);
+    expect(resultOf(world, GOLDEN_SEED).rubezh).toEqual({ reached: false, clearedSec: null, guardHpPercent: null });
+  });
+
   it("копит собранный опыт вместе с прогрессией", () => {
     expect(world.stats.xpCollected).toBeCloseTo(world.progression.totalXp, 9);
   });
@@ -231,6 +236,13 @@ describe("итог забега", () => {
     spawnEnemy(world, typeIndex, world.player.x + offset, world.player.y);
     return world;
   }
+
+  it("сценарий без набора подстройки не несёт: в итоге нет поля pressure", () => {
+    const world = worldWithEnemyAt(DUMMY, 200);
+    const result = resultOf(world, 1);
+    expect(result.pressure).toBeUndefined();
+    expect("pressure" in result).toBe(false);
+  });
 
   it("называет врага, который добил игрока", () => {
     const world = worldWithEnemyAt(BITER, 8);

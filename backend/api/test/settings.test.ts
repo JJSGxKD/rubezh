@@ -130,6 +130,26 @@ describe("каталог настроек", () => {
   });
 });
 
+describe("лента событий (T-0174)", () => {
+  const feed = [SETTINGS.feedLongRunSec, SETTINGS.feedMaxShown, SETTINGS.feedPerPlayer, SETTINGS.feedRefreshSec];
+
+  it("четыре ключа группы «Лента событий» с пределами и умолчаниями из спецификации", () => {
+    expect(feed.map((setting) => [setting.key, setting.group, setting.range?.min, setting.range?.max, setting.fallback])).toEqual([
+      ["feed.long-run-sec", "Лента событий", 60, 3600, 600],
+      ["feed.max-shown", "Лента событий", 1, 50, 20],
+      ["feed.per-player", "Лента событий", 1, 10, 2],
+      ["feed.refresh-sec", "Лента событий", 60, 3600, 300],
+    ]);
+  });
+
+  it("значения вне пределов отклоняются", () => {
+    expect(SETTINGS.feedLongRunSec.schema.safeParse(59).success).toBe(false);
+    expect(SETTINGS.feedMaxShown.schema.safeParse(51).success).toBe(false);
+    expect(SETTINGS.feedPerPlayer.schema.safeParse(0).success).toBe(false);
+    expect(SETTINGS.feedRefreshSec.schema.safeParse(3601).success).toBe(false);
+  });
+});
+
 describe("ссылки «Связаться с разработчиком»", () => {
   const keys = [SETTINGS.contactUrlTelegram, SETTINGS.contactUrlMax, SETTINGS.contactUrlVk, SETTINGS.contactUrlWeb];
 

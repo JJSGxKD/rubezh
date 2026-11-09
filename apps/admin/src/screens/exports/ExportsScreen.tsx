@@ -59,7 +59,7 @@ export function ExportsScreen() {
           <DataTable
             rows={state.data.exports}
             rowKey={(row) => row.exportId}
-            empty="Выгрузок ещё не было"
+            empty="Выгрузок ещё не было — выберите период и нажмите «Собрать и скачать» выше"
             columns={[
               { title: "Когда", render: (row) => formatDateTime(row.createdAt) },
               { title: "Откуда", render: (row) => EXPORT_SOURCES[row.source] ?? row.source },

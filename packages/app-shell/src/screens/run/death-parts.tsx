@@ -8,6 +8,7 @@ import "../../i18n/run";
 // Строки награды — в словаре аккаунта: он приезжает с этим чанком, а не с
 // первой загрузкой.
 import "../../i18n/account";
+import { TUTORIAL_DIFFICULTY_ID } from "../../state/difficulty";
 import { unlockLabel, unlocksGainedBetween } from "../../state/level-unlocks";
 import type { RunRewardView } from "../../state/progress";
 import { track } from "../../state/shell";
@@ -17,6 +18,40 @@ import { ItemIcon } from "../item-icons";
 import { bestWeapon, levelBar } from "./death-rules";
 import { isEvolutionWeapon } from "./evolution-hints";
 import { SecondChance, continueOfferedPayload, useSecondChanceStages, type SecondChanceProps } from "./SecondChance";
+
+/**
+ * Медальон исхода слева от ленты окна итогов: круг с кольцом тона и светом
+ * изнутри, как `ItemMedallion` в сундуке. У короны за кругом — медленные лучи,
+ * тот же веер, что за сундуком (`effects.md` §6.1): вращается слой целиком
+ * (только `transform`). Общий для итогов и окна «Рубеж удержан!» пролога.
+ */
+export function ResultsMedallion(props: { icon: "skull" | "crown"; tone: string }): ReactNode {
+  return (
+    // Обёртка с isolate: лучи уходят под круг, но остаются над фоном окна —
+    // внутри круга с заливкой их закрывала бы анимация появления.
+    <span className="relative isolate inline-flex shrink-0">
+      {props.icon === "crown" ? (
+        <span aria-hidden="true" className="pointer-events-none absolute top-1/2 left-1/2 -z-10 -mt-22 -ml-22 size-44">
+          <span className="block size-full animate-chest-rays-in">
+            <span
+              className="block size-full animate-chest-rays-spin rounded-full"
+              style={{
+                backgroundImage: "repeating-conic-gradient(from 0deg, color-mix(in oklab, var(--color-accent) 32%, transparent) 0deg 7deg, transparent 7deg 22deg)",
+                maskImage: "radial-gradient(closest-side, black 30%, transparent 85%)",
+              }}
+            />
+          </span>
+        </span>
+      ) : null}
+      <span
+        className="inline-flex size-11 items-center justify-center rounded-full bg-surface-sunken ring-2 ring-current max-[22.5rem]:size-9 short:size-9"
+        style={{ color: props.tone, backgroundImage: "radial-gradient(closest-side, color-mix(in oklab, currentColor 22%, transparent), transparent)" }}
+      >
+        {props.icon === "crown" ? <Crown size={22} aria-hidden="true" /> : <Skull size={22} aria-hidden="true" />}
+      </span>
+    </span>
+  );
+}
 
 /**
  * Части экрана смерти (design/screens/death.html): шаг со вторым шансом и
@@ -95,9 +130,9 @@ export function ResultsHero(props: { result: RunResult; isNewRecord: boolean; ra
         </div>
         <div className="mt-1 text-xs text-text-muted">{t("run.death.survived")}</div>
       </div>
-      {/* Сложность рядом с итогом: рекорд засчитан именно на ней. */}
+      {/* Плашка — только у обучающего забега: он не рекорд и не идёт в рейтинг. */}
       <div className="mt-3 flex flex-wrap justify-center gap-2">
-        <Badge>{t(`difficulty.${result.difficultyId}.name`)}</Badge>
+        {result.difficultyId === TUTORIAL_DIFFICULTY_ID ? <Badge>{t("run.death.tutorial")}</Badge> : null}
         {/* Читы — видно сразу: иначе «рекорд» бессмертного забега на скриншоте
             выглядит настоящим. */}
         {result.cheats ? (

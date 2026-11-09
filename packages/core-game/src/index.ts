@@ -21,6 +21,8 @@ export * from "./content/weapons";
 export * from "./content/balance-targets";
 export * from "./content/difficulty";
 export * from "./content/drops";
+export * from "./content/rubezh";
+export * from "./content/prologue";
 export * from "./content/stages";
 export * from "./content/boosts";
 export * from "./content/unlocks";

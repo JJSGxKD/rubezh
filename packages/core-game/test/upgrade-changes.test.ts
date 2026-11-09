@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { PASSIVES } from "../src/content/upgrades";
+import { LIMITS, PASSIVES } from "../src/content/upgrades";
 import { WEAPONS } from "../src/content/weapons";
 import { resolvePassiveTypes } from "../src/game/progression/passives";
-import { evolutionChanges, healChanges, passiveChanges, weaponChanges } from "../src/game/progression/upgrade-changes";
+import { evolutionChanges, healChanges, limitChanges, passiveChanges, weaponChanges } from "../src/game/progression/upgrade-changes";
 import { resolveWeaponTypes } from "../src/game/weapons/weapon-types";
 
 // Что даёт вариант выбора: строки «урон 6 → 7» для карточки улучшения.
@@ -136,6 +136,55 @@ describe("что даёт эволюция", () => {
     const changes = evolutionChanges(weapon("hearth", 3), weapon("forge", 3), 3);
 
     expect(changes.find((change) => change.labelKey === "upgrade.stat.aura.areaRadius")).toMatchObject({ from: 140, to: 175 });
+  });
+});
+
+describe("что даёт «Предел»", () => {
+  const limit = (id: string) => {
+    const def = LIMITS.find((candidate) => candidate.id === id);
+    if (def === undefined) throw new Error(`нет записи «Предела» ${id}`);
+    return def;
+  };
+
+  it("процент: множитель 1 → 1,03, подпись параметра навыка", () => {
+    expect(limitChanges(limit("damage"), 0)).toEqual([
+      { labelKey: "upgrade.stat.passive.damage", from: 1, to: 1.03, format: "percent", lowerIsBetter: false },
+    ]);
+  });
+
+  it("накопленное — это и есть «было»: на третьем нажатии 1,06 → 1,09", () => {
+    expect(limitChanges(limit("damage"), 2)).toEqual([
+      { labelKey: "upgrade.stat.passive.damage", from: 1.06, to: 1.09, format: "percent", lowerIsBetter: false },
+    ]);
+  });
+
+  it("перезарядка: множитель убывает, меньше — лучше", () => {
+    expect(limitChanges(limit("cooldown"), 0)).toEqual([
+      { labelKey: "upgrade.stat.passive.cooldown", from: 1, to: 0.98, format: "percent", lowerIsBetter: true },
+    ]);
+  });
+
+  it("здоровье и восстановление — слагаемым", () => {
+    expect(limitChanges(limit("maxHp"), 1)).toEqual([
+      { labelKey: "upgrade.stat.passive.maxHp", from: 10, to: 20, format: "plus", lowerIsBetter: false },
+    ]);
+    expect(limitChanges(limit("regen"), 0)).toEqual([
+      { labelKey: "upgrade.stat.passive.regenPerSec", from: 0, to: 0.1, format: "plus", lowerIsBetter: false },
+    ]);
+    // 0,1 × 3 в двоичной дроби — 0,30000000000000004: на карточке хвоста быть не должно.
+    expect(limitChanges(limit("regen"), 2)[0]).toMatchObject({ from: 0.2, to: 0.3 });
+  });
+
+  it("скорость, площадь и притяжение — процентом", () => {
+    for (const [id, label, step] of [
+      ["speed", "moveSpeed", 1.02],
+      ["area", "area", 1.03],
+      ["pull", "pickupRadius", 1.05],
+    ] as const) {
+      expect(limitChanges(limit(id), 0)).toEqual([
+        { labelKey: `upgrade.stat.passive.${label}`, from: 1, to: step, format: "percent", lowerIsBetter: false },
+      ]);
+    }
   });
 });
 

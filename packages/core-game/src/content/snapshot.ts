@@ -11,9 +11,11 @@ import type {
   EnemyDef,
   EnemyStageDef,
   LevelCurveDef,
+  LimitDef,
   LoadoutLimits,
   MapDef,
   PassiveDef,
+  PressureDef,
   SecretsDef,
   TimelineSegmentDef,
   WeaponDef,
@@ -26,10 +28,13 @@ import { DIFFICULTIES } from "./difficulty";
 import { DROPS } from "./drops";
 import { ENEMIES } from "./enemies";
 import { MAPS } from "./maps";
+import { PRESSURE } from "./pressure";
+import { PROLOGUE } from "./prologue";
+import { RUBEZH } from "./rubezh";
 import { SECRETS } from "./secrets";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
-import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
+import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
 import { ENDLESS_CURVE, TIMELINE } from "./waves";
 import { WEAPONS } from "./weapons";
 
@@ -86,6 +91,9 @@ export interface ContentSnapshot {
   maxBoostsPerRun: number;
   cardToolUnlocks: readonly CardToolUnlockDef[];
   cardToolRules: CardToolRules;
+  limits: readonly LimitDef[];
+  /** подстройка давления под силу игрока и устройство (Р131, Р183) */
+  pressure: PressureDef;
   /** коридоры для отчёта симуляции; в хэш не входят */
   balanceTargets: BalanceTargetsDef;
 }
@@ -116,6 +124,8 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   maxBoostsPerRun: MAX_BOOSTS_PER_RUN,
   cardToolUnlocks: CARD_TOOL_UNLOCKS,
   cardToolRules: CARD_TOOL_RULES,
+  limits: LIMITS,
+  pressure: PRESSURE,
   balanceTargets: { ...BALANCE_TARGETS, evolutionPowerRatio: EVOLUTION_POWER_RATIO },
 };
 
@@ -126,7 +136,8 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
  *
  * Считается по полям, влияющим на забег, в порядке `ContentSnapshot`. Версия
  * схемы и коридоры калибровки в него не входят: правка цели отчёта не должна
- * объявлять новую версию баланса.
+ * объявлять новую версию баланса. Рубеж (`RUBEZH`) в снимке не лежит, но на забег
+ * влияет: отметка и страж входят в хэш, а за ними — пролог (`PROLOGUE`).
  *
  * Порядок ключей внутри объектов — порядок записи в `JSON.stringify`, и хэш
  * умолчания обязан остаться прежним, поэтому он от порядка зависит. Копия
@@ -159,6 +170,10 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.maxBoostsPerRun,
     snapshot.cardToolUnlocks,
     snapshot.cardToolRules,
+    snapshot.limits,
+    snapshot.pressure,
+    RUBEZH,
+    PROLOGUE,
   ]);
 
   // FNV-1a: короткая, без зависимостей и без криптографических претензий.

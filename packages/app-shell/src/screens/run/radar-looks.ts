@@ -14,6 +14,14 @@ export const RADAR_COLORS = {
   // Золото занято элитой и динамитом, зелёное — аптечкой, салатовое — магнитом:
   // сундук — фиолетовым токеном предметов, и квадратом, а не точкой или ромбом.
   chest: COLORS.passive,
+  // Тайники рубежа (Р153): холодная гамма оберегов — голубой токен — и Нави — фиолетовый токен предметов;
+  // не красный, не золотой и не салатовый. Токена бирюзы нет, а вид читается формой (`RADAR_SHAPES`).
+  shrine: COLORS.info,
+  hoard: COLORS.info,
+  tree: COLORS.info,
+  wisp: COLORS.info,
+  stone: COLORS.passive,
+  rift: COLORS.passive,
 } as const;
 
 /**
@@ -29,4 +37,11 @@ export const RADAR_SHAPES = {
   dynamite: "diamond",
   chest: "square",
   freeze: "x",
+  // Тайник — не точка и не подбор: знак вида, как круг со знаком на земле. Огонёк — звёздочка из точек.
+  shrine: "pillar",
+  hoard: "gem",
+  stone: "triangle",
+  tree: "fir",
+  rift: "crack",
+  wisp: "spark",
 } as const;

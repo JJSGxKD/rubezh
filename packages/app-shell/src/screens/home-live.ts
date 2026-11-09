@@ -9,6 +9,7 @@
  */
 export { HomeBotAccess, hydrateBotAccess, loadBotAccess } from "./home-bot-access";
 export { HomeCarousel } from "./home-carousel";
+export { HomeFeed } from "./home-feed";
 export { HomeWidgets } from "./home-widgets";
 
 export function loadWidgetShowcase(): Promise<typeof import("./home-showcase")> {

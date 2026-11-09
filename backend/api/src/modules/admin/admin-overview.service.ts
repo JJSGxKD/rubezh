@@ -9,7 +9,7 @@ import { CHANGELOG_FOR_PLAYERS } from "../changelog/changelog-rules.js";
 import { ChangelogService } from "../changelog/changelog.service.js";
 import type { BoardMark } from "../restrictions/board-mark.js";
 import { HIDDEN_KIND_PERMISSION } from "../restrictions/restriction-visibility.js";
-import { permissionsOf, type Permission } from "../roles/permissions.js";
+import { permissionsOf } from "../roles/permissions.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { RunsViewService } from "../runs/runs-view.service.js";
 
@@ -92,7 +92,7 @@ export interface Overview {
   /** вчера с полуночи до того же часа */
   yesterday: OverviewDay;
   /** звёзды и покупки — `null`, если выручка закрыта */
-  series: (Omit<DayPoint, "stars" | "purchases"> & { stars: number | null; purchases: number | null })[];
+  series: (Omit<DayPoint, "stars" | "purchases" | "adsCompleted"> & { stars: number | null; purchases: number | null; adsCompleted: number | null })[];
   /** `null` — нет права `ads.view` или чтение не ответило */
   ads: OverviewAds | null;
   boardMark: OverviewBoardMark | null;
@@ -129,7 +129,7 @@ export class AdminOverviewService {
       withTimeout(this.stats.series(seriesFrom, now), READ_TIMEOUT_MS, "сводка: ряд"),
       can.has("ads.view") ? this.adsOverview({ from, to: now }, { from: previousFrom, to: previousTo }) : null,
       can.has(HIDDEN_KIND_PERMISSION) ? this.boardMarkOverview({ day: teamDay(from.getTime()), from, to: now }, { day: teamDay(previousFrom.getTime()), from: previousFrom, to: previousTo }) : null,
-      this.attention(actor, can, now),
+      this.attentionFor(actor, now),
     ]);
     const revenue = can.has("analytics.revenue.view");
     const shown = (stats: DayStats): OverviewDay => ({ ...stats, revenue: revenue ? stats.revenue : null });
@@ -140,7 +140,12 @@ export class AdminOverviewService {
       at: now.toISOString(),
       today: shown(today),
       yesterday: shown(yesterday),
-      series: series.map((point) => ({ ...point, stars: revenue ? point.stars : null, purchases: revenue ? point.purchases : null })),
+      series: series.map((point) => ({
+        ...point,
+        stars: revenue ? point.stars : null,
+        purchases: revenue ? point.purchases : null,
+        adsCompleted: can.has("ads.view") ? point.adsCompleted : null,
+      })),
       ads,
       boardMark,
       attention,
@@ -191,9 +196,11 @@ export class AdminOverviewService {
    * Что ждёт того, кто смотрит, — по его правам: черновики «Что нового»
    * после выката видит тот, кто публикует, рассылки коллег — тот, кто
    * запускает. Источник, который не ответил, пропускается: сводка без
-   * одной строки лучше, чем пустой экран.
+   * одной строки лучше, чем пустой экран. Отдельным запросом (`/admin/attention`)
+   * его читает меню панели — без тяжёлой сводки (T-0359).
    */
-  private async attention(actor: AccountRef, can: ReadonlySet<Permission>, now: Date): Promise<AttentionItem[]> {
+  async attentionFor(actor: AccountRef, now = new Date()): Promise<AttentionItem[]> {
+    const can = permissionsOf(await this.roles.rolesFor(actor));
     const items = await Promise.all([
       // Журнал скрыт у игроков (Р125): черновики версий не напоминаются.
       CHANGELOG_FOR_PLAYERS && can.has("changelog.publish") ? this.safely("журнал обновлений", () => this.changelogDrafts(actor)) : null,

@@ -6,9 +6,11 @@ import { ShardIcon } from "../design-system/components/ShardIcon";
 import { formatDuration, formatNumber, t } from "../i18n";
 import "../i18n/home";
 import { useBadges } from "../state/badges";
+import { RATED_DIFFICULTY_ID } from "../state/difficulty";
 import { refreshHome, useHome, type HomeWidgets as WidgetData } from "../state/home-api";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { usePrologue, type HomeSection } from "../state/prologue";
 import { track, useShell } from "../state/shell";
 import {
   arrangeWidgets,
@@ -66,7 +68,7 @@ const SIZE: Record<WidgetSize, string> = {
   row: "col-span-2 h-(--widget-row-h)",
 };
 
-export function HomeWidgets(): ReactNode {
+export function HomeWidgets(props: { marks?: Record<HomeSection, boolean> }): ReactNode {
   const withAccount = useShell((state) => state.capabilities.auth !== undefined);
   const playable = useShell((state) => state.adapter.showAd !== undefined);
   const badges = useBadges();
@@ -90,7 +92,7 @@ export function HomeWidgets(): ReactNode {
   return (
     <section ref={grid} aria-label={t("home.widgets")} data-still={still ? "" : undefined} className="mb-3 grid grid-cols-2 gap-3">
       {slots.map((slot, index) => (
-        <Widget key={slot.id} id={slot.id} size={slot.size} index={index} widgets={widgets} now={now} playable={playable} />
+        <Widget key={slot.id} id={slot.id} size={slot.size} index={index} widgets={widgets} now={now} playable={playable} fresh={slot.id === "daily" || slot.id === "tasks" ? props.marks?.[slot.id] === true : false} />
       ))}
     </section>
   );
@@ -160,14 +162,16 @@ function useStill(target: RefObject<HTMLElement | null>, shown: boolean): boolea
   return offscreen || hidden;
 }
 
-function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets: WidgetData; now: number; playable: boolean }): ReactNode {
-  const { id, size, index, widgets, now } = props;
+function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets: WidgetData; now: number; playable: boolean; fresh: boolean }): ReactNode {
+  const { id, size, index, widgets, now, fresh } = props;
   const navigation = useNavigation();
   const badges = useBadges();
   const meta = useMeta();
   // Касание — в аналитику с видом, состоянием и местом: видно, какой крючок срабатывает и где.
   const open = (state: string, go: () => void) => (): void => {
     track("home_widget_clicked", { widget: id, state, position: index });
+    // Первое открытие раздела гасит «Новое» после пролога (T-0280).
+    if (id === "daily" || id === "tasks") usePrologue.getState().acknowledge(id);
     go();
   };
 
@@ -175,7 +179,7 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
     case "daily": {
       const face = dailyFace(widgets.daily, badges.daily > 0, now);
       return (
-        <Frame id={id} size={size} index={index} ready={face.state === "ready"} cut={face.state === "ready"} onOpen={open(face.state, () => navigation.push("daily"))}>
+        <Frame id={id} fresh={fresh} size={size} index={index} ready={face.state === "ready"} cut={face.state === "ready"} onOpen={open(face.state, () => navigation.push("daily"))}>
           <DailyView face={face} size={size} now={now} />
         </Frame>
       );
@@ -191,16 +195,16 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
     case "tasks": {
       const face = tasksFace(widgets.tasks, badges.tasks);
       return (
-        <Frame id={id} size={size} index={index} ready={face.state === "ready"} onOpen={open(face.state, () => navigation.resetTo("tasks"))}>
+        <Frame id={id} fresh={fresh} size={size} index={index} ready={face.state === "ready"} onOpen={open(face.state, () => navigation.resetTo("tasks"))}>
           <TasksView face={face} size={size} />
         </Frame>
       );
     }
     case "record": {
-      const face = recordFace(meta.best[meta.lastDifficultyId], meta.lastDifficultyId, meta.lastRun, meta.runs);
+      const face = recordFace(meta.best[RATED_DIFFICULTY_ID], RATED_DIFFICULTY_ID, meta.lastRun, meta.runs);
       return (
         <Frame id={id} size={size} index={index} ready={false} onOpen={open(face.state, () => navigation.resetTo("rating"))}>
-          <RecordView face={face} size={size} difficulty={t(`difficulty.${meta.lastDifficultyId}.name`)} />
+          <RecordView face={face} size={size} />
         </Frame>
       );
     }
@@ -219,7 +223,7 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
  * Рамка виджета: тон, подложка по готовности, размер — из токенов; касание —
  * по всей плитке. Без `onOpen` — витрина: та же рамка, но никуда не ведёт.
  */
-export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; ready: boolean; cut?: boolean; onOpen?: () => void; children: ReactNode }): ReactNode {
+export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; ready: boolean; cut?: boolean; fresh?: boolean; onOpen?: () => void; children: ReactNode }): ReactNode {
   const cut = props.cut === true;
   const className = [
     TONE[props.id],
@@ -232,12 +236,23 @@ export function Frame(props: { id: WidgetId; size: WidgetSize; index: number; re
     cut ? "relative flex min-w-0 animate-rise-in text-left" : "relative flex min-w-0 animate-rise-in items-center gap-3 overflow-hidden rounded-lg p-3 text-left",
     "transition-transform duration-(--duration-fast) ease-base",
   ].join(" ");
-  const content = cut ? (
+  const body = cut ? (
     <CutFrame tone="card-selected" size="md" className="flex h-full w-full min-w-0 items-center gap-3 overflow-hidden p-3 text-left">
       {props.children}
     </CutFrame>
   ) : (
     props.children
+  );
+  // «Новое» после пролога (T-0280): раздел только что открылся, метка гаснет первым открытием.
+  const content = (
+    <>
+      {body}
+      {props.fresh === true ? (
+        <span className="pointer-events-none absolute top-1.5 right-1.5 rounded-pill bg-accent px-2 py-0.5 font-display text-[10px] font-bold tracking-wide text-on-accent uppercase" style={{ zIndex: 1 }}>
+          {t("lobby.new")}
+        </span>
+      ) : null}
+    </>
   );
   if (props.onOpen === undefined) {
     return (
@@ -561,15 +576,15 @@ function Ring(props: { size: number; done: number; total: number | null }): Reac
   );
 }
 
-export function RecordView(props: { face: RecordFace; size: WidgetSize; difficulty: string }): ReactNode {
+export function RecordView(props: { face: RecordFace; size: WidgetSize }): ReactNode {
   const { face, size } = props;
   const icon = (
     <IconFace size={size}>
       <Trophy size={iconSize(size)} />
     </IconFace>
   );
-  // Рекорд — на выбранной сложности: широкий называет её, плитке хватает «Рекорд».
-  const title = size === "tile" ? label("record", size) : t("widget.record.on", { difficulty: props.difficulty });
+  // Сложность одна, называть её не нужно: широкому — «Лучший забег», плитке — «Рекорд».
+  const title = size === "tile" ? label("record", size) : t("widget.record.title");
   switch (face.state) {
     case "none":
       return <Layout size={size} face={icon} label={title} big="—" sub={size === "tile" ? t("widget.record.noneShort") : t("widget.record.none")} />;

@@ -20,6 +20,7 @@ import { PrismaLinksRepository, type RegistrationOn } from "../src/modules/links
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 /** Проход на своём наборе назначений: ветки T-0070 проверяются здесь, не трогая запросы прохода. */
 class CustomTargets extends PrismaConversionsRepository {
@@ -53,6 +54,8 @@ class OnlyThese extends PrismaConversionsRepository {
 /** Какое ограничение таблицы сработало — по имени из ошибки базы. */
 const CLICK_KEY = /ad_conversion_click_id_goal_destination_key/;
 const PURCHASE_KEY = /ad_conversion_purchase_id_destination_key/;
+/** Прямые запуски (T-0181): клика нет, ключ — аккаунт, цель и назначение. */
+const DIRECT_KEY = /ad_conversion_account_goal_destination_direct_key/;
 const GOAL_CHECK = /ad_conversion_goal_check/;
 const PURCHASE_CHECK = /ad_conversion_purchase_check/;
 
@@ -71,6 +74,13 @@ function targetsWithS2s(code: string, events: readonly string[], since: Date | s
     SELECT l.code, 'adsgram'::text, ARRAY['registration', 'purchase_first', 'purchase_repeat']::text[], '-infinity'::timestamptz FROM link l WHERE l.network = 'adsgram'
     UNION ALL
     SELECT l.code, 's2s'::text, ARRAY[${Prisma.join(events)}]::text[], ${since}::timestamptz FROM link l WHERE l.code = ${code}
+  )`;
+}
+
+/** Набор, где AdsGram получает названные события и клики с момента `since`: события и окно прямой ветки. */
+function targetsAdsgramOnly(code: string, events: readonly string[], since: Date | string = "-infinity"): Prisma.Sql {
+  return Prisma.sql`targets(link_code, destination, events, since) AS (
+    SELECT l.code, 'adsgram'::text, ARRAY[${Prisma.join(events)}]::text[], ${since}::timestamptz FROM link l WHERE l.code = ${code}
   )`;
 }
 
@@ -146,7 +156,7 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     return { clickId, accountId: account.accountId, telegramId: account.platformUserId };
   }
 
-  async function finishedRun(accountId: string, survivalSec: number, patch: { cheats?: boolean } = {}) {
+  async function finishedRun(accountId: string, survivalSec: number, patch: { cheats?: boolean; finishedAt?: Date; verdict?: "ok" | "suspicious" | "rejected" } = {}) {
     await prisma.run.create({
       data: {
         runId: `ag-${randomUUID()}`,
@@ -156,24 +166,25 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
         startingWeaponId: "spark",
         contentHash: "abc",
         startedAt: new Date(Date.now() - survivalSec * 1000),
-        finishedAt: new Date(),
+        finishedAt: patch.finishedAt ?? new Date(),
         outcome: "died",
         survivalSec,
         cheats: patch.cheats ?? false,
+        ...(patch.verdict === undefined ? {} : { verdict: patch.verdict }),
         verdictReasons: [],
       },
     });
   }
 
-  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number } = {}) {
+  async function purchase(accountId: string, paidMinutesAgo: number, patch: { mode?: "live" | "test"; refunded?: boolean; chargedStars?: number; donation?: boolean } = {}) {
     const purchaseId = randomUUID();
     const paidAt = new Date(Date.now() - paidMinutesAgo * MINUTE);
     await prisma.purchase.create({
       data: {
         purchaseId,
         accountId,
-        product: "shop_item",
-        sku: "gems_small",
+        product: patch.donation === true ? "donation" : "shop_item",
+        sku: patch.donation === true ? "donation" : "gems_small",
         priceStars: 50,
         chargedStars: patch.chargedStars ?? 50,
         mode: patch.mode ?? "live",
@@ -275,6 +286,16 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     // Через десять минут отлежится и свежая — повторной.
     await conversions.sweep(new Date(Date.now() + 15 * MINUTE));
     expect((await ofAccount(player.accountId)).find((row) => row.purchaseId === fresh)).toMatchObject({ goal: 3 });
+  });
+
+  it("донат — не покупка: донат первым, покупка вторым — цель 2 у покупки, у доната цели нет (T-0364)", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromClick(code);
+    await purchase(player.accountId, 40, { donation: true });
+    const bought = await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    const rows = (await ofAccount(player.accountId)).filter((row) => row.goal !== 1);
+    expect(rows.map((row) => [row.goal, row.purchaseId])).toEqual([[2, bought]]);
   });
 
   it("журнал, счёт по ссылке, отправка и повтор неотправленной", async () => {
@@ -542,5 +563,375 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     await new CustomTargets(prisma, targetsWithS2s(plain, ["purchase_first"], new Date(Date.now() - 60 * MINUTE))).sweep(new Date());
     const rows = await ofAccount(player.accountId);
     expect(rows.map((row) => [row.goal, row.destination, row.network])).toEqual([[2, "s2s", "s2s"]]);
+  });
+
+  // --- Прямая ссылка на Mini App (Р117, Р121, T-0181): конверсия по запуску `l-<код>_<метки>` ---
+
+  const SAMPLE = (code: string) => `l-${code}_campaign-55_clickid-3f2a-9c_record-rec123`;
+  const SAMPLE_PARAMS = { campaign: "55", clickid: "3f2a-9c", record: "rec123" };
+
+  async function newAccount() {
+    return await accounts.upsert(
+      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 99_000_000)), displayName: "По прямой", username: null, photoUrl: null },
+      Date.now(),
+    );
+  }
+
+  async function launchSession(accountId: string, kind: "organic" | "link" | "click", startParam: string | null, startRef: string | null, at = new Date()) {
+    await sessions.record({
+      sessionId: randomUUID(),
+      accountId,
+      platform: "telegram",
+      place: "miniapp",
+      startKind: kind,
+      startParam,
+      startRef,
+      clientPlatform: "android",
+      clientVersion: "8.0",
+      deviceClass: "mobile",
+      os: "android",
+      ipPrefix: null,
+      startedAt: at.toISOString(),
+    });
+  }
+
+  /** Новичок по прямой ссылке: аккаунт заведён сейчас, первая сессия — запуск `l-<код>` с метками сети. */
+  async function playerFromDirect(code: string, startParam: string | null = SAMPLE(code)) {
+    const account = await newAccount();
+    await launchSession(account.accountId, "link", startParam, code);
+    return { accountId: account.accountId, telegramId: account.platformUserId };
+  }
+
+  /** Тик отправки на названных конверсиях; адреса запросов возвращаются. */
+  async function sendThese(ids: readonly string[]) {
+    const service = new AdConversionsService(
+      loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv),
+      new OnlyThese(prisma, ids),
+      [new AdsgramDestination({ get: () => "tok_integration" })],
+      FREE_LOCK as never,
+    );
+    const urls: string[] = [];
+    const fetchImpl = (async (input: URL | string) => {
+      urls.push(String(input));
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const report = await service.tick(new Date(), fetchImpl);
+    return { report, urls };
+  }
+
+  it("прямая ссылка: регистрация — после засчитанного забега; короткий, с читами и отклонённый не считаются; повтор не задваивает", async () => {
+    const code = await adsgramLink();
+    const player = await playerFromDirect(code);
+
+    await finishedRun(player.accountId, 29);
+    await finishedRun(player.accountId, 400, { cheats: true });
+    await finishedRun(player.accountId, 400, { verdict: "rejected" });
+    await conversions.sweep(new Date());
+    expect(await ofAccount(player.accountId)).toEqual([]);
+
+    await finishedRun(player.accountId, 30);
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+    const rows = await ofAccount(player.accountId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      goal: 1,
+      status: "pending",
+      reason: null,
+      network: "adsgram",
+      destination: "adsgram",
+      linkCode: code,
+      clickId: null,
+      purchaseId: null,
+      networkParams: SAMPLE_PARAMS,
+    });
+  });
+
+  it("прямая ссылка: параллельные проходы дают одну регистрацию и одни покупки, без ошибок", async () => {
+    const code = await adsgramLink();
+    const player = await playerFromDirect(code);
+    await finishedRun(player.accountId, 95);
+    const first = await purchase(player.accountId, 40);
+    const second = await purchase(player.accountId, 30);
+
+    const now = new Date();
+    await expect(Promise.all([conversions.sweep(now), conversions.sweep(now), conversions.sweep(now), conversions.sweep(now)])).resolves.toHaveLength(4);
+    expect((await ofAccount(player.accountId)).map((row) => [row.goal, row.destination, row.purchaseId, row.clickId])).toEqual([
+      [1, "adsgram", null, null],
+      [2, "adsgram", first, null],
+      [3, "adsgram", second, null],
+    ]);
+  });
+
+  it("прямая ссылка: очередь отдаёт метки с запуска, постбэк уходит с record и целями 1, 2, 3", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    await purchase(player.accountId, 40);
+    await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    const rows = await ofAccount(player.accountId);
+
+    const queue = await conversions.due(new Date(), 500);
+    const registration = queue.find((item) => item.conversionId === rows[0]?.conversionId);
+    expect(registration).toMatchObject({ destination: "adsgram", event: "registration", attempts: 0, params: SAMPLE_PARAMS, telegramId: player.telegramId, purchase: null });
+
+    const { report, urls } = await sendThese(rows.map((row) => row.conversionId));
+    expect(report).toMatchObject({ sent: 3, failed: 0, skipped: 0 });
+    expect(urls.map((url) => new URL(url).searchParams.get("goaltype")).sort()).toEqual(["1", "2", "3"]);
+    expect(urls.every((url) => new URL(url).searchParams.get("record") === "rec123")).toBe(true);
+    expect(await ofAccount(player.accountId)).toMatchObject([{ status: "sent" }, { status: "sent" }, { status: "sent" }]);
+  });
+
+  it("прямая ссылка: при «первом запуске» регистрация есть сразу, без забега; при «после забега» её нет, пока забега нет", async () => {
+    const afterRun = await adsgramLink("first_run");
+    const onLaunch = await adsgramLink("launch");
+    const waiting = await playerFromDirect(afterRun);
+    const immediate = await playerFromDirect(onLaunch);
+    await conversions.sweep(new Date());
+    expect(await ofAccount(waiting.accountId)).toEqual([]);
+    expect(await ofAccount(immediate.accountId)).toMatchObject([{ goal: 1, status: "pending" }]);
+  });
+
+  it("прямая ссылка: забег позже 7 суток после первого запуска не считается, в пределах окна — считается", async () => {
+    const code = await adsgramLink();
+    const late = await playerFromDirect(code);
+    await finishedRun(late.accountId, 95, { finishedAt: new Date(Date.now() + 7.5 * DAY) });
+    const inside = await playerFromDirect(code);
+    await finishedRun(inside.accountId, 95, { finishedAt: new Date(Date.now() + 6.5 * DAY) });
+
+    await conversions.sweep(new Date(Date.now() + 7.6 * DAY));
+    expect(await ofAccount(late.accountId)).toEqual([]);
+    expect(await ofAccount(inside.accountId)).toMatchObject([{ goal: 1 }]);
+  });
+
+  it("прямая ссылка: без clickid и record строка с тем, что есть; хвост не разобрался — строка без меток, и отправитель пропускает её как no_macros", async () => {
+    const code = await adsgramLink("launch");
+    const onlyCampaign = await playerFromDirect(code, `l-${code}_campaign-55`);
+    const noLabels = await playerFromDirect(code, `l-${code}_hello`);
+    const bare = await playerFromDirect(code, `l-${code}`);
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+
+    expect(await ofAccount(onlyCampaign.accountId)).toMatchObject([{ goal: 1, status: "pending", networkParams: { campaign: "55" } }]);
+    const rowsWithout = [...(await ofAccount(noLabels.accountId)), ...(await ofAccount(bare.accountId))];
+    expect(rowsWithout).toHaveLength(2);
+    for (const row of rowsWithout) expect(row).toMatchObject({ goal: 1, status: "pending", networkParams: null, clickId: null });
+
+    // Только campaign: вариант ссылок Telegram — tgid и campaignid.
+    const sentCampaign = await sendThese([(await ofAccount(onlyCampaign.accountId))[0]?.conversionId ?? ""]);
+    const params = new URL(sentCampaign.urls[0] ?? "https://x.invalid").searchParams;
+    expect([params.get("tgid"), params.get("campaignid"), params.get("goaltype")]).toEqual([onlyCampaign.telegramId, "55", "1"]);
+
+    const skipped = await sendThese(rowsWithout.map((row) => row.conversionId));
+    expect(skipped.report).toMatchObject({ skipped: 2, sent: 0 });
+    expect(skipped.urls).toEqual([]);
+    expect(await ofAccount(noLabels.accountId)).toMatchObject([{ status: "skipped", reason: "no_macros" }]);
+  });
+
+  it("прямая ссылка: старый игрок и тот, чьё первое касание органическое, — не конверсия сети", async () => {
+    const code = await adsgramLink("launch");
+    const old = await playerFromDirect(code);
+    await prisma.account.update({ where: { accountId: old.accountId }, data: { createdAt: new Date(Date.now() - 2 * DAY) } });
+
+    const organic = await newAccount();
+    await launchSession(organic.accountId, "organic", null, null, new Date(Date.now() - 60 * MINUTE));
+    await launchSession(organic.accountId, "link", SAMPLE(code), code, new Date());
+
+    await conversions.sweep(new Date());
+    expect(await ofAccount(old.accountId)).toEqual([]);
+    expect(await ofAccount(organic.accountId)).toEqual([]);
+  });
+
+  it("прямая ссылка: аккаунт команды пропущен с причиной team, отправить его можно руками", async () => {
+    const code = await adsgramLink("launch");
+    const team = await playerFromDirect(code);
+    await prisma.accountRole.create({ data: { accountId: team.accountId, role: "marketer" } });
+    await conversions.sweep(new Date());
+    const [row] = await ofAccount(team.accountId);
+    expect(row).toMatchObject({ goal: 1, status: "skipped", reason: "team", clickId: null, networkParams: SAMPLE_PARAMS });
+    expect(await conversions.requeue(code, row?.conversionId ?? "", new Date())).toMatchObject({ status: "pending", reason: null });
+  });
+
+  it("прямая ссылка: ссылка без сети с тем же параметром конверсий не порождает", async () => {
+    const code = await plainLink();
+    const player = await playerFromDirect(code);
+    await purchase(player.accountId, 40);
+    await conversions.sweep(new Date());
+    expect(await ofAccount(player.accountId)).toEqual([]);
+  });
+
+  it("прямая ссылка: смена цели ссылки на отбор не влияет — запуск по startapp уже доказал, что игрок пришёл по ней", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    await links.retarget(code, "bot");
+    await conversions.sweep(new Date());
+    expect(await ofAccount(player.accountId)).toMatchObject([{ goal: 1 }]);
+  });
+
+  it("прямая ссылка: параметр с чужим кодом — строка пишется без меток, а не теряется", async () => {
+    const code = await adsgramLink("launch");
+    const other = await adsgramLink("launch");
+    // Первое касание — `link` с кодом этой ссылки в `start_ref`, но параметр хранит метки другой ссылки.
+    const mismatch = await playerFromDirect(code, SAMPLE(other));
+    await conversions.sweep(new Date());
+    expect(await ofAccount(mismatch.accountId)).toMatchObject([{ goal: 1, networkParams: null }]);
+  });
+
+  it("прямая ссылка: покупки — первая цель 2, следующие 3; метки с запуска; возврат, тестовая и неотлежавшаяся не уходят", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    const first = await purchase(player.accountId, 40);
+    await purchase(player.accountId, 35, { refunded: true });
+    await purchase(player.accountId, 30, { mode: "test" });
+    const second = await purchase(player.accountId, 20);
+    const fresh = await purchase(player.accountId, 2);
+
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+    const rows = (await ofAccount(player.accountId)).filter((row) => row.goal !== 1);
+    expect(rows.map((row) => [row.goal, row.purchaseId, row.clickId])).toEqual([
+      [2, first, null],
+      [3, second, null],
+    ]);
+    for (const row of rows) expect(row.networkParams).toEqual(SAMPLE_PARAMS);
+
+    // Через десять минут отлежится и свежая — повторной.
+    await conversions.sweep(new Date(Date.now() + 15 * MINUTE));
+    expect((await ofAccount(player.accountId)).find((row) => row.purchaseId === fresh)).toMatchObject({ goal: 3 });
+  });
+
+  it("прямая ссылка: донат — не покупка, покупка после него — цель 2", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    await purchase(player.accountId, 40, { donation: true });
+    const bought = await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    expect((await ofAccount(player.accountId)).filter((row) => row.goal !== 1).map((row) => [row.goal, row.purchaseId])).toEqual([[2, bought]]);
+  });
+
+  it("прямая ссылка: покупка позже 30 суток от первого запуска не уходит, в пределах окна — уходит", async () => {
+    const code = await adsgramLink("launch");
+    const late = await playerFromDirect(code);
+    await purchase(late.accountId, -30.5 * 24 * 60);
+    const inside = await playerFromDirect(code);
+    const insidePurchase = await purchase(inside.accountId, -29 * 24 * 60);
+
+    await conversions.sweep(new Date(Date.now() + 30.6 * DAY));
+    expect((await ofAccount(late.accountId)).filter((row) => row.goal !== 1)).toEqual([]);
+    expect((await ofAccount(inside.accountId)).filter((row) => row.goal !== 1).map((row) => [row.goal, row.purchaseId])).toEqual([[2, insidePurchase]]);
+  });
+
+  it("прямая ссылка: после отправки первой покупки вторая остаётся «3», а не становится «2»", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    const first = await purchase(player.accountId, 60);
+    await conversions.sweep(new Date());
+    const firstRow = (await ofAccount(player.accountId)).find((row) => row.purchaseId === first);
+    expect(firstRow).toMatchObject({ goal: 2 });
+    await conversions.markSent(firstRow?.conversionId ?? "", 200, new Date());
+
+    const second = await purchase(player.accountId, 30);
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+    expect((await ofAccount(player.accountId)).filter((row) => row.goal !== 1).map((row) => [row.goal, row.purchaseId, row.status])).toEqual([
+      [2, first, "sent"],
+      [3, second, "pending"],
+    ]);
+  });
+
+  it("прямая ссылка: путь переходника прежний — клик на строке, метки с клика, на конверсии их нет; обе ветки на одной ссылке не мешают друг другу", async () => {
+    const code = await adsgramLink("launch");
+    const clicked = await playerFromClick(code);
+    const direct = await playerFromDirect(code);
+    await conversions.sweep(new Date());
+    await conversions.sweep(new Date());
+
+    const [clickRow] = await ofAccount(clicked.accountId);
+    expect(clickRow).toMatchObject({ goal: 1, clickId: clicked.clickId, networkParams: null, status: "pending" });
+    const queue = await conversions.due(new Date(), 500);
+    expect(queue.find((item) => item.conversionId === clickRow?.conversionId)?.params).toEqual({ record: "rec123", campaign: "55" });
+    expect(await ofAccount(direct.accountId)).toMatchObject([{ goal: 1, clickId: null, networkParams: SAMPLE_PARAMS }]);
+    expect(await ofAccount(clicked.accountId)).toHaveLength(1);
+  });
+
+  it("прямая ссылка: прямая ветка уважает набор назначений — события по списку, окно since, имя назначения на строке; назначения не рекламных сетей ей не достаются", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    const first = await purchase(player.accountId, 40);
+    await purchase(player.accountId, 30);
+
+    // AdsGram получает регистрацию и первую покупку, повторные — нет.
+    const targets = targetsAdsgramOnly(code, ["registration", "purchase_first"]);
+    await new CustomTargets(prisma, targets).sweep(new Date());
+    await new CustomTargets(prisma, targets).sweep(new Date());
+    const rows = await ofAccount(player.accountId);
+    expect(rows.map((row) => [row.goal, row.destination, row.network, row.clickId])).toEqual([
+      [1, "adsgram", "adsgram", null],
+      [2, "adsgram", "adsgram", null],
+    ]);
+    for (const row of rows) expect(row.networkParams).toEqual(SAMPLE_PARAMS);
+    expect(rows.map((row) => row.purchaseId)).toEqual([null, first]);
+
+    // Назначение, подключённое «с часа вперёд», запуск раньше since не получает.
+    const early = await playerFromDirect(code);
+    await new CustomTargets(prisma, targetsAdsgramOnly(code, ["registration"], new Date(Date.now() + 60 * MINUTE))).sweep(new Date());
+    expect(await ofAccount(early.accountId)).toEqual([]);
+
+    // S2S из набора прямому запуску не достаётся: адрес постбэка работает по кликам (T-0070).
+    const late = await playerFromDirect(code);
+    await new CustomTargets(prisma, targetsWithS2s(code, ["registration", "purchase_first"])).sweep(new Date());
+    expect((await ofAccount(late.accountId)).map((row) => row.destination)).toEqual(["adsgram"]);
+  });
+
+  it("прямая ссылка: журнал и счёт по ссылке видят строки без клика", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    await conversions.sweep(new Date());
+    const journal = await conversions.journal(code, null, 50);
+    expect(journal.map((row) => [row.goal, row.event, row.destination, row.status])).toEqual([[1, "registration", "adsgram", "pending"]]);
+    expect((await conversions.summaries([code])).get(code)?.[1]).toEqual({ pending: 1, sent: 0, failed: 0, skipped: 0 });
+    expect(journal[0]?.accountId).toBe(player.accountId);
+  });
+
+  it("таблица: строки без клика — одна регистрация, одна первая покупка и один возврат на аккаунт и назначение; повторных покупок много", async () => {
+    const code = await adsgramLink("launch");
+    const player = await playerFromDirect(code);
+    const p1 = await purchase(player.accountId, 40);
+    const p2 = await purchase(player.accountId, 30);
+    const p3 = await purchase(player.accountId, 20);
+    const direct = (goal: number, destination = "adsgram", purchaseId: string | null = null) =>
+      prisma.adConversion.create({ data: { network: destination, linkCode: code, clickId: null, accountId: player.accountId, goal, purchaseId, destination } });
+
+    await direct(1);
+    await expect(direct(1)).rejects.toThrow(DIRECT_KEY);
+    await direct(1, "s2s");
+    await direct(2, "adsgram", p1);
+    // Другая оплата той же цели 2 тому же назначению — всё равно вторая «первая покупка».
+    await expect(direct(2, "adsgram", p2)).rejects.toThrow(DIRECT_KEY);
+    await direct(3, "adsgram", p2);
+    await direct(3, "adsgram", p3);
+    await direct(4);
+    await expect(direct(4)).rejects.toThrow(DIRECT_KEY);
+    // Одна оплата — одна строка на назначение: ключ на оплату действует и без клика.
+    await expect(direct(3, "adsgram", p2)).rejects.toThrow(PURCHASE_KEY);
+    expect(await ofAccount(player.accountId)).toHaveLength(6);
+  });
+
+  it("обнуление: метки на конверсии старше 31 суток обнуляются, у свежей остаются; метки клика обнуляются как раньше", async () => {
+    const code = await adsgramLink("launch");
+    const stale = await playerFromDirect(code);
+    const fresh = await playerFromDirect(code);
+    await conversions.sweep(new Date());
+    const [staleRow] = await ofAccount(stale.accountId);
+    await prisma.adConversion.update({ where: { conversionId: staleRow?.conversionId ?? "" }, data: { createdAt: new Date(Date.now() - 32 * DAY) } });
+
+    const clicked = await playerFromClick(code);
+    await prisma.linkClick.update({ where: { clickId: clicked.clickId }, data: { at: new Date(Date.now() - 40 * DAY) } });
+
+    const cleared = await conversions.purgeParams(new Date(), 500);
+    expect(cleared).toBeGreaterThanOrEqual(2);
+    expect((await ofAccount(stale.accountId))[0]?.networkParams).toBeNull();
+    expect((await ofAccount(fresh.accountId))[0]?.networkParams).toEqual(SAMPLE_PARAMS);
+    expect((await prisma.linkClick.findUniqueOrThrow({ where: { clickId: clicked.clickId } })).networkParams).toBeNull();
   });
 });
