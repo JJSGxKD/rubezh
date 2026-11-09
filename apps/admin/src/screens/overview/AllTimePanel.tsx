@@ -84,15 +84,21 @@ export function AllTimeView({ data }: { data: AllTime }) {
   );
 }
 
-/** Плитка итога: число крупно, под ним строки пояснений. Подписи переносятся, а не режутся: на телефоне горизонтальной прокрутки нет. */
+/**
+ * Плитка итога: число крупно, под ним строки пояснений. Подписи переносятся, а
+ * не режутся: на телефоне горизонтальной прокрутки нет. Плитка — контейнер, и
+ * размер числа берётся от её ширины (`cqw`), а не от окна: семь знаков
+ * «1 234 567» в две колонки на 320 px вылезали бы за рамку, а на широком экране
+ * число остаётся крупным (потолок — `--text-2xl`, как у плиток соседних панелей).
+ */
 function Tile({ title, help, value, lines, className = "" }: { title: string; help: string; value: number; lines: readonly ReactNode[]; className?: string }) {
   return (
-    <div className={`flex min-w-0 flex-col gap-0.5 rounded-sm border border-border bg-surface-sunken px-3 py-2.5 ${className}`}>
+    <div className={`@container flex min-w-0 flex-col gap-0.5 rounded-sm border border-border bg-surface-sunken px-3 py-2.5 ${className}`}>
       <span className="flex items-center gap-1 text-xs text-text-muted">
         {title}
         <Help text={help} />
       </span>
-      <span className="font-display text-2xl font-semibold tabular-nums">{formatNumber(value)}</span>
+      <span className="font-display text-[length:clamp(var(--text-base),20cqw,var(--text-2xl))] leading-tight font-semibold tabular-nums">{formatNumber(value)}</span>
       {lines.map((line, index) => (
         <span key={index} className="break-words text-xs text-text-muted">
           {line}
