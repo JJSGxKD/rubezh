@@ -17,6 +17,8 @@ zones:
   - apps/admin/test/form-dialog.test.ts
 shared:
   - apps/admin/src/ui/dialog.tsx
+  - design/art/direction-v2.md
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -148,7 +150,7 @@ batch: 4
 - [x] Четыре раздела открываются списком; «Новое …» и «Изменить»
       открывают форму в окне, на телефоне — листом.
 - [x] Изменённая форма не закрывается без вопроса.
-- [x] Предпросмотр — в ширину игрока, на 390 px нет боковой прокрутки.
+- [ ] Предпросмотр — в ширину игрока, на 390 px нет боковой прокрутки.
 - [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
