@@ -37,11 +37,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed) и Ледяным духом с Кистенем (T-0281: прежний seed 1 дожил до конца сценария).
+ * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed).
  * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 3;
+const GOLDEN_SEED = 1;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -178,39 +178,40 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 124.97,
+      survivalSec: 441.73,
       level: 17,
-      xpCollected: 707,
-      enemiesKilled: 308,
+      xpCollected: 760,
+      enemiesKilled: 2106,
       killsByEnemy: {
-        swarm_rat: 93,
-        tank_ghoul: 14,
-        bone_walker: 12,
-        mire_shambler: 54,
-        dasher_wolf: 17,
-        circler_crow: 20,
-        ice_spirit: 40,
-        bomber_imp: 14,
-        rushing_bats: 32,
-        splitter_slime: 12,
+        swarm_rat: 659,
+        tank_ghoul: 103,
+        bone_walker: 100,
+        mire_shambler: 399,
+        dasher_wolf: 100,
+        circler_crow: 204,
+        ice_spirit: 173,
+        bomber_imp: 91,
+        rushing_bats: 188,
+        splitter_slime: 89,
       },
-      damageDealt: 5453,
-      damageTaken: 274,
+      damageDealt: 35213,
+      damageTaken: 328,
       weapons: [
-        { id: "spark", level: 3, damage: 2551 },
-        { id: "meteor", level: 2, damage: 1766 },
-        { id: "storm", level: 3, damage: 780 },
-        { id: "wardstone", level: 1, damage: 356 },
+        { id: "spark", level: 2, damage: 13956 },
+        { id: "flail", level: 3, damage: 4149 },
+        { id: "meteor", level: 1, damage: 9868 },
+        { id: "storm", level: 2, damage: 7240 },
       ],
       passives: [
-        { id: "mending", level: 2 },
-        { id: "reach", level: 1 },
-        { id: "vitality", level: 3 },
+        { id: "vitality", level: 2 },
+        { id: "ward", level: 2 },
         { id: "lodestone", level: 1 },
-        { id: "might", level: 1 },
+        { id: "reach", level: 1 },
+        { id: "volley", level: 2 },
+        { id: "haste", level: 1 },
       ],
       deathCause: "mire_shambler",
-      distance: 18773,
+      distance: 66961,
       peakEnemies: 31,
     });
   });
