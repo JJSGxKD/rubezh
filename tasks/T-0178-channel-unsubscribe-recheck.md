@@ -27,6 +27,8 @@ shared:
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-runner.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
