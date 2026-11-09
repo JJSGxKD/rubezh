@@ -57,6 +57,22 @@ export const WEAPONS: WeaponDef[] = [
     ],
   },
   {
+    // Один тяжёлый груз на цепи: бьёт редко, но намного сильнее камня оберега.
+    // Растёт ударом, радиусом и паузой, а не числом грузов — число остаётся за
+    // «Круговертью».
+    id: "flail",
+    behavior: "orbit",
+    nameKey: "weapon.flail.name",
+    descriptionKey: "weapon.flail.description",
+    levels: [
+      { damage: 34, cooldownSec: 1.6, projectiles: 1, areaRadius: 72, projectileSpeed: 260 },
+      { damage: 40, cooldownSec: 1.5, projectiles: 1, areaRadius: 76, projectileSpeed: 270 },
+      { damage: 46, cooldownSec: 1.4, projectiles: 1, areaRadius: 80, projectileSpeed: 280 },
+      { damage: 53, cooldownSec: 1.3, projectiles: 1, areaRadius: 84, projectileSpeed: 290 },
+      { damage: 60, cooldownSec: 1.2, projectiles: 1, areaRadius: 88, projectileSpeed: 300 },
+    ],
+  },
+  {
     // Один камень на старте, шесть к восьмому уровню — так это оружие и
     // читается в жанре: «ещё один оберег» на карточке выбора видно сразу.
     // Растёт всё сразу — число камней, радиус кольца и скорость вращения:
@@ -165,22 +181,6 @@ export const WEAPONS: WeaponDef[] = [
       { damage: 34, cooldownSec: 1.9, projectiles: 2, areaRadius: 108, statusChance: 0.5 },
       { damage: 38, cooldownSec: 1.8, projectiles: 2, areaRadius: 113, statusChance: 0.55 },
       { damage: 44, cooldownSec: 1.7, projectiles: 2, areaRadius: 118, statusChance: 0.6 },
-    ],
-  },
-  {
-    // Один тяжёлый груз на цепи: бьёт редко, но намного сильнее камня оберега.
-    // Растёт ударом, радиусом и паузой, а не числом грузов — число остаётся за
-    // «Круговертью».
-    id: "flail",
-    behavior: "orbit",
-    nameKey: "weapon.flail.name",
-    descriptionKey: "weapon.flail.description",
-    levels: [
-      { damage: 34, cooldownSec: 1.6, projectiles: 1, areaRadius: 72, projectileSpeed: 260 },
-      { damage: 40, cooldownSec: 1.5, projectiles: 1, areaRadius: 76, projectileSpeed: 270 },
-      { damage: 46, cooldownSec: 1.4, projectiles: 1, areaRadius: 80, projectileSpeed: 280 },
-      { damage: 53, cooldownSec: 1.3, projectiles: 1, areaRadius: 84, projectileSpeed: 290 },
-      { damage: 60, cooldownSec: 1.2, projectiles: 1, areaRadius: 88, projectileSpeed: 300 },
     ],
   },
 

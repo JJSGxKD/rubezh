@@ -114,7 +114,8 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "rushing_bats", perSec: 0.8 },
       { enemy: "mire_shambler", perSec: 0.2 },
       { enemy: "bomber_imp", perSec: 0.45 },
-      { enemy: "tank_ghoul", perSec: 0.2 },      { enemy: "ice_spirit", perSec: 0.5, burst: 4 },
+      { enemy: "tank_ghoul", perSec: 0.2 },
+      { enemy: "ice_spirit", perSec: 0.5, burst: 4 },
     ],
     events: [{ kind: "flank", enemy: "swarm_rat", count: 18 }],
   },
@@ -123,10 +124,9 @@ export const TIMELINE: TimelineSegmentDef[] = [
     spawns: [
       { enemy: "swarm_rat", perSec: 3 },
       { enemy: "circler_crow", perSec: 1.8 },
-      { enemy: "rushing_bats", perSec: 1 },
+      { enemy: "rushing_bats", perSec: 1.6 },
       { enemy: "bone_walker", perSec: 0.7 },
       { enemy: "dasher_wolf", perSec: 0.4 },
-      { enemy: "ice_spirit", perSec: 0.3 },
     ],
     // Первая контрольная точка сложности: элита приходит в назначенную минуту,
     // а не выпадает случайно из смеси.
