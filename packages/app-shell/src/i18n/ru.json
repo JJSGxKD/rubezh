@@ -163,6 +163,7 @@
   "passive.tempering.name": "Закалка",
   "passive.tempering.description": "Меньше урона от огня, холода, молнии и яда, и их состояния короче.",
   "tester.badge": "Тестер",
+  "supporter.badge": "Меценат",
   "upgrade.heal.name": "Лечение",
   "upgrade.heal.description": "Восстановить часть здоровья.",
   "upgrade.limit.damage.name": "Предел: урон",

@@ -2,11 +2,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import "../src/i18n/donate";
-import { t } from "../src/i18n";
+import { formatNumber, t } from "../src/i18n";
 import type { DonationView } from "../src/state/donations-api";
 import { defaultAmount, hasAnyWay, parseAmount, visibleWays } from "../src/screens/meta/donate-rules";
 import { DonateCard } from "../src/screens/meta/donate-block";
-import { DonateSheetView, type DonateSheetViewProps } from "../src/screens/meta/donate-sheet";
+import { donateNotice, DonateSheetView, type DonateSheetViewProps } from "../src/screens/meta/donate-sheet";
 import { SupporterBadge } from "../src/screens/meta/supporter-badge";
 import { TesterBadge } from "../src/screens/meta/tester-badge";
 import { LeaderboardRow } from "../src/screens/meta/rating";
@@ -116,13 +116,22 @@ describe("блок «Поддержать проект»", () => {
   it("в профиле у поддержавшего абзаца с объяснением нет, у остальных он есть", () => {
     expect(card(view({ supporter: true }), "profile")).not.toContain("Донат — не покупка");
     expect(card(view({ supporter: false }), "profile")).toContain("Донат — не покупка");
-    expect(card(view({ supporter: true }), "about")).not.toContain("Донат — не покупка");
+    expect(card(view({ supporter: true }), "about")).toContain("Донат — не покупка");
   });
 
   it("игроку без знака блок не говорит, что знак уже есть, — и при одной ссылке Tribute", () => {
     expect(card(view({ stars: null, supporter: false }))).not.toContain("знак уже у тебя");
   });
 });
+
+/** Открывающие теги кнопок, чей видимый текст — ровно `text`. */
+function buttonsWith(markup: string, text: string): string[] {
+  return markup
+    .split("<button")
+    .slice(1)
+    .map((part) => `<button${part.split("</button>")[0] ?? ""}`)
+    .filter((button) => button.replace(/<[^>]*>/g, "") === text);
+}
 
 function sheet(patch: Partial<DonateSheetViewProps> = {}): string {
   return renderToStaticMarkup(
@@ -146,7 +155,7 @@ describe("лист доната", () => {
   it("готовые суммы плитками, «Своя» последней, кнопка называет выбранную сумму", () => {
     const markup = sheet();
     expect(markup.indexOf(">50<")).toBeLessThan(markup.indexOf(">250<"));
-    expect(markup.indexOf(">1000<")).toBeLessThan(markup.indexOf(">Своя<"));
+    expect(markup.indexOf(`>${formatNumber(1000)}<`)).toBeLessThan(markup.indexOf(">Своя<"));
     expect(markup).toContain("Любая сумма в звёздах: от 1 до 10");
     expect(markup).toContain("Поддержать на 250 ⭐");
   });
@@ -162,13 +171,15 @@ describe("лист доната", () => {
     const markup = sheet({ selected: "custom", customText: "20000" });
     expect(markup).toContain("Сумма — целое число от 1 до 10");
     expect(markup).not.toContain("Поддержать на");
-    expect(markup).toContain('data-pay="" disabled=""');
+    const [idle] = buttonsWith(markup, "Поддержать");
+    expect(idle).toContain('disabled=""');
   });
 
   it("своя сумма в пределах — кнопка называет её и активна", () => {
     const markup = sheet({ selected: "custom", customText: "777" });
-    expect(markup).toContain("Поддержать на 777 ⭐");
-    expect(markup).not.toContain('data-pay="" disabled=""');
+    const [pay] = buttonsWith(markup, "Поддержать на 777 ⭐");
+    expect(pay).toBeDefined();
+    expect(pay).not.toContain('disabled=""');
   });
 
   it("пока ждём оплату — «Ждём оплату…», суммы не нажимаются: второго счёта не будет", () => {
@@ -201,6 +212,31 @@ describe("лист доната", () => {
     expect(markup).toContain("Знак уже в профиле и в рейтинге");
     expect(markup).toContain("Закрыть");
     expect(markup).not.toContain("Своя сумма");
+  });
+});
+
+describe("лист: Tribute и исходы оплаты", () => {
+  it("ссылка есть — кнопка Tribute под кнопкой оплаты; звёзд нет — на листе остаётся только она", () => {
+    expect(sheet({ tribute: TRIBUTE, onTribute: () => undefined })).toContain("Поддержать через Tribute");
+    expect(sheet()).not.toContain("Tribute");
+    const onlyTribute = sheet({ stars: null, tribute: TRIBUTE, onTribute: () => undefined });
+    expect(onlyTribute).toContain("Поддержать через Tribute");
+    expect(onlyTribute).not.toContain("Своя сумма");
+    expect(buttonsWith(onlyTribute, "Поддержать")).toEqual([]);
+  });
+
+  it("исход покупки — в плашку: отмена и успех молчат, долгое подтверждение — информация, остальное — опасность", () => {
+    expect(donateNotice({ kind: "done" })).toBeNull();
+    expect(donateNotice({ kind: "cancelled" })).toBeNull();
+    expect(donateNotice({ kind: "retry", reason: "slow_confirmation" })).toEqual({ tone: "info", text: "Оплата ещё подтверждается — знак появится сам, повторять не нужно" });
+    expect(donateNotice({ kind: "retry", reason: "offline" })).toEqual({ tone: "error", text: "Нет связи. Звёзды не списаны — попробуй ещё раз" });
+    expect(donateNotice({ kind: "retry", reason: "payment_failed" })?.tone).toBe("error");
+  });
+
+  it("отказ сервера: знакомый код — своим текстом, незнакомый — общим", () => {
+    expect(donateNotice({ kind: "refused", code: "endpoint_disabled" })?.text).toBe("Оплата сейчас недоступна. Попробуй позже");
+    expect(donateNotice({ kind: "refused", code: "payments_unsupported" })?.text).toBe("Оплата звёздами доступна только в Telegram");
+    expect(donateNotice({ kind: "refused", code: "something_new" })?.text).toBe("Не получилось оформить поддержку. Попробуй позже");
   });
 });
 

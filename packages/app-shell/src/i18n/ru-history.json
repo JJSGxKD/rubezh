@@ -57,6 +57,7 @@
   "history.item.other": "Предмет",
   "history.item.level": "ур. {level}",
   "history.purchase.continue_run": "Второй шанс в забеге",
+  "history.purchase.donation": "Поддержка проекта",
   "history.purchase.other": "Покупка",
   "history.purchase.stars": "{stars} ⭐",
   "history.purchase.refunded": "звёзды вернулись"

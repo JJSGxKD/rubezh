@@ -28,6 +28,7 @@ import { RADAR_POSITIONS, useRadarSetting } from "../state/radar-setting";
 import { useToolsAccess } from "../state/tools";
 import { useSettings, type VolumeKey } from "../state/settings";
 import { useShell } from "../state/shell";
+import { DonateBlock } from "./meta/donate-block";
 import { TestNoticeText } from "./meta/test-notice-text";
 
 /**
@@ -337,6 +338,9 @@ export function AboutScreen(): ReactNode {
           <ListItem title={t("about.content")} value={CONTENT_HASH} />
           <ListItem title={t("diagnostics.install")} value={installId.slice(0, 8)} />
         </ListGroup>
+
+        {/* Поддержать проект — между сведениями о сборке и разделом о тесте; способов нет — блока нет. */}
+        <DonateBlock place="about" />
 
         <SectionTitle>{t("testNotice.title")}</SectionTitle>
         <TestNoticeText />
