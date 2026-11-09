@@ -390,6 +390,9 @@ export const EVENT_DICTIONARY = {
   // и стиля в нагрузке нет: распределение по кругам и доля открывших блок.
   rating_circle_changed: { version: 1, payload: payload({ circle: z.enum(["all", "friends", "division"]) }) },
   rating_style_opened: { version: 1, payload: payload({}) },
+  // Карточка забега (tasks/T-0297, WP35): откуда её открывают — из таблицы, с
+  // экрана итогов или из истории. Забега и игрока в нагрузке нет: доли входов.
+  leaderboard_run_opened: { version: 1, payload: payload({ from: z.enum(["rating", "results", "history"]) }) },
   // Реклама глазами клиента (docs/35-stage4-plan.md WP12, §3.7). Шаги показа
   // лежат в ad_session — там исход и код отказа; события добавляют то, чего
   // таблица не знает: устройство из конверта и сколько игрок ждал.
