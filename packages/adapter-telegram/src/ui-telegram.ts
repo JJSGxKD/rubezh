@@ -10,6 +10,7 @@ import {
   viewport,
 } from "@tma.js/sdk";
 import type {
+  ButtonBar,
   PlatformUi,
   SafeAreaInsets,
   ScreenMode,
@@ -38,12 +39,14 @@ export function createTelegramUi(): PlatformUi {
   const insetsListeners = new Set<(insets: SafeAreaInsets) => void>();
   const viewportListeners = new Set<(viewport: ViewportState) => void>();
   const screenModeListeners = new Set<(mode: ScreenMode) => void>();
+  const buttonBarListeners = new Set<(bar: ButtonBar | null) => void>();
   const activeListeners = new Set<(active: boolean) => void>();
   const unsubscribes: Unsubscribe[] = [];
 
   let insets: SafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   let viewportState: ViewportState = { width: 0, height: 0, expanded: true };
   let screenMode: ScreenMode = "normal";
+  let buttonBar: ButtonBar | null = null;
   let active = true;
   let readyPromise: Promise<void> | null = null;
 
@@ -62,6 +65,19 @@ export function createTelegramUi(): PlatformUi {
 
     insets = next;
     for (const listener of insetsListeners) listener(insets);
+  };
+
+  const pushButtonBar = (): void => {
+    const next = buttonBarOf(
+      read(viewport.safeAreaInsets, ZERO_TG_INSETS),
+      read(viewport.contentSafeAreaInsets, ZERO_TG_INSETS),
+      read(viewport.isFullscreen, false),
+    );
+    // Тот же объект, пока полоса не изменилась: на него опирается подписка React.
+    if (next?.top === buttonBar?.top && next?.height === buttonBar?.height) return;
+
+    buttonBar = next;
+    for (const listener of buttonBarListeners) listener(buttonBar);
   };
 
   const pushViewport = (): void => {
@@ -111,16 +127,20 @@ export function createTelegramUi(): PlatformUi {
         unsubscribes.push(
           viewport.safeAreaInsets.sub(pushInsets),
           viewport.contentSafeAreaInsets.sub(pushInsets),
+          viewport.safeAreaInsets.sub(pushButtonBar),
+          viewport.contentSafeAreaInsets.sub(pushButtonBar),
           viewport.width.sub(pushViewport),
           viewport.stableHeight.sub(pushViewport),
           viewport.isExpanded.sub(pushViewport),
           viewport.isFullscreen.sub(pushScreenMode),
+          viewport.isFullscreen.sub(pushButtonBar),
           // Тот же сигнал меняет и «развёрнуто ли»: без этой подписки плашка
           // висела бы до следующего изменения размеров окна.
           viewport.isFullscreen.sub(pushViewport),
           miniApp.isActive.sub(pushActive),
         );
         pushInsets();
+        pushButtonBar();
         pushViewport();
         pushScreenMode();
         pushActive();
@@ -159,6 +179,14 @@ export function createTelegramUi(): PlatformUi {
     onInsetsChange(handler): Unsubscribe {
       insetsListeners.add(handler);
       return () => insetsListeners.delete(handler);
+    },
+
+    get buttonBar(): ButtonBar | null {
+      return buttonBar;
+    },
+    onButtonBarChange(handler): Unsubscribe {
+      buttonBarListeners.add(handler);
+      return () => buttonBarListeners.delete(handler);
     },
 
     get viewport(): ViewportState {
@@ -207,6 +235,28 @@ export function createTelegramUi(): PlatformUi {
 }
 
 const ZERO_TG_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * Полоса кнопок Telegram («Закрыть», меню) — контентная зона над приложением,
+ * и только во весь экран: в обычном режиме кнопки живут в шапке самого
+ * Telegram, а не поверх нас. Начинается под системной зоной (вырез, строка
+ * состояния). Нет контентной зоны (старый клиент) — полосы нет.
+ */
+export function buttonBarOf(
+  system: Readonly<SafeAreaInsets>,
+  content: Readonly<SafeAreaInsets>,
+  fullscreen: boolean,
+): ButtonBar | null {
+  if (!fullscreen) return null;
+  const height = finiteTop(content.top);
+  if (height <= 0) return null;
+  return { top: finiteTop(system.top), height };
+}
+
+/** Площадка присылает числа, а не гарантии: нечисловое и отрицательное — ноль. */
+function finiteTop(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
 
 /** Отписки от нажатий кнопок площадки: у каждой кнопки живёт не больше одной. */
 const backButtonOff = { current: null as Unsubscribe | null };

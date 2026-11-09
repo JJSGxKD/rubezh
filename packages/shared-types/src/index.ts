@@ -341,6 +341,16 @@ export interface ThemeColors {
  * Каждая подписка возвращает функцию отписки: оболочка монтирует и
  * размонтирует экраны, и подписка без отписки — утечка на каждом переходе.
  */
+/**
+ * Полоса кнопок площадки поверх приложения (Telegram во весь экран: «Закрыть»
+ * и меню). Числа — CSS-пиксели от верха окна: `top` — где полоса начинается
+ * (под системной зоной), `height` — её высота.
+ */
+export interface ButtonBar {
+  top: number;
+  height: number;
+}
+
 export interface PlatformUi {
   /**
    * Подготовить возможности площадки: смонтировать SDK, подписаться на
@@ -363,6 +373,16 @@ export interface PlatformUi {
 
   readonly insets: SafeAreaInsets;
   onInsetsChange(handler: (insets: SafeAreaInsets) => void): Unsubscribe;
+
+  /**
+   * Полоса кнопок площадки поверх приложения; `null` — её нет. Нет свойства —
+   * площадка полосы не знает (VK, MAX, браузер), оболочка читает его как
+   * `null`. Объект остаётся тем же, пока полоса не изменилась. Отступы
+   * `insets` от неё не зависят (счётчик онлайна, Р107).
+   */
+  readonly buttonBar?: ButtonBar | null;
+  /** Нет метода — полоса не меняется. */
+  onButtonBarChange?(handler: (bar: ButtonBar | null) => void): Unsubscribe;
 
   readonly viewport: ViewportState;
   onViewportChange(handler: (viewport: ViewportState) => void): Unsubscribe;
