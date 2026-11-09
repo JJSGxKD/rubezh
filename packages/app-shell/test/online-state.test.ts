@@ -3,17 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
 import { OnlinePillView } from "../src/app/OnlinePill";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
-import {
-  ONLINE_FAILURES_TO_HIDE,
-  createOnlinePinger,
-  formatOnlineCount,
-  onlinePlacement,
-  onlineView,
-  resetOnlineForTests,
-  runCaption,
-  useOnline,
-  type OnlineEnv,
-} from "../src/state/online";
+import { ONLINE_FAILURES_TO_HIDE, createOnlinePinger, type OnlineEnv } from "../src/state/online-ping";
+import { formatOnlineCount, onlinePlacement, onlineView, resetOnlineForTests, runCaption, useOnline } from "../src/state/online";
 
 // Счётчик онлайна (Р107, tasks/T-0148): пинг раз в `nextPingSec`, только пока
 // приложение видимо; числа приходят порогованными с сервера, клиент ничего не

@@ -190,10 +190,12 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
           // Счётчик онлайна: пинг после входа, остановка при смене аккаунта и
           // размонтировании (docs/35-stage4-plan.md Р107).
           stopOnline();
-          import("./state/online")
-            .then(({ startOnlinePing }) => {
+          import("./state/online-ping")
+            .then(async ({ startOnlinePing }) => {
+              const stop = await startOnlinePing();
               stopOnline();
-              if (!unmounted) stopOnline = startOnlinePing();
+              if (unmounted) stop();
+              else stopOnline = stop;
             })
             .catch((error: unknown) => console.warn("Счётчик онлайна не загрузился:", error));
         });

@@ -120,7 +120,7 @@ export function OnlinePillView(props: { view: OnlineView | null; variant: Online
           )}
         </span>
       ) : (
-        <span aria-hidden="true">{t(now ? "online.now" : "online.today", { value })}</span>
+        <span aria-hidden="true">{now ? `${value} ${word}` : `${word} ${value}`}</span>
       )}
     </span>
   );
