@@ -149,6 +149,7 @@ function resultOf(
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     killsByEnemy: {},
     damageDealt: 0,

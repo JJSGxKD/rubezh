@@ -21,6 +21,8 @@ export interface RunCounters {
   bossKills: number;
   eliteKills: number;
   chestsOpened: number;
+  /** из открытых — редкие: сундуки наибольшего размера (tasks/T-0175) */
+  rareChests: number;
   crystals: number;
   /** самая долгая серия без попаданий, секунды (tasks/T-0321) */
   noHitSec: number;
@@ -35,6 +37,7 @@ export interface CounterFields {
   bossKills?: number | undefined;
   eliteKills?: number | undefined;
   chestsOpened?: number | undefined;
+  rareChests?: number | undefined;
   crystals?: number | undefined;
   noHitSec?: number | undefined;
   noKillSec?: number | undefined;
@@ -50,17 +53,18 @@ export const GEMS_PER_KILL_CEILING = 16;
 
 /**
  * Счётчики из статистики итога. `null` — статистики нет или ни одного из
- * семи полей: сборка до счётчиков, считать нечего. Отсутствующее поле при
+ * восьми полей: сборка до счётчиков, считать нечего. Отсутствующее поле при
  * присланных остальных — 0, словарь стихий — пустой.
  */
 export function countersOf(stats: CounterFields | undefined): RunCounters | null {
   if (stats === undefined) return null;
-  const { bossKills, eliteKills, chestsOpened, crystals, noHitSec, noKillSec, killsByElement } = stats;
-  if ([bossKills, eliteKills, chestsOpened, crystals, noHitSec, noKillSec, killsByElement].every((field) => field === undefined)) return null;
+  const { bossKills, eliteKills, chestsOpened, rareChests, crystals, noHitSec, noKillSec, killsByElement } = stats;
+  if ([bossKills, eliteKills, chestsOpened, rareChests, crystals, noHitSec, noKillSec, killsByElement].every((field) => field === undefined)) return null;
   return {
     bossKills: bossKills ?? 0,
     eliteKills: eliteKills ?? 0,
     chestsOpened: chestsOpened ?? 0,
+    rareChests: rareChests ?? 0,
     crystals: crystals ?? 0,
     noHitSec: noHitSec ?? 0,
     noKillSec: noKillSec ?? 0,
@@ -144,8 +148,8 @@ export interface CounterContext {
  * Сходятся ли счётчики с ходом боя:
  * 1. боссов и элит убито не больше, чем убито вообще;
  * 2. каждых — не больше, чем пришло по таймлайну к концу забега;
- * 3. сундуков открыто не больше, чем убито элит и боссов: сундук падает
- *    только с них;
+ * 3. сундуков открыто не больше, чем убито элит и боссов (сундук падает
+ *    только с них), а редких среди открытых не больше, чем открыто вообще;
  * 4. кристаллов подобрано не больше, чем потолок горсти с каждого убитого;
  * 5. серии без попаданий и без убийств не длиннее забега, а убийств по стихиям
  *    не больше, чем убито вообще (tasks/T-0321).
@@ -157,6 +161,7 @@ export function countersPlausible(counters: RunCounters, context: CounterContext
   if (counters.eliteKills > budget.elite || counters.bossKills > budget.boss) return false;
 
   if (counters.chestsOpened > counters.bossKills + counters.eliteKills) return false;
+  if (counters.rareChests > counters.chestsOpened) return false;
   if (counters.crystals > context.enemiesKilled * GEMS_PER_KILL_CEILING) return false;
 
   if (counters.noHitSec > context.survivalSec || counters.noKillSec > context.survivalSec) return false;

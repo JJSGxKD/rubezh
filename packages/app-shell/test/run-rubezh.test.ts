@@ -75,6 +75,7 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     bossKills: 1,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     weapons: [{ id: "spark", level: 4, damage: 5000 }],
     passives: [],

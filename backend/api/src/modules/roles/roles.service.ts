@@ -55,8 +55,13 @@ export class RolesService {
     return (await this.isBreakGlassOwner(account)) ? ["owner"] : [];
   }
 
+  /** Все права аккаунта: охранник маршрута кладёт их в запрос для фильтра ошибок. */
+  async permissions(account: AccountRef): Promise<ReadonlySet<Permission>> {
+    return permissionsOf(await this.rolesFor(account));
+  }
+
   async can(account: AccountRef, permission: Permission): Promise<boolean> {
-    return permissionsOf(await this.rolesFor(account)).has(permission);
+    return (await this.permissions(account)).has(permission);
   }
 
   /**

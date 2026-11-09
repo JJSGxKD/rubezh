@@ -59,6 +59,8 @@ export interface LeaderboardView {
     photoUrl: string | null;
     /** знак «Тестер» (Р87); поля нет — не тестер */
     tester?: true;
+    /** знак «Меценат» (Р109); поля нет — не поддержал */
+    supporter?: true;
     /** очки эффективности лучшего забега — по ним ранжируется доска */
     points: number;
     /** время того же забега — подпись к очкам */
@@ -184,6 +186,7 @@ export class RunsViewService {
             name: row.displayName,
             photoUrl: row.photoUrl,
             ...(row.tester ? { tester: true as const } : {}),
+            ...(row.supporter ? { supporter: true as const } : {}),
             points: entry.score,
             survivalSec: row.survivalSec,
             style: row.style,
@@ -219,6 +222,7 @@ export class RunsViewService {
       name: mine.displayName,
       photoUrl: mine.photoUrl,
       ...(mine.tester ? { tester: true as const } : {}),
+      ...(mine.supporter ? { supporter: true as const } : {}),
       points: mine.points,
       survivalSec: mine.survivalSec,
       style: mine.style,

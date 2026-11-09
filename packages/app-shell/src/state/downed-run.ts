@@ -34,6 +34,8 @@ const resultSchema = z.object({
   bossKills: z._default(z.number(), 0),
   eliteKills: z._default(z.number(), 0),
   chestsOpened: z._default(z.number(), 0),
+  // Редкие сундуки (tasks/T-0175): запись прошлой сборки поля не несёт.
+  rareChestsOpened: z._default(z.number(), 0),
   crystalsCollected: z._default(z.number(), 0),
   killsByEnemy: z.record(z.string(), z.number()),
   damageDealt: z.number(),

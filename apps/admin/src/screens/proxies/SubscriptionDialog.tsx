@@ -3,7 +3,7 @@ import { EMPTY_SUBSCRIPTION_FORM, saveSubscription, type SubscriptionInfo, type 
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { Button, Field, Input, Notice } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toastError } from "../../ui/toast";
 import { countriesProblem, normalizeSubscriptionUrl, subscriptionUrlProblem } from "./subscription-view";
 
 /**
@@ -36,7 +36,7 @@ export function SubscriptionDialog({
     setSaving(true);
     const result = await saveSubscription(api, { ...form, url: normalizeSubscriptionUrl(form.url) });
     setSaving(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     onSaved(result.data, existing === null);
   };
 
