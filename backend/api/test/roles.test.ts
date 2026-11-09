@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { DomainError } from "../src/common/domain-error.js";
+import { AdminRolesService } from "../src/modules/admin/admin-roles.service.js";
+import type { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
+import type { RoleConfirmations } from "../src/modules/admin/role-confirmations.js";
 import { ROLE_LEVELS, canManage, levelOf } from "../src/modules/roles/role-levels.js";
 import { PERMISSIONS, ROLES, ROLE_PERMISSIONS, permissionsOf } from "../src/modules/roles/permissions.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
@@ -69,6 +72,16 @@ describe("перечень прав и состав ролей", () => {
 
   it("roles.assign — у владельца и администратора, у остальных ролей нет (T-0216)", () => {
     expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("roles.assign"))).toEqual(["owner", "admin"]);
+  });
+
+  it("у роли partner ровно одно право partner.cabinet, и никто, кроме владельца, его не имеет (T-0217)", () => {
+    expect(ROLE_PERMISSIONS.partner).toEqual(["partner.cabinet"]);
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("partner.cabinet"))).toEqual(["owner", "partner"]);
+    // Партнёр — внешний человек: ни игроков, ни денег, ни чужих партнёров он не видит.
+    const granted = permissionsOf(["partner"]);
+    expect(granted.has("partners.view")).toBe(false);
+    expect(granted.has("players.view")).toBe(false);
+    expect(granted.has("roles.assign")).toBe(false);
   });
 
   it("роли складываются: у человека их бывает несколько", () => {
@@ -186,7 +199,7 @@ describe("кто что может", () => {
 
 describe("уровни ролей (T-0216)", () => {
   it("уровни по таблице решения: владелец выше всех, финансы и участник — наравне, аналитик ниже всех", () => {
-    expect(ROLE_LEVELS).toEqual({ owner: 100, stakeholder: 90, finance: 90, admin: 80, game_designer: 50, marketer: 50, moderator: 40, analyst: 30 });
+    expect(ROLE_LEVELS).toEqual({ owner: 100, stakeholder: 90, finance: 90, admin: 80, game_designer: 50, marketer: 50, moderator: 40, analyst: 30, partner: 20 });
     expect(Object.keys(ROLE_LEVELS).sort()).toEqual([...ROLES].sort());
   });
 
@@ -215,8 +228,17 @@ describe("уровни ролей (T-0216)", () => {
     expect(canManage(["owner", "analyst"], ["admin"], "admin")).toBe(true);
   });
 
-  it("аналитик (право roles.assign у него гипотетическое) не управляет никакой ролью не ниже 30", () => {
-    for (const role of ROLES) expect(canManage(["analyst"], [], role)).toBe(false);
+  it("аналитик (право roles.assign у него гипотетическое) не управляет никакой ролью не ниже 30; партнёр (20) ниже", () => {
+    for (const role of ROLES.filter((candidate) => candidate !== "partner")) expect(canManage(["analyst"], [], role), role).toBe(false);
+    expect(canManage(["analyst"], [], "partner")).toBe(true);
+  });
+
+  it("админ выдаёт и снимает partner (уровень 20) игроку без ролей и игроку ниже себя; партнёр сам ролей не раздаёт (T-0217)", () => {
+    expect(canManage(["admin"], [], "partner")).toBe(true);
+    expect(canManage(["admin"], ["analyst"], "partner")).toBe(true);
+    expect(canManage(["admin"], ["admin"], "partner")).toBe(false);
+    expect(canManage(["owner"], ["owner"], "partner")).toBe(true);
+    for (const role of ROLES) expect(canManage(["partner"], [], role), role).toBe(false);
   });
 
   it("без ролей — никому и ничего", () => {
@@ -274,6 +296,20 @@ describe("уровни ролей в выдаче и снятии (T-0216)", () 
     await service.grant(admin, target, "moderator");
 
     expect(await service.revoke(admin, target, "moderator")).toBe(true);
+    expect(await roles.rolesOf(target)).toEqual([]);
+  });
+
+  it("админ выдаёт partner, снимает его, и оба действия — в журнале; маркетолог без roles.assign — отказ (T-0217)", async () => {
+    const target = randomUUID();
+    const marketer = account("701");
+    await roles.grant(marketer.accountId, "marketer", null);
+
+    expect(await service.grant(admin, target, "partner")).toBe(true);
+    expect(await roles.rolesOf(target)).toEqual(["partner"]);
+    expect(await service.revoke(admin, target, "partner")).toBe(true);
+    expect(roles.entries.map((entry) => entry.action)).toEqual(["roles.assign", "roles.revoke"]);
+
+    await expect(service.grant(marketer, target, "partner")).rejects.toThrowError("Недостаточно прав");
     expect(await roles.rolesOf(target)).toEqual([]);
   });
 
@@ -351,5 +387,58 @@ describe("выдача ролей и журнал", () => {
 
     expect(await service.grant(owner, target, "analyst")).toBe(true);
     expect(await roles.rolesOf(target)).toEqual(["analyst"]);
+  });
+});
+
+describe("роль partner в разделе «Роли» (T-0217)", () => {
+  let roles: MemoryRolesRepository;
+  let accounts: MemoryAccountRepository;
+  let admin: AccountRef;
+  let owner: AccountRef;
+  let section: AdminRolesService;
+
+  beforeEach(async () => {
+    roles = new MemoryRolesRepository();
+    accounts = new MemoryAccountRepository();
+    const cfg = config();
+    const rolesService = new RolesService(cfg, roles, accounts);
+    // Выдача partner отказывает до сессий и подтверждений в боте — им здесь нечего делать.
+    section = new AdminRolesService(cfg, accounts, rolesService, {} as AdminSessionService, {} as RoleConfirmations);
+    owner = account(ADMIN_TELEGRAM_ID);
+    admin = account("700");
+    await roles.grant(admin.accountId, "admin", null);
+  });
+
+  it("в каталоге partner не выдаётся даже тому, у кого хватает уровня, и называет, где его выдают; у других ролей подсказки нет", async () => {
+    for (const actor of [admin, owner]) {
+      const { roles: catalog } = await section.assignments(actor);
+      const partner = catalog.find((entry) => entry.role === "partner");
+      expect(partner, "partner в каталоге").toMatchObject({ grantable: false, permissions: ["partner.cabinet"], hint: "Выдаётся в карточке партнёра" });
+      expect(catalog.filter((entry) => entry.role !== "partner").every((entry) => entry.hint === null)).toBe(true);
+    }
+    // У остальных ролей выдача по уровням работает как раньше.
+    const { roles: asAdmin } = await section.assignments(admin);
+    expect(asAdmin.filter((entry) => entry.grantable).map((entry) => entry.role)).toEqual(["game_designer", "moderator", "marketer", "analyst"]);
+  });
+
+  it("запросом из раздела «Роли» partner не выдать ни админу, ни владельцу: роли нет, журнал пуст", async () => {
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "900", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
+
+    for (const actor of [admin, owner]) {
+      await expect(section.grant(actor, { accountId: target.accountId, role: "partner" })).rejects.toThrowError(/карточке партнёра/);
+    }
+    expect(await roles.rolesOf(target.accountId)).toEqual([]);
+    expect(roles.entries).toEqual([]);
+  });
+
+  it("снять partner из раздела «Роли» можно: аккаунт выпал из команды", async () => {
+    const target = await accounts.upsert({ platform: "telegram", platformUserId: "901", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
+    await roles.grant(target.accountId, "partner", owner.accountId);
+    const sessions = { revokeAll: async () => 1 } as unknown as AdminSessionService;
+    const rolesService = new RolesService(config(), roles, accounts);
+    const withSessions = new AdminRolesService(config(), accounts, rolesService, sessions, {} as RoleConfirmations);
+
+    expect(await withSessions.revoke(admin, { accountId: target.accountId, role: "partner" })).toEqual({ revoked: true, sessionsRevoked: 1 });
+    expect(await roles.rolesOf(target.accountId)).toEqual([]);
   });
 });

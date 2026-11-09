@@ -219,6 +219,40 @@ describe.skipIf(DATABASE_URL === "")("ссылки партнёра на жив�
     }
   });
 
+  it("аккаунт самого партнёра по его ссылке не привязывается — ни кликом, ни прямой ссылкой; другой игрок по той же ссылке привязан (T-0217)", async () => {
+    const partnerId = await partner("Сам себе");
+    const code = await link(partnerId);
+    const own = await account();
+    await prisma.partner.update({ where: { partnerId }, data: { accountId: own } });
+    const binder = new PartnerLinkBinder(prisma);
+    const touch = (accountId: string, ref: string, startKind: "link" | "click") => ({ accountId, startKind, startRef: ref, at: new Date() });
+
+    // Решение — own_account, и слот источника при этом не занят.
+    expect(await binder.bindFromTouch(touch(own, code, "link"))).toBe("own_account");
+    expect(await binder.bindFromTouch(touch(own, await click(code), "click"))).toBe("own_account");
+    await recorder.record(entry(own, `l-${code}`));
+    await recorder.record(entry(own, `c-${await click(code)}`));
+    expect(await bindings(own)).toEqual([]);
+    expect(await prisma.accountSession.count({ where: { accountId: own } })).toBe(2);
+
+    const other = await account();
+    expect(await binder.bindFromTouch(touch(other, code, "link"))).toBe("bind");
+    expect(await bindings(other)).toMatchObject([{ partnerId, linkCode: code }]);
+  });
+
+  it("привязка, записанная до связи партнёра с аккаунтом, остаётся: самопривязка запрещается на будущее (T-0217)", async () => {
+    const partnerId = await partner("Связан позже");
+    const code = await link(partnerId);
+    const early = await account();
+    await recorder.record(entry(early, `l-${code}`));
+    expect(await bindings(early)).toHaveLength(1);
+
+    await prisma.partner.update({ where: { partnerId }, data: { accountId: early } });
+
+    expect(await bindings(early)).toMatchObject([{ partnerId, linkCode: code }]);
+    expect(await partners.bindingOf(early)).toMatchObject({ partnerId, linkCode: code });
+  });
+
   it("окно привязки: аккаунт 6 суток — привязка, 8 суток — нет", async () => {
     const partnerId = await partner();
     const code = await link(partnerId);

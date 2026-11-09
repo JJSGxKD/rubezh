@@ -9,6 +9,7 @@ import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
+import { AdminCabinetController } from "../src/modules/admin/admin-cabinet.controller.js";
 import { AdminPartnersController } from "../src/modules/admin/admin-partners.controller.js";
 import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
@@ -20,6 +21,7 @@ import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import type { PartnerFunnelRow } from "../src/modules/funnel/funnel-report.js";
+import { PartnerCabinet } from "../src/modules/partners/partner-cabinet.js";
 import { PARTNER_STATUSES, bindsNewPlayers, partnerInputSchema, withinBindWindow } from "../src/modules/partners/partner-rules.js";
 import { PartnersService } from "../src/modules/partners/partners.service.js";
 import type { PartnerFunnelSource } from "../src/modules/funnel/funnel.repository.js";
@@ -33,6 +35,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
+import { MemoryPartnerAccounts } from "./helpers/memory-partner-accounts.js";
 import { MemoryPartnersRepository } from "./helpers/memory-partners.js";
 import { MemoryPromoCodesRepository } from "./helpers/memory-promo-codes.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
@@ -575,5 +578,307 @@ describe("партнёры по HTTP панели", () => {
     expect((await app.inject({ method: "GET", url: `${base}/${randomUUID()}/funnel`, headers })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: `${base}/не-uuid/funnel`, headers })).statusCode).toBe(400);
     expect((await app.inject({ method: "GET", url: `${base}/${partnerId}/funnel` })).statusCode).toBe(401);
+  });
+});
+
+describe("кабинет партнёра: открыть, закрыть, чей кабинет (T-0217, Р136)", () => {
+  const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+
+  function withCabinet() {
+    const ctx = setup(config);
+    const links = new MemoryPartnerAccounts(ctx.accounts, ctx.repository);
+    const rolesService = new RolesService(config, ctx.roles, ctx.accounts);
+    const service = new PartnersService(ctx.repository, rolesService, null, null, links);
+    const cabinet = new PartnerCabinet(rolesService, links, ctx.repository);
+    return { ...ctx, links, service, cabinet };
+  }
+  type Ctx = ReturnType<typeof withCabinet>;
+
+  /** Журнал выдачи, снятия и открытия кабинета: создание и правка карточек в нём тоже пишутся, но тесту они ни к чему. */
+  const trail = (ctx: Ctx) => ctx.roles.entries.filter((entry) => entry.action === "roles.assign" || entry.action === "roles.revoke" || entry.action === "partner.cabinet");
+
+  /** Партнёр с карточкой и Telegram ID; его аккаунт заведён входом в игру, если `joined`. */
+  async function partnerWithAccount(ctx: Ctx, telegramId: string, joined = true) {
+    const owner = await person(ctx, OWNER_ID);
+    const card = await ctx.service.create(owner, { name: `Канал ${telegramId}`, contact: "@channel", note: "Договорились на 10%", telegramId, country: "KZ", payoutCurrency: "USDT", sharePercent: "12.5" }, NOW);
+    const account = joined ? await person(ctx, telegramId) : null;
+    return { owner, partnerId: card.partnerId, account };
+  }
+
+  it("без Telegram ID у карточки — отказ с подсказкой; аккаунта с таким ID нет — отказ «пусть откроет игру»; в обоих случаях роли и связи нет", async () => {
+    const ctx = withCabinet();
+    const owner = await person(ctx, OWNER_ID);
+    const bare = await ctx.service.create(owner, { name: "Без ID", contact: null, note: null }, NOW);
+    expect(await codeOf(ctx.service.openCabinet(owner, bare.partnerId))).toBe("validation_failed");
+    await expect(ctx.service.openCabinet(owner, bare.partnerId)).rejects.toThrowError("Сначала укажите Telegram ID партнёра");
+
+    const { partnerId } = await partnerWithAccount(ctx, "900200", false);
+    await expect(ctx.service.openCabinet(owner, partnerId)).rejects.toThrowError("Партнёр ещё не заходил в игру — пусть откроет её один раз");
+    expect(ctx.links.links.size).toBe(0);
+    expect(trail(ctx)).toEqual([]);
+    expect(await codeOf(ctx.service.openCabinet(owner, randomUUID()))).toBe("partner_not_found");
+  });
+
+  it("открыть кабинет: роль partner выдана, связь записана, в журнале выдача роли и открытие; повторное открытие ничего не двоит", async () => {
+    const ctx = withCabinet();
+    const { owner, partnerId, account } = await partnerWithAccount(ctx, "900201");
+
+    const state = await ctx.service.openCabinet(owner, partnerId, NOW);
+
+    expect(state).toEqual({ accountId: account?.accountId, open: true });
+    expect(await ctx.roles.rolesOf(account?.accountId ?? "")).toEqual(["partner"]);
+    expect(ctx.links.links.get(partnerId)).toBe(account?.accountId);
+    expect(trail(ctx).map((entry) => entry.action)).toEqual(["roles.assign", "partner.cabinet"]);
+    expect(trail(ctx)[0]).toMatchObject({ actorAccountId: owner.accountId, target: account?.accountId, after: { role: "partner" } });
+    expect(trail(ctx)[1]).toMatchObject({ target: partnerId, after: { open: true, accountId: account?.accountId } });
+
+    expect(await ctx.service.openCabinet(owner, partnerId, NOW)).toEqual(state);
+    expect(trail(ctx).filter((entry) => entry.action === "roles.assign")).toHaveLength(1);
+  });
+
+  it("закрыть кабинет: роли нет, связь с аккаунтом остаётся — она нужна защите от самопривязки; закрыть дважды — безвредно; открыть снова — можно", async () => {
+    const ctx = withCabinet();
+    const { owner, partnerId, account } = await partnerWithAccount(ctx, "900202");
+    await ctx.service.openCabinet(owner, partnerId, NOW);
+
+    expect(await ctx.service.closeCabinet(owner, partnerId, NOW)).toEqual({ accountId: account?.accountId, open: false });
+    expect(await ctx.roles.rolesOf(account?.accountId ?? "")).toEqual([]);
+    expect(ctx.links.links.get(partnerId)).toBe(account?.accountId);
+    expect(trail(ctx).map((entry) => entry.action)).toEqual(["roles.assign", "partner.cabinet", "roles.revoke", "partner.cabinet"]);
+    expect(trail(ctx)[3]).toMatchObject({ target: partnerId, after: { open: false } });
+
+    expect(await ctx.service.closeCabinet(owner, partnerId, NOW)).toEqual({ accountId: account?.accountId, open: false });
+    expect(await ctx.service.openCabinet(owner, partnerId, NOW)).toEqual({ accountId: account?.accountId, open: true });
+    // Карточка, у которой кабинета не было, закрывается без ошибки и без записей.
+    const bare = await ctx.service.create(owner, { name: "Без кабинета", contact: null, note: null }, NOW);
+    const before = trail(ctx).length;
+    expect(await ctx.service.closeCabinet(owner, bare.partnerId, NOW)).toEqual({ accountId: null, open: false });
+    expect(trail(ctx)).toHaveLength(before);
+  });
+
+  it("карточка отдаёт состояние кабинета: нет связи, открыт, закрыт", async () => {
+    const ctx = withCabinet();
+    const { owner, partnerId, account } = await partnerWithAccount(ctx, "900203");
+
+    expect((await ctx.service.detail(owner, partnerId, NOW)).cabinet).toEqual({ accountId: null, open: false });
+    await ctx.service.openCabinet(owner, partnerId, NOW);
+    expect((await ctx.service.detail(owner, partnerId, NOW)).cabinet).toEqual({ accountId: account?.accountId, open: true });
+    await ctx.service.closeCabinet(owner, partnerId, NOW);
+    expect((await ctx.service.detail(owner, partnerId, NOW)).cabinet).toEqual({ accountId: account?.accountId, open: false });
+    // Сервис без хранилища связи (тесты старых модулей) показывает «нет связи», а не падает.
+    const plain = setup(config);
+    const created = await plain.service.create(owner, { name: "Старый", contact: null, note: null }, NOW);
+    expect((await plain.service.detail(owner, created.partnerId, NOW)).cabinet).toEqual({ accountId: null, open: false });
+  });
+
+  it("роли выдаёт тот, у кого есть roles.assign и уровень: админ — да, маркетолог с partners.edit — отказ до всяких проверок, аккаунт с админской ролью и себя — нет", async () => {
+    const ctx = withCabinet();
+    const { partnerId, account } = await partnerWithAccount(ctx, "900204");
+    const admin = await person(ctx, "800", "admin");
+    const marketer = await person(ctx, "801", "marketer");
+
+    expect(await codeOf(ctx.service.openCabinet(marketer, partnerId))).toBe("forbidden");
+    expect(await ctx.roles.rolesOf(account?.accountId ?? "")).toEqual([]);
+    expect(ctx.links.links.size).toBe(0);
+    expect(await codeOf(ctx.service.closeCabinet(marketer, partnerId))).toBe("forbidden");
+
+    // Аккаунт партнёра с ролью не ниже админской менять нельзя — и защита от случайной карточки на команду.
+    await ctx.roles.grant(account?.accountId ?? "", "admin", null);
+    await expect(ctx.service.openCabinet(admin, partnerId)).rejects.toThrowError("У этого аккаунта роль не ниже вашей — менять её роли нельзя");
+    expect(ctx.links.links.size).toBe(0);
+    await ctx.roles.revoke(account?.accountId ?? "", "admin");
+
+    await expect(ctx.service.openCabinet(admin, partnerId, NOW)).resolves.toMatchObject({ open: true });
+    // Администратор — партнёр сам себе: себе роль не выдать.
+    const adminCard = await ctx.service.create(admin, { name: "Админ-партнёр", contact: null, note: null, telegramId: "800" }, NOW);
+    await expect(ctx.service.openCabinet(admin, adminCard.partnerId)).rejects.toThrow(/себе/);
+  });
+
+  it("аккаунт, уже связанный с другим партнёром, не отдаётся второму: отказ с именем первого, роль и связь не меняются", async () => {
+    const ctx = withCabinet();
+    const first = await partnerWithAccount(ctx, "900205");
+    await ctx.service.openCabinet(first.owner, first.partnerId, NOW);
+    // Telegram ID первого поменяли, а его прежний ID достался второму партнёру, — аккаунт по-прежнему связан с первым.
+    await ctx.service.update(first.owner, first.partnerId, { telegramId: "900206" }, NOW);
+    const second = await ctx.service.create(first.owner, { name: "Второй", contact: null, note: null, telegramId: "900205" }, NOW);
+
+    await expect(ctx.service.openCabinet(first.owner, second.partnerId, NOW)).rejects.toThrowError("Этот аккаунт уже привязан к партнёру «Канал 900205»");
+    expect(await codeOf(ctx.service.openCabinet(first.owner, second.partnerId, NOW))).toBe("partner_account_taken");
+    expect(ctx.links.links.get(second.partnerId)).toBeUndefined();
+    expect(ctx.links.links.get(first.partnerId)).toBe(first.account?.accountId);
+    expect(await ctx.roles.rolesOf(first.account?.accountId ?? "")).toEqual(["partner"]);
+  });
+
+  it("Telegram ID карточки поменяли: пока кабинет открыт на прежнем аккаунте — отказ «сначала закройте»; после закрытия связь переносится на новый аккаунт", async () => {
+    const ctx = withCabinet();
+    const { owner, partnerId, account } = await partnerWithAccount(ctx, "900207");
+    const moved = await person(ctx, "900208");
+    await ctx.service.openCabinet(owner, partnerId, NOW);
+    await ctx.service.update(owner, partnerId, { telegramId: "900208" }, NOW);
+
+    await expect(ctx.service.openCabinet(owner, partnerId, NOW)).rejects.toThrowError("Кабинет уже открыт на другой аккаунт — сначала закройте его");
+    expect(await ctx.roles.rolesOf(moved.accountId)).toEqual([]);
+
+    // Закрывается именно тот аккаунт, что был связан, а не найденный по новому ID.
+    expect(await ctx.service.closeCabinet(owner, partnerId, NOW)).toEqual({ accountId: account?.accountId, open: false });
+    expect(await ctx.service.openCabinet(owner, partnerId, NOW)).toEqual({ accountId: moved.accountId, open: true });
+    expect(await ctx.roles.rolesOf(account?.accountId ?? "")).toEqual([]);
+  });
+
+  describe("точка входа кабинета", () => {
+    async function opened(ctx: Ctx, telegramId: string) {
+      const { owner, partnerId, account } = await partnerWithAccount(ctx, telegramId);
+      await ctx.service.openCabinet(owner, partnerId, NOW);
+      return { owner, partnerId, partner: account as AccountRef };
+    }
+
+    it("партнёр видит свою карточку без контактов, заметок и Telegram ID — только название, статус, процент и валюту выплат", async () => {
+      const ctx = withCabinet();
+      const { partnerId, partner } = await opened(ctx, "900210");
+
+      const view = await ctx.cabinet.overview(partner, {}, NOW);
+
+      expect(view).toEqual({ partner: { partnerId, name: "Канал 900210", status: "active", sharePercent: "12.50", payoutCurrency: "USDT" } });
+      expect(JSON.stringify(view)).not.toMatch(/channel|10%|"900210"/);
+      expect(await ctx.cabinet.partnerOf(partner, {})).toEqual({ partnerId, viewOnly: false });
+    });
+
+    it("игрок без связи, партнёр с закрытым кабинетом и роль без связи — отказ; чужой partnerId партнёру не открывает ничего, даже свой", async () => {
+      const ctx = withCabinet();
+      const { owner, partnerId, partner } = await opened(ctx, "900211");
+      const stranger = await person(ctx, "900212");
+      const roleOnly = await person(ctx, "900213");
+      await ctx.roles.grant(roleOnly.accountId, "partner", null);
+
+      await expect(ctx.cabinet.overview(stranger, {}, NOW)).rejects.toThrowError("Недостаточно прав");
+      await expect(ctx.cabinet.overview(roleOnly, {}, NOW)).rejects.toThrowError("Аккаунт не привязан к партнёру");
+      expect(await codeOf(ctx.cabinet.overview(roleOnly, {}, NOW))).toBe("forbidden");
+      expect(await codeOf(ctx.cabinet.overview(partner, { partnerId }, NOW))).toBe("forbidden");
+      expect(await codeOf(ctx.cabinet.overview(partner, { partnerId: randomUUID() }, NOW))).toBe("forbidden");
+
+      await ctx.service.closeCabinet(owner, partnerId, NOW);
+      await expect(ctx.cabinet.overview(partner, {}, NOW)).rejects.toThrowError("Недостаточно прав");
+    });
+
+    it("владелец, администратор и другие с partners.view смотрят кабинет глазами партнёра по partnerId — только чтение; без права — отказ; партнёра нет — 404", async () => {
+      const ctx = withCabinet();
+      const { owner, partnerId } = await opened(ctx, "900214");
+      const admin = await person(ctx, "800", "admin");
+      const marketer = await person(ctx, "801", "marketer");
+      const moderator = await person(ctx, "802", "moderator");
+
+      for (const viewer of [owner, admin, marketer]) {
+        expect(await ctx.cabinet.partnerOf(viewer, { partnerId })).toEqual({ partnerId, viewOnly: true });
+        expect(await ctx.cabinet.overview(viewer, { partnerId }, NOW)).toMatchObject({ partner: { partnerId, name: "Канал 900214" } });
+      }
+      expect(await codeOf(ctx.cabinet.overview(moderator, { partnerId }, NOW))).toBe("forbidden");
+      expect(await codeOf(ctx.cabinet.overview(admin, { partnerId: randomUUID() }, NOW))).toBe("partner_not_found");
+      // Без partnerId у администратора кабинета нет: он не партнёр.
+      await expect(ctx.cabinet.overview(admin, {}, NOW)).rejects.toThrowError("Недостаточно прав");
+      // Владелец, не связанный с партнёром, без partnerId — отказ с понятной причиной.
+      await expect(ctx.cabinet.overview(owner, {}, NOW)).rejects.toThrowError("Аккаунт не привязан к партнёру");
+    });
+  });
+});
+
+describe("кабинет партнёра по HTTP панели (T-0217)", () => {
+  let app: NestFastifyApplication | null = null;
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  it("открыть кабинет из карточки и войти партнёром; чужие и мусорные запросы — 400/403/404; без сессии — 401", async () => {
+    const cfg = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+    const ctx = setup(cfg);
+    const links = new MemoryPartnerAccounts(ctx.accounts, ctx.repository);
+    const rolesService = new RolesService(cfg, ctx.roles, ctx.accounts);
+    const service = new PartnersService(ctx.repository, rolesService, null, null, links);
+    const cabinet = new PartnerCabinet(rolesService, links, ctx.repository);
+    @Module({
+      controllers: [AdminSessionController, AdminPartnersController, AdminCabinetController],
+      providers: [
+        { provide: APP_CONFIG, useValue: cfg },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: ACCOUNT_REPOSITORY, useValue: ctx.accounts },
+        { provide: ROLES_REPOSITORY, useValue: ctx.roles },
+        { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
+        { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
+        { provide: PartnersService, useValue: service },
+        { provide: PartnerCabinet, useValue: cabinet },
+        PanelLoginService,
+        RateLimiter,
+        RolesService,
+        PermissionGuard,
+        AuthGuard,
+        AdminSessionService,
+        AdminSessionGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const http = app;
+
+    const cookieOf = async (devUser: string) => {
+      const login = await http.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser } });
+      return `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(login.headers["set-cookie"]))?.[1] ?? ""}`;
+    };
+    const ownerHeaders = { cookie: await cookieOf(`dev-${OWNER_ID}:Владелец`), [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const partners = "/api/v1/admin/partners";
+    const cabinetUrl = "/api/v1/admin/cabinet";
+
+    // Партнёр с числовым Telegram ID заходил в игру: аккаунт заведён.
+    const joined = await ctx.accounts.upsert({ platform: "telegram", platformUserId: "900300", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
+    const created = await http.inject({ method: "POST", url: partners, headers: ownerHeaders, payload: { name: "Канал", contact: "@channel", note: "тайная заметка", telegramId: "900300", sharePercent: "10" } });
+    const partnerId = created.json<{ data: { partnerId: string } }>().data.partnerId;
+    const cabinetPost = `${partners}/${partnerId}/cabinet`;
+
+    expect((await http.inject({ method: "POST", url: cabinetPost, headers: { cookie: ownerHeaders.cookie }, payload: { open: true } })).statusCode).toBe(403);
+    for (const bad of [{}, { open: "yes" }, { open: true, extra: 1 }]) {
+      expect((await http.inject({ method: "POST", url: cabinetPost, headers: ownerHeaders, payload: bad })).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect((await http.inject({ method: "POST", url: `${partners}/не-uuid/cabinet`, headers: ownerHeaders, payload: { open: true } })).statusCode).toBe(400);
+    expect((await http.inject({ method: "POST", url: `${partners}/${randomUUID()}/cabinet`, headers: ownerHeaders, payload: { open: true } })).statusCode).toBe(404);
+    const opening = await http.inject({ method: "POST", url: cabinetPost, headers: ownerHeaders, payload: { open: true } });
+    expect(opening.statusCode).toBe(201);
+    expect(opening.json<{ data: unknown }>().data).toEqual({ accountId: joined.accountId, open: true });
+    expect((await http.inject({ method: "GET", url: `${partners}/${partnerId}`, headers: ownerHeaders })).json<{ data: { cabinet: unknown } }>().data.cabinet).toEqual({ accountId: joined.accountId, open: true });
+
+    // Партнёр входит в панель — роль пускает — и видит только свою карточку. Вход разработчика — отдельный аккаунт: свяжем его.
+    const dev = await ctx.accounts.upsert({ platform: "telegram", platformUserId: "dev-player-p1", displayName: "Партнёр-разработчик", username: null, photoUrl: null }, Date.now());
+    await ctx.roles.grant(dev.accountId, "partner", null);
+    const second = await http.inject({ method: "POST", url: partners, headers: ownerHeaders, payload: { name: "Другой канал", contact: null, note: null } });
+    const secondId = second.json<{ data: { partnerId: string } }>().data.partnerId;
+    await links.link(secondId, dev.accountId);
+    const partnerHeaders = { cookie: await cookieOf("dev-player-p1:Партнёр-разработчик"), [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+
+    const own = await http.inject({ method: "GET", url: cabinetUrl, headers: partnerHeaders });
+    expect(own.statusCode).toBe(200);
+    expect(own.json<{ data: unknown }>().data).toEqual({ partner: { partnerId: secondId, name: "Другой канал", status: "active", sharePercent: null, payoutCurrency: null } });
+    // Партнёр не открывает чужие карточки и разделы панели.
+    expect((await http.inject({ method: "GET", url: `${cabinetUrl}?partnerId=${partnerId}`, headers: partnerHeaders })).statusCode).toBe(403);
+    expect((await http.inject({ method: "GET", url: partners, headers: partnerHeaders })).statusCode).toBe(403);
+    expect((await http.inject({ method: "POST", url: cabinetPost, headers: partnerHeaders, payload: { open: false } })).statusCode).toBe(403);
+    expect((await http.inject({ method: "GET", url: cabinetUrl })).statusCode).toBe(401);
+
+    // Владелец смотрит кабинет глазами партнёра: контактов и заметок в ответе нет.
+    const asOwner = await http.inject({ method: "GET", url: `${cabinetUrl}?partnerId=${partnerId}`, headers: ownerHeaders });
+    expect(asOwner.statusCode).toBe(200);
+    expect(asOwner.json<{ data: unknown }>().data).toEqual({ partner: { partnerId, name: "Канал", status: "active", sharePercent: "10.00", payoutCurrency: null } });
+    expect(asOwner.body).not.toMatch(/channel|тайная/);
+    expect((await http.inject({ method: "GET", url: `${cabinetUrl}?partnerId=не-uuid`, headers: ownerHeaders })).statusCode).toBe(400);
+    expect((await http.inject({ method: "GET", url: `${cabinetUrl}?partnerId=${randomUUID()}`, headers: ownerHeaders })).statusCode).toBe(404);
+    expect((await http.inject({ method: "GET", url: `${cabinetUrl}?extra=1`, headers: ownerHeaders })).statusCode).toBe(400);
+
+    // Закрытие кабинета: роль снята, следующий запрос партнёра по тому же cookie — отказ.
+    const closing = await http.inject({ method: "POST", url: cabinetPost, headers: ownerHeaders, payload: { open: false } });
+    expect(closing.json<{ data: unknown }>().data).toEqual({ accountId: joined.accountId, open: false });
+    await ctx.roles.revoke(dev.accountId, "partner");
+    expect((await http.inject({ method: "GET", url: cabinetUrl, headers: partnerHeaders })).statusCode).toBe(403);
   });
 });

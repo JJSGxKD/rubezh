@@ -1,12 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { loadAppConfig } from "../src/config/app-config.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { codeKey } from "../src/modules/promo-codes/promo-code-rules.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign } from "../src/modules/promo-codes/promo-codes.repository.js";
+import { PartnerCabinet, PrismaPartnerAccounts } from "../src/modules/partners/partner-cabinet.js";
 import type { PartnerRow } from "../src/modules/partners/partner-rules.js";
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
+import { PartnersService } from "../src/modules/partners/partners.service.js";
 import { PrismaReferralsRepository } from "../src/modules/referrals/referrals.repository.js";
+import { PrismaRolesRepository } from "../src/modules/roles/roles.repository.js";
+import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
@@ -279,5 +284,166 @@ describe.skipIf(DATABASE_URL === "")("партнёры на живом Postgres"
     expect(await partners.update(randomUUID(), { name: "x1", contact: null, note: null }, NOW)).toBeNull();
     expect((await partners.names()).some((row) => row.partnerId === partnerId && row.name === "Новое имя")).toBe(true);
     await expect(prisma.$executeRaw`DELETE FROM partner WHERE partner_id = ${partnerId}::uuid`).rejects.toThrow();
+  });
+});
+
+describe.skipIf(DATABASE_URL === "")("кабинет партнёра на живом Postgres (T-0217)", () => {
+  let prisma: PrismaClient;
+  let accounts: PrismaAccountRepository;
+  let partners: PrismaPartnersRepository;
+  let links: PrismaPartnerAccounts;
+  let service: PartnersService;
+  let cabinet: PartnerCabinet;
+  const staff: string[] = [];
+
+  /** Числовой Telegram ID, которого нет ни у кого на общей базе. */
+  const freshTelegramId = () => String(Math.floor(Math.random() * 1e15) + 2e15);
+
+  async function player(telegramId = freshTelegramId(), platform: "telegram" | "vk" = "telegram"): Promise<AccountRef> {
+    const account = await accounts.upsert({ platform, platformUserId: telegramId, displayName: "Игрок", username: null, photoUrl: null }, NOW.getTime());
+    return { accountId: account.accountId, platform, platformUserId: telegramId };
+  }
+
+  /** Сотрудник с ролью; роль убирается после прогона, чтобы общая база не копила владельцев. */
+  async function member(role: "owner" | "admin" | "marketer"): Promise<AccountRef> {
+    const who = await player();
+    await prisma.accountRole.create({ data: { accountId: who.accountId, role } });
+    staff.push(who.accountId);
+    return who;
+  }
+
+  /** Карточка партнёра с условиями; создаётся сервисом, как из панели. */
+  async function card(actor: AccountRef, name: string, telegramId: string | null) {
+    const created = await service.create(actor, { name, contact: "@channel", note: "тайная заметка", ...(telegramId === null ? {} : { telegramId }), payoutCurrency: "USDT", sharePercent: "12.5" }, NOW);
+    return created.partnerId;
+  }
+
+  const accountIdOf = async (partnerId: string) => (await prisma.partner.findUnique({ where: { partnerId } }))?.accountId ?? null;
+  const rolesOf = async (accountId: string) => (await prisma.accountRole.findMany({ where: { accountId } })).map((row) => row.role);
+  const audit = (action: string, target: string) => prisma.auditEntry.findMany({ where: { action, target } });
+
+  beforeAll(() => {
+    prisma = testPrisma(DATABASE_URL, 8);
+    accounts = new PrismaAccountRepository(prisma);
+    partners = new PrismaPartnersRepository(prisma);
+    links = new PrismaPartnerAccounts(prisma);
+    const rolesService = new RolesService(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv), new PrismaRolesRepository(prisma), accounts);
+    service = new PartnersService(partners, rolesService, null, null, links);
+    cabinet = new PartnerCabinet(rolesService, links, partners);
+  });
+
+  afterAll(async () => {
+    await prisma.accountRole.deleteMany({ where: { accountId: { in: staff } } });
+    await prisma.$disconnect();
+  });
+
+  it("открыть кабинет: без Telegram ID — отказ; ID, которого нет среди аккаунтов, — отказ; ID игрока — роль partner, account_id и запись в журнале", async () => {
+    const admin = await member("admin");
+    const bare = await card(admin, "Без ID", null);
+    await expect(service.openCabinet(admin, bare, NOW)).rejects.toThrowError("Сначала укажите Telegram ID партнёра");
+
+    const unknownId = freshTelegramId();
+    const unknown = await card(admin, "Не заходил", unknownId);
+    await expect(service.openCabinet(admin, unknown, NOW)).rejects.toThrowError("Партнёр ещё не заходил в игру — пусть откроет её один раз");
+    expect(await accountIdOf(unknown)).toBeNull();
+
+    const joined = await player();
+    const partnerId = await card(admin, "Вошёл", joined.platformUserId);
+    expect(await service.openCabinet(admin, partnerId, NOW)).toEqual({ accountId: joined.accountId, open: true });
+
+    expect(await rolesOf(joined.accountId)).toEqual(["partner"]);
+    expect(await accountIdOf(partnerId)).toBe(joined.accountId);
+    expect(await audit("roles.assign", joined.accountId)).toMatchObject([{ actorAccountId: admin.accountId, after: { role: "partner" } }]);
+    expect(await audit("partner.cabinet", partnerId)).toMatchObject([{ actorAccountId: admin.accountId, after: { open: true, accountId: joined.accountId } }]);
+    expect((await service.detail(admin, partnerId, NOW)).cabinet).toEqual({ accountId: joined.accountId, open: true });
+  });
+
+  it("аккаунт той же площадки с тем же id, но не Telegram, не подходит: партнёр ищется среди аккаунтов Telegram", async () => {
+    const admin = await member("admin");
+    const telegramId = freshTelegramId();
+    await player(telegramId, "vk");
+    const partnerId = await card(admin, "Из ВК", telegramId);
+
+    await expect(service.openCabinet(admin, partnerId, NOW)).rejects.toThrowError("Партнёр ещё не заходил в игру — пусть откроет её один раз");
+  });
+
+  it("закрыть кабинет: роли нет, account_id на месте, снятие в журнале; закрыть дважды и открыть снова — можно", async () => {
+    const admin = await member("admin");
+    const joined = await player();
+    const partnerId = await card(admin, "Закрою", joined.platformUserId);
+    await service.openCabinet(admin, partnerId, NOW);
+
+    expect(await service.closeCabinet(admin, partnerId, NOW)).toEqual({ accountId: joined.accountId, open: false });
+
+    expect(await rolesOf(joined.accountId)).toEqual([]);
+    expect(await accountIdOf(partnerId)).toBe(joined.accountId);
+    expect(await audit("roles.revoke", joined.accountId)).toMatchObject([{ actorAccountId: admin.accountId, before: { role: "partner" } }]);
+    expect(await service.closeCabinet(admin, partnerId, NOW)).toEqual({ accountId: joined.accountId, open: false });
+    expect(await service.openCabinet(admin, partnerId, NOW)).toEqual({ accountId: joined.accountId, open: true });
+  });
+
+  it("аккаунт у второго партнёра: отказ с именем первого; под гонкой связь берёт один, а база не даёт записать один аккаунт двум карточкам", async () => {
+    const admin = await member("admin");
+    const joined = await player();
+    const firstId = await card(admin, "Первый кабинет", joined.platformUserId);
+    await service.openCabinet(admin, firstId, NOW);
+    // Telegram ID первого сменили, а прежний достался второму: аккаунт по-прежнему связан с первым.
+    await service.update(admin, firstId, { telegramId: freshTelegramId() }, NOW);
+    const secondId = await card(admin, "Второй кабинет", joined.platformUserId);
+
+    await expect(service.openCabinet(admin, secondId, NOW)).rejects.toThrowError("Этот аккаунт уже привязан к партнёру «Первый кабинет»");
+    expect(await accountIdOf(secondId)).toBeNull();
+    expect(await accountIdOf(firstId)).toBe(joined.accountId);
+
+    const target = await player();
+    const racers = await Promise.all(Array.from({ length: 4 }, (_, index) => card(admin, `Гонка ${String(index)}`, null)));
+    const results = await Promise.allSettled(racers.map((partnerId) => links.link(partnerId, target.accountId, NOW)));
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    for (const result of results) if (result.status === "rejected") expect(result.reason).toMatchObject({ code: "partner_account_taken", status: 409 });
+    expect(await prisma.partner.count({ where: { accountId: target.accountId } })).toBe(1);
+  });
+
+  it("выдать роль может админ, а маркетолог с partners.edit — нет: связь не записывается; удалённый аккаунт отпускает карточку", async () => {
+    const admin = await member("admin");
+    const marketer = await member("marketer");
+    const joined = await player();
+    const partnerId = await card(admin, "По ролям", joined.platformUserId);
+
+    await expect(service.openCabinet(marketer, partnerId, NOW)).rejects.toMatchObject({ code: "forbidden" });
+    expect(await accountIdOf(partnerId)).toBeNull();
+    expect(await rolesOf(joined.accountId)).toEqual([]);
+
+    await service.openCabinet(admin, partnerId, NOW);
+    await prisma.account.delete({ where: { accountId: joined.accountId } });
+    // Карточка партнёра переживает аккаунт: связь пустеет, а не тянет карточку за собой.
+    expect(await accountIdOf(partnerId)).toBeNull();
+    expect(await partners.byId(partnerId, NOW)).toMatchObject({ partnerId });
+  });
+
+  it("точка входа: партнёр видит свою карточку без контактов и заметок, игрок без связи — отказ, владелец по partnerId — карточку партнёра", async () => {
+    const owner = await member("owner");
+    const admin = await member("admin");
+    const joined = await player();
+    const partnerId = await card(admin, "Мой кабинет", joined.platformUserId);
+    await service.openCabinet(admin, partnerId, NOW);
+
+    const own = await cabinet.overview(joined, {}, NOW);
+    expect(own).toEqual({ partner: { partnerId, name: "Мой кабинет", status: "active", sharePercent: "12.50", payoutCurrency: "USDT" } });
+    expect(JSON.stringify(own)).not.toMatch(/channel|тайная/);
+
+    const stranger = await player();
+    await expect(cabinet.overview(stranger, {}, NOW)).rejects.toMatchObject({ code: "forbidden" });
+    // Роль без связи — отказ с причиной, а не чужая карточка.
+    await prisma.accountRole.create({ data: { accountId: stranger.accountId, role: "partner" } });
+    await expect(cabinet.overview(stranger, {}, NOW)).rejects.toThrowError("Аккаунт не привязан к партнёру");
+    await prisma.accountRole.deleteMany({ where: { accountId: stranger.accountId } });
+
+    expect(await cabinet.overview(owner, { partnerId }, NOW)).toEqual(own);
+    expect(await cabinet.partnerOf(owner, { partnerId })).toEqual({ partnerId, viewOnly: true });
+    await expect(cabinet.overview(joined, { partnerId }, NOW)).rejects.toMatchObject({ code: "forbidden" });
+    await expect(cabinet.overview(owner, { partnerId: randomUUID() }, NOW)).rejects.toMatchObject({ code: "partner_not_found" });
+    // После закрытия партнёр в кабинет больше не входит, а связь осталась.
+    await service.closeCabinet(admin, partnerId, NOW);
+    await expect(cabinet.overview(joined, {}, NOW)).rejects.toMatchObject({ code: "forbidden" });
   });
 });

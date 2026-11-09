@@ -30,7 +30,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 const NOW = Date.UTC(2026, 9, 21, 10, 0, 0);
 
 describe("linkBindingDecision: привязывать ли по касанию", () => {
-  const fresh = { partnerStatus: "active" as PartnerStatus | null, accountAgeDays: 1, slot: "free" as const };
+  const fresh = { partnerStatus: "active" as PartnerStatus | null, accountAgeDays: 1, slot: "free" as const, ownAccount: false };
 
   it("партнёра нет — no_partner", () => {
     expect(linkBindingDecision({ ...fresh, partnerStatus: null })).toBe("no_partner");
@@ -50,6 +50,15 @@ describe("linkBindingDecision: привязывать ли по касанию",
     expect(linkBindingDecision({ ...fresh, accountAgeDays: 0 })).toBe("bind");
     // Часы входа и аккаунта могут разойтись: сессия «раньше» аккаунта новичка не старит.
     expect(linkBindingDecision({ ...fresh, accountAgeDays: -0.01 })).toBe("bind");
+  });
+
+  it("аккаунт самого партнёра — own_account раньше проверок статуса, возраста и слота (T-0217)", () => {
+    expect(linkBindingDecision({ ...fresh, ownAccount: true })).toBe("own_account");
+    // Раньше слота и возраста: причина отказа — кто пришёл, а не когда и после кого.
+    expect(linkBindingDecision({ ...fresh, ownAccount: true, slot: "referral", accountAgeDays: 30 })).toBe("own_account");
+    for (const status of PARTNER_STATUSES) expect(linkBindingDecision({ ...fresh, ownAccount: true, partnerStatus: status }), status).toBe("own_account");
+    // Партнёра нет — решает «нет партнёра»: своего аккаунта у несуществующего не бывает.
+    expect(linkBindingDecision({ ...fresh, ownAccount: true, partnerStatus: null })).toBe("no_partner");
   });
 
   it("слот занят рефералом или партнёром — slot_taken", () => {
