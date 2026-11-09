@@ -3,7 +3,7 @@ id: T-0158
 title: Донаты проекту — клиент: лист доната, ссылки Tribute, знак, благодарность, слайд
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -39,6 +39,7 @@ shared:
   - packages/app-shell/src/i18n/ru-home.json
   - packages/app-shell/src/i18n/ru-history.json
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/state/shop-api.ts
 runner: any
 executor: sonnet-5.5
 effort: high
