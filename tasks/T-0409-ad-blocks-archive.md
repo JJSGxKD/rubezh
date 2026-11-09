@@ -252,7 +252,7 @@ batch: 5
    - `MemoryCatalog` из `ads-catalog.test.ts`:
      - поле `archived = new Map<string, string>()`;
      - `blocks()` возвращает `{ ...row, archivedAt: this.archived.get(row.blockId) ?? null }`;
-     - `setBlockArchived` — по решению 3, через `archived` и `blockRows`;
+     - `setBlockArchived` — по контракту из шага 3, через `archived` и `blockRows`;
      - `updateBlock` для блока из `archived` возвращает `false`.
 
      Литералы `blockRows` не трогать: поле архива живёт в `Map`.
