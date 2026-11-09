@@ -193,7 +193,8 @@ HTML карточек и Telegram — T-0396.
      startRef: string;                               // n-<вид>_card — кнопка «▶ Играть»
      periodKey(at: Date): string | null;             // смена периода → финал; null — без финала
      state(accountId: string, at: Date): Promise<Record<string, unknown>>;
-     finalState?(accountId: string, periodKey: string, at: Date): Promise<Record<string, unknown>>;
+     /** финал периода; нет — последнее отправленное состояние с `x: 1` */
+     finalState?(last: Record<string, unknown>, at: Date): Record<string, unknown>;
      caption(state: Record<string, unknown>): string;
      fallback(state: Record<string, unknown>): RichDocument; // площадка без карточек
      act?(account: AccountRef, action: string, arg: string | null, at: Date): Promise<{ outcome: "ok" | "already" | "locked"; result: Record<string, unknown> }>;
@@ -223,6 +224,8 @@ HTML карточек и Telegram — T-0396.
      /// версия облика у площадки: у Telegram — первые 8 hex sha256 HTML
      version   String    @db.VarChar(16)
      periodKey String?   @map("period_key") @db.VarChar(16)
+     /// последнее отправленное состояние (JSON ≤ 1024 байт): из него «перенесена» и финал
+     state     String
      stateHash String    @map("state_hash") @db.VarChar(64)
      createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
      updatedAt DateTime  @map("updated_at") @db.Timestamptz(3)
@@ -246,7 +249,7 @@ HTML карточек и Telegram — T-0396.
    - `byMessage(platform, chatId, messageId)`;
    - `openReplacing(input)` — в одной транзакции закрывает прежнюю живую
      (`closed_at = now`) и вставляет новую; возвращает id прежней или `null`;
-   - `touched(id, stateHash, at)`;
+   - `touched(id, state, stateHash, at)`;
    - `close(id, at)`;
    - `dueForFinal(kind, currentPeriodKey, limit)` — живые этого вида с другим
      `period_key`.
@@ -279,7 +282,7 @@ HTML карточек и Telegram — T-0396.
      8. состояние вида → `encodeState`;
      9. порт поддерживает вид → `send`, иначе `messenger.send(BotMessages.compose(kind.fallback(state), { button }))`;
      10. на успехе порта — `openReplacing`; у прежней — задание
-         `card-moved:<id прежней>` с `{ moved: 1 }` поверх её состояния.
+         `card-moved:<id прежней>` — её сохранённое состояние с `moved: 1`.
      - Кнопка — `{ text: "▶ Играть", url: AppLinks.launch(platform, startRef) }`,
        без ссылки — `null`.
      - Подпись — `kind.caption(state)`.
@@ -304,8 +307,9 @@ HTML карточек и Telegram — T-0396.
     (`FINAL_SCAN_MS = 600_000`) под локом `bot-cards:final:lock`:
     - для каждого вида с `periodKey(now) !== null` берёт `dueForFinal` (до
       500 за проход);
-    - ставит `card-final:<id>` с `kind.finalState ?? kind.state` и флагом
-      `x: 1`;
+    - ставит `card-final:<id>`: сохранённое состояние карточки с `x: 1`, или
+      `kind.finalState(последнее, now)`, если вид его задал. Состояние
+      нового периода сюда не годится: карточка закрывает свою неделю;
     - без входа игроков (`auth.enabled` выкл.) не запускается.
 11. **`bot-cards-answerer.ts`** — `BotCardsAnswerer implements LiveCardAnswerer`,
     провайдер `LIVE_CARD_ANSWERER` (`useExisting`), в `exports`.
