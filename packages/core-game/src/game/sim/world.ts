@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -8,6 +8,7 @@ import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
+import type { SiegeState } from "./siege";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -444,6 +445,12 @@ export interface World {
   cordon: CordonState;
   /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
   rubezh: RubezhState;
+  /**
+   * осада стоящего (Р197): правила и состояние. Правил нет (`null`) в прологе, на «Лёгкой», в мире без
+   * них (стенды, тесты паттернов) — тогда осада не идёт. Состояние входит в снимок
+   */
+  siegeRules: SiegeDef | null;
+  siege: SiegeState;
   /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
   mode: RunMode;
   /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */
@@ -556,7 +563,7 @@ export function clampToBounds(value: number, halfExtent: number): number {
  * вышедший на пятой минуте, не должен крепчать вместе с таймлайном, пока
  * игрок его добивает.
  */
-export function spawnEnemy(world: World, typeIndex: number, x: number, y: number): number {
+export function spawnEnemy(world: World, typeIndex: number, x: number, y: number, rng: Rng = world.rng): number {
   const pool = world.enemies;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxEnemies);
   if (slot < 0) return -1;
@@ -564,7 +571,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   const type = world.enemyTypes[typeIndex];
   // Элита ступеней не получает: она сама и есть контрольная точка сложности,
   // и приходит событием таймлайна в назначенную минуту.
-  const stageIndex = isElite(type) ? 0 : pickStage(world);
+  const stageIndex = isElite(type) ? 0 : pickStage(world, rng);
   const stage = world.stages[stageIndex] ?? world.stages[0];
   pool.x[slot] = x;
   pool.y[slot] = y;

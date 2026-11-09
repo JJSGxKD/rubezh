@@ -62,6 +62,22 @@ export function checksumWorld(world: World): number {
     fold(world.cordon.pendingLeftSec);
   }
 
+  // Осада без правил или до первого якоря в сумму не входит: суммы забегов без неё не меняются.
+  const siege = world.siege;
+  if (world.siegeRules !== null && (siege.anchored || siege.count > 0)) {
+    fold(siege.anchorX);
+    fold(siege.anchorY);
+    fold(siege.holdTicks);
+    fold(siege.warned ? 1 : 0);
+    fold(siege.level);
+    fold(siege.active ? 1 : 0);
+    fold(siege.activeLevel);
+    fold(siege.cooldownTicks);
+    fold(siege.calmTicks);
+    fold(siege.count);
+    fold(siege.rng.getState());
+  }
+
   for (let i = 0; i < world.enemies.count; i++) {
     fold(world.enemies.alive[i]);
     if (world.enemies.alive[i] === 0) continue;

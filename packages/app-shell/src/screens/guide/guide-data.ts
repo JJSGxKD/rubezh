@@ -12,7 +12,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, BOOSTS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -72,6 +72,15 @@ export function eliteEnemies(): GuideEnemy[] {
 export function rubezhGuide(): { atSec: number; guard: EnemyDef; rewardMul: number } | null {
   const guard = ENEMIES.find((enemy) => enemy.id === RUBEZH.guard);
   return guard === undefined ? null : { atSec: RUBEZH.atSec, guard, rewardMul: RUBEZH_REWARD_MUL };
+}
+
+/**
+ * Раздел «Осада» (T-0392, Р197): с какой секунды следит рубеж и сколько стоять до осады — из контента.
+ * Игроку это не угроза, а правило: «стой дольше и получишь», поэтому гайдбук называет числа.
+ */
+export function siegeGuide(): { fromSec: number; holdSec: number } {
+  const { fromSec, holdSec } = CONTENT_SNAPSHOT.siege;
+  return { fromSec, holdSec };
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */

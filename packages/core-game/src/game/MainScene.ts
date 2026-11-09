@@ -26,6 +26,7 @@ import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import { takeSiegeEvents } from "./sim/siege";
 import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
@@ -173,6 +174,7 @@ export class MainScene extends Phaser.Scene {
   private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
+  private siegeCursor = 0;
   /** фаза рубежа на прошлом шаге: смена фазы — повод для сообщения, после снимка отсчёт идёт от восстановленной */
   private rubezhPhase: RubezhPhase = "pending";
   private cueTracker!: CueTracker;
@@ -205,6 +207,7 @@ export class MainScene extends Phaser.Scene {
     this.secretCursor = { found: 0, used: 0, blessings: 0 };
     this.blessingAnnounced = false;
     this.cordonCursor = 0;
+    this.siegeCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     // Продолженный забег — с тем набором, с которым начался: надетое могло
@@ -347,6 +350,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (isPrologueWon(this.world)) break;
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
@@ -675,6 +679,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
@@ -811,6 +816,22 @@ export class MainScene extends Phaser.Scene {
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /** Осада стоящего — оболочке: предупреждение, начало и конец. Журнал после восстановления снимка пуст. */
+  private emitSiegeEvents(): void {
+    const events = takeSiegeEvents(this.world, this.siegeCursor);
+    this.siegeCursor = events.cursor;
+    const bus = this.sceneData.bus;
+    for (const event of events.events) {
+      if (event.kind === "warn") {
+        bus.emit("siegeWarn", { x: event.x, y: event.y, radius: event.radius, leftSec: event.leftSec, level: event.level, elapsedSec: event.elapsedSec });
+      } else if (event.kind === "start") {
+        bus.emit("siegeStart", { level: event.level, guards: event.guards, elites: event.elites, elapsedSec: event.elapsedSec });
+      } else {
+        bus.emit("siegeEnd", { level: event.level, elapsedSec: event.elapsedSec });
+      }
+    }
   }
 
   /**

@@ -17,6 +17,7 @@ import type {
   PassiveDef,
   PressureDef,
   SecretsDef,
+  SiegeDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -32,6 +33,7 @@ import { PRESSURE } from "./pressure";
 import { PROLOGUE } from "./prologue";
 import { RUBEZH } from "./rubezh";
 import { SECRETS } from "./secrets";
+import { SIEGE } from "./siege";
 import { ENEMY_STAGES } from "./stages";
 import { ACCOUNT_UNLOCKS, CARD_TOOL_RULES, CARD_TOOL_UNLOCKS } from "./unlocks";
 import { LEVEL_CURVE, LIMITS, LOADOUT_LIMITS, PASSIVES } from "./upgrades";
@@ -94,6 +96,8 @@ export interface ContentSnapshot {
   limits: readonly LimitDef[];
   /** подстройка давления под силу игрока и устройство (Р131, Р183) */
   pressure: PressureDef;
+  /** осада стоящего: строй и элиты вокруг того, кто долго стоит на месте (Р197, T-0392) */
+  siege: SiegeDef;
   /** коридоры для отчёта симуляции; в хэш не входят */
   balanceTargets: BalanceTargetsDef;
 }
@@ -126,6 +130,7 @@ export const CONTENT_SNAPSHOT: ContentSnapshot = {
   cardToolRules: CARD_TOOL_RULES,
   limits: LIMITS,
   pressure: PRESSURE,
+  siege: SIEGE,
   balanceTargets: { ...BALANCE_TARGETS, evolutionPowerRatio: EVOLUTION_POWER_RATIO },
 };
 
@@ -172,6 +177,7 @@ export function hashSnapshot(snapshot: ContentSnapshot): string {
     snapshot.cardToolRules,
     snapshot.limits,
     snapshot.pressure,
+    snapshot.siege,
     RUBEZH,
     PROLOGUE,
   ]);

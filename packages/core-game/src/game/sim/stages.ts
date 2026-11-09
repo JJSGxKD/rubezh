@@ -1,4 +1,5 @@
 import type { EnemyStageDef } from "@bh/shared-types";
+import type { Rng } from "./rng";
 import type { World } from "./world";
 
 /**
@@ -52,9 +53,10 @@ export function resolveStages(defs: readonly EnemyStageDef[] | undefined): Enemy
 /**
  * Какая ступень достанется врагу, выходящему сейчас. Выбор по весам среди
  * открытых: рулетка, а не «последняя открытая», — иначе прежние ступени
- * исчезли бы из потока в ту же секунду, когда открылась новая.
+ * исчезли бы из потока в ту же секунду, когда открылась новая. Генератор по умолчанию
+ * общий; событие со своим потоком (страж рубежа, осада) передаёт его, чтобы не двинуть основной.
  */
-export function pickStage(world: World): number {
+export function pickStage(world: World, rng: Rng = world.rng): number {
   const stages = world.stages;
   // Сдвиг подстройки: новичку ступени открываются позже, без подстройки он нулевой. Минус не уводит секунду ниже нуля.
   const elapsed = Math.max(0, world.stats.elapsedSec + world.difficulty.stageShiftSec);
@@ -70,7 +72,7 @@ export function pickStage(world: World): number {
   // трогается вовсе: лишний бросок сдвинул бы всю последовательность забега.
   if (last === 0 || total <= 0) return 0;
 
-  let roll = world.rng.nextRange(0, total);
+  let roll = rng.nextRange(0, total);
   for (let i = 0; i <= last; i++) {
     roll -= stages[i].weight;
     if (roll < 0) return i;
