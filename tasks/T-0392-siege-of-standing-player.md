@@ -40,6 +40,7 @@ release: minor
 merge: lead
 design: null
 batch: 5
+attempt: 2
 ---
 
 # T-0392. Осада стоящего — строй и элиты вокруг игрока, который долго стоит на месте

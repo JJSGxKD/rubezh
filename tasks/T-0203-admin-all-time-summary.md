@@ -37,6 +37,7 @@ effort: extra
 release: minor
 design: null
 batch: 4
+attempt: 2
 ---
 
 # T-0203. Сводка «чего достигли» в панели — итоги за всё время и рекорды DAU/WAU/MAU
