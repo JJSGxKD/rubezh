@@ -44,7 +44,8 @@ export function FormDialog({
   title: string;
   dirty: boolean;
   onClose: () => void;
-  footer?: ReactNode;
+  /** функция получает «закрыть с вопросом» — для кнопки «Отмена» */
+  footer?: ReactNode | ((requestClose: () => void) => ReactNode);
   wide?: boolean;
   children: ReactNode;
 }) {
@@ -58,7 +59,7 @@ export function FormDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => (next ? undefined : requestClose())} title={title} size={wide ? "wide" : "default"} {...(footer === undefined ? {} : { footer })}>
+      <Dialog open={open} onOpenChange={(next) => (next ? undefined : requestClose())} title={title} size={wide ? "wide" : "default"} {...(footer === undefined ? {} : { footer: typeof footer === "function" ? footer(requestClose) : footer })}>
         {children}
       </Dialog>
       <Dialog
