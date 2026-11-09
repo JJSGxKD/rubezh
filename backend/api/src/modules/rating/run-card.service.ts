@@ -181,7 +181,7 @@ export class RunCardService {
     @Inject(EXPECTED_TABLE_SOURCE) private readonly table: ExpectedTableSource,
     private readonly scorer: RunScorer,
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
-    private readonly restrictions: Pick<AccountRestrictions, "status">,
+    @Inject(AccountRestrictions) private readonly restrictions: Pick<AccountRestrictions, "status">,
   ) {}
 
   async card(viewerId: string, runId: string): Promise<RunCardView> {

@@ -1,6 +1,12 @@
+import "reflect-metadata";
+import { Module } from "@nestjs/common";
+import { NestFactory } from "@nestjs/core";
 import { describe, expect, it } from "vitest";
 import { bundledExpectedTable, expectedRowOf, type ExpectedTable } from "../src/modules/rating/expected-table.js";
-import { RunCardService, type RunCardRepository, type RunCardRow } from "../src/modules/rating/run-card.service.js";
+import { RUN_CARD_REPOSITORY, RunCardService, type RunCardRepository, type RunCardRow } from "../src/modules/rating/run-card.service.js";
+import { EXPECTED_TABLE_SOURCE } from "../src/modules/rating/expected-table.js";
+import { AccountRestrictions } from "../src/modules/restrictions/account-restrictions.js";
+import { SETTINGS_READER } from "../src/modules/settings/settings.service.js";
 import { RunScorer } from "../src/modules/rating/run-scorer.service.js";
 import { AXIS_IDS } from "../src/modules/rating/score-rules.js";
 import type { RestrictionRow } from "../src/modules/restrictions/restrictions.repository.js";
@@ -189,5 +195,28 @@ describe("карточка забега: состав ответа", () => {
     expect(text).not.toContain(OWNER);
     expect(text).not.toContain("accountId");
     expect(text).not.toContain("finishedAt");
+  });
+});
+
+describe("сборка в контейнере Nest", () => {
+  it("контейнер собирает RunCardService из провайдеров модуля рейтинга", async () => {
+    const restrictions = { status: async () => null };
+    @Module({
+      providers: [
+        RunCardService,
+        { provide: RunScorer, useValue: new RunScorer({ get: () => table }, panelSettings({}), null) },
+        { provide: RUN_CARD_REPOSITORY, useValue: { find: async () => null, boostsOf: async () => [] } },
+        { provide: EXPECTED_TABLE_SOURCE, useValue: { get: () => table } },
+        { provide: SETTINGS_READER, useValue: panelSettings({}) },
+        { provide: AccountRestrictions, useValue: restrictions },
+      ],
+    })
+    class Root {}
+    const context = await NestFactory.createApplicationContext(Root, { logger: false, abortOnError: false });
+    try {
+      expect(context.get(RunCardService)).toBeInstanceOf(RunCardService);
+    } finally {
+      await context.close();
+    }
   });
 });
