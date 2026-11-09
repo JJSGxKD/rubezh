@@ -3,7 +3,7 @@ id: T-0148
 title: Счётчик онлайна — клиент и панель: шапка, кнопка «Играть», разбивка
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -25,6 +25,14 @@ shared:
   - apps/admin/src/ui/help.ts
   - docs/27-design-system-and-app-shell.md
   - docs/29-admin-panel.md
+  - apps/admin/src/screens/sections.tsx
+  - apps/admin/test/online.test.ts
+  - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/design-system/components/SideRail.tsx
+  - packages/app-shell/src/design-system/tokens.css
+  - packages/app-shell/src/index.tsx
+  - packages/app-shell/src/state/api-request.ts
+  - packages/app-shell/src/state/online-ping.ts
 runner: any
 executor: sonnet-5.5
 effort: high
