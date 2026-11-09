@@ -275,7 +275,7 @@ HTML карточек и Telegram — T-0396.
      5. у триггера (`origin` не `reply`) — выбор игрока выключен →
         `opted_out`;
      6. `BotMessagePolicy.decide`: `skip` → `skipped`; `wait` →
-        `addPaced("card-send", { accountId, kind }, { jobId: "card-send:<аккаунт>:<вид>:<период>", delayMs })`
+        `addPaced("card-send", { accountId, kind, origin: "bot" }, { jobId: "card-send:<аккаунт>:<вид>:<период>", delayMs })`
         → `deferred`;
      7. лок `bot-cards:send:<аккаунт>:<вид>` (`SET NX PX 15000` с токеном),
         занят → `busy`;
@@ -291,6 +291,10 @@ HTML карточек и Telegram — T-0396.
      - Отказ вставки по уникальному индексу (гонка мимо лока) → только что
        отправленной карточке — `moved` и строка `closed_at` сразу, лог
        `card_race`.
+   - `sendLater({ accountId, kind, origin })` — отправка по триггеру (забег,
+     пришедший друг) через очередь:
+     `addPaced("card-send", { accountId, kind, origin }, { jobId: "card-send:<аккаунт>:<вид>:<период>", delayMs: 0 })`.
+     Триггеры зовут её, а не `send`: так отправки идут общим темпом.
    - `touch(accountId, kind)` — есть живая карточка → `addPaced("card-edit", { cardId }, { jobId: "card-edit:<id>", delayMs: max(0, updatedAt + gap − now) })`.
      Повторный `touch`, пока задание ждёт, ничего не добавляет: правки
      сливаются.
@@ -302,7 +306,8 @@ HTML карточек и Telegram — T-0396.
        успех → `touched`.
    - Обработчики `card-moved` и `card-final` — то же без прореживания;
      `card-final` после правки закрывает карточку.
-   - Обработчик `card-send` — `send({ origin: "bot" })` заново.
+   - Обработчик `card-send` — `send` с `origin` из данных задания (у
+     отложенной тихими часами — `bot`).
 10. **`bot-cards.finalizer.ts`** — проход раз в 10 минут
     (`FINAL_SCAN_MS = 600_000`) под локом `bot-cards:final:lock`:
     - для каждого вида с `periodKey(now) !== null` берёт `dueForFinal` (до
