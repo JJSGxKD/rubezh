@@ -91,7 +91,7 @@ describe("сильный бот: стойка по забегу владельц
     expect(median).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stand.oldNumbersMinSec);
   });
 
-  it("«стоит» + «ветеран» на нынешних числах с осадой падает к 6–10-й минуте (Р197, T-0392)", { timeout: 900_000 }, () => {
+  it("«стоит» + «ветеран» на нынешних числах с осадой падает к 6–10-й минуте (360–600 с, Р197, T-0392)", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.stand.veteran;
     const median = summarizeRuns(veteranStandRuns()).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(min);
@@ -103,18 +103,21 @@ describe("сильный бот: стойка по забегу владельц
  * Прогоны «бегает» профиля: с осадой и без неё. Забег, в котором осада не наступила, побитово равен
  * забегу без неё (осада читает мир и берёт случайность из своего потока), поэтому без осады
  * перегоняются только забеги, где она была, — иначе проверка вдвое дольше ради тех же чисел.
+ * Прогоны с осадой у профилей лесенки берутся из кеша лесенки: те же зёрна, то же оружие.
  */
 function kiteWithAndWithoutSiege(profile: PowerProfile): { with: BalanceRunResult[]; without: BalanceRunResult[]; sieged: number } {
-  const profileWeapons = profile.startingWeaponId === undefined ? STARTING_WEAPONS : [profile.startingWeaponId];
-  const seeds = profile.id === "veteran" ? STRONG_BOT_TARGETS.stand.seeds : STRONG_BOT_TARGETS.seeds;
   const off: ContentSnapshot = withoutSiege();
   const withSiege: BalanceRunResult[] = [];
   const without: BalanceRunResult[] = [];
   let sieged = 0;
+  const profileWeapons = profile.startingWeaponId === undefined ? STARTING_WEAPONS : [profile.startingWeaponId];
+  const seeds = profile.id === "veteran" ? STRONG_BOT_TARGETS.stand.seeds : STRONG_BOT_TARGETS.seeds;
+  const cached = profile.id === "veteran" ? undefined : strongRuns(profile, "kite");
+  let index = 0;
   for (const startingWeaponId of profileWeapons) {
     for (let seed = 1; seed <= seeds; seed++) {
       const options = { seed, skill: "strong", stance: "kite", startingWeaponId, maxSec: 1800, loadout: profile.loadout } as const;
-      const run = simulateBalanceRun(options);
+      const run = cached?.[index++] ?? simulateBalanceRun(options);
       withSiege.push(run);
       if ((run.sieges ?? 0) === 0) {
         without.push(run);
@@ -143,12 +146,16 @@ describe("сильный бот: осада не наказывает того, 
 
   it("забег, в котором осада не наступила, побитово равен забегу без неё", { timeout: 300_000 }, () => {
     const off = withoutSiege();
-    for (let seed = 1; seed <= 3; seed++) {
+    let compared = 0;
+    for (let seed = 1; seed <= 6; seed++) {
       const options = { seed, skill: "strong", stance: "kite", startingWeaponId: STARTING_WEAPONS[0], maxSec: 400, loadout: POWER_PROFILES.average.loadout } as const;
       const run = simulateBalanceRun(options);
-      expect(run.sieges ?? 0, `seed ${String(seed)}`).toBe(0);
-      expect(simulateBalanceRun({ ...options, content: off }).survivalSec).toBe(run.survivalSec);
+      // Осада наступает и у бегающего (он топчется в круге), такой забег свойство не проверяет.
+      if ((run.sieges ?? 0) > 0) continue;
+      compared++;
+      expect(simulateBalanceRun({ ...options, content: off }).survivalSec, `seed ${String(seed)}`).toBe(run.survivalSec);
     }
+    expect(compared, "хотя бы два забега без осады").toBeGreaterThanOrEqual(2);
   });
 });
 
