@@ -20,7 +20,7 @@ import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Panel, Select } from "../../ui/kit";
 import { formatNumber } from "../../format";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { CandidatesTab } from "./CandidatesTab";
 import { RecleanPanel } from "./RecleanPanel";
@@ -93,7 +93,7 @@ export function NamesScreen() {
   const toggle = async (rule: NameRule): Promise<void> => {
     const result = await updateRule(api, rule.ruleId, { active: !rule.active });
     if (!result.ok) {
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(rule.active ? "Правило выключено" : "Правило включено");

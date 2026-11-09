@@ -47,6 +47,7 @@ function result(): RunResult {
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     noHitSec: 0,
     noKillSec: 0,

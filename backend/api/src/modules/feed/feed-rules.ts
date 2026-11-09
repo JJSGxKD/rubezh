@@ -28,6 +28,12 @@ export function feedEventsOf(run: RecordedRun, rules: { longRunSec: number }, we
   const events: FeedEvent[] = [];
   if (run.survivalSec >= rules.longRunSec) events.push({ id: `${run.runId}:long_run`, kind: "long_run", accountId: run.accountId, atMs, seconds: run.survivalSec });
   if (weekRecord) events.push({ id: `${run.runId}:week_record`, kind: "week_record", accountId: run.accountId, atMs, seconds: run.survivalSec });
+  // Боссы и редкие сундуки — из счётчиков итога (tasks/T-0175). Неправдоподобные
+  // счётчики приходят сюда как null, поэтому событий из них не бывает; на вид —
+  // одно событие на забег, сколько бы боссов и сундуков в нём ни было.
+  const counters = run.counters;
+  if (counters !== null && counters.bossKills > 0) events.push({ id: `${run.runId}:boss`, kind: "boss", accountId: run.accountId, atMs, seconds: null });
+  if (counters !== null && counters.rareChests > 0) events.push({ id: `${run.runId}:chest`, kind: "chest", accountId: run.accountId, atMs, seconds: null });
   return events;
 }
 
