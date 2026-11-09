@@ -18,3 +18,21 @@ export function parseRunCardStart(param: string | null | undefined): string | nu
   const id = param.slice(START_PREFIX.length);
   return RUN_ID.test(id) ? id : null;
 }
+
+/**
+ * Стартовый параметр из подписанных данных запуска площадки: в Telegram это
+ * строка `initData` — запрос с полем `start_param`. Проверяет подпись сервер;
+ * клиенту параметр нужен только затем, чтобы открыть экран, поэтому он
+ * читается как есть. Нет данных или поля — `null` (обычный запуск, другая
+ * площадка с другим форматом).
+ */
+export function launchStartParam(launchData: string | null | undefined): string | null {
+  if (launchData === null || launchData === undefined || launchData === "") return null;
+  const value = new URLSearchParams(launchData).get("start_param");
+  return value === null || value === "" ? null : value;
+}
+
+/** Ссылка на карточку для друга: адрес бота со стартовой парой `run`; бота нет — пусто. */
+export function runCardShareUrl(botUrl: string, runId: string): string {
+  return botUrl === "" ? "" : `${botUrl}?startapp=${encodeURIComponent(runCardStartParam(runId))}`;
+}

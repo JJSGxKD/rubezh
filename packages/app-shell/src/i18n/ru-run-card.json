@@ -34,6 +34,11 @@
   "runCard.scoreStyle": "Очки {points} · {style}",
   "runCard.scoreOnly": "Очки {points}",
   "runCard.history": "Карточка забега",
+  "runCard.share": "Поделиться",
+  "runCard.share.text": "Забег на рубеже — {points} очков. Сможешь лучше?",
+  "runCard.share.copied": "Ссылка скопирована — отправь её другу.",
+  "runCard.share.unavailable": "Не получилось поделиться. Попробуй ещё раз.",
+  "runCard.share.noBot": "Делиться можно в сборке для Telegram.",
   "runCard.preview.strong": "Сильный забег",
   "runCard.preview.below": "Забег ниже ожидаемого (свой)",
   "runCard.preview.plain": "Забег прошлой сборки: без счётчиков и силы"

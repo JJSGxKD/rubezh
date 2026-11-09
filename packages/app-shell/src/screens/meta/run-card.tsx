@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Trophy } from "lucide-react";
-import { Avatar, Badge, ContentColumn, EmptyState, Screen, SectionTitle } from "../../design-system/components";
+import { Avatar, Badge, Button, ContentColumn, EmptyState, Screen, SectionTitle } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/boosts";
 import "../../i18n/run-card";
@@ -13,6 +13,7 @@ import { ItemIcon } from "../item-icons";
 import { isEvolutionWeapon } from "../run/evolution-hints";
 import { styleAxis } from "./rating-rules";
 import { StyleBadge } from "./rating-style";
+import { shareRunCard } from "./run-card-share";
 import { axisCaption, axisName, barShares, cardTitle, evolutionCount } from "./run-card-rules";
 import { AXIS_TEXT, RunWeb } from "./run-card-web";
 import { SyncProblem } from "./sync-ui";
@@ -70,6 +71,16 @@ export function RunCardBody(props: { card: RunCard }): ReactNode {
   const style = styleAxis(card.style);
   const evolutions = evolutionCount(card.build.weapons, isEvolutionWeapon);
   const bars = barShares(card.axes);
+  // Ответ площадки ждём на месте: второе нажатие, пока выбор чата открывается, отправило бы ссылку дважды.
+  const [share, setShare] = useState<{ busy: boolean; note: string | null }>({ busy: false, note: null });
+  const runShare = (): void => {
+    if (share.busy) return;
+    setShare({ busy: true, note: null });
+    shareRunCard(card).then(
+      (note) => setShare({ busy: false, note }),
+      () => setShare({ busy: false, note: t("error.title") }),
+    );
+  };
   const sub = card.power === null ? t("runCard.sub", { time: formatDuration(card.survivalSec), level: card.level }) : t("runCard.subPower", { time: formatDuration(card.survivalSec), level: card.level, power: POWER.format(card.power) });
 
   return (
@@ -121,6 +132,17 @@ export function RunCardBody(props: { card: RunCard }): ReactNode {
       <section>
         <SectionTitle>{t("runCard.sec.build")}</SectionTitle>
         <Build card={card} />
+      </section>
+
+      <section className="grid gap-1.5">
+        <Button track="share" variant="secondary" block loading={share.busy} onClick={runShare}>
+          {t("runCard.share")}
+        </Button>
+        {share.note === null ? null : (
+          <p role="status" className="text-center text-xs text-text-muted">
+            {share.note}
+          </p>
+        )}
       </section>
     </div>
   );
