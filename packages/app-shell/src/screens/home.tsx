@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { BookOpen, ChevronRight, History, MessageSquareHeart, Play } from "lucide-react";
 import { Button, Card, ContentColumn, Modal, Screen } from "../design-system/components";
 import { formatDuration, t } from "../i18n";
+import { formatOnlineCount, runCaption, useOnline } from "../state/online";
 import { botAccessSupported, shouldOfferBotAccess, useBotAccess } from "../state/bot-access";
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
@@ -35,6 +36,8 @@ export function LobbyScreen(): ReactNode {
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const [preRunOpen, setPreRunOpen] = useState(false);
   const live = useHomeLive();
+  // Сколько людей сейчас в забеге — подпись под «Играть»; нет числа — нет подписи (Р107).
+  const inRunNow = useOnline((state) => runCaption(state));
   // До победы в прологе главная — только «Играть» и строка под ней (T-0280): карусель, виджеты, гайдбук и просьбы ждут победы.
   const open = usePrologueOpen();
   const fresh = usePrologue((state) => state.fresh);
@@ -74,8 +77,23 @@ export function LobbyScreen(): ReactNode {
         {saved === null ? (
           <div className="grid gap-1">
             <Button track="play" size="l" block glow cut shine loading={resolving} onClick={play}>
-              <Play size={22} fill="currentColor" />
-              {t("lobby.play")}
+              {inRunNow === null ? (
+                <>
+                  <Play size={22} fill="currentColor" />
+                  {t("lobby.play")}
+                </>
+              ) : (
+                <span className="flex flex-col items-center gap-0.5">
+                  <span className="inline-flex items-center gap-2">
+                    <Play size={22} fill="currentColor" />
+                    {t("lobby.play")}
+                  </span>
+                  <small className="inline-flex items-center gap-1.5 text-xs leading-tight font-semibold tracking-normal normal-case opacity-80">
+                    <i aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+                    {t("online.inRun", { value: formatOnlineCount(inRunNow) })}
+                  </small>
+                </span>
+              )}
             </Button>
             {face.line === null ? null : (
               <p className="text-center text-xs text-text-muted">{t(face.line === "first" ? "lobby.prologue.first" : "lobby.prologue.next")}</p>

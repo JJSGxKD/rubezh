@@ -91,6 +91,8 @@
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
+  /* Точка «сейчас» на плашке онлайна: медленный пульс (tasks/T-0148). */
+  --animate-online-pulse: online-pulse 2s var(--ease-out) infinite;
   --animate-shimmer: shimmer 1.4s var(--ease-base) infinite;
   --animate-pulse-soft: pulse-soft 1s var(--ease-base) infinite;
 
@@ -461,6 +463,17 @@
     }
   }
 
+  @keyframes online-pulse {
+    from {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
   @keyframes shimmer {
     from {
       transform: translateX(-100%);
@@ -825,6 +838,11 @@
 /* Шапка: поля 0,5rem сверху и снизу и строка в 44 px — плюс вырез камеры. */
 [data-app-header] {
   --app-header-h: calc(var(--app-inset-top) + 3.75rem);
+}
+
+/* Плашка онлайна строкой под шапкой (tasks/T-0148): 26 px плашки и зазор. Шапку не раздвигает, содержимое отодвигает. */
+[data-app-header][data-online-line] {
+  --app-header-h: calc(var(--app-inset-top) + 3.75rem + 2rem);
 }
 
 /*

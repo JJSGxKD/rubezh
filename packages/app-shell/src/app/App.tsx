@@ -5,6 +5,7 @@ import { chromeFor } from "../design-system/components/wide-rules";
 import { AmbientSky } from "./AmbientSky";
 import { AppHeader } from "./AppHeader";
 import { BalanceValue } from "./BalanceValue";
+import { OnlinePill, useOnlineSubline } from "./OnlinePill";
 import { formatCompact, formatNumber, t } from "../i18n";
 import { useInstall } from "../state/install";
 import {
@@ -86,6 +87,7 @@ export function App(): ReactNode {
   const wide = useWide((state) => state.wide);
   // «Награда дня» и «Задания» закрыты, пока не пройден пролог (T-0280): ни вкладки, ни экрана по ссылке.
   const sectionsOpen = usePrologueOpen();
+  const onlineSubline = useOnlineSubline();
 
   usePlatformButtons(stack, screen);
   // Первое открытие раздела гасит «Новое» на главной.
@@ -112,6 +114,8 @@ export function App(): ReactNode {
   // высоту у мира и попадала под палец. С 1024 px вместо нижней панели —
   // боковое меню, а вместо шапки-стекла — шапка в потоке (T-0298).
   const chrome = chromeFor({ wide, inRun: screen === "run", tabRoot: tab !== null, depth: stack.length });
+  // Плашка онлайна строкой под шапкой телефона: содержимому нужно место под ней.
+  const onlineLine = onlineSubline && chrome.header === "app";
   const showTabs = chrome.nav === "tabs";
   const tabItem = tabs.find((item) => item.id === tab);
   // Настройки, открытые с паузы, ложатся поверх забега, а не вместо него:
@@ -121,7 +125,7 @@ export function App(): ReactNode {
 
   return (
     <ModalHostProvider value={modalLayer}>
-    <div className={`bg-app relative flex h-full ${chrome.nav === "rail" ? "flex-row" : "flex-col"}`} data-app-header={chrome.header === "app" ? "" : undefined}>
+    <div className={`bg-app relative flex h-full ${chrome.nav === "rail" ? "flex-row" : "flex-col"}`} data-app-header={chrome.header === "app" ? "" : undefined} data-online-line={onlineLine ? "" : undefined}>
       {chrome.nav === "rail" ? <RailHost items={tabs} activeId={tab} onMenu={() => setMenuOpen(true)} /> : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* Шапка — у разделов нижней панели: внутри раздела верх экрана занят
@@ -226,6 +230,7 @@ function WideHeaderHost(props: { title: string }): ReactNode {
     <WideHeader
       title={props.title}
       offline={offline}
+      center={<OnlinePill variant="header" />}
       coinsLabel={`${t("currency.coins")}: ${formatNumber(balances?.coins ?? 0)}`}
       gemsLabel={`${t("currency.premium")}: ${formatNumber(balances?.gems ?? 0)}`}
       coins={(bump) => <BalanceValue id="coins" value={balances?.coins ?? null} format={formatCompact} bump={bump} />}

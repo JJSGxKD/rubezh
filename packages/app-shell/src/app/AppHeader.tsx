@@ -11,6 +11,7 @@ import { uiFeedback } from "../state/ui-feedback";
 import { useShell } from "../state/shell";
 import { useWallet } from "../state/wallet";
 import { BalanceValue } from "./BalanceValue";
+import { OnlineHeaderSlot } from "./OnlinePill";
 
 /**
  * Шапка разделов нижней панели (docs/27-design-system-and-app-shell.md §6,
@@ -98,6 +99,8 @@ export function AppHeader(props: { onMenu(): void }): ReactNode {
           {withAccount ? <CountBadge count={unread} className="@min-[21.5rem]:hidden" /> : null}
         </button>
       </div>
+      {/* Плашка онлайна — в полосе кнопок площадки или строкой под шапкой; шапку не раздвигает. */}
+      <OnlineHeaderSlot />
     </header>
   );
 }

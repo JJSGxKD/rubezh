@@ -142,6 +142,8 @@ export interface WideHeaderProps {
   bell: { unread: number; label: string; onOpen(): void } | null;
   /** без связи числа на плашках — последние известные */
   offline?: boolean;
+  /** плашка по центру между названием и кошельком (счётчик онлайна) */
+  center?: ReactNode;
 }
 
 /**
@@ -152,8 +154,9 @@ export interface WideHeaderProps {
 export function WideHeader(props: WideHeaderProps): ReactNode {
   return (
     <header className="shrink-0 pt-[calc(1.25rem+var(--app-inset-top))] pr-[calc(1.75rem+var(--app-inset-right))] pb-4 pl-7">
-      <div className="mx-auto flex w-full max-w-(--wide-column) items-center justify-between gap-4">
+      <div className="relative mx-auto flex w-full max-w-(--wide-column) items-center justify-between gap-4">
         <h1 className="min-w-0 truncate font-display text-3xl font-bold text-text">{props.title}</h1>
+        {props.center === undefined ? null : <div className="pointer-events-none absolute inset-x-0 flex justify-center">{props.center}</div>}
         <div className={`flex shrink-0 items-center gap-2.5 transition-opacity duration-(--duration-base) ease-base ${props.offline === true ? "opacity-60" : ""}`}>
           <WalletPill label={props.coinsLabel} icon={<CoinIcon size={22} />} onClick={props.onCoins} value={props.coins} />
           <WalletPill label={props.gemsLabel} icon={<GemIcon size={22} />} onClick={props.onGems} value={props.gems} buy />
