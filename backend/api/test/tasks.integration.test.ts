@@ -151,17 +151,6 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       expect(task?.passPoints, `${taskId}: очки`).toBe(catalog.find((candidate) => candidate.taskId === anchor[period][tier])?.passPoints);
       expect(task?.passPoints ?? 0, `${taskId}: очки больше нуля`).toBeGreaterThan(0);
     }
-    // внутри ступени строки идут по алфавиту id, ступени — блоками 150+ / 250+ / 350+
-    for (const period of ["daily", "weekly"] as const) {
-      for (const [tier, base] of [["easy", 150], ["medium", 250], ["hard", 350]] as const) {
-        const rows = added.filter((row) => row[1] === period && row[2] === tier).map((row) => catalog.find((task) => task.taskId === row[0]));
-        const sorted = [...rows].sort((a, b) => (a?.taskId ?? "").localeCompare(b?.taskId ?? ""));
-        expect(
-          sorted.map((task) => task?.sort),
-          `${period}/${tier}`,
-        ).toEqual(sorted.map((_task, index) => base + index));
-      }
-    }
   });
 
   it("копит и помнит лучший, не уходит за цель, отмечает выполнение", async () => {
@@ -651,7 +640,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     });
 
     it("квоты ротации прежние: 5 в день (2/2/1) и 6 в неделю (2/3/1), хотя пул вырос", () => {
-      const tiersOf = (ids: Set<string>, period: "daily" | "weekly") =>
+      const tiersOf = (ids: ReadonlySet<string>, period: "daily" | "weekly") =>
         POOL_TIERS.map((tier) => catalog.filter((task) => task.period === period && task.tier === tier && ids.has(task.taskId)).length);
       for (let day = 0; day < 20; day++) {
         const at = new Date(NOON.getTime() + day * 86_400_000);

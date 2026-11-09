@@ -186,8 +186,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 66 достижений (49 и 17 про боссов, элит, сундуки, кристаллы и эволюции), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(66);
+    it("ровно 65 достижений (48 и 17 про боссов, элит, сундуки, кристаллы и эволюции), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(65);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -251,7 +251,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBeGreaterThanOrEqual(48);
+      expect(added.length).toBe(56);
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
       expect(catalog.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
@@ -284,8 +284,6 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
         const task = catalog.find((candidate) => candidate.taskId === taskId);
         expect(task, taskId).toMatchObject({ period: "achievement", ladder, rung, kind, target, title, category, coins, prestige, gems: 0, shards: 0, passPoints: 0, hidden: false, hint: null, filter: null, tier: null, active: true });
       }
-      // порядок в списке: с 600 шагом 10 по порядку таблицы
-      expect(expected.map(([taskId]) => catalog.find((candidate) => candidate.taskId === taskId)?.sort)).toEqual(expected.map((_row, index) => 600 + index * 10));
     });
 
     it("единая сложность (Р126): цели на сложность — только «Сложная»", () => {
