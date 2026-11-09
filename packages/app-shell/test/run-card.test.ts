@@ -1,18 +1,21 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { LeaderboardEntry } from "@bh/shared-types";
 import "../src/i18n/run-card";
 import { LeaderboardRow } from "../src/screens/meta/rating";
 import { RunCardBody } from "../src/screens/meta/run-card";
 import { RunScoreLink } from "../src/screens/meta/run-card-link";
+import { shareRunCard, type RunCardShareDeps } from "../src/screens/meta/run-card-share";
 import { RunWeb } from "../src/screens/meta/run-card-web";
 import {
   axisCaption,
   barShares,
   cardTitle,
   evolutionCount,
+  launchStartParam,
   parseRunCardStart,
+  runCardShareUrl,
   runCardStartParam,
   webPoints,
   type CardAxis,
@@ -330,5 +333,71 @@ describe("входы в карточку", () => {
 
   it("событие есть в словаре клиента", () => {
     expect(ANALYTICS_EVENTS).toContain("leaderboard_run_opened");
+  });
+});
+
+describe("ссылка на карточку: чтение параметра запуска и «Поделиться»", () => {
+  const ID = "3f2a9c1e-77b0-4c1d-9a55-0d3b6a41e8f2";
+
+  it("параметр запуска читается из подписанных данных площадки", () => {
+    const launch = `query_id=AAH1&user=%7B%22id%22%3A1%7D&start_param=run-${ID}&auth_date=1730000000&hash=abc`;
+
+    expect(launchStartParam(launch)).toBe(`run-${ID}`);
+    expect(openRunCardFromStart(launchStartParam(launch))).toBe(true);
+  });
+
+  it("нет параметра, пустые или чужие данные — null, экран не открывается", () => {
+    expect(launchStartParam(null)).toBeNull();
+    expect(launchStartParam("")).toBeNull();
+    expect(launchStartParam("query_id=AAH1&auth_date=1&hash=abc")).toBeNull();
+    expect(launchStartParam("start_param=&hash=abc")).toBeNull();
+    expect(launchStartParam("vk_user_id=1&sign=abc")).toBeNull();
+  });
+
+  it("ссылка для друга — адрес бота со стартовой парой run", () => {
+    expect(runCardShareUrl("https://t.me/rubezh_bot/play", ID)).toBe(`https://t.me/rubezh_bot/play?startapp=run-${ID}`);
+    expect(runCardShareUrl("", ID)).toBe("");
+  });
+
+  function deps(over: Partial<RunCardShareDeps> = {}): RunCardShareDeps & { events: string[] } {
+    const events: string[] = [];
+    return {
+      botUrl: "https://t.me/rubezh_bot/play",
+      invite: vi.fn(async () => "shared" as const),
+      track: (event, payload) => void events.push(`${event}:${String(payload.context)}:${String(payload.result ?? "")}`),
+      events,
+      ...over,
+    };
+  }
+
+  it("делится ссылкой на карточку и считает предложение и итог", async () => {
+    const d = deps();
+
+    expect(await shareRunCard({ runId: ID, points: 1_990 }, d)).toBeNull();
+    expect(d.invite).toHaveBeenCalledOnce();
+    const sent = vi.mocked(d.invite).mock.calls[0]?.[0];
+    expect(sent?.url).toBe(`https://t.me/rubezh_bot/play?startapp=run-${ID}`);
+    expect(sent?.text).toContain("1");
+    expect(d.events).toEqual(["share_offered:run_card:", "share_completed:run_card:shared"]);
+  });
+
+  it("без адреса бота — честная фраза, события нет", async () => {
+    const d = deps({ botUrl: "" });
+
+    expect(await shareRunCard({ runId: ID, points: 10 }, d)).not.toBeNull();
+    expect(d.invite).not.toHaveBeenCalled();
+    expect(d.events).toEqual([]);
+  });
+
+  it("ссылка скопирована или не вышло — строка под кнопкой; отмена — молчание", async () => {
+    expect(await shareRunCard({ runId: ID, points: 10 }, deps({ invite: async () => "copied" }))).not.toBeNull();
+    expect(await shareRunCard({ runId: ID, points: 10 }, deps({ invite: async () => "unavailable" }))).not.toBeNull();
+    expect(await shareRunCard({ runId: ID, points: 10 }, deps({ invite: async () => "cancelled" }))).toBeNull();
+  });
+
+  it("на экране карточки есть кнопка «Поделиться»", () => {
+    const html = text(renderToStaticMarkup(createElement(RunCardBody, { card: CARD })));
+
+    expect(html).toContain("Поделиться");
   });
 });
