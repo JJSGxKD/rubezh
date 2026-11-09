@@ -5,8 +5,8 @@ import { z } from "zod";
  * что настоящие игроки сделали за последние сутки. Лента — витрина в Redis,
  * а не аналитика: событий в `analytics_event` она не порождает.
  *
- * Виды `boss` и `chest` читаются и показываются уже сейчас, а записывает их
- * T-0175 — когда у забега появятся нужные счётчики.
+ * Виды `boss` и `chest` берутся из счётчиков итога забега (tasks/T-0175):
+ * убит хотя бы один босс и открыт хотя бы один редкий сундук.
  */
 export const FEED_KINDS = ["long_run", "week_record", "boss", "chest"] as const;
 
@@ -20,7 +20,7 @@ export interface FeedEvent {
   accountId: string;
   /** `finishedAt` забега, мс */
   atMs: number;
-  /** время забега в секундах: у `long_run` и `week_record` */
+  /** время забега в секундах: у `long_run` и `week_record`; у `boss` и `chest` — null */
   seconds: number | null;
 }
 
