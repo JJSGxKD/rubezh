@@ -7,6 +7,7 @@ import "../../i18n/donate";
 import { createDonationsApi, markSupporter, openTribute, purchasePoller, type DonatePlace, type DonationStars, type DonationView } from "../../state/donations-api";
 import { buy, type BuyOutcome } from "../../state/shop-purchase";
 import { useShell } from "../../state/shell";
+import { useWide } from "../../state/wide";
 import { defaultAmount, parseAmount, visibleWays, type VisibleWays } from "./donate-rules";
 import { SupporterBadge } from "./supporter-badge";
 
@@ -182,13 +183,20 @@ const HEADING_ID = "donate-sheet-title";
 /** Лист без состояния и сети: то, что нарисовано при данных пропсах. */
 export function DonateSheetView(props: DonateSheetViewProps): ReactNode {
   const { thanks } = props;
+  // На wide лист — панель сбоку во всю высоту: места хватает, и «низкого ландшафта» там нет.
+  const wide = useWide((state) => state.wide);
   return (
-    <Modal labelledBy={HEADING_ID} placement="bottom" onDismiss={props.onClose}>
-      <div className="flex flex-col items-center text-center">
+    // Кнопки закреплены под прокручиваемым телом: в ландшафте и с клавиатурой «Поддержать» не уезжает за край.
+    <Modal labelledBy={HEADING_ID} placement="bottom" pinFooter footer={thanks ? <ThanksFooter onClose={props.onClose} /> : <ChoiceFooter {...props} />} onDismiss={props.onClose}>
+      {/* pt-1: кольцо сердца — тень снаружи круга, и без поля её верх срезает прокручиваемое тело листа. */}
+      <div className="flex flex-col items-center pt-1 text-center">
         {/* На узком экране и в ландшафте сердца нет: клавиатура и так съедает полэкрана. */}
         <span
           aria-hidden="true"
-          className="mb-2.5 inline-flex size-[72px] items-center justify-center rounded-full bg-surface-sunken text-hp ring-2 ring-hp/70 max-[359px]:hidden short:hidden landscape:hidden"
+          className={[
+            "mb-2.5 inline-flex size-[72px] items-center justify-center rounded-full bg-surface-sunken text-hp ring-2 ring-hp/70 max-[359px]:hidden",
+            wide ? "" : "short:hidden landscape:hidden",
+          ].join(" ")}
         >
           <Heart size={34} fill="currentColor" />
         </span>
@@ -196,23 +204,50 @@ export function DonateSheetView(props: DonateSheetViewProps): ReactNode {
           {thanks ? t("donate.thanks.title") : t("donate.sheet.title")}
         </h2>
       </div>
-      {thanks ? <Thanks onClose={props.onClose} /> : <Choice {...props} />}
+      {thanks ? <Thanks /> : <Choice {...props} />}
     </Modal>
   );
 }
 
-function Thanks(props: { onClose: () => void }): ReactNode {
+function Thanks(): ReactNode {
   return (
     <div className="mt-2 flex flex-col items-center gap-3 text-center">
       <p className="text-sm text-text-muted">{t("donate.thanks.text")}</p>
       <SupporterBadge size="l" />
       <p className="text-xs text-text-muted">{t("donate.thanks.badge")}</p>
-      <div className="mt-1 w-full">
-        <Button track="donate_close" block variant="secondary" onClick={props.onClose}>
-          {t("donate.close")}
-        </Button>
-      </div>
     </div>
+  );
+}
+
+function ThanksFooter(props: { onClose: () => void }): ReactNode {
+  return (
+    <Button track="donate_close" block variant="secondary" onClick={props.onClose}>
+      {t("donate.close")}
+    </Button>
+  );
+}
+
+/** Кнопки листа: оплата выбранной суммы и Tribute; пока ждём оплату — «Ждём оплату…» вместо суммы. */
+function ChoiceFooter(props: DonateSheetViewProps): ReactNode {
+  const { stars, paying } = props;
+  if (stars === null) return <TributeAction {...props} />;
+  const amount = amountOf(props.selected, props.customText, stars);
+  return (
+    <>
+      {/* Плашка — над кнопкой, а не в прокручиваемом теле: в ландшафте она иначе уезжала бы за край. */}
+      {props.notice === null ? null : <Notice notice={props.notice} />}
+      {paying ? (
+        <Button track="donate_pay" block variant="secondary" disabled>
+          <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          {t("donate.paying")}
+        </Button>
+      ) : (
+        <Button track="donate_pay" block disabled={amount === null} onClick={props.onPay}>
+          {amount === null ? t("donate.pay.idle") : t("donate.pay", { n: formatNumber(amount) })}
+        </Button>
+      )}
+      <TributeAction {...props} />
+    </>
   );
 }
 
@@ -220,12 +255,7 @@ function Choice(props: DonateSheetViewProps): ReactNode {
   const { stars, paying } = props;
   if (stars === null) {
     // Оплаты звёздами нет — остаётся ссылка Tribute, если она есть.
-    return (
-      <div className="mt-2 grid gap-3">
-        <p className="text-center text-sm text-text-muted">{t("donate.text")}</p>
-        <TributeAction {...props} />
-      </div>
-    );
+    return <p className="mt-2 text-center text-sm text-text-muted">{t("donate.text")}</p>;
   }
 
   const custom = props.selected === "custom";
@@ -268,7 +298,7 @@ function Choice(props: DonateSheetViewProps): ReactNode {
             aria-describedby={invalid ? "donate-custom-error" : undefined}
             className={[
               "surface-sunken min-h-12 w-full rounded-md px-3 font-display text-lg font-bold text-text ring-2",
-              invalid ? "ring-danger" : "ring-border-strong",
+              invalid ? "ring-danger focus-visible:outline-danger" : "ring-border-strong",
             ].join(" ")}
             onChange={(event) => props.onCustomText(event.target.value)}
             onKeyDown={(event) => {
@@ -284,22 +314,7 @@ function Choice(props: DonateSheetViewProps): ReactNode {
         </div>
       ) : null}
 
-      {props.notice === null ? null : <Notice notice={props.notice} />}
       {stars.mode === "test" ? <p className="mt-3 text-xs text-info">{t("donate.test")}</p> : null}
-
-      <div className="mt-3 grid gap-2">
-        {paying ? (
-          <Button track="donate_pay" block variant="secondary" disabled>
-            <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            {t("donate.paying")}
-          </Button>
-        ) : (
-          <Button track="donate_pay" block disabled={amount === null} onClick={props.onPay}>
-            {amount === null ? t("donate.pay.idle") : t("donate.pay", { n: formatNumber(amount) })}
-          </Button>
-        )}
-        <TributeAction {...props} />
-      </div>
     </div>
   );
 }
@@ -308,8 +323,8 @@ function TributeAction(props: DonateSheetViewProps): ReactNode {
   if (props.tribute === undefined || props.tribute === null || props.onTribute === undefined) return null;
   return (
     <Button track="donate_tribute" block variant="ghost" disabled={props.paying} onClick={props.onTribute}>
-      {t("donate.tribute")}
-      <ExternalLink size={16} aria-hidden="true" />
+      <span className="text-sm min-[360px]:text-base">{t("donate.tribute")}</span>
+      <ExternalLink size={16} aria-hidden="true" className="max-[359px]:hidden" />
     </Button>
   );
 }
@@ -344,7 +359,7 @@ function Notice(props: { notice: DonateNotice }): ReactNode {
   return (
     <div
       role={error ? "alert" : "status"}
-      className={["surface-sunken mt-3 flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm text-text ring-1", error ? "ring-danger/40" : "ring-info/40"].join(" ")}
+      className={["surface-sunken flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm text-text ring-1", error ? "ring-danger/40" : "ring-info/40"].join(" ")}
     >
       <Icon size={16} aria-hidden="true" className={`mt-px shrink-0 ${error ? "text-danger" : "text-info"}`} />
       <p className="min-w-0 flex-1">{props.notice.text}</p>

@@ -93,7 +93,7 @@ export function DonateCard(props: {
         <span aria-hidden="true" className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-hp ring-2 ring-hp/70">
           <Heart size={20} fill="currentColor" />
         </span>
-        <h2 className="min-w-0 font-display text-lg font-bold text-text">{t("donate.title")}</h2>
+        <h2 className="min-w-0 font-display text-base font-bold min-[360px]:text-lg text-text">{t("donate.title")}</h2>
       </div>
       {supporter ? (
         <p className="mb-2.5 flex flex-wrap items-center gap-2 text-sm text-text">
@@ -122,9 +122,9 @@ function TributeButton(props: { ways: VisibleWays; onTribute: (tribute: NonNulla
   if (tribute === null) return null;
   return (
     <Button track="donate_tribute" block variant="secondary" onClick={() => props.onTribute(tribute)}>
-      <span className="min-[768px]:hidden">{t("donate.tribute")}</span>
+      <span className="text-sm min-[360px]:text-base min-[768px]:hidden">{t("donate.tribute")}</span>
       <span className="hidden min-[768px]:inline">{t("donate.tribute.short")}</span>
-      <ExternalLink size={16} aria-hidden="true" />
+      <ExternalLink size={16} aria-hidden="true" className="max-[359px]:hidden" />
     </Button>
   );
 }
