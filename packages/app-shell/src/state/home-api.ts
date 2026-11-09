@@ -35,6 +35,7 @@ const slideSchema = z.discriminatedUnion("kind", [
   z.object({ id: z.string(), kind: z.literal("vip"), stars: z.number() }),
   z.object({ id: z.string(), kind: z.literal("starter"), stars: z.number() }),
   z.object({ id: z.string(), kind: z.literal("invite") }),
+  z.object({ id: z.string(), kind: z.literal("donate") }),
   z.object({ id: z.string(), kind: z.literal("channel"), url: z.string() }),
   z.object({ id: z.string(), kind: z.literal("task"), title: z.nullable(z.string()), image: z.nullable(z.string()), reward: rewardSchema }),
   // Значок — строкой: незнакомый (сервер новее) рисуется значком объявления, а не роняет слайд.

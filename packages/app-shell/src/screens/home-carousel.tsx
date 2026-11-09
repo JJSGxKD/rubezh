@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useSwipeStrip } from "../design-system/components/swipe-strip";
 import { t } from "../i18n";
 import "../i18n/home";
@@ -26,6 +26,9 @@ import { useClock } from "./meta/schedule";
  * высоты — главная не прыгает. Ответ общий с виджетами (`home-api.ts`): на
  * возврате прежние слайды стоят, пока идёт новый.
  */
+
+// Лист доната — отдельным чанком: нужен после касания по слайду, а не главной.
+const HomeDonateSheet = lazy(async () => ({ default: (await import("./meta/donate-sheet")).HomeDonateSheet }));
 
 const AUTO_MS = 6_000;
 /** Сколько слайд должен быть на виду, чтобы засчитать показ. */
@@ -72,6 +75,8 @@ export function HomeCarousel(): ReactNode {
   const hidden = useMedia(LOW_SCREEN);
   const still = useMedia(REDUCED_MOTION);
   const now = useClock(slides?.some((slide) => slide.kind === "promo") === true, CLOCK_STEP_MS);
+  const [donate, setDonate] = useState(false);
+  const closeDonate = useCallback(() => setDonate(false), []);
 
   // Обновились знаки меню — забег, забор, возврат в приложение — значит, и главная могла измениться.
   useEffect(() => {
@@ -122,9 +127,14 @@ export function HomeCarousel(): ReactNode {
         onKeyDown={touch}
       >
         {slides.map((slide, index) => (
-          <SlideCard key={slide.id} slide={slide} index={index} total={total} now={now} />
+          <SlideCard key={slide.id} slide={slide} index={index} total={total} now={now} onDonate={() => setDonate(true)} />
         ))}
       </div>
+      {donate ? (
+        <Suspense fallback={null}>
+          <HomeDonateSheet onClose={closeDonate} />
+        </Suspense>
+      ) : null}
       {total === 1 ? null : (
         <SlideDots
           ids={slides.map((slide) => slide.id)}
@@ -145,6 +155,17 @@ function slideEvent(slide: HomeSlide, position: number): { slide: string; positi
 }
 
 /**
+ * Касание по слайду доната: событие и открытие листа. `false` — слайд не
+ * донат, и дальше им занимается общий разбор касаний.
+ */
+export function tapDonateSlide(slide: HomeSlide, position: number, show: () => void): boolean {
+  if (slide.kind !== "donate") return false;
+  track("home_slide_clicked", slideEvent(slide, position));
+  show();
+  return true;
+}
+
+/**
  * Заглушка той же высоты, что карусель с точками: пока ответ в пути, главная
  * не прыгает. Та же разметка стоит в `home.tsx`, пока едет сам чанк.
  */
@@ -157,15 +178,18 @@ export function CarouselPlaceholder(): ReactNode {
   );
 }
 
-function SlideCard(props: { slide: HomeSlide; index: number; total: number; now: number }): ReactNode {
+function SlideCard(props: { slide: HomeSlide; index: number; total: number; now: number; onDonate: () => void }): ReactNode {
   const { slide } = props;
   const navigation = useNavigation();
   const baseUrl = useShell((state) => state.capabilities.auth?.baseUrl);
 
   // Ссылку открывают в том же нажатии: площадка открывает ссылки только в ответ на касание.
   const open = (): void => {
+    if (tapDonateSlide(slide, props.index, props.onDonate)) return;
     track("home_slide_clicked", slideEvent(slide, props.index));
     switch (slide.kind) {
+      case "donate":
+        return;
       case "promo":
       case "vip":
       case "starter":
