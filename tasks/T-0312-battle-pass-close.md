@@ -3,7 +3,7 @@ id: T-0312
 title: Батл-пасс — закрытие месяца: незабранное выдаётся само под локом, уведомление в игре и в боте; бусты-подарки тратятся при включении буста
 epic: E16
 priority: P2
-status: done
+status: in-progress
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
