@@ -37,6 +37,7 @@ const loaders = {
   testerThanks: () => import("../screens/meta/tester-thanks"),
   runInterrupted: () => import("../screens/meta/run-interrupted"),
   runCard: () => import("../screens/meta/run-card"),
+  runCardPreview: () => import("../screens/meta/run-card-preview"),
   stress: () => import("../screens/stress/StressScreen"),
   soundLab: () => import("../screens/sound-lab"),
   adsCheck: () => import("../screens/ads-check"),
@@ -82,6 +83,8 @@ export const TestNoticeScreen = screen(loaders.testNotice, "TestNoticeScreen");
 export const TesterThanksScreen = screen(loaders.testerThanks, "TesterThanksScreen");
 export const RunInterruptedScreen = screen(loaders.runInterrupted, "RunInterruptedScreen");
 export const RunCardScreen = screen(loaders.runCard, "RunCardScreen");
+// Витрина карточки — своим чанком: числа её примеров не должны раздувать витрину компонентов.
+export const RunCardPreviewLazy = screen(loaders.runCardPreview, "RunCardPreview");
 export const GuideScreen = screen(loaders.guide, "GuideScreen");
 export const FeedbackScreen = screen(loaders.feedback, "FeedbackScreen");
 export const StressScreen = screen(loaders.stress, "StressScreen");

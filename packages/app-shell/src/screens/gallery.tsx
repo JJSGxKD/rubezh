@@ -1,6 +1,7 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
 import type { AdCreative, BlessingDef, LeaderboardEntry, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import { RunCardPreviewLazy as RunCardPreview } from "../app/lazy-screens";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -480,9 +481,6 @@ function RatingPreview(): ReactNode {
     </Screen>
   );
 }
-
-/** Карточка забега (T-0297) — своим чанком: числа её примеров не должны раздувать витрину. */
-const RunCardPreview = lazy(async () => ({ default: (await import("./meta/run-card-preview")).RunCardPreview }));
 
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
