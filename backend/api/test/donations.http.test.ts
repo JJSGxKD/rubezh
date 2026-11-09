@@ -93,7 +93,7 @@ describe("донаты по HTTP", () => {
     for (const payload of [{}, { amount: "50" }, { amount: 1.5 }, { amount: null }, { amount: 50, stars: 1 }, { amount: 0 }, { amount: -5 }, { amount: 10_001 }]) {
       const response = await server.inject({ method: "POST", url: "/api/v1/donations/orders", headers, payload });
       expect(response.statusCode, JSON.stringify(payload)).toBe(400);
-      expect(response.json<{ error: { code: string; message: string } }>().error).toEqual({ code: "validation_failed", message: "Некорректная сумма" });
+      expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "validation_failed", message: "Некорректная сумма" });
     }
     expect(purchases.rows.size).toBe(0);
     expect(api.sent).toEqual([]);
