@@ -13,6 +13,7 @@ import { FxScreen } from "./fx/FxScreen";
 import { HomeSlidesScreen } from "./home/HomeSlidesScreen";
 import { LinksScreen } from "./links/LinksScreen";
 import { NamesScreen } from "./names/NamesScreen";
+import { OnlineScreen } from "./online";
 import { OverviewScreen } from "./overview/OverviewScreen";
 import { PartnersScreen } from "./partners/PartnersScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
@@ -32,6 +33,7 @@ import { SettingsScreen } from "./settings/SettingsScreen";
  */
 export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> = {
   overview: () => <OverviewScreen />,
+  online: () => <OnlineScreen />,
   players: (id) => <PlayersScreen id={id} />,
   review: () => <ReviewScreen />,
   names: () => <NamesScreen />,

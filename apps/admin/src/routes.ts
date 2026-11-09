@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -34,7 +34,10 @@ export interface SectionGroup {
 export const SECTION_GROUPS: readonly SectionGroup[] = [
   {
     title: "Обзор",
-    sections: [{ id: "overview", title: "Сводка", hint: "Как идёт игра сегодня против вчера и что ждёт вас", permission: "analytics.gameplay.view", icon: Gauge }],
+    sections: [
+      { id: "overview", title: "Сводка", hint: "Как идёт игра сегодня против вчера и что ждёт вас", permission: "analytics.gameplay.view", icon: Gauge },
+      { id: "online", title: "Онлайн", hint: "Сколько игроков сейчас в приложении и в забеге по площадкам, рекорд", permission: "analytics.gameplay.view", icon: Radio },
+    ],
   },
   {
     title: "Поддержка",
