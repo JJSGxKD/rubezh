@@ -19,7 +19,7 @@ import { HELP } from "../../ui/help";
 import { Badge, Button, ErrorNotice, Help, KeyValue, Loading } from "../../ui/kit";
 import { saveFile } from "../../ui/save-file";
 import { navigate } from "../../ui/router";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { PeriodCell, Usage } from "./PromoCodesScreen";
 
@@ -40,7 +40,7 @@ export function PromoCodeCard({ campaignId, onClose, onChanged, onEdit }: { camp
     setBusy(true);
     const result = await setPaused(api, campaign.campaignId, paused);
     setBusy(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     toast.success(paused ? `${campaign.title}: на паузе — игроки увидят «код сейчас не действует»` : `${campaign.title}: снова действует`);
     reload();
     onChanged();
@@ -51,7 +51,7 @@ export function PromoCodeCard({ campaignId, onClose, onChanged, onEdit }: { camp
     setBusy(true);
     const result = await removePromoCode(api, campaign.campaignId);
     setBusy(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     toast.success(`${campaign.title}: удалён — код ${campaign.kind === "shared" ? campaign.codeSample : "пачки"} свободен`);
     onChanged();
     onClose();

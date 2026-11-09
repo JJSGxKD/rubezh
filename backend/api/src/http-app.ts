@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NestFactory } from "@nestjs/core";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { APP_CONFIG, type AppConfig } from "./config/app-config.js";
@@ -44,6 +45,11 @@ export async function createHttpApp(module: EntryModule, options: HttpAppOptions
     // Доверяем ровно стольким ближайшим прокси, сколько их перед API: адрес
     // из X-Forwarded-For дальше этой цепочки — слова клиента, а не факт.
     trustProxy: hops > 0 ? (_address: string, hop: number) => hop < hops : false,
+    // Номер запроса выдаёт сервер и только он: заголовок клиента не
+    // принимается, иначе номер в логе задавался бы снаружи (Р193). Случайный
+    // UUID, а не счётчик `req-N`: тот повторяется после перезапуска.
+    genReqId: () => randomUUID(),
+    requestIdHeader: false,
   });
   const app = await NestFactory.create<NestFastifyApplication>(module, adapter, options.logger === false ? { logger: false } : {});
   configureHttpApp(app, app.get<AppConfig>(APP_CONFIG));
@@ -90,7 +96,10 @@ function configureHttpApp(app: NestFastifyApplication, config: AppConfig): void 
   app
     .getHttpAdapter()
     .getInstance()
-    .addHook("onSend", async (_request, reply, payload) => {
+    .addHook("onSend", async (request, reply, payload) => {
+      // Номер запроса — на каждый ответ, в том числе с ошибкой: по нему
+      // запись находится в логе. Он ничего не раскрывает, поэтому его получают все.
+      reply.header("x-request-id", request.id);
       for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
         if (!reply.hasHeader(name)) reply.header(name, value);
       }
