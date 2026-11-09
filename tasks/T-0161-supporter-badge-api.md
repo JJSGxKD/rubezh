@@ -3,7 +3,7 @@ id: T-0161
 title: Знак «Меценат» в ответах входа, рейтинга и сезонов — сервер
 epic: E1
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -20,7 +20,8 @@ zones:
   - backend/api/test/helpers/memory-auth.ts
   - backend/api/test/auth.test.ts
   - backend/api/test/runs.integration.test.ts
-shared: []
+shared:
+  - backend/api/test/supporter-badge.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
