@@ -3,8 +3,8 @@ id: T-0175
 title: Лента живых событий — убитый босс и редкий сундук: счётчик редких сундуков и события
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0125, T-0174, T-0193, T-0195, T-0198]
