@@ -25,6 +25,7 @@ release: minor
 merge: lead
 design: null
 batch: 5
+attempt: 2
 ---
 
 # T-0391. Подстройка по сильному боту — новичок не дольше среднего, лесенка 7 / 10 / 14

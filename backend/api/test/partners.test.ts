@@ -502,7 +502,7 @@ describe("партнёры по HTTP панели", () => {
     const other = await app.inject({ method: "POST", url: base, headers, payload: { name: "Другой", contact: null, note: null } });
     const taken = await app.inject({ method: "POST", url: `${base}/${other.json<{ data: { partnerId: string } }>().data.partnerId}`, headers, payload: { name: "Другой", contact: null, note: null, telegramId: "900100" } });
     expect(taken.statusCode).toBe(409);
-    expect(taken.json<{ error: { code: string; message: string } }>().error).toEqual({ code: "partner_telegram_taken", message: "Этот TG id уже у партнёра «Канал»" });
+    expect(taken.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "partner_telegram_taken", message: "Этот TG id уже у партнёра «Канал»" });
 
     const url = `${base}/${partnerId}/status`;
     const body = { status: "paused", reason: "Не выходит на связь" };
