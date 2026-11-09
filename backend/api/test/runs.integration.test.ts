@@ -155,6 +155,24 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     for (const row of rows) expect(row).not.toHaveProperty("testerAt");
   });
 
+  it("знак «Меценат» (T-0161): у аккаунта с supporterAt в лучшем забеге supporter: true, у остальных поля нет, а дата наружу не уходит", async () => {
+    const supporter = await account("Меценат");
+    const plain = await account("Без знака");
+    await prisma.account.update({ where: { accountId: supporter }, data: { supporterAt: new Date("2026-10-20T10:00:00Z") } });
+    for (const id of [supporter, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 120 }));
+    await runs.finish(finished(randomUUID(), supporter, { difficulty: "hard", survivalSec: 300, ranked: false, ratingRestricted: "silent" }));
+
+    const rows = await runs.bestRuns([supporter, plain], "hard", null);
+    const byId = new Map(rows.map((row) => [row.accountId, row]));
+
+    expect(byId.get(supporter)).toMatchObject({ displayName: "Меценат", supporter: true });
+    expect(byId.get(plain)).not.toHaveProperty("supporter");
+    for (const row of rows) expect(row).not.toHaveProperty("supporterAt");
+    // bestRunOf — то же правило, в том числе для тени.
+    expect(await runs.bestRunOf(supporter, "hard", true, null)).toMatchObject({ supporter: true, survivalSec: 300 });
+    expect(await runs.bestRunOf(plain, "hard", false, null)).not.toHaveProperty("supporter");
+  });
+
   it("знак «Тестер»: bestRunOf — то же правило, в том числе для тени", async () => {
     const tester = await account("Тестер в тени");
     const plain = await account("Обычный в тени");

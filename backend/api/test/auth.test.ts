@@ -392,4 +392,17 @@ describe("знак «Тестер» в виде сессии (T-0042)", () => {
   it("аккаунт без поля testerAt (подмена старого вида) — тоже не тестер", async () => {
     expect(await sessionOf({})).not.toHaveProperty("tester");
   });
+
+  it("у поддержавшего проект в аккаунте supporter: true, а даты знака нет (Р109)", async () => {
+    const view = await sessionOf({ supporterAt: new Date("2026-10-20T10:00:00Z") });
+
+    expect(view).toEqual({ accountId: account.accountId, displayName: "Путник", photoUrl: null, createdAt: "2026-09-01T10:00:00.000Z", created: false, supporter: true });
+    expect(view).not.toHaveProperty("supporterAt");
+  });
+
+  it("у не поддержавшего поля supporter нет вовсе, а знаки тестера и мецената живут вместе", async () => {
+    expect(await sessionOf({ supporterAt: null })).not.toHaveProperty("supporter");
+    expect(await sessionOf({})).not.toHaveProperty("supporter");
+    expect(await sessionOf({ testerAt: new Date("2026-10-01T10:00:00Z"), supporterAt: new Date("2026-10-20T10:00:00Z") })).toMatchObject({ tester: true, supporter: true });
+  });
 });
