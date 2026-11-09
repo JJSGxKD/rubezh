@@ -18,6 +18,8 @@ export interface RunsApi {
   start(start: RunStartSubmission): Promise<ApiResult<{ trusted: boolean }>>;
   finish(submission: RunFinishSubmission): Promise<ApiResult<RunFinishResult>>;
   leaderboard(difficultyId: DifficultyId): Promise<ApiResult<Leaderboard>>;
+  /** карточка рейтингового забега (tasks/T-0297); чужой закрытый — отказ 404 */
+  card(runId: string): Promise<ApiResult<RunCard>>;
   profile(): Promise<ApiResult<RunProfile>>;
 }
 
@@ -27,12 +29,24 @@ const difficultySchema = z.enum(DIFFICULTY_IDS);
 
 const startSchema = z.object({ trusted: z.boolean() });
 
+const axisSchema = z.enum(["t", "k", "h", "c", "b"]);
+
+/** Очки в ответе записи забега (T-0293): их читает строка «Очки · стиль» на экране итогов. */
+const scoreSchema = z.object({
+  points: z.number(),
+  axes: z.object({ t: z.number(), k: z.number(), h: z.number(), c: z.number(), b: z.number() }),
+  style: axisSchema,
+  band: z.string(),
+  expectedPoints: z.number(),
+});
+
 const finishSchema = z.object({
   bestSurvivalSec: z.number(),
   isNewBest: z.boolean(),
   rank: z.nullable(z.number()),
   recorded: z.boolean(),
   verdict: z.enum(["ok", "suspicious", "rejected"]),
+  score: z.optional(scoreSchema),
 });
 
 /** Своя строка доски: место и числа лучшего забега; очки, стиль и дивизион — у сервера не старше T-0294. */
@@ -49,6 +63,8 @@ export const leaderboardSchema = z.object({
   entries: z.array(
     z.object({
       rank: z.number(),
+      /** лучший забег игрока: по нему строка открывает карточку забега (T-0297); сервер до карточки поля не отдавал */
+      runId: z.optional(z.string()),
       name: z.string(),
       photoUrl: z.nullable(z.string()),
       survivalSec: z.number(),
@@ -72,6 +88,39 @@ export const leaderboardSchema = z.object({
   me: z.nullable(meSchema),
   totalPlayers: z.number(),
 });
+
+/**
+ * Карточка забега (tasks/T-0297): оси против ожидаемого, разбор очков и
+ * сборка. Идентификатора аккаунта и времени записи в ответе нет.
+ */
+export const runCardSchema = z.object({
+  runId: z.string(),
+  mine: z.boolean(),
+  player: z.object({ name: z.string(), photoUrl: z.nullable(z.string()), tester: z.optional(z.literal(true)) }),
+  survivalSec: z.number(),
+  level: z.number(),
+  power: z.nullable(z.number()),
+  startingWeaponId: z.string(),
+  points: z.number(),
+  expectedPoints: z.number(),
+  style: axisSchema,
+  band: z.string(),
+  cap: z.number(),
+  axes: z.array(z.object({ axis: axisSchema, index: z.number(), points: z.number(), expectedPoints: z.number() })),
+  facts: z.object({
+    killsPerMin: z.number(),
+    bossKills: z.nullable(z.number()),
+    eliteKills: z.nullable(z.number()),
+    damageDeltaPct: z.nullable(z.number()),
+  }),
+  build: z.object({
+    weapons: z.array(z.object({ id: z.string(), level: z.number() })),
+    passives: z.array(z.object({ id: z.string(), level: z.number() })),
+    boosts: z.array(z.string()),
+  }),
+});
+
+export type RunCard = z.infer<typeof runCardSchema>;
 
 const bestSchema = z.nullable(z.object({ survivalSec: z.number(), rank: z.number() }));
 
@@ -98,9 +147,15 @@ const profileSchema = z.object({
 export function createRunsApi(request: ApiRequest = apiRequest): RunsApi {
   return {
     start: (start) => request(`${PREFIX}/start`, startSchema, { method: "POST", body: start }),
-    finish: (submission) => request(PREFIX, finishSchema, { method: "POST", body: submission }),
+    finish: async (submission) => {
+      const answer = await request(PREFIX, finishSchema, { method: "POST", body: submission });
+      if (!answer.ok) return answer;
+      const { score, ...rest } = answer.data;
+      return { ...answer, data: score === undefined ? rest : { ...rest, score } };
+    },
     leaderboard: (difficultyId) =>
       request(`${PREFIX}/leaderboard?difficulty=${encodeURIComponent(difficultyId)}`, leaderboardSchema, { method: "GET" }),
     profile: () => request(`${PREFIX}/me`, profileSchema, { method: "GET" }),
+    card: (runId) => request(`/api/v1/rating/runs/${encodeURIComponent(runId)}`, runCardSchema, { method: "GET" }),
   };
 }

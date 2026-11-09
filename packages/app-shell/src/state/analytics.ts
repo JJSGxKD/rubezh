@@ -73,6 +73,7 @@ export const ANALYTICS_EVENTS = [
   "changelog_opened",
   "rating_circle_changed",
   "rating_style_opened",
+  "leaderboard_run_opened",
   "ad_shown",
   "ad_failed",
   "ad_clicked",

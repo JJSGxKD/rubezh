@@ -26,6 +26,7 @@ import { boardScoring, divisionId, nextPlace, scoreOf, styleAxis, type RatingCir
 import { BoardSkeleton, SeasonTab, useSeasonBoard, useSeasonOverview, weekScoring, type BoardListView } from "./rating-season";
 import { DivisionWord, StyleBadge } from "./rating-style";
 import { RestrictedPlaque } from "./restricted-plaque";
+import { RowOpener, entryRunId } from "./run-card-link";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SyncProblem } from "./sync-ui";
 import { TesterBadge } from "./tester-badge";
@@ -249,11 +250,12 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
   const place = props.place ?? entry.rank;
   const score = scoreOf(entry, props.scoring ?? "points");
   const style = styleAxis(entry.style);
+  const runId = entryRunId(entry);
 
   return (
     <li
       className={[
-        "flex animate-rise-in items-center gap-3 rounded-lg px-3 py-2.5",
+        "relative flex animate-rise-in items-center gap-3 rounded-lg px-3 py-2.5",
         entry.isMe ? "surface-card-selected" : "surface-card",
       ].join(" ")}
       // Лесенка только у первых строк: пятидесятая строка, выезжающая через
@@ -282,6 +284,7 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
         </div>
       </div>
       <ScoreCell score={score} />
+      {runId === null ? null : <RowOpener runId={runId} name={entry.name} />}
     </li>
   );
 }

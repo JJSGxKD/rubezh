@@ -10,6 +10,7 @@ import { RunWeb } from "../src/screens/meta/run-card-web";
 import {
   axisCaption,
   barShares,
+  cardTitle,
   evolutionCount,
   parseRunCardStart,
   runCardStartParam,
@@ -119,7 +120,7 @@ describe("подписи осей из ответа", () => {
 
   it("Охота — боссы и элиты", () => {
     expect(axisCaption("h", CARD, evolutions)).toBe("6 боссов · 58 элит");
-    expect(axisCaption("h", { ...CARD, facts: { ...CARD.facts, bossKills: 1, eliteKills: 21 } }, evolutions)).toBe("1 босс · 21 элит");
+    expect(axisCaption("h", { ...CARD, facts: { ...CARD.facts, bossKills: 1, eliteKills: 21 } }, evolutions)).toBe("1 босс · 21 элита");
   });
 
   it("Охота без счётчиков (забег прошлой сборки) — без подписи, а не «0 боссов»", () => {
@@ -222,8 +223,11 @@ describe("ответ сервера", () => {
 describe("экран карточки", () => {
   const html = text(renderToStaticMarkup(createElement(RunCardBody, { card: CARD })));
 
-  it("шапка: очки, игрок, время, уровень, мощь и стиль", () => {
-    expect(html).toContain("Забег · 1 990");
+  it("заголовок экрана — очки забега", () => {
+    expect(cardTitle(1_990).replace(/\u00a0/g, " ")).toBe("Забег · 1 990");
+  });
+
+  it("шапка: игрок, время, уровень, мощь и стиль", () => {
     expect(html).toContain("Велимир");
     expect(html).toContain("31:48");
     expect(html).toContain("уровень 41");
@@ -241,7 +245,7 @@ describe("экран карточки", () => {
   it("легенда пунктира и сборка", () => {
     expect(html).toContain("пунктир — ожидаемое для его силы");
     expect(html).toContain("Сборка");
-    expect(html).toContain("Эгида");
+    expect(html).toContain("Щит");
   });
 
   it("строки о проверке повтором нет: повтора на сервере ещё нет", () => {

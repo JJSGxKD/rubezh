@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { parseRunCardStart } from "./run-card-start";
 import { track } from "./shell";
 
 /**
@@ -38,6 +39,7 @@ export const SCREEN_IDS = [
   "testerThanks",
   "runInterrupted",
   "promoCode",
+  "runCard",
 ] as const;
 export type ScreenId = (typeof SCREEN_IDS)[number];
 
@@ -72,6 +74,8 @@ export function screenMotion(prev: readonly ScreenId[], next: readonly ScreenId[
 
 export interface NavigationStore {
   stack: ScreenId[];
+  /** какой забег показывает карточка (`runCard`, tasks/T-0297); экран без забега ничего не рисует */
+  runCardId: string | null;
   /** как сдвинулся мир последним переходом — для `ScreenTransition` */
   motion: ScreenMotion;
   push(screen: ScreenId): void;
@@ -82,6 +86,7 @@ export interface NavigationStore {
 
 export const useNavigation = create<NavigationStore>((set, get) => ({
   stack: ["lobby"],
+  runCardId: null,
   motion: "rise",
 
   push(screen): void {
@@ -111,6 +116,33 @@ export const useNavigation = create<NavigationStore>((set, get) => ({
     reportScreen(screen);
   },
 }));
+
+/** Откуда открыта карточка забега — разрез события `leaderboard_run_opened`. */
+export type RunCardSource = "rating" | "results" | "history";
+
+/**
+ * Открыть карточку забега: из таблицы рейтинга, с экрана итогов или из листа
+ * забега в истории. Поверх забега она ложится как настройки с паузы — экран
+ * забега под ней остаётся живым (`app/App.tsx`, `runUnderneath`).
+ */
+export function openRunCard(runId: string, from: RunCardSource): void {
+  useNavigation.setState({ runCardId: runId });
+  useNavigation.getState().push("runCard");
+  track("leaderboard_run_opened", { from });
+}
+
+/**
+ * Открыть карточку по стартовому параметру (`run-<id>`, docs/24): ссылкой на
+ * карточку можно поделиться. `false` — параметр не про карточку, ничего не
+ * открыто.
+ */
+export function openRunCardFromStart(param: string | null | undefined): boolean {
+  const runId = parseRunCardStart(param);
+  if (runId === null) return false;
+  useNavigation.setState({ runCardId: runId });
+  useNavigation.getState().push("runCard");
+  return true;
+}
 
 export function currentScreen(stack: readonly ScreenId[]): ScreenId {
   return current(stack);

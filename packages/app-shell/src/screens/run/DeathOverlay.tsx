@@ -7,9 +7,11 @@ import "../../i18n/run";
 // первой загрузкой.
 import "../../i18n/account";
 import { useMeta } from "../../state/meta";
+import { currentScreen, useNavigation } from "../../state/navigation";
 import { useProgress, type RunRewardView } from "../../state/progress";
 import { awaitReward } from "../../state/progress-api";
 import { useRuns } from "../../state/runs";
+import { RunScoreLink } from "../meta/run-card-link";
 import { DeathNext } from "./DeathNext";
 import { RubezhResult } from "./RubezhResult";
 import { ChanceStep, LevelUpCard, ResultsHero, ResultsMedallion, RewardCard, RunDetails, RunStats } from "./death-parts";
@@ -69,6 +71,11 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
   // этого забега принят. Экран ушёл раньше — опрос доработает сам и обновит
   // шапку.
   const accepted = useRuns((state) => state.lastSubmitted?.runId === result.runId);
+  // Очки этого забега — из ответа сервера на итог; строка ведёт в карточку забега (tasks/T-0297).
+  const score = useRuns((state) => (state.lastSubmitted?.runId === result.runId ? state.lastSubmitted.result.score : undefined));
+  // Карточка забега ложится поверх забега как экран, а окно итогов живёт в слое модалок выше экранов:
+  // пока карточка открыта, окно убирается (хуки остаются на месте, состояние окна не теряется).
+  const covered = useNavigation((state) => state.stack.includes("run") && currentScreen(state.stack) !== "run");
   useEffect(() => {
     if (props.showReward === true && accepted && useProgress.getState().rewards[result.runId] === undefined) void awaitReward(result.runId);
   }, [props.showReward, accepted, result.runId]);
@@ -102,6 +109,8 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
       () => setShare({ busy: false, note: t("error.title") }),
     );
   };
+
+  if (covered) return null;
 
   if (step === "chance" && secondChance !== undefined) {
     return (
@@ -159,6 +168,7 @@ export function DeathOverlay(props: DeathOverlayProps): ReactNode {
         <div className="grid gap-4 landscape:grid-cols-2">
           <div className="grid content-start gap-3">
             <ResultsHero result={result} isNewRecord={props.isNewRecord} {...(props.rank === undefined ? {} : { rank: props.rank })} {...(props.cheatsCounted === undefined ? {} : { cheatsCounted: props.cheatsCounted })} />
+            {score === undefined ? null : <RunScoreLink runId={result.runId} points={score.points} style={score.style} />}
             {/* Удвоение — только у настоящего итога: у витрины компонентов сети нет. */}
             {reward === undefined ? null : <RewardCard reward={reward} {...(props.showReward === true ? { doubleRunId: result.runId } : {})} />}
             {reward?.status === "granted" ? <LevelUpCard levelBefore={reward.levelBefore} levelAfter={reward.levelAfter} /> : null}
