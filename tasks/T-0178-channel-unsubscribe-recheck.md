@@ -25,6 +25,8 @@ shared:
   - docs/35-stage4-plan.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

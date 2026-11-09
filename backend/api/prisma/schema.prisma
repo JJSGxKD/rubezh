@@ -256,6 +256,7 @@ model Account {
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
+  taskChannelWatch TaskChannelWatch[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -1660,6 +1661,7 @@ model TaskDef {
   participants TaskParticipant[]
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
+  channelWatch TaskChannelWatch[]
 
   @@map("task_def")
 }
@@ -2796,4 +2798,42 @@ model BoostCredit {
 
   @@id([accountId, boostId])
   @@map("boost_credit")
+}
+
+// Перепроверка подписки после награды (docs/35-stage4-plan.md Р115, T-0178)
+
+/// Окно наблюдения за наградой за подписку на канал: семь суток после забора
+/// сервер спрашивает бота площадки, остался ли игрок в канале. Строка на
+/// каждую выданную награду — ключ как у `task_progress`: у ежедневной и
+/// еженедельной подписки награда за каждый срок со своим окном. Состояние и
+/// допустимые значения держит `CHECK` в миграции, как и частичный индекс по
+/// `next_check_at` для `state = 'watching'` — Prisma частичные индексы не
+/// описывает. `event_no` — номер события отписки пары «игрок + задание»:
+/// награды всех открытых окон пары, списанные одной отпиской, делят номер.
+model TaskChannelWatch {
+  accountId   String    @map("account_id") @db.Uuid
+  taskId      String    @map("task_id") @db.VarChar(48)
+  periodStart DateTime  @map("period_start") @db.Date
+  /// момент забора награды
+  startedAt   DateTime  @map("started_at") @db.Timestamptz(3)
+  /// конец окна: `started_at` + 7 суток
+  watchUntil  DateTime  @map("watch_until") @db.Timestamptz(3)
+  nextCheckAt DateTime  @map("next_check_at") @db.Timestamptz(3)
+  /// последняя проверка, на которую площадка ответила
+  checkedAt   DateTime? @map("checked_at") @db.Timestamptz(3)
+  /// `watching`, `kept` (досидел), `expired` (кончилось без ответа площадки),
+  /// `penalized` (отписался) — `CHECK` в миграции
+  state       String    @default("watching") @db.VarChar(16)
+  eventNo     Int?      @map("event_no")
+  penalizedAt DateTime? @map("penalized_at") @db.Timestamptz(3)
+  /// сколько списано по ресурсам: `{ "coins": n, "gems": n, "shards": n }`
+  revoked     Json?
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+
+  @@id([accountId, taskId, periodStart])
+  // Разбор пары «игрок + задание»: открытые окна и последнее событие отписки.
+  @@index([accountId, taskId])
+  @@map("task_channel_watch")
 }
