@@ -26,7 +26,9 @@ import { ItemIcon } from "../item-icons";
 import { achievementTitle, CategoryIcon } from "./achievement-card";
 import { AccountLevel } from "./account-level";
 import { RestrictionsSection } from "./restricted-plaque";
+import { DonateBlock } from "./donate-block";
 import { RunDetailSheet } from "./run-detail";
+import { SupporterBadge } from "./supporter-badge";
 
 export { HistoryScreen } from "./history";
 export { LevelScreen } from "./level";
@@ -88,10 +90,14 @@ export function ProfileScreen(): ReactNode {
           <div className="flex items-center gap-3">
             <Avatar name={name} url={avatar ?? null} size={56} />
             <div className="min-w-0">
-              <p className="flex min-w-0 items-center gap-2 font-display text-lg font-bold text-text">
-                <span className="truncate">{name}</span>
-                {account?.tester === true ? <TesterBadge size="l" /> : null}
-              </p>
+              <p className="truncate font-display text-lg font-bold text-text">{name}</p>
+              {/* Знаки — строкой под именем и переносятся: два со словом рядом с именем на 320 px съели бы его. */}
+              {account?.tester === true || account?.supporter === true ? (
+                <p className="mt-1 mb-1 flex flex-wrap items-center gap-1.5">
+                  {account.tester === true ? <TesterBadge size="l" /> : null}
+                  {account.supporter === true ? <SupporterBadge size="l" /> : null}
+                </p>
+              ) : null}
               <p className="text-xs text-text-muted">
                 {account === null ? t("profile.local") : t("profile.since", { date: formatSince(account.createdAt) })}
               </p>
@@ -163,6 +169,9 @@ export function ProfileScreen(): ReactNode {
             ))}
           </ul>
         )}
+
+        {/* Поддержать проект — ниже последних забегов, выше заглушки «Скоро»; способов нет — блока нет. */}
+        {account === null ? null : <DonateBlock place="profile" />}
 
         <SectionTitle>{t("profile.later")}</SectionTitle>
         <StubNotice text={t("profile.soon")} />

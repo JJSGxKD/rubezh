@@ -28,6 +28,8 @@ export interface AuthAccount {
   created: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** поддержал проект (Р109); нет поля — не поддержал */
+  supporter?: true | undefined;
 }
 
 export interface Session {
@@ -106,6 +108,7 @@ const sessionSchema = z.object({
     createdAt: z.string(),
     created: z.boolean(),
     tester: z.optional(z.literal(true)),
+    supporter: z.optional(z.literal(true)),
   }),
   launch: z.optional(z.object({ startKind: z.string() })),
 });
