@@ -7,6 +7,7 @@ import { PRISMA } from "../../infra/database.js";
 import { REDIS } from "../../infra/redis.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { ActivityWindow } from "../admin-notify/activity-snapshot.js";
+import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 
 /**
  * Чтения для панели «Чего достигли» и для ночного снимка аудитории
@@ -133,8 +134,8 @@ export class PrismaAllTimeRepository implements AllTimeRepository {
     const rows = await this.prisma.$queryRaw`
       SELECT coalesce(sum(charged_stars) FILTER (WHERE paid_at IS NOT NULL), 0) AS paid,
              coalesce(sum(charged_stars) FILTER (WHERE refunded_at IS NOT NULL), 0) AS refunded,
-             count(*) FILTER (WHERE paid_at IS NOT NULL AND product <> 'donation') AS purchases,
-             count(*) FILTER (WHERE paid_at IS NOT NULL AND product = 'donation') AS donations
+             count(*) FILTER (WHERE paid_at IS NOT NULL AND product::text <> ${DONATION_PRODUCT}) AS purchases,
+             count(*) FILTER (WHERE paid_at IS NOT NULL AND product::text = ${DONATION_PRODUCT}) AS donations
       FROM purchase WHERE mode = 'live'`;
     return revenueSchema.parse(rows)[0] ?? { paid: 0, refunded: 0, purchases: 0, donations: 0 };
   }
