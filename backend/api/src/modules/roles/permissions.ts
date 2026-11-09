@@ -110,6 +110,10 @@ export const PERMISSIONS = [
   // Правила фильтра имён (Р168): слова и регулярки, которые убираются из ников игроков —
   // поэтому не «настройки»; кто видит экран, тот и правит
   "names.edit",
+  // Кабинет партнёра (T-0217, Р136): внешний человек видит только свою карточку,
+  // свои ссылки, промокоды и начисления. Единственное право роли `partner`;
+  // чужой кабинет глазами партнёра смотрит тот, у кого есть `partners.view`
+  "partner.cabinet",
   // Роли и журнал
   "roles.assign",
   "audit.view",
@@ -126,6 +130,7 @@ export const ROLES = [
   "finance",
   "analyst",
   "stakeholder",
+  "partner",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -237,6 +242,9 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 
   // Свой расчёт распределения дохода и сводный отчёт (docs/11-revenue-split.md §5).
   stakeholder: ["revenue.split.own.view"],
+
+  // Внешний партнёр: только свой кабинет. Роль выдаётся из карточки партнёра, а не в разделе «Роли».
+  partner: ["partner.cabinet"],
 };
 
 /** Все права роли-набора. Ролей у человека может быть несколько. */

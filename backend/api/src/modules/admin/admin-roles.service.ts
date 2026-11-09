@@ -38,6 +38,12 @@ export interface AuditPage {
   next: string | null;
 }
 
+/**
+ * Роли, которые выдаются не из раздела «Роли», а из своего места (T-0217): роль партнёра ничего не значит
+ * без связи аккаунта с карточкой, а связь пишет только карточка партнёра. Подсказка — в каталоге ролей.
+ */
+const GRANTED_ELSEWHERE: Partial<Record<Role, string>> = { partner: "Выдаётся в карточке партнёра" };
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface RoleAssignmentView {
@@ -60,8 +66,10 @@ export interface RoleAssignmentView {
 export interface RoleCatalogEntry {
   role: Role;
   permissions: readonly Permission[];
-  /** действующий вправе выдать эту роль кому-то ниже себя: её уровень ниже его (T-0216) */
+  /** действующий вправе выдать эту роль кому-то ниже себя: её уровень ниже его (T-0216) и её выдают из этого раздела */
   grantable: boolean;
+  /** почему не выдаётся отсюда и где выдаётся; `null` — обычная роль */
+  hint: string | null;
 }
 
 export interface RoleAssignments {
@@ -106,7 +114,12 @@ export class AdminRolesService {
         grantedAt: row.grantedAt.toISOString(),
         revocable: row.accountId !== actor.accountId && canManage(mine, rolesByAccount.get(row.accountId) ?? [], row.role),
       })),
-      roles: ROLES.map((role) => ({ role, permissions: ROLE_PERMISSIONS[role], grantable: canManage(mine, [], role) })),
+      roles: ROLES.map((role) => ({
+        role,
+        permissions: ROLE_PERMISSIONS[role],
+        grantable: GRANTED_ELSEWHERE[role] === undefined && canManage(mine, [], role),
+        hint: GRANTED_ELSEWHERE[role] ?? null,
+      })),
     };
   }
 
@@ -134,8 +147,10 @@ export class AdminRolesService {
    * игрок — один человек, а бота может не быть.
    */
   async grant(actor: AccountRef, target: RoleTarget): Promise<{ granted: boolean; confirm: RoleConfirmOpened | null }> {
-    const accountId = await this.resolve(target);
     const role = target.role as Role;
+    // До поиска аккаунта: отказ не зависит от того, кому выдают, и не выдаёт, есть ли такой аккаунт.
+    if (GRANTED_ELSEWHERE[role] !== undefined) throw new ValidationError("Роль партнёра выдаётся в карточке партнёра — кнопкой «Открыть кабинет»");
+    const accountId = await this.resolve(target);
     if (!CONFIRMED_ROLES.includes(role) || this.config.auth.devLogin) return { granted: await this.roles.grant(actor, accountId, role), confirm: null };
     // Права и запрет выдачи себе проверяются до запроса: бот не должен просить подтвердить заведомо невозможное.
     await this.roles.require(actor, "roles.assign");
