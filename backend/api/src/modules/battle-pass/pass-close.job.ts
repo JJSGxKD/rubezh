@@ -14,11 +14,15 @@ import { PassCloseService } from "./pass-close.service.js";
  * (`pass-close.service.ts`).
  *
  * Почти каждый проход — одно чтение меток закрытия по индексу первичного ключа.
+ * Раз в минуту — 1440 заданий в сутки, поэтому выполненные и упавшие хранятся
+ * только последние 24: BullMQ по умолчанию не удаляет ничего, и список растил бы
+ * память Redis.
  */
 
 const QUEUE_NAME = "pass-close";
 const SCHEDULER_ID = "every-minute";
 const EVERY_MS = 60_000;
+const KEPT_JOBS = 24;
 
 @Injectable()
 export class PassCloseJob implements OnApplicationBootstrap, OnModuleDestroy {
@@ -43,7 +47,7 @@ export class PassCloseJob implements OnApplicationBootstrap, OnModuleDestroy {
     // Без обработчика ошибка соединения воркера роняла бы процесс.
     this.worker.on("error", (error) => this.logger.warn(JSON.stringify({ module: "battle-pass", event: "pass_close_worker_error", reason: error.message })));
     try {
-      await this.queue.upsertJobScheduler(SCHEDULER_ID, { every: EVERY_MS }, { name: "close" });
+      await this.queue.upsertJobScheduler(SCHEDULER_ID, { every: EVERY_MS }, { name: "close", opts: { removeOnComplete: KEPT_JOBS, removeOnFail: KEPT_JOBS } });
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "battle-pass", event: "pass_close_schedule_failed", reason: error instanceof Error ? error.message : "unknown" }));
     }
