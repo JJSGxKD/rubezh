@@ -69,6 +69,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/media",
       "/api/v1/client",
       "/api/v1/csp-reports",
+      "/api/v1/online",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },

@@ -26,6 +26,7 @@ shared:
   - docs/27-design-system-and-app-shell.md
   - docs/29-admin-panel.md
   - apps/admin/src/screens/sections.tsx
+  - apps/web-telegram/vite.config.ts
   - apps/admin/test/online.test.ts
   - packages/app-shell/src/app/App.tsx
   - packages/app-shell/src/design-system/components/SideRail.tsx
