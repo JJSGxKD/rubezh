@@ -231,6 +231,16 @@ describe("плитки", () => {
     expect(markup).not.toContain("сейчас");
   });
 
+  it("число плитки сжимается по ширине самой плитки: семь знаков на 320 px не вылезают за рамку", () => {
+    const markup = html(DATA);
+    // Плитка — контейнер, размер числа берётся от его ширины (cqw), а не от окна: колонок на экране бывает две и четыре.
+    expect(markup).toContain("@container");
+    // Подсказка типа `length:` обязательна: без неё Tailwind принимает clamp() за цвет, и размер пропадает.
+    expect(markup).toMatch(/text-\[length:clamp\(var\(--text-base\),\d+cqw,var\(--text-2xl\)\)\]/);
+    // Фиксированный размер числа (утилита `text-2xl` отдельным классом) вернул бы вылезание.
+    expect(markup).not.toMatch(/[\s"]text-2xl[\s"]/);
+  });
+
   it("подписи переносятся, а не режутся многоточием: на телефоне горизонтального скролла нет", () => {
     const markup = html(DATA);
     expect(markup).not.toContain("truncate");
