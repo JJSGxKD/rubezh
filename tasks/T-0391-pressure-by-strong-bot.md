@@ -4,7 +4,7 @@ title: Подстройка по сильному боту — новичок н
 epic: E10
 priority: P1
 status: in-progress
-owner: claude-57 / sonnet-5.5 / high
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0389]
