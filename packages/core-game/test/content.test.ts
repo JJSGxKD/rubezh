@@ -340,9 +340,11 @@ describe("контент стража кольца и колец в таймла
 describe("контент Тарана", () => {
   const ram = ENEMIES.find((enemy) => enemy.id === "boss_ram");
 
-  it("Таран описан по таблице задачи и стоит в массиве последним", () => {
+  it("Таран описан по таблице задачи и стоит в массиве перед стражем рубежа", () => {
     expect(ram).toBeDefined();
-    expect(ENEMIES[ENEMIES.length - 1].id).toBe("boss_ram");
+    // Страж рубежа (T-0120) дописан в конец: индексы прежних типов не сдвинулись.
+    expect(ENEMIES[ENEMIES.length - 2].id).toBe("boss_ram");
+    expect(ENEMIES[ENEMIES.length - 1].id).toBe("rubezh_guard");
     expect(ram).toMatchObject({
       rank: "boss",
       pattern: "dash",
@@ -388,6 +390,8 @@ describe("боссы бесконечного режима", () => {
       }
     }
     fired.sort((a, b) => a.sec - b.sec);
+    // Формула кривой не меняется: событие на 570 с сдвигает к 690 с таймлайн мира с рубежом
+    // (`sim/timeline.ts`, T-0120, Р126) — это проверяет `rubezh.test.ts`.
     expect(fired).toEqual([
       { sec: 570, enemy: "boss_matryoshka" },
       { sec: 750, enemy: "boss_ram" },

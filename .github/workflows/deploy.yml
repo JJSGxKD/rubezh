@@ -66,7 +66,7 @@ jobs:
       # Секреты сервера (.env, api.env) не трогаются: их нет в репозитории.
       - name: Конфигурация стека
         run: |
-          ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "mkdir -p /srv/rubezh/app/caddy /srv/rubezh/app/backup /srv/rubezh/app/postgres"
+          ssh -i ~/.ssh/deploy -o BatchMode=yes "deploy@${DEPLOY_HOST}" "mkdir -p /srv/rubezh/app/caddy /srv/rubezh/app/backup /srv/rubezh/app/postgres /srv/rubezh/app/xray"
           scp -i ~/.ssh/deploy -o BatchMode=yes \
             infra/prod/compose.yml infra/prod/Caddyfile infra/prod/frps.toml \
             infra/prod/deploy.sh infra/prod/backup.sh infra/prod/backup-watch.sh infra/prod/restore-drill.sh \
@@ -75,6 +75,7 @@ jobs:
           scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/caddy/Dockerfile "deploy@${DEPLOY_HOST}:/srv/rubezh/app/caddy/"
           scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/backup/Dockerfile infra/prod/backup/backupctl.sh "deploy@${DEPLOY_HOST}:/srv/rubezh/app/backup/"
           scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/postgres/pg_hba.conf "deploy@${DEPLOY_HOST}:/srv/rubezh/app/postgres/"
+          scp -i ~/.ssh/deploy -o BatchMode=yes infra/prod/xray/Dockerfile infra/prod/xray/run.sh "deploy@${DEPLOY_HOST}:/srv/rubezh/app/xray/"
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
 

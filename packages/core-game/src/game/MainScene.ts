@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
@@ -17,6 +17,7 @@ import {
 } from "../run-api";
 import { CueTracker } from "./run/cues";
 import { applyDevCommand } from "./run/dev-commands";
+import { isPrologueWon } from "./run/prologue";
 import { restartSceneData } from "./run/restart-data";
 import { inspectWorld } from "./run/inspect";
 import { applyCardTool, BANISH_PREFIX, canReroll, REROLL_COMMAND, SKIP_COMMAND } from "./progression/card-tools";
@@ -25,6 +26,7 @@ import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
 import { applyContinue, canContinue } from "./sim/continue";
@@ -85,6 +87,8 @@ export interface MainSceneData {
   unitScale: number;
   mapId: string;
   difficultyId: DifficultyId;
+  /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
+  mode?: RunMode;
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -124,6 +128,17 @@ export interface MainSceneData {
  * (docs/27-design-system-and-app-shell.md §3.2). Сцена сообщает о событиях и
  * принимает команды, а что показать игроку, решает оболочка.
  */
+/** Видимые объекты вместе с вложенными в контейнеры: контейнер сам почти ничего не рисует. */
+function countVisible(list: readonly Phaser.GameObjects.GameObject[]): number {
+  let count = 0;
+  for (const child of list) {
+    if (!("visible" in child) || child.visible !== true) continue;
+    count += 1;
+    if (child instanceof Phaser.GameObjects.Container) count += countVisible(child.list);
+  }
+  return count;
+}
+
 export class MainScene extends Phaser.Scene {
   private sceneData!: MainSceneData;
   private world!: World;
@@ -158,6 +173,8 @@ export class MainScene extends Phaser.Scene {
   private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
+  /** фаза рубежа на прошлом шаге: смена фазы — повод для сообщения, после снимка отсчёт идёт от восстановленной */
+  private rubezhPhase: RubezhPhase = "pending";
   private cueTracker!: CueTracker;
   private cueTimerMs = 0;
   /** направление прошлого кадра: от него считается гистерезис квантования */
@@ -197,6 +214,8 @@ export class MainScene extends Phaser.Scene {
       seed: this.seed,
       mapId: resume?.mapId ?? data.mapId,
       difficultyId: resume?.difficultyId ?? data.difficultyId,
+      // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
+      mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
@@ -204,6 +223,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.world = world;
     this.spawner = spawner;
+    this.rubezhPhase = world.rubezh.phase;
     // Выбор благословения отдан игроку только там, где оболочка умеет его показать:
     // боты, повтор и стенд берут первое из предложенных.
     world.secrets.manualBlessing = this.sceneData.pauseOnChest === true;
@@ -239,6 +259,7 @@ export class MainScene extends Phaser.Scene {
               mapId: world.mapId,
               difficultyId: world.difficultyLevel.id,
               startingWeaponId: this.startingWeaponId(),
+              ...(world.mode === "endless" ? {} : { mode: world.mode }),
               contentHash: this.contentHash,
               unitScale: data.unitScale,
               // Продолженный забег не повторить с начала, а в забеге
@@ -258,6 +279,16 @@ export class MainScene extends Phaser.Scene {
 
     this.applyDev(data.dev);
     this.ready = true;
+    if (data.dev !== undefined) {
+      // Дев-доступ для стенда эффектов (T-0213): оболочке до сессии из своего
+      // хранилища не дотянуться, поэтому сцена забега разработчика сама
+      // отдаёт счётчик на `window` и убирает его при закрытии.
+      const host = globalThis as { __bhRenderStats?: () => { displayObjects: number } | null };
+      host.__bhRenderStats = () => this.devRenderStats();
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        delete host.__bhRenderStats;
+      });
+    }
     if (resume === undefined) for (const command of data.dev?.start ?? []) this.devCommand(command);
     // Сигналы считаются от уже собранного мира: продолженный забег и команды
     // старта не должны прозвучать залпом на первом кадре.
@@ -316,6 +347,8 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitRubezhEvents();
+      if (isPrologueWon(this.world)) break;
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
     }
     const simMs = measure ? performance.now() - simStartedAt : 0;
@@ -345,6 +378,11 @@ export class MainScene extends Phaser.Scene {
 
     this.probe.endFrame(this.world, simMs, steps, renderMs);
 
+    // Страж пролога пал: забег кончается победой, окна сундука и выбора уровня ему не помеха.
+    if (isPrologueWon(this.world)) {
+      this.winPrologue();
+      return;
+    }
     if (!this.world.player.alive) {
       this.handleDeath();
       return;
@@ -556,6 +594,15 @@ export class MainScene extends Phaser.Scene {
     if (isAwaitingChoice(this.world)) this.enterChoice();
   }
 
+  /**
+   * Сколько видимых объектов рисует сцена (дев-доступ стенда эффектов, Р142).
+   * Игроку счётчик не нужен: у забега без `dev` — `null`.
+   */
+  devRenderStats(): { displayObjects: number } | null {
+    if (!this.ready || this.sceneData.dev === undefined) return null;
+    return { displayObjects: countVisible(this.children.list) };
+  }
+
   /** Характеристики забега для листа «Характеристики». */
   inspect(): RunInspection | null {
     return this.ready ? inspectWorld(this.world) : null;
@@ -578,6 +625,7 @@ export class MainScene extends Phaser.Scene {
       mapId: world.mapId,
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
+      ...(world.mode === "endless" ? {} : { mode: world.mode }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
@@ -627,6 +675,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
     this.worldRenderer.sync(1);
@@ -693,6 +742,8 @@ export class MainScene extends Phaser.Scene {
         throw new SnapshotError("снят на другой версии контента");
       }
       restoreWorld(this.world, this.spawner, snapshot.world);
+      // Страж, пришедший до сохранения, баннера не повторяет: отсчёт — от восстановленной фазы.
+      this.rubezhPhase = this.world.rubezh.phase;
       return true;
     } catch (error: unknown) {
       this.phase = "dead";
@@ -760,6 +811,25 @@ export class MainScene extends Phaser.Scene {
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /**
+   * Рубеж — оболочке. Фаза сравнивается с прошлой: смена одна, поэтому каждое
+   * сообщение уходит ровно один раз за забег, а журнала в мире не нужно.
+   */
+  private emitRubezhEvents(): void {
+    const state = this.world.rubezh;
+    if (state.phase === this.rubezhPhase) return;
+    const previous = this.rubezhPhase;
+    this.rubezhPhase = state.phase;
+    const bus = this.sceneData.bus;
+    const elapsedSec = this.world.stats.elapsedSec;
+    if (previous === "pending" && (state.phase === "guard" || state.phase === "cleared")) {
+      bus.emit("rubezhGuardSpawned", { enemyId: this.world.enemyTypes[state.guardType].id, elapsedSec });
+    }
+    if (state.phase === "cleared" && state.clearedSec !== null) {
+      bus.emit("rubezhCleared", { clearedSec: state.clearedSec, elapsedSec });
+    }
   }
 
   /** Отдельным методом: после шага симуляции фаза могла смениться, а TS этого не видит. */
@@ -857,6 +927,20 @@ export class MainScene extends Phaser.Scene {
       contentHash: this.contentHash,
       cheats: this.cheatsUsed,
     });
+  }
+
+  /**
+   * Победа в прологе: оболочка узнаёт о ней сообщением `prologueWon`, а забег
+   * закрывается обычным путём — `abandoned` с итогом, где `prologue.won = true`,
+   * чтобы отправка итога, рекорд и диагностика шли теми же дорогами.
+   */
+  private winPrologue(): void {
+    if (this.phase === "dead") return;
+    this.sceneData.bus.emit("prologueWon", {
+      result: this.resultOf("abandoned"),
+      elapsedSec: this.world.stats.elapsedSec,
+    });
+    this.finishRun("abandoned");
   }
 
   private finishRun(outcome: RunOutcome): void {

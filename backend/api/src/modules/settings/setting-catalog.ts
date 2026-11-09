@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { pointsFromOf } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
@@ -146,6 +147,11 @@ const ACHIEVEMENTS_GROUP = "Достижения";
 
 const PASS_GROUP = "Батл-пасс";
 
+const PROXY_GROUP = "Прокси";
+const REMINDERS_GROUP = "Напоминания";
+
+const PROLOGUE_GROUP = "Пролог";
+
 /**
  * Предел награды за сутки — суточный потолок причины `task_reward`
  * (`wallet/wallet-limits.ts`): больше всё равно срезалось бы кошельком.
@@ -159,6 +165,9 @@ const SEASONS_START_MAX = 20_991_228;
 
 /** Последняя допустимая дата отсечки рейтинга: 31 декабря 2099. */
 const RATING_SINCE_MAX = 20_991_231;
+
+/** Вес оси очков эффективности, проценты. */
+const RATING_WEIGHT = { min: 0, max: 100, unit: ["процент", "процента", "процентов"] } as const satisfies SettingRange;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -213,6 +222,13 @@ export const SETTINGS = {
   ),
   // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
   chatOps: chat("notify.chat.ops", "Сбои сервера", "Всплеск ошибок 5xx API: 20 за минуту и больше. Пусто — общий чат", () => ""),
+  // Переменной окружения нет: адрес задаётся только в панели (пусто — общий чат).
+  chatReminders: chat(
+    "notify.chat.reminders",
+    "Напоминания",
+    "Раз в игровые сутки одно сообщение: сколько напоминаний бота отправлено вчера, сколько не доставлено и сколько игроков заблокировали бота. Пусто — общий чат",
+    () => "",
+  ),
   notifyReports: {
     key: "notify.reports",
     group: NOTIFY_GROUP,
@@ -551,6 +567,72 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: 0,
   } satisfies SettingDefinition<number>,
+  /**
+   * Очки эффективности (docs/35-stage4-plan.md, Р152, tasks/T-0293): веса пяти
+   * осей и показатель Стойкости подбирают калибровкой, поэтому лежат в панели.
+   * Редактор панели принимает только целые, поэтому веса — проценты (40 — это
+   * 0,40), показатель — сотые (130 — это 1,3). Сумма весов не 100 — сервер
+   * нормирует её к единице и пишет предупреждение в лог. Правка действует на
+   * новые забеги; прошлые пересчитывает `pnpm runs:rescore`.
+   */
+  ratingWeightEndurance: integer("rating.weight-endurance", RATING_GROUP, "Очки: вес Стойкости", "Доля Стойкости (время жизни) в очках эффективности, проценты: 40 — это 0,40", RATING_WEIGHT, 40),
+  ratingWeightOnslaught: integer("rating.weight-onslaught", RATING_GROUP, "Очки: вес Натиска", "Доля Натиска (темп убийств) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightHunt: integer("rating.weight-hunt", RATING_GROUP, "Очки: вес Охоты", "Доля Охоты (элиты и боссы) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightClean: integer("rating.weight-clean", RATING_GROUP, "Очки: вес Чистоты", "Доля Чистоты (полученный урон) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingWeightBuild: integer("rating.weight-build", RATING_GROUP, "Очки: вес Сборки", "Доля Сборки (эволюции и оружие на максимуме) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingEnduranceExponent: integer(
+    "rating.endurance-exponent",
+    RATING_GROUP,
+    "Очки: показатель Стойкости",
+    "Стойкость растёт как (время / 600 с) в этой степени, в сотых: 130 — это 1,3. Больше — глубокий забег весит больше",
+    { min: 100, max: 300, unit: ["сотая", "сотые", "сотых"] },
+    130,
+  ),
+  ratingIndexCap: integer(
+    "rating.index-cap",
+    RATING_GROUP,
+    "Очки: потолок индекса оси",
+    "Выше этого значения индекс оси в очки не идёт; индекс выше двойного потолка — подозрение антифрода",
+    { min: 1, max: 10, unit: ["раз", "раза", "раз"] },
+    3,
+  ),
+  /**
+   * Переход недельных сезонов на очки (tasks/T-0294, Р66): сезоны, начавшиеся не
+   * раньше этого понедельника, ранжируются по очкам лучшего забега недели, раньше —
+   * по времени. Идущий в момент выката сезон дотягивается по времени: менять
+   * правила посреди недели нечестно к тем, кто уже играл. Миграция ставит
+   * понедельник после выката на каждой среде. Число ГГГГММДД, как у
+   * `seasons.start-date`; 0 — сезонов по очкам нет.
+   */
+  ratingPointsFrom: {
+    key: "rating.points-from",
+    group: RATING_GROUP,
+    title: "Сезоны по очкам с понедельника",
+    hint: "Понедельник, с которого недельные сезоны ранжируются по очкам эффективности, числом ГГГГММДД: 20261109. Сезоны раньше идут по времени. 0 — сезонов по очкам нет",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(SEASONS_START_MAX, { message: `не больше ${String(SEASONS_START_MAX)}` })
+      .refine((value) => value === 0 || pointsFromOf(value) !== null, { message: "понедельник в виде ГГГГММДД, например 20261109, или 0" }),
+    range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
+    saveCheck: (value, now) => {
+      const from = pointsFromOf(value);
+      // Дата не раньше следующей недели: сезон, который уже идёт, менять правила не может.
+      return from !== null && from.getTime() <= seasonOf(now).startsAt.getTime() ? "Сезоны по очкам не могут начаться с идущей или прошлой недели — укажите понедельник следующей недели или позже" : null;
+    },
+  } satisfies SettingDefinition<number>,
+  ratingSeasonThresholdPoints: integer(
+    "rating.season-threshold-points",
+    RATING_GROUP,
+    "Порог награды участника сезона, очки",
+    "Сколько очков лучшего забега недели даёт награду участника в сезоне по очкам; места награждаются как раньше. Чуть ниже типичного забега: награду получает тот, кто сыграл всерьёз",
+    { min: 0, max: 100_000, unit: ["очко", "очка", "очков"] },
+    800,
+  ),
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",
@@ -714,6 +796,76 @@ export const SETTINGS = {
     { min: 1, max: 10_000, unit: ["очко", "очка", "очков"] },
     100,
   ),
+  /**
+   * Награда за победу в прологе (docs/35-stage4-plan.md Р151, tasks/T-0279): один раз на
+   * аккаунт. Предел равен суточному потолку причины `prologue_reward`
+   * (`wallet/wallet-limits.ts`), поэтому панель не поднимет награду выше; ноль — не
+   * начислять. Без окружения: продуктовые числа правятся в панели.
+   */
+  prologueRewardCoins: integer(
+    "prologue.reward-coins",
+    PROLOGUE_GROUP,
+    "Пролог: монеты за победу",
+    "Сколько монет получает игрок за победу в прологе, один раз на аккаунт. 0 — монет нет. Выше суточного потолка кошелька (500) не поднять",
+    { min: 0, max: 500, unit: ["монета", "монеты", "монет"] },
+    500,
+  ),
+  prologueRewardGems: integer(
+    "prologue.reward-gems",
+    PROLOGUE_GROUP,
+    "Пролог: самоцветы за победу",
+    "Сколько самоцветов получает игрок за победу в прологе, один раз на аккаунт. 0 — самоцветов нет. Выше суточного потолка кошелька (10) не поднять",
+    { min: 0, max: 10, unit: ["самоцвет", "самоцвета", "самоцветов"] },
+    10,
+  ),
+  /**
+   * Напоминания бота (docs/39-retention-mechanics.md П5, tasks/T-0128): включатель
+   * выключен, пока команда не посмотрит тексты на деве. Окно потолка скользящее,
+   * тихие часы — по Москве, как игровые сутки. Без окружения: числа правятся в
+   * панели. Ключи через дефис: формат ключа не знает подчёркивания (`SETTING_KEY`).
+   */
+  remindersEnabled: {
+    ...feature(
+      "reminders.enabled",
+      "Напоминания через бота",
+      "Бот пишет игрокам, которые разрешили ему писать: обогнали в сезоне, сезон закрывается, награда дня ждёт. Выключено — не пишет и не создаёт строк в ленте. Включайте после просмотра текстов на деве",
+      () => null,
+      false,
+    ),
+    group: REMINDERS_GROUP,
+  } satisfies SettingDefinition<boolean>,
+  remindersMinGapHours: integer(
+    "reminders.min-gap-hours",
+    REMINDERS_GROUP,
+    "Не чаще одного напоминания за",
+    "Окно скользящее, на все три вида вместе: между двумя напоминаниями игроку проходит не меньше этого времени, даже на стыке суток",
+    { min: 12, max: 168, unit: ["час", "часа", "часов"] },
+    20,
+  ),
+  remindersQuietFromHour: integer(
+    "reminders.quiet-from-hour",
+    REMINDERS_GROUP,
+    "Тихие часы: с",
+    "Час по Москве, с которого бот не пишет. Окно может переходить через полночь: с 21 до 10 бот пишет с 10:00 до 21:00. Равные начало и конец — тихих часов нет",
+    { min: 0, max: 23, unit: ["час", "часа", "часов"] },
+    21,
+  ),
+  remindersQuietToHour: integer(
+    "reminders.quiet-to-hour",
+    REMINDERS_GROUP,
+    "Тихие часы: до",
+    "Час по Москве, с которого бот снова пишет. Равные начало и конец — тихих часов нет",
+    { min: 0, max: 23, unit: ["час", "часа", "часов"] },
+    10,
+  ),
+  remindersLapseDays: integer(
+    "reminders.lapse-days",
+    REMINDERS_GROUP,
+    "Награда дня: не напоминать тем, кто не забирал её дольше",
+    "Игроку, который не забирал награду дня дольше этого срока, бот о ней не напоминает: он ушёл, а не забыл",
+    { min: 1, max: 60, unit: ["день", "дня", "дней"] },
+    14,
+  ),
   linksAutoDailyCap: integer(
     "links.auto-daily-cap",
     AUTO_SOURCES_GROUP,
@@ -721,6 +873,34 @@ export const SETTINGS = {
     "Сколько новых источников в сутки сервер заводит сам по ссылкам с метками. Нуль — не заводить; запуски по таким ссылкам всё равно записываются и подхватятся, когда источник появится",
     { min: 0, max: 500, unit: ["источник", "источника", "источников"] },
     20,
+  ),
+  /**
+   * Подписка Xray для прокси (docs/35-stage4-plan.md Р101, tasks/T-0093).
+   * Без окружения: числа правятся в панели без релиза.
+   */
+  proxySubscriptionRefreshHours: integer(
+    "proxy.subscription.refresh-hours",
+    PROXY_GROUP,
+    "Подписка Xray: как часто обновлять",
+    "Период обновления списка узлов. Если поставщик сообщил свой интервал (Profile-Update-Interval), берётся больший из двух, но не больше 168 часов. Кнопка «Обновить сейчас» в разделе «Прокси» работает в любое время, не чаще раза в минуту",
+    { min: 1, max: 168, unit: ["час", "часа", "часов"] },
+    6,
+  ),
+  proxySubscriptionCandidates: integer(
+    "proxy.subscription.candidates",
+    PROXY_GROUP,
+    "Подписка Xray: сколько узлов в переборе",
+    "Сколько лучших здоровых узлов (по задержке) подписка отдаёт в перебор клиенту исходящих после ручных прокси. Остальные ждут: перебирать все сто узлов на каждом запросе незачем",
+    { min: 1, max: 10, unit: ["узел", "узла", "узлов"] },
+    3,
+  ),
+  proxySubscriptionProbeMinutes: integer(
+    "proxy.subscription.probe-minutes",
+    PROXY_GROUP,
+    "Подписка Xray: как часто проверять узлы",
+    "Пауза между проверками здорового узла (запрос на ipify через него). Не отвечающий узел проверяется реже, с ростом паузы до часа. Действует со следующей проверки, без перезапуска",
+    { min: 1, max: 60, unit: ["минута", "минуты", "минут"] },
+    5,
   ),
 } as const;
 

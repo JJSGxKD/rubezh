@@ -33,6 +33,14 @@ export interface LinkInput {
 export interface LinkOwner {
   partnerId: string;
   name: string;
+  /**
+   * Задан ли у партнёра общий адрес постбэка — сам адрес отсюда не читается: в нём бывает секрет приёмника. Поля ниже
+   * хранилище заполняет всегда; необязательны они в типе затем, чтобы владельца можно было собрать без них (тесты,
+   * написанные до событий, T-0071) — нет поля, значит, общего адреса как не бывало.
+   */
+  postbackSet?: boolean;
+  /** какие события уходят на общий адрес партнёра: панель показывает их у ссылки без своего адреса */
+  postbackEvents?: string[];
 }
 
 export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
@@ -50,6 +58,12 @@ export interface LinkRecord extends Omit<LinkInput, "target" | "partnerId"> {
   title: string | null;
   /** скрыт в панели; запуски по нему считаются */
   hiddenAt: Date | null;
+  /** адрес постбэка с макросами (T-0070); `null` — у ссылки своего адреса нет, действует общий адрес партнёра, если он есть */
+  postbackUrl: string | null;
+  /** с какого времени по кликам действует адрес; задан тогда и только тогда, когда задан адрес */
+  postbackSince: Date | null;
+  /** какие события уходят на адрес; по умолчанию одна регистрация */
+  postbackEvents: string[];
 }
 
 /** Что меняется в показе автоисточника; не заданное не трогается. */
@@ -113,6 +127,11 @@ export interface LinksRepository {
    * разрезы аналитики. `null` — такого автоисточника нет (в том числе код ручной ссылки).
    */
   setDisplay(code: string, patch: LinkDisplayPatch, now: Date): Promise<LinkRecord | null>;
+  /**
+   * Записать адрес постбэка, момент, с которого он действует (оба `null` — адрес снят), и события: названное пишется,
+   * не названное остаётся как было. `null` — ссылки с таким кодом нет.
+   */
+  setPostback(code: string, postback: { url?: string | null; since?: Date | null; events?: readonly string[] }): Promise<LinkRecord | null>;
 }
 
 @Injectable()
@@ -142,6 +161,20 @@ export class PrismaLinksRepository implements LinksRepository {
   async retarget(code: string, target: LinkTarget): Promise<LinkRecord | null> {
     try {
       return recordOf(await this.prisma.link.update({ where: { code }, data: { target }, include: WITH_OWNER }));
+    } catch (error: unknown) {
+      // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
+      throw error;
+    }
+  }
+
+  async setPostback(code: string, postback: { url?: string | null; since?: Date | null; events?: readonly string[] }): Promise<LinkRecord | null> {
+    const data: Prisma.LinkUpdateInput = {};
+    if (postback.url !== undefined) data.postbackUrl = postback.url;
+    if (postback.since !== undefined) data.postbackSince = postback.since;
+    if (postback.events !== undefined) data.postbackEvents = [...postback.events];
+    try {
+      return recordOf(await this.prisma.link.update({ where: { code }, data, include: WITH_OWNER }));
     } catch (error: unknown) {
       // Ссылки с таким кодом нет: Prisma сообщает об этом кодом P2025.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return null;
@@ -243,8 +276,11 @@ export class PrismaLinksRepository implements LinksRepository {
   }
 }
 
-/** Владельца ссылки читаем вместе с ней: название нужно и виду ссылки, и карточке партнёра. */
-const WITH_OWNER = { partner: { select: { name: true } } } as const;
+/**
+ * Владельца ссылки читаем вместе с ней: название нужно и виду ссылки, и карточке партнёра. Адрес партнёра выбирается
+ * только затем, чтобы узнать, задан ли он: наружу из записи он не уходит.
+ */
+const WITH_OWNER = { partner: { select: { name: true, postbackUrl: true, postbackEvents: true } } } as const;
 
 type LinkRow = Prisma.LinkGetPayload<{ include: typeof WITH_OWNER }>;
 
@@ -259,6 +295,6 @@ function recordOf(row: LinkRow): LinkRecord {
     network: row.network === null || !isLinkNetwork(row.network) ? null : row.network,
     registrationOn: row.registrationOn === "launch" ? "launch" : "first_run",
     target: isLinkTarget(row.target) ? row.target : "app",
-    partner: partner === null || partnerId === null ? null : { partnerId, name: partner.name },
+    partner: partner === null || partnerId === null ? null : { partnerId, name: partner.name, postbackSet: partner.postbackUrl !== null, postbackEvents: partner.postbackEvents },
   };
 }

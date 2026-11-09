@@ -184,6 +184,10 @@ describe.skipIf(DATABASE_URL === "")("вехи воронки на живом Po
     await funnel.firstPurchase(ids[0]!, new Date(day));
     // Не в счёт: проверка платёжной цепочки и возврат.
     await purchase(ids[1]!, 1, "test", "paid");
+    // Донат — поддержка, а не покупка: в звёзды группы не идёт (T-0364).
+    await prisma.$executeRaw`
+      INSERT INTO purchase (purchase_id, account_id, product, sku, price_stars, charged_stars, mode, status, invoiced_at, paid_at)
+      VALUES (${randomUUID()}::uuid, ${ids[0]!}::uuid, 'donation', 'donation', 100, 100, 'live'::"PaymentMode", 'paid'::"PurchaseStatus", ${new Date(day)}, ${new Date(day)})`;
     await purchase(ids[2]!, 100, "live", "refunded");
 
     const run = (accountId: string) => prisma.$executeRaw`

@@ -247,6 +247,9 @@ importers:
       '@bh/fx':
         specifier: workspace:*
         version: link:../../packages/fx
+      '@bh/proxy-kit':
+        specifier: workspace:*
+        version: link:../../packages/proxy-kit
       '@nestjs/common':
         specifier: 12.0.3
         version: 12.0.3(reflect-metadata@0.2.2)(rxjs@7.8.2)

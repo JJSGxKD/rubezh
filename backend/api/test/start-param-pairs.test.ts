@@ -113,7 +113,8 @@ describe("пары в разборе параметра запуска", () => {
 
   it("то, чего Telegram не пропускает, по-прежнему не хранится даже сырым", () => {
     expect(parseStartParam("src-а_cmp-b")).toEqual({ kind: "unknown", raw: null, ref: null });
-    expect(parseStartParam(`src-${"a".repeat(61)}`)).toEqual({ kind: "unknown", raw: null, ref: null });
+    // Предел `/start` бота — 64 знака; у Mini App он 512 (T-0181), поэтому длина проверяется по каналу.
+    expect(parseStartParam(`src-${"a".repeat(61)}`, "bot")).toEqual({ kind: "unknown", raw: null, ref: null });
   });
 
   it("старые форматы разбираются до пар и пар не касаются", () => {

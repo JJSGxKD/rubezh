@@ -34,7 +34,7 @@ batch: 4
 
 # T-0255. Напоминания бота картинкой — «тебя обогнали», сезон закрывается, награда дня ждёт, колесо снова крутится
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0255.json)](README.md#значки-статуса) [![T-0252](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0252.json&label=T-0252)](T-0252-bot-cards-foundation.md) [![T-0128](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0128.json&label=T-0128)](T-0128-bot-reminders.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0255.json)](README.md#значки-статуса) [![T-0252](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0252.json&label=T-0252)](T-0252-bot-cards-foundation.md) [![T-0128](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0128.json&label=T-0128)](archive/T-0128-bot-reminders.md)
 
 ## Зачем
 

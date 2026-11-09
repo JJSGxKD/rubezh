@@ -1,6 +1,6 @@
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
-import { leaderboardSchema } from "./runs-api";
+import { leaderboardSchema, meSchema } from "./runs-api";
 
 /**
  * Клиент недельного сезона (tasks/T-0111, контракт — tasks/archive/T-0110):
@@ -46,7 +46,9 @@ const historySchema = z.object({
   seasonKey: z.string(),
   startsAt: z.string(),
   endsAt: z.string(),
-  results: z.array(z.object({ difficulty: z.string(), bestSec: z.number(), place: z.number(), boardSize: z.number() })),
+  /** по чему ранжирован сезон: от этого зависит, секунды или очки в `bestSec`; нет поля — по времени */
+  scoring: z.optional(z.string()),
+  results: z.array(z.object({ difficulty: z.string(), bestSec: z.number(), place: z.number(), boardSize: z.number(), division: z.optional(z.nullable(z.string())) })),
   reward: z.nullable(z.object({ coins: z.number(), prestige: z.number(), claimed: z.boolean() })),
 });
 
@@ -56,10 +58,16 @@ const overviewSchema = z.object({
   season: z.optional(z.nullable(seasonSchema)),
   minBoard: z.optional(z.number()),
   thresholds: z.optional(z.record(z.string(), z.number())),
+  thresholdPoints: z.optional(z.number()),
+  /** по чему ранжирован идущий сезон (T-0294): `time` или `points`; сервер до очков поля не знал */
+  scoring: z.optional(z.string()),
   thresholdReward: z.optional(rewardSchema),
   placeLadder: z.optional(z.array(ladderStepSchema)),
   difficultyMul: z.optional(z.record(z.string(), z.number())),
   mine: z.optional(z.record(z.string(), z.nullable(z.number()))),
+  minePoints: z.optional(z.record(z.string(), z.nullable(z.number()))),
+  /** дивизион игрока на доске сезона (T-0295); ключ — сложность */
+  division: z.optional(z.record(z.string(), z.nullable(z.string()))),
   pending: z.optional(z.array(pendingSchema)),
   history: z.optional(z.array(historySchema)),
 });
@@ -67,9 +75,22 @@ const overviewSchema = z.object({
 const boardSchema = z.object({
   seasonKey: z.string(),
   difficulty: z.string(),
+  /** по чему ранжирована таблица; нет поля — по времени */
+  scoring: z.optional(z.string()),
   total: z.number(),
   entries: leaderboardSchema.shape.entries,
-  me: z.nullable(z.object({ rank: z.number(), survivalSec: z.number() })),
+  me: z.nullable(meSchema),
+});
+
+/** «Твой стиль» (T-0295): оси строками — незнакомую ось экран не показывает, а ответ не отбрасывает. */
+const styleSchema = z.object({
+  style: z.nullable(z.string()),
+  strong: z.nullable(z.string()),
+  weak: z.nullable(z.string()),
+  axes: z.nullable(z.record(z.string(), z.number())),
+  runs: z.number(),
+  /** сколько рейтинговых забегов не хватает до стиля; 0 — стиль есть */
+  missing: z.number(),
 });
 
 const claimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema });
@@ -80,7 +101,15 @@ export type PendingReward = z.infer<typeof pendingSchema>;
 export type SeasonHistoryItem = z.infer<typeof historySchema>;
 export type SeasonBoard = z.infer<typeof boardSchema>;
 export type SeasonClaim = z.infer<typeof claimSchema>;
+export type StyleSummary = z.infer<typeof styleSchema>;
 export type BoardScope = "all" | "friends";
+
+/** По чему ранжирован сезон или таблица; всё незнакомое — по времени, как было до очков. */
+export type SeasonScoring = "time" | "points";
+
+export function scoringOf(raw: string | undefined): SeasonScoring {
+  return raw === "points" ? "points" : "time";
+}
 
 /** Сезон, каким его видит экран: поля, которых сервер не прислал, пусты. */
 export interface SeasonData {
@@ -88,10 +117,16 @@ export interface SeasonData {
   season: z.infer<typeof seasonSchema> | null;
   minBoard: number;
   thresholds: Record<string, number>;
+  /** очки лучшего забега, с которых начинается награда за порог в сезоне по очкам */
+  thresholdPoints: number;
+  scoring: SeasonScoring;
   thresholdReward: SeasonReward;
   placeLadder: LadderStep[];
   difficultyMul: Record<string, number>;
   mine: Record<string, number | null>;
+  /** очки лучшего забега недели по сложности; в сезоне по времени очков нет */
+  minePoints: Record<string, number | null>;
+  division: Record<string, string | null>;
   pending: PendingReward[];
   history: SeasonHistoryItem[];
 }
@@ -116,13 +151,28 @@ function normalized(raw: z.infer<typeof overviewSchema>): SeasonsOverview {
     season: raw.season ?? null,
     minBoard: raw.minBoard ?? 0,
     thresholds: raw.thresholds ?? {},
+    thresholdPoints: raw.thresholdPoints ?? 0,
+    scoring: scoringOf(raw.scoring),
     thresholdReward: raw.thresholdReward ?? { coins: 0, prestige: 0 },
     placeLadder: raw.placeLadder ?? [],
     difficultyMul: raw.difficultyMul ?? {},
     mine: raw.mine ?? {},
+    minePoints: raw.minePoints ?? {},
+    division: raw.division ?? {},
     pending: raw.pending ?? [],
     history: (raw.history ?? []).slice(0, HISTORY_SHOWN),
   };
+}
+
+/** Клиент «Твоего стиля»: ответ считает сервер по последним десяти рейтинговым забегам. */
+export interface StyleApi {
+  myStyle(): Promise<ApiResult<StyleSummary>>;
+}
+
+const STYLE_PATH = "/api/v1/rating/me/style";
+
+export function createStyleApi(request: ApiRequest = apiRequest): StyleApi {
+  return { myStyle: () => request(STYLE_PATH, styleSchema, { method: "GET" }) };
 }
 
 /** `request` подменяется в тестах: сеть и сессия им не нужны. */

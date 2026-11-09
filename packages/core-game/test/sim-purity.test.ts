@@ -121,6 +121,14 @@ describe("чистота слоя симуляции", () => {
     }
   });
 
+  it("рубеж (T-0120) в проверяемом слое и берёт случайность только из своего потока", () => {
+    const file = sources.find(({ path }) => path.replace(/\\/g, "/").endsWith("/sim/rubezh.ts"));
+    expect(file, "game/sim/rubezh.ts").toBeDefined();
+    // world.rng рубеж не трогает: место стража берётся из rubezh.rng, иначе приход
+    // стража сдвинул бы все golden-прогоны и предложения уровней.
+    expect(file?.source).not.toMatch(/world\.rng/);
+  });
+
   it("не использует Date.now, new Date и performance.now", () => {
     for (const { path, source } of sources) {
       expect(source, path).not.toMatch(/Date\.now|new Date\(|performance\.now/);

@@ -47,6 +47,12 @@ enum Difficulty {
   hard
 }
 
+// Режим забега (T-0279, Р151): пролог — первый забег аккаунта, вне рейтинга и заданий.
+enum RunMode {
+  endless
+  prologue
+}
+
 enum RunStatus {
   started
   finished
@@ -184,6 +190,8 @@ model Account {
   nameLockedAt   DateTime? @map("name_locked_at") @db.Timestamptz(3)
   /// знак «Поддержал проект» (Р109): когда подтверждён первый донат; снимается внешним возвратом
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
+  /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
+  prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
 
   roles         AccountRole[]
   runs          Run[]
@@ -446,6 +454,8 @@ model Run {
   accountId        String      @map("account_id") @db.Uuid
   status           RunStatus
   difficulty       Difficulty
+  /// режим: `prologue` — пролог первого забега (T-0279); старые клиенты без поля — `endless`
+  mode             RunMode     @default(endless)
   startingWeaponId String      @map("starting_weapon_id") @db.VarChar(64)
   contentHash      String      @map("content_hash") @db.VarChar(32)
   /// когда забег начался по часам сервера; `null` — старт не дошёл или пришёл слишком поздно
@@ -471,6 +481,20 @@ model Run {
   verdict          RunVerdict?
   /// коды причин вердикта, в том числе сведения, не меняющие его
   verdictReasons   String[]    @map("verdict_reasons")
+  /// страж рубежа пришёл (со слов итога, T-0121); победа засчитывается вердиктом `ok`
+  rubezhReached    Boolean     @default(false) @map("rubezh_reached")
+  /// секунда, на которой пал страж; `null` — не пал
+  rubezhClearedSec Int?        @map("rubezh_cleared_sec")
+  /// очки эффективности (T-0293, Р152); `null` — пролог и обучение, сбой подсчёта или забег до очков
+  points           Int?
+  /// индексы пяти осей с тремя знаками: `{ t, k, h, c, b }`, 1 — ровно ожидаемое; сырые, без потолка индекса
+  axes             Json?
+  /// стиль забега — ключ сильнейшей оси: `t`, `k`, `h`, `c` или `b`
+  style            String?     @db.VarChar(8)
+  /// полоса силы, по которой взято ожидаемое: `novice`…`full`
+  band             String?     @db.VarChar(16)
+  /// исходные числа подсчёта, которых нет в других колонках, — для пересчёта: `{ power, huntLog, buildScore }`
+  scoreInput       Json?       @map("score_input")
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
@@ -483,6 +507,8 @@ model Run {
   @@index([accountId, finishedAt])
   // Пересборка лидерборда: лучший рейтинговый забег каждого по сложности.
   @@index([difficulty, ranked, survivalSec])
+  // Доски рейтинга по очкам (T-0294): лучший забег аккаунта и периода по очкам.
+  @@index([difficulty, ranked, points])
   // Закрытие недельного сезона: рейтинговые забеги сложности за окно недели.
   @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
@@ -660,8 +686,8 @@ model AccountSession {
   platform       Platform
   place          SessionPlace
   startKind      StartKind    @map("start_kind")
-  /// параметр запуска как пришёл, из подписанных данных; `null` — не было или мусор
-  startParam     String?      @map("start_param") @db.VarChar(64)
+  /// параметр запуска как пришёл, из подписанных данных, до 512 знаков (предел `startapp` Mini App); `null` — не было или мусор
+  startParam     String?      @map("start_param") @db.VarChar(512)
   /// идентификатор внутри параметра: код клика, id партнёра Telegram
   startRef       String?      @map("start_ref") @db.VarChar(64)
   /// что клиент говорит о себе (`tgWebAppPlatform`) — подсказка, не факт
@@ -696,7 +722,7 @@ model Acquisition {
   accountId           String      @id @map("account_id") @db.Uuid
   firstAt             DateTime    @map("first_at") @db.Timestamptz(3)
   firstStartKind      StartKind   @map("first_start_kind")
-  firstStartParam     String?     @map("first_start_param") @db.VarChar(64)
+  firstStartParam     String?     @map("first_start_param") @db.VarChar(512)
   firstStartRef       String?     @map("first_start_ref") @db.VarChar(64)
   firstClientPlatform String?     @map("first_client_platform") @db.VarChar(16)
   firstDeviceClass    DeviceClass @map("first_device_class")
@@ -705,7 +731,7 @@ model Acquisition {
   /// последняя сессия по ссылке; `null` — по ссылкам не приходил ни разу
   lastTouchAt         DateTime?   @map("last_touch_at") @db.Timestamptz(3)
   lastStartKind       StartKind?  @map("last_start_kind")
-  lastStartParam      String?     @map("last_start_param") @db.VarChar(64)
+  lastStartParam      String?     @map("last_start_param") @db.VarChar(512)
   lastStartRef        String?     @map("last_start_ref") @db.VarChar(64)
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
@@ -1124,6 +1150,12 @@ model Link {
   title          String?          @db.VarChar(80)
   /// скрыт в панели; запуски по нему считаются
   hiddenAt       DateTime?        @map("hidden_at") @db.Timestamptz(3)
+  /// адрес постбэка с макросами (T-0070): события игрока по кликам уходят на него GET-запросом; `null` — не отправляем
+  postbackUrl    String?          @map("postback_url") @db.VarChar(1024)
+  /// с какого времени по кликам действует адрес: клики раньше не отправляются, прошлое не досылается; задан тогда и только тогда, когда задан адрес
+  postbackSince  DateTime?        @map("postback_since") @db.Timestamptz(3)
+  /// какие события уходят на адрес: registration, purchase_first, purchase_repeat, d1_return; по умолчанию одна регистрация
+  postbackEvents String[]         @default(["registration"]) @map("postback_events") @db.VarChar(24)
   clicks         LinkClick[]
   conversions    AdConversion[]
   bindings       PartnerBinding[]
@@ -2134,6 +2166,12 @@ model Partner {
   payoutMethod   String?  @map("payout_method") @db.VarChar(200)
   /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
   sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
+  /// общий адрес постбэка партнёра с макросами (T-0070): действует на ссылки партнёра, у которых нет своего адреса; `null` — не отправляем
+  postbackUrl    String?   @map("postback_url") @db.VarChar(1024)
+  /// с какого времени по кликам действует адрес: клики раньше не отправляются; задан тогда и только тогда, когда задан адрес
+  postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
+  /// какие события уходят на адрес; по умолчанию одна регистрация
+  postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
 
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
@@ -2216,6 +2254,61 @@ model OutboundProxy {
 
   @@index([enabled, priority])
   @@map("outbound_proxy")
+}
+
+/// Подписка Xray для прокси исходящих запросов (docs/35-stage4-plan.md Р101, T-0093).
+/// Одна строка: key = 'main'. Адрес — шифртекстом SecretCipher; состояние узла
+/// и его слот держат CHECK в миграции
+model ProxySubscription {
+  key                   String    @id @db.VarChar(16)
+  name                  String    @db.VarChar(60)
+  /// адрес подписки — шифртекстом SecretCipher
+  urlIv                 Bytes     @map("url_iv")
+  urlTag                Bytes     @map("url_tag")
+  urlCt                 Bytes     @map("url_ct")
+  urlKeyId              String    @map("url_key_id") @db.VarChar(16)
+  /// «хост …abcd» — сверить с кабинетом поставщика
+  urlHint               String    @map("url_hint") @db.VarChar(80)
+  enabled               Boolean
+  /// ISO-коды стран узлов; пусто — любые
+  countries             String[]  @db.VarChar(2)
+  lastRefreshAt         DateTime? @map("last_refresh_at") @db.Timestamptz(3)
+  lastRefreshOk         Boolean?  @map("last_refresh_ok")
+  lastRefreshNote       String?   @map("last_refresh_note") @db.VarChar(300)
+  providerIntervalHours Int?      @map("provider_interval_hours")
+  trafficUsedBytes      BigInt?   @map("traffic_used_bytes")
+  trafficTotalBytes     BigInt?   @map("traffic_total_bytes")
+  expiresAt             DateTime? @map("expires_at") @db.Timestamptz(3)
+  /// кто менял последним; без внешнего ключа — подписка переживает аккаунт
+  updatedBy             String    @map("updated_by") @db.Uuid
+  updatedAt             DateTime  @map("updated_at") @db.Timestamptz(3)
+
+  nodes ProxySubscriptionNode[]
+
+  @@map("proxy_subscription")
+}
+
+/// Узлы подписки. Секретов узла (UUID, пароль) в базе нет: они только в конфиге
+/// Xray и в ответе поставщика. `slot` — вход Xray узла: порт = база + слот
+model ProxySubscriptionNode {
+  subscriptionKey String    @map("subscription_key") @db.VarChar(16)
+  nodeKey         String    @map("node_key") @db.VarChar(16)
+  slot            Int       @unique
+  protocol        String    @db.VarChar(12)
+  name            String    @db.VarChar(80)
+  country         String?   @db.VarChar(2)
+  host            String    @db.VarChar(255)
+  /// `unknown`, `healthy` или `down` (`CHECK` в миграции)
+  state           String    @db.VarChar(8)
+  failures        Int
+  latencyMs       Int?      @map("latency_ms")
+  lastProbeAt     DateTime? @map("last_probe_at") @db.Timestamptz(3)
+  nextProbeAt     DateTime  @map("next_probe_at") @db.Timestamptz(3)
+
+  subscription ProxySubscription @relation(fields: [subscriptionKey], references: [key], onDelete: Cascade)
+
+  @@id([subscriptionKey, nodeKey])
+  @@map("proxy_subscription_node")
 }
 
 /// Режим сервиса клиента исходящих (Р91): строки нет — умолчание из кода (`infra/outbound/outbound-route.ts`).
@@ -2302,13 +2395,19 @@ model HomeSlide {
 // назначения. Ключи: оплата и назначение; клик, цель и назначение — частичным
 // индексом `ad_conversion_click_id_goal_destination_key` для целей 1, 2, 4
 // (повторных покупок на клик много). Prisma частичные индексы не описывает,
-// он только в миграции.
+// они только в миграции.
+//
+// Запуск по прямой ссылке на Mini App (T-0181, Р121): клика нет, `click_id`
+// пуст, а метки сети лежат на самой строке (`network_params`). Регистрация,
+// первая покупка и возврат такой строки — по одной на аккаунт и назначение:
+// частичный индекс `ad_conversion_account_goal_destination_direct_key`.
 model AdConversion {
   conversionId  String             @id @default(uuid()) @map("conversion_id") @db.Uuid
   /// имя назначения, как `destination`; колонка осталась от первой версии — откату кода она нужна
   network       String             @db.VarChar(16)
   linkCode      String             @map("link_code") @db.VarChar(16)
-  clickId       String             @map("click_id") @db.VarChar(16)
+  /// клик по переходнику; `null` — запуск по прямой ссылке на Mini App
+  clickId       String?            @map("click_id") @db.VarChar(16)
   accountId     String             @map("account_id") @db.Uuid
   /// код события: 1 — регистрация, 2 — первая покупка, 3 — повторная (совпадают с `goaltype` AdsGram), 4 — возврат на следующий день
   goal          Int                @db.SmallInt
@@ -2326,9 +2425,11 @@ model AdConversion {
   lastError     String?            @map("last_error") @db.VarChar(200)
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   sentAt        DateTime?          @map("sent_at") @db.Timestamptz(3)
+  /// метки сети с прямого запуска: те же ключи, что у `link_click.network_params`; у конверсии по клику пусто, метки лежат на клике; обнуляются через 31 сутки
+  networkParams Json?              @map("network_params")
 
-  link     Link      @relation(fields: [linkCode], references: [code], onDelete: Cascade)
-  click    LinkClick @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
+  link     Link       @relation(fields: [linkCode], references: [code], onDelete: Cascade)
+  click    LinkClick? @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
   account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
@@ -2406,6 +2507,8 @@ model SeasonResult {
   boardSize  Int        @map("board_size")
   /// доска аккаунта на момент закрытия: `common` — общая, без аккаунтов с отдельной доской; `full` — полная (T-0114, Р104)
   board      String     @default("common") @db.VarChar(8)
+  /// дивизион по месту и размеру доски на закрытии: ruby, gold, silver, bronze; `null` — сезон закрыт до дивизионов (T-0295, Р152)
+  division   String?    @db.VarChar(8)
 
   season  Season  @relation(fields: [seasonKey], references: [seasonKey], onDelete: Cascade)
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)

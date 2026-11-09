@@ -30,6 +30,13 @@ export const MAX_XP_PER_RUN = 1_500;
 /** Сложнее — щедрее: иначе незачем уходить с лёгкой. */
 export const DIFFICULTY_REWARD_MUL: Record<Difficulty, number> = { easy: 1, normal: 1.3, hard: 1.7 };
 
+/**
+ * Победа над стражем рубежа удваивает монеты и опыт забега (T-0121, Р102).
+ * Сервер `shared-types` не импортирует, поэтому число здесь, а равенство с
+ * `RUBEZH_REWARD_MUL` держит тест `rubezh-win.test.ts`. Число стартовое.
+ */
+export const RUBEZH_REWARD_MUL = 2;
+
 export const MAX_LEVEL = 100;
 
 export interface RewardableRun {
@@ -40,6 +47,17 @@ export interface RewardableRun {
   level: number;
   cheats: boolean;
   verdict: "ok" | "suspicious" | "rejected";
+  /** победа над стражем заявлена и правдоподобна (`RecordedRun.rubezhCleared`); поля нет — победы нет */
+  rubezhCleared?: boolean;
+}
+
+/**
+ * Победа оплачена ×2: засчитана, вердикт честный, читов нет и награда не
+ * пропущена. Подозрительный забег награду получает, но без множителя — иначе
+ * сомнительная победа платила бы вдвое.
+ */
+export function rubezhPaid(run: { cleared: boolean; verdict: RewardableRun["verdict"]; cheats: boolean; skipped: string | null }): boolean {
+  return run.cleared && run.verdict === "ok" && !run.cheats && run.skipped === null;
 }
 
 export type RunRewardDecision = { coins: number; xp: number; skipped: null } | { coins: 0; xp: 0; skipped: "too_short" | "cheats" | "rejected" };
@@ -55,7 +73,8 @@ export function runReward(run: RewardableRun): RunRewardDecision {
   if (run.survivalSec < MIN_REWARDED_SEC) return { coins: 0, xp: 0, skipped: "too_short" };
 
   const minutes = run.survivalSec / 60;
-  const mul = DIFFICULTY_REWARD_MUL[run.difficulty];
+  // Множители складываются до округления, потолки — после них.
+  const mul = DIFFICULTY_REWARD_MUL[run.difficulty] * (rubezhPaid({ cleared: run.rubezhCleared === true, verdict: run.verdict, cheats: run.cheats, skipped: null }) ? RUBEZH_REWARD_MUL : 1);
   const coins = Math.round((COINS_PER_MINUTE * minutes + (COINS_PER_100_KILLS * run.enemiesKilled) / 100) * mul);
   const xp = Math.round((XP_PER_MINUTE * minutes + XP_PER_RUN_LEVEL * Math.max(0, run.level - 1)) * mul);
   return { coins: Math.min(coins, MAX_COINS_PER_RUN), xp: Math.min(xp, MAX_XP_PER_RUN), skipped: null };

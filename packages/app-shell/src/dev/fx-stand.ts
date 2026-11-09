@@ -1,7 +1,7 @@
 import { DEFAULT_DIFFICULTY_ID, DEFAULT_MAP_ID } from "@bh/core-game";
 import { DEFAULT_DEV_SETTINGS, devModeAllowed, useDevMode } from "../state/dev-mode";
 import { useRun } from "../state/run";
-import { fxScene, type FxScene } from "./fx-scenes";
+import { FX_SCENES, fxScene, type FxScene } from "./fx-scenes";
 
 /**
  * Стенд эффектов (docs/17-testing-strategy.md, «Стенд эффектов»): забег
@@ -15,11 +15,23 @@ export interface FxStand {
   scene: FxScene;
   /** шаг симуляции на паузе и ожидание отрисовки кадра */
   step(ticks: number): Promise<void>;
+  /** видимые объекты отрисовки сцены; `null` — сцена не создана */
+  stats(): { displayObjects: number } | null;
+  /**
+   * Живое проигрывание: снимает паузу на `ms` миллисекунд при обычной скорости,
+   * возвращает время каждого кадра (мс) по requestAnimationFrame и снова ставит
+   * паузу.
+   */
+  play(ms: number): Promise<number[]>;
 }
 
 declare global {
   interface Window {
     __fxStand?: FxStand;
+    /** id всех сцен каталога — скрипт раскадровки без запуска сцены не знает их */
+    __fxCatalog?: string[];
+    /** счётчик объектов отрисовки, который ставит сцена забега разработчика */
+    __bhRenderStats?: () => { displayObjects: number } | null;
   }
 }
 
@@ -44,6 +56,7 @@ async function until(condition: () => boolean, what: string): Promise<void> {
 }
 
 export function startFxStand(sceneId: string, ground: "map" | "light"): void {
+  window.__fxCatalog = FX_SCENES.map((item) => item.id);
   const scene = fxScene(sceneId);
   if (scene === null) {
     console.warn(`неизвестная сцена эффекта: ${sceneId}`);
@@ -99,6 +112,25 @@ export function startFxStand(sceneId: string, ground: "map" | "light"): void {
       await ready;
       useRun.getState().devCommand({ kind: "stepTicks", ticks });
       await twoFrames();
+    },
+    stats(): { displayObjects: number } | null {
+      return window.__bhRenderStats?.() ?? null;
+    },
+    async play(ms: number): Promise<number[]> {
+      await ready;
+      useRun.getState().resume();
+      const times: number[] = [];
+      let last = performance.now();
+      const end = last + ms;
+      while (last < end) {
+        await nextFrame();
+        const now = performance.now();
+        times.push(now - last);
+        last = now;
+      }
+      useRun.getState().pause("manual");
+      await until(() => useRun.getState().phase === "paused", "пауза после проигрывания");
+      return times;
     },
   };
 }

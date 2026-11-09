@@ -11,16 +11,31 @@ import { DIFFICULTIES, type Difficulty } from "./run-rules.js";
  * (`pnpm --filter backend-api runs:rebuild-leaderboard`). Поэтому сюда
  * пишется только то, что уже лежит в таблице `run` с `ranked = true`.
  *
- * Член множества — идентификатор аккаунта, очки — лучшее время. Лучшее
+ * Член множества — идентификатор аккаунта, счёт — очки эффективности
+ * лучшего забега (tasks/T-0294, Р66, Р152); время того забега в доске не
+ * лежит, его читают из базы подписью к строке. Лучшее
  * только растёт: `ZADD GT` не опустит его ни повтором, ни худшим забегом, и
  * делает это атомарно — без чтения и записи из кода.
  *
+ * **Ключи с приставкой `pts:`** (T-0294). Доска всех времён переходит на очки
+ * сразу, а не с нового сезона, поэтому живёт под новыми ключами
+ * `runs:leaderboard:pts:…`: числа в них — очки, а старые ключи с секундами
+ * никто не читает и не пишет. Пустые ключи при старте наполняет
+ * `LeaderboardWarmup`, запасной путь — пересборка (`runs:rescore`, затем
+ * `runs:rebuild-leaderboard`); новые забеги ложатся сами.
+ *
  * **Две проекции одного источника** (docs/35-stage4-plan.md, Р104, T-0113).
- * Общая доска лежит под прежним ключом `runs:leaderboard:<сложность>` — её
- * читают все; полная — под `runs:leaderboard:full:<сложность>`, в ней ещё и
+ * Общая доска лежит под ключом `runs:leaderboard:pts:<сложность>` — её
+ * читают все; полная — под `runs:leaderboard:pts:full:<сложность>`, в ней ещё и
  * аккаунты со скрытым ограничением «Отдельная доска», и читают её только они.
- * Лучшее время игрока на обеих досках одно, поэтому запись идёт по списку
+ * Лучший счёт игрока на обеих досках один, поэтому запись идёт по списку
  * досок, а каждое чтение называет доску — прямого чтения без доски нет.
+ *
+ * **Отметка рубежа** (T-0121, Р102): засчитанная победа над стражем лежит
+ * отдельным набором `lb:rubezh:<сложность>` (accountId), общим для обеих досок:
+ * победа — свойство аккаунта, а не доски. Пишется в той же транзакции, что
+ * и рекорд; `top` читает флаги всей страницы одним `SMISMEMBER`. Набор — такая
+ * же проекция базы, как и доски: пересборка собирает его заново.
  */
 
 export const LEADERBOARD_STORE = Symbol("LEADERBOARD_STORE");
@@ -35,28 +50,40 @@ export const FULL_ONLY: readonly Board[] = ["full"];
 
 export interface LeaderboardEntry {
   accountId: string;
-  survivalSec: number;
+  /** очки эффективности лучшего забега */
+  score: number;
+  /** у аккаунта засчитана победа над стражем на этой сложности; поля нет — не засчитана */
+  rubezh?: true;
 }
 
 export interface LeaderboardStore {
-  /** Учесть забег на этих досках. `improved` — новое лучшее время игрока хотя бы на одной. */
-  submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[]): Promise<{ improved: boolean }>;
+  /**
+   * Учесть забег на этих досках. `improved` — новый лучший счёт игрока хотя бы
+   * на одной. `rubezh` — забег засчитан победой над стражем: аккаунт попадает в
+   * набор отметки; `false` набор не трогает, отметку снимает только пересборка
+   * или `setRubezh`.
+   */
+  submit(difficulty: Difficulty, accountId: string, score: number, boards: readonly Board[], rubezh?: boolean): Promise<{ improved: boolean }>;
   /** Место с единицы; `null` — игрока в этой доске нет. */
   rank(difficulty: Difficulty, accountId: string, board: Board): Promise<number | null>;
   best(difficulty: Difficulty, accountId: string, board: Board): Promise<number | null>;
   top(difficulty: Difficulty, limit: number, board: Board): Promise<LeaderboardEntry[]>;
   count(difficulty: Difficulty, board: Board): Promise<number>;
-  /** Сколько игроков в доске с временем строго больше — место того, кого в доске нет. */
-  countAbove(difficulty: Difficulty, survivalSec: number, board: Board): Promise<number>;
+  /** Сколько игроков в доске со счётом строго больше — место того, кого в доске нет. */
+  countAbove(difficulty: Difficulty, score: number, board: Board): Promise<number>;
   /**
-   * Поставить ровно это время, даже если оно хуже, — после того как
+   * Поставить ровно этот счёт, даже если он хуже, — после того как
    * модератор снял забег с рейтинга; `null` — убрать из доски сложности.
    */
-  set(difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[]): Promise<void>;
+  set(difficulty: Difficulty, accountId: string, score: number | null, boards: readonly Board[]): Promise<void>;
   /** Убрать аккаунты из этих досок всех сложностей — ограничения рейтинга; возвращает, сколько мест снято. */
   remove(accountIds: readonly string[], boards: readonly Board[]): Promise<number>;
   /** Заменить проекцию одной доски целиком — пересборка из базы. */
   replace(difficulty: Difficulty, board: Board, entries: readonly LeaderboardEntry[]): Promise<void>;
+  /** Заменить набор победителей сложности целиком — пересборка из базы. */
+  replaceRubezh(difficulty: Difficulty, accountIds: readonly string[]): Promise<void>;
+  /** Поставить или снять отметку одному аккаунту — после того как модератор снял забег с рейтинга. */
+  setRubezh(difficulty: Difficulty, accountId: string, won: boolean): Promise<void>;
 }
 
 /** Сколько членов пишется одной командой при пересборке. */
@@ -66,11 +93,15 @@ const REBUILD_BATCH = 1_000;
 export class RedisLeaderboardStore implements LeaderboardStore {
   constructor(@Inject(REDIS) private readonly redis: Redis) {}
 
-  async submit(difficulty: Difficulty, accountId: string, survivalSec: number, boards: readonly Board[]): Promise<{ improved: boolean }> {
+  async submit(difficulty: Difficulty, accountId: string, score: number, boards: readonly Board[], rubezh = false): Promise<{ improved: boolean }> {
     // CH — число изменённых членов: 1, если игрок новый на доске или время выросло.
-    // Все доски — одной транзакцией MULTI: запись не остаётся наполовину.
-    const changed = await this.write(boards, (pipeline, board) => pipeline.zadd(key(difficulty, board), "GT", "CH", survivalSec, accountId));
-    return { improved: changed.some((count) => count > 0) };
+    // Все доски и отметка рубежа — одной транзакцией MULTI: запись не остаётся наполовину.
+    const writes: readonly (Board | "rubezh")[] = rubezh ? [...boards, "rubezh"] : boards;
+    const changed = await this.write(writes, (pipeline, place) =>
+      place === "rubezh" ? pipeline.sadd(rubezhKey(difficulty), accountId) : pipeline.zadd(key(difficulty, place), "GT", "CH", score, accountId),
+    );
+    // Отметка в `improved` не входит: «новый рекорд» — это время.
+    return { improved: changed.slice(0, boards.length).some((count) => count > 0) };
   }
 
   async rank(difficulty: Difficulty, accountId: string, board: Board): Promise<number | null> {
@@ -87,21 +118,24 @@ export class RedisLeaderboardStore implements LeaderboardStore {
     const flat = await this.redis.zrevrange(key(difficulty, board), 0, limit - 1, "WITHSCORES");
     const entries: LeaderboardEntry[] = [];
     for (let index = 0; index + 1 < flat.length; index += 2) {
-      entries.push({ accountId: flat[index] ?? "", survivalSec: Number(flat[index + 1]) });
+      entries.push({ accountId: flat[index] ?? "", score: Number(flat[index + 1]) });
     }
-    return entries;
+    if (entries.length === 0) return entries;
+    // Один запрос на всю страницу, а не по запросу на строку.
+    const won = await this.redis.smismember(rubezhKey(difficulty), ...entries.map((entry) => entry.accountId));
+    return entries.map((entry, index) => (won[index] === 1 ? { ...entry, rubezh: true as const } : entry));
   }
 
   async count(difficulty: Difficulty, board: Board): Promise<number> {
     return await this.redis.zcard(key(difficulty, board));
   }
 
-  async countAbove(difficulty: Difficulty, survivalSec: number, board: Board): Promise<number> {
-    return await this.redis.zcount(key(difficulty, board), `(${String(survivalSec)}`, "+inf");
+  async countAbove(difficulty: Difficulty, score: number, board: Board): Promise<number> {
+    return await this.redis.zcount(key(difficulty, board), `(${String(score)}`, "+inf");
   }
 
-  async set(difficulty: Difficulty, accountId: string, survivalSec: number | null, boards: readonly Board[]): Promise<void> {
-    await this.write(boards, (pipeline, board) => (survivalSec === null ? pipeline.zrem(key(difficulty, board), accountId) : pipeline.zadd(key(difficulty, board), survivalSec, accountId)));
+  async set(difficulty: Difficulty, accountId: string, score: number | null, boards: readonly Board[]): Promise<void> {
+    await this.write(boards, (pipeline, board) => (score === null ? pipeline.zrem(key(difficulty, board), accountId) : pipeline.zadd(key(difficulty, board), score, accountId)));
   }
 
   async remove(accountIds: readonly string[], boards: readonly Board[]): Promise<number> {
@@ -118,7 +152,7 @@ export class RedisLeaderboardStore implements LeaderboardStore {
     const temporary = `${target}:rebuild`;
     await this.redis.del(temporary);
     for (let start = 0; start < entries.length; start += REBUILD_BATCH) {
-      const batch = entries.slice(start, start + REBUILD_BATCH).flatMap((entry) => [entry.survivalSec, entry.accountId]);
+      const batch = entries.slice(start, start + REBUILD_BATCH).flatMap((entry) => [entry.score, entry.accountId]);
       await this.redis.zadd(temporary, ...batch);
     }
     if (entries.length === 0) {
@@ -126,6 +160,26 @@ export class RedisLeaderboardStore implements LeaderboardStore {
       return;
     }
     await this.redis.rename(temporary, target);
+  }
+
+  async replaceRubezh(difficulty: Difficulty, accountIds: readonly string[]): Promise<void> {
+    // Как и доски: собираем во временный ключ и подменяем одной командой.
+    const target = rubezhKey(difficulty);
+    const temporary = `${target}:rebuild`;
+    await this.redis.del(temporary);
+    for (let start = 0; start < accountIds.length; start += REBUILD_BATCH) {
+      await this.redis.sadd(temporary, ...accountIds.slice(start, start + REBUILD_BATCH));
+    }
+    if (accountIds.length === 0) {
+      await this.redis.del(target);
+      return;
+    }
+    await this.redis.rename(temporary, target);
+  }
+
+  async setRubezh(difficulty: Difficulty, accountId: string, won: boolean): Promise<void> {
+    if (won) await this.redis.sadd(rubezhKey(difficulty), accountId);
+    else await this.redis.srem(rubezhKey(difficulty), accountId);
   }
 
   /** Команда на каждый элемент списка одной транзакцией MULTI; числа ответов — в порядке списка. */
@@ -140,7 +194,12 @@ export class RedisLeaderboardStore implements LeaderboardStore {
   }
 }
 
-/** Общая доска — прежний ключ: все остальные игроки читают её без перехода. */
+/** Набор победителей над стражем: один на сложность, общий для обеих досок. */
+function rubezhKey(difficulty: Difficulty): string {
+  return `lb:rubezh:${difficulty}`;
+}
+
+/** Ключ доски по очкам (T-0294): приставка `pts:` отделяет её от прежних досок по времени. */
 function key(difficulty: Difficulty, board: Board): string {
-  return board === "full" ? `runs:leaderboard:full:${difficulty}` : `runs:leaderboard:${difficulty}`;
+  return board === "full" ? `runs:leaderboard:pts:full:${difficulty}` : `runs:leaderboard:pts:${difficulty}`;
 }

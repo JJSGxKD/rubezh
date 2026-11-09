@@ -12,8 +12,9 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["src"],
+  // JSON с таблицей ожидаемого для очков эффективности (src/modules/rating) едет в сборку вместе с кодом.
+  "include": ["src", "src/**/*.json"],
   // Ядро курсов бэкенд берёт собранным: `tsc -b` соберёт пакет первым, а
   // типы придут из его `dist` (docs/35-stage4-plan.md, §3.12).
-  "references": [{ "path": "../../packages/fx" }]
+  "references": [{ "path": "../../packages/fx" }, { "path": "../../packages/proxy-kit" }]
 }

@@ -2,10 +2,12 @@ import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
+import { sweepClickLaunches } from "./click-launch-sweep.js";
 import { CONVERSION_WINDOWS, PAYMENT_CURRENCY, isConversionGoal, type ConversionGoal } from "./conversion-rules.js";
+import { purgeDirectParams, sweepDirectLaunches } from "./direct-launch-sweep.js";
 import { DESTINATION_KINDS, destinationOf, type DestinationKind } from "./destinations/destination.js";
 import { TARGETS_CTE } from "./destinations/destination-targets.js";
-import { EVENT_GOAL, KNOWN_GOALS, eventOfGoal, type PostbackEvent } from "./postback-events.js";
+import { KNOWN_GOALS, eventOfGoal, type PostbackEvent } from "./postback-events.js";
 
 /**
  * Конверсии закупленной рекламы (`ad_conversion`, WP43).
@@ -19,6 +21,11 @@ import { EVENT_GOAL, KNOWN_GOALS, eventOfGoal, type PostbackEvent } from "./post
  *
  * Игрок — **новый аккаунт**: создан после клика. Старый игрок, заново
  * открывший игру по рекламе, сети не отдаётся — его привела не она.
+ *
+ * Запросы прохода живут в двух файлах: клики переходника — `click-launch-sweep.ts`.
+ * Запуск по прямой ссылке на Mini App клика не оставляет: его конверсии
+ * выводит `direct-launch-sweep.ts` из первого касания `link`, а метки сети
+ * хранит сама строка.
  *
  * Кому и какие события отдавать, решает не этот файл, а набор
  * `destinations/destination-targets.ts` (T-0069): запросы прохода берут из
@@ -39,6 +46,8 @@ export interface DueConversion {
   telegramId: string | null;
   /** оплата событий-покупок; у остальных — `null` */
   purchase: { amount: number; currency: string } | null;
+  /** адрес постбэка с макросами: у ссылки, а если его нет — у партнёра-владельца; `null` — адреса нет (T-0070) */
+  postbackUrl: string | null;
 }
 
 export interface ConversionRow {
@@ -73,9 +82,19 @@ export type ConversionSummary = Record<ConversionGoal, GoalCounts>;
 
 export const CONVERSIONS_REPOSITORY = Symbol("CONVERSIONS_REPOSITORY");
 
+/**
+ * Сколько строк дописал проход. `returns` — возвраты на следующий день: он необязателен, чтобы заглушки репозитория,
+ * написанные до событий (T-0071), не знали о нём; нет поля — возвратов ноль.
+ */
+export interface SweepFound {
+  registrations: number;
+  purchases: number;
+  returns?: number;
+}
+
 export interface ConversionsRepository {
-  /** Дописать регистрации и покупки, которых ещё нет. Сколько дописано. */
-  sweep(now: Date): Promise<{ registrations: number; purchases: number }>;
+  /** Дописать регистрации, покупки и возвраты, которых ещё нет. Сколько дописано. */
+  sweep(now: Date): Promise<SweepFound>;
   due(now: Date, limit: number): Promise<DueConversion[]>;
   markSent(conversionId: string, httpStatus: number, now: Date): Promise<void>;
   /** Неудача: повторить в `nextAt` или, если `null`, — больше не пробовать. */
@@ -84,7 +103,7 @@ export interface ConversionsRepository {
   defer(conversionId: string, nextAt: Date, reason: string): Promise<void>;
   /** Не отправлять вовсе — сети не узнать, чья это конверсия. */
   skip(conversionId: string, reason: string): Promise<void>;
-  /** Обнулить макросы кликов старше окна. Сколько обнулено. */
+  /** Обнулить макросы кликов и метки прямых запусков старше окна. Сколько обнулено. */
   purgeParams(now: Date, limit: number): Promise<number>;
   /** Счёт по ссылкам и целям назначения; строки других назначений в него не попадают. */
   summaries(linkCodes: readonly string[], destination?: DestinationKind): Promise<Map<string, ConversionSummary>>;
@@ -113,83 +132,11 @@ export class PrismaConversionsRepository implements ConversionsRepository {
     return TARGETS_CTE;
   }
 
-  async sweep(now: Date): Promise<{ registrations: number; purchases: number }> {
-    const { registrationDays, purchaseDays, purchaseSettleMin, minRunSec } = CONVERSION_WINDOWS;
+  async sweep(now: Date): Promise<SweepFound> {
     const targets = this.targets();
-    const registration: PostbackEvent = "registration";
-    const first: PostbackEvent = "purchase_first";
-    const repeat: PostbackEvent = "purchase_repeat";
-    // Кандидаты — по первому касанию за окно: индекс `(first_start_kind, first_at)`.
-    // Аккаунт команды конверсией не становится: свои проверки сети не нужны —
-    // строка пишется пропущенной, отправить её можно руками. В `network` —
-    // имя назначения: колонка обязательна и нужна коду прошлого релиза.
-    const registrations = await this.prisma.$executeRaw`
-      WITH ${targets}
-      INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, status, reason, next_attempt_at, created_at)
-      SELECT gen_random_uuid(), t.destination, t.destination, l.code, c.click_id, q.account_id, ${EVENT_GOAL.registration}::smallint,
-             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
-             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'team' END,
-             ${now}, ${now}
-      FROM targets t
-      JOIN link l ON l.code = t.link_code
-      JOIN link_click c ON c.link_code = l.code
-      JOIN acquisition q ON q.first_start_ref = c.click_id
-      JOIN account a ON a.account_id = q.account_id AND a.created_at >= c.at - interval '1 minute'
-      WHERE q.first_start_kind = 'click'
-        AND q.first_at > ${now}::timestamptz - make_interval(days => ${registrationDays + 1})
-        AND ${registration}::text = ANY(t.events)
-        AND c.at >= t.since
-        AND (
-          l.registration_on = 'launch'
-          OR EXISTS (
-            SELECT 1 FROM run r
-            WHERE r.account_id = q.account_id
-              AND r.finished_at IS NOT NULL
-              AND r.finished_at <= c.at + make_interval(days => ${registrationDays})
-              AND r.cheats = false
-              AND r.survival_sec >= ${minRunSec}
-              AND (r.verdict IS NULL OR r.verdict <> 'rejected')
-          )
-        )
-      ON CONFLICT DO NOTHING`;
-
-    // Покупки — настоящие, не возвращённые, отлежавшиеся. Номер покупки —
-    // среди таких же по времени оплаты: первая — цель 2, остальные — 3. Номер
-    // считается по всем оплатам аккаунта, а не по назначению: «первая» для
-    // назначения без повторных покупок не должна стать второй оплатой.
-    const purchases = await this.prisma.$executeRaw`
-      WITH ${targets},
-      attributed AS (
-        SELECT q.account_id, c.click_id, c.at AS click_at, l.code AS link_code, t.destination, t.events
-        FROM targets t
-        JOIN link l ON l.code = t.link_code
-        JOIN link_click c ON c.link_code = l.code
-        JOIN acquisition q ON q.first_start_ref = c.click_id
-        JOIN account a ON a.account_id = q.account_id AND a.created_at >= c.at - interval '1 minute'
-        WHERE q.first_start_kind = 'click'
-          AND q.first_at > ${now}::timestamptz - make_interval(days => ${purchaseDays + 1})
-          AND c.at >= t.since
-      ),
-      paid AS (
-        SELECT p.purchase_id, p.account_id, p.paid_at,
-               row_number() OVER (PARTITION BY p.account_id ORDER BY p.paid_at, p.purchase_id) AS n
-        FROM purchase p
-        WHERE p.account_id IN (SELECT account_id FROM attributed)
-          AND p.mode = 'live' AND p.paid_at IS NOT NULL AND p.status = 'paid' AND p.refund_requested_at IS NULL
-      )
-      INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, purchase_id, status, reason, next_attempt_at, created_at)
-      SELECT gen_random_uuid(), t.destination, t.destination, t.link_code, t.click_id, t.account_id,
-             (CASE WHEN paid.n = 1 THEN ${EVENT_GOAL.purchase_first} ELSE ${EVENT_GOAL.purchase_repeat} END)::smallint, paid.purchase_id,
-             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
-             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id) THEN 'team' END,
-             ${now}, ${now}
-      FROM paid
-      JOIN attributed t ON t.account_id = paid.account_id
-      WHERE paid.paid_at <= t.click_at + make_interval(days => ${purchaseDays})
-        AND paid.paid_at <= ${now}::timestamptz - make_interval(mins => ${purchaseSettleMin})
-        AND (CASE WHEN paid.n = 1 THEN ${first}::text ELSE ${repeat}::text END) = ANY(t.events)
-      ON CONFLICT DO NOTHING`;
-    return { registrations, purchases };
+    const clicks = await sweepClickLaunches(this.prisma, now, targets);
+    const direct = await sweepDirectLaunches(this.prisma, now, targets);
+    return { registrations: clicks.registrations + direct.registrations, purchases: clicks.purchases + direct.purchases, returns: clicks.returns };
   }
 
   async due(now: Date, limit: number): Promise<DueConversion[]> {
@@ -197,13 +144,26 @@ export class PrismaConversionsRepository implements ConversionsRepository {
     // откате), в очередь не попадают: иначе одна такая строка останавливала бы
     // проход, а читать её как регистрацию нельзя.
     const rows = await this.prisma.$queryRaw<
-      { conversion_id: string; destination: string; goal: number; attempts: number; params: unknown; platform: string; platform_user_id: string; charged_stars: number | null }[]
+      {
+        conversion_id: string;
+        destination: string;
+        goal: number;
+        attempts: number;
+        params: unknown;
+        platform: string;
+        platform_user_id: string;
+        charged_stars: number | null;
+        postback_url: string | null;
+      }[]
     >`
-      SELECT v.conversion_id, v.destination, v.goal, v.attempts, c.network_params AS params, a.platform, a.platform_user_id, p.charged_stars
+      SELECT v.conversion_id, v.destination, v.goal, v.attempts, COALESCE(c.network_params, v.network_params) AS params, a.platform, a.platform_user_id, p.charged_stars,
+             COALESCE(l.postback_url, pt.postback_url) AS postback_url
       FROM ad_conversion v
-      JOIN link_click c ON c.click_id = v.click_id
+      LEFT JOIN link_click c ON c.click_id = v.click_id
       JOIN account a ON a.account_id = v.account_id
       LEFT JOIN purchase p ON p.purchase_id = v.purchase_id
+      LEFT JOIN link l ON l.code = v.link_code
+      LEFT JOIN partner pt ON pt.partner_id = l.partner_id
       WHERE v.status = 'pending' AND v.next_attempt_at <= ${now}
         AND v.goal IN (${Prisma.join(KNOWN_GOALS)})
         AND v.destination IN (${Prisma.join(DESTINATION_KINDS)})
@@ -217,6 +177,7 @@ export class PrismaConversionsRepository implements ConversionsRepository {
       params: paramsSchema.parse(row.params),
       telegramId: row.platform === "telegram" ? row.platform_user_id : null,
       purchase: row.charged_stars === null ? null : { amount: row.charged_stars, currency: PAYMENT_CURRENCY },
+      postbackUrl: row.postback_url,
     }));
   }
 
@@ -245,13 +206,15 @@ export class PrismaConversionsRepository implements ConversionsRepository {
   }
 
   async purgeParams(now: Date, limit: number): Promise<number> {
-    return await this.prisma.$executeRaw`
+    const clicks = await this.prisma.$executeRaw`
       UPDATE link_click SET network_params = NULL
       WHERE click_id IN (
         SELECT click_id FROM link_click
         WHERE network_params IS NOT NULL AND at < ${now}::timestamptz - make_interval(days => ${CONVERSION_WINDOWS.paramsKeepDays})
         LIMIT ${limit}
       )`;
+    const conversions = await purgeDirectParams(this.prisma, now, limit);
+    return clicks + conversions;
   }
 
   async summaries(linkCodes: readonly string[], destination: DestinationKind = "adsgram"): Promise<Map<string, ConversionSummary>> {

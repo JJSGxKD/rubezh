@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, Swords } from "lucide-react";
+import { Crosshair, Flame, History, Hourglass, Lightbulb, Lock, Shuffle, ShieldAlert, Swords } from "lucide-react";
 import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { PASSIVE_CATEGORIES, type WeaponDef } from "@bh/shared-types";
 import { DROPS, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN } from "@bh/core-game";
@@ -28,6 +28,7 @@ import {
   passiveCategories,
   passiveRange,
   regularEnemies,
+  rubezhGuide,
   speedClass,
   firstLevelWeapons,
   levelWeapons,
@@ -105,9 +106,21 @@ function Basics(): ReactNode {
     slots: LOADOUT_LIMITS.passives[category],
   }));
 
+  const rubezh = rubezhGuide();
+
   return (
     <>
       <Topic index={0} icon={<Hourglass size={20} />} title={t("guide.basics.goal.title")} text={t("guide.basics.goal.text")} />
+
+      {/* Рубеж: страж, время и множитель — из контента (T-0124). */}
+      {rubezh === null ? null : (
+        <Topic
+          index={1}
+          icon={<ShieldAlert size={20} />}
+          title={t("guide.basics.rubezh.title")}
+          text={t("guide.basics.rubezh.text", { time: formatDuration(rubezh.atSec), guard: t(`enemy.${rubezh.guard.id}.name`), mul: `×${String(rubezh.rewardMul)}` })}
+        />
+      )}
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>
         <div className="mx-auto max-w-[300px]">

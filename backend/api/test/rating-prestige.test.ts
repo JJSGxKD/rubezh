@@ -14,7 +14,7 @@ import { RunsService } from "../src/modules/runs/runs.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 
 /**
  * Престиж в строках рейтинга (tasks/T-0107, docs/39-retention-mechanics.md К1).
@@ -60,7 +60,7 @@ beforeEach(() => {
   board = new MemoryLeaderboardStore();
   const rating = ratingRestrictions(runs, board);
   const roles = new RolesService(config(), new MemoryRolesRepository(), accounts);
-  service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
+  service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
   prestige = new RunPrestige();
   view = new RunsViewService(runs, board, new RunExtras(), rating.rating, prestige);
 });

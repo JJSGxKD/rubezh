@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Redis } from "ioredis";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { createPrisma } from "../src/infra/database.js";
@@ -9,6 +9,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { rebuildForRestrictions, rebuildLeaderboard } from "../src/modules/runs/leaderboard-rebuild.js";
 import { ALL_BOARDS, COMMON_ONLY, RedisLeaderboardStore } from "../src/modules/runs/leaderboard.store.js";
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
+import { secondsScore } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 
 /**
@@ -65,6 +66,10 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
       ratingRestricted: null,
       verdict: "ok",
       verdictReasons: [],
+      rubezhReached: false,
+      rubezhClearedSec: null,
+      // Доска ранжирует по очкам (T-0294): в тестах очки равны секундам, если забегу не заданы свои.
+      score: secondsScore(patch.survivalSec ?? 120),
       ...patch,
     };
   }
@@ -168,13 +173,13 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     await runs.finish(finished(randomUUID(), slow, { difficulty: "hard", survivalSec: 100 }));
     await runs.finish(finished(randomUUID(), fast, { difficulty: "hard", survivalSec: 500 }));
     // Мусор в проекции, которого в базе нет, — пересборка его уберёт.
-    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:hard", 99_999, "призрак");
 
     await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
 
     expect(await board.rank("hard", "призрак", "common")).toBeNull();
     expect((await board.rank("hard", fast, "common")) ?? 0).toBeLessThan((await board.rank("hard", slow, "common")) ?? 0);
-    expect(await redis.exists("runs:leaderboard:hard:rebuild")).toBe(0);
+    expect(await redis.exists("runs:leaderboard:pts:hard:rebuild")).toBe(0);
   });
 
   it("ограничение рейтинга: лучший для возврата — только рейтинговые, для тени — и сданные молча; база держит пометку только у нерейтингового", async () => {
@@ -246,14 +251,14 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
     expect(await board.submit("normal", onlyFull, 300, ["full"])).toEqual({ improved: true });
     // Общего ключа не появилось: пишется только в полную.
-    expect(await redis.exists("runs:leaderboard:normal")).toBe(0);
-    expect(await redis.zscore("runs:leaderboard:full:normal", onlyFull)).toBe("300");
+    expect(await redis.exists("runs:leaderboard:pts:normal")).toBe(0);
+    expect(await redis.zscore("runs:leaderboard:pts:full:normal", onlyFull)).toBe("300");
     expect(await board.best("normal", onlyFull, "common")).toBeNull();
 
     expect(await board.submit("normal", both, 200, ALL_BOARDS)).toEqual({ improved: true });
     expect(await board.best("normal", both, "full")).toBe(200);
     expect(await board.best("normal", both, "common")).toBe(200);
-    expect(await redis.zscore("runs:leaderboard:normal", both)).toBe("200");
+    expect(await redis.zscore("runs:leaderboard:pts:normal", both)).toBe("200");
 
     // GT на каждой доске: худшее и равное время ничего не меняют.
     expect(await board.submit("normal", both, 150, ALL_BOARDS)).toEqual({ improved: false });
@@ -283,11 +288,11 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(await board.rank("hard", c, "full")).toBeNull();
     expect(await board.countAbove("hard", 150, "full")).toBe(2);
     expect(await board.countAbove("hard", 150, "common")).toBe(1);
-    expect((await board.top("hard", 10, "full")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+    expect((await board.top("hard", 10, "full")).map((entry) => [entry.accountId, entry.score])).toEqual([
       [a, 400],
       [b, 200],
     ]);
-    expect((await board.top("hard", 10, "common")).map((entry) => [entry.accountId, entry.survivalSec])).toEqual([
+    expect((await board.top("hard", 10, "common")).map((entry) => [entry.accountId, entry.score])).toEqual([
       [b, 200],
       [c, 100],
     ]);
@@ -333,12 +338,12 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const [a, b] = [await account(), await account()];
     await board.submit("normal", a, 100, ALL_BOARDS);
 
-    await board.replace("normal", "full", [{ accountId: b, survivalSec: 900 }]);
+    await board.replace("normal", "full", [{ accountId: b, score: 900 }]);
 
     expect((await board.top("normal", 10, "full")).map((entry) => entry.accountId)).toEqual([b]);
     expect((await board.top("normal", 10, "common")).map((entry) => entry.accountId)).toEqual([a]);
-    expect(await redis.keys("runs:leaderboard:*:rebuild")).toEqual([]);
-    expect(await redis.keys("runs:leaderboard:rebuild*")).toEqual([]);
+    expect(await redis.keys("runs:leaderboard:pts:*:rebuild")).toEqual([]);
+    expect(await redis.keys("runs:leaderboard:pts:rebuild*")).toEqual([]);
 
     await board.replace("normal", "common", []);
     expect(await board.count("normal", "common")).toBe(0);
@@ -350,8 +355,8 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     const [closed, separate, plain] = [await account("Закрытый"), await account("Отдельная"), await account("Обычный")];
     for (const id of [closed, separate, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 640 }));
     // Мусор, которого в базе нет, уходит из обеих проекций.
-    await redis.zadd("runs:leaderboard:hard", 99_999, "призрак");
-    await redis.zadd("runs:leaderboard:full:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:hard", 99_999, "призрак");
+    await redis.zadd("runs:leaderboard:pts:full:hard", 99_999, "призрак");
 
     const counts = await rebuildLeaderboard(runs, board, new Set([closed]), new Set([separate]), null);
 
@@ -433,5 +438,101 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     // Запись прошлой сборки: ключей счётчиков в jsonb нет вовсе.
     await prisma.run.update({ where: { runId }, data: { details: { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [] } } });
     expect(await runs.detail(owner, runId)).toMatchObject({ details: { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null } });
+  });
+
+  it("победа над стражем (T-0121): колонки пишутся и читаются, обычный забег — false и null", async () => {
+    const owner = await account();
+    const [won, plain] = [randomUUID(), randomUUID()];
+    await runs.finish(finished(won, owner, { survivalSec: 700, rubezhReached: true, rubezhClearedSec: 650 }));
+    await runs.finish(finished(plain, owner));
+
+    expect(await runs.find(won)).toMatchObject({ rubezhReached: true, rubezhClearedSec: 650 });
+    expect(await runs.find(plain)).toMatchObject({ rubezhReached: false, rubezhClearedSec: null });
+    expect(await prisma.run.findUnique({ where: { runId: won }, select: { rubezhReached: true, rubezhClearedSec: true } })).toEqual({ rubezhReached: true, rubezhClearedSec: 650 });
+  });
+
+  it("победители рубежа: рейтинговый забег с вердиктом ok и засчитанной победой; подозрение, нерейтинговый и сложность без доски не считаются", async () => {
+    const [winner, suspicious, unranked, reachedOnly, easy] = [await account(), await account(), await account(), await account(), await account()];
+    const win = { rubezhReached: true, rubezhClearedSec: 650, survivalSec: 700 };
+    await runs.finish(finished(randomUUID(), winner, win));
+    await runs.finish(finished(randomUUID(), suspicious, { ...win, verdict: "suspicious", verdictReasons: ["rubezh_implausible"], ranked: false }));
+    await runs.finish(finished(randomUUID(), unranked, { ...win, ranked: false }));
+    await runs.finish(finished(randomUUID(), reachedOnly, { rubezhReached: true, survivalSec: 700 }));
+    await runs.finish(finished(randomUUID(), easy, { ...win, difficulty: "easy" }));
+
+    const winners = await runs.rubezhWinners("hard", null);
+    expect(winners).toContain(winner);
+    for (const other of [suspicious, unranked, reachedOnly, easy]) expect(winners).not.toContain(other);
+    expect(await runs.rubezhWinners("hard", null, [winner, suspicious])).toEqual([winner]);
+    expect(await runs.rubezhWinners("easy", null)).toEqual([]);
+    expect(await runs.rubezhWinners("hard", null, [])).toEqual([]);
+  });
+
+  it("победители рубежа: рейтинговый забег с читами победой не считается, честная победа того же аккаунта — считается", async () => {
+    const [cheater, mixed] = [await account(), await account()];
+    const win = { rubezhReached: true, rubezhClearedSec: 650, survivalSec: 700 };
+    // Читы в рейтинг пускает право владельца и админа (`countInRating`): забег рейтинговый, вердикт ok, победы всё равно нет.
+    await runs.finish(finished(randomUUID(), cheater, { ...win, cheats: true }));
+    await runs.finish(finished(randomUUID(), mixed, { ...win, cheats: true }));
+    await runs.finish(finished(randomUUID(), mixed, { ...win, cheats: false }));
+
+    const winners = await runs.rubezhWinners("hard", null);
+    expect(winners).not.toContain(cheater);
+    expect(winners).toContain(mixed);
+    expect(await runs.rubezhWinners("hard", null, [cheater])).toEqual([]);
+    expect(await runs.rubezhWinners("hard", null, [cheater, mixed])).toEqual([mixed]);
+  });
+
+  it("отметка в доске: запись вместе с submit, страница читает флаги одним SMISMEMBER", async () => {
+    const [winner, plain] = [await account(), await account()];
+    await board.submit("hard", winner, 700, ALL_BOARDS, true);
+    await board.submit("hard", plain, 650, ALL_BOARDS);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+    expect(await redis.sismember("lb:rubezh:hard", plain)).toBe(0);
+
+    const spy = vi.spyOn(redis, "smismember");
+    const top = await board.top("hard", 10_000, "common");
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    expect(top.find((entry) => entry.accountId === winner)).toMatchObject({ rubezh: true });
+    expect(top.find((entry) => entry.accountId === plain)).not.toHaveProperty("rubezh");
+    // Повторная запись без победы набор не сбрасывает: отметка живёт, пока её не снимет пересборка.
+    await board.submit("hard", winner, 710, ALL_BOARDS);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+  });
+
+  it("пустая доска: SMISMEMBER не зовётся", async () => {
+    const spy = vi.spyOn(redis, "smismember");
+    expect(await board.top("easy", 10, "common")).toEqual([]);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it("пересборка восстанавливает набор победителей по базе и убирает лишних", async () => {
+    const [winner, plain] = [await account(), await account()];
+    await runs.finish(finished(randomUUID(), winner, { survivalSec: 900, rubezhReached: true, rubezhClearedSec: 700 }));
+    await runs.finish(finished(randomUUID(), plain, { survivalSec: 800 }));
+    await redis.del("lb:rubezh:hard");
+    await redis.sadd("lb:rubezh:hard", plain, "призрак");
+
+    await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
+
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(1);
+    expect(await redis.sismember("lb:rubezh:hard", plain)).toBe(0);
+    expect(await redis.sismember("lb:rubezh:hard", "призрак")).toBe(0);
+    expect(await redis.exists("lb:rubezh:hard:rebuild")).toBe(0);
+    // Закрытый рейтинг: победитель в доски не попал — и в набор тоже.
+    await rebuildLeaderboard(runs, board, new Set([winner]), new Set(), null);
+    expect(await redis.sismember("lb:rubezh:hard", winner)).toBe(0);
+  });
+
+  it("пересборка не ставит отметку за победу с читами, даже если забег рейтинговый и самый длинный", async () => {
+    const cheater = await account();
+    await runs.finish(finished(randomUUID(), cheater, { survivalSec: 950, cheats: true, rubezhReached: true, rubezhClearedSec: 700 }));
+    await redis.del("lb:rubezh:hard");
+
+    await rebuildLeaderboard(runs, board, new Set(), new Set(), null);
+
+    expect(await redis.sismember("lb:rubezh:hard", cheater)).toBe(0);
   });
 });

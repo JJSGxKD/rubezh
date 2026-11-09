@@ -26,6 +26,7 @@ export function createRunEngine(): RunEngine {
         unitScale: host.pixelRatio,
         mapId: options.mapId,
         difficultyId: options.difficultyId,
+        mode: options.mode,
         ...(options.startingWeaponId === ""
           ? {}
           : { startingWeaponId: options.startingWeaponId }),
@@ -102,6 +103,9 @@ export function createRunEngine(): RunEngine {
         },
         inspect() {
           return scene()?.inspect() ?? null;
+        },
+        devRenderStats() {
+          return scene()?.devRenderStats() ?? null;
         },
         setDev(dev) {
           scene()?.setDev(dev);

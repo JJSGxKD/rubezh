@@ -13,7 +13,6 @@ import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
 import { SecretsRenderer } from "./secrets-look";
-import { projectileLook, type ProjectileLook } from "./projectile-look";
 import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { artFlashStart, NO_FLASH } from "./hit-flash";
@@ -28,7 +27,6 @@ import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
-const lookScratch: ProjectileLook = { texture: "", rotation: 0, scaleX: 1, scaleY: 1 };
 /** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
 const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
@@ -164,9 +162,6 @@ export class WorldRenderer {
 
     ensureShapeTexture(scene, "bh-player", world.config.player.radius, WORLD_COLORS.player, "player", { shadow: true });
     ensureShapeTexture(scene, "bh-projectile", world.config.player.projectileRadius, WORLD_COLORS.projectile, "circle");
-    // Снаряд врага крупнее и другой формы: он должен читаться как летящая
-    // угроза, а не как мелкий враг, на которого можно бежать.
-    ensureShapeTexture(scene, "bh-projectile-enemy", world.config.player.projectileRadius * 1.35, WORLD_COLORS.enemyProjectile, "bolt");
     ensureShapeTexture(scene, "bh-blast", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.blast, "ring");
     ensureShapeTexture(scene, "bh-heal", BLAST_TEXTURE_UNITS * scale, WORLD_COLORS.heal, "ring");
     ensureShapeTexture(scene, "bh-magnet", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.magnetWave, "wave");
@@ -489,19 +484,11 @@ export class WorldRenderer {
         if (sprite.visible) sprite.setVisible(false);
         continue;
       }
-      const look = projectileLook(projectiles.fromPlayer[p] === 1, projectiles.vx[p], projectiles.vy[p], lookScratch);
-      // Спрайты переиспользуются, поэтому текстура меняется только при смене вида:
-      // setTexture на каждый снаряд каждый кадр — лишняя работа.
-      if (sprite.texture.key !== look.texture) sprite.setTexture(look.texture);
       sprite.setVisible(true);
       sprite.setPosition(
         lerp(projectiles.prevX[p], projectiles.x[p], t),
         lerp(projectiles.prevY[p], projectiles.y[p], t),
       );
-      // Поворот и масштаб — всегда: свой снаряд в слоте, где летел вражеский,
-      // не должен остаться повёрнутым и сплюснутым.
-      sprite.setRotation(look.rotation);
-      sprite.setScale(look.scaleX, look.scaleY);
     }
   }
 
@@ -587,9 +574,9 @@ export class WorldRenderer {
         this.startBlast(events.x[slot], events.y[slot], HEAL_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
-      if (kind === SIM_EVENT.shield) {
-        // Щит принял удар: кольцо от игрока вместо вспышки урона — видно, что
-        // спасло, и что щита больше нет.
+      if (kind === SIM_EVENT.shield || kind === SIM_EVENT.ward) {
+        // Щит или оберег принял удар: кольцо от игрока вместо вспышки урона — видно,
+        // что спасло. Оберег рисуется тем же знаком и под тем же переключателем эффектов.
         this.startBlast(events.x[slot], events.y[slot], SHIELD_RING_UNITS * scale, events.tick[slot], kind);
         continue;
       }
@@ -735,6 +722,7 @@ const BLAST_TEXTURE_BY_KIND: Partial<Record<number, string>> = {
   [SIM_EVENT.dynamite]: "bh-dynamite",
   [SIM_EVENT.freeze]: "bh-freeze",
   [SIM_EVENT.shield]: "bh-magnet",
+  [SIM_EVENT.ward]: "bh-magnet",
 };
 /** Радиус кольца сработавшего щита, игровые единицы. */
 const SHIELD_RING_UNITS = 60;

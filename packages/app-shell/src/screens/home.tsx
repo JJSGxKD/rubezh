@@ -6,6 +6,7 @@ import { botAccessSupported, shouldOfferBotAccess, useBotAccess } from "../state
 import { shouldAskFeedback, useFeedback } from "../state/feedback";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { homeFace, resolvePrologue, usePrologue, usePrologueOpen, type HomeSection } from "../state/prologue";
 import { PreRunSheetLazy, preloadScreens } from "../app/lazy-screens";
 import { preloadRunEngine, useRun } from "../state/run";
 import { useSavedRun, type SavedRun } from "../state/run-save";
@@ -24,7 +25,8 @@ const PRELOAD_DELAY_MS = 1500;
  * рекорд и друзья — и «Играть», которая открывает лист «Перед забегом»
  * (docs/27-design-system-and-app-shell.md §6,
  * docs/35-stage4-plan.md WP42). Карусель и виджеты — одним чанком после
- * первого кадра (`home-live.ts`): первой загрузке они не нужны.
+ * первого кадра (`home-live.ts`): первой загрузке они не нужны. Под кнопкой —
+ * строка ленты живых событий (Р114, `home-feed.tsx`).
  */
 export function LobbyScreen(): ReactNode {
   const navigation = useNavigation();
@@ -33,21 +35,52 @@ export function LobbyScreen(): ReactNode {
   const [confirmingNewRun, setConfirmingNewRun] = useState(false);
   const [preRunOpen, setPreRunOpen] = useState(false);
   const live = useHomeLive();
-  const offerBotAccess = useBotAccessOffer(runs, live);
+  // До победы в прологе главная — только «Играть» и строка под ней (T-0280): карусель, виджеты, гайдбук и просьбы ждут победы.
+  const open = usePrologueOpen();
+  const fresh = usePrologue((state) => state.fresh);
+  const face = homeFace({ open, fresh });
+  const [resolving, setResolving] = useState(false);
+  const offerBotAccess = useBotAccessOffer(runs, live) && face.sections;
   // Две просьбы на одном экране — навязчиво: пока зовём разрешить бота, отзыв ждёт.
   const feedbackSentAtRuns = useFeedback((state) => state.sentAtRuns);
-  const askFeedback = !offerBotAccess && shouldAskFeedback(runs, feedbackSentAtRuns);
+  const askFeedback = face.sections && !offerBotAccess && shouldAskFeedback(runs, feedbackSentAtRuns);
+  // Первый запуск без меню: пока пролог не пройден, «Играть» ведёт сразу в него, минуя лист «Перед забегом».
+  const play = (): void => {
+    if (resolving) return;
+    setResolving(true);
+    resolvePrologue().then(
+      (prologue) => {
+        setResolving(false);
+        if (!prologue) {
+          setPreRunOpen(true);
+          return;
+        }
+        useRun.getState().intend({ kind: "new", mode: "prologue" });
+        navigation.push("run");
+      },
+      () => {
+        setResolving(false);
+        setPreRunOpen(true);
+      },
+    );
+  };
   usePreloadEngine();
 
   return (
     <div className="relative h-full">
     <Screen
       footer={
-        saved === null ? (
-          <Button track="play" size="l" block glow cut shine onClick={() => setPreRunOpen(true)}>
-            <Play size={22} fill="currentColor" />
-            {t("lobby.play")}
-          </Button>
+        <>
+        {saved === null ? (
+          <div className="grid gap-1">
+            <Button track="play" size="l" block glow cut shine loading={resolving} onClick={play}>
+              <Play size={22} fill="currentColor" />
+              {t("lobby.play")}
+            </Button>
+            {face.line === null ? null : (
+              <p className="text-center text-xs text-text-muted">{t(face.line === "first" ? "lobby.prologue.first" : "lobby.prologue.next")}</p>
+            )}
+          </div>
         ) : (
           // Прерванный забег главнее нового: игрок, вернувшийся после звонка,
           // хочет доиграть, а не начинать с нуля.
@@ -69,22 +102,27 @@ export function LobbyScreen(): ReactNode {
               {t("lobby.newRun")}
             </Button>
           </div>
-        )
+        )}
+        {face.sections ? <FeedSlot /> : null}
+        </>
       }
     >
       <ContentColumn>
         {/* Бренда на главной нет — он на заставке и в «Об игре»: игрок и так
             знает, что открыл (Р76). На его месте — что можно сделать сейчас. */}
-        <div className="mt-3">
-          <CarouselSlot />
-        </div>
+        {face.sections ? (
+          <div className="mt-3">
+            <CarouselSlot />
+          </div>
+        ) : null}
 
         {saved === null ? null : <SavedRunCard saved={saved} />}
 
-        <WidgetsSlot />
+        {face.sections ? <WidgetsSlot marks={face.marks} /> : null}
 
         {/* Гайдбук на главной, а не только в меню: новичок не пойдёт искать
             его по меню, пока не проиграет пару забегов непонятно кому. */}
+        {face.sections ? (
         <div className="mt-3">
           <Card appearIndex={4} onClick={() => navigation.push("guide")}>
             <div className="flex items-center gap-3">
@@ -99,6 +137,7 @@ export function LobbyScreen(): ReactNode {
             </div>
           </Card>
         </div>
+        ) : null}
 
         {/* Отзыв зовут оставить после первого же забега и дальше раз в
             десяток: спрашивать в каждый запуск — верный способ, чтобы форму
@@ -137,7 +176,7 @@ export function LobbyScreen(): ReactNode {
               onClick={() => {
                 useSavedRun.getState().clear();
                 setConfirmingNewRun(false);
-                setPreRunOpen(true);
+                play();
               }}
             >
               {t("lobby.newRun.confirm")}
@@ -240,14 +279,32 @@ function CarouselSlot(): ReactNode {
 }
 
 /**
+ * Лента живых событий (Р114) — под кнопкой «Играть» или под «Продолжить» и
+ * «Новый забег», тем же чанком. Заглушки нет: нет события — нет строки, а
+ * чанк, который не приехал, ничего не стоит. Гостю без входа ленты нет:
+ * события собирает сервер. В низком ландшафте телефона под кнопкой не
+ * остаётся места — там её тоже нет.
+ */
+function FeedSlot(): ReactNode {
+  const withAccount = useShell((state) => state.capabilities.auth !== undefined);
+  const live = useHomeLive();
+  if (!withAccount || live === null) return null;
+  return (
+    <div className="[@media(max-height:480px)]:hidden">
+      <live.HomeFeed />
+    </div>
+  );
+}
+
+/**
  * Виджеты главной (WP42, часть 3) — тем же чанком. Заглушка — сетка без
  * готового к забору: рекорд во всю ширину и две пары плиток, высоты — из
  * токенов, как у самих виджетов (`home-widgets.tsx`). Гостю виджеты тоже
  * есть: рекорд — с устройства, остальные ведут на свои экраны.
  */
-function WidgetsSlot(): ReactNode {
+function WidgetsSlot(props: { marks: Record<HomeSection, boolean> }): ReactNode {
   const live = useHomeLive();
-  if (live !== null) return <live.HomeWidgets />;
+  if (live !== null) return <live.HomeWidgets marks={props.marks} />;
   return (
     <div aria-hidden="true" className="mb-3 grid grid-cols-2 gap-3">
       <div className="surface-sunken col-span-2 h-(--widget-hero-h) rounded-lg" />

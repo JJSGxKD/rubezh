@@ -83,6 +83,17 @@ export const partnerInputSchema = z
 
 export type PartnerInput = z.infer<typeof partnerInputSchema>;
 
+/**
+ * Правка существующего партнёра: те же поля и адрес постбэка (T-0070). Адрес — строка разумной длины, правила
+ * шаблона проверяет сервис и отвечает первой проблемой словами; пустая строка и `null` снимают адрес, не названный
+ * остаётся как был. События общего адреса (T-0071) схема не разбирает: «не список», «пусто» и «незнакомое» отвечает
+ * `eventsProblems` своими словами, а выбрать их можно, только когда адрес задан. Момент `postback_since` клиент не
+ * присылает: лишнее поле — отказ. В заведении нового партнёра адреса нет — он появляется правкой.
+ */
+export const partnerUpdateSchema = partnerInputSchema.extend({ postbackUrl: z.string().max(4_096).nullable().optional(), postbackEvents: z.unknown().optional() });
+
+export type PartnerUpdateInput = z.infer<typeof partnerUpdateSchema>;
+
 /** Условия партнёра: что записано в карточке сверх имени и связи (Р96). */
 export interface PartnerTerms {
   telegramId: string | null;
@@ -92,6 +103,12 @@ export interface PartnerTerms {
   payoutMethod: string | null;
   /** процент строкой с двумя знаками: «12.50» */
   sharePercent: string | null;
+  /** общий адрес постбэка с макросами; `null` — не задан (T-0070) */
+  postbackUrl: string | null;
+  /** с какого времени по кликам он действует; задан тогда и только тогда, когда задан адрес */
+  postbackSince: Date | null;
+  /** какие события уходят на адрес; по умолчанию одна регистрация */
+  postbackEvents: string[];
 }
 
 /**
@@ -120,6 +137,9 @@ export function termsOf(row: PartnerRow): PartnerTerms {
     payoutCurrency: row.payoutCurrency ?? null,
     payoutMethod: row.payoutMethod ?? null,
     sharePercent: row.sharePercent ?? null,
+    postbackUrl: row.postbackUrl ?? null,
+    postbackSince: row.postbackSince ?? null,
+    postbackEvents: row.postbackEvents ?? ["registration"],
   };
 }
 
@@ -127,8 +147,16 @@ export function withTerms<T extends PartnerRow>(row: T): T & PartnerTerms {
   return { ...row, ...termsOf(row) };
 }
 
-/** Правка партнёра: название, связь и условия — то, что названо; статус — той же правкой, но только из `setStatus`. */
-export type PartnerPatch = Partial<PartnerInput> & { status?: PartnerStatus };
+/**
+ * Правка партнёра: название, связь и условия — то, что названо; статус — той же правкой, но только из `setStatus`.
+ * Адрес постбэка и момент, с которого он действует, сервис присылает парой: поодиночке база их не принимает.
+ */
+export type PartnerPatch = Partial<PartnerInput> & {
+  status?: PartnerStatus;
+  postbackUrl?: string | null;
+  postbackSince?: Date | null;
+  postbackEvents?: readonly string[];
+};
 
 /** Что партнёр принёс — для списка и карточки. Платящие и звёзды — живые оплаты после привязки, без возвращённых. */
 export interface PartnerStats {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { RUN_MODES } from "../../runs/run-rules.js";
 
 /**
  * Схема записи забега (`rubezh.run.v1`, docs/28-diagnostics.md §3.3–§3.4).
@@ -95,6 +96,10 @@ const loadoutSchema = z.object({
   // Уровень аккаунта решает, что было открыто (docs/35-stage4-plan.md WP25):
   // без него повтор у команды открыл бы всё и разошёлся с забегом тестера.
   accountLevel: z.number().int().min(1).max(1000).optional(),
+  // Класс устройства меняет потолок врагов и добор (Р67): без него повтор у
+  // команды шёл бы как на обычном устройстве и разошёлся с забегом тестера.
+  // Обычному устройству поле не пишется.
+  deviceClass: z.enum(["standard", "light"]).optional(),
 });
 
 const resultSchema = z.object({
@@ -114,6 +119,9 @@ export const runRecordingSchema = z.object({
   seed: z.number().int(),
   mapId: id,
   difficultyId: id,
+  // Режим забега (T-0278, T-0279): без него перепроверка пролога собрала бы обычный мир и разошлась с первого тика.
+  // Запись обычного забега поля не несёт.
+  mode: z.enum(RUN_MODES).optional(),
   startingWeaponId: id,
   contentHash: id,
   unitScale: z.number().positive().max(10),

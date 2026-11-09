@@ -27,7 +27,6 @@ function cues(patch: Partial<RunCues> = {}): RunCues {
     fuses: 0,
     dashWarns: 0,
     dashes: 0,
-    enemyShots: 0,
     weapons: {},
     ...patch,
   };

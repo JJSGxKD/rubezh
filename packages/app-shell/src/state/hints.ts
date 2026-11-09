@@ -16,8 +16,46 @@ import { reportError, useShell } from "./shell";
  */
 const HINTS_KEY = "bh.hints.v1";
 
-export const HINT_ORDER = ["move", "gems", "dodge"] as const;
+export const HINT_ORDER = ["move", "gems", "choose", "dodge"] as const;
 export type HintId = (typeof HINT_ORDER)[number];
+
+/**
+ * События, по которым подсказки появляются (tasks/T-0280): первый кристалл на
+ * поле, первый выбор улучшения, первая элита. Подсказка не ждёт секунды забега —
+ * она приходит, когда игроку впервые есть о чём знать.
+ */
+export interface HintSignals {
+  gem: boolean;
+  levelUp: boolean;
+  elite: boolean;
+}
+
+/** Событие, которое открывает подсказку; про движение — сразу, на старте. */
+const HINT_SIGNAL: Record<HintId, keyof HintSignals | null> = { move: null, gems: "gem", choose: "levelUp", dodge: "elite" };
+
+/**
+ * Какая подсказка показывается сейчас — одна, не показанная и уже дождавшаяся
+ * своего события; при нескольких — по порядку `HINT_ORDER`. `null` — говорить
+ * нечего.
+ */
+export function nextHint(input: { seen: readonly HintId[]; signals: HintSignals }): HintId | null {
+  return (
+    HINT_ORDER.find((id) => {
+      if (input.seen.includes(id)) return false;
+      const signal = HINT_SIGNAL[id];
+      return signal === null || input.signals[signal];
+    }) ?? null
+  );
+}
+
+/**
+ * Что считать виденным. Пролог — первый забег аккаунта, и подсказки в нём идут
+ * всегда, даже если на этом устройстве их уже видели (например, после очистки
+ * аккаунта): тогда считается только то, что показано в этом забеге.
+ */
+export function hintsSeenFor(input: { prologue: boolean; device: readonly HintId[]; session: readonly HintId[] }): readonly HintId[] {
+  return input.prologue ? input.session : input.device;
+}
 
 /** Сколько игровых единиц пройти, чтобы подсказка про движение считалась усвоенной. */
 const MOVE_DONE_UNITS = 140;
@@ -41,6 +79,9 @@ export function isHintDone(id: HintId, hud: HudSnapshot, shownSinceSec: number):
       return hud.distance >= MOVE_DONE_UNITS;
     case "gems":
       return hud.xp > 0 || hud.level > 1;
+    case "choose":
+      // Гаснет выбором карточки (`LevelUpOverlay`), а не по состоянию мира: пока окно открыто, мир стоит.
+      return false;
     default:
       return hud.survivalSec - shownSinceSec >= DODGE_SHOW_SEC;
   }

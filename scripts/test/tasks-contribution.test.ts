@@ -79,6 +79,15 @@ describe("задачи и очки", () => {
     expect(rows[0]).toMatchObject({ tasks: 1, points: 1 });
   });
 
+  it("PR из ветки task/T-NNNN-2 засчитывается задаче T-NNNN: очки по её размеру (Р195)", () => {
+    const rows = rowsOf("today", { mergedPrs: [mergedPr({ headRefName: "task/T-0001-2" })] });
+    expect(rows).toEqual([{ who: "claude-3 · владелец", tasks: 1, points: 2, rework: 0, reviews: 0, specs: 0, leadPrs: 0 }]);
+  });
+
+  it("ветка task/T-NNNN-1 — не ветка задачи", () => {
+    expect(rowsOf("today", { mergedPrs: [mergedPr({ headRefName: "task/T-0001-1" })] })).not.toEqual([expect.objectContaining({ tasks: 1 })]);
+  });
+
   it("порядок строк: очки, затем ревью и ответы, затем имя", () => {
     const task = (number: number, id: string, account: string) => mergedPr({ number, headRefName: `task/${id}`, body: BODY.replace("claude-3", account) });
     const comment = (name: string) => ({ author: { login: "x" }, body: `**${name}:** ок`, createdAt: "2026-10-24T22:00:00Z" });
@@ -172,11 +181,12 @@ describe("PR тимлидов", () => {
 describe("строка «Поток:»", () => {
   it("разбор отдаёт аккаунт", () => {
     expect(parseRunnerLine("Описание\nПоток: claude-3 / sonnet-5.5 / medium\nЗапустил: владелец")).toBe("claude-3");
+    expect(parseRunnerLine("Поток: claude-lead-1 / sonnet-5.5 / high")).toBe("claude-lead-1");
     expect(parseRunnerLine("нет строки")).toBeNull();
   });
 
   it("на тех же примерах отвечает так же, как проверка pr-check", () => {
-    const bodies = ["Поток: claude-3 / sonnet-5.5 / medium", "Поток: claude-x / sonnet-5.5 / medium", "Поток: claude-3 / gpt-5 / medium", "Поток: claude-3 / sonnet-5.5", "ничего"];
+    const bodies = ["Поток: claude-3 / sonnet-5.5 / medium", "Поток: claude-lead-1 / sonnet-5.5 / high", "Поток: claude-lead / sonnet-5.5 / high", "Поток: claude-x / sonnet-5.5 / medium", "Поток: claude-3 / gpt-5 / medium", "Поток: claude-3 / sonnet-5.5", "ничего"];
     for (const body of bodies) {
       const checkOk = !checkRunnerLines(`${body}\nЗапустил: владелец`, "task/T-0001").some((error: string) => error.startsWith("поток"));
       // pr-check дополнительно сверяет модель и уровень по спискам; формат строки совпадает.

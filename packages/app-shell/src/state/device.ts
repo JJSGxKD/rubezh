@@ -1,4 +1,4 @@
-import type { DeviceFormFactor, DeviceOs, PlatformClientInfo, DeviceDescription } from "@bh/shared-types";
+import type { DeviceClass, DeviceFormFactor, DeviceOs, PlatformClientInfo, DeviceDescription } from "@bh/shared-types";
 
 /**
  * Сведения об устройстве для статистики плейтеста: на чём играют тестеры.
@@ -44,13 +44,48 @@ export function osOf(userAgent: string, maxTouchPoints: number): DeviceOs {
   return "other";
 }
 
-function formFactorOf(os: DeviceOs, env: DeviceEnvironment): DeviceFormFactor {
+export function formFactorOf(os: DeviceOs, env: DeviceEnvironment): DeviceFormFactor {
   if (os === "windows" || os === "macos" || os === "linux") return env.maxTouchPoints > 1 ? "tablet" : "desktop";
   // Короткая сторона в CSS-пикселях отделяет телефон от планшета надёжнее
   // user-agent: Android-планшет часто не пишет о себе ничего особенного.
   const shortSide = Math.min(env.screenWidth, env.screenHeight);
   if (/ipad/.test(env.userAgent.toLowerCase()) || shortSide >= 600) return "tablet";
   return os === "other" && env.maxTouchPoints <= 1 ? "desktop" : "phone";
+}
+
+/**
+ * Пороги слабого устройства. `deviceMemory` Chromium округляет до 0,25…8 ГБ, а
+ * у Safari его нет вовсе; ядер на старых iPhone и дешёвых Android четыре и
+ * меньше. Пороги рабочие: настоящую долю слабых покажет `deviceClass` в
+ * `run_started` после выката (tasks/T-0196, вопрос 6).
+ */
+const LIGHT_MEMORY_GB = 2;
+const LIGHT_CORES = 4;
+
+/**
+ * Класс устройства для подстройки давления (Р67): слабое получает потолок
+ * врагов ниже, а недостающее добирают их здоровье и урон. Десктоп слабым не
+ * бывает — его ядра и память мало говорят о кадрах; нет сведений — обычное,
+ * чтобы не урезать бой зря. Определяется один раз на старте забега и нигде не
+ * сохраняется: класс влияет на бой и обязан быть известен до старта.
+ */
+export function deviceClassOf(given?: DeviceEnvironment): DeviceClass {
+  const env = given ?? readEnvironmentSafely();
+  if (env === null) return "standard";
+  const os = osOf(env.userAgent, env.maxTouchPoints);
+  if (formFactorOf(os, env) === "desktop") return "standard";
+  const weakMemory = env.memoryGb !== null && env.memoryGb <= LIGHT_MEMORY_GB;
+  const weakCores = env.cores !== null && env.cores <= LIGHT_CORES;
+  return weakMemory || weakCores ? "light" : "standard";
+}
+
+/** Сведения, которые не удалось прочитать (нет `screen` или `navigator`), — это «нет сведений», а не ошибка старта забега. */
+function readEnvironmentSafely(): DeviceEnvironment | null {
+  try {
+    return readEnvironment();
+  } catch {
+    return null;
+  }
 }
 
 export function readEnvironment(): DeviceEnvironment {
