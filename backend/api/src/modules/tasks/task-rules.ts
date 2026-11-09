@@ -90,6 +90,34 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
 };
 
 /**
+ * Эволюции оружия на сервере: id эволюции → id базового (tasks/T-0102,
+ * docs/39-retention-mechanics.md К1). Эволюция занимает слот базового, поэтому
+ * в итоге забега стоит её id, а не базового: без таблицы забег с «Грозой» в
+ * эволюции не считался бы ни оружием «Гроза», ни молнией. Таблицу сверяет тест
+ * с `core-game/src/content/weapons.ts` — новая эволюция роняет его, пока строку
+ * не добавили.
+ */
+export const WEAPON_EVOLUTIONS = {
+  starfall: "spark",
+  tempest: "storm",
+  blade_whirl: "knife",
+  frost_crown: "wardstone",
+  forge: "hearth",
+  viper: "sting",
+  fire_rain: "meteor",
+} as const;
+
+/** Это оружие — эволюция. Через `hasOwn`: id приходит с клиента, `constructor` эволюцией не бывает. */
+export function isEvolution(id: string): boolean {
+  return Object.hasOwn(WEAPON_EVOLUTIONS, id);
+}
+
+/** Базовое оружие: у эволюции — то, из которого она выросла, у остального — оно само. */
+export function baseWeaponOf(id: string): string {
+  return isEvolution(id) ? WEAPON_EVOLUTIONS[id as keyof typeof WEAPON_EVOLUTIONS] : id;
+}
+
+/**
  * Виды целей, которые двигает забег: `sum` копит за срок, `max` помнит лучший
  * забег. Новый вид — код здесь (и строка текста у клиента), новое задание на
  * готовом виде — строка каталога в панели. `measure` получает фильтр строки
@@ -111,13 +139,13 @@ export const RUN_KINDS = {
   /** сыграть забег с оружием в наборе к концу */
   weapon_runs: {
     op: "sum",
-    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => weapon.id === filter?.weapon) ? 1 : 0),
+    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => baseWeaponOf(weapon.id) === filter?.weapon) ? 1 : 0),
   },
   /** сыграть забег с оружием стихии */
   element_runs: {
     op: "sum",
     measure: (run: TaskRun, filter?: RunFilter | null) =>
-      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[weapon.id] === filter.element) ? 1 : 0,
+      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[baseWeaponOf(weapon.id)] === filter.element) ? 1 : 0,
   },
   /** сыграть забег на сложности */
   difficulty_runs: { op: "sum", measure: (run: TaskRun, filter?: RunFilter | null) => (run.difficulty === filter?.difficulty ? 1 : 0) },
@@ -128,6 +156,22 @@ export const RUN_KINDS = {
   },
   /** сыграть забег с оплаченным бустом */
   boost_runs: { op: "sum", measure: (run: TaskRun) => (run.boosts.length > 0 ? 1 : 0) },
+  // Счётчики итога (T-0125): забег без них — старый клиент, нет статистики или
+  // счётчики неправдоподобны — даёт ноль, а остальные виды двигает как раньше.
+  /** убить боссов */
+  boss_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.bossKills ?? 0 },
+  /** убить элит */
+  elite_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.eliteKills ?? 0 },
+  /** открыть сундуков */
+  chests_opened: { op: "sum", measure: (run: TaskRun) => run.counters?.chestsOpened ?? 0 },
+  /** подобрать кристаллов */
+  crystals_collected: { op: "sum", measure: (run: TaskRun) => run.counters?.crystals ?? 0 },
+  /**
+   * сыграть забег, где к концу есть эволюция оружия. Читается из набора, а не из
+   * события: `evolution_unlocked` клиентское и до сервера не доходит, а эволюция
+   * занимает слот базового оружия.
+   */
+  evolution_runs: { op: "sum", measure: (run: TaskRun) => (run.weapons.some((weapon) => isEvolution(weapon.id)) ? 1 : 0) },
 } as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun, filter?: RunFilter | null) => number }>;
 
 export type RunKind = keyof typeof RUN_KINDS;
@@ -219,7 +263,7 @@ export function visibleOn(params: TaskParams | null, platform: PlatformId): bool
   return params.platform === undefined || params.platform === platform;
 }
 
-export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
+export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected" | "counters">;
 
 /**
  * Засчитывается тот же забег, что приносит награду: с читами, отклонённый
