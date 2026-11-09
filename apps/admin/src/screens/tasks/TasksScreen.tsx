@@ -53,6 +53,7 @@ import {
 import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
+import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
@@ -81,6 +82,10 @@ export function TasksScreen() {
   const { state, reload } = useApi(() => fetchTasks(api), []);
   const [input, setInput] = useState<TaskDef>(EMPTY);
   const [original, setOriginal] = useState<TaskDef | null>(null);
+  // Значения при открытии окна: по ним видно, тронул ли оператор форму.
+  const [initial, setInitial] = useState<TaskDef>(EMPTY);
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   /** Новый порядок группы сразу, пока запрос в пути: без него строка прыгала бы назад и вперёд. */
@@ -93,17 +98,30 @@ export function TasksScreen() {
   const problem = taskProblem(input, original === null, catalog);
 
   const reset = () => {
+    setOpen(false);
     setInput(EMPTY);
     setOriginal(null);
+    setFormError(null);
+  };
+
+  const openForm = (task: TaskDef | null) => {
+    const value = task === null ? EMPTY : { ...task };
+    setInput(value);
+    setInitial(value);
+    setOriginal(task);
+    setOutcome(null);
+    setFormError(null);
+    setOpen(true);
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (problem !== null) return;
     setPending(true);
+    setFormError(null);
     const result = await saveTask(api, input);
     setPending(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    if (!result.ok) return setFormError(result.error.message);
     setOutcome({ tone: "success", text: original === null ? `Задание ${result.data.taskId} заведено — игроки увидят его в течение полуминуты` : `Задание ${result.data.taskId} сохранено` });
     reset();
     reload();
@@ -144,9 +162,25 @@ export function TasksScreen() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title={original === null ? "Новое задание" : `Задание ${original.taskId}`}>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
+      {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
+      <FormDialog
+        open={open}
+        wide
+        title={original === null ? "Новое задание" : `Задание ${original.taskId}`}
+        dirty={isDirty(initial, input)}
+        onClose={reset}
+        footer={(requestClose) => (
+          <>
+            {formError === null ? null : <span className="mr-auto text-sm text-danger">{formError}</span>}
+            <Button onClick={requestClose}>Отмена</Button>
+            <Button tone="primary" type="submit" form="task-form" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
+              {original === null ? "Завести" : "Сохранить"}
+            </Button>
+          </>
+        )}
+      >
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form id="task-form" onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
           <FieldRow>
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
@@ -366,37 +400,39 @@ export function TasksScreen() {
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
-              {original === null ? "Завести" : "Сохранить"}
-            </Button>
-            {original === null ? null : <Button onClick={reset}>Отмена</Button>}
-          </div>
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
-          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 md:sticky md:top-0 md:self-start">
             <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
           </div>
         </div>
-        {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
-      </Panel>
+      </FormDialog>
 
       {state.status === "ok" ? <RotationPanel rotation={state.data.rotation} catalog={state.data.tasks} /> : null}
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
-        ? groupByPeriod(state.data.tasks).map((group) => (
-            <Panel key={group.group} title={GROUP_TITLES[group.group]} help={HELP.tasks.order}>
+        ? groupByPeriod(state.data.tasks).map((group, index) => (
+            <Panel
+              key={group.group}
+              title={GROUP_TITLES[group.group]}
+              help={HELP.tasks.order}
+              {...(index === 0
+                ? {
+                    actions: (
+                      <Button tone="primary" onClick={() => openForm(null)}>
+                        Новое задание
+                      </Button>
+                    ),
+                  }
+                : {})}
+            >
               <DataTable
                 rows={override?.group === group.group ? applyOrder(group.tasks, override.ids, (task) => task.taskId) : group.tasks}
                 reorder={{ labelOf: (task) => task.taskId, onReorder: (ids) => void move(group.group, ids), disabled: reordering }}
                 rowKey={(task) => task.taskId}
-                onRowClick={(task) => {
-                  setInput({ ...task });
-                  setOriginal(task);
-                  setOutcome(null);
-                }}
-                empty="Пусто — заведите задание выше"
+                onRowClick={openForm}
+                empty="Пусто — заведите кнопкой «Новое задание»"
                 columns={[
                   { title: "id", render: (task) => <span className="font-mono text-xs">{task.taskId}</span> },
                   { title: "Вид", render: (task) => KIND_TITLES[task.kind] ?? task.kind },
