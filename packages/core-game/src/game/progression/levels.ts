@@ -5,6 +5,7 @@ import { combineModifiers } from "./boosts";
 import { applyEvolution, isWeaponOfferable } from "./evolutions";
 import { limitCandidates, limitModifiers } from "./limit";
 import { computePlayerStats } from "./passives";
+import { recommendFirstOffers } from "../run/prologue";
 import { healChanges, passiveChanges, weaponChanges } from "./upgrade-changes";
 import {
   addPassive,
@@ -99,7 +100,7 @@ export function isAwaitingChoice(world: World): boolean {
  *
  * Варианты берутся генератором мира: одинаковый seed и одинаковый ход забега
  * дают одинаковые предложения, иначе повтор забега разойдётся на первом же
- * уровне.
+ * уровне. В прологе первое предложение дополняется «Советуем».
  */
 export function prepareOffers(world: World): UpgradeOption[] {
   const progression = world.progression;
@@ -109,7 +110,9 @@ export function prepareOffers(world: World): UpgradeOption[] {
 
   const candidates = collectCandidates(world);
   progression.offers =
-    candidates.length === 0 ? buildLimitOffers(world, world.rng) : pickWeighted(world.rng, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers);
+    candidates.length === 0
+      ? buildLimitOffers(world, world.rng)
+      : recommendFirstOffers(world, candidates, pickWeighted(world.rng, candidates, OFFERS_PER_LEVEL + world.boosts.extraOffers));
   return progression.offers;
 }
 

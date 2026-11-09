@@ -4,6 +4,8 @@
   "settings.bot.friendGift": "Подарки друзей",
   "settings.bot.friendGift.hint": "Каждый день от каждого друга — поэтому выключено, пока не включишь",
   "settings.bot.teamMessage": "Сообщения команды",
+  "settings.bot.reminders": "Напоминания",
+  "settings.bot.reminders.hint": "Сообщение от бота не чаще раза в сутки: тебя обогнали в сезоне, сезон скоро закрывается или ждёт награда дня.",
   "settings.bot.allow": "Разрешить боту писать",
   "settings.bot.allow.hint": "Без разрешения бот не сможет прислать ничего из списка ниже",
   "settings.bot.allow.action": "Разрешить",

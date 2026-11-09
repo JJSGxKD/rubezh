@@ -167,6 +167,16 @@ describe("checkSummary", () => {
 describe("checkTaskLine", () => {
   const files = ["T-0042-wipe.md", "T-0043-other.md"];
 
+  it("ветка попытки task/T-NNNN-2 проверяется как ветка задачи (Р195)", () => {
+    expect(checkTaskLine("Задача: tasks/T-0042-wipe.md", "task/T-0042-2", files)).toEqual([]);
+    expect(checkTaskLine("Задача: tasks/T-0043-other.md", "task/T-0042-2", files)).toHaveLength(1);
+    expect(checkTaskLine("текст", "task/T-0042-2", files)).toHaveLength(1);
+  });
+
+  it("task/T-NNNN-1 — не ветка задачи: строка «Задача:» не требуется", () => {
+    expect(checkTaskLine("текст", "task/T-0042-1", files)).toEqual([]);
+  });
+
   it("принимает верную строку и существующий файл", () => {
     expect(checkTaskLine("Задача: tasks/T-0042-wipe.md\n\nтекст", "task/T-0042", files)).toEqual([]);
   });
@@ -270,6 +280,13 @@ describe("checkRunnerLines", () => {
     ]);
   });
 
+  it("задачу тимлида подписывает claude-lead-N", () => {
+    expect(checkRunnerLines(`${TASK}
+
+Поток: claude-lead-1 / sonnet-5.5 / high
+Запустил: владелец`, "task/T-0001")).toEqual([]);
+  });
+
   it("номер аккаунта не цифры — ошибка", () => {
     expect(checkRunnerLines(`${TASK}\n\nПоток: claude-x / sonnet-5.5 / medium\nЗапустил: владелец`, "task/T-0001")).toEqual([
       expect.stringContaining("поток: в описании нет строки"),
@@ -282,6 +299,12 @@ describe("checkRunnerLines", () => {
     ]);
   });
 
+  it("ветка попытки task/T-NNNN-2 — ветка задачи: строки «Поток» и «Запустил» нужны, task/T-NNNN-1 — нет (Р195)", () => {
+    expect(checkRunnerLines("", "task/T-0001-2")).toHaveLength(2);
+    expect(checkRunnerLines(`${TASK}\n\n${OK}`, "task/T-0001-2")).toEqual([]);
+    expect(checkRunnerLines("", "task/T-0001-1")).toEqual([]);
+  });
+
   it("ветка не задачи — ошибок нет даже без строк", () => {
     expect(checkRunnerLines("", "lead/specs")).toEqual([]);
   });
@@ -289,6 +312,13 @@ describe("checkRunnerLines", () => {
 
 describe("checkStatusLabels", () => {
   const HEAD = "task/T-0001";
+
+  it("ветка попытки task/T-NNNN-2 требует ровно одну метку статуса, task/T-NNNN-1 — нет (Р195)", () => {
+    expect(checkStatusLabels(["release: patch", "на ревью"], "task/T-0001-2")).toEqual([]);
+    expect(checkStatusLabels([], "task/T-0001-2")).toHaveLength(1);
+    expect(checkStatusLabels(["на ревью", "доработка"], "task/T-0001-2")).toHaveLength(1);
+    expect(checkStatusLabels([], "task/T-0001-1")).toEqual([]);
+  });
 
   it("ровно одна метка статуса — порядок", () => {
     for (const label of ["в работе", "на ревью", "доработка", "ждёт владельца", "задел"]) {

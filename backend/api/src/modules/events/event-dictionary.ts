@@ -17,7 +17,11 @@ import { z } from "zod";
  * смысла или типа поля — новая версия, а не правка на месте.
  */
 
-const MAX_PAYLOAD_KEYS = 40;
+// Потолок растёт вместе с итогом забега: перф-поля, урон по стихиям, счётчики
+// боя и сила игрока с давлением (T-0125, T-0196) в одном событии. Лимит
+// защищает базу от мусора, а не ограничивает смысл; клиент держит запас в
+// четыре ключа (тест итога в оболочке).
+export const MAX_PAYLOAD_KEYS = 48;
 
 const flatValue = z.union([z.string().max(512), z.number().finite(), z.boolean(), z.null()]);
 const id = z.string().max(64);
@@ -69,6 +73,10 @@ const runOutcome = payload({
   // Серии без попаданий и без убийств, целые секунды (tasks/T-0321): необязательные, версия прежняя.
   noHitSec: count.optional(),
   noKillSec: count.optional(),
+  // Рубеж (tasks/T-0121, Р102): дошёл до стража и победил ли; секунда победы.
+  // Необязательные: сборки до рубежа полей не шлют, версия прежняя.
+  rubezh: z.enum(["none", "reached", "cleared"]).optional(),
+  rubezhClearedSec: count.optional(),
   weapon: id,
   map: id,
   difficulty: id,
@@ -104,6 +112,13 @@ const runOutcome = payload({
   damageCold: count.optional(),
   damageLightning: count.optional(),
   damagePoison: count.optional(),
+  // Сила и давление на старте и в конце забега, класс устройства (T-0196):
+  // по ним сверяют лесенку длины забега у игроков разной силы. Необязательные.
+  power: amount.optional(),
+  pressure: amount.optional(),
+  powerEnd: amount.optional(),
+  pressureEnd: amount.optional(),
+  deviceClass: id.optional(),
 });
 
 export const EVENT_DICTIONARY = {
@@ -144,10 +159,34 @@ export const EVENT_DICTIONARY = {
       screenMode: id,
       orientation: id,
       devMode: z.boolean(),
+      // Сила игрока (очки) и уровень давления на старте, класс устройства
+      // (docs/22-analytics-and-metrics.md §3.3, T-0196). Необязательные: забег
+      // разработчика и сборки до подстройки их не шлют, версия прежняя.
+      power: amount.optional(),
+      pressure: amount.optional(),
+      deviceClass: id.optional(),
     }),
   },
   run_resumed: { version: 1, payload: payload({ seed: z.number().int(), elapsedSec: seconds, level: count }) },
   run_finished: { version: 1, payload: runOutcome },
+  // Серверное событие: сервер посчитал очки эффективности записанного забега
+  // (tasks/T-0293, Р152). Индексы осей — с тремя знаками, 1 — ровно ожидаемое;
+  // `style` — ключ сильнейшей оси, `strengthBand` — полоса силы. Шлёт только
+  // сервер, клиент его не пишет.
+  run_scored: {
+    version: 1,
+    payload: payload({
+      runId: id,
+      points: count,
+      endurance: amount,
+      onslaught: amount,
+      hunt: amount,
+      clean: amount,
+      build: amount,
+      style: z.enum(["t", "k", "h", "c", "b"]),
+      strengthBand: id,
+    }),
+  },
   run_abandoned: { version: 1, payload: runOutcome },
   run_paused: { version: 1, payload: payload({ reason: id, elapsedSec: seconds }) },
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
@@ -179,6 +218,11 @@ export const EVENT_DICTIONARY = {
       elapsedSec: seconds,
     }),
   },
+  // Воронка пролога (tasks/T-0280, Р151): шаг первого забега аккаунта — `start`,
+  // `first_gem`, `first_level`, `first_elite`, `first_chest`, `guard`, `won`;
+  // победа добавляет `tutorial_completed` с секундой забега.
+  tutorial_step: { version: 1, payload: payload({ step: id }) },
+  tutorial_completed: { version: 1, payload: payload({ sec: seconds }) },
   // Эволюция оружия (docs/39-retention-mechanics.md Б2, T-0102): сундук превратил
   // базовое оружие `weapon` в `evolution` по навыку `passive`. `chest` — номер
   // сундука забега, `level` — уровень игрока.
@@ -328,6 +372,10 @@ export const EVENT_DICTIONARY = {
   // срабатывает — готовое к забору, отсчёт, рекорд — и на каком месте сетки.
   // Порядок виджетов — правилом, и событие показывает, правильное ли оно.
   home_widget_clicked: { version: 1, payload: payload({ widget: id, state: id, position: count }) },
+  // Лента живых событий под «Играть» (Р114, tasks/T-0176): какие виды событий
+  // игроки успевают увидеть. Клиент шлёт, когда событие было на виду не меньше
+  // секунды, раз на событие за запуск; игрока в нём нет.
+  feed_event_viewed: { version: 1, payload: payload({ kind: id, position: count }) },
   // Принял предупреждение об открытом тесте (docs/35-stage4-plan.md WP33):
   // доходят ли новички до игры после него и с какой версии текста. Само
   // принятие — таблица test_notice, по ней проверяется, что игрок видел
@@ -337,6 +385,11 @@ export const EVENT_DICTIONARY = {
   // до него после выхода версии и откуда — из меню или из уведомления. Сколько
   // версий было новыми — чтобы отличить «пришёл за новостью» от «просто листал».
   changelog_opened: { version: 1, payload: payload({ fresh: count, source: z.enum(["menu", "notification"]) }) },
+  // Рейтинг по очкам (tasks/T-0296, Р152): каким кругом смотрят таблицу недели —
+  // все, друзья или свой дивизион — и доходят ли до блока «Твой стиль». Игрока
+  // и стиля в нагрузке нет: распределение по кругам и доля открывших блок.
+  rating_circle_changed: { version: 1, payload: payload({ circle: z.enum(["all", "friends", "division"]) }) },
+  rating_style_opened: { version: 1, payload: payload({}) },
   // Реклама глазами клиента (docs/35-stage4-plan.md WP12, §3.7). Шаги показа
   // лежат в ad_session — там исход и код отказа; события добавляют то, чего
   // таблица не знает: устройство из конверта и сколько игрок ждал.

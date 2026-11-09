@@ -93,6 +93,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   IntegrationSecret: keep("ключи интеграций"),
   OutboundProxy: keep("прокси для исходящих запросов — настройка команды, к игрокам не относится; пароль только шифртекстом"),
   OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
+  ProxySubscription: keep("подписка Xray для прокси — настройка команды, к игрокам не относится; адрес только шифртекстом"),
+  ProxySubscriptionNode: keep("узлы подписки Xray — часть настройки команды"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),

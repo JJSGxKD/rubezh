@@ -157,6 +157,15 @@ const passiveSchema = z.strictObject({
 
 const loadoutModifiers = z.partialRecord(z.enum(LOADOUT_STATS), num);
 
+const limitSchema = z.strictObject({
+  id: text,
+  nameKey: text,
+  descriptionKey: text,
+  stat: z.enum(LOADOUT_STATS),
+  step: num,
+  weight: num.optional(),
+});
+
 const categoryCounts = z.strictObject({ attack: count, defense: count, mobility: count });
 
 const unlockSchema = z.strictObject({
@@ -334,6 +343,12 @@ const balanceTargetsSchema = z.strictObject({
     rankEventsDensityRatioMin: num,
     hardMaxAliveMulMax: num,
   }),
+  // Необязательное: снимок, сохранённый до рубежа (T-0120), коридора не знает.
+  rubezh: z.strictObject({ guardHpMinRatio: num, reachedRatioMax: num, clearedRatioMax: num }).optional(),
+  // Необязательное: снимок, сохранённый до пролога (T-0278), коридоров пролога не знает.
+  prologue: z
+    .strictObject({ seeds: num, winRatioMin: num, endSec: range, guardLifeSec: range, firstChestSec: range })
+    .optional(),
   evolutionPowerRatio: range,
 });
 
@@ -358,6 +373,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   maxBoostsPerRun: count,
   cardToolUnlocks: z.array(z.strictObject({ level: z.int().positive(), ...cardTools })),
   cardToolRules: z.strictObject({ skipXpRatio: num }),
+  limits: z.array(limitSchema),
   pressure: pressureSchema,
   balanceTargets: balanceTargetsSchema,
 });

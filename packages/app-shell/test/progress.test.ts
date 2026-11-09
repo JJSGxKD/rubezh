@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ApiResult } from "../src/state/api-request";
+import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { useProgress } from "../src/state/progress";
-import { REWARD_POLL_DELAYS_MS, awaitReward, type ProgressApi, type ProgressView, type RunRewardView } from "../src/state/progress-api";
+import { REWARD_POLL_DELAYS_MS, awaitReward, createProgressApi, type ProgressApi, type ProgressView, type RunRewardView } from "../src/state/progress-api";
 
 /**
  * Награда на экране итогов (docs/35-stage4-plan.md, WP4). Сервер считает её
@@ -89,5 +89,24 @@ describe("награда за забег на экране итогов", () => 
     const none: RunRewardView = { status: "none", reason: "too_short" };
     expect(await awaitReward("run-6", { api: scripted([{ ok: true, data: none }]), sleep: noSleep })).toEqual(none);
     expect(useProgress.getState().progress).toBeNull();
+  });
+});
+
+describe("рубеж в ответе награды (tasks/T-0124)", () => {
+  const answer = (body: unknown): Promise<ApiResult<RunRewardView>> => {
+    const request: ApiRequest = async (_path, schema) => {
+      const parsed = schema.safeParse(body);
+      return parsed.success ? { ok: true, data: parsed.data } : { ok: false, failure: "unavailable" };
+    };
+    return createProgressApi(request).reward("run-1");
+  };
+
+  it("множитель рубежа доезжает до экрана, а ответ без него по-прежнему принимается", async () => {
+    const withMul = await answer({ ...GRANTED, rubezhMul: 2 });
+    expect(withMul.ok && withMul.data.status === "granted" && withMul.data.rubezhMul).toBe(2);
+    const nulled = await answer({ ...GRANTED, rubezhMul: null });
+    expect(nulled.ok && nulled.data.status === "granted" && nulled.data.rubezhMul).toBeNull();
+    const old = await answer(GRANTED);
+    expect(old.ok).toBe(true);
   });
 });

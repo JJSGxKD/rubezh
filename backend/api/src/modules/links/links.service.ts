@@ -7,11 +7,13 @@ import { classifyClient } from "../attribution/client-class.js";
 import { ipPrefix } from "../attribution/ip-prefix.js";
 import { PartnerNotFoundError } from "../partners/partner-errors.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { NO_POSTBACK_ADDRESS, checkedPostbackEvents, checkedPostbackUrl, nextPostback, postbackLogForm, sameEvents } from "../ad-conversions/postback-settings.js";
 import { AUTO_SOURCES_REPOSITORY, UNKNOWN_KEYS_MAX, type AutoSourcesRepository, type UnknownKeyRow } from "./auto-sources.repository.js";
 import { checkerOf } from "./availability-checkers.js";
+import { clickParamsOf } from "./click-params.js";
 import { isCrawler } from "./crawler.js";
 import { newClickId, newLinkCode } from "./link-code.js";
-import { macroQuery, networkParamsOf, type LinkNetwork } from "./link-networks.js";
+import { macroQuery, type LinkNetwork } from "./link-networks.js";
 import { clickDeepTarget, clickTarget, directUrl, type LinkTarget, type LinkTargetBuilders } from "./link-targets.js";
 import { LINKS_REPOSITORY, type LinkFilter, type LinkRecord, type LinksRepository, type LinkStats, type RegistrationOn } from "./links.repository.js";
 
@@ -26,13 +28,18 @@ import { LINKS_REPOSITORY, type LinkFilter, type LinkRecord, type LinksRepositor
  * игрок всё равно попадает в игру.
  *
  * Куда ведёт переход, решает цель ссылки (Р95): Mini App, чат с ботом или
- * лендинг. Кроме переходника у ссылки без сети есть прямая — сразу в бота или
- * Mini App, без клика (`link-targets.ts`).
+ * лендинг. Кроме переходника у ссылки есть прямая — сразу в бота или Mini App,
+ * без клика; у ссылки сети — только с целью Mini App, с метками сети в
+ * стартовом параметре (`link-targets.ts`, Р121).
  *
  * У ссылки может быть владелец-партнёр (docs/35-stage4-plan.md Р96, T-0067):
  * пришедший по ней новичок записывается за партнёром при первом входе
  * (`partners/partner-links.ts`). Владелец задаётся при создании и не
  * меняется — клики и привязки уже записаны за ним.
+ *
+ * У ссылки может быть свой адрес постбэка (tasks/T-0070): регистрация игрока уходит на него вместе с
+ * `click_id` и `sub1`…`sub5`, которые партнёр положил в адрес ссылки. Такие ссылки (и ссылки партнёра)
+ * сохраняют эти параметры на клике (`click-params.ts`).
  */
 
 export interface VisitorInfo {
@@ -73,7 +80,8 @@ export interface NewLink {
 
 /**
  * Ссылка для панели: адрес переходника, у ссылки сети — адрес с макросами (его
- * вставляют в кабинет сети), у ссылки без сети — прямой адрес без переходника.
+ * вставляют в кабинет сети), прямой адрес без переходника. У ссылки сети прямой
+ * адрес — для рекламы внутри Telegram: метки клика сеть подставляет в стартовый параметр.
  */
 export type LinkView<T extends LinkRecord = LinkRecord> = T & { url: string; networkUrl: string | null; directUrl: string | null };
 
@@ -117,7 +125,7 @@ export class LinksService {
         deviceClass: classifyClient(null, visitor.userAgent).deviceClass,
         ipPrefix: ipPrefix(visitor.ip),
         language: languageOf(visitor.acceptLanguage),
-        networkParams: link.network === null ? null : networkParamsOf(link.network, visitor.query),
+        networkParams: clickParamsOf(link, visitor.query),
       })
       .catch((error: unknown) => {
         this.logger.warn(JSON.stringify({ module: "links", event: "click_record_failed", link: link.code, reason: error instanceof Error ? error.message : "unknown" }));
@@ -171,6 +179,55 @@ export class LinksService {
     const link = await this.links.retarget(code, target);
     if (link === null) return null;
     await this.roles.audit({ actorAccountId: actor.accountId, action: "links.retarget", target: code, before: { target: before.target }, after: { target: link.target } });
+    return this.view(link);
+  }
+
+  /**
+   * Задать, сменить или снять адрес постбэка ссылки (T-0070). Адрес проверяется правилами шаблона; не прошёл —
+   * `ValidationError` с первой проблемой. Первое задание адреса ставит `postback_since` — клики раньше не
+   * отправляются; смена на другой адрес момент не трогает; снятие обнуляет и возвращает события к одной регистрации.
+   * Тот же адрес повторно — без записи и аудита. В аудит адрес уходит без запроса: он может нести секрет приёмника. `null` — ссылки с таким кодом нет.
+   */
+  async setPostback(actor: AccountRef, code: string, raw: string | null, now = new Date()): Promise<LinkView | null> {
+    await this.roles.require(actor, "links.manage");
+    const url = checkedPostbackUrl(raw);
+    const before = await this.links.byCode(code);
+    if (before === null) return null;
+    if (before.postbackUrl === url) return this.view(before);
+    const link = await this.links.setPostback(code, nextPostback({ url: before.postbackUrl, since: before.postbackSince }, url, now));
+    if (link === null) return null;
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "links.postback.set",
+      target: code,
+      before: { postback: postbackLogForm(before.postbackUrl) },
+      after: { postback: postbackLogForm(link.postbackUrl) },
+    });
+    return this.view(link);
+  }
+
+  /**
+   * Выбрать события, которые уходят на адрес ссылки (T-0071). Список проверяется (`eventsProblems`) и пишется
+   * нормализованным; адреса у ссылки нет — `ValidationError`: выбирать не из чего. Своего адреса нет, а у партнёра-владельца
+   * общий есть — тоже отказ: его события меняются в карточке партнёра. Тот же выбор повторно — без записи и аудита.
+   * Включение события `postback_since` не меняет. `null` — ссылки с таким кодом нет.
+   */
+  async setPostbackEvents(actor: AccountRef, code: string, raw: unknown): Promise<LinkView | null> {
+    await this.roles.require(actor, "links.manage");
+    const events = checkedPostbackEvents(raw);
+    const before = await this.links.byCode(code);
+    if (before === null) return null;
+    if (before.postbackUrl === null) throw new ValidationError(NO_POSTBACK_ADDRESS);
+    if (sameEvents(before.postbackEvents, events)) return this.view(before);
+    const link = await this.links.setPostback(code, { events });
+    if (link === null) return null;
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "links.postback.events",
+      target: code,
+      before: { events: before.postbackEvents },
+      after: { events: link.postbackEvents },
+    });
     return this.view(link);
   }
 
@@ -239,7 +296,7 @@ export class LinksService {
   /** Построители адресов цели: Mini App и чат — у адаптера площадки, лендинг — на домене переходника. */
   private builders(platform: PlatformId): LinkTargetBuilders {
     return {
-      launch: (param) => this.appLinks.launch(platform, param),
+      launch: (param, rawTail) => this.appLinks.launch(platform, param, rawTail),
       chat: (param) => this.appLinks.chat(platform, param),
       landingBase: this.landingBase(),
     };

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
-import type { AdCreative, BlessingDef, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import type { AdCreative, BlessingDef, LeaderboardEntry, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -30,14 +30,19 @@ import "../i18n/gallery";
 import "../i18n/team";
 import { useBackLayer } from "../state/back-stack";
 import { useNavigation } from "../state/navigation";
+import { homeFace } from "../state/prologue";
 import type { ItemView } from "../state/items-api";
 import { BootScreen } from "./gates";
 import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
+import { LeaderboardRow, YouStrip } from "./meta/rating";
+import { Podium } from "./meta/rating-podium";
+import { DivisionPlaque, StyleCard } from "./meta/rating-style";
 import { RunLoading } from "./run/RunLoading";
 import { DeathOverlay } from "./run/DeathOverlay";
 import { BlessingOverlay } from "./run/BlessingOverlay";
 import { ChestOverlay } from "./run/ChestOverlay";
 import { LevelUpOverlay, PauseOverlay } from "./run/overlays";
+import { PrologueWinView } from "./run/PrologueWin";
 import { SecondChance } from "./run/SecondChance";
 import type { AdContinueStage } from "../state/ad-continue";
 import type { GemContinueStage } from "../state/gem-continue";
@@ -54,7 +59,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -92,11 +97,20 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.death")} onClick={() => setPreview("death")} />
           <ListItem title={t("run.continue.title")} onClick={() => setPreview("chance")} />
           <ListItem title={t("gallery.preview.record")} onClick={() => setPreview("record")} />
+          <ListItem title={t("gallery.preview.abandoned")} onClick={() => setPreview("abandoned")} />
+          <ListItem title={t("gallery.preview.rubezhHeld")} onClick={() => setPreview("rubezhHeld")} />
+          <ListItem title={t("gallery.preview.levelUpRecommended")} onClick={() => setPreview("levelUpRecommended")} />
+          <ListItem title={t("gallery.preview.prologueWin")} onClick={() => setPreview("prologueWin")} />
+          <ListItem title={t("gallery.preview.prologueWinPending")} onClick={() => setPreview("prologueWinPending")} />
+          <ListItem title={t("gallery.preview.prologueWinOffline")} onClick={() => setPreview("prologueWinOffline")} />
+          <ListItem title={t("gallery.preview.homeBefore")} onClick={() => setPreview("homeBefore")} />
+          <ListItem title={t("gallery.preview.homeAfter")} onClick={() => setPreview("homeAfter")} />
           <ListItem title={t("gallery.preview.chest", { size: 1 })} onClick={() => setPreview("chest1")} />
           <ListItem title={t("gallery.preview.chest", { size: 3 })} onClick={() => setPreview("chest3")} />
           <ListItem title={t("gallery.preview.chest", { size: 5 })} onClick={() => setPreview("chest5")} />
           <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
+          <ListItem title={t("gallery.preview.rating")} onClick={() => setPreview("rating")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -410,6 +424,62 @@ function AsidePreview(): ReactNode {
   );
 }
 
+/** Игроки рейтинга на тестовых данных (T-0296): пьедестал, строки, «Ты» и «Твой стиль» во всех состояниях. */
+const RATING_SAMPLE: LeaderboardEntry[] = [
+  ["Велимир", 9_812, "t", "ruby"],
+  ["Ярослава", 9_440, "k", "ruby"],
+  ["Мирон", 8_905, "h", "gold"],
+  ["Злата", 8_120, "h", "gold"],
+  ["Тимур", 7_760, "b", "gold"],
+].map(([name, points, style, division], index) => ({
+  rank: index + 1,
+  name: String(name),
+  photoUrl: null,
+  survivalSec: 1_908 - index * 120,
+  level: 41 - index,
+  startingWeaponId: "spark",
+  enemiesKilled: 2_400 - index * 150,
+  isMe: false,
+  points: Number(points),
+  style: String(style),
+  division: String(division),
+}));
+
+function RatingPreview(): ReactNode {
+  const me = { rank: 38, survivalSec: 612, points: 4_205, style: "c", division: "silver" };
+  const above = RATING_SAMPLE.slice(4, 5).map((entry) => ({ ...entry, rank: 37, points: 4_345 }));
+  return (
+    <Screen title={t("gallery.preview.rating")}>
+      <ContentColumn>
+        <SectionTitle>{t("gallery.rating.podium")}</SectionTitle>
+        <div className="grid gap-2">
+          <Podium entries={RATING_SAMPLE} scoring="points" />
+          <ol className="grid gap-2">
+            {RATING_SAMPLE.slice(3).map((entry, index) => (
+              <LeaderboardRow key={entry.rank} entry={entry} index={index} scoring="points" />
+            ))}
+          </ol>
+        </div>
+        <SectionTitle>{t("gallery.rating.podiumTwo")}</SectionTitle>
+        <Podium entries={RATING_SAMPLE.slice(0, 2)} scoring="points" />
+        <SectionTitle>{t("gallery.rating.you")}</SectionTitle>
+        <div className="grid gap-2">
+          <YouStrip me={me} entries={above} scoring="points" total={900} />
+          <YouStrip me={{ ...me, rank: 1, points: 9_999, division: "ruby" }} entries={[]} scoring="points" total={900} />
+          <YouStrip me={null} entries={[]} scoring="points" total={0} />
+        </div>
+        <SectionTitle>{t("gallery.rating.plaque")}</SectionTitle>
+        <DivisionPlaque division="silver" best={{ kind: "points", value: 4_205 }} next={{ next: "gold", gap: 610, unit: "points" }} />
+        <SectionTitle>{t("gallery.rating.style")}</SectionTitle>
+        <div className="grid gap-2">
+          <StyleCard summary={{ style: "c", strong: "c", weak: "k", axes: { t: 1.2, k: 0.6, h: 0.9, c: 1.5, b: 1 }, runs: 10, missing: 0 }} />
+          <StyleCard summary={{ style: null, strong: null, weak: null, axes: null, runs: 1, missing: 2 }} />
+        </div>
+      </ContentColumn>
+    </Screen>
+  );
+}
+
 function renderPreview(preview: Preview): ReactNode {
   const noop = (): void => undefined;
   const shareNoop = (): Promise<null> => Promise.resolve(null);
@@ -417,6 +487,8 @@ function renderPreview(preview: Preview): ReactNode {
   switch (preview) {
     case "aside":
       return <AsidePreview />;
+    case "rating":
+      return <RatingPreview />;
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":
@@ -488,6 +560,54 @@ function renderPreview(preview: Preview): ReactNode {
           result={SAMPLE_RESULT}
           isNewRecord={false}
           diagnostics
+          reward={{ status: "pending" }}
+          onDecline={noop}
+          onRestart={noop}
+          onMenu={noop}
+          onShare={shareNoop}
+        />
+      );
+    case "abandoned":
+      return (
+        <DeathOverlay
+          result={{ ...SAMPLE_RESULT, outcome: "abandoned" }}
+          isNewRecord={false}
+          diagnostics={false}
+          reward={{ status: "pending" }}
+          onDecline={noop}
+          onRestart={noop}
+          onMenu={noop}
+          onShare={shareNoop}
+        />
+      );
+    case "levelUpRecommended":
+      // Первый выбор пролога: «Советуем» — у нового оружия, остальные карточки как обычно.
+      return (
+        <LevelUpOverlay
+          level={2}
+          offers={SAMPLE_OFFERS.map((offer, index) => (index === 0 ? { ...offer, recommended: true } : offer))}
+          queued={0}
+          loadout={{ weapons: [{ id: "spark", level: 1 }], passives: [] }}
+          onChoose={noop}
+          onStats={noop}
+        />
+      );
+    case "prologueWin":
+      return <PrologueWinView result={PROLOGUE_RESULT} reward={{ status: "granted", coins: 500, gems: 10 }} onHome={noop} />;
+    case "prologueWinPending":
+      return <PrologueWinView result={PROLOGUE_RESULT} reward={{ status: "pending" }} onHome={noop} />;
+    case "prologueWinOffline":
+      return <PrologueWinView result={PROLOGUE_RESULT} reward={{ status: "offline" }} onHome={noop} />;
+    case "homeBefore":
+      return <HomePreview open={false} />;
+    case "homeAfter":
+      return <HomePreview open />;
+    case "rubezhHeld":
+      return (
+        <DeathOverlay
+          result={{ ...SAMPLE_RESULT, rubezh: { reached: true, clearedSec: 702, guardHpPercent: null } }}
+          isNewRecord={false}
+          diagnostics={false}
           reward={{ status: "pending" }}
           onDecline={noop}
           onRestart={noop}
@@ -723,6 +843,42 @@ const LONG_OFFERS: UpgradeOption[] = [
   },
 ];
 
+/**
+ * Главная до и после победы в прологе: то же правило (`homeFace`), что у настоящей
+ * главной, но без сторов — кнопка, строка под ней и метки «Новое» у виджетов.
+ */
+function HomePreview(props: { open: boolean }): ReactNode {
+  const face = homeFace({ open: props.open, fresh: { daily: true, tasks: true, play: true } });
+  return (
+    <div className="mx-auto grid h-full max-w-[420px] content-end gap-3 p-4">
+      {face.sections ? <HomeSectionsPreview marks={face.marks} /> : null}
+      <div className="grid gap-1">
+        <Button track="play" size="l" block glow cut shine>
+          {t("lobby.play")}
+        </Button>
+        {face.line === null ? null : <p className="text-center text-xs text-text-muted">{t(face.line === "first" ? "lobby.prologue.first" : "lobby.prologue.next")}</p>}
+      </div>
+    </div>
+  );
+}
+
+function HomeSectionsPreview(props: { marks: Record<"daily" | "tasks", boolean> }): ReactNode {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {(["daily", "tasks"] as const).map((id, index) => (
+        <div key={id} className="surface-sunken relative flex h-(--widget-tile-h) items-center justify-center rounded-lg font-display text-sm text-text">
+          {t(id === "daily" ? "lobby.daily" : "tab.tasks")}
+          {props.marks[id] ? (
+            <span className="absolute top-1.5 right-1.5 rounded-pill bg-accent px-2 py-0.5 font-display text-[10px] font-bold tracking-wide text-on-accent uppercase" style={{ zIndex: index + 1 }}>
+              {t("lobby.new")}
+            </span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const SAMPLE_RESULT: RunResult = {
   runId: "gallery-0000",
   seed: 424242,
@@ -759,6 +915,9 @@ const SAMPLE_RESULT: RunResult = {
   cheats: false,
   continues: [],
 };
+
+/** Победа в прологе на 3:04 — как приходит от движка: закрытый забег с итогом пролога. */
+const PROLOGUE_RESULT: RunResult = { ...SAMPLE_RESULT, outcome: "abandoned", difficultyId: "easy", survivalSec: 184, mode: "prologue", prologue: { won: true, sec: 184 } };
 
 /**
  * Все состояния виджетов главной (docs/35-stage4-plan.md WP42) — через чанк

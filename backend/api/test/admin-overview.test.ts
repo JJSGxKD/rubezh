@@ -50,7 +50,7 @@ function stats(active: number): DayStats {
     active,
     sessions: active * 2,
     runs: { finished: 10, players: 4, medianSurvivalSec: 300 },
-    revenue: { stars: 150, purchases: 3, refunds: 0 },
+    revenue: { stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 },
     funnel: { entered: 5, appOpened: 5, firstRun: 4, runs5: 1, returnedD1: 2, returnedD7: 0, firstPurchase: 1 },
   };
 }
@@ -276,7 +276,7 @@ describe("сводка панели", () => {
   it("владельцу — выручка и всё, что ждёт: рассылки коллег, свежий разбор; черновики версий не напоминаются (Р125)", async () => {
     const { service, owner } = await setup();
     const overview = await service.overview(owner, 1, NOW);
-    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0 });
+    expect(overview.today.revenue).toEqual({ stars: 150, purchases: 3, refunds: 0, purchaseStars: 150, donations: 0, donationStars: 0 });
     expect(overview.series[0]?.stars).toBe(150);
     expect(overview.series[0]?.purchases).toBe(3);
     expect(overview.attention).toEqual([

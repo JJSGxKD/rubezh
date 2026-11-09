@@ -1,4 +1,5 @@
 import { ELEMENT_COLD, ELEMENT_FIRE, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, ELEMENT_POISON } from "./element-ids";
+import { wardHealth } from "../run/prologue";
 import { registerPlayerHit } from "./streaks";
 import type { PlayerState, World } from "./world";
 
@@ -145,7 +146,8 @@ function inflictPlayerDot(world: World, amount: number, source: number): void {
   // Тик горения и яда — попадание; бессмертие разработчика серию не спасает.
   registerPlayerHit(world);
   if (world.cheats.godMode) return;
-  player.hp -= amount;
+  // Оберег пролога держит здоровье на пороге и под горением с ядом.
+  player.hp = wardHealth(world, player.hp, player.hp - amount);
   world.stats.damageTaken += amount;
   if (player.hp <= 0) {
     player.hp = 0;

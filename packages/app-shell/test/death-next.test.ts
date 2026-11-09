@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { RUBEZH_AT_SEC } from "@bh/shared-types";
 import "../src/i18n/run";
 import "../src/i18n/account";
 import { formatDuration, t } from "../src/i18n";
 import { unlockLabel, type LevelUnlock } from "../src/state/level-unlocks";
-import { goalText, levelGoalInput, MAX_GOALS, pickNextGoals, type NextGoal, type NextGoalsInput } from "../src/screens/run/death-next";
+import { goalText, levelGoalInput, MAX_GOALS, pickNextGoals, RUBEZH_CLOSE, type NextGoal, type NextGoalsInput } from "../src/screens/run/death-next";
 
 // Что дальше после смерти (tasks/T-0109): до трёх ближайших целей — до
 // рекорда, до уровня, задание на подходе, ближайшее открытие. Вся логика —
@@ -12,7 +13,8 @@ import { goalText, levelGoalInput, MAX_GOALS, pickNextGoals, type NextGoal, type
 const STORM: LevelUnlock = { kind: "weapon", id: "storm" };
 
 function input(patch: Partial<NextGoalsInput> = {}): NextGoalsInput {
-  return { isNewRecord: false, survivalSec: 0, bestSec: null, level: null, tasks: [], nextUnlock: null, ...patch };
+  // Победа над стражем гасит цель «рубеж»: цели рекорда, заданий и уровня проверяются сами по себе, рубеж — в своём describe.
+  return { isNewRecord: false, survivalSec: 0, bestSec: null, level: null, tasks: [], nextUnlock: null, rubezh: { reached: true, clearedSec: 1, guardHpPercent: null }, ...patch };
 }
 
 const task = (id: string, period: string, value: number, target: number, patch: { kind?: string; done?: boolean } = {}) => ({
@@ -144,6 +146,86 @@ describe("порядок и предел", () => {
 
   it("пустой вход — пустой список", () => {
     expect(pickNextGoals(input())).toEqual([]);
+  });
+});
+
+describe("цель «рубеж»", () => {
+  // Другие цели проверяются без рубежа: победа в умолчании `input` его гасит, здесь умолчание снято.
+  const open = (patch: Partial<NextGoalsInput>): NextGoalsInput => input({ rubezh: undefined, ...patch });
+  const stopped = (guardHpPercent: number | null) => ({ reached: true, clearedSec: null, guardHpPercent });
+
+  it("580 из 600 — «До рубежа 20 с», близость доли отметки", () => {
+    expect(RUBEZH_AT_SEC).toBe(600);
+    const goals = pickNextGoals(open({ survivalSec: 580 }));
+    expect(goals).toEqual([{ kind: "rubezh", stage: "approach", closeness: 580 / 600, leftSec: 20 }]);
+    expect(goalText(goals[0] as NextGoal)).toBe("До рубежа 20 с");
+  });
+
+  it("200 из 600 — цели нет: до рубежа далеко", () => {
+    expect(pickNextGoals(open({ survivalSec: 200 }))).toEqual([]);
+  });
+
+  it("порог — половина отметки: ровно половина ещё цель, чуть меньше — нет", () => {
+    expect(RUBEZH_CLOSE).toBe(0.5);
+    expect(kinds(pickNextGoals(open({ survivalSec: RUBEZH_AT_SEC * RUBEZH_CLOSE })))).toEqual(["rubezh"]);
+    expect(pickNextGoals(open({ survivalSec: RUBEZH_AT_SEC * RUBEZH_CLOSE - 1 }))).toEqual([]);
+  });
+
+  it("секунды до рубежа округляются вверх: «0 с» не показываем, пока страж не пришёл", () => {
+    const goal = pickNextGoals(open({ survivalSec: 599.4 }))[0];
+    expect(goal).toMatchObject({ kind: "rubezh", stage: "approach", leftSec: 1 });
+  });
+
+  it("страж жив с 12% — близость 0,94 и «осталось 12%»", () => {
+    const goals = pickNextGoals(open({ survivalSec: 700, rubezh: stopped(12) }));
+    expect(goals).toHaveLength(1);
+    expect(goals[0]).toMatchObject({ kind: "rubezh", stage: "guard", guardHpPercent: 12 });
+    expect(goals[0]?.closeness).toBeCloseTo(0.94, 10);
+    expect(goalText(goals[0] as NextGoal)).toBe("Страж почти пал: осталось 12%");
+  });
+
+  it("страж нетронут — близость 0,5: сам приход стража уже половина пути", () => {
+    expect(pickNextGoals(open({ survivalSec: 650, rubezh: stopped(100) }))[0]?.closeness).toBe(0.5);
+  });
+
+  it("страж жив, остаток неизвестен — цели нет, а не «осталось null%»", () => {
+    expect(pickNextGoals(open({ survivalSec: 700, rubezh: stopped(null) }))).toEqual([]);
+  });
+
+  it("победа — цели «рубеж» нет", () => {
+    expect(pickNextGoals(open({ survivalSec: 800, rubezh: { reached: true, clearedSec: 700, guardHpPercent: null } }))).toEqual([]);
+    expect(pickNextGoals(open({ survivalSec: 580, rubezh: { reached: true, clearedSec: 575, guardHpPercent: null } }))).toEqual([]);
+  });
+
+  it("не дошёл до стража, а секунд забега уже больше отметки — цели нет", () => {
+    expect(pickNextGoals(open({ survivalSec: 640, rubezh: { reached: false, clearedSec: null, guardHpPercent: null } }))).toEqual([]);
+  });
+
+  it("при равной близости: рекорд, рубеж, задание, уровень", () => {
+    const goals = pickNextGoals(
+      input({
+        survivalSec: 300,
+        bestSec: 600,
+        rubezh: stopped(100),
+        level: { level: 3, fraction: 0.5, xpLeft: 300 },
+        tasks: [task("d1", "daily", 5, 10)],
+      }),
+    );
+    // Все четыре цели на 0,5; предел показа — три, уровень не помещается.
+    expect(kinds(goals)).toEqual(["record", "rubezh", "task"]);
+  });
+
+  it("близкий рубеж вытесняет из трёх целей самую дальнюю", () => {
+    const goals = pickNextGoals(
+      open({
+        survivalSec: 590,
+        bestSec: 700,
+        level: { level: 3, fraction: 0.45, xpLeft: 300 },
+        tasks: [task("d1", "daily", 6, 10)],
+        nextUnlock: { level: 6, unlocks: [STORM] },
+      }),
+    );
+    expect(kinds(goals)).toEqual(["rubezh", "record", "task"]);
   });
 });
 

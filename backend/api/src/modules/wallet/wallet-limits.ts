@@ -48,6 +48,9 @@ export const WALLET_DAILY_CAPS: Record<EarnReason, Partial<Record<WalletResource
   // целиком. Числа — удвоенная сумма ленты по умолчанию (`battle-pass/pass-defaults.ts`),
   // тест сверяет; чужую ленту месяца схема не пропустит выше этого потолка.
   pass_reward: { coins: 21_000, gems: 500, shard_common: 220, shard_uncommon: 32, shard_rare: 122, shard_epic: 8 },
+  // Награда пролога (Р151, tasks/T-0279): одно начисление на аккаунт, потолок равен самой награде —
+  // панель не поднимет её выше (пределы ключей `prologue.reward-*` те же).
+  prologue_reward: { coins: 500, gems: 10 },
 };
 
 /**

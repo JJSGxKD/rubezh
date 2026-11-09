@@ -39,7 +39,8 @@ export function skipFirstRunHints(): void {
   for (const id of HINT_ORDER) hints.markSeen(id);
 }
 
-function sessionReady(deadline: number): Promise<boolean> {
+/** Сессия поднялась до срока: пролог (`prologue.ts`) спрашивает профиль так же недолго. */
+export function sessionReady(deadline: number): Promise<boolean> {
   const status = useSession.getState().status;
   if (status === "ready") return Promise.resolve(true);
   if (status === "failed" || status === "idle") return Promise.resolve(false);

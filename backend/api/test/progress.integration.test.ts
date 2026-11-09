@@ -11,6 +11,7 @@ import { ProgressService } from "../src/modules/progress/progress.service.js";
 import { RunRewards, type RewardJob } from "../src/modules/progress/run-rewards.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
+import { PrismaRunsRepository } from "../src/modules/runs/runs.repository.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
@@ -92,6 +93,79 @@ describe.skipIf(DATABASE_URL === "")("награды за забег на жив
     expect(row).toMatchObject({ coins: 88, coinsCredited: 88, xp: 165, levelBefore: 1, levelAfter: 2 });
     expect(await coins(id)).toBe(88 + 100);
     expect(await view.runReward(id, run.runId)).toMatchObject({ status: "granted", coins: 88, xp: 165, levelAfter: 2, progress: { level: 2, xp: 165 } });
+  });
+
+  it("победа над стражем (T-0121): монеты и опыт ×2, ответ несёт rubezhMul = 2; повтор не платит второй раз", async () => {
+    const id = await account();
+    const run = job(id, { rubezhCleared: true });
+    await new PrismaRunsRepository(prisma).finish({
+      runId: run.runId,
+      accountId: id,
+      difficulty: "easy",
+      startingWeaponId: "knife",
+      contentHash: "abc",
+      finishedAt: new Date(),
+      outcome: "died",
+      survivalSec: 700,
+      level: 20,
+      enemiesKilled: 600,
+      weapons: [],
+      details: null,
+      deathCause: null,
+      cheats: false,
+      continues: [],
+      ranked: false,
+      ratingRestricted: null,
+      verdict: "ok",
+      verdictReasons: [],
+      rubezhReached: true,
+      rubezhClearedSec: 650,
+    });
+
+    const row = await rewards.grant(run);
+    await rewards.grant(run);
+
+    // Те же 88 и 165, что у забега без победы, умноженные на два до округления.
+    expect(row).toMatchObject({ coins: 176, xp: 330, coinsCredited: 176 });
+    expect(await view.runReward(id, run.runId)).toMatchObject({ status: "granted", coins: 176, xp: 330, rubezhMul: 2 });
+    expect((await progress.progress(id)).xp).toBe(330);
+  });
+
+  it("победа без оплаты: подозрение и забег без победы ответа ×2 не получают", async () => {
+    const id = await account();
+    const runs = new PrismaRunsRepository(prisma);
+    const finished = (runId: string, verdict: "ok" | "suspicious", rubezhClearedSec: number | null) =>
+      runs.finish({
+        runId,
+        accountId: id,
+        difficulty: "easy",
+        startingWeaponId: "knife",
+        contentHash: "abc",
+        finishedAt: new Date(),
+        outcome: "died",
+        survivalSec: 700,
+        level: 20,
+        enemiesKilled: 600,
+        weapons: [],
+        details: null,
+        deathCause: null,
+        cheats: false,
+        continues: [],
+        ranked: false,
+        ratingRestricted: null,
+        verdict,
+        verdictReasons: [],
+        rubezhReached: true,
+        rubezhClearedSec,
+      });
+    const [suspicious, alive] = [job(id, { verdict: "suspicious", rubezhCleared: false }), job(id)];
+    await finished(suspicious.runId, "suspicious", 599);
+    await finished(alive.runId, "ok", null);
+
+    expect(await rewards.grant(suspicious)).toMatchObject({ coins: 88 });
+    expect(await rewards.grant(alive)).toMatchObject({ coins: 88 });
+    expect(await view.runReward(id, suspicious.runId)).toMatchObject({ status: "granted", rubezhMul: null });
+    expect(await view.runReward(id, alive.runId)).toMatchObject({ status: "granted", rubezhMul: null });
   });
 
   it("повтор задания ничего не удваивает", async () => {

@@ -27,7 +27,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 3
 ---
 
 # T-0068. Воронка партнёра — по его ссылкам, кодам и площадкам

@@ -33,6 +33,38 @@ import { MAX_WEAPONS } from "./run-rules.js";
 
 export type RunVerdict = "ok" | "suspicious" | "rejected";
 
+/**
+ * Рубеж (T-0121, Р102, Р105): секунда прихода стража и минимальная длительность
+ * боя с ним. Сервер пакет `shared-types` не импортирует (его не подключает ни
+ * один модуль бэкенда), поэтому числа продублированы, а их равенство с
+ * `RUBEZH_AT_SEC` и `RUBEZH_MIN_FIGHT_SEC` держит тест `rubezh-win.test.ts`.
+ */
+export const RUBEZH_AT_SEC = 600;
+export const RUBEZH_MIN_FIGHT_SEC = 5;
+/** Допуск между секундой победы и длиной забега, секунды: округление клиента. */
+const RUBEZH_TOLERANCE_SEC = 1;
+
+/** Что итог заявляет о рубеже; остаток здоровья стража на правдоподобие победы не влияет. */
+export interface RubezhClaim {
+  reached: boolean;
+  clearedSec: number | null;
+}
+
+/** Победа заявлена: страж пришёл и пал. Засчитывает её вердикт, а не это условие. */
+export function rubezhClaimsWin(claim: RubezhClaim | null | undefined): boolean {
+  return claim?.reached === true && claim.clearedSec !== null;
+}
+
+/**
+ * Победа, которой сервер верит: заявлена и не вызвала подозрения. Для награды и
+ * отметки в рейтинге этого мало — нужен ещё вердикт `ok` и забег без читов,
+ * но подозрение в рубеже уже опускает вердикт, поэтому отдельной проверки
+ * причины не нужно.
+ */
+export function rubezhWinOf(claim: RubezhClaim | null | undefined, reasons: readonly VerdictReason[]): boolean {
+  return rubezhClaimsWin(claim) && !reasons.includes("rubezh_implausible");
+}
+
 export type VerdictReason =
   | "weapons_over_slots"
   | "longer_than_wall_clock"
@@ -57,7 +89,17 @@ export type VerdictReason =
    * счётчики итога не сходятся с ходом боя: вердикт не меняет (как
    * `unverified_time`), но счётчики не идут в задания и достижения
    */
-  | "counters_implausible";
+  | "counters_implausible"
+  /**
+   * победа над стражем невозможна по времени: раньше, чем страж мог пасть, позже
+   * конца забега, при `reached: false`, или страж «пришёл» до отметки
+   */
+  | "rubezh_implausible"
+  /**
+   * индекс оси очков эффективности выше двойного потолка (tasks/T-0293): выброс,
+   * которого честный забег не даёт; очков он не меняет, но в рейтинг не идёт
+   */
+  | "axis_out_of_range";
 
 export interface VerdictInput {
   survivalSec: number;
@@ -85,6 +127,10 @@ export interface VerdictInput {
   boosts: BoostStatus;
   /** счётчики итога; `null` — итог без них (старая сборка) */
   counters: RunCounters | null;
+  /** рубеж из итога; нет поля — забег до рубежа или итог старой сборки */
+  rubezh?: RubezhClaim | null;
+  /** индекс оси очков выше двух потолков; нет поля — очки не считались */
+  axisOutOfRange?: boolean;
 }
 
 export interface Verdict {
@@ -93,7 +139,7 @@ export interface Verdict {
 }
 
 const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "loadout_level_ahead", "boost_unpaid"]);
-const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale"]);
+const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible", "axis_out_of_range"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
   const reasons: VerdictReason[] = [];
@@ -136,7 +182,23 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
     reasons.push("counters_implausible");
   }
 
+  if (input.rubezh != null && !rubezhPlausible(input.rubezh, input.survivalSec)) reasons.push("rubezh_implausible");
+
+  if (input.axisOutOfRange === true) reasons.push("axis_out_of_range");
+
   return { verdict: verdictOf(reasons), reasons };
+}
+
+/**
+ * Клиенту не верим: победа заявлена без стража, раньше, чем страж мог пасть, или
+ * позже конца забега. Страж «пришёл» при выживании короче отметки — тоже. Страж,
+ * который пришёл и не пал, ничего больше не требует.
+ */
+function rubezhPlausible(claim: RubezhClaim, survivalSec: number): boolean {
+  if (claim.reached && survivalSec < RUBEZH_AT_SEC - RUBEZH_TOLERANCE_SEC) return false;
+  if (claim.clearedSec === null) return true;
+  if (!claim.reached) return false;
+  return claim.clearedSec >= RUBEZH_AT_SEC + RUBEZH_MIN_FIGHT_SEC && claim.clearedSec <= survivalSec + RUBEZH_TOLERANCE_SEC;
 }
 
 function verdictOf(reasons: readonly VerdictReason[]): RunVerdict {

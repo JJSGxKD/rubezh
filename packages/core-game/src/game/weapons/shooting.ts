@@ -55,7 +55,6 @@ export function fireFan(
       (spreadY / length) * level.projectileSpeed,
       level.damage,
       level.ttlSec,
-      true,
     );
     if (projectile < 0) return;
 

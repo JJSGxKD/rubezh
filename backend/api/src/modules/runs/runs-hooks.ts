@@ -1,6 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import type { RunCounters } from "./run-counters.js";
-import type { Difficulty } from "./run-rules.js";
+import type { Difficulty, RunMode } from "./run-rules.js";
 import type { RunVerdict, VerdictReason } from "./run-verdict.js";
 
 /**
@@ -17,8 +17,12 @@ export interface RecordedRun {
   runId: string;
   accountId: string;
   difficulty: Difficulty;
+  /** пролог — вне рейтинга и заданий (T-0279); поля нет — бесконечный забег */
+  mode?: RunMode;
   outcome: "died" | "abandoned";
   survivalSec: number;
+  /** очки эффективности (T-0293); `null` — очков нет: пролог, нерейтинговая сложность, сбой подсчёта; поля нет — то же */
+  points?: number | null;
   level: number;
   enemiesKilled: number;
   startingWeaponId: string;
@@ -43,6 +47,11 @@ export interface RecordedRun {
   verdict: RunVerdict;
   reasons: VerdictReason[];
   finishedAt: Date;
+  /**
+   * Победа над стражем рубежа заявлена и не вызвала подозрения (T-0121). Платит
+   * за неё награда при вердикте `ok` и без читов; поля нет — победы нет.
+   */
+  rubezhCleared?: boolean;
 }
 
 export type RunListener = (run: RecordedRun) => Promise<void>;

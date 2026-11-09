@@ -29,8 +29,11 @@ export interface DayStats {
   active: number;
   sessions: number;
   runs: { finished: number; players: number; medianSurvivalSec: number | null };
-  /** только настоящие звёзды: тестовая оплата в выручку не идёт */
-  revenue: { stars: number; purchases: number; refunds: number };
+  /**
+   * Только настоящие звёзды: тестовая оплата в выручку не идёт. `stars` — весь
+   * доход (покупки и донаты), `purchases` и `purchaseStars` — без донатов (Р109).
+   */
+  revenue: { stars: number; purchases: number; refunds: number; purchaseStars: number; donations: number; donationStars: number };
   funnel: { entered: number; appOpened: number; firstRun: number; runs5: number; returnedD1: number; returnedD7: number; firstPurchase: number };
 }
 
@@ -95,7 +98,8 @@ export function statsText(day: string, today: DayStats, before: DayStats | null)
     ...(sources.length === 0 ? [] : [`   ${sources.join(" · ")}`]),
     `🟢 Активных: ${today.active}${delta(today.active, before?.active ?? 0)} · запусков ${today.sessions}`,
     `🎮 Забегов: ${today.runs.finished}${delta(today.runs.finished, before?.runs.finished ?? 0)} · игроков ${today.runs.players}${today.runs.medianSurvivalSec === null ? "" : ` · медиана ${clock(today.runs.medianSurvivalSec)}`}`,
-    `⭐ Выручка: ${today.revenue.stars} ${stars(today.revenue.stars)}${delta(today.revenue.stars, before?.revenue.stars ?? 0)} · покупок ${today.revenue.purchases} · возвратов ${today.revenue.refunds}`,
+    `⭐ Выручка: ${today.revenue.stars} ${stars(today.revenue.stars)}${delta(today.revenue.stars, before?.revenue.stars ?? 0)} · покупок ${today.revenue.purchases} на ${today.revenue.purchaseStars} ⭐ · возвратов ${today.revenue.refunds}`,
+    ...(today.revenue.donations === 0 ? [] : [`💝 Донаты: ${today.revenue.donations} на ${today.revenue.donationStars} ⭐`]),
     `🪜 Воронка: вошли ${f.entered} · открыли игру ${f.appOpened} · первый забег ${f.firstRun} · пять забегов ${f.runs5} · вернулись назавтра ${f.returnedD1}, через неделю ${f.returnedD7} · первая покупка ${f.firstPurchase}`,
   ].join("\n");
 }

@@ -3,7 +3,10 @@ import { levelCap } from "../src/modules/items/item-rules.js";
 import {
   MAX_COINS_PER_RUN,
   MAX_LEVEL,
+  MAX_XP_PER_RUN,
   MIN_REWARDED_SEC,
+  RUBEZH_REWARD_MUL,
+  rubezhPaid,
   levelForXp,
   levelReward,
   runReward,
@@ -92,5 +95,51 @@ describe("уровень аккаунта", () => {
     expect(upcoming[2]).toEqual({ level: 5, ...levelReward(5), itemLevelCap: levelCap(5) });
     expect(upcoming[2]?.gems).toBeGreaterThan(0);
     expect(progressView({ xp: xpForLevel(MAX_LEVEL - 2), level: MAX_LEVEL - 2 }).upcoming.map((row) => row.level)).toEqual([MAX_LEVEL - 1, MAX_LEVEL]);
+  });
+});
+
+describe("награда за победу над стражем (T-0121)", () => {
+  const WON: RewardableRun = { ...RUN, rubezhCleared: true };
+
+  it("победа удваивает монеты и опыт поверх базы сложности, округляя один раз", () => {
+    const base = runReward(RUN);
+    const won = runReward(WON);
+    expect(RUBEZH_REWARD_MUL).toBe(2);
+    expect(won).toEqual({ coins: 176, xp: 330, skipped: null });
+    expect(won.coins).toBe(base.coins * 2);
+    // Множители складываются до округления: нечётная база не теряет полмонеты.
+    const hard = runReward({ ...RUN, difficulty: "hard" });
+    expect(runReward({ ...WON, difficulty: "hard" }).coins).toBe(Math.round(((10 * 7 + (3 * 600) / 100) * 1.7) * 2));
+    expect(runReward({ ...WON, difficulty: "hard" }).xp).toBeGreaterThanOrEqual(hard.xp * 2 - 1);
+  });
+
+  it("потолки забега применяются после множителя", () => {
+    const capped = runReward({ ...WON, difficulty: "hard", survivalSec: 2400, enemiesKilled: 9000 });
+    expect(capped.coins).toBe(MAX_COINS_PER_RUN);
+    expect(capped.xp).toBe(MAX_XP_PER_RUN);
+    // Без потолка двойная награда медианного забега на сложной уложилась бы в него, а с множителем — нет.
+    const near = { ...WON, difficulty: "hard" as const, survivalSec: 1300, enemiesKilled: 2000 };
+    expect(runReward({ ...near, rubezhCleared: false }).coins).toBeLessThan(MAX_COINS_PER_RUN);
+    expect(runReward(near).coins).toBe(MAX_COINS_PER_RUN);
+  });
+
+  it("подозрительный забег платится без множителя, отклонённый и с читами — не платится вовсе", () => {
+    expect(runReward({ ...WON, verdict: "suspicious" })).toEqual(runReward({ ...RUN, verdict: "suspicious" }));
+    expect(runReward({ ...WON, verdict: "rejected" })).toEqual({ coins: 0, xp: 0, skipped: "rejected" });
+    expect(runReward({ ...WON, cheats: true })).toEqual({ coins: 0, xp: 0, skipped: "cheats" });
+  });
+
+  it("поле rubezhCleared не обязательно: старое задание очереди платит как раньше", () => {
+    expect(runReward({ ...RUN })).toEqual(runReward({ ...RUN, rubezhCleared: false }));
+  });
+
+  it("оплаченность победы: засчитанная победа, честный вердикт, без читов, награда не пропущена", () => {
+    const paid = { cleared: true, verdict: "ok" as const, cheats: false, skipped: null };
+    expect(rubezhPaid(paid)).toBe(true);
+    expect(rubezhPaid({ ...paid, cleared: false })).toBe(false);
+    expect(rubezhPaid({ ...paid, verdict: "suspicious" })).toBe(false);
+    expect(rubezhPaid({ ...paid, verdict: "rejected" })).toBe(false);
+    expect(rubezhPaid({ ...paid, cheats: true })).toBe(false);
+    expect(rubezhPaid({ ...paid, skipped: "too_short" })).toBe(false);
   });
 });

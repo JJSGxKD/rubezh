@@ -39,6 +39,9 @@ const rewardSchema = z.union([
     xp: z.number(),
     levelBefore: z.number(),
     levelAfter: z.number(),
+    // Победа над стражем рубежа оплачена (T-0121): множитель считает сервер,
+    // оболочка «×2» сама не выводит. Сервер до рубежа поля не присылал.
+    rubezhMul: z.optional(z.nullable(z.number())),
     progress: progressSchema,
   }),
 ]);

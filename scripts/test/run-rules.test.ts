@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { PROLOGUE } from "../../packages/core-game/src/content/prologue";
 import { CONTINUE } from "../../packages/core-game/src/content/continue";
 import { DIFFICULTIES as CONTENT_DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
+import { RUN_MODES as CONTENT_RUN_MODES } from "../../packages/shared-types/src/index";
 import { LOADOUT_LIMITS } from "../../packages/core-game/src/content/upgrades";
-import { CONTINUES_PER_RUN, DIFFICULTIES, MAX_WEAPONS, RATED_DIFFICULTIES } from "../../backend/api/src/modules/runs/run-rules.js";
+import { PROLOGUE_MIN_SEC } from "../../backend/api/src/modules/runs/prologue-rules.js";
+import { CONTINUES_PER_RUN, DIFFICULTIES, MAX_WEAPONS, RATED_DIFFICULTIES, RUN_MODES } from "../../backend/api/src/modules/runs/run-rules.js";
 
 // Правила игры на сервере — копия чисел из контента, а не импорт: собранный
 // бэкенд не импортирует исходники пакетов монорепо. Копия не имеет права
@@ -22,6 +25,14 @@ describe("правила игры на сервере совпадают с ко
 
   it("список сложностей", () => {
     expect([...DIFFICULTIES].sort()).toEqual(CONTENT_DIFFICULTIES.map((difficulty) => difficulty.id).sort());
+  });
+
+  it("список режимов забега", () => expect([...RUN_MODES]).toEqual([...CONTENT_RUN_MODES]));
+
+  it("минимальная длина пролога — приход Стража на последнем отрезке таймлайна", () => {
+    // Разойдутся — сервер либо засчитает «победу» раньше Стража, либо откажет честной.
+    const last = PROLOGUE.timeline[PROLOGUE.timeline.length - 1];
+    expect(PROLOGUE_MIN_SEC, "поменяйте PROLOGUE_MIN_SEC в backend/api/src/modules/runs/prologue-rules.ts").toBe(last.fromSec);
   });
 
   it("рейтинговые сложности есть среди сложностей контента", () => {

@@ -45,6 +45,8 @@ export const ACCOUNT_SETTINGS: Record<string, AccountSettingSpec> = {
   "bot.friendRequest": { schema: z.boolean(), merge: "latest" },
   "bot.friendGift": { schema: z.boolean(), merge: "latest" },
   "bot.teamMessage": { schema: z.boolean(), merge: "latest" },
+  /** напоминания бота: обогнали в сезоне, сезон закрывается, награда дня — один ключ на три вида (tasks/T-0128) */
+  "bot.reminders": { schema: z.boolean(), merge: "latest" },
 };
 
 export const ACCOUNT_SETTING_KEYS = Object.keys(ACCOUNT_SETTINGS);
