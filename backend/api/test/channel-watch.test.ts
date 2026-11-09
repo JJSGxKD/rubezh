@@ -1028,3 +1028,150 @@ describe("разное", () => {
     expect(ctx.membership.asked).toEqual([]);
   });
 });
+
+describe("границы события отписки", () => {
+  it("окно, заведённое после начала прохода, ответа площадки не слышало: его очередь — следующий проход, и это уже второе событие", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    const def = channelDef("sub_daily");
+    await claim(ctx, player, def, "2026-10-05", MON);
+    // награда за вторник забрана уже после того, как проход начался
+    const now = at(MON, DAY + 7 * HOUR);
+    await claim(ctx, player, def, "2026-10-06", at(now, HOUR));
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(now);
+    expect(windowsOf(ctx, player.accountId).map((row) => [row.periodStart, row.state, row.eventNo])).toEqual([
+      ["2026-10-05", "penalized", 1],
+      ["2026-10-06", "watching", null],
+    ]);
+    expect(ctx.restrictionRows.rows).toEqual([]);
+
+    await ctx.service.tick(at(now, 8 * HOUR));
+    expect(windowsOf(ctx, player.accountId).map((row) => row.eventNo)).toEqual([1, 2]);
+    expect(standing(ctx, player.accountId, at(now, 8 * HOUR))).toHaveLength(1);
+  });
+
+  it("пару уже ведёт другой проход: она пропускается без записи и подбирается следующим", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+    const now = at(MON, DAY);
+
+    const held = await ctx.watch.withPairLock(player.accountId, "sub_daily", async () => await ctx.service.tick(now));
+
+    expect(held).toMatchObject({ locked: true, value: { penalized: 0, busy: 1, failed: 0 } });
+    expect(ctx.watch.rows[0]?.state).toBe("watching");
+    expect(ctx.wallet.revokes).toEqual([]);
+    expect(unsubscribed(ctx)).toEqual([]);
+
+    expect(await ctx.service.tick(at(now, TICK_MS))).toMatchObject({ penalized: 1, busy: 0 });
+    expect(ctx.watch.rows[0]?.state).toBe("penalized");
+  });
+
+  it("правка награды задания после забора не оставляет начисленное: отзывается то, что записано в кошельке", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    ctx.catalog.defs = [channelDef("sub_daily", { coins: 0, gems: 0 })];
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(at(MON, DAY));
+
+    expect(ctx.wallet.of(player.accountId, "coins")).toBe(0);
+    expect(ctx.wallet.of(player.accountId, "gems")).toBe(0);
+    expect(ctx.watch.rows[0]?.revoked).toEqual({ coins: 100, gems: 5, shards: 0 });
+  });
+
+  it("задание без названия: в уведомлении `title: null`, текст по виду цели собирает клиент", async () => {
+    const ctx = setup([channelDef("sub_daily", { title: null })]);
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(at(MON, DAY));
+
+    expect(unsubscribed(ctx)[0]?.payload).toMatchObject({ title: null, coins: 100, gems: 5 });
+  });
+
+  it("уведомление не по схеме штраф не подвешивает: списание и отметка стоят, в лог — `channel_watch_notice_rejected`", async () => {
+    const ctx = setup([channelDef("sub_daily", { title: "я".repeat(130) })]);
+    const log = capture();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+
+    const result = await ctx.service.tick(at(MON, DAY));
+
+    expect(result).toMatchObject({ penalized: 1, failed: 0 });
+    expect(ctx.watch.rows[0]?.state).toBe("penalized");
+    expect(ctx.wallet.of(player.accountId, "coins")).toBe(0);
+    expect(unsubscribed(ctx)).toEqual([]);
+    expect(log.of("channel_watch_notice_rejected")).toHaveLength(1);
+  });
+
+  it("сбой ленты — не штраф: проход падает на паре, повтор доделывает событие и уведомление одно", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+    const insert = vi.spyOn(ctx.feed, "insert").mockRejectedValueOnce(new Error("лента недоступна"));
+
+    const first = await ctx.service.tick(at(MON, DAY));
+    expect(first.failed).toBe(1);
+    expect(ctx.watch.rows[0]?.state).toBe("watching");
+
+    const second = await ctx.service.tick(at(MON, DAY + TICK_MS));
+    expect(second).toMatchObject({ penalized: 1, failed: 0 });
+    expect(insert).toHaveBeenCalledTimes(2);
+    expect(unsubscribed(ctx)).toHaveLength(1);
+    expect(ctx.wallet.revokedEntries).toBe(2);
+  });
+});
+
+describe("площадка пропала или ответила поздно", () => {
+  it("у площадки задания больше нет проверки: это не «не состоит» — окно ждёт и сдаётся по сроку, площадку не спрашивали", async () => {
+    const ctx = setup();
+    const log = capture();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    ctx.catalog.defs = [channelDef("sub_daily", { params: { platform: "max", chat: "rubezh", url: "https://max.ru/rubezh" } })];
+    unsubscribe(ctx, player);
+
+    const first = await ctx.service.tick(at(MON, DAY));
+    expect(first).toMatchObject({ penalized: 0, postponed: 1 });
+    expect(ctx.membership.asked).toEqual([]);
+    expect(log.of("channel_watch_unavailable")).toHaveLength(1);
+
+    await ctx.service.tick(at(watchUntil(MON), DAY));
+    expect(ctx.watch.rows[0]?.state).toBe("expired");
+    expect(ctx.wallet.revokes).toEqual([]);
+  });
+
+  it("сбой, пришедший после таймаута, второй строкой в лог не идёт и окно не штрафует", async () => {
+    vi.useFakeTimers();
+    const ctx = setup();
+    const log = capture();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    let fail: () => void = () => undefined;
+    vi.spyOn(ctx.membership, "isMember").mockImplementation(
+      () =>
+        new Promise<boolean>((_resolve, reject) => {
+          fail = () => reject(new TypeError("поздний сбой"));
+        }),
+    );
+
+    const pending = ctx.service.tick(at(MON, DAY));
+    await vi.advanceTimersByTimeAsync(ASK_TIMEOUT_MS);
+    await pending;
+    fail();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(log.of("channel_watch_unavailable")).toHaveLength(1);
+    expect(log.of("channel_watch_failed")).toEqual([]);
+    expect(ctx.watch.rows[0]?.state).toBe("watching");
+    expect(ctx.wallet.revokes).toEqual([]);
+  });
+});
