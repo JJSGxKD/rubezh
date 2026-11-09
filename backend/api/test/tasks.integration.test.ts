@@ -97,11 +97,11 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     expect(catalog.filter((task) => task.period !== "achievement").every((task) => task.gems === 0)).toBe(true);
   });
 
-  it("миграция пула: 20 дневных (8/8/4) и 12 недельных (4/5/3), у старых строк ступень, награды прежние", () => {
+  it("миграция пула: 28 дневных (11/11/6) и 19 недельных (6/8/5), у старых строк ступень, награды прежние", () => {
     const count = (period: "daily" | "weekly") =>
       Object.fromEntries(POOL_TIERS.map((tier) => [tier, catalog.filter((task) => task.period === period && task.tier === tier).length]));
-    expect(count("daily")).toEqual({ easy: 8, medium: 8, hard: 4 });
-    expect(count("weekly")).toEqual({ easy: 4, medium: 5, hard: 3 });
+    expect(count("daily")).toEqual({ easy: 11, medium: 11, hard: 6 });
+    expect(count("weekly")).toEqual({ easy: 6, medium: 8, hard: 5 });
 
     const old: [string, string | null, number, number][] = [
       ["daily_runs", "easy", 120, 0],
@@ -118,6 +118,50 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     // новые виды цели сеются с фильтром
     expect(catalog.find((task) => task.taskId === "daily_weapon_spark")).toMatchObject({ kind: "weapon_runs", filter: { weapon: "spark" }, target: 2, tier: "easy", coins: 70 });
     expect(catalog.find((task) => task.taskId === "weekly_hard_240")).toMatchObject({ kind: "difficulty_survive_sec", filter: { difficulty: "hard" }, tier: "hard", coins: 900, shards: 5 });
+  });
+
+  it("пятнадцать заданий про боссов, элит, сундуки, кристаллы и эволюции (T-0126): ступень, награда и очки как у ступени", () => {
+    const added: [string, "daily" | "weekly", "easy" | "medium" | "hard", string, number][] = [
+      ["daily_elite_1", "daily", "easy", "elite_kills", 1],
+      ["daily_chest_1", "daily", "easy", "chests_opened", 1],
+      ["daily_crystals_300", "daily", "easy", "crystals_collected", 300],
+      ["daily_elite_3", "daily", "medium", "elite_kills", 3],
+      ["daily_chest_3", "daily", "medium", "chests_opened", 3],
+      ["daily_crystals_1000", "daily", "medium", "crystals_collected", 1000],
+      ["daily_boss_1", "daily", "hard", "boss_kills", 1],
+      ["daily_evolution", "daily", "hard", "evolution_runs", 1],
+      ["weekly_elite_5", "weekly", "easy", "elite_kills", 5],
+      ["weekly_chest_5", "weekly", "easy", "chests_opened", 5],
+      ["weekly_elite_15", "weekly", "medium", "elite_kills", 15],
+      ["weekly_chest_12", "weekly", "medium", "chests_opened", 12],
+      ["weekly_crystals_5000", "weekly", "medium", "crystals_collected", 5000],
+      ["weekly_boss_3", "weekly", "hard", "boss_kills", 3],
+      ["weekly_evolution_2", "weekly", "hard", "evolution_runs", 2],
+    ];
+    const reward = {
+      daily: { easy: { coins: 70, shards: 0 }, medium: { coins: 110, shards: 0 }, hard: { coins: 160, shards: 0 } },
+      weekly: { easy: { coins: 300, shards: 0 }, medium: { coins: 550, shards: 0 }, hard: { coins: 900, shards: 5 } },
+    } as const;
+    // очки — у опорной строки той же ступени и срока (T-0105)
+    const anchor = { daily: { easy: "daily_runs", medium: "daily_kills", hard: "daily_level" }, weekly: { easy: "weekly_runs", medium: "weekly_kills", hard: "weekly_best_540" } } as const;
+    expect(added.length).toBe(15);
+    for (const [taskId, period, tier, kind, target] of added) {
+      const task = catalog.find((candidate) => candidate.taskId === taskId);
+      expect(task, taskId).toMatchObject({ period, tier, kind, target, title: null, filter: null, active: true, gems: 0, ...reward[period][tier] });
+      expect(task?.passPoints, `${taskId}: очки`).toBe(catalog.find((candidate) => candidate.taskId === anchor[period][tier])?.passPoints);
+      expect(task?.passPoints ?? 0, `${taskId}: очки больше нуля`).toBeGreaterThan(0);
+    }
+    // внутри ступени строки идут по алфавиту id, ступени — блоками 150+ / 250+ / 350+
+    for (const period of ["daily", "weekly"] as const) {
+      for (const [tier, base] of [["easy", 150], ["medium", 250], ["hard", 350]] as const) {
+        const rows = added.filter((row) => row[1] === period && row[2] === tier).map((row) => catalog.find((task) => task.taskId === row[0]));
+        const sorted = [...rows].sort((a, b) => (a?.taskId ?? "").localeCompare(b?.taskId ?? ""));
+        expect(
+          sorted.map((task) => task?.sort),
+          `${period}/${tier}`,
+        ).toEqual(sorted.map((_task, index) => base + index));
+      }
+    }
   });
 
   it("копит и помнит лучший, не уходит за цель, отмечает выполнение", async () => {
@@ -586,7 +630,7 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       for (const id of moved) expect(allowed.has(id), `${id} не в ротации`).toBe(true);
       // невыбранные дневные остаются без строки прогресса
       const idle = catalog.filter((task) => task.period === "daily" && task.tier !== null && !chosenDaily(NOON).has(task.taskId));
-      expect(idle.length).toBe(15);
+      expect(idle.length).toBe(23);
       for (const task of idle) expect(moved).not.toContain(task.taskId);
     });
 
@@ -604,6 +648,55 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
       expect(kinds.size).toBeGreaterThan(1);
       for (const task of view.filter((candidate) => ["xp_collected", "boost_runs"].includes(candidate.kind))) expect(task.value, task.id).toBeGreaterThan(0);
       for (const task of view) expect(task.category, task.id).not.toBe("partner");
+    });
+
+    it("квоты ротации прежние: 5 в день (2/2/1) и 6 в неделю (2/3/1), хотя пул вырос", () => {
+      const tiersOf = (ids: Set<string>, period: "daily" | "weekly") =>
+        POOL_TIERS.map((tier) => catalog.filter((task) => task.period === period && task.tier === tier && ids.has(task.taskId)).length);
+      for (let day = 0; day < 20; day++) {
+        const at = new Date(NOON.getTime() + day * 86_400_000);
+        const daily = chosenDaily(at);
+        const weekly = chosenWeekly(at);
+        expect(daily.size).toBe(5);
+        expect(tiersOf(daily, "daily")).toEqual([2, 2, 1]);
+        expect(weekly.size).toBe(6);
+        expect(tiersOf(weekly, "weekly")).toEqual([2, 3, 1]);
+      }
+    });
+
+    /** Первые сутки, в которые выбран нужный дневной набор строк: сид — день, так что ищем день, а не подставляем строку. */
+    function dayChoosing(taskId: string): Date {
+      for (let day = 0; day < 400; day++) {
+        const at = new Date(NOON.getTime() + day * 86_400_000);
+        if (chosenDaily(at).has(taskId)) return at;
+      }
+      throw new Error(`${taskId} не выбирается ни в один из 400 дней`);
+    }
+
+    it("счётчики T-0125 двигают выбранное: элиты — daily_elite_3 до цели; забег без счётчиков и с читами — ничего; повтор забега не удваивает", async () => {
+      const service = tasksService();
+      const at = dayChoosing("daily_elite_3");
+      const newIds = ["daily_elite_3", "daily_boss_1", "daily_chest_3", "daily_crystals_1000", "daily_evolution", "daily_elite_1", "daily_chest_1", "daily_crystals_300"];
+      const valueOf = async (who: AccountRef, id: string) => (await service.view(who, at)).find((task) => task.id === id)?.value ?? 0;
+      const counters = { bossKills: 0, eliteKills: 3, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+
+      const me = await player();
+      const good = { ...finished(me.accountId), finishedAt: at, counters };
+      await service.onRun(good);
+      expect(await valueOf(me, "daily_elite_3")).toBe(3);
+      // повтор того же runId прогресс не удваивает
+      await service.onRun(good);
+      expect(await valueOf(me, "daily_elite_3")).toBe(3);
+
+      // без счётчиков новые виды стоят
+      const old = await player();
+      await service.onRun({ ...finished(old.accountId), finishedAt: at, counters: null });
+      for (const id of newIds) expect(await valueOf(old, id), `${id}: без счётчиков`).toBe(0);
+
+      // с читами забег не двигает вообще
+      const cheater = await player();
+      await service.onRun({ ...finished(cheater.accountId), finishedAt: at, counters, cheats: true });
+      for (const id of newIds) expect(await valueOf(cheater, id), `${id}: чит`).toBe(0);
     });
 
     it("два игрока видят один набор, а на следующих сутках набор другой", async () => {

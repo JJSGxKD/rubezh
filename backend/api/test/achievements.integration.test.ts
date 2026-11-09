@@ -186,9 +186,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("от 40 до 50 достижений, id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBeGreaterThanOrEqual(40);
-      expect(catalog.length).toBeLessThanOrEqual(50);
+    it("ровно 66 достижений (49 и 17 про боссов, элит, сундуки, кристаллы и эволюции), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(66);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -252,11 +251,41 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBeGreaterThanOrEqual(31);
+      expect(added.length).toBeGreaterThanOrEqual(48);
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
       expect(catalog.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
       expect(catalog.reduce((sum, task) => sum + task.gems, 0)).toBeLessThanOrEqual(200);
+    });
+
+    it("семнадцать новых достижений (T-0126): лестницы, цели, названия, награда и престиж по лестнице", () => {
+      // [id, лестница, ступень, вид, цель, название, категория, монеты, престиж]
+      const expected: [string, string, number, string, number, string, string, number, number][] = [
+        ["ach_elite_1", "elite", 1, "elite_kills", 1, "Первая элита", "combat", 100, 5],
+        ["ach_elite_10", "elite", 2, "elite_kills", 10, "Охотник на элит", "combat", 200, 10],
+        ["ach_elite_50", "elite", 3, "elite_kills", 50, "Гроза элит", "combat", 400, 20],
+        ["ach_elite_200", "elite", 4, "elite_kills", 200, "Погибель элит", "combat", 800, 40],
+        ["ach_boss_1", "boss", 1, "boss_kills", 1, "Первый босс", "combat", 200, 10],
+        ["ach_boss_5", "boss", 2, "boss_kills", 5, "Истребитель боссов", "combat", 400, 20],
+        ["ach_boss_25", "boss", 3, "boss_kills", 25, "Гроза боссов", "combat", 800, 40],
+        ["ach_chest_1", "chest", 1, "chests_opened", 1, "Первая находка", "collection", 100, 5],
+        ["ach_chest_10", "chest", 2, "chests_opened", 10, "Кладоискатель", "collection", 200, 10],
+        ["ach_chest_50", "chest", 3, "chests_opened", 50, "Хозяин сундуков", "collection", 400, 20],
+        ["ach_chest_200", "chest", 4, "chests_opened", 200, "Король сундуков", "collection", 800, 40],
+        ["ach_crystal_1k", "crystal", 1, "crystals_collected", 1_000, "Горсть кристаллов", "collection", 100, 5],
+        ["ach_crystal_10k", "crystal", 2, "crystals_collected", 10_000, "Мешок кристаллов", "collection", 200, 10],
+        ["ach_crystal_100k", "crystal", 3, "crystals_collected", 100_000, "Кристальная гора", "collection", 400, 20],
+        ["ach_evolution_1", "evolution", 1, "evolution_runs", 1, "Превращение", "collection", 200, 10],
+        ["ach_evolution_5", "evolution", 2, "evolution_runs", 5, "Эволюционист", "collection", 400, 20],
+        ["ach_evolution_25", "evolution", 3, "evolution_runs", 25, "Мастер превращений", "collection", 800, 40],
+      ];
+      expect(expected.length).toBe(17);
+      for (const [taskId, ladder, rung, kind, target, title, category, coins, prestige] of expected) {
+        const task = catalog.find((candidate) => candidate.taskId === taskId);
+        expect(task, taskId).toMatchObject({ period: "achievement", ladder, rung, kind, target, title, category, coins, prestige, gems: 0, shards: 0, passPoints: 0, hidden: false, hint: null, filter: null, tier: null, active: true });
+      }
+      // порядок в списке: с 600 шагом 10 по порядку таблицы
+      expect(expected.map(([taskId]) => catalog.find((candidate) => candidate.taskId === taskId)?.sort)).toEqual(expected.map((_row, index) => 600 + index * 10));
     });
 
     it("единая сложность (Р126): цели на сложность — только «Сложная»", () => {
@@ -719,6 +748,39 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
       const entries = await prisma.$queryRaw<{ reason: string; amount: bigint }[]>`
         SELECT reason, amount FROM wallet_entry WHERE account_id = ${me.accountId}::uuid AND source = 'task:ach_runs_1'`;
       expect(entries.map((entry) => [entry.reason, Number(entry.amount)])).toEqual([["achievement_reward", 50]]);
+    });
+
+    it("боссы (T-0126): забег с одним убитым боссом выполняет «Первого босса», «Истребителя» двигает на 1; забор монет — один раз", async () => {
+      const me = await player();
+      const counters = { bossKills: 1, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+      await tasks.onRun(recorded(me.accountId, { counters }));
+      const view = await service.view(me, NOON);
+      expect(openOf(view).find((item) => item.id === "ach_boss_1")).toMatchObject({ done: true, value: 1, target: 1 });
+      expect(openOf(view).find((item) => item.id === "ach_boss_5")).toMatchObject({ done: false, value: 1, target: 5 });
+      // забег без счётчиков боссов не двигает
+      expect(openOf(await service.view(me, NOON)).find((item) => item.id === "ach_elite_1")).toMatchObject({ done: false, value: 0 });
+
+      const before = (await wallet.balances(me.accountId)).coins;
+      expect((await tasks.claim(me, "ach_boss_1", NOON)).credited).toEqual({ coins: 200, gems: 0, shards: 0 });
+      expect((await tasks.claim(me, "ach_boss_1", NOON)).credited).toEqual({ coins: 0, gems: 0, shards: 0 });
+      expect((await wallet.balances(me.accountId)).coins).toBe(before + 200);
+      const entries = await prisma.$queryRaw<{ reason: string; amount: bigint }[]>`
+        SELECT reason, amount FROM wallet_entry WHERE account_id = ${me.accountId}::uuid AND source = 'task:ach_boss_1'`;
+      expect(entries.map((entry) => [entry.reason, Number(entry.amount)])).toEqual([["achievement_reward", 200]]);
+    });
+
+    it("эволюция (T-0126): «Гадюка» в наборе выполняет «Превращение» и засчитывается за оружие «Жало»", async () => {
+      const me = await player();
+      await tasks.onRun(recorded(me.accountId, { weapons: [{ id: "viper", level: 1 }] }));
+      const view = await service.view(me, NOON);
+      expect(openOf(view).find((item) => item.id === "ach_evolution_1")).toMatchObject({ done: true, value: 1 });
+      expect(openOf(view).find((item) => item.id === "ach_evolution_5")).toMatchObject({ done: false, value: 1 });
+      expect(openOf(view).find((item) => item.id === "ach_weapon_sting")).toMatchObject({ done: false, value: 1 });
+      expect(openOf(view).find((item) => item.id === "ach_element_poison")).toMatchObject({ done: false, value: 1 });
+      // оружие без эволюции «Превращение» не двигает
+      const other = await player();
+      await tasks.onRun(recorded(other.accountId, { weapons: [{ id: "sting", level: 5 }] }));
+      expect(openOf(await service.view(other, NOON)).find((item) => item.id === "ach_evolution_1")).toMatchObject({ done: false, value: 0 });
     });
 
     it("забор выполненного друзьями достижения не требует партнёрских прав, а невыполненного — «не выполнено»", async () => {

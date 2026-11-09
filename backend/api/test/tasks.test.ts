@@ -32,6 +32,8 @@ import {
   STATE_KINDS,
   TASK_LIMIT_GRACE_MIN,
   WEAPON_ELEMENTS,
+  WEAPON_EVOLUTIONS,
+  baseWeaponOf,
   countsForTasks,
   rewardReason,
   slotsFor,
@@ -1271,6 +1273,91 @@ describe("новые виды цели", () => {
     }
     const ids = new Set(WEAPONS.map((weapon) => weapon.id));
     for (const id of Object.keys(WEAPON_ELEMENTS)) expect(ids.has(id), `${id}: такого оружия нет в контенте`).toBe(true);
+  });
+});
+
+describe("боссы, элиты, сундуки, кристаллы, эволюции (T-0126)", () => {
+  const counters = { bossKills: 2, eliteKills: 3, chestsOpened: 4, rareChests: 1, crystals: 500, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+  const withCounters = run({ counters, weapons: [{ id: "tempest", level: 1 }] });
+
+  it("счётчики итога: боссы, элиты, сундуки и кристаллы — суммой по забегу", () => {
+    for (const kind of ["boss_kills", "elite_kills", "chests_opened", "crystals_collected", "evolution_runs"] as const) expect(RUN_KINDS[kind], kind).toMatchObject({ op: "sum" });
+    expect(RUN_KINDS.boss_kills.measure(withCounters)).toBe(2);
+    expect(RUN_KINDS.elite_kills.measure(withCounters)).toBe(3);
+    expect(RUN_KINDS.chests_opened.measure(withCounters)).toBe(4);
+    expect(RUN_KINDS.crystals_collected.measure(withCounters)).toBe(500);
+  });
+
+  it("забег без счётчиков (старый клиент, нет stats, неправдоподобные) даёт ноль по всем четырём", () => {
+    const old = run({ counters: null, weapons: [{ id: "tempest", level: 1 }] });
+    expect(RUN_KINDS.boss_kills.measure(old)).toBe(0);
+    expect(RUN_KINDS.elite_kills.measure(old)).toBe(0);
+    expect(RUN_KINDS.chests_opened.measure(old)).toBe(0);
+    expect(RUN_KINDS.crystals_collected.measure(old)).toBe(0);
+    // эволюция читается из набора и от счётчиков не зависит
+    expect(RUN_KINDS.evolution_runs.measure(old)).toBe(1);
+    // а забег остаётся забегом для прочих видов
+    expect(RUN_KINDS.runs.measure()).toBe(1);
+    expect(RUN_KINDS.kills.measure(old)).toBe(400);
+  });
+
+  it("эволюция в наборе к концу забега: одна на забег, базовое оружие и пустой набор — ноль", () => {
+    expect(RUN_KINDS.evolution_runs.measure(run({ weapons: [{ id: "tempest", level: 1 }] }))).toBe(1);
+    expect(RUN_KINDS.evolution_runs.measure(run({ weapons: [{ id: "storm", level: 3 }] }))).toBe(0);
+    expect(RUN_KINDS.evolution_runs.measure(run({ weapons: [] }))).toBe(0);
+    // две эволюции в забеге — всё равно один забег с эволюцией
+    expect(RUN_KINDS.evolution_runs.measure(run({ weapons: [{ id: "tempest", level: 1 }, { id: "viper", level: 1 }, { id: "spark", level: 2 }] }))).toBe(1);
+    expect(RUN_KINDS.evolution_runs.measure(run({ weapons: [{ id: "spark", level: 4 }, { id: "forge", level: 1 }] }))).toBe(1);
+  });
+
+  it("эволюция считается своим базовым оружием и его стихией", () => {
+    const evolved = run({ weapons: [{ id: "tempest", level: 1 }] });
+    expect(RUN_KINDS.weapon_runs.measure(evolved, { weapon: "storm" })).toBe(1);
+    expect(RUN_KINDS.weapon_runs.measure(evolved, { weapon: "spark" })).toBe(0);
+    expect(RUN_KINDS.element_runs.measure(evolved, { element: "lightning" })).toBe(1);
+    expect(RUN_KINDS.element_runs.measure(evolved, { element: "fire" })).toBe(0);
+    expect(RUN_KINDS.weapon_runs.measure(run({ weapons: [{ id: "viper", level: 1 }] }), { weapon: "sting" })).toBe(1);
+    // эволюция без стихии («Звездопад») стихии базового не имеет — у искры её нет
+    expect(RUN_KINDS.element_runs.measure(run({ weapons: [{ id: "starfall", level: 1 }] }), { element: "fire" })).toBe(0);
+  });
+
+  it("baseWeaponOf: эволюция — базовое, остальное — само себя", () => {
+    expect(baseWeaponOf("spark")).toBe("spark");
+    expect(baseWeaponOf("starfall")).toBe("spark");
+    expect(baseWeaponOf("tempest")).toBe("storm");
+    expect(baseWeaponOf("unknown_weapon")).toBe("unknown_weapon");
+    // служебные ключи прототипа не принимаются за эволюцию
+    expect(baseWeaponOf("constructor")).toBe("constructor");
+    expect(baseWeaponOf("toString")).toBe("toString");
+  });
+
+  it("схема: у новых видов фильтра нет; достижение со ступенью по-прежнему отказ", () => {
+    expect(taskDefSchema.safeParse(def("daily_boss_1", { kind: "boss_kills", target: 1, tier: "hard" })).success).toBe(true);
+    expect(taskDefSchema.safeParse(def("daily_boss_1", { kind: "boss_kills", target: 1, filter: { weapon: "storm" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_evolution", { kind: "evolution_runs", target: 1, tier: "hard" })).success).toBe(true);
+    for (const kind of ["elite_kills", "chests_opened", "crystals_collected"] as const) {
+      expect(taskDefSchema.safeParse(def(`daily_${kind}`, { kind, filter: { element: "fire" } })).success, kind).toBe(false);
+      expect(taskDefSchema.safeParse(def(`daily_${kind}`, { kind })).success, kind).toBe(true);
+    }
+    expect(taskDefSchema.safeParse(def("ach_boss_1", { period: "achievement", kind: "boss_kills", target: 1, tier: "easy" })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("ach_boss_1", { period: "achievement", kind: "boss_kills", target: 1, category: "combat", ladder: "boss", rung: 1, prestige: 10 })).success).toBe(true);
+  });
+
+  it("эволюции на сервере — как в контенте игры: каждая есть с тем же базовым, лишних нет, стихия базового", () => {
+    const evolved = WEAPONS.filter((weapon) => weapon.evolvedFrom !== undefined);
+    expect(evolved.length).toBeGreaterThan(0);
+    for (const weapon of evolved) {
+      expect(WEAPON_EVOLUTIONS[weapon.id as keyof typeof WEAPON_EVOLUTIONS], `${weapon.id}: базовое`).toBe(weapon.evolvedFrom);
+    }
+    const ids = new Set(WEAPONS.map((weapon) => weapon.id));
+    for (const [id, base] of Object.entries(WEAPON_EVOLUTIONS)) {
+      expect(ids.has(id), `${id}: такого оружия нет в контенте`).toBe(true);
+      expect(WEAPONS.find((weapon) => weapon.id === id)?.evolvedFrom, `${id}: эволюция ли в контенте`).toBe(base);
+    }
+    expect(Object.keys(WEAPON_EVOLUTIONS).length).toBe(evolved.length);
+    for (const weapon of evolved) {
+      expect(WEAPON_ELEMENTS[weapon.id], `${weapon.id}: стихия эволюции`).toBe(WEAPON_ELEMENTS[weapon.evolvedFrom ?? ""]);
+    }
   });
 });
 
