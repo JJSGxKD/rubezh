@@ -3,7 +3,7 @@ id: T-0175
 title: Лента живых событий — убитый босс и редкий сундук: счётчик редких сундуков и события
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -37,6 +37,16 @@ shared:
   - packages/shared-types/src/index.ts
   - docs/39-retention-mechanics.md
   - docs/22-analytics-and-metrics.md
+  - packages/app-shell/src/state/run-interrupted.ts
+  - packages/app-shell/test/death-overlay-layout.test.ts
+  - packages/app-shell/test/gem-continue.test.ts
+  - packages/app-shell/test/run-interrupted.test.ts
+  - packages/app-shell/test/run-rubezh.test.ts
+  - backend/api/src/modules/feed/feed-events.ts
+  - backend/api/test/run-streaks.test.ts
+  - backend/api/test/run-verdict.test.ts
+  - backend/api/test/runs.test.ts
+  - backend/api/test/runs.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
