@@ -97,8 +97,57 @@ describe("feedEventsOf: что из забега попадает в ленту"
     expect(feedEventsOf(recorded({ survivalSec: 100 }), { longRunSec: 60 }, false)).toHaveLength(1);
   });
 
-  it("виды схемы: четыре, босс и сундук читаются, но здесь не создаются", () => {
+  it("виды схемы: четыре", () => {
     expect([...FEED_KINDS]).toEqual(["long_run", "week_record", "boss", "chest"]);
+  });
+});
+
+describe("feedEventsOf: босс и редкий сундук (T-0175)", () => {
+  const rules = { longRunSec: 600 };
+  const counters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+
+  it("bossKills: 2 при rareChests: 0 — одно событие boss без времени", () => {
+    const events = feedEventsOf(recorded({ survivalSec: 300, counters: { ...counters, bossKills: 2 } }), rules, false);
+
+    expect(events).toEqual([{ id: "run-1:boss", kind: "boss", accountId: ALICE, atMs: NOW.getTime(), seconds: null }]);
+  });
+
+  it("rareChests: 1 при bossKills: 0 — одно событие chest без времени", () => {
+    const events = feedEventsOf(recorded({ survivalSec: 300, counters: { ...counters, chestsOpened: 1, rareChests: 1 } }), rules, false);
+
+    expect(events).toEqual([{ id: "run-1:chest", kind: "chest", accountId: ALICE, atMs: NOW.getTime(), seconds: null }]);
+  });
+
+  it("один вид на забег, сколько бы боссов и сундуков ни было", () => {
+    const events = feedEventsOf(recorded({ survivalSec: 300, counters: { ...counters, bossKills: 5, chestsOpened: 9, rareChests: 4 } }), rules, false);
+
+    expect(events.map((item) => item.kind).sort()).toEqual(["boss", "chest"]);
+  });
+
+  it("оба вида — два события с разными id; вместе с long_run и week_record — четыре", () => {
+    const run = recorded({ survivalSec: 900, counters: { ...counters, bossKills: 1, chestsOpened: 1, rareChests: 1 } });
+
+    expect(feedEventsOf(run, rules, false).map((item) => item.id).sort()).toEqual(["run-1:boss", "run-1:chest", "run-1:long_run"]);
+    const all = feedEventsOf(run, rules, true);
+    expect(all).toHaveLength(4);
+    expect(new Set(all.map((item) => item.id)).size).toBe(4);
+  });
+
+  it("нули в счётчиках — ничего", () => {
+    expect(feedEventsOf(recorded({ survivalSec: 300, counters }), rules, false)).toEqual([]);
+  });
+
+  it("counters: null (старая сборка или неправдоподобные) — ни босса, ни сундука", () => {
+    expect(feedEventsOf(recorded({ survivalSec: 300, counters: null }), rules, false)).toEqual([]);
+  });
+
+  it("нерейтинговый забег, читы, вердикт не ok — ни одного события", () => {
+    const withCounters = { ...counters, bossKills: 1, chestsOpened: 1, rareChests: 1 };
+
+    expect(feedEventsOf(recorded({ ranked: false, counters: withCounters }), rules, false)).toEqual([]);
+    expect(feedEventsOf(recorded({ cheats: true, counters: withCounters }), rules, false)).toEqual([]);
+    expect(feedEventsOf(recorded({ verdict: "suspicious", counters: withCounters }), rules, false)).toEqual([]);
+    expect(feedEventsOf(recorded({ verdict: "rejected", counters: withCounters }), rules, false)).toEqual([]);
   });
 });
 

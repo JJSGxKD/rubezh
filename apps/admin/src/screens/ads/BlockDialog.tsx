@@ -30,7 +30,7 @@ import { Dialog } from "../../ui/dialog";
 import { InlineCode } from "../../ui/inline-code";
 import { HELP } from "../../ui/help";
 import { Badge, Button, Field, Help, Input, Notice } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 /**
  * Блок места — по шагам (docs/35-stage4-plan.md WP12, часть 5): сеть → место
@@ -76,7 +76,7 @@ export function BlockDialog({ view, block, onClose, onSaved }: { view: AdsView; 
     if (ready === null) return;
     const result = await saveBlock(api, ready);
     if (!result.ok) {
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(`${editing === null ? "Блок заведён" : "Блок сохранён"}: ${profile?.title ?? networkKey}, ${PLACE_TITLES[result.data.place]}`, {

@@ -27,7 +27,7 @@ import { redisDatabase } from "./helpers/redis-database.js";
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 2);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
-const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
+const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, rareChests: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
 
 describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   let config: AppConfig;
