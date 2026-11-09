@@ -76,11 +76,12 @@ export function rubezhGuide(): { atSec: number; guard: EnemyDef; rewardMul: numb
 
 /**
  * Раздел «Осада» (T-0392, Р197): с какой секунды следит рубеж и сколько стоять до осады — из контента.
- * Игроку это не угроза, а правило: «стой дольше и получишь», поэтому гайдбук называет числа.
+ * Игроку это не угроза, а правило: «стой дольше и получишь», поэтому гайдбук называет числа. Элиты в
+ * тексте только если осада их приводит: числа правит геймдизайнер, и описание не должно обещать лишнего.
  */
-export function siegeGuide(): { fromSec: number; holdSec: number } {
-  const { fromSec, holdSec } = CONTENT_SNAPSHOT.siege;
-  return { fromSec, holdSec };
+export function siegeGuide(): { fromSec: number; holdSec: number; elites: boolean } {
+  const { fromSec, holdSec, eliteCount } = CONTENT_SNAPSHOT.siege;
+  return { fromSec, holdSec, elites: eliteCount > 0 };
 }
 
 /** Ступени врагов по порядку открытия: та же тварь, но матёрее. */

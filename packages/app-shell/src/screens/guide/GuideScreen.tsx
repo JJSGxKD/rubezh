@@ -127,7 +127,7 @@ function Basics(): ReactNode {
         index={1}
         icon={<Swords size={20} />}
         title={t("guide.siege.title")}
-        text={t("guide.siege.text", { time: formatDuration(siege.fromSec), hold: String(Math.round(siege.holdSec)) })}
+        text={t(siege.elites ? "guide.siege.textElites" : "guide.siege.text", { time: formatDuration(siege.fromSec), hold: String(Math.round(siege.holdSec)) })}
       />
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>

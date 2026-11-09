@@ -51,11 +51,16 @@ describe("гайдбук", () => {
 
   it("рассказывает про осаду числами из контента: с какой секунды и сколько стоять", () => {
     const { fromSec, holdSec } = CONTENT_SNAPSHOT.siege;
-    expect(siegeGuide()).toEqual({ fromSec, holdSec });
+    expect(siegeGuide()).toEqual({ fromSec, holdSec, elites: CONTENT_SNAPSHOT.siege.eliteCount > 0 });
     expect(hasTranslation("guide.siege.title")).toBe(true);
+    expect(hasTranslation("guide.siege.text")).toBe(true);
+    expect(hasTranslation("guide.siege.textElites")).toBe(true);
     const markup = renderToStaticMarkup(createElement(GuideScreen));
     expect(markup).toContain("Осада");
     expect(markup).toContain(`после ${formatDuration(fromSec)} стоит на одном месте дольше ${String(Math.round(holdSec))} с`);
+    // Элиты в описании ровно тогда, когда осада их приводит
+    expect(markup.includes("строй стражей и приходят элиты")).toBe(CONTENT_SNAPSHOT.siege.eliteCount > 0);
+    expect(markup).toContain("вокруг встаёт строй стражей");
   });
 
   it("рассказывает про заморозку числами из контента: срок и срок для боссов", () => {
