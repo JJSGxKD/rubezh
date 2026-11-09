@@ -425,7 +425,21 @@ WP44). `account_restricted` и `account_restriction_lifted`, которые пл
 системой на срок (Р115, `tasks/T-0177`), когда более строгое ограничение
 осталось, — `restriction_system_kept` (аккаунт, вид, причина); отзыв
 начисленного кошельком — `wallet_revoked` с полем `reason`: `task_revoke` у
-награды за задание при отписке, `refund_revoke` у возврата звёзд. Рейтинг —
+награды за задание при отписке, `refund_revoke` у возврата звёзд.
+Перепроверка подписки после награды (Р115, `tasks/T-0178`) пишет в лог модуля
+`tasks`, без серверных событий в словаре и без меток Prometheus (аккаунт и
+задание — высокая кардинальность): `channel_watch_started` (окно заведено),
+`channel_unsubscribed` (аккаунт, задание, номер события отписки, списанное по
+ресурсам, закрыты ли задания), `channel_watch_unavailable` (площадка не
+ответила или таймаут), `channel_watch_misconfigured` (уровень error: бота нет
+в канале или нет права видеть участников), `channel_watch_expired` (окно
+закрыто без ответа площадки, штрафа нет), `channel_watch_orphaned` (нет
+аккаунта или канала у задания), `channel_watch_failed` (error: проход
+споткнулся на паре, окна ждут следующего), `channel_watch_not_started` (error:
+награда выдана, а окно не завелось), `channel_watch_notice_rejected` (error:
+уведомление не по схеме, штраф от этого не зависает) и, у расписания,
+`channel_watch_tick_failed`, `channel_watch_worker_error`,
+`channel_watch_schedule_failed`. Рейтинг —
 `rating_restricted` и `rating_restored` (из досок и обратно) и
 `rating_restricted_swept`, если обход убрал вернувшегося гонкой; забег,
 сданный под ограничением, помечен в `run.rating_restricted`. Забег, снятый

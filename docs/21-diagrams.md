@@ -130,6 +130,8 @@ erDiagram
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
+    ACCOUNT ||--o{ TASK_CHANNEL_WATCH : "окна перепроверки подписки после награды"
+    TASK_DEF ||--o{ TASK_CHANNEL_WATCH : "задание, чья награда под наблюдением"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -1228,6 +1230,20 @@ erDiagram
         string boost_id PK "id буста из каталога бустов"
         int count "подарки, не меньше нуля (CHECK); тратит включение буста на забег (T-0312)"
     }
+
+    TASK_CHANNEL_WATCH {
+        uuid account_id PK,FK "каскадом"
+        string task_id PK,FK "задание-подписка на канал"
+        date period_start PK "срок награды — как в TASK_PROGRESS"
+        datetime started_at "забор награды"
+        datetime watch_until "started_at + 7 суток (Р115)"
+        datetime next_check_at "частичный индекс только по state = watching"
+        datetime checked_at "nullable: последняя проверка с ответом площадки"
+        string state "watching, kept, expired, penalized (CHECK)"
+        int event_no "nullable: номер события отписки пары; только у penalized (CHECK)"
+        datetime penalized_at "nullable: момент штрафа; вместе с event_no"
+        json revoked "nullable: списано по ресурсам coins, gems, shards"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1337,6 +1353,25 @@ erDiagram
   Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
   хранится: он одинаков у всех игроков и реплик, забег двигает только
   выбранные, невыбранные нельзя забрать, знак меню их не считает.
+- **`TASK_CHANNEL_WATCH` — перепроверка подписки после награды**
+  (`35-stage4-plan.md` Р115, T-0178): строка на каждую выданную награду за
+  подписку на канал (`kind = channel`) на площадке, у которой есть проверка
+  участника (сейчас Telegram), ключ — как у `TASK_PROGRESS`. Ежедневная и
+  еженедельная подписка (Р82) даёт по награде за срок, и у каждой своё окно в
+  7 суток. Окно заводит забор награды после выдачи, и только запрос, чья
+  отметка «забрано» встала первой; награды, выданные до выката, окон не имеют.
+  Проход раз в 5 минут (`ChannelWatchJob`, очередь BullMQ с постоянным id)
+  берёт до 200 окон с наступившим `next_check_at` — частичный индекс по
+  `watching` — и по одному вопросу на пару «игрок + задание» спрашивает бота
+  площадки. Нет ответа (сбой, таймаут, ошибка настройки канала) — штрафа нет:
+  окно откладывается, а через сутки после конца закрывается как `expired`.
+  Не состоит — событие отписки: награды всех открытых окон пары списываются
+  разом (`revokeUpTo`, не больше начисленного и не больше баланса) и
+  считаются одним нарушением с общим `event_no`; со второго события пары
+  `partner_tasks` закрывается на 30 суток. Событие идёт под замком пары
+  (`pg_try_advisory_xact_lock`, без ожидания) и кончается отметкой
+  `penalized`, поэтому всё до неё идемпотентно по ключам. Вайп стирает
+  таблицу вместе с прогрессом заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -2417,7 +2452,7 @@ flowchart LR
     WHEEL -. "уровень аккаунта" .-> PROG
     BADGES -. "крутка ждёт" .-> WHEEL
     CADDY -- "/api/v1/tasks" --> TASKS
-    TASKS -- "task_def, task_progress, task_points_claim, task_run, task_participant" --> PG
+    TASKS -- "task_def, task_progress, task_points_claim, task_run, task_participant, task_channel_watch" --> PG
     CADDY -- "/api/v1/media/хэш.webp" --> MEDIA
     MEDIA -- "media_image" --> PG
     ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
@@ -2430,6 +2465,10 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    TASKS -. "отписка после награды: отзыв награды (revokeUpTo)" .-> WALLET
+    TASKS -. "повторная отписка: закрыть партнёрские задания на 30 суток" .-> RESTR
+    TASKS -. "уведомление task_unsubscribed" .-> NOTIF
+    TASKS -. "очередь channel-watch: перепроверка раз в 5 минут" .-> QUEUE
     CADDY -- "/api/v1/achievements" --> ACHIEV
     ACHIEV -- "achievement_rarity, achievement_favorite; престиж из task_progress" --> PG
     ACHIEV -- "achievements:rarity:lock, лок пересчёта" --> REDIS
@@ -4530,6 +4569,80 @@ sequenceDiagram
   есть хоть один забег: разделы открыты сразу.
 - **Закрыты два раздела:** награда дня и забор задания. Список заданий
   отдаётся как обычно — оболочка его просто не показывает.
+
+### 4.36 Отписка от канала после награды: окно, перепроверка, списание (этап 4, реализовано)
+
+Награда за подписку на канал выдаётся один раз и дальше стоила бы игроку
+ничего: подписался, забрал, отписался. Р115 (`35-stage4-plan.md`,
+`tasks/T-0178`) держит награду неделю: сервер перепроверяет подписку и
+списывает награду отписавшемуся. Площадку домен знает только через порт
+`ChannelMemberships` (`platforms/ports/channel-membership.ts`); у площадок без
+проверки (MAX, VK) окна нет и штрафа нет.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Клиент
+    participant T as TasksService
+    participant W as ChannelWatchService
+    participant J as Планировщик BullMQ, раз в 5 минут
+    participant DB as Postgres task_channel_watch
+    participant P as Порт ChannelMemberships
+    participant L as Кошелёк
+    participant R as Ограничения
+    participant N as Лента уведомлений
+
+    K->>T: POST /tasks/:id/claim — награда за подписку
+    T->>L: grant, ключ task:аккаунт:задание:срок:ресурс
+    T->>DB: markClaimed — условная отметка «забрано»
+    opt отметка встала у этого запроса, kind = channel
+        T->>W: start(аккаунт, задание, срок, момент забора)
+        W->>DB: INSERT окно (watch_until = забор + 7 суток), ON CONFLICT DO NOTHING
+    end
+    Note over T,W: сбой постановки окна награду не отменяет: строка channel_watch_not_started
+
+    J->>W: tick(now)
+    W->>DB: due(now, 200) — watching с наступившим next_check_at
+    W->>DB: каталог заданий — один запрос на проход
+    loop по одной паре «игрок + задание», без параллели
+        W->>P: isMember(канал, игрок) с потолком 5 секунд
+        alt состоит
+            W->>DB: окна на исходе — kept, остальные — postpone на 6 часов
+        else нет ответа: сбой, таймаут, ошибка настройки
+            W->>DB: postpone; через сутки после конца окна — expired, штрафа нет
+        else не состоит
+            W->>DB: withPairLock — pg_try_advisory_xact_lock(пара), занято — пропуск до следующего прохода
+            W->>DB: openOf — все открытые окна пары, lastEventNo + 1
+            loop каждое окно и ресурс награды
+                W->>L: revokeUpTo(ключ награды, ключ отзыва taskrevoke:…), причина task_revoke
+            end
+            opt событие № 2 и дальше
+                W->>R: imposeBySystemFor(partner_tasks, task_unsubscribe, 30 суток)
+            end
+            W->>N: deliver task_unsubscribed, ключ события task_unsubscribed:аккаунт:задание:№
+            W->>DB: markPenalized — последним, state = penalized, event_no, revoked
+        end
+    end
+```
+
+- **Одно событие на пару.** Ежедневная подписка, забранная несколько дней
+  подряд, даёт несколько окон; одна отписка списывает награды всех открытых
+  окон разом и считается одним нарушением. Закрытие партнёрских заданий —
+  со второго события пары, а не со второго окна: иначе отписавшийся один раз
+  получил бы «повтор».
+- **Не ниже нуля.** `revokeUpTo` забирает не больше записи награды и не больше
+  баланса; потраченное не возвращается, и об этом уведомление говорит словами
+  «награда уже потрачена». Очки пасса не списываются.
+- **Нет ответа — нет штрафа.** Недоступность площадки, таймаут и ошибка
+  настройки канала откладывают окно; окно, на которое площадка так и не
+  ответила, закрывается `expired` через сутки после конца.
+- **Оборванный проход.** Списание держится на ключе отзыва, уведомление — на
+  ключе события, закрытие не ослабляет действующее, а `markPenalized` идёт
+  последним и пишет только окна в `watching`. Повтор доделывает событие: номер
+  тот же, списано один раз, уведомление одно.
+- **Две реплики.** Планировщик с постоянным id выпускает одно задание на
+  тик; от двойной работы на одной паре защищает ещё и замок пары. Площадку под
+  замком и внутри транзакции не спрашивают (`15-engineering-standards.md` §4.2).
 
 ## 5. Топология развёртывания
 
