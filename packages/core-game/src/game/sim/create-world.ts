@@ -503,6 +503,7 @@ export function createWorld(options: CreateWorldOptions): World {
       freezeTotalTicks: 0,
       chestsFound: 0,
       chestsOpened: 0,
+      rareChestsOpened: 0,
       distance: 0,
       peakEnemies: 0,
       enemiesRecycled: 0,

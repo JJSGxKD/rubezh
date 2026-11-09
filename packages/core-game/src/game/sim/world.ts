@@ -210,6 +210,8 @@ export interface RunStats {
   chestsFound: number;
   /** открытые сундуки */
   chestsOpened: number;
+  /** открытые сундуки наибольшего размера из `CHESTS.sizes` (tasks/T-0175) */
+  rareChestsOpened: number;
   /** пройденное расстояние: в бесконечном мире это показатель стиля игры */
   distance: number;
   /** пик числа живых врагов за забег — сколько игрок вытянул одновременно */

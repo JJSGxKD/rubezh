@@ -14,7 +14,7 @@ import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, Field, FieldRow, Input, Notice, Panel } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 /**
  * Задания рекламных сетей (docs/35-stage4-plan.md WP13, часть 6): строка на
@@ -144,7 +144,7 @@ function EditDialog({ row, onClose, onSaved }: { row: NetworkTaskRow; onClose: (
     setSaving(true);
     const result = await saveNetworkTask(api, input);
     setSaving(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     onSaved(result.data);
   };
 

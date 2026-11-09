@@ -9,7 +9,7 @@ import { countersOf, countersPlausible, type RunCounters } from "../src/modules/
  * порогов (Р7): серия не длиннее забега, убийства по стихиям не больше убитых.
  */
 
-const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
 const CONTEXT = { survivalSec: 600, enemiesKilled: 1000 };
 
 describe("countersOf: новые поля", () => {
@@ -18,6 +18,7 @@ describe("countersOf: новые поля", () => {
       bossKills: 1,
       eliteKills: 2,
       chestsOpened: 3,
+      rareChests: 0,
       crystals: 4,
       noHitSec: 0,
       noKillSec: 0,

@@ -4,7 +4,7 @@ import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Button, Field, Input, Notice, Select } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toastError } from "../../ui/toast";
 
 /**
  * Окно прокси: добавление и правка. Пароль живёт только в состоянии окна:
@@ -38,7 +38,7 @@ export function ProxyDialog({
     setSaving(true);
     const result = existing === null ? await createProxy(api, form) : await updateProxy(api, existing.proxyId, form);
     setSaving(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     onSaved(result.data, existing === null);
   };
 

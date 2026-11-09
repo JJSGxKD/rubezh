@@ -1662,6 +1662,8 @@ export interface RunResult {
   eliteKills: number;
   /** открытые сундуки забега */
   chestsOpened: number;
+  /** из них редких: открытых сундуков наибольшего размера из таблицы весов (tasks/T-0175) */
+  rareChestsOpened: number;
   /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
   crystalsCollected: number;
   /**
@@ -1824,6 +1826,8 @@ export interface RunFinishStats {
   bossKills?: number;
   eliteKills?: number;
   chestsOpened?: number;
+  /** редкие сундуки: не больше `chestsOpened` (tasks/T-0175) */
+  rareChests?: number;
   crystals?: number;
   /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
   noHitSec?: number;
@@ -1908,6 +1912,8 @@ export interface LeaderboardEntry {
   isMe: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** поддержал проект (Р109); нет поля — не поддержал */
+  supporter?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
