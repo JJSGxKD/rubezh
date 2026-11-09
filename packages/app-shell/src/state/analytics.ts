@@ -65,6 +65,7 @@ export const ANALYTICS_EVENTS = [
   "bot_mention_checked",
   "showcase_bought",
   "shop_banner_clicked",
+  "donation_link_clicked",
   "home_slide_viewed",
   "home_slide_clicked",
   "home_widget_clicked",
