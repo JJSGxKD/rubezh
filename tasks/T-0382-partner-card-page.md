@@ -7,17 +7,14 @@ status: ready
 owner:
 author: claude-lead2-3
 size: M
-depends_on: [T-0218, T-0221]
+depends_on: [T-0218, T-0221, T-0410]
 zones:
   - apps/admin/src/screens/partners/PartnerCard.tsx
   - apps/admin/src/screens/partners/PartnerHeader.tsx
   - apps/admin/src/screens/partners/partner-card-rules.ts
   - apps/admin/src/screens/partners/PartnersScreen.tsx
-  - apps/admin/src/ui/card-tabs.tsx
   - apps/admin/test/partner-card.test.ts
-  - apps/admin/test/card-tabs.test.ts
 shared:
-  - apps/admin/src/screens/players/PlayerCardView.tsx
   - docs/29-admin-panel.md
 runner: local
 executor: sonnet-5.5
@@ -30,7 +27,7 @@ batch: 5
 
 # T-0382. Карточка партнёра — страница с вкладками вместо окна
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0382.json)](README.md#значки-статуса) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md) [![T-0221](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json&label=T-0221)](T-0221-partner-materials.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0382.json)](README.md#значки-статуса) [![T-0218](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json&label=T-0218)](T-0218-partner-cabinet-links-promo.md) [![T-0221](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0221.json&label=T-0221)](T-0221-partner-materials.md) [![T-0410](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0410.json&label=T-0410)](T-0410-admin-tab-bar.md)
 
 ## Зачем
 
@@ -69,8 +66,9 @@ batch: 5
    T-0218. «← Партнёры» над шапкой, как «← Игроки».
 6. **Вкладка — в адресе**, без вкладки — «Сводка»; неизвестная — «Сводка»
    (как `cardTabOf`). Смена вкладки карточку не перечитывает.
-7. **Вкладки — общим компонентом** `ui/card-tabs.tsx`: карточка игрока
-   переходит на него отдельным коммитом-рефакторингом, поведение то же.
+7. **Вкладки — общим компонентом** `TabBar` (`ui/tab-bar.tsx`): его выносит
+   из карточки игрока T-0410 (Р201), своего компонента вкладок задача не
+   заводит.
 
 ## Как сейчас
 
@@ -84,21 +82,17 @@ batch: 5
   T-0221 в разделе «Партнёры» — вкладка «Материалы» (`PartnersScreen.tsx`).
   Задача берётся после обеих и переносит их кнопки и вкладки как есть.
 - Эталон — карточка игрока: `screens/players/PlayerCardView.tsx` (вкладка из
-  `useHashRoute()?.tab`, `navigate({ section, id, tab })`, локальный `Tabs`
-  `:72–94`), `card-rules.ts` (`CARD_TABS`, `cardTabOf`, `tabCounts`).
+  `useHashRoute()?.tab`, `navigate({ section, id, tab })`, после T-0410 — `TabBar`
+  вместо локального `Tabs`), `card-rules.ts` (`CARD_TABS`, `cardTabOf`, `tabCounts`).
 - `ui/router.ts` — `navigate`, `useHashRoute`; `routes.ts` — `hrefOf` с третьей
   частью адреса.
 
 ## Шаги по порядку
 
 1. **Тесты первым коммитом** (раздел «Тесты»).
-2. **Рефакторинг отдельным коммитом, поведение то же:** `ui/card-tabs.tsx` —
-   `CardTabs<T extends string>({ label, tabs: readonly { id: T; title: string }[],
-   active, counts, onSelect })` — ровно разметка и классы нынешнего `Tabs` из
-   `PlayerCardView.tsx` (`role="tablist"`, `aria-selected`, число — значком).
-   `PlayerCardView.tsx`: локальный `Tabs` удалить, использовать `CardTabs` с
-   `label="Карточка игрока"`; больше в файле ничего не править. Тесты карточки
-   игрока зелёные без правки.
+2. **Вкладки** — `TabBar` из `ui/tab-bar.tsx` (T-0410) с `label="Карточка
+   партнёра"` и `tabs={partnerTabs(canEdit)}`. Карточку игрока задача не
+   трогает: её перевела на `TabBar` T-0410.
 3. **`partner-card-rules.ts`**:
 
    ```ts
@@ -119,7 +113,7 @@ batch: 5
    `PartnerCard.tsx:91–111` и от T-0218, их условия и заглушки `NO_LINK_FOR_INACTIVE`
    — как есть).
 5. **`PartnerCard.tsx`** — страница вместо `Dialog`: «← Партнёры», загрузка
-   (`Loading`), ошибка (`ErrorNotice` с «Повторить»), шапка, `CardTabs`,
+   (`Loading`), ошибка (`ErrorNotice` с «Повторить»), шапка, `TabBar`,
    содержимое вкладки по решению 4. `PartnerDialog` и `PartnerStatusDialog`
    остаются окнами — поверх страницы, а не вместо неё. Пропсы: `{ partnerId,
    canEdit, onChanged }`, `onClose` больше нет.
@@ -136,7 +130,7 @@ batch: 5
   переносятся как есть.
 - Вкладку «Реклама» — T-0383.
 - Кабинет партнёра (`screens/cabinet/**`) — T-0218/T-0219.
-- Карточку игрока, кроме замены `Tabs` на `CardTabs` (шаг 2).
+- Карточку игрока (`PlayerCardView.tsx`) и `ui/tab-bar.tsx` — T-0410.
 
 ## Сценарий и интерфейс
 
@@ -165,9 +159,6 @@ batch: 5
     порядке решения 3;
   - `hrefOf({ section: "partners", id: "<uuid>", tab: "funnel" })` →
     `#/partners/<uuid>/funnel`.
-- `apps/admin/test/card-tabs.test.ts` (`renderToStaticMarkup`): `role="tablist"` с
-  подписью, у активной `aria-selected="true"`, число у вкладки — значком, нуля
-  нет.
 - Существующие `partners.test.ts`, `postbacks.test.ts`, `card-rules.test.ts`,
   `players.test.ts` зелёные.
 
@@ -183,8 +174,7 @@ batch: 5
 
 - `docs/29-admin-panel.md`: строка «Партнёры» в таблице модулей — карточка
   открывается страницей `#/partners/<id>/<вкладка>`, вкладки «Сводка»,
-  «Ссылки и коды», «Воронка», «Постбэк» (Р191); в описании UI-кита — `CardTabs`
-  (`ui/card-tabs.tsx`) общий для карточек игрока и партнёра.
+  «Ссылки и коды», «Воронка», «Постбэк» (Р191).
 
 ## Критерии приёмки
 
@@ -192,8 +182,6 @@ batch: 5
   работает.
 - [ ] На вкладках — всё, что было в окне, без потерь; «Постбэк» — только с
   `partners.edit`.
-- [ ] Карточка игрока на `CardTabs` выглядит и работает, как раньше (отдельный
-  коммит).
 - [ ] Снимки вкладок на 390 и 1440 в PR.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
