@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createNoopPlatformUi, type PlatformAdapter } from "@bh/shared-types";
+import { markSupporter } from "../src/state/donations-api";
 import { authorizedFetch, resetSessionForTests, useSession } from "../src/state/session";
 import { initShell, type ShellCapabilities } from "../src/state/shell";
 import type { AnalyticsEvent, AnalyticsPayload } from "../src/state/analytics";
@@ -35,7 +36,7 @@ function shell(options: { launchData?: string | null; auth?: boolean; devUser?: 
 }
 
 /** Ответ сервера: `data` в конверте — как отдаёт бэкенд. */
-function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string; startKind?: string; tester?: true } = {}): string {
+function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?: string; startKind?: string; tester?: true; supporter?: true } = {}): string {
   return JSON.stringify({
     data: {
       ...(patch.startKind === undefined ? {} : { launch: { startKind: patch.startKind } }),
@@ -49,6 +50,7 @@ function sessionBody(patch: { created?: boolean; expiresInSec?: number; refresh?
         createdAt: "2026-09-23T00:00:00.000Z",
         created: patch.created ?? false,
         ...(patch.tester === undefined ? {} : { tester: patch.tester }),
+        ...(patch.supporter === undefined ? {} : { supporter: patch.supporter }),
       },
     },
   });
@@ -106,6 +108,30 @@ describe("вход в сессию", () => {
     stubFetch([() => ok(sessionBody())]);
     await useSession.getState().signIn();
     expect(useSession.getState().account?.tester).toBeUndefined();
+  });
+
+  it("признак «Меценат» в аккаунте разбирается; без поля флага нет", async () => {
+    stubFetch([() => ok(sessionBody({ supporter: true }))]);
+    await useSession.getState().signIn();
+    expect(useSession.getState().account?.supporter).toBe(true);
+
+    resetSessionForTests();
+    stubFetch([() => ok(sessionBody())]);
+    await useSession.getState().signIn();
+    expect(useSession.getState().account?.supporter).toBeUndefined();
+  });
+
+  it("после успешного доната знак ставится в сессию сразу, без нового входа; без сессии — ничего", async () => {
+    markSupporter();
+    expect(useSession.getState().account).toBeNull();
+
+    stubFetch([() => ok(sessionBody())]);
+    await useSession.getState().signIn();
+    expect(useSession.getState().account?.supporter).toBeUndefined();
+    markSupporter();
+    expect(useSession.getState().account?.supporter).toBe(true);
+    expect(useSession.getState().account?.displayName).toBe("Дым");
+    expect(useSession.getState().status).toBe("ready");
   });
 
   it("о заведении аккаунта сообщает ровно раз, о входе — каждый раз", async () => {
