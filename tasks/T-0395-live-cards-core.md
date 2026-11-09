@@ -197,7 +197,7 @@ HTML карточек и Telegram — T-0396.
      finalState?(last: Record<string, unknown>, at: Date): Record<string, unknown>;
      caption(state: Record<string, unknown>): string;
      fallback(state: Record<string, unknown>): RichDocument; // площадка без карточек
-     act?(account: AccountRef, action: string, arg: string | null, at: Date): Promise<{ outcome: "ok" | "already" | "locked"; result: Record<string, unknown> }>;
+     act?(account: AccountRef, action: string, arg: string | null, at: Date): Promise<{ outcome: "ok" | "already" | "locked" | "limited"; result: Record<string, unknown> }>;
      actions: readonly string[];                     // разрешённые действия кроме `r`
    }
    @Injectable() export class BotCardKinds { register(kind: BotCardKind): void; get(kind: string): BotCardKind | undefined; all(): BotCardKind[] }
@@ -265,7 +265,9 @@ HTML карточек и Telegram — T-0396.
    - имя `notify` в `registerPaced` — исключение;
    - модуль экспортирует `BotNotifyQueue`.
 9. **`bot-cards.service.ts`** — `BotCardsService`:
-   - `send({ accountId, kind, origin }, at)` → `CardSendResult`
+   - `send({ accountId, kind, origin, silent? }, at)` → `CardSendResult`. `silent`
+     задан — звук уже решил вызывающий (дубль уведомлений, T-0398), и шаг 6
+     пропускается: счётчик звука не растёт дважды.
      (`"sent" | "fallback" | "off" | "opted_out" | "not_allowed" | "deferred" | "skipped" | "blocked" | "failed" | "busy"`).
      По порядку:
      1. выключены `bot.formats.enabled` или ключ вида → `off`;
