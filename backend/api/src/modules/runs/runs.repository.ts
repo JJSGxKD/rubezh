@@ -121,6 +121,8 @@ export interface BestRunRow {
   photoUrl: string | null;
   /** знак «Тестер» (Р87); поля нет — не тестер, а дата знака наружу не отдаётся */
   tester?: true;
+  /** знак «Меценат» (Р109); поля нет — не поддержал */
+  supporter?: true;
   survivalSec: number;
   /** очки эффективности забега; `null` — очков нет */
   points: number | null;
@@ -425,7 +427,7 @@ export class PrismaRunsRepository implements RunsRepository {
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
-        account: { select: { displayName: true, photoUrl: true, testerAt: true } },
+        account: { select: { displayName: true, photoUrl: true, testerAt: true, supporterAt: true } },
       },
     });
     return rows.map((row) => ({
@@ -434,6 +436,7 @@ export class PrismaRunsRepository implements RunsRepository {
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
       ...(row.account.testerAt === null ? {} : { tester: true as const }),
+      ...(row.account.supporterAt === null ? {} : { supporter: true as const }),
       survivalSec: row.survivalSec ?? 0,
       points: row.points,
       style: row.style,
@@ -467,7 +470,7 @@ export class PrismaRunsRepository implements RunsRepository {
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
-        account: { select: { displayName: true, photoUrl: true, testerAt: true } },
+        account: { select: { displayName: true, photoUrl: true, testerAt: true, supporterAt: true } },
       },
     });
     if (row === null) return null;
@@ -477,6 +480,7 @@ export class PrismaRunsRepository implements RunsRepository {
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
       ...(row.account.testerAt === null ? {} : { tester: true as const }),
+      ...(row.account.supporterAt === null ? {} : { supporter: true as const }),
       survivalSec: row.survivalSec ?? 0,
       points: row.points,
       style: row.style,

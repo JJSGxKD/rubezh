@@ -22,7 +22,7 @@ import { Dialog } from "../../ui/dialog";
 import { Badge, Button, DataTable, ErrorNotice, Field, Input, Loading, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate } from "../../ui/router";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 
 /**
@@ -159,7 +159,7 @@ function GrantDialog({ catalog, accountId, onClose, onGranted }: { catalog: Assi
     setPending(true);
     const result = await grantRole(api, { accountId: candidate.accountId }, role);
     setPending(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     if (result.data.confirm !== null) return setAwaiting({ link: result.data.confirm.link, role, name: candidate.displayName });
     toast.success(`${candidate.displayName}: роль «${roleName(role)}» выдана`, { description: "Права действуют сразу, без повторного входа" });
     onGranted();
@@ -277,7 +277,7 @@ function RevokeDialog({ member, assignment, onClose, onRevoked }: { member: Team
     setPending(true);
     const result = await revokeRole(api, { accountId: member.accountId }, assignment.role);
     setPending(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     const sessions = result.data.sessionsRevoked > 0 ? ` Закрыто сессий панели: ${String(result.data.sessionsRevoked)}.` : "";
     toast.success(`${name}: роль «${roleName(assignment.role)}» снята.${sessions}`);
     onRevoked();

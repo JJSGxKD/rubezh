@@ -48,6 +48,10 @@ export interface ApiError {
   code: string | null;
   /** текст для человека: от сервера, а без него — наш */
   message: string;
+  /** номер запроса: по нему запись находится в логе API; `null` — ответа не было */
+  requestId: string | null;
+  /** причина внутренней ошибки — сервер отдаёт её только с правом diagnostics.view */
+  reason: string | null;
 }
 
 export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError };
@@ -75,7 +79,20 @@ const FALLBACK_MESSAGES: Record<ApiFailure, string> = {
   unavailable: "Сервер ответил ошибкой — подробности в логе API",
 };
 
-const errorEnvelope = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+/** Причина длиннее — не наша: сервер режет её до этого предела, а длиннее значит чужой ответ. */
+const REASON_MAX_LENGTH = 300;
+const REQUEST_ID_HEADER = "x-request-id";
+
+const errorEnvelope = z.object({
+  error: z.object({
+    code: z.string(),
+    message: z.string(),
+    // Необязательные поля неразборчивого вида отбрасываются, а не роняют конверт:
+    // сообщение сервера важнее подробностей к нему.
+    requestId: z.string().max(64).optional().catch(undefined),
+    reason: z.string().max(REASON_MAX_LENGTH).optional().catch(undefined),
+  }),
+});
 
 export class AdminApi {
   private readonly unauthorizedListeners = new Set<() => void>();
@@ -116,14 +133,22 @@ export class AdminApi {
     if (response.ok) {
       const parsed = z.object({ data: options.schema }).safeParse(payload);
       if (parsed.success) return { ok: true, data: parsed.data.data };
-      return failure("unavailable", response.status, null, "Ответ сервера не разобрался — панель и API разных версий?");
+      return failure("unavailable", response.status, null, "Ответ сервера не разобрался — панель и API разных версий?", { requestId: requestIdOf(response) });
     }
 
+    return this.httpFailure(response, payload);
+  }
+
+  /** Ответ с кодом ошибки: конверт сервера, а без него — заготовка и номер из заголовка. */
+  private httpFailure(response: Response, payload: unknown): { ok: false; error: ApiError } {
     const envelope = errorEnvelope.safeParse(payload);
     const code = envelope.success ? envelope.data.error.code : null;
     const kind = kindOf(response.status, code);
     if (kind === "unauthorized") for (const listener of this.unauthorizedListeners) listener();
-    return failure(kind, response.status, code, envelope.success ? envelope.data.error.message : undefined);
+    return failure(kind, response.status, code, envelope.success ? envelope.data.error.message : undefined, {
+      requestId: (envelope.success ? envelope.data.error.requestId : undefined) ?? requestIdOf(response),
+      reason: envelope.success ? envelope.data.error.reason : undefined,
+    });
   }
 
   /**
@@ -147,11 +172,7 @@ export class AdminApi {
     }
     if (response.ok) return { ok: true, data: { blob: await response.blob(), fileName: fileNameOf(response.headers.get("content-disposition")) } };
 
-    const envelope = errorEnvelope.safeParse(await readJson(response));
-    const code = envelope.success ? envelope.data.error.code : null;
-    const kind = kindOf(response.status, code);
-    if (kind === "unauthorized") for (const listener of this.unauthorizedListeners) listener();
-    return failure(kind, response.status, code, envelope.success ? envelope.data.error.message : undefined);
+    return this.httpFailure(response, await readJson(response));
   }
 }
 
@@ -179,8 +200,49 @@ export function kindOf(status: number, code: string | null): ApiFailure {
   return "unavailable";
 }
 
-function failure(kind: ApiFailure, status: number | null, code: string | null, message?: string): { ok: false; error: ApiError } {
-  return { ok: false, error: { kind, status, code, message: message ?? FALLBACK_MESSAGES[kind] } };
+function failure(
+  kind: ApiFailure,
+  status: number | null,
+  code: string | null,
+  message?: string,
+  details: { requestId?: string | null | undefined; reason?: string | undefined } = {},
+): { ok: false; error: ApiError } {
+  return { ok: false, error: { kind, status, code, message: message ?? FALLBACK_MESSAGES[kind], requestId: details.requestId ?? null, reason: details.reason ?? null } };
+}
+
+/** Номер запроса из заголовка ответа: он есть и когда конверта нет, например у страницы ошибки прокси. */
+function requestIdOf(response: Response): string | null {
+  const value = response.headers.get(REQUEST_ID_HEADER)?.trim() ?? "";
+  return value === "" ? null : value;
+}
+
+/** Сколько знаков номера видно в строке подробностей: полный — при копировании. */
+const REQUEST_ID_SHORT = 8;
+
+/**
+ * Строка подробностей ошибки: `код · статус · №номер` из тех частей, что есть.
+ * Нет ни одной — `null`: показывать нечего (например, нет связи).
+ */
+export function errorDetails(error: ApiError): string | null {
+  const parts: string[] = [];
+  if (error.code !== null) parts.push(error.code);
+  if (error.status !== null) parts.push(String(error.status));
+  if (error.requestId !== null) parts.push(`№${error.requestId.slice(0, REQUEST_ID_SHORT)}`);
+  return parts.length === 0 ? null : parts.join(" · ");
+}
+
+/**
+ * Текст, который уходит в буфер: всё, что нужно, чтобы найти запись в логе, —
+ * текст, причина, код, статус, полный номер и время по UTC.
+ */
+export function errorCopyText(error: ApiError, nowMs: number): string {
+  const lines = [error.message];
+  if (error.reason !== null) lines.push(`Причина: ${error.reason}`);
+  if (error.code !== null) lines.push(`Код: ${error.code}`);
+  if (error.status !== null) lines.push(`Статус: ${error.status}`);
+  if (error.requestId !== null) lines.push(`Запрос: №${error.requestId}`);
+  lines.push(`Время: ${new Date(nowMs).toISOString()}`);
+  return lines.join("\n");
 }
 
 /** Тело не JSON — например, страница ошибки прокси: разбирать нечего, это не исключение. */

@@ -88,6 +88,8 @@ const boardEntry = z.object({
   photoUrl: z.string().nullable(),
   /** знак «Тестер»; поля нет — не тестер */
   tester: z.literal(true).optional(),
+  /** знак «Меценат» (Р109); поля нет — не поддержал */
+  supporter: z.literal(true).optional(),
   /** очки лучшего забега недели; `null` — в сезоне по времени у забега очков нет */
   points: z.number().nullable(),
   /** время того же забега: в сезоне по очкам — подпись, в сезоне по времени — главное число */

@@ -910,6 +910,7 @@ const SAMPLE_RESULT: RunResult = {
   bossKills: 1,
   eliteKills: 6,
   chestsOpened: 3,
+  rareChestsOpened: 0,
   crystalsCollected: 640,
   weapons: [
     { id: "spark", level: 5, damage: 21840 },

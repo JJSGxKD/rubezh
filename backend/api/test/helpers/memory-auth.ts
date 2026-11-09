@@ -35,6 +35,7 @@ export class MemoryAccountRepository implements AccountRepository {
       bannedAt: null,
       banReason: null,
       testerAt: null,
+      supporterAt: null,
       created: true,
     };
     this.byKey.set(key, account);

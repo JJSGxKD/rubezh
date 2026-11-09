@@ -13,7 +13,7 @@ import {
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { Button, Field, Notice, Select, TextArea } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 /**
  * Смена статуса партнёра: новый статус и причина. Причина обязательна и уходит
@@ -32,7 +32,7 @@ export function PartnerStatusDialog({ partner, onClose, onSaved }: { partner: Pa
     const result = await setPartnerStatus(api, partner.partnerId, status, trimmed);
     setSaving(false);
     if (!result.ok) {
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(`Статус партнёра «${result.data.name}»: ${STATUS_TITLES[result.data.status]}`);

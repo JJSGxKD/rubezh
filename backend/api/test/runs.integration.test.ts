@@ -27,7 +27,7 @@ import { redisDatabase } from "./helpers/redis-database.js";
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 const REDIS_URL = redisDatabase(process.env.PLAYTEST_TEST_REDIS_URL ?? "", 2);
 const live = DATABASE_URL !== "" && REDIS_URL !== "";
-const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
+const NO_COUNTERS = { bossKills: null, eliteKills: null, chestsOpened: null, rareChests: null, crystals: null, noHitSec: null, noKillSec: null, killsByElement: null };
 
 describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
   let config: AppConfig;
@@ -153,6 +153,24 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
     expect(byId.get(tester)).toMatchObject({ displayName: "Тестер", tester: true });
     expect(byId.get(plain)).not.toHaveProperty("tester");
     for (const row of rows) expect(row).not.toHaveProperty("testerAt");
+  });
+
+  it("знак «Меценат» (T-0161): у аккаунта с supporterAt в лучшем забеге supporter: true, у остальных поля нет, а дата наружу не уходит", async () => {
+    const supporter = await account("Меценат");
+    const plain = await account("Без знака");
+    await prisma.account.update({ where: { accountId: supporter }, data: { supporterAt: new Date("2026-10-20T10:00:00Z") } });
+    for (const id of [supporter, plain]) await runs.finish(finished(randomUUID(), id, { difficulty: "hard", survivalSec: 120 }));
+    await runs.finish(finished(randomUUID(), supporter, { difficulty: "hard", survivalSec: 300, ranked: false, ratingRestricted: "silent" }));
+
+    const rows = await runs.bestRuns([supporter, plain], "hard", null);
+    const byId = new Map(rows.map((row) => [row.accountId, row]));
+
+    expect(byId.get(supporter)).toMatchObject({ displayName: "Меценат", supporter: true });
+    expect(byId.get(plain)).not.toHaveProperty("supporter");
+    for (const row of rows) expect(row).not.toHaveProperty("supporterAt");
+    // bestRunOf — то же правило, в том числе для тени.
+    expect(await runs.bestRunOf(supporter, "hard", true, null)).toMatchObject({ supporter: true, survivalSec: 300 });
+    expect(await runs.bestRunOf(plain, "hard", false, null)).not.toHaveProperty("supporter");
   });
 
   it("знак «Тестер»: bestRunOf — то же правило, в том числе для тени", async () => {

@@ -28,7 +28,7 @@ import { ChoiceCards } from "../../ui/choice";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Button, Field, Help, Input, Notice, Select, TextArea } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 const DAY_MS = 86_400_000;
 /** быстрые сроки от начала: чаще всего код живёт сутки, неделю или месяц */
@@ -86,7 +86,7 @@ export function PromoCodeDialog({
     const result = editing === null ? await createPromoCode(api, createBodyOf(draft, now)) : await updatePromoCode(api, editing.campaignId, updateBodyOf(draft, editing, now));
     if (!result.ok) {
       if (result.error.code === "promo_code_taken") form.setError("code", { message: result.error.message });
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(editing === null ? `Промокод заведён: ${result.data.title}` : `Сохранено: ${result.data.title}`, {

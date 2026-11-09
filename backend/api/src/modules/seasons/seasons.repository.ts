@@ -127,7 +127,7 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
         level: true,
         startingWeaponId: true,
         enemiesKilled: true,
-        account: { select: { displayName: true, photoUrl: true, testerAt: true } },
+        account: { select: { displayName: true, photoUrl: true, testerAt: true, supporterAt: true } },
       },
     });
     return rows.map((row) => ({
@@ -136,6 +136,7 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
       ...(row.account.testerAt === null ? {} : { tester: true as const }),
+      ...(row.account.supporterAt === null ? {} : { supporter: true as const }),
       survivalSec: row.survivalSec ?? 0,
       points: row.points,
       style: row.style,
