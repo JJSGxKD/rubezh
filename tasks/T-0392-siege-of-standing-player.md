@@ -3,7 +3,7 @@ id: T-0392
 title: Осада стоящего — строй и элиты вокруг игрока, который долго стоит на месте
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -30,6 +30,20 @@ shared:
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/guide/**
+  - packages/core-game/src/game/sim/siege-rules.ts
+  - packages/core-game/src/game/sim/continue.ts
+  - packages/core-game/src/game/sim/stages.ts
+  - packages/core-game/src/game/sim/timeline-content.ts
+  - packages/core-game/src/game/run/run-result.ts
+  - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/run-api.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/test/guide.test.ts
+  - docs/30-configuration-map.md
   - docs/32-balance.md
   - docs/35-stage4-plan.md
   - CLAUDE.md
