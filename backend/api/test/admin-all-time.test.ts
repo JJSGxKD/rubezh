@@ -210,6 +210,12 @@ describe("цифры", () => {
     });
   });
 
+  it("донаты (Р109): звёзды в доходе — оплачено минус возвращено, «донатов» отдельным числом, в «покупок» они не входят", async () => {
+    const { service, repository, owner } = await setup();
+    repository.revenueRow = { paid: 520, refunded: 20, purchases: 2, donations: 1 };
+    expect((await service.allTime(owner, NOW)).revenue).toEqual({ stars: 500, paid: 520, refunded: 20, purchases: 2, donations: 1 });
+  });
+
   it("при равенстве площадки идут по имени: порядок не зависит от того, как ответила база", async () => {
     const { service, repository, owner } = await setup();
     repository.accountRows = [
