@@ -114,6 +114,8 @@ export interface RecentRun {
 }
 
 export interface BestRunRow {
+  /** ключ забега: по нему строка рейтинга открывает карточку забега (T-0297) */
+  runId?: string;
   accountId: string;
   displayName: string;
   photoUrl: string | null;
@@ -174,6 +176,8 @@ export interface RunDetailRow {
   ranked: boolean;
   ratingRestricted: RatingRestricted | null;
   verdict: RunVerdict | null;
+  /** очки эффективности (T-0293): по ним лист решает, есть ли у забега карточка (T-0297); поля нет — не прислано */
+  points?: number | null;
 }
 
 export const RUNS_REPOSITORY = Symbol("RUNS_REPOSITORY");
@@ -376,6 +380,7 @@ export class PrismaRunsRepository implements RunsRepository {
         ranked: true,
         ratingRestricted: true,
         verdict: true,
+        points: true,
       },
     });
     if (row === null) return null;
@@ -399,6 +404,7 @@ export class PrismaRunsRepository implements RunsRepository {
       ranked: row.ranked,
       ratingRestricted: ratingRestrictedOf(row.ratingRestricted),
       verdict: row.verdict,
+      points: row.points,
     };
   }
 
@@ -411,6 +417,7 @@ export class PrismaRunsRepository implements RunsRepository {
       orderBy: [{ accountId: "asc" }, { points: "desc" }, { finishedAt: "asc" }],
       distinct: ["accountId"],
       select: {
+        runId: true,
         accountId: true,
         survivalSec: true,
         points: true,
@@ -422,6 +429,7 @@ export class PrismaRunsRepository implements RunsRepository {
       },
     });
     return rows.map((row) => ({
+      runId: row.runId,
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
@@ -451,6 +459,7 @@ export class PrismaRunsRepository implements RunsRepository {
       where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }], points: { not: null } },
       orderBy: [{ points: "desc" }, { finishedAt: "asc" }],
       select: {
+        runId: true,
         accountId: true,
         survivalSec: true,
         points: true,
@@ -463,6 +472,7 @@ export class PrismaRunsRepository implements RunsRepository {
     });
     if (row === null) return null;
     return {
+      runId: row.runId,
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,

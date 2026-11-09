@@ -156,6 +156,11 @@ export class RunScorer {
     }
   }
 
+  /** Параметры подсчёта сейчас: карточка забега раскладывает очки по осям теми же весами. */
+  scoreParams(): ScoreParams {
+    return this.params();
+  }
+
   /** Параметры подсчёта из панели: веса — проценты, показатель — сотые. */
   private params(): ScoreParams {
     const raw: AxisValues = {

@@ -55,6 +55,8 @@ export interface LeaderboardView {
   difficultyId: Difficulty;
   entries: {
     rank: number;
+    /** лучший забег игрока: по нему открывается карточка забега (T-0297) */
+    runId?: string;
     name: string;
     photoUrl: string | null;
     /** знак «Тестер» (Р87); поля нет — не тестер */
@@ -126,6 +128,8 @@ export interface RunDetailView {
    * ему сообщили. Под молчаливым — `ranked`: так игрок видит его из тени.
    */
   rating: "ranked" | "cheats" | "review" | "restricted";
+  /** очки эффективности; `null` — очков нет, и карточки забега тоже (T-0297) */
+  points: number | null;
   boosts: string[];
   reward: RunRewardPart | null;
   loot: RunLootPart[];
@@ -181,6 +185,7 @@ export class RunsViewService {
         return [
           {
             rank: index + 1,
+            ...(row.runId === undefined ? {} : { runId: row.runId }),
             name: row.displayName,
             photoUrl: row.photoUrl,
             ...(row.tester ? { tester: true as const } : {}),
@@ -216,6 +221,7 @@ export class RunsViewService {
     const rank = (await this.leaderboard.countAbove(difficulty, mine.points, board)) + 1;
     const own = {
       rank,
+      ...(mine.runId === undefined ? {} : { runId: mine.runId }),
       name: mine.displayName,
       photoUrl: mine.photoUrl,
       ...(mine.tester ? { tester: true as const } : {}),
@@ -322,6 +328,7 @@ export class RunsViewService {
       topKills: run.details?.topKills ?? [],
       continues: run.continues,
       rating: ratingOf(run),
+      points: run.points ?? null,
       ...extras,
     };
   }

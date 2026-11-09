@@ -119,6 +119,7 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
       orderBy: [{ accountId: "asc" }, scoreOrder(scoring), { finishedAt: "asc" }],
       distinct: ["accountId"],
       select: {
+        runId: true,
         accountId: true,
         survivalSec: true,
         points: true,
@@ -130,6 +131,7 @@ export class PrismaSeasonsRepository implements SeasonsRepository {
       },
     });
     return rows.map((row) => ({
+      runId: row.runId,
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
