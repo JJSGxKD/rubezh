@@ -39,6 +39,8 @@ enum Role {
   finance
   analyst
   stakeholder
+  /// внешний партнёр: пускает в панель, но только в его кабинет (T-0217, Р136); выдаётся из карточки партнёра
+  partner
 }
 
 enum Difficulty {
@@ -233,6 +235,7 @@ model Account {
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
   partnerBinding   PartnerBinding?
+  partnerCard      Partner?
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -2170,7 +2173,10 @@ model Partner {
   postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
   /// какие события уходят на адрес; по умолчанию одна регистрация
   postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
+  /// игровой аккаунт партнёра — связь кабинета (T-0217, Р136): пишется только из карточки партнёра. Остаётся и после закрытия кабинета: по ней аккаунт не привязывается к самому себе. Один аккаунт — один партнёр
+  accountId      String?   @unique @map("account_id") @db.Uuid
 
+  account   Account?        @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
@@ -2801,4 +2807,20 @@ model BoostCredit {
 
   @@id([accountId, boostId])
   @@map("boost_credit")
+}
+
+// Снимки аудитории по суткам (tasks/T-0203)
+
+/// Закрытые московские сутки: сколько разных аккаунтов запускало игру в них,
+/// за 7 и за 30 суток, заканчивая ими. Рекорды DAU/WAU/MAU — максимум по строкам.
+/// Строку пишет ночное задание (`admin-notify/activity-snapshot.job.ts`), историю
+/// строит из сессий запуска — их вайп не стирает
+model ActivityDaily {
+  day        String   @id @db.VarChar(10)
+  dau        Int
+  wau        Int
+  mau        Int
+  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  @@map("activity_daily")
 }
