@@ -4452,13 +4452,16 @@ sequenceDiagram
 
 ---
 
-### 4.33 Проверка черновика контента в sim-worker (этап 4, реализован воркер)
+### 4.33 Проверка черновика контента в sim-worker (этап 4, реализовано)
 
 Редактор баланса (`19-content-admin.md` §4.3, Р160) прогоняет черновик ботом
 калибровки до того, как его увидят игроки. Собранный бэкенд исходники
 `core-game` не импортирует (Р15), поэтому прогон идёт в отдельном процессе со
-своей сборкой движка. Задания ставит сервер (`tasks/T-0303`), воркер — этот
-поток.
+своей сборкой движка. Задание ставит сервер (`POST /admin/content/drafts/:id/check`,
+`tasks/T-0303`), итог он читает при опросе `GET /admin/content/checks/:id`:
+статус и отчёт лежат в `content_check`, повтор того же снимка отдаёт прошлый
+отчёт без нового задания, а проверка, которую воркер не взял за 15 минут,
+становится `failed`.
 
 ```mermaid
 sequenceDiagram
@@ -4469,7 +4472,7 @@ sequenceDiagram
     participant E as Движок и бот (внутри сборки)
     participant M as Prometheus
 
-    S->>R: submitCheck: форма, снимки до 2 МБ, ждущих меньше пяти
+    S->>R: черновик и база, снимки до 2 МБ, ждущих меньше пяти (content_check: queued)
     Note over S,R: шестое ждущее — отказ «Проверка уже идёт, дождитесь»
     R->>W: задание {checkId, snapshot, baseSnapshot, scenarios, seeds}, конкурентность 1
     W->>W: размер, затем схема снимка (черновик и база)
@@ -4484,7 +4487,7 @@ sequenceDiagram
         end
         W-->>R: {schemaProblems: [], contentProblems, report: медианы, дельты, коридоры, timeout}
     end
-    R-->>S: событие завершения задания, результат в returnvalue
+    S->>R: опрос GET /checks/:id: состояние задания, результат в returnvalue
     M->>W: GET /metrics: sim_jobs_total{queue,outcome}, sim_job_seconds{queue}
 ```
 
