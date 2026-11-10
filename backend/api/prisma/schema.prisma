@@ -2797,3 +2797,75 @@ model BoostCredit {
   @@id([accountId, boostId])
   @@map("boost_credit")
 }
+
+// Контент игры на сервере (docs/19-content-admin.md §3, docs/35-stage4-plan.md
+// Р16 и Р160, T-0303): версии снимка, черновики поверх версий и проверки
+// черновиков в sim-worker. Это правила игры, а не данные игроков, — вайп их не
+// трогает. Публикации пока нет (T-0306): версия «из кода» заводится выкатом.
+
+/// Версия контента: неизменяемый снимок вместе со схемой, по которой он
+/// проверялся, и именами для панели. Хэш — тот же `content_hash`, что игра
+/// пишет в итог забега (`hashSnapshot` движка), поэтому уникален; на версию
+/// «из кода» его кладёт выгрузка `content:export`
+model ContentVersion {
+  versionNo     Int       @id @default(autoincrement()) @map("version_no")
+  contentHash   String    @unique @map("content_hash") @db.VarChar(64)
+  /// версия формы снимка: клиент берёт последнюю, которую понимает
+  schemaVersion Int       @map("schema_version") @db.SmallInt
+  snapshot      Json
+  /// JSON Schema снимка (`z.toJSONSchema`): ею проверяется форма правки
+  jsonSchema    Json      @map("json_schema")
+  /// тексты `nameKey` и `descriptionKey` снимка: панель показывает имена, а не id
+  names         Json
+  /// `repo` — из кода при выкате, `panel` — опубликована из панели (`CHECK` в миграции)
+  source        String    @db.VarChar(8)
+  /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// `null` — версия ещё не публиковалась
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+
+  drafts ContentDraft[]
+
+  @@map("content_version")
+}
+
+/// Черновик: копия снимка версии, которую правит человек. Версию-основу не
+/// меняет и не двигает. Из списка уходит архивом, строка остаётся
+model ContentDraft {
+  draftId       String    @id @map("draft_id") @db.Uuid
+  baseVersionNo Int       @map("base_version_no")
+  title         String    @db.VarChar(80)
+  snapshot      Json
+  /// без внешнего ключа — черновик переживает аккаунт
+  author        String    @db.Uuid
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  base   ContentVersion @relation(fields: [baseVersionNo], references: [versionNo], onDelete: Restrict)
+  checks ContentCheck[]
+
+  @@index([updatedAt])
+  @@index([baseVersionNo])
+  @@map("content_draft")
+}
+
+/// Проверка черновика в sim-worker. Хэш — отпечаток снимка, который проверяли:
+/// правка черновика его меняет, и старый отчёт «устаревает». Один живой отчёт
+/// на пару (черновик, хэш) — частичный уникальный индекс в миграции; упавшая
+/// проверка место не занимает
+model ContentCheck {
+  checkId      String   @id @map("check_id") @db.Uuid
+  draftId      String   @map("draft_id") @db.Uuid
+  snapshotHash String   @map("snapshot_hash") @db.VarChar(64)
+  /// `queued`, `done`, `failed`, `timeout` (`CHECK` в миграции)
+  status       String   @db.VarChar(8)
+  /// итог воркера как есть (проблемы схемы и контента, отчёт симуляции) или `{ error }`
+  report       Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  draft ContentDraft @relation(fields: [draftId], references: [draftId], onDelete: Restrict)
+
+  @@index([draftId, createdAt])
+  @@map("content_check")
+}

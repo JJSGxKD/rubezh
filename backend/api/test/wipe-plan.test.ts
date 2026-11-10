@@ -36,15 +36,19 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 72 модели, стирается 26", () => {
+  it("остаётся 75 моделей, стирается 26", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(72);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(75);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(26);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("контент игры на сервере (T-0303) остаётся: это правила игры, а не данные игроков", () => {
+    for (const model of ["ContentVersion", "ContentDraft", "ContentCheck"]) expect(plan[model]?.action, model).toBe("keep");
   });
 
   it("второй шанс за самоцветы стирается своим шагом рядом с рекламным и до забега, а не только каскадом", () => {

@@ -130,6 +130,8 @@ erDiagram
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
+    CONTENT_VERSION ||--o{ CONTENT_DRAFT : "черновик правит копию снимка версии-основы"
+    CONTENT_DRAFT ||--o{ CONTENT_CHECK : "проверки черновика в sim-worker"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -1228,6 +1230,38 @@ erDiagram
         string boost_id PK "id буста из каталога бустов"
         int count "подарки, не меньше нуля (CHECK); тратит включение буста на забег (T-0312)"
     }
+
+    CONTENT_VERSION {
+        serial version_no PK "растёт без дыр: повторный импорт того же хэша номер не тратит"
+        string content_hash UK "hashSnapshot движка (8 знаков) — тот же, что игра пишет в итог забега (Р16)"
+        smallint schema_version "версия формы снимка; клиент берёт последнюю, которую понимает"
+        jsonb snapshot "весь контент забега; jsonb переставляет ключи, хэш считает не сервер"
+        jsonb json_schema "JSON Schema снимка: ею проверяется форма правки"
+        jsonb names "тексты nameKey и descriptionKey для панели"
+        string source "repo или panel (CHECK)"
+        uuid created_by "без FK; null — завёл выкат"
+        datetime created_at
+        datetime published_at "null — не публиковалась; публикация — T-0306"
+    }
+
+    CONTENT_DRAFT {
+        uuid draft_id PK
+        int base_version_no FK "RESTRICT: версию-основу не удалить, пока на ней есть черновик"
+        string title "до 80 знаков"
+        jsonb snapshot "копия снимка версии; правится по пути под блокировкой строки"
+        uuid author "без FK"
+        datetime updated_at
+        datetime archived_at "архив: из списка уходит, строка остаётся"
+    }
+
+    CONTENT_CHECK {
+        uuid check_id PK "он же id задания BullMQ в очереди content-check"
+        uuid draft_id FK "RESTRICT"
+        string snapshot_hash "sha256 канонического JSON снимка, который проверяли"
+        string status "queued, done, failed, timeout (CHECK)"
+        jsonb report "итог sim-worker как есть или { error }"
+        datetime created_at "частичный UNIQUE (draft_id, snapshot_hash) где status не failed"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1376,6 +1410,18 @@ erDiagram
   проверяется по VIP в момент забора, поэтому купленный посреди месяца VIP
   открывает и пройденные ступени. Вайп стирает очки, журнал и подарки, ленты
   месяца остаются.
+- **`CONTENT_VERSION`, `CONTENT_DRAFT`, `CONTENT_CHECK` — контент игры на
+  сервере** (`35-stage4-plan.md` Р16, Р160, `19-content-admin.md` §3, T-0303):
+  версия — неизменяемый снимок со схемой и именами. Версию «из кода» заводит
+  выкат командой `content:import` из выгрузки `content:export`; хэш в выгрузке
+  считает движок (в него входят рубеж и пролог, которых в снимке нет), сервер
+  ждёт готовый. Черновик — копия снимка версии: правка по пути
+  (`enemies[id=swarm_rat].hp`) идёт под блокировкой строки, форма значения
+  проверяется JSON Schema той же версии, не та форма — 422 и черновик не
+  меняется. Проверка — задание очереди `content-check` с черновиком и базой;
+  отчёт воркера читается при опросе `GET /checks/:id`, повтор того же снимка
+  отдаёт прошлый отчёт (`snapshot_hash` — sha256 канонического JSON: порядок
+  ключей jsonb его не меняет). Вайп таблицы не трогает: это правила игры.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
