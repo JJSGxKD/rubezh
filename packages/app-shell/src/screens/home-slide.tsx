@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { BadgePercent, CalendarDays, Crown, Gift, Megaphone, Newspaper, Rocket, Sparkles, Target, Trophy, UserPlus } from "lucide-react";
+import { BadgePercent, CalendarDays, Crown, Gift, Heart, Megaphone, Newspaper, Rocket, Sparkles, Target, Trophy, UserPlus } from "lucide-react";
 // Компонент из общего входа дизайн-системы держит ядро значков в общем чанке
 // первой загрузки: без него сборщик выносит ядро в отдельный файл
 // (docs/27-design-system-and-app-shell.md §3.4).
@@ -23,6 +23,7 @@ const TONE: Record<HomeSlide["kind"], string> = {
   vip: "bg-elite/15 text-elite",
   starter: "bg-success/15 text-success",
   invite: "bg-accent/15 text-accent",
+  donate: "bg-hp/15 text-hp",
   channel: "bg-info/15 text-info",
   task: "bg-passive/15 text-passive",
   team: "bg-accent/15 text-accent",
@@ -70,6 +71,8 @@ function SlideIcon(props: { slide: HomeSlide }): ReactNode {
       return <Rocket size={30} />;
     case "invite":
       return <UserPlus size={30} />;
+    case "donate":
+      return <Heart size={30} fill="currentColor" />;
     case "channel":
       return <Megaphone size={30} />;
     case "task":

@@ -57,6 +57,8 @@ export const leaderboardSchema = z.object({
       enemiesKilled: z.number(),
       isMe: z.boolean(),
       tester: z.optional(z.literal(true)),
+      /** поддержал проект (Р109, T-0161); сервер до знака поля не отдавал */
+      supporter: z.optional(z.literal(true)),
       /** очки престижа (T-0107); сервер до достижений поля не отдавал */
       prestige: z.optional(z.number()),
       /** победа над стражем рубежа засчитана (T-0121); сервер шлёт только `true` или ничего */

@@ -17,6 +17,7 @@ import { HomeModule } from "../home/home.module.js";
 import { AdminPromoCodesController } from "./admin-promo-codes.controller.js";
 import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
+import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
@@ -34,6 +35,9 @@ import { AdminProxySubscriptionController } from "./admin-proxy-subscription.con
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
+import { AdminAllTimeController } from "./admin-all-time.controller.js";
+import { ALL_TIME_STORE, RedisAllTimeStore } from "./admin-all-time.repository.js";
+import { AdminAllTimeService } from "./admin-all-time.service.js";
 import { AdminOverviewController } from "./admin-overview.controller.js";
 import { AdminOverviewService } from "./admin-overview.service.js";
 import { FriendsModule } from "../friends/friends.module.js";
@@ -99,6 +103,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminRunsController,
     AdminRatingController,
     AdminOverviewController,
+    AdminAllTimeController,
     AdminFxController,
     AdminRolesController,
     AdminDiagnosticsController,
@@ -125,6 +130,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
+    AdminCabinetController,
     AdminRequestsController,
     AdminUiClicksController,
   ],
@@ -134,6 +140,9 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminPlayersService,
     AdminRolesService,
     AdminOverviewService,
+    // Итоги за всё время (T-0203): репозиторий — в `AdminNotifyModule`, его же читает ночное задание снимка
+    AdminAllTimeService,
+    { provide: ALL_TIME_STORE, useClass: RedisAllTimeStore },
     AdminExportsService,
     AdminSocialService,
     AdminSettingsService,

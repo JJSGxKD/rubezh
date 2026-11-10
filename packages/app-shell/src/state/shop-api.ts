@@ -46,7 +46,8 @@ const shopSchema = z.object({
   tribute: z.optional(z.nullable(z.string())),
 });
 
-const invoiceSchema = z.object({
+/** Счёт на оплату: тот же у набора, VIP и доната проекту (`donations-api.ts`). */
+export const invoiceSchema = z.object({
   purchaseId: z.string(),
   sku: z.string(),
   status: z.enum(["pending", "paid"]),
