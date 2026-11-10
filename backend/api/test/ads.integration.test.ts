@@ -286,11 +286,11 @@ describe.skipIf(DATABASE_URL === "")("реклама на живом Postgres", 
     expect(created).not.toBeNull();
     expect(await catalog.insertBlock({ networkKey: "it_missing", place: "task", externalId: "x", success: "view", active: true, platforms: [], devices: [] }, actor, NOON)).toBeNull();
     if (created === null) throw new Error("блок не заведён");
-    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(created);
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual({ ...created, archivedAt: null });
 
     const edited = { ...created, externalId: "ext-panel-2", active: false, platforms: [], devices: ["desktop" as const] };
     expect(await catalog.updateBlock(edited, actor, NOON)).toBe(true);
-    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual(edited);
+    expect((await catalog.blocks()).find((row) => row.blockId === created.blockId)).toEqual({ ...edited, archivedAt: null });
     expect(await catalog.updateBlock({ ...edited, blockId: randomUUID() }, actor, NOON)).toBe(false);
 
     // Окно воронки — в будущем, куда не пишет ни один другой тест.
