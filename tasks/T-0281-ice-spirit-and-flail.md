@@ -18,6 +18,8 @@ shared:
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/game/render/WorldRenderer.ts
+  - packages/core-game/src/game/render/orbiter-points.ts
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/item-icons.tsx
