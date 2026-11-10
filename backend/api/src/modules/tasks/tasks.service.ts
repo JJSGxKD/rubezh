@@ -10,6 +10,7 @@ import { PrologueService } from "../runs/prologue.service.js";
 import { RunsHooks, type RecordedRun } from "../runs/runs-hooks.js";
 import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
+import { ChannelWatchService } from "./channel-watch.service.js";
 import {
   TaskCheckUnavailableError,
   TaskLimitReachedError,
@@ -62,8 +63,9 @@ import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepos
  * видна через полминуты.
  *
  * Партнёрские цели (Р52) забег не двигает. Подписку на канал проверяет бот
- * площадки в момент забора — через порт, без знания о Telegram; переход по
- * ссылке и запуск бота засчитывает сам переход через сервер (`open`).
+ * площадки в момент забора и ещё 7 суток после него (Р115, T-0178: окно
+ * перепроверки — `ChannelWatchService`) — через порт, без знания о Telegram;
+ * переход по ссылке и запуск бота засчитывает сам переход через сервер (`open`).
  *
  * Лимит выполнений партнёрской цели (Р82, WP13, часть 7) — сколько игроков
  * получат награду. Игрок видит остаток; исчерпан — цель пропадает у тех, кто
@@ -152,6 +154,7 @@ export class TasksService implements OnModuleInit {
     @Optional() private readonly points?: TaskPointsService,
     @Optional() private readonly pass?: BattlePassService,
     @Optional() private readonly prologue?: PrologueService,
+    @Optional() private readonly watch?: ChannelWatchService,
   ) {}
 
   onModuleInit(): void {
@@ -175,6 +178,11 @@ export class TasksService implements OnModuleInit {
     return await this.points.claim(account, period, points, at);
   }
 
+  /**
+   * Забрать награду. За подписку на канал её ещё 7 суток перепроверяют: отписался —
+   * награда списывается (Р115, T-0178); окно заводится после выдачи, и только тому
+   * запросу, чья отметка «забрано» встала первой.
+   */
   async claim(account: AccountRef, taskId: string, at = new Date()): Promise<TaskClaimResult> {
     const { accountId } = account;
     // Закрыто до победы в прологе (Р151); список заданий отдаётся как обычно — оболочка его просто не показывает.
@@ -222,9 +230,24 @@ export class TasksService implements OnModuleInit {
     const claimed = await this.db(this.repository.markClaimed(accountId, taskId, done.periodStart, at));
     if (claimed) {
       this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
+      await this.startWatch(account, def, done.periodStart, at);
       await this.awardPassPoints(accountId, taskId, def.passPoints, at);
     }
     return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at) };
+  }
+
+  /**
+   * Окно перепроверки подписки на выданную награду (Р115, T-0178). Сбой не отменяет
+   * забор: награда уже выдана и отмечена, а не взятую под наблюдение команда видит по
+   * строке `channel_watch_not_started`.
+   */
+  private async startWatch(account: AccountRef, def: TaskDef, periodStart: string, at: Date): Promise<void> {
+    if (this.watch === undefined || def.kind !== "channel") return;
+    try {
+      await this.watch.start(account, def, periodStart, at);
+    } catch (error: unknown) {
+      this.logger.error(JSON.stringify({ module: "tasks", event: "channel_watch_not_started", accountId: account.accountId, taskId: def.taskId, periodStart, reason: error instanceof Error ? error.message : String(error) }));
+    }
   }
 
   /**
