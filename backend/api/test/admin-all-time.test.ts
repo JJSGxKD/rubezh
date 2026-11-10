@@ -561,6 +561,8 @@ describe("по HTTP", () => {
     const body = response.json() as { data?: unknown; error: { code: string; message: string } };
     expect(body.data).toBeUndefined();
     expect(body.error.code).toBe("internal_error");
-    expect(JSON.stringify(body)).not.toContain("база не ответила");
+    // Подробность в `message` не попадает; `reason` фильтр отдаёт только
+    // владельцу с правом diagnostics.view — общее правило панели.
+    expect(body.error.message).not.toContain("база не ответила");
   });
 });
