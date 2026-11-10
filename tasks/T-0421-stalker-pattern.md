@@ -50,8 +50,6 @@ batch: 5
 
 [![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0421.json)](README.md#значки-статуса)
 
-Строку значков и ячейку эпика ставит `pnpm task fix`.
-
 ## Зачем
 
 Игра сейчас слишком лёгкая, и сильный игрок стоит на месте (Р197). Владелец
