@@ -316,7 +316,7 @@ class MemoryContentRepository implements ContentRepository {
     return [...this.versionRows].reverse().map((row) => this.summary(row));
   }
   async version(versionNo: number): Promise<ContentVersionRecord | null> {
-    return clone(this.versionRows.find((row) => row.versionNo === versionNo) ?? null);
+    return structuredClone(this.versionRows.find((row) => row.versionNo === versionNo) ?? null);
   }
   async versionByHash(contentHash: string): Promise<ContentVersionSummary | null> {
     const row = this.versionRows.find((candidate) => candidate.contentHash === contentHash);
@@ -329,7 +329,7 @@ class MemoryContentRepository implements ContentRepository {
   async addVersion(input: NewContentVersion): Promise<{ created: boolean; version: ContentVersionSummary }> {
     const existing = this.versionRows.find((row) => row.contentHash === input.contentHash);
     if (existing !== undefined) return { created: false, version: this.summary(existing) };
-    const row: ContentVersionRecord = { ...clone(input), versionNo: this.nextVersion++, publishedAt: null };
+    const row: ContentVersionRecord = { ...structuredClone(input), versionNo: this.nextVersion++, publishedAt: null };
     this.versionRows.push(row);
     return { created: true, version: this.summary(row) };
   }
@@ -344,21 +344,21 @@ class MemoryContentRepository implements ContentRepository {
     return [...this.draftRows.values()].filter((row) => row.archivedAt === null).length;
   }
   async draft(draftId: string): Promise<ContentDraftRecord | null> {
-    return clone(this.draftRows.get(draftId) ?? null);
+    return structuredClone(this.draftRows.get(draftId) ?? null);
   }
   async addDraft(record: ContentDraftRecord): Promise<void> {
-    this.draftRows.set(record.draftId, clone(record));
+    this.draftRows.set(record.draftId, structuredClone(record));
   }
   async editDraft(draftId: string, at: Date, edit: (current: ContentDraftRecord) => unknown): Promise<DraftMutation> {
     const current = this.draftRows.get(draftId);
     if (current === undefined) return { outcome: "missing" };
     if (current.archivedAt !== null) return { outcome: "archived" };
-    const before = clone(current);
-    const next = edit(clone(current));
+    const before = structuredClone(current);
+    const next = edit(structuredClone(current));
     if (next === null) return { outcome: "ok", before, after: before };
-    const after: ContentDraftRecord = { ...current, snapshot: clone(next), updatedAt: at };
+    const after: ContentDraftRecord = { ...current, snapshot: structuredClone(next), updatedAt: at };
     this.draftRows.set(draftId, after);
-    return { outcome: "ok", before, after: clone(after) };
+    return { outcome: "ok", before, after: structuredClone(after) };
   }
   async archiveDraft(draftId: string, at: Date): Promise<ContentDraftSummary | null> {
     const current = this.draftRows.get(draftId);
@@ -370,24 +370,24 @@ class MemoryContentRepository implements ContentRepository {
   async addCheck(record: ContentCheckRecord): Promise<ContentCheckRecord> {
     const existing = await this.reusableCheck(record.draftId, record.snapshotHash);
     if (existing !== null) return existing;
-    this.checkRows.push(clone(record));
+    this.checkRows.push(structuredClone(record));
     return record;
   }
   async check(checkId: string): Promise<ContentCheckRecord | null> {
-    return clone(this.checkRows.find((row) => row.checkId === checkId) ?? null);
+    return structuredClone(this.checkRows.find((row) => row.checkId === checkId) ?? null);
   }
   async latestCheck(draftId: string): Promise<ContentCheckRecord | null> {
-    return clone([...this.checkRows].reverse().find((row) => row.draftId === draftId) ?? null);
+    return structuredClone([...this.checkRows].reverse().find((row) => row.draftId === draftId) ?? null);
   }
   async reusableCheck(draftId: string, hash: string): Promise<ContentCheckRecord | null> {
     const found = [...this.checkRows].reverse().find((row) => row.draftId === draftId && row.snapshotHash === hash && row.status !== "failed");
-    return clone(found ?? null);
+    return structuredClone(found ?? null);
   }
   async finishCheck(checkId: string, status: Exclude<ContentCheckStatus, "queued">, report: unknown): Promise<boolean> {
     const row = this.checkRows.find((candidate) => candidate.checkId === checkId);
     if (row === undefined || row.status !== "queued") return false;
     row.status = status;
-    row.report = clone(report);
+    row.report = structuredClone(report);
     return true;
   }
   async removeCheck(checkId: string): Promise<void> {
