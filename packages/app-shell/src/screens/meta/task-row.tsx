@@ -154,7 +154,8 @@ export function TaskRow(props: {
         </div>
       ) : null}
       {waitsAction && !opens ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        // «Открыть сообщество VK» в половине карточки на 320 px не умещается: у чужой площадки кнопки идут столбцом.
+        <div className={isExternalChannel(task) ? "mt-3 grid gap-2" : "mt-3 grid grid-cols-2 gap-2"}>
           <Button track="subscribe" variant="secondary" onClick={() => props.onOpen(link)}>
             {t(subscribeKey(task))}
           </Button>
