@@ -19,6 +19,8 @@ import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { divisionOf } from "../src/modules/rating/division-rules.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Permission } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -297,6 +299,7 @@ describe("рейтинг в панели по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: SeasonsAdminService, useValue: stub },
         PanelLoginService,
         { provide: RateLimiter, useValue: { consume: async () => true } },

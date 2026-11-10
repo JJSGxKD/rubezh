@@ -37,8 +37,8 @@ describe.skipIf(!live)("рейтинг в панели на живом Postgres"
   const keys: string[] = [];
   const created: string[] = [];
 
-  // Первый из трёх сезонов: понедельник в 25xx–28xx годах.
-  const first = seasonOf(new Date(Date.UTC(2500, 0, 1) + randomInt(0, 20_000) * WEEK));
+  // Первый из трёх сезонов: понедельник в 2045–2090 годах (настройка points-from не принимает дату позже 2099).
+  const first = seasonOf(new Date(Date.UTC(2045, 0, 1) + randomInt(0, 2_400) * WEEK));
   const seasonAt = (index: number) => seasonOf(new Date(first.startsAt.getTime() + index * WEEK));
   const [s1, s2, s3] = [seasonAt(0), seasonAt(1), seasonAt(2)];
 
