@@ -4490,6 +4490,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     autonumber
+    participant P as Панель администратора
     participant S as Сервер (T-0303)
     participant R as Redis, очередь content-check
     participant W as sim-worker
@@ -4511,7 +4512,8 @@ sequenceDiagram
         end
         W-->>R: {schemaProblems: [], contentProblems, report: медианы, дельты, коридоры, timeout}
     end
-    S->>R: опрос GET /checks/:id: состояние задания, результат в returnvalue
+    P->>S: опрос GET /checks/:id
+    S->>R: состояние задания, результат в returnvalue
     M->>W: GET /metrics: sim_jobs_total{queue,outcome}, sim_job_seconds{queue}
 ```
 
