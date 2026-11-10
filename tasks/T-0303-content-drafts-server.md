@@ -3,7 +3,7 @@ id: T-0303
 title: Контент на сервере — версии и черновики в базе, версия 0 из репозитория, правка черновика, проверка через sim-worker и разница с базой
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -26,6 +26,8 @@ shared:
   - docs/19-content-admin.md
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
+  - scripts/content/export-snapshot.ts
+  - packages/core-game/test/content-snapshot.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
