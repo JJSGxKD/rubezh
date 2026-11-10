@@ -35,6 +35,7 @@ shared:
   - packages/proxy-kit/src/index.ts
   - packages/proxy-kit/README.md
   - packages/proxy-kit/test/xray-json.test.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - apps/admin/src/ui/help.ts
