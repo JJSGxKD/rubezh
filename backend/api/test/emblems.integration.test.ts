@@ -646,10 +646,11 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
       await giveVip(me.accountId, new Date(Date.now() - DAY), 30 * 86_400);
       expect(await achievements.setFavorites(me.accountId, ["emb_vip"])).toEqual({ favorites: ["emb_vip"] });
       await prisma.$executeRaw`UPDATE vip_period SET starts_at = starts_at - interval '60 days', ends_at = now() - interval '1 hour' WHERE account_id = ${me.accountId}::uuid`;
-      expect((await achievements.view(me, at)).favorites).toEqual([]);
+      // VIP считается на момент запроса, поэтому здесь настоящее «сейчас», а не фиксированный `at`.
+      expect((await achievements.view(me, new Date())).favorites).toEqual([]);
       expect((await achievements.summary(me.accountId)).favorites).toEqual([]);
       await prisma.$executeRaw`UPDATE vip_period SET ends_at = now() + interval '1 day' WHERE account_id = ${me.accountId}::uuid`;
-      expect((await achievements.view(me, at)).favorites).toEqual(["emb_vip"]);
+      expect((await achievements.view(me, new Date())).favorites).toEqual(["emb_vip"]);
     });
   });
 
