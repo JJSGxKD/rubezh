@@ -31,6 +31,7 @@ import { AdsService } from "./ads.service.js";
 import {
   ADS_CATALOG_REPOSITORY,
   type AdBlockDef,
+  type AdCatalogBlock,
   type AdFunnelRow,
   type AdPassRow,
   type AdNetworkEdit,
@@ -105,7 +106,7 @@ export interface AdNetworkView extends AdNetworkRow {
   problem: string | null;
 }
 
-export interface AdBlockView extends AdBlockDef {
+export interface AdBlockView extends AdCatalogBlock {
   /** блок не по профилю сети — выдача его пропускает; `null` — по правилам */
   problem: string | null;
 }
