@@ -3,6 +3,7 @@ import { api } from "../../services";
 import type { ApiError } from "../../api/client";
 import { FLAG_PLATFORMS, fetchFlags, flagProblem, flagReach, removeFlag, saveFlag, type FlagInput, type FlagRow } from "../../api/flags";
 import { formatDateTime } from "../../format";
+import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { useApi } from "../../ui/use-api";
@@ -27,19 +28,40 @@ export function FlagsScreen() {
   // Сравнение долей живёт в «Воронке» — ссылка только тем, кому она открыта.
   const canCompare = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("analytics.gameplay.view"));
   const [input, setInput] = useState<FlagInput>(EMPTY);
+  // Значения при открытии окна: по ним видно, тронул ли оператор форму.
+  const [initial, setInitial] = useState<FlagInput>(EMPTY);
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
 
   const problem = flagProblem(input);
 
-  const apply = async (next: FlagInput, done: string): Promise<boolean> => {
+  const openForm = (value: FlagInput, edit: boolean): void => {
+    setInput(value);
+    setInitial(value);
+    setEditing(edit);
+    setFormError(null);
+    setOpen(true);
+  };
+
+  const closeForm = (): void => {
+    setOpen(false);
+    setEditing(false);
+    setInput(EMPTY);
+    setInitial(EMPTY);
+    setFormError(null);
+  };
+
+  const apply = async (next: FlagInput, done: string, inDialog = false): Promise<boolean> => {
     setPending(true);
     const result = await saveFlag(api, next);
     setPending(false);
     if (!result.ok) {
-      setOutcome({ tone: "danger", error: result.error });
+      if (inDialog) setFormError(result.error.message);
+      else setOutcome({ tone: "danger", error: result.error });
       return false;
     }
     setOutcome({ tone: "success", text: done });
@@ -50,9 +72,9 @@ export function FlagsScreen() {
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (problem !== null) return;
-    if (!(await apply(input, `Флаг ${input.key} сохранён: ${flagReach(input)}`))) return;
-    setInput(EMPTY);
-    setEditing(false);
+    setFormError(null);
+    if (!(await apply(input, `Флаг ${input.key} сохранён: ${flagReach(input)}`, true))) return;
+    closeForm();
   };
 
   const remove = async (key: string) => {
@@ -73,59 +95,26 @@ export function FlagsScreen() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title={editing ? `Флаг ${input.key}` : "Новый флаг"}>
-        <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
-          <FieldRow>
-            <Field label="Ключ" hint="его читает игра; латиница, точка, дефис">
-              <Input value={input.key} disabled={editing} onChange={(event) => setInput({ ...input, key: event.target.value.trim().toLowerCase() })} placeholder="shop.v2" maxLength={64} />
-            </Field>
-            <Field label="Доля игроков, %" help={HELP.flags.percent}>
-              <Input type="number" min={0} max={100} step={1} value={input.percent} onChange={(event) => setInput({ ...input, percent: Number(event.target.value) })} className="w-24" />
-            </Field>
-            <Field label="Заметка">
-              <Input value={input.note} onChange={(event) => setInput({ ...input, note: event.target.value })} maxLength={200} className="w-72" />
-            </Field>
-          </FieldRow>
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={input.enabled} onChange={(event) => setInput({ ...input, enabled: event.target.checked })} />
-              Включён
-            </label>
-            <span className="text-text-muted">Площадки (ни одной — все):</span>
-            {FLAG_PLATFORMS.map((platform) => (
-              <label key={platform} className="flex items-center gap-1">
-                <input type="checkbox" checked={input.platforms.includes(platform)} onChange={() => togglePlatform(platform)} />
-                {platform}
-              </label>
-            ))}
-          </div>
-          <p className="text-sm text-text-muted">Получат: {flagReach(input)}</p>
-          <div className="flex gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
-              Сохранить
+      {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
+      <Panel
+        title="Флаги"
+        help={HELP.flags.flags}
+        actions={
+          <>
+            <Button tone="primary" onClick={() => openForm(EMPTY, false)}>
+              Новый флаг
             </Button>
-            {editing ? (
-              <Button
-                onClick={() => {
-                  setInput(EMPTY);
-                  setEditing(false);
-                }}
-              >
-                Отмена
-              </Button>
-            ) : null}
-          </div>
-        </form>
-        {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
-      </Panel>
-      <Panel title="Флаги" help={HELP.flags.flags} actions={<Button onClick={reload}>Обновить</Button>}>
+            <Button onClick={reload}>Обновить</Button>
+          </>
+        }
+      >
         {state.status === "loading" ? <Loading /> : null}
         {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
         {state.status === "ok" ? (
           <DataTable
             rows={state.data.flags}
             rowKey={(row) => row.key}
-            empty="Флагов ещё нет — флаг включает функцию на одной площадке или доле игроков"
+            empty="Флагов ещё нет — заведите кнопкой «Новый флаг»: он включает функцию на одной площадке или доле игроков"
             columns={[
               { title: "Ключ", render: (row) => <code className="text-xs">{row.key}</code> },
               { title: "Состояние", render: (row) => (row.enabled ? <Badge tone="success">включён</Badge> : <Badge>выключен</Badge>) },
@@ -152,10 +141,7 @@ export function FlagsScreen() {
                         {row.enabled ? "Выключить" : "Включить"}
                       </Button>
                       <Button
-                        onClick={() => {
-                          setInput(toInput(row));
-                          setEditing(true);
-                        }}
+                        onClick={() => openForm(toInput(row), true)}
                       >
                         Изменить
                       </Button>
@@ -172,6 +158,49 @@ export function FlagsScreen() {
           />
         ) : null}
       </Panel>
+      <FormDialog
+        open={open}
+        title={editing ? `Флаг ${input.key}` : "Новый флаг"}
+        dirty={isDirty(initial, input)}
+        onClose={closeForm}
+        footer={(requestClose) => (
+          <>
+            {formError === null ? null : <span className="mr-auto text-sm text-danger">{formError}</span>}
+            <Button onClick={requestClose}>Отмена</Button>
+            <Button tone="primary" type="submit" form="flag-form" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
+              Сохранить
+            </Button>
+          </>
+        )}
+      >
+        <form id="flag-form" onSubmit={(event) => void submit(event)} className="flex flex-col gap-3">
+          <FieldRow>
+            <Field label="Ключ" hint="его читает игра; латиница, точка, дефис">
+              <Input value={input.key} disabled={editing} onChange={(event) => setInput({ ...input, key: event.target.value.trim().toLowerCase() })} placeholder="shop.v2" maxLength={64} />
+            </Field>
+            <Field label="Доля игроков, %" help={HELP.flags.percent}>
+              <Input type="number" min={0} max={100} step={1} value={input.percent} onChange={(event) => setInput({ ...input, percent: Number(event.target.value) })} className="w-24" />
+            </Field>
+            <Field label="Заметка">
+              <Input value={input.note} onChange={(event) => setInput({ ...input, note: event.target.value })} maxLength={200} className="w-72" />
+            </Field>
+          </FieldRow>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={input.enabled} onChange={(event) => setInput({ ...input, enabled: event.target.checked })} />
+              Включён
+            </label>
+            <span className="text-text-muted">Площадки (ни одной — все):</span>
+            {FLAG_PLATFORMS.map((platform) => (
+              <label key={platform} className="flex items-center gap-1">
+                <input type="checkbox" checked={input.platforms.includes(platform)} onChange={() => togglePlatform(platform)} />
+                {platform}
+              </label>
+            ))}
+          </div>
+          <p className="text-sm text-text-muted">Получат: {flagReach(input)}</p>
+        </form>
+      </FormDialog>
     </div>
   );
 }
