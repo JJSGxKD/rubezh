@@ -18,7 +18,7 @@ import { useSession } from "../../state/use-session";
 import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, ErrorNotice, Field, Help, Input, Loading, Notice, Panel } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 
 type CheckState = { pending: true } | { pending: false; result: SecretCheck; at: number };
@@ -199,7 +199,7 @@ function ReplaceDialog({ row, onClose, onSaved }: { row: SecretRow; onClose: () 
     setSaving(true);
     const result = await saveSecret(api, row.key, value);
     setSaving(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     onSaved(result.data);
   };
 
@@ -287,7 +287,7 @@ function GenerateDialog({ row, onClose }: { row: SecretRow; onClose: () => void 
     setPending(true);
     const result = await generateSecret(api, row.key);
     setPending(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     setCreated(result.data);
   };
 
@@ -360,7 +360,7 @@ function ResetDialog({ row, onClose, onDone }: { row: SecretRow; onClose: () => 
     setPending(true);
     const result = await resetSecret(api, row.key);
     setPending(false);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     onDone(result.data);
   };
   return (

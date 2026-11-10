@@ -27,6 +27,7 @@ export const storedDetailsSchema = z.object({
   bossKills: count.nullable().default(null),
   eliteKills: count.nullable().default(null),
   chestsOpened: count.nullable().default(null),
+  rareChests: count.nullable().default(null),
   crystals: count.nullable().default(null),
   // Серии и убийства по стихиям (tasks/T-0321): так же — строка прошлой сборки их не несёт.
   noHitSec: count.nullable().default(null),
@@ -59,6 +60,7 @@ export function detailsOf(input: FinishDetailsInput): StoredDetails | null {
     bossKills: input.stats?.bossKills ?? null,
     eliteKills: input.stats?.eliteKills ?? null,
     chestsOpened: input.stats?.chestsOpened ?? null,
+    rareChests: input.stats?.rareChests ?? null,
     crystals: input.stats?.crystals ?? null,
     noHitSec: input.stats?.noHitSec ?? null,
     noKillSec: input.stats?.noKillSec ?? null,

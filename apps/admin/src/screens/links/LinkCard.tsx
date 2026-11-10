@@ -52,7 +52,7 @@ import { Dialog } from "../../ui/dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Help, Input, KeyValue, Loading, Notice, Select } from "../../ui/kit";
 import { navigate } from "../../ui/router";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { PostbackBlock } from "./PostbackBlock";
 import { TokenNotice } from "./TokenNotice";
 
@@ -213,7 +213,7 @@ function AutoSource({ link, onChanged }: { link: LinkRow; onChanged: () => void 
     setSaving(true);
     const result = await setLinkHidden(api, link.code, !hidden);
     setSaving(false);
-    if (!result.ok) return toast.error(result.error.message);
+    if (!result.ok) return toastError(result.error);
     toast.success(hidden ? "Источник вернулся в список" : "Источник скрыт — запуски по нему считаются как раньше");
     onChanged();
   };
@@ -308,7 +308,7 @@ function TargetEditor({ link, onChanged }: { link: LinkRow; onChanged: () => voi
     setSaving(true);
     const result = await retargetLink(api, link.code, target);
     setSaving(false);
-    if (!result.ok) return toast.error(result.error.message);
+    if (!result.ok) return toastError(result.error);
     toast.success(`Теперь ссылка ведёт: ${TARGET_TITLES[target]}`);
     onChanged();
   };
@@ -407,7 +407,7 @@ function Journal({ code, onChanged }: { code: string; onChanged: () => void }) {
     setSending(row.conversionId);
     const result = await resendConversion(api, code, row.conversionId);
     setSending(null);
-    if (!result.ok) return toast.error(result.error.message);
+    if (!result.ok) return toastError(result.error);
     toast.success("Конверсия в очереди — уйдёт в течение минуты");
     setRows((current) => current.map((item) => (item.conversionId === row.conversionId ? result.data : item)));
     onChanged();

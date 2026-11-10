@@ -56,6 +56,7 @@ function result(): RunResult {
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     weapons: [{ id: "spark", level: 5, damage: 9000 }],
     passives: [],

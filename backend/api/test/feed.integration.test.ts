@@ -220,6 +220,24 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
     expect((await service.view(NOW)).events[0]?.name).toBe("Алисия");
   });
 
+  it("забег с боссом и редким сундуком: события видны в ленте, а игрок со скрытой отдельной доской — нет (T-0175)", async () => {
+    const open = await account("Открытый");
+    const hidden = await account("Скрытый");
+    const counters = { bossKills: 1, eliteKills: 1, chestsOpened: 1, rareChests: 1, crystals: 10, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+    await hooks.emit(recorded(open, { survivalSec: 300, counters }));
+    await hooks.emit(recorded(hidden, { survivalSec: 300, counters }));
+    await prisma.accountRestriction.create({
+      data: { accountId: hidden, kind: "separate_board", startsAt: new Date(NOW.getTime() - HOUR), endsAt: null, reason: "feed-test", notify: false },
+    });
+
+    const view = await service.view(NOW);
+
+    expect(view.events.map((item) => [item.kind, item.name, item.seconds]).sort()).toEqual([
+      ["boss", "Открытый", null],
+      ["chest", "Открытый", null],
+    ]);
+  });
+
   it("рекорд недели через запись: второй забег длиннее первого — событие week_record", async () => {
     const id = await account();
 
