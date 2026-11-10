@@ -37,6 +37,7 @@ shared:
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/src/screens/guide/scenes.tsx
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -275,7 +276,11 @@ batch: 5
       - `"guide.pattern.stalker.name": "Неубиваемый"`;
       - `"guide.pattern.stalker.text": "Идёт за тобой ровным шагом. Убить его нельзя: удары только отталкивают, и каждый следующий подряд слабее. Касание снимает треть здоровья и отбрасывает."`;
       - `"guide.pattern.stalker.tip": "Не стой — уходи. Отталкивай, только чтобы выиграть шаг."`.
-15. Если сдвинулись golden-эталоны (новый враг меняет `CONTENT_HASH` и длину
+15. **Сцена гайдбука:** если `switch` по паттерну в
+    `packages/app-shell/src/screens/guide/scenes.tsx` (строка ~297) перестал
+    быть полным — ветка `stalker` по образцу `swarm` (фигура идёт к герою).
+    Настоящую сцену рисует T-0427.
+16. Если сдвинулись golden-эталоны (новый враг меняет `CONTENT_HASH` и длину
     `killsByType`) — обновить в этом же PR и объяснить в описании: в забег
     Карачун ещё не приходит, поэтому длина забегов сдвинуться не должна.
 
