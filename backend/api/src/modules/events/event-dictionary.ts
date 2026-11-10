@@ -188,6 +188,16 @@ export const EVENT_DICTIONARY = {
     }),
   },
   run_abandoned: { version: 1, payload: runOutcome },
+  // Серверное событие: бот MAX или VK применил одноразовый код и сервер закрепил
+  // (или отклонил) связь игрового аккаунта с аккаунтом площадки (tasks/T-0377,
+  // Р188). `result`: `linked` — новая связь, `already` — та же пара уже была,
+  // `taken` — id площадки занят другим аккаунтом или у аккаунта другая связь.
+  // Игрок — по обычному конверту; id площадки в нагрузку не пишется. Шлёт
+  // только сервер, клиент его не пишет.
+  external_account_linked: {
+    version: 1,
+    payload: payload({ platform: z.enum(["max", "vk"]), result: z.enum(["linked", "already", "taken"]) }),
+  },
   run_paused: { version: 1, payload: payload({ reason: id, elapsedSec: seconds }) },
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },

@@ -24,6 +24,7 @@ export const ANALYTICS_EVENTS = [
   "run_finished",
   "run_scored",
   "run_abandoned",
+  "external_account_linked",
   "run_paused",
   "upgrade_offered",
   "upgrade_chosen",
