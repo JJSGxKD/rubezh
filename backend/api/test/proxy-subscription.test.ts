@@ -22,6 +22,7 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PROXIES_REPOSITORY, type ProxiesRepository, type StoredProxy } from "../src/modules/proxies/proxies.repository.js";
 import { PROXY_CIPHER } from "../src/modules/proxies/proxy-password.js";
 import { ProxyRoutes } from "../src/modules/proxies/proxy-routes.service.js";
+import { SubscriptionCommands } from "../src/modules/proxies/subscription/subscription-commands.js";
 import { SubscriptionRoutes } from "../src/modules/proxies/subscription/subscription-routes.js";
 import { SUBSCRIPTION_REPOSITORY, type StoredNode, type StoredSubscription } from "../src/modules/proxies/subscription/subscription.repository.js";
 import { SubscriptionScheduler } from "../src/modules/proxies/subscription/subscription.scheduler.js";
@@ -44,9 +45,11 @@ import { MemoryConfigWriter, MemoryLockRedis, MemorySubscriptionRepository } fro
 import { panelSettings } from "./helpers/settings.js";
 
 /**
- * Подписка Xray для прокси (docs/35-stage4-plan.md Р101, tasks/T-0093):
- * обновление с защитой от SSRF и от сбоя поставщика, слоты узлов, выдача узлов
- * клиенту исходящих, расписание проверок и панель по HTTP. Сеть, DNS, файл
+ * Подписка Xray для прокси (docs/35-stage4-plan.md Р101, tasks/T-0093; несколько
+ * подписок — Р192, tasks/T-0384): обновление с защитой от SSRF и от сбоя
+ * поставщика, слоты узлов, выдача узлов клиенту исходящих, расписание проверок
+ * и панель по HTTP. Здесь — подписка одна, с ключом `main` (исходная); общий
+ * перебор нескольких — `proxy-subscriptions-multi.test.ts`. Сеть, DNS, файл
  * конфига, Redis и хранилище — подмены.
  */
 
@@ -81,6 +84,7 @@ interface Rig {
   resolve: ReturnType<typeof vi.fn<(host: string) => Promise<string[]>>>;
   changed: ReturnType<typeof vi.fn<() => Promise<void>>>;
   sync: SubscriptionSync;
+  commands: SubscriptionCommands;
 }
 
 function rig(options: { slotCount?: number; settings?: Record<string, SettingValue> } = {}): Rig {
@@ -93,25 +97,18 @@ function rig(options: { slotCount?: number; settings?: Record<string, SettingVal
   const fetchMock = vi.fn<typeof fetch>(async () => answer(bodyOf(nodeLink(1), nodeLink(2), nodeLink(3), HYSTERIA)));
   const resolve = vi.fn<(host: string) => Promise<string[]>>(async () => [PUBLIC_IP]);
   const changed = vi.fn<() => Promise<void>>(async () => undefined);
-  const sync = new SubscriptionSync({
-    repository,
-    cipher: sealing,
-    outbound: { forService: () => fetchMock },
-    resolve,
-    writer,
-    routes,
-    redis,
-    changed,
-    xray: { basePort: BASE_PORT, slotCount: options.slotCount ?? 8 },
-  });
-  return { repository, cipher: sealing, routes, writer, redis, settings, fetch: fetchMock, resolve, changed, sync };
+  const xray = { basePort: BASE_PORT, slotCount: options.slotCount ?? 8 };
+  const sync = new SubscriptionSync({ repository, cipher: sealing, outbound: { forService: () => fetchMock }, resolve, writer, routes, redis, changed, xray });
+  const commands = new SubscriptionCommands({ repository, writer, sync, xray });
+  return { repository, cipher: sealing, routes, writer, redis, settings, fetch: fetchMock, resolve, changed, sync, commands };
 }
 
 function subscriptionRow(sealing: SecretCipher, patch: Partial<StoredSubscription> = {}, url = URL_SECRET): StoredSubscription {
+  const key = patch.key ?? "main";
   return {
-    key: "main",
+    key,
     name: "Основная",
-    ...sealUrl(sealing, "main", url),
+    ...sealUrl(sealing, key, url),
     enabled: true,
     countries: [],
     lastRefreshAt: null,
@@ -123,12 +120,16 @@ function subscriptionRow(sealing: SecretCipher, patch: Partial<StoredSubscriptio
     expiresAt: null,
     updatedBy: "00000000-0000-4000-8000-000000000001",
     updatedAt: NOW,
+    createdAt: NOW,
     ...patch,
   };
 }
 
+/** Подписка в хранилище: нет — создаётся, есть — заменяется целиком (как смена адреса). */
 async function seed(r: Rig, patch: Partial<StoredSubscription> = {}, url = URL_SECRET): Promise<void> {
-  await r.repository.save(subscriptionRow(r.cipher, patch, url));
+  const row = subscriptionRow(r.cipher, patch, url);
+  if ((await r.repository.load(row.key)) === null) await r.repository.create(row);
+  else await r.repository.save(row, { dropNodes: true });
 }
 
 const nodeRow = (key: string, slot: number, patch: Partial<StoredNode> = {}): StoredNode => ({
@@ -152,7 +153,7 @@ describe("обновление подписки", () => {
     const r = rig();
     await seed(r);
 
-    const result = await r.sync.refresh(NOW);
+    const result = await r.sync.refresh("main", NOW);
 
     expect(result).toEqual({ status: "ok", note: "3 узла, пропущено 1 (протокол: 1)" });
     const config = r.writer.last as { inbounds: { port: number; listen: string; protocol: string }[] };
@@ -175,7 +176,7 @@ describe("обновление подписки", () => {
       answer(bodyOf(nodeLink(1)), { headers: { "subscription-userinfo": "upload=1; download=2; total=1000; expire=1795000000", "profile-update-interval": "12" } }),
     );
 
-    await r.sync.refresh(NOW);
+    await r.sync.refresh("main", NOW);
 
     expect(r.repository.subscription).toMatchObject({ trafficUsedBytes: 3n, trafficTotalBytes: 1000n, providerIntervalHours: 12 });
     expect(r.repository.subscription?.expiresAt?.getTime()).toBe(1795000000 * 1000);
@@ -199,7 +200,7 @@ describe("обновление подписки", () => {
     });
     r.fetch.mockResolvedValueOnce(answer(JSON.stringify([config("[DE] Берлин", "de.example.org"), config("[NL] Амстердам", "nl.example.org")])));
 
-    const result = await r.sync.refresh(NOW);
+    const result = await r.sync.refresh("main", NOW);
 
     expect(result).toEqual({ status: "ok", note: "2 узла" });
     expect(r.repository.nodes.map((node) => [node.name, node.country, node.host])).toEqual([
@@ -214,7 +215,7 @@ describe("обновление подписки", () => {
     it("User-Agent v2rayN/7.0, x-device-os: Linux и x-hwid из 32 hex; адреса подписки в заголовках нет", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
 
       const headers = headersOf(r);
       expect(headers.get("user-agent")).toBe(SUBSCRIPTION_USER_AGENT);
@@ -229,8 +230,8 @@ describe("обновление подписки", () => {
     it("hwid постоянный: каждое обновление подписки приходит с одним и тем же", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
-      await r.sync.refresh(new Date(NOW.getTime() + 3_600_000));
+      await r.sync.refresh("main", NOW);
+      await r.sync.refresh("main", new Date(NOW.getTime() + 3_600_000));
 
       expect(r.fetch).toHaveBeenCalledTimes(2);
       expect(headersOf(r, 1).get("x-hwid")).toBe(headersOf(r, 0).get("x-hwid"));
@@ -239,9 +240,9 @@ describe("обновление подписки", () => {
     it("смена адреса подписки hwid не меняет: устройство то же, лимит устройств у поставщика не растёт", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
       await seed(r, {}, "https://other.example.net/sub/NEW-TOKEN");
-      await r.sync.refresh(new Date(NOW.getTime() + 3_600_000));
+      await r.sync.refresh("main", new Date(NOW.getTime() + 3_600_000));
 
       expect(headersOf(r, 1).get("x-hwid")).toBe(headersOf(r, 0).get("x-hwid"));
     });
@@ -272,12 +273,12 @@ describe("обновление подписки", () => {
     it(`${name}: прежние узлы и конфиг на месте, заметка без адреса подписки`, async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
       const before = { nodes: structuredClone(r.repository.nodes), writes: r.writer.written.length, refreshWrites: r.repository.refreshWrites };
       r.fetch.mockImplementation(async () => respond());
 
       const later = new Date(NOW.getTime() + 3_600_000);
-      const result = await r.sync.refresh(later);
+      const result = await r.sync.refresh("main", later);
 
       expect(result).toEqual({ status: "failed", note });
       expect(r.repository.nodes).toEqual(before.nodes);
@@ -312,7 +313,7 @@ describe("обновление подписки", () => {
         const r = rig();
         await seed(r, {}, url);
 
-        const result = await r.sync.refresh(NOW);
+        const result = await r.sync.refresh("main", NOW);
 
         expect(result).toEqual({ status: "failed", note: NOT_ALLOWED });
         expect(r.fetch).not.toHaveBeenCalled();
@@ -324,7 +325,7 @@ describe("обновление подписки", () => {
       await seed(r);
       r.resolve.mockResolvedValue(["127.0.0.1"]);
 
-      expect(await r.sync.refresh(NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
+      expect(await r.sync.refresh("main", NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
       expect(r.fetch).not.toHaveBeenCalled();
     });
 
@@ -333,7 +334,7 @@ describe("обновление подписки", () => {
       await seed(r);
       r.resolve.mockResolvedValue([PUBLIC_IP, "10.1.2.3"]);
 
-      expect(await r.sync.refresh(NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
+      expect(await r.sync.refresh("main", NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
       expect(r.fetch).not.toHaveBeenCalled();
     });
 
@@ -342,7 +343,7 @@ describe("обновление подписки", () => {
       await seed(r);
       r.resolve.mockRejectedValue(new Error("ENOTFOUND"));
 
-      expect(await r.sync.refresh(NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
+      expect(await r.sync.refresh("main", NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
     });
 
     it("переход на закрытый адрес: второй запрос не уходит, нужен был только первый", async () => {
@@ -351,7 +352,7 @@ describe("обновление подписки", () => {
       r.resolve.mockImplementation(async (host) => (host === "evil.example.net" ? ["192.168.0.10"] : [PUBLIC_IP]));
       r.fetch.mockResolvedValue(new Response(null, { status: 302, headers: { location: "https://evil.example.net/x" } }));
 
-      expect(await r.sync.refresh(NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
+      expect(await r.sync.refresh("main", NOW)).toEqual({ status: "failed", note: NOT_ALLOWED });
       expect(r.fetch).toHaveBeenCalledTimes(1);
     });
   });
@@ -361,7 +362,7 @@ describe("обновление подписки", () => {
     await seed(r);
     r.writer.available_ = false;
 
-    const result = await r.sync.refresh(NOW);
+    const result = await r.sync.refresh("main", NOW);
 
     expect(result).toEqual({ status: "failed", note: "Контейнер Xray не подключён: конфиг некуда записать" });
     expect(r.repository.nodes).toEqual([]);
@@ -385,7 +386,7 @@ describe("обновление подписки", () => {
       xray: { basePort: BASE_PORT, slotCount: 8 },
     });
 
-    const result = await other.refresh(NOW);
+    const result = await other.refresh("main", NOW);
 
     expect(result.status).toBe("failed");
     expect(r.fetch).not.toHaveBeenCalled();
@@ -395,28 +396,28 @@ describe("обновление подписки", () => {
     it("вернувшийся узел получает прежний слот, новый — наименьший свободный", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
       const slotOf = (host: string): number | undefined => r.repository.nodes.find((node) => node.host === host)?.slot;
       expect([slotOf("n1.example.org"), slotOf("n2.example.org"), slotOf("n3.example.org")]).toEqual([0, 1, 2]);
 
       // n1 пропал, появился n4, потом n1 вернулся.
       r.fetch.mockImplementation(async () => answer(bodyOf(nodeLink(2), nodeLink(3), nodeLink(4))));
-      await r.sync.refresh(new Date(NOW.getTime() + 1000));
+      await r.sync.refresh("main", new Date(NOW.getTime() + 1000));
       expect(slotOf("n4.example.org")).toBe(0);
       expect(slotOf("n2.example.org")).toBe(1);
 
       r.fetch.mockImplementation(async () => answer(bodyOf(nodeLink(1), nodeLink(2), nodeLink(3), nodeLink(4))));
-      await r.sync.refresh(new Date(NOW.getTime() + 2000));
+      await r.sync.refresh("main", new Date(NOW.getTime() + 2000));
       expect([slotOf("n1.example.org"), slotOf("n2.example.org"), slotOf("n3.example.org"), slotOf("n4.example.org")]).toEqual([3, 1, 2, 0]);
     });
 
     it("пропавший узел удаляется из таблицы и из пула", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
       r.fetch.mockImplementation(async () => answer(bodyOf(nodeLink(1))));
 
-      await r.sync.refresh(new Date(NOW.getTime() + 1000));
+      await r.sync.refresh("main", new Date(NOW.getTime() + 1000));
 
       expect(r.repository.nodes.map((node) => node.host)).toEqual(["n1.example.org"]);
       expect(r.routes.nodeCount()).toBe(1);
@@ -425,12 +426,12 @@ describe("обновление подписки", () => {
     it("состояние проверок уцелевшего узла не сбрасывается обновлением", async () => {
       const r = rig();
       await seed(r);
-      await r.sync.refresh(NOW);
+      await r.sync.refresh("main", NOW);
       const keep = r.repository.nodes[0] as StoredNode;
       r.repository.nodes = r.repository.nodes.map((node) => (node.nodeKey === keep.nodeKey ? { ...node, state: "healthy", latencyMs: 80, lastProbeAt: NOW, nextProbeAt: new Date(NOW.getTime() + 300_000) } : node));
       await r.routes.reload();
 
-      await r.sync.refresh(new Date(NOW.getTime() + 1000));
+      await r.sync.refresh("main", new Date(NOW.getTime() + 1000));
 
       expect(r.repository.nodes.find((node) => node.nodeKey === keep.nodeKey)).toMatchObject({ state: "healthy", latencyMs: 80 });
     });
@@ -439,11 +440,11 @@ describe("обновление подписки", () => {
       const r = rig({ slotCount: 2 });
       await seed(r);
 
-      const result = await r.sync.refresh(NOW);
+      const result = await r.sync.refresh("main", NOW);
 
       expect(r.repository.nodes).toHaveLength(2);
       expect(result.status).toBe("ok");
-      expect(r.repository.subscription?.lastRefreshNote).toContain("Не хватило входов: 1 узел не подключён — увеличьте XRAY_SLOT_COUNT");
+      expect(r.repository.subscription?.lastRefreshNote).toContain("Не хватило входов: 1 узел не подключён — на подписку приходится 2 входа; увеличьте XRAY_SLOT_COUNT или удалите лишние подписки");
       expect(r.repository.subscription?.lastRefreshOk).toBe(false);
     });
   });
@@ -459,9 +460,9 @@ describe("обновление подписки", () => {
         }),
     );
 
-    const first = r.sync.refresh(NOW);
+    const first = r.sync.refresh("main", NOW);
     await vi.waitFor(() => expect(r.fetch).toHaveBeenCalledTimes(1));
-    const second = await r.sync.refresh(NOW);
+    const second = await r.sync.refresh("main", NOW);
     release();
 
     expect(second).toEqual({ status: "busy" });
@@ -476,15 +477,15 @@ describe("обновление подписки", () => {
     await seed(r);
     r.redis.hold("proxy-subscription:refresh:lock");
 
-    expect(await r.sync.refresh(NOW)).toEqual({ status: "busy" });
+    expect(await r.sync.refresh("main", NOW)).toEqual({ status: "busy" });
     expect(r.fetch).not.toHaveBeenCalled();
   });
 
   it("нет подписки или она выключена: обновления нет", async () => {
     const r = rig();
-    expect(await r.sync.refresh(NOW)).toEqual({ status: "absent" });
+    expect(await r.sync.refresh("main", NOW)).toEqual({ status: "absent" });
     await seed(r, { enabled: false });
-    expect(await r.sync.refresh(NOW)).toEqual({ status: "disabled" });
+    expect(await r.sync.refresh("main", NOW)).toEqual({ status: "disabled" });
     expect(r.fetch).not.toHaveBeenCalled();
   });
 });
@@ -532,7 +533,7 @@ describe("узлы в переборе клиента исходящих", () =>
 
     const list = await listed(r);
 
-    expect(list.map((proxy) => proxy.id)).toEqual(["node:dddd", "node:bbbb", "node:cccc"]);
+    expect(list.map((proxy) => proxy.id)).toEqual(["node:main:dddd", "node:main:bbbb", "node:main:cccc"]);
     expect(list.map((proxy) => [proxy.scheme, proxy.host, proxy.port, proxy.username, proxy.password])).toEqual([
       ["socks5", "xray", BASE_PORT + 3, null, null],
       ["socks5", "xray", BASE_PORT + 5, null, null],
@@ -547,7 +548,7 @@ describe("узлы в переборе клиента исходящих", () =>
 
     const list = await listed(r, [manual(40)]);
 
-    expect(list.map((proxy) => proxy.id)).toEqual(["manual-1", "node:aaaa", "node:bbbb"]);
+    expect(list.map((proxy) => proxy.id)).toEqual(["manual-1", "node:main:aaaa", "node:main:bbbb"]);
     const priorities = list.map((proxy) => proxy.priority);
     expect(priorities).toEqual([...priorities].sort((a, b) => a - b));
     expect(new Set(priorities).size).toBe(3);
@@ -558,7 +559,7 @@ describe("узлы в переборе клиента исходящих", () =>
     await seed(r, { countries: ["NL"] });
     r.repository.nodes = [healthy("aaaa", 0, 10, { country: "DE" }), healthy("bbbb", 1, 20, { country: "NL" }), healthy("cccc", 2, 5, { country: null })];
 
-    expect((await listed(r)).map((proxy) => proxy.id)).toEqual(["node:bbbb"]);
+    expect((await listed(r)).map((proxy) => proxy.id)).toEqual(["node:main:bbbb"]);
   });
 
   it("без фильтра узел без страны подходит", async () => {
@@ -566,7 +567,7 @@ describe("узлы в переборе клиента исходящих", () =>
     await seed(r);
     r.repository.nodes = [healthy("cccc", 2, 5, { country: null })];
 
-    expect((await listed(r)).map((proxy) => proxy.id)).toEqual(["node:cccc"]);
+    expect((await listed(r)).map((proxy) => proxy.id)).toEqual(["node:main:cccc"]);
   });
 
   it("подписка выключена: узлов в переборе нет", async () => {
@@ -839,7 +840,7 @@ describe("подписка по HTTP в панели", () => {
     @Module({
       controllers: [AdminProxySubscriptionController],
       providers: [
-        { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: "777000111" } as NodeJS.ProcessEnv) },
+        { provide: APP_CONFIG, useValue: loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: "777000111", XRAY_SLOT_COUNT: "8" } as NodeJS.ProcessEnv) },
         { provide: REDIS, useValue: Object.assign(r.redis, { publish }) },
         { provide: ACCOUNT_REPOSITORY, useValue: accounts },
         { provide: ROLES_REPOSITORY, useValue: roles },
@@ -851,6 +852,7 @@ describe("подписка по HTTP в панели", () => {
         { provide: OUTBOUND_PROXY_FETCH, useValue: vi.fn() },
         { provide: SubscriptionRoutes, useValue: r.routes },
         { provide: SubscriptionSync, useValue: r.sync },
+        { provide: SubscriptionCommands, useValue: r.commands },
         { provide: ProxyRoutes, useValue: { changed: r.changed } },
         ProxySubscriptionService,
         RateLimiter,
@@ -891,35 +893,69 @@ describe("подписка по HTTP в панели", () => {
   }
   const headersOf = (token: string) => ({ cookie: `${ADMIN_SESSION_COOKIE}=${token}`, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
   const call = (method: "GET" | "POST" | "PUT" | "DELETE", path: string, token: string, payload?: unknown) =>
-    server().inject({ method, url: `/api/v1/admin/proxy-subscription${path}`, headers: headersOf(token), ...(payload === undefined ? {} : { payload: payload as object }) });
-  const save = (body: Record<string, unknown> = {}, token = "own") => call("PUT", "", token, { name: "Основная", url: URL_SECRET, countries: ["DE", "NL"], enabled: true, ...body });
+    server().inject({ method, url: `/api/v1/admin/proxy-subscriptions${path}`, headers: headersOf(token), ...(payload === undefined ? {} : { payload: payload as object }) });
+  const create = (body: Record<string, unknown> = {}, token = "own") => call("POST", "", token, { name: "Основная", url: URL_SECRET, countries: ["DE", "NL"], enabled: true, ...body });
   const auditText = async (): Promise<string> => JSON.stringify(await roles.recentAudit(100));
+  /** Ключ единственной подписки: его выдаёт сервер, случайный. */
+  const onlyKey = (): string => {
+    const [row] = r.repository.rows;
+    if (row === undefined) throw new Error("подписки нет");
+    return row.key;
+  };
+
+  type Overview = {
+    encryption: boolean;
+    sidecar: { connected: boolean };
+    limit: number;
+    slotCount: number;
+    slotQuota: number;
+    subscriptions: ({ key: string; nodes: { name: string; state: string }[] } & Record<string, unknown>)[];
+  };
+  const overviewOf = (response: { json: () => unknown }): Overview => (response.json() as { data: Overview }).data;
 
   it("смотреть: владелец и администратор — 200, модератор — 403, без сессии — 401", async () => {
     expect((await call("GET", "", "own")).statusCode).toBe(200);
     expect((await call("GET", "", "adm")).statusCode).toBe(200);
     expect((await call("GET", "", "mod")).statusCode).toBe(403);
-    expect((await server().inject({ method: "GET", url: "/api/v1/admin/proxy-subscription" })).statusCode).toBe(401);
+    expect((await server().inject({ method: "GET", url: "/api/v1/admin/proxy-subscriptions" })).statusCode).toBe(401);
   });
 
   it("менять без proxies.edit (администратор, модератор) — 403, ничего не записано", async () => {
     for (const token of ["adm", "mod"]) {
-      expect((await save({}, token)).statusCode, token).toBe(403);
-      expect((await call("POST", "/refresh", token)).statusCode, token).toBe(403);
-      expect((await call("POST", "/probe", token)).statusCode, token).toBe(403);
-      expect((await call("DELETE", "", token)).statusCode, token).toBe(403);
+      expect((await create({}, token)).statusCode, token).toBe(403);
+      expect((await call("PUT", "/main", token, { name: "Х", countries: [], enabled: true })).statusCode, token).toBe(403);
+      expect((await call("POST", "/main/refresh", token)).statusCode, token).toBe(403);
+      expect((await call("POST", "/main/probe", token)).statusCode, token).toBe(403);
+      expect((await call("DELETE", "/main", token)).statusCode, token).toBe(403);
     }
-    expect(r.repository.subscription).toBeNull();
+    expect(r.repository.rows).toEqual([]);
     expect(r.fetch).not.toHaveBeenCalled();
     expect(await auditText()).not.toContain("proxy_subscription");
   });
 
-  it("пусто: подписки нет, контейнер подключён", async () => {
-    const body = (await call("GET", "", "own")).json() as { data: { subscription: unknown; nodes: unknown[]; sidecar: { connected: boolean }; encryption: boolean } };
-    expect(body.data).toMatchObject({ subscription: null, nodes: [], sidecar: { connected: true }, encryption: true });
+  it("пусто: подписок нет, контейнер подключён, предел и доля входов названы", async () => {
+    const data = overviewOf(await call("GET", "", "own"));
+    expect(data).toMatchObject({ subscriptions: [], sidecar: { connected: true }, encryption: true, limit: 10, slotCount: 8, slotQuota: 8 });
 
     r.writer.available_ = false;
-    expect(((await call("GET", "", "own")).json() as typeof body).data.sidecar.connected).toBe(false);
+    expect(overviewOf(await call("GET", "", "own")).sidecar.connected).toBe(false);
+  });
+
+  it(":key не по формату — 400: заглавные, слишком длинный, не латиница", async () => {
+    for (const key of ["ABC", "a".repeat(17), "a-b", "%D0%BA%D0%BB%D1%8E%D1%87"]) {
+      expect((await call("PUT", `/${key}`, "own", { name: "Х", countries: [], enabled: true })).statusCode, key).toBe(400);
+      expect((await call("DELETE", `/${key}`, "own")).statusCode, key).toBe(400);
+      expect((await call("POST", `/${key}/refresh`, "own")).statusCode, key).toBe(400);
+      expect((await call("POST", `/${key}/probe`, "own")).statusCode, key).toBe(400);
+    }
+    expect(r.fetch).not.toHaveBeenCalled();
+  });
+
+  it("нет такой подписки — 404 на правку, удаление, обновление и проверку", async () => {
+    expect((await call("PUT", "/nosuch", "own", { name: "Х", countries: [], enabled: true })).statusCode).toBe(404);
+    expect((await call("DELETE", "/nosuch", "own")).statusCode).toBe(404);
+    expect((await call("POST", "/nosuch/refresh", "own")).statusCode).toBe(404);
+    expect((await call("POST", "/nosuch/probe", "own")).statusCode).toBe(404);
   });
 
   const BAD: [string, Record<string, unknown>][] = [
@@ -932,67 +968,95 @@ describe("подписка по HTTP в панели", () => {
     ["больше десяти стран", { countries: ["AA", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ", "AK"] }],
     ["пустое название", { name: " " }],
     ["лишнее поле", { extra: 1 }],
+    ["ключ в теле (его выдаёт сервер)", { key: "main" }],
   ];
   for (const [name, patch] of BAD) {
-    it(`сохранение: ${name} — 400, ничего не записано`, async () => {
-      const response = await save(patch);
+    it(`создание: ${name} — 400, ничего не записано`, async () => {
+      const response = await create(patch);
       expect(response.statusCode).toBe(400);
-      expect(r.repository.subscription).toBeNull();
+      expect(r.repository.rows).toEqual([]);
     });
   }
 
-  it("сохранение: адрес шифртекстом, в ответе, журнале и аудите его нет; есть подсказка", async () => {
-    const response = await save();
+  it("создание: адрес шифртекстом, в ответе, журнале и аудите его нет; есть подсказка и ключ из 12 hex", async () => {
+    const response = await create();
 
     expect(response.statusCode).toBe(200);
     expect(response.body).not.toMatch(AUDIT_URL);
-    const data = (response.json() as { data: { subscription: Record<string, unknown> } }).data.subscription;
-    expect(data).toMatchObject({ name: "Основная", countries: ["DE", "NL"], enabled: true, urlHint: "sub.example.com …TKEY" });
-    expect(Object.keys(data).some((key) => /^url(Iv|Tag|Ct|KeyId)?$/i.test(key))).toBe(false);
+    const [entry] = overviewOf(response).subscriptions;
+    expect(entry).toMatchObject({ name: "Основная", countries: ["DE", "NL"], enabled: true, urlHint: "sub.example.com …TKEY", nodes: [] });
+    expect(entry?.key).toMatch(/^[0-9a-f]{12}$/);
+    expect(Object.keys(entry ?? {}).some((key) => /^url(Iv|Tag|Ct|KeyId)?$/i.test(key))).toBe(false);
 
-    const row = r.repository.subscription;
+    const row = r.repository.rows[0];
+    expect(row?.key).toBe(entry?.key);
     expect(Buffer.from(row?.urlCt ?? []).toString("utf8")).not.toContain("sub.example.com");
     expect(await auditText()).not.toMatch(AUDIT_URL);
-    const entry = (await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.save");
-    expect(entry?.after).toMatchObject({ name: "Основная", urlHint: "sub.example.com …TKEY", countries: ["DE", "NL"], enabled: true });
+    const audit = (await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.save");
+    expect(audit?.target).toBe(entry?.key);
+    expect(audit?.after).toMatchObject({ name: "Основная", urlHint: "sub.example.com …TKEY", countries: ["DE", "NL"], enabled: true });
+  });
+
+  it("адрес читается ключом новой подписки: обновление после создания берёт его и проходит", async () => {
+    await create();
+    const response = await call("POST", `/${onlyKey()}/refresh`, "own");
+    expect(response.statusCode).toBe(200);
+    expect(r.fetch).toHaveBeenCalledTimes(1);
+    expect(String(r.fetch.mock.calls[0]?.[0])).toContain("sub.example.com");
   });
 
   it("PUT без url оставляет прежний адрес и узлы; с новым — узлы прежней подписки сбрасываются", async () => {
-    await save();
-    const sealed = Buffer.from(r.repository.subscription?.urlCt ?? []).toString("hex");
-    r.repository.nodes = [nodeRow("aaaa", 0)];
+    await create();
+    const key = onlyKey();
+    const sealed = Buffer.from(r.repository.rows[0]?.urlCt ?? []).toString("hex");
+    r.repository.nodes = [nodeRow("aaaa", 0, { subscriptionKey: key })];
 
-    const keep = await call("PUT", "", "own", { name: "Новое имя", countries: [], enabled: false });
+    const keep = await call("PUT", `/${key}`, "own", { name: "Новое имя", countries: [], enabled: false });
     expect(keep.statusCode).toBe(200);
-    expect(Buffer.from(r.repository.subscription?.urlCt ?? []).toString("hex")).toBe(sealed);
-    expect(r.repository.subscription).toMatchObject({ name: "Новое имя", enabled: false, countries: [] });
+    expect(Buffer.from(r.repository.rowOf(key)?.urlCt ?? []).toString("hex")).toBe(sealed);
+    expect(r.repository.rowOf(key)).toMatchObject({ name: "Новое имя", enabled: false, countries: [] });
     expect(r.repository.nodes).toHaveLength(1);
 
-    await save({ url: "https://other.example.com/new-token-1234567890" });
-    expect(Buffer.from(r.repository.subscription?.urlCt ?? []).toString("hex")).not.toBe(sealed);
+    const replaced = await call("PUT", `/${key}`, "own", { name: "Новое имя", url: "https://other.example.com/new-token-1234567890", countries: [], enabled: true });
+    expect(replaced.statusCode).toBe(200);
+    expect(Buffer.from(r.repository.rowOf(key)?.urlCt ?? []).toString("hex")).not.toBe(sealed);
     expect(r.repository.nodes).toEqual([]);
-    expect(r.repository.subscription?.lastRefreshAt).toBeNull();
+    expect(r.repository.rowOf(key)?.lastRefreshAt).toBeNull();
+    expect(r.repository.rowOf(key)?.key).toBe(key);
   });
 
-  it("первое сохранение без url — 400", async () => {
-    expect((await call("PUT", "", "own", { name: "Основная", countries: [], enabled: true })).statusCode).toBe(400);
+  it("правка не стирает итог обновления, записанный между чтением и записью", async () => {
+    await create();
+    const key = onlyKey();
+    await r.sync.refresh(key, NOW);
+    const done = r.repository.rowOf(key);
+
+    expect((await call("PUT", `/${key}`, "own", { name: "Другое", countries: ["FR"], enabled: true })).statusCode).toBe(200);
+
+    expect(r.repository.rowOf(key)).toMatchObject({ name: "Другое", countries: ["FR"], lastRefreshAt: done?.lastRefreshAt, lastRefreshNote: done?.lastRefreshNote });
+  });
+
+  it("создание без url — 400", async () => {
+    expect((await call("POST", "", "own", { name: "Основная", countries: [], enabled: true })).statusCode).toBe(400);
+    expect(r.repository.rows).toEqual([]);
   });
 
   it("без ключа шифрования сохранить нельзя — 409", async () => {
     await app?.close();
     await boot({ encryption: false });
-    const response = await save();
+    const response = await create();
     expect(response.statusCode).toBe(409);
-    expect(r.repository.subscription).toBeNull();
-    expect(((await call("GET", "", "own")).json() as { data: { encryption: boolean } }).data.encryption).toBe(false);
+    expect(r.repository.rows).toEqual([]);
+    expect(overviewOf(await call("GET", "", "own")).encryption).toBe(false);
   });
 
   it("ручное «Обновить» дважды за минуту: второе — 429, обновление было одно", async () => {
-    await save();
-    expect((await call("POST", "/refresh", "own")).statusCode).toBe(200);
+    await create();
+    const key = onlyKey();
+    expect((await call("POST", `/${key}/refresh`, "own")).statusCode).toBe(200);
     expect(r.fetch).toHaveBeenCalledTimes(1);
 
-    const second = await call("POST", "/refresh", "own");
+    const second = await call("POST", `/${key}/refresh`, "own");
 
     expect(second.statusCode).toBe(429);
     expect(second.json()).toMatchObject({ error: { message: "Подождите минуту" } });
@@ -1000,69 +1064,97 @@ describe("подписка по HTTP в панели", () => {
   });
 
   it("«Проверить узлы» не чаще раза в минуту; отмечает все узлы к проверке сейчас", async () => {
-    await save();
+    await create();
+    const key = onlyKey();
     const far = Date.now() + 10 * 3_600_000;
-    r.repository.nodes = [nodeRow("aaaa", 0, { nextProbeAt: new Date(far) })];
+    r.repository.nodes = [nodeRow("aaaa", 0, { subscriptionKey: key, nextProbeAt: new Date(far) })];
 
-    expect((await call("POST", "/probe", "own")).statusCode).toBe(200);
+    expect((await call("POST", `/${key}/probe`, "own")).statusCode).toBe(200);
     expect(r.repository.nodes[0]?.nextProbeAt.getTime()).toBeLessThanOrEqual(Date.now());
-    expect((await call("POST", "/probe", "own")).statusCode).toBe(429);
+    expect((await call("POST", `/${key}/probe`, "own")).statusCode).toBe(429);
   });
 
-  it("обновление пишет аудит без адреса и возвращает итог", async () => {
-    await save();
-    const response = await call("POST", "/refresh", "own");
+  it("обновление пишет аудит без адреса, с ключом подписки целью, и возвращает итог", async () => {
+    await create();
+    const key = onlyKey();
+    const response = await call("POST", `/${key}/refresh`, "own");
 
     expect(response.statusCode).toBe(200);
-    expect((response.json() as { data: { subscription: { lastRefreshNote: string } } }).data.subscription.lastRefreshNote).toBe("3 узла, пропущено 1 (протокол: 1)");
+    expect(overviewOf(response).subscriptions[0]?.lastRefreshNote).toBe("3 узла, пропущено 1 (протокол: 1)");
     expect(await auditText()).not.toMatch(AUDIT_URL);
-    expect((await roles.recentAudit(10)).some((item) => item.action === "proxy_subscription.refresh")).toBe(true);
+    expect((await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.refresh")?.target).toBe(key);
+  });
+
+  it("обновление выключенной подписки — 400 с понятным текстом", async () => {
+    await create({ enabled: false });
+    const response = await call("POST", `/${onlyKey()}/refresh`, "own");
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { message: "Подписка выключена — сначала включите её" } });
+    expect(r.fetch).not.toHaveBeenCalled();
   });
 
   it("узлы в ответе: рабочие сверху, секретов узла (uuid, пароль) нет", async () => {
-    await save();
-    r.repository.nodes = [nodeRow("down1", 0, { state: "down", failures: 3 }), nodeRow("ok-slow", 1, { state: "healthy", latencyMs: 200 }), nodeRow("ok-fast", 2, { state: "healthy", latencyMs: 30 }), nodeRow("new1", 3)];
+    await create();
+    const key = onlyKey();
+    r.repository.nodes = [
+      nodeRow("down1", 0, { subscriptionKey: key, state: "down", failures: 3 }),
+      nodeRow("ok-slow", 1, { subscriptionKey: key, state: "healthy", latencyMs: 200 }),
+      nodeRow("ok-fast", 2, { subscriptionKey: key, state: "healthy", latencyMs: 30 }),
+      nodeRow("new1", 3, { subscriptionKey: key }),
+    ];
 
     const response = await call("GET", "", "adm");
-    const nodes = (response.json() as { data: { nodes: { name: string; state: string }[] } }).data.nodes;
 
-    expect(nodes.map((node) => node.state)).toEqual(["healthy", "healthy", "unknown", "down"]);
+    expect(overviewOf(response).subscriptions[0]?.nodes.map((node) => node.state)).toEqual(["healthy", "healthy", "unknown", "down"]);
     expect(response.body).not.toContain(UUID);
   });
 
   it("включить и выключить: аудит toggle, в перебор выключенная не попадает", async () => {
-    await save();
-    r.repository.nodes = [nodeRow("aaaa", 0, { state: "healthy", latencyMs: 10 })];
+    await create();
+    const key = onlyKey();
+    r.repository.nodes = [nodeRow("aaaa", 0, { subscriptionKey: key, state: "healthy", latencyMs: 10 })];
     await r.routes.reload();
     expect(r.routes.list(0)).toHaveLength(1);
 
-    const off = await call("PUT", "", "own", { name: "Основная", countries: [], enabled: false });
+    const off = await call("PUT", `/${key}`, "own", { name: "Основная", countries: [], enabled: false });
 
     expect(off.statusCode).toBe(200);
     expect(r.routes.list(0)).toEqual([]);
-    expect((await roles.recentAudit(10)).some((item) => item.action === "proxy_subscription.toggle")).toBe(true);
+    const toggle = (await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.toggle");
+    expect(toggle).toMatchObject({ target: key, before: { enabled: true }, after: { enabled: false } });
   });
 
-  it("удаление: в конфиг пишется пустой, строка и узлы удалены, аудит delete; повторное — 404", async () => {
-    await save();
-    await call("POST", "/refresh", "own");
+  it("удаление: в конфиг пишется пустой, строка, узлы и часть удалены, аудит delete; повторное — 404", async () => {
+    await create();
+    const key = onlyKey();
+    await call("POST", `/${key}/refresh`, "own");
     expect(r.repository.nodes.length).toBeGreaterThan(0);
+    expect(r.writer.parts.has(key)).toBe(true);
 
-    expect((await call("DELETE", "", "own")).statusCode).toBe(200);
+    expect((await call("DELETE", `/${key}`, "own")).statusCode).toBe(200);
 
-    expect(r.repository.subscription).toBeNull();
+    expect(r.repository.rows).toEqual([]);
     expect(r.repository.nodes).toEqual([]);
+    expect(r.writer.parts.has(key)).toBe(false);
     expect((r.writer.last as { inbounds: unknown[] }).inbounds).toEqual([]);
     expect(r.routes.list(0)).toEqual([]);
-    expect((await roles.recentAudit(10)).some((item) => item.action === "proxy_subscription.delete")).toBe(true);
-    expect((await call("DELETE", "", "own")).statusCode).toBe(404);
+    expect((await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.delete")?.target).toBe(key);
+    expect((await call("DELETE", `/${key}`, "own")).statusCode).toBe(404);
   });
 
   it("удаление без контейнера Xray не падает: подписка всё равно удаляется", async () => {
-    await save();
+    await create();
     r.writer.available_ = false;
 
-    expect((await call("DELETE", "", "own")).statusCode).toBe(200);
-    expect(r.repository.subscription).toBeNull();
+    expect((await call("DELETE", `/${onlyKey()}`, "own")).statusCode).toBe(200);
+    expect(r.repository.rows).toEqual([]);
+  });
+
+  it("создание без контейнера Xray (dev) работает: подписка записана, конфиг не трогается", async () => {
+    r.writer.available_ = false;
+
+    expect((await create()).statusCode).toBe(200);
+    expect(r.repository.rows).toHaveLength(1);
+    expect(r.writer.written).toEqual([]);
   });
 });
