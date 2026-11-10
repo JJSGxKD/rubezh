@@ -3,8 +3,8 @@ id: T-0384
 title: Пул Xray — несколько подписок в общем переборе
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-4
 size: M
 depends_on: []
