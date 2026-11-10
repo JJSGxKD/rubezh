@@ -3,8 +3,8 @@ id: T-0380
 title: Рейтинг в панели — сервер: доски, архив сезонов, места игрока
 epic: E11
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-3
 size: M
 depends_on: []
