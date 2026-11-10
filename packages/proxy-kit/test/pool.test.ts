@@ -148,6 +148,46 @@ describe("выбор", () => {
     expect(source.pick({ countries: ["FR"], limit: 10 })).toEqual([]);
     expect(source.pick({ limit: 10 })).toContain("ccc");
   });
+
+  it("accept: отвергнутый здоровый быстрый узел не выбирается, а limit считается по оставшимся", () => {
+    const source = healthy();
+    expect(source.pick({ limit: 10, accept: (item) => item.key !== "bbb" })).toEqual(["ccc", "aaa"]);
+    expect(source.pick({ limit: 1, accept: (item) => item.key !== "bbb" })).toEqual(["ccc"]);
+    expect(source.pick({ limit: 10, accept: () => false })).toEqual([]);
+  });
+
+  it("accept получает запись пула целиком — по ней решают о стране и ключе", () => {
+    const source = healthy();
+    const seen: string[] = [];
+    source.pick({
+      limit: 10,
+      accept: (item) => {
+        seen.push(`${item.key}:${item.country ?? "-"}:${item.state}`);
+        return true;
+      },
+    });
+    expect(seen.sort()).toEqual(["aaa:DE:healthy", "bbb:NL:healthy", "ccc:-:healthy"]);
+  });
+
+  it("accept вместе с countries: узел обязан пройти оба условия", () => {
+    const source = healthy();
+    expect(source.pick({ countries: ["DE", "NL"], limit: 10, accept: (item) => item.key !== "aaa" })).toEqual(["bbb"]);
+    expect(source.pick({ countries: ["DE"], limit: 10, accept: (item) => item.key === "bbb" })).toEqual([]);
+  });
+
+  it("accept не видит нездоровых узлов: unknown и down отсеяны раньше", () => {
+    const source = pool();
+    source.record("aaa", { ok: true, latencyMs: 100 }, T0);
+    const seen: string[] = [];
+    source.pick({
+      limit: 10,
+      accept: (item) => {
+        seen.push(item.key);
+        return true;
+      },
+    });
+    expect(seen).toEqual(["aaa"]);
+  });
 });
 
 describe("sync", () => {

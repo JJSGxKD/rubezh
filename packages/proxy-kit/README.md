@@ -21,12 +21,18 @@ Nest и Prisma; сеть, время и DNS приходят аргумента�
   `tls`, `reality`. Что не умеем — пропускается с причиной, а не угадывается.
 - Секреты ссылок не попадают в причины пропуска и в тексты ошибок.
 - Конфиг Xray: локальный SOCKS-вход на узел, стабильные слоты между обновлениями.
-- Пул: проверка здоровья с ростом паузы для «лежащих» узлов, выбор по задержке и стране.
+  Узлы нескольких подписок идут одним конфигом: у каждого узла есть группа (ключ
+  подписки), тег выхода — `out-<группа>-<ключ узла>`, а слоты подписки не
+  пересекаются со слотами других и не превышают её долю.
+- Схема узла (`proxyNodeSchema`, Zod) — для чтения узлов с диска: пакет сам файлы
+  не пишет, но схема держит границу, если их пишет вызывающий.
+- Пул: проверка здоровья с ростом паузы для «лежащих» узлов, выбор по задержке и
+  стране; своё условие выбора — `accept`.
 
 ## Пример
 
 ```ts
-import { assignSlots, buildXrayConfig, fetchSubscription, NodePool, parseSubscription } from "@bh/proxy-kit";
+import { assignSlots, buildXrayConfig, fetchSubscription, NodePool, parseSubscription, type PlacedNode } from "@bh/proxy-kit";
 
 const { body } = await fetchSubscription(url, {
   fetch,
@@ -34,13 +40,18 @@ const { body } = await fetchSubscription(url, {
 });
 const { nodes, skipped } = parseSubscription(body);
 
-const { slots } = assignSlots(nodes.map((node) => node.key), new Map(), 32);
-const config = buildXrayConfig(nodes, slots, { basePort: 10800, slotCount: 32, listen: "127.0.0.1" });
+// Слоты подписки "main": чужие слоты (reserved) не брать, больше доли (limit) не занимать.
+const { slots } = assignSlots(nodes.map((node) => node.key), new Map(), { slotCount: 32, reserved: new Set(), limit: 16 });
+const placed: PlacedNode[] = nodes.flatMap((node) => (slots.has(node.key) ? [{ group: "main", node, slot: slots.get(node.key) ?? 0 }] : []));
+// Узлы других подписок добавляются в тот же список со своим group. Тег выхода: out-main-<ключ узла>.
+const config = buildXrayConfig(placed, { basePort: 10800, slotCount: 32, listen: "127.0.0.1" });
 
 const pool = new NodePool();
 pool.sync(nodes, Date.now());
 for (const key of pool.due(Date.now())) { /* проверить узел и вызвать pool.record(key, …, Date.now()) */ }
 const best = pool.pick({ countries: ["DE"], limit: 3 });
+// своё условие поверх страны: например, только узлы включённых подписок
+const enabled = pool.pick({ limit: 3, accept: (entry) => entry.key.startsWith("main:") });
 ```
 
 ## Проверки

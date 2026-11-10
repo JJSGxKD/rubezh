@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-57.5 -57.5 115 115"><defs><filter id="srim" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+<feMorphology in="SourceAlpha" operator="dilate" radius="1.79" result="d"/>
+<feFlood flood-color="#e6e0ff"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="42" rx="30" ry="8" fill="#0b0816" opacity="0.6"/><ellipse cx="0" cy="42" rx="34" ry="9.5" fill="none" stroke="#e6e0ff" stroke-width="1.6" opacity="0.6"/><g filter="url(#srim)" opacity="1">
+<path d="M-36 18 L-28.8 30 L-26.7 18 L-22.3 25.8 L-17.3 18 L-15.1 30 L-8 18 L-2.4 25.8 L1.3 18 L8.2 30 L10.7 18 L13.8 25.8 L20 18 L20 14 L-36 14 Z" fill="#150f24" opacity="1"/><path d="M-36 24.6 L-28.8 34.2 L-26.7 24.6 L-22.3 30.8 L-17.3 24.6 L-15.1 34.2 L-8 24.6 L-2.4 30.8 L1.3 24.6 L8.2 34.2 L10.7 24.6 L13.8 30.8 L20 24.6 L20 20.6 L-36 20.6 Z" fill="#150f24" opacity="0.6"/><path d="M-36 31.2 L-28.8 38.4 L-26.7 31.2 L-22.3 35.9 L-17.3 31.2 L-15.1 38.4 L-8 31.2 L-2.4 35.9 L1.3 31.2 L8.2 38.4 L10.7 31.2 L13.8 35.9 L20 31.2 L20 27.2 L-36 27.2 Z" fill="#150f24" opacity="0.3"/>
+<path d="M18 -4 Q39 10 44 34 M44 34 l5 4 M44 34 l-1 7 M44 34 l-6 4" fill="none" stroke="#150f24" stroke-width="5" stroke-linecap="round"/>
+<path d="M-4 -2 Q3 14 0 32 M0 32 l5 4 M0 32 l-3 6" fill="none" stroke="#0b0816" stroke-width="5" stroke-linecap="round"/>
+<clipPath id="c2"><path d="M-34 22 Q-40 -4 -18 -16 Q4 -26 20 -18 Q30 -8 22 16 L-34 22 Z"/></clipPath>
+<g fill="#150f24"><path d="M-34 22 Q-40 -4 -18 -16 Q4 -26 20 -18 Q30 -8 22 16 L-34 22 Z"/></g>
+<g clip-path="url(#c2)"><g fill="#241c38" transform="translate(-3 -3)"><path d="M-34 22 Q-40 -4 -18 -16 Q4 -26 20 -18 Q30 -8 22 16 L-34 22 Z"/></g></g>
+<path d="M-26 -8 Q-6 -24 12 -18" fill="none" stroke="#4d4170" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+<path d="M-14 -18 l-4 -9 M-4 -22 l-1 -10 M6 -22 l3 -9" stroke="#150f24" stroke-width="3" stroke-linecap="round"/>
+<clipPath id="c3"><path d="M10 -20 Q20 -38 36 -28 Q46 -20 40 -8 Q28 -2 14 -8 Z"/></clipPath>
+<g fill="#150f24"><path d="M10 -20 Q20 -38 36 -28 Q46 -20 40 -8 Q28 -2 14 -8 Z"/></g>
+<g clip-path="url(#c3)"><g fill="#241c38" transform="translate(-2 -2)"><path d="M10 -20 Q20 -38 36 -28 Q46 -20 40 -8 Q28 -2 14 -8 Z"/></g></g>
+<circle cx="24" cy="-22" r="10.1" fill="#fff1c2" opacity="0.3"/><circle cx="24" cy="-22" r="4.6" fill="#fff1c2"/><circle cx="36" cy="-19" r="7.9" fill="#fff1c2" opacity="0.3"/><circle cx="36" cy="-19" r="3.6" fill="#fff1c2"/>
+<circle cx="25" cy="-22" r="1.6" fill="#0b0816"/><circle cx="37" cy="-19" r="1.3" fill="#0b0816"/>
+<path d="M22 -8 Q32 -4 40 -10" fill="none" stroke="#0b0816" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M25 -7 l1 3 l2 -3 M31 -6 l1 3 l2 -3 M36 -8 l1 3 l2 -3" fill="none" stroke="#e9e1cf" stroke-width="1.4"/></g></svg>

@@ -55,6 +55,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     rareChestsOpened: stats.rareChestsOpened,
     crystalsCollected: stats.crystalsCollected,
     secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
+    sieges: world.siege.count,
     rubezh: describeRubezh(world),
     ...(world.prologue === null ? {} : { mode: world.mode, prologue: describePrologue(world) }),
     killsByEnemy: killsByEnemy(world),
