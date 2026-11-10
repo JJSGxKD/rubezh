@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Logger } from "@nestjs/common";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
+import type { PrismaClient } from "../src/generated/prisma/client.js";
 import { NotificationsService } from "../src/modules/notifications/notifications.service.js";
 import { RestrictionsHooks } from "../src/modules/restrictions/restrictions-hooks.js";
 import { RestrictionsService } from "../src/modules/restrictions/restrictions.service.js";
@@ -20,7 +21,15 @@ import {
   shouldGiveUp,
   watchUntil,
 } from "../src/modules/tasks/channel-watch-rules.js";
-import type { ChannelWatchRepository, NewWatch, Penalty, WatchKey, WatchRow, WatchState } from "../src/modules/tasks/channel-watch.repository.js";
+import {
+  PrismaChannelWatchRepository,
+  type ChannelWatchRepository,
+  type NewWatch,
+  type Penalty,
+  type WatchKey,
+  type WatchRow,
+  type WatchState,
+} from "../src/modules/tasks/channel-watch.repository.js";
 import { ChannelWatchService } from "../src/modules/tasks/channel-watch.service.js";
 import { NO_ACHIEVEMENT_FIELDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import type { TasksRepository } from "../src/modules/tasks/tasks.repository.js";
@@ -1173,5 +1182,58 @@ describe("площадка пропала или ответила поздно",
     expect(log.of("channel_watch_failed")).toEqual([]);
     expect(ctx.watch.rows[0]?.state).toBe("watching");
     expect(ctx.wallet.revokes).toEqual([]);
+  });
+});
+
+/** Подмена базы: сырые запросы отвечают заданными строками, транзакция — тем же клиентом. */
+function prismaAnswering(rows: unknown[]): PrismaClient {
+  const fake = {
+    $queryRaw: vi.fn(async () => rows),
+    $transaction: async <T>(work: (tx: unknown) => Promise<T>): Promise<T> => await work(fake),
+  };
+  return fake as unknown as PrismaClient;
+}
+
+describe("разбор ответов базы схемой", () => {
+  const PLAYER = "11111111-1111-4111-8111-111111111111";
+
+  it("последний номер события берётся из строки целым числом", async () => {
+    const repository = new PrismaChannelWatchRepository(prismaAnswering([{ last: 3 }]));
+
+    await expect(repository.lastEventNo(PLAYER, "sub_daily")).resolves.toBe(3);
+  });
+
+  it("паре без событий соответствует нуль", async () => {
+    const repository = new PrismaChannelWatchRepository(prismaAnswering([{ last: 0 }]));
+
+    await expect(repository.lastEventNo(PLAYER, "sub_daily")).resolves.toBe(0);
+  });
+
+  it("строка не по схеме не приводится к номеру: ни текст, ни дробь, ни пропуск поля", async () => {
+    for (const row of [{ last: "3" }, { last: 1.5 }, { last: null }, {}]) {
+      const repository = new PrismaChannelWatchRepository(prismaAnswering([row]));
+
+      await expect(repository.lastEventNo(PLAYER, "sub_daily"), JSON.stringify(row)).rejects.toThrow();
+    }
+  });
+
+  it("ответ замка пары: занято и свободно читаются булевым полем", async () => {
+    const busy = new PrismaChannelWatchRepository(prismaAnswering([{ locked: false }]));
+    const free = new PrismaChannelWatchRepository(prismaAnswering([{ locked: true }]));
+    const work = vi.fn(async () => "готово");
+
+    await expect(busy.withPairLock(PLAYER, "sub_daily", work)).resolves.toEqual({ locked: false });
+    expect(work).not.toHaveBeenCalled();
+    await expect(free.withPairLock(PLAYER, "sub_daily", work)).resolves.toEqual({ locked: true, value: "готово" });
+  });
+
+  it("ответ замка пары не по схеме не считается ни «занято», ни «свободно»", async () => {
+    for (const row of [{ locked: "t" }, { locked: null }, {}]) {
+      const repository = new PrismaChannelWatchRepository(prismaAnswering([row]));
+      const work = vi.fn(async () => "готово");
+
+      await expect(repository.withPairLock(PLAYER, "sub_daily", work), JSON.stringify(row)).rejects.toThrow();
+      expect(work).not.toHaveBeenCalled();
+    }
   });
 });
