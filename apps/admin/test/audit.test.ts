@@ -55,6 +55,11 @@ describe("журнал аудита", () => {
     expect(auditObject(entry({ action: "ads.test", target: "richads:interstitial" }))).toEqual({ kind: "проверка", label: "richads · interstitial", route: { section: "ads", id: null } });
   });
 
+  it("архив рекламных блоков: подписи действий (T-0409)", () => {
+    expect(actionTitle("ads.block.archive")).toBe("Рекламный блок в архив");
+    expect(actionTitle("ads.block.unarchive")).toBe("Рекламный блок из архива");
+  });
+
   it("правила фильтра имён: подписи, область «Поддержка» и объект «правило» (T-0338)", () => {
     expect(actionTitle("names.rule.create")).toBe("Новое правило фильтра имён");
     expect(actionTitle("names.rule.update")).toBe("Правка правила фильтра имён");
