@@ -410,6 +410,16 @@ export interface RunEvents {
    */
   ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
   /**
+   * Осада стоящего (Р197, T-0392): за `leftSec` секунд до осады на земле загорелось кольцо радиуса
+   * `radius` вокруг якоря `(x, y)`. Приходит один раз на отсчёт; ушёл из круга — осады не будет, события
+   * об отмене нет: кольцо гаснет само.
+   */
+  siegeWarn: { x: number; y: number; radius: number; leftSec: number; level: number; elapsedSec: number };
+  /** Осада началась: вокруг якоря встал строй из `guards` стражей и вышло `elites` элит (в аналитику не уходит). */
+  siegeStart: { level: number; guards: number; elites: number; elapsedSec: number };
+  /** Осада кончилась вместе со строем: пал или вышло его время; начинается перезарядка. */
+  siegeEnd: { level: number; elapsedSec: number };
+  /**
    * На отметке рубежа пришёл страж (T-0120): оболочка рисует баннер. Сообщение
    * приходит один раз за забег; продолженный из снимка забег с живым стражем
    * его не повторяет.

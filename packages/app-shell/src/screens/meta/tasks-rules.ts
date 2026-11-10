@@ -33,3 +33,35 @@ export function initialTasksView(input: { tasks: readonly RewardTask[]; hasPartn
 export function viewAfterLoad(input: { chosen: TasksView | null; tasks: readonly RewardTask[]; hasPartner: boolean }): TasksView {
   return input.chosen ?? initialTasksView(input);
 }
+
+/** Что на вкладке стоит в группе «Можно забрать», а что ниже (T-0373, Р186). */
+export interface TabLayout<T> {
+  /** готовые задания в порядке `sortTasks` */
+  claimable: T[];
+  /** полоса очков в группе: на «Дне» и «Неделе», если готова хоть одна ступень */
+  pointsInGroup: boolean;
+  /** остальные задания вкладки в порядке `sortTasks` */
+  rest: T[];
+}
+
+/**
+ * Раскладка вкладки. Ступени живут в одной полосе, поэтому в группу встаёт
+ * полоса целиком. Под ограничением партнёрских заданий кнопок нет, и группа
+ * «Можно забрать» обещала бы то, чего нажать нельзя.
+ */
+export function tabLayout<T extends Pick<TaskItem, "done" | "claimed">>(input: {
+  view: TasksView;
+  tasks: readonly T[];
+  pointsReady: number;
+  partnerClosed: boolean;
+}): TabLayout<T> {
+  const hidden = input.view === "partner" && input.partnerClosed;
+  const claimable = hidden ? [] : input.tasks.filter(isClaimable);
+  const rest = hidden ? [...input.tasks] : input.tasks.filter((task) => !isClaimable(task));
+  const pointsInGroup = (input.view === "daily" || input.view === "weekly") && input.pointsReady > 0;
+  return { claimable, pointsInGroup, rest };
+}
+
+export function hasClaimableGroup(layout: TabLayout<unknown>): boolean {
+  return layout.claimable.length > 0 || layout.pointsInGroup;
+}

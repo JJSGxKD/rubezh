@@ -62,3 +62,25 @@ export function buttonKey(task: BotMentionTask): string | null {
 export function outcomeKey(outcome: string): string {
   return isKnownOutcome(outcome) ? `botMention.outcome.${outcome}` : "botMention.outcome.failed";
 }
+
+/**
+ * Вид готов к «забору» (T-0373, Р186): задание начато, награды за сутки нет, а
+ * последняя проверка нашла юзернейм — «Проверить» здесь и есть «забрать».
+ */
+export function isBotMentionClaimable(task: BotMentionTask): boolean {
+  return task.started && !task.rewardedToday && task.lastResult === "present";
+}
+
+/** Блок готов, если готов хоть один показываемый вид. */
+export function isBotMentionBlockClaimable(view: BotMentionView): boolean {
+  return visibleTasks(view).some(isBotMentionClaimable);
+}
+
+/**
+ * Где на экране «Задания» стоит блок бота (Р186): только на «Дне»; готов к
+ * забору — в группе «Можно забрать», иначе под ней; на других вкладках его нет.
+ */
+export function botPlace(tab: string, ready: boolean): "group" | "list" | null {
+  if (tab !== "daily") return null;
+  return ready ? "group" : "list";
+}

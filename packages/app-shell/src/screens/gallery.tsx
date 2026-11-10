@@ -1,6 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Gem, Star, X } from "lucide-react";
 import type { AdCreative, BlessingDef, LeaderboardEntry, ChestReward, RunResult, UpgradeChange, UpgradeOption } from "@bh/shared-types";
+import { RunCardPreviewLazy as RunCardPreview } from "../app/lazy-screens";
 import { AdCreativeCard, showCreative, type CreativeResult } from "../ads/ad-creative";
 import {
   Avatar,
@@ -59,7 +60,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating" | "runCard";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -111,6 +112,7 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.blessing")} onClick={() => setPreview("blessing")} />
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
           <ListItem title={t("gallery.preview.rating")} onClick={() => setPreview("rating")} />
+          <ListItem title={t("gallery.preview.runCard")} onClick={() => setPreview("runCard")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -489,6 +491,12 @@ function renderPreview(preview: Preview): ReactNode {
       return <AsidePreview />;
     case "rating":
       return <RatingPreview />;
+    case "runCard":
+      return (
+        <Suspense fallback={null}>
+          <RunCardPreview />
+        </Suspense>
+      );
     case "boot":
       return <BootScreen stage="fonts" version="0.0.0-gallery" />;
     case "runLoading":

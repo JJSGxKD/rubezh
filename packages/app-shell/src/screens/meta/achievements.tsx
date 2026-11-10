@@ -12,7 +12,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { AchievementCardView, CategoryIcon, achievementTitle, categoryLabel } from "./achievement-card";
-import { FAVORITES_MAX, cards, groupByCategory, nextFavorites, openedCount } from "./achievements-rules";
+import { FAVORITES_MAX, cards, groupByCategory, nextFavorites, openedCount, readyCards, withoutReady } from "./achievements-rules";
 
 /**
  * Витрина достижений — содержимое вкладки «Достижения» на экране заданий
@@ -109,9 +109,34 @@ export function Achievements(props: { onChanged: () => void }): ReactNode {
   const open = view.items.filter(isOpenAchievement);
   const favoriteItems = view.favorites.flatMap((id) => open.filter((item) => item.id === id));
   let index = 0;
+  // Готовое к забору — группой над шапкой; секции ниже без этих карточек.
+  const ready = readyCards(view.items);
+  const sectionItems = withoutReady(view.items);
+  const cardView = (card: (typeof ready)[number]): ReactNode => {
+    const id = card.kind === "ladder" ? card.current.id : card.item.id;
+    return (
+      <AchievementCardView
+        key={card.kind === "ladder" ? `ladder:${card.ladder}` : id}
+        card={card}
+        index={index++}
+        claiming={claiming === id}
+        notice={notice?.id === id ? notice.text : null}
+        favorites={view.favorites}
+        favoritesBusy={favoritesBusy}
+        onClaim={(item) => void claim(item)}
+        onToggleFavorite={toggleFavorite}
+      />
+    );
+  };
 
   return (
     <div>
+      {ready.length === 0 ? null : (
+        <section aria-label={t("tasks.claimableGroup")}>
+          <SectionTitle>{t("tasks.claimableGroup")}</SectionTitle>
+          <div className="mb-3 grid gap-2">{ready.map(cardView)}</div>
+        </section>
+      )}
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="font-display text-base font-bold text-accent">{t("achievements.prestige", { points: formatNumber(view.prestige) })}</span>
@@ -147,26 +172,11 @@ export function Achievements(props: { onChanged: () => void }): ReactNode {
       </Card>
 
       {view.items.length === 0 ? <p className="mt-4 text-sm text-text-muted">{t("tasks.empty")}</p> : null}
-      {groupByCategory(view.items).map((group) => (
+      {groupByCategory(sectionItems).map((group) => (
         <section key={group.category}>
           <SectionTitle>{categoryLabel(group.category)}</SectionTitle>
           <div className="grid gap-2">
-            {cards(group.items).map((card) => {
-              const id = card.kind === "ladder" ? card.current.id : card.item.id;
-              return (
-                <AchievementCardView
-                  key={card.kind === "ladder" ? `ladder:${card.ladder}` : id}
-                  card={card}
-                  index={index++}
-                  claiming={claiming === id}
-                  notice={notice?.id === id ? notice.text : null}
-                  favorites={view.favorites}
-                  favoritesBusy={favoritesBusy}
-                  onClaim={(item) => void claim(item)}
-                  onToggleFavorite={toggleFavorite}
-                />
-              );
-            })}
+            {cards(group.items).map(cardView)}
           </div>
         </section>
       ))}
