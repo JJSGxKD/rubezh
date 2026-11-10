@@ -125,12 +125,12 @@ function findEventProblems(
  * стражи приходят снаружи экрана (radius меньше кольца спавна), а строй не
  * сжимается до тесноты, в которой игрока раздавит стенка.
  */
-const CORDON_MAX_COUNT = 64;
+export const CORDON_MAX_COUNT = 64;
 const CORDON_MAX_RADIUS = 420;
 const CORDON_MIN_RADIUS_FLOOR = 60;
 const CORDON_LIFE_SEC = { min: 5, max: 120 } as const;
 
-function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
+export function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
   const problems: string[] = [];
   if (!(ring.minRadius >= CORDON_MIN_RADIUS_FLOOR)) {
     problems.push(`${where}: ring.minRadius — не меньше ${CORDON_MIN_RADIUS_FLOOR}: теснее строй раздавит игрока`);

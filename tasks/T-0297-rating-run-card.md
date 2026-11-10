@@ -3,8 +3,8 @@ id: T-0297
 title: Карточка забега — «паутина» пяти осей против ожидаемого, разбор очков полосами и сборка; открывается из рейтинга и с экрана итогов
 epic: E12
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0296, T-0232]
@@ -30,6 +30,25 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - backend/api/src/modules/rating/run-scorer.service.ts
+  - backend/api/src/modules/runs/runs.repository.ts
+  - backend/api/src/modules/runs/runs-view.service.ts
+  - backend/api/src/modules/seasons/seasons.repository.ts
+  - backend/api/src/modules/seasons/seasons-view.service.ts
+  - backend/api/src/modules/seasons/dto/seasons.dto.ts
+  - backend/api/test/rating-run-card.test.ts
+  - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
+  - packages/app-shell/src/screens/meta/run-card-link.tsx
+  - packages/app-shell/src/state/run-card-start.ts
+  - packages/app-shell/src/state/run-detail-api.ts
+  - packages/app-shell/src/i18n/ru-run-card.json
+  - packages/app-shell/src/i18n/run-card.ts
+  - packages/app-shell/src/screens/meta/run-card-preview.tsx
+  - packages/app-shell/src/screens/meta/run-card-share.ts
+  - packages/app-shell/src/index.tsx
+  - docs/10-progression-and-ladder.md
+  - docs/24-attribution-and-sharing.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -99,7 +118,10 @@ batch: 7
   - лист своего забега в истории (`run-detail.tsx`) — кнопка «Карточка забега».
 
   Экран — ленивым чанком (`lazy-screens.tsx`), адрес — стартовая пара `run`
-  в `navigation.ts`: ссылкой на карточку можно поделиться.
+  в `navigation.ts`: ссылкой на карточку можно поделиться. При запуске
+  оболочка читает `start_param` из подписанных данных площадки
+  (`signedLaunchData`, строка `index.tsx`), кнопка «Поделиться» на карточке
+  отдаёт ссылку `?startapp=run-<id>`.
 - **Проверка повтором** — строка «Забег прошёл проверку повтором на сервере»
   из макета **не показывается**, пока нет перепроверки повтором (WP5): говорить
   о том, чего нет, нельзя.
@@ -181,10 +203,10 @@ batch: 7
 
 ## Критерии приёмки
 
-- [ ] Карточка забега: «паутина» осей против ожидаемого, разбор очков полосами, сборка.
-- [ ] Открывается из рейтинга, итогов и истории; ссылкой можно поделиться.
-- [ ] Чужие нерейтинговые и скрытые забеги не отдаются; персональных данных нет.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Карточка забега: «паутина» осей против ожидаемого, разбор очков полосами, сборка.
+- [x] Открывается из рейтинга, итогов и истории; ссылкой можно поделиться: пара `run` открывает карточку при запуске, кнопка «Поделиться» отдаёт ссылку.
+- [x] Чужие нерейтинговые и скрытые забеги не отдаются; персональных данных нет.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

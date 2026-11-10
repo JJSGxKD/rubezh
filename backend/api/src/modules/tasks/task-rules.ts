@@ -6,6 +6,7 @@ import { DIFFICULTIES } from "../runs/run-rules.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
+import { CLIENT_KINDS, isClientKind, type ClientKind } from "./client-signal-rules.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): каталог — в базе,
@@ -238,11 +239,12 @@ export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot
 export const EMBLEM_KINDS = ["status", "season"] as const;
 export type EmblemKind = (typeof EMBLEM_KINDS)[number];
 
-export type TaskKind = RunKind | StateKind | CheckedKind | EmblemKind;
+export type TaskKind = RunKind | StateKind | CheckedKind | ClientKind | EmblemKind;
 export const TASK_KIND_IDS: readonly TaskKind[] = [
   ...(Object.keys(RUN_KINDS) as RunKind[]),
   ...(Object.keys(STATE_KINDS) as StateKind[]),
   ...CHECKED_KINDS,
+  ...(Object.keys(CLIENT_KINDS) as ClientKind[]),
   ...EMBLEM_KINDS,
 ];
 
@@ -455,6 +457,28 @@ export const taskDefSchema = z
     }
   })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
+  // Цели по сигналу клиента (Р187): срок закреплён за видом, цель одна, ротации, фильтра,
+  // лимита и картинки нет — задание в игре всегда, вне пула.
+  .superRefine((task, ctx) => {
+    if (!isClientKind(task.kind)) return;
+    if (task.period !== CLIENT_KINDS[task.kind].period) {
+      const message = task.kind === "home_screen" ? "главный экран — только достижение" : "история — только недельное";
+      ctx.addIssue({ code: "custom", message, path: ["period"] });
+    }
+    if (task.target !== 1) ctx.addIssue({ code: "custom", message: "у этого задания цель — 1", path: ["target"] });
+    const extra = [
+      ["tier", task.tier !== null],
+      ["filter", task.filter !== null],
+      ["limit", task.limit !== null],
+      ["image", task.image !== null],
+    ] as const;
+    const first = extra.find(([, set]) => set);
+    if (first !== undefined) ctx.addIssue({ code: "custom", message: "ступень, фильтр, лимит и картинка — не у этого задания", path: [first[0]] });
+    // Витрина берёт только достижения с категорией: без неё игрок задание не увидит.
+    if (task.kind === "home_screen" && task.category === null) {
+      ctx.addIssue({ code: "custom", message: "у достижения «главный экран» нужна категория — без неё витрина его не покажет", path: ["category"] });
+    }
+  })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по
   // ссылке платил бы каждый день за одно и то же нажатие.
   .refine((task) => !isCheckedKind(task.kind) || task.kind === "channel" || task.period === "achievement", {

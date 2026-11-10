@@ -133,6 +133,7 @@ export class SeasonsViewService {
       return [
         {
           rank: index + 1,
+          ...(row.runId === undefined ? {} : { runId: row.runId }),
           name: row.displayName,
           photoUrl: row.photoUrl,
           ...(row.tester ? { tester: true as const } : {}),
