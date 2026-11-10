@@ -13,12 +13,14 @@ import { ACCOUNT_UNLOCKS } from "../../content/unlocks";
  * поменяли каталог — тест печатает числа для вставки сюда.
  */
 
-export type PowerProfileId = "novice" | "average" | "full";
+export type PowerProfileId = "novice" | "average" | "full" | "veteran";
 
 export interface PowerProfile {
   id: PowerProfileId;
   titleRu: string;
   loadout: RunLoadout;
+  /** чем начинать забег профиля; не задано — любым стартовым оружием, как у остальных профилей */
+  startingWeaponId?: string;
 }
 
 /** Верхний уровень аккаунта берётся из лестницы открытий, а не литералом: добавили строку — профиль уехал вместе с ней. */
@@ -81,6 +83,30 @@ export const POWER_PROFILES: Readonly<Record<PowerProfileId, PowerProfile>> = {
       },
       boosts: ["fury", "bulwark", "aegis"],
       accountLevel: TOP_ACCOUNT_LEVEL,
+    },
+  },
+  // Забег владельца на v0.12.2 (Р196, T-0389): «Сложная», `frontier`, 1242 с, уровень забега 64.
+  // Не канонический набор каталога, а снаряжение из записи как есть: восемь свойств с малыми
+  // прибавками на 9-м уровне аккаунта, три буста. Фикстура записи —
+  // `core-game/test/fixtures/veteran-run-v0122.json`, равенство профиля ей держит тест. Это
+  // единственный профиль, у которого есть живой образец: по нему сверяется стоящий бот.
+  veteran: {
+    id: "veteran",
+    titleRu: "ветеран",
+    startingWeaponId: "hearth",
+    loadout: {
+      modifiers: {
+        area: 0.0645,
+        maxHp: 8.73,
+        cooldown: 0.0361,
+        moveSpeed: 0.0384,
+        resistCold: 0.039,
+        regenPerSec: 0.3316,
+        resistPoison: 0.0323,
+        statusChance: 0.069,
+      },
+      boosts: ["head_start", "lure", "fury"],
+      accountLevel: 9,
     },
   },
 };

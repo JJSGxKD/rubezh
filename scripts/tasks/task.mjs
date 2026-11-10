@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
+import { AHEAD_LABEL, COLUMNS, REWORK_LABEL, WORK_LABEL, classify, accountStreams, epicStreamsBadge, flowPrompt, hangingDays, launchedBy, nextOrder, previousAttemptNote, renderStreamsText, reworkRounds, statusBadge, streamLabel, streamsSummary } from "./board.mjs";
 import { freeBadge, renderBoardPage, taskCredits } from "./board-page.mjs";
+import { branchResolver, currentBranchOf, parseTaskBranch, taskBranch } from "./branch.mjs";
 import { contributionRows } from "./contribution.mjs";
-import { checkAheadPr, checkClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
+import { attemptChangeProblems, checkAheadPr, checkClaim, fromBranchProblem, mergePreviousAttempt, restartClaim, takeOverClaim, unclosedDependenciesOnBase, withoutDependencyFiles } from "./claim.mjs";
 import { planFix } from "./fix.mjs";
-import { BASE, ROOT, addPrLabel, claimedAt, dependencyChangedFiles, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergeDependencyBranches, mergedPrs, readBranchFile, readOriginTasks, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
+import { BASE, ROOT, addPrLabel, claimedAt, dependencyChangedFiles, fetchOrigin, git, addedTaskSpecs, loadRegistryState, mergeDependencyBranches, mergedPrs, readBranchFile, readFileAt, readOriginTasks, removePrLabel, taskPrsOf, tryGit } from "./git-io.mjs";
 import { runMerge } from "./merge.mjs";
 import { ARCHIVE_DIR, awaitingArchiveLine, checkRegistry, readTasks, registrySummary } from "./registry.mjs";
 import { batchNumber, parseFrontmatter, parseOwner, validateTask } from "./task-file.mjs";
@@ -25,14 +26,17 @@ const USAGE = `Команды:
                                            доработка, созревший задел, свободные задачи, затем «можно заделом»; лучшая — первой
   pnpm task streams [--epic E10] [--account claude-2]   какие потоки (модель и уровень) запускать сейчас и что ждёт в очереди; с --account — ещё готовые промты для аккаунта
   pnpm task claim T-NNNN --owner "<аккаунт / модель / уровень>"
-                                           захватить задачу веткой task/T-NNNN
+                                           захватить задачу веткой task/T-NNNN (после снятия захвата — task/T-NNNN-N)
+  pnpm task claim T-NNNN --from task/T-NNNN --owner "<аккаунт / модель / уровень>"
+                                           взять задачу с попыткой от 2 поверх работы прежней попытки (Р195)
+  pnpm task restart T-NNNN --reason "…"    тимлиду: снять застрявший захват — попытка + 1, коммит без push (Р195)
   pnpm task claim T-NNNN --ahead --owner "<аккаунт / модель / уровень>"
                                            взять заделом (Р178): зависимости на ревью, ветка — поверх их веток, PR — черновик с меткой «задел»
   pnpm task resume T-NNNN --owner "<аккаунт / модель / уровень>"
                                            продолжить PR с меткой «доработка» или созревший задел (зависимости влиты, dev вливается в ветку), чей бы он ни был
   pnpm task merge T-NNNN                   влить PR задачи с пометкой merge: self в dev (Р176): пометка из origin/dev, метка «на ревью», CI, самопроверка с head:
   pnpm task holds <путь>                  какие задачи «в работе» и «доработка» держат файл или каталог, с номером PR
-  pnpm task release T-NNNN --yes           отдать задачу: удалить ветку task/T-NNNN
+  pnpm task release T-NNNN --yes           отдать задачу: удалить свою ветку текущей попытки
   pnpm task diff-check [--base <ref>]      файлы PR задачи — только в её зонах
   pnpm task fix                            поставить строки значков, ссылки и ячейки эпиков; файлы не переносит
   pnpm task archive                        уборка тимлида: закрытые задачи — в tasks/archive/, открытые — обратно, ссылки на них — заново
@@ -68,7 +72,7 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-function taskLine({ task, reason, pr, aheadOver, ripe }, owner) {
+function taskLine({ task, reason, pr, aheadOver, ripe, previousBranch }, owner, abandonedNote) {
   const batch = batchNumber(task);
   const parts = [task.id.padEnd(7), (batch === null ? "—" : `пачка ${String(batch)}`).padEnd(8),`${task.priority} ${task.size} ${task.runner}`.padEnd(14), `${task.executor}/${task.effort}`.padEnd(18), task.title];
   const notes = [];
@@ -77,14 +81,26 @@ function taskLine({ task, reason, pr, aheadOver, ripe }, owner) {
   if (ripe === true) notes.push("задел созрел: зависимости влиты");
   if (aheadOver !== undefined) notes.push(`заделом поверх ${aheadOver.join(", ")}`);
   if (reason !== undefined) notes.push(reason);
+  if (abandonedNote !== undefined) notes.push(abandonedNote);
+  // Подсказка про работу прежней попытки (Р195) — последней в строке.
+  const previousNote = previousAttemptNote({ task, previousBranch });
+  if (previousNote !== undefined) notes.push(previousNote);
   return `  ${parts.join("  ")}${notes.length > 0 ? `\n${" ".repeat(10)}↳ ${notes.join("; ")}` : ""}`;
 }
 
 /** Кто взял задачу: поле owner из её ветки на origin (на dev оно пустое — статус живёт в ветке). */
 function ownerOf(task, emptyIfUnknown = false) {
-  const text = readBranchFile(task.id, task.fileName);
+  const text = readBranchFile(task);
   const owner = text === null ? "" : (parseFrontmatter(text).data.owner ?? "");
   return owner === "" && !emptyIfUnknown ? "неизвестно" : owner;
+}
+
+/** Пометка брошенного захвата (T-0371) для `next` и `board`: чей он и сколько часов в ветке тишина; у живого захвата — `undefined`. */
+function abandonedNoteOf(entry, state, now = Date.now()) {
+  if (entry.abandoned !== true) return undefined;
+  const last = Date.parse(state.lastCommits?.[entry.task.id] ?? "");
+  const ago = Number.isNaN(last) ? "давно" : `${String(Math.floor((now - last) / 3_600_000))} ч назад`;
+  return `брошенный захват ${ownerOf(entry.task)}, ${ago}`;
 }
 
 function printState(state) {
@@ -98,17 +114,17 @@ function loadBoard() {
   fetchOrigin();
   const state = loadRegistryState();
   printState(state);
-  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder) };
+  return { state, board: classify(state.tasks, state.taken, state.prs, state.repoFiles, state.epicOrder, state.abandoned, state.previousWork) };
 }
 
 function runBoard(flags) {
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   for (const column of COLUMNS) {
     if (column.key === "cancelled" && flags.all !== true) continue;
     const entries = board[column.key];
     console.log(`\n${column.title} (${String(entries.length)})`);
     const busy = ["inProgress", "review", "rework", "ahead"].includes(column.key);
-    for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined));
+    for (const entry of entries) console.log(taskLine(entry, busy ? ownerOf(entry.task) : undefined, abandonedNoteOf(entry, state)));
   }
 }
 
@@ -142,7 +158,7 @@ function runStreams(flags) {
 }
 
 function runNext(flags) {
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const filters = { runner: flags.runner ?? "any", executor: flags.executor, effort: flags.effort };
   const order = nextOrder(board, filters);
   if (order.length === 0) {
@@ -161,7 +177,7 @@ function runNext(flags) {
     const entries = order.filter((item) => item.kind === kind).map((item) => item.entry);
     if (entries.length === 0) continue;
     console.log(title);
-    for (const entry of entries) console.log(taskLine(entry, withOwner ? ownerOf(entry.task) : undefined));
+    for (const entry of entries) console.log(taskLine(entry, withOwner ? ownerOf(entry.task) : undefined, abandonedNoteOf(entry, state)));
   }
 }
 
@@ -242,14 +258,21 @@ function withClaim(text, owner) {
   return header + text.slice(end);
 }
 
+/** Ветка из `--from`: `refs/heads/task/…` приводится к `task/…`; не ветка задачи остаётся как есть (её отвергнет проверка). */
+function normalizedBranch(ref) {
+  const parsed = parseTaskBranch(ref);
+  return parsed === null ? ref : taskBranch(parsed.id, parsed.attempt);
+}
+
 function runClaim(positional, flags) {
   const id = positional[0];
   if (id === undefined || !TASK_ID_RE.test(id)) fail("Укажи задачу: pnpm task claim T-NNNN --owner \"аккаунт / модель / уровень\"");
   ownerFor(undefined, flags, "claim");
+  if (flags.from !== undefined && flags.ahead === true) fail("--from не сочетается с --ahead: задел строится поверх веток зависимостей, а не прежней попытки.");
 
   if (git(["status", "--porcelain"]) !== "") fail("Рабочая копия не чистая: закоммить или убери изменения, потом бери задачу.");
 
-  const { board } = loadBoard();
+  const { state, board } = loadBoard();
   const all = COLUMNS.flatMap((column) => board[column.key].map((entry) => ({ ...entry, column })));
   const found = all.find((entry) => entry.task.id === id);
   if (found === undefined) fail(`Задачи ${id} нет в ${BASE}.`);
@@ -266,9 +289,16 @@ function runClaim(positional, flags) {
   const { task } = found;
   const owner = ownerFor(task, flags, "claim");
 
-  const branch = `task/${id}`;
+  // Ветка текущей попытки (Р195): попытка 1 — task/T-NNNN, после снятия захвата — task/T-NNNN-N.
+  const branch = currentBranchOf(task);
   if (tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).ok) {
     fail(`Локальная ветка ${branch} уже есть: удали её (git branch -D ${branch}) или вернись на неё и продолжай работу.`);
+  }
+  const from = flags.from === undefined ? undefined : normalizedBranch(flags.from);
+  if (from !== undefined) {
+    const problem = fromBranchProblem(task, from, { exists: tryGit(["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${from}`]).ok });
+    if (problem !== null) fail(problem);
+    if (state.abandoned.has(id)) fail(`Захват ${id} брошен: ветку ${branch} перехватывают без --from, работа прежней попытки в неё уже не нужна.`);
   }
 
   const previous = git(["branch", "--show-current"]) || git(["rev-parse", "HEAD"]);
@@ -277,10 +307,46 @@ function runClaim(positional, flags) {
     tryGit(["branch", "-D", branch]);
   };
 
+  if (state.abandoned.has(id)) {
+    // Захват брошен (T-0371): ветка прежнего владельца остаётся, поверх неё ложится коммит перехвата.
+    if (ahead) fail(`Захват ${id} брошен, но зависимости не влиты: перехватить его заделом нельзя — возьми задачу без --ahead после их мерджа или выбери другую.`);
+    const takeover = takeOverClaim({
+      id,
+      fileName: task.fileName,
+      owner,
+      branch,
+      git,
+      tryGit,
+      readFile: (name) => readFileSync(join(ROOT, "tasks", name), "utf8"),
+      writeFile: (name, text) => writeFileSync(join(ROOT, "tasks", name), text),
+      rewrite: (text, newOwner) => {
+        const updated = withClaim(text, newOwner);
+        const parsed = parseFrontmatter(updated);
+        return { text: updated, problems: [...parsed.errors, ...validateTask(task.fileName, parsed.data)] };
+      },
+    });
+    if (!takeover.ok) {
+      returnBack();
+      fail(takeover.message);
+    }
+    console.log(`Задача ${id} перехвачена: захват был брошен, ветка ${branch} продолжена, владелец «${owner}». Ветку прежнего владельца не удаляем.`);
+    console.log(`Прежний владелец, вернувшись, пишет тимлиду, а не пушит поверх (tasks/README.md, «Брошенный захват»).`);
+    console.log(`Уровень effort в сессии — ${task.effort}. Дальше — тесты первым коммитом (tasks/README.md, шаг 5).`);
+    return;
+  }
+
   git(["switch", "-c", branch, BASE]);
+  if (from !== undefined) {
+    // Работа прежней попытки (Р195): её ветка вливается в новую, конфликт в чужих файлах отменяет захват.
+    const carried = mergePreviousAttempt({ from, fileName: task.fileName, base: BASE, tryGit });
+    if (!carried.ok) {
+      returnBack();
+      fail(`${carried.message}\nВетка ${branch} убрана локально: возьми задачу без --from или реши конфликт сам, когда прежняя ветка обновится.`);
+    }
+  }
   if (ahead) {
     // Ветка задела: dev плюс ветки незакрытых зависимостей по порядку depends_on (Р178, п. 2).
-    const built = mergeDependencyBranches(found.aheadOver);
+    const built = mergeDependencyBranches(found.aheadOver, { branchOf: branchResolver(state.tasks) });
     if (!built.ok) {
       returnBack();
       if (built.missing) fail(`Ветки зависимости ${built.dependency} нет на origin: заделом её не взять — возьми другую задачу.`);
@@ -314,7 +380,8 @@ function runClaim(positional, flags) {
     console.log(`  gh pr create --draft --base dev --label "${AHEAD_LABEL}" --title "<заголовок из раздела «PR» спецификации>" --body-file <описание>`);
     console.log("Зон задел не держит. Влить его и снять с черновика нельзя, пока зависимости не влиты: claim-check в CI и pnpm task merge откажут.");
     console.log(`Влиты зависимости — задел встанет в pnpm task next сразу после доработки; доводит его pnpm task resume ${id}.`);
-  } else console.log(`Задача ${id} взята: ветка ${branch}, владелец «${owner}».`);
+  } else if (from !== undefined) console.log(`Задача ${id} взята: ветка ${branch}, владелец «${owner}», работа прежней попытки (${from}) влита. Ветку ${from} не удаляем.`);
+  else console.log(`Задача ${id} взята: ветка ${branch}, владелец «${owner}».`);
   console.log(`Уровень effort в сессии — ${task.effort}. Дальше — тесты первым коммитом (tasks/README.md, шаг 5).`);
 }
 
@@ -353,7 +420,7 @@ function runResume(positional, flags) {
   const { task, pr } = found;
   const owner = ownerFor(task, flags, "resume");
 
-  const branch = `task/${id}`;
+  const branch = currentBranchOf(task);
   const remote = `origin/${branch}`;
   const previous = git(["branch", "--show-current"]) || git(["rev-parse", "HEAD"]);
   const hadLocal = tryGit(["rev-parse", "--verify", "--quiet", `refs/heads/${branch}`]).ok;
@@ -433,6 +500,34 @@ function runResume(positional, flags) {
 }
 
 /**
+ * Снять застрявший захват (Р195, tasks/README.md, «Снятый захват»): команда тимлида. В файле задачи
+ * поднимается попытка, статус `ready`, `owner` пустой — одним коммитом в рабочей ветке тимлида, без push.
+ * Снятие вступает в силу с влитием этого коммита в `dev`: после него ветка прежней попытки ничего не держит,
+ * а задачу берут веткой `task/T-NNNN-N`. Чужую ветку команда не удаляет и в неё не пушит.
+ */
+function runRestart(positional, flags) {
+  const id = positional[0];
+  if (id === undefined || !TASK_ID_RE.test(id)) fail("Укажи задачу: pnpm task restart T-NNNN --reason \"…\"");
+  fetchOrigin();
+  const { tasks } = readTasks(readOriginTasks());
+  const task = tasks.find((candidate) => candidate.id === id);
+  if (task === undefined) fail(`Задачи ${id} нет в ${BASE}.`);
+  const result = restartClaim({
+    task,
+    reason: flags.reason,
+    headBranch: git(["branch", "--show-current"]),
+    git,
+    tryGit,
+    readFile: (name) => readFileSync(join(ROOT, "tasks", name), "utf8"),
+    writeFile: (name, text) => writeFileSync(join(ROOT, "tasks", name), text),
+  });
+  if (!result.ok) fail(result.message);
+  console.log(`Захват ${id} снят: попытка ${String(result.attempt)}, прежний владелец «${result.previousOwner}». Коммит лёг в текущую ветку, push не делался.`);
+  console.log(`Снятие вступает в силу с влитием PR с этим коммитом в dev. После влития задачу берут веткой ${result.branch}: pnpm task claim ${id} --owner "…";`);
+  console.log(`продолжить работу прежней попытки — --from ${result.previousBranch}. Открытый PR прежней ветки закрой с комментарием; саму ветку ${result.previousBranch} не удаляем.`);
+}
+
+/**
  * Кто держит файл (tasks/README.md, «Что исполнитель решает сам», п. 2): задачи
  * колонок «В работе» и «Доработка», у которых путь попадает в `zones` или
  * `shared`. Править такой файл вне зон своей задачи нельзя.
@@ -457,7 +552,10 @@ function runHolds(positional) {
 function runRelease(positional, flags) {
   const id = positional[0];
   if (id === undefined || !TASK_ID_RE.test(id)) fail("Укажи задачу: pnpm task release T-NNNN --yes");
-  const branch = `task/${id}`;
+  // Своя ветка — ветка текущей попытки (Р195); чужие и прежние ветки команда не удаляет.
+  fetchOrigin();
+  const task = readTasks(readOriginTasks()).tasks.find((candidate) => candidate.id === id);
+  const branch = task === undefined ? taskBranch(id) : currentBranchOf(task);
   if (flags.yes !== true) {
     console.log(`Будет выполнено: git push origin --delete ${branch}\nЭто освободит задачу. Отдавай только свою ветку. Подтверди флагом --yes.`);
     return;
@@ -477,20 +575,21 @@ function withoutOpenDependencyFiles(changed, id, base) {
   const unclosed = unclosedDependenciesOnBase(id, tasks);
   if (unclosed.length === 0) return changed;
   // Ветки зависимостей могли обновиться после последнего fetch; нет сети — берём что есть.
-  for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/task/${dependencyId}:refs/remotes/origin/task/${dependencyId}`, "--quiet"]);
-  const { files, missing } = dependencyChangedFiles(unclosed, { base });
+  const branchOf = branchResolver(tasks);
+  for (const dependencyId of unclosed) tryGit(["fetch", "origin", `+refs/heads/${branchOf(dependencyId)}:refs/remotes/origin/${branchOf(dependencyId)}`, "--quiet"]);
+  const { files, missing } = dependencyChangedFiles(unclosed, { base, branchOf });
   if (missing.length > 0) console.error(`предупреждение: веток зависимостей ${missing.join(", ")} на origin нет — их файлы из диффа не вычтены`);
   return withoutDependencyFiles(changed, files);
 }
 
 function runDiffCheck(flags) {
   const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
-  const match = /^task\/(T-\d{4})$/.exec(head);
-  if (match === null) {
+  const onBranch = parseTaskBranch(head);
+  if (onBranch === null) {
     console.log(`Ветка «${head}» — не ветка задачи, проверка зон пропущена.`);
     return;
   }
-  const id = match[1];
+  const id = onBranch.id;
   const base = flags.base ?? BASE;
 
   const found = readWorkingTasks().find((file) => file.name.split("/").at(-1).startsWith(`${id}-`) && file.name.endsWith(".md"));
@@ -502,7 +601,11 @@ function runDiffCheck(flags) {
 
   // Без поиска переименований: переименование — это и удаление старого пути, а он тоже должен быть в зонах.
   const diff = git(["diff", "--name-only", "--no-renames", `${base}...HEAD`]);
-  const changed = withoutOpenDependencyFiles(diff === "" ? [] : diff.split("\n"), id, base);
+  const diffFiles = diff === "" ? [] : diff.split("\n");
+  // Снимает захват только тимлид (Р195): ветка задачи не вправе менять `attempt` ни у одной задачи.
+  const attemptProblems = attemptChangeProblems({ changed: diffFiles, readBase: (path) => readFileAt(base, path), readHead: (path) => readFileAt("HEAD", path) });
+  if (attemptProblems.length > 0) fail(attemptProblems.map((problem) => `ошибка  ${problem}`).join("\n"));
+  const changed = withoutOpenDependencyFiles(diffFiles, id, base);
   const outside = outOfZone(changed, { ...parsed.data, fileName });
   if (outside.length > 0) {
     console.error(`ошибка  PR задачи ${id} меняет файлы вне её зон (zones, shared и сам файл задачи):`);
@@ -518,9 +621,9 @@ function runDiffCheck(flags) {
 /** Ветка PR в виде `task/T-NNNN` → id; иначе `null`: проверки только для веток задач. */
 function taskIdOfHead() {
   const head = process.env.GITHUB_HEAD_REF || git(["branch", "--show-current"]);
-  const match = /^task\/(T-\d{4})$/.exec(head);
-  if (match === null) console.log(`Ветка «${head}» — не ветка задачи, проверка захвата пропущена.`);
-  return match === null ? null : { id: match[1], head };
+  const parsed = parseTaskBranch(head);
+  if (parsed === null) console.log(`Ветка «${head}» — не ветка задачи, проверка захвата пропущена.`);
+  return parsed === null ? null : { id: parsed.id, head, attempt: parsed.attempt };
 }
 
 function runClaimCheck(flags) {
@@ -532,7 +635,7 @@ function runClaimCheck(flags) {
   // Задел определяет метка на PR; незакрытые зависимости без неё и без черновика — отказ (Р178, п. 5).
   const own = (state.prs ?? []).find((pr) => pr.headRefName === found.head);
   const ahead = own !== undefined && (own.labels ?? []).some((label) => label?.name === AHEAD_LABEL);
-  const problems = checkClaim(found.id, { ...state, ahead });
+  const problems = checkClaim(found.id, { ...state, ahead, branchAttempt: found.attempt });
   const task = state.tasks.find((candidate) => candidate.id === found.id);
   // Без списка PR (нет gh) про черновик и метку ничего не известно — проверять нечего.
   if (task !== undefined && state.prs !== null) problems.push(...checkAheadPr(own, task, state.tasks));
@@ -555,7 +658,7 @@ function boardDetails(entry, columnKey, owner, prsByNumber, now) {
   return {
     owner,
     launchedBy: launchedBy(pr?.body),
-    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task.id) : pr?.createdAt, now),
+    days: hangingDays(columnKey === "inProgress" ? claimedAt(entry.task) : pr?.createdAt, now),
     rounds: reworkRounds(pr, entry.task.id),
   };
 }
@@ -626,6 +729,8 @@ function main(argv) {
       return runClaim(positional, flags);
     case "resume":
       return runResume(positional, flags);
+    case "restart":
+      return runRestart(positional, flags);
     case "merge":
       return runMerge(positional);
     case "holds":

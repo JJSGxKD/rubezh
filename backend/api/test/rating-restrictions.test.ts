@@ -31,7 +31,7 @@ import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { ALL_BOARDS } from "../src/modules/runs/leaderboard.store.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { RunPrestige } from "../src/modules/runs/run-prestige.js";
 
 /**
@@ -84,7 +84,7 @@ beforeEach(async () => {
   rolesRepository = new MemoryRolesRepository();
   const roles = new RolesService(config(), rolesRepository, accounts);
   restrictions = new RestrictionsService(rating.restrictions, accounts, roles, rating.gate, rating.hooks);
-  service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
+  service = new RunsService(config(), runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
   view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   moderator = await player("модератор");
   await rolesRepository.grant(moderator.accountId, "moderator", null);
@@ -163,7 +163,7 @@ describe("тень: ограничение рейтинга молча", () => {
     const [imposed] = await restrictions.impose(moderator, shadow.accountId, input({ notify: false }));
 
     const run = finish({ survivalSec: 400 });
-    expect(await service.finish(shadow, run)).toEqual({ recorded: true, verdict: "ok", bestSurvivalSec: 400, isNewBest: true, rank: 2 });
+    expect(await service.finish(shadow, run)).toMatchObject({ recorded: true, verdict: "ok", bestSurvivalSec: 400, isNewBest: true, rank: 2 });
     expect(runs.rows.get(run.runId)).toMatchObject({ ranked: false, ratingRestricted: "silent" });
     expect(await board.best("hard", shadow.accountId, "common")).toBeNull();
 
@@ -173,7 +173,7 @@ describe("тень: ограничение рейтинга молча", () => {
       [2, 400, true],
       [3, 300, false],
     ]);
-    expect(mine.me).toEqual({ rank: 2, survivalSec: 400 });
+    expect(mine.me).toMatchObject({ rank: 2, survivalSec: 400 });
     expect(mine.totalPlayers).toBe(3);
     // Карточка `/start` считает доску так же: место 2 из 3, а не из 2.
     expect(await view.boardSize(shadow.accountId, "hard")).toBe(3);
@@ -184,7 +184,7 @@ describe("тень: ограничение рейтинга молча", () => {
       [2, 300, true],
     ]);
     expect(theirs.totalPlayers).toBe(2);
-    expect((await view.profile(shadow.accountId)).best.hard).toEqual({ survivalSec: 400, rank: 2 });
+    expect((await view.profile(shadow.accountId)).best.hard).toMatchObject({ survivalSec: 400, rank: 2 });
     // Команда в карточке игрока видит правду: в доске его нет.
     expect((await view.profile(shadow.accountId, "team")).best.hard).toBeNull();
     expect((await view.detail(shadow.accountId, run.runId)).rating).toBe("ranked");

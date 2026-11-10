@@ -16,5 +16,7 @@ import { EVENTS_SINK, QueuedEventsSink } from "./events.sink.js";
     { provide: EVENTS_REPOSITORY, useClass: PrismaEventsRepository },
     { provide: EVENTS_SINK, useClass: QueuedEventsSink },
   ],
+  // Писатель событий нужен серверным событиям других модулей (очки эффективности, tasks/T-0293).
+  exports: [EVENTS_SINK],
 })
 export class EventsModule {}

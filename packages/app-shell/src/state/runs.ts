@@ -80,11 +80,17 @@ const finishFields = {
       bossKills: z.optional(z.number()),
       eliteKills: z.optional(z.number()),
       chestsOpened: z.optional(z.number()),
+      // Редкие сундуки (T-0175): записи прошлых сборок их не знают.
+      rareChests: z.optional(z.number()),
       crystals: z.optional(z.number()),
       // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
       noHitSec: z.optional(z.number()),
       noKillSec: z.optional(z.number()),
       killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
+      // Очки эффективности (T-0293): журнал охоты, оценка сборки и сила на старте; записи прошлых сборок их не знают.
+      huntLog: z.optional(z.array(z.object({ rank: z.enum(["elite", "boss"]), value: z.number(), aliveSec: z.number() }))),
+      buildScore: z.optional(z.number()),
+      power: z.optional(z.number()),
     }),
   ),
 };
@@ -313,10 +319,15 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       bossKills: result.bossKills,
       eliteKills: result.eliteKills,
       chestsOpened: result.chestsOpened,
+      rareChests: result.rareChestsOpened,
       crystals: Math.round(result.crystalsCollected),
       noHitSec: result.noHitSec,
       noKillSec: result.noKillSec,
       killsByElement: result.killsByElement,
+      // Для очков эффективности (T-0293): без них сервер считает оси охоты и сборки единицей, а полосу берёт среднюю.
+      ...(result.huntLog === undefined ? {} : { huntLog: result.huntLog.map(({ rank, value, aliveSec }) => ({ rank, value, aliveSec })) }),
+      ...(result.buildScore === undefined ? {} : { buildScore: result.buildScore }),
+      ...(result.pressure === undefined ? {} : { power: result.pressure.power }),
     },
   };
 }

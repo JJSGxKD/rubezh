@@ -94,7 +94,12 @@ export type VerdictReason =
    * победа над стражем невозможна по времени: раньше, чем страж мог пасть, позже
    * конца забега, при `reached: false`, или страж «пришёл» до отметки
    */
-  | "rubezh_implausible";
+  | "rubezh_implausible"
+  /**
+   * индекс оси очков эффективности выше двойного потолка (tasks/T-0293): выброс,
+   * которого честный забег не даёт; очков он не меняет, но в рейтинг не идёт
+   */
+  | "axis_out_of_range";
 
 export interface VerdictInput {
   survivalSec: number;
@@ -124,6 +129,8 @@ export interface VerdictInput {
   counters: RunCounters | null;
   /** рубеж из итога; нет поля — забег до рубежа или итог старой сборки */
   rubezh?: RubezhClaim | null;
+  /** индекс оси очков выше двух потолков; нет поля — очки не считались */
+  axisOutOfRange?: boolean;
 }
 
 export interface Verdict {
@@ -132,7 +139,7 @@ export interface Verdict {
 }
 
 const REJECTING: ReadonlySet<VerdictReason> = new Set(["weapons_over_slots", "longer_than_wall_clock", "unpaid_continue", "loadout_forged", "loadout_level_ahead", "boost_unpaid"]);
-const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible"]);
+const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible", "axis_out_of_range"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
   const reasons: VerdictReason[] = [];
@@ -176,6 +183,8 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   }
 
   if (input.rubezh != null && !rubezhPlausible(input.rubezh, input.survivalSec)) reasons.push("rubezh_implausible");
+
+  if (input.axisOutOfRange === true) reasons.push("axis_out_of_range");
 
   return { verdict: verdictOf(reasons), reasons };
 }

@@ -5,7 +5,7 @@ import { api } from "../../services";
 import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { HELP } from "../../ui/help";
 import { Button, ErrorNotice, Loading, Panel } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 
 /** Как часто спрашивать сервер, пока идёт проход, мс. */
@@ -37,7 +37,7 @@ export function RecleanPanel({ view }: { view: RulesView }) {
     const result = await run();
     setAsking(false);
     if (!result.ok) {
-      toast.error(result.error.message);
+      toastError(result.error);
       return;
     }
     toast.success(done);
@@ -65,7 +65,7 @@ export function RecleanPanel({ view }: { view: RulesView }) {
               onClick={() =>
                 void (async () => {
                   const result = await stopReclean(api);
-                  if (!result.ok) toast.error(result.error.message);
+                  if (!result.ok) toastError(result.error);
                   else toast.success("Останавливаем: проход закончит текущую пачку");
                   reload();
                 })()

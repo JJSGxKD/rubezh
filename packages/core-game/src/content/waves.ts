@@ -73,10 +73,13 @@ export const TIMELINE: TimelineSegmentDef[] = [
     ],
     events: [
       { kind: "ring", enemy: "circler_crow", count: 16 },
-      // Первое кольцо слабее следующих, но не пустое: 32 стража встают сразу и
-      // держат строй 45 секунд. Элиты внутри нет: сундук с неё ускорял сборку
+      // Первое кольцо слабее следующих, но не пустое: 48 стражей встают сразу и
+      // держат строй 45 секунд. Радиус 255 заметно дальше зоны «Очага» (до 140):
+      // вровень с ней зона достаёт строй сразу, и стражи тают, не успев стать
+      // стеной. Число стражей растёт вместе с радиусом, чтобы просвет между соседями
+      // оставался уже игрока. Элиты внутри нет: сундук с неё ускорял сборку
       // набора, элиту в строй ставят только кольца кривой.
-      { kind: "cordon", enemy: "cordon_guard", count: 32, ring: { radius: 170, minRadius: 90, shrinkPerSec: 1.5, lifeSec: 45 } },
+      { kind: "cordon", enemy: "cordon_guard", count: 48, ring: { radius: 255, minRadius: 120, shrinkPerSec: 2.5, lifeSec: 45 } },
     ],
   },
   {
@@ -128,7 +131,7 @@ export const TIMELINE: TimelineSegmentDef[] = [
     // а не выпадает случайно из смеси.
     events: [
       { kind: "ring", enemy: "elite_ghoul", count: 1 },
-      { kind: "cordon", enemy: "cordon_guard", count: 40, ring: { radius: 200, minRadius: 90, shrinkPerSec: 2, lifeSec: 50 } },
+      { kind: "cordon", enemy: "cordon_guard", count: 60, ring: { radius: 300, minRadius: 120, shrinkPerSec: 3.3, lifeSec: 50 } },
     ],
   },
 ];
@@ -142,6 +145,10 @@ export const TIMELINE: TimelineSegmentDef[] = [
  * (docs/25-week1-fps-trials.md §6.5).
  *
  * В `pool` только обычные враги: элиты и мини-боссы приходят событиями.
+ *
+ * Рост здоровья `hpGrowth` — 1,16 за отрезок (Р194, было 1,14). Решение называло
+ * 1,18, но с ним индекс силы за три минуты — 3,3 при потолке коридора `latePressure`
+ * 3,2, а здоровье на 600-й секунде — ×3,3 к прежнему вместо ×3 (docs/32-balance.md §2.6).
  */
 export const ENDLESS_CURVE: EndlessCurveDef = {
   fromSec: 330,
@@ -149,7 +156,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
   threatPerSec: 14.4,
   threatGrowth: 1.22,
   maxAlive: 240,
-  hpGrowth: 1.14,
+  hpGrowth: 1.16,
   damageGrowth: 1.08,
   pool: [
     "swarm_rat",
@@ -179,16 +186,20 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     { everySegments: 9, kind: "flank", enemy: "elite_grave_knight", count: 2 },
     // Кольца на 450, 630, 810 с и дальше: между ними всегда больше lifeSec, а
     // крепнут они здоровьем стража — ступенями и hpGrowth кривой, поэтому
-    // параметры кольца с отрезка на отрезок не растут.
+    // параметры кольца с отрезка на отрезок не растут. Радиус 360 — предел, при
+    // котором строй ещё читается целиком; стражей 64 — потолок события
+    // (CORDON_MAX_COUNT): плотность чуть ниже, чем у колец поуже, но просвет
+    // между соседями по-прежнему уже игрока. Сжатие подобрано так, чтобы путь
+    // от радиуса до предела занимал около минуты, как у колец поуже.
     {
       everySegments: 3,
       kind: "cordon",
       enemy: "cordon_guard",
-      count: 56,
+      count: 64,
       ring: {
-        radius: 240,
-        minRadius: 100,
-        shrinkPerSec: 2.5,
+        radius: 360,
+        minRadius: 135,
+        shrinkPerSec: 4,
         lifeSec: 60,
         inner: [{ enemy: "elite_ghoul", count: 1 }],
       },

@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { pointsFromOf } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
@@ -164,6 +165,9 @@ const SEASONS_START_MAX = 20_991_228;
 
 /** Последняя допустимая дата отсечки рейтинга: 31 декабря 2099. */
 const RATING_SINCE_MAX = 20_991_231;
+
+/** Вес оси очков эффективности, проценты. */
+const RATING_WEIGHT = { min: 0, max: 100, unit: ["процент", "процента", "процентов"] } as const satisfies SettingRange;
 
 /**
  * Целое число в пределах — схема и пределы из одного места: панель
@@ -563,6 +567,72 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: 0,
   } satisfies SettingDefinition<number>,
+  /**
+   * Очки эффективности (docs/35-stage4-plan.md, Р152, tasks/T-0293): веса пяти
+   * осей и показатель Стойкости подбирают калибровкой, поэтому лежат в панели.
+   * Редактор панели принимает только целые, поэтому веса — проценты (40 — это
+   * 0,40), показатель — сотые (130 — это 1,3). Сумма весов не 100 — сервер
+   * нормирует её к единице и пишет предупреждение в лог. Правка действует на
+   * новые забеги; прошлые пересчитывает `pnpm runs:rescore`.
+   */
+  ratingWeightEndurance: integer("rating.weight-endurance", RATING_GROUP, "Очки: вес Стойкости", "Доля Стойкости (время жизни) в очках эффективности, проценты: 40 — это 0,40", RATING_WEIGHT, 40),
+  ratingWeightOnslaught: integer("rating.weight-onslaught", RATING_GROUP, "Очки: вес Натиска", "Доля Натиска (темп убийств) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightHunt: integer("rating.weight-hunt", RATING_GROUP, "Очки: вес Охоты", "Доля Охоты (элиты и боссы) в очках эффективности, проценты: 20 — это 0,20", RATING_WEIGHT, 20),
+  ratingWeightClean: integer("rating.weight-clean", RATING_GROUP, "Очки: вес Чистоты", "Доля Чистоты (полученный урон) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingWeightBuild: integer("rating.weight-build", RATING_GROUP, "Очки: вес Сборки", "Доля Сборки (эволюции и оружие на максимуме) в очках эффективности, проценты: 10 — это 0,10", RATING_WEIGHT, 10),
+  ratingEnduranceExponent: integer(
+    "rating.endurance-exponent",
+    RATING_GROUP,
+    "Очки: показатель Стойкости",
+    "Стойкость растёт как (время / 600 с) в этой степени, в сотых: 130 — это 1,3. Больше — глубокий забег весит больше",
+    { min: 100, max: 300, unit: ["сотая", "сотые", "сотых"] },
+    130,
+  ),
+  ratingIndexCap: integer(
+    "rating.index-cap",
+    RATING_GROUP,
+    "Очки: потолок индекса оси",
+    "Выше этого значения индекс оси в очки не идёт; индекс выше двойного потолка — подозрение антифрода",
+    { min: 1, max: 10, unit: ["раз", "раза", "раз"] },
+    3,
+  ),
+  /**
+   * Переход недельных сезонов на очки (tasks/T-0294, Р66): сезоны, начавшиеся не
+   * раньше этого понедельника, ранжируются по очкам лучшего забега недели, раньше —
+   * по времени. Идущий в момент выката сезон дотягивается по времени: менять
+   * правила посреди недели нечестно к тем, кто уже играл. Миграция ставит
+   * понедельник после выката на каждой среде. Число ГГГГММДД, как у
+   * `seasons.start-date`; 0 — сезонов по очкам нет.
+   */
+  ratingPointsFrom: {
+    key: "rating.points-from",
+    group: RATING_GROUP,
+    title: "Сезоны по очкам с понедельника",
+    hint: "Понедельник, с которого недельные сезоны ранжируются по очкам эффективности, числом ГГГГММДД: 20261109. Сезоны раньше идут по времени. 0 — сезонов по очкам нет",
+    kind: "number",
+    schema: z
+      .number()
+      .int({ message: "целое число" })
+      .min(0, { message: "не меньше 0" })
+      .max(SEASONS_START_MAX, { message: `не больше ${String(SEASONS_START_MAX)}` })
+      .refine((value) => value === 0 || pointsFromOf(value) !== null, { message: "понедельник в виде ГГГГММДД, например 20261109, или 0" }),
+    range: { min: 0, max: SEASONS_START_MAX, unit: ["(ГГГГММДД)", "(ГГГГММДД)", "(ГГГГММДД)"] },
+    fromEnv: () => null,
+    fallback: 0,
+    saveCheck: (value, now) => {
+      const from = pointsFromOf(value);
+      // Дата не раньше следующей недели: сезон, который уже идёт, менять правила не может.
+      return from !== null && from.getTime() <= seasonOf(now).startsAt.getTime() ? "Сезоны по очкам не могут начаться с идущей или прошлой недели — укажите понедельник следующей недели или позже" : null;
+    },
+  } satisfies SettingDefinition<number>,
+  ratingSeasonThresholdPoints: integer(
+    "rating.season-threshold-points",
+    RATING_GROUP,
+    "Порог награды участника сезона, очки",
+    "Сколько очков лучшего забега недели даёт награду участника в сезоне по очкам; места награждаются как раньше. Чуть ниже типичного забега: награду получает тот, кто сыграл всерьёз",
+    { min: 0, max: 100_000, unit: ["очко", "очка", "очков"] },
+    800,
+  ),
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",

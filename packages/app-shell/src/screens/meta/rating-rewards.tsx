@@ -142,9 +142,10 @@ function HistoryRow({ item }: { item: SeasonHistoryItem }): ReactNode {
       <p className="font-display text-sm font-bold text-text">{seasonRangeLabel(item.startsAt, item.endsAt)}</p>
       {item.results.map((result) => (
         <p key={result.difficulty} className="text-sm text-text-muted">
-          {t("season.history.row", {
+          {t(item.scoring === "points" ? "season.history.rowPoints" : "season.history.row", {
             difficulty: difficultyName(result.difficulty),
             time: formatDuration(result.bestSec),
+            points: formatNumber(result.bestSec),
             place: result.place,
             total: result.boardSize,
           })}

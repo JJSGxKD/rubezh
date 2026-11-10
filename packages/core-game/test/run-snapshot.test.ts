@@ -324,6 +324,26 @@ describe("снимок забега", () => {
     expect(resumed.world.stats.crystalsCollected).toBe(77);
   });
 
+  it("круг «снять и поднять» сохраняет число редких сундуков (T-0175)", () => {
+    const run = newRun(1);
+    run.world.stats.chestsOpened = 4;
+    run.world.stats.rareChestsOpened = 2;
+    const saved = roundTrip(run);
+
+    const resumed = newRun(1);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.stats.rareChestsOpened).toBe(2);
+    expect(resumed.world.stats.chestsOpened).toBe(4);
+  });
+
+  it("снимок без rareChestsOpened в stats — SnapshotError, а не ноль (T-0175)", () => {
+    const run = newRun(1);
+    const saved = structuredClone(roundTrip(run)) as { stats: { scalars: Record<string, number> } };
+    delete saved.stats.scalars.rareChestsOpened;
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, saved)).toThrow(SnapshotError);
+  });
+
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
     const run = newRun(1);
     advance(run, 5 * 60);

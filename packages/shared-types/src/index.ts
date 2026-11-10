@@ -341,6 +341,16 @@ export interface ThemeColors {
  * Каждая подписка возвращает функцию отписки: оболочка монтирует и
  * размонтирует экраны, и подписка без отписки — утечка на каждом переходе.
  */
+/**
+ * Полоса кнопок площадки поверх приложения (Telegram во весь экран: «Закрыть»
+ * и меню). Числа — CSS-пиксели от верха окна: `top` — где полоса начинается
+ * (под системной зоной), `height` — её высота.
+ */
+export interface ButtonBar {
+  top: number;
+  height: number;
+}
+
 export interface PlatformUi {
   /**
    * Подготовить возможности площадки: смонтировать SDK, подписаться на
@@ -363,6 +373,16 @@ export interface PlatformUi {
 
   readonly insets: SafeAreaInsets;
   onInsetsChange(handler: (insets: SafeAreaInsets) => void): Unsubscribe;
+
+  /**
+   * Полоса кнопок площадки поверх приложения; `null` — её нет. Нет свойства —
+   * площадка полосы не знает (VK, MAX, браузер), оболочка читает его как
+   * `null`. Объект остаётся тем же, пока полоса не изменилась. Отступы
+   * `insets` от неё не зависят (счётчик онлайна, Р107).
+   */
+  readonly buttonBar?: ButtonBar | null;
+  /** Нет метода — полоса не меняется. */
+  onButtonBarChange?(handler: (bar: ButtonBar | null) => void): Unsubscribe;
 
   readonly viewport: ViewportState;
   onViewportChange(handler: (viewport: ViewportState) => void): Unsubscribe;
@@ -1255,6 +1275,34 @@ export interface SecretsDef {
   blessings: readonly BlessingDef[];
 }
 
+/**
+ * Осада стоящего — данные геймдизайнера (`core-game/src/content/siege.ts`, Р197, tasks/T-0392).
+ * Кто после `fromSec` долго стоит в одном круге, того рубеж берёт в осаду: строй стражей и кольцо элит.
+ * Расстояния и радиусы — в игровых единицах, время — в секундах.
+ */
+export interface SiegeDef {
+  /** с какой секунды забега директор следит за стоянием; раньше стоять можно */
+  fromSec: number;
+  /** круг стояния вокруг якоря: пока игрок в нём, копится счётчик; вышел — якорь переезжает */
+  radius: number;
+  /** сколько секунд стоять до осады */
+  holdSec: number;
+  /** за сколько секунд до осады на земле загорается кольцо предупреждения; меньше `holdSec` */
+  warnSec: number;
+  /** пауза после осады, секунды: новой осады в ней нет */
+  cooldownSec: number;
+  /** сколько секунд подряд вне осады снимают один уровень */
+  calmSec: number;
+  /** во сколько раз число стражей и элит растёт за уровень, от 1 до 2 */
+  growth: number;
+  /** уровень осады растёт с каждой осадой забега до этого потолка, от 1 до 10 */
+  maxLevel: number;
+  /** строй: страж, сколько их на нулевом уровне и числа кольца (как у события `cordon`) */
+  cordon: { enemy: string; count: number; ring: CordonRingDef };
+  /** сколько элит выходит кольцом на нулевом уровне; типы — те, что таймлайн к этой секунде уже выпускал */
+  eliteCount: number;
+}
+
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
 export interface RunSecretsSummary {
   found: SecretKind[];
@@ -1634,6 +1682,8 @@ export interface RunResult {
   eliteKills: number;
   /** открытые сундуки забега */
   chestsOpened: number;
+  /** из них редких: открытых сундуков наибольшего размера из таблицы весов (tasks/T-0175) */
+  rareChestsOpened: number;
   /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
   crystalsCollected: number;
   /**
@@ -1641,6 +1691,11 @@ export interface RunResult {
    * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
    */
   secrets?: RunSecretsSummary;
+  /**
+   * Сколько раз рубеж брал игрока в осаду за стояние (tasks/T-0392). Необязательное: итог прошлой
+   * сборки поля не знает, а движок отдаёт его всегда. Рейтинг и очки эффективности осада не меняет.
+   */
+  sieges?: number;
   /**
    * Рубеж: пришёл ли страж, пал ли он и сколько здоровья у него осталось —
    * «почти победил» для экрана смерти (T-0120). Необязательное: итог прошлой
@@ -1791,6 +1846,8 @@ export interface RunFinishStats {
   bossKills?: number;
   eliteKills?: number;
   chestsOpened?: number;
+  /** редкие сундуки: не больше `chestsOpened` (tasks/T-0175) */
+  rareChests?: number;
   crystals?: number;
   /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
   noHitSec?: number;
@@ -1799,6 +1856,11 @@ export interface RunFinishStats {
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
+  /**
+   * Сила игрока на старте забега, очки (`RunPressureResult.power`): по ней сервер берёт полосу
+   * ожидаемого для очков эффективности (tasks/T-0293). Нет поля — подстройки не было, полоса средняя.
+   */
+  power?: number;
 }
 
 export type DeviceOs = "android" | "ios" | "windows" | "macos" | "linux" | "other";
@@ -1835,6 +1897,28 @@ export interface RunFinishResult {
   /** `false` — забег не в рейтинге: читы или вердикт не `ok` */
   recorded: boolean;
   verdict: RunVerdict;
+  /**
+   * Очки эффективности забега (tasks/T-0293, Р152). Нет поля — очков нет: пролог и обучение,
+   * сбой подсчёта, ответ сервера до очков.
+   */
+  score?: RunScoreView;
+}
+
+/** Ось очков: Стойкость, Натиск, Охота, Чистота, Сборка. */
+export type RunScoreAxis = "t" | "k" | "h" | "c" | "b";
+
+/** Стиль забега — сильнейшая ось: Стена, Ураган, Охотник, Тень, Мастер. */
+export type RunScoreStyle = RunScoreAxis;
+
+/** Очки эффективности в ответе записи забега: индексы осей — 1 значит ровно ожидаемое. */
+export interface RunScoreView {
+  points: number;
+  axes: Record<RunScoreAxis, number>;
+  style: RunScoreStyle;
+  /** полоса силы, по которой взято ожидаемое */
+  band: string;
+  /** очки забега той же длины, сыгранного ровно по ожидаемому: черта «ожидаемое» */
+  expectedPoints: number;
 }
 
 export interface LeaderboardEntry {
@@ -1848,17 +1932,34 @@ export interface LeaderboardEntry {
   isMe: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** поддержал проект (Р109); нет поля — не поддержал */
+  supporter?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
   rubezh?: true | undefined;
+  /** очки эффективности лучшего забега (T-0294) — по ним ранжирована доска; нет поля — сервер до очков, `null` — в сезоне по времени очков в таблице нет */
+  points?: number | null | undefined;
+  /** стиль забега (T-0293): ось `t`, `k`, `h`, `c`, `b`; `null` — очков нет */
+  style?: string | null | undefined;
+  /** дивизион сезона (T-0295); `null` — места на доске сезона нет */
+  division?: string | null | undefined;
+}
+
+/** Своя строка доски: место и числа лучшего забега, даже если оно ниже показанных строк. */
+export interface LeaderboardMe {
+  rank: number;
+  survivalSec: number;
+  points?: number | null | undefined;
+  style?: string | null | undefined;
+  division?: string | null | undefined;
 }
 
 export interface Leaderboard {
   difficultyId: DifficultyId;
   entries: LeaderboardEntry[];
   /** своё место, даже если оно ниже показанных строк */
-  me: { rank: number; survivalSec: number } | null;
+  me: LeaderboardMe | null;
   totalPlayers: number;
 }
 

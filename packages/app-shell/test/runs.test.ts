@@ -39,6 +39,7 @@ function result(runId: string, patch: Partial<RunResult> = {}): RunResult {
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     weapons: [{ id: "spark", level: 4, damage: 4000 }],
     passives: [{ id: "might", level: 2 }],
@@ -189,7 +190,7 @@ describe("очередь забегов", () => {
       deathCause: "swarm_rat",
       continues: [],
       passives: [{ id: "might", level: 2 }],
-      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} },
+      stats: { damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }], bossKills: 0, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} },
     });
     expect(useRuns.getState().pending).toBe(0);
   });
@@ -259,7 +260,7 @@ describe("очередь забегов", () => {
   it("запись очереди прошлой сборки без счётчиков итога разбирается и уходит на сервер как есть (T-0125)", async () => {
     const legacy = toSubmission(result("run-old-0001"));
     const stats: Record<string, unknown> = { ...legacy.stats };
-    for (const key of ["bossKills", "eliteKills", "chestsOpened", "crystals", "noHitSec", "noKillSec", "killsByElement"]) delete stats[key];
+    for (const key of ["bossKills", "eliteKills", "chestsOpened", "rareChests", "crystals", "noHitSec", "noKillSec", "killsByElement"]) delete stats[key];
     storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
 
     reply = async () => json(200, FINISHED);
@@ -269,6 +270,35 @@ describe("очередь забегов", () => {
     expect(requests).toHaveLength(1);
     const sent = requests[0]?.body as { stats: Record<string, unknown> };
     expect(sent.stats).toEqual({ damageTaken: 120, xpCollected: 300, waveReached: 3, topKills: [{ enemy: "swarm_rat", count: 200 }] });
+  });
+
+  it("запись очереди без одного только rareChests разбирается: поля нет и в отправке (T-0175)", async () => {
+    const legacy = toSubmission(result("run-old-0001"));
+    const stats: Record<string, unknown> = { ...legacy.stats };
+    delete stats.rareChests;
+    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...legacy, stats }]));
+
+    reply = async () => json(200, FINISHED);
+    mount();
+    await useRuns.getState().flush("launch");
+
+    expect(requests).toHaveLength(1);
+    const sent = requests[0]?.body as { stats: Record<string, unknown> };
+    expect(sent.stats).not.toHaveProperty("rareChests");
+    expect(sent.stats.chestsOpened).toBe(0);
+  });
+
+  it("запись очереди хранит журнал охоты, сборку и силу и отправляет их на сервер как есть (T-0293)", async () => {
+    const hunt = [{ rank: "elite" as const, value: 12, aliveSec: 14.5 }];
+    const queued = toSubmission(result("run-00000001", { huntLog: hunt, buildScore: 7, pressure: { power: 2.4, level: 1, deviceClass: "standard", powerEnd: 2.9, levelEnd: 1.1 } }));
+    storage.set(QUEUE_KEY, JSON.stringify([{ kind: "finish", ...queued }]));
+
+    reply = async () => json(200, FINISHED);
+    mount();
+    await useRuns.getState().flush("launch");
+
+    const sent = requests[0]?.body as { stats: Record<string, unknown> };
+    expect(sent.stats).toMatchObject({ huntLog: hunt, buildScore: 7, power: 2.4 });
   });
 
   it("рекорд с другого устройства приходит в лобби и в хранилище устройства", async () => {
@@ -366,6 +396,43 @@ describe("счётчики итога забега (T-0125)", () => {
     expect(submission.stats).toMatchObject({ bossKills: 2, eliteKills: 5, chestsOpened: 3, crystals: 412 });
   });
 
+  it("редкие сундуки уходят в stats.rareChests (T-0175)", () => {
+    const submission = toSubmission(result("run-00000001", { chestsOpened: 3, rareChestsOpened: 2 }));
+
+    expect(submission.stats).toMatchObject({ chestsOpened: 3, rareChests: 2 });
+  });
+
+});
+
+describe("очки эффективности: журнал охоты, сборка и сила (T-0293)", () => {
+  const hunt = [
+    { rank: "elite" as const, value: 12, aliveSec: 14.5 },
+    { rank: "boss" as const, value: 80, aliveSec: 31 },
+  ];
+
+  it("журнал охоты, оценка сборки и сила на старте уходят в stats", () => {
+    const submission = toSubmission(
+      result("run-00000001", {
+        huntLog: hunt,
+        buildScore: 7,
+        pressure: { power: 2.4, level: 1, deviceClass: "standard", powerEnd: 2.9, levelEnd: 1.1 },
+      }),
+    );
+
+    expect(submission.stats).toMatchObject({ huntLog: hunt, buildScore: 7, power: 2.4 });
+  });
+
+  it("итог без них (сборка без подстройки, прошлый движок) уходит без этих ключей: сервер считает эти оси единицей", () => {
+    const stats = toSubmission(result("run-00000001")).stats;
+
+    expect(stats).not.toHaveProperty("huntLog");
+    expect(stats).not.toHaveProperty("buildScore");
+    expect(stats).not.toHaveProperty("power");
+  });
+
+  it("пустой журнал охоты уходит пустым массивом: охоты не было, и это не «неизвестно»", () => {
+    expect(toSubmission(result("run-00000001", { huntLog: [], buildScore: 0 })).stats).toMatchObject({ huntLog: [], buildScore: 0 });
+  });
 });
 
 describe("подробности забега для листа в профиле", () => {
@@ -389,6 +456,7 @@ describe("подробности забега для листа в профил�
       bossKills: 0,
       eliteKills: 0,
       chestsOpened: 0,
+      rareChests: 0,
       crystals: 0,
       noHitSec: 0,
       noKillSec: 0,

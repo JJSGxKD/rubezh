@@ -33,7 +33,7 @@ function formatCode(body: string): string {
 
 /** Исходящее подключение узла без тега: ключ узла в тег входит, а сравниваем содержимое. */
 function outboundOf(node: ProxyNode): Record<string, unknown> {
-  const config = buildXrayConfig([node], new Map([[node.key, 0]]), OPTIONS) as { outbounds: Record<string, unknown>[] };
+  const config = buildXrayConfig([{ group: "main", node, slot: 0 }], OPTIONS) as { outbounds: Record<string, unknown>[] };
   return { ...config.outbounds[1], tag: "" };
 }
 

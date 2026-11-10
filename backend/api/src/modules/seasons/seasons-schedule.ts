@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { boardKeyOf, pointsFromOf, scoringOfSeason, type Scoring } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { SETTINGS } from "../settings/setting-catalog.js";
 import { SETTINGS_READER, type SettingsReader } from "../settings/settings.service.js";
@@ -27,6 +28,34 @@ export class SeasonSchedule {
    */
   ratingSince(): Date | null {
     return ratingSinceOf(this.settings.get(SETTINGS.ratingSinceDate));
+  }
+
+  /**
+   * Понедельник первого сезона по очкам (`rating.points-from`, T-0294); `null` —
+   * сезонов по очкам нет. Читается на каждый вызов.
+   */
+  pointsFrom(): Date | null {
+    return pointsFromOf(this.settings.get(SETTINGS.ratingPointsFrom));
+  }
+
+  /** Как ранжирован сезон: до понедельника перехода — по времени, с него — по очкам. */
+  scoringOf(season: Season): Scoring {
+    return scoringOfSeason(season.startsAt, this.pointsFrom());
+  }
+
+  /**
+   * Сезон под ключом его доски в Redis: сезон по очкам лежит под `pts:<ключ>`,
+   * по времени — под прежним, поэтому переход идёт без окна, где доска пуста.
+   * Даты те же — от них считается срок жизни ключа. Ключ сезона в базе итогов и
+   * наград остаётся датой понедельника: этот видит только Redis.
+   */
+  boardSeason(season: Season): Season {
+    return { ...season, key: boardKeyOf(season.key, this.scoringOf(season)) };
+  }
+
+  /** Порог награды участника в сезоне по очкам (`rating.season-threshold-points`). */
+  thresholdPoints(): number {
+    return this.settings.get(SETTINGS.ratingSeasonThresholdPoints);
   }
 
   /** Сезон, в который попадает момент; `null` — сезонов нет или первый ещё не начался. */

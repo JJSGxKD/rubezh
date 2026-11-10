@@ -44,6 +44,8 @@ function task(patch: Partial<TaskView> = {}): TaskView {
     reward: { coins: 100, gems: 0, shards: 0 },
     passPoints: 0,
     link: "https://t.me/partner",
+    linkMode: "own",
+    channelPlatform: "telegram",
     slots: null,
     image: null,
     tier: null,

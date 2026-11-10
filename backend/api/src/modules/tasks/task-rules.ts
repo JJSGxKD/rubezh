@@ -5,6 +5,7 @@ import { DIFFICULTIES } from "../runs/run-rules.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
+import { CLIENT_KINDS, isClientKind, type ClientKind } from "./client-signal-rules.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): каталог — в базе,
@@ -90,6 +91,34 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
 };
 
 /**
+ * Эволюции оружия на сервере: id эволюции → id базового (tasks/T-0102,
+ * docs/39-retention-mechanics.md К1). Эволюция занимает слот базового, поэтому
+ * в итоге забега стоит её id, а не базового: без таблицы забег с «Грозой» в
+ * эволюции не считался бы ни оружием «Гроза», ни молнией. Таблицу сверяет тест
+ * с `core-game/src/content/weapons.ts` — новая эволюция роняет его, пока строку
+ * не добавили.
+ */
+export const WEAPON_EVOLUTIONS = {
+  starfall: "spark",
+  tempest: "storm",
+  blade_whirl: "knife",
+  frost_crown: "wardstone",
+  forge: "hearth",
+  viper: "sting",
+  fire_rain: "meteor",
+} as const;
+
+/** Это оружие — эволюция. Через `hasOwn`: id приходит с клиента, `constructor` эволюцией не бывает. */
+export function isEvolution(id: string): boolean {
+  return Object.hasOwn(WEAPON_EVOLUTIONS, id);
+}
+
+/** Базовое оружие: у эволюции — то, из которого она выросла, у остального — оно само. */
+export function baseWeaponOf(id: string): string {
+  return isEvolution(id) ? WEAPON_EVOLUTIONS[id as keyof typeof WEAPON_EVOLUTIONS] : id;
+}
+
+/**
  * Виды целей, которые двигает забег: `sum` копит за срок, `max` помнит лучший
  * забег. Новый вид — код здесь (и строка текста у клиента), новое задание на
  * готовом виде — строка каталога в панели. `measure` получает фильтр строки
@@ -111,13 +140,13 @@ export const RUN_KINDS = {
   /** сыграть забег с оружием в наборе к концу */
   weapon_runs: {
     op: "sum",
-    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => weapon.id === filter?.weapon) ? 1 : 0),
+    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => baseWeaponOf(weapon.id) === filter?.weapon) ? 1 : 0),
   },
   /** сыграть забег с оружием стихии */
   element_runs: {
     op: "sum",
     measure: (run: TaskRun, filter?: RunFilter | null) =>
-      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[weapon.id] === filter.element) ? 1 : 0,
+      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[baseWeaponOf(weapon.id)] === filter.element) ? 1 : 0,
   },
   /** сыграть забег на сложности */
   difficulty_runs: { op: "sum", measure: (run: TaskRun, filter?: RunFilter | null) => (run.difficulty === filter?.difficulty ? 1 : 0) },
@@ -128,6 +157,22 @@ export const RUN_KINDS = {
   },
   /** сыграть забег с оплаченным бустом */
   boost_runs: { op: "sum", measure: (run: TaskRun) => (run.boosts.length > 0 ? 1 : 0) },
+  // Счётчики итога (T-0125): забег без них — старый клиент, нет статистики или
+  // счётчики неправдоподобны — даёт ноль, а остальные виды двигает как раньше.
+  /** убить боссов */
+  boss_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.bossKills ?? 0 },
+  /** убить элит */
+  elite_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.eliteKills ?? 0 },
+  /** открыть сундуков */
+  chests_opened: { op: "sum", measure: (run: TaskRun) => run.counters?.chestsOpened ?? 0 },
+  /** подобрать кристаллов */
+  crystals_collected: { op: "sum", measure: (run: TaskRun) => run.counters?.crystals ?? 0 },
+  /**
+   * сыграть забег, где к концу есть эволюция оружия. Читается из набора, а не из
+   * события: `evolution_unlocked` клиентское и до сервера не доходит, а эволюция
+   * занимает слот базового оружия.
+   */
+  evolution_runs: { op: "sum", measure: (run: TaskRun) => (run.weapons.some((weapon) => isEvolution(weapon.id)) ? 1 : 0) },
 } as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun, filter?: RunFilter | null) => number }>;
 
 export type RunKind = keyof typeof RUN_KINDS;
@@ -167,8 +212,13 @@ export type CheckedKind = (typeof CHECKED_KINDS)[number];
 /** Цели, которые засчитывает сам переход: проверить их у площадки нечем. */
 export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot"]);
 
-export type TaskKind = RunKind | StateKind | CheckedKind;
-export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...(Object.keys(STATE_KINDS) as StateKind[]), ...CHECKED_KINDS];
+export type TaskKind = RunKind | StateKind | CheckedKind | ClientKind;
+export const TASK_KIND_IDS: readonly TaskKind[] = [
+  ...(Object.keys(RUN_KINDS) as RunKind[]),
+  ...(Object.keys(STATE_KINDS) as StateKind[]),
+  ...CHECKED_KINDS,
+  ...(Object.keys(CLIENT_KINDS) as ClientKind[]),
+];
 
 export function isRunKind(kind: TaskKind): kind is RunKind {
   return Object.hasOwn(RUN_KINDS, kind);
@@ -212,14 +262,37 @@ export const taskParamsSchema = z
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 
-/** Видна ли цель игроку этой площадки: цель без площадок — всем. */
-export function visibleOn(params: TaskParams | null, platform: PlatformId): boolean {
+/** Нет подключённых площадок: каналы чужих площадок не видны (поведение до связи аккаунтов, Р188). */
+export const NO_LINKABLE: ReadonlySet<PlatformId> = new Set();
+
+/**
+ * Видна ли цель игроку этой площадки: цель без площадок — всем.
+ *
+ * Канал другой площадки (Р188, T-0377) виден, только если площадка в `linkable`:
+ * у неё есть и проверка подписки, и бот, через который игрок свяжет аккаунты.
+ * Каналом считается цель с `chat` — схема каталога даёт `chat` только подписке на
+ * канал; площадка у ссылки и бота по-прежнему значит «где видна».
+ */
+export function visibleOn(params: TaskParams | null, platform: PlatformId, linkable: ReadonlySet<PlatformId> = NO_LINKABLE): boolean {
   if (params === null) return true;
   if (params.platforms !== undefined) return params.platforms.includes(platform);
-  return params.platform === undefined || params.platform === platform;
+  if (params.platform === undefined || params.platform === platform) return true;
+  return params.chat !== undefined && linkable.has(params.platform);
 }
 
-export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
+/**
+ * Как игрок проверяется в канале: `own` — канал его площадки, спрашиваем по его
+ * id; `external` — канал другой площадки, нужна связь аккаунтов и кнопка бота.
+ * У остальных целей способа нет.
+ */
+export type ChannelLinkMode = "own" | "external";
+
+export function channelLinkMode(def: Pick<TaskDef, "kind" | "params">, platform: PlatformId): ChannelLinkMode | null {
+  if (def.kind !== "channel" || def.params?.platform === undefined) return null;
+  return def.params.platform === platform ? "own" : "external";
+}
+
+export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected" | "counters">;
 
 /**
  * Засчитывается тот же забег, что приносит награду: с читами, отклонённый
@@ -349,6 +422,28 @@ export const taskDefSchema = z
     if (isStateKind(task.kind) && task.period !== "achievement") ctx.addIssue({ code: "custom", message: "друзья и уровень аккаунта — только у достижений", path: ["kind"] });
   })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
+  // Цели по сигналу клиента (Р187): срок закреплён за видом, цель одна, ротации, фильтра,
+  // лимита и картинки нет — задание в игре всегда, вне пула.
+  .superRefine((task, ctx) => {
+    if (!isClientKind(task.kind)) return;
+    if (task.period !== CLIENT_KINDS[task.kind].period) {
+      const message = task.kind === "home_screen" ? "главный экран — только достижение" : "история — только недельное";
+      ctx.addIssue({ code: "custom", message, path: ["period"] });
+    }
+    if (task.target !== 1) ctx.addIssue({ code: "custom", message: "у этого задания цель — 1", path: ["target"] });
+    const extra = [
+      ["tier", task.tier !== null],
+      ["filter", task.filter !== null],
+      ["limit", task.limit !== null],
+      ["image", task.image !== null],
+    ] as const;
+    const first = extra.find(([, set]) => set);
+    if (first !== undefined) ctx.addIssue({ code: "custom", message: "ступень, фильтр, лимит и картинка — не у этого задания", path: [first[0]] });
+    // Витрина берёт только достижения с категорией: без неё игрок задание не увидит.
+    if (task.kind === "home_screen" && task.category === null) {
+      ctx.addIssue({ code: "custom", message: "у достижения «главный экран» нужна категория — без неё витрина его не покажет", path: ["category"] });
+    }
+  })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по
   // ссылке платил бы каждый день за одно и то же нажатие.
   .refine((task) => !isCheckedKind(task.kind) || task.kind === "channel" || task.period === "achievement", {

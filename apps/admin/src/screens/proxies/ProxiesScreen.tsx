@@ -4,7 +4,7 @@ import { api } from "../../services";
 import { useSession } from "../../state/use-session";
 import { HELP } from "../../ui/help";
 import { Button, ErrorNotice, Loading, Notice, Panel } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { ModesPanel } from "./ModesPanel";
 import { ProxyCard } from "./ProxyCard";
@@ -31,7 +31,7 @@ export function ProxiesScreen() {
       next.delete(row.proxyId);
       return next;
     });
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     if (result.data.ok) toast.success(`«${row.name}» работает`, { description: result.data.message });
     else toast.error(`«${row.name}» не отвечает`, { description: result.data.message });
     reload();

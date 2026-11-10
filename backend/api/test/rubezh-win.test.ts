@@ -21,7 +21,7 @@ import { RunsService } from "../src/modules/runs/runs.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 
 /**
  * Рубеж на сервере (T-0121, Р102, Р105): форма итога, словарь событий, цифры,
@@ -68,7 +68,7 @@ function world() {
   hooks.onRecorded("test", async (run) => {
     recorded.push(run);
   });
-  const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating);
+  const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
   const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   return { accounts, runs, board, rating, rolesRepository, restrictions, service, view, recorded };
 }

@@ -16,6 +16,9 @@ export interface DevUrlOptions {
   ground: "map" | "light";
 }
 
+/** Особый id `?fx=`: страница рендера звуков (`pnpm fx:sound`), а не сцена стенда. */
+export const FX_SOUND_PAGE = "sound";
+
 const LOCAL_HOSTS: ReadonlySet<string> = new Set(["localhost", "127.0.0.1"]);
 /** Забегу нужен старт из листа, а стресс-тесту — своя подготовка: адресом их не открыть. */
 const NOT_OPENABLE: ReadonlySet<ScreenId> = new Set<ScreenId>(["run", "stress"]);
@@ -50,7 +53,7 @@ export function readDevUrl(href: string, isDev: boolean): DevUrlOptions {
   const rawFx = url.searchParams.get("fx");
   let fx: string | null = null;
   if (rawFx !== null && rawFx !== "") {
-    if (fxScene(rawFx) !== null) fx = rawFx;
+    if (rawFx === FX_SOUND_PAGE || fxScene(rawFx) !== null) fx = rawFx;
     else console.warn(`неизвестная сцена эффекта: ${rawFx}`);
   }
   const ground = url.searchParams.get("ground") === "light" ? "light" : "map";

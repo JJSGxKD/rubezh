@@ -398,7 +398,7 @@ describe("знак «Тестер» в рейтинге", () => {
   const STRANGER = randomUUID();
 
   function best(accountId: string, patch: Partial<BestRunRow> = {}): BestRunRow {
-    return { accountId, displayName: `Игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: 300, level: 7, startingWeaponId: "knife", enemiesKilled: 90, ...patch };
+    return { accountId, displayName: `Игрок ${accountId.slice(0, 4)}`, photoUrl: null, survivalSec: 300, points: 300, style: null, level: 7, startingWeaponId: "knife", enemiesKilled: 90, ...patch };
   }
 
   function viewOf(rows: BestRunRow[], options: { shadow?: BestRunRow | null; hold?: "silent" | null } = {}): RunsViewService {
@@ -431,7 +431,7 @@ describe("знак «Тестер» в рейтинге", () => {
 
     const { entries } = await view.leaderboardFor(ME, "hard");
 
-    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "prestige", "rank", "startingWeaponId", "survivalSec", "tester"]);
+    expect(Object.keys(entries[0] ?? {}).sort()).toEqual(["enemiesKilled", "isMe", "level", "name", "photoUrl", "points", "prestige", "rank", "startingWeaponId", "style", "survivalSec", "tester"]);
   });
 
   it("игрок в тени видит себя со знаком, если он тестер", async () => {

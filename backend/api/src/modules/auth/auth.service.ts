@@ -104,7 +104,7 @@ export class AuthService {
     const tokens = await this.issue(account, nowMs);
     // Параметр — из подписи, а не из тела запроса: подменить его значит
     // сломать подпись (docs/33-telegram-mini-app-pitfalls.md §5.2).
-    const startParam = parseStartParam(check.startParam);
+    const startParam = parseStartParam(check.startParam, "miniapp");
     this.announce(account, "miniapp", startParam, context, nowMs);
     return { ...tokens, account, startParam };
   }
@@ -148,7 +148,8 @@ export class AuthService {
       nowMs,
     );
     if (account.bannedAt !== null) return account;
-    this.announce(account, "channel", parseStartParam(entry.startParam), PLAIN_LOGIN, nowMs);
+    // `/start` бота — до 64 знаков, не 512, как у Mini App (Р121).
+    this.announce(account, "channel", parseStartParam(entry.startParam, "bot"), PLAIN_LOGIN, nowMs);
     return account;
   }
 

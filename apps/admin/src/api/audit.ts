@@ -123,6 +123,7 @@ const ACTION_TITLES: Record<string, string> = {
   "home.slides.reorder": "Порядок слайдов главной",
   "links.create": "Новая ссылка",
   "links.retarget": "Смена цели ссылки",
+  "links.postback.set": "Адрес постбэка ссылки",
   "links.rename": "Название источника",
   "links.hide": "Скрытие источника",
   "links.unhide": "Возврат источника в список",
@@ -338,6 +339,8 @@ const FIELD_TITLES: Record<string, string> = {
   perMonth: "лимит в месяц",
   used: "израсходовано",
   month: "месяц",
+  postback: "адрес постбэка",
+  postbackUrl: "адрес постбэка",
 };
 
 export function fieldTitle(key: string): string {

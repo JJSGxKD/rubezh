@@ -192,11 +192,13 @@ export class RemindersScanner implements OnApplicationBootstrap, OnModuleDestroy
    * строки уже записаны.
    */
   private async overtakenOffers(season: Season, day: string, difficulty: Difficulty, offer: (target: ReminderTarget, reminder: Reminder) => void): Promise<{ difficulty: Difficulty; entries: SnapshotEntry[] }> {
-    const top = await this.board.top(season.key, difficulty, SNAPSHOT_TOP);
-    const entries = top.map((entry, index) => ({ accountId: entry.accountId, rank: index + 1, score: entry.survivalSec }));
+    // Сезон по очкам лежит в Redis под своим ключом (T-0294).
+    const boardKey = this.schedule.boardSeason(season).key;
+    const top = await this.board.top(boardKey, difficulty, SNAPSHOT_TOP);
+    const entries = top.map((entry, index) => ({ accountId: entry.accountId, rank: index + 1, score: entry.score }));
     const before = await this.store.readSnapshot(season.key, difficulty);
     if (before === null) return { difficulty, entries };
-    const hits = overtaken(before, await this.currentPlaces(season.key, difficulty, before));
+    const hits = overtaken(before, await this.currentPlaces(boardKey, difficulty, before));
     if (hits.length === 0) return { difficulty, entries };
     const places = new Map(hits.map((hit) => [hit.accountId, hit.place]));
     for (const target of await this.repository.reachable(hits.map((hit) => hit.accountId))) {

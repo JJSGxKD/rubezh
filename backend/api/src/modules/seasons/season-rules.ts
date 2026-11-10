@@ -1,5 +1,6 @@
 import { DIFFICULTY_REWARD_MUL } from "../progress/progress-rules.js";
 import type { Board } from "../runs/leaderboard.store.js";
+import type { Scoring } from "../rating/rating-switch.js";
 import type { Difficulty } from "../runs/run-rules.js";
 
 /**
@@ -104,6 +105,17 @@ export function parseStartDate(value: number): Date | null {
 /** Сколько игроков должно быть на сложности, чтобы места в её таблице награждались. */
 export const MIN_BOARD = 10;
 
+/**
+ * По чему ранжирован сезон и с какого числа даётся награда участника
+ * (tasks/T-0294). Сезон по очкам берёт порог в очках из настройки
+ * `rating.season-threshold-points`, сезон по времени — секунды `THRESHOLD_SEC`.
+ * Лестница мест от режима не зависит.
+ */
+export interface PrizeRules {
+  scoring: Scoring;
+  thresholdPoints: number;
+}
+
 /** Порог времени, секунды: дотянул хоть на одной сложности — награда всем. */
 export const THRESHOLD_SEC: Record<Difficulty, number> = { easy: 180, normal: 150, hard: 90 };
 
@@ -167,7 +179,7 @@ export function assertInGameReward(reward: Record<string, unknown>): asserts rew
   }
 }
 
-/** Лучшее время аккаунта за неделю на одной сложности — вход в `standings`. */
+/** Лучший счёт аккаунта за неделю на одной сложности (секунды или очки сезона) — вход в `standings`. */
 export interface StandingEntry {
   accountId: string;
   bestSec: number;
@@ -204,8 +216,8 @@ export function standings(entries: readonly StandingEntry[], separate: ReadonlyS
   return { common: rank(entries.filter((entry) => !separate.has(entry.accountId))), full: rank(entries) };
 }
 
-export function thresholdReached(difficulty: Difficulty, bestSec: number): boolean {
-  return bestSec >= THRESHOLD_SEC[difficulty];
+export function thresholdReached(difficulty: Difficulty, bestSec: number, rules?: PrizeRules): boolean {
+  return bestSec >= (rules?.scoring === "points" ? rules.thresholdPoints : THRESHOLD_SEC[difficulty]);
 }
 
 /** Награда за место; `null` — места не награждаются: вне лестницы или таблица меньше `MIN_BOARD`. */
@@ -220,6 +232,7 @@ export function placeReward(place: number, boardSize: number, difficulty: Diffic
 /** Итог аккаунта на одной сложности после закрытия сезона. */
 export interface SeasonResultLine {
   difficulty: Difficulty;
+  /** лучший счёт недели: секунды в сезоне по времени, очки в сезоне по очкам */
   bestSec: number;
   place: number;
   boardSize: number;
@@ -235,9 +248,10 @@ export interface SeasonPrize extends Reward {
 /**
  * Единственная награда аккаунта за сезон. Награда за место заменяет награду
  * за порог и берётся с той сложности, где она больше, — не суммой по трём.
- * Ограничение рейтинга проверяет вызывающий: правила его не знают.
+ * Ограничение рейтинга проверяет вызывающий: правила его не знают. Без `rules`
+ * сезон считается по времени.
  */
-export function rewardFor(results: readonly SeasonResultLine[]): SeasonPrize | null {
+export function rewardFor(results: readonly SeasonResultLine[], rules?: PrizeRules): SeasonPrize | null {
   let best: SeasonPrize | null = null;
   for (const line of results) {
     const reward = placeReward(line.place, line.boardSize, line.difficulty);
@@ -246,7 +260,7 @@ export function rewardFor(results: readonly SeasonResultLine[]): SeasonPrize | n
     if (best === null || isBigger(candidate, best)) best = candidate;
   }
   if (best !== null) return best;
-  if (results.some((line) => thresholdReached(line.difficulty, line.bestSec))) return { kind: "threshold", difficulty: null, place: null, ...THRESHOLD_REWARD };
+  if (results.some((line) => thresholdReached(line.difficulty, line.bestSec, rules))) return { kind: "threshold", difficulty: null, place: null, ...THRESHOLD_REWARD };
   return null;
 }
 

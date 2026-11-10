@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { clickDeepTarget, clickTarget, directUrl, LINK_TARGETS } from "../src/modules/links/link-targets.js";
 
 /**
@@ -8,7 +8,8 @@ import { clickDeepTarget, clickTarget, directUrl, LINK_TARGETS } from "../src/mo
  */
 
 const builders = {
-  launch: (param: string) => `https://t.me/rubezh_bot?startapp=${encodeURIComponent(param)}`,
+  // Хвост меток дописывается как есть: `{campaign_id}` кодировать нельзя, сеть ищет макрос буквально.
+  launch: (param: string, rawTail?: string) => `https://t.me/rubezh_bot?startapp=${encodeURIComponent(param)}${rawTail ?? ""}`,
   chat: (param: string) => `https://t.me/rubezh_bot?start=${encodeURIComponent(param)}`,
   landingBase: "https://rubezh.example",
 };
@@ -61,12 +62,35 @@ describe("прямая ссылка", () => {
     expect(directUrl(link("landing"), builders)).toBe("https://rubezh.example/?l=AbC123xyz9");
   });
 
-  it("у ссылки с сетью прямой ссылки нет, какая бы ни была цель: макросы клика пишет только переходник", () => {
-    for (const target of LINK_TARGETS) expect(directUrl(link(target, "adsgram"), builders), target).toBeNull();
+  it("у ссылки сети с целью app — прямая ссылка на Mini App с кодом, метками и record последним, макросы без кодирования (T-0181)", () => {
+    const url = directUrl(link("app", "adsgram"), builders);
+    expect(url).toBe("https://t.me/rubezh_bot?startapp=l-AbC123xyz9_campaign-{campaign_id}_clickid-{click_id}_record-{record_data}");
+    expect(url).not.toContain("%7B");
+    expect(url?.endsWith("_record-{record_data}")).toBe(true);
+  });
+
+  it("у ссылки сети с целью bot или landing прямой ссылки нет: в /start метки не уложить, у лендинга параметра запуска нет", () => {
+    expect(directUrl(link("bot", "adsgram"), builders)).toBeNull();
+    expect(directUrl(link("landing", "adsgram"), builders)).toBeNull();
+  });
+
+  it("сеть, о которой сервер не знает, — прямой ссылки нет при любой цели", () => {
+    for (const target of LINK_TARGETS) expect(directUrl(link(target, "future-net"), builders), target).toBeNull();
+  });
+
+  it("ссылка без сети: все три цели как раньше, хвост меток не передаётся", () => {
+    const launch = vi.fn((param: string) => `https://t.me/rubezh_bot?startapp=${encodeURIComponent(param)}`);
+    const spy = { ...builders, launch };
+    expect(directUrl(link("app"), spy)).toBe("https://t.me/rubezh_bot?startapp=l-AbC123xyz9");
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch.mock.calls[0]).toEqual(["l-AbC123xyz9"]);
+    expect(directUrl(link("bot"), spy)).toBe("https://t.me/rubezh_bot?start=l-AbC123xyz9");
+    expect(directUrl(link("landing"), spy)).toBe("https://rubezh.example/?l=AbC123xyz9");
   });
 
   it("построитель вернул null — прямой ссылки нет", () => {
     expect(directUrl(link("app"), notReady)).toBeNull();
+    expect(directUrl(link("app", "adsgram"), notReady)).toBeNull();
     expect(directUrl(link("bot"), notReady)).toBeNull();
     expect(directUrl(link("landing"), { ...builders, landingBase: "" })).toBeNull();
   });

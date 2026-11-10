@@ -31,7 +31,7 @@ import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js"
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
-import { MemoryLeaderboardStore, ratingRestrictions } from "./helpers/memory-runs.js";
+import { MemoryLeaderboardStore, ratingRestrictions, secondsScore, survivalScorer } from "./helpers/memory-runs.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 import { panelSettings } from "./helpers/settings.js";
 
@@ -111,6 +111,7 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
       verdictReasons: [],
       rubezhReached: false,
       rubezhClearedSec: null,
+      score: secondsScore(survivalSec),
       ...patch,
     };
   }
@@ -250,9 +251,9 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
       expect((await runs.bestRuns([id], "hard", SINCE)).map((row) => row.survivalSec)).toEqual([300]);
       expect(await runs.bestRuns([id], "easy", SINCE)).toEqual([]);
 
-      expect((await runs.bestTimes("hard", SINCE)).find((row) => row.accountId === id)?.survivalSec).toBe(300);
-      expect(await runs.bestTimes("easy", SINCE)).toEqual([]);
-      expect(await runs.bestTimes("normal", SINCE)).toEqual([]);
+      expect((await runs.bestScores("hard", SINCE)).find((row) => row.accountId === id)?.score).toBe(300);
+      expect(await runs.bestScores("easy", SINCE)).toEqual([]);
+      expect(await runs.bestScores("normal", SINCE)).toEqual([]);
 
       expect((await runs.moderationRuns(id, "hard", 10, SINCE)).map((row) => row.runId).sort()).toEqual([newHard.runId, atCutoff.runId].sort());
       expect(await runs.moderationRuns(id, "easy", 10, SINCE)).toEqual([]);
@@ -286,7 +287,7 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
     async function boot(board: MemoryLeaderboardStore, settings = panelSettings({ [SETTINGS.ratingSinceDate.key]: SINCE_NUMBER })) {
       const rating = ratingRestrictions(runs, board, undefined, settings);
       const roles = new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository());
-      const service = new RunsService(config, runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating);
+      const service = new RunsService(config, runs, board, roles, new RunsHooks(), new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
       const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
       @Module({
         controllers: [RunsController],
@@ -337,7 +338,7 @@ describe.skipIf(DATABASE_URL === "")("единая сложность на жи�
       const body = hard.json<{ data: LeaderboardView }>().data;
       expect(body.difficultyId).toBe("hard");
       expect(body.entries[0]).toMatchObject({ rank: 1, survivalSec: 70_000, isMe: true });
-      expect(body.me).toEqual({ rank: 1, survivalSec: 70_000 });
+      expect(body.me).toMatchObject({ rank: 1, survivalSec: 70_000 });
       expect(JSON.stringify(body)).not.toContain("80000");
       expect(JSON.stringify(body)).not.toContain("85000");
       expect(JSON.stringify(body)).not.toContain(early);

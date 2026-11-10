@@ -113,6 +113,7 @@ export const runFinishSchema = z
         bossKills: z.number().int().min(0).max(1_000_000).optional(),
         eliteKills: z.number().int().min(0).max(1_000_000).optional(),
         chestsOpened: z.number().int().min(0).max(1_000_000).optional(),
+        rareChests: z.number().int().min(0).max(1_000_000).optional(),
         crystals: z.number().int().min(0).max(10_000_000).optional(),
         // Серии и убийства по стихиям для достижений (tasks/T-0321): потолок — сутки, как у секунд забега;
         // физических убийств в словаре нет. Старые сборки полей не шлют.
@@ -131,6 +132,8 @@ export const runFinishSchema = z
           .max(64)
           .optional(),
         buildScore: z.number().min(0).max(64).optional(),
+        // Сила игрока на старте (очки подстройки): по ней сервер берёт полосу ожидаемого. Потолок формы; нет поля — полоса средняя.
+        power: z.number().min(0).max(1_000).optional(),
       })
       .optional(),
   })

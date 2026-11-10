@@ -45,6 +45,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/payments",
       "/api/v1/shop",
       "/api/v1/vip",
+      "/api/v1/donations",
       "/api/v1/wallet",
       "/api/v1/items",
       "/api/v1/boosts",
@@ -55,6 +56,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/tasks",
       "/api/v1/achievements",
       "/api/v1/seasons",
+      "/api/v1/rating",
       "/api/v1/promo-codes",
       "/api/v1/ads",
       "/api/v1/tools",
@@ -68,6 +70,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/media",
       "/api/v1/client",
       "/api/v1/csp-reports",
+      "/api/v1/online",
     ].map((prefix) => [
       prefix,
       { target: apiTarget, changeOrigin: true },

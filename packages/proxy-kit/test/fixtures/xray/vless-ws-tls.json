@@ -21,7 +21,7 @@
       "protocol": "blackhole"
     },
     {
-      "tag": "out-{{KEY}}",
+      "tag": "out-main-{{KEY}}",
       "protocol": "vless",
       "settings": {
         "vnext": [
@@ -68,7 +68,7 @@
         "inboundTag": [
           "in-0"
         ],
-        "outboundTag": "out-{{KEY}}"
+        "outboundTag": "out-main-{{KEY}}"
       }
     ]
   }

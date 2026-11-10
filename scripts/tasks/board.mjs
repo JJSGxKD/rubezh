@@ -1,3 +1,4 @@
+import { attemptOf, currentBranchOf, taskBranch } from "./branch.mjs";
 import { BATCH_RE, EFFORTS, EXECUTORS, batchNumber } from "./task-file.mjs";
 import { zonesOverlap } from "./zones.mjs";
 
@@ -160,7 +161,7 @@ export function aheadCheck(task, tasks, prs, { atClaim = true } = {}) {
     const dependency = byId.get(id);
     if (dependency?.status === "done") continue;
     unclosed.push(id);
-    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(`task/${id}`), prs !== null, atClaim);
+    const problem = aheadDependencyProblem(id, dependency, prByBranch.get(dependency === undefined ? taskBranch(id) : currentBranchOf(dependency)), prs !== null, atClaim);
     if (problem !== null) problems.push(problem);
   }
   return { unclosed, problems };
@@ -174,7 +175,7 @@ export function aheadCheck(task, tasks, prs, { atClaim = true } = {}) {
 function closedWithoutMerge(dependency, branches, openPrs) {
   if (dependency === undefined || dependency.status === "done") return false;
   if (dependency.status === "cancelled") return true;
-  const live = branches.has(dependency.id) || openPrs.has(`task/${dependency.id}`);
+  const live = branches.has(dependency.id) || openPrs.has(currentBranchOf(dependency));
   return (dependency.status === "ready" || dependency.status === "in-progress") && !live;
 }
 
@@ -182,16 +183,24 @@ function closedWithoutMerge(dependency, branches, openPrs) {
  * Раскладывает задачи по колонкам.
  *
  * - `tasks` — поля задач с `fileName` (как в `readTasks`);
- * - `taken` — id задач, у которых на `origin` есть ветка `task/T-NNNN`;
+ * - `taken` — id задач, у которых на `origin` есть ветка текущей попытки (`task/T-NNNN` или `task/T-NNNN-N`);
  * - `prs` — открытые PR `{ number, headRefName, isDraft, labels?, body?, statusCheckRollup? }`
  *   или `null`, если список получить не удалось (нет `gh`): тогда «На ревью» сливается с
  *   «В работе». Колонку PR задаёт `prStatus` (метка, Р172): «в работе» — «В работе» (с номером
  *   PR), «доработка» — «Доработка», «на ревью» и «ждёт владельца» — «На ревью», «задел» — «Задел»;
  *   ветка без PR — «В работе». У записей «На ревью» и «Доработка» есть `waiting` — результат `waitingOn`;
  * - `repoFiles` — файлы репозитория для пересечения зон;
- * - `epicOrder` — эпики в порядке `epics.md`.
+ * - `epicOrder` — эпики в порядке `epics.md`;
+ * - `abandoned` — id задач с брошенным захватом (T-0371, `isAbandonedClaim`): ветка без работы
+ *   дольше суток. Такая задача не «в работе» и зон не держит: она в «Свободно» (или в той колонке,
+ *   куда ведут её зависимости) с `abandoned: true`, её можно перехватить;
+ * - `previousWork` — `Map<id, ветка>` (Р195): у задачи с попыткой от 2 в ветке прежней попытки есть работа
+ *   кроме захвата. Такая ждущая задача получает `previousBranch` — подсказку `--from` для `pnpm task next`.
  *
- * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith? }] }`,
+ * Занята задача только веткой **текущей** попытки (`attempt` в шапке, Р195): ветка прежней попытки
+ * (`taken` её не содержит) ничего не держит, и открытый PR из неё — не PR задачи.
+ *
+ * Возвращает `{ <колонка>: [{ task, reason?, pr?, waitingFor?, busyWith?, abandoned? }] }`,
  * внутри колонки порядок: пачка, приоритет, эпик, id. У заблокированных `waitingFor` —
  * id недоделанных зависимостей, `busyWith` — id задач, чьи зоны заняты.
  *
@@ -201,7 +210,7 @@ function closedWithoutMerge(dependency, branches, openPrs) {
  * `aheadFree` с `aheadOver` (поверх каких зависимостей). Задел, чью зависимость закрыли без
  * мерджа, уходит в `blocked` с причиной.
  */
-export function classify(tasks, taken, prs, repoFiles, epicOrder) {
+export function classify(tasks, taken, prs, repoFiles, epicOrder, abandoned = new Set(), previousWork = new Map()) {
   const branches = new Set(taken);
   const openPrs = new Map((prs ?? []).map((pr) => [pr.headRefName, pr]));
   const byId = new Map(tasks.map((task) => [task.id, task]));
@@ -212,8 +221,8 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
     if (task.status === "done") result.done.push({ task });
     else if (task.status === "cancelled") result.cancelled.push({ task });
     else if (task.status === "draft") result.draft.push({ task });
-    else if (branches.has(task.id)) {
-      const pr = openPrs.get(`task/${task.id}`);
+    else if (branches.has(task.id) && !(abandoned.has(task.id) && !openPrs.has(currentBranchOf(task)))) {
+      const pr = openPrs.get(currentBranchOf(task));
       if (pr === undefined) result.inProgress.push({ task });
       else {
         const status = prStatus(pr);
@@ -228,7 +237,7 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
           } else result.ahead.push({ task, pr: pr.number, ripe: waitingFor.length === 0, waitingFor });
         } else result.review.push({ task, pr: pr.number, waiting: waitingOn(pr) });
       }
-    } else if (task.status === "in-progress") {
+    } else if (task.status === "in-progress" && !abandoned.has(task.id)) {
       // На dev этот статус не живёт (tasks/README.md, «Состояния»); без ветки
       // задачу всё равно считаем занятой — статус в файле говорит, что её взяли.
       result.inProgress.push({ task });
@@ -246,6 +255,10 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
   ];
 
   for (const task of waiting) {
+    const mark = {
+      ...(abandoned.has(task.id) ? { abandoned: true } : {}),
+      ...(previousWork.has(task.id) ? { previousBranch: previousWork.get(task.id) } : {}),
+    };
     const reasons = [];
     // Те же причины списками id — из них собирается значок статуса, текст не разбирается обратно.
     const waitingFor = [];
@@ -266,16 +279,25 @@ export function classify(tasks, taken, prs, repoFiles, epicOrder) {
         busyWith.push(other.task.id);
       }
     }
-    if (reasons.length === 0) result.free.push({ task });
+    if (reasons.length === 0) result.free.push({ task, ...mark });
     else if (busyWith.length === 0 && waitingFor.length > 0 && aheadCheck(task, tasks, prs).problems.length === 0) {
       // Все зависимости ждут ревью, зоны свободны: задачу можно начать заделом (Р178).
-      result.aheadFree.push({ task, aheadOver: waitingFor });
-    } else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith });
+      result.aheadFree.push({ task, aheadOver: waitingFor, ...mark });
+    } else result.blocked.push({ task, reason: reasons.join("; "), waitingFor, busyWith, ...mark });
   }
 
   const compare = compareTasks(epicOrder);
   for (const entries of Object.values(result)) entries.sort(compare);
   return result;
+}
+
+/**
+ * Подсказка в строке `pnpm task next` (Р195): у задачи с попыткой от 2 в ветке прежней попытки
+ * есть работа кроме захвата. `undefined` — подсказывать нечего.
+ */
+export function previousAttemptNote(entry) {
+  if (entry.previousBranch === undefined) return undefined;
+  return `попытка ${String(attemptOf(entry.task))}, работа прежней попытки — ${entry.previousBranch} (--from)`;
 }
 
 /**
@@ -611,7 +633,7 @@ export function flowPrompt({ account, executor, effort, runner }) {
     `своей модели и уровня — pnpm task next --executor ${executor} --effort ${effort}${runnerFlag},`,
     "доработку первой (pnpm task resume), иначе pnpm task claim T-NNNN",
     `--owner "${account} / ${executor} / ${effort}". Делай строго по спецификации,`,
-    "только в ветке task/T-NNNN, в описании PR — строки Поток и Запустил, в dev и main не пушь, PR не вливай — вливают",
+    "только в ветке task/T-NNNN (после снятия захвата — task/T-NNNN-N), в описании PR — строки Поток и Запустил, в dev и main не пушь, PR не вливай — вливают",
     "тимлиды. Неясно — черновик PR с разделом «Вопросы» и цитатой строки",
     "спецификации, независимые шаги продолжай. PR открыт — сразу следующая",
     "задача, ответа не жди: закончит PR тот поток, что первым возьмёт его на",

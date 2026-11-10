@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-65 -65 130 130"><defs><filter id="srim" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+<feMorphology in="SourceAlpha" operator="dilate" radius="1.68" result="d"/>
+<feFlood flood-color="#e6e0ff"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="42" rx="30" ry="8" fill="#0b0816" opacity="0.6"/><ellipse cx="0" cy="42" rx="34" ry="9.5" fill="none" stroke="#e6e0ff" stroke-width="1.6" opacity="0.6"/><g filter="url(#srim)" opacity="1">
+<path d="M-28 22.5 L-20.8 34.5 L-18.7 22.5 L-14.3 30.3 L-9.3 22.5 L-7.1 34.5 L0 22.5 L5.6 30.3 L9.3 22.5 L16.2 34.5 L18.7 22.5 L21.8 30.3 L28 22.5 L28 18.5 L-28 18.5 Z" fill="#150f24" opacity="1"/><path d="M-28 29.1 L-20.8 38.7 L-18.7 29.1 L-14.3 35.3 L-9.3 29.1 L-7.1 38.7 L0 29.1 L5.6 35.3 L9.3 29.1 L16.2 38.7 L18.7 29.1 L21.8 35.3 L28 29.1 L28 25.1 L-28 25.1 Z" fill="#150f24" opacity="0.6"/><path d="M-28 35.7 L-20.8 42.9 L-18.7 35.7 L-14.3 40.4 L-9.3 35.7 L-7.1 42.9 L0 35.7 L5.6 40.4 L9.3 35.7 L16.2 42.9 L18.7 35.7 L21.8 40.4 L28 35.7 L28 31.7 L-28 31.7 Z" fill="#150f24" opacity="0.3"/>
+<path d="M34 40 L32 -41.5 Q32 -53.5 22 -51.5" fill="none" stroke="#4d4170" stroke-width="3.6" stroke-linecap="round"/>
+<path d="M28 -57.5 l4 -8 l4 8 l-4 5 Z" fill="#cfe9ff"/>
+<clipPath id="c1"><path d="M-26 26.5 L-18 -19.5 Q-14 -35.5 -2 -47.5 L4 -57.5 L10 -45.5 Q20 -31.5 20 -15.5 L26 26.5 Z"/></clipPath>
+<g fill="#150f24"><path d="M-26 26.5 L-18 -19.5 Q-14 -35.5 -2 -47.5 L4 -57.5 L10 -45.5 Q20 -31.5 20 -15.5 L26 26.5 Z"/></g>
+<g clip-path="url(#c1)"><g fill="#241c38" transform="translate(-3 -3)"><path d="M-26 26.5 L-18 -19.5 Q-14 -35.5 -2 -47.5 L4 -57.5 L10 -45.5 Q20 -31.5 20 -15.5 L26 26.5 Z"/></g></g>
+<path d="M-12 -13.5 Q-16 4.5 -20 24.5 M6 -1.5 Q8 12.5 6 26.5" fill="none" stroke="#4d4170" stroke-width="2.4" opacity="0.6"/>
+<path d="M-4 -41.5 Q4 -47.5 14 -37.5 Q16 -29.5 12 -23.5 L-4 -23.5 Q-8 -31.5 -4 -41.5 Z" fill="#0b0816"/>
+<circle cx="3" cy="-33.5" r="4.6" fill="#f6f3ff" opacity="0.3"/><circle cx="3" cy="-33.5" r="1.9" fill="#f6f3ff"/><circle cx="10" cy="-32.5" r="3.8" fill="#f6f3ff" opacity="0.3"/><circle cx="10" cy="-32.5" r="1.6" fill="#f6f3ff"/>
+<g fill="#cfe9ff"><path d="M-6 -23.5 L-3.5 -14.5 L-1 -23.5 Z"/><path d="M-1 -23.5 L1.5 -8.5 L4 -23.5 Z"/><path d="M4 -23.5 L6.5 -14.5 L9 -23.5 Z"/><path d="M9 -23.5 L11.5 -8.5 L14 -23.5 Z"/><path d="M14 -23.5 L16.5 -14.5 L19 -23.5 Z"/><path d="M-6 -45.5 l2 -6 l2 6 Z"/><path d="M0 -49.5 l2 -10 l2 10 Z"/><path d="M6 -45.5 l2 -6 l2 6 Z"/><path d="M12 -45.5 l2 -10 l2 10 Z"/></g>
+<path d="M18 -13.5 Q26 -15.5 33 -19.5" fill="none" stroke="#150f24" stroke-width="6" stroke-linecap="round"/>
+<circle cx="33" cy="-19.5" r="3.4" fill="#4d4170"/>
+<path d="M-20 8.5 l-5 3 M-22 16.5 l-6 2 M-16 0.5 l-5 1" stroke="#cfe9ff" stroke-width="1.6" stroke-linecap="round" opacity="0.8"/></g></svg>

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { REVIEW_LABEL, REWORK_LABEL, STATUS_LABELS, WORK_LABEL } from "../tasks/board.mjs";
+import { parseTaskBranch } from "../tasks/branch.mjs";
 import { viewPr } from "./git.mjs";
 
 /**
@@ -12,8 +13,6 @@ import { viewPr } from "./git.mjs";
  * Логика — чистая функция `planStatusLabels`: что поставить и снять по событию.
  * CLI внизу — тонкая обвязка над `gh`, тестами не покрыта (читает живой PR).
  */
-
-const TASK_BRANCH_RE = /^task\/T-\d{4}$/;
 
 /**
  * Что сделать с метками по событию: `{ add, remove }` — списки имён, оба могут
@@ -29,7 +28,7 @@ const TASK_BRANCH_RE = /^task\/T-\d{4}$/;
  */
 export function planStatusLabels({ headRef, eventName, action, labels, labelName, reviewState }) {
   const none = { add: [], remove: [] };
-  if (!TASK_BRANCH_RE.test(headRef ?? "")) return none;
+  if (parseTaskBranch(headRef) === null) return none;
   const statuses = labels.filter((label) => STATUS_LABELS.includes(label));
 
   if (eventName === "pull_request_review") {

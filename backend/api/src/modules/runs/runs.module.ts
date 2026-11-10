@@ -1,10 +1,12 @@
 import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { RatingModule } from "../rating/rating.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { LEADERBOARD_STORE, RedisLeaderboardStore } from "./leaderboard.store.js";
 import { PROLOGUE_STORE, PrologueService, PrismaPrologueStore } from "./prologue.service.js";
+import { LeaderboardWarmup } from "./leaderboard-warmup.js";
 import { RatingRestrictions } from "./rating-restrictions.js";
 import { RunsController } from "./runs.controller.js";
 import { PrismaRunsRepository, RUNS_REPOSITORY } from "./runs.repository.js";
@@ -39,7 +41,7 @@ import { RunsViewService } from "./runs-view.service.js";
  * экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule],
+  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule],
   controllers: [RunsController, RunAdContinueController, RunGemContinueController],
   providers: [
     RunsService,
@@ -54,6 +56,7 @@ import { RunsViewService } from "./runs-view.service.js";
     RunPrestige,
     RunExtras,
     RatingRestrictions,
+    LeaderboardWarmup,
     RunProofsService,
     RunProofsCleanupJob,
     { provide: RUN_PROOFS_REPOSITORY, useClass: PrismaRunProofsRepository },

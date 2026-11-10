@@ -2,7 +2,7 @@ import { SubscriptionFetchError, SubscriptionFormatError, type SkipReason, type 
 
 /**
  * Тексты итога обновления подписки (`lastRefreshNote`, docs/35-stage4-plan.md
- * Р101). В них нет ни адреса подписки, ни куска ссылки узла, ни текста
+ * Р101, Р192). В них нет ни адреса подписки, ни куска ссылки узла, ни текста
  * исключения: адрес секретный целиком, а исключение сети его цитирует.
  */
 
@@ -69,10 +69,10 @@ export function noNodesNote(skipped: readonly SkippedLink[]): string {
   return clip(skipped.length === 0 ? base : `${base}: пропущено ${String(skipped.length)} (${skippedBreakdown(skipped)})`);
 }
 
-/** Входов Xray не хватило на все узлы. */
-export function overflowNote(count: number): string {
+/** Входов Xray не хватило на все узлы: на подписку приходится `quota` входов (поровну между подписками). */
+export function overflowNote(count: number, quota: number): string {
   const verb = count === 1 ? "не подключён" : "не подключены";
-  return `Не хватило входов: ${nodesWord(count)} ${verb} — увеличьте XRAY_SLOT_COUNT`;
+  return `Не хватило входов: ${nodesWord(count)} ${verb} — на подписку приходится ${String(quota)} ${plural(quota, "вход", "входа", "входов")}; увеличьте XRAY_SLOT_COUNT или удалите лишние подписки`;
 }
 
 export const joinNotes = (...parts: string[]): string => clip(parts.join(". "));

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-57.5 -57.5 115 115"><defs><filter id="srim" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+<feMorphology in="SourceAlpha" operator="dilate" radius="1.68" result="d"/>
+<feFlood flood-color="#e6e0ff"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="42" rx="30" ry="8" fill="#0b0816" opacity="0.6"/><ellipse cx="0" cy="42" rx="34" ry="9.5" fill="none" stroke="#e6e0ff" stroke-width="1.6" opacity="0.6"/><g filter="url(#srim)" opacity="1">
+<path d="M-26 24.5 L-19.2 37.5 L-17.3 24.5 L-13.3 33 L-8.7 24.5 L-6.8 37.5 L0 24.5 L5.3 33 L8.7 24.5 L15.2 37.5 L17.3 24.5 L20.2 33 L26 24.5 L26 20.5 L-26 20.5 Z" fill="#150f24" opacity="1"/><path d="M-26 31.7 L-19.2 42.1 L-17.3 31.7 L-13.3 38.4 L-8.7 31.7 L-6.8 42.1 L0 31.7 L5.3 38.4 L8.7 31.7 L15.2 42.1 L17.3 31.7 L20.2 38.4 L26 31.7 L26 27.7 L-26 27.7 Z" fill="#150f24" opacity="0.6"/><path d="M-26 38.8 L-19.2 46.6 L-17.3 38.8 L-13.3 43.9 L-8.7 38.8 L-6.8 46.6 L0 38.8 L5.3 43.9 L8.7 38.8 L15.2 46.6 L17.3 38.8 L20.2 43.9 L26 38.8 L26 34.8 L-26 34.8 Z" fill="#150f24" opacity="0.3"/>
+<clipPath id="c11"><path d="M-24 28.5 Q-30 -5.5 -14 -27.5 Q0 -45.5 14 -31.5 Q28 -9.5 24 28.5 Z"/></clipPath>
+<g fill="#150f24"><path d="M-24 28.5 Q-30 -5.5 -14 -27.5 Q0 -45.5 14 -31.5 Q28 -9.5 24 28.5 Z"/></g>
+<g clip-path="url(#c11)"><g fill="#241c38" transform="translate(-3 -3)"><path d="M-24 28.5 Q-30 -5.5 -14 -27.5 Q0 -45.5 14 -31.5 Q28 -9.5 24 28.5 Z"/></g></g>
+<path d="M-14 -21.5 Q-18 2.5 -16 24.5" fill="none" stroke="#4d4170" stroke-width="2.6" opacity="0.6"/>
+<path d="M-2 -33.5 Q8 -37.5 14 -27.5 Q14 -15.5 4 -11.5 Q-6 -15.5 -6 -25.5 Z" fill="#0b0816" stroke="#bf98ff" stroke-width="2"/>
+<path d="M4 -9.5 L1 2.5 L6 10.5 L2 20.5 L5 30.5" fill="none" stroke="#bf98ff" stroke-width="2.4" stroke-linejoin="round"/>
+<path d="M4 -9.5 L1 2.5 L6 10.5 L2 20.5 L5 30.5" fill="none" stroke="#bf98ff" stroke-width="7" stroke-linejoin="round" opacity="0.2"/>
+<circle cx="8" cy="-24.5" r="3.4" fill="#f6f3ff" opacity="0.3"/><circle cx="8" cy="-24.5" r="1.3" fill="#f6f3ff"/>
+<path d="M18 -7.5 Q36 2.5 38 16.5" fill="none" stroke="#150f24" stroke-width="5" stroke-linecap="round"/>
+<path d="M38 16.5 l4 5 M38 16.5 l0 7 M38 16.5 l-4 5" stroke="#e9e1cf" stroke-width="2" stroke-linecap="round"/></g></svg>

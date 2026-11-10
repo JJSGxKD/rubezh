@@ -79,6 +79,15 @@ describe("задачи и очки", () => {
     expect(rows[0]).toMatchObject({ tasks: 1, points: 1 });
   });
 
+  it("PR из ветки task/T-NNNN-2 засчитывается задаче T-NNNN: очки по её размеру (Р195)", () => {
+    const rows = rowsOf("today", { mergedPrs: [mergedPr({ headRefName: "task/T-0001-2" })] });
+    expect(rows).toEqual([{ who: "claude-3 · владелец", tasks: 1, points: 2, rework: 0, reviews: 0, specs: 0, leadPrs: 0 }]);
+  });
+
+  it("ветка task/T-NNNN-1 — не ветка задачи", () => {
+    expect(rowsOf("today", { mergedPrs: [mergedPr({ headRefName: "task/T-0001-1" })] })).not.toEqual([expect.objectContaining({ tasks: 1 })]);
+  });
+
   it("порядок строк: очки, затем ревью и ответы, затем имя", () => {
     const task = (number: number, id: string, account: string) => mergedPr({ number, headRefName: `task/${id}`, body: BODY.replace("claude-3", account) });
     const comment = (name: string) => ({ author: { login: "x" }, body: `**${name}:** ок`, createdAt: "2026-10-24T22:00:00Z" });
