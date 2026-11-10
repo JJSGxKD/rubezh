@@ -1,7 +1,10 @@
 import { Api, InputFile } from "grammy";
 import { z } from "zod";
 import { chatTargetOf, type ChatRef } from "../ports/chat-target.js";
-import { callBotApi } from "./telegram-api-call.js";
+import { callBotApi, chatFields, ephemeralFields, type Ephemeral } from "./telegram-api-call.js";
+import { TelegramRichApi } from "./telegram-rich-api.js";
+import { updateSchema, type TelegramUpdate } from "./telegram-update-schema.js";
+import { TelegramWidgetApi } from "./telegram-widget-api.js";
 
 /**
  * Методы Bot API, которые нужны боту, — поверх клиента grammY
@@ -28,11 +31,8 @@ import { callBotApi } from "./telegram-api-call.js";
  */
 export const TELEGRAM_BOT_API = Symbol("TELEGRAM_BOT_API");
 
-/** Поля запроса Bot API: тема добавляется, только когда она есть. */
-export function chatFields(ref: ChatRef): { chat_id: string; message_thread_id?: number } {
-  const target = chatTargetOf(ref);
-  return target.threadId === null ? { chat_id: target.chatId } : { chat_id: target.chatId, message_thread_id: target.threadId };
-}
+export { chatFields };
+export type { Ephemeral };
 
 /** Запас сверх long polling: Telegram держит запрос до `timeout` секунд и отвечает чуть позже. */
 const POLL_GRACE_MS = 10_000;
@@ -52,10 +52,20 @@ const PRE_CHECKOUT_TIMEOUT_MS = 5_000;
  * Остальное Telegram не шлёт вовсе.
  */
 /**
+ * `widget_query` и `shared_widget_query` — запросы из живых карточек (Bot API
+ * 10.4): без них в `allowed_updates` Telegram их не пришлёт.
  * `my_chat_member` — игрок заблокировал или разблокировал бота: без него
  * рассылка шла бы тем, кто нас уже не слушает (docs/35-stage4-plan.md, §3.10).
  */
-export const ALLOWED_UPDATES = ["message", "callback_query", "pre_checkout_query", "my_chat_member", "subscription"] as const;
+export const ALLOWED_UPDATES = [
+  "message",
+  "callback_query",
+  "pre_checkout_query",
+  "my_chat_member",
+  "subscription",
+  "widget_query",
+  "shared_widget_query",
+] as const;
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -66,18 +76,7 @@ type ReplyMarkup = { reply_markup?: { inline_keyboard: InlineButton[][] } };
 export type CommandsLanguage = "ru" | "en";
 
 export { TelegramApiError } from "./telegram-api-call.js";
-
-const userSchema = z.object({
-  id: z.number().int(),
-  is_bot: z.boolean(),
-  first_name: z.string().max(256).optional(),
-  last_name: z.string().max(256).optional(),
-  username: z.string().max(64).optional(),
-  language_code: z.string().max(16).optional(),
-  is_premium: z.boolean().optional(),
-});
-
-const chatSchema = z.object({ id: z.number().int(), type: z.string() });
+export { updateSchema, type TelegramUpdate, type TelegramUser } from "./telegram-update-schema.js";
 
 const chatInfoSchema = z.object({
   id: z.number().int(),
@@ -87,76 +86,6 @@ const chatInfoSchema = z.object({
   bio: z.string().max(512).optional(),
 });
 
-/**
- * Оплата и её возврат в Stars — сообщения от Telegram в личном чате с
- * игроком. Границы щедрые: обновление, не прошедшее схему, пропускается, а
- * пропущенная оплата — это звёзды без продолжения.
- */
-const paymentSchema = z.object({
-  currency: z.string().max(16),
-  total_amount: z.number().int(),
-  invoice_payload: z.string().max(256),
-  telegram_payment_charge_id: z.string().min(1).max(256),
-});
-
-export const updateSchema = z.object({
-  update_id: z.number().int(),
-  message: z
-    .object({
-      message_id: z.number().int(),
-      date: z.number().int(),
-      text: z.string().optional(),
-      chat: chatSchema,
-      /** тема супергруппы, если сообщение пришло из неё — ответ уходит туда же */
-      message_thread_id: z.number().int().optional(),
-      from: userSchema.optional(),
-      successful_payment: paymentSchema.optional(),
-      refunded_payment: paymentSchema.optional(),
-      /** служебное: игрок разрешил боту писать ему — из Mini App (`requestWriteAccess`) или при входе */
-      write_access_allowed: z.object({}).optional(),
-    })
-    .optional(),
-  /** игрок отменил или вернул продление подписки в Telegram, или очередное списание не прошло */
-  subscription: z
-    .object({
-      user: userSchema,
-      invoice_payload: z.string().max(256),
-      state: z.string().max(16),
-    })
-    .optional(),
-  callback_query: z
-    .object({
-      id: z.string().max(128),
-      from: userSchema,
-      data: z.string().max(64).optional(),
-      message: z
-        .object({ message_id: z.number().int(), chat: chatSchema, message_thread_id: z.number().int().optional() })
-        .optional(),
-    })
-    .optional(),
-  pre_checkout_query: z
-    .object({
-      id: z.string().max(256),
-      from: userSchema,
-      currency: z.string().max(16),
-      total_amount: z.number().int(),
-      invoice_payload: z.string().max(256),
-    })
-    .optional(),
-  /** статус бота в чате изменился: в личке `kicked` — игрок заблокировал бота, `member` — разблокировал */
-  my_chat_member: z
-    .object({
-      chat: chatSchema,
-      from: userSchema,
-      date: z.number().int(),
-      new_chat_member: z.object({ status: z.string().max(32) }),
-    })
-    .optional(),
-});
-
-export type TelegramUpdate = z.infer<typeof updateSchema>;
-export type TelegramUser = z.infer<typeof userSchema>;
-
 const sentMessageSchema = z.object({
   message_id: z.number().int(),
   photo: z.array(z.object({ file_id: z.string() })).optional(),
@@ -165,6 +94,8 @@ const sentMessageSchema = z.object({
 export interface BotCommand {
   command: string;
   description: string;
+  /** команда отвечает эфемерным сообщением — его видит только вызвавший */
+  is_ephemeral?: boolean;
 }
 
 /** Встроенные кнопки под сообщением: запуск Mini App или нажатие с данными. */
@@ -179,6 +110,10 @@ export type InlineButton =
 
 export interface SendOptions {
   keyboard?: InlineButton[][];
+  /** без звука уведомления */
+  silent?: boolean;
+  /** эфемерное сообщение: видно одному игроку */
+  ephemeral?: Ephemeral;
 }
 
 /** Счёт в Telegram Stars: одна позиция, сумма целыми звёздами. */
@@ -224,6 +159,10 @@ export interface SentPhoto {
 
 export class TelegramBotApi {
   private readonly api: Api;
+  /** Оформленные сообщения и темы (Bot API 10.x). */
+  readonly rich: TelegramRichApi;
+  /** Виджеты Bot API 10.4 — сырыми вызовами, в grammY их нет. */
+  readonly widgets: TelegramWidgetApi;
 
   constructor(
     token: string,
@@ -246,13 +185,15 @@ export class TelegramBotApi {
       // документа он другой, а свой таймер grammY оборвал бы их раньше.
       timeoutSeconds: UPLOAD_TIMEOUT_MS / 1000,
     });
+    this.rich = new TelegramRichApi(this.api);
+    this.widgets = new TelegramWidgetApi(token, apiRoot, fetchImpl);
   }
 
   /** Кто этот бот: имя нужно для ссылки на Mini App (`t.me/<бот>?startapp`). */
-  async getMe(signal?: AbortSignal): Promise<{ id: number; username: string | null }> {
+  async getMe(signal?: AbortSignal): Promise<{ id: number; username: string | null; topicsEnabled: boolean }> {
     const result = await callBotApi("getMe", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getMe(abort));
-    const me = z.object({ id: z.number().int(), username: z.string().optional() }).parse(result);
-    return { id: me.id, username: me.username ?? null };
+    const me = z.object({ id: z.number().int(), username: z.string().optional(), has_topics_enabled: z.boolean().optional() }).parse(result);
+    return { id: me.id, username: me.username ?? null, topicsEnabled: me.has_topics_enabled ?? false };
   }
 
   /**
@@ -278,7 +219,7 @@ export class TelegramBotApi {
   async sendMessage(chat: ChatRef, text: string, signal?: AbortSignal, options: SendOptions = {}): Promise<number> {
     const { chat_id, ...thread } = chatFields(chat);
     const result = await callBotApi("sendMessage", REQUEST_TIMEOUT_MS, signal, (abort) =>
-      this.api.sendMessage(chat_id, text, { ...thread, ...replyMarkup(options) }, abort),
+      this.api.sendMessage(chat_id, text, { ...thread, ...replyMarkup(options), ...sendFlags(options) }, abort),
     );
     return sentMessageSchema.parse(result).message_id;
   }
@@ -481,4 +422,12 @@ function languageOf(languageCode: CommandsLanguage | null): { language_code?: Co
 
 function replyMarkup(options: SendOptions): ReplyMarkup {
   return options.keyboard === undefined ? {} : { reply_markup: { inline_keyboard: options.keyboard } };
+}
+
+/** Тихая отправка и эфемерность: поля попадают в запрос, только когда заданы. */
+function sendFlags(options: SendOptions): { disable_notification?: boolean; ephemeral_message_parameters?: ReturnType<typeof ephemeralFields> } {
+  return {
+    ...(options.silent === undefined ? {} : { disable_notification: options.silent }),
+    ...(options.ephemeral === undefined ? {} : { ephemeral_message_parameters: ephemeralFields(options.ephemeral) }),
+  };
 }

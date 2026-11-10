@@ -1,4 +1,5 @@
 import { GrammyError, HttpError, type Api } from "grammy";
+import { chatTargetOf, type ChatRef } from "../ports/chat-target.js";
 
 /**
  * Вызов метода Bot API через grammY с таймаутом и нашей ошибкой. Модули
@@ -57,4 +58,37 @@ export async function callBotApi<T>(
     // только имя метода и тип исходной ошибки.
     throw networkError(method, error instanceof HttpError ? error.error : error);
   }
+}
+
+/** Поля запроса Bot API: тема добавляется, только когда она есть. */
+export function chatFields(ref: ChatRef): { chat_id: string; message_thread_id?: number } {
+  const target = chatTargetOf(ref);
+  return target.threadId === null ? { chat_id: target.chatId } : { chat_id: target.chatId, message_thread_id: target.threadId };
+}
+
+/**
+ * Эфемерное сообщение: видно одному игроку и не остаётся в истории чата.
+ * `receiverUserId` передаётся всегда, даже при ответе на нажатие: Telegram
+ * разрешает его вместе с `callbackQueryId`, если это id нажавшего, а типы
+ * grammY требуют поле всегда.
+ */
+export interface Ephemeral {
+  receiverUserId: number;
+  callbackQueryId?: string;
+  /** показать вместо сообщения, под которым нажали кнопку */
+  replaceOriginal?: boolean;
+}
+
+export interface EphemeralFields {
+  receiver_user_id: number;
+  callback_query_id?: string;
+  replace_callback_query_message?: boolean;
+}
+
+export function ephemeralFields(ephemeral: Ephemeral): EphemeralFields {
+  return {
+    receiver_user_id: ephemeral.receiverUserId,
+    ...(ephemeral.callbackQueryId === undefined ? {} : { callback_query_id: ephemeral.callbackQueryId }),
+    ...(ephemeral.replaceOriginal === undefined ? {} : { replace_callback_query_message: ephemeral.replaceOriginal }),
+  };
 }
