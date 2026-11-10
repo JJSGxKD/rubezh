@@ -95,6 +95,12 @@ const rowSchema = z.object({
   revoked: revokedSchema.nullable(),
 });
 
+/** Ответ `lastEventNo`: `COALESCE(max(…), 0)::int` всегда даёт одну строку с целым. */
+const lastEventSchema = z.object({ last: z.number().int() });
+
+/** Ответ `pg_try_advisory_xact_lock`: булево, не `null`. */
+const lockSchema = z.object({ locked: z.boolean() });
+
 /**
  * Замок пары держит открытую транзакцию, пока идёт работа: другие запросы
  * работы идут своими соединениями. Работа — списание, ограничение и запись в
@@ -156,8 +162,9 @@ export class PrismaChannelWatchRepository implements ChannelWatchRepository {
   }
 
   async lastEventNo(accountId: string, taskId: string): Promise<number> {
-    const [row] = await this.prisma.$queryRaw<{ last: number }[]>`
+    const rows = await this.prisma.$queryRaw<unknown[]>`
       SELECT COALESCE(max(event_no), 0)::int AS last FROM task_channel_watch WHERE account_id = ${accountId}::uuid AND task_id = ${taskId}`;
+    const [row] = z.array(lastEventSchema).parse(rows);
     return row?.last ?? 0;
   }
 
@@ -195,7 +202,8 @@ export class PrismaChannelWatchRepository implements ChannelWatchRepository {
     return await this.prisma.$transaction(async (tx): Promise<PairLock<T>> => {
       // Замок транзакции, без ожидания: занято — пару уже обрабатывает другой проход. Он снимается с
       // концом транзакции, в том числе при обрыве соединения, поэтому «повисшего» замка не бывает.
-      const [row] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${`channel_watch:${accountId}:${taskId}`})) AS locked`;
+      const rows = await tx.$queryRaw<unknown[]>`SELECT pg_try_advisory_xact_lock(hashtext(${`channel_watch:${accountId}:${taskId}`})) AS locked`;
+      const [row] = z.array(lockSchema).parse(rows);
       if (row?.locked !== true) return { locked: false };
       return { locked: true, value: await work() };
     }, LOCK_TX_OPTIONS);
