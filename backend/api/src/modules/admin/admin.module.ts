@@ -67,6 +67,8 @@ import { AdminPlayersController } from "./admin-players.controller.js";
 import { AdminPlayersService } from "./admin-players.service.js";
 import { AdminReviewController } from "./admin-review.controller.js";
 import { AdminRunsController } from "./admin-runs.controller.js";
+import { AdminRatingController } from "./admin-rating.controller.js";
+import { SeasonsModule } from "../seasons/seasons.module.js";
 import { AdminRolesController } from "./admin-roles.controller.js";
 import { AdminRolesService } from "./admin-roles.service.js";
 import { AdminSessionController } from "./admin-session.controller.js";
@@ -89,12 +91,13 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
     AdminReviewController,
     AdminRunsController,
+    AdminRatingController,
     AdminOverviewController,
     AdminFxController,
     AdminRolesController,
