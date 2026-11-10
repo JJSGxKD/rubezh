@@ -99,7 +99,7 @@ const NETWORKS: AdNetwork[] = [
 const FORMATS = { second_chance: "rewarded", wheel_spin: "rewarded", run_double: "rewarded", task: "task", interstitial: "interstitial" };
 
 function block(patch: Partial<AdBlock> = {}): AdBlock {
-  return { blockId: "b1", networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", active: true, platforms: [], devices: [], problem: null, ...patch };
+  return { blockId: "b1", networkKey: "adsgram", place: "wheel_spin", externalId: "123", success: "view", active: true, platforms: [], devices: [], problem: null, archivedAt: null, ...patch };
 }
 
 function view(patch: Partial<AdsView> = {}): AdsView {
