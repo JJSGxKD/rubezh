@@ -279,6 +279,21 @@ describe("итог забега", () => {
     expect(result).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 3, crystalsCollected: 250 });
   });
 
+  it("несёт число редких сундуков из мира (T-0175)", () => {
+    const world = worldWithEnemyAt(DUMMY, 40);
+    world.stats.chestsOpened = 3;
+    world.stats.rareChestsOpened = 1;
+
+    const result = buildRunResult(world, {
+      runId: "r4",
+      seed: 42,
+      outcome: "died",
+      startingWeaponId: "spark",
+      contentHash: "test-hash",
+    });
+    expect(result).toMatchObject({ chestsOpened: 3, rareChestsOpened: 1 });
+  });
+
   it("у сдачи нет причины смерти: сдавшийся забег — не убийство", () => {
     const world = worldWithEnemyAt(DUMMY, 40);
     for (let tick = 0; tick < 120; tick++) stepWorld(world, IDLE_INPUT);
@@ -363,6 +378,7 @@ describe("локальный рекорд", () => {
       bossKills: 0,
       eliteKills: 0,
       chestsOpened: 0,
+      rareChestsOpened: 0,
       crystalsCollected: 0,
       killsByEnemy: {},
       damageDealt: 0,

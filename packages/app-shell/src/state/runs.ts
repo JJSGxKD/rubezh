@@ -80,6 +80,8 @@ const finishFields = {
       bossKills: z.optional(z.number()),
       eliteKills: z.optional(z.number()),
       chestsOpened: z.optional(z.number()),
+      // Редкие сундуки (T-0175): записи прошлых сборок их не знают.
+      rareChests: z.optional(z.number()),
       crystals: z.optional(z.number()),
       // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
       noHitSec: z.optional(z.number()),
@@ -317,6 +319,7 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       bossKills: result.bossKills,
       eliteKills: result.eliteKills,
       chestsOpened: result.chestsOpened,
+      rareChests: result.rareChestsOpened,
       crystals: Math.round(result.crystalsCollected),
       noHitSec: result.noHitSec,
       noKillSec: result.noKillSec,

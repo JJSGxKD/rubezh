@@ -3,8 +3,8 @@ id: T-0214
 title: Рендер звуков в WAV и замеры — `pnpm fx:sound [звук…]`
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0212]

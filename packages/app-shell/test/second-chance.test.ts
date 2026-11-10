@@ -48,6 +48,7 @@ function result(patch: Partial<RunResult> = {}): RunResult {
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     weapons: [{ id: "spark", level: 4, damage: 5000 }],
     passives: [],
@@ -251,6 +252,17 @@ describe("экран смерти со вторым шансом", () => {
     expect(useMeta.getState().runs).toBe(1);
     const finished = payloads.find((entry) => entry.event === "run_finished");
     expect(finished?.payload).toMatchObject({ bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0 });
+  });
+
+  it("итог прошлой сборки без rareChestsOpened разбирается: забег закрывается, а не пропадает (T-0175)", () => {
+    const legacy: Record<string, unknown> = { ...result({ runId: "run-old" }) };
+    delete legacy.rareChestsOpened;
+    storage.set(DOWNED_KEY, JSON.stringify({ result: legacy, countInRating: false }));
+
+    recoverDownedRun();
+
+    expect(useMeta.getState().runs).toBe(1);
+    expect(payloads.some((entry) => entry.event === "run_finished")).toBe(true);
   });
 
   it("где окна оплаты нет, второй шанс — только в забеге разработчика: купить его негде", async () => {
