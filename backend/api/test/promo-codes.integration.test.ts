@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { batchCode, codeKey, type PromoCampaignRow } from "../src/modules/promo-codes/promo-code-rules.js";
+import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
 import { PrismaPromoCodesRepository, type NewPromoCampaign, type PromoCodeDraft } from "../src/modules/promo-codes/promo-codes.repository.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 
@@ -177,5 +178,24 @@ describe.skipIf(DATABASE_URL === "")("промокоды на живом Postgre
     await expect(insert({ kind: "shared", max: 2, redeemed: 3, ends: null })).rejects.toThrow();
     await expect(insert({ kind: "shared", max: null, redeemed: 0, ends: at(-HOUR) })).rejects.toThrow();
     await expect(insert({ kind: "gift", max: null, redeemed: 0, ends: null })).rejects.toThrow();
+  });
+
+  it("партнёр гасит свой промокод: код погашен, награда по правилам кода, а привязки к самому себе нет; другой игрок привязан (T-0217)", async () => {
+    const partnerId = randomUUID();
+    await new PrismaPartnersRepository(prisma).create({ partnerId, name: "Сам себе", contact: null, note: null, createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
+    const display = uniqueCode();
+    const row = await created(campaign({ partnerId }), shared(display));
+    const own = await player();
+    await prisma.partner.update({ where: { partnerId }, data: { accountId: own } });
+
+    expect(await repository.redeem({ campaignId: row.campaignId, accountId: own, code: codeKey(display), batch: false, partnerId, at: NOW })).toEqual({ status: "redeemed", bound: false });
+    expect(await repository.redemption(row.campaignId, own)).toEqual({ rewardedAt: null });
+    expect(await prisma.partnerBinding.findUnique({ where: { accountId: own } })).toBeNull();
+    // Отказ касается только привязки: погашение посчитано, как у любого игрока.
+    expect((await repository.byId(row.campaignId))?.redeemed).toBe(1);
+
+    const other = await player();
+    expect(await repository.redeem({ campaignId: row.campaignId, accountId: other, code: codeKey(display), batch: false, partnerId, at: NOW })).toEqual({ status: "redeemed", bound: true });
+    expect(await prisma.partnerBinding.findUnique({ where: { accountId: other } })).toMatchObject({ partnerId, campaignId: row.campaignId });
   });
 });
