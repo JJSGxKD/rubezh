@@ -104,7 +104,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
   it("партнёр заводит ссылку: partner_id — он, target — app, сети нет; в журнале аудита он сам", async () => {
     const { partnerId, actor } = await partnerWithCabinet("Заведу ссылку");
 
-    const created = await cabinet.createLink(actor, {}, { campaign: "Мой канал", source: "stream", note: "Игровой угол" }, NOW);
+    const created = await cabinet.createLink(actor, {}, { campaign: "Мой канал", source: "stream", note: "Игровой угол" });
 
     const row = await prisma.link.findUnique({ where: { code: created.code } });
     expect(row).toMatchObject({ partnerId, target: "app", network: null, campaign: "moy-kanal", source: "stream", note: "Игровой угол", platform: "telegram", createdBy: actor.accountId, auto: false });
@@ -115,12 +115,12 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
   it("список ссылок не показывает ссылки другого партнёра и команды; клики и запуски считаются теми же запросами, что в разделе «Ссылки»", async () => {
     const mine = await partnerWithCabinet("Моя сторона");
     const other = await partnerWithCabinet("Чужая сторона");
-    const own = await cabinet.createLink(mine.actor, {}, { campaign: "Пост", source: "post", note: null }, NOW);
-    const foreign = await cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "chat", note: null }, NOW);
+    const own = await cabinet.createLink(mine.actor, {}, { campaign: "Пост", source: "post", note: null });
+    const foreign = await cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "chat", note: null });
     const team = await links.create({ code: `T${randomUUID().replaceAll("-", "").slice(0, 12)}`, platform: "telegram", campaign: "launch", source: "tg", medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", partnerId: null });
     await links.recordClick({ clickId: randomUUID(), linkCode: own.code, at: NOW, utm: { source: null, medium: null, campaign: null, content: null, term: null }, refererHost: null, deviceClass: "mobile", ipPrefix: null, language: null, networkParams: null });
 
-    const list = await cabinet.links(mine.actor, {}, NOW);
+    const list = await cabinet.links(mine.actor, {});
 
     expect(list.links.map((link) => link.code)).toEqual([own.code]);
     expect(list.links[0]).toMatchObject({ clicks: 1, launches: 0, source: "post" });
@@ -202,16 +202,16 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
     const { partnerId, actor } = await partnerWithCabinet("Смотрят сверху");
     const admin = await ownerOf();
     const source = await campaign(partnerId, uniqueWord());
-    const created = await cabinet.createLink(actor, {}, { campaign: "Канал", source: "channel", note: null }, NOW);
+    const created = await cabinet.createLink(actor, {}, { campaign: "Канал", source: "channel", note: null });
 
-    const seenLinks = await cabinet.links(admin, { partnerId }, NOW);
+    const seenLinks = await cabinet.links(admin, { partnerId });
     const seenPromos = await cabinet.promos(admin, { partnerId }, NOW);
     expect(seenLinks.viewOnly).toBe(true);
     expect(seenLinks.links.map((link) => link.code)).toEqual([created.code]);
     expect(seenPromos.viewOnly).toBe(true);
     expect(seenPromos.promos.map((item) => item.campaignId)).toEqual([source.campaignId]);
 
-    await expect(cabinet.createLink(admin, { partnerId }, { campaign: "От админа", source: "post", note: null }, NOW)).rejects.toThrowError("Кабинет открыт для просмотра");
+    await expect(cabinet.createLink(admin, { partnerId }, { campaign: "От админа", source: "post", note: null })).rejects.toThrowError("Кабинет открыт для просмотра");
     await expect(cabinet.copyPromo(admin, { partnerId }, source.campaignId, uniqueWord(), NOW)).rejects.toThrowError("Кабинет открыт для просмотра");
     expect(await prisma.link.count({ where: { partnerId } })).toBe(1);
     expect(await prisma.promoCampaign.count({ where: { partnerId } })).toBe(1);

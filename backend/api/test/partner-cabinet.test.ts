@@ -1,16 +1,39 @@
+import "reflect-metadata";
 import { randomUUID } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { Module } from "@nestjs/common";
+import type { NestFastifyApplication } from "@nestjs/platform-fastify";
+import type { Redis } from "ioredis";
+import { afterEach, describe, expect, it } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
-import { loadAppConfig } from "../src/config/app-config.js";
+import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
+import { createHttpApp } from "../src/http-app.js";
+import { REDIS } from "../src/infra/redis.js";
+import { AdminCabinetController } from "../src/modules/admin/admin-cabinet.controller.js";
+import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
+import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
+import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
+import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
+import { ADMIN_SESSION_STORE } from "../src/modules/admin/admin-session.store.js";
+import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
+import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
+import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
+import { AuthGuard } from "../src/modules/auth/auth.guard.js";
+import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import type { LinkInput, LinkRecord, LinksRepository, LinkStats } from "../src/modules/links/links.repository.js";
 import { PartnerCabinet, campaignSlug, type PartnerPromos } from "../src/modules/partners/partner-cabinet.js";
 import { PartnerNotFoundError } from "../src/modules/partners/partner-errors.js";
 import { codeKey } from "../src/modules/promo-codes/promo-code-rules.js";
 import type { NewPromoCampaign } from "../src/modules/promo-codes/promo-codes.repository.js";
+import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
+import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryPartnerAccounts } from "./helpers/memory-partner-accounts.js";
 import { MemoryPartnersRepository } from "./helpers/memory-partners.js";
 import { MemoryPromoCodesRepository } from "./helpers/memory-promo-codes.js";
@@ -159,7 +182,7 @@ describe("ссылки кабинета партнёра (T-0218, Р136)", () =>
     const ctx = setup();
     const { partnerId, actor } = await partnerWithCabinet(ctx, "900401");
 
-    const created = await ctx.cabinet.createLink(actor, {}, { campaign: "Мой канал", source: "channel", note: "Игровой угол" }, NOW);
+    const created = await ctx.cabinet.createLink(actor, {}, { campaign: "Мой канал", source: "channel", note: "Игровой угол" });
 
     const stored = ctx.links.links.get(created.code);
     expect(stored).toMatchObject({ campaign: "moy-kanal", source: "channel", medium: null, note: "Игровой угол", target: "app", network: null, registrationOn: "first_run", platform: "telegram", createdBy: actor.accountId });
@@ -172,12 +195,12 @@ describe("ссылки кабинета партнёра (T-0218, Р136)", () =>
     const ctx = setup();
     const mine = await partnerWithCabinet(ctx, "900402");
     const other = await partnerWithCabinet(ctx, "900403");
-    const own = await ctx.cabinet.createLink(mine.actor, {}, { campaign: "Пост", source: "post", note: null }, NOW);
-    await ctx.cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "chat", note: null }, NOW);
+    const own = await ctx.cabinet.createLink(mine.actor, {}, { campaign: "Пост", source: "post", note: null });
+    await ctx.cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "chat", note: null });
     await ctx.links.create({ code: "teamcode0000001", platform: "telegram", campaign: "launch", source: "tg", medium: null, note: "командная", createdBy: null, network: null, registrationOn: "first_run", partnerId: null });
     ctx.links.clicks.set(own.code, 7);
 
-    const list = await ctx.cabinet.links(mine.actor, {}, NOW);
+    const list = await ctx.cabinet.links(mine.actor, {});
 
     expect(list.viewOnly).toBe(false);
     expect(list.limit).toEqual({ used: 1, max: 20 });
@@ -189,29 +212,29 @@ describe("ссылки кабинета партнёра (T-0218, Р136)", () =>
   it("лимит: двадцать ссылок есть — отказ с числом из настроек; поднять лимит в настройках — можно дальше; ссылка команды партнёру тоже считается", async () => {
     const ctx = setup();
     const { partnerId, actor } = await partnerWithCabinet(ctx, "900404");
-    for (let index = 0; index < 20; index += 1) await ctx.cabinet.createLink(actor, {}, { campaign: `kanal-${String(index)}`, source: "channel", note: null }, NOW);
+    for (let index = 0; index < 20; index += 1) await ctx.cabinet.createLink(actor, {}, { campaign: `kanal-${String(index)}`, source: "channel", note: null });
 
-    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "лишняя", source: "post", note: null }, NOW)).rejects.toThrowError("Ссылок уже 20 — это потолок кабинета");
-    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "лишняя", source: "post", note: null }, NOW))).toBe("validation_failed");
+    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "лишняя", source: "post", note: null })).rejects.toThrowError("Ссылок уже 20 — это потолок кабинета");
+    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "лишняя", source: "post", note: null }))).toBe("validation_failed");
     expect(ctx.links.links.size).toBe(20);
 
     ctx.settings.set(SETTINGS.partnersCabinetMaxLinks.key, 21);
-    await ctx.cabinet.createLink(actor, {}, { campaign: "двадцать первая", source: "post", note: null }, NOW);
-    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "ещё", source: "post", note: null }, NOW)).rejects.toThrowError("Ссылок уже 21 — это потолок кабинета");
+    await ctx.cabinet.createLink(actor, {}, { campaign: "двадцать первая", source: "post", note: null });
+    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "ещё", source: "post", note: null })).rejects.toThrowError("Ссылок уже 21 — это потолок кабинета");
 
     // Ссылка, заведённая командой от имени партнёра, лежит у него в кабинете и считается тоже.
     ctx.settings.set(SETTINGS.partnersCabinetMaxLinks.key, 22);
     await ctx.links.create({ code: "teamforpartner01", platform: "telegram", campaign: "team", source: null, medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", partnerId });
-    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "ещё", source: "post", note: null }, NOW)).rejects.toThrowError("Ссылок уже 22 — это потолок кабинета");
+    await expect(ctx.cabinet.createLink(actor, {}, { campaign: "ещё", source: "post", note: null })).rejects.toThrowError("Ссылок уже 22 — это потолок кабинета");
   });
 
   it("плохой ввод: название без букв и цифр, длинная заметка, незнакомый источник — отказ до записи", async () => {
     const ctx = setup();
     const { actor } = await partnerWithCabinet(ctx, "900405");
 
-    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "!!!", source: "post", note: null }, NOW))).toBe("validation_failed");
-    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "ok", source: "post", note: "я".repeat(121) }, NOW))).toBe("validation_failed");
-    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "ok", source: "podcast" as "post", note: null }, NOW))).toBe("validation_failed");
+    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "!!!", source: "post", note: null }))).toBe("validation_failed");
+    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "ok", source: "post", note: "я".repeat(121) }))).toBe("validation_failed");
+    expect(await codeOf(ctx.cabinet.createLink(actor, {}, { campaign: "ok", source: "podcast" as "post", note: null }))).toBe("validation_failed");
     expect(ctx.links.links.size).toBe(0);
   });
 
@@ -219,21 +242,21 @@ describe("ссылки кабинета партнёра (T-0218, Р136)", () =>
     const ctx = setup();
     const { partnerId, actor } = await partnerWithCabinet(ctx, "900406");
     const stranger = await partnerWithCabinet(ctx, "900407");
-    const own = await ctx.cabinet.createLink(actor, {}, { campaign: "Канал", source: "channel", note: null }, NOW);
+    const own = await ctx.cabinet.createLink(actor, {}, { campaign: "Канал", source: "channel", note: null });
     const admin = await person(ctx, "800", "admin");
 
-    const seen = await ctx.cabinet.links(admin, { partnerId }, NOW);
+    const seen = await ctx.cabinet.links(admin, { partnerId });
     expect(seen.viewOnly).toBe(true);
     expect(seen.links.map((link) => link.code)).toEqual([own.code]);
-    await expect(ctx.cabinet.createLink(admin, { partnerId }, { campaign: "от админа", source: "post", note: null }, NOW)).rejects.toThrowError("Кабинет открыт для просмотра");
-    expect(await codeOf(ctx.cabinet.createLink(admin, { partnerId }, { campaign: "от админа", source: "post", note: null }, NOW))).toBe("forbidden");
+    await expect(ctx.cabinet.createLink(admin, { partnerId }, { campaign: "от админа", source: "post", note: null })).rejects.toThrowError("Кабинет открыт для просмотра");
+    expect(await codeOf(ctx.cabinet.createLink(admin, { partnerId }, { campaign: "от админа", source: "post", note: null }))).toBe("forbidden");
     expect(ctx.links.links.size).toBe(1);
 
-    expect(await codeOf(ctx.cabinet.links(stranger.actor, { partnerId }, NOW))).toBe("forbidden");
-    expect(await codeOf(ctx.cabinet.createLink(stranger.actor, { partnerId }, { campaign: "в чужой", source: "post", note: null }, NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.links(stranger.actor, { partnerId }))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.createLink(stranger.actor, { partnerId }, { campaign: "в чужой", source: "post", note: null }))).toBe("forbidden");
     // Маркетолог без partners.view и без роли partner: ни своего, ни чужого.
     const marketer = await person(ctx, "801", "marketer");
-    expect(await codeOf(ctx.cabinet.links(marketer, {}, NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.links(marketer, {}))).toBe("forbidden");
     expect(ctx.links.links.size).toBe(1);
   });
 
@@ -242,9 +265,9 @@ describe("ссылки кабинета партнёра (T-0218, Р136)", () =>
     const orphan = await person(ctx, "900408", "partner");
     const plain = await person(ctx, "900409");
 
-    expect(await codeOf(ctx.cabinet.links(orphan, {}, NOW))).toBe("forbidden");
-    expect(await codeOf(ctx.cabinet.createLink(orphan, {}, { campaign: "x1", source: "post", note: null }, NOW))).toBe("forbidden");
-    expect(await codeOf(ctx.cabinet.links(plain, {}, NOW))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.links(orphan, {}))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.createLink(orphan, {}, { campaign: "x1", source: "post", note: null }))).toBe("forbidden");
+    expect(await codeOf(ctx.cabinet.links(plain, {}))).toBe("forbidden");
   });
 });
 
@@ -422,5 +445,105 @@ describe("промокоды кабинета партнёра (T-0218, Р136)",
     expect(await codeOf(ctx.cabinet.promos(other.actor, { partnerId }, NOW))).toBe("forbidden");
     // Чужую кампанию партнёр не копирует, даже зная её id.
     expect(await codeOf(ctx.cabinet.copyPromo(other.actor, {}, source.campaignId, "Ukrast kod", NOW))).toBe("promo_campaign_not_found");
+  });
+});
+
+describe("кабинет партнёра по HTTP панели (T-0218)", () => {
+  let app: NestFastifyApplication | null = null;
+  const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
+
+  afterEach(async () => {
+    await app?.close();
+    app = null;
+  });
+
+  it("партнёр заводит ссылку и копию кода по HTTP; мусорные тела и лишние поля — 400, чужие кампании — 404, глазами партнёра — 403", async () => {
+    const config = loadAppConfig({ NODE_ENV: "development", ...AUTH_ENV, AUTH_DEV_LOGIN: "true", ADMIN_TELEGRAM_IDS: OWNER_ID, PUBLIC_WEB_URL: "https://rubezh.example" } as NodeJS.ProcessEnv);
+    const ctx = setup();
+    const rolesService = new RolesService(config, ctx.roles, ctx.accounts);
+    const promos: PartnerPromos = { ofPartner: async (partnerId) => (await ctx.promo.list(500)).filter((row) => row.partnerId === partnerId) };
+    const cabinet = new PartnerCabinet(rolesService, ctx.linked, ctx.partners, config, ctx.links, ctx.promo, promos, ctx.settings);
+    @Module({
+      controllers: [AdminSessionController, AdminCabinetController],
+      providers: [
+        { provide: APP_CONFIG, useValue: config },
+        { provide: REDIS, useValue: unavailableRedis },
+        { provide: ACCOUNT_REPOSITORY, useValue: ctx.accounts },
+        { provide: ROLES_REPOSITORY, useValue: ctx.roles },
+        { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
+        { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
+        { provide: PartnerCabinet, useValue: cabinet },
+        PanelLoginService,
+        RateLimiter,
+        RolesService,
+        PermissionGuard,
+        AuthGuard,
+        AdminSessionService,
+        AdminSessionGuard,
+      ],
+    })
+    class TestModule {}
+    app = await createHttpApp(TestModule, { logger: false });
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    const http = app;
+
+    const cookieOf = async (devUser: string) => {
+      const login = await http.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser } });
+      return `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(login.headers["set-cookie"]))?.[1] ?? ""}`;
+    };
+    const base = "/api/v1/admin/cabinet";
+
+    // Партнёр — аккаунт разработческого входа, связанный с карточкой.
+    const partnerId = randomUUID();
+    await ctx.partners.create({ partnerId, name: "Канал", contact: "@secret_contact", note: "тайная заметка", createdBy: randomUUID(), createdAt: NOW, updatedAt: NOW });
+    ctx.links.partners.set(partnerId, "Канал");
+    const dev = await ctx.accounts.upsert({ platform: "telegram", platformUserId: "dev-player-p1", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
+    await ctx.roles.grant(dev.accountId, "partner", null);
+    await ctx.linked.link(partnerId, dev.accountId);
+    // Копия берёт «сейчас» с часов сервера, поэтому срок исходной кампании — от настоящего времени.
+    const source = await campaign(ctx, partnerId, "KANAL 2026", { startsAt: new Date(Date.now() - HOUR), endsAt: new Date(Date.now() + 10 * DAY) });
+    const foreign = await campaign(ctx, null, "KOMANDA");
+    const partner = { cookie: await cookieOf("dev-player-p1:Партнёр"), [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+    const owner = { cookie: await cookieOf(`dev-${OWNER_ID}:Владелец`), [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE };
+
+    expect((await http.inject({ method: "GET", url: `${base}/links` })).statusCode).toBe(401);
+    expect((await http.inject({ method: "POST", url: `${base}/links`, headers: { cookie: partner.cookie }, payload: { campaign: "Пост", source: "post" } })).statusCode).toBe(403);
+
+    const created = await http.inject({ method: "POST", url: `${base}/links`, headers: partner, payload: { campaign: "Мой пост", source: "post", note: "в канале" } });
+    expect(created.statusCode).toBe(201);
+    expect(created.json<{ data: unknown }>().data).toMatchObject({ campaign: "moy-post", source: "post", note: "в канале", clicks: 0 });
+    for (const bad of [{}, { campaign: "x", source: "post" }, { campaign: "Пост", source: "podcast" }, { campaign: "Пост", source: "post", target: "bot" }, { campaign: "Пост", source: "post", partnerId }, { campaign: "Пост", source: "post", note: "я".repeat(121) }]) {
+      expect((await http.inject({ method: "POST", url: `${base}/links`, headers: partner, payload: bad })).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    const listed = await http.inject({ method: "GET", url: `${base}/links`, headers: partner });
+    expect(listed.json<{ data: unknown }>().data).toMatchObject({ links: [{ campaign: "moy-post" }], limit: { used: 1, max: 20 }, viewOnly: false });
+
+    const promoList = await http.inject({ method: "GET", url: `${base}/promos`, headers: partner });
+    expect(promoList.json<{ data: { promos: { campaignId: string }[] } }>().data.promos.map((promo) => promo.campaignId)).toEqual([source.campaignId]);
+    const copyUrl = (campaignId: string, query = "") => `${base}/promos/${campaignId}/copy${query}`;
+    for (const bad of [{}, { code: "" }, { code: "X".repeat(49) }, { code: "NOVOE SLOVO", reward: { coins: 99999 } }, { code: "NOVOE SLOVO", maxRedemptions: 1_000_000 }]) {
+      expect((await http.inject({ method: "POST", url: copyUrl(source.campaignId), headers: partner, payload: bad })).statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect((await http.inject({ method: "POST", url: copyUrl("не-uuid"), headers: partner, payload: { code: "NOVOE SLOVO" } })).statusCode).toBe(400);
+    expect((await http.inject({ method: "POST", url: copyUrl(foreign.campaignId), headers: partner, payload: { code: "NOVOE SLOVO" } })).statusCode).toBe(404);
+    const copied = await http.inject({ method: "POST", url: copyUrl(source.campaignId), headers: partner, payload: { code: "novoe slovo" } });
+    expect(copied.statusCode).toBe(201);
+    expect(copied.json<{ data: unknown }>().data).toMatchObject({ code: "NOVOE SLOVO", copy: true, reward: source.reward });
+    expect((await http.inject({ method: "POST", url: copyUrl(source.campaignId), headers: partner, payload: { code: "NOVOE-SLOVO" } })).statusCode).toBe(409);
+
+    // Партнёр чужой кабинет не открывает даже запросом; владелец смотрит, но не пишет.
+    expect((await http.inject({ method: "GET", url: `${base}/links?partnerId=${randomUUID()}`, headers: partner })).statusCode).toBe(403);
+    expect((await http.inject({ method: "GET", url: `${base}/links?partnerId=${partnerId}&extra=1`, headers: owner })).statusCode).toBe(400);
+    const watched = await http.inject({ method: "GET", url: `${base}/links?partnerId=${partnerId}`, headers: owner });
+    expect(watched.statusCode).toBe(200);
+    expect(watched.json<{ data: { viewOnly: boolean } }>().data.viewOnly).toBe(true);
+    expect(watched.body).not.toMatch(/secret_contact|тайная/);
+    const blocked = await http.inject({ method: "POST", url: `${base}/links?partnerId=${partnerId}`, headers: owner, payload: { campaign: "От админа", source: "post" } });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.body).toContain("Кабинет открыт для просмотра");
+    expect((await http.inject({ method: "POST", url: copyUrl(source.campaignId, `?partnerId=${partnerId}`), headers: owner, payload: { code: "OT ADMINA" } })).statusCode).toBe(403);
+    expect(ctx.links.links.size).toBe(1);
   });
 });
