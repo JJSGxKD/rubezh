@@ -28,6 +28,8 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/home.test.ts
+  - backend/api/test/tasks.test.ts
+  - backend/api/test/task-signals.test.ts
   - backend/api/src/app.module.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/i18n/ru.json
