@@ -17,6 +17,7 @@ import {
   type AdNetworkProfile,
 } from "./ad-networks.js";
 import {
+  AdBlockArchivedError,
   AdBlockInvalidError,
   AdBlockLimitError,
   AdBlockShapeLockedError,
@@ -209,6 +210,7 @@ export class AdsCatalogService {
     const before = input.blockId === null ? null : ((await this.db(this.repository.blocks())).find((candidate) => candidate.blockId === input.blockId) ?? null);
     if (input.blockId !== null) {
       if (before === null) throw new AdCatalogNotFoundError("block");
+      if (before.archivedAt !== null) throw new AdBlockArchivedError();
       if (before.networkKey !== input.networkKey || before.place !== input.place) throw new AdBlockShapeLockedError();
     }
     const edit = await this.checkedBlock(input);
@@ -220,7 +222,11 @@ export class AdsCatalogService {
       return created;
     }
     const block: AdBlockDef = { ...edit, blockId: edit.blockId };
-    if (!(await this.db(this.repository.updateBlock(block, actor.accountId, at)))) throw new AdCatalogNotFoundError("block");
+    if (!(await this.db(this.repository.updateBlock(block, actor.accountId, at)))) {
+      // Запись не прошла: блок успели убрать в архив между чтением и записью или он пропал.
+      const now = (await this.db(this.repository.blocks())).find((candidate) => candidate.blockId === block.blockId);
+      throw now !== undefined && now.archivedAt !== null ? new AdBlockArchivedError() : new AdCatalogNotFoundError("block");
+    }
     await this.roles.audit({ actorAccountId: actor.accountId, action: "ads.block.update", target: block.blockId, before, after: block });
     this.changed({ event: "ad_block_updated", blockId: block.blockId, actor: actor.accountId });
     return block;
