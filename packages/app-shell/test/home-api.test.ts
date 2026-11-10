@@ -34,6 +34,19 @@ describe("виджеты в ответе главной", () => {
   });
 });
 
+describe("слайд доната (tasks/T-0158)", () => {
+  it("слайд donate разбирается; неизвестный вид по-прежнему отбрасывается, соседи на месте", async () => {
+    const answer = { slides: [{ id: "invite", kind: "invite" }, { id: "donate", kind: "donate" }, { id: "x", kind: "lottery" }, { id: "channel", kind: "channel", url: "https://t.me/rubezh" }] };
+    const result = await createHomeApi(server(answer)).home();
+    expect(result.ok && result.data.slides.map((slide) => slide.kind)).toEqual(["invite", "donate", "channel"]);
+  });
+
+  it("слайд donate без id — битый и отбрасывается", async () => {
+    const result = await createHomeApi(server({ slides: [{ kind: "donate" }, { id: "invite", kind: "invite" }] })).home();
+    expect(result.ok && result.data.slides.map((slide) => slide.id)).toEqual(["invite"]);
+  });
+});
+
 describe("свежесть ответа главной", () => {
   const DATA: HomeData = { slides: [], widgets: { daily: null, wheel: null, tasks: null } };
 
