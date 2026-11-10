@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
+import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
 import { PartnerCabinet, PrismaPartnerAccounts, PrismaPartnerPromos } from "../src/modules/partners/partner-cabinet.js";
 import { PrismaPartnersRepository } from "../src/modules/partners/partners.repository.js";
@@ -117,8 +118,8 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
     const other = await partnerWithCabinet("Чужая сторона");
     const own = await cabinet.createLink(mine.actor, {}, { campaign: "Пост", source: "post", note: null });
     const foreign = await cabinet.createLink(other.actor, {}, { campaign: "Чужая", source: "chat", note: null });
-    const team = await links.create({ code: `T${randomUUID().replaceAll("-", "").slice(0, 12)}`, platform: "telegram", campaign: "launch", source: "tg", medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", partnerId: null });
-    await links.recordClick({ clickId: randomUUID(), linkCode: own.code, at: NOW, utm: { source: null, medium: null, campaign: null, content: null, term: null }, refererHost: null, deviceClass: "mobile", ipPrefix: null, language: null, networkParams: null });
+    const team = await links.create({ code: newLinkCode(), platform: "telegram", campaign: "launch", source: "tg", medium: null, note: null, createdBy: null, network: null, registrationOn: "first_run", partnerId: null });
+    await links.recordClick({ clickId: newClickId(), linkCode: own.code, at: NOW, utm: { source: null, medium: null, campaign: null, content: null, term: null }, refererHost: null, deviceClass: "mobile", ipPrefix: null, language: null, networkParams: null });
 
     const list = await cabinet.links(mine.actor, {});
 
