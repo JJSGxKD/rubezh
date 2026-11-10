@@ -99,7 +99,7 @@ describe("виды по сигналу клиента: схема каталог
     expect(problems(story({ tier: "easy" }))).toContainEqual({ message, path: ["tier"] });
     expect(problems(story({ filter: { weapon: "spark" } }))).toContainEqual({ message, path: ["filter"] });
     expect(problems(story({ limit: 100 }))).toContainEqual({ message, path: ["limit"] });
-    expect(problems(story({ image: "a".repeat(32) }))).toContainEqual({ message, path: ["image"] });
+    expect(problems(story({ image: "a".repeat(64) }))).toContainEqual({ message, path: ["image"] });
   });
 
   it("главный экран: ступень у достижения тоже отклоняется", () => {

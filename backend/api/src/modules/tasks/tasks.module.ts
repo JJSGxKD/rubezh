@@ -6,6 +6,8 @@ import { MediaModule } from "../media/media.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
+import { TaskSignalsController } from "./task-signals.controller.js";
+import { TaskSignalsService } from "./task-signals.service.js";
 import { TasksController } from "./tasks.controller.js";
 import { NETWORK_TASKS_REPOSITORY, PrismaNetworkTasksRepository } from "./network-tasks.repository.js";
 import { NetworkTasksService } from "./network-tasks.service.js";
@@ -30,9 +32,10 @@ import { TasksService } from "./tasks.service.js";
  */
 @Module({
   imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule],
-  controllers: [TasksController],
+  controllers: [TasksController, TaskSignalsController],
   providers: [
     TasksService,
+    TaskSignalsService,
     TaskPointsService,
     NetworkTasksService,
     { provide: TASKS_REPOSITORY, useClass: PrismaTasksRepository },

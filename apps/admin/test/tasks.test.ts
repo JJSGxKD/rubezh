@@ -459,7 +459,7 @@ describe("поля достижения в форме (T-0106)", () => {
 
 describe("задания по сигналу клиента (T-0375)", () => {
   it("главный экран: срок «достижение», цель 1, пустые параметры, ступень и фильтр", () => {
-    const picked = withKind(task({ taskId: "ach_home", period: "weekly", target: 5, tier: "easy", filter: { weapon: "spark" }, limit: 10, image: "a".repeat(32) }), "home_screen");
+    const picked = withKind(task({ taskId: "ach_home", period: "weekly", target: 5, tier: "easy", filter: { weapon: "spark" }, limit: 10, image: "a".repeat(64) }), "home_screen");
     expect(picked).toMatchObject({ kind: "home_screen", period: "achievement", target: 1, params: null, tier: null, filter: null, limit: null, image: null });
   });
 
