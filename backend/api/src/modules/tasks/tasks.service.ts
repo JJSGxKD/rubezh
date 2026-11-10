@@ -1,7 +1,13 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
+import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { BattlePassService } from "../battle-pass/battle-pass.service.js";
 import { ChannelMemberships, MembershipRejectedError, MembershipUnavailableError } from "../../platforms/ports/channel-membership.js";
+import { ExternalLinkStarters } from "../../platforms/ports/external-link.js";
+import type { PlatformId } from "../../platforms/ports/platform.js";
+import { LinkUnavailableError } from "../external-identity/external-identity-errors.js";
+import { LINK_PLATFORMS } from "../external-identity/external-identity-rules.js";
+import { ExternalIdentityService } from "../external-identity/external-identity.service.js";
 import { imagePath } from "../media/image-rules.js";
 import { MediaService } from "../media/media.service.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
@@ -13,6 +19,7 @@ import type { WalletResource } from "../wallet/wallet-types.js";
 import {
   TaskCheckUnavailableError,
   TaskLimitReachedError,
+  TaskLinkRequiredError,
   TaskNotDoneError,
   TaskNotFoundError,
   TaskNotJoinedError,
@@ -26,7 +33,9 @@ import {
   TASK_KIND_IDS,
   TASK_LIMIT_GRACE_MIN,
   TASK_PERIODS,
+  NO_LINKABLE,
   TASK_SORT_MAX,
+  channelLinkMode,
   countsForTasks,
   isCheckedKind,
   isRunKind,
@@ -35,6 +44,7 @@ import {
   taskGroup,
   visibleOn,
   type AchievementCategory,
+  type ChannelLinkMode,
   type PoolTier,
   type RunFilter,
   type TaskCategory,
@@ -73,6 +83,8 @@ import { TASKS_REPOSITORY, type TaskDelta, type TaskProgressRow, type TasksRepos
 
 const DB_TIMEOUT_MS = 3_000;
 const CATALOG_TTL_MS = 30_000;
+/** Код, которым спрашивается, настроен ли бот площадки: `startUrl` — чистая функция, ничего не выдаёт. */
+const PROBE_CODE = "0".repeat(16);
 
 export interface TaskView {
   id: string;
@@ -90,6 +102,13 @@ export interface TaskView {
   passPoints: number;
   /** куда вести игрока — у цели «канал»; у целей забега — пусто */
   link: string | null;
+  /**
+   * Как игрока проверяют в канале (Р188): `own` — канал его площадки, `external` — другой
+   * площадки, и первой кнопкой идёт бот; у остальных целей пусто. Не `link`: так уже назван адрес.
+   */
+  linkMode: ChannelLinkMode | null;
+  /** площадка канала; у остальных целей пусто — по ней клиент подписывает кнопку бота */
+  channelPlatform: PlatformId | null;
   /** места в цели с лимитом; без лимита и у выполнившего — пусто */
   slots: { left: number; total: number; holdUntil: string | null } | null;
   /** картинка 1:1 партнёрской цели — путь от адреса API; нет — значок вида */
@@ -152,6 +171,8 @@ export class TasksService implements OnModuleInit {
     @Optional() private readonly points?: TaskPointsService,
     @Optional() private readonly pass?: BattlePassService,
     @Optional() private readonly prologue?: PrologueService,
+    @Optional() private readonly external?: ExternalIdentityService,
+    @Optional() private readonly starters?: ExternalLinkStarters,
   ) {}
 
   onModuleInit(): void {
@@ -160,7 +181,7 @@ export class TasksService implements OnModuleInit {
 
   async view(account: AccountRef, at = new Date()): Promise<TaskView[]> {
     const { defs, progress, participation } = await this.state(account, at);
-    return viewOf(defs, progress, participation, at);
+    return viewOf(defs, progress, participation, at, account.platform);
   }
 
   /** Полоса очков дня и недели; `null` — сервис очков не подключён (старый состав модуля). */
@@ -203,7 +224,7 @@ export class TasksService implements OnModuleInit {
     // Прогресс остальных целей — как был; этой — после проверки площадки.
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
     const none = { coins: 0, gems: 0, shards: 0 };
-    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done], joined, at) };
+    if (done.claimed) return { claimed: false, credited: none, tasks: viewOf(defs, [...others, done], joined, at, account.platform) };
 
     const credited = { ...none };
     for (const [field, resource] of REWARD_RESOURCES) {
@@ -224,7 +245,7 @@ export class TasksService implements OnModuleInit {
       this.logger.log(JSON.stringify({ module: "tasks", event: "task_claimed", accountId, taskId, period: def.period, ...credited }));
       await this.awardPassPoints(accountId, taskId, def.passPoints, at);
     }
-    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at) };
+    return { claimed, credited, tasks: viewOf(defs, [...others, { ...done, claimed: true }], joined, at, account.platform) };
   }
 
   /**
@@ -260,12 +281,37 @@ export class TasksService implements OnModuleInit {
       // Переход до исчерпания — начало мягкого часа. После исчерпания час не
       // продлевается: иначе игрок держал бы место переходами бесконечно.
       if ((mine === null || mine.completedAt === null) && (place.slots === null || place.slots.left > 0)) await this.db(this.repository.markOpened(accountId, taskId, at));
-      return { url: def.params.url, tasks: viewOf(defs, progress, participation, at) };
+      return { url: def.params.url, tasks: viewOf(defs, progress, participation, at, account.platform) };
     }
     const done = await this.db(this.repository.complete(accountId, def, at, graceSince(at)));
     if (done === null) throw this.limitReached(accountId, taskId);
     const others = progress.filter((candidate) => candidate.taskId !== taskId);
-    return { url: def.params.url, tasks: viewOf(defs, [...others, done], withCompleted(participation, taskId, at), at) };
+    return { url: def.params.url, tasks: viewOf(defs, [...others, done], withCompleted(participation, taskId, at), at, account.platform) };
+  }
+
+  /**
+   * Ссылка на бота площадки для задания-канала другой площадки (Р188, T-0377): игрок
+   * открывает бота, тот связывает его id с игровым аккаунтом, и только после этого
+   * «Проверить» может спросить подписку. Для канала своей площадки и целей без канала
+   * бот не нужен — 400. Площадка не подключена — задание игроку не видно, и ссылки на
+   * него тоже нет. Выдача ссылки — переход к цели: от него идёт мягкий час лимита (Р82).
+   */
+  async startExternalLink(account: AccountRef, taskId: string, at = new Date()): Promise<{ url: string }> {
+    const { accountId } = account;
+    const [defs, participation] = await Promise.all([this.visible(account, at), this.db(this.repository.participation(accountId))]);
+    const def = defs.find((candidate) => candidate.taskId === taskId);
+    if (def === undefined || def.params === null) throw new TaskNotFoundError();
+    await this.restrictions.ensure(accountId, "partner_tasks", at);
+    const platform = def.params.platform;
+    if (def.kind !== "channel" || platform === undefined || platform === account.platform) throw new ValidationError("Для этого задания бот не нужен");
+    const mine = participation.get(taskId) ?? null;
+    const place = slotsFor(def.limit, mine, at);
+    if (!place.visible) throw this.limitReached(accountId, taskId);
+    if (this.external === undefined) throw new LinkUnavailableError();
+    const { url } = await this.external.startLink(account, platform);
+    this.logger.log(JSON.stringify({ module: "tasks", event: "task_link_started", accountId, taskId, platform }));
+    if ((mine === null || mine.completedAt === null) && (place.slots === null || place.slots.left > 0)) await this.db(this.repository.markOpened(accountId, taskId, at));
+    return { url };
   }
 
   /** Каталог, прогресс и участие игрока — разом: экран заданий ждёт самого долгого из трёх. */
@@ -284,19 +330,22 @@ export class TasksService implements OnModuleInit {
   }
 
   /**
-   * Подписка — у площадки игрока, ботом. Не подписан — отказ, который
-   * клиент показывает как «подпишитесь и нажмите ещё раз». Площадка
-   * проверить не может — это настройка задания: игроку «позже», команде —
-   * ошибка в лог с заданием.
+   * Подписка — у площадки канала, ботом. Канал площадки игрока спрашивается по его
+   * id; канал другой площадки — по id, который бот связал с аккаунтом (Р188), а
+   * связи нет — «сначала открой бота». Не подписан — отказ, который клиент
+   * показывает как «подпишитесь и нажмите ещё раз». Площадка проверить не может —
+   * это настройка задания: игроку «позже», команде — ошибка в лог с заданием.
    */
   private async checkJoined(account: AccountRef, def: TaskDef): Promise<void> {
     const params = def.params;
     const chat = params?.chat;
-    const membership = params?.platform === undefined ? null : this.memberships.for(params.platform);
-    if (params === null || chat === undefined || membership === null) throw new TaskCheckUnavailableError();
+    const platform = params?.platform;
+    const membership = platform === undefined ? null : this.memberships.for(platform);
+    if (params === null || chat === undefined || platform === undefined || membership === null) throw new TaskCheckUnavailableError();
+    const who = platform === account.platform ? account.platformUserId : await this.linkedUserId(account, platform);
     let joined: boolean;
     try {
-      joined = await membership.isMember(chat, account.platformUserId);
+      joined = await membership.isMember(chat, who);
     } catch (error: unknown) {
       if (error instanceof MembershipRejectedError) {
         this.logger.error(JSON.stringify({ module: "tasks", event: "task_check_misconfigured", taskId: def.taskId, chat, reason: error.message }));
@@ -306,6 +355,25 @@ export class TasksService implements OnModuleInit {
       throw error;
     }
     if (!joined) throw new TaskNotJoinedError();
+  }
+
+  /** id игрока на другой площадке, связанный с аккаунтом; связи нет — отказ с просьбой открыть бота. */
+  private async linkedUserId(account: AccountRef, platform: PlatformId): Promise<string> {
+    if (this.external === undefined) throw new TaskCheckUnavailableError();
+    const id = await this.external.externalId(account.accountId, platform);
+    if (id === null) throw new TaskLinkRequiredError();
+    return id;
+  }
+
+  /**
+   * Площадки, каналы которых видны чужим игрокам (Р188): у площадки есть и проверка
+   * подписки, и бот со ссылкой для связи аккаунтов. Пока бот не подключён, множество
+   * пусто, и каналы видны только игрокам самой площадки.
+   */
+  private linkable(): ReadonlySet<PlatformId> {
+    const starters = this.starters;
+    if (this.external === undefined || starters === undefined) return NO_LINKABLE;
+    return new Set(LINK_PLATFORMS.filter((platform) => this.memberships.for(platform) !== null && typeof starters.for(platform)?.startUrl(PROBE_CODE) === "string"));
   }
 
   /**
@@ -423,7 +491,8 @@ export class TasksService implements OnModuleInit {
    * недели на `at`.
    */
   private async visible(account: AccountRef, at: Date): Promise<TaskDef[]> {
-    return inPlay(await this.active(), at).filter((def) => visibleOn(def.params, account.platform));
+    const linkable = this.linkable();
+    return inPlay(await this.active(), at).filter((def) => visibleOn(def.params, account.platform, linkable));
   }
 
   private async active(): Promise<TaskDef[]> {
@@ -465,7 +534,13 @@ function withCompleted(participation: ReadonlyMap<string, TaskParticipation>, ta
  * двигавшаяся цель — с нулём.
  * Цель с исчерпанным лимитом, к которой игрок не переходил, не показывается.
  */
-export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgressRow[], participation: ReadonlyMap<string, TaskParticipation> = new Map(), at = new Date()): TaskView[] {
+export function viewOf(
+  defs: readonly TaskDef[],
+  progress: readonly TaskProgressRow[],
+  participation: ReadonlyMap<string, TaskParticipation> = new Map(),
+  at = new Date(),
+  platform?: PlatformId,
+): TaskView[] {
   const byTask = new Map(progress.map((row) => [row.taskId, row]));
   // Сравнение строк, а не `localeCompare`: порядок не должен зависеть от локали сервера.
   const ordered = [...defs].sort((a, b) => a.sort - b.sort || (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0));
@@ -489,6 +564,8 @@ export function viewOf(defs: readonly TaskDef[], progress: readonly TaskProgress
       reward: { coins: def.coins, gems: def.gems, shards: def.shards },
       passPoints: def.passPoints,
       link: def.params?.url ?? null,
+      linkMode: platform === undefined ? null : channelLinkMode(def, platform),
+      channelPlatform: def.kind === "channel" ? (def.params?.platform ?? null) : null,
       slots,
       image: def.image === null ? null : imagePath(def.image),
       tier: def.tier,

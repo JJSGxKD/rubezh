@@ -256,11 +256,34 @@ export const taskParamsSchema = z
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 
-/** Видна ли цель игроку этой площадки: цель без площадок — всем. */
-export function visibleOn(params: TaskParams | null, platform: PlatformId): boolean {
+/** Нет подключённых площадок: каналы чужих площадок не видны (поведение до связи аккаунтов, Р188). */
+export const NO_LINKABLE: ReadonlySet<PlatformId> = new Set();
+
+/**
+ * Видна ли цель игроку этой площадки: цель без площадок — всем.
+ *
+ * Канал другой площадки (Р188, T-0377) виден, только если площадка в `linkable`:
+ * у неё есть и проверка подписки, и бот, через который игрок свяжет аккаунты.
+ * Каналом считается цель с `chat` — схема каталога даёт `chat` только подписке на
+ * канал; площадка у ссылки и бота по-прежнему значит «где видна».
+ */
+export function visibleOn(params: TaskParams | null, platform: PlatformId, linkable: ReadonlySet<PlatformId> = NO_LINKABLE): boolean {
   if (params === null) return true;
   if (params.platforms !== undefined) return params.platforms.includes(platform);
-  return params.platform === undefined || params.platform === platform;
+  if (params.platform === undefined || params.platform === platform) return true;
+  return params.chat !== undefined && linkable.has(params.platform);
+}
+
+/**
+ * Как игрок проверяется в канале: `own` — канал его площадки, спрашиваем по его
+ * id; `external` — канал другой площадки, нужна связь аккаунтов и кнопка бота.
+ * У остальных целей способа нет.
+ */
+export type ChannelLinkMode = "own" | "external";
+
+export function channelLinkMode(def: Pick<TaskDef, "kind" | "params">, platform: PlatformId): ChannelLinkMode | null {
+  if (def.kind !== "channel" || def.params?.platform === undefined) return null;
+  return def.params.platform === platform ? "own" : "external";
 }
 
 export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected" | "counters">;

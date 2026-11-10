@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
+import { ExternalIdentityModule } from "../external-identity/external-identity.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
@@ -27,9 +28,13 @@ import { TasksService } from "./tasks.service.js";
  * Задания рекламных сетей (WP13, часть 6) — `NetworkTasksService`: модуль
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
  * них, решает он.
+ *
+ * Канал другой площадки (Р188, T-0377): подписку на нём проверяют по id, который
+ * бот площадки связал с аккаунтом, — связь и ссылку на бота даёт
+ * `ExternalIdentityModule`.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule, ExternalIdentityModule],
   controllers: [TasksController],
   providers: [
     TasksService,

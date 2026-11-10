@@ -268,7 +268,8 @@ describe("видимость канала другой площадки", () => 
   });
 
   it("viewOf без площадки игрока поле не заполняет, с площадкой — own или external", () => {
-    const defs = [channel("join_tg", "telegram"), channel("join_max", "max")];
+    // порядок списка — по `sort`, а не по id: свой канал первым
+    const defs = [channel("join_tg", "telegram"), channel("join_max", "max", { sort: 1 })];
     expect(viewOf(defs, []).map((task) => task.linkMode)).toEqual([null, null]);
     expect(viewOf(defs, [], new Map(), NOON, "telegram").map((task) => task.linkMode)).toEqual(["own", "external"]);
   });
