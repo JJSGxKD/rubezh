@@ -5,6 +5,7 @@ import { Avatar, staggerStyle } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 import "../../i18n/season";
 import { podiumSteps, scoreOf, type Scoring } from "./rating-rules";
+import { RowOpener, entryRunId } from "./run-card-link";
 
 /**
  * Пьедестал топ-3 (tasks/T-0296, Р66, `design/art/meta-v2.md` §2.4): рейтинг —
@@ -32,8 +33,10 @@ export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: S
       {steps.map((step, index) => {
         const look = STEP_LOOK[step.place];
         const score = scoreOf(step.entry, props.scoring);
+        const runId = entryRunId(step.entry);
         return (
-          <li key={step.place} data-place={step.place} className="flex min-w-0 animate-rise-in flex-col items-center" style={staggerStyle(index)}>
+          <li key={step.place} data-place={step.place} className="relative flex min-w-0 animate-rise-in flex-col items-center" style={staggerStyle(index)}>
+            {runId === null ? null : <RowOpener runId={runId} name={step.entry.name} />}
             {step.place === 1 ? <Crown size={18} aria-hidden="true" className="mb-1 text-elite" /> : null}
             <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} />
             <span className={`mt-1.5 max-w-full truncate font-display text-sm font-bold ${step.entry.isMe ? "text-accent" : "text-text"}`}>{step.entry.name}</span>
