@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
+import { ORBITER_FRAME_NAMES } from "./looks";
 import type { PickupArt } from "./pickups";
 import { secretFrameName, type SecretArt, type SecretLookState } from "./secrets-look";
 import { STATUS_MARK_FRAMES, type StatusMarkArt } from "./status-marks";
@@ -20,12 +21,12 @@ import { STATUS_TONE } from "./status-tones";
 export const ART_PPU = 2.5;
 
 /**
- * Во сколько раз растянуть кадр оберега, чтобы его свечение совпало с зоной
- * удара: ячейка кадра — 16 единиц (`units` в design/art/src/fx.mjs), свечение
- * — 0,8 ячейки, а бьёт оберег на `ORBITER_RADIUS` вокруг себя.
+ * Во сколько раз растянуть кадр оберега, чтобы его свечение совпало с
+ * радиусом рисунка: ячейка кадра — `cellUnits` единиц (`units` в
+ * design/art/src/fx.mjs, у оберега 16), свечение — 0,8 ячейки.
  */
-export function orbiterArtScale(orbiterRadius: number): number {
-  return (orbiterRadius * 2) / (16 * 0.8);
+export function orbiterArtScale(orbiterRadius: number, cellUnits = 16): number {
+  return (orbiterRadius * 2) / (cellUnits * 0.8);
 }
 
 /** Кадров шага у врага и героя. */
@@ -192,7 +193,7 @@ export class ArtMode {
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[]; hurt: ArtFrame | null } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
-  private orbiterFrame: ArtFrame | null = null;
+  private orbiterFrames = new Map<string, ArtFrame>();
   private secretFrames: SecretArt | null = null;
   private statusMarkFrames: StatusMarkArt = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
@@ -258,7 +259,11 @@ export class ArtMode {
       scale: this.scale,
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
-    this.orbiterFrame = this.atlas.find("fx/orbiter_ward0");
+    this.orbiterFrames = new Map();
+    for (const name of ORBITER_FRAME_NAMES) {
+      const frame = this.atlas.find(name);
+      if (frame !== null) this.orbiterFrames.set(name, frame);
+    }
     // Тайники: кадры `secret/<вид>/<состояние>` атласа env; нет кадра — тайник остаётся фигурой.
     const states: readonly SecretLookState[] = ["found", "active", "hint"];
     this.secretFrames = Object.fromEntries(
@@ -276,11 +281,12 @@ export class ArtMode {
   }
 
   /**
-   * Кадр оберега «Оберегов»; `null` — режим выключен. Плоский бирюзовый круг
-   * фигуры среди спрайтов выглядел заплаткой.
+   * Кадр объекта орбиты по имени кадра из `orbiterLook`; `null` — режим
+   * выключен или кадра нет в атласе (тогда рисуется фигура). Плоский
+   * бирюзовый круг среди спрайтов выглядел заплаткой.
    */
-  orbiterArt(): ArtFrame | null {
-    return this.enabled ? this.orbiterFrame : null;
+  orbiterArt(frameName: string): ArtFrame | null {
+    return this.enabled ? (this.orbiterFrames.get(frameName) ?? null) : null;
   }
 
   /** Кадры тайников для `SecretsRenderer`; `null` — режим выключен. */
