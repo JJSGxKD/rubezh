@@ -10,6 +10,7 @@ import { damageShares, loadRunDetail, type RunDetail } from "../../state/run-det
 import { ItemIcon } from "../item-icons";
 import { isEvolutionWeapon } from "../run/evolution-hints";
 import { RarityGlow, itemLabel, slotIcon, toneOf } from "./arsenal-parts";
+import { RunCardButton } from "./run-card-link";
 
 /**
  * Лист забега из «Последних забегов» профиля (docs/35-stage4-plan.md, WP4;
@@ -57,7 +58,7 @@ export function RunDetailSheet(props: { runId: string; onClose(): void }): React
     >
       {state.status === "loading" ? <p className="text-sm text-text-muted">{t("runDetail.loading")}</p> : null}
       {state.status === "failed" ? <ErrorState text={t("runDetail.failed")} onRetry={() => void load()} /> : null}
-      {state.status === "ready" ? <Body run={state.run} /> : null}
+      {state.status === "ready" ? <Body run={state.run} onCard={props.onClose} /> : null}
     </Modal>
   );
 }
@@ -73,7 +74,7 @@ function Part(props: { title: string; children: ReactNode }): ReactNode {
   );
 }
 
-function Body(props: { run: RunDetail }): ReactNode {
+function Body(props: { run: RunDetail; onCard(): void }): ReactNode {
   const { run } = props;
   const ratingKey = `runDetail.rating.${run.rating}`;
   // Подробностей нет — забег записан сборкой до листа: честно сказать, а не рисовать нули.
@@ -106,6 +107,9 @@ function Body(props: { run: RunDetail }): ReactNode {
       </div>
 
       {old ? <p className="text-xs text-text-muted">{t("runDetail.old")}</p> : null}
+
+      {/* Карточка есть у забега с очками: пролог и забег до очков её не имеют, кнопки у них нет. */}
+      {typeof run.points !== "number" ? null : <RunCardButton runId={run.runId} onBeforeOpen={props.onCard} />}
 
       <Reward run={run} />
 

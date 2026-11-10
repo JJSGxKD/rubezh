@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
@@ -16,15 +16,17 @@ import { PARTNER_RULES, PARTNER_STATUSES, bindsNewPlayers, type PartnerStatus } 
  * привязки нет.
  */
 
-export type LinkBindingDecision = "bind" | "no_partner" | "inactive" | "too_old" | "slot_taken";
+export type LinkBindingDecision = "bind" | "no_partner" | "own_account" | "inactive" | "too_old" | "slot_taken";
 
 /**
  * Привязывать ли по касанию: решение без базы. Порядок отказов — от «кому
- * привязывать» к «можно ли именно сейчас»: нет партнёра, он не активен, аккаунт
- * вышел за окно, слот занят.
+ * привязывать» к «можно ли именно сейчас»: нет партнёра, это его собственный
+ * аккаунт (T-0217: партнёр — игрок и приводить сам себя не может), партнёр не
+ * активен, аккаунт вышел за окно, слот занят.
  */
-export function linkBindingDecision(input: { partnerStatus: PartnerStatus | null; accountAgeDays: number; slot: SourceSlot }): LinkBindingDecision {
+export function linkBindingDecision(input: { partnerStatus: PartnerStatus | null; ownAccount: boolean; accountAgeDays: number; slot: SourceSlot }): LinkBindingDecision {
   if (input.partnerStatus === null) return "no_partner";
+  if (input.ownAccount) return "own_account";
   if (!bindsNewPlayers(input.partnerStatus)) return "inactive";
   if (input.accountAgeDays > PARTNER_RULES.bindWindowDays) return "too_old";
   if (input.slot !== "free") return "slot_taken";
@@ -45,7 +47,7 @@ const DAY_MS = 86_400_000;
 
 const ownerRow = z.object({ code: z.string(), partner_id: z.string() });
 const accountRow = z.object({ created_at: z.date() });
-const partnerRow = z.object({ status: z.string() });
+const partnerRow = z.object({ status: z.string(), own_account: z.boolean() });
 
 /** Статус из строки базы; незнакомый — `null`, как «партнёра нет». */
 function statusOf(raw: unknown): PartnerStatus | null {
@@ -55,6 +57,8 @@ function statusOf(raw: unknown): PartnerStatus | null {
 
 @Injectable()
 export class PartnerLinkBinder {
+  private readonly logger = new Logger("partners");
+
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   /**
@@ -71,14 +75,18 @@ export class PartnerLinkBinder {
     return await this.prisma.$transaction(async (tx): Promise<LinkBindingDecision> => {
       const slot = await lockSourceSlot(tx, touch.accountId);
       const [account] = await tx.$queryRaw<unknown[]>`SELECT created_at FROM account WHERE account_id = ${touch.accountId}::uuid`;
-      const [partner] = await tx.$queryRaw<unknown[]>`SELECT status FROM partner WHERE partner_id = ${owner.partnerId}::uuid`;
+      // Свой аккаунт партнёра — по связи карточки с аккаунтом, прочитанной в той же транзакции: кабинет мог открыться только что.
+      const [partner] = await tx.$queryRaw<unknown[]>`
+        SELECT status, coalesce(account_id = ${touch.accountId}::uuid, false) AS own_account FROM partner WHERE partner_id = ${owner.partnerId}::uuid`;
       // Аккаунта нет — привязывать некого: возраст считаем вышедшим за окно. Статус, которого код не знает
       // (из будущей версии), партнёра активным не делает.
       const decision = linkBindingDecision({
         partnerStatus: partner === undefined ? null : statusOf(partner),
+        ownAccount: partner !== undefined && partnerRow.parse(partner).own_account,
         accountAgeDays: account === undefined ? Number.POSITIVE_INFINITY : (touch.at.getTime() - accountRow.parse(account).created_at.getTime()) / DAY_MS,
         slot,
       });
+      if (decision === "own_account") this.logger.log(JSON.stringify({ module: "partners", event: "partner_bind_refused", reason: decision, partnerId: owner.partnerId, accountId: touch.accountId }));
       if (decision !== "bind") return decision;
       // Слот под блокировкой свободен, так что дубля быть не должно; первичный ключ — последний
       // рубеж, и повтор не роняет задание очереди.
