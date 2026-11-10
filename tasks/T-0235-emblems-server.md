@@ -3,8 +3,8 @@ id: T-0235
 title: Знаки у имени — сервер: каталог, статусные и сезонные знаки, выбор знака
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0106, T-0107, T-0126]
