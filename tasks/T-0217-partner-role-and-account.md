@@ -38,6 +38,7 @@ shared:
   - backend/api/src/modules/ad-conversions/direct-launch-sweep.ts
   - backend/api/test/ad-conversions.integration.test.ts
   - backend/api/test/helpers/memory-partner-accounts.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
