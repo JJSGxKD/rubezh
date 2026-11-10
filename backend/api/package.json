@@ -22,6 +22,7 @@
     "wallet:reconcile": "node --conditions=source --import @swc-node/register/esm-register src/cli/wallet-reconcile.ts",
     "fx:manual": "node --conditions=source --import @swc-node/register/esm-register src/cli/fx-manual.ts",
     "changelog:import": "node --conditions=source --import @swc-node/register/esm-register src/cli/changelog-import.ts",
+    "content:import": "node --conditions=source --import @swc-node/register/esm-register src/cli/content-import.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy"
