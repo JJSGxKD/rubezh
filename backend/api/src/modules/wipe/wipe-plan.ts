@@ -31,7 +31,7 @@ const wipe = (why: string): WipeDecision => ({ action: "wipe", why });
 /** Решение по каждой модели Prisma. Новая модель без строки здесь — падение теста. */
 export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   // --- остаются: люди, их настройки и история ---
-  Account: keep("аккаунт, имя и аватар остаются (Р87)"),
+  Account: keep("аккаунт, имя и аватар остаются (Р87); выбранный знак у имени (shown_emblem_id) остаётся, но после вайпа не действует: выполненных достижений нет, и у имени знак по умолчанию (T-0235)"),
   AccountSettings: keep("настройки игрока остаются"),
   TestNotice: keep("принятое предупреждение о тесте остаётся"),
   AccountRole: keep("роли команды"),
