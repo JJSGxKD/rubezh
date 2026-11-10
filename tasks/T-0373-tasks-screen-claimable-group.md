@@ -3,7 +3,7 @@ id: T-0373
 title: Экран заданий — юзернейм бота только на «День», «Можно забрать» группой наверху вкладки
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead2-3
 size: M

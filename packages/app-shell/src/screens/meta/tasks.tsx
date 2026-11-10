@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Clock } from "lucide-react";
-import { ContentColumn, ErrorState, InfoNotice, PageTitle, Screen, SegmentedControl } from "../../design-system/components";
+import { ContentColumn, ErrorState, InfoNotice, PageTitle, Screen, SectionTitle, SegmentedControl } from "../../design-system/components";
 import { t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
@@ -32,14 +32,14 @@ import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { Achievements } from "./achievements";
-import { BotMentionRows } from "./bot-mention-rows";
+import { BotMentionRows, useBotMention } from "./bot-mention-rows";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskPointsBar } from "./task-points";
 import { readyIn } from "./task-points-rules";
 import { TaskRow } from "./task-row";
 import { rewardText } from "./task-reward";
-import { TASK_TAB_OF, viewAfterLoad, type TasksView } from "./tasks-rules";
+import { TASK_TAB_OF, hasClaimableGroup, tabLayout, viewAfterLoad, type TasksView } from "./tasks-rules";
 
 /**
  * «Задания»: ежедневные, недельные и достижения
@@ -184,11 +184,9 @@ export function TasksScreen(): ReactNode {
   const networks = state.status === "ready" ? state.networks : [];
   const view: TasksView = chosen ?? "daily";
   const tasks = sortTasks(all.filter((task) => tabOf(task) === TASK_TAB_OF[view]));
-  // Порядок вкладки общий (WP13, часть 6): что можно забрать — первым,
-  // задания сетей — сразу за ним, дальше — остальное.
-  const claimable = tasks.filter(isClaimable);
-  const rest = tasks.filter((task) => !isClaimable(task));
   const partner = view === "partner";
+  // Юзернейм бота — только на «Дне»; запрос уходит при первом открытии вкладки (Р186).
+  const bot = useBotMention(view === "daily");
   // Показы партнёрских заданий (T-0224): событие на задание, чья карточка
   // нарисована на вкладке «Партнёры»; ref живёт, пока открыт экран.
   const shownPartner = useRef<Set<string>>(new Set());
@@ -200,6 +198,24 @@ export function TasksScreen(): ReactNode {
     }
   }, [state, view]);
   const partnerClosed = useRestricted(PARTNER_RESTRICTION);
+  // Порядок вкладки (Р186): всё, что можно забрать, — группой «Можно забрать»
+  // наверху; задания сетей — сразу под группой, дальше — остальное.
+  const pointsReady = points === null ? 0 : view === "daily" ? readyIn(points.daily) : view === "weekly" ? readyIn(points.weekly) : 0;
+  const layout = tabLayout({ view, tasks, pointsReady, partnerClosed });
+  const { claimable, rest } = layout;
+  const botInGroup = view === "daily" && bot.ready;
+  const pointsBar =
+    (view === "daily" || view === "weekly") && points !== null ? (
+      <div className="mb-3">
+        <TaskPointsBar
+          period={view}
+          bar={points[view]}
+          claiming={pointsBusy}
+          notice={pointsNotice?.period === view ? pointsNotice.text : null}
+          onClaim={(step) => void claimPoints(view, step)}
+        />
+      </div>
+    ) : null;
   // Знак на вкладке — сколько наград там ждёт: игрок видит их, не перебирая вкладки.
   // К наградам заданий вкладок «День» и «Неделя» прибавляются готовые ступени их полос.
   const waiting = (tab: TaskTab) =>
@@ -252,9 +268,6 @@ export function TasksScreen(): ReactNode {
           {!tasksAvailable() && view !== "achievements" ? <InfoNotice text={t("tasks.guest")} /> : null}
         </div>
 
-        {/* Юзернейм бота приоритетнее заданий, но не выше вкладок: первым под ними, на любой вкладке. */}
-        <BotMentionRows />
-
         {/* Витрина грузит себя сама: сбой списка заданий её не закрывает, знак вкладки лишь не обновится. */}
         {view === "achievements" ? <Achievements onChanged={() => void refresh()} /> : null}
 
@@ -265,24 +278,22 @@ export function TasksScreen(): ReactNode {
           // Ключ — вид: список монтируется заново, и лесенка появления
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
+            {/* Юзернейм бота — только «День» (Р186): готовый встаёт в группу первым, иначе — сразу под группой. */}
+            <ClaimableGroup
+              shown={hasClaimableGroup(layout) || botInGroup}
+              botInGroup={botInGroup}
+              bot={view === "daily" ? <BotMentionRows model={bot} place={botInGroup ? "group" : "list"} /> : null}
+            >
+              {layout.pointsInGroup ? pointsBar : null}
+              <div className="grid gap-2">{claimable.map((task, index) => row(task, index))}</div>
+            </ClaimableGroup>
             {view === "daily" || view === "weekly" ? <ResetLine period={view} /> : null}
-            {(view === "daily" || view === "weekly") && points !== null ? (
-              <div className="mb-3">
-                <TaskPointsBar
-                  period={view}
-                  bar={points[view]}
-                  claiming={pointsBusy}
-                  notice={pointsNotice?.period === view ? pointsNotice.text : null}
-                  onClaim={(step) => void claimPoints(view, step)}
-                />
-              </div>
-            ) : null}
+            {layout.pointsInGroup ? null : pointsBar}
             {partner ? <RestrictedPlaque kinds={PARTNER_RESTRICTION} className="mb-3" /> : null}
             {/* Под ограничением вкладка пуста не потому, что заданий нет: это говорит плашка. */}
             {tasks.length === 0 && (!partner || (networkRows === 0 && !partnerClosed)) ? <p className="text-sm text-text-muted">{t("tasks.empty")}</p> : null}
             {/* relative: строка сети, пока её задание не нарисовано, стоит невидимой поверх списка */}
             <div className="relative grid gap-2">
-              {claimable.map((task, index) => row(task, index))}
               {partner ? <NetworkTasks items={networks} firstIndex={claimable.length} refresh={refresh} onCount={setNetworkRows} /> : null}
               {rest.map((task, index) => row(task, claimable.length + (partner ? networkRows : 0) + index))}
             </div>
@@ -291,6 +302,25 @@ export function TasksScreen(): ReactNode {
         {burst === null ? null : <RewardBurst key={burst.key} burst={burst} onDone={() => setBurst(null)} />}
       </ContentColumn>
     </Screen>
+  );
+}
+
+/**
+ * Группа «Можно забрать» в самом верху вкладки (Р186). Блок бота, если он
+ * готов, стоит в ней первым; не готов — идёт сразу под группой.
+ */
+function ClaimableGroup(props: { shown: boolean; botInGroup: boolean; bot: ReactNode; children: ReactNode }): ReactNode {
+  return (
+    <>
+      {props.shown ? (
+        <section aria-label={t("tasks.claimableGroup")} className="mb-3">
+          <SectionTitle>{t("tasks.claimableGroup")}</SectionTitle>
+          {props.botInGroup ? props.bot : null}
+          {props.children}
+        </section>
+      ) : null}
+      {props.botInGroup ? null : props.bot}
+    </>
   );
 }
 
