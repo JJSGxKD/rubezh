@@ -1,4 +1,5 @@
-import type { Api, InputRichMessage } from "grammy";
+import type { Api } from "grammy";
+import type { InputRichMessage } from "grammy/types";
 import { z } from "zod";
 import { chatTargetOf, type ChatRef } from "../ports/chat-target.js";
 import { callBotApi, chatFields, ephemeralFields, type Ephemeral } from "./telegram-api-call.js";

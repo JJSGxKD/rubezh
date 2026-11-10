@@ -202,7 +202,7 @@ export class TelegramBotApi {
    */
   async getUpdates(offset: number | null, timeoutSec: number, signal?: AbortSignal): Promise<{ updates: TelegramUpdate[]; lastUpdateId: number | null }> {
     const result = await callBotApi("getUpdates", timeoutSec * 1000 + POLL_GRACE_MS, signal, (abort) =>
-      this.api.getUpdates({ ...(offset === null ? {} : { offset }), timeout: timeoutSec, allowed_updates: [...ALLOWED_UPDATES] }, abort),
+      this.api.getUpdates({ ...(offset === null ? {} : { offset }), timeout: timeoutSec, allowed_updates: allowedUpdatesParam() }, abort),
     );
     const raw = z.array(z.unknown()).parse(result);
     const updates: TelegramUpdate[] = [];
@@ -406,7 +406,7 @@ export class TelegramBotApi {
 
   async setWebhook(url: string, secretToken: string, signal?: AbortSignal): Promise<void> {
     await callBotApi("setWebhook", REQUEST_TIMEOUT_MS, signal, (abort) =>
-      this.api.setWebhook(url, { secret_token: secretToken, allowed_updates: [...ALLOWED_UPDATES], drop_pending_updates: false }, abort),
+      this.api.setWebhook(url, { secret_token: secretToken, allowed_updates: allowedUpdatesParam(), drop_pending_updates: false }, abort),
     );
   }
 
@@ -430,4 +430,13 @@ function sendFlags(options: SendOptions): { disable_notification?: boolean; ephe
     ...(options.silent === undefined ? {} : { disable_notification: options.silent }),
     ...(options.ephemeral === undefined ? {} : { ephemeral_message_parameters: ephemeralFields(options.ephemeral) }),
   };
+}
+
+/**
+ * Список обновлений для запроса. Типы grammY 1.46.0 не знают `widget_query`,
+ * хотя Telegram их принимает; приведение уйдёт вместе с переходом на методы
+ * grammY.
+ */
+function allowedUpdatesParam(): NonNullable<NonNullable<Parameters<Api["getUpdates"]>[0]>["allowed_updates"]> {
+  return [...ALLOWED_UPDATES] as unknown as NonNullable<NonNullable<Parameters<Api["getUpdates"]>[0]>["allowed_updates"]>;
 }
