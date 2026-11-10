@@ -4,6 +4,7 @@ import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
+import type { CabinetState } from "../partners/partner-cabinet.js";
 import { PARTNER_STATUSES, partnerInputSchema, partnerUpdateSchema } from "../partners/partner-rules.js";
 import { PartnersService, type PartnerDetail, type PartnerFunnel, type PartnerView } from "../partners/partners.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
@@ -14,6 +15,9 @@ import { AdminSessionGuard } from "./admin-session.guard.js";
 
 /** Смена статуса: сам статус и причина; длину причины проверяет сервис — одна проверка на все пути. */
 const statusSchema = z.object({ status: z.enum(PARTNER_STATUSES), reason: z.string().max(1_000) }).strict();
+
+/** Открыть или закрыть кабинет: одно булево поле, лишнего не принимаем. */
+const cabinetSchema = z.object({ open: z.boolean() }).strict();
 
 /**
  * Партнёры в панели (docs/35-stage4-plan.md WP41, часть 2; docs/29-admin-panel.md):
@@ -72,6 +76,19 @@ export class AdminPartnersController {
     const actor = await this.consume(request);
     const { status, reason } = parse(() => statusSchema.parse(body), "Нужны статус — заявка, активен, приостановлен или отклонён — и причина");
     return { data: await this.partners.setStatus(actor, partnerIdOf(partnerId), status, reason) };
+  }
+
+  /**
+   * Открыть или закрыть кабинет партнёра (T-0217, Р136): роль `partner` и связь карточки с аккаунтом пишутся
+   * только отсюда. Право на правку карточки нужно, а выдать роль может только тот, у кого есть `roles.assign`.
+   */
+  @Post(":partnerId/cabinet")
+  @RequirePermission("partners.edit")
+  async cabinet(@Req() request: unknown, @Param("partnerId") partnerId: string, @Body() body: unknown): Promise<{ data: CabinetState }> {
+    const actor = await this.consume(request);
+    const { open } = parse(() => cabinetSchema.parse(body), "Нужно поле open: true или false");
+    const id = partnerIdOf(partnerId);
+    return { data: open ? await this.partners.openCabinet(actor, id) : await this.partners.closeCabinet(actor, id) };
   }
 
   private async consume(request: unknown) {
