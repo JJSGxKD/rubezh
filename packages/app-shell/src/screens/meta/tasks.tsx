@@ -14,7 +14,9 @@ import {
   claimFailureKey,
   createTasksApi,
   isClaimable,
+  isExternalChannel,
   isFeedTask,
+  openExternalBot,
   openTaskLink,
   pointsFailureKey,
   sortTasks,
@@ -229,11 +231,23 @@ export function TasksScreen(): ReactNode {
    */
   const open = (task: TaskItem, link: string): void => {
     track("task_link_opened", { task: task.id, kind: task.kind });
+    // Канал другой площадки (Р188): сначала бот, он свяжет аккаунты и пришлёт сам канал.
+    if (isExternalChannel(task)) return void startBot(task);
     openTaskLink(link);
     void api.open(task.id).then((response) => {
       if (response.ok) setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
       else if (response.code === TASK_LIMIT_REACHED) close(task.id);
     });
+  };
+
+  /**
+   * Бот площадки канала: ссылку с кодом выдаёт сервер, открывает площадка. Отказ — строкой под
+   * карточкой; кнопки остаются, повторить можно сразу.
+   */
+  const startBot = async (task: TaskItem): Promise<void> => {
+    setNotice(null);
+    const result = await openExternalBot(api, task);
+    if (!result.ok) setNotice({ taskId: task.id, text: t(result.key) });
   };
 
   const row = (task: TaskItem, index: number): ReactNode => (

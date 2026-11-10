@@ -259,6 +259,7 @@ model Account {
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
+  externalLinks    ExternalIdentity[]
   taskChannelWatch TaskChannelWatch[]
 
   @@unique([platform, platformUserId])
@@ -2863,4 +2864,24 @@ model ActivityDaily {
   computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
 
   @@map("activity_daily")
+}
+
+// Связь с аккаунтом MAX или VK (docs/35-stage4-plan.md Р188, tasks/T-0377)
+
+/// Связь игрового аккаунта с его аккаунтом на другой площадке — для заданий «подпишись через бота»,
+/// не для входа. Пара «площадка + id» принадлежит одному аккаунту навсегда, у аккаунта на площадке
+/// одна связь: строку не меняют и не освобождают, перепривязка — только через поддержку. `CHECK` в
+/// миграции: площадка — `max` или `vk`
+model ExternalIdentity {
+  accountId      String   @map("account_id") @db.Uuid
+  platform       Platform
+  /// id игрока на площадке, как его присылает бот; в аналитику не пишется
+  externalUserId String   @map("external_user_id") @db.VarChar(64)
+  linkedAt       DateTime @default(now()) @map("linked_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, platform])
+  @@unique([platform, externalUserId])
+  @@map("external_identity")
 }

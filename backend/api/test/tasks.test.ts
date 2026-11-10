@@ -330,6 +330,8 @@ function setup(options: { watch?: boolean } = {}) {
     undefined,
     undefined,
     undefined,
+    undefined,
+    undefined,
     options.watch === false ? undefined : (watch as unknown as ChannelWatchService),
   );
   service.onModuleInit();

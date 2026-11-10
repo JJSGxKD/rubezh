@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
+import { ExternalIdentityModule } from "../external-identity/external-identity.module.js";
 import { MediaModule } from "../media/media.module.js";
 import { NotificationsModule } from "../notifications/notifications.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
@@ -34,12 +35,16 @@ import { TasksService } from "./tasks.service.js";
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
  * них, решает он.
  *
+ * Канал другой площадки (Р188, T-0377): подписку на нём проверяют по id, который
+ * бот площадки связал с аккаунтом, — связь и ссылку на бота даёт
+ * `ExternalIdentityModule`.
+ *
  * Перепроверка подписки после награды (Р115, T-0178) — `ChannelWatchService` и
  * его расписание `ChannelWatchJob`: наружу они не выходят, службу окон зовёт
  * только забор награды из `TasksService`.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule, NotificationsModule],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule, NotificationsModule, ExternalIdentityModule],
   controllers: [TasksController, TaskSignalsController],
   providers: [
     TasksService,
