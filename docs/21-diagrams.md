@@ -135,6 +135,7 @@ erDiagram
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
     PARTNER ||--o{ PROMO_CAMPAIGN : "коды партнёра"
     PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
+    ACCOUNT |o--o| PARTNER : "кабинет партнёра: аккаунт карточки, остаётся после закрытия"
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
     PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
@@ -448,7 +449,7 @@ erDiagram
 
     ACCOUNT_ROLE {
         uuid account_id PK,FK
-        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder"
+        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder|partner"
         uuid granted_by "nullable: выдано на старте по списку в окружении"
         datetime granted_at
     }
@@ -944,7 +945,7 @@ erDiagram
         uuid created_by "без FK"
         datetime created_at
         datetime updated_at
-        string telegram_id "nullable, UK: вход в будущий кабинет"
+        string telegram_id "nullable, UK: по нему «Открыть кабинет» находит аккаунт партнёра"
         string status "applied|active|paused|rejected, по умолчанию active: привязывает новых игроков только active"
         string country "nullable: ISO-код двух букв, где получает выплаты"
         string payout_currency "nullable: код из ядра курсов"
@@ -953,6 +954,7 @@ erDiagram
         string postback_url "nullable: общий адрес постбэка партнёра с макросами (T-0070); действует на ссылки партнёра без своего адреса"
         datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
         string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
+        uuid account_id FK "nullable, UK: игровой аккаунт партнёра (T-0217, Р136); пишется только из карточки, остаётся после закрытия кабинета; аккаунт удалён — пусто"
     }
 
     PARTNER_BINDING {
@@ -1561,7 +1563,10 @@ erDiagram
   (§1.3). Ссылка партнёра (`LINK.partner_id`, T-0067) привязывает так же,
   но по первому входу: сессия вида `click` или `link` после записи зовёт
   привязку, та берёт тот же слот источника и пишет `PARTNER_BINDING` с
-  `link_code`.
+  `link_code`. Партнёр — игрок: `PARTNER.account_id` связывает карточку с
+  аккаунтом (кнопка «Открыть кабинет» выдаёт ему роль `partner`, T-0217), и
+  привязать самого себя он не может ни ссылкой, ни кодом; связь остаётся и
+  после закрытия кабинета.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
