@@ -41,6 +41,7 @@ import {
   taskDefSchema,
   taskGroup,
   taskOrderSchema,
+  TASK_KIND_IDS,
   TASK_PERIODS,
   type PoolTier,
   type TaskGroup,
@@ -1040,7 +1041,7 @@ describe("каталог из панели", () => {
     const ctx = setup();
     const owner = await person(ctx, OWNER_ID);
     const view = await ctx.service.catalog(owner);
-    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "boss_kills", "elite_kills", "chests_opened", "crystals_collected", "evolution_runs", "friends", "account_level", "channel", "link", "bot"]);
+    expect(view.kinds).toEqual(["runs", "kills", "survive_sec", "best_survival_sec", "run_level", "xp_collected", "weapon_runs", "element_runs", "difficulty_runs", "difficulty_survive_sec", "boost_runs", "boss_kills", "elite_kills", "chests_opened", "crystals_collected", "evolution_runs", "friends", "account_level", "channel", "link", "bot", "home_screen", "story_share"]);
     expect(view.periods).toEqual(["daily", "weekly", "achievement"]);
     expect(view.tasks).toHaveLength(CATALOG.length);
   });
@@ -1723,5 +1724,17 @@ describe("достижения: состояние игрока и скрыты�
     expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
     await ctx.service.save(designer, { ...fresh, category: "mastery", hint: "Другой намёк", prestige: 20 });
     expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "mastery", hint: "Другой намёк", prestige: 20 });
+  });
+});
+
+describe("виды по сигналу клиента в каталоге (T-0375)", () => {
+  it("оба вида входят в список видов цели", () => {
+    expect(TASK_KIND_IDS).toContain("home_screen");
+    expect(TASK_KIND_IDS).toContain("story_share");
+  });
+
+  it("список в панели: главный экран — среди достижений, история — среди недельных", () => {
+    expect(taskGroup({ kind: "home_screen", period: "achievement" })).toBe("achievement");
+    expect(taskGroup({ kind: "story_share", period: "weekly" })).toBe("weekly");
   });
 });
