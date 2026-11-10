@@ -3,8 +3,8 @@ id: T-0303
 title: Контент на сервере — версии и черновики в базе, версия 0 из репозитория, правка черновика, проверка через sim-worker и разница с базой
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0302]
