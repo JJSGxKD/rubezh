@@ -28,6 +28,7 @@ shared:
   - docs/29-admin-panel.md
   - scripts/content/export-snapshot.ts
   - packages/core-game/test/content-snapshot.test.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
