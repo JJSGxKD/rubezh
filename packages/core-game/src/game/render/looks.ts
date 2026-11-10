@@ -65,6 +65,15 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   cordon: { shape: "diamond", color: 0xb3203f },
 };
 
+/**
+ * Тон тела конкретного врага, когда тон его паттерна не подходит: красная гамма
+ * паттерна не говорит о стихии. Форма остаётся от паттерна.
+ */
+export const ENEMY_TONE_BY_ID: Readonly<Record<string, number>> = {
+  // тон холода: тот же голубой, которым читается холод в гайдбуке и на знаках состояний
+  ice_spirit: 0x6fc8ff,
+};
+
 /** Ранг врага на канве: обычный не задан. */
 export type EnemyRankLook = "elite" | "boss" | undefined;
 
@@ -83,8 +92,8 @@ const RANK_TINT = {
  * подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
  * останется без своего цвета элиты.
  */
-export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook): number {
-  const color = ENEMY_LOOKS[pattern].color;
+export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook, enemyId?: string): number {
+  const color = (enemyId === undefined ? undefined : ENEMY_TONE_BY_ID[enemyId]) ?? ENEMY_LOOKS[pattern].color;
   if (rank === undefined) return color;
   return mixChannels(color, RANK_TINT[rank].color, RANK_TINT[rank].mix);
 }
@@ -100,6 +109,33 @@ export function enemyRim(rank: EnemyRankLook): EnemyRim | null {
   if (rank === "elite") return { color: 0xffd15c, width: 2 };
   if (rank === "boss") return { color: 0xffd15c, width: 3 };
   return null;
+}
+
+/** Облик объекта орбиты: кадр арта, радиус рисунка (единицы) и цвет фигуры без арта. */
+export interface OrbiterLook {
+  frame: string;
+  radius: number;
+  /** ячейка кадра в единицах (`units` в design/art/src/fx.mjs) */
+  cellUnits: number;
+  color: number;
+}
+
+const WARD_LOOK: OrbiterLook = { frame: "fx/orbiter_ward0", radius: 16, cellUnits: 16, color: 0x46d9c6 };
+
+/**
+ * Облик по id оружия-орбиты. Груз кистеня крупнее камня-оберега: рисунок
+ * только крупнее, зона удара в симуляции у всех одна (`ORBITER_RADIUS`).
+ */
+export const ORBITER_LOOKS: Readonly<Record<string, OrbiterLook>> = {
+  flail: { frame: "fx/orbiter_flail0", radius: 24, cellUnits: 20, color: 0xb8c4d9 },
+  whirl: { frame: "fx/orbiter_whirl0", radius: 26, cellUnits: 22, color: 0xe6edff },
+};
+
+/** Имена кадров всех видов объектов орбиты — их атлас ищет при сборке. */
+export const ORBITER_FRAME_NAMES: readonly string[] = [WARD_LOOK.frame, ...Object.values(ORBITER_LOOKS).map((look) => look.frame)];
+
+export function orbiterLook(weaponId: string): OrbiterLook {
+  return ORBITER_LOOKS[weaponId] ?? WARD_LOOK;
 }
 
 /**
