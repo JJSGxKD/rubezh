@@ -3,8 +3,8 @@ id: T-0409
 title: Архив рекламных блоков — «В архив» выключает блок и убирает его из списка
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
