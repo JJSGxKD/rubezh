@@ -299,6 +299,12 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
         await expect(insert({ category: "pvp" })).rejects.toThrow();
         await expect(insert({ coins: 0 })).rejects.toThrow();
         await expect(insert({ kind: "kills", category: "combat", coins: 0 })).rejects.toThrow();
+        // вид и категория знака идут парой: status — status, season — season
+        await expect(insert({ kind: "status", category: "combat", tier: "rare", coins: 0 })).rejects.toThrow();
+        await expect(insert({ kind: "status", category: "season", tier: "rare", coins: 0 })).rejects.toThrow();
+        await expect(insert({ kind: "season", category: null, tier: "rare", coins: 0 })).rejects.toThrow();
+        await expect(insert({ kind: "runs", category: "status" })).rejects.toThrow();
+        await expect(insert({ kind: "kills", category: "season" })).rejects.toThrow();
         // допустимое проходит: знак у достижения, знак «Команды», статус без награды
         await expect(insert({ category: "combat", tier: "epic" })).resolves.toBe(1);
         await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${taskId}`;

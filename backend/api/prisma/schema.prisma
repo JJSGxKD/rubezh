@@ -194,8 +194,12 @@ model Account {
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
   /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
+  /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
+  shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
 
   roles         AccountRole[]
+  // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
+  shownEmblem   TaskDef?      @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
   runs          Run[]
   purchases     Purchase[]
   sessions      AccountSession[]
@@ -1652,6 +1656,9 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// редкость знака у имени (T-0235, Р149): common…mythic по шкале предметов и `team`
+  /// для знака «Команда»; пусто — у достижения знака нет. Только у достижений (`CHECK` в миграции)
+  emblemTier      String?    @map("emblem_tier") @db.VarChar(16)
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
@@ -1663,6 +1670,7 @@ model TaskDef {
   participants TaskParticipant[]
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
+  shownBy      Account[]             @relation("account_shown_emblem")
 
   @@map("task_def")
 }
