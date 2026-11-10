@@ -3,7 +3,7 @@ id: T-0391
 title: Подстройка по сильному боту — новичок не дольше среднего, лесенка 7 / 10 / 14
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
