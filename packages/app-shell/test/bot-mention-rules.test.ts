@@ -1,6 +1,6 @@
 import ruTasks from "../src/i18n/ru-tasks.json";
 import { describe, expect, it } from "vitest";
-import { buttonKey, collapsedStreak, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
+import { buttonKey, collapsedStreak, isBotMentionBlockClaimable, isBotMentionClaimable, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
 import type { BotMentionTask, BotMentionView } from "../src/state/bot-mention-api";
 
 // Правила блока «юзернейм бота» (tasks/T-0160): что показать, какая строка
@@ -138,5 +138,32 @@ describe("свёрнутая серия (Р167)", () => {
 
   it("тексты свёртки есть в словаре", () => {
     for (const key of ["botMention.collapsed", "botMention.expand", "botMention.collapse"]) expect(texts[key], key).toBeTypeOf("string");
+  });
+});
+
+// Блок бота в группе «Можно забрать» (tasks/T-0373, Р186): «Проверить» с найденным юзернеймом и есть «забрать».
+describe("isBotMentionClaimable", () => {
+  it("начато, награды за сутки нет, проверка нашла — готово", () => {
+    expect(isBotMentionClaimable(task({ started: true, lastResult: "present", rewardedToday: false }))).toBe(true);
+  });
+
+  it("не начато — не готово", () => {
+    expect(isBotMentionClaimable(task({ started: false }))).toBe(false);
+  });
+
+  it("награда за сутки получена — не готово", () => {
+    expect(isBotMentionClaimable(task({ started: true, lastResult: "present", rewardedToday: true }))).toBe(false);
+  });
+
+  it("проверка не нашла юзернейм — не готово", () => {
+    expect(isBotMentionClaimable(task({ started: true, lastResult: "absent" }))).toBe(false);
+    expect(isBotMentionClaimable(task({ started: true, lastResult: null }))).toBe(false);
+  });
+
+  it("блок готов, если готов хоть один показываемый вид; нет юзернейма бота — не готов", () => {
+    const ready = task({ kind: "bio", started: true, lastResult: "present" });
+    expect(isBotMentionBlockClaimable(view([task(), ready]))).toBe(true);
+    expect(isBotMentionBlockClaimable(view([task()]))).toBe(false);
+    expect(isBotMentionBlockClaimable(view([ready], null))).toBe(false);
   });
 });
