@@ -600,7 +600,7 @@ describe("кабинет партнёра: открыть, закрыть, че�
   /** Партнёр с карточкой и Telegram ID; его аккаунт заведён входом в игру, если `joined`. */
   async function partnerWithAccount(ctx: Ctx, telegramId: string, joined = true) {
     const owner = await person(ctx, OWNER_ID);
-    const card = await ctx.service.create(owner, { name: `Канал ${telegramId}`, contact: "@channel", note: "Договорились на 10%", telegramId, country: "KZ", payoutCurrency: "USDT", sharePercent: "12.5" }, NOW);
+    const card = await ctx.service.create(owner, { name: `Канал ${telegramId}`, contact: "@channel", note: "Договорились на 10%", telegramId, country: "KZ", payoutCurrency: "USDT", sharePercent: "12.50" }, NOW);
     const account = joined ? await person(ctx, telegramId) : null;
     return { owner, partnerId: card.partnerId, account };
   }
@@ -699,7 +699,7 @@ describe("кабинет партнёра: открыть, закрыть, че�
     const first = await partnerWithAccount(ctx, "900205");
     await ctx.service.openCabinet(first.owner, first.partnerId, NOW);
     // Telegram ID первого поменяли, а его прежний ID достался второму партнёру, — аккаунт по-прежнему связан с первым.
-    await ctx.service.update(first.owner, first.partnerId, { telegramId: "900206" }, NOW);
+    await ctx.service.update(first.owner, first.partnerId, { name: "Канал 900205", contact: "@channel", note: null, telegramId: "900206" }, NOW);
     const second = await ctx.service.create(first.owner, { name: "Второй", contact: null, note: null, telegramId: "900205" }, NOW);
 
     await expect(ctx.service.openCabinet(first.owner, second.partnerId, NOW)).rejects.toThrowError("Этот аккаунт уже привязан к партнёру «Канал 900205»");
@@ -714,7 +714,7 @@ describe("кабинет партнёра: открыть, закрыть, че�
     const { owner, partnerId, account } = await partnerWithAccount(ctx, "900207");
     const moved = await person(ctx, "900208");
     await ctx.service.openCabinet(owner, partnerId, NOW);
-    await ctx.service.update(owner, partnerId, { telegramId: "900208" }, NOW);
+    await ctx.service.update(owner, partnerId, { name: "Канал 900207", contact: "@channel", note: null, telegramId: "900208" }, NOW);
 
     await expect(ctx.service.openCabinet(owner, partnerId, NOW)).rejects.toThrowError("Кабинет уже открыт на другой аккаунт — сначала закройте его");
     expect(await ctx.roles.rolesOf(moved.accountId)).toEqual([]);

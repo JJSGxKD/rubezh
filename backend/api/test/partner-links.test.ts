@@ -71,7 +71,7 @@ describe("linkBindingDecision: привязывать ли по касанию",
   });
 
   it("порядок отказов: нет партнёра, статус, возраст, слот", () => {
-    const worst = { partnerStatus: "paused" as const, accountAgeDays: 30, slot: "referral" as const };
+    const worst = { partnerStatus: "paused" as const, ownAccount: false, accountAgeDays: 30, slot: "referral" as const };
     expect(linkBindingDecision({ ...worst, partnerStatus: null })).toBe("no_partner");
     expect(linkBindingDecision(worst)).toBe("inactive");
     expect(linkBindingDecision({ ...worst, partnerStatus: "active" })).toBe("too_old");

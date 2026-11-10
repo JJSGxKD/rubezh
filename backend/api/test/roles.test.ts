@@ -425,7 +425,7 @@ describe("роль partner в разделе «Роли» (T-0217)", () => {
     const target = await accounts.upsert({ platform: "telegram", platformUserId: "900", displayName: "Партнёр", username: null, photoUrl: null }, Date.now());
 
     for (const actor of [admin, owner]) {
-      await expect(section.grant(actor, { accountId: target.accountId, role: "partner" })).rejects.toThrowError(/карточке партнёра/);
+      await expect(section.grant(actor, { platform: "telegram", accountId: target.accountId, role: "partner" })).rejects.toThrowError(/карточке партнёра/);
     }
     expect(await roles.rolesOf(target.accountId)).toEqual([]);
     expect(roles.entries).toEqual([]);
@@ -438,7 +438,7 @@ describe("роль partner в разделе «Роли» (T-0217)", () => {
     const rolesService = new RolesService(config(), roles, accounts);
     const withSessions = new AdminRolesService(config(), accounts, rolesService, sessions, {} as RoleConfirmations);
 
-    expect(await withSessions.revoke(admin, { accountId: target.accountId, role: "partner" })).toEqual({ revoked: true, sessionsRevoked: 1 });
+    expect(await withSessions.revoke(admin, { platform: "telegram", accountId: target.accountId, role: "partner" })).toEqual({ revoked: true, sessionsRevoked: 1 });
     expect(await roles.rolesOf(target.accountId)).toEqual([]);
   });
 });

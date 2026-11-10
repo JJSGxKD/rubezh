@@ -314,7 +314,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра на жи�
 
   /** Карточка партнёра с условиями; создаётся сервисом, как из панели. */
   async function card(actor: AccountRef, name: string, telegramId: string | null) {
-    const created = await service.create(actor, { name, contact: "@channel", note: "тайная заметка", ...(telegramId === null ? {} : { telegramId }), payoutCurrency: "USDT", sharePercent: "12.5" }, NOW);
+    const created = await service.create(actor, { name, contact: "@channel", note: "тайная заметка", ...(telegramId === null ? {} : { telegramId }), payoutCurrency: "USDT", sharePercent: "12.50" }, NOW);
     return created.partnerId;
   }
 
@@ -388,7 +388,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра на жи�
     const firstId = await card(admin, "Первый кабинет", joined.platformUserId);
     await service.openCabinet(admin, firstId, NOW);
     // Telegram ID первого сменили, а прежний достался второму: аккаунт по-прежнему связан с первым.
-    await service.update(admin, firstId, { telegramId: freshTelegramId() }, NOW);
+    await service.update(admin, firstId, { name: "Первый кабинет", contact: "@channel", note: null, telegramId: freshTelegramId() }, NOW);
     const secondId = await card(admin, "Второй кабинет", joined.platformUserId);
 
     await expect(service.openCabinet(admin, secondId, NOW)).rejects.toThrowError("Этот аккаунт уже привязан к партнёру «Первый кабинет»");
