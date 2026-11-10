@@ -3,8 +3,8 @@ id: T-0218
 title: Кабинет партнёра в панели — свои ссылки и промокоды, доступ из карточки
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0217]
