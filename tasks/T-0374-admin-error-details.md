@@ -3,8 +3,8 @@ id: T-0374
 title: Ошибки запросов в панели — код, статус, номер запроса и причина внутренней ошибки по праву
 epic: E7
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -22,6 +22,9 @@ zones:
   - apps/admin/test/client.test.ts
   - apps/admin/test/error-details.test.ts
 shared:
+  - backend/api/test/donations.http.test.ts
+  - backend/api/test/partners.test.ts
+  - backend/api/test/restrictions.test.ts
   - apps/admin/src/screens/ads/BlockDialog.tsx
   - apps/admin/src/screens/ads/NetworkCards.tsx
   - apps/admin/src/screens/fx/FxScreen.tsx

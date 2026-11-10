@@ -4,7 +4,7 @@ import { formatDateTime } from "../../format";
 import { api } from "../../services";
 import { HELP } from "../../ui/help";
 import { Badge, DataTable, ErrorNotice, Loading, Panel, Select, type Column } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 
 /**
@@ -22,7 +22,7 @@ export function ModesPanel({ canEdit }: { canEdit: boolean }) {
     setSaving(row.service);
     const result = await setServiceMode(api, row.service, mode);
     setSaving(null);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     toast.success(`${serviceTitle(row.service)}: ${modeLabel(mode).toLowerCase()}`, { description: "Заработает в течение полуминуты — без перезапуска" });
     reload();
   };

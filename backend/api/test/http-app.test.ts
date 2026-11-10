@@ -109,7 +109,31 @@ describe("HTTP-приложение на Fastify", () => {
   it("отвечает на неизвестный путь общей формой ошибки", async () => {
     const response = await app.inject({ method: "GET", url: "/api/v1/no-such-thing" });
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({ error: { code: "not_found", message: "Не найдено" } });
+    expect(response.json()).toEqual({ error: { code: "not_found", message: "Не найдено", requestId: response.headers["x-request-id"] } });
+  });
+
+  it("выдаёт на каждый ответ номер запроса — UUID, разный у разных запросов", async () => {
+    const first = await app.inject({ method: "GET", url: "/health" });
+    const second = await app.inject({ method: "GET", url: "/health" });
+    const failed = await app.inject({ method: "GET", url: "/api/v1/no-such-thing" });
+
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    expect(first.headers["x-request-id"]).toMatch(uuid);
+    expect(failed.headers["x-request-id"]).toMatch(uuid);
+    expect(first.headers["x-request-id"]).not.toBe(second.headers["x-request-id"]);
+  });
+
+  it("не принимает номер запроса от клиента", async () => {
+    const response = await app.inject({ method: "GET", url: "/health", headers: { "x-request-id": "chosen-by-client" } });
+
+    expect(response.headers["x-request-id"]).not.toBe("chosen-by-client");
+  });
+
+  it("кладёт тот же номер в тело ошибки и в заголовок", async () => {
+    const response = await app.inject({ method: "GET", url: "/api/v1/runs/me" });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ error: { requestId: response.headers["x-request-id"] } });
   });
 
   it("не пускает без токена доступа", async () => {
@@ -126,7 +150,7 @@ describe("HTTP-приложение на Fastify", () => {
       payload: '{"runId": ',
     });
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: { code: "bad_request", message: "Некорректный запрос" } });
+    expect(response.json()).toEqual({ error: { code: "bad_request", message: "Некорректный запрос", requestId: response.headers["x-request-id"] } });
   });
 
   it("отвечает 413 на тело сверх лимита", async () => {
