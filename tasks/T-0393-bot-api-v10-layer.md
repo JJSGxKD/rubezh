@@ -21,6 +21,9 @@ shared:
   - backend/api/src/platforms/telegram/bot-identity.ts
   - backend/api/test/bot-update-queue.test.ts
   - backend/api/test/bot-fallback.test.ts
+  - backend/api/test/telegram-link-host.test.ts
+  - backend/api/test/telegram-link-origin.test.ts
+  - backend/api/test/welcome.test.ts
   - docs/16-tech-stack-decisions.md
   - docs/28-diagnostics.md
 runner: any
