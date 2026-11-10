@@ -3,8 +3,8 @@ id: T-0356
 title: Панель — список первым, форма «Новое …» и «Изменить» в окне: Задания, Главная, Журнал, Флаги
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
@@ -17,6 +17,8 @@ zones:
   - apps/admin/test/form-dialog.test.ts
 shared:
   - apps/admin/src/ui/dialog.tsx
+  - design/art/direction-v2.md
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -145,11 +147,11 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] Четыре раздела открываются списком; «Новое …» и «Изменить»
+- [x] Четыре раздела открываются списком; «Новое …» и «Изменить»
       открывают форму в окне, на телефоне — листом.
-- [ ] Изменённая форма не закрывается без вопроса.
+- [x] Изменённая форма не закрывается без вопроса.
 - [ ] Предпросмотр — в ширину игрока, на 390 px нет боковой прокрутки.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

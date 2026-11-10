@@ -52,6 +52,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     bossKills: stats.bossKills,
     eliteKills: stats.eliteKills,
     chestsOpened: stats.chestsOpened,
+    rareChestsOpened: stats.rareChestsOpened,
     crystalsCollected: stats.crystalsCollected,
     secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
     rubezh: describeRubezh(world),

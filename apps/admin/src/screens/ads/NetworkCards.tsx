@@ -25,7 +25,7 @@ import { InlineCode } from "../../ui/inline-code";
 import { Badge, Button, Field, Help, Input, Notice, Panel } from "../../ui/kit";
 import { SortableItem, SortableList } from "../../ui/sortable-list";
 import { applyOrder } from "../../ui/sortable-order";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 
 /**
  * Сети карточками (docs/35-stage4-plan.md WP12, часть 5): у каждой — что она
@@ -56,7 +56,7 @@ export function NetworkCards({ view, canEdit, onSaved }: { view: AdsView; canEdi
     } else {
       // В том числе 400: список сетей мог измениться у другого администратора — порядок возвращается к серверному.
       setShown(null);
-      toast.error(result.error.message);
+      toastError(result.error);
     }
     onSaved();
   };
@@ -112,7 +112,7 @@ function NetworkCard({
   const submit = form.handleSubmit(async (values) => {
     const result = await saveNetwork(api, network.networkKey, values);
     if (!result.ok) {
-      toast.error(`${network.name}: ${result.error.message}`);
+      toastError(result.error, `${network.name}: ${result.error.message}`);
       return;
     }
     toast.success(`${result.data.name}: ${result.data.active ? "включена" : "выключена"}`, {

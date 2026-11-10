@@ -53,6 +53,11 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 const config = () => loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
 
+/** Номер запроса у каждого ответа свой (Р193): сравнивая отказы, его отбрасывают. */
+function withoutRequestId(body: { error: Record<string, unknown> }): unknown {
+  return { ...body, error: { ...body.error, requestId: undefined } };
+}
+
 function setup() {
   const accounts = new MemoryAccountRepository();
   const roles = new MemoryRolesRepository();
@@ -1204,13 +1209,13 @@ describe("скрытое ограничение по HTTP (T-0112)", () => {
     const modPreview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: as("mod"), payload: draft });
     const badPreview = await app.inject({ method: "POST", url: "/api/v1/admin/restrictions/preview", headers: as("mod"), payload: { ...draft, kinds: [] } });
     expect(modPreview.statusCode).toBe(400);
-    expect(modPreview.json()).toEqual(badPreview.json());
+    expect(withoutRequestId(modPreview.json())).toEqual(withoutRequestId(badPreview.json()));
 
     // Наложение: модератору — 400, как на кривое тело; ничего не записано.
     const modImpose = await app.inject({ method: "POST", url: base, headers: as("mod"), payload: body });
     const badImpose = await app.inject({ method: "POST", url: base, headers: as("mod"), payload: { ...body, kinds: ["ad_rewards", "ad_rewards"] } });
     expect(modImpose.statusCode).toBe(400);
-    expect(modImpose.json()).toEqual(badImpose.json());
+    expect(withoutRequestId(modImpose.json())).toEqual(withoutRequestId(badImpose.json()));
     expect(s.repository.rows).toEqual([]);
 
     const imposed = await app.inject({ method: "POST", url: base, headers: as("own"), payload: body });
