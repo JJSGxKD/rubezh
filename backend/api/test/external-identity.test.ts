@@ -1,6 +1,7 @@
 import "reflect-metadata";
+import { Logger } from "@nestjs/common";
 import type { Redis } from "ioredis";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DomainError, RateLimitedError, ValidationError } from "../src/common/domain-error.js";
 import { EVENT_DICTIONARY } from "../src/modules/events/event-dictionary.js";
 import type { EventRow } from "../src/modules/events/events.repository.js";
@@ -34,6 +35,15 @@ const ME = "00000000-0000-4000-8000-00000000f001";
 const OTHER = "00000000-0000-4000-8000-00000000f002";
 const PLAYER: AccountRef = { accountId: ME, platform: "telegram", platformUserId: "555000111" };
 const NOON = Date.UTC(2026, 10, 10, 9);
+
+// Строки лога модулей в вывод тестов не попадают.
+beforeEach(() => {
+  for (const level of ["log", "warn"] as const) vi.spyOn(Logger.prototype, level).mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 /** Redis, которого нет: лимит частоты уходит в память процесса, как при сбое. */
 const unavailableRedis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
@@ -244,6 +254,16 @@ describe("consume: бот применяет код", () => {
       await expect(ctx.service.consume("max", code, "max-user-77")).resolves.toBe("expired");
     }
     expect(ctx.codes.takes).toBe(0);
+  });
+
+  it("id игрока не похож на id площадки — 400 от бота, код не сгорает", async () => {
+    const ctx = setup();
+    const { url } = await ctx.service.startLink(PLAYER, "max");
+    for (const id of ["", " ", "a b", "x".repeat(65), "id\n", "<script>"]) {
+      expect((await failure(ctx.service.consume("max", codeOf(url), id))).status).toBe(400);
+    }
+    expect(ctx.codes.entries.size).toBe(1);
+    await expect(ctx.service.consume("max", codeOf(url), "max-user-77")).resolves.toBe("linked");
   });
 
   it("первая связь — linked; id площадки читается через externalId", async () => {
