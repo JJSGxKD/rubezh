@@ -1,7 +1,7 @@
 import type { RunHuntEntry } from "@bh/shared-types";
 import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
-import { createCordonState, type CordonState } from "../sim/cordon";
+import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
 import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
@@ -370,6 +370,7 @@ function restoreSiege(world: World, input: unknown): void {
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
   return {
     active: state.active,
+    source: state.source,
     centerX: state.centerX,
     centerY: state.centerY,
     radius: state.radius,
@@ -396,6 +397,8 @@ function restoreCordon(world: World, input: unknown): void {
   const raw = asRecord(input, "cordon");
   Object.assign(world.cordon, {
     active: asBoolean(raw.active, "cordon.active"),
+    // Снимок до осады источника не знал: все кольца в нём — кольца таймлайна.
+    source: raw.source === undefined ? "timeline" : asCordonSource(raw.source, "cordon.source"),
     centerX: asNumber(raw.centerX, "cordon.centerX"),
     centerY: asNumber(raw.centerY, "cordon.centerY"),
     radius: asNumber(raw.radius, "cordon.radius"),
@@ -678,6 +681,12 @@ function asNumber(value: unknown, path: string): number {
 function asString(value: unknown, path: string): string {
   if (typeof value !== "string") throw new SnapshotError(`${path}: ожидалась строка`);
   return value;
+}
+
+function asCordonSource(value: unknown, path: string): CordonSource {
+  const source = asString(value, path);
+  if (!(CORDON_SOURCES as readonly string[]).includes(source)) throw new SnapshotError(`${path}: «${source}» — неизвестный источник кольца`);
+  return source as CordonSource;
 }
 
 function asBoolean(value: unknown, path: string): boolean {

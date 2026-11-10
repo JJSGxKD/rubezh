@@ -31,9 +31,20 @@ export interface CordonEnd {
   elapsedSec: number;
 }
 
+/**
+ * Чьё кольцо стоит: событие таймлайна или осада стоящего (Р197). Журнал колец и их счёт ведутся только
+ * для `timeline` — по ним калибруются кольца таймлайна (docs/32 §3.2), и осадный строй их бы смешал.
+ */
+export type CordonSource = "timeline" | "siege";
+
+/** Все источники колец: разбор снимка и перебор в тестах. */
+export const CORDON_SOURCES: readonly CordonSource[] = ["timeline", "siege"];
+
 export interface CordonState {
   /** идёт ли кольцо; неактивное в контрольную сумму и в логику шага не входит */
   active: boolean;
+  /** источник кольца, которое идёт или шло последним; в снимке хранится, чтобы осадный строй не попал в журнал после восстановления */
+  source: CordonSource;
   /** центр — точка, где стоял игрок в тик события; за игроком не идёт */
   centerX: number;
   centerY: number;
@@ -43,7 +54,7 @@ export interface CordonState {
   shrinkPerSec: number;
   /** сколько секунд кольцо ещё живёт */
   timeLeftSec: number;
-  /** сколько колец началось в забеге; номер очередного кольца для аналитики */
+  /** сколько колец таймлайна закончилось в забеге; номер очередного для аналитики, осадный строй не считается */
   ringsStarted: number;
   /** секунда забега, на которой кольцо началось */
   startedAtSec: number;
@@ -76,6 +87,7 @@ export const CORDON_INNER_RADIUS_MUL = 0.5;
 export function createCordonState(): CordonState {
   return {
     active: false,
+    source: "timeline",
     centerX: 0,
     centerY: 0,
     radius: 0,
@@ -95,7 +107,8 @@ const direction = createDirection();
 
 /**
  * Откуда и чьей случайностью встаёт строй, если не как обычно: событие таймлайна ставит кольцо вокруг
- * игрока и бросает `world.rng`, а осада стоящего — вокруг якоря и из своего потока (Р197).
+ * игрока и бросает `world.rng`, а осада стоящего — вокруг якоря и из своего потока (Р197). Кольцо с
+ * `origin` — осадное (`source: "siege"`): в журнал колец для аналитики оно не пишется.
  */
 export interface CordonOrigin {
   x: number;
@@ -143,6 +156,7 @@ export function startCordon(world: World, typeIndex: number, count: number, ring
   if (spawned === 0) return;
 
   state.active = true;
+  state.source = origin === undefined ? "timeline" : "siege";
   state.centerX = centerX;
   state.centerY = centerY;
   state.radius = radius;
@@ -213,22 +227,26 @@ function countGuards(world: World): number {
 
 /**
  * Закрыть кольцо и записать исход в журнал: единственное место, где кольцо
- * кончается, поэтому на каждое приходится ровно одна запись. `killed` — сколько
- * из вышедших стражей уже нет к этому моменту (по времени оставшиеся исчезают
- * позже и убитыми не считаются).
+ * кончается, поэтому на каждое кольцо таймлайна приходится ровно одна запись.
+ * `killed` — сколько из вышедших стражей уже нет к этому моменту (по времени
+ * оставшиеся исчезают позже и убитыми не считаются). Осадный строй в журнал и в
+ * счёт колец не попадает: его исход виден по событию `siegeEnd`, а `ring_ended`
+ * описывает только кольца таймлайна.
  */
 function endCordon(world: World, outcome: CordonOutcome): void {
   const state = world.cordon;
   const elapsedSec = world.stats.elapsedSec;
-  state.ended.push({
-    index: state.ringsStarted,
-    outcome,
-    guards: state.guards,
-    killed: Math.max(0, state.guards - countGuards(world)),
-    lifeSec: Math.max(0, elapsedSec - state.startedAtSec),
-    elapsedSec,
-  });
-  state.ringsStarted++;
+  if (state.source === "timeline") {
+    state.ended.push({
+      index: state.ringsStarted,
+      outcome,
+      guards: state.guards,
+      killed: Math.max(0, state.guards - countGuards(world)),
+      lifeSec: Math.max(0, elapsedSec - state.startedAtSec),
+      elapsedSec,
+    });
+    state.ringsStarted++;
+  }
   state.active = false;
   // Кольцо кончилось раньше, чем вышли внутренние: невышедшие не появятся.
   state.pending = [];

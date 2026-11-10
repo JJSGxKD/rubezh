@@ -18,13 +18,13 @@ import { createRunWorld } from "../src/game/run-world";
 import { captureWorld, restoreWorld, SnapshotError } from "../src/game/run/snapshot";
 import { checksumWorld } from "../src/game/sim/checksum";
 import { applyContinue } from "../src/game/sim/continue";
-import { startCordon } from "../src/game/sim/cordon";
+import { settleCordonDeath, startCordon, takeCordonEvents } from "../src/game/sim/cordon";
 import { createTimelineDirector } from "../src/game/sim/director";
 import { createRng, deriveSeed, STREAM_SALT } from "../src/game/sim/rng";
 import { findSiegeProblems, siegeWarning, takeSiegeEvents, type SiegeEvent } from "../src/game/sim/siege";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { IDLE_INPUT, stepWorld } from "../src/game/sim/step";
-import { createWorld, TICK_SEC, type World } from "../src/game/sim/world";
+import { createWorld, despawnEnemy, TICK_SEC, type World } from "../src/game/sim/world";
 
 // Осада стоящего (tasks/T-0392, Р197): кто после третьей минуты долго стоит в одном круге,
 // того рубеж берёт в осаду — строй стражей и кольцо элит, и с каждым разом сильнее. Здесь —
@@ -312,6 +312,111 @@ describe("осада: рост, перезарядка, спад", () => {
     expect(eventsOf(run, "end")).toHaveLength(0);
     expect(advanceUntil(run, "end", 30)).toBe(true);
     expect(run.world.cordon.active).toBe(false);
+  });
+});
+
+describe("осада: строй не попадает в журнал колец", () => {
+  // Журнал колец уходит в `ring_ended` (docs/22), по нему калибруются кольца таймлайна
+  // (docs/32 §3.2). Осадный строй в нём смешал бы два разных источника и сдвинул бы `index`.
+  const TIMELINE_RING = { radius: 200, minRadius: 80, shrinkPerSec: 2, lifeSec: 3 };
+
+  function killGuards(world: World): void {
+    for (let i = 0; i < world.enemies.count; i++) {
+      if (world.enemies.alive[i] === 1 && world.enemyTypes[world.enemies.type[i]].anchored) despawnEnemy(world, i);
+    }
+  }
+
+  it("источник кольца: осадный строй — siege, кольцо таймлайна — timeline", () => {
+    const run = setup({ siege: RULES });
+    expect(run.world.cordon.source).toBe("timeline");
+    startCordon(run.world, 1, 4, TIMELINE_RING);
+    expect(run.world.cordon.source).toBe("timeline");
+    advance(run, TIMELINE_RING.lifeSec + 1);
+    expect(run.world.cordon.active).toBe(false);
+
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    expect(run.world.cordon.active).toBe(true);
+    expect(run.world.cordon.source).toBe("siege");
+  });
+
+  it("строй дожил до конца срока: журнал колец пуст, ringsStarted прежний", () => {
+    const run = setup({ siege: RULES });
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    expect(advanceUntil(run, "end", RULES.cordon.ring.lifeSec + 5)).toBe(true);
+
+    expect(takeCordonEvents(run.world, 0).ended).toEqual([]);
+    expect(run.world.cordon.ringsStarted).toBe(0);
+  });
+
+  it("строй пал: журнал колец пуст, а осада всё равно кончилась", () => {
+    const run = setup({ siege: RULES });
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    killGuards(run.world);
+    expect(advanceUntil(run, "end", 5)).toBe(true);
+
+    expect(takeCordonEvents(run.world, 0).ended).toEqual([]);
+    expect(run.world.cordon.ringsStarted).toBe(0);
+  });
+
+  it("игрок погиб в осаде: журнал колец пуст", () => {
+    const run = setup({ siege: RULES });
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    run.world.player.alive = false;
+    run.world.player.hp = 0;
+
+    expect(settleCordonDeath(run.world)).toBe(true);
+    expect(run.world.cordon.active).toBe(false);
+    expect(takeCordonEvents(run.world, 0).ended).toEqual([]);
+    expect(run.world.cordon.ringsStarted).toBe(0);
+  });
+
+  it("кольца таймлайна по обе стороны осады нумеруются подряд: осада номер не занимает", () => {
+    const run = setup({ siege: RULES });
+    startCordon(run.world, 1, 4, TIMELINE_RING);
+    advance(run, TIMELINE_RING.lifeSec + 1);
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    expect(advanceUntil(run, "end", RULES.cordon.ring.lifeSec + 5)).toBe(true);
+    startCordon(run.world, 1, 4, TIMELINE_RING);
+    expect(run.world.cordon.source).toBe("timeline");
+    advance(run, TIMELINE_RING.lifeSec + 1);
+
+    const { ended } = takeCordonEvents(run.world, 0);
+    expect(ended.map((entry) => entry.index)).toEqual([0, 1]);
+    expect(ended.every((entry) => entry.outcome === "held")).toBe(true);
+    expect(run.world.cordon.ringsStarted).toBe(2);
+  });
+
+  it("источник переживает снимок: восстановленный осадный строй тоже не пишется в журнал", () => {
+    const run = setup({ siege: RULES });
+    expect(advanceUntil(run, "start", 60)).toBe(true);
+    advance(run, 2);
+    const snapshot = JSON.parse(JSON.stringify(captureWorld(run.world, run.director))) as { cordon: { source?: string } };
+    expect(snapshot.cordon.source).toBe("siege");
+
+    const copy = setup({ siege: RULES });
+    restoreWorld(copy.world, copy.director, snapshot);
+    expect(copy.world.cordon.source).toBe("siege");
+    expect(advanceUntil(copy, "end", RULES.cordon.ring.lifeSec + 5)).toBe(true);
+    expect(takeCordonEvents(copy.world, 0).ended).toEqual([]);
+    expect(copy.world.cordon.ringsStarted).toBe(0);
+  });
+
+  it("снимок без источника (прежний формат) — кольцо таймлайна; неизвестный источник — SnapshotError", () => {
+    const run = setup({ siege: RULES });
+    startCordon(run.world, 1, 4, { ...TIMELINE_RING, lifeSec: 20 });
+    const good = JSON.parse(JSON.stringify(captureWorld(run.world, run.director))) as { cordon: Record<string, unknown> };
+    expect(good.cordon.source).toBe("timeline");
+
+    const legacy = JSON.parse(JSON.stringify(good)) as { cordon: Record<string, unknown> };
+    delete legacy.cordon.source;
+    const copy = setup({ siege: RULES });
+    restoreWorld(copy.world, copy.director, legacy);
+    expect(copy.world.cordon.source).toBe("timeline");
+
+    for (const source of ["pump", 1, null]) {
+      const bad = { ...good, cordon: { ...good.cordon, source } };
+      expect(() => restoreWorld(setup({ siege: RULES }).world, run.director, bad), String(source)).toThrow(SnapshotError);
+    }
   });
 });
 
