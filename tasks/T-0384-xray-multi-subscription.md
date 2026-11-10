@@ -3,7 +3,7 @@ id: T-0384
 title: Пул Xray — несколько подписок в общем переборе
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead2-4
 size: M
@@ -34,6 +34,7 @@ zones:
 shared:
   - packages/proxy-kit/src/index.ts
   - packages/proxy-kit/README.md
+  - packages/proxy-kit/test/xray-json.test.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - apps/admin/src/ui/help.ts
