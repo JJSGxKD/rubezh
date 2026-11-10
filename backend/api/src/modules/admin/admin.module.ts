@@ -17,6 +17,7 @@ import { HomeModule } from "../home/home.module.js";
 import { AdminPromoCodesController } from "./admin-promo-codes.controller.js";
 import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
+import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
@@ -122,6 +123,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminShopController,
     AdminPromoCodesController,
     AdminPartnersController,
+    AdminCabinetController,
     AdminRequestsController,
     AdminUiClicksController,
   ],
