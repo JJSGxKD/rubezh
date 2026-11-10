@@ -50,6 +50,7 @@ erDiagram
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
         datetime supporter_at "nullable: знак «Меценат» (Р109, Р149) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
         datetime prologue_done_at "nullable: пролог пройден (T-0279, Р151) — победа в нём; аккаунтам с забегами до выката миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты"
+        string shown_emblem_id FK "nullable: знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — по умолчанию. Держит ли он знак сейчас, сервер считает при чтении; вайп колонку не трогает"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -127,6 +128,7 @@ erDiagram
     TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
+    TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -684,7 +686,7 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot; знаки без прогресса — status, season"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
         json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
@@ -697,12 +699,13 @@ erDiagram
         int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
         int completions "игроков, выполнивших цель; растёт под блокировкой строки"
         string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
-        string category "nullable: combat|collection|mastery|friends, только у достижений (CHECK)"
+        string category "nullable: combat|collection|mastery|friends, только у достижений; status|season — у знаков статуса и сезона, парой с одноимённым видом (CHECK)"
         string ladder "nullable: лестница достижений; вместе с rung (CHECK)"
         smallint rung "nullable: ступень лестницы с единицы; вместе с ladder (CHECK)"
         boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
         string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
         int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
+        string emblem_tier "nullable: редкость знака у имени (T-0235) — common|uncommon|rare|epic|legendary|mythic или team; только у достижений (CHECK); null — знака нет"
         int sort
         boolean active
         datetime created_at
@@ -1369,6 +1372,28 @@ erDiagram
   до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
   транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
   вместе с прогрессом заданий, редкость не трогает.
+- **Знаки у имени — `TASK_DEF.emblem_tier`, `ACCOUNT.shown_emblem_id`**
+  (`35-stage4-plan.md` Р149, T-0235): знак — достижение, которое носят, поэтому
+  отдельного каталога нет. У 24 отобранных достижений (верхние ступени лестниц,
+  скрытые, «Мастера оружия») есть редкость знака; она стоит в каталоге и не
+  плавает вместе с «есть у N%». Статусные и сезонные знаки — семь строк того же
+  `TASK_DEF` с периодом `achievement`, видами `status` и `season` и такими же
+  категориями (`emb_vip`, `emb_tester`, `emb_supporter`, `emb_team`,
+  `emb_season_champion`, `emb_season_top10`, `emb_season_top100`): цель 1,
+  награды нет, прогресса в `TASK_PROGRESS` у них не бывает, `claim` для них — 404,
+  в списке заданий их нет. Держит ли игрок такой знак, сервер вычисляет при
+  чтении: VIP — по самому позднему `VIP_PERIOD.ends_at`, «Тестер» и «Меценат» —
+  по `ACCOUNT.tester_at` и `supporter_at`, «Команда» — по любой строке
+  `ACCOUNT_ROLE`, кроме внешней роли `partner`, сезонные — по лучшему месту в
+  `SEASON_RESULT` на таблице не меньше `MIN_BOARD`; номер сезона — сколько
+  закрытых `SEASON` не позже последнего, где порог взят. Истёкший VIP знака не
+  держит, и снимать ничего не нужно. Выбранный знак в `shown_emblem_id`: если он
+  больше не держится, показывается знак по умолчанию (Команда → VIP →
+  Меценат → Тестер). Знак на список аккаунтов готовит `EmblemsService.of` —
+  четыре запроса (аккаунт, VIP, сезоны, достижения), сколько бы строк ни было.
+  «Есть у N%» у статусных и сезонных знаков считает тот же проход редкости теми
+  же правилами в той же транзакции. Вайп колонку не трогает, но выбранное
+  перестаёт действовать само: прогресса, который его держал, уже нет.
 - **`PASS_PROGRESS`, `PASS_SEASON`, `PASS_CLAIM`, `BOOST_CREDIT` — батл-пасс**
   (`35-stage4-plan.md` Р46, §3.15, T-0311): месяц — календарный по Москве
   (UTC+3 без летнего времени), ключ `ГГГГ-ММ`; граница — 1-е число 00:00 МСК.
@@ -2243,7 +2268,7 @@ flowchart LR
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, перебор прокси по режиму<br/>сервиса, запись о каждой попытке<br/>в приёмник, реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
-        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
@@ -2467,6 +2492,7 @@ flowchart LR
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
+    ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
