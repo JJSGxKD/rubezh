@@ -3,7 +3,7 @@ id: T-0235
 title: Знаки у имени — сервер: каталог, статусные и сезонные знаки, выбор знака
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -29,6 +29,13 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - docs/21-diagrams.md
   - docs/39-retention-mechanics.md
+  - backend/api/src/modules/achievements/emblem-errors.ts
+  - backend/api/src/modules/achievements/achievements.repository.ts
+  - backend/api/src/modules/tasks/tasks.repository.ts
+  - backend/api/src/modules/tasks/tasks-errors.ts
+  - backend/api/test/tasks.test.ts
+  - backend/api/test/achievements.integration.test.ts
+  - apps/admin/test/tasks.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
