@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildExport, HASH_FILE, NAMES_FILE, SCHEMA_FILE, SNAPSHOT_FILE } from "../../../scripts/content/export-snapshot";
 import { CONTENT_SNAPSHOT } from "../../../packages/core-game/src/content/snapshot";
 import { contentSnapshotJsonSchema, contentSnapshotSchema } from "../../../packages/core-game/src/content/snapshot-schema";
@@ -16,7 +16,7 @@ import { snapshotHash } from "../src/modules/content/content-hash.js";
 import { CONTENT_EXPORT_FILES, importContentVersion, parseContentExport, readContentExport } from "../src/modules/content/content-import.js";
 import { validateJsonSchema } from "../src/modules/content/content-json-schema.js";
 import { parsePath } from "../src/modules/content/content-path.js";
-import { CONTENT_CHECK_QUEUE_NAME, CONTENT_CHECK_QUEUE_MAX_WAITING, CONTENT_SNAPSHOT_MAX_BYTES, type CheckJobPayload, type CheckJobState, type ContentCheckQueue } from "../src/modules/content/content-check.queue.js";
+import { BullContentCheckQueue, CONTENT_CHECK_QUEUE_NAME, CONTENT_CHECK_QUEUE_MAX_WAITING, CONTENT_SNAPSHOT_MAX_BYTES, type CheckJobPayload, type CheckJobState, type ContentCheckQueue } from "../src/modules/content/content-check.queue.js";
 import type {
   ContentCheckRecord,
   ContentCheckStatus,
@@ -40,6 +40,40 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
  * sim-worker. Сервер пакеты игры не импортирует — снимок и JSON Schema здесь
  * берутся из них только как данные теста, а проверка идёт серверным кодом.
  */
+
+/**
+ * Очередь BullMQ подменена заглушкой, которая молчит: так проверяется, что ни
+ * один вызов Redis в `BullContentCheckQueue` не ждёт ответа вечно. Остальным
+ * кейсам файла настоящая очередь не нужна — они идут через `ContentCheckQueue`
+ * на памяти.
+ */
+const hungRedis = vi.hoisted(() => ({
+  closeCalls: 0,
+  disconnectCalls: 0,
+  /** поведение getJob: задание есть, а снять его Redis не отвечает */
+  getJob: (): Promise<{ remove: () => Promise<void> } | undefined> => Promise.resolve({ remove: () => new Promise<void>(() => undefined) }),
+}));
+
+vi.mock("bullmq", () => ({
+  Queue: class {
+    on(): void {}
+    getJob(): Promise<{ remove: () => Promise<void> } | undefined> {
+      return hungRedis.getJob();
+    }
+    close(): Promise<void> {
+      hungRedis.closeCalls += 1;
+      return new Promise<void>(() => undefined);
+    }
+  },
+}));
+
+vi.mock("../src/infra/queues.js", () => ({
+  createQueueConnection: () => ({
+    disconnect: () => {
+      hungRedis.disconnectCalls += 1;
+    },
+  }),
+}));
 
 interface Snap {
   schemaVersion: number;
@@ -827,5 +861,62 @@ describe("согласованность с sim-worker", () => {
     expect(source).toContain(`CONTENT_CHECK_QUEUE = "${CONTENT_CHECK_QUEUE_NAME}"`);
     expect(source).toContain(`QUEUE_MAX_WAITING = ${String(CONTENT_CHECK_QUEUE_MAX_WAITING)}`);
     expect(source).toContain(`SNAPSHOT_MAX_BYTES = ${String(CONTENT_SNAPSHOT_MAX_BYTES / (1024 * 1024))} * 1024 * 1024`);
+  });
+});
+
+describe("очередь проверок: ни один вызов Redis не ждёт вечно", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    hungRedis.closeCalls = 0;
+    hungRedis.disconnectCalls = 0;
+    hungRedis.getJob = () => Promise.resolve({ remove: () => new Promise<void>(() => undefined) });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const AFTER_TIMEOUT_MS = 3_100;
+
+  it("cancel отпускает вызывающего, если Redis не отвечает на снятие задания", async () => {
+    const queue = new BullContentCheckQueue(config());
+    let settled = false;
+    const cancelling = queue.cancel("check-1").then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(AFTER_TIMEOUT_MS);
+    expect(settled).toBe(true);
+    await cancelling;
+  });
+
+  it("cancel отпускает вызывающего, если Redis не отвечает и на поиск задания", async () => {
+    hungRedis.getJob = () => new Promise(() => undefined);
+    const queue = new BullContentCheckQueue(config());
+    let settled = false;
+    void queue.cancel("check-1").then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(AFTER_TIMEOUT_MS);
+    expect(settled).toBe(true);
+  });
+
+  it("остановка модуля закрывает соединение, даже если очередь не отвечает на закрытие", async () => {
+    hungRedis.getJob = () => Promise.resolve(undefined);
+    const queue = new BullContentCheckQueue(config());
+    await queue.cancel("check-1");
+    let settled = false;
+    const destroying = queue.onModuleDestroy().then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(AFTER_TIMEOUT_MS);
+    expect(settled).toBe(true);
+    await destroying;
+    expect(hungRedis.closeCalls).toBe(1);
+    expect(hungRedis.disconnectCalls).toBe(1);
+  });
+
+  it("остановка модуля без открытой очереди ничего не ждёт", async () => {
+    const queue = new BullContentCheckQueue(config());
+    await expect(queue.onModuleDestroy()).resolves.toBeUndefined();
+    expect(hungRedis.closeCalls).toBe(0);
   });
 });

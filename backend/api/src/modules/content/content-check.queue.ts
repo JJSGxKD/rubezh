@@ -108,7 +108,7 @@ export class BullContentCheckQueue implements ContentCheckQueue, OnModuleDestroy
   async cancel(checkId: string): Promise<void> {
     try {
       const job = await withTimeout(this.ensure().getJob(checkId), REDIS_TIMEOUT_MS, "очередь проверок");
-      await job?.remove();
+      if (job !== undefined) await withTimeout(job.remove(), REDIS_TIMEOUT_MS, "очередь проверок");
     } catch (error: unknown) {
       // Идущее задание снять нельзя (оно под замком), недоступный Redis — не повод ронять запрос: проверка и так помечена.
       this.logThrottled(error instanceof Error ? error.message : "unknown");
@@ -116,10 +116,18 @@ export class BullContentCheckQueue implements ContentCheckQueue, OnModuleDestroy
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.queue?.close();
-    this.connection?.disconnect();
+    const queue = this.queue;
+    const connection = this.connection;
     this.queue = null;
     this.connection = null;
+    try {
+      if (queue !== null) await withTimeout(queue.close(), REDIS_TIMEOUT_MS, "очередь проверок");
+    } catch (error: unknown) {
+      // Остановка не должна зависеть от Redis: соединение всё равно закрывается ниже.
+      this.logThrottled(error instanceof Error ? error.message : "unknown");
+    } finally {
+      connection?.disconnect();
+    }
   }
 
   private logThrottled(reason: string): void {
