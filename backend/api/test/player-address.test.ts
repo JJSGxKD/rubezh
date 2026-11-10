@@ -73,6 +73,9 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   // выбор событий постбэка в панели (T-0071): тексты задаёт спецификация
   { code: "postback_events_empty", fragment: "Выберите хотя бы одно событие" },
   { code: "postback_events_no_address", fragment: "Сначала задайте адрес постбэка" },
+  // «Открыть кабинет» в карточке партнёра (T-0217): тексты сотруднику, первый задаёт спецификация
+  { code: "partner_cabinet_no_telegram", fragment: "Сначала укажите Telegram ID партнёра" },
+  { code: "partner_cabinet_other_account", fragment: "сначала закройте его" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];
