@@ -3,8 +3,8 @@ id: T-0178
 title: Отписка от канала после награды — перепроверка 7 суток, списание, закрытие заданий
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0177, T-0167, T-0169, T-0345]
@@ -25,6 +25,10 @@ shared:
   - docs/35-stage4-plan.md
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-runner.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

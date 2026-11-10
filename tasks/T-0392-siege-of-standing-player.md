@@ -3,8 +3,8 @@ id: T-0392
 title: Осада стоящего — строй и элиты вокруг игрока, который долго стоит на месте
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0389]
@@ -30,6 +30,21 @@ shared:
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/guide/**
+  - packages/core-game/src/game/sim/siege-rules.ts
+  - packages/core-game/src/game/sim/continue.ts
+  - docs/22-analytics-and-metrics.md
+  - packages/core-game/src/game/sim/stages.ts
+  - packages/core-game/src/game/sim/timeline-content.ts
+  - packages/core-game/src/game/run/run-result.ts
+  - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/game/content-problems.ts
+  - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/engine/run-bus.ts
+  - packages/core-game/src/run-api.ts
+  - packages/shared-types/src/index.ts
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/test/guide.test.ts
+  - docs/30-configuration-map.md
   - docs/32-balance.md
   - docs/35-stage4-plan.md
   - CLAUDE.md
@@ -221,8 +236,9 @@ export const SIEGE: SiegeDef = {
 ## Критерии приёмки
 
 - [ ] Стоящий в одном круге после 180 с получает предупреждение, а через
-      `holdSec` — осаду строем и элитами. Повторные осады сильнее. Отошёл —
-      счётчик сброшен.
+      `holdSec` — осаду строем (кольцо элит есть в механике, в числах
+      `eliteCount: 0` — решение тимлида по вопросу 1 к PR, `docs/35`, Р197).
+      Повторные осады сильнее. Отошёл — счётчик сброшен.
 - [ ] Сильный «ветеран» стоит 360–600 с. «Бегает» сдвинулся не больше чем на 5%.
 - [ ] Осада детерминирована: свой поток, снимок, контрольная сумма. `world.rng`
       не тронут.
@@ -234,11 +250,11 @@ export const SIEGE: SiegeDef = {
 - **Заголовок:** `feat(core-game): Осада стоящего — строй и элиты вокруг неподвижного`
 - **Метка:** `release: minor`
 - **Для игроков:**
-  - `- новое: кто долго стоит на одном месте после третьей минуты, того рубеж берёт в осаду — строй стражей и элиты; отойди, пока кольцо на земле не замкнулось`
+  - `- новое: кто долго стоит на одном месте после третьей минуты, того рубеж берёт в осаду — строй стражей; отойди, пока кольцо на земле не замкнулось`
 - **Сводка для команды:**
 
   ```
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — ОСАДА СТОЯЩЕГО**
 
-  Стоять на одном месте со связкой «Очаг + обереги + регенерация» больше не выйдет. Кто после третьей минуты долго стоит в одном круге, получает предупреждение кольцом на земле, а потом осаду: строй стражей и элиты, и с каждым разом сильнее. Тому, кто двигается, осада не грозит.
+  Стоять на одном месте со связкой «Очаг + обереги + регенерация» больше не выйдет. Кто после третьей минуты долго стоит в одном круге, получает предупреждение кольцом на земле, а потом осаду: строй стражей, и с каждым разом сильнее. Тому, кто двигается, осада не грозит.
   ```

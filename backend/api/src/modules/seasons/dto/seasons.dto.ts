@@ -82,6 +82,8 @@ export type Overview = z.infer<typeof overviewSchema>;
 /** Запись таблицы недели — форма записи вечного рейтинга (`runs-view.service.ts`). */
 const boardEntry = z.object({
   rank: count,
+  /** лучший забег недели: по нему открывается карточка забега (T-0297); поля нет у записей прошлой сборки */
+  runId: z.string().optional(),
   name: z.string(),
   photoUrl: z.string().nullable(),
   /** знак «Тестер»; поля нет — не тестер */

@@ -8,6 +8,8 @@ import {
   openedCount,
   percentText,
   rarityTier,
+  readyCards,
+  withoutReady,
 } from "../src/screens/meta/achievements-rules";
 import type { AchievementItem, OpenAchievement } from "../src/state/achievements-api";
 
@@ -199,5 +201,33 @@ describe("openedCount", () => {
 
     expect(openedCount(items)).toBe(2);
     expect(openedCount([])).toBe(0);
+  });
+});
+
+// Готовое к забору — группой «Можно забрать» над секциями (tasks/T-0373, Р186).
+describe("готовые достижения для группы «Можно забрать»", () => {
+  it("одиночное done && !claimed — в readyCards, в секциях его нет", () => {
+    const items = [open("a", { done: true }), open("b")];
+    expect(readyCards(items).map((card) => (card.kind === "single" ? card.item.id : card.ladder))).toEqual(["a"]);
+    expect(groupByCategory(withoutReady(items)).flatMap((group) => group.items.map((item) => item.id))).toEqual(["b"]);
+  });
+
+  it("лестница с готовой второй ступенью — одна карточка, лестницы в секциях нет", () => {
+    const items = [
+      open("l1", { ladder: "kills", rung: 1, done: true, claimed: true }),
+      open("l2", { ladder: "kills", rung: 2, done: true }),
+      open("l3", { ladder: "kills", rung: 3 }),
+      open("x"),
+    ];
+    const ready = readyCards(items);
+    expect(ready).toHaveLength(1);
+    expect(ready[0]?.kind).toBe("ladder");
+    expect(withoutReady(items).map((item) => item.id)).toEqual(["x"]);
+  });
+
+  it("лестница без готового и закрытое скрытое — остаются в секциях", () => {
+    const items = [open("l1", { ladder: "kills", rung: 1, done: true, claimed: true }), open("l2", { ladder: "kills", rung: 2 }), closed("h")];
+    expect(readyCards(items)).toEqual([]);
+    expect(withoutReady(items)).toHaveLength(3);
   });
 });

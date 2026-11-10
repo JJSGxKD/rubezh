@@ -84,6 +84,7 @@ describe("снимок контента: состав и хэш", () => {
       "cardToolRules",
       "limits",
       "pressure",
+      "siege",
       "balanceTargets",
     ]);
   });

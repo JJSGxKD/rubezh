@@ -10,6 +10,7 @@ import { findCardToolProblems, findUnlockProblems } from "./progression/unlocks"
 import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
 import { findSecretsProblems } from "./sim/secrets";
+import { findSiegeProblems } from "./sim/siege-rules";
 import { findContinueProblems } from "./sim/continue";
 import { findPressureProblems } from "./sim/pressure";
 import { findDifficultyContentProblems } from "./sim/difficulty";
@@ -82,6 +83,7 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("maxBoostsPerRun", findBoostLimitProblems(content));
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
   add("pressure", findPressureProblems(content.pressure));
+  add("siege", findSiegeProblems(content.siege, content.enemies));
   return problems;
 }
 

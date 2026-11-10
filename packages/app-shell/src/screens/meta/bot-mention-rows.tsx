@@ -8,11 +8,11 @@ import { createBotMentionApi, isKnownOutcome, type BotMentionTask, type BotMenti
 import { track } from "../../state/shell";
 import { tasksAvailable } from "../../state/tasks-api";
 import { loadWallet } from "../../state/wallet-api";
-import { buttonKey, collapsedStreak, outcomeKey, statusKey, visibleTasks } from "./bot-mention-rules";
+import { buttonKey, collapsedStreak, isBotMentionBlockClaimable, outcomeKey, statusKey, visibleTasks } from "./bot-mention-rules";
 import { RewardChips, rewardText } from "./task-reward";
 
 /**
- * Задания «юзернейм бота в имени и в bio» — блок над вкладками экрана «Задания»
+ * Задания «юзернейм бота в имени и в bio» — блок вкладки «День» экрана «Задания»
  * (docs/35-stage4-plan.md Р110, Р167, tasks/T-0160, T-0337). Проверку, серию и награду ведёт
  * сервер: клиент показывает ответ и присылает один вид задания.
  *
@@ -29,7 +29,20 @@ const api = createBotMentionApi();
 const KIND_TITLE: Readonly<Record<string, string>> = { name: "botMention.name.title", bio: "botMention.bio.title" };
 const KIND_HINT: Readonly<Record<string, string>> = { name: "botMention.name.hint", bio: "botMention.bio.hint" };
 
-export function BotMentionRows(): ReactNode {
+/** Состояние блока: живёт на экране, а не в блоке, чтобы переезд блока в группу и обратно не терял сообщение и развёрнутость. */
+export interface BotMentionModel {
+  view: BotMentionView | null;
+  busy: string | null;
+  expanded: boolean;
+  messages: Readonly<Record<string, string>>;
+  /** блок готов к «забору» (Р186): ему место в группе «Можно забрать» */
+  ready: boolean;
+  toggle: () => void;
+  press: (task: BotMentionTask) => void;
+}
+
+/** `enabled` — блок нужен на экране сейчас; запрос уходит при первом включении. */
+export function useBotMention(enabled: boolean): BotMentionModel {
   const [view, setView] = useState<BotMentionView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -37,23 +50,22 @@ export function BotMentionRows(): ReactNode {
   const alive = useRef(true);
   // Замок на нажатие: состояние обновится только после отрисовки, а второе нажатие может прийти раньше.
   const pending = useRef(false);
+  const requested = useRef(false);
 
   useEffect(() => {
     alive.current = true;
-    if (tasksAvailable()) {
-      void api.view().then((response) => {
-        if (alive.current && response.ok) setView(response.data);
-      });
-    }
     return () => {
       alive.current = false;
     };
   }, []);
 
-  if (!tasksAvailable() || view === null) return null;
-  const shown = visibleTasks(view);
-  const bot = view.botUsername;
-  if (bot === null || shown.length === 0) return null;
+  useEffect(() => {
+    if (!enabled || requested.current || !tasksAvailable()) return;
+    requested.current = true;
+    void api.view().then((response) => {
+      if (alive.current && response.ok) setView(response.data);
+    });
+  }, [enabled]);
 
   const say = (kind: string, text: string): void => setMessages((current) => ({ ...current, [kind]: text }));
 
@@ -85,7 +97,30 @@ export function BotMentionRows(): ReactNode {
     void loadBadges();
   };
 
-  return <BotMentionBlock botUsername={bot} tasks={shown} expanded={expanded} busyKind={busy} messages={messages} onToggle={() => setExpanded((value) => !value)} onPress={(task) => void press(task)} />;
+  return {
+    view,
+    busy,
+    expanded,
+    messages,
+    ready: tasksAvailable() && view !== null && isBotMentionBlockClaimable(view),
+    toggle: () => setExpanded((value) => !value),
+    press: (task) => void press(task),
+  };
+}
+
+/**
+ * Блок на экране. `place` — где он стоит: в группе «Можно забрать» (`"group"`)
+ * или первым в списке вкладки (`"list"`); от места зависит только отступ.
+ */
+export function BotMentionRows(props: { model: BotMentionModel; place: "group" | "list" }): ReactNode {
+  const { model } = props;
+  if (!tasksAvailable() || model.view === null) return null;
+  const shown = visibleTasks(model.view);
+  const bot = model.view.botUsername;
+  if (bot === null || shown.length === 0) return null;
+  return (
+    <BotMentionBlock botUsername={bot} tasks={shown} expanded={model.expanded} busyKind={model.busy} messages={model.messages} onToggle={model.toggle} onPress={model.press} className={props.place === "group" ? "mb-3" : "mt-2"} />
+  );
 }
 
 export interface BotMentionBlockProps {
@@ -98,6 +133,8 @@ export interface BotMentionBlockProps {
   messages: Readonly<Record<string, string>>;
   onToggle: () => void;
   onPress: (task: BotMentionTask) => void;
+  /** отступ секции; по умолчанию сверху */
+  className?: string;
 }
 
 /** Строка-кнопка блока: свёрнутый вид (серия) или заголовок развёрнутого, который можно свернуть. */
@@ -121,7 +158,7 @@ export function BotMentionBlock(props: BotMentionBlockProps): ReactNode {
 
   if (streak !== null && !props.expanded) {
     return (
-      <section aria-label={t("botMention.title")} className="mt-2">
+      <section aria-label={t("botMention.title")} className={props.className ?? "mt-2"}>
         <BlockToggle open={false} onToggle={props.onToggle}>
           {t("botMention.collapsed", { n: streak })}
         </BlockToggle>
@@ -130,7 +167,7 @@ export function BotMentionBlock(props: BotMentionBlockProps): ReactNode {
   }
 
   return (
-    <section aria-label={t("botMention.title")} className="mt-2">
+    <section aria-label={t("botMention.title")} className={props.className ?? "mt-2"}>
       {streak === null ? (
         <SectionTitle>{t("botMention.title")}</SectionTitle>
       ) : (
