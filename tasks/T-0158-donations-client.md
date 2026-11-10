@@ -40,6 +40,7 @@ shared:
   - packages/app-shell/src/i18n/ru-history.json
   - docs/27-design-system-and-app-shell.md
   - packages/app-shell/src/state/shop-api.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
