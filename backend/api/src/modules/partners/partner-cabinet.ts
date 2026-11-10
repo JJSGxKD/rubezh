@@ -210,7 +210,7 @@ export interface CabinetPromos {
 /** Слово копии занято — без названия кампании, которая его держит: оно внутреннее. */
 export class CabinetCodeTakenError extends DomainError {
   constructor(display: string) {
-    super("promo_code_taken", `Код ${display} уже занят — придумайте другой`, 409);
+    super("promo_code_taken", `Код ${display} уже занят: нужно другое слово`, 409);
   }
 }
 

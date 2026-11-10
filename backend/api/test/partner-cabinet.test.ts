@@ -396,7 +396,7 @@ describe("промокоды кабинета партнёра (T-0218, Р136)",
     } catch (error: unknown) {
       message = error instanceof Error ? error.message : "";
     }
-    expect(message).toBe("Код KOMAN DA уже занят — придумайте другой");
+    expect(message).toBe("Код KOMAN DA уже занят: нужно другое слово");
     expect(message).not.toMatch(/Секретная/);
   });
 

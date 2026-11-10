@@ -170,7 +170,7 @@ describe.skipIf(DATABASE_URL === "")("кабинет партнёра: ссыл�
     const own = await campaign(partnerId, uniqueWord());
 
     await expect(cabinet.copyPromo(actor, {}, foreign.campaignId, uniqueWord(), NOW)).rejects.toMatchObject({ code: "promo_campaign_not_found" });
-    await expect(cabinet.copyPromo(actor, {}, own.campaignId, taken, NOW)).rejects.toThrowError(`Код ${taken} уже занят — придумайте другой`);
+    await expect(cabinet.copyPromo(actor, {}, own.campaignId, taken, NOW)).rejects.toThrowError(`Код ${taken} уже занят: нужно другое слово`);
     expect(await prisma.promoCampaign.count({ where: { partnerId, createdBy: actor.accountId } })).toBe(0);
 
     const batchId = randomUUID();
