@@ -79,6 +79,11 @@ describe("readDevUrl", () => {
     expect(warn).toHaveBeenCalledWith("неизвестная сцена эффекта: nope");
   });
 
+  it("?fx=sound — особый id страницы звуков, а не сцена", () => {
+    expect(readDevUrl("http://localhost:5173/?fx=sound", true).fx).toBe("sound");
+    expect(readDevUrl("http://localhost:5173/?fx=sound", false).fx).toBeNull();
+  });
+
   it("в сборке и через туннель сцена не действует", () => {
     expect(readDevUrl("http://localhost:5173/?fx=storm", false).fx).toBeNull();
     expect(readDevUrl("https://dev-tg.example/?fx=storm", true).fx).toBeNull();

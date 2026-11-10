@@ -1,4 +1,4 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Logger } from "@nestjs/common";
 import { z } from "zod";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
@@ -20,6 +20,8 @@ import { PROMO_KINDS, promoRewardSchema, type PromoCampaignRow, type PromoCampai
  */
 
 export const PROMO_CODES_REPOSITORY = Symbol("PROMO_CODES_REPOSITORY");
+
+const logger = new Logger("promo-codes");
 
 export interface PromoCodeDraft {
   code: string;
@@ -134,13 +136,21 @@ function toRow(raw: unknown): PromoCampaignRow {
 }
 
 /**
- * Привязывает ли партнёр новых игроков сейчас — только активный (`bindsNewPlayers`). Статус читается
- * в транзакции активации, до блокировки слота источника; нет партнёра или статус неизвестен — не привязывает.
+ * Привязывает ли партнёр этого игрока сейчас — только активный (`bindsNewPlayers`) и только не сам себя. Статус
+ * и связь карточки с аккаунтом читаются в транзакции активации, до блокировки слота источника; нет партнёра или
+ * статус неизвестен — не привязывает.
  */
-async function partnerBinds(tx: Prisma.TransactionClient, partnerId: string): Promise<boolean> {
-  const [row] = await tx.$queryRaw<{ status: string }[]>`SELECT status FROM partner WHERE partner_id = ${partnerId}::uuid`;
+async function partnerBinds(tx: Prisma.TransactionClient, partnerId: string, accountId: string): Promise<boolean> {
+  const [row] = await tx.$queryRaw<{ status: string; own_account: boolean }[]>`
+    SELECT status, coalesce(account_id = ${accountId}::uuid, false) AS own_account FROM partner WHERE partner_id = ${partnerId}::uuid`;
   const status = PARTNER_STATUSES.find((known) => known === row?.status);
-  return status !== undefined && bindsNewPlayers(status);
+  if (status === undefined || !bindsNewPlayers(status)) return false;
+  // Партнёр — игрок, но приводить сам себя не может (T-0217): код ему засчитывается, как всем, а привязки нет.
+  if (row?.own_account === true) {
+    logger.log(JSON.stringify({ module: "promo-codes", event: "partner_bind_refused", reason: "own_account", partnerId, accountId }));
+    return false;
+  }
+  return true;
 }
 
 /** Откат транзакции погашения с причиной: Prisma откатывает её по любому исключению. */
@@ -313,7 +323,7 @@ export class PrismaPromoCodesRepository implements PromoCodesRepository {
         // привязки или привязка без активации считались бы по-разному.
         // Не активный партнёр награду кода даёт, но игрока за собой не записывает и слот источника не занимает.
         let bound = false;
-        if (input.partnerId !== null && (await partnerBinds(tx, input.partnerId)) && (await lockSourceSlot(tx, input.accountId)) === "free") {
+        if (input.partnerId !== null && (await partnerBinds(tx, input.partnerId, input.accountId)) && (await lockSourceSlot(tx, input.accountId)) === "free") {
           bound =
             (await tx.$executeRaw`
               INSERT INTO partner_binding (account_id, partner_id, campaign_id, bound_at)

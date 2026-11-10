@@ -45,6 +45,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/payments",
       "/api/v1/shop",
       "/api/v1/vip",
+      "/api/v1/donations",
       "/api/v1/wallet",
       "/api/v1/items",
       "/api/v1/boosts",

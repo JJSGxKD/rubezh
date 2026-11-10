@@ -1,12 +1,14 @@
 import type { NodeState, StoredNode, StoredSubscription } from "./subscription.repository.js";
 
 /**
- * Подписка и узлы в ответе панели и в аудите (docs/35-stage4-plan.md Р101).
+ * Подписки и узлы в ответе панели и в аудите (docs/35-stage4-plan.md Р101, Р192).
  * Адреса подписки здесь нет вовсе — только подсказка «хост …abcd»; секретов
  * узла (UUID, пароль) в таблицах нет, поэтому и в ответе их нет.
  */
 
 export interface SubscriptionView {
+  /** ключ подписки: неизменен с рождения, по нему идут все действия */
+  key: string;
   name: string;
   urlHint: string;
   enabled: boolean;
@@ -31,17 +33,29 @@ export interface NodeView {
   latencyMs: number | null;
 }
 
-export interface SubscriptionOverview {
+/** Подписка в обзоре: карточка и её узлы. */
+export interface SubscriptionEntry extends SubscriptionView {
+  nodes: NodeView[];
+}
+
+export interface SubscriptionsOverview {
   /** можно ли сохранять адрес: есть ключ шифрования */
   encryption: boolean;
   /** каталог тома с конфигом есть — контейнер Xray подключён */
   sidecar: { connected: boolean };
-  subscription: SubscriptionView | null;
-  nodes: NodeView[];
+  /** сколько подписок можно подключить (`SUBSCRIPTIONS_MAX`) */
+  limit: number;
+  /** входов Xray всего (`XRAY_SLOT_COUNT`) */
+  slotCount: number;
+  /** доля входов одной подписки сейчас */
+  slotQuota: number;
+  /** по времени подключения */
+  subscriptions: SubscriptionEntry[];
 }
 
 export function subscriptionView(row: StoredSubscription): SubscriptionView {
   return {
+    key: row.key,
     name: row.name,
     urlHint: row.urlHint,
     enabled: row.enabled,
@@ -65,7 +79,7 @@ export function nodeViews(nodes: readonly StoredNode[]): NodeView[] {
     .map((node) => ({ nodeKey: node.nodeKey, name: node.name, protocol: node.protocol, country: node.country, host: node.host, state: node.state, latencyMs: node.latencyMs }));
 }
 
-/** Подписка в аудите: название и подсказка адреса, без адреса. */
+/** Подписка в аудите: название и подсказка адреса, без адреса. Ключ подписки — цель записи. */
 export function subscriptionAudit(row: StoredSubscription): Record<string, unknown> {
   return { name: row.name, urlHint: row.urlHint, countries: row.countries, enabled: row.enabled };
 }

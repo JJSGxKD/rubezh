@@ -360,6 +360,11 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ banner: id, place: z.enum(["carousel", "gems"]), position: count }),
   },
+  // Нажал «Поддержать через Tribute» (docs/35-stage4-plan.md, Р109, T-0158):
+  // сколько игроков идёт к донату и откуда. Оплата по ссылке — вне игры и вне
+  // таблицы покупок, поэтому клик — всё, что видно; донат звёздами — штатные
+  // purchase_* с product = donation. `way` называет сервер по площадке игрока.
+  donation_link_clicked: { version: 1, payload: payload({ way: z.enum(["tribute_telegram", "tribute_web"]), place: z.enum(["about", "profile", "home"]) }) },
   // Карусель главной (docs/35-stage4-plan.md WP42): какие слайды видят и по
   // каким идут — порядок слайдов по данным, а не на глаз. Показ — раз за
   // заход и только если слайд был виден дольше секунды: пролистанный мимо

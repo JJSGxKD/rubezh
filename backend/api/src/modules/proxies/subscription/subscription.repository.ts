@@ -4,14 +4,20 @@ import { PRISMA } from "../../../infra/database.js";
 import type { UrlColumns } from "./subscription-url.js";
 
 /**
- * Подписка Xray и её узлы в базе (`proxy_subscription`,
- * `proxy_subscription_node`, docs/35-stage4-plan.md Р101). Запрос к базе живёт
- * здесь, а не в сервисе (docs/15-engineering-standards.md §2.3). Секретов узла
- * (UUID, пароль) в таблицах нет: они только в конфиге Xray.
+ * Подписки Xray и их узлы в базе (`proxy_subscription`,
+ * `proxy_subscription_node`, docs/35-stage4-plan.md Р101, Р192). Запрос к базе
+ * живёт здесь, а не в сервисе (docs/15-engineering-standards.md §2.3). Секретов
+ * узла (UUID, пароль) в таблицах нет: они только в конфиге Xray и в файлах-частях
+ * его тома.
  */
 
-/** Подписка одна на систему. */
-export const SUBSCRIPTION_KEY = "main";
+/**
+ * Ключ исходной подписки, появившейся до нескольких (Р101). Ключ неизменен с
+ * рождения: от него зависят шифртекст адреса и `x-hwid`. Новые подписки получают
+ * ключ из 12 hex (`newSubscriptionKey`); эта константа нужна только комментарию
+ * и тесту миграции.
+ */
+export const LEGACY_SUBSCRIPTION_KEY = "main";
 
 export const NODE_STATES = ["unknown", "healthy", "down"] as const;
 export type NodeState = (typeof NODE_STATES)[number];
@@ -31,6 +37,8 @@ export interface StoredSubscription extends UrlColumns {
   expiresAt: Date | null;
   updatedBy: string;
   updatedAt: Date;
+  /** когда подключена: порядок карточек в панели */
+  createdAt: Date;
 }
 
 export interface StoredNode {
@@ -77,46 +85,97 @@ export interface ProbeWrite {
 export const SUBSCRIPTION_REPOSITORY = Symbol("SUBSCRIPTION_REPOSITORY");
 
 export interface SubscriptionRepository {
-  load(): Promise<SubscriptionSnapshot | null>;
-  /** создать или заменить строку подписки; `dropNodes` — узлы прежнего адреса больше не нужны */
-  save(row: StoredSubscription, options?: { dropNodes: boolean }): Promise<void>;
+  /** все подписки с узлами: по времени подключения, узлы по слоту */
+  list(): Promise<SubscriptionSnapshot[]>;
+  load(key: string): Promise<SubscriptionSnapshot | null>;
+  count(): Promise<number>;
+  /** новая подписка; ключ занят — ошибка, а не молчаливая замена */
+  create(row: StoredSubscription): Promise<void>;
+  /**
+   * Правка подписки; `false` — её нет. Без `dropNodes` пишутся только поля формы
+   * (название, страны, включена, кто менял): итог обновления, записанный другой
+   * репликой между чтением и записью, не затирается. С `dropNodes` адрес заменён —
+   * строка пишется целиком, а узлы прежнего адреса удаляются.
+   */
+  save(row: StoredSubscription, options?: { dropNodes: boolean }): Promise<boolean>;
   applyRefresh(key: string, write: RefreshWrite): Promise<void>;
   /** неудачное обновление: узлы и конфиг не трогаются, меняется только итог */
   recordFailure(key: string, at: Date, note: string): Promise<void>;
   saveProbes(key: string, probes: ProbeWrite[]): Promise<void>;
   /** «Проверить узлы»: все узлы к проверке сейчас */
   scheduleAllProbes(key: string, at: Date): Promise<void>;
+  /** снять узлы сверх доли входов: слоты освобождаются для других подписок */
+  dropNodes(key: string, nodeKeys: readonly string[]): Promise<void>;
   /** `false` — подписки нет */
   remove(key: string): Promise<boolean>;
 }
 
 const isState = (value: string): value is NodeState => (NODE_STATES as readonly string[]).includes(value);
 
+type NodeRow = Omit<StoredNode, "state"> & { state: string };
+type SubscriptionRow = Omit<StoredSubscription, "countries"> & { countries: string[] | null; nodes: NodeRow[] };
+
 /** Состояние держит CHECK в базе; незнакомое значение — строка, записанная в обход миграции. */
-function nodeOf(row: Omit<StoredNode, "state"> & { state: string }): StoredNode {
+function nodeOf(row: NodeRow): StoredNode {
   if (!isState(row.state)) throw new Error(`proxy_subscription_node ${row.nodeKey}: состояние «${row.state}» вне перечня`);
   return { ...row, state: row.state };
 }
 
 const bytes = (value: Uint8Array): Uint8Array<ArrayBuffer> => Uint8Array.from(value);
 
+function snapshotOf(row: SubscriptionRow): SubscriptionSnapshot {
+  const { nodes, ...subscription } = row;
+  return { subscription: { ...subscription, countries: row.countries ?? [] }, nodes: nodes.map(nodeOf) };
+}
+
+/** Адрес и итоги обновления, которые меняются только вместе с адресом: другой адрес — другая подписка. */
+function addressColumns(row: StoredSubscription) {
+  return {
+    urlIv: bytes(row.urlIv),
+    urlTag: bytes(row.urlTag),
+    urlCt: bytes(row.urlCt),
+    urlKeyId: row.urlKeyId,
+    urlHint: row.urlHint,
+    lastRefreshAt: row.lastRefreshAt,
+    lastRefreshOk: row.lastRefreshOk,
+    lastRefreshNote: row.lastRefreshNote,
+    providerIntervalHours: row.providerIntervalHours,
+    trafficUsedBytes: row.trafficUsedBytes,
+    trafficTotalBytes: row.trafficTotalBytes,
+    expiresAt: row.expiresAt,
+  };
+}
+
 @Injectable()
 export class PrismaSubscriptionRepository implements SubscriptionRepository {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
-  async load(): Promise<SubscriptionSnapshot | null> {
-    const row = await this.prisma.proxySubscription.findUnique({ where: { key: SUBSCRIPTION_KEY }, include: { nodes: { orderBy: { slot: "asc" } } } });
-    if (row === null) return null;
-    const { nodes, ...subscription } = row;
-    return { subscription: { ...subscription, countries: subscription.countries ?? [] }, nodes: nodes.map(nodeOf) };
+  async list(): Promise<SubscriptionSnapshot[]> {
+    const rows = await this.prisma.proxySubscription.findMany({ orderBy: [{ createdAt: "asc" }, { key: "asc" }], include: { nodes: { orderBy: { slot: "asc" } } } });
+    return rows.map(snapshotOf);
   }
 
-  async save(row: StoredSubscription, options: { dropNodes: boolean } = { dropNodes: false }): Promise<void> {
-    const { key, ...columns } = row;
-    const data = { ...columns, urlIv: bytes(row.urlIv), urlTag: bytes(row.urlTag), urlCt: bytes(row.urlCt) };
-    await this.prisma.$transaction(async (tx) => {
-      if (options.dropNodes) await tx.proxySubscriptionNode.deleteMany({ where: { subscriptionKey: key } });
-      await tx.proxySubscription.upsert({ where: { key }, create: { key, ...data }, update: data });
+  async load(key: string): Promise<SubscriptionSnapshot | null> {
+    const row = await this.prisma.proxySubscription.findUnique({ where: { key }, include: { nodes: { orderBy: { slot: "asc" } } } });
+    return row === null ? null : snapshotOf(row);
+  }
+
+  async count(): Promise<number> {
+    return await this.prisma.proxySubscription.count();
+  }
+
+  async create(row: StoredSubscription): Promise<void> {
+    await this.prisma.proxySubscription.create({ data: { ...row, urlIv: bytes(row.urlIv), urlTag: bytes(row.urlTag), urlCt: bytes(row.urlCt) } });
+  }
+
+  async save(row: StoredSubscription, options: { dropNodes: boolean } = { dropNodes: false }): Promise<boolean> {
+    const form = { name: row.name, enabled: row.enabled, countries: row.countries, updatedBy: row.updatedBy, updatedAt: row.updatedAt };
+    const data = options.dropNodes ? { ...form, ...addressColumns(row) } : form;
+    return await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.proxySubscription.updateMany({ where: { key: row.key }, data });
+      if (count === 0) return false;
+      if (options.dropNodes) await tx.proxySubscriptionNode.deleteMany({ where: { subscriptionKey: row.key } });
+      return true;
     });
   }
 
@@ -159,6 +218,11 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
 
   async scheduleAllProbes(key: string, at: Date): Promise<void> {
     await this.prisma.proxySubscriptionNode.updateMany({ where: { subscriptionKey: key }, data: { nextProbeAt: at } });
+  }
+
+  async dropNodes(key: string, nodeKeys: readonly string[]): Promise<void> {
+    if (nodeKeys.length === 0) return;
+    await this.prisma.proxySubscriptionNode.deleteMany({ where: { subscriptionKey: key, nodeKey: { in: [...nodeKeys] } } });
   }
 
   async remove(key: string): Promise<boolean> {
