@@ -121,6 +121,11 @@ describe("входы и правила", () => {
     expect(() => buildXrayConfig([placed("a", first!, 2), placed("a", second!, 2)], OPTIONS)).toThrow(RangeError);
   });
 
+  it("один и тот же узел одной подписки дважды (в разных слотах) — RangeError: тег выхода должен быть один", () => {
+    const [first] = nodes;
+    expect(() => buildXrayConfig([placed("a", first!, 0), placed("a", first!, 1)], OPTIONS)).toThrow(RangeError);
+  });
+
   it("ключ подписки не по формату ^[a-z0-9]{1,16}$ — RangeError", () => {
     const [first] = nodes;
     for (const group of ["Main", "", "a-b", "a b", "a".repeat(17), "ключ"]) {
