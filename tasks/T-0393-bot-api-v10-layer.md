@@ -3,8 +3,8 @@ id: T-0393
 title: Слой Bot API 10.x — оформленные и эфемерные сообщения, темы, виджеты и приём widget_query
 epic: E5
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
