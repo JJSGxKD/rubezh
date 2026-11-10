@@ -137,6 +137,7 @@ erDiagram
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
     PARTNER ||--o{ PROMO_CAMPAIGN : "коды партнёра"
     PARTNER ||--o{ PARTNER_BINDING : "привёл игроков"
+    ACCOUNT |o--o| PARTNER : "кабинет партнёра: аккаунт карточки, остаётся после закрытия"
     ACCOUNT ||--o| PARTNER_BINDING : "приведён партнёром"
     PROMO_CAMPAIGN ||--o{ PARTNER_BINDING : "чем привязан"
     PARTNER |o--o{ LINK : "ссылки партнёра: владелец задаётся при создании"
@@ -450,7 +451,7 @@ erDiagram
 
     ACCOUNT_ROLE {
         uuid account_id PK,FK
-        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder"
+        enum role PK "owner|admin|game_designer|moderator|marketer|finance|analyst|stakeholder|partner"
         uuid granted_by "nullable: выдано на старте по списку в окружении"
         datetime granted_at
     }
@@ -946,7 +947,7 @@ erDiagram
         uuid created_by "без FK"
         datetime created_at
         datetime updated_at
-        string telegram_id "nullable, UK: вход в будущий кабинет"
+        string telegram_id "nullable, UK: по нему «Открыть кабинет» находит аккаунт партнёра"
         string status "applied|active|paused|rejected, по умолчанию active: привязывает новых игроков только active"
         string country "nullable: ISO-код двух букв, где получает выплаты"
         string payout_currency "nullable: код из ядра курсов"
@@ -955,6 +956,7 @@ erDiagram
         string postback_url "nullable: общий адрес постбэка партнёра с макросами (T-0070); действует на ссылки партнёра без своего адреса"
         datetime postback_since "nullable: с какого времени по кликам действует адрес; CHECK: задан тогда и только тогда, когда задан адрес"
         string_array postback_events "по умолчанию registration; CHECK: только четыре известных события"
+        uuid account_id FK "nullable, UK: игровой аккаунт партнёра (T-0217, Р136); пишется только из карточки, остаётся после закрытия кабинета; аккаунт удалён — пусто"
     }
 
     PARTNER_BINDING {
@@ -1243,6 +1245,14 @@ erDiagram
         int event_no "nullable: номер события отписки пары; только у penalized (CHECK)"
         datetime penalized_at "nullable: момент штрафа; вместе с event_no"
         json revoked "nullable: списано по ресурсам coins, gems, shards"
+    }
+
+    ACTIVITY_DAILY {
+        string day PK "закрытые сутки по Москве «2026-10-01»; без внешних ключей: строка — факт истории"
+        int dau "разных аккаунтов с запуском игры в этих сутках"
+        int wau "то же за 7 суток, заканчивающихся ими включительно"
+        int mau "то же за 30 суток"
+        datetime computed_at "когда ночное задание записало строку (T-0203)"
     }
 ```
 
@@ -1596,7 +1606,10 @@ erDiagram
   (§1.3). Ссылка партнёра (`LINK.partner_id`, T-0067) привязывает так же,
   но по первому входу: сессия вида `click` или `link` после записи зовёт
   привязку, та берёт тот же слот источника и пишет `PARTNER_BINDING` с
-  `link_code`.
+  `link_code`. Партнёр — игрок: `PARTNER.account_id` связывает карточку с
+  аккаунтом (кнопка «Открыть кабинет» выдаёт ему роль `partner`, T-0217), и
+  привязать самого себя он не может ни ссылкой, ни кодом; связь остаётся и
+  после закрытия кабинета.
 - **`ACCOUNT_SETTINGS` — настройки для всех устройств игрока**
   (`35-stage4-plan.md`, Р56, WP29): участие в помощи в тестировании,
   усвоенные подсказки, отображение боя. У каждого ключа — значение и когда
@@ -1655,6 +1668,18 @@ erDiagram
   `ON CONFLICT`. Персональных данных — минимум: подсеть вместо адреса и
   класс устройства вместо строки User-Agent (`24-attribution-and-sharing.md`
   §6). Уходят вместе с аккаунтом.
+- **`ACTIVITY_DAILY` — суточные снимки аудитории** (`tasks/T-0203`, первая
+  реализация витрины `mart_dau` без разрезов, `22-analytics-and-metrics.md`
+  §4). По строке на **закрытые** московские сутки: DAU, WAU и MAU, считанные
+  из `ACCOUNT_SESSION` окнами `[полночь (сутки − N + 1), полночь (сутки + 1))`.
+  Пишет ночное задание в 00:20 по Москве (`admin-notify/activity-snapshot.job.ts`):
+  закрывает все сутки от последней записи до вчерашних, на пустой таблице
+  строит историю от суток первой сессии (до 400 суток за проход), вставка
+  `ON CONFLICT (day) DO NOTHING` — повтор и две реплики безвредны; сутки без
+  сессий — строка с нулями, а не дыра. Сессии запуска вайп не стирает, поэтому
+  таблица вайпом тоже не трогается и внешних ключей не имеет. Рекорд панели
+  «Чего достигли» — максимум по этой таблице и по сегодняшним, ещё не
+  закрытым суткам (посчитанным на лету); при равенстве — более ранние сутки.
 - **`PURCHASE` — запись бухгалтерии, а не состояние игры.** Внешние ключи
   на аккаунт и забег запрещают удаление (`Restrict`): удалить игрока, за
   которым числятся звёзды, база не даст — деньги не исчезают вместе с ним.

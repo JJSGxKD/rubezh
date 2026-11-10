@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { deleteSubscription, fetchSubscription, probeSubscription, refreshSubscription, saveSubscription, type SubscriptionInfo, type SubscriptionOverview } from "../../api/proxy-subscription";
+import type { ApiError } from "../../api/client";
 import { api } from "../../services";
 import { ConfirmDialog } from "../../ui/confirm-dialog";
 import { HELP } from "../../ui/help";
 import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel, type Column } from "../../ui/kit";
-import { toast } from "../../ui/toast";
+import { toast, toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 import { nodeRows, refreshLine, trafficLine, type NodeRow } from "./subscription-view";
@@ -34,11 +35,11 @@ export function SubscriptionPanel({ canEdit }: { canEdit: boolean }) {
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
   const { encryption, sidecar, subscription, nodes } = state.data;
 
-  const run = async (kind: "refresh" | "probe", action: () => Promise<{ ok: true; data: SubscriptionOverview } | { ok: false; error: { message: string } }>, done: string) => {
+  const run = async (kind: "refresh" | "probe", action: () => Promise<{ ok: true; data: SubscriptionOverview } | { ok: false; error: ApiError }>, done: string) => {
     setBusy(kind);
     const result = await action();
     setBusy(null);
-    if (!result.ok) return void toast.error(result.error.message);
+    if (!result.ok) return void toastError(result.error);
     toast.success(done);
     reload();
   };
@@ -86,7 +87,7 @@ export function SubscriptionPanel({ canEdit }: { canEdit: boolean }) {
                 setBusy("toggle");
                 const result = await saveSubscription(api, { name: subscription.name, url: "", countries: subscription.countries.join(","), enabled: !subscription.enabled });
                 setBusy(null);
-                if (!result.ok) return void toast.error(result.error.message);
+                if (!result.ok) return void toastError(result.error);
                 toast.success(subscription.enabled ? "Подписка отключена" : "Подписка включена");
                 reload();
               }}
