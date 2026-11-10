@@ -12,7 +12,7 @@ import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
 import { ADMIN_SESSION_STORE, hashSessionToken } from "../src/modules/admin/admin-session.store.js";
 import { AdBlockArchiveService } from "../src/modules/ads/ad-block-archive.service.js";
-import type { AdBlockDef, AdCatalogBlock, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { AdBlockDef, AdCatalogBlock, AdFunnelRow, AdNetworkRow, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsCatalogService, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
 import { AdBlockArchivedError, AdCatalogNotFoundError } from "../src/modules/ads/ads-errors.js";
 import type { AdsService } from "../src/modules/ads/ads.service.js";

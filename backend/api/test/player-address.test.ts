@@ -64,6 +64,7 @@ export const TEAM_PATHS: readonly string[] = [
  */
 export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "ad_block_shape_locked", fragment: "заведите новый блок, а этот выключите" },
+  { code: "ad_block_archived", fragment: "верните его, чтобы изменить" },
   { code: "task_shape_locked", fragment: "заведите новое задание и выключите это" },
   { code: "promo_code_taken", fragment: "Придумайте другой" },
   { code: "purchase_undeliverable", fragment: "Верните звёзды" },
