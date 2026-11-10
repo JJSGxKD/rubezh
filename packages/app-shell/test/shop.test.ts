@@ -348,6 +348,30 @@ describe("покупка в магазине", () => {
     expect(named("purchase_failed").map((payload) => payload.reason)).toEqual(["offline", "payments_unavailable", "vip_active", "disabled"]);
   });
 
+  it("донат — тот же путь, что у набора: события несут product и sku «donation», цена — сумма из счёта", async () => {
+    const donation: BuyRequest = {
+      product: "donation",
+      sku: "donation",
+      priceStars: 250,
+      chargedStars: 250,
+      mode: "live",
+      order: async () => ({ ok: true, data: { ...INVOICE, sku: "donation", priceStars: 250, chargedStars: 250 } }),
+    };
+    expect(await buy(donation, deps("paid"))).toEqual({ kind: "done" });
+    expect(named("purchase_initiated")).toEqual([{ product: "donation", sku: "donation", priceStars: 250, chargedStars: 250, mode: "live" }]);
+    expect(named("purchase_completed")).toEqual([{ product: "donation", sku: "donation", priceStars: 250, chargedStars: 250, mode: "live" }]);
+  });
+
+  it("донат: закрыл окно оплаты — отмена, «Спасибо» не наступает; отказ endpoint_disabled не повторяется", async () => {
+    const donation = (answer: ApiResult<ShopInvoice>): BuyRequest => ({ product: "donation", sku: "donation", priceStars: 50, chargedStars: 50, mode: "live", order: async () => answer });
+    expect(await buy(donation({ ok: true, data: { ...INVOICE, sku: "donation" } }), deps("cancelled"))).toEqual({ kind: "cancelled" });
+    expect(polled).toEqual([]);
+    expect(named("purchase_completed")).toEqual([]);
+    expect(await buy(donation({ ok: false, failure: "unavailable", code: "endpoint_disabled" }), deps())).toEqual({ kind: "refused", code: "endpoint_disabled" });
+    expect(named("purchase_failed").map((payload) => payload.reason)).toEqual(["cancelled", "endpoint_disabled"]);
+    expect(named("purchase_failed").every((payload) => payload.product === "donation")).toBe(true);
+  });
+
   it("исход — в строку для игрока: знакомый отказ своим текстом, незнакомый — общим", () => {
     expect(noticeOf({ kind: "done" }, "Набор кузнеца")).toEqual({ tone: "success", text: "Готово: «Набор кузнеца» на счету." });
     expect(noticeOf({ kind: "cancelled" }, "x")).toBeNull();

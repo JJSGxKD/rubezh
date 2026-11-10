@@ -46,7 +46,7 @@ export interface DirectCandidate {
   purchaseId: string | null;
   /** `first_start_param` аккаунта как записан */
   startParam: string | null;
-  /** аккаунт команды: строка пишется пропущенной */
+  /** аккаунт команды (роль, кроме `partner`): строка пишется пропущенной */
   team: boolean;
 }
 
@@ -152,7 +152,7 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
   const registrationRows = await prisma.$queryRaw<CandidateRow[]>`
     WITH ${targets}
     SELECT q.account_id, l.code AS link_code, l.network, t.destination, q.first_start_param,
-           EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) AS team
+           EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') AS team
     FROM acquisition q
     JOIN link l ON l.code = q.first_start_ref
     JOIN targets t ON t.link_code = l.code AND t.destination IN (${NETWORK_DESTINATIONS})
@@ -181,7 +181,7 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
     WITH ${targets},
     attributed AS (
       SELECT q.account_id, q.first_at, l.code AS link_code, l.network, t.destination, t.events, q.first_start_param,
-             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) AS team
+             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') AS team
       FROM acquisition q
       JOIN link l ON l.code = q.first_start_ref
       JOIN targets t ON t.link_code = l.code AND t.destination IN (${NETWORK_DESTINATIONS})

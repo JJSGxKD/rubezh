@@ -39,6 +39,8 @@ enum Role {
   finance
   analyst
   stakeholder
+  /// внешний партнёр: пускает в панель, но только в его кабинет (T-0217, Р136); выдаётся из карточки партнёра
+  partner
 }
 
 enum Difficulty {
@@ -233,6 +235,7 @@ model Account {
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
   partnerBinding   PartnerBinding?
+  partnerCard      Partner?
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -2170,7 +2173,10 @@ model Partner {
   postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
   /// какие события уходят на адрес; по умолчанию одна регистрация
   postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
+  /// игровой аккаунт партнёра — связь кабинета (T-0217, Р136): пишется только из карточки партнёра. Остаётся и после закрытия кабинета: по ней аккаунт не привязывается к самому себе. Один аккаунт — один партнёр
+  accountId      String?   @unique @map("account_id") @db.Uuid
 
+  account   Account?        @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
@@ -2255,8 +2261,10 @@ model OutboundProxy {
 }
 
 /// Подписка Xray для прокси исходящих запросов (docs/35-stage4-plan.md Р101, T-0093).
-/// Одна строка: key = 'main'. Адрес — шифртекстом SecretCipher; состояние узла
-/// и его слот держат CHECK в миграции
+/// Несколько подписок (Р192, T-0384): ключ неизменен с рождения — от него зависят
+/// шифртекст адреса и x-hwid; первая подписка сохранила ключ `main`. Ключ —
+/// строчные латиница и цифры (CHECK в миграции). Адрес — шифртекстом SecretCipher;
+/// состояние узла и его слот держат CHECK в миграции
 model ProxySubscription {
   key                   String    @id @db.VarChar(16)
   name                  String    @db.VarChar(60)
@@ -2280,6 +2288,8 @@ model ProxySubscription {
   /// кто менял последним; без внешнего ключа — подписка переживает аккаунт
   updatedBy             String    @map("updated_by") @db.Uuid
   updatedAt             DateTime  @map("updated_at") @db.Timestamptz(3)
+  /// когда подключена: порядок карточек в панели
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   nodes ProxySubscriptionNode[]
 
@@ -2287,7 +2297,8 @@ model ProxySubscription {
 }
 
 /// Узлы подписки. Секретов узла (UUID, пароль) в базе нет: они только в конфиге
-/// Xray и в ответе поставщика. `slot` — вход Xray узла: порт = база + слот
+/// Xray, в файлах-частях подписок в его томе и в ответе поставщика. `slot` — вход
+/// Xray узла: порт = база + слот; слот уникален на всю систему, между подписками тоже
 model ProxySubscriptionNode {
   subscriptionKey String    @map("subscription_key") @db.VarChar(16)
   nodeKey         String    @map("node_key") @db.VarChar(16)
