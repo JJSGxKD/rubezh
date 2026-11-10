@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { STRONG_BOT_TARGETS } from "../src/content/balance-targets";
-import { contentBeforeT0388 } from "./helpers/content-before-t0388";
+import { PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../src/content/balance-targets";
+import { contentBeforeT0388, withoutSiege } from "./helpers/content-before-t0388";
+import type { ContentSnapshot } from "../src/content/snapshot";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
@@ -67,34 +68,121 @@ function veteranStandRuns(content?: ReturnType<typeof contentBeforeT0388>): Bala
 
 const strongMedian = (profile: PowerProfile, stance: StrongStance): number => summarizeRuns(strongRuns(profile, stance)).medianSurvivalSec;
 
-// В тестах — коридоры, принятые владельцем (Р196, Р197). «Бегает» у новичка и порядок лесенки — вердикты
-// `pnpm balance:sim -t "сильный бот"`: их вернёт задача подстройки T-0391, тест, который заведомо красный,
-// или `it.skip` — не контроль (docs/32-balance.md §3.2).
-describe("сильный бот: лесенка профилей (Р183, Р194)", () => {
+// Лесенка Р183 по сильному боту (Р197, T-0391): подстройка под силу калибруется им, а не уклоняющимся.
+// Медианы «бегает» считаются один раз на файл и переиспользуются свойствами ниже.
+describe("сильный бот: лесенка профилей (Р183, Р194, Р197)", () => {
+  it("«бегает»: новичок живёт около 7 минут", { timeout: 600_000 }, () => {
+    const { min, max } = STRONG_BOT_TARGETS.kite.novice;
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeGreaterThanOrEqual(min);
+    expect(strongMedian(POWER_PROFILES.novice, "kite")).toBeLessThanOrEqual(max);
+  });
+
   it("«бегает»: средний игрок живёт около 10 минут", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.average;
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.average, "kite")).toBeLessThanOrEqual(max);
   });
 
-  it("«бегает»: полный арсенал — в коридоре по замеру (Р197)", { timeout: 600_000 }, () => {
+  it("«бегает»: полный арсенал — в коридоре лесенки", { timeout: 600_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.kite.full;
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeGreaterThanOrEqual(min);
     expect(strongMedian(POWER_PROFILES.full, "kite")).toBeLessThanOrEqual(max);
   });
+
+  it("порядок лесенки: новичок < средний < полный арсенал, с подстройкой", { timeout: 600_000 }, () => {
+    const novice = strongMedian(POWER_PROFILES.novice, "kite");
+    const average = strongMedian(POWER_PROFILES.average, "kite");
+    const full = strongMedian(POWER_PROFILES.full, "kite");
+    expect(novice).toBeLessThan(average);
+    expect(average).toBeLessThan(full);
+  });
+
+  it("новичок к среднему — в коридоре отношений (цель 0,7 = 7 / 10 минут)", { timeout: 600_000 }, () => {
+    const { min, max } = PRESSURE_TARGETS.noviceToAverage;
+    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / strongMedian(POWER_PROFILES.average, "kite");
+    expect(ratio).toBeGreaterThanOrEqual(min);
+    expect(ratio).toBeLessThanOrEqual(max);
+  });
+
+  it("полный арсенал к среднему — в коридоре отношений (цель 1,4 = 14 / 10 минут)", { timeout: 600_000 }, () => {
+    const { min, max } = PRESSURE_TARGETS.fullToAverage;
+    const ratio = strongMedian(POWER_PROFILES.full, "kite") / strongMedian(POWER_PROFILES.average, "kite");
+    expect(ratio).toBeGreaterThanOrEqual(min);
+    expect(ratio).toBeLessThanOrEqual(max);
+  });
 });
 
 describe("сильный бот: стойка по забегу владельца (Р196)", () => {
-  it("«стоит» + «ветеран» на числах до T-0388 живёт не меньше 1020 с: бот не слабее человека (1242 с)", { timeout: 900_000 }, () => {
+  it("«стоит» + «ветеран» на числах до T-0388 без осады живёт не меньше 1020 с: бот не слабее человека (1242 с)", { timeout: 900_000 }, () => {
     const median = summarizeRuns(veteranStandRuns(contentBeforeT0388())).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(STRONG_BOT_TARGETS.stand.oldNumbersMinSec);
   });
 
-  it("«стоит» + «ветеран» на нынешних числах падает к 12–16-й минуте (Р197)", { timeout: 900_000 }, () => {
+  it("«стоит» + «ветеран» на нынешних числах с осадой падает к 6–10-й минуте (360–600 с, Р197, T-0392)", { timeout: 900_000 }, () => {
     const { min, max } = STRONG_BOT_TARGETS.stand.veteran;
     const median = summarizeRuns(veteranStandRuns()).medianSurvivalSec;
     expect(median).toBeGreaterThanOrEqual(min);
     expect(median).toBeLessThanOrEqual(max);
+  });
+});
+
+/**
+ * Прогоны «бегает» профиля: с осадой и без неё. Забег, в котором осада не наступила, побитово равен
+ * забегу без неё (осада читает мир и берёт случайность из своего потока), поэтому без осады
+ * перегоняются только забеги, где она была, — иначе проверка вдвое дольше ради тех же чисел.
+ * Прогоны с осадой у профилей лесенки берутся из кеша лесенки: те же зёрна, то же оружие.
+ */
+function kiteWithAndWithoutSiege(profile: PowerProfile): { with: BalanceRunResult[]; without: BalanceRunResult[]; sieged: number } {
+  const off: ContentSnapshot = withoutSiege();
+  const withSiege: BalanceRunResult[] = [];
+  const without: BalanceRunResult[] = [];
+  let sieged = 0;
+  const profileWeapons = profile.startingWeaponId === undefined ? STARTING_WEAPONS : [profile.startingWeaponId];
+  const seeds = profile.id === "veteran" ? STRONG_BOT_TARGETS.stand.seeds : STRONG_BOT_TARGETS.seeds;
+  const cached = profile.id === "veteran" ? undefined : strongRuns(profile, "kite");
+  let index = 0;
+  for (const startingWeaponId of profileWeapons) {
+    for (let seed = 1; seed <= seeds; seed++) {
+      const options = { seed, skill: "strong", stance: "kite", startingWeaponId, maxSec: 1800, loadout: profile.loadout } as const;
+      const run = cached?.[index++] ?? simulateBalanceRun(options);
+      withSiege.push(run);
+      if ((run.sieges ?? 0) === 0) {
+        without.push(run);
+        continue;
+      }
+      sieged++;
+      without.push(simulateBalanceRun({ ...options, content: off }));
+    }
+  }
+  return { with: withSiege, without, sieged };
+}
+
+describe("сильный бот: осада не наказывает того, кто двигается (T-0392)", () => {
+  const profiles = [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full, POWER_PROFILES.veteran];
+
+  for (const profile of profiles) {
+    it(`«бегает», ${profile.titleRu}: медиана с осадой и без неё расходится не больше чем на 5%`, { timeout: 900_000 }, () => {
+      const { with: withSiege, without } = kiteWithAndWithoutSiege(profile);
+      const medianWith = summarizeRuns(withSiege).medianSurvivalSec;
+      const medianWithout = summarizeRuns(without).medianSurvivalSec;
+      expect(Math.abs(medianWith - medianWithout) / medianWithout, `${String(medianWith)} с с осадой против ${String(medianWithout)} без неё`).toBeLessThanOrEqual(
+        STRONG_BOT_TARGETS.siege.kiteShiftMax,
+      );
+    });
+  }
+
+  it("забег, в котором осада не наступила, побитово равен забегу без неё", { timeout: 300_000 }, () => {
+    const off = withoutSiege();
+    let compared = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const options = { seed, skill: "strong", stance: "kite", startingWeaponId: STARTING_WEAPONS[0], maxSec: 400, loadout: POWER_PROFILES.average.loadout } as const;
+      const run = simulateBalanceRun(options);
+      // Осада наступает и у бегающего (он топчется в круге), такой забег свойство не проверяет.
+      if ((run.sieges ?? 0) > 0) continue;
+      compared++;
+      expect(simulateBalanceRun({ ...options, content: off }).survivalSec, `seed ${String(seed)}`).toBe(run.survivalSec);
+    }
+    expect(compared, "хотя бы два забега без осады").toBeGreaterThanOrEqual(2);
   });
 });
 

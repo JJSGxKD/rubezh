@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
   FILTER_KEYS,
+  KIND_TITLES,
   NO_ACHIEVEMENT_FIELDS,
   TASK_LIMIT_RANGE,
   TIER_TITLES,
@@ -302,6 +303,18 @@ describe("ротация пула и фильтр цели", () => {
     expect(taskProblem(task({ taskId: "w_1", kind: "runs", filter: { weapon: "spark" } }), true)).toMatch(/фильтр/);
     expect(taskProblem(task({ taskId: "w_1", kind: "boost_runs", filter: null }), true)).toBeNull();
     expect(Object.keys(FILTER_KEYS).sort()).toEqual(["difficulty_runs", "difficulty_survive_sec", "element_runs", "weapon_runs"]);
+  });
+
+  it("виды по итогу забега (T-0126): боссы, элиты, сундуки, кристаллы, эволюции — форма принимает без фильтра и отклоняет с ним", () => {
+    const titles = { boss_kills: "Боссы", elite_kills: "Элиты", chests_opened: "Сундуки", crystals_collected: "Кристаллы", evolution_runs: "Эволюции" } as const;
+    for (const [kind, title] of Object.entries(titles)) {
+      expect(KIND_TITLES[kind], kind).toBe(title);
+      expect(taskProblem(task({ taskId: "w_1", kind, filter: null, tier: "hard" }), true), kind).toBeNull();
+      expect(taskProblem(task({ taskId: "w_1", kind, filter: { weapon: "storm" } }), true), kind).toMatch(/фильтр/);
+      expect(FILTER_KEYS[kind], kind).toBeUndefined();
+      // смена на такой вид убирает фильтр прежнего
+      expect(withKind(task({ kind: "weapon_runs", filter: { weapon: "spark" } }), kind).filter, kind).toBeNull();
+    }
   });
 
   it("ступень — только у дневных и недельных заданий и не у партнёрских", () => {
