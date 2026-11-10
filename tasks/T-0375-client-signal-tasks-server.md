@@ -3,7 +3,7 @@ id: T-0375
 title: Задания по сигналу клиента — сервер и панель: главный экран и история
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-3
 size: M

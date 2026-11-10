@@ -36,6 +36,8 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   channel: "Подписка на канал",
   link: "Переход по ссылке",
   bot: "Запуск бота",
+  home_screen: "Игра на главном экране",
+  story_share: "История с игрой",
 };
 
 /** Ступени пула ротации: из строк ступени игрок видит набор дня или недели. */
@@ -74,6 +76,15 @@ export const REPEAT_TITLES: Record<TaskPeriod, string> = { achievement: "Раз�
 
 /** Партнёрские виды: ссылка вместо числа, своя группа в каталоге. */
 export const PARTNER_KINDS: ReadonlySet<string> = new Set([CHANNEL_KIND, "link", "bot"]);
+
+/**
+ * Виды по сигналу клиента (Р187, `tasks/client-signal-rules.ts`, `CLIENT_KINDS`): засчитывает
+ * сообщение игры, сервер действие проверить не может. Срок закреплён за видом, цель — 1.
+ */
+export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, TaskPeriod>([
+  ["home_screen", "achievement"],
+  ["story_share", "weekly"],
+]);
 
 /**
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
@@ -299,6 +310,13 @@ export function togglePlatform(params: TaskParams | null, platform: PartnerPlatf
  * поле формы сохраняет.
  */
 export function withKind(task: TaskDef, kind: string): TaskDef {
+  // Вид по сигналу клиента: срок и цель закреплены, ступени, фильтра, лимита и картинки нет. Историю считают недельным
+  // заданием, поэтому поля достижения у неё пусты; у главного экрана категорию выбирают в форме.
+  const clientPeriod = CLIENT_KINDS.get(kind);
+  if (clientPeriod !== undefined) {
+    const next = { ...task, kind, period: clientPeriod, target: 1, params: null, limit: null, image: null, filter: null, tier: null };
+    return clientPeriod === "achievement" ? next : { ...next, ...NO_ACHIEVEMENT_FIELDS };
+  }
   // Фильтр принадлежит виду: у другого вида он был бы чужим. Друзья и уровень аккаунта читает витрина достижений, поэтому срок у них — «достижение».
   if (STATE_KINDS.has(kind)) return { ...task, kind, period: "achievement", params: null, limit: null, image: null, filter: null, tier: null };
   if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null, filter: null };
@@ -386,6 +404,12 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (task.tier !== null && (task.period === "achievement" || PARTNER_KINDS.has(task.kind))) return "Ступень — только у дневных и недельных заданий";
   const achievementProblem = achievementProblemOf(task);
   if (achievementProblem !== null) return achievementProblem;
+  const clientPeriod = CLIENT_KINDS.get(task.kind);
+  if (clientPeriod !== undefined) {
+    if (task.period !== clientPeriod) return clientPeriod === "achievement" ? "Главный экран — только достижение" : "История — только недельное задание";
+    if (task.target !== 1) return "У этого задания цель — 1";
+    if (task.kind === "home_screen" && task.category === null) return "Достижению «главный экран» нужна категория — без неё витрина его не покажет";
+  }
   const filterProblem = filterProblemOf(task);
   if (filterProblem !== null) return filterProblem;
   if (PARTNER_KINDS.has(task.kind)) return partnerProblem(task);
