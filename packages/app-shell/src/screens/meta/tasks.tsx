@@ -33,6 +33,7 @@ import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { Achievements } from "./achievements";
 import { BotMentionRows, useBotMention } from "./bot-mention-rows";
+import { botPlace } from "./bot-mention-rules";
 import { NetworkTasks } from "./network-tasks";
 import { RestrictedPlaque } from "./restricted-plaque";
 import { TaskPointsBar } from "./task-points";
@@ -203,7 +204,8 @@ export function TasksScreen(): ReactNode {
   const pointsReady = points === null ? 0 : view === "daily" ? readyIn(points.daily) : view === "weekly" ? readyIn(points.weekly) : 0;
   const layout = tabLayout({ view, tasks, pointsReady, partnerClosed });
   const { claimable, rest } = layout;
-  const botInGroup = view === "daily" && bot.ready;
+  const botSpot = botPlace(view, bot.ready);
+  const botInGroup = botSpot === "group";
   const pointsBar =
     (view === "daily" || view === "weekly") && points !== null ? (
       <div className="mb-3">
@@ -282,7 +284,7 @@ export function TasksScreen(): ReactNode {
             <ClaimableGroup
               shown={hasClaimableGroup(layout) || botInGroup}
               botInGroup={botInGroup}
-              bot={view === "daily" ? <BotMentionRows model={bot} place={botInGroup ? "group" : "list"} /> : null}
+              bot={botSpot !== null ? <BotMentionRows model={bot} place={botSpot} /> : null}
             >
               {layout.pointsInGroup ? pointsBar : null}
               <div className="grid gap-2">{claimable.map((task, index) => row(task, index))}</div>

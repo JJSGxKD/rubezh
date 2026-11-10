@@ -75,3 +75,12 @@ export function isBotMentionClaimable(task: BotMentionTask): boolean {
 export function isBotMentionBlockClaimable(view: BotMentionView): boolean {
   return visibleTasks(view).some(isBotMentionClaimable);
 }
+
+/**
+ * Где на экране «Задания» стоит блок бота (Р186): только на «Дне»; готов к
+ * забору — в группе «Можно забрать», иначе под ней; на других вкладках его нет.
+ */
+export function botPlace(tab: string, ready: boolean): "group" | "list" | null {
+  if (tab !== "daily") return null;
+  return ready ? "group" : "list";
+}

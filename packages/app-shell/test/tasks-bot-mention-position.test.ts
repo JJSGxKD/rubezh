@@ -18,7 +18,8 @@ describe("блок «юзернейм бота» в tasks.tsx", () => {
   });
 
   it("рисуется только на вкладке «День»", () => {
-    const line = source.slice(source.lastIndexOf("\n", at) + 1, source.indexOf("\n", at));
-    expect(line).toMatch(/view\s*===\s*"daily"/);
+    expect(source).toMatch(/botPlace\(view,\s*bot\.ready\)/);
+    expect(source).toMatch(/place=\{botSpot\}/);
+    expect(source).toMatch(/botInGroup\s*=\s*botSpot\s*===\s*"group"/);
   });
 });

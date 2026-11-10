@@ -1,6 +1,6 @@
 import ruTasks from "../src/i18n/ru-tasks.json";
 import { describe, expect, it } from "vitest";
-import { buttonKey, collapsedStreak, isBotMentionBlockClaimable, isBotMentionClaimable, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
+import { botPlace, buttonKey, collapsedStreak, isBotMentionBlockClaimable, isBotMentionClaimable, outcomeKey, statusKey, visibleTasks } from "../src/screens/meta/bot-mention-rules";
 import type { BotMentionTask, BotMentionView } from "../src/state/bot-mention-api";
 
 // Правила блока «юзернейм бота» (tasks/T-0160): что показать, какая строка
@@ -165,5 +165,22 @@ describe("isBotMentionClaimable", () => {
     expect(isBotMentionBlockClaimable(view([task(), ready]))).toBe(true);
     expect(isBotMentionBlockClaimable(view([task()]))).toBe(false);
     expect(isBotMentionBlockClaimable(view([ready], null))).toBe(false);
+  });
+});
+
+describe("botPlace", () => {
+  it("на «Дне» готовый блок стоит в группе", () => {
+    expect(botPlace("daily", true)).toBe("group");
+  });
+
+  it("на «Дне» неготовый блок стоит под группой", () => {
+    expect(botPlace("daily", false)).toBe("list");
+  });
+
+  it("на других вкладках блока нет, готов он или нет", () => {
+    for (const tab of ["weekly", "achievements", "partner", "networks"]) {
+      expect(botPlace(tab, true)).toBeNull();
+      expect(botPlace(tab, false)).toBeNull();
+    }
   });
 });
