@@ -170,8 +170,8 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
     await fresh.reload();
 
     expect(fresh.list(0).map((proxy) => [proxy.id, proxy.port])).toEqual([
-      ["node:bbbb", 10801],
-      ["node:aaaa", 10800],
+      ["node:main:bbbb", 10801],
+      ["node:main:aaaa", 10800],
     ]);
   });
 
@@ -220,11 +220,27 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
     nextProbeAt: NOW,
   });
 
+  /** Строка без created_at: так подписка лежала до миграции — колонку заполняет умолчание базы. */
+  const legacyData = (key: string) => {
+    const full = row(key);
+    return {
+      key,
+      name: full.name,
+      urlIv: Uint8Array.from(full.urlIv),
+      urlTag: Uint8Array.from(full.urlTag),
+      urlCt: Uint8Array.from(full.urlCt),
+      urlKeyId: full.urlKeyId,
+      urlHint: full.urlHint,
+      enabled: full.enabled,
+      countries: full.countries,
+      updatedBy: full.updatedBy,
+      updatedAt: full.updatedAt,
+    };
+  };
+
   describe("несколько подписок (Р192)", () => {
     it("исходная подписка с ключом main после миграции читается, её адрес открывается тем же ключом шифрования", async () => {
-      // Строка без created_at: так она лежала до миграции — колонку заполняет умолчание базы.
-      const { createdAt: _unused, ...legacy } = row("main");
-      await prisma.proxySubscription.create({ data: { ...legacy, urlIv: Uint8Array.from(legacy.urlIv), urlTag: Uint8Array.from(legacy.urlTag), urlCt: Uint8Array.from(legacy.urlCt) } });
+      await prisma.proxySubscription.create({ data: legacyData("main") });
       await prisma.proxySubscriptionNode.create({ data: nodeData("main", "aaaa", 0) });
 
       const loaded = await repository.load("main");
@@ -236,10 +252,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("подписка Xray 
     });
 
     it("ключ подписки — строчные латиница и цифры до 16 знаков: ABC, дефис, пробел, пусто и длиннее — отказ CHECK", async () => {
-      const insert = (key: string) => {
-        const { createdAt: _unused, ...legacy } = row("main");
-        return prisma.proxySubscription.create({ data: { ...legacy, key, urlIv: Uint8Array.from(legacy.urlIv), urlTag: Uint8Array.from(legacy.urlTag), urlCt: Uint8Array.from(legacy.urlCt) } });
-      };
+      const insert = (key: string) => prisma.proxySubscription.create({ data: { ...legacyData("main"), key } });
 
       for (const key of ["ABC", "a-b", "a b", "", "ключ", "a".repeat(17), "Main"]) await expect(insert(key), JSON.stringify(key)).rejects.toThrow();
       for (const key of ["abc", "main", "0123456789ab", "a".repeat(16)]) await expect(insert(key), key).resolves.toBeDefined();

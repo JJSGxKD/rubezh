@@ -125,11 +125,15 @@ function subscriptionRow(sealing: SecretCipher, patch: Partial<StoredSubscriptio
   };
 }
 
-/** Подписка в хранилище: нет — создаётся, есть — заменяется целиком (как смена адреса). */
+/**
+ * Подписка в хранилище: нет — создаётся, есть — заменяется целиком (как смена адреса).
+ * Уже успешно обновлённая подписка имеет часть в томе: без неё расписание обновит её сразу.
+ */
 async function seed(r: Rig, patch: Partial<StoredSubscription> = {}, url = URL_SECRET): Promise<void> {
   const row = subscriptionRow(r.cipher, patch, url);
   if ((await r.repository.load(row.key)) === null) await r.repository.create(row);
   else await r.repository.save(row, { dropNodes: true });
+  if (row.lastRefreshOk === true) await r.writer.writePart(row.key, { version: 1, nodes: [] });
 }
 
 const nodeRow = (key: string, slot: number, patch: Partial<StoredNode> = {}): StoredNode => ({
@@ -675,9 +679,11 @@ describe("расписание обновления и проверок", () => 
     expect(s.fetch).toHaveBeenCalledTimes(1);
   });
 
-  it("файла конфига нет, подписка свежая: тик обновляет сразу, не ждёт период", async () => {
+  it("том пересоздан (нет ни config.json, ни части), подписка свежая: тик обновляет сразу, не ждёт период", async () => {
     const s = scheduled();
     await seed(s, { lastRefreshAt: NOW, lastRefreshOk: true });
+    // Часть лежит в том же томе, что и config.json: потерян том — потеряны оба файла.
+    s.writer.parts.clear();
     s.writer.fileExists = false;
 
     await s.scheduler.tick(after(60));
@@ -981,7 +987,7 @@ describe("подписка по HTTP в панели", () => {
   it("создание: адрес шифртекстом, в ответе, журнале и аудите его нет; есть подсказка и ключ из 12 hex", async () => {
     const response = await create();
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(201);
     expect(response.body).not.toMatch(AUDIT_URL);
     const [entry] = overviewOf(response).subscriptions;
     expect(entry).toMatchObject({ name: "Основная", countries: ["DE", "NL"], enabled: true, urlHint: "sub.example.com …TKEY", nodes: [] });
@@ -1153,7 +1159,7 @@ describe("подписка по HTTP в панели", () => {
   it("создание без контейнера Xray (dev) работает: подписка записана, конфиг не трогается", async () => {
     r.writer.available_ = false;
 
-    expect((await create()).statusCode).toBe(200);
+    expect((await create()).statusCode).toBe(201);
     expect(r.repository.rows).toHaveLength(1);
     expect(r.writer.written).toEqual([]);
   });

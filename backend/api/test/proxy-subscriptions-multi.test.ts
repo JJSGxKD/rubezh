@@ -40,7 +40,8 @@ const PUBLIC_IP = "93.184.216.34";
 const BASE_PORT = 10800;
 const LOCK_KEY = "proxy-subscription:refresh:lock";
 const ACTOR: AccountRef = { accountId: "00000000-0000-4000-8000-000000000001", platform: "telegram", platformUserId: "1" };
-const SECRET_PATTERN = /token-|sub-[a-z0-9]+\.example\.com/;
+// Подсказка адреса «хост …abcd» видима по замыслу; адрес целиком и его путь — нет.
+const SECRET_PATTERN = /https:\/\/|\/s\/token-/;
 
 const at = (seconds: number): Date => new Date(NOW.getTime() + seconds * 1000);
 const urlOf = (key: string): string => `https://sub-${key}.example.com/s/token-${key}`;
@@ -529,7 +530,7 @@ describe("всё, что меняет конфиг, — под общим зам
 
   it("замок занят: создание, смена enabled и удаление — SubscriptionBusyError, база и том не тронуты", async () => {
     const r = await seeded();
-    const before = { rows: structuredClone(r.repository.rows), nodes: structuredClone(r.repository.nodes), parts: structuredClone([...r.writer.parts]), configs: r.writer.written.length };
+    const before = { rows: [...r.repository.rows], nodes: [...r.repository.nodes], parts: [...r.writer.parts], configs: r.writer.written.length };
     r.redis.hold(LOCK_KEY);
 
     const outcomes = await Promise.all([
@@ -916,6 +917,19 @@ describe("сборка конфига и части в томе", () => {
 
     expect([...result.missing].sort()).toEqual(["b", "c"]);
     expect(outTags(configOf(r))).toEqual([`out-a-${part(["a1.example.org"], 0).nodes[0]?.node.key}`]);
+  });
+
+  it("слот части за пределами входов (XRAY_SLOT_COUNT уменьшили) — часть считается недостающей, а не ломает сборку", async () => {
+    const r = rig({ slotCount: 12 });
+    await r.add("a");
+    await r.add("b");
+    await r.writer.writePart("a", part(["a1.example.org"], 0));
+    await r.writer.writePart("b", part(["b1.example.org"], 40));
+
+    const result = await assembleConfig({ repository: r.repository, writer: r.writer, xray: { basePort: BASE_PORT, slotCount: 12 } });
+
+    expect(result.missing).toEqual(["b"]);
+    expect(configOf(r).inbounds).toHaveLength(1);
   });
 
   it("override подставляет переданную часть вместо файла", async () => {
