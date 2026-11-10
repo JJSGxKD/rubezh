@@ -24,6 +24,7 @@ import { settleInterruptedRun } from "./state/run-interrupted";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
+import { FX_SOUND_PAGE } from "./state/dev-url";
 import { installErrorReporting } from "./state/error-reporting";
 import { useFeedback } from "./state/feedback";
 import { useGraphics } from "./state/graphics";
@@ -130,7 +131,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
   // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
   const fxScene = options.capabilities.devFxScene;
-  if (fxScene !== undefined) {
+  if (fxScene?.id === FX_SOUND_PAGE) {
+    // Страница рендера звуков (pnpm fx:sound): сцена не нужна, нужен только синтез.
+    void import("./dev/fx-sound").then(({ startFxSound }) => startFxSound());
+  } else if (fxScene !== undefined) {
     void import("./dev/fx-stand").then(({ startFxStand }) => startFxStand(fxScene.id, fxScene.ground));
   }
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради

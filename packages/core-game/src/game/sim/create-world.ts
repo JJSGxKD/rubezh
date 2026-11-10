@@ -20,6 +20,7 @@ import type {
   PrologueDef,
   RubezhDef,
   SecretsDef,
+  SiegeDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -36,6 +37,8 @@ import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
 import { createSecretState, findSecretsProblems } from "./secrets";
+import { createSiegeState } from "./siege";
+import { findSiegeProblems } from "./siege-rules";
 import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
@@ -189,6 +192,12 @@ export interface CreateWorldOptions {
   /** правила рубежа (страж на отметке); по умолчанию рубежа нет: стража в мире не будет */
   rubezh?: RubezhDef;
   /**
+   * осада стоящего (Р197); по умолчанию осады нет. Правила в мир не попадают в прологе и на «Лёгкой»
+   * (уровень с id `easy`, переданный явно): обучение не наказывает за остановку. Идёт осада только
+   * под директором спавна
+   */
+  siege?: SiegeDef;
+  /**
    * Пролог первого забега (T-0278): оберег, большой первый сундук, «Советуем», Страж
    * по силе набранного и своя кривая опыта. Без поля — обычный бесконечный забег.
    * Таймлайн пролога подаётся отдельно (`timeline`): мир его не хранит.
@@ -275,6 +284,14 @@ export function createWorld(options: CreateWorldOptions): World {
   const secretProblems = findSecretsProblems(secretRules);
   if (secretProblems.length > 0) {
     throw new Error(`Некорректный контент тайников:\n${secretProblems.join("\n")}`);
+  }
+
+  const siegeRules = options.siege ?? null;
+  if (siegeRules !== null) {
+    const siegeProblems = findSiegeProblems(siegeRules, options.enemies);
+    if (siegeProblems.length > 0) {
+      throw new Error(`Некорректный контент осады:\n${siegeProblems.join("\n")}`);
+    }
   }
 
   const pressureRules = options.pressure ?? null;
@@ -372,6 +389,8 @@ export function createWorld(options: CreateWorldOptions): World {
     ),
     cordon: createCordonState(),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
+    siegeRules: prologueRules !== null || options.difficulty?.id === "easy" ? null : siegeRules,
+    siege: createSiegeState(createRng(deriveSeed(options.seed, STREAM_SALT.siege))),
     mode: prologueRules === null ? "endless" : "prologue",
     prologue: prologueRules === null ? null : createPrologueState(prologueRules),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),

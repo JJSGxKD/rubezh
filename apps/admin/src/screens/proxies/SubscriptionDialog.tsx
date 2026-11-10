@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { EMPTY_SUBSCRIPTION_FORM, saveSubscription, type SubscriptionInfo, type SubscriptionOverview } from "../../api/proxy-subscription";
+import { createSubscription, EMPTY_SUBSCRIPTION_FORM, updateSubscription, type SubscriptionInfo } from "../../api/proxy-subscription";
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
 import { Button, Field, Input, Notice } from "../../ui/kit";
@@ -9,7 +9,7 @@ import { countriesProblem, normalizeSubscriptionUrl, subscriptionUrlProblem } fr
 /**
  * Окно подписки Xray: подключение и правка. Адрес живёт только в состоянии окна:
  * закрыли — пропал, назад сервер его не отдаёт. При правке пустое поле оставляет
- * прежний адрес (docs/35-stage4-plan.md Р101).
+ * прежний адрес (docs/35-stage4-plan.md Р101, Р192).
  */
 export function SubscriptionDialog({
   existing,
@@ -19,7 +19,7 @@ export function SubscriptionDialog({
   /** правка этой подписки; `null` — новая */
   existing: SubscriptionInfo | null;
   onClose: () => void;
-  onSaved: (overview: SubscriptionOverview, created: boolean) => void;
+  onSaved: (created: boolean) => void;
 }) {
   const [form, setForm] = useState(existing === null ? EMPTY_SUBSCRIPTION_FORM : { name: existing.name, url: "", countries: existing.countries.join(", "), enabled: existing.enabled });
   const [touched, setTouched] = useState(false);
@@ -34,10 +34,11 @@ export function SubscriptionDialog({
     setTouched(true);
     if (problem !== null || saving) return;
     setSaving(true);
-    const result = await saveSubscription(api, { ...form, url: normalizeSubscriptionUrl(form.url) });
+    const input = { ...form, url: normalizeSubscriptionUrl(form.url) };
+    const result = await (existing === null ? createSubscription(api, input) : updateSubscription(api, existing.key, input));
     setSaving(false);
     if (!result.ok) return void toastError(result.error);
-    onSaved(result.data, existing === null);
+    onSaved(existing === null);
   };
 
   return (
@@ -46,8 +47,8 @@ export function SubscriptionDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={existing === null ? "Подключить подписку Xray" : `Подписка «${existing.name}»`}
-      description={existing === null ? "Адрес с множеством подключений: узлы станут прокси для запросов сервера" : `Адрес сейчас: ${existing.urlHint}`}
+      title={existing === null ? "Новая подписка" : `Подписка: ${existing.name}`}
+      description={existing === null ? "Адрес с множеством подключений: узлы войдут в общий запас прокси для запросов сервера" : `Адрес сейчас: ${existing.urlHint}`}
       footer={
         <>
           <Button onClick={onClose}>Отмена</Button>

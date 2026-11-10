@@ -3,8 +3,8 @@ id: T-0217
 title: Роль «партнёр» — аккаунт привязан к карточке, вход в свой кабинет, без самопривязки
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0216, T-0068, T-0070, T-0071, T-0181]
@@ -33,6 +33,12 @@ shared:
   - docs/21-diagrams.md
   - docs/23-referral-and-partner-program.md
   - docs/29-admin-panel.md
+  - backend/api/src/modules/partners/partners.module.ts
+  - backend/api/src/modules/ad-conversions/click-launch-sweep.ts
+  - backend/api/src/modules/ad-conversions/direct-launch-sweep.ts
+  - backend/api/test/ad-conversions.integration.test.ts
+  - backend/api/test/helpers/memory-partner-accounts.ts
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

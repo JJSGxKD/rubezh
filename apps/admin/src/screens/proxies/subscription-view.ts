@@ -1,10 +1,11 @@
-import { countriesOf, type SubscriptionInfo, type SubscriptionNode } from "../../api/proxy-subscription";
-import { formatTime } from "../../format";
+import { countriesOf, type SubscriptionInfo, type SubscriptionNode, type SubscriptionOverview } from "../../api/proxy-subscription";
+import { formatTime, plural } from "../../format";
 
 /**
- * Чистые функции блока «Подписка Xray» (docs/35-stage4-plan.md Р101): проверка
- * адреса до отправки, строки трафика и итога обновления, порядок узлов. Вынесены
- * из компонентов ради теста; сервер проверит то же самое ещё раз.
+ * Чистые функции блока «Подписки Xray» (docs/35-stage4-plan.md Р101, Р192):
+ * проверка адреса до отправки, строки трафика и итога обновления, сводка по узлам
+ * и входам, порядок узлов. Вынесены из компонентов ради теста; сервер проверит то
+ * же самое ещё раз.
  */
 
 const URL_PROBLEMS = {
@@ -93,6 +94,41 @@ export function refreshLine(subscription: Pick<SubscriptionInfo, "lastRefreshAt"
   if (subscription.lastRefreshOk === false) return { tone: "danger", text: subscription.lastRefreshNote ?? "Обновление не удалось" };
   const when = `Обновлена ${formatTime(subscription.lastRefreshAt)}`;
   return { tone: "neutral", text: subscription.lastRefreshNote === null ? when : `${when} — ${subscription.lastRefreshNote}` };
+}
+
+/** «37 узлов: работают 30, не отвечают 5, не проверены 2»; состояния без узлов не называются. */
+export function nodesSummary(nodes: readonly Pick<SubscriptionNode, "state">[]): string {
+  if (nodes.length === 0) return "Узлов пока нет";
+  const groups = [
+    { state: "healthy", forms: ["работает", "работают", "работают"] },
+    { state: "down", forms: ["не отвечает", "не отвечают", "не отвечают"] },
+    { state: "unknown", forms: ["не проверен", "не проверены", "не проверены"] },
+  ] as const;
+  const parts = groups.flatMap(({ state, forms }) => {
+    const count = nodes.filter((node) => node.state === state).length;
+    return count === 0 ? [] : [`${plural(count, forms)} ${String(count)}`];
+  });
+  return `${String(nodes.length)} ${plural(nodes.length, ["узел", "узла", "узлов"])}: ${parts.join(", ")}`;
+}
+
+/** «Входов Xray: 100, на подписку — 50»: входы делятся между подписками поровну. */
+export function slotLine(overview: Pick<SubscriptionOverview, "slotCount" | "slotQuota">): string {
+  return `Входов Xray: ${String(overview.slotCount)}, на подписку — ${String(overview.slotQuota)}`;
+}
+
+/** Кнопка таблицы узлов: «Показать узлы (37)» / «Скрыть узлы». */
+export function nodesToggleLabel(count: number, open: boolean): string {
+  return open ? "Скрыть узлы" : `Показать узлы (${String(count)})`;
+}
+
+/** Подписку можно добавить, пока их меньше предела сервера. */
+export function canAddSubscription(overview: Pick<SubscriptionOverview, "limit" | "subscriptions">): boolean {
+  return overview.subscriptions.length < overview.limit;
+}
+
+/** Почему добавить больше нельзя; `null` — можно. */
+export function limitLine(overview: Pick<SubscriptionOverview, "limit" | "subscriptions">): string | null {
+  return canAddSubscription(overview) ? null : `Подписок ${String(overview.limit)} — больше добавить нельзя: удалите лишнюю`;
 }
 
 export interface NodeRow {

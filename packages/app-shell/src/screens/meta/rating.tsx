@@ -29,6 +29,7 @@ import { RestrictedPlaque } from "./restricted-plaque";
 import { RowOpener, entryRunId } from "./run-card-link";
 import { SessionNotice, useSessionNotice } from "./session-notice";
 import { RankMark, SyncProblem } from "./sync-ui";
+import { SupporterBadge } from "./supporter-badge";
 import { TesterBadge } from "./tester-badge";
 
 /**
@@ -270,6 +271,7 @@ export function LeaderboardRow(props: { entry: LeaderboardEntry; index: number; 
           {place === 1 ? <Crown size={14} aria-hidden="true" className="shrink-0 text-elite" /> : null}
           <span className="max-w-full truncate">{entry.name}</span>
           {entry.tester === true ? <TesterBadge /> : null}
+          {entry.supporter === true ? <SupporterBadge iconOnly /> : null}
           {entry.rubezh === true ? <RubezhMark /> : null}
           {entry.prestige !== undefined && entry.prestige > 0 ? <PrestigeMark points={entry.prestige} /> : null}
           {entry.isMe ? (
