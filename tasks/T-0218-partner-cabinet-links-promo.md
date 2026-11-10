@@ -3,7 +3,7 @@ id: T-0218
 title: Кабинет партнёра в панели — свои ссылки и промокоды, доступ из карточки
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -25,6 +25,9 @@ shared:
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
+  - apps/admin/test/cabinet.test.ts
+  - backend/api/src/modules/partners/partners.module.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -167,13 +170,13 @@ batch: 4
 
 ## Критерии приёмки
 
-- [ ] Партнёр видит и заводит только свои ссылки и копии своих промокодов,
+- [x] Партнёр видит и заводит только свои ссылки и копии своих промокодов,
   в пределах лимитов из настроек.
-- [ ] Награду промокода партнёр не меняет.
-- [ ] Команда открывает и закрывает кабинет из карточки и смотрит его
+- [x] Награду промокода партнёр не меняет.
+- [x] Команда открывает и закрывает кабинет из карточки и смотрит его
   глазами партнёра без права на запись.
-- [ ] Блок «Интерфейс» приёмки пройден.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Блок «Интерфейс» приёмки пройден.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
