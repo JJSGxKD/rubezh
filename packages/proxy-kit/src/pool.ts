@@ -90,14 +90,19 @@ export class NodePool {
 
   /**
    * Здоровые узлы, быстрые первыми. С `countries` — только узлы этих стран: узел
-   * без страны подходит лишь когда фильтра нет.
+   * без страны подходит лишь когда фильтра нет. `accept` — своё условие
+   * вызывающего (например, у каждой подписки свой фильтр стран): применяется
+   * вместе с `countries` и только к здоровым узлам, а `limit` считается по
+   * тем, что его прошли.
    */
-  pick(query: { countries?: readonly string[]; limit: number }): string[] {
+  pick(query: { countries?: readonly string[]; limit: number; accept?: (entry: PoolEntry) => boolean }): string[] {
     if (query.limit <= 0) return [];
     const countries = query.countries?.map((country) => country.toUpperCase());
+    const accept = query.accept;
     return [...this.entries.values()]
       .filter((entry) => entry.state === "healthy")
       .filter((entry) => countries === undefined || (entry.country !== null && countries.includes(entry.country.toUpperCase())))
+      .filter((entry) => accept === undefined || accept(entry))
       .sort((a, b) => (a.latencyMs ?? Infinity) - (b.latencyMs ?? Infinity) || compareKeys(a.key, b.key))
       .slice(0, query.limit)
       .map((entry) => entry.key);
