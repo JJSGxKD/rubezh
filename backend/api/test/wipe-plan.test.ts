@@ -36,15 +36,21 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 73 модели, стирается 26", () => {
+  it("остаётся 74 модели, стирается 26", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(73);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(74);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(26);
   });
 
   it("батл-пасс (T-0311): очки, журнал забора и подарки-бусты стираются, лента месяца остаётся", () => {
     for (const model of ["PassProgress", "PassClaim", "BoostCredit"]) expect(plan[model]?.action, model).toBe("wipe");
     expect(plan.PassSeason?.action).toBe("keep");
+  });
+
+  it("связь с аккаунтом MAX или VK (T-0377) остаётся: она постоянна, как привязки приглашения и источника (Р188)", () => {
+    expect(plan.ExternalIdentity?.action).toBe("keep");
+    expect(plan.ExternalIdentity?.why).toContain("постоянна");
+    expect(order).not.toContain("ExternalIdentity");
   });
 
   it("второй шанс за самоцветы стирается своим шагом рядом с рекламным и до забега, а не только каскадом", () => {
