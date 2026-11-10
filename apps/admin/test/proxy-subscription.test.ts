@@ -1,3 +1,5 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
@@ -26,6 +28,7 @@ import {
   subscriptionUrlProblem,
   trafficLine,
 } from "../src/screens/proxies/subscription-view";
+import { SubscriptionCard } from "../src/screens/proxies/SubscriptionCard";
 import { HELP } from "../src/ui/help";
 import { fakeFetch, json } from "./helpers";
 
@@ -303,5 +306,58 @@ describe("пояснение раздела", () => {
     expect(text).toMatch(/поровну/);
     expect(text).toContain("Адрес подписки");
     expect(text).toMatch(/не показывается|назад не/);
+  });
+});
+
+describe("карточка подписки", () => {
+  const withNodes: SubscriptionInfo = {
+    ...SUBSCRIPTION,
+    nodes: [node({ nodeKey: "a", name: "Берлин", state: "healthy", latencyMs: 40 }), node({ nodeKey: "b", name: "Лондон", state: "down" })],
+  };
+  const noop = (): void => undefined;
+  const render = (subscription: SubscriptionInfo, patch: { single?: boolean; canEdit?: boolean; busy?: "refresh" | "probe" | "toggle" | null } = {}): string =>
+    renderToStaticMarkup(
+      createElement(SubscriptionCard, { subscription, single: true, canEdit: true, busy: null, onRefresh: noop, onProbe: noop, onEdit: noop, onToggle: noop, onRemove: noop, ...patch }),
+    );
+
+  it("название, подсказка адреса, сводка по узлам и кнопки; адреса целиком нет", () => {
+    const html = render(withNodes);
+    expect(html).toContain("Основная");
+    expect(html).toContain("sub.example.com …c3d4");
+    expect(html).toContain("2 узла: работает 1, не отвечает 1");
+    for (const label of ["Обновить сейчас", "Проверить узлы", "Изменить", "Отключить", "Удалить"]) expect(html).toContain(label);
+    expect(html).not.toContain("https://");
+  });
+
+  it("подписка одна — узлы показаны сразу; подписок несколько — свёрнуты кнопкой «Показать узлы (2)»", () => {
+    const single = render(withNodes, { single: true });
+    expect(single).toContain("Берлин");
+    expect(single).toContain("Скрыть узлы");
+
+    const several = render(withNodes, { single: false });
+    expect(several).not.toContain("Берлин");
+    expect(several).toContain("Показать узлы (2)");
+  });
+
+  it("выключенная подписка: бейдж, пояснение про сохранённые входы, «Включить», «Обновить» недоступна", () => {
+    const html = render({ ...withNodes, enabled: false });
+    expect(html).toContain("Выключена");
+    expect(html).toContain("Узлы не в переборе; входы Xray за подпиской сохранены");
+    expect(html).toContain("Включить");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Обновить сейчас/);
+  });
+
+  it("без proxies.edit кнопок нет, список виден; узлов нет — подсказка вместо таблицы", () => {
+    const html = render(withNodes, { canEdit: false });
+    expect(html).toContain("Основная");
+    expect(html).not.toContain("Обновить сейчас");
+    expect(html).not.toContain("Удалить");
+    expect(render({ ...SUBSCRIPTION, nodes: [] })).toContain("Узлов пока нет — подписка ещё не обновлялась или в ней нет подходящих");
+  });
+
+  it("идёт обновление: подпись кнопки меняется, остальные кнопки этой подписки недоступны", () => {
+    const html = render(withNodes, { busy: "refresh" });
+    expect(html).toContain("Обновляю…");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Проверить узлы/);
   });
 });
