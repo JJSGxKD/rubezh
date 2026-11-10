@@ -38,6 +38,7 @@ import {
   taskDefSchema,
   taskGroup,
   taskOrderSchema,
+  TASK_KIND_IDS,
   TASK_PERIODS,
   type PoolTier,
   type TaskGroup,
@@ -1509,5 +1510,17 @@ describe("достижения: состояние игрока и скрыты�
     expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "combat", ladder: "kills", rung: 9, prestige: 15, hidden: true, hint: "Намёк" });
     await ctx.service.save(designer, { ...fresh, category: "mastery", hint: "Другой намёк", prestige: 20 });
     expect(ctx.repository.defs.find((task) => task.taskId === "ach_new_one")).toMatchObject({ category: "mastery", hint: "Другой намёк", prestige: 20 });
+  });
+});
+
+describe("виды по сигналу клиента в каталоге (T-0375)", () => {
+  it("оба вида входят в список видов цели", () => {
+    expect(TASK_KIND_IDS).toContain("home_screen");
+    expect(TASK_KIND_IDS).toContain("story_share");
+  });
+
+  it("список в панели: главный экран — среди достижений, история — среди недельных", () => {
+    expect(taskGroup({ kind: "home_screen", period: "achievement" })).toBe("achievement");
+    expect(taskGroup({ kind: "story_share", period: "weekly" })).toBe("weekly");
   });
 });

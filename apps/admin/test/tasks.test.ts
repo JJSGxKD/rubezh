@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  CLIENT_KINDS,
   FILTER_KEYS,
+  KIND_TITLES,
   NO_ACHIEVEMENT_FIELDS,
   TASK_LIMIT_RANGE,
   TIER_TITLES,
@@ -452,5 +454,35 @@ describe("поля достижения в форме (T-0106)", () => {
     const { fetch } = fakeFetch(json(200, { data: { tasks: [old], kinds: ["runs"], periods: ["daily"] } }));
     const list = await fetchTasks(new AdminApi(fetch));
     expect(list.ok && list.data.tasks[0]).toMatchObject(NO_ACHIEVEMENT_FIELDS);
+  });
+});
+
+describe("задания по сигналу клиента (T-0375)", () => {
+  it("главный экран: срок «достижение», цель 1, пустые параметры, ступень и фильтр", () => {
+    const picked = withKind(task({ taskId: "ach_home", period: "weekly", target: 5, tier: "easy", filter: { weapon: "spark" }, limit: 10, image: "a".repeat(32) }), "home_screen");
+    expect(picked).toMatchObject({ kind: "home_screen", period: "achievement", target: 1, params: null, tier: null, filter: null, limit: null, image: null });
+  });
+
+  it("история: недельный срок и пустые поля достижения", () => {
+    const filled = task({ taskId: "ach_x", period: "achievement", kind: "kills", category: "combat", ladder: "kills", rung: 2, prestige: 10, hidden: true, hint: "Намёк" });
+    expect(withKind(filled, "story_share")).toMatchObject({ kind: "story_share", period: "weekly", target: 1, params: null, tier: null, filter: null, limit: null, image: null, ...NO_ACHIEVEMENT_FIELDS });
+  });
+
+  it("главный экран без категории — отказ с текстом, с категорией — можно", () => {
+    const home = (patch: Partial<TaskDef> = {}) => ({ ...withKind(task({ taskId: "ach_home", coins: 50 }), "home_screen"), ...patch });
+    expect(taskProblem(home(), true, [])).toBe("Достижению «главный экран» нужна категория — без неё витрина его не покажет");
+    expect(taskProblem(home({ category: "collection" }), true, [])).toBeNull();
+  });
+
+  it("история категории не требует", () => {
+    expect(taskProblem(withKind(task({ taskId: "weekly_story", coins: 30 }), "story_share"), true, [])).toBeNull();
+  });
+
+  it("подписи видов и срок, закреплённый за видом", () => {
+    expect(KIND_TITLES.home_screen).toBe("Игра на главном экране");
+    expect(KIND_TITLES.story_share).toBe("История с игрой");
+    expect(CLIENT_KINDS.get("home_screen")).toBe("achievement");
+    expect(CLIENT_KINDS.get("story_share")).toBe("weekly");
+    expect(CLIENT_KINDS.has("channel")).toBe(false);
   });
 });
