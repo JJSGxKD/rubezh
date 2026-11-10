@@ -4,7 +4,7 @@ import { ELEMENTS, type StatusElement } from "@bh/shared-types";
 import { Badge, Button, Card, ProgressBar } from "../../design-system/components";
 import { formatDuration, formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/tasks";
-import { goalFilterParams, isClaimable, isOpenKind, slotsText, tabOf, taskLink, type TaskItem } from "../../state/tasks-api";
+import { goalFilterParams, isClaimable, isExternalChannel, isOpenKind, slotsText, subscribeKey, tabOf, taskLink, type TaskItem } from "../../state/tasks-api";
 import { ElementMark } from "../element-mark";
 import { BOOST_RUN_GLYPH, GameGlyph, WEAPON_GLYPHS, XP_CRYSTAL_GLYPH } from "../game-glyphs";
 import { formatCountdown, msUntilReset } from "./schedule";
@@ -156,13 +156,15 @@ export function TaskRow(props: {
       {waitsAction && !opens ? (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button track="subscribe" variant="secondary" onClick={() => props.onOpen(link)}>
-            {t("tasks.subscribe")}
+            {t(subscribeKey(task))}
           </Button>
           <Button track="check" loading={props.claiming} onClick={props.onClaim}>
             {t("tasks.check")}
           </Button>
         </div>
       ) : null}
+      {/* Канал другой площадки: путь из двух шагов объясняется на карточке, а не после первой неудачи. */}
+      {waitsAction && !opens && isExternalChannel(task) ? <p className="mt-2 text-xs text-text-muted">{t("tasks.external.hint")}</p> : null}
       {props.notice === null ? null : <p className="mt-2 text-xs font-semibold text-text-muted">{props.notice}</p>}
     </Card>
   );
