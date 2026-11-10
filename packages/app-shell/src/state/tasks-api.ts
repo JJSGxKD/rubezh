@@ -1,6 +1,7 @@
 import { z } from "zod/mini";
 import { t } from "../i18n";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { openExternalLink } from "./external-link";
 import { useShell } from "./shell";
 
 /**
@@ -16,6 +17,10 @@ import { useShell } from "./shell";
  *
  * Цель со ссылкой — подписка на канал (Р52): её выполняет не забег, а
  * подписка, и проверяет сервер ботом площадки по нажатию «Проверить».
+ *
+ * Канал другой площадки (Р188, tasks/T-0377): сервер должен знать, кто игрок
+ * там, поэтому первая кнопка открывает бота площадки по ссылке с одноразовым
+ * кодом (`link`), а не сам канал; бот связывает аккаунты и присылает канал.
  */
 
 const rewardSchema = z.object({ coins: z.number(), gems: z.number(), shards: z.number() });
@@ -34,6 +39,14 @@ const taskSchema = z.object({
   passPoints: z.number(),
   /** куда вести игрока — у цели «канал»; сервер до канала поля не отдавал */
   link: z.optional(z.nullable(z.string())),
+  /**
+   * Как игрока проверяют в канале: `own` — канал его площадки, `external` — другой, и первой
+   * кнопкой идёт бот (Р188). Строкой: сервер новее клиента может завести способ, которого клиент
+   * не знает, и кнопка останется прежней. Сервер до связи аккаунтов поля не отдавал
+   */
+  linkMode: z.optional(z.nullable(z.string())),
+  /** площадка канала — по ней подписана кнопка бота; сервер до связи аккаунтов поля не отдавал */
+  channelPlatform: z.optional(z.nullable(z.string())),
   /** места в партнёрской цели с лимитом (Р82); сервер до лимита поля не отдавал */
   slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
   /** картинка 1:1 партнёрской цели (Р82) — путь от адреса API; сервер до картинок поля не отдавал */
@@ -87,6 +100,7 @@ const pointsClaimSchema = z.object({ claimed: z.boolean(), credited: rewardSchem
 const viewSchema = z.object({ tasks: z.array(taskSchema), networks: z.optional(z.array(networkTaskSchema)), points: z.optional(pointsSchema) });
 const claimSchema = z.object({ claimed: z.boolean(), credited: rewardSchema, tasks: z.array(taskSchema) });
 const openSchema = z.object({ url: z.string(), tasks: z.array(taskSchema) });
+const linkSchema = z.object({ url: z.string() });
 const stepSchema = z.object({ ok: z.literal(true) });
 
 /**
@@ -197,6 +211,10 @@ export const TASK_NOT_OPENED = "task_not_opened";
 export const TASK_CHECK_UNAVAILABLE = "task_check_unavailable";
 /** Места в цели с лимитом закончились, а игрок к ней не переходил в последний час. */
 export const TASK_LIMIT_REACHED = "task_limit_reached";
+/** Канал другой площадки, а аккаунт с ней не связан: сначала бот. */
+export const TASK_LINK_REQUIRED = "task_link_required";
+/** Бот площадки не подключён или не отвечает: ссылку с кодом выдать нечем. */
+export const LINK_UNAVAILABLE = "link_unavailable";
 
 /** Очков на ступень не хватает — экран устарел: перечитать задания и полосу. */
 export const TASK_POINTS_NOT_REACHED = "task_points_not_reached";
@@ -213,7 +231,43 @@ export function claimFailureKey(code: string | undefined): string {
   if (code === TASK_CHECK_UNAVAILABLE) return "tasks.checkUnavailable";
   if (code === TASK_NOT_OPENED) return "tasks.notOpened";
   if (code === TASK_LIMIT_REACHED) return "tasks.limitReached";
+  if (code === TASK_LINK_REQUIRED) return "tasks.external.linkRequired";
+  if (code === LINK_UNAVAILABLE) return "tasks.external.unavailable";
   return "tasks.claimFailed";
+}
+
+/** Канал другой площадки: игрока там нужно сначала узнать, и первая кнопка — бот площадки. */
+export function isExternalChannel(task: Pick<TaskItem, "linkMode">): boolean {
+  return task.linkMode === "external";
+}
+
+/**
+ * Надпись первой кнопки канала: у чужой площадки — бот или сообщество, у своей
+ * и у площадки, которой клиент не знает, — прежняя «Подписаться».
+ */
+export function subscribeKey(task: Pick<TaskItem, "linkMode" | "channelPlatform">): string {
+  if (!isExternalChannel(task)) return "tasks.subscribe";
+  if (task.channelPlatform === "max") return "tasks.external.open.max";
+  if (task.channelPlatform === "vk") return "tasks.external.open.vk";
+  return "tasks.subscribe";
+}
+
+/**
+ * Нажатие на бота площадки: сервер выдаёт ссылку с одноразовым кодом, площадка её
+ * открывает. Ссылка — ответ сервера и открывается, только если это `https`. Отказ — ключом
+ * текста: бот недоступен говорит своё, лимит и сеть — общее.
+ */
+export async function openExternalBot(
+  api: Pick<TasksApi, "link">,
+  task: Pick<TaskItem, "id">,
+  open: (url: string) => void = openExternalLink,
+): Promise<{ ok: true } | { ok: false; key: string }> {
+  const response = await api.link(task.id);
+  if (!response.ok) return { ok: false, key: claimFailureKey(response.code) };
+  const url = response.data.url;
+  if (!URL.canParse(url) || new URL(url).protocol !== "https:") return { ok: false, key: claimFailureKey(undefined) };
+  open(url);
+  return { ok: true };
 }
 
 /**
@@ -262,6 +316,8 @@ export interface TasksApi {
   claimPoints(period: PointsPeriod, points: number): Promise<ApiResult<PointsClaim>>;
   /** переход по ссылке партнёрской цели: ссылку и бота он и выполняет */
   open(taskId: string): Promise<ApiResult<{ url: string; tasks: TaskItem[] }>>;
+  /** ссылка на бота площадки канала с одноразовым кодом: бот свяжет аккаунт площадки с игровым (Р188) */
+  link(taskId: string): Promise<ApiResult<{ url: string }>>;
   /**
    * Шаг задания сети для воронки места «Задания» — та же ручка, что у
    * показов рекламы: задание нарисовано (`shown`) или игрок нажал «Перейти»
@@ -281,6 +337,7 @@ export function createTasksApi(request: ApiRequest = apiRequest): TasksApi {
     claim: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/claim`, claimSchema, { method: "POST" }),
     claimPoints: (period, points) => request(`/api/v1/tasks/points/${period}/${String(Math.trunc(points))}/claim`, pointsClaimSchema, { method: "POST" }),
     open: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/open`, openSchema, { method: "POST" }),
+    link: (taskId) => request(`/api/v1/tasks/${encodeURIComponent(taskId)}/link`, linkSchema, { method: "POST" }),
     networkStep: (sessionId, outcome) => request(`/api/v1/ads/sessions/${encodeURIComponent(sessionId)}/result`, stepSchema, { method: "POST", body: { outcome } }),
     networkItem: (network, hints) => request(`/api/v1/tasks/networks/${encodeURIComponent(network)}/item`, feedItemSchema, { method: "POST", body: hintsBody(hints) }),
     networkCheck: (network, sessionId, hints) =>

@@ -3,8 +3,8 @@ id: T-0377
 title: Привязка аккаунта MAX и VK к игровому — основа заданий «подпишись через бота»
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
@@ -27,9 +27,15 @@ shared:
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/home.test.ts
+  - backend/api/test/tasks.test.ts
+  - backend/api/test/task-signals.test.ts
   - backend/api/src/app.module.ts
   - backend/api/src/modules/events/event-dictionary.ts
   - packages/app-shell/src/i18n/ru.json
+  - packages/app-shell/src/i18n/ru-tasks.json
+  - packages/app-shell/src/screens/meta/task-row.tsx
+  - packages/app-shell/src/state/analytics.ts
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/35-stage4-plan.md
