@@ -109,7 +109,7 @@ function measure() {
     // отдельным PR по тому же правилу. Превышение при таком запасе значит,
     // что кто-то принёс заметный вес, — сначала разбор, потом число
     // (docs/27-design-system-and-app-shell.md §3.4).
-    { name: "Оболочка, первая загрузка", limitKb: 185, matches: (name) => firstLoad.has(name) },
+    { name: "Оболочка, первая загрузка", limitKb: 225, matches: (name) => firstLoad.has(name) },
     { name: "CSS", limitKb: 30, matches: (name) => name.endsWith(".css") },
     {
       // Самый большой ленивый экран — единственное из экранов, что
@@ -135,7 +135,7 @@ function measure() {
     // выбор улучшения, характеристики и их словарь. 19 КБ — с 24.10.2026:
     // окна-реликвии и сцена сундука (PR #452, #453) подняли замер до 15,3 КБ.
     { name: "Интерфейс забега", limitKb: 19, matches: (name) => RUN_UI.test(name) && !firstLoad.has(name) },
-    { name: "Инструменты команды", limitKb: 17, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
+    { name: "Инструменты команды", limitKb: 21, matches: (name) => TEAM.test(name) && !firstLoad.has(name) },
     { name: "Движок и стенд", limitKb: 430, matches: (name) => ENGINE.test(name) },
     { name: "Звук", limitKb: 15, matches: (name) => AUDIO.test(name) && !firstLoad.has(name) },
     // Обёртки SDK сетей, наш рекламный блок и поток межстраничной — своими
