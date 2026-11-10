@@ -6,6 +6,8 @@ import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { SeasonCloseJob } from "./season-close.job.js";
 import { RedisSeasonBoardStore, SEASON_BOARD_STORE } from "./season-board.store.js";
+import { PrismaSeasonsAdminRepository, SEASONS_ADMIN_REPOSITORY } from "./seasons-admin.repository.js";
+import { SeasonsAdminService } from "./seasons-admin.service.js";
 import { SeasonsClaimService } from "./seasons-claim.service.js";
 import { PrismaSeasonCloseRepository, SEASON_CLOSE_REPOSITORY } from "./seasons-close.repository.js";
 import { SeasonsCloseService } from "./seasons-close.service.js";
@@ -33,15 +35,18 @@ import { PrismaSeasonsRepository, SEASONS_REPOSITORY } from "./seasons.repositor
     SeasonSchedule,
     SeasonsProjection,
     SeasonsViewService,
+    SeasonsAdminService,
     SeasonsClaimService,
     SeasonsCloseService,
     SeasonCloseJob,
     { provide: SEASON_BOARD_STORE, useClass: RedisSeasonBoardStore },
     { provide: SEASONS_REPOSITORY, useClass: PrismaSeasonsRepository },
     { provide: SEASON_CLOSE_REPOSITORY, useClass: PrismaSeasonCloseRepository },
+    { provide: SEASONS_ADMIN_REPOSITORY, useClass: PrismaSeasonsAdminRepository },
   ],
   // Расписание нужно ленте событий (рекорд недели по текущему сезону, tasks/T-0174),
   // а расписание и таблицу недели читают напоминания бота (`modules/reminders`, tasks/T-0128).
-  exports: [SeasonsProjection, SeasonSchedule, SEASON_BOARD_STORE],
+  // Рейтинг в панели (tasks/T-0380) читает `AdminModule`: контроллер там, сервис здесь.
+  exports: [SeasonsProjection, SeasonSchedule, SEASON_BOARD_STORE, SeasonsAdminService],
 })
 export class SeasonsModule {}
