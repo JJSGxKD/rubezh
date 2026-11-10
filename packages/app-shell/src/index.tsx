@@ -156,6 +156,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
   // импорт утащил бы её и клиента авторизации в первую загрузку.
   let stopAccountSync = (): void => undefined;
+  let stopOnline = (): void => undefined;
   let unmounted = false;
   if (options.capabilities.auth !== undefined) {
     import("./state/session")
@@ -193,6 +194,17 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
               return loadBadges();
             })
             .catch((error: unknown) => console.warn("Знаки меню не загрузились:", error));
+          // Счётчик онлайна: пинг после входа, остановка при смене аккаунта и
+          // размонтировании (docs/35-stage4-plan.md Р107).
+          stopOnline();
+          import("./state/online-ping")
+            .then(async ({ startOnlinePing }) => {
+              const stop = await startOnlinePing();
+              stopOnline();
+              if (unmounted) stop();
+              else stopOnline = stop;
+            })
+            .catch((error: unknown) => console.warn("Счётчик онлайна не загрузился:", error));
         });
         return useSession.getState().signIn();
       })
@@ -223,6 +235,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       stopTelemetry();
       unmounted = true;
       stopAccountSync();
+      stopOnline();
       root.unmount();
     },
   };
