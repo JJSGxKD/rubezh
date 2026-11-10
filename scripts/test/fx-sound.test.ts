@@ -14,7 +14,7 @@ function sine(amp: number, ms: number, hz = 1000): Float32Array {
 }
 
 function fadeOut(samples: Float32Array): Float32Array {
-  for (let i = 0; i < samples.length; i += 1) samples[i] = (samples[i] ?? 0) * (1 - i / samples.length);
+  for (let i = 0; i < samples.length; i += 1) samples[i] = (samples[i] ?? 0) * (1 - i / samples.length) ** 3;
   return samples;
 }
 
