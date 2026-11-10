@@ -21,6 +21,13 @@ export class TaskShapeLockedError extends DomainError {
   }
 }
 
+/** Знаки статусов и сезонов заводит миграция: панель правит заведённые, а новый такого вида завести не может. */
+export class TaskEmblemFixedError extends DomainError {
+  constructor() {
+    super("task_emblem_fixed", "Знаки статусов и сезонов заводятся миграцией — здесь можно править только заведённые", 409);
+  }
+}
+
 /** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
 export class TaskOrderMismatchError extends DomainError {
   constructor() {

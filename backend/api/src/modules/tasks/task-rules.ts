@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ITEM_RARITIES } from "../items/item-catalog.js";
 import { IMAGE_ID } from "../media/image-rules.js";
 import { runReward } from "../progress/progress-rules.js";
 import { DIFFICULTIES } from "../runs/run-rules.js";
@@ -56,10 +57,28 @@ export const RUN_FILTER_KEYS = {
  * «Мастерство», «Друзья». Названия показывает клиент.
  */
 export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
-export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
 
-/** Поля достижения у обычного задания: категории, лестницы и престижа у него нет. */
-export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+/**
+ * Категории статусных и сезонных знаков (tasks/T-0235): у них нет прогресса,
+ * поэтому игрок видит их не среди четырёх категорий выше, а своими группами.
+ * Категория идёт парой с одноимённым видом цели.
+ */
+export const EMBLEM_CATEGORIES = ["status", "season"] as const;
+
+/** Все категории строки каталога, какие может хранить база (`CHECK` в миграции). */
+export const CATEGORY_IDS = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] as const;
+export type AchievementCategory = (typeof CATEGORY_IDS)[number];
+
+/**
+ * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов и
+ * отдельный тон `team` для знака «Команда». Стоит в каталоге и не плавает
+ * вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
+ */
+export const EMBLEM_TIERS = [...ITEM_RARITIES, "team"] as const;
+export type EmblemTier = (typeof EMBLEM_TIERS)[number];
+
+/** Поля достижения у обычного задания: категории, лестницы, престижа и знака у него нет. */
+export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0, emblemTier: null } as const;
 
 /** Потолок очков престижа одного достижения — от опечатки в панели. */
 export const PRESTIGE_MAX = 10_000;
@@ -211,8 +230,21 @@ export type CheckedKind = (typeof CHECKED_KINDS)[number];
 /** Цели, которые засчитывает сам переход: проверить их у площадки нечем. */
 export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot"]);
 
-export type TaskKind = RunKind | StateKind | CheckedKind;
-export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...(Object.keys(STATE_KINDS) as StateKind[]), ...CHECKED_KINDS];
+/**
+ * Статусные и сезонные знаки у имени (tasks/T-0235): строки каталога без прогресса.
+ * Держит ли игрок знак, сервер вычисляет при чтении по состоянию аккаунта — забег
+ * их не двигает, `claim` для них не существует, а в списке заданий игрока их нет.
+ */
+export const EMBLEM_KINDS = ["status", "season"] as const;
+export type EmblemKind = (typeof EMBLEM_KINDS)[number];
+
+export type TaskKind = RunKind | StateKind | CheckedKind | EmblemKind;
+export const TASK_KIND_IDS: readonly TaskKind[] = [
+  ...(Object.keys(RUN_KINDS) as RunKind[]),
+  ...(Object.keys(STATE_KINDS) as StateKind[]),
+  ...CHECKED_KINDS,
+  ...EMBLEM_KINDS,
+];
 
 export function isRunKind(kind: TaskKind): kind is RunKind {
   return Object.hasOwn(RUN_KINDS, kind);
@@ -220,6 +252,11 @@ export function isRunKind(kind: TaskKind): kind is RunKind {
 
 export function isStateKind(kind: TaskKind): kind is StateKind {
   return Object.hasOwn(STATE_KINDS, kind);
+}
+
+/** Строка статусного или сезонного знака: не задание, прогресса и награды у неё нет. */
+export function isEmblemKind(kind: string): kind is EmblemKind {
+  return (EMBLEM_KINDS as readonly string[]).includes(kind);
 }
 
 /** Категория цели у игрока: партнёрские — своей вкладкой, остальные — по сроку. */
@@ -325,7 +362,7 @@ export const taskDefSchema = z
     /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
     image: z.string().regex(IMAGE_ID).nullable().default(null),
     /** категория достижения; `null` — не достижение, и панель до престижа поля не слала */
-    category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
+    category: z.enum(CATEGORY_IDS).nullable().default(null),
     /** лестница: достижения с общим `ladder` идут ступенями `rung` с единицы */
     ladder: z.string().regex(LADDER_ID, "лестница — латиница, цифры и подчёркивание, до 32 знаков").nullable().default(null),
     rung: z.number().int().min(1).max(100).nullable().default(null),
@@ -335,9 +372,12 @@ export const taskDefSchema = z
     hint: z.string().trim().min(1).max(120).nullable().default(null),
     /** очки престижа за выполненное достижение */
     prestige: z.number().int().min(0).max(PRESTIGE_MAX).default(0),
+    /** редкость знака у имени (T-0235); `null` — знака нет, и панель до знаков поля не слала */
+    emblemTier: z.enum(EMBLEM_TIERS).nullable().default(null),
   })
   .strict()
-  .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
+  // Награды нет только у знаков статуса и сезона: их не выполняют, а держат.
+  .refine((task) => isEmblemKind(task.kind) || task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
   // Лимит — у того, что выполняют действием вне игры: место в нём занимает
   // игрок, а у цели забега мест нет.
   .refine((task) => task.limit === null || isCheckedKind(task.kind), { message: "лимит выполнений — только у партнёрской цели", path: ["limit"] })
@@ -391,6 +431,28 @@ export const taskDefSchema = z
     // Друзей и уровень аккаунта читает витрина достижений: у ежедневной цели срок сбрасывал бы
     // прогресс, который до экрана заданий никто не обновляет.
     if (isStateKind(task.kind) && task.period !== "achievement") ctx.addIssue({ code: "custom", message: "друзья и уровень аккаунта — только у достижений", path: ["kind"] });
+  })
+  .superRefine((task, ctx) => {
+    // Знак у имени (T-0235). У обычного достижения он необязателен, но безымянным не бывает:
+    // название игрок видит рядом с именем. Партнёрская цель знака не несёт — её рисует вкладка партнёров.
+    const achievement = task.period === "achievement" && !isCheckedKind(task.kind);
+    if (task.emblemTier !== null && !achievement) ctx.addIssue({ code: "custom", message: "знак у имени — только у достижений забега", path: ["emblemTier"] });
+    if (task.emblemTier !== null && task.title === null) ctx.addIssue({ code: "custom", message: "у знака нужно название — его игрок видит рядом с именем", path: ["title"] });
+    // Категории `status` и `season` идут парой с одноимённым видом цели.
+    const paired = task.kind === "status" ? "status" : task.kind === "season" ? "season" : null;
+    if (paired === null && (task.category === "status" || task.category === "season")) {
+      ctx.addIssue({ code: "custom", message: "категории «Статус» и «Сезоны» — только у знаков этих видов", path: ["category"] });
+    }
+    if (paired === null) return;
+    if (task.category !== paired) ctx.addIssue({ code: "custom", message: `у знака вида ${paired} категория — ${paired}`, path: ["category"] });
+    if (task.period !== "achievement") ctx.addIssue({ code: "custom", message: "знак статуса и сезона — только достижение", path: ["period"] });
+    if (task.target !== 1) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона цель — 1: его держат, а не копят", path: ["target"] });
+    if (task.coins + task.gems + task.shards + task.passPoints !== 0) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона награды нет", path: ["coins"] });
+    if (task.emblemTier === null) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нужна редкость", path: ["emblemTier"] });
+    if (task.hint === null) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нужна подсказка — условие, которое видит игрок у закрытого знака", path: ["hint"] });
+    if (task.prestige !== 0 || task.hidden || task.ladder !== null || task.rung !== null) {
+      ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нет престижа, лестницы и скрытости", path: ["prestige"] });
+    }
   })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по

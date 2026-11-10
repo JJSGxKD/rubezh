@@ -12,6 +12,7 @@ import { WalletService } from "../wallet/wallet.service.js";
 import type { WalletResource } from "../wallet/wallet-types.js";
 import {
   TaskCheckUnavailableError,
+  TaskEmblemFixedError,
   TaskLimitReachedError,
   TaskNotDoneError,
   TaskNotFoundError,
@@ -29,6 +30,7 @@ import {
   TASK_SORT_MAX,
   countsForTasks,
   isCheckedKind,
+  isEmblemKind,
   isRunKind,
   rewardReason,
   slotsFor,
@@ -344,6 +346,8 @@ export class TasksService implements OnModuleInit {
     // не слайд. Прежнюю не перепроверяем — она уже у игроков.
     if (task.image !== null && task.image !== before?.image) await this.media.require(task.image, "task");
     if (before === null) {
+      // Знаки статусов и сезонов заводит миграция: правило, кто их держит, живёт в коде, а строка без него мертва.
+      if (isEmblemKind(task.kind)) throw new TaskEmblemFixedError();
       if (!(await this.db(this.repository.insert(task, actor.accountId, at)))) throw new TaskShapeLockedError();
       await this.roles.audit({ actorAccountId: actor.accountId, action: "tasks.create", target: task.taskId, after: task });
     } else {
@@ -420,10 +424,11 @@ export class TasksService implements OnModuleInit {
   /**
    * Включённые цели, которые игрок может выполнить: цель другой площадки ему
    * не показывается, цель без площадки — всем; из пула — только набор дня и
-   * недели на `at`.
+   * недели на `at`. Строки знаков статуса и сезона сюда не входят.
    */
   private async visible(account: AccountRef, at: Date): Promise<TaskDef[]> {
-    return inPlay(await this.active(), at).filter((def) => visibleOn(def.params, account.platform));
+    // Знаки статусов и сезонов — строки того же каталога, но не задания: их нет в списке и забрать их нельзя.
+    return inPlay(await this.active(), at).filter((def) => !isEmblemKind(def.kind) && visibleOn(def.params, account.platform));
   }
 
   private async active(): Promise<TaskDef[]> {
