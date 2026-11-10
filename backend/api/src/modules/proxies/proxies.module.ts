@@ -10,6 +10,7 @@ import { ProxiesService } from "./proxies.service.js";
 import { PROXIES_REPOSITORY, PrismaProxiesRepository } from "./proxies.repository.js";
 import { PROXY_CIPHER } from "./proxy-password.js";
 import { ProxyRoutes } from "./proxy-routes.service.js";
+import { SubscriptionCommands } from "./subscription/subscription-commands.js";
 import { HOST_RESOLVER, systemResolver, type HostResolver } from "./subscription/subscription-download.js";
 import { SubscriptionRoutes } from "./subscription/subscription-routes.js";
 import { SUBSCRIPTION_REPOSITORY, PrismaSubscriptionRepository, type SubscriptionRepository } from "./subscription/subscription.repository.js";
@@ -20,7 +21,7 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
 
 /**
  * Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, tasks/T-0065) и
- * подписка Xray (Р101, tasks/T-0093).
+ * подписки Xray (Р101, Р192, tasks/T-0093, tasks/T-0384).
  *
  * Модуль глобальный, как приёмник журнала запросов: клиент исходящих
  * (`infra/outbound`) берёт список прокси и режимы из `OUTBOUND_ROUTES`, не
@@ -99,6 +100,12 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
         // Без базы подписке негде жить: расписание не запускается (как опрос прокси).
         return new SubscriptionScheduler({ repository, routes, sync, writer, proxyFetch, redis, settings, changed: () => proxyRoutes.changed("subscription"), autostart: config.databaseUrl !== "" });
       },
+    },
+    {
+      provide: SubscriptionCommands,
+      inject: [SUBSCRIPTION_REPOSITORY, CONFIG_WRITER, SubscriptionSync, APP_CONFIG],
+      useFactory: (repository: SubscriptionRepository, writer: ConfigWriter, sync: SubscriptionSync, config: AppConfig): SubscriptionCommands =>
+        new SubscriptionCommands({ repository, writer, sync, xray: { slotCount: config.xray.slotCount } }),
     },
     ProxySubscriptionService,
     ProxiesService,
