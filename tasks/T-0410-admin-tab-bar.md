@@ -20,7 +20,7 @@ effort: medium
 release: patch
 merge: self
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0410. Вкладки панели — общий компонент TabBar из карточки игрока
