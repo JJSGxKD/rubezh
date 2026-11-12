@@ -3,8 +3,8 @@ id: T-0379
 title: Бот MAX — связывает аккаунт по стартовому параметру и проверяет подписку на канал
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0377]
