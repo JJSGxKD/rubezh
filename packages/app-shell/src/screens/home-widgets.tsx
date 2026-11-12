@@ -10,6 +10,7 @@ import { RATED_DIFFICULTY_ID } from "../state/difficulty";
 import { refreshHome, useHome, type HomeWidgets as WidgetData } from "../state/home-api";
 import { useMeta } from "../state/meta";
 import { useNavigation } from "../state/navigation";
+import { useRuns } from "../state/runs";
 import { usePrologue, type HomeSection } from "../state/prologue";
 import { track, useShell } from "../state/shell";
 import {
@@ -17,6 +18,7 @@ import {
   dailyFace,
   friendsFace,
   recordFace,
+  recordPointsFace,
   tasksFace,
   wheelFace,
   type Amount,
@@ -24,6 +26,7 @@ import {
   type DayMark,
   type FriendsFace,
   type RecordFace,
+  type RecordPointsFace,
   type TasksFace,
   type WheelFace,
   type WidgetId,
@@ -167,6 +170,9 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
   const navigation = useNavigation();
   const badges = useBadges();
   const meta = useMeta();
+  // Примитивы и ссылка из стора: новых объектов нет, главная не перерисовывается лишний раз.
+  const bestRated = useRuns((s) => s.profile?.best[RATED_DIFFICULTY_ID] ?? null);
+  const lastPoints = useRuns((s) => s.lastSubmitted?.result.score?.points ?? null);
   // Касание — в аналитику с видом, состоянием и местом: видно, какой крючок срабатывает и где.
   const open = (state: string, go: () => void) => (): void => {
     track("home_widget_clicked", { widget: id, state, position: index });
@@ -201,6 +207,14 @@ function Widget(props: { id: WidgetId; size: WidgetSize; index: number; widgets:
       );
     }
     case "record": {
+      const pointsFace = recordPointsFace(bestRated, lastPoints, meta.runs);
+      if (pointsFace !== null) {
+        return (
+          <Frame id={id} size={size} index={index} ready={false} onOpen={open(pointsFace.state, () => navigation.resetTo("rating"))}>
+            <RecordPointsView face={pointsFace} size={size} />
+          </Frame>
+        );
+      }
       const face = recordFace(meta.best[RATED_DIFFICULTY_ID], RATED_DIFFICULTY_ID, meta.lastRun, meta.runs);
       return (
         <Frame id={id} size={size} index={index} ready={false} onOpen={open(face.state, () => navigation.resetTo("rating"))}>
@@ -595,6 +609,39 @@ export function RecordView(props: { face: RecordFace; size: WidgetSize }): React
     case "best":
       return <Layout size={size} face={icon} label={title} big={<Time sec={face.bestSec} size={size} />} sub={t("lobby.runs", { count: face.runs })} />;
   }
+}
+
+/** Плитка по очкам (Р212): очки крупно, время лучшего забега мелко рядом, на плитке — подписью. */
+export function RecordPointsView(props: { face: RecordPointsFace; size: WidgetSize }): ReactNode {
+  const { face, size } = props;
+  const icon = (
+    <IconFace size={size}>
+      <Trophy size={iconSize(size)} />
+    </IconFace>
+  );
+  const title = size === "tile" ? label("record", size) : t("widget.record.title");
+  const beside = size === "tile" ? null : <span className="ml-2 text-xs font-normal text-text-muted tabular-nums">{formatDuration(face.bestSec)}</span>;
+  const big = (
+    <>
+      <span className={`tabular-nums ${size === "hero" ? "text-xl" : ""}`}>{formatNumber(face.points)}</span>
+      {beside}
+    </>
+  );
+  let sub: string;
+  switch (face.state) {
+    case "record":
+      sub = t("widget.record.fresh");
+      break;
+    case "gap":
+      sub = t("widget.record.gapPoints", { points: formatNumber(face.gapPoints), count: face.gapPoints });
+      break;
+    case "best":
+      sub = t("lobby.runs", { count: face.runs });
+      break;
+  }
+  // Плитке время в строку с очками не помещается — оно в подписи.
+  if (size === "tile") sub = face.state === "best" ? `${t("widget.record.at", { time: formatDuration(face.bestSec) })}, ${sub}` : sub;
+  return <Layout size={size} face={icon} label={title} big={big} sub={sub} />;
 }
 
 function Time(props: { sec: number; size: WidgetSize }): ReactNode {

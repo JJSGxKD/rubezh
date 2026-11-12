@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { formatNumber } from "../src/i18n";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
 import { arrangeWidgets, dailyFace, recordFace, recordPointsFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
-import { Frame, FriendsView, RecordView, TasksView, WheelView } from "../src/screens/home-widgets";
+import { Frame, FriendsView, RecordPointsView, RecordView, TasksView, WheelView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -219,16 +220,16 @@ describe("плитка «Лучший забег» по очкам (Р212)", () 
 
   it("вид: очки крупно, время рядом или подписью", () => {
     const face = { state: "best", points: 12340, bestSec: 760, runs: 7 } as const;
-    const wide = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", ...face }, size: "hero" }));
+    const wide = renderToStaticMarkup(createElement(RecordPointsView, { face, size: "hero" }));
     expect(wide).toContain("12 340");
     expect(wide).toContain("12:40");
-    const tile = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", ...face }, size: "tile" }));
+    const tile = renderToStaticMarkup(createElement(RecordPointsView, { face, size: "tile" }));
     expect(tile).toContain("12 340");
     expect(tile).toContain("за 12:40");
   });
 
-  it("вид: gap говорит очками, null-лицо по времени", () => {
-    const gap = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", state2: "gap", points: 2340, bestSec: 760, gapPoints: 140 } as never, size: "hero" }));
+  it("вид: gap говорит очками, без очков — прежняя разметка со временем", () => {
+    const gap = renderToStaticMarkup(createElement(RecordPointsView, { face: { state: "gap", points: 2340, bestSec: 760, gapPoints: 140 }, size: "hero" }));
     expect(gap).toContain("не хватило 140 очков");
     const time = renderToStaticMarkup(createElement(RecordView, { face: { state: "best", bestSec: 760, runs: 7 }, size: "hero" }));
     expect(time).toContain("12:40");
