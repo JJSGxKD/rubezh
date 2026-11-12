@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { AppConfig } from "../../config/app-config.js";
 
 /**
@@ -53,6 +54,8 @@ export interface GeneratedSecret {
   readonly reveal: (value: string, config: AppConfig) => string;
   /** куда именно вставить — словами для панели */
   readonly where: string;
+  /** как создать значение, если сервис принимает не любой знак; нет — 32 случайных байта в base64url */
+  readonly generate?: () => string;
 }
 
 export const SECRET_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
@@ -123,6 +126,67 @@ export const ADSGRAM_REWARD_PATH = "/api/v1/ads/adsgram/reward";
 
 /** Секрет адреса — 32 случайных байта в base64url: подобрать его перебором нельзя. */
 export const GENERATED_SECRET_BYTES = 32;
+
+const VK_SERVICE = "VK";
+
+/**
+ * Сообщество VK как бот (docs/35-stage4-plan.md Р188, tasks/T-0378). Адрес
+ * методов и версия API — одни на клиент сообщества (`platforms/vk/vk-api.ts`) и
+ * на проверку ключа из панели; путь вебхука — тот же, что у контроллера
+ * `platforms/vk/vk-callback.controller.ts`, их совпадение проверяет HTTP-тест.
+ */
+export const VK_API_URL = "https://api.vk.com/method";
+export const VK_API_VERSION = "5.199";
+export const VK_CALLBACK_PATH = "/api/v1/vk/callback";
+
+/** Секрет Callback API — латиница и цифры: другие знаки VK в поле «Секретный ключ» не принимает. */
+const VK_SECRET_LENGTH = 40;
+const ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+/** Наибольшее кратное 62 в диапазоне байта: остальные значения отбрасываются, чтобы знаки выпадали поровну. */
+const ALPHANUMERIC_LIMIT = 248;
+
+/** Случайная строка из латиницы и цифр без перекоса по знакам. */
+export function alphanumericSecret(length: number): string {
+  let value = "";
+  while (value.length < length) {
+    for (const byte of randomBytes(length)) {
+      if (byte >= ALPHANUMERIC_LIMIT) continue;
+      value += ALPHANUMERIC.charAt(byte % ALPHANUMERIC.length);
+      if (value.length === length) break;
+    }
+  }
+  return value;
+}
+
+/** Проверка ключа сообщества: `groups.getById` без сообщества отвечает о том, чей ключ, и расходов не имеет. */
+async function vkCommunityTokenCheck(value: string, fetchImpl: typeof fetch): Promise<SecretCheckResult> {
+  try {
+    // Ключ — в теле, а не в адресе: адрес попадает в журналы по дороге.
+    const response = await fetchImpl(`${VK_API_URL}/groups.getById`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+      body: new URLSearchParams({ v: VK_API_VERSION, access_token: value }),
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false, message: `VK ответил ${String(response.status)} — ключ не проверен` };
+    // VK отвечает 200 и на отказ: ошибка лежит в теле.
+    const body: unknown = await response.json();
+    if (typeof body === "object" && body !== null && "error" in body) {
+      const error = (body as { error: unknown }).error;
+      const code = typeof error === "object" && error !== null && "error_code" in error ? Number((error as { error_code: unknown }).error_code) : null;
+      if (code === 6 || code === 9 || code === 29) return { ok: false, message: "VK ответил «слишком много запросов» — ключ не проверен, попробуйте через минуту" };
+      return {
+        ok: false,
+        message: `VK не принял ключ${code === null ? "" : ` (код ${String(code)})`}: проверьте, что это ключ доступа сообщества с правами на сообщения и управление, скопированный целиком`,
+      };
+    }
+    if (typeof body === "object" && body !== null && "response" in body) return { ok: true, message: "VK принял ключ" };
+    return { ok: false, message: "VK ответил непонятно — ключ не проверен" };
+  } catch (error: unknown) {
+    const timeout = error instanceof Error && error.name === "TimeoutError";
+    return { ok: false, message: timeout ? "VK не ответил за 5 секунд — ключ не проверен" : "VK недоступен с сервера — ключ не проверен" };
+  }
+}
 
 export const SECRETS = {
   coingeckoPro: {
@@ -250,6 +314,44 @@ export const SECRETS = {
       reveal: (value, config) => `${config.telegram.publicApiUrl}${ADSGRAM_REWARD_PATH}/${value}/[userId]`,
       where: "кабинет AdsGram → блок формата Task → поле Reward URL",
     },
+  },
+  vkCommunityToken: {
+    key: "vk.community-token",
+    service: VK_SERVICE,
+    title: "Ключ доступа сообщества VK",
+    hint: "Сообщество отвечает игрокам и проверяет вступление этим ключом. Права: сообщения сообщества, управление. Без ключа задания «вступите в сообщество» никому не видны.",
+    cabinetUrl: "https://vk.com/groups?tab=admin",
+    // Ключ сообщества — длинная строка печатных знаков (`vk1.a.…`); формат VK не описывает, шаблон отсекает мусор.
+    pattern: /^[\x21-\x7e]{32,512}$/,
+    example: "vk1.a.AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+    // Только из панели: ключ перевыпускают в кабинете, и заменять его должен человек.
+    fromEnv: () => null,
+    check: vkCommunityTokenCheck,
+  },
+  vkCallbackSecret: {
+    key: "vk.callback-secret",
+    service: VK_SERVICE,
+    title: "Секрет Callback API VK",
+    hint: "VK присылает его в каждом событии сообщества, и только с ним сервер принимает сообщения игроков. Создаёт сервер: адрес и секрет показываются один раз — вставьте их в настройки сообщества. Нет секрета — бот сообщества молчит.",
+    cabinetUrl: "https://vk.com/groups?tab=admin",
+    pattern: /^[A-Za-z0-9]{32,64}$/,
+    example: "aBcD3fGh1jKlMn0pQrStUvWxYz0123456789",
+    fromEnv: () => null,
+    generated: {
+      reveal: (value, config) => `${config.telegram.publicApiUrl}${VK_CALLBACK_PATH} — секретный ключ: ${value}`,
+      where: "управление сообществом → Работа с API → Callback API: адрес и секретный ключ",
+      generate: () => alphanumericSecret(VK_SECRET_LENGTH),
+    },
+  },
+  vkCallbackConfirmation: {
+    key: "vk.callback-confirmation",
+    service: VK_SERVICE,
+    title: "Строка подтверждения Callback API VK",
+    hint: "VK показывает её в настройках Callback API («Строка, которую должен вернуть сервер») и просит вернуть при подключении адреса. Без неё VK не подтвердит сервер.",
+    cabinetUrl: "https://vk.com/groups?tab=admin",
+    pattern: /^[\x21-\x7e]{1,32}$/,
+    example: "a1b2c3d4",
+    fromEnv: () => null,
   },
 } as const satisfies Record<string, SecretDefinition>;
 

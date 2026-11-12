@@ -70,6 +70,7 @@ import { RequestJournalModule } from "./modules/request-journal/request-journal.
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
+import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
@@ -172,6 +173,7 @@ export const APP_MODULES = [
   DonationsModule,
   BotMentionModule,
   ExternalIdentityModule,
+  VkModule,
   AchievementsModule,
   BattlePassModule,
   RemindersModule,

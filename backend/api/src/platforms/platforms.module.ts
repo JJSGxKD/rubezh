@@ -1,9 +1,12 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
+import { Outbound } from "../infra/outbound/outbound.js";
+import { SECRETS_READER, type SecretsReader } from "../modules/secrets/secrets.service.js";
 import { SETTINGS_READER, type SettingsReader } from "../modules/settings/settings.service.js";
 import { AppLinks } from "./ports/app-links.js";
 import { BotMentions } from "./ports/bot-mention.js";
-import { ChannelMemberships } from "./ports/channel-membership.js";
+import { ChannelMemberships, type ChannelMembership } from "./ports/channel-membership.js";
+import { ExternalLinkStarters, type ExternalLinkStarter } from "./ports/external-link.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
 import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
@@ -20,6 +23,10 @@ import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
 import { TelegramMessagePreparer } from "./telegram/telegram-message-preparer.js";
 import { TelegramMessenger } from "./telegram/telegram-messenger.js";
 import { UnsupportedLaunchVerifier } from "./unsupported.js";
+import { VkApi } from "./vk/vk-api.js";
+import { VkChannelMembership } from "./vk/vk-channel-membership.js";
+import { VkCommunity } from "./vk/vk-community.js";
+import { VkLinkStarter } from "./vk/vk-link-starter.js";
 
 /**
  * Реализации портов площадок для всего бэкенда (docs/35-stage4-plan.md,
@@ -40,9 +47,31 @@ export function paymentProvidersFor(config: AppConfig, telegramApi: TelegramBotA
   return new PaymentProviders([new TelegramStarsProvider(telegramApi, config.telegram.updates !== "off")]);
 }
 
-/** Подписка на канал для заданий (Р52): пока только Telegram — у MAX и VK ботов ещё нет. */
-export function channelMembershipsFor(config: AppConfig, telegramApi: MembershipBotApi): ChannelMemberships {
-  return new ChannelMemberships([new TelegramChannelMembership(telegramApi, config.telegram.botToken !== "")]);
+/**
+ * Подписка на канал для заданий (Р52, Р188): Telegram и — когда передана —
+ * сообщество VK. У MAX проверки пока нет.
+ */
+export function channelMembershipsFor(config: AppConfig, telegramApi: MembershipBotApi, vk?: ChannelMembership): ChannelMemberships {
+  return new ChannelMemberships([new TelegramChannelMembership(telegramApi, config.telegram.botToken !== ""), ...(vk === undefined ? [] : [vk])]);
+}
+
+/**
+ * Ссылки на ботов площадок для связи аккаунтов (Р188): сюда площадка
+ * подключает себя, а не в модуль связи — доменные модули адаптеров не знают.
+ * Пока бот VK; бота MAX добавит его задача.
+ */
+export function externalLinkStartersFor(...starters: readonly ExternalLinkStarter[]): ExternalLinkStarters {
+  return new ExternalLinkStarters(starters);
+}
+
+/** Сообщество VK: ключи — из «Ключей интеграций», само сообщество — из настройки `vk.community`. */
+export function vkCommunityFor(secrets: SecretsReader, settings: SettingsReader): VkCommunity {
+  return new VkCommunity(secrets, settings);
+}
+
+/** Методы API VK ключом сообщества — через клиент исходящих: у него журнал и прокси. */
+export function vkApiFor(community: VkCommunity, outbound: Outbound): VkApi {
+  return new VkApi(community, outbound.forService("vk.api"));
 }
 
 /** Юзернейм бота в имени и bio (Р110): пока только Telegram — у MAX и VK такой возможности нет, заданий там нет. */
@@ -78,10 +107,17 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: TELEGRAM_LINK_ORIGIN, inject: [SETTINGS_READER], useFactory: linkOriginFor },
     { provide: AppLinks, inject: [BotIdentity, TELEGRAM_LINK_ORIGIN], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
-    { provide: ChannelMemberships, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: channelMembershipsFor },
+    { provide: VkCommunity, inject: [SECRETS_READER, SETTINGS_READER], useFactory: vkCommunityFor },
+    { provide: VkApi, inject: [VkCommunity, Outbound], useFactory: vkApiFor },
+    {
+      provide: ChannelMemberships,
+      inject: [APP_CONFIG, TELEGRAM_BOT_API, VkApi],
+      useFactory: (config: AppConfig, telegramApi: TelegramBotApi, vkApi: VkApi) => channelMembershipsFor(config, telegramApi, new VkChannelMembership(vkApi)),
+    },
+    { provide: ExternalLinkStarters, inject: [VkCommunity], useFactory: (community: VkCommunity) => externalLinkStartersFor(new VkLinkStarter(community)) },
     { provide: BotMentions, inject: [APP_CONFIG, TELEGRAM_BOT_API, BotIdentity], useFactory: botMentionsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, BotMentions, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, ExternalLinkStarters, VkCommunity, VkApi, BotMentions, MessagePreparers],
 })
 export class PlatformsModule {}

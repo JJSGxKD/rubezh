@@ -108,6 +108,52 @@ export function telegramLinkOriginOf(value: string): string | null {
   return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
 }
 
+const VK_GROUP = "Сообщество VK";
+
+/** Домены VK, с которых принимается ссылка на сообщество. */
+const VK_HOSTS: ReadonlySet<string> = new Set(["vk.com", "www.vk.com", "m.vk.com", "vk.ru", "www.vk.ru", "m.vk.ru"]);
+const VK_SCREEN_NAME = /^[A-Za-z0-9_.]{3,32}$/;
+const VK_NUMERIC_ID = /^\d{1,12}$/;
+const VK_ID_NAME = /^(?:club|public)(\d{1,12})$/;
+
+/** Сообщество VK: короткое имя для ссылок, числовой id (если он известен из записи) и адрес страницы. */
+export interface VkCommunityRef {
+  readonly screenName: string;
+  readonly id: string | null;
+  readonly url: string;
+}
+
+/**
+ * Сообщество VK из записи: ссылка `https://vk.com/<имя>`, короткое имя,
+ * `club<id>` или `public<id>`, просто число — id. Это же правило читает
+ * проверка в панели (настройка `vk.community`) и задание-канал
+ * (`params.chat`), поэтому оно здесь, а не в адаптере: сервер и панель не
+ * разойдутся в том, что считать сообществом. Не сообщество — `null`.
+ */
+export function parseVkCommunity(raw: string): VkCommunityRef | null {
+  let name = raw.trim();
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(name)) {
+    if (!URL.canParse(name)) return null;
+    const url = new URL(name);
+    const plain = url.protocol === "https:" && VK_HOSTS.has(url.hostname) && url.search === "" && url.hash === "" && url.username === "" && url.password === "" && url.port === "";
+    const path = url.pathname.replace(/\/$/, "");
+    if (!plain || path.indexOf("/") !== 0 || path.lastIndexOf("/") !== 0) return null;
+    name = path.slice(1);
+  } else if (name.startsWith("@")) {
+    name = name.slice(1);
+  }
+  if (VK_NUMERIC_ID.test(name)) return { screenName: `club${name}`, id: name, url: `https://vk.com/club${name}` };
+  const idForm = VK_ID_NAME.exec(name);
+  if (idForm !== null) return { screenName: name, id: idForm[1] ?? null, url: `https://vk.com/${name}` };
+  return VK_SCREEN_NAME.test(name) ? { screenName: name, id: null, url: `https://vk.com/${name}` } : null;
+}
+
+const vkCommunitySchema = z
+  .string()
+  .trim()
+  .max(256)
+  .refine((value) => value === "" || parseVkCommunity(value) !== null, { message: "ссылка https://vk.com/…, короткое имя или club<id> — или пусто" });
+
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
@@ -902,6 +948,22 @@ export const SETTINGS = {
     { min: 1, max: 60, unit: ["минута", "минуты", "минут"] },
     5,
   ),
+  /**
+   * Сообщество VK для заданий (docs/35-stage4-plan.md Р188, tasks/T-0378). Без
+   * окружения: меняется из панели. Вид «ссылка»: редактор панели знает только
+   * чат, ссылку, число и список сумм, а ссылка на сообщество — одновременно и
+   * то, что видит игрок; сервер принимает и короткое имя (`parseVkCommunity`).
+   */
+  vkCommunity: {
+    key: "vk.community",
+    group: VK_GROUP,
+    title: "Сообщество VK для заданий",
+    hint: "Сообщество VK для заданий: игрок вступает в него, бот пишет от его имени. Ссылка на сообщество — https://vk.com/короткое_имя или https://vk.com/club123456. Пусто — задания «вступи в сообщество» никому не видны",
+    kind: "url",
+    schema: vkCommunitySchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);
