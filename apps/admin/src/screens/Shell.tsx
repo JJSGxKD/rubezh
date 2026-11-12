@@ -4,7 +4,8 @@ import { Dialog, DropdownMenu } from "radix-ui";
 import { roleName } from "../api/roles";
 import type { AdminIdentity } from "../api/session";
 import { filterGroups, hrefOf, locateSection, playerQuery, resolveRoute, visibleGroups, type Route, type SectionGroup } from "../routes";
-import { badgeText, useAttention } from "../state/use-attention";
+import { pulseParts, type Pulse } from "../api/pulse";
+import { badgeText, useAttention, usePulse } from "../state/use-attention";
 import { useSession } from "../state/use-session";
 import { Badge, Notice } from "../ui/kit";
 import { Toaster } from "../ui/toast";
@@ -34,6 +35,8 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
   const searchRef = useRef<HTMLInputElement>(null);
   // «Ждёт вас» — у «Сводки»: считается только тем, кому она открыта.
   const attention = useAttention(groups.some((group) => group.sections.some((section) => section.id === "overview")));
+  // Пульс — только в шапке ПК; на телефоне его роль играет экран «Онлайн».
+  const pulse = usePulse(!narrow && groups.some((group) => group.sections.some((section) => ["online", "broadcasts", "csp"].includes(section.id))));
 
   // Раздел — в заголовке вкладки: с пятью открытыми вкладками панели иначе
   // все они называются одинаково.
@@ -141,6 +144,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
                 <span className="truncate text-xs text-text-muted">{located.section.hint}</span>
               </p>
             )}
+            <PulseLine pulse={pulse} />
             <AccountMenu identity={identity} />
           </header>
           <main className="min-w-0 p-5">{content}</main>
@@ -148,6 +152,25 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
       </div>
       <Toaster />
     </>
+  );
+}
+
+/** Строка пульса в шапке ПК: части через « · », каждая — ссылка в свой раздел; пусто — строки нет. */
+function PulseLine({ pulse }: { pulse: Pulse | null }) {
+  const parts = pulse === null ? [] : pulseParts(pulse);
+  if (parts.length === 0) return null;
+  return (
+    <p aria-label="Пульс игры" className="flex shrink-0 items-center text-xs text-text-muted">
+      {parts.map((part, index) => (
+        <span key={part.key} className="flex items-center">
+          {index > 0 ? <span aria-hidden="true" className="px-1.5">·</span> : null}
+          <a href={hrefOf(part.route)} className="flex items-center gap-1.5 hover:text-text">
+            {part.dot ? <span aria-hidden="true" className="size-1.5 rounded-full bg-success" /> : null}
+            {part.text}
+          </a>
+        </span>
+      ))}
+    </p>
   );
 }
 
