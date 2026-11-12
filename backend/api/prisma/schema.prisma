@@ -1662,6 +1662,15 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
+  /// партнёрской цели, связи полей — `CHECK` в миграции
+  customer        String?    @db.VarChar(80)
+  /// модель оплаты: `cpa` — за выполнение, `rs` — доля дохода
+  payModel        String?    @map("pay_model") @db.VarChar(8)
+  /// ставка: у `cpa` — центы доллара за выполнение, у `rs` — сотые доли процента
+  rate            Int?
+  /// после скольких суток удержания выполнение оплачивается; 0 — сразу
+  holdDays        Int        @default(0) @map("hold_days") @db.SmallInt
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
