@@ -3,7 +3,7 @@ id: T-0360
 title: Панель — строка «пульса» в шапке: онлайн сейчас, ход рассылки, новые блокировки клиента за час
 epic: E7
 priority: P3
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
