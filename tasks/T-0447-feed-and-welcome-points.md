@@ -3,8 +3,8 @@ id: T-0447
 title: Лента главной и карточка бота — рекорд по очкам, а не по времени
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: []
@@ -27,6 +27,8 @@ zones:
 shared:
   - packages/app-shell/src/i18n/ru-home.json
   - docs/22-analytics-and-metrics.md
+  - backend/api/test/feed.http.test.ts
+  - backend/api/test/boards-by-viewer.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium

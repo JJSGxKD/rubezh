@@ -2,6 +2,7 @@
   "feed.label": "Что происходит в игре",
   "feed.longRun": "{name}: {minutes} мин в одном забеге",
   "feed.weekRecord": "{name}: новый рекорд недели — {time}",
+  "feed.weekRecordPoints": "{name}: новый рекорд недели — {points} {points, plural, one {очко} few {очка} many {очков} other {очков}}",
   "feed.boss": "{name}: босс повержен",
   "feed.chest": "{name}: открыт редкий сундук",
   "home.carousel": "Сейчас в игре",
