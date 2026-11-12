@@ -17,7 +17,10 @@ zones:
   - packages/app-shell/src/i18n/ru-tasks.json
   - packages/app-shell/test/tasks-api.test.ts
   - packages/app-shell/test/tasks-rules.test.ts
-shared: []
+shared:
+  - backend/api/test/home.test.ts
+  - backend/api/test/task-signals.test.ts
+  - docs/35-stage4-plan.md
 runner: any
 executor: sonnet-5.5
 effort: medium
