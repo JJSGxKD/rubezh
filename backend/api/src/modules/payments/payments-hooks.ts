@@ -83,6 +83,10 @@ export interface SupportAction {
   actorName: string;
   note: string;
   at: Date;
+  /** самоцветы компенсации (Р209) — только у `compensate` */
+  gems?: number;
+  /** что именно сделано — строкой для сообщения команде, например «повторено заданий: 2» (Р209) */
+  detail?: string;
 }
 
 export type StuckListener = (purchase: StuckPurchase) => Promise<void>;

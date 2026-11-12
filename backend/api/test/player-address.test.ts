@@ -81,6 +81,8 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   // подписки Xray в панели (T-0384): тексты сотруднику задаёт спецификация
   { code: "proxy_subscription_limit", fragment: "удалите лишнюю" },
   { code: "proxy_subscription_busy", fragment: "повторите через минуту" },
+  // лента платежей в панели (T-0429): устаревший курсор страницы — сотруднику, текст задаёт спецификация
+  { code: "validation_failed", fragment: "откройте ленту заново" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
 ];

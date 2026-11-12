@@ -27,8 +27,9 @@ import { TELEGRAM_BOT_API, type TelegramBotApi } from "../../platforms/telegram/
  * повторное событие карточку не удваивают.
  *
  * И сообщение о ручном действии поддержки с покупкой (tasks/T-0037): кто,
- * кому, что и почему. Без дедупликации: каждое действие — отдельное решение
- * человека, а повторное нажатие сервер отклоняет сам.
+ * кому, что и почему — вернуть звёзды, выдать, повторить учёт и
+ * компенсировать (Р209, tasks/T-0429). Без дедупликации: каждое действие —
+ * отдельное решение человека, а повторное нажатие сервер отклоняет сам.
  */
 
 const QUIET_SEC = 7 * 24 * 60 * 60;
@@ -172,14 +173,23 @@ export function externalRefundText(refund: ExternalRefund): string {
 /** Текст — для человека в чате: кто, кому, что сделал с покупкой и почему. */
 export function supportActionText(action: SupportAction): string {
   const { kind, purchase, actorName, note } = action;
-  const head = [
-    kind === "refund" ? "↩️ Возврат звёзд вручную" : "✅ Покупка выдана вручную",
+  const who = [
     `Товар: ${purchase.sku ?? purchase.product}, ${String(purchase.chargedStars)} ⭐`,
     `Аккаунт: ${purchase.accountId}`,
     `Кто: ${actorName}`,
     `Причина: ${note}`,
   ];
-  return (kind === "refund" ? [...head, "Звёзды вернутся заданием очереди. Если покупка выдана, после возврата заберём остаток."] : head).join("\n");
+  switch (kind) {
+    case "refund":
+      return ["↩️ Возврат звёзд вручную", ...who, "Звёзды вернутся заданием очереди. Если покупка выдана, после возврата заберём остаток."].join("\n");
+    case "fulfill":
+      return ["✅ Покупка выдана вручную", ...who].join("\n");
+    case "retry":
+      // Что именно повторено, знает тот, кто повторял: он же и пишет строку.
+      return ["🔁 Учёт оплаты повторён вручную", ...who, ...(action.detail === undefined ? [] : [action.detail])].join("\n");
+    case "compensate":
+      return ["🎁 Компенсация за сбой оплаты", ...who, ...(action.gems === undefined ? [] : [`Начислено самоцветов: ${String(action.gems)}`])].join("\n");
+  }
 }
 
 /** ГГГГ-ММ-ДД ЧЧ:ММ по UTC: сервер и логи в UTC, команда сверяет покупку по ним. */
