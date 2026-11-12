@@ -18,15 +18,19 @@ import { formatTime } from "../src/format";
 import {
   canAddSubscription,
   countriesProblem,
+  deviceLine,
   limitLine,
   nodeRows,
   nodesSummary,
   nodesToggleLabel,
   normalizeSubscriptionUrl,
   refreshLine,
+  routingLine,
+  securityLabel,
   slotLine,
   subscriptionUrlProblem,
   trafficLine,
+  transportLabel,
 } from "../src/screens/proxies/subscription-view";
 import { SubscriptionCard } from "../src/screens/proxies/SubscriptionCard";
 import { HELP } from "../src/ui/help";
@@ -52,10 +56,24 @@ const SUBSCRIPTION: SubscriptionInfo = {
   trafficTotalBytes: 500 * GB,
   expiresAt: "2026-12-01T00:00:00.000Z",
   updatedAt: "2026-11-02T09:00:00.000Z",
+  routing: null,
+  device: { count: 1, hwidPrefix: "3f9a2c1b", os: "Linux", userAgent: "v2rayN/7.0" },
   nodes: [],
 };
 
-const node = (patch: Partial<SubscriptionNode>): SubscriptionNode => ({ nodeKey: "aaaa", name: "Узел", protocol: "vless", country: "DE", host: "n.example.org", state: "unknown", latencyMs: null, ...patch });
+const node = (patch: Partial<SubscriptionNode>): SubscriptionNode => ({
+  nodeKey: "aaaa",
+  name: "Узел",
+  protocol: "vless",
+  country: "DE",
+  host: "n.example.org",
+  state: "unknown",
+  latencyMs: null,
+  network: "tcp",
+  security: "reality",
+  flow: "xtls-rprx-vision",
+  ...patch,
+});
 
 const OVERVIEW: SubscriptionOverview = {
   encryption: true,
@@ -142,10 +160,112 @@ describe("таблица узлов", () => {
     expect(rows.map((row) => row.tone)).toEqual(["success", "success", "neutral", "danger"]);
   });
 
+  it("транспорт и безопасность словами: RAW · REALITY · Vision, WebSocket · TLS, gRPC · TLS, Shadowsocks — «шифр протокола»", () => {
+    const rows = nodeRows([
+      node({ nodeKey: "a", name: "А", network: "tcp", security: "reality", flow: "xtls-rprx-vision" }),
+      node({ nodeKey: "b", name: "Б", network: "ws", security: "tls", flow: null }),
+      node({ nodeKey: "c", name: "В", network: "grpc", security: "tls", flow: null }),
+      node({ nodeKey: "d", name: "Г", protocol: "shadowsocks", network: "tcp", security: "none", flow: null }),
+    ]);
+
+    expect(rows.map((row) => [row.transportText, row.securityText])).toEqual([
+      ["RAW", "REALITY · Vision"],
+      ["WebSocket", "TLS"],
+      ["gRPC", "TLS"],
+      ["RAW", "шифр протокола"],
+    ]);
+  });
+
+  it("узел до первого обновления после выкатки — прочерк в обеих колонках, ничего не падает", () => {
+    const [row] = nodeRows([node({ network: null, security: null, flow: null })]);
+    expect(row?.transportText).toBe("—");
+    expect(row?.securityText).toBe("—");
+  });
+
   it("страна без значения — прочерк; порядок равных стабилен по названию", () => {
     const rows = nodeRows([node({ nodeKey: "b", name: "Б", country: null }), node({ nodeKey: "a", name: "А" })]);
     expect(rows.map((row) => row.name)).toEqual(["А", "Б"]);
     expect(rows[1]?.countryText).toBe("—");
+  });
+});
+
+describe("транспорт и безопасность узла", () => {
+  it("transportLabel: все пять и null; незнакомое значение показывается как есть", () => {
+    expect(transportLabel("tcp")).toBe("RAW");
+    expect(transportLabel("ws")).toBe("WebSocket");
+    expect(transportLabel("grpc")).toBe("gRPC");
+    expect(transportLabel("httpupgrade")).toBe("HTTPUpgrade");
+    expect(transportLabel("xhttp")).toBe("XHTTP");
+    expect(transportLabel(null)).toBe("—");
+    expect(transportLabel("kcp")).toBe("kcp");
+  });
+
+  it("securityLabel: none у VLESS и Trojan — «без шифрования», у VMess и Shadowsocks — «шифр протокола»", () => {
+    expect(securityLabel("vless", "none", null)).toBe("без шифрования");
+    expect(securityLabel("trojan", "none", null)).toBe("без шифрования");
+    expect(securityLabel("vmess", "none", null)).toBe("шифр протокола");
+    expect(securityLabel("shadowsocks", "none", null)).toBe("шифр протокола");
+  });
+
+  it("securityLabel: TLS и REALITY; flow дописывается — Vision коротко, другой как есть", () => {
+    expect(securityLabel("vless", "tls", null)).toBe("TLS");
+    expect(securityLabel("vmess", "tls", null)).toBe("TLS");
+    expect(securityLabel("vless", "reality", "xtls-rprx-vision")).toBe("REALITY · Vision");
+    expect(securityLabel("vless", "tls", "xtls-rprx-vision-udp443")).toBe("TLS · xtls-rprx-vision-udp443");
+    expect(securityLabel("vless", "reality", null)).toBe("REALITY");
+    expect(securityLabel("vless", "reality", "")).toBe("REALITY");
+  });
+
+  it("securityLabel: нет сведений — прочерк; незнакомая безопасность или протокол — как есть, а не «без шифрования»", () => {
+    expect(securityLabel("vless", null, null)).toBe("—");
+    expect(securityLabel("vless", null, "xtls-rprx-vision")).toBe("—");
+    expect(securityLabel("vless", "xtls", null)).toBe("xtls");
+    expect(securityLabel("wireguard", "none", null)).toBe("none");
+  });
+});
+
+describe("устройство и маршрутизация подписки", () => {
+  const device = { count: 1, hwidPrefix: "3f9a2c1b", os: "Linux", userAgent: "v2rayN/7.0" };
+
+  it("устройство: «Занимает 1 устройство у поставщика · отпечаток 3f9a2c1b… · Linux, v2rayN/7.0»", () => {
+    expect(deviceLine(device)).toBe("Занимает 1 устройство у поставщика · отпечаток 3f9a2c1b… · Linux, v2rayN/7.0");
+  });
+
+  it("устройство без ключа шифрования: отпечаток появится, когда на сервере будет ключ", () => {
+    expect(deviceLine({ ...device, hwidPrefix: null })).toBe("Занимает 1 устройство у поставщика · отпечаток появится, когда на сервере будет ключ шифрования");
+  });
+
+  it("маршрутизация: не обновлялась после выкатки", () => {
+    expect(routingLine(null)).toBe("Своя маршрутизация: станет известно после обновления подписки");
+  });
+
+  it("маршрутизация: нет", () => {
+    expect(routingLine({ source: "none", direct: 0, block: 0, hints: [] })).toBe("Своя маршрутизация: нет");
+  });
+
+  it("маршрутизация: есть с числами и подсказками; источник словами", () => {
+    expect(routingLine({ source: "json", direct: 12, block: 3, hints: ["geosite:category-ru", "geoip:ru"] })).toBe(
+      "Своя маршрутизация: есть (в JSON-конфиге) — мимо туннеля 12, например geosite:category-ru, geoip:ru; блокируется 3. Наш перебор её не применяет",
+    );
+    expect(routingLine({ source: "header", direct: 2, block: 1, hints: ["geoip:ru"] })).toBe("Своя маршрутизация: есть (в заголовке поставщика) — мимо туннеля 2, например geoip:ru; блокируется 1. Наш перебор её не применяет");
+    expect(routingLine({ source: "json+header", direct: 5, block: 1, hints: [] })).toBe("Своя маршрутизация: есть (в JSON-конфиге и заголовке поставщика) — мимо туннеля 5; блокируется 1. Наш перебор её не применяет");
+  });
+
+  it("маршрутизация: нулевая часть опускается, пустые подсказки — без «например»", () => {
+    expect(routingLine({ source: "json", direct: 4, block: 0, hints: [] })).toBe("Своя маршрутизация: есть (в JSON-конфиге) — мимо туннеля 4. Наш перебор её не применяет");
+    expect(routingLine({ source: "json", direct: 0, block: 3, hints: [] })).toBe("Своя маршрутизация: есть (в JSON-конфиге) — блокируется 3. Наш перебор её не применяет");
+    expect(routingLine({ source: "header", direct: 0, block: 0, hints: [] })).toBe("Своя маршрутизация: есть (в заголовке поставщика). Наш перебор её не применяет");
+  });
+
+  it("маршрутизация: заголовок не разобран — «состав не разобран»", () => {
+    expect(routingLine({ source: "header", direct: null, block: null, hints: [] })).toBe("Своя маршрутизация: есть (в заголовке поставщика), состав не разобран. Наш перебор её не применяет");
+  });
+
+  it("подсказка про устройство: одно постоянное устройство, отпечаток, смена ключа шифрования", () => {
+    const text = HELP.proxies.device;
+    expect(text).toContain("одним постоянным устройством");
+    expect(text).toContain("Отпечаток");
+    expect(text).toContain("ключ шифрования");
   });
 });
 
@@ -229,6 +349,38 @@ describe("запросы к серверу", () => {
       { ...OVERVIEW, subscriptions: [{ ...SUBSCRIPTION, key: undefined }] },
       { ...OVERVIEW, limit: undefined },
       { ...OVERVIEW, subscription: null, subscriptions: undefined },
+    ];
+    for (const data of broken) {
+      const { fetch } = fakeFetch(json(200, { data }));
+      expect((await fetchSubscriptions(new AdminApi(fetch))).ok).toBe(false);
+    }
+  });
+
+  it("новые поля: транспорт, безопасность, flow, маршрутизация и устройство разбираются; незнакомые значения не роняют разбор", async () => {
+    const data = {
+      ...OVERVIEW,
+      subscriptions: [
+        {
+          ...SUBSCRIPTION,
+          routing: { source: "json+header", direct: 12, block: null, hints: ["geoip:ru"] },
+          device: { count: 1, hwidPrefix: null, os: "Linux", userAgent: "v2rayN/7.0" },
+          nodes: [node({ network: "kcp", security: "xtls", flow: "some-flow" }), node({ nodeKey: "bbbb", network: null, security: null, flow: null })],
+        },
+      ],
+    };
+    const { fetch } = fakeFetch(json(200, { data }));
+    const result = await fetchSubscriptions(new AdminApi(fetch));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual(data);
+  });
+
+  it("ответ без устройства или с неизвестным источником маршрутизации — честная ошибка", async () => {
+    const broken = [
+      { ...OVERVIEW, subscriptions: [{ ...SUBSCRIPTION, device: undefined }] },
+      { ...OVERVIEW, subscriptions: [{ ...SUBSCRIPTION, routing: { source: "x", direct: 1, block: 1, hints: [] } }] },
+      { ...OVERVIEW, subscriptions: [{ ...SUBSCRIPTION, routing: { source: "json", direct: 1, block: 1 } }] },
     ];
     for (const data of broken) {
       const { fetch } = fakeFetch(json(200, { data }));
@@ -327,6 +479,31 @@ describe("карточка подписки", () => {
     expect(html).toContain("2 узла: работает 1, не отвечает 1");
     for (const label of ["Обновить сейчас", "Проверить узлы", "Изменить", "Отключить", "Удалить"]) expect(html).toContain(label);
     expect(html).not.toContain("https://");
+  });
+
+  it("под трафиком — строки «Устройство» и «Маршрутизация»; у строки устройства подсказка", () => {
+    const html = render({ ...withNodes, routing: { source: "json", direct: 12, block: 3, hints: ["geosite:category-ru"] } });
+    expect(html).toContain("Занимает 1 устройство у поставщика · отпечаток 3f9a2c1b… · Linux, v2rayN/7.0");
+    expect(html).toContain("Своя маршрутизация: есть (в JSON-конфиге) — мимо туннеля 12, например geosite:category-ru; блокируется 3. Наш перебор её не применяет");
+    expect(html).toContain(HELP.proxies.device);
+    // порядок: трафик, затем устройство, затем маршрутизация
+    expect(html.indexOf("Осталось 120 ГБ")).toBeLessThan(html.indexOf("Занимает 1 устройство"));
+    expect(html.indexOf("Занимает 1 устройство")).toBeLessThan(html.indexOf("Своя маршрутизация"));
+  });
+
+  it("подписка не обновлялась после выкатки: маршрутизация «станет известно», узел — прочерки; без ключа — отпечаток появится позже", () => {
+    const html = render({ ...SUBSCRIPTION, device: { count: 1, hwidPrefix: null, os: "Linux", userAgent: "v2rayN/7.0" }, nodes: [node({ network: null, security: null, flow: null, name: "Старый" })] });
+    expect(html).toContain("Своя маршрутизация: станет известно после обновления подписки");
+    expect(html).toContain("отпечаток появится, когда на сервере будет ключ шифрования");
+    expect(html).toContain("Старый");
+  });
+
+  it("таблица узлов: колонки «Транспорт» и «Безопасность» стоят после «Протокол»", () => {
+    const html = render(withNodes);
+    const order = ["Протокол", "Транспорт", "Безопасность", "Страна", "Хост"].map((title) => html.indexOf(`>${title}<`));
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(html).toContain("REALITY · Vision");
   });
 
   it("подписка одна — узлы показаны сразу; подписок несколько — свёрнуты кнопкой «Показать узлы (2)»", () => {
