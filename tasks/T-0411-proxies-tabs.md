@@ -25,7 +25,7 @@ batch: 5
 
 # T-0411. Раздел «Прокси» — вкладки с адресом вместо одной ленты
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0411.json)](README.md#значки-статуса) [![T-0410](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0410.json&label=T-0410)](T-0410-admin-tab-bar.md) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](T-0384-xray-multi-subscription.md) [![T-0386](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0386.json&label=T-0386)](T-0386-xray-traffic-stats.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0411.json)](README.md#значки-статуса) [![T-0410](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0410.json&label=T-0410)](T-0410-admin-tab-bar.md) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](archive/T-0384-xray-multi-subscription.md) [![T-0386](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0386.json&label=T-0386)](T-0386-xray-traffic-stats.md)
 
 ## Зачем
 
