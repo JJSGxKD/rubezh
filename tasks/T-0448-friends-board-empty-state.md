@@ -3,7 +3,7 @@ id: T-0448
 title: Друзья в рейтинге — «нет друзей» только когда их правда нет
 epic: E11
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
