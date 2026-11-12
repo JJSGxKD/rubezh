@@ -279,12 +279,12 @@ describe("сводка: разметка рекламы и вех", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("вехи: семь полос, у первой «—», у остальных доля от прошлого", () => {
+  it("вехи: семь полос, у первой «—», у остальных доля от шага выше", () => {
     const html = renderToStaticMarkup(createElement(FunnelBars, { funnel: FUNNEL }));
     expect(html.match(/role="img"/g)).toHaveLength(7);
     expect(html).toContain("Вошли в бота");
-    expect(html).toContain("83% от прошлого");
-    expect(html).toContain("86% от прошлого");
+    expect(html).toContain("83% от шага выше");
+    expect(html).toContain("86% от шага выше");
     expect(html).toContain("—");
   });
 });
