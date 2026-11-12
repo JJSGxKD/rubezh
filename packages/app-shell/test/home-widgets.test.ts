@@ -221,10 +221,10 @@ describe("плитка «Лучший забег» по очкам (Р212)", () 
   it("вид: очки крупно, время рядом или подписью", () => {
     const face = { state: "best", points: 12340, bestSec: 760, runs: 7 } as const;
     const wide = renderToStaticMarkup(createElement(RecordPointsView, { face, size: "hero" }));
-    expect(wide).toContain("12 340");
+    expect(wide).toContain(formatNumber(12340));
     expect(wide).toContain("12:40");
     const tile = renderToStaticMarkup(createElement(RecordPointsView, { face, size: "tile" }));
-    expect(tile).toContain("12 340");
+    expect(tile).toContain(formatNumber(12340));
     expect(tile).toContain("за 12:40");
   });
 
