@@ -3,8 +3,8 @@ id: T-0441
 title: Рисунки ступеней 3–5 для всех обычных врагов
 epic: E9
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0440]
