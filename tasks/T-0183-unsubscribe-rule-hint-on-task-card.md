@@ -3,7 +3,7 @@ id: T-0183
 title: Подсказка о правиле подписки на карточке партнёрского задания
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead2-1
 size: S
