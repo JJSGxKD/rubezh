@@ -10,7 +10,7 @@ import {
 import type { EnemyType } from "../patterns/enemy-types";
 import { LOADOUT_BOUNDS } from "../progression/run-loadout";
 import { segmentStartSec } from "./timeline";
-import { BASE_PLAYER_SPEED_PX_SEC, type ElitePoolStep } from "./world";
+import type { ElitePoolStep } from "./world";
 
 /**
  * Правила тайников как данные: проверка `content/secrets.ts` и чтение числа из
@@ -22,6 +22,13 @@ const ALLOWED_CHEST_SIZES: readonly number[] = [1, 3, 5];
 /** Коридор срока волны разлома, секунды: короче — не успеть дойти, длиннее — разлом висит весь забег. */
 const RIFT_TIME_LIMIT_MIN_SEC = 20;
 const RIFT_TIME_LIMIT_MAX_SEC = 300;
+
+/**
+ * Бег игрока по умолчанию (`DEFAULT_SIM_CONFIG.player.speedPxSec`), единицы в секунду: потолок
+ * скорости огонька. Число повторено здесь, а не импортировано: `world` и `create-world` замкнуты
+ * в цикл импортов, и значение на старте модуля оказывалось пустым. Равенство держит тест.
+ */
+export const PLAYER_RUN_SPEED = 190;
 
 /** Коридоры шага огонька, единицы: короче шаг не читается, длиннее — не видно, куда он ведёт; доля отклонения не больше 1,2. */
 const WISP_HOP_MIN = 80;
@@ -103,8 +110,8 @@ export function findSecretsProblems(def: SecretsDef): string[] {
     problems.push(`secrets.wisp.appearSec — не меньше 0, сейчас ${def.wisp.appearSec}`);
   }
   // Быстрее бега игрока огонёк не догнать: ведёт он, а не убегает.
-  if (!(positive(def.wisp.speed) && def.wisp.speed < BASE_PLAYER_SPEED_PX_SEC)) {
-    problems.push(`secrets.wisp.speed — больше 0 и меньше бега игрока (${BASE_PLAYER_SPEED_PX_SEC}), сейчас ${def.wisp.speed}`);
+  if (!(positive(def.wisp.speed) && def.wisp.speed < PLAYER_RUN_SPEED)) {
+    problems.push(`secrets.wisp.speed — больше 0 и меньше бега игрока (${PLAYER_RUN_SPEED}), сейчас ${def.wisp.speed}`);
   }
   const { hopUnits, swayMin, swayMax, waitUnits } = def.wisp;
   if (!(Number.isFinite(hopUnits) && hopUnits >= WISP_HOP_MIN && hopUnits <= WISP_HOP_MAX)) {

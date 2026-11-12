@@ -36,12 +36,6 @@ const MIN_DAMAGE_RATIO = 0.1;
 export const TICK_HZ = 60;
 export const TICK_SEC = 1 / TICK_HZ;
 
-/**
- * Бег игрока по умолчанию, единицы в секунду (до масштаба мира): потолок скорости огонька в
- * проверке тайников — быстрее бега его не догнать.
- */
-export const BASE_PLAYER_SPEED_PX_SEC = 190;
-
 export interface PlayerConfig {
   radius: number;
   maxHp: number;

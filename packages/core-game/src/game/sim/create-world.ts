@@ -53,7 +53,7 @@ import { findContinueProblems } from "./continue";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import { BASE_PLAYER_SPEED_PX_SEC, MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
+import { MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -163,7 +163,7 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
   player: {
     radius: 10,
     maxHp: 100,
-    speedPxSec: BASE_PLAYER_SPEED_PX_SEC,
+    speedPxSec: 190,
     accelerationPxSec2: 1900,
     attackDamage: 6,
     attackCooldownSec: 0.28,
