@@ -631,7 +631,7 @@ model Purchase {
   mode              PaymentMode
   status            PurchaseStatus
   /// идентификатор оплаты в Telegram; `null` — оплаты ещё не было
-  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(128)
+  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(256)
   /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
   invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
   paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
