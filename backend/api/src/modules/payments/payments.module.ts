@@ -4,6 +4,9 @@ import { RunsModule } from "../runs/runs.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
+import { PaymentFeedSources } from "./payment-feed-sources.js";
+import { PAYMENTS_FEED_REPOSITORY, PrismaPaymentsFeedRepository } from "./payments-feed.repository.js";
+import { PaymentsFeed } from "./payments-feed.service.js";
 import { PaymentsHooks } from "./payments-hooks.js";
 import { PaymentConfirmation } from "./payment-confirmation.js";
 import { PaymentRefunds } from "./payment-refunds.js";
@@ -51,12 +54,17 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PurchaseRevocation,
     PurchaseSupport,
     SubscriptionRenewal,
+    PaymentsFeed,
+    PaymentFeedSources,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
+    { provide: PAYMENTS_FEED_REPOSITORY, useClass: PrismaPaymentsFeedRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
   // Сервис и выдача — магазину и VIP: они выставляют счета на товары и выдают их;
   // отзыв остатка при возврате — им же; продление подписки — VIP. Поддержка покупок —
-  // панели: маршруты и карточка игрока (`admin/admin-purchases.controller.ts`).
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY],
+  // панели: маршруты и карточка игрока (`admin/admin-purchases.controller.ts`). Лента платежей —
+  // панели же (`admin/admin-payments.controller.ts`), а реестр источников хронологии — модулям, которые
+  // добавляют в карточку платежа свои строки: брошенные задания, сверка, компенсация (Р209).
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY, PaymentsFeed, PaymentFeedSources],
 })
 export class PaymentsModule {}
