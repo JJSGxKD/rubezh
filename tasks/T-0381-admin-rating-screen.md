@@ -3,7 +3,7 @@ id: T-0381
 title: Рейтинг в панели — раздел: доски, архив сезонов, места игрока в карточке
 epic: E11
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead2-3
 size: M
