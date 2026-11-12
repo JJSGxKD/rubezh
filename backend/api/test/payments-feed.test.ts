@@ -61,7 +61,7 @@ function paid(patch: Partial<StoredPurchase> = {}): StoredPurchase {
   return purchase({ status: "paid", telegramChargeId: `charge-${randomUUID()}`, paidAt: at(1), ...patch });
 }
 
-function entry(kind: TimelineEntry["kind"], minutes: number, text = kind): TimelineEntry {
+function entry(kind: TimelineEntry["kind"], minutes: number, text: string = kind): TimelineEntry {
   return { at: at(minutes), kind, text, actorName: null };
 }
 
@@ -225,10 +225,13 @@ describe("mergeTimeline: всё вместе", () => {
 });
 
 describe("PaymentFeedSources: реестр источников", () => {
-  let warn: ReturnType<typeof vi.spyOn>;
+  let warned: string[] = [];
 
   beforeEach(() => {
-    warn = vi.spyOn(Logger.prototype, "warn").mockImplementation(() => undefined);
+    warned = [];
+    vi.spyOn(Logger.prototype, "warn").mockImplementation((line: unknown) => {
+      warned.push(String(line));
+    });
   });
 
   afterEach(() => {
@@ -240,7 +243,7 @@ describe("PaymentFeedSources: реестр источников", () => {
     return { timeline: async () => [], marks: async () => new Map(), actions: async () => [], ...patch };
   }
 
-  const failures = (): Record<string, unknown>[] => warn.mock.calls.map((call) => JSON.parse(String(call[0])) as Record<string, unknown>);
+  const failures = (): Record<string, unknown>[] => warned.map((line) => JSON.parse(line) as Record<string, unknown>);
 
   it("строки, пометки и действия всех источников собираются вместе", async () => {
     const sources = new PaymentFeedSources();
