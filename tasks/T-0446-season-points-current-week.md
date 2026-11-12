@@ -3,8 +3,8 @@ id: T-0446
 title: Недельный сезон по очкам с идущей недели — панель пускает, таблица пересобирается сама
 epic: E11
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
