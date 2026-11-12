@@ -13,7 +13,14 @@ Nest и Prisma; сеть, время и DNS приходят аргумента�
   vmess, trojan или shadowsocks (у vless — и плоская форма настроек Xray 25+ без
   `vnext`), имя — `remarks`; `freedom`, `blackhole` и `dns`
   молча пропускаются. Clash YAML, sing-box JSON и SIP008 не поддерживаются.
-- Загрузка подписки шлёт `User-Agent` и `x-device-os: Linux`; необязательный `hwid`
+- Своя маршрутизация подписки (`routing.ts`): из JSON-конфигов — правила в выходы
+  `freedom` («мимо туннеля») и `blackhole` («блокируется»), из заголовка ответа
+  `routing` (вид Happ: `happ://routing/add/<base64>`, списки `DirectSites`,
+  `DirectIp`, `BlockSites`, `BlockIp`). `routingOfConfigs`, `parseRoutingHeader` и
+  `mergeRouting` отдают сводку: сколько записей, откуда известно и до 8 имён
+  `geosite:`/`geoip:`; повторы между источниками считаются один раз, нечитаемый
+  заголовок — «есть, состав не разобран». Только для сведения: пул её не применяет.
+- Загрузка подписки шлёт `User-Agent` и `x-device-os: Linux` (`DEVICE_OS`); необязательный `hwid`
   уходит заголовком `x-hwid` для подписок с ограничением числа устройств, но
   только на исходный origin: на переход к другому хосту или порту — без него.
 - Ссылки: `vless://`, `vmess://` (JSON и адресная форма), `trojan://`, `ss://`.

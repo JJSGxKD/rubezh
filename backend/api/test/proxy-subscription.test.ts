@@ -118,6 +118,10 @@ function subscriptionRow(sealing: SecretCipher, patch: Partial<StoredSubscriptio
     trafficUsedBytes: null,
     trafficTotalBytes: null,
     expiresAt: null,
+    routingSource: null,
+    routingDirect: null,
+    routingBlock: null,
+    routingHints: [],
     updatedBy: "00000000-0000-4000-8000-000000000001",
     updatedAt: NOW,
     createdAt: NOW,
@@ -149,6 +153,9 @@ const nodeRow = (key: string, slot: number, patch: Partial<StoredNode> = {}): St
   latencyMs: null,
   lastProbeAt: null,
   nextProbeAt: NOW,
+  network: null,
+  security: null,
+  flow: null,
   ...patch,
 });
 
