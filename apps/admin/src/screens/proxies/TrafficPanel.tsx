@@ -16,9 +16,10 @@ const COLUMNS: Column<TrafficRow>[] = [
   // Ушедший из подписки узел подписан в самом названии: «Берлин (нет в подписке)».
   { title: "Узел", primary: true, render: (row) => <span className="font-medium">{row.name}</span> },
   { title: "Подписка", render: (row) => row.subscriptionName },
-  { title: "Отдано", align: "right", render: (row) => <span className="tabular-nums">{row.upText}</span> },
-  { title: "Получено", align: "right", render: (row) => <span className="tabular-nums">{row.downText}</span> },
-  { title: "Всего", align: "right", render: (row) => <span className="font-medium tabular-nums">{row.totalText}</span> },
+  // Число и единица не разрываются переносом: «11,0» над «ГБ» читается как две разные цифры.
+  { title: "Отдано", align: "right", render: (row) => <span className="whitespace-nowrap tabular-nums">{row.upText}</span> },
+  { title: "Получено", align: "right", render: (row) => <span className="whitespace-nowrap tabular-nums">{row.downText}</span> },
+  { title: "Всего", align: "right", render: (row) => <span className="font-medium whitespace-nowrap tabular-nums">{row.totalText}</span> },
 ];
 
 const chip = (selected: boolean): string =>
