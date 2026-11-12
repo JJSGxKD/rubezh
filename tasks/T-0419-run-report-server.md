@@ -3,7 +3,7 @@ id: T-0419
 title: Отчёт забега для разбора и решения «Честный», «Аннулировать», «Вернуть забег» — сервер
 epic: E11
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
