@@ -53,7 +53,7 @@ batch: 4
 
 # T-0428. Удалить интеграцию AdSonar — сеть закрылась, вырезаем под корень
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0428.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0428.json)](../README.md#значки-статуса)
 
 ## Зачем
 
