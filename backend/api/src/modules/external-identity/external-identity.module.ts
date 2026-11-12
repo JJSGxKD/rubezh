@@ -1,5 +1,4 @@
 import { Module } from "@nestjs/common";
-import { ExternalLinkStarters } from "../../platforms/ports/external-link.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { EventsModule } from "../events/events.module.js";
 import { EXTERNAL_IDENTITY_REPOSITORY, PrismaExternalIdentityRepository } from "./external-identity.repository.js";
@@ -7,29 +6,20 @@ import { ExternalIdentityService } from "./external-identity.service.js";
 import { LINK_CODE_STORE, RedisLinkCodes } from "./link-codes.js";
 
 /**
- * Стартеры ботов площадок: единственное место, где адаптер MAX или VK
- * подключает себя к связи аккаунтов (docs/35-stage4-plan.md Р188). Пока ботов
- * нет, список пуст: ни одна площадка не подключена, и каналы MAX и VK не
- * видны игрокам Telegram. Адаптеры добавят себя в T-0378 (VK) и T-0379 (MAX).
- */
-export function externalLinkStartersFor(): ExternalLinkStarters {
-  return new ExternalLinkStarters([]);
-}
-
-/**
  * Связь игрового аккаунта с аккаунтом MAX или VK (docs/35-stage4-plan.md Р188,
  * tasks/T-0377): одноразовые коды в Redis, пары «площадка + id» в базе.
- * Сервис экспортируется заданиям и ботам площадок; модули домена видят только
- * порт `ExternalLinkStarters`, а не адаптеры.
+ * Сервис экспортируется заданиям и ботам площадок. Порт `ExternalLinkStarters`
+ * здесь не собирается: ссылки на ботов собирает `platforms/platforms.module.ts`
+ * (глобальный модуль), потому что только там можно знать адаптеры площадок —
+ * модули домена их не импортируют.
  */
 @Module({
   imports: [AuthModule, EventsModule],
   providers: [
     ExternalIdentityService,
-    { provide: ExternalLinkStarters, useFactory: externalLinkStartersFor },
     { provide: EXTERNAL_IDENTITY_REPOSITORY, useClass: PrismaExternalIdentityRepository },
     { provide: LINK_CODE_STORE, useClass: RedisLinkCodes },
   ],
-  exports: [ExternalIdentityService, ExternalLinkStarters],
+  exports: [ExternalIdentityService],
 })
 export class ExternalIdentityModule {}
