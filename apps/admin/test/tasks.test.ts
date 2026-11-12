@@ -14,6 +14,7 @@ import {
   networkTaskProblem,
   networkTaskState,
   reorderTasks,
+  rateLabel,
   rewardLabel,
   saveNetworkTask,
   saveTask,
@@ -496,5 +497,59 @@ describe("задания по сигналу клиента (T-0375)", () => {
     expect(CLIENT_KINDS.get("home_screen")).toBe("achievement");
     expect(CLIENT_KINDS.get("story_share")).toBe("weekly");
     expect(CLIENT_KINDS.has("channel")).toBe(false);
+  });
+});
+
+describe("заказчик партнёрского задания в панели", () => {
+  const sold = (patch: Partial<TaskDef> = {}) =>
+    task({
+      taskId: "ach_channel",
+      period: "achievement",
+      kind: "channel",
+      target: 1,
+      coins: 0,
+      gems: 15,
+      params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" },
+      customer: "Канал «Игровой угол»",
+      payModel: "cpa",
+      rate: 40,
+      holdDays: 3,
+      ...patch,
+    });
+
+  it("правила формы совпадают с сервером", () => {
+    expect(taskProblem(sold(), true)).toBeNull();
+    expect(taskProblem(sold({ payModel: null, rate: null }), true)).toMatch(/модель/);
+    expect(taskProblem(sold({ rate: null }), true)).toMatch(/Ставка/);
+    expect(taskProblem(sold({ payModel: "rs", rate: 10_001 }), true)).toMatch(/RS/);
+    expect(taskProblem(sold({ rate: 100_001 }), true)).toMatch(/CPA/);
+    expect(taskProblem(sold({ customer: null, payModel: "cpa" }), true)).toMatch(/только у заданий с заказчиком/);
+    expect(taskProblem(sold({ holdDays: 5 as TaskDef["holdDays"] }), true)).toMatch(/Удержание/);
+    expect(taskProblem(sold({ kind: "link", period: "achievement", params: { url: "https://example.com" } }), true)).toMatch(/только у подписки на канал/);
+    expect(taskProblem(task({ customer: "Канал", payModel: "cpa", rate: 1 }), true)).not.toBeNull();
+  });
+
+  it("подпись ставки: доллары за выполнение и проценты дохода", () => {
+    expect(rateLabel("cpa", 40)).toMatch(/^\$0,40 за выполнение$/);
+    expect(rateLabel("rs", 1_250)).toBe("12,5% дохода");
+    expect(rateLabel(null, 40)).toBeNull();
+    expect(rateLabel("rs", null)).toBeNull();
+  });
+
+  it("на сервер уходит обрезанный заказчик; пустой снимает модель и ставку, у ссылки удержание ноль", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: sold() }), json(200, { data: sold() }), json(200, { data: sold() }));
+    await saveTask(new AdminApi(fetch), sold({ customer: "  Игровой угол  " }));
+    await saveTask(new AdminApi(fetch), sold({ customer: "   " }));
+    await saveTask(new AdminApi(fetch), sold({ kind: "link", params: { url: "https://example.com" }, holdDays: 7 }));
+    const bodies = calls.map((call) => JSON.parse(String(call.init?.body)) as TaskDef);
+    expect(bodies[0]).toMatchObject({ customer: "Игровой угол", payModel: "cpa", rate: 40, holdDays: 3 });
+    expect(bodies[1]).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 3 });
+    expect(bodies[2]).toMatchObject({ holdDays: 0, customer: "Канал «Игровой угол»" });
+  });
+
+  it("смена вида: ссылка сбрасывает удержание и хранит заказчика, цель забега заказчика снимает; старый сервер без полей читается", () => {
+    expect(withKind(sold(), "link")).toMatchObject({ customer: "Канал «Игровой угол»", payModel: "cpa", rate: 40, holdDays: 0 });
+    expect(withKind(sold(), "runs")).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+    expect(withPeriod(sold({ period: "daily" }), "weekly")).toMatchObject({ customer: "Канал «Игровой угол»", holdDays: 3 });
   });
 });
