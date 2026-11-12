@@ -143,8 +143,7 @@
 блок SDK-сети прямо через адаптер (`adapter.showAd`), мимо `POST /ads/sessions`:
 сессии, награды, кулдауна, капа и воронки нет. Показ по умолчанию тестовый
 (`debug` только на этот вызов), боевой — по галочке с предупреждением; режим
-AdsGram и RichAds действует на вызов, режим AdSonar задаёт первый показ после
-запуска. Исход виден на экране, уходит событием `ad_tested` и отчётом
+AdsGram и RichAds действует на вызов. Исход виден на экране, уходит событием `ad_tested` и отчётом
 `POST /api/v1/tools/ads/test-results` (журнал действий `ads.test`). Каталог —
 `GET /api/v1/tools/ads/catalog`. Код: `app-shell/src/screens/ads-check.tsx`,
 правила — `ads-check-rules.ts`, запросы — `state/ads-check.ts`.
