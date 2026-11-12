@@ -66,7 +66,7 @@ describe("пульс панели", () => {
   it("две sending — берётся начатая раньше", async () => {
     const early = broadcast("early", "sending", new Date(NOW.getTime() - 60 * MIN));
     const late = broadcast("late", "sending", new Date(NOW.getTime() - 5 * MIN));
-    const service = setup({ broadcasts: [late, early, broadcast("done", "finished", NOW)], stats: { early: stats(10, 90), late: stats(50, 50) } });
+    const service = setup({ broadcasts: [late, early, broadcast("done", "done", NOW)], stats: { early: stats(10, 90), late: stats(50, 50) } });
     expect((await service.pulse(ACTOR, NOW)).broadcast).toEqual({ id: "early", percent: 10 });
   });
 
