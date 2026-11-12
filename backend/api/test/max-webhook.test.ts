@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { APP_CONFIG, loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import type { ExternalIdentityService } from "../src/modules/external-identity/external-identity.service.js";
-import { GENERATED_SECRET_BYTES, SECRETS, secretByKey, secretProblem } from "../src/modules/secrets/secret-catalog.js";
+import { GENERATED_SECRET_BYTES, SECRETS, secretByKey, secretProblem, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import { SECRETS_READER, type SecretsReader } from "../src/modules/secrets/secrets.service.js";
-import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
+import { SETTINGS, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import { NO_ACHIEVEMENT_FIELDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import type { TasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { MAX_API_BASE, MaxApiError, MaxBotApi } from "../src/platforms/max/max-bot-api.js";
@@ -75,7 +75,7 @@ describe("ключи и настройка MAX в каталогах", () => {
 
     expect(secret.key).toBe("max.bot-token");
     expect(secret.service).toBe("MAX");
-    expect(secret.fromEnv(config())).toBeNull();
+    expect((secret as SecretDefinition).fromEnv(config())).toBeNull();
     expect(secret.hint).toContain("администратором канала");
     expect(secret.hint).toContain("Без ключа");
     expect(secretByKey("max.bot-token")).toBe(secret);
@@ -111,7 +111,7 @@ describe("ключи и настройка MAX в каталогах", () => {
 
     expect(secret.key).toBe("max.webhook-secret");
     expect(secret.service).toBe("MAX");
-    expect(secret.fromEnv(config())).toBeNull();
+    expect((secret as SecretDefinition).fromEnv(config())).toBeNull();
     expect(secret.generated).toBeDefined();
     expect(secretProblem(secret, generated)).toBeNull();
     expect(secret.generated?.reveal(generated, config())).toBe(WEBHOOK_URL);
@@ -124,7 +124,7 @@ describe("ключи и настройка MAX в каталогах", () => {
     expect(setting.key).toBe("max.bot-username");
     expect(setting.kind).toBe("text");
     expect(setting.fallback).toBe("");
-    expect(setting.fromEnv(config())).toBeNull();
+    expect((setting as SettingDefinition).fromEnv(config())).toBeNull();
     for (const good of ["", "rubezh_bot", "id7701234567_bot"]) expect(setting.schema.safeParse(good).success, good).toBe(true);
     for (const bad of ["@rubezh_bot", "rubezh bot", "ru/bot", "https://max.ru/rubezh_bot", "a".repeat(65)]) expect(setting.schema.safeParse(bad).success, bad).toBe(false);
   });
