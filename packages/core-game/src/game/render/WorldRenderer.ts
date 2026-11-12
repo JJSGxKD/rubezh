@@ -14,7 +14,7 @@ import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
 import { SecretsRenderer } from "./secrets-look";
-import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, ORBITER_LOOKS, orbiterLook, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
 import { artFlashStart, NO_FLASH } from "./hit-flash";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
@@ -28,6 +28,14 @@ import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
+const orbiterWeaponIds: string[] = [];
+/** Оружие с собственной фигурой орбиты; прочие рисуются фигурой оберега. */
+const ORBITER_WEAPON_IDS = Object.keys(ORBITER_LOOKS);
+
+function orbiterShapeKey(weaponId: string): string {
+  return ORBITER_WEAPON_IDS.includes(weaponId) ? `bh-orbiter-${weaponId}` : "bh-orbiter";
+}
+
 /** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
 const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
@@ -135,7 +143,7 @@ export class WorldRenderer {
     this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type), type.id));
     const unitScale = world.config.unitScale;
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
@@ -172,6 +180,11 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
     ensureShapeTexture(scene, "bh-freeze", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.freezeWave, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS * scale, WORLD_COLORS.orbiter, "circle");
+    // Фигуры тяжёлых орбит (кистень, круговерть) крупнее оберега — для режима без арта.
+    for (const id of ORBITER_WEAPON_IDS) {
+      const look = orbiterLook(id);
+      ensureShapeTexture(scene, orbiterShapeKey(id), look.radius * scale, look.color, "circle");
+    }
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
@@ -508,17 +521,22 @@ export class WorldRenderer {
    * же числами, что у симуляции, и от сглаженной позиции героя.
    */
   private syncOrbiters(t: number): void {
-    const drawn = orbiterRenderPoints(this.world, t, orbiterPoints);
-    const art = this.art.orbiterArt();
-    // Оберег черновой арта медленно вращается: свет в движении, а не наклейка.
-    const spin = art === null ? 0 : (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
+    const drawn = orbiterRenderPoints(this.world, t, orbiterPoints, orbiterWeaponIds);
+    // Обереги черновой арта медленно вращаются: свет в движении, а не наклейка.
+    const spin = (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
     for (let k = 0; k < drawn; k++) {
       const sprite = this.orbiterSprite(k);
-      if (art === null && sprite.texture.key !== "bh-orbiter") sprite.setTexture("bh-orbiter").setScale(1).setRotation(0);
-      if (art !== null && sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(ORBITER_RADIUS));
+      const look = orbiterLook(orbiterWeaponIds[k]);
+      const art = this.art.orbiterArt(look.frame);
+      if (art === null) {
+        const key = orbiterShapeKey(orbiterWeaponIds[k]);
+        if (sprite.texture.key !== key) sprite.setTexture(key).setScale(1).setRotation(0);
+      } else {
+        if (sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(look.radius, look.cellUnits));
+        sprite.setRotation(spin + k);
+      }
       sprite.setVisible(true);
       sprite.setPosition(orbiterPoints[k].x, orbiterPoints[k].y);
-      if (art !== null) sprite.setRotation(spin + k);
     }
 
     for (let i = drawn; i < this.orbiterSprites.length; i++) {
