@@ -58,6 +58,6 @@ import { TasksService } from "./tasks.service.js";
     { provide: TASK_POINTS_REPOSITORY, useClass: PrismaTaskPointsRepository },
     { provide: NETWORK_TASKS_REPOSITORY, useClass: PrismaNetworkTasksRepository },
   ],
-  exports: [TasksService, NetworkTasksService],
+  exports: [TasksService, NetworkTasksService, TASKS_REPOSITORY],
 })
 export class TasksModule {}
