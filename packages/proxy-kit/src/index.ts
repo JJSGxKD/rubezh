@@ -23,3 +23,14 @@ export {
 } from "./subscription.js";
 export { checkSubscriptionUrl, isPublicAddress, type UrlCheck } from "./url-guard.js";
 export { assignSlots, buildXrayConfig, GROUP_FORMAT, outboundTag, type PlacedNode, type SlotOptions, type XrayConfigOptions } from "./xray-config.js";
+export {
+  decodeQueryStatsResponse,
+  encodeQueryStatsRequest,
+  grpcFrame,
+  grpcUnframe,
+  STATS_SERVICE_PATH,
+  trafficOfStats,
+  XrayStatsFormatError,
+  type NodeTraffic,
+  type StatEntry,
+} from "./xray-stats.js";

@@ -498,6 +498,12 @@ model Run {
   band             String?     @db.VarChar(16)
   /// исходные числа подсчёта, которых нет в других колонках, — для пересчёта: `{ power, huntLog, buildScore }`
   scoreInput       Json?       @map("score_input")
+  /// решение разбора (Р203, T-0419): `honest` — проверка команды признала забег честным, `annulled` — убран из досок рейтинга и сезона; `null` — не разбирался
+  reviewOutcome    String?     @map("review_outcome") @db.VarChar(16)
+  /// когда принято решение разбора; `null` — не разбирался
+  reviewedAt       DateTime?   @map("reviewed_at") @db.Timestamptz(3)
+  /// аккаунт команды, принявший решение; без внешнего ключа: удалённый аккаунт не должен ронять историю забега
+  reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
@@ -2970,4 +2976,19 @@ model ExternalIdentity {
   @@id([accountId, platform])
   @@unique([platform, externalUserId])
   @@map("external_identity")
+}
+
+// Трафик узлов Xray по часам (docs/35-stage4-plan.md Р192, T-0386): считает ядро Xray,
+// строки старше 35 суток удаляются. Внешнего ключа на подписку нет: отчёт соединяется с живыми.
+model ProxyTrafficHour {
+  hour            DateTime @db.Timestamptz(0)
+  subscriptionKey String   @map("subscription_key") @db.VarChar(16)
+  nodeKey         String   @map("node_key") @db.VarChar(16)
+  /// название узла на последнем чтении: узел мог уйти из подписки
+  nodeName        String   @map("node_name") @db.VarChar(80)
+  upBytes         BigInt   @map("up_bytes")
+  downBytes       BigInt   @map("down_bytes")
+
+  @@id([hour, subscriptionKey, nodeKey])
+  @@map("proxy_traffic_hour")
 }

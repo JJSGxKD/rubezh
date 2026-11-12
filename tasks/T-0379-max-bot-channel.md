@@ -3,8 +3,8 @@ id: T-0379
 title: Бот MAX — связывает аккаунт по стартовому параметру и проверяет подписку на канал
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0377]
@@ -21,6 +21,15 @@ shared:
   - docs/20-env-and-ports.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
+  - docs/21-diagrams.md
+  - backend/api/src/platforms/ports/channel-membership.ts
+  - backend/api/src/platforms/ports/external-link.ts
+  - backend/api/src/modules/external-identity/external-identity.module.ts
+  - backend/api/src/modules/tasks/tasks.module.ts
+  - backend/api/src/modules/tasks/channel-watch.service.ts
+  - backend/api/test/channel-watch.test.ts
+  - backend/api/test/outbound.test.ts
+  - apps/admin/src/api/settings.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

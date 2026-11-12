@@ -95,6 +95,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
   ProxySubscription: keep("подписка Xray для прокси — настройка команды, к игрокам не относится; адрес только шифртекстом"),
   ProxySubscriptionNode: keep("узлы подписки Xray — часть настройки команды"),
+  ProxyTrafficHour: keep("учёт трафика узлов Xray — служебные данные команды, к игрокам не относятся"),
   ContentVersion: keep("версии контента игры — правила, а не данные игроков (T-0303)"),
   ContentDraft: keep("черновики контента команды (T-0303)"),
   ContentCheck: keep("проверки черновиков контента (T-0303)"),

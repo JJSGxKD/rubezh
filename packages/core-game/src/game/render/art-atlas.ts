@@ -1,5 +1,6 @@
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
+import { mixChannels, STAGE_LOOKS } from "./looks";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
 import type { PickupArt } from "./pickups";
 import { secretFrameName, type SecretArt, type SecretLookState } from "./secrets-look";
@@ -92,6 +93,25 @@ export function frameForEnemy(tick: number, slot: number, moving: boolean, lastF
  * Имя кадра врага. У элиты и босса ступеней нет — у них только `s0`, как и в
  * игре (content/stages.ts).
  */
+/** Наибольшая нарисованная ступень не выше `stage`; `-1` — рисунка нет вовсе. */
+export function artStageFor(stage: number, has: (stage: number) => boolean): number {
+  for (let s = stage; s >= 0; s--) if (has(s)) return s;
+  return -1;
+}
+
+/**
+ * Тон ступени без своего рисунка: белый, смешанный с цветом ступени на
+ * разницу её тона и тона нарисованной. `null` — тон не нужен.
+ */
+export function artStageTint(stage: number, drawn: number): number | null {
+  if (drawn < 0 || drawn >= stage) return null;
+  const last = STAGE_LOOKS.length - 1;
+  const look = STAGE_LOOKS[Math.min(stage, last)];
+  const drawnLook = STAGE_LOOKS[Math.min(drawn, last)];
+  if (look === undefined || drawnLook === undefined) return null;
+  return mixChannels(0xffffff, look.mixColor, Math.max(0, look.mix - drawnLook.mix));
+}
+
 export function enemyFrameName(id: string, stage: number, frame: number): string {
   return `${id}/s${String(stage)}/walk${String(frame)}`;
 }
@@ -184,6 +204,8 @@ export class ArtMode {
   private enabled = false;
   /** кадры по индексу «(тип × ступени + ступень) × кадры шага + кадр»; `null` — арта нет */
   private frames: (ArtFrame | null)[] = [];
+  /** Тон текстуры по индексу «тип × ступени + ступень»; `null` — рисунок своей ступени. */
+  private stageTints: (number | null)[] = [];
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[]; hurt: ArtFrame | null } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
@@ -236,8 +258,12 @@ export class ArtMode {
   private buildFrames(): void {
     this.world.enemyTypes.forEach((type) => {
       for (let stage = 0; stage < this.stageCount; stage++) {
+        const wanted = type.rank === "normal" ? stage : 0;
+        // Нет кадров нужной ступени — берём ближайшую нарисованную ниже и красим тоном (Р215).
+        const drawn = type.rank === "normal" ? artStageFor(wanted, (s) => this.atlas.find(enemyFrameName(type.id, s, 0)) !== null) : 0;
+        this.stageTints.push(type.rank === "normal" ? artStageTint(wanted, drawn) : null);
         for (let k = 0; k < ART_WALK_FRAMES; k++) {
-          this.frames.push(this.atlas.find(enemyFrameName(type.id, type.rank === "normal" ? stage : 0, k)));
+          this.frames.push(drawn < 0 ? null : this.atlas.find(enemyFrameName(type.id, drawn, k)));
         }
       }
     });
@@ -314,6 +340,13 @@ export class ArtMode {
       this.shown[slot] = index;
     }
     return true;
+  }
+
+  /** Тон текстуры, которую слот показывает сейчас; `null` — рисунок своей ступени или фигура. */
+  tintOf(slot: number): number | null {
+    const shown = this.shown[slot];
+    if (shown < 0) return null;
+    return this.stageTints[Math.floor(shown / ART_WALK_FRAMES)] ?? null;
   }
 
   /** Слот врага освободился: следующий в нём начнёт с кадра 0, а не унаследует чужой. */

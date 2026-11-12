@@ -87,14 +87,17 @@ export class ChannelWatchService {
 
   /**
    * Завести окно на выданную награду за подписку. Только у `channel` и только
-   * там, где у площадки есть проверка подписки: MAX и VK штрафа не знают.
+   * там, где у площадки есть проверка подписки и канал — своей площадки игрока:
+   * канал MAX проверяет бот MAX по id игрока там (Р188), а окно спросило бы по
+   * id его площадки и «отписало» бы подписанного. Перепроверка чужих каналов —
+   * отдельная задача после T-0178.
    * `false` — окна не будет или оно уже есть. Зовёт забор награды, поэтому
    * сам решает, наблюдается ли это задание.
    */
   async start(account: AccountRef, def: TaskDef, periodStart: string, at: Date): Promise<boolean> {
     const params = def.params;
     if (def.kind !== "channel" || params === null || params.chat === undefined || params.platform === undefined) return false;
-    if (this.memberships.for(params.platform) === null) return false;
+    if (params.platform !== account.platform || this.memberships.for(params.platform) === null) return false;
     const until = watchUntil(at);
     const created = await this.watch.start({ accountId: account.accountId, taskId: def.taskId, periodStart, startedAt: at, watchUntil: until, nextCheckAt: nextCheckAfter(at, until) });
     if (created) this.logger.log(JSON.stringify({ module: "tasks", event: "channel_watch_started", accountId: account.accountId, taskId: def.taskId, periodStart }));

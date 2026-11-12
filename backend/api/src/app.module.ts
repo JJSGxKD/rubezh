@@ -73,6 +73,7 @@ import { ExternalIdentityModule } from "./modules/external-identity/external-ide
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
+import { MaxModule } from "./platforms/max/max.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -103,7 +104,8 @@ import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.j
  * Р92 (там же, T-0060); donations — донаты проекту и знак «Поддержал
  * проект», Р109 (там же, T-0157).
  *
- * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
+ * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11);
+ * MaxModule — бот MAX заданий-каналов, Р188 (там же, T-0379).
  */
 export const APP_MODULES = [
   RedisModule,
@@ -176,6 +178,7 @@ export const APP_MODULES = [
   BattlePassModule,
   RemindersModule,
   RemindersOffModule,
+  MaxModule,
   ContentModule,
 ];
 
