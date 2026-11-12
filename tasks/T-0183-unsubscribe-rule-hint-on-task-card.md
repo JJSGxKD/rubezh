@@ -28,7 +28,7 @@ batch: 4
 
 # T-0183. Подсказка о правиле подписки на карточке партнёрского задания
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0183.json)](README.md#значки-статуса) [![T-0178](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json&label=T-0178)](T-0178-channel-unsubscribe-recheck.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0183.json)](README.md#значки-статуса) [![T-0178](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json&label=T-0178)](archive/T-0178-channel-unsubscribe-recheck.md)
 
 ## Зачем
 

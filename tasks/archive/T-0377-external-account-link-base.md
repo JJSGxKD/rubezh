@@ -50,7 +50,7 @@ batch: 5
 
 # T-0377. Привязка аккаунта MAX и VK к игровому — основа заданий «подпишись через бота»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0377.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0377.json)](../README.md#значки-статуса)
 
 ## Зачем
 
