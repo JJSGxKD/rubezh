@@ -17,6 +17,8 @@ shared:
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/sections.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
+  - apps/admin/src/screens/Shell.tsx
+  - apps/admin/test/roles.test.ts
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
 runner: local
