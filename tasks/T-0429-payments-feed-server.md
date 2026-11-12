@@ -3,8 +3,8 @@ id: T-0429
 title: Лента и карточка платежа в панели — сервер, права и источники хронологии
 epic: E1
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: []
