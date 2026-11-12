@@ -73,7 +73,7 @@ export function Shell({ identity }: { identity: AdminIdentity }) {
   }, [narrow]);
 
   const content =
-    route === null || screen === undefined ? <Notice tone="info">Для ваших ролей в этой версии панели разделов нет.</Notice> : screen(route.id);
+    route === null || screen === undefined ? <Notice tone="info">Для ваших ролей в этой версии панели разделов нет.</Notice> : screen(route.id, route.tab);
 
   // Уведомления — рядом с сеткой, а не в ней: третий ребёнок сетки заводит
   // вторую строку, и меню слева перестаёт доставать до низа окна.
