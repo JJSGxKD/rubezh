@@ -6,7 +6,7 @@ import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import type { PaymentConfirmation, ConfirmedPayment } from "../src/modules/payments/payment-confirmation.js";
 import { PaymentRefunds } from "../src/modules/payments/payment-refunds.js";
 import { PaymentsHooks, type AbandonedJob } from "../src/modules/payments/payments-hooks.js";
-import { PaymentsQueue } from "../src/modules/payments/payments-queue.js";
+import { PaymentsQueue, type FailedPaymentJob } from "../src/modules/payments/payments-queue.js";
 import { PurchaseFulfillment } from "../src/modules/payments/purchase-fulfillment.js";
 import type { RefundOrder } from "../src/modules/payments/purchases.repository.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
@@ -17,7 +17,8 @@ import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 /**
  * Очередь оплаты без BullMQ и Redis: внешний возврат (`refunded_payment`)
  * ложится в неё, как и подтверждение, а задание, брошенное после всех
- * попыток, выходит слушателям (tasks/T-0004).
+ * попыток, выходит слушателям (tasks/T-0004). Брошенные задания читаются и
+ * повторяются из панели (tasks/T-0431, Р209, WP53).
  */
 
 const NOW = Date.UTC(2026, 9, 6, 9, 5, 0);
@@ -227,5 +228,204 @@ describe("задание, брошенное после всех попыток"
     await expect(queue.jobFailed(failedJob({ kind: "refunded", chargeId: "charge-1", at: NOW }, 10), new Error("база лежит"))).resolves.toBeUndefined();
 
     expect(abandoned).toHaveLength(1);
+  });
+});
+
+/** Задание очереди, каким его отдаёт BullMQ: только то, что читает очередь оплаты. */
+interface FakeBullJob {
+  id?: string;
+  data: unknown;
+  failedReason?: string;
+  attemptsMade: number;
+  finishedOn?: number;
+}
+
+describe("брошенные задания: чтение", () => {
+  const PURCHASE_ID = "11111111-1111-4111-8111-111111111111";
+  const payment: ConfirmedPayment = { platform: "telegram", chargeId: "charge-1", payload: PURCHASE_ID, payerId: "555000111", currency: "XTR", totalAmount: 50 };
+  const order: RefundOrder = { platform: "telegram", chargeId: "charge-2", purchaseId: PURCHASE_ID, payerId: "555000111", reason: "manual" };
+
+  const confirmJob: FakeBullJob = { id: "confirm-aaaa", data: { kind: "confirm", payment }, failedReason: "Connection terminated", attemptsMade: 10, finishedOn: NOW };
+  const refundJob: FakeBullJob = { id: "refund-bbbb", data: { kind: "refund", order }, failedReason: "Telegram недоступен", attemptsMade: 10, finishedOn: NOW - 60_000 };
+  const refundedJob: FakeBullJob = { id: "refunded-cccc", data: { kind: "refunded", chargeId: "charge-3", at: NOW }, failedReason: "база лежит", attemptsMade: 4, finishedOn: NOW - 120_000 };
+
+  function attach(queue: PaymentsQueue, getFailed: (start: number, end: number) => Promise<FakeBullJob[]>): void {
+    Object.assign(queue as unknown as { queue: unknown }, { queue: { getFailed } });
+  }
+
+  it("три задания разных видов и одно с битыми данными — четыре строки; у битого вид unknown и пустые поля", async () => {
+    const { queue } = setup();
+    const broken: FakeBullJob = { id: "mystery-dddd", data: { kind: "что-то новое" }, attemptsMade: 3 };
+    attach(queue, async () => [confirmJob, refundJob, refundedJob, broken]);
+
+    const jobs = await queue.failedJobs(200);
+
+    expect(jobs).toEqual([
+      { jobId: "confirm-aaaa", kind: "confirm", chargeId: "charge-1", purchaseId: PURCHASE_ID, payerId: "555000111", amount: 50, reason: "Connection terminated", attempts: 10, failedAt: new Date(NOW) },
+      { jobId: "refund-bbbb", kind: "refund", chargeId: "charge-2", purchaseId: PURCHASE_ID, payerId: "555000111", amount: null, reason: "Telegram недоступен", attempts: 10, failedAt: new Date(NOW - 60_000) },
+      { jobId: "refunded-cccc", kind: "refunded", chargeId: "charge-3", purchaseId: null, payerId: null, amount: null, reason: "база лежит", attempts: 4, failedAt: new Date(NOW - 120_000) },
+      { jobId: "mystery-dddd", kind: "unknown", chargeId: null, purchaseId: null, payerId: null, amount: null, reason: "", attempts: 3, failedAt: null },
+    ] satisfies FailedPaymentJob[]);
+  });
+
+  it.each([[null], ["текст вместо объекта"], [42], [{ kind: 7 }], [{ kind: "возврат" }]])("данные %j не разбираются — вид unknown, поля пусты, строка не пропадает", async (data) => {
+    const { queue } = setup();
+    attach(queue, async () => [{ id: "mystery-eeee", data, failedReason: "x", attemptsMade: 1 }]);
+
+    const [job] = (await queue.failedJobs(10)) ?? [];
+
+    expect(job).toMatchObject({ jobId: "mystery-eeee", kind: "unknown", chargeId: null, purchaseId: null, payerId: null, amount: null });
+  });
+
+  it("известный вид с неполными данными остаётся своим видом, пустым остаётся только то, чего нет", async () => {
+    const { queue } = setup();
+    attach(queue, async () => [
+      { id: "confirm-ffff", data: { kind: "confirm", payment: { chargeId: "charge-9", payload: 7, totalAmount: "много" } }, failedReason: "x", attemptsMade: 2 },
+      { id: "refund-gggg", data: { kind: "refund" }, failedReason: "x", attemptsMade: 2 },
+      // возврат без покупки: заказ «ничей», покупки в нём нет
+      { id: "refund-hhhh", data: { kind: "refund", order: { ...order, purchaseId: null } }, failedReason: "x", attemptsMade: 2 },
+    ]);
+
+    const jobs = await queue.failedJobs(10);
+
+    expect(jobs?.[0]).toMatchObject({ kind: "confirm", chargeId: "charge-9", purchaseId: null, payerId: null, amount: null });
+    expect(jobs?.[1]).toMatchObject({ kind: "refund", chargeId: null, purchaseId: null });
+    expect(jobs?.[2]).toMatchObject({ kind: "refund", chargeId: "charge-2", purchaseId: null });
+  });
+
+  it("причина — первая непустая строка, а не весь стек", async () => {
+    const { queue } = setup();
+    attach(queue, async () => [{ ...confirmJob, failedReason: "\n  \r\nPrisma: нет связи с базой\n    at Object.<anonymous> (file.js:1:1)\nвторая строка" }]);
+
+    const [job] = (await queue.failedJobs(10)) ?? [];
+
+    expect(job?.reason).toBe("Prisma: нет связи с базой");
+  });
+
+  it("причина длиннее 200 знаков обрезается по знакам, а не по кодовым единицам; нет причины — пустая строка", async () => {
+    const { queue } = setup();
+    attach(queue, async () => [
+      { ...confirmJob, failedReason: "ж".repeat(300) },
+      { ...confirmJob, id: "confirm-iiii", failedReason: "😀".repeat(250) },
+      { ...confirmJob, id: "confirm-jjjj", failedReason: undefined },
+    ]);
+
+    const jobs = await queue.failedJobs(10);
+
+    expect(jobs?.[0]?.reason).toBe("ж".repeat(200));
+    expect(jobs?.[1]?.reason).toBe("😀".repeat(200));
+    expect(jobs?.[2]?.reason).toBe("");
+  });
+
+  it("задание без времени завершения — failedAt null, без id — пустой jobId", async () => {
+    const { queue } = setup();
+    attach(queue, async () => [{ data: confirmJob.data, failedReason: "x", attemptsMade: 10 }]);
+
+    const [job] = (await queue.failedJobs(10)) ?? [];
+
+    expect(job).toMatchObject({ jobId: "", failedAt: null });
+  });
+
+  it("из очереди просится ровно лимит заданий: от нуля до лимита минус один", async () => {
+    const { queue } = setup();
+    const asked: [number, number][] = [];
+    attach(queue, async (start, end) => {
+      asked.push([start, end]);
+      return [];
+    });
+
+    await queue.failedJobs(200);
+
+    expect(asked).toEqual([[0, 199]]);
+  });
+
+  it("очереди нет (оплата выключена или Redis не поднят) — null, а не пустой список", async () => {
+    const { queue } = setup();
+
+    expect(await queue.failedJobs(200)).toBeNull();
+  });
+
+  it("очередь не отвечает — ошибка с названием вызова через 5 секунд, а не вечное ожидание", async () => {
+    vi.useFakeTimers();
+    try {
+      const { queue } = setup();
+      attach(queue, () => new Promise<FakeBullJob[]>(() => undefined));
+
+      const result = expect(queue.failedJobs(10)).rejects.toThrow("брошенные задания оплаты");
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await result;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("брошенные задания: повтор", () => {
+  beforeEach(() => {
+    for (const level of ["log", "warn", "error"] as const) vi.spyOn(Logger.prototype, level).mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  interface FakeJob {
+    getState: () => Promise<string>;
+    retry: (state: string, options: unknown) => Promise<void>;
+  }
+
+  function attach(queue: PaymentsQueue, getJob: (jobId: string) => Promise<FakeJob | undefined>): void {
+    Object.assign(queue as unknown as { queue: unknown }, { queue: { getJob } });
+  }
+
+  it("задания нет (его уже убрали из хранилища) — not_found", async () => {
+    const { queue } = setup();
+    const asked: string[] = [];
+    attach(queue, async (jobId) => {
+      asked.push(jobId);
+      return undefined;
+    });
+
+    expect(await queue.retryFailed("confirm-aaaa")).toBe("not_found");
+    expect(asked).toEqual(["confirm-aaaa"]);
+  });
+
+  it.each([["completed"], ["waiting"], ["active"], ["delayed"]])("задание в состоянии %s — not_failed, повтор не зовётся", async (state) => {
+    const { queue } = setup();
+    const retry = vi.fn(async () => undefined);
+    attach(queue, async () => ({ getState: async () => state, retry }));
+
+    expect(await queue.retryFailed("confirm-aaaa")).toBe("not_failed");
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("брошенное задание повторяется со свежей серией попыток: оба счётчика сбрасываются", async () => {
+    const { queue } = setup();
+    const retry = vi.fn(async () => undefined);
+    attach(queue, async () => ({ getState: async () => "failed", retry }));
+
+    expect(await queue.retryFailed("confirm-aaaa")).toBe("retried");
+
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledWith("failed", { resetAttemptsMade: true, resetAttemptsStarted: true });
+  });
+
+  it("BullMQ отказал в повторе — задание успели повторить до нас: not_failed, а не ошибка запроса", async () => {
+    const { queue } = setup();
+    attach(queue, async () => ({
+      getState: async () => "failed",
+      retry: async () => {
+        throw new Error("Job confirm-aaaa is not in the failed state. retryJob");
+      },
+    }));
+
+    expect(await queue.retryFailed("confirm-aaaa")).toBe("not_failed");
+  });
+
+  it("очереди нет — not_found: повторять нечего", async () => {
+    const { queue } = setup();
+
+    expect(await queue.retryFailed("confirm-aaaa")).toBe("not_found");
   });
 });
