@@ -53,7 +53,7 @@ const RUN_UI = /^(RunScreen|overlays|run)-[\w-]{8}\.js$/;
  */
 const TEAM = /^(gallery|home-showcase|sound-lab|DevSheet|DevTechPanel)-.*\.js$/;
 /**
- * Реклама — обёртки SDK AdsGram, AdSonar и RichAds и учёт аудитории Taddy
+ * Реклама — обёртки SDK AdsGram и RichAds и учёт аудитории Taddy
  * (`adapter-telegram/src/ads/`) с прослойкой `Telegram.WebApp` для чужих SDK
  * (`adapter-telegram/src/webapp-compat.ts`), наш рекламный блок, который рисует
  * объявление сети с API (`app-shell/src/ads/ad-creative.tsx`), и поток

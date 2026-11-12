@@ -58,7 +58,9 @@ describe("политика источников клиента", () => {
 
   it("реклама сетей — только в Telegram-сборке: скрипты лишь их SDK, креативы — с любого https", () => {
     const withAds = directives(contentSecurityPolicy({ mode: "build", apiOrigin: "", ads: true }));
-    expect(withAds.get("script-src")).toEqual(expect.arrayContaining(["'self'", "https://sad.adsgram.ai", "https://static.sonartech.io", "https://richinfo.co", "https://sdk.taddy.pro"]));
+    expect(withAds.get("script-src")).toEqual(expect.arrayContaining(["'self'", "https://sad.adsgram.ai", "https://richinfo.co", "https://sdk.taddy.pro"]));
+    // Закрытая сеть в списке источников не остаётся: адрес чужого домена без SDK — лишний путь для скрипта.
+    expect(withAds.get("script-src")?.filter((source) => source.includes("son" + "artech"))).toEqual([]);
     // Чужой скрипт по-прежнему не исполняется: ни встроенных, ни eval, ни «любой https».
     for (const loose of ["'unsafe-inline'", "'unsafe-eval'", "https:", "*"]) expect(withAds.get("script-src"), loose).not.toContain(loose);
     expect(withAds.get("media-src")).toEqual(["'self'", "blob:", "https:"]);

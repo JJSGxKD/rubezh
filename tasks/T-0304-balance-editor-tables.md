@@ -28,7 +28,7 @@ batch: 7
 
 # T-0304. Панель «Баланс» — таблицы контента по разделам, правка ячейки с прежним числом, ошибка формы строкой под записью, список правок черновика
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0304.json)](README.md#значки-статуса) [![T-0303](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0303.json&label=T-0303)](T-0303-content-drafts-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0304.json)](README.md#значки-статуса) [![T-0303](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0303.json&label=T-0303)](archive/T-0303-content-drafts-server.md)
 
 ## Зачем
 

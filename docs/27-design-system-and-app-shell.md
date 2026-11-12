@@ -252,7 +252,7 @@ index.html: критичный CSS + заставка в разметке (зн�
 | Инструменты команды: витрина с её подписями и витриной состояний виджетов главной, звуковая лаборатория, лист и панель разработчика | ≤ 26 КБ | 17,0 КБ |
 | Движок, стенд и стресс-тест | ≤ 565 КБ | 375 КБ |
 | Звук: движок, рецепты, музыка (`31-audio-and-haptics.md`) | ≤ 15 КБ | 10,0 КБ |
-| Реклама: обёртки SDK AdsGram, AdSonar, RichAds и учёт аудитории Taddy (`adapter-telegram/src/ads/`), наш рекламный блок (`app-shell/src/ads/ad-creative.tsx`), поток межстраничной (`app-shell/src/state/interstitial.ts`), задание AdsGram (`adapter-telegram/src/ads/tasks.ts`), переход по заданию ленты Taddy (`adapter-telegram/src/ads/task-links.ts`) | ≤ 11 КБ | 7,1 КБ |
+| Реклама: обёртки SDK AdsGram, RichAds и учёт аудитории Taddy (`adapter-telegram/src/ads/`), наш рекламный блок (`app-shell/src/ads/ad-creative.tsx`), поток межстраничной (`app-shell/src/state/interstitial.ts`), задание AdsGram (`adapter-telegram/src/ads/tasks.ts`), переход по заданию ленты Taddy (`adapter-telegram/src/ads/task-links.ts`) | ≤ 11 КБ | 6,8 КБ |
 | Шрифты | ≤ 130 КБ | 85 КБ: Russo One и IBM Plex Sans, кириллица и латиница |
 
 Замер — `dev` от 11.11.2026. Первая загрузка и инструменты команды упёрлись

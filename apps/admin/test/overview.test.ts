@@ -99,10 +99,10 @@ describe("сводка: реклама", () => {
 
   it("сеть — по ключу сервера: известные именем, незнакомая — самим ключом", () => {
     expect(networkTitle("adsgram")).toBe("AdsGram");
-    expect(networkTitle("adsonar")).toBe("AdSonar");
     expect(networkTitle("richads")).toBe("RichAds");
     expect(networkTitle("taddy")).toBe("Taddy");
     expect(networkTitle("newnet")).toBe("newnet");
+    expect(networkTitle("unknown_net")).toBe("unknown_net");
   });
 
   it("ответ без рекламы и без выручки разбирается; сервер старее панели — тоже", () => {

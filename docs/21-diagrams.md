@@ -789,7 +789,7 @@ erDiagram
     }
 
     AD_NETWORK {
-        string network_key PK "adsgram, adsonar, richads, taddy"
+        string network_key PK "adsgram, richads, taddy"
         string name
         boolean active "из миграции — выключены"
         int priority "меньше — раньше в круге"
