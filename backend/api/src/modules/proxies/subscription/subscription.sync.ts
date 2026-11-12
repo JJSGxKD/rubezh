@@ -8,7 +8,7 @@ import { slotQuota } from "./subscription-rules.js";
 import type { StoredNode, StoredSubscription, SubscriptionRepository } from "./subscription.repository.js";
 import type { SubscriptionRoutes } from "./subscription-routes.js";
 import { openUrl } from "./subscription-url.js";
-import { assembleConfig, missingParts, type AssemblyResult } from "./xray-config-assembly.js";
+import { assembleConfig, missingParts, type AssemblyDeps, type AssemblyResult } from "./xray-config-assembly.js";
 import { SidecarMissingError, type ConfigPart, type ConfigWriter } from "./xray-config-writer.js";
 
 /**
@@ -41,7 +41,9 @@ export interface SyncDeps {
   redis: LockRedis;
   /** сообщить остальным репликам, что таблицы изменились */
   changed: () => Promise<void>;
-  xray: { basePort: number; slotCount: number };
+  xray: AssemblyDeps["xray"];
+  /** снять счётчики трафика перед записью конфига (tasks/T-0386) */
+  beforeWrite?: AssemblyDeps["beforeWrite"];
 }
 
 export type RefreshResult = { status: "busy" } | { status: "absent" } | { status: "disabled" } | { status: "ok" | "failed"; note: string };

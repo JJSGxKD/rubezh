@@ -10,6 +10,7 @@ import { ModesPanel } from "./ModesPanel";
 import { ProxyCard } from "./ProxyCard";
 import { ProxyDialog } from "./ProxyDialog";
 import { SubscriptionPanel } from "./SubscriptionPanel";
+import { TrafficPanel } from "./TrafficPanel";
 
 /**
  * Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, tasks/T-0065):
@@ -50,6 +51,7 @@ export function ProxiesScreen() {
         </Notice>
       )}
       <SubscriptionPanel canEdit={canEdit} />
+      <TrafficPanel />
       <Panel
         title="Прокси"
         help={HELP.proxies.list}
