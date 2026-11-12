@@ -1805,8 +1805,8 @@ describe("заказчик партнёрского задания: модель
   });
 
   it("срок удержания — 0, 1, 3 или 7; у ссылки и бота — только 0", () => {
-    for (const days of [0, 1, 3, 7]) expect(taskDefSchema.safeParse(sold({ holdDays: days })).success).toBe(true);
-    for (const days of [2, 5, 14, -1]) expect(taskDefSchema.safeParse(sold({ holdDays: days })).success).toBe(false);
+    for (const days of [0, 1, 3, 7]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(true);
+    for (const days of [2, 5, 14, -1]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(false);
     const link = def("ach_link", { period: "achievement", kind: "link", params: { url: "https://example.com" }, target: 1, coins: 10, customer: "Сайт", payModel: "cpa", rate: 10 });
     expect(taskDefSchema.safeParse(link).success).toBe(true);
     expect(message({ ...link, holdDays: 3 })).toContain("Удержание проверяется только у подписки на канал");
