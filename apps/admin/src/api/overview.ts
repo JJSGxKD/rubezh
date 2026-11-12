@@ -205,7 +205,7 @@ export function funnelBars(funnel: OverviewDay["funnel"]): { key: string; title:
 }
 
 /** Названия сетей по `networkKey` (ключи — `backend/api/src/modules/ads/ad-networks.ts`); незнакомый — сам ключ. */
-const NETWORK_TITLES: Readonly<Record<string, string>> = { adsgram: "AdsGram", adsonar: "AdSonar", richads: "RichAds", taddy: "Taddy" };
+const NETWORK_TITLES: Readonly<Record<string, string>> = { adsgram: "AdsGram", richads: "RichAds", taddy: "Taddy" };
 
 export function networkTitle(networkKey: string): string {
   return NETWORK_TITLES[networkKey] ?? networkKey;

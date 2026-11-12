@@ -294,7 +294,6 @@ export function interstitialGate(repository: MemoryAds, settings: SettingsReader
 /** Рабочие ключи сетей — того вида, что ждёт профиль (`ad-networks.ts`). */
 export const NETWORK_KEYS: Readonly<Record<string, Record<string, string>>> = {
   adsgram: {},
-  adsonar: { appId: "app_133d2148" },
   richads: { pubId: "1001262", appId: "6023" },
   taddy: { pubId: "14cbeb980853dd416003462ca4db7c12" },
 };

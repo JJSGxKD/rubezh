@@ -341,7 +341,7 @@ describe("крутка за рекламу", () => {
   });
 
   it("две сессии, выданные до кулдауна, дают одну крутку", async () => {
-    const { service, ads, wallet } = setup(rolls(0), 1, [adBlock("adsgram", 10), adBlock("adsonar", 20)]);
+    const { service, ads, wallet } = setup(rolls(0), 1, [adBlock("adsgram", 10), adBlock("richads", 20)]);
     const first = await watched(ads, NOON);
     const second = await watched(ads, NOON);
     await service.spin(PLAYER, { kind: "ad", sessionId: first }, NOON);
