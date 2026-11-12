@@ -498,6 +498,12 @@ model Run {
   band             String?     @db.VarChar(16)
   /// исходные числа подсчёта, которых нет в других колонках, — для пересчёта: `{ power, huntLog, buildScore }`
   scoreInput       Json?       @map("score_input")
+  /// решение разбора (Р203, T-0419): `honest` — проверка команды признала забег честным, `annulled` — убран из досок рейтинга и сезона; `null` — не разбирался
+  reviewOutcome    String?     @map("review_outcome") @db.VarChar(16)
+  /// когда принято решение разбора; `null` — не разбирался
+  reviewedAt       DateTime?   @map("reviewed_at") @db.Timestamptz(3)
+  /// аккаунт команды, принявший решение; без внешнего ключа: удалённый аккаунт не должен ронять историю забега
+  reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
