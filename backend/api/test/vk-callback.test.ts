@@ -10,7 +10,7 @@ import { SECRETS, VK_API_VERSION, VK_CALLBACK_PATH, type SecretDefinition } from
 import type { SecretsReader } from "../src/modules/secrets/secrets.service.js";
 import { SETTINGS, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
-import { VkApi } from "../src/platforms/vk/vk-api.js";
+import { VkApi, VkApiError } from "../src/platforms/vk/vk-api.js";
 import { VkCallbackController } from "../src/platforms/vk/vk-callback.controller.js";
 import { VkCommunity } from "../src/platforms/vk/vk-community.js";
 import type { VkMessageEvent } from "../src/platforms/vk/vk-events.js";
@@ -83,16 +83,19 @@ describe("вебхук сообщества VK", () => {
   let app: NestFastifyApplication | null = null;
   let bull: FakeBull;
   let resolved: string[];
+  let groupIdFails = false;
 
   async function start(patch: Partial<Values> = {}): Promise<NestFastifyApplication> {
     bull = new FakeBull();
     resolved = [];
+    groupIdFails = false;
     const values = { ...DEFAULTS, ...patch };
     const queue = new VkEventQueue(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv), {} as unknown as VkUpdatesWorker);
     Object.assign(queue as unknown as { queue: unknown }, { queue: bull });
     const api = {
       groupId: async (name: string) => {
         resolved.push(name);
+        if (groupIdFails) throw new VkApiError("VK не назвал сообщество", "transient");
         return name === "rubezh_game" ? String(GROUP_ID) : "999";
       },
     } as unknown as VkApi;
@@ -217,6 +220,16 @@ describe("вебхук сообщества VK", () => {
       expect(own.body).toBe(CONFIRMATION);
       expect(resolved).toEqual(["rubezh_game"]);
       expect((await post(target, { type: "confirmation", group_id: 1, secret: SECRET })).statusCode).toBe(401);
+    });
+
+    it("VK не назвал сообщество — 503 без строки подтверждения, текст не просит ничего повторять", async () => {
+      const target = await start({ community: "https://vk.com/rubezh_game" });
+      groupIdFails = true;
+      const response = await post(target, { type: "confirmation", group_id: GROUP_ID, secret: SECRET });
+      expect(response.statusCode).toBe(503);
+      expect(response.body).not.toContain(CONFIRMATION);
+      expect(response.body).toContain("подтверждение не выполнено");
+      expect(response.body).not.toContain("повторите");
     });
 
     it("настройки сообщества или строки подтверждения нет — 404: отвечать нечем", async () => {

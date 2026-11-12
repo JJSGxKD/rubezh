@@ -106,7 +106,7 @@ export class VkCallbackController implements OnModuleDestroy {
       return await this.api.groupId(screenName);
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "vk", event: "vk_group_id_failed", reason: error instanceof Error ? error.message : "unknown" }));
-      throw new UnavailableError("VK не назвал сообщество — повторите подтверждение");
+      throw new UnavailableError("VK не назвал сообщество, подтверждение не выполнено");
     }
   }
 
