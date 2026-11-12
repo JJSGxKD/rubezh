@@ -3,7 +3,7 @@ id: T-0386
 title: Пул Xray — учёт трафика по узлу и подписке
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-4
 size: M
@@ -33,6 +33,7 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
   - backend/api/src/modules/admin/admin.module.ts
+  - backend/api/src/modules/proxies/subscription/subscription.sync.ts
   - backend/api/src/config/app-config.ts
   - .env.example
   - infra/prod/api.env.example
