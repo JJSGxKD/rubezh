@@ -640,6 +640,10 @@ model Purchase {
   telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(256)
   /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
   invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
+  /// последняя предварительная проверка оплаты по этому счёту (Р209); у продления — отметка первой покупки
+  checkoutAt        DateTime?       @map("checkout_at") @db.Timestamptz(3)
+  /// отказ последней проверки (`CheckoutRefusal`); `null` — пройдена или не было
+  checkoutRefusal   String?         @map("checkout_refusal") @db.VarChar(32)
   paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
   refundReason      RefundReason?   @map("refund_reason")
   /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
