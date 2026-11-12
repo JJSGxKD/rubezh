@@ -33,6 +33,7 @@
   "tasks.check": "Проверить",
   "tasks.repeat.daily": "Награда каждый день, пока держится подписка",
   "tasks.repeat.weekly": "Награда каждую неделю, пока держится подписка",
+  "tasks.recheck": "Отпишетесь в течение {days} суток — награду спишут",
   "tasks.repeat.next": "Следующая награда\u00a0— через {time}",
   "tasks.slotsLeft": "Осталось {left} из {total}",
   "tasks.slotsHeld": "Места закончились — твоё держим ещё {minutes} мин",

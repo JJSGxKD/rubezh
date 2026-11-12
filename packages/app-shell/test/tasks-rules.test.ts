@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasClaimableGroup, initialTasksView, tabLayout, TASK_TAB_OF, TASKS_VIEW_ORDER, viewAfterLoad } from "../src/screens/meta/tasks-rules";
+import { hasClaimableGroup, initialTasksView, recheckHintDays, tabLayout, TASK_TAB_OF, TASKS_VIEW_ORDER, viewAfterLoad } from "../src/screens/meta/tasks-rules";
 
 // Вкладка «Заданий» при открытии (tasks/T-0098): первая по порядку, где ждёт награда.
 const task = (period: "daily" | "weekly" | "achievement", done: boolean, claimed: boolean, partner = false) => ({
@@ -126,5 +126,24 @@ describe("раскладка вкладки: группа «Можно забр�
 
   it("«Достижения»: полосы очков в группе нет при любом числе готовых ступеней", () => {
     expect(tabLayout({ view: "achievements", tasks: [], pointsReady: 3, partnerClosed: false }).pointsInGroup).toBe(false);
+  });
+});
+
+describe("подсказка о правиле отписки (T-0183)", () => {
+  it("число суток — у задания с recheckDays больше нуля", () => {
+    expect(recheckHintDays({ period: "daily", claimed: false, recheckDays: 7 })).toBe(7);
+    expect(recheckHintDays({ period: "daily", claimed: true, recheckDays: 7 })).toBe(7);
+    expect(recheckHintDays({ period: "weekly", claimed: true, recheckDays: 7 })).toBe(7);
+    expect(recheckHintDays({ period: "achievement", claimed: false, recheckDays: 7 })).toBe(7);
+  });
+
+  it("null, ноль и отсутствующее поле — строки нет", () => {
+    expect(recheckHintDays({ period: "daily", claimed: false, recheckDays: null })).toBeNull();
+    expect(recheckHintDays({ period: "daily", claimed: false, recheckDays: 0 })).toBeNull();
+    expect(recheckHintDays({ period: "daily", claimed: false })).toBeNull();
+  });
+
+  it("забранное достижение — строки нет: предупреждать поздно", () => {
+    expect(recheckHintDays({ period: "achievement", claimed: true, recheckDays: 7 })).toBeNull();
   });
 });
