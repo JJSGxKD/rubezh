@@ -233,9 +233,9 @@ describe("сборщик: чтение счётчиков", () => {
 
     expect(r.source.query).toHaveBeenCalledWith(true);
     expect(r.repository.list()).toEqual([
+      { hour: HOUR, subscriptionKey: SECOND, nodeKey: KEY1, nodeName: "Берлин", upBytes: 0n, downBytes: 70n },
       { hour: HOUR, subscriptionKey: "main", nodeKey: KEY1, nodeName: "Берлин", upBytes: 100n, downBytes: 2_000n },
       { hour: HOUR, subscriptionKey: "main", nodeKey: KEY2, nodeName: "Амстердам", upBytes: 5n, downBytes: 0n },
-      { hour: HOUR, subscriptionKey: SECOND, nodeKey: KEY1, nodeName: "Берлин", upBytes: 0n, downBytes: 70n },
     ]);
   });
 
