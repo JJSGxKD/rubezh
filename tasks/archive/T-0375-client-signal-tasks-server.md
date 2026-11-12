@@ -34,7 +34,7 @@ batch: 5
 
 # T-0375. Задания по сигналу клиента — сервер и панель: главный экран и история
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0375.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0375.json)](../README.md#значки-статуса)
 
 ## Зачем
 

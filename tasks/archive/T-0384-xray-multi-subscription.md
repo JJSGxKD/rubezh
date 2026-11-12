@@ -53,7 +53,7 @@ batch: 5
 
 # T-0384. Пул Xray — несколько подписок в общем переборе
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json)](../README.md#значки-статуса)
 
 ## Зачем
 

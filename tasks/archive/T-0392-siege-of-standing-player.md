@@ -60,7 +60,7 @@ attempt: 2
 
 # T-0392. Осада стоящего — строй и элиты вокруг игрока, который долго стоит на месте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0392.json)](README.md#значки-статуса) [![T-0389](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0389.json&label=T-0389)](archive/T-0389-human-like-calibration-bot.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0392.json)](../README.md#значки-статуса) [![T-0389](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0389.json&label=T-0389)](T-0389-human-like-calibration-bot.md)
 
 ## Зачем
 
