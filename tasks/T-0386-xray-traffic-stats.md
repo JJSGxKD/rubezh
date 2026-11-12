@@ -3,8 +3,8 @@ id: T-0386
 title: Пул Xray — учёт трафика по узлу и подписке
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-4
 size: M
 depends_on: [T-0384]
