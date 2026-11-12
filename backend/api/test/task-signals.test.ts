@@ -151,6 +151,8 @@ function view(id: string, patch: Partial<TaskView> = {}): TaskView {
     reward: { coins: 50, gems: 0, shards: 0 },
     passPoints: 0,
     link: null,
+    linkMode: null,
+    channelPlatform: null,
     slots: null,
     image: null,
     tier: null,

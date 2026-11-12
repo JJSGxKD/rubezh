@@ -55,6 +55,7 @@ import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 import { WipeModule } from "./modules/wipe/wipe.module.js";
+import { ContentModule } from "./modules/content/content.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
 import { ClientScriptsModule } from "./modules/client-scripts/client-scripts.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
@@ -68,6 +69,7 @@ import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
 import { RequestJournalModule } from "./modules/request-journal/request-journal.module.js";
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
+import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
@@ -169,10 +171,12 @@ export const APP_MODULES = [
   RequestJournalModule,
   DonationsModule,
   BotMentionModule,
+  ExternalIdentityModule,
   AchievementsModule,
   BattlePassModule,
   RemindersModule,
   RemindersOffModule,
+  ContentModule,
 ];
 
 /**

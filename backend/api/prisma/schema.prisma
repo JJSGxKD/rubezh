@@ -259,6 +259,8 @@ model Account {
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
+  externalLinks    ExternalIdentity[]
+  taskChannelWatch TaskChannelWatch[]
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -629,7 +631,7 @@ model Purchase {
   mode              PaymentMode
   status            PurchaseStatus
   /// идентификатор оплаты в Telegram; `null` — оплаты ещё не было
-  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(128)
+  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(256)
   /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
   invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
   paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
@@ -1663,6 +1665,7 @@ model TaskDef {
   participants TaskParticipant[]
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
+  channelWatch TaskChannelWatch[]
 
   @@map("task_def")
 }
@@ -2809,6 +2812,116 @@ model BoostCredit {
   @@map("boost_credit")
 }
 
+// Контент игры на сервере (docs/19-content-admin.md §3, docs/35-stage4-plan.md
+// Р16 и Р160, T-0303): версии снимка, черновики поверх версий и проверки
+// черновиков в sim-worker. Это правила игры, а не данные игроков, — вайп их не
+// трогает. Публикации пока нет (T-0306): версия «из кода» заводится выкатом.
+
+/// Версия контента: неизменяемый снимок вместе со схемой, по которой он
+/// проверялся, и именами для панели. Хэш — тот же `content_hash`, что игра
+/// пишет в итог забега (`hashSnapshot` движка), поэтому уникален; на версию
+/// «из кода» его кладёт выгрузка `content:export`
+model ContentVersion {
+  versionNo     Int       @id @default(autoincrement()) @map("version_no")
+  contentHash   String    @unique @map("content_hash") @db.VarChar(64)
+  /// версия формы снимка: клиент берёт последнюю, которую понимает
+  schemaVersion Int       @map("schema_version") @db.SmallInt
+  snapshot      Json
+  /// JSON Schema снимка (`z.toJSONSchema`): ею проверяется форма правки
+  jsonSchema    Json      @map("json_schema")
+  /// тексты `nameKey` и `descriptionKey` снимка: панель показывает имена, а не id
+  names         Json
+  /// `repo` — из кода при выкате, `panel` — опубликована из панели (`CHECK` в миграции)
+  source        String    @db.VarChar(8)
+  /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// `null` — версия ещё не публиковалась
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+
+  drafts ContentDraft[]
+
+  @@map("content_version")
+}
+
+/// Черновик: копия снимка версии, которую правит человек. Версию-основу не
+/// меняет и не двигает. Из списка уходит архивом, строка остаётся
+model ContentDraft {
+  draftId       String    @id @map("draft_id") @db.Uuid
+  baseVersionNo Int       @map("base_version_no")
+  title         String    @db.VarChar(80)
+  snapshot      Json
+  /// без внешнего ключа — черновик переживает аккаунт
+  author        String    @db.Uuid
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  base   ContentVersion @relation(fields: [baseVersionNo], references: [versionNo], onDelete: Restrict)
+  checks ContentCheck[]
+
+  @@index([updatedAt])
+  @@index([baseVersionNo])
+  @@map("content_draft")
+}
+
+/// Проверка черновика в sim-worker. Хэш — отпечаток снимка, который проверяли:
+/// правка черновика его меняет, и старый отчёт «устаревает». Один живой отчёт
+/// на пару (черновик, хэш) — частичный уникальный индекс в миграции; упавшая
+/// проверка место не занимает
+model ContentCheck {
+  checkId      String   @id @map("check_id") @db.Uuid
+  draftId      String   @map("draft_id") @db.Uuid
+  snapshotHash String   @map("snapshot_hash") @db.VarChar(64)
+  /// `queued`, `done`, `failed`, `timeout` (`CHECK` в миграции)
+  status       String   @db.VarChar(8)
+  /// итог воркера как есть (проблемы схемы и контента, отчёт симуляции) или `{ error }`
+  report       Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  draft ContentDraft @relation(fields: [draftId], references: [draftId], onDelete: Restrict)
+
+  @@index([draftId, createdAt])
+  @@map("content_check")
+}
+
+// Перепроверка подписки после награды (docs/35-stage4-plan.md Р115, T-0178)
+
+/// Окно наблюдения за наградой за подписку на канал: семь суток после забора
+/// сервер спрашивает бота площадки, остался ли игрок в канале. Строка на
+/// каждую выданную награду — ключ как у `task_progress`: у ежедневной и
+/// еженедельной подписки награда за каждый срок со своим окном. Состояние и
+/// допустимые значения держит `CHECK` в миграции, как и частичный индекс по
+/// `next_check_at` для `state = 'watching'` — Prisma частичные индексы не
+/// описывает. `event_no` — номер события отписки пары «игрок + задание»:
+/// награды всех открытых окон пары, списанные одной отпиской, делят номер.
+model TaskChannelWatch {
+  accountId   String    @map("account_id") @db.Uuid
+  taskId      String    @map("task_id") @db.VarChar(48)
+  periodStart DateTime  @map("period_start") @db.Date
+  /// момент забора награды
+  startedAt   DateTime  @map("started_at") @db.Timestamptz(3)
+  /// конец окна: `started_at` + 7 суток
+  watchUntil  DateTime  @map("watch_until") @db.Timestamptz(3)
+  nextCheckAt DateTime  @map("next_check_at") @db.Timestamptz(3)
+  /// последняя проверка, на которую площадка ответила
+  checkedAt   DateTime? @map("checked_at") @db.Timestamptz(3)
+  /// `watching`, `kept` (досидел), `expired` (кончилось без ответа площадки),
+  /// `penalized` (отписался) — `CHECK` в миграции
+  state       String    @default("watching") @db.VarChar(16)
+  eventNo     Int?      @map("event_no")
+  penalizedAt DateTime? @map("penalized_at") @db.Timestamptz(3)
+  /// сколько списано по ресурсам: `{ "coins": n, "gems": n, "shards": n }`
+  revoked     Json?
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+
+  @@id([accountId, taskId, periodStart])
+  // Разбор пары «игрок + задание»: открытые окна и последнее событие отписки.
+  @@index([accountId, taskId])
+  @@map("task_channel_watch")
+}
+
 // Снимки аудитории по суткам (tasks/T-0203)
 
 /// Закрытые московские сутки: сколько разных аккаунтов запускало игру в них,
@@ -2823,4 +2936,24 @@ model ActivityDaily {
   computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
 
   @@map("activity_daily")
+}
+
+// Связь с аккаунтом MAX или VK (docs/35-stage4-plan.md Р188, tasks/T-0377)
+
+/// Связь игрового аккаунта с его аккаунтом на другой площадке — для заданий «подпишись через бота»,
+/// не для входа. Пара «площадка + id» принадлежит одному аккаунту навсегда, у аккаунта на площадке
+/// одна связь: строку не меняют и не освобождают, перепривязка — только через поддержку. `CHECK` в
+/// миграции: площадка — `max` или `vk`
+model ExternalIdentity {
+  accountId      String   @map("account_id") @db.Uuid
+  platform       Platform
+  /// id игрока на площадке, как его присылает бот; в аналитику не пишется
+  externalUserId String   @map("external_user_id") @db.VarChar(64)
+  linkedAt       DateTime @default(now()) @map("linked_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, platform])
+  @@unique([platform, externalUserId])
+  @@map("external_identity")
 }
