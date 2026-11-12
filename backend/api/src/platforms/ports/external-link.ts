@@ -20,7 +20,18 @@ export interface ExternalLinkStarter {
 
 /** Стартеры всех площадок: домен выбирает по площадке канала. */
 export class ExternalLinkStarters {
-  constructor(private readonly all: readonly ExternalLinkStarter[]) {}
+  private readonly all: ExternalLinkStarter[];
+
+  constructor(all: readonly ExternalLinkStarter[]) {
+    this.all = [...all];
+  }
+
+  /** Адаптер площадки подключает себя сам при старте своего модуля; повтор заменяет стартер той же площадки. */
+  register(starter: ExternalLinkStarter): void {
+    const index = this.all.findIndex((item) => item.platform === starter.platform);
+    if (index === -1) this.all.push(starter);
+    else this.all[index] = starter;
+  }
 
   for(platform: PlatformId): ExternalLinkStarter | null {
     return this.all.find((starter) => starter.platform === platform) ?? null;
