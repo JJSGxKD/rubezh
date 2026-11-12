@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { SECRETS, secretProblem, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import type { SecretsReader } from "../src/modules/secrets/secrets.service.js";
-import { SETTINGS, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
+import { SETTINGS, parseVkCommunity, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import { LINK_CODE_PATTERN, newLinkCode } from "../src/modules/external-identity/external-identity-rules.js";
 import { externalLinkStartersFor } from "../src/platforms/platforms.module.js";
-import { VkCommunity, parseVkCommunity } from "../src/platforms/vk/vk-community.js";
+import { VkCommunity } from "../src/platforms/vk/vk-community.js";
 import { VkLinkStarter } from "../src/platforms/vk/vk-link-starter.js";
 
 /**
@@ -99,7 +99,7 @@ describe("сообщество VK в настройке", () => {
     const schema = SETTINGS.vkCommunity.schema;
     expect(SETTINGS.vkCommunity.key).toBe("vk.community");
     expect(SETTINGS.vkCommunity.fallback).toBe("");
-    expect(SETTINGS.vkCommunity.fromEnv(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv))).toBeNull();
+    expect((SETTINGS.vkCommunity as SettingDefinition).fromEnv(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv))).toBeNull();
     for (const ok of ["", "https://vk.com/rubezh_game", "rubezh_game", "club123456"]) expect(schema.safeParse(ok).success, ok).toBe(true);
     for (const bad of ["http://vk.com/x", "https://example.com/x", "два слова", "https://vk.com/a/b"]) expect(schema.safeParse(bad).success, bad).toBe(false);
   });

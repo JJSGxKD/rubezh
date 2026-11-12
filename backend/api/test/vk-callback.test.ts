@@ -16,6 +16,7 @@ import { VkCommunity } from "../src/platforms/vk/vk-community.js";
 import type { VkMessageEvent } from "../src/platforms/vk/vk-events.js";
 import { VkEventQueue } from "../src/platforms/vk/vk-event-queue.js";
 import { VkUpdatesWorker } from "../src/platforms/vk/vk-updates.worker.js";
+import { AUTH_ENV } from "./helpers/auth-env.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 
 /**
@@ -416,7 +417,7 @@ describe("ключи сообщества VK в каталоге", () => {
   it("все три ключа — сервис «VK», ключ сообщества и строка подтверждения только из панели", () => {
     for (const secret of [SECRETS.vkCommunityToken, SECRETS.vkCallbackSecret, SECRETS.vkCallbackConfirmation]) {
       expect(secret.service).toContain("VK");
-      expect(secret.fromEnv(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv))).toBeNull();
+      expect((secret as SecretDefinition).fromEnv(loadAppConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv))).toBeNull();
     }
     expect(SECRETS.vkCommunityToken.key).toBe("vk.community-token");
     expect(SECRETS.vkCallbackSecret.key).toBe("vk.callback-secret");
@@ -490,7 +491,8 @@ describe.skipIf(REDIS_URL === "")("очередь событий VK на жив�
   it("событие доходит до воркера, а повтор event_id обрабатывается один раз", async () => {
     const seen: string[] = [];
     const worker = { handle: async (incoming: VkMessageEvent) => void seen.push(incoming.eventId ?? "") } as unknown as VkUpdatesWorker;
-    const live = new VkEventQueue(loadAppConfig({ NODE_ENV: "test", REDIS_URL } as NodeJS.ProcessEnv), worker);
+    // Очередь запускается при включённом входе игроков: связывать без аккаунтов нечего.
+    const live = new VkEventQueue(loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, REDIS_URL } as NodeJS.ProcessEnv), worker);
     await live.onApplicationBootstrap();
     queue = live;
     const id = `live-${String(Date.now())}-${String(Math.floor(Math.random() * 1_000_000))}`;

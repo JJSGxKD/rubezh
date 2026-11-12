@@ -1,6 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VK_API_VERSION, SECRETS, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
+import { SECRETS, VK_API_VERSION, type SecretDefinition } from "../src/modules/secrets/secret-catalog.js";
 import type { SecretsReader } from "../src/modules/secrets/secrets.service.js";
 import { SETTINGS, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
