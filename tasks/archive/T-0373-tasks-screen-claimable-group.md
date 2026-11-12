@@ -34,7 +34,7 @@ batch: 4
 
 # T-0373. Экран заданий — юзернейм бота только на «День», «Можно забрать» группой наверху вкладки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0373.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0373.json)](../README.md#значки-статуса)
 
 ## Зачем
 

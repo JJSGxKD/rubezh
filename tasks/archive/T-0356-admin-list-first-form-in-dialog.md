@@ -30,7 +30,7 @@ batch: 4
 
 # T-0356. Панель — список первым, форма «Новое …» и «Изменить» в окне: Задания, Главная, Журнал, Флаги
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0356.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0356.json)](../README.md#значки-статуса)
 
 ## Зачем
 
