@@ -1771,3 +1771,62 @@ describe("виды по сигналу клиента в каталоге (T-037
     expect(taskGroup({ kind: "story_share", period: "weekly" })).toBe("weekly");
   });
 });
+
+describe("заказчик партнёрского задания: модель оплаты, ставка, срок удержания", () => {
+  const sold = (patch: Partial<TaskDef> = {}) => channelTask({ customer: "Канал «Игровой угол»", payModel: "cpa", rate: 40, holdDays: 3, ...patch });
+  const message = (task: TaskDef) => {
+    const result = taskDefSchema.safeParse(task);
+    return result.success ? null : result.error.issues.map((issue) => issue.message).join("; ");
+  };
+
+  it("CPA и RS со ставкой и сроком проходят; без заказчика — задание своё", () => {
+    expect(taskDefSchema.safeParse(sold()).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 1_250, holdDays: 7 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ holdDays: 0 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(channelTask()).success).toBe(true);
+  });
+
+  it("заказчик без модели и модель без заказчика — ошибка; ставка идёт вместе с моделью", () => {
+    expect(taskDefSchema.safeParse(sold({ payModel: null, rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ rate: 40 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "x".repeat(81) })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "   " })).success).toBe(false);
+  });
+
+  it("ставка: CPA — целые центы до 100 000, RS — сотые доли процента от 1 до 10 000", () => {
+    expect(taskDefSchema.safeParse(sold({ rate: 100_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ rate: 100_001 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 0 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 1.5 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_001 })).success).toBe(false);
+  });
+
+  it("срок удержания — 0, 1, 3 или 7; у ссылки и бота — только 0", () => {
+    for (const days of [0, 1, 3, 7]) expect(taskDefSchema.safeParse(sold({ holdDays: days })).success).toBe(true);
+    for (const days of [2, 5, 14, -1]) expect(taskDefSchema.safeParse(sold({ holdDays: days })).success).toBe(false);
+    const link = def("ach_link", { period: "achievement", kind: "link", params: { url: "https://example.com" }, target: 1, coins: 10, customer: "Сайт", payModel: "cpa", rate: 10 });
+    expect(taskDefSchema.safeParse(link).success).toBe(true);
+    expect(message({ ...link, holdDays: 3 })).toContain("Удержание проверяется только у подписки на канал");
+    expect(taskDefSchema.safeParse({ ...link, kind: "bot", holdDays: 1 }).success).toBe(false);
+  });
+
+  it("цель забега с заказчиком или сроком — ошибка", () => {
+    expect(taskDefSchema.safeParse(def("daily_runs", { customer: "Канал", payModel: "cpa", rate: 10 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_runs", { holdDays: 1 })).success).toBe(false);
+  });
+
+  it("старое тело без полей — умолчания: задание своё, удержания нет", () => {
+    const old = Object.fromEntries(Object.entries(channelTask()).filter(([key]) => !["customer", "payModel", "rate", "holdDays"].includes(key)));
+    expect(taskDefSchema.parse(old)).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+  });
+
+  it("игрок полей заказчика не получает", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(sold({ taskId: "ach_sold" }));
+    const view = byId(await ctx.service.view(PLAYER, NOON), "ach_sold");
+    for (const field of ["customer", "payModel", "rate", "holdDays"]) expect(view).not.toHaveProperty(field);
+  });
+});
