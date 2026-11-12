@@ -23,7 +23,7 @@ describe("страница не прокручивается вбок", () => {
   });
 
   it("Screen: прокрутчик вниз, но не вбок", () => {
-    const html = renderToStaticMarkup(createElement(Screen, {}, "x"));
+    const html = renderToStaticMarkup(createElement(Screen, { children: "x" }));
     const classes = /class="([^"]*\boverflow-y-auto\b[^"]*)"/.exec(html)?.[1] ?? "";
     expect(classes).toMatch(/\boverflow-x-hidden\b/);
   });
