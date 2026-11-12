@@ -18,8 +18,8 @@ describe("Ледяной дух", () => {
       hp: 22,
       speed: 90,
       damage: 6,
-      xp: 4,
-      threat: 4,
+      xp: 2,
+      threat: 3.8,
       pattern: "orbit",
       element: "cold",
       statusChance: 0.35,
@@ -30,7 +30,7 @@ describe("Ледяной дух", () => {
 
   it("приходит отдельно в расписанном отрезке после 240 с, потом в смеси бесконечного режима", () => {
     const segment = TIMELINE.find((entry) => entry.fromSec > 240 && entry.spawns.some((spawn) => spawn.enemy === "ice_spirit"));
-    expect(segment?.spawns.find((spawn) => spawn.enemy === "ice_spirit")).toMatchObject({ perSec: 0.5, burst: 4 });
+    expect(segment?.spawns.find((spawn) => spawn.enemy === "ice_spirit")).toMatchObject({ perSec: 0.2, burst: 4 });
     expect(ENDLESS_CURVE.pool).toContain("ice_spirit");
   });
 });
@@ -68,9 +68,11 @@ describe("Кистень и «Круговерть»", () => {
     expect(ratio).toBeLessThanOrEqual(EVOLUTION_POWER_RATIO.max);
   });
 
-  it("кистень открывается на 18-м уровне аккаунта, эволюция вместе с ним", () => {
-    expect(unlocksAt(ACCOUNT_UNLOCKS, 17).weapons.has("flail")).toBe(false);
-    expect(unlocksAt(ACCOUNT_UNLOCKS, 18).weapons.has("flail")).toBe(true);
+  it("кистень открывается на 15-м уровне аккаунта, эволюция вместе с ним", () => {
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 14).weapons.has("flail")).toBe(false);
+    expect(unlocksAt(ACCOUNT_UNLOCKS, 15).weapons.has("flail")).toBe(true);
+    // Верхний уровень лестницы не сдвигается: от него зависит потолок предмета профиля «полный арсенал».
+    expect(Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level))).toBe(16);
     // Эволюция в лестницу не вносится: открыта вместе с базовым.
     expect(ACCOUNT_UNLOCKS.some((row) => row.weapons?.includes("whirl") === true)).toBe(false);
   });
