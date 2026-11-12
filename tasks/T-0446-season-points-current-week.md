@@ -3,8 +3,8 @@ id: T-0446
 title: Недельный сезон по очкам с идущей недели — панель пускает, таблица пересобирается сама
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
@@ -18,6 +18,11 @@ shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - docs/10-progression-and-ladder.md
   - docs/30-configuration-map.md
+  - backend/api/test/seasons.test.ts
+  - backend/api/test/seasons.integration.test.ts
+  - backend/api/test/rating-boards.integration.test.ts
+  - backend/api/test/rating-style.integration.test.ts
+  - backend/api/test/run-review.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

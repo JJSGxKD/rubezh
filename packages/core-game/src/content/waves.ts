@@ -115,6 +115,9 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "mire_shambler", perSec: 0.2 },
       { enemy: "bomber_imp", perSec: 0.45 },
       { enemy: "tank_ghoul", perSec: 0.2 },
+      // Выход редкий: бюджет угрозы отрезка не должен упасть ниже следующего
+      // (300 с), а новичок с частым духом уходит за коридор лесенки.
+      { enemy: "ice_spirit", perSec: 0.2, burst: 4 },
     ],
     events: [{ kind: "flank", enemy: "swarm_rat", count: 18 }],
   },
@@ -168,6 +171,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     "tank_ghoul",
     "bone_walker",
     "mire_shambler",
+    "ice_spirit",
   ],
   startTypes: 5,
   typesPerSegment: 1,

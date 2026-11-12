@@ -3,8 +3,8 @@ id: T-0281
 title: Новый контент, данные — враг Ледяной дух и оружие Кистень с эволюцией «Круговерть» на готовых паттерне и поведении
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0120]
@@ -18,13 +18,19 @@ shared:
   - packages/core-game/src/content/weapons.ts
   - packages/core-game/src/content/unlocks.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/game/render/WorldRenderer.ts
+  - packages/core-game/src/game/render/orbiter-points.ts
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/item-icons.tsx
   - packages/app-shell/src/audio/recipes.ts
+  - packages/app-shell/src/audio/sound-director.ts
   - packages/app-shell/test/**
   - backend/api/src/modules/tasks/task-rules.ts
   - docs/32-balance.md
+  - apps/admin/src/api/tasks.ts
+  - packages/core-game/src/game/balance/power-profiles.ts
+  - packages/app-shell/src/i18n/ru-team.json
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -88,7 +94,9 @@ batch: 6
     обновляется;
   - один уровень `{ damage: 90, cooldownSec: 1.0, projectiles: 2, areaRadius: 100, projectileSpeed: 340 }`;
   - сила в коридоре `EVOLUTION_POWER_RATIO`. Не прошла — числа правятся до коридора, в PR — замер.
-- **Открытие** — `unlocks.ts`: Кистень на уровне 18 (новая строка). Последний
+- **Открытие** — `unlocks.ts`: Кистень на уровне 15 (новая строка; решение тимлида
+  12.11.2026: не выше 16 — иначе верхний уровень лестницы сдвигает потолок
+  предмета профиля «полный арсенал» и всю калибровку). Последний
   уровень лестницы — тот, где открыто всё, слоты равны `LOADOUT_LIMITS`.
 - **Тексты** `ru.json`:
   - `enemy.ice_spirit.name` — «Ледяной дух»;
@@ -134,7 +142,7 @@ batch: 6
 1. **Тест первым коммитом** — `new-content-wave1.test.ts`:
    - дух и кистень в контенте;
    - эволюция в коридоре;
-   - кистень открыт на 18.
+   - кистень открыт на 15.
 2. **Данные** — враг, таймлайн, оружие, эволюция, открытие.
 3. **Тексты, значок, облик, звук.**
 4. **Эталоны** — golden-тесты обновляются в том же PR; в описании —
@@ -166,7 +174,7 @@ batch: 6
 ## Критерии приёмки
 
 - [ ] Ледяной дух приходит отдельно, потом в смеси; касание морозит.
-- [ ] Кистень открывается на 18-м уровне, эволюционирует в «Круговерть».
+- [ ] Кистень открывается на 15-м уровне, эволюционирует в «Круговерть».
 - [ ] Гайдбук, значок, звук и тексты на месте; эталоны обновлены с замером.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
@@ -180,5 +188,5 @@ batch: 6
   ```
   📋 **СВОДКА: В DEV ВЛИТ PR #<номер> — ЛЕДЯНОЙ ДУХ И КИСТЕНЬ**
 
-  Новый контент: Ледяной дух — кружит широким кольцом и морозит касанием; Кистень — тяжёлый груз на цепи, открывается на 18-м уровне, эволюция «Круговерть». Числа стартовые, геймдизайнер калибрует.
+  Новый контент: Ледяной дух — кружит широким кольцом и морозит касанием; Кистень — тяжёлый груз на цепи, открывается на 15-м уровне, эволюция «Круговерть». Числа стартовые, геймдизайнер калибрует.
   ```

@@ -106,6 +106,7 @@ export const WEAPON_EVOLUTIONS = {
   starfall: "spark",
   tempest: "storm",
   blade_whirl: "knife",
+  whirl: "flail",
   frost_crown: "wardstone",
   forge: "hearth",
   viper: "sting",
