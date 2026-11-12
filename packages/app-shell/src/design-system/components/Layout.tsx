@@ -43,7 +43,7 @@ export function Screen(props: ScreenProps): ReactNode {
       )}
       {/* Под шапкой разделов — отступ её высоты: содержимое начинается под ней,
           а при прокрутке уходит под стекло. Внутри раздела отступ нулевой. */}
-      <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pt-[var(--app-header-h)] pb-4 ${wide ? "px-7" : "px-4"}`}>
+      <div className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain pt-[var(--app-header-h)] pb-4 ${wide ? "px-7" : "px-4"}`}>
         <ConnectionBanner />
         {props.aside === undefined ? (
           props.children
@@ -338,7 +338,7 @@ export function SegmentedControl(props: {
 
   if (tabs) {
     return (
-      <div className="relative border-b border-border">
+      <div className="relative min-w-0 border-b border-border">
         <div
           ref={list}
           role="tablist"
@@ -379,7 +379,7 @@ export function SegmentedControl(props: {
   }
 
   return (
-    <div ref={list} role="tablist" aria-label={props.label} className="surface-sunken relative flex gap-1 overflow-x-auto rounded-lg p-1 [scrollbar-width:none]">
+    <div ref={list} role="tablist" aria-label={props.label} className="surface-sunken relative flex min-w-0 gap-1 overflow-x-auto rounded-lg p-1 [scrollbar-width:none]">
       {props.items.map((item) => {
         const active = item.id === props.activeId;
         return (
