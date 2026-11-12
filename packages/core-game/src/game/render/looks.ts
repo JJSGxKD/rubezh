@@ -171,7 +171,7 @@ export function stageCore(stage: number): number | null {
   return STAGE_LOOKS[Math.min(stage, STAGE_LOOKS.length - 1)]?.core ?? null;
 }
 
-function mixChannels(from: number, to: number, ratio: number): number {
+export function mixChannels(from: number, to: number, ratio: number): number {
   const channel = (shift: number): number => {
     const a = (from >> shift) & 0xff;
     const b = (to >> shift) & 0xff;
