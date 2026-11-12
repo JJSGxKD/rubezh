@@ -3,8 +3,8 @@ id: T-0428
 title: Удалить интеграцию AdSonar — сеть закрылась, вырезаем под корень
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
