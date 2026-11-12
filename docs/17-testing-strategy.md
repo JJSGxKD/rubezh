@@ -433,6 +433,12 @@ CI не входит). Окно 390×844, анимации не урезаютс
 Расчёт замеров — чистые функции `scripts/fx/frames-core.mjs`, тесты —
 `scripts/test/fx-frames.test.ts`.
 
+**Единая проверка** — `pnpm fx:check [--scenes a,b] [--sounds x,y] [--changed]
+[--base ветка] [--url адрес] [--out var/fx]`: `--changed` выбирает по диффу
+ветки (рецепты и синтез — звуки, оружие и `game/render/` — сцены), пишет
+`<out>/report.md` с таблицами для PR; код 1 — ошибка звука или вспышки чаще
+трёх в секунду. Тесты — `scripts/test/fx-check.test.ts`.
+
 ---
 
 ## 9. Гейты и покрытие
