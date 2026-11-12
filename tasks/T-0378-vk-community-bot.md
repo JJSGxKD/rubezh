@@ -3,7 +3,7 @@ id: T-0378
 title: Сообщество VK — бот сообщества связывает аккаунт и проверяет вступление
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -18,7 +18,13 @@ shared:
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/infra/outbound/outbound-services.ts
   - backend/api/src/app.module.ts
+  - backend/api/src/platforms/platforms.module.ts
+  - backend/api/src/modules/external-identity/external-identity.module.ts
+  - backend/api/src/modules/admin/admin-secrets.service.ts
+  - backend/api/test/secrets.test.ts
+  - backend/api/test/outbound.test.ts
   - docs/20-env-and-ports.md
+  - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/35-stage4-plan.md
 runner: any
