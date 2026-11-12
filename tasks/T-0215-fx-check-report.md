@@ -3,7 +3,7 @@ id: T-0215
 title: Отчёт проверки звука и эффектов — `pnpm fx:check`, таблица в описание PR
 epic: E0
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
