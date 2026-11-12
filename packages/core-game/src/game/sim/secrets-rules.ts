@@ -10,7 +10,7 @@ import {
 import type { EnemyType } from "../patterns/enemy-types";
 import { LOADOUT_BOUNDS } from "../progression/run-loadout";
 import { segmentStartSec } from "./timeline";
-import type { ElitePoolStep } from "./world";
+import { BASE_PLAYER_SPEED_PX_SEC, type ElitePoolStep } from "./world";
 
 /**
  * Правила тайников как данные: проверка `content/secrets.ts` и чтение числа из
@@ -22,6 +22,13 @@ const ALLOWED_CHEST_SIZES: readonly number[] = [1, 3, 5];
 /** Коридор срока волны разлома, секунды: короче — не успеть дойти, длиннее — разлом висит весь забег. */
 const RIFT_TIME_LIMIT_MIN_SEC = 20;
 const RIFT_TIME_LIMIT_MAX_SEC = 300;
+
+/** Коридоры шага огонька, единицы: короче шаг не читается, длиннее — не видно, куда он ведёт; доля отклонения не больше 1,2. */
+const WISP_HOP_MIN = 80;
+const WISP_HOP_MAX = 600;
+const WISP_SWAY_MAX = 1.2;
+const WISP_WAIT_MIN = 40;
+const WISP_WAIT_MAX = 400;
 
 export function findSecretsProblems(def: SecretsDef): string[] {
   const problems: string[] = [];
@@ -95,7 +102,23 @@ export function findSecretsProblems(def: SecretsDef): string[] {
   if (!(Number.isFinite(def.wisp.appearSec) && def.wisp.appearSec >= 0)) {
     problems.push(`secrets.wisp.appearSec — не меньше 0, сейчас ${def.wisp.appearSec}`);
   }
-  if (!positive(def.wisp.speed)) problems.push(`secrets.wisp.speed — больше 0, сейчас ${def.wisp.speed}`);
+  // Быстрее бега игрока огонёк не догнать: ведёт он, а не убегает.
+  if (!(positive(def.wisp.speed) && def.wisp.speed < BASE_PLAYER_SPEED_PX_SEC)) {
+    problems.push(`secrets.wisp.speed — больше 0 и меньше бега игрока (${BASE_PLAYER_SPEED_PX_SEC}), сейчас ${def.wisp.speed}`);
+  }
+  const { hopUnits, swayMin, swayMax, waitUnits } = def.wisp;
+  if (!(Number.isFinite(hopUnits) && hopUnits >= WISP_HOP_MIN && hopUnits <= WISP_HOP_MAX)) {
+    problems.push(`secrets.wisp.hopUnits — от ${WISP_HOP_MIN} до ${WISP_HOP_MAX}, сейчас ${hopUnits}`);
+  }
+  if (!(Number.isFinite(swayMin) && swayMin >= 0)) {
+    problems.push(`secrets.wisp.swayMin — не меньше 0, сейчас ${swayMin}`);
+  }
+  if (!(Number.isFinite(swayMax) && swayMax <= WISP_SWAY_MAX && swayMax >= swayMin)) {
+    problems.push(`secrets.wisp.swayMax — от swayMin (${swayMin}) до ${WISP_SWAY_MAX}, сейчас ${swayMax}`);
+  }
+  if (!(Number.isFinite(waitUnits) && waitUnits >= WISP_WAIT_MIN && waitUnits <= WISP_WAIT_MAX)) {
+    problems.push(`secrets.wisp.waitUnits — от ${WISP_WAIT_MIN} до ${WISP_WAIT_MAX}, сейчас ${waitUnits}`);
+  }
 
   const seen = new Set<string>();
   def.blessings.forEach((blessing, i) => {

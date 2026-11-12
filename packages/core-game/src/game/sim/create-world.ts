@@ -53,7 +53,7 @@ import { findContinueProblems } from "./continue";
 import { findDropsContentProblems } from "./gems";
 import { MAX_PICKUPS } from "./pickups";
 import { createEnemyPool, createGemPool, createPickupPool, createProjectilePool, NO_OWNER_TYPE } from "./pools";
-import { MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
+import { BASE_PLAYER_SPEED_PX_SEC, MAX_CONTINUES_PER_RUN, NO_CHEATS, type PlayerConfig, type SimConfig, type World } from "./world";
 
 /**
  * Создание мира вынесено из world.ts: там состояние забега и операции над
@@ -114,7 +114,7 @@ const FALLBACK_SECRETS: SecretsDef = {
   stone: { radius: 30 },
   tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
   rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5, timeLimitSec: 90 },
-  wisp: { appearSec: 90, speed: 80 },
+  wisp: { appearSec: 90, speed: 150, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 },
   blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
 
@@ -163,7 +163,7 @@ export const DEFAULT_SIM_CONFIG: SimConfig = {
   player: {
     radius: 10,
     maxHp: 100,
-    speedPxSec: 190,
+    speedPxSec: BASE_PLAYER_SPEED_PX_SEC,
     accelerationPxSec2: 1900,
     attackDamage: 6,
     attackCooldownSec: 0.28,

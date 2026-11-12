@@ -36,6 +36,12 @@ const MIN_DAMAGE_RATIO = 0.1;
 export const TICK_HZ = 60;
 export const TICK_SEC = 1 / TICK_HZ;
 
+/**
+ * Бег игрока по умолчанию, единицы в секунду (до масштаба мира): потолок скорости огонька в
+ * проверке тайников — быстрее бега его не догнать.
+ */
+export const BASE_PLAYER_SPEED_PX_SEC = 190;
+
 export interface PlayerConfig {
   radius: number;
   maxHp: number;
@@ -297,6 +303,13 @@ export interface SecretSite {
   wave: SecretWaveEnemy[];
   /** разлом Нави: сколько тиков идёт волна — по ним отсчитывается срок `timeLimitSec`; остальные виды — ноль */
   waveTicks: number;
+  /** огонёк: сколько шагов сделал — чётность задаёт сторону отклонения следующего; остальные виды — ноль */
+  hops: number;
+  /** огонёк: летит к точке `hopX, hopY`; остальные виды — всегда `false` */
+  flying: boolean;
+  /** огонёк: куда летит, пока `flying`; остальные виды — ноль */
+  hopX: number;
+  hopY: number;
 }
 
 /**

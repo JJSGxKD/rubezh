@@ -72,7 +72,7 @@ export function createSecretState(
 const WISP_RING = -1;
 
 function newSite(kind: SecretKind, ring: number, active: boolean): SecretSite {
-  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [], waveTicks: 0 };
+  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [], waveTicks: 0, hops: 0, flying: false, hopX: 0, hopY: 0 };
 }
 
 function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {
