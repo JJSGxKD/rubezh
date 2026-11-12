@@ -3,8 +3,8 @@ id: T-0428
 title: Удалить интеграцию AdSonar — сеть закрылась, вырезаем под корень
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -36,6 +36,7 @@ zones:
   - docs/27-design-system-and-app-shell.md
   - docs/28-diagnostics.md
 shared:
+  - backend/api/test/ad-networks.test.ts
   - packages/adapter-telegram/src/index.ts
   - packages/shared-types/src/index.ts
   - apps/admin/src/ui/help.ts
@@ -52,7 +53,7 @@ batch: 4
 
 # T-0428. Удалить интеграцию AdSonar — сеть закрылась, вырезаем под корень
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0428.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0428.json)](../README.md#значки-статуса)
 
 ## Зачем
 

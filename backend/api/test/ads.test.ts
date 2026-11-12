@@ -131,7 +131,7 @@ describe("числа рекламы", () => {
         entry("adsgram", at(NOON, -300), { shownAt: at(NOON, -299), claimedAt: at(NOON, -298) }),
         entry("richads", at(NOON, -200), { shownAt: at(NOON, -199), claimedAt: at(NOON, -198) }),
         entry("taddy", at(NOON, -30)),
-        entry("adsonar", at(NOON, -61)),
+        entry("richads", at(NOON, -61)),
       ],
       dayStart,
       NOON,
@@ -156,28 +156,26 @@ describe("числа рекламы", () => {
 
   it("порядок сетей: без истории — по приоритету, круг — от сети последней награды, выданная за час — в конце очереди", () => {
     const networks = [
-      { networkKey: "richads", priority: 30 },
+      { networkKey: "taddy", priority: 40 },
       { networkKey: "adsgram", priority: 10 },
-      { networkKey: "adsonar", priority: 20 },
-      { networkKey: "taddy", priority: 30 },
+      { networkKey: "richads", priority: 30 },
     ];
     const keys = (order: { networkKey: string }[]) => order.map((network) => network.networkKey);
-    expect(keys(networkOrder(networks, new Map(), null))).toEqual(["adsgram", "adsonar", "richads", "taddy"]);
-    expect(keys(networkOrder(networks, new Map(), "adsonar"))).toEqual(["richads", "taddy", "adsgram", "adsonar"]);
-    expect(keys(networkOrder(networks, new Map([["richads", 1]]), "adsonar"))).toEqual(["taddy", "adsgram", "adsonar"]);
-    expect(keys(networkOrder(networks, new Map(), "gone"))).toEqual(["adsgram", "adsonar", "richads", "taddy"]);
+    expect(keys(networkOrder(networks, new Map(), null))).toEqual(["adsgram", "richads", "taddy"]);
+    expect(keys(networkOrder(networks, new Map(), "richads"))).toEqual(["taddy", "adsgram", "richads"]);
+    expect(keys(networkOrder(networks, new Map([["adsgram", 1]]), "richads"))).toEqual(["taddy", "richads"]);
+    expect(keys(networkOrder(networks, new Map(), "gone"))).toEqual(["adsgram", "richads", "taddy"]);
     const allSeen = new Map([
       ["adsgram", 40],
-      ["adsonar", 10],
       ["richads", 30],
       ["taddy", 20],
     ]);
-    expect(keys(networkOrder(networks, allSeen, "adsgram"))).toEqual(["adsonar", "taddy", "richads", "adsgram"]);
+    expect(keys(networkOrder(networks, allSeen, "adsgram"))).toEqual(["taddy", "richads", "adsgram"]);
   });
 
   it("блоки места — по площадке сети и устройству; пустой список площадок — везде, где работает сеть, неизвестное устройство — только туда, где не ограничено", () => {
     const everywhere = block("adsgram", 10);
-    const telegramOnly = block("adsonar", 20, { platforms: ["telegram"] });
+    const telegramOnly = block("taddy", 20, { platforms: ["telegram"] });
     // Заведён до площадок в профиле: VK сети чужая — блок не выдаётся нигде.
     const withVk = block("richads", 25, { platforms: ["telegram", "vk"] });
     const mobile = block("richads", 30, { devices: ["android", "ios"] });
@@ -199,7 +197,7 @@ describe("выдача показа", () => {
 
   it("первой — сеть с высшим приоритетом; сессия живёт по условию успеха, SDK получает блок, формат места и ключи сети", async () => {
     const adsgram = block("adsgram", 10);
-    const { service, repository } = setup([block("adsonar", 20), adsgram]);
+    const { service, repository } = setup([block("richads", 20), adsgram]);
     const offer = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
     expect(offer).toMatchObject({ network: "adsgram", blockId: adsgram.externalId, format: "rewarded", keys: {}, success: "view", expiresAt: at(NOON, SESSION_TTL_MIN.view).toISOString() });
     // Сеть без блока в кабинете показывает по своим ключам — их SDK и получает.
@@ -215,7 +213,7 @@ describe("выдача показа", () => {
   });
 
   it("тестовые показы — по настройке панели, сразу на следующей выдаче; по умолчанию — боевые", async () => {
-    const { service, settings } = setup([block("adsgram", 10), block("adsonar", 20)]);
+    const { service, settings } = setup([block("adsgram", 10), block("richads", 20)]);
     expect(offered(await service.offer(TELEGRAM, "wheel_spin", NOON)).debug).toBe(false);
     settings.set("ads.test-mode", true);
     expect(offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, 1))).debug).toBe(true);
@@ -237,24 +235,24 @@ describe("выдача показа", () => {
   });
 
   it("отказ первой сети уводит к следующей, все на паузе — к давнее всех выданной", async () => {
-    const { service } = setup([block("adsgram", 10), block("adsonar", 20), block("richads", 30)]);
+    const { service } = setup([block("adsgram", 10), block("richads", 20), block("taddy", 30)]);
     const networks: string[] = [];
     for (let attempt = 0; attempt < 4; attempt++) {
       const offer = offered(await service.offer(TELEGRAM, "wheel_spin", at(NOON, attempt)));
       networks.push(offer.network);
       await service.report(ME, offer.sessionId, { kind: "failed", reason: "no_fill" }, at(NOON, attempt));
     }
-    expect(networks).toEqual(["adsgram", "adsonar", "richads", "adsgram"]);
+    expect(networks).toEqual(["adsgram", "richads", "taddy", "adsgram"]);
   });
 
   it("после награды круг идёт дальше от её сети, а не с начала", async () => {
-    const { service } = setup([block("adsgram", 10, { place: "run_double" }), block("adsonar", 20, { place: "run_double" }), block("richads", 30, { place: "run_double" })]);
+    const { service } = setup([block("adsgram", 10, { place: "run_double" }), block("richads", 20, { place: "run_double" }), block("taddy", 30, { place: "run_double" })]);
     const first = await watch(service, "run_double", NOON);
     expect(first.network).toBe("adsgram");
     // Через два часа пауза сети прошла, но круг помнит последнюю награду суток.
     const second = await watch(service, "run_double", at(NOON, 120));
-    expect(second.network).toBe("adsonar");
-    expect(offered(await service.offer(TELEGRAM, "run_double", at(NOON, 240))).network).toBe("richads");
+    expect(second.network).toBe("richads");
+    expect(offered(await service.offer(TELEGRAM, "run_double", at(NOON, 240))).network).toBe("taddy");
   });
 
   it("внутри сети блок выбирается случайно", async () => {
@@ -684,7 +682,7 @@ describe("межстраничная по площадкам (WP12, часть 1
 
   it("ролик за награду на экране держит паузу, а невыданный — нет", async () => {
     const { service, repository, viewer } = gated();
-    repository.blocks.push(block("adsonar", 20, { place: "wheel_spin" }));
+    repository.blocks.push(block("richads", 20, { place: "wheel_spin" }));
     const wheel = offered(await service.offer(viewer, "wheel_spin", at(NOON, -5)));
     expect((await service.offer(viewer, "interstitial", NOON)).available).toBe(true);
     await service.report(ME, wheel.sessionId, { kind: "shown" }, at(NOON, -4));
@@ -756,7 +754,7 @@ describe("забор награды хозяином места", () => {
   });
 
   it("две досмотренные сессии, выданные до кулдауна, вторую награду не дают", async () => {
-    const { service } = setup([block("adsgram", 10), block("adsonar", 20)]);
+    const { service } = setup([block("adsgram", 10), block("richads", 20)]);
     const first = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
     const second = offered(await service.offer(TELEGRAM, "wheel_spin", NOON));
     for (const offer of [first, second]) await service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1));
@@ -824,7 +822,7 @@ describe("реклама без ролика (VIP)", () => {
 
   it("VIP кончился — снова сети по кругу, а награда без ролика в истории круг не ломает", async () => {
     const until = at(NOON, 10);
-    const { service } = withPass([block("adsgram", 10, { place: "run_double" }), block("adsonar", 20, { place: "run_double" })], until);
+    const { service } = withPass([block("adsgram", 10, { place: "run_double" }), block("richads", 20, { place: "run_double" })], until);
     const vip = offered(await service.offer(TELEGRAM, "run_double", NOON));
     await service.claim(ME, vip.sessionId, "run_double", NOON);
     const after = offered(await service.offer(TELEGRAM, "run_double", at(NOON, 60)));

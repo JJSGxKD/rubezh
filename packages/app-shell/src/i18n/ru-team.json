@@ -261,7 +261,6 @@
   "adsCheck.startLike.hint": "Только для межстраничной: не успела за 2 секунды — исход «late».",
   "adsCheck.network.off": "выключена",
   "adsCheck.block.off": "выключен",
-  "adsCheck.sonarNote": "Режим AdSonar (тестовый или боевой) задаёт первый показ после запуска игры. Чтобы сменить, перезапусти игру.",
   "adsCheck.format.rewarded": "За награду",
   "adsCheck.format.interstitial": "Межстраничная",
   "adsCheck.place.second_chance": "Второй шанс",

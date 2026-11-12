@@ -92,6 +92,8 @@ export class WorldRenderer {
    * виду этого не узнать.
    */
   private readonly enemySpriteSize: Float32Array;
+  /** Тон спрайта слота (−1 — без тона): смена ступени без смены вида обязана перекрасить. */
+  private readonly enemySpriteTint: Int32Array;
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   /** ключи текстур по паре «тип и ступень»: индекс = тип × число ступеней + ступень */
@@ -129,6 +131,7 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
     this.enemySpriteSize = new Float32Array(world.config.maxEnemies);
+    this.enemySpriteTint = new Int32Array(world.config.maxEnemies).fill(-1);
     this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
@@ -285,6 +288,7 @@ export class WorldRenderer {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
+      this.enemySpriteTint.fill(-1);
       this.pickups.setArt(this.art.pickupArt());
       this.secrets.setArt(this.art.secretArt(), this.art.scale);
       this.feedback.setDeathArt(this.art.deathArt());
@@ -530,8 +534,11 @@ export class WorldRenderer {
     // Кадр атласа другого размера, чем фигура: смена «фигура ↔ арт» — тоже смена вида.
     const art = this.art.shows(index);
     const key = art ? look + LOOK_ART : look;
-    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && sprite.visible) return;
+    const tint = art ? this.art.tintOf(index) : null;
+    const tintKey = tint ?? -1;
+    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && this.enemySpriteTint[index] === tintKey && sprite.visible) return;
     this.enemySpriteLook[index] = key;
+    this.enemySpriteTint[index] = tintKey;
     this.enemySpriteSize[index] = size;
     // Фигура строится по радиусу типа, `size` в нём уже есть; кадр атласа рисуется
     // постоянным масштабом, и без множителя хитбокс с рисунком разошлись бы.
@@ -547,6 +554,7 @@ export class WorldRenderer {
     if (look === LOOK.warning || look === LOOK.hit) sprite.setTintFill(0xffffff);
     else if (look === LOOK.frozen || look === LOOK.frozenBlink) sprite.setTintFill(WORLD_COLORS.freezeTint);
     else if (look > LOOK.status) sprite.setTintFill(STATUS_TONE_COLORS[look - LOOK.status] ?? 0xffffff);
+    else if (tint !== null) sprite.setTint(tint);
     else sprite.clearTint();
   }
 

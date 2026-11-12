@@ -165,6 +165,15 @@ describe("журнал аудита", () => {
     expect(auditObject(unranked)).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
   });
 
+  it("решения разбора забега (Р203) — три подписи, объект — игрок", () => {
+    expect(actionTitle("players.run.honest")).toBe("Разбор: честный забег");
+    expect(actionTitle("players.run.annul")).toBe("Разбор: забег аннулирован");
+    expect(actionTitle("players.run.restore")).toBe("Разбор: аннулирование отменено");
+    for (const action of ["players.run.honest", "players.run.annul", "players.run.restore"]) {
+      expect(auditObject(entry({ action, target: ACCOUNT, targetName: "Оля", after: { runId: "9a1b2c3d-0000-4000-8000-000000000001", comment: "проверили" } }))).toMatchObject({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
+    }
+  });
+
   it("объект: имя и ссылка на его экран, а где экрана нет — без ссылки", () => {
     expect(auditObject(entry({ action: "players.ban", target: ACCOUNT, targetName: "Оля" }))).toEqual({ kind: "игрок", label: "Оля", route: { section: "players", id: ACCOUNT } });
     // Аккаунт удалён — имени нет, остаётся начало id.

@@ -178,6 +178,9 @@ erDiagram
         string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
         string band "nullable: полоса силы ожидаемого: novice…full"
         jsonb score_input "nullable: сила на старте, журнал охоты, оценка сборки — для runs:rescore"
+        string review_outcome "nullable: honest|annulled — решение разбора (Р203)"
+        datetime reviewed_at "nullable"
+        uuid reviewed_by "nullable: кто решил, без FK"
     }
 
     ACCOUNT_SESSION {
@@ -789,7 +792,7 @@ erDiagram
     }
 
     AD_NETWORK {
-        string network_key PK "adsgram, adsonar, richads, taddy"
+        string network_key PK "adsgram, richads, taddy"
         string name
         boolean active "из миграции — выключены"
         int priority "меньше — раньше в круге"
@@ -2305,6 +2308,7 @@ flowchart LR
         TOOLS["roles: инструменты команды<br/>режим разработчика, стресс-тест —<br/>по праву и настройке, реализовано"]
         BOT["platforms/telegram: бот<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
         TGADP["platforms/telegram: адаптер<br/>проверка запуска, оплата Stars,<br/>обновления оплаты, реализовано"]
+        MAXADP["platforms/max: бот заданий-каналов<br/>вебхук с секретом, очередь Redis, ответы по коду,<br/>подписка вебхука у MAX, проверка подписки, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
@@ -2563,6 +2567,10 @@ flowchart LR
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
     TASKS -. "канал другой площадки: id игрока там и ссылка на бота (Р188)" .-> EXTIDENT
+    TASKS -. "порт ChannelMemberships: GET /chats/{id}/members (канал MAX, Р188)" .-> MAXADP
+    MAXADP -. "порт ExternalLinkStarters: ссылка на бота; consume(max, код, id игрока)" .-> EXTIDENT
+    MAXADP -- "очередь max-updates: событие bot_started до ответа 200" --> REDIS
+    MAXADP -- "подписка вебхука, личное сообщение, участники канала (max.bot)" --> OUTBOUND
     EXTIDENT -- "external_identity: пара «площадка + id» за аккаунтом" --> PG
     EXTIDENT -- "ext-link:код на 30 минут, GETDEL; лимит выдачи" --> REDIS
     EXTIDENT -. "серверное событие external_account_linked" .-> EVENTS
@@ -2671,7 +2679,7 @@ flowchart LR
 вход, приёмник, оплата — не знают Telegram, а просят порты
 `platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт,
 состоит ли игрок в канале и что значит ответ Bot API, знает адаптер
-`platforms/telegram/`; у MAX и VK — заглушки. Бот и инструменты команды в чате администраторов порта не
+`platforms/telegram/`; у MAX — адаптер бота заданий-каналов `platforms/max/` (связь аккаунтов и проверка подписки на канал, игру он не портирует), у VK пока заглушка. Бот и инструменты команды в чате администраторов порта не
 требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
@@ -3881,8 +3889,41 @@ sequenceDiagram
 ```
 
 «Вернуть» — тот же путь в обратную сторону: вернуть можно только забег,
-снятый модератором, — с честным вердиктом, без читов и не под
-ограничением.
+снятый модератором, — без читов и не под ограничением, с честным
+вердиктом или признанный честным разбором; аннулированный разбором
+возвращается только отменой аннулирования.
+
+Решения разбора забега (Р203, T-0419) ведут в те же `setRanked`: решение
+пишется условным обновлением `run.review_outcome`, а доски и недельная
+таблица текущего сезона пересчитываются по базе. Закрытые сезоны,
+`season_result`, награды и кошелёк не меняются:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель: отчёт забега
+    participant V as runs: RunReviewService
+    participant S as runs: RunsService
+    participant DB as Postgres
+    participant Z as Redis: доски
+
+    P->>V: «Честный» / «Аннулировать» / «Вернуть забег»
+    V->>DB: UPDATE run SET review_outcome … WHERE прежнее состояние допустимо
+    alt обновление не прошло (гонка)
+        V->>DB: перечитать строку — то же решение, отказ или повтор
+    else решение записано
+        V->>DB: аудит players.run.honest / annul / restore
+        alt «Аннулировать» и забег в рейтинге
+            V->>S: setRanked(false) — снять с досок
+        else «Честный» или «Вернуть забег», забег годен для рейтинга
+            V->>S: setRanked(true) — вернуть в текущие доски
+        end
+        S->>DB: лучший оставшийся рейтинговый забег сложности
+        S->>Z: доска сложности; недельная таблица текущего сезона — по базе
+        S->>DB: аудит players.run.unrank / rerank
+    end
+    V-->>P: отчёт забега (RunReportView)
+```
 
 ### 4.22 Предпросмотр черновика из панели (этап 4, реализовано)
 
@@ -4701,8 +4742,10 @@ sequenceDiagram
 ничего: подписался, забрал, отписался. Р115 (`35-stage4-plan.md`,
 `tasks/T-0178`) держит награду неделю: сервер перепроверяет подписку и
 списывает награду отписавшемуся. Площадку домен знает только через порт
-`ChannelMemberships` (`platforms/ports/channel-membership.ts`); у площадок без
-проверки (MAX, VK) окна нет и штрафа нет.
+`ChannelMemberships` (`platforms/ports/channel-membership.ts`). Окно заводится
+только для канала своей площадки игрока (Telegram): каналы MAX и VK проверяет бот
+той площадки по id игрока там, а окно знает лишь id своей площадки, поэтому
+перепроверки отписки у чужих каналов нет и штрафа нет.
 
 ```mermaid
 sequenceDiagram
@@ -4769,14 +4812,14 @@ sequenceDiagram
   тик; от двойной работы на одной паре защищает ещё и замок пары. Площадку под
   замком и внутри транзакции не спрашивают (`15-engineering-standards.md` §4.2).
 
-### 4.37 Связь аккаунта с MAX и VK: код, бот, проверка подписки (этап 4, реализована серверная часть)
+### 4.37 Связь аккаунта с MAX и VK: код, бот, проверка подписки (этап 4, реализовано: MAX — T-0379, VK — T-0378)
 
 Игрок Telegram берёт задание «подпишитесь на канал MAX» (Р188,
 `35-stage4-plan.md`, `tasks/T-0377`). Сервер проверит подписку, только если
 знает, кто этот игрок на MAX: бот площадки связывает его id с игровым аккаунтом
-по одноразовому коду. Боты — T-0378 (VK) и T-0379 (MAX); здесь — то, что они
-вызывают. Пока ни один бот не подключён, каналы MAX и VK не видны никому, кроме
-игроков самой площадки.
+по одноразовому коду. Боты — T-0378 (VK) и T-0379 (MAX, поток бота — §4.38); здесь —
+то, что они вызывают. Пока бот площадки не подключён, её каналы не видны никому,
+кроме игроков самой площадки.
 
 ```mermaid
 sequenceDiagram
@@ -4785,7 +4828,7 @@ sequenceDiagram
     participant T as TasksService
     participant I as ExternalIdentityService
     participant R as Redis
-    participant B as Бот площадки (T-0378, T-0379)
+    participant B as Бот площадки (MAX — §4.38, VK — T-0378)
     participant P as Postgres external_identity
     participant M as Порт ChannelMemberships
 
@@ -4834,6 +4877,78 @@ sequenceDiagram
   есть и проверка подписки (`ChannelMemberships`), и ссылка на бота
   (`ExternalLinkStarters`, `startUrl` не `null`). Задания каналов своей
   площадки работают как раньше.
+
+### 4.38 Бот MAX: подписка вебхука, очередь событий, ответ игроку (этап 4, реализовано)
+
+Бот MAX служит росту канала и игру не портирует (Р188, `tasks/T-0379`). Он
+принимает от MAX одно событие — `bot_started` со ссылки с кодом, — связывает
+аккаунты (§4.37) и отвечает игроку ссылкой на канал. Включается ключом: пока в
+«Ключах интеграций» нет ключа бота и секрета вебхука, вебхук отвечает 404.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as MaxSubscriptionService
+    participant X as Bot API MAX
+    participant I as Игрок в MAX
+    participant W as MaxWebhookController
+    participant Q as Redis, очередь max-updates
+    participant H as MaxUpdatesWorker
+    participant E as ExternalIdentityService
+    participant T as Репозиторий заданий
+
+    Note over S,X: при старте и раз в минуту, если есть ключ, секрет и https-адрес API
+    S->>X: GET /subscriptions
+    alt подписки на адрес вебхука с bot_started нет, либо сменился ключ или секрет
+        S->>X: POST /subscriptions — адрес, тип bot_started, секрет
+    end
+
+    I->>X: открывает max.ru/бот?start=код и жмёт «Начать»
+    X->>W: POST /api/v1/max/webhook, заголовок X-Max-Bot-Api-Secret
+    alt нет ключа бота или секрета
+        W-->>X: 404
+    else секрет не совпал (постоянное время, до разбора тела)
+        W-->>X: 401
+    else событие bot_started
+        W->>Q: add, id задания — игрок, время события и хеш кода
+        alt Redis недоступен
+            W-->>X: 503, MAX повторит доставку до 10 раз за 8 часов
+        else записано, повтор того же события — то же задание
+            W-->>X: 200
+        end
+    else прочие типы событий
+        W-->>X: 200 без обработки
+    end
+
+    Q->>H: задание bot_started
+    alt payload пуст
+        H->>X: POST /messages — «открой задание в игре»
+    else есть код
+        H->>E: consume(max, код, id игрока в MAX)
+        alt связь не записалась
+            E-->>H: ошибка, задание повторится по расписанию BullMQ
+        else linked или already
+            H->>T: каталог, адреса включённых заданий-каналов MAX
+            H->>X: POST /messages — «Готово!» и до трёх кнопок-ссылок
+        else taken или expired
+            H->>X: POST /messages — свой текст, без кнопки
+        end
+    end
+```
+
+- **Секрет подписки — единственная защита вебхука.** Неугадываемый путь ею не
+  считается. Подчёркивание из секрета, который создаёт панель, заменяется
+  дефисом: описание поля у MAX допускает латиницу, цифры и дефис.
+- **События не теряются и не дублируются.** Запись в Redis — до ответа 200; у
+  события MAX нет идентификатора, поэтому id задания собирается из игрока,
+  времени события и хеша кода (сам код в Redis открытым не лежит). Выполненное
+  задание помнится сутки: MAX повторяет доставку до 8 часов.
+- **Ответ игроку не повторяется.** Код забирается один раз: упавшая отправка —
+  только строка лога, а повтор `consume` ответил бы связанному игроку «ссылка
+  устарела». Задание повторяется лишь тогда, когда связь не записалась.
+- **Подписка на канал** — `GET /chats/{chatId}/members?user_ids=…` ботом —
+  администратором канала: пустой ответ — не подписан; сеть, 429 и 5xx — «позже»;
+  нет канала, бот не администратор, неверный ключ — ошибка настройки задания.
 
 ## 5. Топология развёртывания
 

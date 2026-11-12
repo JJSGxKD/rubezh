@@ -121,7 +121,7 @@ describe("реклама за награду", () => {
   });
 
   it("закрыл раньше — шаг «показан», награды нет, второго ролика тоже", async () => {
-    const h = harness({ offers: [offer("adsgram"), offer("adsonar")], outcomes: [{ kind: "closed" }] });
+    const h = harness({ offers: [offer("adsgram"), offer("richads")], outcomes: [{ kind: "closed" }] });
     expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "closed" });
     expect(h.offers).toHaveLength(1);
     expect(h.reports).toEqual([{ sessionId: "session-adsgram", step: { outcome: "shown" } }]);
@@ -129,21 +129,21 @@ describe("реклама за награду", () => {
   });
 
   it("у сети нет рекламы — отказ в воронку и одна попытка с другой сетью", async () => {
-    const h = harness({ offers: [offer("adsgram"), offer("adsonar")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "completed" }] });
-    expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "watched", sessionId: "session-adsonar", source: "ad" });
+    const h = harness({ offers: [offer("adsgram"), offer("richads")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "completed" }] });
+    expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "watched", sessionId: "session-richads", source: "ad" });
     expect(h.reports.map((report) => report.step)).toEqual([{ outcome: "failed", reason: "no_fill" }, { outcome: "completed" }]);
     expect(h.events.map((entry) => [entry.event, entry.payload["network"], entry.payload["attempt"]])).toEqual([
       ["ad_failed", "adsgram", 1],
-      ["ad_shown", "adsonar", undefined],
+      ["ad_shown", "richads", undefined],
     ]);
   });
 
   it("обе сети пусты — «рекламы нет»; скрипт не загрузился — «проверьте связь»; больше двух сетей не пробуем", async () => {
-    const empty = harness({ offers: [offer("adsgram"), offer("adsonar"), offer("richads")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "failed", reason: "no_fill" }] });
+    const empty = harness({ offers: [offer("adsgram"), offer("richads"), offer("taddy")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "failed", reason: "no_fill" }] });
     expect(await watchAd("wheel_spin", empty.deps)).toEqual({ kind: "no_ads" });
     expect(empty.offers).toHaveLength(2);
 
-    const offline = harness({ offers: [offer("adsgram"), offer("adsonar")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "failed", reason: "load_failed" }] });
+    const offline = harness({ offers: [offer("adsgram"), offer("richads")], outcomes: [{ kind: "failed", reason: "no_fill" }, { kind: "failed", reason: "load_failed" }] });
     expect(await watchAd("wheel_spin", offline.deps)).toEqual({ kind: "failed" });
   });
 
@@ -155,7 +155,7 @@ describe("реклама за награду", () => {
   });
 
   it("SDK молчал до таймаута — второй ролик подряд не заказываем", async () => {
-    const h = harness({ offers: [offer("adsgram"), offer("adsonar")], outcomes: [{ kind: "failed", reason: "timeout" }] });
+    const h = harness({ offers: [offer("adsgram"), offer("richads")], outcomes: [{ kind: "failed", reason: "timeout" }] });
     expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "failed" });
     expect(h.offers).toHaveLength(1);
   });
@@ -187,7 +187,7 @@ describe("реклама за награду", () => {
   });
 
   it("площадка без рекламы сетей — «рекламы нет» сразу, а VIP всё равно получает награду", async () => {
-    const h = harness({ offers: [offer("adsgram"), offer("adsonar")], show: false });
+    const h = harness({ offers: [offer("adsgram"), offer("richads")], show: false });
     expect(await watchAd("wheel_spin", h.deps)).toEqual({ kind: "no_ads" });
     expect(h.offers).toHaveLength(1);
     expect(h.reports).toEqual([{ sessionId: "session-adsgram", step: { outcome: "failed", reason: "unsupported" } }]);
@@ -200,9 +200,9 @@ describe("реклама за награду", () => {
     const future = offer("adsgram", { format: "playable" });
     expect(future.ok && future.data.available && requestOf(future.data)).toBeNull();
 
-    const h = harness({ offers: [future, offer("adsonar")], outcomes: [{ kind: "completed" }] });
-    expect(await watchAd("wheel_spin", h.deps)).toMatchObject({ kind: "watched", sessionId: "session-adsonar" });
-    expect(h.shown.map((request) => request.network)).toEqual(["adsonar"]);
+    const h = harness({ offers: [future, offer("richads")], outcomes: [{ kind: "completed" }] });
+    expect(await watchAd("wheel_spin", h.deps)).toMatchObject({ kind: "watched", sessionId: "session-richads" });
+    expect(h.shown.map((request) => request.network)).toEqual(["richads"]);
     expect(h.reports[0]?.step).toEqual({ outcome: "failed", reason: "unsupported" });
   });
 });
