@@ -23,6 +23,7 @@ import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
+import { AdminPaymentsController } from "./admin-payments.controller.js";
 import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
@@ -125,6 +126,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminMediaController,
     AdminRestrictionsController,
     AdminPurchasesController,
+    AdminPaymentsController,
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,
