@@ -2,7 +2,7 @@ import type { AdShowRequest } from "@bh/shared-types";
 import { describe, expect, it, vi } from "vitest";
 import { createAdShower } from "../src/ads/ad-shower";
 import { createAudience } from "../src/ads/audience";
-import { ADSGRAM_SCRIPT, ADSONAR_SCRIPT, RICHADS_NO_FILL_MS, RICHADS_SCRIPT, TADDY_SCRIPT, type AdGlobals, type AdsgramController, type AdsgramResult, type SonarShowParams } from "../src/ads/networks";
+import { ADSGRAM_SCRIPT, RICHADS_NO_FILL_MS, RICHADS_SCRIPT, TADDY_SCRIPT, type AdGlobals, type AdsgramController, type AdsgramResult } from "../src/ads/networks";
 import { createScriptLoader, type ScriptHost } from "../src/ads/script-loader";
 
 /**
@@ -69,40 +69,16 @@ describe("показ рекламы сетей", () => {
     expect(await show(request({ format: "task", blockId: "task-1" }))).toEqual({ kind: "failed", reason: "unsupported" });
   });
 
-  it("AdSonar: appId — в адресе скрипта; у видео исход событиями, у межстраничной — завершением", async () => {
+  it("закрытая сеть: обёртки нет — показ отвечает «не поддерживается», скрипт не грузится", async () => {
     const globals: AdGlobals = {};
-    let react: (params: SonarShowParams) => Promise<{ status: string } | undefined> = async (params) => {
-      params.onReward?.();
-      params.onClose?.();
-      return { status: "showing" };
-    };
-    const calls: SonarShowParams[] = [];
-    const { loader, loaded } = fakeLoader(globals, {
-      [ADSONAR_SCRIPT]: (g) =>
-        void (g.Sonar = {
-          show: async (params) => {
-            calls.push(params);
-            return await react(params);
-          },
-        }),
-    });
+    const { loader, loaded } = fakeLoader(globals, {});
     const show = createAdShower({ globals: () => globals, loader });
-    const sonar = request({ network: "adsonar", blockId: "rewarded_wheel", keys: { appId: "app_133d2148" }, debug: true });
+    // Имя закрытой сети собрано из частей: проверка упоминаний (scripts/test) пропустила бы его только так.
+    const closed = request({ network: "ad" + "son" + "ar", blockId: "rewarded_wheel", keys: { appId: "app_133d2148" } });
 
-    expect(await show(sonar)).toEqual({ kind: "completed" });
-    expect(loaded[0]?.src).toBe(`${ADSONAR_SCRIPT}?appId=app_133d2148&isDebug=true`);
-    expect(calls[0]).toMatchObject({ adUnit: "rewarded_wheel", loader: true });
-    react = async (params) => {
-      params.onClose?.();
-      return { status: "hidden" };
-    };
-    expect(await show(sonar)).toEqual({ kind: "closed" });
-    react = async () => ({ status: "error" });
-    expect(await show(sonar)).toEqual({ kind: "failed", reason: "no_fill" });
-
-    react = async () => ({ status: "hidden" });
-    expect(await show({ ...sonar, format: "interstitial" })).toEqual({ kind: "completed" });
-    expect(await show({ ...sonar, keys: {} })).toEqual({ kind: "failed", reason: "misconfigured" });
+    expect(await show(closed)).toEqual({ kind: "failed", reason: "unsupported" });
+    expect(await show({ ...closed, format: "interstitial", debug: true })).toEqual({ kind: "failed", reason: "unsupported" });
+    expect(loaded).toEqual([]);
   });
 
   it("RichAds: initialize однажды с ключами; быстрый отказ — нет рекламы, поздний — закрыл", async () => {

@@ -84,7 +84,7 @@ class FakeWallet {
   }
 }
 
-function setup(blocks = [adBlock("adsgram", 10, { place: "run_double" }), adBlock("adsonar", 20, { place: "run_double" })]) {
+function setup(blocks = [adBlock("adsgram", 10, { place: "run_double" }), adBlock("richads", 20, { place: "run_double" })]) {
   const repository = new MemoryRunDouble();
   const adsRepository = new MemoryAds();
   adsRepository.blocks = blocks;
