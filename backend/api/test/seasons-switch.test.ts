@@ -43,7 +43,7 @@ function setup(options: { lock?: "OK" | null; weekBests?: () => Promise<{ accoun
     },
   };
   const repository = { weekBests: vi.fn(options.weekBests ?? (async () => [{ accountId: "a", score: 1_200 }])) };
-  const redis = { set: vi.fn(async () => options.lock ?? "OK"), eval: vi.fn(async () => 1) };
+  const redis = { set: vi.fn(async () => (options.lock === undefined ? "OK" : options.lock)), eval: vi.fn(async () => 1) };
   const rating = { boardsFor: async () => [], separate: async () => [] as string[] };
   const restrictions = { restrictedAccounts: async () => [] as string[], status: async () => null };
   const projection = new SeasonsProjection(
