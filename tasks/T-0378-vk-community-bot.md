@@ -3,8 +3,8 @@ id: T-0378
 title: Сообщество VK — бот сообщества связывает аккаунт и проверяет вступление
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0377]
