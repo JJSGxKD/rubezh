@@ -16,6 +16,7 @@ zones:
   - packages/app-shell/test/runs-api.test.ts
 shared:
   - packages/app-shell/src/i18n/ru-home.json
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
