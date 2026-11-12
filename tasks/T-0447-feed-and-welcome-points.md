@@ -28,6 +28,7 @@ shared:
   - packages/app-shell/src/i18n/ru-home.json
   - docs/22-analytics-and-metrics.md
   - backend/api/test/feed.http.test.ts
+  - backend/api/test/boards-by-viewer.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
