@@ -18,6 +18,9 @@ shared:
   - apps/admin/src/screens/Shell.tsx
   - apps/admin/src/state/use-attention.ts
   - backend/api/src/modules/admin/admin.module.ts
+  - design/art/direction-v2.md
+  - docs/21-diagrams.md
+  - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
 effort: medium
