@@ -55,7 +55,7 @@ describe("атлас покрывает контент", () => {
 
   it("у обычного врага на любой ступени контента есть кадр", () => {
     for (const enemy of ENEMIES) {
-      if (enemy.rank !== undefined && enemy.rank !== "normal") continue;
+      if (enemy.rank !== undefined) continue;
       for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
         expect(artStageFor(stage, (s) => frames.has(enemyFrameName(enemy.id, s, 0))), `${enemy.id} s${String(stage)}`).toBeGreaterThanOrEqual(0);
       }
