@@ -231,6 +231,9 @@ describe("плитка «Лучший забег» по очкам (Р212)", () 
   it("вид: gap говорит очками, без очков — прежняя разметка со временем", () => {
     const gap = renderToStaticMarkup(createElement(RecordPointsView, { face: { state: "gap", points: 2340, bestSec: 760, gapPoints: 140 }, size: "hero" }));
     expect(gap).toContain("не хватило 140 очков");
+    const gapTile = renderToStaticMarkup(createElement(RecordPointsView, { face: { state: "gap", points: 12340, bestSec: 760, gapPoints: 1140 }, size: "tile" }));
+    expect(gapTile).toContain(`не хватило ${formatNumber(1140)}`);
+    expect(gapTile).not.toContain("очков");
     const time = renderToStaticMarkup(createElement(RecordView, { face: { state: "best", bestSec: 760, runs: 7 }, size: "hero" }));
     expect(time).toContain("12:40");
     expect(time).not.toContain("340");

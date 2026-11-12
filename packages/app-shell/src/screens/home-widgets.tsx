@@ -633,7 +633,8 @@ export function RecordPointsView(props: { face: RecordPointsFace; size: WidgetSi
       sub = t("widget.record.fresh");
       break;
     case "gap":
-      sub = t("widget.record.gapPoints", { points: formatNumber(face.gapPoints), count: face.gapPoints });
+      // На плитке 320 px «не хватило 1 140 очков» обрезается: слово «очков» опускаем.
+      sub = size === "tile" ? t("widget.record.gapPointsShort", { points: formatNumber(face.gapPoints) }) : t("widget.record.gapPoints", { points: formatNumber(face.gapPoints), count: face.gapPoints });
       break;
     case "best":
       sub = t("lobby.runs", { count: face.runs });
