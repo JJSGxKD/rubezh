@@ -87,7 +87,7 @@ describe("разбор ответа ленты", () => {
 });
 
 describe("обновление ленты", () => {
-  const DATA: FeedData = { items: [{ id: "a", kind: "boss", name: "Ян", atMs: NOW - 1_000, seconds: null }], refreshSec: 300 };
+  const DATA: FeedData = { items: [{ id: "a", kind: "boss", name: "Ян", atMs: NOW - 1_000, seconds: null, points: null }], refreshSec: 300 };
 
   function counting(results: ApiResult<FeedData>[] = []): FeedApi & { asked: number } {
     const api = {
