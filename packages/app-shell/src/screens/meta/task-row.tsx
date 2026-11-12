@@ -10,6 +10,7 @@ import { BOOST_RUN_GLYPH, GameGlyph, WEAPON_GLYPHS, XP_CRYSTAL_GLYPH } from "../
 import { formatCountdown, msUntilReset } from "./schedule";
 import { TaskImage } from "./task-image";
 import { RewardChips } from "./task-reward";
+import { recheckHintDays } from "./tasks-rules";
 
 /**
  * Строка задания — та, что игрок видит в «Заданиях»
@@ -87,6 +88,7 @@ export function TaskRow(props: {
   const place = props.closed ? null : slotsText(task.slots, Date.now());
   const title = taskTitle(task);
   const hint = taskHint(task);
+  const recheckDays = recheckHintDays(task);
 
   return (
     <Card appearIndex={props.index} stripe={claimable ? "accent" : undefined}>
@@ -120,6 +122,7 @@ export function TaskRow(props: {
             ) : null}
           </div>
           {hint === null ? null : <p className="mt-0.5 text-xs text-text-muted">{hint}</p>}
+          {recheckDays === null ? null : <p className="mt-0.5 text-xs text-text-muted">{t("tasks.recheck", { days: recheckDays })}</p>}
           {place === null ? null : <p className="mt-0.5 font-display text-xs font-semibold text-accent">{t(place.key, place.params)}</p>}
           {link === null ? (
             <div className="mt-2">

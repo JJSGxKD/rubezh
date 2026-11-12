@@ -632,6 +632,7 @@ Phaser 3 + Vite (`01-tech-stack.md` §2). Компоненты не перено
 | Хуки показа рекламы | `src/app/_components/ads/use*.ts` | **Переработка**, см. §5 |
 | `EnvUnsupported`, `ErrorBoundary`, `CheckPlatform` | `src/app/(tma)/_components/*` | **Только идея.** Сценарий «Mini App открыли не из Telegram» обрабатывается явно, а не белым экраном |
 | `next.config.ts` | — | **Не берём**, но учесть урок: блок security-заголовков там закомментирован целиком (§2.1 H). У нас CSP настраивается сразу |
+| SVG-флаги стран | `public/flags/*.svg` | **Берём как ассеты** (разрешение владельца, Р201): сжатые svgo скриптом `scripts/admin/import-flags.mjs`, строчными именами в `apps/admin/public/flags/`; файлы проверяются на скрипты и внешние ссылки |
 
 ---
 

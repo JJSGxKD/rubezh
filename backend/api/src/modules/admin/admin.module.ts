@@ -23,6 +23,7 @@ import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
+import { AdminPaymentsController } from "./admin-payments.controller.js";
 import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
@@ -34,6 +35,7 @@ import { AdminNameRulesController } from "./admin-name-rules.controller.js";
 import { AdminNameRulesStatsController } from "./admin-name-rules-stats.controller.js";
 import { AdminProxiesController } from "./admin-proxies.controller.js";
 import { AdminProxySubscriptionController } from "./admin-proxy-subscription.controller.js";
+import { AdminProxyTrafficController } from "./admin-proxy-traffic.controller.js";
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
@@ -73,6 +75,7 @@ import { AdminPlayersController } from "./admin-players.controller.js";
 import { AdminPlayersService } from "./admin-players.service.js";
 import { AdminReviewController } from "./admin-review.controller.js";
 import { AdminRunsController } from "./admin-runs.controller.js";
+import { AdminRunReviewController } from "./admin-run-review.controller.js";
 import { AdminRatingController } from "./admin-rating.controller.js";
 import { SeasonsModule } from "../seasons/seasons.module.js";
 import { AdminRolesController } from "./admin-roles.controller.js";
@@ -87,6 +90,11 @@ import { PanelLoginService } from "./panel-login.service.js";
 import { PANEL_LOGIN_STORE, RedisPanelLoginStore } from "./panel-login.store.js";
 import { RoleConfirmations } from "./role-confirmations.js";
 import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js";
+import { AdminPulseController } from "./admin-pulse.controller.js";
+import { AdminPulseService } from "./admin-pulse.service.js";
+import { OnlineCoreModule } from "../online/online-core.module.js";
+import { CSP_REPORTS_REPOSITORY, RedisCspReportsRepository } from "../csp-reports/csp-reports.repository.js";
+import { CspReportsService } from "../csp-reports/csp-reports.service.js";
 
 /**
  * Серверная часть админ-панели (docs/35-stage4-plan.md, WP17;
@@ -97,12 +105,13 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
     AdminReviewController,
     AdminRunsController,
+    AdminRunReviewController,
     AdminRatingController,
     AdminOverviewController,
     AdminAllTimeController,
@@ -122,12 +131,14 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminMediaController,
     AdminRestrictionsController,
     AdminPurchasesController,
+    AdminPaymentsController,
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,
     AdminNameRuleCandidatesController,
     AdminProxiesController,
     AdminProxySubscriptionController,
+    AdminProxyTrafficController,
     AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,
@@ -136,6 +147,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminRequestsController,
     AdminUiClicksController,
     AdminContentController,
+    AdminPulseController,
   ],
   providers: [
     AdminSessionService,
@@ -159,6 +171,11 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     // Журнал запросов читает только панель; запись — в глобальном `RequestJournalModule`
     { provide: REQUEST_JOURNAL_READER, useClass: PrismaRequestJournalRepository },
     RequestJournalService,
+    // Пульс в шапке (T-0360) только читает сводку блокировок клиента: `CspReportsModule`
+    // импортирует `AdminModule` ради гарда, поэтому сервис здесь свой, а не из того модуля
+    { provide: CSP_REPORTS_REPOSITORY, useClass: RedisCspReportsRepository },
+    CspReportsService,
+    AdminPulseService,
   ],
   // Гард панели закрывает маршруты модулей, у которых контроллер вне `AdminModule`.
   // Он экспортируется вместе с сервисом сессий: `@UseGuards(...)` Nest собирает в

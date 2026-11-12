@@ -1,3 +1,4 @@
+import { Logger } from "@nestjs/common";
 import { buildXrayConfig, type PlacedNode } from "@bh/proxy-kit";
 import type { SubscriptionRepository } from "./subscription.repository.js";
 import type { ConfigPart, ConfigWriter } from "./xray-config-writer.js";
@@ -10,6 +11,10 @@ import type { ConfigPart, ConfigWriter } from "./xray-config-writer.js";
  *
  * Звать только под общим замком `proxy-subscription:refresh:lock`: сборка читает
  * части и пишет конфиг, и две параллельные сборки затёрли бы друг друга.
+ *
+ * Учёт трафика (Р192, tasks/T-0386): с `xray.statsPort` в конфиг входят счётчики
+ * выходов и служба их чтения. После записи Xray перезапускается и счётчики
+ * обнуляются, поэтому перед записью зовётся `beforeWrite` — сборщик успевает их снять.
  */
 
 /** Внутри сети tunnel вход слушает на всех интерфейсах: API живёт в другом контейнере. Порты наружу не публикуются. */
@@ -18,7 +23,10 @@ export const XRAY_LISTEN = "0.0.0.0";
 export interface AssemblyDeps {
   repository: Pick<SubscriptionRepository, "list">;
   writer: ConfigWriter;
-  xray: { basePort: number; slotCount: number };
+  /** `statsPort` не задан — конфиг без счётчиков трафика */
+  xray: { basePort: number; slotCount: number; statsPort?: number };
+  /** снять счётчики перед записью конфига; его сбой запись не останавливает */
+  beforeWrite?: () => Promise<void>;
 }
 
 export interface AssemblyResult {
@@ -51,8 +59,21 @@ async function collect(deps: AssemblyDeps, override?: { key: string; part: Confi
  */
 export async function assembleConfig(deps: AssemblyDeps, override?: { key: string; part: ConfigPart }): Promise<AssemblyResult> {
   const { placed, missing } = await collect(deps, override);
-  await deps.writer.write(buildXrayConfig(placed, { ...deps.xray, listen: XRAY_LISTEN }));
+  const { basePort, slotCount, statsPort } = deps.xray;
+  const config = buildXrayConfig(placed, { basePort, slotCount, listen: XRAY_LISTEN, ...(statsPort === undefined ? {} : { stats: { port: statsPort } }) });
+  await flushBefore(deps);
+  await deps.writer.write(config);
   return { missing };
+}
+
+/** Снятие счётчиков не стоит конфига: ошибка уходит в лог без текста, запись идёт дальше. */
+async function flushBefore(deps: AssemblyDeps): Promise<void> {
+  if (deps.beforeWrite === undefined) return;
+  try {
+    await deps.beforeWrite();
+  } catch (error: unknown) {
+    new Logger("proxy-traffic").warn(JSON.stringify({ module: "proxy-traffic", event: "flush_failed", reason: error instanceof Error ? error.name : "unknown" }));
+  }
 }
 
 /** Включённые подписки без годной части — без записи конфига: расписание по ним решает, кого обновить. */

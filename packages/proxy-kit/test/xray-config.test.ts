@@ -143,8 +143,61 @@ describe("входы и правила", () => {
   });
 });
 
+describe("счётчики трафика (docs/35-stage4-plan.md Р192, tasks/T-0386)", () => {
+  type Stats = {
+    stats?: unknown;
+    api?: { tag: string; listen: string; services: string[] };
+    policy?: { system: Record<string, unknown> };
+    inbounds: { tag: string; port: number }[];
+    routing: { rules: unknown[] };
+  };
+  const STATS = { port: 10799 };
+
+  it("без stats конфиг прежний: блоков stats, api и policy нет", () => {
+    const config = buildXrayConfig([placed("main", node(L.VLESS_REALITY), 0)], OPTIONS);
+    expect(Object.keys(config)).toEqual(["log", "inbounds", "outbounds", "routing"]);
+  });
+
+  it("со stats — те же входы, выходы и правила, плюс три блока; совпадает с золотым файлом", () => {
+    const source = node(L.VLESS_REALITY);
+    const config = buildXrayConfig([placed("main", source, 0)], { ...OPTIONS, stats: STATS });
+    expect(config).toEqual(golden("vless-reality-stats", source));
+  });
+
+  it("служба API одна — StatsService; слушает адрес входов и порт из stats; правил маршрутизации под API не добавляется", () => {
+    const config = buildXrayConfig([placed("main", node(L.VLESS_REALITY), 0)], { ...OPTIONS, listen: "0.0.0.0", stats: STATS }) as Stats;
+    expect(config.api).toEqual({ tag: "api", listen: "0.0.0.0:10799", services: ["StatsService"] });
+    expect(config.stats).toEqual({});
+    expect(config.policy).toEqual({ system: { statsOutboundUplink: true, statsOutboundDownlink: true } });
+    // Счётчики входов и пользователей не включаются: нужны только выходы.
+    expect(Object.keys(config.policy?.system ?? {}).sort()).toEqual(["statsOutboundDownlink", "statsOutboundUplink"]);
+    expect(config.routing.rules).toHaveLength(1);
+    expect(config.inbounds.map((inbound) => inbound.tag)).toEqual(["in-0"]);
+  });
+
+  it("пустой список узлов со stats — валидный конфиг: счётчики есть, входов нет", () => {
+    const config = buildXrayConfig([], { ...OPTIONS, stats: STATS }) as Stats;
+    expect(config.api?.services).toEqual(["StatsService"]);
+    expect(config.inbounds).toEqual([]);
+  });
+
+  it("порт статистики внутри диапазона SOCKS-входов — RangeError: два слушателя на одном порту", () => {
+    const first = placed("main", node(L.VLESS_REALITY), 0);
+    expect(() => buildXrayConfig([first], { ...OPTIONS, stats: { port: 10800 } })).toThrow(RangeError);
+    expect(() => buildXrayConfig([first], { ...OPTIONS, stats: { port: 10807 } })).toThrow(RangeError);
+    expect(() => buildXrayConfig([first], { ...OPTIONS, stats: { port: 10808 } })).not.toThrow();
+    expect(() => buildXrayConfig([first], { ...OPTIONS, stats: { port: 10799 } })).not.toThrow();
+  });
+
+  it("порт статистики не целое или вне 1…65535 — RangeError", () => {
+    for (const port of [0, -1, 1.5, 65_536, Number.NaN]) {
+      expect(() => buildXrayConfig([], { ...OPTIONS, stats: { port } }), String(port)).toThrow(RangeError);
+    }
+  });
+});
+
 describe("слоты", () => {
-  const options = (patch: Partial<{ slotCount: number; reserved: ReadonlySet<number>; limit: number }> = {}) => ({ slotCount: 8, reserved: new Set<number>(), limit: 8, ...patch });
+  const options =(patch: Partial<{ slotCount: number; reserved: ReadonlySet<number>; limit: number }> = {}) => ({ slotCount: 8, reserved: new Set<number>(), limit: 8, ...patch });
 
   it("прежние слоты сохраняются при смене порядка", () => {
     const previous = new Map([["a", 0], ["b", 1], ["c", 2]]);

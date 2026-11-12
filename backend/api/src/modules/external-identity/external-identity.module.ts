@@ -7,10 +7,10 @@ import { ExternalIdentityService } from "./external-identity.service.js";
 import { LINK_CODE_STORE, RedisLinkCodes } from "./link-codes.js";
 
 /**
- * Стартеры ботов площадок: единственное место, где адаптер MAX или VK
- * подключает себя к связи аккаунтов (docs/35-stage4-plan.md Р188). Пока ботов
- * нет, список пуст: ни одна площадка не подключена, и каналы MAX и VK не
- * видны игрокам Telegram. Адаптеры добавят себя в T-0378 (VK) и T-0379 (MAX).
+ * Стартеры ботов площадок (docs/35-stage4-plan.md Р188). Список начинается
+ * пустым: адаптер площадки сам подключает себя при старте своего модуля
+ * (`ExternalLinkStarters.register`), так что домен адаптеров не импортирует.
+ * Пока площадка не подключена, её каналы не видны игрокам других площадок.
  */
 export function externalLinkStartersFor(): ExternalLinkStarters {
   return new ExternalLinkStarters([]);
