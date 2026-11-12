@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { formatCountdown } from "../src/screens/meta/schedule";
 import type { DailyWidget, WheelWidget } from "../src/state/home-api";
-import { arrangeWidgets, dailyFace, recordFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
-import { Frame, FriendsView, TasksView, WheelView } from "../src/screens/home-widgets";
+import { arrangeWidgets, dailyFace, recordFace, recordPointsFace, tasksFace, wheelFace, type WidgetReadiness } from "../src/screens/home-widget-rules";
+import { Frame, FriendsView, RecordView, TasksView, WheelView } from "../src/screens/home-widgets";
 
 // Виджеты главной (docs/35-stage4-plan.md WP42, часть 3): готовое к забору —
 // первым и во всю ширину, дыр в сетке нет; что говорит каждый виджет —
@@ -194,5 +194,44 @@ describe("подпись виджета читается и на готовом"
   it("подпись берёт цвет из переменной, по умолчанию — приглушённый", () => {
     const html = renderToStaticMarkup(createElement(WheelView, { face: wheelFace(WHEEL, true, NOW, true), size: "hero", now: NOW }));
     expect(html).toContain("text-[var(--widget-label,var(--color-text-muted))]");
+  });
+});
+
+describe("плитка «Лучший забег» по очкам (Р212)", () => {
+  it("без очков — null, плитка остаётся по времени", () => {
+    expect(recordPointsFace(null, null, 3)).toBeNull();
+    expect(recordPointsFace({ points: null, survivalSec: 760 }, 100, 3)).toBeNull();
+    expect(recordPointsFace({ survivalSec: 760 }, 100, 3)).toBeNull();
+  });
+
+  it("последнего забега нет — лучший с временем и числом забегов", () => {
+    expect(recordPointsFace({ points: 2340, survivalSec: 760 }, null, 7)).toEqual({ state: "best", points: 2340, bestSec: 760, runs: 7 });
+  });
+
+  it("последний меньше лучшего — разница в очках", () => {
+    expect(recordPointsFace({ points: 2340, survivalSec: 760 }, 2200, 7)).toEqual({ state: "gap", points: 2340, bestSec: 760, gapPoints: 140 });
+  });
+
+  it("последний равен или больше лучшего — рекорд с очками последнего", () => {
+    expect(recordPointsFace({ points: 2340, survivalSec: 760 }, 2340, 7)).toEqual({ state: "record", points: 2340, bestSec: 760 });
+    expect(recordPointsFace({ points: 2340, survivalSec: 760 }, 2500, 7)).toEqual({ state: "record", points: 2500, bestSec: 760 });
+  });
+
+  it("вид: очки крупно, время рядом или подписью", () => {
+    const face = { state: "best", points: 12340, bestSec: 760, runs: 7 } as const;
+    const wide = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", ...face }, size: "hero" }));
+    expect(wide).toContain("12 340");
+    expect(wide).toContain("12:40");
+    const tile = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", ...face }, size: "tile" }));
+    expect(tile).toContain("12 340");
+    expect(tile).toContain("за 12:40");
+  });
+
+  it("вид: gap говорит очками, null-лицо по времени", () => {
+    const gap = renderToStaticMarkup(createElement(RecordView, { face: { state: "points", state2: "gap", points: 2340, bestSec: 760, gapPoints: 140 } as never, size: "hero" }));
+    expect(gap).toContain("не хватило 140 очков");
+    const time = renderToStaticMarkup(createElement(RecordView, { face: { state: "best", bestSec: 760, runs: 7 }, size: "hero" }));
+    expect(time).toContain("12:40");
+    expect(time).not.toContain("340");
   });
 });
