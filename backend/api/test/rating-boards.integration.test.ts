@@ -167,7 +167,7 @@ describe.skipIf(!live)("доски рейтинга по очкам на жив�
     const rating = ratingRestrictions(runs, leaderboard, undefined, settings);
     const roles = new RolesService(config, rolesRepository, memoryAccounts);
     const service = new RunsService(config, runs, leaderboard, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating, undefined, killsScorer());
-    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, hooks, new RestrictionsHooks(), rating.gate, rating.rating);
+    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, hooks, new RestrictionsHooks(), rating.gate, rating.rating, { set: async () => "OK", eval: async () => 1 } as never);
     projection.onModuleInit();
     const seasonsView = new SeasonsViewService(schedule, seasonsRepository, seasonStore, friends, rating.gate, rating.rating);
     const close = new SeasonsCloseService(redis, schedule, closeRepository, rating.gate);
