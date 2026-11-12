@@ -3,7 +3,7 @@ id: T-0450
 title: «Сводка» панели — рядом с процентом значение прошлого периода
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
