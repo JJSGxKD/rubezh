@@ -1,18 +1,19 @@
-import { createElement } from "react";
+import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { SecondChance } from "../src/screens/run/SecondChance";
+import { SecondChance, type SecondChanceProps } from "../src/screens/run/SecondChance";
 
 // Сетка способов второго шанса (Р210): колонки не распираются содержимым,
 // подпись ролика не переносится.
 function markup(): string {
-  return renderToStaticMarkup(
-    createElement(SecondChance, {
-      adPreview: { kind: "ready", pass: false, notice: null },
-      gemsPreview: { kind: "ready", offer: { continueNo: 1, priceGems: 10, balance: 78 }, notice: null },
-      paidPreview: { kind: "ready", offer: { continueNo: 1, priceStars: 10, chargedStars: 10, mode: "live" } },
-    }),
-  );
+  const props: SecondChanceProps = {
+    adPreview: { kind: "ready", pass: false, notice: null },
+    gemsPreview: { kind: "ready", offer: { continueNo: 1, priceGems: 10, balance: 78 }, notice: null },
+    paidPreview: { kind: "ready", offer: { continueNo: 1, priceStars: 10, chargedStars: 10, mode: "live" } },
+  };
+  // Компонент возвращает ReactNode, а createElement ждёт элемент: хуки вызываются внутри хозяина.
+  const Host = (): ReactElement => createElement("div", null, SecondChance(props));
+  return renderToStaticMarkup(createElement(Host));
 }
 
 describe("раскладка второго шанса", () => {
