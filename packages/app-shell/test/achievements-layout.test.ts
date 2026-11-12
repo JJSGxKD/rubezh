@@ -38,8 +38,11 @@ describe("«Любимые» без обрезки", () => {
     expect(html).toContain("line-clamp-2");
   });
 
-  it("второе и третье пустые места скрыты на узкой колонке", () => {
-    expect(html.match(/hidden @min-\[30rem\]:block/g)?.length).toBe(2);
+  it("на узкой колонке видно только первое пустое место", () => {
+    // Одно избранное: пустых два, скрыто второе из них.
+    expect(html.match(/hidden @min-\[30rem\]:block/g)?.length).toBe(1);
+    const none = renderToStaticMarkup(createElement(FavoritesStrip, { items: [], busy: false, onRemove: noop }));
+    expect(none.match(/hidden @min-\[30rem\]:block/g)?.length).toBe(2);
   });
 });
 
