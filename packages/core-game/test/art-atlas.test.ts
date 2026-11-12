@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
-import { ART_MOVING_EPSILON, ART_WALK_FRAMES, enemyFrameName, faceLeft, frameForEnemy, heroPose, isMoving, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
+import { ENEMY_STAGES } from "../src/content/stages";
+import { ART_MOVING_EPSILON, ART_WALK_FRAMES, artStageFor, artStageTint, enemyFrameName, faceLeft, frameForEnemy, heroPose, isMoving, orbiterArtScale, walkFrame } from "../src/game/render/art-atlas";
 
 // Черновой арт забега за переключателем разработчика (design/art/README.md):
 // рендер, на исход забега не влияет.
@@ -51,6 +52,15 @@ describe("атлас покрывает контент", () => {
       // Карачун рисуется фигурой-заглушкой: кадры его облика приходят с T-0425, и тогда исключение уходит.
       if (enemy.pattern === "stalker") continue;
       for (let k = 0; k < ART_WALK_FRAMES; k++) expect(frames.has(enemyFrameName(enemy.id, 0, k)), enemy.id).toBe(true);
+    }
+  });
+
+  it("у обычного врага на любой ступени контента есть кадр", () => {
+    for (const enemy of ENEMIES) {
+      if (enemy.rank !== undefined) continue;
+      for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
+        expect(artStageFor(stage, (s) => frames.has(enemyFrameName(enemy.id, s, 0))), `${enemy.id} s${String(stage)}`).toBeGreaterThanOrEqual(0);
+      }
     }
   });
 
@@ -128,5 +138,40 @@ describe("кадр шага врага по движению", () => {
     const source = readFileSync(new URL("../src/game/render/WorldRenderer.ts", import.meta.url), "utf8");
     expect(source).toContain("applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])");
     expect(source).toContain("releaseEnemy(i)");
+  });
+});
+
+describe("ступень рисунка и тон", () => {
+  const upTo = (top: number) => (s: number): boolean => s <= top;
+  const sum = (c: number): number => (c >> 16) + ((c >> 8) & 0xff) + (c & 0xff);
+
+  it("берёт наибольшую нарисованную ступень не выше нужной", () => {
+    expect(artStageFor(5, upTo(2))).toBe(2);
+    expect(artStageFor(1, upTo(2))).toBe(1);
+    expect(artStageFor(0, upTo(2))).toBe(0);
+    expect(artStageFor(4, upTo(0))).toBe(0);
+    expect(artStageFor(3, () => false)).toBe(-1);
+  });
+
+  it("нарисованная ступень тона не получает", () => {
+    expect(artStageTint(2, 2)).toBeNull();
+    expect(artStageTint(1, 2)).toBeNull();
+    expect(artStageTint(4, -1)).toBeNull();
+  });
+
+  it("поздняя ступень темнее, но не уходит в чёрное пятно", () => {
+    const tints = [3, 4, 5].map((stage) => artStageTint(stage, 2));
+    for (const tint of tints) {
+      expect(tint).not.toBeNull();
+      for (const shift of [16, 8, 0]) expect(((tint ?? 0) >> shift) & 0xff).toBeGreaterThanOrEqual(0x80);
+    }
+    expect(sum(tints[0] ?? 0)).toBeGreaterThan(sum(tints[1] ?? 0));
+    expect(sum(tints[1] ?? 0)).toBeGreaterThan(sum(tints[2] ?? 0));
+  });
+
+  it("рендер красит тон ступени и помнит его в кэше вида", () => {
+    const source = readFileSync(new URL("../src/game/render/WorldRenderer.ts", import.meta.url), "utf8");
+    expect(source).toContain("tintOf(");
+    expect(source).toContain("enemySpriteTint");
   });
 });
