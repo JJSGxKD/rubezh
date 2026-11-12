@@ -3,7 +3,7 @@ id: T-0443
 title: «Второй шанс» — подпись ролика в одну строку, самоцветы и звёзды ровной парой
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S

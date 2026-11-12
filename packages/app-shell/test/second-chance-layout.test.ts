@@ -10,7 +10,7 @@ function markup(): string {
     createElement(SecondChance, {
       adPreview: { kind: "ready", pass: false, notice: null },
       gemsPreview: { kind: "ready", offer: { continueNo: 1, priceGems: 10, balance: 78 }, notice: null },
-      paidPreview: { kind: "ready", offer: { continueNo: 1, priceStars: 10, chargedStars: 10, testMode: false } as never },
+      paidPreview: { kind: "ready", offer: { continueNo: 1, priceStars: 10, chargedStars: 10, mode: "live" } },
     }),
   );
 }
