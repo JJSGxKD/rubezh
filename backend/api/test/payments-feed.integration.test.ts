@@ -97,7 +97,9 @@ describe.skipIf(DATABASE_URL === "")("лента платежей на живо�
     await prisma.purchase.create({ data: row("P3", telegramAccount, "shop_item", 2) });
     await prisma.purchase.create({ data: row("P4", telegramAccount, "shop_item", 3, { ...paidAt(3), telegramChargeId: LONG_CHARGE_ID }) });
     // Второй шанс выдаётся самой оплатой: fulfilled_at пуст всегда, и «не выдан» он не бывает.
-    await prisma.purchase.create({ data: row("P5", telegramAccount, "continue_run", 3, { ...paidAt(3) }) });
+    // База требует у второго шанса номер продолжения и секунду цены (purchase_continue_check);
+    // ссылка на забег после стирания забега пуста, и здесь она не нужна.
+    await prisma.purchase.create({ data: row("P5", telegramAccount, "continue_run", 3, { ...paidAt(3), continueNo: 1, elapsedSec: 120 }) });
     await prisma.purchase.create({
       data: row("P6", vkAccount, "shop_item", 4, { ...paidAt(4), fulfilledAt: at(4), refundReason: "manual", refundRequestedAt: at(20) }),
     });
