@@ -143,7 +143,7 @@ export class RunReviewService {
         break;
       }
       // Гонку выиграл другой вызов: что с забегом теперь, решает таблица переходов.
-      if (attempt >= MARK_ATTEMPTS) throw new RunReviewConflictError("run_review_busy", "Забег решают одновременно — откройте отчёт заново");
+      if (attempt >= MARK_ATTEMPTS) throw new RunReviewConflictError("run_review_busy", "Забег решают одновременно — отчёт нужно открыть заново");
       row = await this.rowOf(runId);
     }
 
