@@ -178,6 +178,9 @@ erDiagram
         string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
         string band "nullable: полоса силы ожидаемого: novice…full"
         jsonb score_input "nullable: сила на старте, журнал охоты, оценка сборки — для runs:rescore"
+        string review_outcome "nullable: honest|annulled — решение разбора (Р203)"
+        datetime reviewed_at "nullable"
+        uuid reviewed_by "nullable: кто решил, без FK"
     }
 
     ACCOUNT_SESSION {
@@ -3881,8 +3884,41 @@ sequenceDiagram
 ```
 
 «Вернуть» — тот же путь в обратную сторону: вернуть можно только забег,
-снятый модератором, — с честным вердиктом, без читов и не под
-ограничением.
+снятый модератором, — без читов и не под ограничением, с честным
+вердиктом или признанный честным разбором; аннулированный разбором
+возвращается только отменой аннулирования.
+
+Решения разбора забега (Р203, T-0419) ведут в те же `setRanked`: решение
+пишется условным обновлением `run.review_outcome`, а доски и недельная
+таблица текущего сезона пересчитываются по базе. Закрытые сезоны,
+`season_result`, награды и кошелёк не меняются:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель: отчёт забега
+    participant V as runs: RunReviewService
+    participant S as runs: RunsService
+    participant DB as Postgres
+    participant Z as Redis: доски
+
+    P->>V: «Честный» / «Аннулировать» / «Вернуть забег»
+    V->>DB: UPDATE run SET review_outcome … WHERE прежнее состояние допустимо
+    alt обновление не прошло (гонка)
+        V->>DB: перечитать строку — то же решение, отказ или повтор
+    else решение записано
+        V->>DB: аудит players.run.honest / annul / restore
+        alt «Аннулировать» и забег в рейтинге
+            V->>S: setRanked(false) — снять с досок
+        else «Честный» или «Вернуть забег», забег годен для рейтинга
+            V->>S: setRanked(true) — вернуть в текущие доски
+        end
+        S->>DB: лучший оставшийся рейтинговый забег сложности
+        S->>Z: доска сложности; недельная таблица текущего сезона — по базе
+        S->>DB: аудит players.run.unrank / rerank
+    end
+    V-->>P: отчёт забега (RunReportView)
+```
 
 ### 4.22 Предпросмотр черновика из панели (этап 4, реализовано)
 
