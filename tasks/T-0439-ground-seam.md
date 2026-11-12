@@ -3,7 +3,7 @@ id: T-0439
 title: Земля забега без швов — нет тонкой полосы на стыке клеток
 epic: E6
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
