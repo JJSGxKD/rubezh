@@ -212,8 +212,8 @@ async function loadPlaywright() {
 }
 
 /** Отрисовать список SVG в ячейки одного холста в браузере, вернуть PNG. */
-export async function renderSheet(page, layout, mime = "image/png") {
-  return page.evaluate(async ({ width, height, frames, mime }) => {
+export async function renderSheet(page, layout, mime = "image/png", { quality = 0.82, crop = null } = {}) {
+  return page.evaluate(async ({ width, height, frames, mime, quality, crop }) => {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -224,8 +224,13 @@ export async function renderSheet(page, layout, mime = "image/png") {
       await img.decode();
       ctx.drawImage(img, frame.x, frame.y, frame.size, frame.size);
     }
-    return canvas.toDataURL(mime, 0.82).split(",")[1];
-  }, { ...layout, mime });
+    if (!crop) return canvas.toDataURL(mime, quality).split(",")[1];
+    const cut = document.createElement("canvas");
+    cut.width = crop.size;
+    cut.height = crop.size;
+    cut.getContext("2d").drawImage(canvas, crop.x, crop.y, crop.size, crop.size, 0, 0, crop.size, crop.size);
+    return cut.toDataURL(mime, quality).split(",")[1];
+  }, { ...layout, mime, quality, crop });
 }
 
 /**
@@ -312,13 +317,18 @@ async function main() {
   }
   // Плитки земли — отдельными текстурами: TileSprite повторяет текстуру целиком.
   // WebP, а не PNG: у плитки нет прозрачности, а размытые пятна сжимаются
-  // в 3–4 КБ против 210 КБ PNG без видимой разницы.
+  // в несколько КБ против 210 КБ PNG. Сжатие без потерь (качество 1): при
+  // потерях крайние столбцы и строки расходятся, и на стыке клеток видна
+  // полоса (T-0439). Плитка рисуется втрое шире, из середины вырезается
+  // сама плитка: у края настоящие соседи, а не обрыв рисунка.
   // Нужна одна нейтральная плитка: цвет зоны рендер кладёт окраской по вершинам.
   // Плитки зон собираются только для сравнения: `ART_ZONE_TILES=1`.
   const tiles = process.env.ART_ZONE_TILES === "1" ? Object.keys(ZONES) : ["neutral"];
   for (const zone of tiles) {
     const size = 512;
-    const png = Buffer.from(await renderSheet(page, { width: size, height: size, frames: [{ svg: groundTile(zone, size), x: 0, y: 0, size }] }, "image/webp"), "base64");
+    const wide = size * 3;
+    const frame = { svg: groundTile(zone, size, 7, size), x: 0, y: 0, size: wide };
+    const png = Buffer.from(await renderSheet(page, { width: wide, height: wide, frames: [frame] }, "image/webp", { quality: 1, crop: { x: size, y: size, size } }), "base64");
     writeFileSync(join(OUT, `ground-${zone}.webp`), png);
     report.push({ pack: `ground-${zone}`, frames: 1, atlas: `${size}×${size}`, fill: "100%", png: `${Math.round(png.length / 1024)} КБ`, gpu: `${((size * size * 4) / 1048576).toFixed(2)} МБ` });
   }
