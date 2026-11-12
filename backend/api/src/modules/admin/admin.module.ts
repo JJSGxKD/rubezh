@@ -34,6 +34,7 @@ import { AdminNameRulesController } from "./admin-name-rules.controller.js";
 import { AdminNameRulesStatsController } from "./admin-name-rules-stats.controller.js";
 import { AdminProxiesController } from "./admin-proxies.controller.js";
 import { AdminProxySubscriptionController } from "./admin-proxy-subscription.controller.js";
+import { AdminProxyTrafficController } from "./admin-proxy-traffic.controller.js";
 import { NameRulesModule } from "../name-rules/name-rules.module.js";
 import { AdminBroadcastsController } from "./admin-broadcasts.controller.js";
 import { AdminNotifyModule } from "../admin-notify/admin-notify.module.js";
@@ -128,6 +129,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminNameRuleCandidatesController,
     AdminProxiesController,
     AdminProxySubscriptionController,
+    AdminProxyTrafficController,
     AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,
