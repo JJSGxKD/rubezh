@@ -220,6 +220,10 @@ const schema = z.object({
   XRAY_SOCKS_PORT_BASE: z.coerce.number().int().min(1024).max(65_000).default(10_800),
   XRAY_SLOT_COUNT: z.coerce.number().int().min(1).max(500).default(100),
   XRAY_CONFIG_PATH: z.string().trim().min(1).default("/xray-config/config.json"),
+  // Порт службы статистики Xray (docs/35-stage4-plan.md Р192, T-0386): считает
+  // трафик по узлу и подписке. Слушает внутри сети tunnel, наружу не публикуется;
+  // от SOCKS-входов отделён проверкой ниже.
+  XRAY_STATS_PORT: z.coerce.number().int().min(1024).max(65_535).default(10_799),
   // Цена второго шанса (Р5.1): звёзд за каждую начатую минуту забега и
   // потолок цены. Считает сервер, клиент цену только показывает. Рабочие
   // значения до решения геймдизайнера (О1). Потолок схемы — с запасом под
@@ -336,6 +340,8 @@ export interface AppConfig {
     slotCount: number;
     /** файл конфига, который пишет API и читает контейнер */
     configPath: string;
+    /** порт службы статистики Xray внутри сети tunnel: вне диапазона SOCKS-входов */
+    statsPort: number;
   };
   payments: {
     /** оплата возможна: вход и чтение обновлений бота; включена ли — настройка `payments.stars` */
@@ -465,6 +471,9 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
   if (parsed.XRAY_SOCKS_PORT_BASE + parsed.XRAY_SLOT_COUNT > 65_535) {
     throw new Error("XRAY_SOCKS_PORT_BASE + XRAY_SLOT_COUNT не выше 65535: порты входов Xray не должны выходить за предел");
   }
+  if (parsed.XRAY_STATS_PORT >= parsed.XRAY_SOCKS_PORT_BASE && parsed.XRAY_STATS_PORT < parsed.XRAY_SOCKS_PORT_BASE + parsed.XRAY_SLOT_COUNT) {
+    throw new Error("XRAY_STATS_PORT пересекается с портами SOCKS-входов Xray: порт статистики должен лежать вне диапазона XRAY_SOCKS_PORT_BASE…XRAY_SOCKS_PORT_BASE + XRAY_SLOT_COUNT");
+  }
   const paymentsPossible = authEnabled && botUpdates;
   if (parsed.PAYMENTS_ENABLED === true && !paymentsPossible) {
     throw new Error(
@@ -532,7 +541,13 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
     secrets: {
       encryptionKeys: [parsed.SECRETS_ENCRYPTION_KEY, parsed.SECRETS_ENCRYPTION_KEY_PREVIOUS].filter((key) => key !== ""),
     },
-    xray: { host: parsed.XRAY_HOST, socksPortBase: parsed.XRAY_SOCKS_PORT_BASE, slotCount: parsed.XRAY_SLOT_COUNT, configPath: parsed.XRAY_CONFIG_PATH },
+    xray: {
+      host: parsed.XRAY_HOST,
+      socksPortBase: parsed.XRAY_SOCKS_PORT_BASE,
+      slotCount: parsed.XRAY_SLOT_COUNT,
+      configPath: parsed.XRAY_CONFIG_PATH,
+      statsPort: parsed.XRAY_STATS_PORT,
+    },
     payments: {
       possible: paymentsPossible,
       starsEnv: parsed.PAYMENTS_ENABLED,
