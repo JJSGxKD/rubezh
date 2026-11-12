@@ -16,8 +16,8 @@ import { damageEnemy, inflictDamage } from "../src/game/sim/combat";
 import { createTimelineDirector } from "../src/game/sim/director";
 import { ELEMENT_COLD, ELEMENT_FIRE, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, ELEMENT_POISON } from "../src/game/sim/element-ids";
 import { startFreeze } from "../src/game/sim/freeze";
-import { PICKUP_KIND, spawnPickup, updatePickups } from "../src/game/sim/pickups";
-import { despawnStalker, findStalkerProblems, spawnStalker, stalkerAlive } from "../src/game/sim/stalker-body";
+import { PICKUP_KIND, PICKUP_LAND_TICKS, spawnPickup, updatePickups } from "../src/game/sim/pickups";
+import { despawnStalker, findStalkerProblems, spawnStalker, STALKER_WINDOW_TICKS, stalkerAlive } from "../src/game/sim/stalker-body";
 import { IDLE_INPUT, stepWorld, type SimInput } from "../src/game/sim/step";
 import { findTimelineProblems } from "../src/game/sim/timeline-content";
 import { createWorld, DEFAULT_SIM_CONFIG, damagePlayer, spawnEnemy, TICK_HZ, type CreateWorldOptions, type World } from "../src/game/sim/world";
@@ -35,11 +35,11 @@ const BODY = STALKER.body;
 const PLAYER_MAX_HP = 1000;
 const MELEE_INPUT: SimInput = { moveX: 1, moveY: 0 };
 
-function makeWorld(patch: Partial<CreateWorldOptions> = {}, stalker: StalkerDef | undefined = STALKER): World {
+function makeWorld(patch: Partial<CreateWorldOptions> = {}, stalker: StalkerDef | null = STALKER): World {
   return createWorld({
     seed: 7,
     enemies: [RAT, KARACHUN],
-    ...(stalker === undefined ? {} : { stalker }),
+    ...(stalker === null ? {} : { stalker }),
     config: {
       progressionEnabled: false,
       player: { ...DEFAULT_SIM_CONFIG.player, maxHp: PLAYER_MAX_HP },
@@ -80,6 +80,11 @@ describe("появление преследователя", () => {
     expect(stalkerAlive(world)).toBe(1);
   });
 
+  it("окно толчков — ровно секунда симуляции", () => {
+    expect(STALKER_WINDOW_TICKS).toBe(TICK_HZ);
+    expect(makeWorld().stalkerBody.pushWindow.length).toBe(TICK_HZ);
+  });
+
   it("после снятия ставится снова", () => {
     const world = makeWorld();
     spawnStalker(world, KARACHUN_TYPE, 300, 0);
@@ -90,7 +95,7 @@ describe("появление преследователя", () => {
   });
 
   it("без правил тела в мире не ставит никого", () => {
-    const world = makeWorld({}, undefined);
+    const world = makeWorld({}, null);
     expect(spawnStalker(world, KARACHUN_TYPE, 300, 0)).toBe(-1);
     expect(world.enemies.aliveCount).toBe(0);
   });
@@ -104,9 +109,10 @@ describe("появление преследователя", () => {
     const world = makeWorld({
       stages: [
         { fromSec: 0, weight: 1, hpMul: 1, damageMul: 1, speedMul: 1, xpMul: 1 },
-        { fromSec: 0, weight: 1, hpMul: 5, damageMul: 5, speedMul: 2, xpMul: 1 },
+        { fromSec: 100, weight: 1, hpMul: 5, damageMul: 5, speedMul: 2, xpMul: 1 },
       ],
     });
+    world.stats.elapsedSec = 500;
     world.difficulty.hpMul = 9;
     world.difficulty.damageMul = 9;
     const before = world.rng.getState();
@@ -229,6 +235,7 @@ describe("неубиваемость", () => {
     // Рядовой в том же радиусе: без него проверка пропустила бы и «динамит не сработал вовсе».
     const rat = spawnEnemy(world, RAT_TYPE, 120, 0);
     spawnPickup(world, PICKUP_KIND.dynamite, world.player.x, world.player.y);
+    world.stats.tick += PICKUP_LAND_TICKS;
     updatePickups(world);
     expect(world.stats.dynamiteCollected).toBe(1);
     expect(world.enemies.alive[rat]).toBe(0);
@@ -319,11 +326,12 @@ describe("толчок", () => {
   });
 
   it("у стены толчок зажат границей карты", () => {
-    const world = makeWorld({ map: { ...MAPS[0], bounds: { halfWidth: 320 } } });
+    const world = makeWorld({ map: { ...MAPS[0], bounds: { halfWidth: 800 } } });
     frozen(world);
-    const slot = spawnStalker(world, KARACHUN_TYPE, 310, 0);
+    const slot = spawnStalker(world, KARACHUN_TYPE, 770, 0);
     for (let i = 0; i < 5; i++) damageEnemy(world, slot, 5, 0);
-    expect(world.enemies.x[slot]).toBeLessThanOrEqual(320);
+    expect(world.enemies.x[slot]).toBeLessThanOrEqual(800 - 16);
+    expect(world.enemies.x[slot]).toBeGreaterThan(780);
   });
 });
 
@@ -454,7 +462,8 @@ describe("касание", () => {
   it("щит буста гасит касание целиком", () => {
     const { world } = withStalker(200, 0);
     world.player.shieldHits = 1;
-    expect(untilTouch(world, IDLE_INPUT, 6 * TICK_HZ)).toBe(-1);
+    // Только первое касание: через перезарядку второе щит уже не встретит.
+    expect(untilTouch(world, IDLE_INPUT, 3 * TICK_HZ)).toBe(-1);
     expect(world.player.hp).toBe(PLAYER_MAX_HP);
     expect(world.player.shieldHits).toBe(0);
   });
@@ -510,7 +519,6 @@ describe("потолок живых, перенос вперёд, пик", () =>
       seed: 5,
       enemies: ENEMIES,
       stalker: STALKER,
-      weapons: WEAPONS,
       map: MAPS[0],
       config: { progressionEnabled: false, player: { ...DEFAULT_SIM_CONFIG.player, maxHp: 1_000_000 } },
     });
@@ -610,7 +618,7 @@ describe("снимок забега и контрольная сумма", () =>
 
   it("мир без Карачуна считает ту же сумму, что и до задачи: тело в неё не входит", () => {
     const a = makeWorld();
-    const b = makeWorld({}, undefined);
+    const b = makeWorld({}, null);
     expect(checksumWorld(a)).toBe(checksumWorld(b));
   });
 });
