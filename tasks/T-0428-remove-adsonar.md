@@ -36,6 +36,7 @@ zones:
   - docs/27-design-system-and-app-shell.md
   - docs/28-diagnostics.md
 shared:
+  - backend/api/test/ad-networks.test.ts
   - packages/adapter-telegram/src/index.ts
   - packages/shared-types/src/index.ts
   - apps/admin/src/ui/help.ts
