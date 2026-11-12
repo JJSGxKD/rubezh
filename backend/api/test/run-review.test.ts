@@ -136,6 +136,8 @@ class MemoryReviewRepository implements RunReviewRepository {
   readonly rows = new Map<string, RunReportRow>();
   /** Один раз перед `mark` строку меняет «другой вызов»: так воспроизводится проигранная гонка. */
   beforeMark: ((row: RunReportRow) => void) | null = null;
+  /** Каждое обновление проигрывает гонку, а строка остаётся прежней: решение никак не удаётся записать. */
+  loseEveryMark = false;
   markCalls = 0;
 
   async report(runId: string): Promise<RunReportRow | null> {
@@ -146,7 +148,7 @@ class MemoryReviewRepository implements RunReviewRepository {
   async mark(runId: string, outcome: ReviewOutcome, from: readonly (ReviewOutcome | null)[], actorId: string, at: Date): Promise<boolean> {
     this.markCalls += 1;
     const row = this.rows.get(runId);
-    if (row === undefined) return false;
+    if (row === undefined || this.loseEveryMark) return false;
     const hook = this.beforeMark;
     this.beforeMark = null;
     hook?.(row);
@@ -445,6 +447,30 @@ describe("«Честный»", () => {
 
     expect(entriesOf("players.run.honest")).toHaveLength(0);
     expect(setRanked).not.toHaveBeenCalled();
+  });
+
+  it("гонка проиграна во всех трёх попытках — 409 run_review_busy, записи в журнал и setRanked нет", async () => {
+    const stored = row();
+    repository.loseEveryMark = true;
+
+    await expect(service.honest(moderator, stored.runId, null)).rejects.toMatchObject({ status: 409, code: "run_review_busy" });
+
+    expect(repository.markCalls).toBe(3);
+    expect(repository.rows.get(stored.runId)?.reviewOutcome).toBeNull();
+    expect(entriesOf("players.run.honest")).toHaveLength(0);
+    expect(setRanked).not.toHaveBeenCalled();
+  });
+
+  it("текст run_review_busy без повелительного обращения: файл вне TEAM_PATHS, тест на «ты» (Р163) считает его игровым", async () => {
+    const stored = row();
+    repository.loseEveryMark = true;
+
+    const error: unknown = await service.honest(moderator, stored.runId, null).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toBe("Забег решают одновременно — отчёт нужно открыть заново");
+    expect(message).not.toMatch(/\p{L}+(ите|йте)(?!\p{L})/u);
   });
 });
 
