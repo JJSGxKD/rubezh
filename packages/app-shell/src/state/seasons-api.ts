@@ -79,6 +79,8 @@ const boardSchema = z.object({
   scoring: z.optional(z.string()),
   total: z.number(),
   entries: leaderboardSchema.shape.entries,
+  /** принятых друзей у игрока, только в таблице друзей; нет поля — старый сервер */
+  friendCount: z.optional(z.nullable(z.number())),
   me: z.nullable(meSchema),
 });
 
