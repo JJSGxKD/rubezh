@@ -21,12 +21,25 @@ const F = {
   grpc: "grpcSettings",
   httpupgrade: "httpupgradeSettings",
   xhttp: "xhttpSettings",
+  stats: "stats",
+  api: "api",
+  policy: "policy",
+  apiTag: "api",
+  statsService: "StatsService",
+  statsUplink: "statsOutboundUplink",
+  statsDownlink: "statsOutboundDownlink",
 } as const;
 
 export interface XrayConfigOptions {
   basePort: number;
   slotCount: number;
   listen: string;
+  /**
+   * Счётчики трафика выходов и служба их чтения. Не задано — блоков `stats`,
+   * `api` и `policy` в конфиге нет, и конфиг прежний. Служба одна — `StatsService`:
+   * она отдаёт только счётчики и их сброс, правки выходов на лету через неё нет.
+   */
+  stats?: { port: number };
 }
 
 /** Ключ подписки (группы узлов): строчные латиница и цифры. Он входит в тег выхода, поэтому формат жёсткий. */
@@ -105,6 +118,7 @@ export function assignSlots(keys: readonly string[], previous: ReadonlyMap<strin
  *
  * Конфиг с общим слотом у двух узлов или с ключом подписки не по формату не
  * собирается: два входа на одном порту или тег с мусором Xray принял бы молча.
+ * Так же не собирается конфиг, где порт статистики совпал с портом входа.
  */
 export function buildXrayConfig(nodes: readonly PlacedNode[], options: XrayConfigOptions): Record<string, unknown> {
   const slots = new Set<number>();
@@ -121,9 +135,18 @@ export function buildXrayConfig(nodes: readonly PlacedNode[], options: XrayConfi
     tags.add(tag);
   }
 
+  if (options.stats !== undefined) {
+    const { port } = options.stats;
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new RangeError(`Порт статистики ${port} вне диапазона 1…65535`);
+    if (port >= options.basePort && port < options.basePort + options.slotCount) {
+      throw new RangeError(`Порт статистики ${port} лежит среди портов SOCKS-входов ${options.basePort}…${options.basePort + options.slotCount - 1}`);
+    }
+  }
+
   const placed = [...nodes].sort((a, b) => a.slot - b.slot);
   return {
     log: { loglevel: "warning", access: "none" },
+    ...(options.stats === undefined ? {} : statsBlocks(options.listen, options.stats.port)),
     [F.inbounds]: placed.map(({ slot }) => ({
       tag: F.tagIn(slot),
       listen: options.listen,
@@ -136,6 +159,19 @@ export function buildXrayConfig(nodes: readonly PlacedNode[], options: XrayConfi
       domainStrategy: "AsIs",
       rules: placed.map(({ group, node, slot }) => ({ type: "field", inboundTag: [F.tagIn(slot)], outboundTag: outboundTag(group, node.key) })),
     },
+  };
+}
+
+/**
+ * Блоки учёта трафика: счётчики только по выходам (по входам и пользователям
+ * не нужны) и служба API, слушающая `listen:port`. Правило маршрутизации к ней
+ * не нужно: у `api.listen` собственный слушатель.
+ */
+function statsBlocks(listen: string, port: number): Record<string, unknown> {
+  return {
+    [F.stats]: {},
+    [F.api]: { tag: F.apiTag, listen: `${listen}:${port}`, services: [F.statsService] },
+    [F.policy]: { system: { [F.statsUplink]: true, [F.statsDownlink]: true } },
   };
 }
 

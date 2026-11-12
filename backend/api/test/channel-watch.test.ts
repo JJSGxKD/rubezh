@@ -438,6 +438,26 @@ describe("заведение окна", () => {
     expect(ctx.watch.rows).toEqual([]);
   });
 
+  it("канал другой площадки окна не заводит, даже когда у площадки есть проверка: окно знает только id игрока в Telegram (Р188)", async () => {
+    const ctx = setup();
+    const asked: string[] = [];
+    const maxMembership = {
+      platform: "max" as const,
+      isMember: async (_chat: string, platformUserId: string) => {
+        asked.push(platformUserId);
+        return false;
+      },
+    };
+    (Reflect.get(ctx.service, "memberships") as ChannelMemberships).register(maxMembership);
+    const player = await person(ctx);
+    const max = channelDef("sub_max", { params: { platform: "max", chat: "-100500", url: "https://max.ru/join/rubezh" } });
+
+    expect(await ctx.service.start(player, max, "2026-10-05", MON)).toBe(false);
+
+    expect(ctx.watch.rows).toEqual([]);
+    expect(asked).toEqual([]);
+  });
+
   it("задание без канала окна не заводит", async () => {
     const ctx = setup();
     const player = await person(ctx);

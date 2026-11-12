@@ -16,7 +16,7 @@ export const settingSchema = z.object({
   group: z.string(),
   title: z.string(),
   hint: z.string(),
-  kind: z.enum(["chat", "boolean", "url", "number", "amounts"]),
+  kind: z.enum(["chat", "boolean", "url", "number", "amounts", "text"]),
   /** сервер до числовых настроек поля не отдавал */
   range: rangeSchema.nullable().optional(),
   value: valueSchema,
@@ -103,6 +103,7 @@ export const SETTING_PLACEHOLDER: Record<Exclude<SettingRow["kind"], "boolean">,
   url: "https://t.me/…",
   number: "",
   amounts: "50, 100, 250",
+  text: "",
 };
 
 export const SOURCE_TITLES: Record<SettingRow["source"], string> = { base: "панель", env: "окружение", default: "умолчание" };

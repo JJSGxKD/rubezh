@@ -2963,3 +2963,18 @@ model ExternalIdentity {
   @@unique([platform, externalUserId])
   @@map("external_identity")
 }
+
+// Трафик узлов Xray по часам (docs/35-stage4-plan.md Р192, T-0386): считает ядро Xray,
+// строки старше 35 суток удаляются. Внешнего ключа на подписку нет: отчёт соединяется с живыми.
+model ProxyTrafficHour {
+  hour            DateTime @db.Timestamptz(0)
+  subscriptionKey String   @map("subscription_key") @db.VarChar(16)
+  nodeKey         String   @map("node_key") @db.VarChar(16)
+  /// название узла на последнем чтении: узел мог уйти из подписки
+  nodeName        String   @map("node_name") @db.VarChar(80)
+  upBytes         BigInt   @map("up_bytes")
+  downBytes       BigInt   @map("down_bytes")
+
+  @@id([hour, subscriptionKey, nodeKey])
+  @@map("proxy_traffic_hour")
+}
