@@ -87,9 +87,9 @@ describe("рецепты в гайдбуке", () => {
     expect(closed(1).sort()).toEqual(["fire_rain", "forge", "tempest", "viper", "whirl"]);
     // tempest = «Буря» (4) + «Залп» (8), viper = «Жало» (11) + «Закалка» (14): по таблице открытий.
     expect(closed(6).sort()).toEqual(["fire_rain", "tempest", "viper", "whirl"]);
-    // whirl = «Кистень» (18) + «Мощь» (1).
-    expect(closed(16)).toEqual(["whirl"]);
-    expect(closed(18)).toEqual([]);
+    // whirl = «Кистень» (15) + «Мощь» (1).
+    expect(closed(14)).toEqual(["fire_rain", "whirl"]);
+    expect(closed(16)).toEqual([]);
   });
 
   it("сила эволюции лежит в коридоре", () => {
