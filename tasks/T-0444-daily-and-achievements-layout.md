@@ -3,8 +3,8 @@ id: T-0444
 title: «День» и «Достижения» — строка обновления на плашке, любимые и ступени без обрезки
 epic: E6
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / low
 author: claude-lead-1
 size: S
 depends_on: []
