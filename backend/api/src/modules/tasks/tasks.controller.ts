@@ -85,6 +85,20 @@ export class TasksController {
     return { data: await this.tasks.open(account, taskId) };
   }
 
+  /**
+   * Ссылка на бота площадки канала с одноразовым кодом (Р188): первая кнопка задания
+   * «подпишись на канал другой площадки». Лимит частоты — как у забора; свой, часовой, —
+   * у выдачи кодов в сервисе связи.
+   */
+  @Post(":taskId/link")
+  @HttpCode(200)
+  async link(@Req() request: unknown, @Param("taskId") taskId: string): Promise<{ data: { url: string } }> {
+    const account = accountOf(request);
+    if (!TASK_ID.test(taskId)) throw new ValidationError("Неверный id задания");
+    await this.limit(account.accountId);
+    return { data: await this.tasks.startExternalLink(account, taskId) };
+  }
+
   /** Задание ленты сети для строки во вкладке «Партнёры». */
   @Post("networks/:network/item")
   @HttpCode(200)

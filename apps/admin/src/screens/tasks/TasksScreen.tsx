@@ -6,6 +6,7 @@ import {
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
+  CLIENT_KINDS,
   FILTER_KEYS,
   FILTER_LABELS,
   FILTER_OPTIONS,
@@ -129,7 +130,8 @@ export function TasksScreen() {
 
   const partner = PARTNER_KINDS.has(input.kind);
   const filterKey = FILTER_KEYS[input.kind];
-  const pooled = !partner && input.period !== "achievement";
+  const clientKind = CLIENT_KINDS.has(input.kind);
+  const pooled = !partner && !clientKind && input.period !== "achievement";
   const achievement = isAchievement(input);
   const stateKind = STATE_KINDS.has(input.kind);
   const channel = input.kind === CHANNEL_KIND;
@@ -197,7 +199,7 @@ export function TasksScreen() {
               </Field>
             ) : (
               <Field label="Срок" help={HELP.tasks.period}>
-                <Select value={input.period} disabled={original !== null || partner || stateKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
+                <Select value={input.period} disabled={original !== null || partner || stateKind || clientKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
                   {TASK_PERIODS.map((period) => (
                     <option key={period} value={period}>
                       {PERIOD_TITLES[period]}
@@ -242,12 +244,13 @@ export function TasksScreen() {
                 </Select>
               </Field>
             ) : null}
-            {partner ? null : (
+            {partner || clientKind ? null : (
               <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
                 <Input {...number("target")} min={1} />
               </Field>
             )}
           </FieldRow>
+          {clientKind ? <Notice tone="info">{HELP.tasks.clientSignal}</Notice> : null}
           {partner ? (
             <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
           ) : null}

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildExport,
   collectNameKeys,
+  HASH_FILE,
   NAMES_FILE,
   readDictionary,
   SCHEMA_FILE,
@@ -446,12 +447,17 @@ describe("выгрузка снимка: pnpm content:export", () => {
     expect(JSON.parse(files[NAMES_FILE])).toEqual({});
   });
 
-  it("пишет три файла в каталог, создавая его", () => {
+  it("кладёт хэш движка: сервер сам его не посчитает, он берёт версию 0 по этому хэшу", () => {
+    const { files } = buildExport(CONTENT_SNAPSHOT, dictionary);
+    expect(JSON.parse(files[HASH_FILE])).toEqual({ hash: CONTENT_HASH });
+  });
+
+  it("пишет четыре файла в каталог, создавая его", () => {
     const dir = mkdtempSync(join(tmpdir(), "content-export-"));
     try {
       const target = join(dir, "nested", "dist");
       writeExport(target);
-      for (const name of [SNAPSHOT_FILE, SCHEMA_FILE, NAMES_FILE]) {
+      for (const name of [SNAPSHOT_FILE, SCHEMA_FILE, NAMES_FILE, HASH_FILE]) {
         expect(() => JSON.parse(readFileSync(join(target, name), "utf8")), name).not.toThrow();
       }
     } finally {

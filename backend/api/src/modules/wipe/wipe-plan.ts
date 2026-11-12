@@ -61,6 +61,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   FriendReturn: keep("пара за возвращение награждается однажды"),
   FriendBonus: keep("ступень бонуса за друзей — один раз навсегда"),
   PartnerBinding: keep("слот источника игрока навсегда"),
+  ExternalIdentity: keep("связь с аккаунтом MAX или VK постоянна (Р188, T-0377): id площадки не освобождается и второй раз никому не достаётся, как привязки приглашения и источника"),
   Partner: keep("партнёры команды"),
   TaskParticipant: keep("место в лимите партнёрского задания занимается однажды"),
   PromoRedemption: keep("погашенный код погашен навсегда"),
@@ -94,6 +95,9 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   OutboundServiceMode: keep("режимы сервисов клиента исходящих запросов — настройка команды"),
   ProxySubscription: keep("подписка Xray для прокси — настройка команды, к игрокам не относится; адрес только шифртекстом"),
   ProxySubscriptionNode: keep("узлы подписки Xray — часть настройки команды"),
+  ContentVersion: keep("версии контента игры — правила, а не данные игроков (T-0303)"),
+  ContentDraft: keep("черновики контента команды (T-0303)"),
+  ContentCheck: keep("проверки черновиков контента (T-0303)"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),
@@ -125,6 +129,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   Run: wipe("забеги и рейтинги стираются (Р87); ссылку покупки на забег обнуляет T-0041"),
   TaskProgress: wipe("прогресс заданий начинается заново"),
   TaskPointsClaim: wipe("забранные ступени очков заданий (T-0105) — прогресс того же рода, что задания; кошелёк после вайпа обнулён, отметки не оставляем"),
+  TaskChannelWatch: wipe("окна перепроверки подписки (T-0178) следят за наградой, которой после вайпа нет: прогресс заданий и кошелёк обнулены, отписка не должна отнять заработанное заново"),
   AchievementFavorite: wipe("любимые достижения ссылаются на выполненное, а прогресс заданий после вайпа начинается заново (T-0106)"),
   ShowcaseOffer: wipe("предложения витрины ссылаются на предметы"),
   ItemEvent: wipe("журнал предметов"),
@@ -155,6 +160,7 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "Run",
   "TaskProgress",
   "TaskPointsClaim",
+  "TaskChannelWatch",
   "AchievementFavorite",
   "ShowcaseOffer",
   "ItemEvent",
