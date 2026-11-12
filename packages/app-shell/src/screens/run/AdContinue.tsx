@@ -44,7 +44,16 @@ export function AdContinueView(props: { stage: AdContinueStage; locked: boolean;
           {look.pass ? <Crown size={18} aria-hidden="true" /> : <Tv size={18} aria-hidden="true" />}
           {/* Рядом с кнопкой звёзд — коротко: колонка экрана смерти узкая, и
               «За рекламу» переносилась на две строки. Одна — целиком. */}
-          {t(look.labelKey)}
+          {look.compactLabelKey === look.labelKey ? (
+            <span className="whitespace-nowrap">{t(look.labelKey)}</span>
+          ) : (
+            <>
+              {/* Полная подпись — от ширины сетки 17 rem (контейнерный запрос), ниже — короткая:
+                  на 320 px и при крупном шрифте системы полная не помещается в одну строку. */}
+              <span className="hidden whitespace-nowrap @[17rem]:inline">{t(look.labelKey)}</span>
+              <span className="whitespace-nowrap @[17rem]:hidden">{t(look.compactLabelKey)}</span>
+            </>
+          )}
         </Button>
       )}
       {line === null ? null : (
