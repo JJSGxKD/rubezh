@@ -25,9 +25,10 @@ const level: ResolvedWeaponLevel = {
 
 /**
  * Пишет точки оберегов в `out` и возвращает их число. Объекты точек
- * переиспользуются, массив растёт только при нехватке.
+ * переиспользуются, массив растёт только при нехватке. `weaponIds`, если
+ * передан, получает id оружия каждой точки: по нему выбирают облик.
  */
-export function orbiterRenderPoints(world: World, t: number, out: OrbiterPoint[]): number {
+export function orbiterRenderPoints(world: World, t: number, out: OrbiterPoint[], weaponIds?: string[]): number {
   const player = world.player;
   const centerX = player.prevX + (player.x - player.prevX) * t;
   const centerY = player.prevY + (player.y - player.prevY) * t;
@@ -42,6 +43,7 @@ export function orbiterRenderPoints(world: World, t: number, out: OrbiterPoint[]
     for (let k = 0; k < count; k++) {
       if (out.length <= drawn) out.push({ x: 0, y: 0 });
       orbiterPosition(world, slot, level, k, out[drawn], centerX, centerY);
+      if (weaponIds !== undefined) weaponIds[drawn] = type.id;
       drawn += 1;
     }
   }

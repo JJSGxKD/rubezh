@@ -38,6 +38,17 @@ export class SeasonSchedule {
     return pointsFromOf(this.settings.get(SETTINGS.ratingPointsFrom));
   }
 
+  /**
+   * Подписка на смену `rating.points-from` (tasks/T-0446): слушатель зовётся, когда
+   * на этой реплике поменялось действующее значение ключа — из панели или по
+   * сообщению Redis от другой реплики.
+   */
+  onScoringSettingChange(listener: () => void): void {
+    this.settings.onChange((changed) => {
+      if (changed.includes(SETTINGS.ratingPointsFrom.key)) listener();
+    });
+  }
+
   /** Как ранжирован сезон: до понедельника перехода — по времени, с него — по очкам. */
   scoringOf(season: Season): Scoring {
     return scoringOfSeason(season.startsAt, this.pointsFrom());

@@ -134,23 +134,30 @@ export function sourcesLine(day: OverviewDay): string {
 }
 
 /** Как называется прошлое окно в сравнении: «вчера», «прошлые 7 дней». */
-const BEFORE_TEXT: Readonly<Record<OverviewDays, { versus: string; same: string; zero: string }>> = {
-  1: { versus: "к вчера", same: "как вчера", zero: "вчера к этому часу — 0" },
-  7: { versus: "к прошлым 7 дням", same: "как в прошлые 7 дней", zero: "в прошлые 7 дней — 0" },
-  30: { versus: "к прошлым 30 дням", same: "как в прошлые 30 дней", zero: "в прошлые 30 дней — 0" },
+const BEFORE_TEXT: Readonly<Record<OverviewDays, { versus: string; same: string; zero: string; window: string }>> = {
+  1: { versus: "к вчера", same: "как вчера", zero: "вчера к этому часу — 0", window: "вчера к этому часу" },
+  7: { versus: "к прошлым 7 дням", same: "как в прошлые 7 дней", zero: "в прошлые 7 дней — 0", window: "прошлые 7 дней" },
+  30: { versus: "к прошлым 30 дням", same: "как в прошлые 30 дней", zero: "в прошлые 30 дней — 0", window: "прошлые 30 дней" },
 };
 
 /**
  * Сравнение с прошлым окном той же длины: «+25% к вчера», «−10% к прошлым 7
  * дням», «как вчера». Ноль в прошлом окне — не «+∞%», а само прошлое число:
- * проценты от нуля ничего не говорят.
+ * проценты от нуля ничего не говорят. Рядом — `previous`: прошлое значение с
+ * окном, чтобы процент читался сразу («вчера к этому часу — 1»); при нуле оно
+ * уже в `text`, второй подписи нет.
  */
-export function versusBefore(now: number, before: number, days: OverviewDays = 1): { text: string; tone: "up" | "down" | "flat" } {
-  const text = BEFORE_TEXT[days];
-  if (before === 0) return now === 0 ? { text: text.same, tone: "flat" } : { text: text.zero, tone: "up" };
+export function versusBefore(
+  now: number,
+  before: number,
+  days: OverviewDays = 1,
+): { text: string; tone: "up" | "down" | "flat"; previous: string | null } {
+  const label = BEFORE_TEXT[days];
+  const previous = before === 0 ? null : `${label.window} — ${formatNumber(before)}`;
+  if (before === 0) return now === 0 ? { text: label.same, tone: "flat", previous } : { text: label.zero, tone: "up", previous };
   const change = Math.round(((now - before) / before) * 100);
-  if (change === 0) return { text: text.same, tone: "flat" };
-  return { text: `${change > 0 ? "+" : "−"}${String(Math.abs(change))}% ${text.versus}`, tone: change > 0 ? "up" : "down" };
+  if (change === 0) return { text: label.same, tone: "flat", previous };
+  return { text: `${change > 0 ? "+" : "−"}${formatNumber(Math.abs(change))}% ${label.versus}`, tone: change > 0 ? "up" : "down", previous };
 }
 
 /** Сдвиг игровых суток `2026-10-07` на `delta` суток по календарю, без часовых поясов. */

@@ -179,7 +179,7 @@ describe.skipIf(!live)("недельный сезон на живых Postgres �
     const schedule = new SeasonSchedule(settings);
     const runsHooks = new RunsHooks();
     const restrictionsHooks = new RestrictionsHooks();
-    const projection = new SeasonsProjection(schedule, store, repository, runsHooks, restrictionsHooks, restrictions as never, rating as never);
+    const projection = new SeasonsProjection(schedule, store, repository, runsHooks, restrictionsHooks, restrictions as never, rating as never, { set: async () => "OK", eval: async () => 1 } as never);
     projection.onModuleInit();
     const close = new SeasonsCloseService(redis, schedule, closeRepository, restrictions as never);
     const claim = new SeasonsClaimService(repository, wallet);

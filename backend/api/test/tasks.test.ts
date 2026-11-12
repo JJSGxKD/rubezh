@@ -514,6 +514,37 @@ describe("партнёрские цели: ссылка и бот", () => {
   });
 });
 
+describe("правило отписки на карточке (T-0183)", () => {
+  const watched = (...ids: string[]) => ({ taskIds: new Set(ids), days: 7 });
+
+  it("viewOf: recheckDays — у наблюдаемого канала, null у остальных; без аргумента — null у всех", () => {
+    const link = def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/partner" }, target: 1, coins: 50, gems: 0 });
+    const bot = def("ach_partner_bot", { period: "achievement", kind: "bot", params: { platform: "telegram", url: "https://t.me/partner_bot?start=rubezh" }, target: 1, coins: 50, gems: 0 });
+    const noPort = channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } });
+    const defs = [channelTask(), noPort, link, bot, def("daily_runs")];
+    const views = viewOf(defs, [], new Map(), NOON, undefined, watched("ach_channel"));
+    expect(views.map((view) => [view.id, view.recheckDays])).toEqual(
+      expect.arrayContaining([["ach_channel", 7], ["ach_channel_max", null], ["ach_partner_site", null], ["ach_partner_bot", null], ["daily_runs", null]]),
+    );
+    expect(viewOf(defs, [], new Map(), NOON).every((view) => view.recheckDays === null)).toBe(true);
+  });
+
+  it("view, open и claim отдают то же поле; площадка без порта проверки — null", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask(), channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } }), def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/p" }, target: 1, coins: 50, gems: 0 }));
+    const max: AccountRef = { accountId: ME, platform: "max", platformUserId: "555000111" };
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(await ctx.service.view(max, NOON), "ach_channel_max")).toMatchObject({ recheckDays: null });
+    const opened = await ctx.service.open(PLAYER, "ach_partner_site", NOON);
+    expect(byId(opened.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(opened.tasks, "ach_partner_site")).toMatchObject({ recheckDays: null });
+    ctx.membership.members.add(`${CHANNEL.chat}|${PLAYER.platformUserId}`);
+    const claimed = await ctx.service.claim(PLAYER, "ach_channel", NOON);
+    expect(byId(claimed.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(claimed.tasks, "daily_runs")).toMatchObject({ recheckDays: null });
+  });
+});
+
 describe("цель «канал»: проверка площадкой", () => {
   function withChannel() {
     const ctx = setup();
