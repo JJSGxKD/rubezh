@@ -3,7 +3,7 @@ id: T-0445
 title: «Подобрано для тебя» — обычная кнопка покупки, выделение рамкой карточки
 epic: E6
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / haiku-5.5 / low
 author: claude-lead-1
 size: S
