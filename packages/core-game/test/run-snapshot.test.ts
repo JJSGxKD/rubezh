@@ -579,6 +579,7 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
       while (wispOf(original.world).flying) escort(original.world, 1);
       const wisp = wispOf(original.world);
       expect(wisp.hops).toBe(1);
+      const hopsBefore = wisp.hops;
       // Игрок отстал: огонёк стоит и ждёт.
       standOn(original.world, { ...wisp, x: wisp.x + 600 });
       for (let i = 0; i < 30; i++) stepWorld(original.world, idle);
@@ -589,7 +590,7 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
       escort(original.world, 120);
       escort(resumed.world, 120);
 
-      expect(wispOf(original.world).hops).toBeGreaterThan(wisp.hops);
+      expect(wispOf(original.world).hops).toBeGreaterThan(hopsBefore);
       expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
       expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
     });

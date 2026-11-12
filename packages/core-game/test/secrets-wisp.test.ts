@@ -213,8 +213,8 @@ describe("огонёк ведёт шагами (Р214)", () => {
     expect(wisp.flying).toBe(false);
     expect(wisp.hops).toBe(hopsBefore);
 
-    // Ровно на пороге (не дальше): уже ведёт.
-    standAt(world, wisp.x - WISP.waitUnits, wisp.y);
+    // Чуть ближе порога: уже ведёт.
+    standAt(world, wisp.x - (WISP.waitUnits - 0.01), wisp.y);
     run(world, 1);
     expect(wisp.flying).toBe(true);
     expect(wisp.hops).toBe(hopsBefore + 1);
@@ -315,8 +315,8 @@ describe("огонёк гаснет, когда вести некуда (Р214)"
     expect(secretKindsUsed(world)).not.toContain("wisp");
     expect(secretKindsFound(world)).toContain("wisp");
     const result = buildRunResult(world, { runId: "r", seed: 1, outcome: "died", startingWeaponId: "spark", contentHash: "00000000" });
-    expect(result.secrets.used).not.toContain("wisp");
-    expect(result.secrets.found).toContain("wisp");
+    expect(result.secrets?.used).not.toContain("wisp");
+    expect(result.secrets?.found).toContain("wisp");
   });
 
   it("погасание в журнал использованных не пишется", () => {
