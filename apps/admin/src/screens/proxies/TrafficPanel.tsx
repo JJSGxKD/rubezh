@@ -4,7 +4,7 @@ import { api } from "../../services";
 import { HELP } from "../../ui/help";
 import { Button, DataTable, ErrorNotice, Loading, Notice, Panel, type Column } from "../../ui/kit";
 import { useApi } from "../../ui/use-api";
-import { periodLabel, subscriptionTotals, trafficRows, windowLabel, type TrafficRow } from "./traffic-view";
+import { keepUnits, periodLabel, subscriptionTotals, trafficRows, windowLabel, type TrafficRow } from "./traffic-view";
 
 /**
  * Блок «Трафик через узлы Xray» под подписками (docs/35-stage4-plan.md Р192,
@@ -36,7 +36,7 @@ function Report({ report }: { report: TrafficReport }) {
       {report.subscriptions.length === 0 ? null : (
         <ul className="flex flex-col gap-1 text-sm">
           {subscriptionTotals(report).map((total) => (
-            <li key={total.key}>{total.text}</li>
+            <li key={total.key}>{keepUnits(total.text)}</li>
           ))}
         </ul>
       )}

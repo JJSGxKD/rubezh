@@ -28,6 +28,13 @@ export function bytesText(bytes: number): string {
   return `${ONE_DECIMAL.format(value)} ${UNITS[unit] ?? "ТБ"}`;
 }
 
+/**
+ * Число и единица не разрываются переносом строки: «1,2 / МБ» на узком экране
+ * читается как две разные величины. Пробел перед единицей — неразрывный; текст
+ * из `bytesText` и `subscriptionTotals` остаётся прежним, меняется только показ.
+ */
+export const keepUnits = (text: string): string => text.replace(/(\d) (Б|КБ|МБ|ГБ|ТБ)(?![А-Яа-яЁё])/gu, "$1\u00a0$2");
+
 export interface TrafficRow {
   /** подписка и узел: один узел может прийти из двух подписок */
   key: string;

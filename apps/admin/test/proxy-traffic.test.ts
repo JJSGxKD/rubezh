@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import { fetchProxyTraffic, TRAFFIC_PERIODS, type TrafficReport } from "../src/api/proxy-traffic";
-import { bytesText, periodLabel, subscriptionTotals, trafficRows, windowLabel } from "../src/screens/proxies/traffic-view";
+import { bytesText, keepUnits, periodLabel, subscriptionTotals, trafficRows, windowLabel } from "../src/screens/proxies/traffic-view";
 import { TrafficPanel } from "../src/screens/proxies/TrafficPanel";
 import { HELP } from "../src/ui/help";
 import { fakeFetch, json } from "./helpers";
@@ -130,6 +130,18 @@ describe("итоги по подпискам", () => {
   it("подписка без трафика остаётся в итогах с нулями", () => {
     const empty = report({ subscriptions: [{ key: "main", name: "Основная", upBytes: 0, downBytes: 0, nodes: [] }] });
     expect(subscriptionTotals(empty)[0]?.text).toBe("Основная: отдано 0 Б · получено 0 Б · всего 0 Б");
+  });
+});
+
+describe("единицы в строке итогов", () => {
+  it("пробел перед единицей неразрывный, остальной текст прежний", () => {
+    const shown = keepUnits("Запасная: отдано 2,0 ТБ · получено 1,2 МБ · всего 512 Б");
+    expect(shown).toBe("Запасная: отдано 2,0\u00a0ТБ · получено 1,2\u00a0МБ · всего 512\u00a0Б");
+    expect(shown.replaceAll("\u00a0", " ")).toBe("Запасная: отдано 2,0 ТБ · получено 1,2 МБ · всего 512 Б");
+  });
+
+  it("название подписки с цифрой и буквой не трогается", () => {
+    expect(keepUnits("Резерв 2 Берлин: отдано 0 Б")).toBe("Резерв 2 Берлин: отдано 0\u00a0Б");
   });
 });
 
