@@ -21,6 +21,7 @@ import type {
   RubezhDef,
   SecretsDef,
   SiegeDef,
+  StalkerDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -43,6 +44,7 @@ import { findPressureProblems, initPressure, isPressureActive } from "./pressure
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
 import { createRubezhState } from "./rubezh";
+import { createStalkerBodyState, findStalkerProblems } from "./stalker-body";
 import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
@@ -198,6 +200,11 @@ export interface CreateWorldOptions {
    */
   siege?: SiegeDef;
   /**
+   * правила неубиваемого преследователя (Р205, tasks/T-0421); по умолчанию их нет, и выпустить
+   * преследователя в такой мир нельзя. В мир забега их подключает `createRunWorld` (T-0424)
+   */
+  stalker?: StalkerDef;
+  /**
    * Пролог первого забега (T-0278): оберег, большой первый сундук, «Советуем», Страж
    * по силе набранного и своя кривая опыта. Без поля — обычный бесконечный забег.
    * Таймлайн пролога подаётся отдельно (`timeline`): мир его не хранит.
@@ -291,6 +298,14 @@ export function createWorld(options: CreateWorldOptions): World {
     const siegeProblems = findSiegeProblems(siegeRules, options.enemies);
     if (siegeProblems.length > 0) {
       throw new Error(`Некорректный контент осады:\n${siegeProblems.join("\n")}`);
+    }
+  }
+
+  const stalkerRules = options.stalker;
+  if (stalkerRules !== undefined) {
+    const stalkerProblems = findStalkerProblems(stalkerRules, options.enemies);
+    if (stalkerProblems.length > 0) {
+      throw new Error(`Некорректные правила преследователя:\n${stalkerProblems.join("\n")}`);
     }
   }
 
@@ -388,6 +403,7 @@ export function createWorld(options: CreateWorldOptions): World {
         : [],
     ),
     cordon: createCordonState(),
+    stalkerBody: createStalkerBodyState(stalkerRules, enemyTypes),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
     siegeRules: prologueRules !== null || options.difficulty?.id === "easy" ? null : siegeRules,
     siege: createSiegeState(createRng(deriveSeed(options.seed, STREAM_SALT.siege))),
@@ -461,6 +477,9 @@ export function createWorld(options: CreateWorldOptions): World {
       poisonStacks: 0,
       poisonDps: 0,
       poisonSource: -1,
+      knockbackTicks: 0,
+      knockbackVx: 0,
+      knockbackVy: 0,
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),
