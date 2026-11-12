@@ -199,7 +199,7 @@ describe.skipIf(!live)("разбор забегов на живых Postgres и 
     const rating = ratingRestrictions(runs, board, undefined, settings);
     const roles = new RolesService(config, rolesRepository, accounts);
     service = new RunsService(config, runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating);
-    new SeasonsProjection(schedule, seasonStore, new PrismaSeasonsRepository(prisma), hooks, new RestrictionsHooks(), rating.gate, rating.rating).onModuleInit();
+    new SeasonsProjection(schedule, seasonStore, new PrismaSeasonsRepository(prisma), hooks, new RestrictionsHooks(), rating.gate, rating.rating, { set: async () => "OK", eval: async () => 1 } as never).onModuleInit();
     view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
     const review = new RunReviewService(reviews, service, rating.rating, roles, accounts);
 

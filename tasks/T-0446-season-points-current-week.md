@@ -22,6 +22,7 @@ shared:
   - backend/api/test/seasons.integration.test.ts
   - backend/api/test/rating-boards.integration.test.ts
   - backend/api/test/rating-style.integration.test.ts
+  - backend/api/test/run-review.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
