@@ -114,6 +114,7 @@ const ERAPI_SERVICE = "Курсы валют · ExchangeRate-API";
 const FOREXRATEAPI_SERVICE = "Курсы валют · ForexRateAPI";
 const ADSGRAM_SERVICE = "Трекинг закупок · AdsGram";
 const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
+const MAX_SERVICE = "MAX";
 
 /**
  * Адрес награды за задание AdsGram (docs/35-stage4-plan.md WP13, часть 6):
@@ -123,6 +124,16 @@ const ADSGRAM_TASKS_SERVICE = "Задания сетей · AdsGram";
  * `ads/adsgram-reward.controller.ts`; их совпадение проверяет HTTP-тест.
  */
 export const ADSGRAM_REWARD_PATH = "/api/v1/ads/adsgram/reward";
+
+/**
+ * Адрес вебхука бота MAX (docs/35-stage4-plan.md Р188, tasks/T-0379): его сервер сам
+ * сообщает MAX при старте, а панель лишь показывает. Путь — тот же, что у
+ * `platforms/max/max-webhook.controller.ts`; их совпадение проверяет HTTP-тест.
+ * Адрес API бота повторён здесь (`platforms/max/max-bot-api.ts` → `MAX_API_BASE`):
+ * домен адаптеров площадок не импортирует.
+ */
+export const MAX_WEBHOOK_PATH = "/api/v1/max/webhook";
+const MAX_API_ROOT = "https://platform-api2.max.ru";
 
 /** Секрет адреса — 32 случайных байта в base64url: подобрать его перебором нельзя. */
 export const GENERATED_SECRET_BYTES = 32;
@@ -352,6 +363,42 @@ export const SECRETS = {
     pattern: /^[\x21-\x7e]{1,32}$/,
     example: "a1b2c3d4",
     fromEnv: () => null,
+  },
+  maxBotToken: {
+    key: "max.bot-token",
+    service: MAX_SERVICE,
+    title: "Ключ бота MAX",
+    hint: "Бот связывает аккаунт MAX игрока с игрой и проверяет подписку на канал. Бот должен быть администратором канала. Без ключа задания «подпишитесь на канал MAX» никому не видны.",
+    cabinetUrl: "https://business.max.ru/self",
+    // Ключ MAX — длинная строка из латиницы, цифр, дефиса и подчёркивания; он уходит только в заголовок Authorization.
+    pattern: /^[A-Za-z0-9_.-]{16,256}$/,
+    example: "f9LHodD0cOKoGIx5aSDsQjL_9dKfC1xj6lIhSgkxClhAv6nvLWSOvaCqSbc8jm",
+    // Только из панели: ключ перевыпускают в кабинете MAX, и заменять его должен человек, а не выкат.
+    fromEnv: () => null,
+    // `GET /me` кредитов не тратит; ключ уходит голым в заголовок Authorization, без «Bearer».
+    check: keyCheck({
+      service: "MAX",
+      url: () => `${MAX_API_ROOT}/me`,
+      headers: (value) => ({ Authorization: value }),
+      refusalHint: "проверьте, что ключ скопирован целиком из кабинета MAX (Чат-боты → Настройки)",
+    }),
+  },
+  maxWebhookSecret: {
+    key: "max.webhook-secret",
+    service: MAX_SERVICE,
+    title: "Секрет вебхука бота MAX",
+    hint: "Сервер ставит его в подписку вебхука у MAX сам, при старте и при смене ключа бота; MAX присылает его в заголовке каждого события, а сервер сверяет. Без секрета бот события не принимает. Новый секрет заменяет прежний при следующей подписке.",
+    cabinetUrl: null,
+    // Генератор панели выдаёт base64url (латиница, цифры, «-» и «_»); подчёркивание сервер заменяет на дефис,
+    // когда отдаёт секрет MAX (`platforms/max/max-secret.ts`).
+    pattern: /^[A-Za-z0-9_-]{32,64}$/,
+    example: "aBcD3fGh1jKlMn0pQrStUvWxYz-aBcD3fGh1jKl",
+    // Только из панели: секрет создаёт сервер, и вставлять его в кабинет не нужно.
+    fromEnv: () => null,
+    generated: {
+      reveal: (_value, config) => `${config.telegram.publicApiUrl}${MAX_WEBHOOK_PATH}`,
+      where: "вставлять никуда не нужно: сервер сам оформит подписку у MAX; выше — адрес вебхука для справки",
+    },
   },
 } as const satisfies Record<string, SecretDefinition>;
 

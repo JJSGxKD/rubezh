@@ -32,7 +32,18 @@ export interface ChannelMembership {
 
 /** Проверки всех площадок: домен выбирает по площадке аккаунта. */
 export class ChannelMemberships {
-  constructor(private readonly all: readonly ChannelMembership[]) {}
+  private readonly all: ChannelMembership[];
+
+  constructor(all: readonly ChannelMembership[]) {
+    this.all = [...all];
+  }
+
+  /** Адаптер площадки подключает себя сам при старте своего модуля; повтор заменяет проверку той же площадки. */
+  register(membership: ChannelMembership): void {
+    const index = this.all.findIndex((item) => item.platform === membership.platform);
+    if (index === -1) this.all.push(membership);
+    else this.all[index] = membership;
+  }
 
   for(platform: PlatformId): ChannelMembership | null {
     return this.all.find((membership) => membership.platform === platform) ?? null;

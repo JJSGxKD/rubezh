@@ -73,6 +73,7 @@ import { AdminPlayersController } from "./admin-players.controller.js";
 import { AdminPlayersService } from "./admin-players.service.js";
 import { AdminReviewController } from "./admin-review.controller.js";
 import { AdminRunsController } from "./admin-runs.controller.js";
+import { AdminRunReviewController } from "./admin-run-review.controller.js";
 import { AdminRatingController } from "./admin-rating.controller.js";
 import { SeasonsModule } from "../seasons/seasons.module.js";
 import { AdminRolesController } from "./admin-roles.controller.js";
@@ -103,6 +104,7 @@ import { BOARD_MARK_READER, PrismaBoardMarkReader } from "./board-mark.reader.js
     AdminPlayersController,
     AdminReviewController,
     AdminRunsController,
+    AdminRunReviewController,
     AdminRatingController,
     AdminOverviewController,
     AdminAllTimeController,

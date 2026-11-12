@@ -160,12 +160,15 @@ describe("вступление в сообщество VK: groups.isMember", () 
     expect(logs()).not.toContain(TOKEN);
   });
 
-  it("у площадок в сборке VK есть проверка, когда её передали; без неё VK — как раньше, нет", () => {
+  it("VK подключает проверку к порту сам; до подключения VK в сборке нет", () => {
     const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
     const telegram = { getChatMember: async () => ({ status: "member", isMember: null }) };
     const { check } = setup(() => json({ response: 1 }));
-    expect(channelMembershipsFor(config, telegram, check).for("vk")).toBe(check);
-    expect(channelMembershipsFor(config, telegram).for("vk")).toBeNull();
+    const memberships = channelMembershipsFor(config, telegram);
+    expect(memberships.for("vk")).toBeNull();
+    memberships.register(check);
+    expect(memberships.for("vk")).toBe(check);
+    expect(memberships.for("telegram")).not.toBeNull();
   });
 });
 

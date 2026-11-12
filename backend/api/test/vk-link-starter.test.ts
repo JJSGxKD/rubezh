@@ -5,9 +5,13 @@ import type { SecretsReader } from "../src/modules/secrets/secrets.service.js";
 import { SETTINGS, parseVkCommunity, type SettingDefinition } from "../src/modules/settings/setting-catalog.js";
 import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import { LINK_CODE_PATTERN, newLinkCode } from "../src/modules/external-identity/external-identity-rules.js";
-import { externalLinkStartersFor } from "../src/platforms/platforms.module.js";
+import { externalLinkStartersFor } from "../src/modules/external-identity/external-identity.module.js";
+import { ChannelMemberships } from "../src/platforms/ports/channel-membership.js";
+import type { VkApi } from "../src/platforms/vk/vk-api.js";
+import { VkChannelMembership } from "../src/platforms/vk/vk-channel-membership.js";
 import { VkCommunity } from "../src/platforms/vk/vk-community.js";
 import { VkLinkStarter } from "../src/platforms/vk/vk-link-starter.js";
+import { VkModule } from "../src/platforms/vk/vk.module.js";
 
 /**
  * Ссылка на бота сообщества VK для связи аккаунтов (docs/35-stage4-plan.md
@@ -74,9 +78,17 @@ describe("ссылка на бота сообщества VK", () => {
     expect(new URL(new VkLinkStarter(community(TOKEN, "rubezh_game")).startUrl(code) ?? "").searchParams.get("ref")).toBe(code);
   });
 
-  it("в сборке площадок у VK есть стартер", () => {
-    const starters = externalLinkStartersFor(new VkLinkStarter(community(TOKEN, "rubezh_game")));
+  it("модуль VK при старте подключает стартер и проверку вступления к портам; до старта VK в портах нет", () => {
+    const starters = externalLinkStartersFor();
+    const memberships = new ChannelMemberships([]);
+    const vkCommunity = community(TOKEN, "rubezh_game");
+    const module = new VkModule({ isMember: async () => true } as unknown as VkApi, vkCommunity, memberships, starters);
+    expect(starters.for("vk")).toBeNull();
+    expect(memberships.for("vk")).toBeNull();
+    module.onModuleInit();
     expect(starters.for("vk")).toBeInstanceOf(VkLinkStarter);
+    expect(starters.for("vk")?.startUrl("abc")).toBe("https://vk.me/rubezh_game?ref=abc");
+    expect(memberships.for("vk")).toBeInstanceOf(VkChannelMembership);
   });
 });
 

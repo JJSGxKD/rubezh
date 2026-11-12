@@ -22,8 +22,11 @@ import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 export type SettingValue = string | boolean | number;
 
-/** `amounts` — список сумм через запятую («50, 100, 250»): редактор панели — текстовое поле, правило — `parseAmounts`. */
-export type SettingKind = "chat" | "boolean" | "url" | "number" | "amounts";
+/**
+ * `amounts` — список сумм через запятую («50, 100, 250»): редактор панели — текстовое поле, правило — `parseAmounts`.
+ * `text` — короткая строка со своим правилом в схеме (имя бота): панель шлёт её как есть, проверяет сервер.
+ */
+export type SettingKind = "chat" | "boolean" | "url" | "number" | "amounts" | "text";
 
 /**
  * Пределы числа и в чём оно — для редактора панели: поле не даст ввести
@@ -197,6 +200,17 @@ const PROXY_GROUP = "Прокси";
 const REMINDERS_GROUP = "Напоминания";
 
 const PROLOGUE_GROUP = "Пролог";
+
+const MAX_BOT_GROUP = "Бот MAX";
+
+/** Имя бота MAX в ссылке `max.ru/<имя>`: латиница, цифры, знак подчёркивания, точка и дефис; без «@» и без адреса. */
+const MAX_BOT_USERNAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
+
+const maxBotUsernameSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((value) => value === "" || MAX_BOT_USERNAME.test(value), { message: "имя бота без «@» и адреса, например rubezh_bot, или пусто" });
 
 /**
  * Предел награды за сутки — суточный потолок причины `task_reward`
@@ -948,6 +962,20 @@ export const SETTINGS = {
     { min: 1, max: 60, unit: ["минута", "минуты", "минут"] },
     5,
   ),
+  /**
+   * Имя бота MAX для ссылки на него (docs/35-stage4-plan.md Р188, tasks/T-0379).
+   * Окружения нет: имя задаёт человек, который завёл бота, — в панели.
+   */
+  maxBotUsername: {
+    key: "max.bot-username",
+    group: MAX_BOT_GROUP,
+    title: "Имя бота MAX",
+    hint: "Имя бота в ссылке max.ru/<имя>, без «@»: по ней игрок открывает бота из задания «подпишитесь на канал MAX». Пусто — таких заданий игрокам не видно",
+    kind: "text",
+    schema: maxBotUsernameSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
   /**
    * Сообщество VK для заданий (docs/35-stage4-plan.md Р188, tasks/T-0378). Без
    * окружения: меняется из панели. Вид «ссылка»: редактор панели знает только
