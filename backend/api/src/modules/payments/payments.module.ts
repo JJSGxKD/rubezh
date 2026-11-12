@@ -4,6 +4,7 @@ import { RunsModule } from "../runs/runs.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
+import { PaymentCheckoutMarks } from "./payment-checkout-marks.js";
 import { PaymentFeedSources } from "./payment-feed-sources.js";
 import { PAYMENTS_FEED_REPOSITORY, PrismaPaymentsFeedRepository } from "./payments-feed.repository.js";
 import { PaymentsFeed } from "./payments-feed.service.js";
@@ -56,6 +57,7 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     SubscriptionRenewal,
     PaymentsFeed,
     PaymentFeedSources,
+    PaymentCheckoutMarks,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
     { provide: PAYMENTS_FEED_REPOSITORY, useClass: PrismaPaymentsFeedRepository },
   ],
