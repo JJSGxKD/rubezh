@@ -34,6 +34,18 @@ export function viewAfterLoad(input: { chosen: TasksView | null; tasks: readonly
   return input.chosen ?? initialTasksView(input);
 }
 
+/**
+ * Сутки для строки о правиле отписки (Р115, T-0183) или `null`, если строки нет. Забранное
+ * достижение награду уже получило: предупреждать поздно. Ежедневным и еженедельным строка
+ * нужна всегда — у каждой награды своё окно.
+ */
+export function recheckHintDays(task: Pick<TaskItem, "period" | "claimed"> & { recheckDays?: number | null }): number | null {
+  const days = task.recheckDays ?? 0;
+  if (days <= 0) return null;
+  if (task.period === "achievement" && task.claimed) return null;
+  return days;
+}
+
 /** Что на вкладке стоит в группе «Можно забрать», а что ниже (T-0373, Р186). */
 export interface TabLayout<T> {
   /** готовые задания в порядке `sortTasks` */
