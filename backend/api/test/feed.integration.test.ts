@@ -116,7 +116,7 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
     return created.accountId;
   }
 
-  const event = (accountId: string, patch: Partial<FeedEvent> = {}): FeedEvent => ({ id: `${randomUUID()}:long_run`, kind: "long_run", accountId, atMs: NOW.getTime() - HOUR, seconds: 700, ...patch });
+  const event = (accountId: string, patch: Partial<FeedEvent> = {}): FeedEvent => ({ id: `${randomUUID()}:long_run`, kind: "long_run", accountId, atMs: NOW.getTime() - HOUR, seconds: 700, points: null, ...patch });
 
   it("одно и то же событие дважды — одна запись в feed:events", async () => {
     const id = await account();

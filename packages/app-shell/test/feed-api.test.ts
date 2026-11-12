@@ -36,7 +36,15 @@ describe("разбор ответа ленты", () => {
       refreshSec: 300,
     });
     expect(data.items.map((entry) => entry.id)).toEqual(["a", "b", "c"]);
-    expect(data.items[1]).toEqual({ id: "b", kind: "long_run", name: "Ян", atMs: NOW - 60_000, seconds: 700 });
+    expect(data.items[1]).toEqual({ id: "b", kind: "long_run", name: "Ян", atMs: NOW - 60_000, seconds: 700, points: null });
+  });
+
+  it("очки рекорда недели: поле есть — сохраняется, поля нет (старый сервер) — null", async () => {
+    const data = await load({
+      events: [event("a", { kind: "week_record", seconds: 700, points: 2340 }), event("b", { kind: "week_record", seconds: 700 })],
+      refreshSec: 300,
+    });
+    expect(data.items.map((entry) => entry.points)).toEqual([2340, null]);
   });
 
   it("битая дата или пустое имя — событие отброшено, остальные целы", async () => {
