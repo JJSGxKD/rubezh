@@ -3,8 +3,8 @@ id: T-0413
 title: Флаги стран для панели — сжатые SVG владельца статическими файлами
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
