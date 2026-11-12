@@ -3,7 +3,7 @@ id: T-0412
 title: Раздел «Настройки» — вкладки по группам с адресом вместо одной ленты
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S

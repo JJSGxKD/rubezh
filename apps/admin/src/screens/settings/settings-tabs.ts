@@ -40,7 +40,7 @@ export interface SettingsTab {
 
 /** Вкладки в порядке каталога (`groupSettings`). */
 export function settingsTabs(rows: readonly SettingRow[]): SettingsTab[] {
-  return groupSettings([...rows]).map(({ group, rows: groupRows }) => ({
+  return groupSettings(rows).map(({ group, rows: groupRows }) => ({
     id: SETTING_GROUP_SLUGS[group] ?? group,
     title: group,
     rows: groupRows,
