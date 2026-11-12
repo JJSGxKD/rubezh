@@ -112,6 +112,8 @@ export const boardViewSchema = z.object({
   scoring,
   total: count,
   entries: z.array(boardEntry),
+  /** число принятых друзей — только у `scope=friends`, иначе поля нет: по нему экран отличает «друзей нет» от «друзья не играли на этой неделе» */
+  friendCount: count.nullable().optional(),
   me: z.object({ rank: count, points: z.number().nullable(), survivalSec: z.number(), style: z.string().nullable(), division }).nullable(),
 });
 
