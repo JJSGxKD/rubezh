@@ -43,6 +43,7 @@ shared:
   - docs/30-configuration-map.md
   - backend/api/test/proxy-subscription.test.ts
   - backend/api/test/proxy-subscriptions-multi.test.ts
+  - backend/api/test/proxy-traffic.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
