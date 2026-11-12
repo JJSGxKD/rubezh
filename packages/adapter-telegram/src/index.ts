@@ -33,7 +33,7 @@ import { createTelegramUi } from "./ui-telegram";
  * Оплата — обязательно Telegram Stars для цифровых товаров, см.
  * docs/01-tech-stack.md §5 и docs/08-web-and-identity.md §6 (важное
  * ограничение — TON/Gram/USDT НЕ заменяют Stars внутри Mini App).
- * Реклама — SDK сетей AdsGram, AdSonar, RichAds и Taddy по выдаче сервера
+ * Реклама — SDK сетей AdsGram, RichAds и Taddy по выдаче сервера
  * (`ads/`), цепочку сетей ведёт сервер; пассивные баннеры и промо-посты
  * SocialLead — отдельно, см. docs/07-monetization-and-ads.md.
  */

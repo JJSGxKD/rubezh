@@ -49,7 +49,7 @@ export type HapticType =
  * места по сессии показа.
  */
 export interface AdShowRequest {
-  /** сеть из выдачи сервера: `adsgram`, `adsonar`, `richads`, `taddy` */
+  /** сеть из выдачи сервера: `adsgram`, `richads`, `taddy` */
   network: string;
   /** блок в кабинете сети; `null` — показ по ключам сети */
   blockId: string | null;
