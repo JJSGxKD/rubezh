@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { Body, Controller, HttpCode, Logger, Post } from "@nestjs/common";
+import { Body, Controller, HttpCode, Logger, Post, type OnModuleDestroy } from "@nestjs/common";
 import { Public } from "../../common/access.js";
 import { DisabledError, UnauthorizedError, UnavailableError, ValidationError } from "../../common/domain-error.js";
 import { VkApi } from "./vk-api.js";
@@ -22,18 +22,24 @@ import { VkEventQueue } from "./vk-event-queue.js";
  *   подтверждение — строку подтверждения), иначе VK считает доставку
  *   неудавшейся и повторяет её. Это осознанное исключение из формата ответов
  *   API.
- * - Метрика `vk_callback_total{type,result}` — строкой лога, пока в бэкенде
- *   нет Prometheus (docs/22 §3.3); тип — из закрытого списка, чужие — `other`.
+ * - Метрика `vk_callback_total{type,result}` — строкой лога раз в минуту, пока
+ *   в бэкенде нет Prometheus (docs/22 §3.3); тип — из закрытого списка, чужие —
+ *   `other`, поэтому кардинальность низкая.
  */
 
 const OK = "ok";
+
+/** Как часто счётчик событий уходит в лог: строка на каждое событие росла бы вместе с трафиком. */
+const FLUSH_MS = 60_000;
 
 /** Типы событий, которые различает метрика: остальные — `other`, чтобы чужой текст не стал меткой. */
 const KNOWN_TYPES: ReadonlySet<string> = new Set(["confirmation", "message_new"]);
 
 @Controller("vk")
-export class VkCallbackController {
+export class VkCallbackController implements OnModuleDestroy {
   private readonly logger = new Logger("vk");
+  private readonly counts = new Map<string, number>();
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly community: VkCommunity,
@@ -104,8 +110,26 @@ export class VkCallbackController {
     }
   }
 
+  /** Одно событие в счётчик; в лог оно попадёт общей строкой раз в минуту, а не само по себе. */
   private record(type: string, result: string): void {
-    this.logger.log(JSON.stringify({ module: "vk", event: "vk_callback", type, result }));
+    const key = `${type}|${result}`;
+    this.counts.set(key, (this.counts.get(key) ?? 0) + 1);
+    this.timer ??= setInterval(() => this.flush(), FLUSH_MS).unref();
+  }
+
+  /** Накопленный счётчик — строками лога по типу и исходу; пустой не пишется. */
+  flush(): void {
+    for (const [key, count] of this.counts) {
+      const [type = "", result = ""] = key.split("|");
+      this.logger.log(JSON.stringify({ module: "vk", event: "vk_callback_total", type, result, count }));
+    }
+    this.counts.clear();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer !== null) clearInterval(this.timer);
+    this.timer = null;
+    this.flush();
   }
 }
 

@@ -263,6 +263,27 @@ describe("вебхук сообщества VK", () => {
       expect(response.body).not.toBe("ok");
     });
 
+    it("беседа, куда сообщество добавили, — ok без ответа: инструкцией на каждое слово там отвечать нельзя", async () => {
+      const target = await start();
+      expect((await post(target, messageNew({}, { peer_id: 2_000_000_001 }))).body).toBe("ok");
+      expect(bull.all).toEqual([]);
+      // Личный диалог: peer_id игрока — он сам.
+      expect((await post(target, messageNew({}, { peer_id: 555000111 }))).body).toBe("ok");
+      expect(bull.all).toHaveLength(1);
+    });
+
+    it("event_id, негодный в id задания (двоеточие, длина), — событие в очереди без отсечения повторов, а не отказ", async () => {
+      const target = await start();
+      for (const eventId of ["evt:1", "x".repeat(65), ""]) {
+        expect((await post(target, messageNew({ event_id: eventId }))).body, eventId).toBe("ok");
+      }
+      expect(bull.all).toHaveLength(3);
+      for (const queued of bull.all) {
+        expect(queued.options.jobId).toBeUndefined();
+        expect(queued.data).toMatchObject({ eventId: null });
+      }
+    });
+
     it("сообщение не от человека (from_id отрицательный — сообщество) и без сообщения — ok, но в очередь не идёт", async () => {
       const target = await start();
       expect((await post(target, messageNew({}, { from_id: -123456 }))).body).toBe("ok");
@@ -270,6 +291,29 @@ describe("вебхук сообщества VK", () => {
       expect((await post(target, messageNew({ object: undefined }))).body).toBe("ok");
       expect(bull.all).toEqual([]);
     });
+  });
+
+  it("метрика vk_callback_total: события считаются по типу и исходу и уходят в лог одной строкой на пару, а не каждое", async () => {
+    const target = await start();
+    const log = vi.mocked(Logger.prototype.log);
+    for (let index = 0; index < 3; index++) await post(target, messageNew({ event_id: `evt-${String(index)}` }));
+    await post(target, { type: "confirmation", group_id: GROUP_ID, secret: SECRET });
+    await post(target, { type: "wall_post_new", group_id: GROUP_ID, secret: SECRET });
+    await post(target, { type: "somebody_else_event", group_id: GROUP_ID, secret: SECRET });
+    // Неверный секрет не считается: чужой текст не должен стать меткой.
+    await post(target, messageNew({ secret: "wrong", type: "attacker_controlled_type" }));
+    expect(log.mock.calls.filter(([line]) => String(line).includes("vk_callback_total"))).toEqual([]);
+
+    target.get(VkCallbackController).flush();
+
+    const lines = log.mock.calls
+      .map(([line]) => String(line))
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((line) => line.event === "vk_callback_total");
+    const byPair = Object.fromEntries(lines.map((line) => [`${String(line.type)}|${String(line.result)}`, line.count]));
+    expect(byPair).toEqual({ "message_new|queued": 3, "confirmation|confirmed": 1, "other|ignored": 2 });
+    expect(JSON.stringify(lines)).not.toContain("attacker_controlled_type");
   });
 
   it("прочие события — ok без разбора", async () => {
