@@ -19,9 +19,11 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - backend/api/src/modules/roles/permissions.ts
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/App.tsx
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: high
