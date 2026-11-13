@@ -98,6 +98,13 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
+  it("журнал учёта в панели только читается и закрыт правом ledger.view (T-0457, Р219)", () => {
+    const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
+
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual(["balances", "journal"]);
+    for (const route of ledgerRoutes) expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe("ledger.view");
+  });
+
   it("публичный маршрут не притворяется защищённым правом", () => {
     const both = routes
       .filter((route) => Reflect.getMetadata(PUBLIC_METADATA, route.handler) === true)

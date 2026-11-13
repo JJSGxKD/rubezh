@@ -36,9 +36,9 @@ describe("план вайпа: полнота", () => {
     }
   });
 
-  it("остаётся 84 модели, стирается 27", () => {
+  it("остаётся 87 моделей, стирается 27", () => {
     const actions = Object.values(plan).map((decision) => decision.action);
-    expect(actions.filter((action) => action === "keep")).toHaveLength(84);
+    expect(actions.filter((action) => action === "keep")).toHaveLength(87);
     expect(actions.filter((action) => action === "wipe")).toHaveLength(27);
   });
 
