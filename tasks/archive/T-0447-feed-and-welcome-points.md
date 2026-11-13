@@ -40,7 +40,7 @@ batch: 4
 
 # T-0447. Лента главной и карточка бота — рекорд по очкам, а не по времени
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0447.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0447.json)](../README.md#значки-статуса)
 
 ## Зачем
 

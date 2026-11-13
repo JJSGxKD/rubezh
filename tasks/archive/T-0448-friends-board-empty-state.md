@@ -30,7 +30,7 @@ batch: 4
 
 # T-0448. Друзья в рейтинге — «нет друзей» только когда их правда нет
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0448.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0448.json)](../README.md#значки-статуса)
 
 ## Зачем
 

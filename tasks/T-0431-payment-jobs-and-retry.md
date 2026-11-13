@@ -35,7 +35,7 @@ batch: 4
 
 # T-0431. Брошенные задания оплаты и «Повторить учёт» — сервер
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0431.json)](README.md#значки-статуса) [![T-0429](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0429.json&label=T-0429)](T-0429-payments-feed-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0431.json)](README.md#значки-статуса) [![T-0429](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0429.json&label=T-0429)](archive/T-0429-payments-feed-server.md)
 
 ## Зачем
 
