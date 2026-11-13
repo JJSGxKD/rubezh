@@ -93,6 +93,10 @@ describe("состояние облика", () => {
     opened: false,
     wave: [],
     waveTicks: 0,
+    hops: 0,
+    flying: false,
+    hopX: 0,
+    hopY: 0,
     ...patch,
   });
 
