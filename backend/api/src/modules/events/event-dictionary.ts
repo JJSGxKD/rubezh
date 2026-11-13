@@ -255,8 +255,12 @@ export const EVENT_DICTIONARY = {
   },
   // Действия с карточками на выборе улучшения (docs/39-retention-mechanics.md Б3):
   // `level` — уровень выбора, `left` — зарядов этого вида осталось, `item` —
-  // изгнанный предмет (`weapon:<id>` / `passive:<id>`).
-  card_rerolled: { version: 1, payload: payload({ level: count, left: count }) },
+  // изгнанный предмет (`weapon:<id>` / `passive:<id>`). `via` у переброса — `"ad"`, если он взят
+  // за рекламу (T-0199); у обычного поля нет.
+  card_rerolled: { version: 1, payload: payload({ level: count, left: count, via: id.optional() }) },
+  // Кнопка «Перебросить за рекламу» показана игроку (T-0199): раз на экран нового выбора. `pass` — VIP,
+  // без ролика. Знаменатель для `card_rerolled` с `via: ad`.
+  card_reroll_ad_offered: { version: 1, payload: payload({ level: count, pass: z.boolean() }) },
   card_skipped: { version: 1, payload: payload({ level: count, left: count }) },
   card_banished: { version: 1, payload: payload({ level: count, left: count, item: id }) },
   // Тестер забрал компенсацию после вайпа (Р87, tasks/T-0043): дошли ли и сколько выдано.
