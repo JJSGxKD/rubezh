@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Decimal, rateOf, type CurrencyCode, type Rate } from "@bh/fx";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DomainError } from "../src/common/domain-error.js";
+import { DomainError, ForbiddenError } from "../src/common/domain-error.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import type { FxService } from "../src/modules/fx/fx.service.js";
 import { PrismaLedgerChartRepository } from "../src/modules/ledger/ledger-chart.repository.js";
@@ -109,10 +109,16 @@ describe.skipIf(DATABASE_URL === "")("второй ключ операций у�
   beforeAll(async () => {
     prisma = testPrisma(DATABASE_URL, 12);
     const ledger = new LedgerService(new PrismaLedgerRepository(prisma));
+    const can = async (actor: OperationActor, permission: string): Promise<boolean> =>
+      actor.accountId === owner.accountId || permission !== "finance.operation.approve";
     const roles = {
       audit: async (entry: AuditEntry) => void audit.push(entry),
       rolesFor: async (actor: OperationActor) => (actor.accountId === owner.accountId ? ["owner"] : ["finance"]),
-      can: async (actor: OperationActor, permission: string) => actor.accountId === owner.accountId || permission !== "finance.operation.approve",
+      can,
+      // Как настоящий RolesService.require: нет права — отказ, а не молчаливый пропуск (MediaService.upload зовёт его).
+      require: async (actor: OperationActor, permission: string): Promise<void> => {
+        if (!(await can(actor, permission))) throw new ForbiddenError("Недостаточно прав");
+      },
     } as unknown as RolesService;
     const chart = new LedgerChartService(new PrismaLedgerChartRepository(prisma), ledger, roles);
     const fx = { peek: async () => ({ takenAt: new Date(), rates: rates({ RUB: "0.0125" }), payout: rates({ XTR: "0.013" }) }) } as unknown as FxService;
