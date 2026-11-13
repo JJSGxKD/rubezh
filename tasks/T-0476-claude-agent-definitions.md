@@ -3,8 +3,8 @@ id: T-0476
 title: Определения агентов команды — модель, усилие и инструменты в файле, а не в промпте
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
