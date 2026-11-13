@@ -3,7 +3,7 @@ id: T-0435
 title: Компенсация самоцветами за сбой оплаты — сервер
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
