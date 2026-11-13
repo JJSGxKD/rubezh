@@ -121,6 +121,8 @@
   "achievements.category.collection": "Коллекция",
   "achievements.category.mastery": "Мастерство",
   "achievements.category.friends": "Друзья",
+  "achievements.category.status": "Статус",
+  "achievements.category.season": "Сезоны",
   "achievements.rung": "Ступень {current} из {total}",
   "achievements.rarity": "Есть у {percent}% игроков",
   "achievements.rarity.common": "Обычное",
