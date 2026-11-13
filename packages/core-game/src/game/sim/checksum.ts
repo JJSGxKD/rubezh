@@ -78,6 +78,16 @@ export function checksumWorld(world: World): number {
     fold(siege.rng.getState());
   }
 
+  // Лужи — только живые: суммы забегов без врагов со следом не меняются.
+  const puddles = world.hazards.puddles;
+  for (let i = 0; i < puddles.alive.length; i++) {
+    if (puddles.alive[i] === 0) continue;
+    fold(i);
+    fold(puddles.x[i]);
+    fold(puddles.y[i]);
+    fold(puddles.ttl[i]);
+  }
+
   for (let i = 0; i < world.enemies.count; i++) {
     fold(world.enemies.alive[i]);
     if (world.enemies.alive[i] === 0) continue;

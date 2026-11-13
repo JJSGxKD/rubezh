@@ -6,6 +6,7 @@ import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
+import type { HazardState } from "./hazards";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
 import type { SiegeState } from "./siege";
@@ -445,6 +446,8 @@ export interface World {
   secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
+  /** лужи врагов со следом (`sim/hazards.ts`, Р157); состояние входит в снимок */
+  hazards: HazardState;
   /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
   rubezh: RubezhState;
   /**
@@ -601,6 +604,8 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.dirX[slot] = 0;
   pool.dirY[slot] = 0;
   pool.ringRadius[slot] = 0;
+  // Отсчёт следа прежнего врага слота не достаётся новому: первая лужа — через everySec.
+  world.hazards.trail.ticks[slot] = 0;
   clearStatuses(world, slot, NO_OWNER_TYPE);
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;

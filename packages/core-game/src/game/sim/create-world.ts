@@ -42,6 +42,7 @@ import { findSiegeProblems } from "./siege-rules";
 import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
+import { createHazardState } from "./hazards";
 import { createRubezhState } from "./rubezh";
 import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
@@ -388,6 +389,7 @@ export function createWorld(options: CreateWorldOptions): World {
         : [],
     ),
     cordon: createCordonState(),
+    hazards: createHazardState(maxEnemies),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
     siegeRules: prologueRules !== null || options.difficulty?.id === "easy" ? null : siegeRules,
     siege: createSiegeState(createRng(deriveSeed(options.seed, STREAM_SALT.siege))),

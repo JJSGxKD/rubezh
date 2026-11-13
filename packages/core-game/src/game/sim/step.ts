@@ -8,6 +8,7 @@ import { isTimeFrozen, tickFreeze } from "./freeze";
 import { stepRubezh } from "./rubezh";
 import { playerSlowFactor, tickPlayerStatuses } from "./player-status";
 import { updateGems } from "./gems";
+import { stepHazards, tickTrail } from "./hazards";
 import { updatePickups } from "./pickups";
 import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
@@ -70,6 +71,8 @@ export function stepWorld(world: World, input: SimInput): void {
     world.enemies.alive,
     world.enemies.count,
   );
+  // Лужи — до хода врагов: поставленная в этом шаге лужа начнёт бить и стареть со следующего.
+  stepHazards(world);
   updateEnemies(world, dt);
   updateWeapons(world, dt);
   updateProjectiles(world, dt);
@@ -238,6 +241,9 @@ function updateEnemies(world: World, dt: number): void {
     const slow = movementFactor(world, i);
     enemies.x[i] = clampToBounds(enemies.x[i] + enemies.vx[i] * slow * dt, bounds.halfWidth - type.radius);
     enemies.y[i] = clampToBounds(enemies.y[i] + enemies.vy[i] * slow * dt, bounds.halfHeight - type.radius);
+
+    // След — после хода, в итоговой точке; замороженный до сюда не доходит и лужу не ставит.
+    if (type.trail !== null) tickTrail(world, i, typeIndex, type.trail);
 
     if (!player.alive) continue;
 

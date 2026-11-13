@@ -3,6 +3,7 @@ import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
 import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
+import { createHazardState } from "../sim/hazards";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
 import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
@@ -113,6 +114,11 @@ export interface WorldSnapshot {
   secrets: SecretsSnapshot;
   /** кольцо стражей; в снимках прежнего формата поля нет — это «кольца нет» */
   cordon?: Omit<CordonState, "ended">;
+  /**
+   * Лужи врагов со следом и отсчёт следа по слотам врагов (T-0282). В снимках без поля луж нет,
+   * а отсчёт идёт с нуля: версию формата не поднимали.
+   */
+  hazards?: { puddles: EncodedPool; trail: EncodedPool };
   /** осада стоящего: поток, якорь, счётчик, уровень, перезарядка; в снимках без поля осада начинается заново (T-0392) */
   siege?: SiegeSnapshot;
   /**
@@ -152,6 +158,10 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     pickups: encodeRecord(world.pickups, world.pickups.count),
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
     secrets: capturedSecrets(world),
+    hazards: {
+      puddles: encodeRecord(world.hazards.puddles, world.hazards.puddles.alive.length),
+      trail: encodeRecord(world.hazards.trail, world.enemies.count),
+    },
     siege: capturedSiege(world.siege),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
@@ -205,6 +215,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
   restoreSiege(world, snapshot.siege);
+  restoreHazards(world, snapshot.hazards);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
@@ -319,6 +330,30 @@ function restoreHunt(world: World, input: unknown): void {
   });
   world.hunt.log = entries;
   for (const spawn of spawns) world.hunt.spawnTick[spawn.slot] = spawn.tick;
+}
+
+/**
+ * Лужи. Отсутствие поля — снимок до луж: версию формата не поднимали, старый снимок читается,
+ * луж нет, отсчёт следа идёт с нуля. Тип лужи — индекс врага: за пределами контента это снимок
+ * другого контента, а не повод ставить лужу несуществующего врага.
+ */
+function restoreHazards(world: World, input: unknown): void {
+  const fresh = createHazardState(world.config.maxEnemies);
+  if (input === undefined) {
+    Object.assign(world.hazards.puddles, fresh.puddles);
+    world.hazards.trail.ticks.fill(0);
+    return;
+  }
+  const raw = asRecord(input, "hazards");
+  decodeRecord(world.hazards.puddles, raw.puddles, "hazards.puddles");
+  decodeRecord(world.hazards.trail, raw.trail, "hazards.trail");
+  const pool = world.hazards.puddles;
+  for (let i = 0; i < pool.alive.length; i++) {
+    if (pool.alive[i] === 0) continue;
+    if (pool.type[i] >= world.enemyTypes.length || world.enemyTypes[pool.type[i]].trail === null) {
+      throw new SnapshotError(`hazards.puddles: лужа ${i} от врага без следа`);
+    }
+  }
 }
 
 function capturedSiege(state: SiegeState): SiegeSnapshot {
