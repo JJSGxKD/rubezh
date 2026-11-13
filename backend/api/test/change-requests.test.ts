@@ -501,6 +501,7 @@ function fakeTx(initial: { fields: unknown } | null = null) {
 }
 
 describe("вид правки «цена товара»", () => {
+  const gems60 = skuById("gems_60") as ShopSku;
   const kind = () => new SkuPriceKind(new ShopOverrides(NO_SHOP_OVERRIDES));
   const request = (patch: Partial<ChangeRequestRow> = {}): ChangeRequestRow => ({
     requestId: randomUUID(),
@@ -736,18 +737,20 @@ describe("заявки по HTTP панели", () => {
 
   it("заявка, подтверждение другим, 409 на повтор; автор и без права — отказ; без заголовка панели — 403", async () => {
     const { ctx, login } = await start();
+    // Вход в панель открыт тем, у кого уже есть роль: роли выдаются до входа.
+    const seat = async (devId: string, name: string, role: "game_designer" | "moderator"): Promise<Record<string, string>> => {
+      const account = await ctx.accounts.upsert({ platform: "telegram", platformUserId: devId, displayName: name, username: null, photoUrl: null }, Date.now());
+      await ctx.roles.grant(account.accountId, role, null);
+      return headers(await login(`${devId}:${name}`));
+    };
     const owner = headers(await login(`dev-${OWNER_ID}:Владелец`));
-    const designer = headers(await login("dev-player-501:Геймдизайнер"));
-    const moderator = headers(await login("dev-player-502:Модератор"));
-    const designerAccount = await ctx.accounts.byPlatformUser("telegram", "dev-player-501");
-    const moderatorAccount = await ctx.accounts.byPlatformUser("telegram", "dev-player-502");
-    await ctx.roles.grant(designerAccount?.accountId ?? "", "game_designer", null);
-    await ctx.roles.grant(moderatorAccount?.accountId ?? "", "moderator", null);
+    const designer = await seat("dev-player-501", "Геймдизайнер", "game_designer");
+    const moderator = await seat("dev-player-502", "Модератор", "moderator");
     const call = (method: "GET" | "POST", url: string, h: Record<string, string>, payload?: Record<string, unknown>) =>
       app!.inject({ method, url: `/api/v1/admin/change-requests${url}`, headers: h, ...(payload === undefined ? {} : { payload }) });
 
-    expect((await call("POST", "", { cookie: designer.cookie }, proposal())).statusCode).toBe(403);
-    expect((await call("POST", "", headers(moderator.cookie), proposal())).statusCode).toBe(403);
+    expect((await call("POST", "", { cookie: designer.cookie ?? "" }, proposal())).statusCode).toBe(403);
+    expect((await call("POST", "", moderator, proposal())).statusCode).toBe(403);
     expect((await call("POST", "", designer, proposal({ after: { stars: 0 } }))).statusCode).toBe(422);
     expect((await call("POST", "", designer, proposal({ reason: "" }))).statusCode).toBe(400);
 

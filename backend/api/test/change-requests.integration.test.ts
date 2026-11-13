@@ -411,23 +411,23 @@ describe.skipIf(DATABASE_URL === "")("заявки на правку цен на
         const response = await app!.inject({ method: "POST", url: "/api/v1/admin/session/dev", payload: { devUser: user } });
         return { [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE, cookie: `${ADMIN_SESSION_COOKIE}=${/rubezh_admin_session=([^;]+)/.exec(String(response.headers["set-cookie"]))?.[1] ?? ""}` };
       };
-      const grant = async (devId: string, role: "game_designer" | "moderator"): Promise<void> => {
-        const account = await ctx.accounts.byPlatformUser("telegram", devId);
-        await ctx.roles.grant(account?.accountId ?? "", role, null);
+      // Вход в панель открыт тем, у кого уже есть роль: роли выдаются до входа.
+      const seat = async (devId: string, name: string, role: "game_designer" | "moderator"): Promise<Record<string, string>> => {
+        const account = await ctx.accounts.upsert({ platform: "telegram", platformUserId: devId, displayName: name, username: null, photoUrl: null }, Date.now());
+        await ctx.roles.grant(account.accountId, role, null);
+        return await login(`${devId}:${name}`);
       };
-      return { ctx, login, grant };
+      return { ctx, login, seat };
     }
 
     const call = (method: "GET" | "POST", url: string, headers: Record<string, string>, payload?: Record<string, unknown>) =>
       app!.inject({ method, url: `${BASE}${url}`, headers, ...(payload === undefined ? {} : { payload }) });
 
     it("геймдизайнер подаёт, владелец подтверждает: товар получает новую цену; автору «подтвердить» и 403 без права, stars: 0 — 422", async () => {
-      const { login, grant } = await start();
+      const { login, seat } = await start();
       const owner = await login(`dev-${OWNER_ID}:Владелец`);
-      const designer = await login("dev-player-601:Геймдизайнер");
-      const moderator = await login("dev-player-602:Модератор");
-      await grant("dev-player-601", "game_designer");
-      await grant("dev-player-602", "moderator");
+      const designer = await seat("dev-player-601", "Геймдизайнер", "game_designer");
+      const moderator = await seat("dev-player-602", "Модератор", "moderator");
 
       // Без права на цены — 403 и на чтение «sku.price.view» тоже, и на заявку.
       expect((await call("POST", "", moderator, proposal())).statusCode).toBe(403);
