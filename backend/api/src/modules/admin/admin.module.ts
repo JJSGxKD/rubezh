@@ -22,6 +22,8 @@ import { PartnersModule } from "../partners/partners.module.js";
 import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
+import { AdminCustomerReportController } from "./admin-customer-report.controller.js";
+import { CUSTOMER_REPORT_REPOSITORY, PrismaCustomerReportRepository } from "../tasks/customer-report.repository.js";
 import { AdminMediaController } from "./admin-media.controller.js";
 import { AdminPaymentCompensationController } from "./admin-payment-compensation.controller.js";
 import { AdminPaymentJobsController } from "./admin-payment-jobs.controller.js";
@@ -130,6 +132,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminChangelogController,
     AdminHomeController,
     AdminTasksController,
+    AdminCustomerReportController,
     AdminMediaController,
     AdminRestrictionsController,
     AdminPurchasesController,
@@ -163,6 +166,8 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminAllTimeService,
     { provide: ALL_TIME_STORE, useClass: RedisAllTimeStore },
     AdminExportsService,
+    // Отчёт заказчику партнёрских заданий (T-0225): читает только панель
+    { provide: CUSTOMER_REPORT_REPOSITORY, useClass: PrismaCustomerReportRepository },
     AdminSocialService,
     AdminSettingsService,
     AdminSecretsService,
