@@ -303,7 +303,7 @@ describe("обновление подписки", () => {
   describe("заметка о подписке без подходящих узлов", () => {
     const skip = (reason: SkipReason, count: number): SkippedLink[] => Array.from({ length: count }, (_, index) => ({ index, scheme: "vless", reason, detail: "x" }));
 
-    it("причины идут в порядке словаря, числа складываются в общее", () => {
+    it("причины идут от частых к редким, при равенстве — в порядке словаря, числа складываются в общее", () => {
       expect(noNodesNote([...skip("unsupported_option", 3), ...skip("unsupported_scheme", 9)])).toBe("В подписке нет подходящих узлов: пропущено 12 — протокол: x 9; параметры: x 3");
     });
 
@@ -337,7 +337,7 @@ describe("обновление подписки", () => {
 
     it("noNodesNote — те же имена", () => {
       expect(noNodesNote([...skip("unsupported_option", "dialerProxy.redirect", 2), ...skip("unsupported_scheme", "hysteria2", 1)])).toBe(
-        "В подписке нет подходящих узлов: пропущено 3 — протокол: hysteria2 1; параметры: dialerProxy.redirect 2",
+        "В подписке нет подходящих узлов: пропущено 3 — параметры: dialerProxy.redirect 2; протокол: hysteria2 1",
       );
     });
 
@@ -348,7 +348,7 @@ describe("обновление подписки", () => {
     it("в заметку идут только имена: всё, что на имя не похоже, сворачивается в «прочее»", () => {
       const skipped = [...skip("unsupported_option", "https://t.example.org/sub/tok-9f8e7d6c5b4a", 2), ...skip("malformed", "a b", 1), ...skip("unsupported_scheme", "x".repeat(40), 1)];
       const note = successNote(1, skipped);
-      expect(note).toBe("1 узел, пропущено 4 — протокол: прочее 1; параметры: прочее 2; ссылка: прочее 1");
+      expect(note).toBe("1 узел, пропущено 4 — параметры: прочее 2; протокол: прочее 1; ссылка: прочее 1");
       expect(note).not.toMatch(/tok-9f8e7d6c5b4a|example\.org/);
     });
 
