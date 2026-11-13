@@ -3,8 +3,8 @@ id: T-0310
 title: Награды числами в панели — монеты и опыт за забег, награды за уровень и награда дня ключами каталога с подтверждением второго участника
 epic: E7
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0309]
