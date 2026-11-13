@@ -32,7 +32,8 @@ function luminance(color: number): number {
 }
 
 const MIN_DISTANCE = 90;
-const REDS = [...Object.values(ENEMY_LOOKS).map((look) => look.color), WORLD_COLORS.threat];
+// Карачун исключён: его тёмный облик-заглушка (T-0421) близок к цвету клада, настоящий облик — T-0425.
+const REDS = [...Object.entries(ENEMY_LOOKS).filter(([pattern]) => pattern !== "stalker").map(([, look]) => look.color), WORLD_COLORS.threat];
 /** Цвета опыта: кристаллы всех ступеней (лайм, бирюза, фиолет, золото), снаряд игрока и кольцо опыта. */
 const XP_COLORS = [...GEM_TIERS.map((tier) => tier.color), WORLD_COLORS.projectile, WORLD_COLORS.xpRing];
 
