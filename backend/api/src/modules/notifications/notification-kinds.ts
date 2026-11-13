@@ -56,6 +56,8 @@ export const NOTIFICATION_KINDS = {
   season_closing: z.object({ endsAt: z.iso.datetime() }),
   /** напоминание: награда дня сегодня не забрана */
   daily_reward_ready: z.object({}),
+  /** команде: новая заявка на правку цены ждёт подтверждения второго участника (T-0309); в бота не дублируется */
+  change_request_pending: z.object({ requestId: z.string().uuid(), kind: id, target: id, authorName: name }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

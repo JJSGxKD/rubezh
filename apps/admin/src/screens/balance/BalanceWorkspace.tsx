@@ -15,6 +15,8 @@ import { parseSnapshot } from "./balance-snapshot";
 import { TABS, isTabId, tabOfPath, tablesFor, type TabId } from "./balance-tables";
 import { BalanceTable } from "./BalanceTable";
 import { EditsSheet } from "./EditsSheet";
+import { PricesTab } from "./prices/PricesTab";
+import { PRICES_TAB, isPricesTab, withPricesTab } from "./prices/prices-rules";
 
 const DRAFT_TITLE_MAX = 80;
 
@@ -57,7 +59,9 @@ export function BalanceWorkspace({
 }) {
   const narrow = useNarrow();
   const names = version.names;
-  const [tab, setTab] = useState<TabId>(isTabId(initialTab) ? initialTab : "enemies");
+  // «Цены и награды» — не таблица черновика, а заявки (tasks/T-0309): вкладка не зависит от черновика.
+  const [tab, setTab] = useState<TabId | typeof PRICES_TAB.id>(isTabId(initialTab) || isPricesTab(initialTab) ? initialTab : "enemies");
+  const onPrices = tab === PRICES_TAB.id;
   const [editor, setEditor] = useState<EditorState>(() => ({ snapshot: draft === null ? version.snapshot : draft.snapshot, errors: {} }));
   const [changes, setChanges] = useState<DraftChange[]>(() => diff?.changes ?? []);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -118,7 +122,7 @@ export function BalanceWorkspace({
   };
 
   // Вкладка — в адресе: ссылку на раздел черновика можно отправить коллеге. Без черновика в адресе только раздел меню.
-  const selectTab = (next: TabId): void => {
+  const selectTab = (next: TabId | typeof PRICES_TAB.id): void => {
     setTab(next);
     if (draft !== null) navigate({ section: "balance", id: draft.draftId, tab: next });
   };
@@ -182,33 +186,37 @@ export function BalanceWorkspace({
         </Button>
       </div>
 
-      {narrow ? <Notice tone="info">На телефоне баланс только читается: править таблицу чисел на узком экране — способ ошибиться.</Notice> : null}
-      {draft === null && !narrow ? (
+      {narrow && !onPrices ? <Notice tone="info">На телефоне баланс только читается: править таблицу чисел на узком экране — способ ошибиться.</Notice> : null}
+      {draft === null && !narrow && !onPrices ? (
         <Notice tone="info">{canEdit ? `Показана версия v${String(version.versionNo)} — так числа лежат в игре. Чтобы править, создайте черновик.` : "Только чтение: для правки нужно право «content.edit»."}</Notice>
       ) : null}
-      {draft !== null && !canEdit ? <Notice tone="info">Только чтение: для правки нужно право «content.edit».</Notice> : null}
+      {draft !== null && !canEdit && !onPrices ? <Notice tone="info">Только чтение: для правки нужно право «content.edit».</Notice> : null}
 
-      <TabBar label="Разделы баланса" tabs={TABS} active={tab} counts={counts} onSelect={selectTab} />
+      <TabBar label="Разделы баланса" tabs={withPricesTab(TABS)} active={tab} counts={counts} onSelect={selectTab} />
 
-      <div className="flex min-w-0 flex-col gap-4">
-        {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
-        {draft !== null && sheetOpen ? (
-          <EditsSheet
-            changes={changes}
-            truncated={diff?.truncated === true}
-            snapshot={editor.snapshot}
-            names={names}
-            canEdit={canEdit && !narrow}
-            busyPath={busyPath}
-            onRevert={(change) => void revert(change)}
-            onClose={() => setSheetOpen(false)}
-            onGo={(path) => {
-              const owner = tabOfPath(path);
-              if (owner !== null) selectTab(owner);
-            }}
-          />
-        ) : null}
-      </div>
+      {onPrices ? (
+        <PricesTab />
+      ) : (
+        <div className="flex min-w-0 flex-col gap-4">
+          {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
+          {draft !== null && sheetOpen ? (
+            <EditsSheet
+              changes={changes}
+              truncated={diff?.truncated === true}
+              snapshot={editor.snapshot}
+              names={names}
+              canEdit={canEdit && !narrow}
+              busyPath={busyPath}
+              onRevert={(change) => void revert(change)}
+              onClose={() => setSheetOpen(false)}
+              onGo={(path) => {
+                const owner = tabOfPath(path);
+                if (owner !== null) selectTab(owner);
+              }}
+            />
+          ) : null}
+        </div>
+      )}
 
       <Dialog
         open={creating}
