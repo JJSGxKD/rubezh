@@ -1,5 +1,6 @@
 import type { DeviceClass, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../../content/hash";
+import type { ContentSnapshot } from "../../content/snapshot";
 import type { RunRecording, RunRecordingResult, RunReplayBlocker } from "../../run-api";
 import { applyCardTool, isCardToolCommand } from "../progression/card-tools";
 import { chooseUpgrade, isAwaitingChoice } from "../progression/levels";
@@ -73,7 +74,35 @@ export type ReplaySource = Pick<
 /** Выбор благословения капища идёт в лог выборов с этой приставкой (`MainScene.chooseBlessing`). */
 const BLESSING_PREFIX = "blessing:";
 
-export function replayRecording(recording: ReplaySource, contentHash: string = CONTENT_HASH): ReplayOutcome {
+/**
+ * Сколько шагов повтор делает между остановками (`replaySteps`): десять секунд мира. Достаточно
+ * редко, чтобы остановки не стоили заметного, и достаточно часто, чтобы воркер успевал отдавать
+ * управление циклу событий и проверять предел времени.
+ */
+export const REPLAY_PART_STEPS = 600;
+
+export interface ReplayOptions {
+  /**
+   * Контент, на котором шёл забег; без поля — боевой `CONTENT_SNAPSHOT`. Воркер подаёт сюда снимок
+   * по хэшу записи (tasks/T-0318): забег на прошлой версии баланса повторяется на ней, а не на нынешней.
+   * Сверять хэш снимка с хэшем записи должен вызывающий: повтор доверяет ему `contentHash`.
+   */
+  content?: ContentSnapshot;
+}
+
+export function replayRecording(recording: ReplaySource, contentHash: string = CONTENT_HASH, options: ReplayOptions = {}): ReplayOutcome {
+  const parts = replaySteps(recording, contentHash, options);
+  for (let part = parts.next(); ; part = parts.next()) {
+    if (part.done === true) return part.value;
+  }
+}
+
+/**
+ * Тот же повтор, но по частям: между частями (`REPLAY_PART_STEPS` шагов) управление возвращается
+ * вызывающему, и он решает — продолжать, отдать цикл событий или бросить (`return()` закрывает
+ * повтор). Значение остановки — сколько шагов лога уже сделано. Цельный повтор — `replayRecording`.
+ */
+export function* replaySteps(recording: ReplaySource, contentHash: string = CONTENT_HASH, options: ReplayOptions = {}): Generator<number, ReplayOutcome, undefined> {
   const expected = recording.result;
   const verdict = (value: ReplayVerdict, reason: string | null, actual: RunRecordingResult | null = null, divergedAtTick: number | null = null): ReplayOutcome => ({
     verdict: value,
@@ -105,6 +134,7 @@ export function replayRecording(recording: ReplaySource, contentHash: string = C
     ...(recording.startingWeaponId === "" ? {} : { startingWeaponId: recording.startingWeaponId }),
     unitScale: recording.unitScale,
     ...(loadout === undefined ? {} : { loadout }),
+    ...(options.content === undefined ? {} : { content: options.content }),
   });
   // Капище в живом забеге ждёт игрока (`pauseOnChest`), и выбор лежит в логе; без таких выборов
   // оно берёт первое предложение, как у ботов и стенда, — и мир один и тот же.
@@ -166,6 +196,7 @@ export function replayRecording(recording: ReplaySource, contentHash: string = C
     // Как в сцене: смерть закрывает кольцо стражей после шага и после свёртки тика.
     settleCordonDeath(world);
     settleStalkerDeath(world);
+    if ((step + 1) % REPLAY_PART_STEPS === 0) yield step + 1;
   }
   const trailing = applyChoices();
   if (trailing !== null) return verdict("mismatch", trailing, resultOf(), divergedAtTick ?? world.stats.tick);

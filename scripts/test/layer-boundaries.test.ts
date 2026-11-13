@@ -102,8 +102,8 @@ const RULES: Rule[] = [
   },
   {
     from: "apps/sim-worker/src",
-    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/|joystick|radar))/,
-    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
+    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/(?!replay["'])|joystick|radar))/,
+    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`) и повтором забега (`game/diagnostics/replay`, без Phaser — это держит тест сборки в `apps/sim-worker/test/replay-job.test.ts`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
   },
 ];
 

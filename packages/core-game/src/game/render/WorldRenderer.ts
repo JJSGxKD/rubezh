@@ -20,6 +20,7 @@ import { artFlashStart, HIT_FLASH_TICKS, hitFlashStyle, NO_FLASH } from "./hit-f
 import { StalkerLook, stalkerFadeAlpha } from "./stalker-look";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
+import { Puddles } from "./puddles";
 import { Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -111,6 +112,8 @@ export class WorldRenderer {
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly pickups: PickupRenderer;
   private readonly secrets: SecretsRenderer;
+  /** лужи врагов со следом на земле */
+  private readonly puddles: Puddles;
   private readonly telegraphs: Telegraphs;
   /** предвестие и провал неубиваемого: рисуются при любых настройках графики */
   private readonly stalkerLook: StalkerLook;
@@ -212,6 +215,9 @@ export class WorldRenderer {
     // Тайники — на земле, под героем, врагами и подборами; порядок в режиме арта выставляет `applyArtMode`.
     this.secrets = new SecretsRenderer(scene, world, this.layer);
     this.secrets.place(this.layer, false);
+    // Лужи — тоже на земле: сразу над тайниками, под всем, что по ней ходит.
+    this.puddles = new Puddles(scene, world, this.layer);
+    this.layer.moveTo(this.puddles.container, 1);
     this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
@@ -260,6 +266,7 @@ export class WorldRenderer {
   sync(alpha: number): void {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     this.secrets.sync();
+    this.puddles.sync();
     this.syncEnemies(t);
     this.stalkerLook.sync(t);
     this.syncProjectiles(t);
@@ -340,6 +347,8 @@ export class WorldRenderer {
       if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
       // Тайники — следом за землёй, декором и знаком под ногами; без арта — в самом низу слоя.
       this.secrets.place(this.layer, this.art.on);
+      this.puddles.setArt(this.art.puddleArt());
+      this.layer.moveTo(this.puddles.container, this.art.on ? 4 : 1);
       this.ground.setVisible(!this.art.on);
     });
   }

@@ -3,8 +3,8 @@ id: T-0282
 title: Болотник — враг, оставляющий ядовитые лужи: поле `trail` у врага, лужи в мире, облик на земле
 epic: E10
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0281]
@@ -23,6 +23,12 @@ shared:
   - packages/core-game/src/game/patterns/enemy-types.ts
   - packages/core-game/src/game/render/WorldRenderer.ts
   - packages/core-game/src/game/render/looks.ts
+  - packages/core-game/src/game/render/puddles.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/sim/checksum.ts
+  - packages/app-shell/src/screens/guide/GuideScreen.tsx
+  - packages/app-shell/src/screens/guide/elements.tsx
+  - packages/app-shell/src/i18n/ru-guide.json
   - packages/core-game/test/**
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/screens/guide/guide-data.ts

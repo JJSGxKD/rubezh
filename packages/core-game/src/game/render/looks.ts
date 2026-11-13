@@ -162,6 +162,8 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
 export const ENEMY_TONE_BY_ID: Readonly<Record<string, number>> = {
   // тон холода: тот же голубой, которым читается холод в гайдбуке и на знаках состояний
   ice_spirit: 0x6fc8ff,
+  // болотная зелень, темнее тона яда (`STATUS_TONE_COLORS`): тело не сливается с лужей и знаком отравления
+  bog_lurker: 0x5fa043,
 };
 
 /** Ранг врага на канве: обычный не задан. */
