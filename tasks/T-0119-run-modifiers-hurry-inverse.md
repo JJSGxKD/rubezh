@@ -3,8 +3,8 @@ id: T-0119
 title: Модификаторы забега «Спешка» и «Инверсия»: данные и движок
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
 depends_on: [T-0108, T-0192, T-0193, T-0194, T-0195, T-0196, T-0198]
@@ -33,6 +33,11 @@ shared:
   - packages/app-shell/src/i18n/ru.json
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - CLAUDE.md
+  - packages/core-game/src/content/snapshot.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/run-api.ts
+  - packages/core-game/src/game/MainScene.ts
 runner: any
 executor: sonnet-5.5
 effort: high

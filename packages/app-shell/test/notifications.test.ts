@@ -6,7 +6,7 @@ import { createBadgesApi, loadBadges } from "../src/state/badges-api";
 import { useItems } from "../src/state/items";
 import { createItemsApi, markItemsSeen, type InventoryView, type ItemView } from "../src/state/items-api";
 import { createNotificationsApi, formatWhen, loadFeed, markRead } from "../src/state/notifications-api";
-import { Gem, Undo2 } from "lucide-react";
+import { Gem, Gift, Undo2 } from "lucide-react";
 import { describeNotification } from "../src/screens/meta/notifications";
 import { t } from "../src/i18n";
 import "../src/i18n/history";
@@ -343,5 +343,50 @@ describe("извинение команды в ленте: компенсаци�
     expect(row(refunded("external", false))).toBeNull();
     expect(row(refunded("manual", false, { stars: undefined }))).toBeNull();
     expect(() => row({ action: 5, stars: {}, gems: [], paidAt: null })).not.toThrow();
+  });
+});
+
+describe("пасс месяца закрыт: строка ленты (T-0312)", () => {
+  const row = (data: Record<string, unknown>, kind = "pass_closed") => describeNotification({ id: "n7", kind, data, createdAt: "2026-11-01T00:01:00.000Z", read: false });
+
+  it("текст бота дословно, значок «подарок», никуда не ведёт: экран пасса — T-0314", () => {
+    const described = row({ month: "2026-10", rewards: 5 });
+
+    expect(described?.text).toBe("Пасс октября закрыт: 5 наград зачислено на счёт.");
+    expect(described?.target).toBeNull();
+    expect(described?.over).toBeUndefined();
+    expect((described?.icon as { type: unknown }).type).toBe(Gift);
+  });
+
+  it("число наград склоняется, как в сообщении бота", () => {
+    const texts = [1, 2, 5, 11, 21, 22, 25, 60].map((rewards) => row({ month: "2026-10", rewards })?.text);
+    expect(texts).toEqual([
+      "Пасс октября закрыт: 1 награда зачислена на счёт.",
+      "Пасс октября закрыт: 2 награды зачислены на счёт.",
+      "Пасс октября закрыт: 5 наград зачислено на счёт.",
+      "Пасс октября закрыт: 11 наград зачислено на счёт.",
+      "Пасс октября закрыт: 21 награда зачислена на счёт.",
+      "Пасс октября закрыт: 22 награды зачислены на счёт.",
+      "Пасс октября закрыт: 25 наград зачислено на счёт.",
+      "Пасс октября закрыт: 60 наград зачислено на счёт.",
+    ]);
+  });
+
+  it("месяц — в родительном падеже, январь и декабрь на границах года", () => {
+    expect(row({ month: "2026-01", rewards: 3 })?.text).toContain("Пасс января закрыт");
+    expect(row({ month: "2026-12", rewards: 3 })?.text).toContain("Пасс декабря закрыт");
+    expect(row({ month: "2026-03", rewards: 3 })?.text).toContain("Пасс марта закрыт");
+  });
+
+  it("битые данные — строки нет, а не «undefined» в тексте и не падение ленты", () => {
+    expect(row({})).toBeNull();
+    expect(row({ month: "2026-10" })).toBeNull();
+    expect(row({ month: "2026-10", rewards: 0 })).toBeNull();
+    expect(row({ month: "2026-10", rewards: -2 })).toBeNull();
+    expect(row({ month: "2026-10", rewards: "5" })).toBeNull();
+    expect(row({ month: "2026-13", rewards: 5 })).toBeNull();
+    expect(row({ month: "октябрь", rewards: 5 })).toBeNull();
+    expect(row({ month: 10, rewards: 5 })).toBeNull();
+    expect(() => row({ month: null, rewards: {} })).not.toThrow();
   });
 });

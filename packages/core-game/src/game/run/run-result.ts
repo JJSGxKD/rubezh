@@ -43,6 +43,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     startingWeaponId: options.startingWeaponId,
     mapId: world.mapId,
     difficultyId: world.difficultyLevel.id,
+    ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
     contentHash: options.contentHash,
     waveReached: world.difficulty.segment,
     survivalSec: stats.elapsedSec,

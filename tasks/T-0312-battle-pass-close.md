@@ -3,8 +3,8 @@ id: T-0312
 title: Батл-пасс — закрытие месяца: незабранное выдаётся само под локом, уведомление в игре и в боте; бусты-подарки тратятся при включении буста
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0311]
@@ -15,11 +15,25 @@ zones:
   - backend/api/test/boost-credits.integration.test.ts
 shared:
   - backend/api/src/modules/battle-pass/battle-pass.module.ts
+  - backend/api/src/modules/battle-pass/pass-close.repository.ts
+  - backend/api/src/modules/battle-pass/pass-close.lock.ts
   - backend/api/src/modules/boosts/boosts.service.ts
   - backend/api/src/modules/boosts/boosts.repository.ts
   - backend/api/src/modules/notifications/notification-kinds.ts
   - backend/api/src/modules/notifications-bot/bot-notify-texts.ts
+  - backend/api/src/modules/notifications-bot/bot-notify-rules.ts
+  - backend/api/test/notifications-bot.test.ts
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/i18n/ru-account.json
+  - packages/app-shell/test/notifications.test.ts
   - backend/api/src/modules/vip/vip.repository.ts
+  - backend/api/prisma/schema.prisma
+  - backend/api/prisma/migrations/**
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - docs/21-diagrams.md
+  - docs/22-analytics-and-metrics.md
+  - docs/30-configuration-map.md
   - docs/37-accounting.md
 runner: any
 executor: sonnet-5.5

@@ -227,6 +227,7 @@ export function openRunRecorder(options: OpenRecorderOptions): RunRecorder {
       // Стартовое оружие продолженного забега — из записи: слот мира мог уйти в эволюцию.
       startingWeaponId: resume?.startingWeaponId ?? options.startingWeaponId,
       ...(world.mode === "endless" ? {} : { mode: world.mode }),
+      ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
       contentHash: options.contentHash,
       unitScale: options.unitScale,
       // Продолженный без записи не повторить с начала, а в забеге разработчика читы и
