@@ -43,6 +43,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/name-rules/name-rules-reclean.service.ts",
   // подписка Xray — раздел панели, игрок её не видит
   "modules/proxies/subscription/",
+  // ядро Xray (T-0416): раздел панели, тексты отказов — сотруднику
+  "modules/proxies/xray-core/",
   // контент и баланс (T-0303): версии, черновики, проверка — раздел панели, тексты сотруднику
   "modules/content/",
   // заявки на правку цен (T-0309): раздел панели, тексты сотруднику

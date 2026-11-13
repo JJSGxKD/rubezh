@@ -2577,6 +2577,7 @@ flowchart LR
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
         PROXIES["proxies<br/>прокси для исходящих запросов:<br/>список и режимы сервисов из панели,<br/>пароль шифртекстом, снимок маршрутов<br/>в памяти, реализовано"]
         SUBSCR["proxies/subscription<br/>подписки Xray (до 10): обновление под замком,<br/>слоты узлов, части подписок и общий конфиг<br/>в томе, проверки узлов, учёт трафика узлов<br/>по часам, реализовано"]
+        XRAYCORE["proxies/xray-core<br/>«Ядро Xray» в панели: версия из файла статуса,<br/>свежий выпуск XTLS (кэш 6 ч), совместимость из proxy-kit,<br/>запуск workflow обновления под замком, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
@@ -2608,6 +2609,8 @@ flowchart LR
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
 
     ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion;<br/>зовёт адрес награды задания"]
+
+    GITHUBAPI["GitHub<br/>api.github.com: последний выпуск XTLS/Xray-core;<br/>запуск xray-bump.yml ключом github.xray-update"]
 
     TADDYAPI["Taddy<br/>api.taddy.pro: креатив и его показы,<br/>лента обмена и проверка задания"]
 
@@ -2765,6 +2768,11 @@ flowchart LR
     SUBSCR -. "proxy.subscription: только напрямую" .-> OUTBOUND
     SUBSCR -- "замок proxy-subscription:refresh:lock" --> REDIS
     ADMINAPI -. "подписка: обновить, проверить, права proxies.*" .-> SUBSCR
+    ADMINAPI -. "ядро Xray: состояние, проверить выпуск, обновить; права proxies.*" .-> XRAYCORE
+    XRAYCORE -- "кэш выпуска, замок запуска xray-core:update:lock" --> REDIS
+    XRAYCORE -. "ключ github.xray-update на каждом запуске" .-> SECRETS
+    XRAYCORE -- "github.api, таймаут 5 с" --> OUTBOUND
+    OUTBOUND -- "github.api" --> GITHUBAPI
     OUTBOUND -- "outbound:route:сервис — какой прокси сработал, 10 минут" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG

@@ -220,6 +220,9 @@ const schema = z.object({
   XRAY_SOCKS_PORT_BASE: z.coerce.number().int().min(1024).max(65_000).default(10_800),
   XRAY_SLOT_COUNT: z.coerce.number().int().min(1).max(500).default(100),
   XRAY_CONFIG_PATH: z.string().trim().min(1).default("/xray-config/config.json"),
+  // Файл статуса ядра Xray (Р202, T-0416): версию и время запуска пишет контейнер,
+  // API только читает. Не секрет, умолчание допустимо.
+  XRAY_STATUS_PATH: z.string().trim().min(1).default("/xray-status/core"),
   // Порт службы статистики Xray (docs/35-stage4-plan.md Р192, T-0386): считает
   // трафик по узлу и подписке. Слушает внутри сети tunnel, наружу не публикуется;
   // от SOCKS-входов отделён проверкой ниже.
@@ -340,6 +343,8 @@ export interface AppConfig {
     slotCount: number;
     /** файл конфига, который пишет API и читает контейнер */
     configPath: string;
+    /** файл статуса ядра: версия и время запуска, пишет контейнер Xray, API только читает */
+    statusPath: string;
     /** порт службы статистики Xray внутри сети tunnel: вне диапазона SOCKS-входов */
     statsPort: number;
   };
@@ -546,6 +551,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv): AppConfig {
       socksPortBase: parsed.XRAY_SOCKS_PORT_BASE,
       slotCount: parsed.XRAY_SLOT_COUNT,
       configPath: parsed.XRAY_CONFIG_PATH,
+      statusPath: parsed.XRAY_STATUS_PATH,
       statsPort: parsed.XRAY_STATS_PORT,
     },
     payments: {

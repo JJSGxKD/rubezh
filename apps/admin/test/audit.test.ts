@@ -72,6 +72,13 @@ describe("журнал аудита", () => {
     expect(auditObject(entry({ action: "names.reclean.start", target: "00000000-0000-4000-8000-000000000009" }))).toEqual({ kind: "перечистка", label: "00000000", route: { section: "names", id: null } });
   });
 
+  it("запуск обновления ядра Xray (T-0416): название, объект «ядро Xray», версии словами; ручные прокси — как были", () => {
+    expect(actionTitle("proxies.xray_core.update")).toBe("Запуск обновления ядра Xray");
+    expect(fieldTitle("running")).toBe("запущенная версия");
+    expect(auditObject(entry({ action: "proxies.xray_core.update", target: "26.11.5", after: { version: "26.11.5", running: "26.10.31" } }))).toEqual({ kind: "ядро Xray", label: "26.11.5", route: { section: "proxies", id: null } });
+    expect(auditObject(entry({ action: "proxies.create", target: "00000000-0000-4000-8000-000000000002" }))).toEqual({ kind: "объект", label: "00000000", route: null });
+  });
+
   it("отбор уходит серверу началами действий, человеком, объектом и курсором", async () => {
     const page = { entries: [entry({})], next: "2026-10-01T10:00:00.000Z_e1" };
     const { fetch, calls } = fakeFetch(json(200, { data: page }), json(200, { data: { entries: [], next: null } }));
