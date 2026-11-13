@@ -1337,11 +1337,46 @@ export interface StalkerBodyDef {
   };
 }
 
-/** Правила преследователя целиком: какой враг им служит и как устроено его тело. */
+/** Отрезок значений `[min, max]`, из которого поток случайности бросает число. */
+export interface StalkerRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Когда и как появляется преследователь (Р205, tasks/T-0423). Время — в секундах, расстояния — в
+ * игровых единицах.
+ */
+export interface StalkerAppearDef {
+  /** с какой секунды забега он приходит */
+  fromSec: number;
+  /** первое предвестие — через столько секунд после `fromSec` */
+  firstDelaySec: StalkerRange;
+  /** пауза от конца появления до следующего предвестия на `fromSec` */
+  gapSec: StalkerRange;
+  /** она же на `lateAtSec` и дальше; между ними — линейно */
+  lateGapSec: StalkerRange;
+  lateAtSec: number;
+  /** сколько секунд длится погоня */
+  chaseSec: StalkerRange;
+  /** сколько горит предвестие до выхода */
+  omenSec: number;
+  /** сколько он стоит, растворяясь, после погони */
+  fadeSec: number;
+  /** на каком расстоянии от игрока выходит: на виду и у самого узкого экрана */
+  appearDistance: number;
+  /** дальше этого от игрока он растворяется и возникает ближе */
+  farDistance: number;
+  /** ниже этого уровня аккаунта он не приходит; забег без уровня идёт с ним */
+  minAccountLevel: number;
+}
+
+/** Правила преследователя целиком: какой враг им служит, как устроено его тело и когда он приходит. */
 export interface StalkerDef {
   /** id врага паттерна `stalker` */
   enemy: string;
   body: StalkerBodyDef;
+  appear: StalkerAppearDef;
 }
 
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */

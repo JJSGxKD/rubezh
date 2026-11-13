@@ -32,7 +32,6 @@ const BOSS: EnemyDef = { id: "boss", hp: 1_000_000, speed: 0.001, damage: 0, xp:
 const GUARD: EnemyDef = { id: "guard", hp: 1_000_000, speed: 0.001, damage: 0, xp: 1, threat: 1, pattern: "cordon" };
 const BOSS_TYPE = 2;
 const GUARD_TYPE = 3;
-const KARACHUN_TYPE = 1;
 
 const APPEAR = STALKER.appear;
 const OMEN_TICKS = Math.round(APPEAR.omenSec * TICK_HZ);
@@ -454,7 +453,6 @@ describe("свой поток случайности", () => {
 describe("журнал появлений", () => {
   it("растворился: faded, счётчики и время жизни", () => {
     const world = chaseWorld();
-    world.cheats.godMode = false;
     let guard = 0;
     while (world.stalker.ended.length === 0 && guard++ < 5_000) step(world, 1);
     expect(world.stalker.ended).toHaveLength(1);
@@ -466,7 +464,8 @@ describe("журнал появлений", () => {
     expect(end.relocations).toBe(0);
     expect(end.lifeSec).toBeGreaterThanOrEqual(APPEAR.chaseSec.min + APPEAR.fadeSec - 0.1);
     expect(end.lifeSec).toBeLessThanOrEqual(APPEAR.chaseSec.max + APPEAR.fadeSec + 0.1);
-    expect(end.elapsedSec).toBeCloseTo(world.stats.tick * TICK_SEC, 6);
+    // Запись сделана внутри шага, до приращения счётчика тиков.
+    expect(end.elapsedSec).toBeCloseTo((world.stats.tick - 1) * TICK_SEC, 6);
     expect(world.stalker.index).toBe(1);
   });
 
@@ -562,8 +561,9 @@ describe("снимок и контрольная сумма", () => {
   }
 
   function stateOf(world: World): Omit<World["stalker"], "ended" | "rng"> & { rng: number } {
-    const { ended: _ended, rng, ...rest } = world.stalker;
-    return { ...rest, rng: rng.getState() };
+    const state: Partial<World["stalker"]> = { ...world.stalker };
+    delete state.ended;
+    return { ...(state as Omit<World["stalker"], "ended" | "rng">), rng: world.stalker.rng.getState() };
   }
 
   for (const phase of ["waiting", "omen", "chase", "fading"] as const) {

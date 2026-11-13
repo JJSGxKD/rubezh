@@ -9,6 +9,7 @@ import type { CordonState } from "./cordon";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
 import type { SiegeState } from "./siege";
+import type { StalkerState } from "./stalker";
 import type { StalkerBodyState } from "./stalker-body";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
@@ -478,6 +479,12 @@ export interface World {
    * нет (`rules: null`) — преследователя не выпустить. Динамическая часть входит в снимок
    */
   stalkerBody: StalkerBodyState;
+  /**
+   * директор преследователя (Р205, T-0423): фаза появления, отметки, собственный поток случайности.
+   * Фаза `off` — директора нет (правил нет, пролог, «Лёгкая», новичок). В `createRunWorld` подключается
+   * задачей T-0424. Состояние входит в снимок
+   */
+  stalker: StalkerState;
   /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
   mode: RunMode;
   /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */

@@ -1,4 +1,4 @@
-import type { EnemyDef, StalkerBodyDef, StalkerDef } from "@bh/shared-types";
+import type { EnemyDef, StalkerAppearDef, StalkerBodyDef, StalkerDef, StalkerRange } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { NEVER_HIT } from "./pools";
 import { vectorLength } from "./vector";
@@ -134,7 +134,8 @@ export function pushStalker(world: World, index: number): void {
   // Вспышка попадания нужна рендеру и без толчка: удар по нему виден.
   enemies.hitTick[index] = tick;
   const rules = state.rules;
-  if (rules === null) return;
+  // Растворяющийся стоит на месте: удар не двигает его, и в счётчик толчков он не идёт.
+  if (rules === null || world.stalker.phase === "fading") return;
 
   const push = rules.push;
   if (tick - state.lastPushTick > Math.round(push.seriesResetSec * TICK_HZ)) state.seriesFactor = 1;
@@ -144,6 +145,7 @@ export function pushStalker(world: World, index: number): void {
   const size = Math.min(push.first * state.seriesFactor * scale, push.maxPerSec * scale - state.pushWindowSum);
   state.seriesFactor *= push.decay;
   if (!(size > 0)) return;
+  world.stalker.pushes++;
 
   const player = world.player;
   let nx = enemies.x[index] - player.x;
@@ -177,6 +179,7 @@ export function stalkerTouch(world: World, index: number): void {
 
   const enemies = world.enemies;
   const player = world.player;
+  world.stalker.hits++;
   damagePlayer(world, world.playerStats.maxHp * rules.touchMaxHpShare, enemies.type[index], true);
   state.touchCooldownTicks = Math.round(rules.touchCooldownSec * TICK_HZ);
   state.recoverTicks = Math.round(rules.recoverSec * TICK_HZ);
@@ -220,7 +223,11 @@ function between(value: unknown, min: number, max: number): boolean {
  * Проблемы правил тела человеческим языком: сообщение называет поле. Данные пришли из контента или из
  * панели JSON-ом, поэтому проверка не доверяет типам и не падает на отсутствующем поле.
  */
-export function findStalkerProblems(def: StalkerDef, enemies: readonly EnemyDef[]): string[] {
+export function findStalkerProblems(
+  def: StalkerDef,
+  enemies: readonly EnemyDef[],
+  options: { maxAccountLevel?: number } = {},
+): string[] {
   const problems: string[] = [];
   const enemy = enemies.find((entry) => entry.id === def.enemy);
   if (enemy === undefined) {
@@ -269,6 +276,71 @@ export function findStalkerProblems(def: StalkerDef, enemies: readonly EnemyDef[
     problems.push(
       `stalker.push.maxPerSec: не больше ${PUSH_MAX_SPEED_RATIO} скорости врага (${enemy.speed * PUSH_MAX_SPEED_RATIO}): иначе под огнём он не подойдёт`,
     );
+  }
+  problems.push(...findAppearProblems(def.appear, options.maxAccountLevel));
+  return problems;
+}
+
+/** Коридоры правил появления: число не должно уехать так, что Карачун приходит каждую секунду или никогда. */
+const GAP_SEC = { min: 10, max: 600 } as const;
+const CHASE_SEC = { min: 3, max: 60 } as const;
+const OMEN_SEC = { min: 0.5, max: 3 } as const;
+const FADE_SEC = { min: 0.2, max: 2 } as const;
+const APPEAR_DISTANCE_MIN = 100;
+/** Дальше farDistance от appearDistance — иначе отброшенный возник бы снова за границей. */
+const FAR_MARGIN = 100;
+
+function rangeOk(range: StalkerRange | undefined): range is StalkerRange {
+  return range !== undefined && typeof range.min === "number" && typeof range.max === "number" && range.min <= range.max;
+}
+
+/** Проверка в границах `[lo, hi]` сразу обоих концов отрезка; `false` — отрезок неверен или вне границ. */
+function rangeWithin(range: StalkerRange | undefined, lo: number, hi: number): boolean {
+  return rangeOk(range) && range.min >= lo && range.max <= hi;
+}
+
+/**
+ * Проблемы правил появления. Связи с картами (видимая область, радиус кольца спавна) проверяет
+ * `findStalkerMapProblems` в `sim/stalker.ts`, где карты под рукой; верхний предел `minAccountLevel`
+ * известен только набору контента и приходит параметром.
+ */
+function findAppearProblems(appear: StalkerAppearDef | undefined, maxAccountLevel: number | undefined): string[] {
+  if (appear === undefined) return ["stalker.appear: правил появления нет"];
+  const problems: string[] = [];
+
+  if (!(typeof appear.fromSec === "number" && appear.fromSec >= 0)) problems.push("stalker.appear.fromSec: не меньше 0");
+  if (!rangeOk(appear.firstDelaySec) || appear.firstDelaySec.min < 0) {
+    problems.push("stalker.appear.firstDelaySec: min не меньше 0 и не больше max");
+  }
+  if (!rangeWithin(appear.gapSec, GAP_SEC.min, GAP_SEC.max)) {
+    problems.push(`stalker.appear.gapSec: min не больше max, оба от ${GAP_SEC.min} до ${GAP_SEC.max}`);
+  }
+  if (!rangeWithin(appear.lateGapSec, GAP_SEC.min, GAP_SEC.max)) {
+    problems.push(`stalker.appear.lateGapSec: min не больше max, оба от ${GAP_SEC.min} до ${GAP_SEC.max}`);
+  } else if (rangeOk(appear.gapSec) && (appear.lateGapSec.min > appear.gapSec.min || appear.lateGapSec.max > appear.gapSec.max)) {
+    problems.push("stalker.appear.lateGapSec: позже — не реже, оба конца не больше концов gapSec");
+  }
+  if (!(typeof appear.lateAtSec === "number" && appear.lateAtSec > appear.fromSec)) {
+    problems.push("stalker.appear.lateAtSec: позже fromSec");
+  }
+  if (!rangeWithin(appear.chaseSec, CHASE_SEC.min, CHASE_SEC.max)) {
+    problems.push(`stalker.appear.chaseSec: min не больше max, оба от ${CHASE_SEC.min} до ${CHASE_SEC.max}`);
+  }
+  if (!between(appear.omenSec, OMEN_SEC.min, OMEN_SEC.max)) {
+    problems.push(`stalker.appear.omenSec: от ${OMEN_SEC.min} до ${OMEN_SEC.max}`);
+  }
+  if (!between(appear.fadeSec, FADE_SEC.min, FADE_SEC.max)) {
+    problems.push(`stalker.appear.fadeSec: от ${FADE_SEC.min} до ${FADE_SEC.max}`);
+  }
+  if (!(typeof appear.appearDistance === "number" && appear.appearDistance >= APPEAR_DISTANCE_MIN)) {
+    problems.push(`stalker.appear.appearDistance: не меньше ${APPEAR_DISTANCE_MIN}`);
+  }
+  if (!(typeof appear.farDistance === "number" && typeof appear.appearDistance === "number" && appear.farDistance >= appear.appearDistance + FAR_MARGIN)) {
+    problems.push(`stalker.appear.farDistance: не меньше appearDistance + ${FAR_MARGIN}`);
+  }
+  const level = appear.minAccountLevel;
+  if (!(Number.isInteger(level) && level >= 1 && (maxAccountLevel === undefined || level <= maxAccountLevel))) {
+    problems.push(`stalker.appear.minAccountLevel: целое от 1${maxAccountLevel === undefined ? "" : ` до ${maxAccountLevel}`}`);
   }
   return problems;
 }
