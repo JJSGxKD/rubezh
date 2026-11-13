@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ForbiddenError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
 import { PaymentReconciler } from "../src/modules/payments/payment-reconciler.js";
-import { RECONCILE, type KnownPurchase } from "../src/modules/payments/payment-reconcile.js";
+import { RECONCILE, type FoundDiscrepancy, type KnownPurchase } from "../src/modules/payments/payment-reconcile.js";
 import type {
   DiscrepancyRow,
   FinishedRun,
@@ -82,7 +82,7 @@ class MemoryStatement implements PaymentStatement {
   }
 }
 
-interface RunRecord extends StartedRun, FinishedRun {}
+type RunRecord = StartedRun & Omit<FinishedRun, "finishedAt"> & { finishedAt: Date | null };
 
 /** Репозиторий в памяти: те же правила, что у Postgres, — удачная сверка без ошибки, уникальный ключ расхождения. */
 class MemoryReconcileRepository implements PaymentReconcileRepository {
@@ -112,6 +112,26 @@ class MemoryReconcileRepository implements PaymentReconcileRepository {
       found: 0,
       matched: 0,
       error: null,
+    });
+  }
+
+  /** Сверка, оборвавшаяся ошибкой площадки: курсора у неё нет. */
+  failed(platform: PlatformId, finishedAt: Date, error: string): void {
+    this.runs.push({
+      runId: randomUUID(),
+      platform,
+      trigger: "schedule",
+      actorAccountId: null,
+      startedAt: finishedAt,
+      fromOffset: 0,
+      finishedAt,
+      toOffset: null,
+      coveredFrom: null,
+      coveredTo: null,
+      scanned: 0,
+      found: 0,
+      matched: 0,
+      error,
     });
   }
 
@@ -171,7 +191,7 @@ class MemoryReconcileRepository implements PaymentReconcileRepository {
     return this.purchases.filter((row) => row.platform === platform && row.paidAt >= from && row.paidAt <= to);
   }
 
-  async insertFound(runId: string, platform: PlatformId, found: readonly Parameters<PaymentReconcileRepository["insertFound"]>[2][number][], at: Date): Promise<InsertedFound> {
+  async insertFound(runId: string, platform: PlatformId, found: readonly FoundDiscrepancy[], at: Date): Promise<InsertedFound> {
     const items: InsertedFound["items"] = [];
     for (const item of found) {
       if (this.discrepancies.some((row) => row.platform === platform && row.kind === item.kind && row.chargeId === item.chargeId)) continue;
@@ -570,7 +590,7 @@ describe("PaymentReconciler: выключатель и расписание", ()
   it("неудачная сверка сутки не откладывает: прошлая удачная была давно — тик сверяет снова", async () => {
     const s = setup();
     s.repository.succeeded("telegram", 40, new Date(NOW.getTime() - 3 * DAY));
-    s.repository.runs.push({ ...s.repository.runs[0]!, runId: randomUUID(), finishedAt: new Date(NOW.getTime() - 3_600_000), toOffset: null, error: "Bad Gateway" });
+    s.repository.failed("telegram", new Date(NOW.getTime() - 3_600_000), "Bad Gateway");
     s.statement.entries = filler(60);
 
     await s.reconciler.tick(NOW);
@@ -710,8 +730,10 @@ describe("PaymentReconciler: расхождения и сообщение ком
     s.repository.purchases = [
       { ...purchase("now-recorded", { paidAt: ago(1000) }), platform: "telegram" },
       { ...purchase("now-refunded", { refundedAt: ago(500) }), platform: "telegram" },
+      { ...purchase("now-present", { paidAt: ago(299) }), platform: "telegram" },
     ];
-    s.statement.entries = [entry("now-present", 300), ...filler(5)];
+    // Две операции с разницей в минуту: отрезка для «записано, но нет» у такой выписки нет.
+    s.statement.entries = [entry("now-present", 300), entry("x1", 299, { kind: "other" })];
 
     const result = await s.reconciler.run("schedule", null, NOW);
 
