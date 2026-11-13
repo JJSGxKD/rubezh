@@ -4,7 +4,7 @@ import { MemoryRateStore } from "../src/memory-store.js";
 import { quoteInUsd, type Quote } from "../src/quote.js";
 import { Decimal } from "../src/decimal.js";
 import { convert, MissingRateError, payoutUsdPerUnit, rateOf } from "../src/rates.js";
-import { refreshRates, takeSnapshot, type RateAlerts } from "../src/refresh.js";
+import { buildSnapshot, refreshRates, takeSnapshot, type RateAlerts } from "../src/refresh.js";
 import { SourceRateLimitedError, SourceUnavailableError, type RateSource } from "../src/sources.js";
 import { rateStoreContract } from "./store-contract.js";
 
@@ -261,4 +261,46 @@ describe("запасной ручной курс рыночной валюты (
 
 describe("хранилище в памяти", () => {
   rateStoreContract(async () => ({ store: new MemoryRateStore(), source: (name) => name }));
+});
+
+describe("снимок без записи: buildSnapshot (T-0453)", () => {
+  /** Хранилище, которое считает записи снимков: просмотр кабинета не должен их плодить. */
+  class CountingStore extends MemoryRateStore {
+    saved = 0;
+
+    override async saveSnapshot(snapshot: Parameters<MemoryRateStore["saveSnapshot"]>[0]) {
+      this.saved++;
+      return await super.saveSnapshot(snapshot);
+    }
+  }
+
+  async function seeded(): Promise<CountingStore> {
+    const store = new CountingStore();
+    await store.setCurrentRate(rateOf("RUB", new Decimal(1).div("90"), ["cbr"], T0), T0);
+    await store.appendManual(manualRate({ currency: "XTR", purpose: "payout", price: "0.013", setBy: "owner", setAt: T0, expiresAt: at(30 * 86_400_000), note: "" }));
+    return store;
+  }
+
+  it("не вызывает saveSnapshot, а курсы те же, что у takeSnapshot", async () => {
+    const store = await seeded();
+
+    const built = await buildSnapshot(store, T0);
+
+    expect(store.saved).toBe(0);
+    expect(built).not.toHaveProperty("id");
+    expect(built.takenAt).toEqual(T0);
+    expect(built.payout.get("XTR")?.usdPerUnit.toString()).toBe("0.013");
+    expect(built.rates.get("RUB")?.usdPerUnit.toDecimalPlaces(6).toString()).toBe("0.011111");
+  });
+
+  it("takeSnapshot вызывает saveSnapshot ровно один раз и отдаёт то же, что buildSnapshot, с id", async () => {
+    const store = await seeded();
+    const built = await buildSnapshot(store, T0);
+
+    const taken = await takeSnapshot(store, T0);
+
+    expect(store.saved).toBe(1);
+    expect(taken.id).toMatch(/^memory-/);
+    expect({ takenAt: taken.takenAt, rates: [...taken.rates], payout: [...taken.payout] }).toEqual({ takenAt: built.takenAt, rates: [...built.rates], payout: [...built.payout] });
+  });
 });

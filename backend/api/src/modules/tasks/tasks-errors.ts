@@ -21,6 +21,13 @@ export class TaskShapeLockedError extends DomainError {
   }
 }
 
+/** Знаки статусов и сезонов заводит миграция: панель правит заведённые, а новый такого вида завести не может. */
+export class TaskEmblemFixedError extends DomainError {
+  constructor() {
+    super("task_emblem_fixed", "Знаки статусов и сезонов заводятся миграцией — здесь можно править только заведённые", 409);
+  }
+}
+
 /** Состав списка изменился, пока панель держала порядок: нужны свежие данные, а не тихая перезапись. */
 export class TaskOrderMismatchError extends DomainError {
   constructor() {
@@ -32,6 +39,16 @@ export class TaskOrderMismatchError extends DomainError {
 export class TaskNotJoinedError extends DomainError {
   constructor() {
     super("task_not_joined", "Подписка не найдена — подпишись и нажми ещё раз", 409);
+  }
+}
+
+/**
+ * Канал другой площадки, а аккаунт с ней ещё не связан (Р188): подписку нечем
+ * проверить, пока игрок не открыл бота и не нажал «Начать».
+ */
+export class TaskLinkRequiredError extends DomainError {
+  constructor() {
+    super("task_link_required", "Сначала открой бота и нажми «Начать» — так мы узнаем твой аккаунт", 409);
   }
 }
 

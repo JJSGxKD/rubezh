@@ -30,7 +30,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 const NOW = Date.UTC(2026, 9, 21, 10, 0, 0);
 
 describe("linkBindingDecision: привязывать ли по касанию", () => {
-  const fresh = { partnerStatus: "active" as PartnerStatus | null, accountAgeDays: 1, slot: "free" as const };
+  const fresh = { partnerStatus: "active" as PartnerStatus | null, accountAgeDays: 1, slot: "free" as const, ownAccount: false };
 
   it("партнёра нет — no_partner", () => {
     expect(linkBindingDecision({ ...fresh, partnerStatus: null })).toBe("no_partner");
@@ -52,6 +52,15 @@ describe("linkBindingDecision: привязывать ли по касанию",
     expect(linkBindingDecision({ ...fresh, accountAgeDays: -0.01 })).toBe("bind");
   });
 
+  it("аккаунт самого партнёра — own_account раньше проверок статуса, возраста и слота (T-0217)", () => {
+    expect(linkBindingDecision({ ...fresh, ownAccount: true })).toBe("own_account");
+    // Раньше слота и возраста: причина отказа — кто пришёл, а не когда и после кого.
+    expect(linkBindingDecision({ ...fresh, ownAccount: true, slot: "referral", accountAgeDays: 30 })).toBe("own_account");
+    for (const status of PARTNER_STATUSES) expect(linkBindingDecision({ ...fresh, ownAccount: true, partnerStatus: status }), status).toBe("own_account");
+    // Партнёра нет — решает «нет партнёра»: своего аккаунта у несуществующего не бывает.
+    expect(linkBindingDecision({ ...fresh, ownAccount: true, partnerStatus: null })).toBe("no_partner");
+  });
+
   it("слот занят рефералом или партнёром — slot_taken", () => {
     expect(linkBindingDecision({ ...fresh, slot: "referral" })).toBe("slot_taken");
     expect(linkBindingDecision({ ...fresh, slot: "partner" })).toBe("slot_taken");
@@ -62,7 +71,7 @@ describe("linkBindingDecision: привязывать ли по касанию",
   });
 
   it("порядок отказов: нет партнёра, статус, возраст, слот", () => {
-    const worst = { partnerStatus: "paused" as const, accountAgeDays: 30, slot: "referral" as const };
+    const worst = { partnerStatus: "paused" as const, ownAccount: false, accountAgeDays: 30, slot: "referral" as const };
     expect(linkBindingDecision({ ...worst, partnerStatus: null })).toBe("no_partner");
     expect(linkBindingDecision(worst)).toBe("inactive");
     expect(linkBindingDecision({ ...worst, partnerStatus: "active" })).toBe("too_old");

@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { ENEMIES } from "../src/content/enemies";
 import { DROPS } from "../src/content/drops";
 import { LEVEL_CURVE, LOADOUT_LIMITS, PASSIVES } from "../src/content/upgrades";
+import { RUN_MODIFIERS } from "../src/content/modifiers";
 import { WEAPONS } from "../src/content/weapons";
+import { BASE_DIFFICULTY, composeDifficulty } from "../src/game/sim/difficulty";
 import { benchInput } from "../src/game/bench/autopilot";
 import { chooseUpgrade, isAwaitingChoice } from "../src/game/progression/levels";
 import { loadBestSurvivalSec, mergeBestSurvivalSec, submitRunResult } from "../src/game/run/records";
@@ -37,11 +39,11 @@ const GOLDEN_POPULATION = 28;
  * Меняется, когда правка выпадения сдвигает генератор и выбранный seed
  * перестаёт доживать до набора: так было с горстью кристаллов, броском на
  * аптечку, магнитом с динамитом, появлением нетопырей в смеси, стихийными
- * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed).
+ * атаками врагов, пешими врагами рядом с огоньком, подбором «Заморозка», уходом стрелков и растянутым набором (T-0193: слоты 4/3/2/1 дожили этот забег до восьмой минуты на прежнем seed) и новым врагом с оружием (T-0281: Ледяной дух в смеси сдвинул генератор, и seed 1 снова дожил до конца сценария), и Болотником (T-0282: ещё один преследователь в смеси сдвинул генератор, seed 9 погиб на 19-й секунде без набора, и взят seed 11 — 157 с, четыре оружия и шесть навыков).
  * Распределение времени по seed при этом остаётся прежним, поэтому
  * смена seed — не подгонка результата, а возврат эталону его смысла.
  */
-const GOLDEN_SEED = 1;
+const GOLDEN_SEED = 11;
 
 /** Прогон живого игрока до смерти: экран смерти показывает именно такой мир. */
 function runUntilDeath(seed: number, population: number): World {
@@ -178,38 +180,42 @@ describe("статистика забега", () => {
       distance: Math.round(result.distance),
       peakEnemies: result.peakEnemies,
     }).toEqual({
-      survivalSec: 319.93,
-      level: 17,
-      xpCollected: 718,
-      enemiesKilled: 1625,
+      survivalSec: 157.43,
+      level: 18,
+      xpCollected: 923,
+      enemiesKilled: 379,
       killsByEnemy: {
-        swarm_rat: 568,
-        tank_ghoul: 94,
-        bone_walker: 78,
-        mire_shambler: 315,
-        dasher_wolf: 90,
-        circler_crow: 173,
-        bomber_imp: 79,
-        rushing_bats: 149,
-        splitter_slime: 79,
+        swarm_rat: 124,
+        tank_ghoul: 9,
+        bone_walker: 14,
+        mire_shambler: 71,
+        dasher_wolf: 18,
+        circler_crow: 37,
+        ice_spirit: 34,
+        bog_lurker: 12,
+        bomber_imp: 16,
+        rushing_bats: 27,
+        splitter_slime: 17,
       },
-      damageDealt: 25790,
-      damageTaken: 164,
+      damageDealt: 6257,
+      damageTaken: 200,
       weapons: [
-        { id: "spark", level: 2, damage: 7582 },
-        { id: "meteor", level: 5, damage: 11358 },
-        { id: "knife", level: 3, damage: 5692 },
-        { id: "hearth", level: 2, damage: 1158 },
+        { id: "spark", level: 1, damage: 3935 },
+        { id: "flail", level: 2, damage: 1270 },
+        { id: "hearth", level: 1, damage: 330 },
+        { id: "wardstone", level: 2, damage: 721 },
       ],
       passives: [
-        { id: "haste", level: 1 },
-        { id: "ward", level: 2 },
         { id: "volley", level: 1 },
-        { id: "swiftness", level: 1 },
+        { id: "might", level: 3 },
+        { id: "tempering", level: 3 },
+        { id: "reach", level: 1 },
+        { id: "lodestone", level: 2 },
+        { id: "vitality", level: 2 },
       ],
-      deathCause: "rushing_bats",
-      distance: 50031,
-      peakEnemies: 32,
+      deathCause: "bone_walker",
+      distance: 23972,
+      peakEnemies: 30,
     });
   });
 
@@ -236,6 +242,22 @@ describe("итог забега", () => {
     spawnEnemy(world, typeIndex, world.player.x + offset, world.player.y);
     return world;
   }
+
+  it("итог несёт модификатор забега, а без него поля нет (T-0119)", () => {
+    const plain = worldWithEnemyAt(DUMMY, 200);
+    expect(resultOf(plain, 1).modifierIds).toBeUndefined();
+    expect("modifierIds" in resultOf(plain, 1)).toBe(false);
+
+    const world = createWorld({
+      seed: 1,
+      enemies: [DUMMY, BITER],
+      weapons: [SPARK],
+      difficulty: composeDifficulty(BASE_DIFFICULTY, ["inverse"], RUN_MODIFIERS),
+      modifierIds: ["inverse"],
+    });
+    expect(resultOf(world, 1).modifierIds).toEqual(["inverse"]);
+    expect(resultOf(world, 1).difficultyId).toBe("easy");
+  });
 
   it("сценарий без набора подстройки не несёт: в итоге нет поля pressure", () => {
     const world = worldWithEnemyAt(DUMMY, 200);
@@ -277,6 +299,21 @@ describe("итог забега", () => {
       contentHash: "test-hash",
     });
     expect(result).toMatchObject({ bossKills: 1, eliteKills: 4, chestsOpened: 3, crystalsCollected: 250 });
+  });
+
+  it("несёт число редких сундуков из мира (T-0175)", () => {
+    const world = worldWithEnemyAt(DUMMY, 40);
+    world.stats.chestsOpened = 3;
+    world.stats.rareChestsOpened = 1;
+
+    const result = buildRunResult(world, {
+      runId: "r4",
+      seed: 42,
+      outcome: "died",
+      startingWeaponId: "spark",
+      contentHash: "test-hash",
+    });
+    expect(result).toMatchObject({ chestsOpened: 3, rareChestsOpened: 1 });
   });
 
   it("у сдачи нет причины смерти: сдавшийся забег — не убийство", () => {
@@ -363,6 +400,7 @@ describe("локальный рекорд", () => {
       bossKills: 0,
       eliteKills: 0,
       chestsOpened: 0,
+      rareChestsOpened: 0,
       crystalsCollected: 0,
       killsByEnemy: {},
       damageDealt: 0,

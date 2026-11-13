@@ -71,6 +71,11 @@ const RULES: Rule[] = [
     why: "ядро курсов самодостаточно: ни игры, ни Nest, ни Prisma — им станет отдельный сервис (docs/35-stage4-plan.md, Р32)",
   },
   {
+    from: "packages/ledger/src",
+    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
+    why: "ядро учёта переходит в другие проекты: ни игры, ни Nest, ни Prisma (docs/35-stage4-plan.md, Р98, Р219)",
+  },
+  {
     from: "packages/proxy-kit/src",
     forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
     why: "пакет проксирования переиспользуется в других проектах: ни игры, ни Nest, ни Prisma",
@@ -97,8 +102,8 @@ const RULES: Rule[] = [
   },
   {
     from: "apps/sim-worker/src",
-    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/|joystick|radar))/,
-    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
+    forbidden: /["']@bh\/core-game["']|["']@bh\/core-game\/src\/(?:index|engine\/|game\/(?:MainScene|BenchScene|render\/|overlays\/|bench\/|diagnostics\/(?!replay["'])|joystick|radar))/,
+    why: "движок берётся только симуляцией, балансом и контентом (`@bh/core-game/src/game/sim`, `game/balance`, `content`) и повтором забега (`game/diagnostics/replay`, без Phaser — это держит тест сборки в `apps/sim-worker/test/replay-job.test.ts`): index.ts и сцены тянут за собой Phaser в единственный файл сборки",
   },
 ];
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DifficultyId } from "@bh/shared-types";
-import { BALANCE_TARGETS } from "../src/content/balance-targets";
+import { BALANCE_TARGETS, MODIFIER_TARGETS } from "../src/content/balance-targets";
+import { RUN_MODIFIER_IDS } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
 import { ENEMY_STAGES } from "../src/content/stages";
@@ -8,6 +9,7 @@ import { ENDLESS_CURVE } from "../src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
+import { withoutStalker } from "./helpers/without-stalker";
 import {
   POWER_PROFILES,
   simulateBalanceRun,
@@ -164,10 +166,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 175.68333333333334,
-      level: 13,
-      wave: 5,
-      enemiesKilled: 757,
+      survivalSec: 185.21666666666667,
+      level: 15,
+      wave: 6,
+      enemiesKilled: 793,
     });
   });
 
@@ -196,14 +198,19 @@ const PROFILE_WEAPONS = STARTING_WEAPONS.includes("spark") ? ["spark"] : STARTIN
 
 const profileCache = new Map<string, BalanceRunResult[]>();
 
-/** Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз. */
+/**
+ * Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз.
+ * Без Карачуна (Р205, T-0424): правило касается подстройки, а Карачун не меняет силу игрока, зато
+ * сдвигает любой исход пяти забегов — бот бросает уклонение от толпы ради бегства, и порядок профилей на
+ * таком выборе выпадает случаем (на пяти seed с ним «полный» 525 с против «среднего» 586 с, без него 647 против 462).
+ */
 function profileRuns(profile: PowerProfile, pressure: boolean): BalanceRunResult[] {
   const key = `${profile.id}:${String(pressure)}`;
   const known = profileCache.get(key);
   if (known !== undefined) return known;
 
   const runs = PROFILE_WEAPONS.flatMap((startingWeaponId) =>
-    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure })),
+    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure, content: withoutStalker() })),
   );
   profileCache.set(key, runs);
   return runs;
@@ -223,6 +230,61 @@ describe("подстройка под силу: лесенка профилей"
     const withPressure = medianOf(POWER_PROFILES.full, true) / medianOf(POWER_PROFILES.average, true);
     const without = medianOf(POWER_PROFILES.full, false) / medianOf(POWER_PROFILES.average, false);
     expect(withPressure).toBeGreaterThanOrEqual(Math.sqrt(without));
+  });
+});
+
+// Модификаторы забега (tasks/T-0119, Р105): коридор — отношение медианы выживания
+// уклоняющегося бота с модификатором к медиане без него на «Сложной» (Р126), те же
+// оружия и seed. Вне коридора правятся множители таблицы `RUN_MODIFIERS`, а не коридор
+// (docs/32-balance.md «Модификаторы забега»).
+describe("модификаторы забега: коридор медианы", () => {
+  const modifierCache = new Map<string, BalanceRunResult[]>();
+
+  function modifierRuns(id: string): BalanceRunResult[] {
+    const known = modifierCache.get(id);
+    if (known !== undefined) return known;
+    const runs: BalanceRunResult[] = [];
+    for (const startingWeaponId of STARTING_WEAPONS) {
+      for (const seed of SEEDS) {
+        runs.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 900, modifierIds: [id] }));
+      }
+    }
+    modifierCache.set(id, runs);
+    return runs;
+  }
+
+  it("коридор задан для каждого модификатора и согласован", () => {
+    for (const id of RUN_MODIFIER_IDS) {
+      const range = MODIFIER_TARGETS.modifierMedianRatio[id];
+      expect(range.min, id).toBeGreaterThan(0);
+      expect(range.max, id).toBeGreaterThan(range.min);
+    }
+    expect(MODIFIER_TARGETS.modifierMedianRatio.hurry).toEqual({ min: 0.5, max: 0.95 });
+    expect(MODIFIER_TARGETS.modifierMedianRatio.inverse).toEqual({ min: 0.6, max: 1.3 });
+  });
+
+  for (const id of RUN_MODIFIER_IDS) {
+    it(`медиана уклоняющегося бота с «${id}» — в коридоре от медианы «Сложной»`, { timeout: 120_000 }, () => {
+      const baseline = summarizeRuns(dodgingRuns()).medianSurvivalSec;
+      const median = summarizeRuns(modifierRuns(id)).medianSurvivalSec;
+      const range = MODIFIER_TARGETS.modifierMedianRatio[id];
+
+      expect(median / baseline, `${id}: ${median.toFixed(1)} с против ${baseline.toFixed(1)} с`).toBeGreaterThanOrEqual(range.min);
+      expect(median / baseline, `${id}: ${median.toFixed(1)} с против ${baseline.toFixed(1)} с`).toBeLessThanOrEqual(range.max);
+    });
+  }
+
+  it("прогон с модификатором детерминирован и отличается от прогона без него", { timeout: 60_000 }, () => {
+    const first = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300, modifierIds: ["hurry"] });
+    const second = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300, modifierIds: ["hurry"] });
+    const plain = simulateBalanceRun({ seed: 5, skill: "dodging", maxSec: 300 });
+    expect(second).toEqual(first);
+    expect(first).not.toEqual(plain);
+  });
+
+  it("пустой список модификаторов — тот же забег, что без поля", { timeout: 60_000 }, () => {
+    const plain = simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200 });
+    expect(simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200, modifierIds: [] })).toEqual(plain);
   });
 });
 

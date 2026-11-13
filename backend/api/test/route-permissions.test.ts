@@ -98,6 +98,18 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций и шаблонов — finance.entry.create (T-0457, T-0460, T-0461, T-0463, Р219, Р220)", () => {
+    const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
+    const reading = ["articles", "balances", "journal", "listOperations", "listTemplates", "operation", "places"];
+    const writing = ["archiveArticle", "archivePlace", "archiveTemplate", "createArticle", "createOperation", "createPlace", "createTemplate", "discardOperation", "draftPeriod", "renameArticle", "submitOperation", "updateOperation", "updatePlace", "updateTemplate"];
+
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing].sort());
+    for (const route of ledgerRoutes) {
+      const expected = reading.includes(route.method) ? "ledger.view" : "finance.entry.create";
+      expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe(expected);
+    }
+  });
+
   it("публичный маршрут не притворяется защищённым правом", () => {
     const both = routes
       .filter((route) => Reflect.getMetadata(PUBLIC_METADATA, route.handler) === true)

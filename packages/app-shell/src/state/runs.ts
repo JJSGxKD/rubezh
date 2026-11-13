@@ -80,11 +80,15 @@ const finishFields = {
       bossKills: z.optional(z.number()),
       eliteKills: z.optional(z.number()),
       chestsOpened: z.optional(z.number()),
+      // Редкие сундуки (T-0175): записи прошлых сборок их не знают.
+      rareChests: z.optional(z.number()),
       crystals: z.optional(z.number()),
       // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
       noHitSec: z.optional(z.number()),
       noKillSec: z.optional(z.number()),
       killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
+      // Встреченные враги для кодекса (T-0479): записи прошлых сборок их не знают.
+      enemiesSeen: z.optional(z.array(z.string())),
       // Очки эффективности (T-0293): журнал охоты, оценка сборки и сила на старте; записи прошлых сборок их не знают.
       huntLog: z.optional(z.array(z.object({ rank: z.enum(["elite", "boss"]), value: z.number(), aliveSec: z.number() }))),
       buildScore: z.optional(z.number()),
@@ -95,6 +99,9 @@ const finishFields = {
 
 /** Сколько врагов в «кого больше всего убил» — столько же хранит сервер. */
 const TOP_KILLS = 5;
+
+/** Потолок списка встреченных врагов — тот же, что у сервера (`runFinishSchema`). */
+const MAX_ENEMIES_SEEN = 64;
 
 const startEntrySchema = z.object({
   kind: z.literal("start"),
@@ -192,6 +199,8 @@ export const useRuns = create<RunsStore>((set, get) => ({
     const client = api();
     if (client === null || flushing) return;
     flushing = true;
+    /** забеги, которые сервер принял в этом проходе: их записи для проверки можно отправлять */
+    const recorded: string[] = [];
 
     try {
       // По одному и по порядку: у сервера нет пакетной записи, старт обязан
@@ -235,6 +244,7 @@ export const useRuns = create<RunsStore>((set, get) => ({
           continue;
         }
         const result = response.data;
+        recorded.push(head.runId);
         set({ lastSubmitted: { runId: head.runId, result } });
         useMeta.getState().mergeRemote({ best: { [head.difficultyId]: result.bestSurvivalSec } });
         track("run_synced", {
@@ -249,6 +259,7 @@ export const useRuns = create<RunsStore>((set, get) => ({
       }
     } finally {
       flushing = false;
+      releaseProofs(recorded);
     }
   },
 
@@ -317,10 +328,13 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       bossKills: result.bossKills,
       eliteKills: result.eliteKills,
       chestsOpened: result.chestsOpened,
+      rareChests: result.rareChestsOpened,
       crystals: Math.round(result.crystalsCollected),
       noHitSec: result.noHitSec,
       noKillSec: result.noKillSec,
       killsByElement: result.killsByElement,
+      // Потолок сервера — 64: лишнее обрезается здесь, иначе итог целиком уйдёт в отказ формы.
+      ...(result.enemiesSeen === undefined ? {} : { enemiesSeen: result.enemiesSeen.slice(0, MAX_ENEMIES_SEEN) }),
       // Для очков эффективности (T-0293): без них сервер считает оси охоты и сборки единицей, а полосу берёт среднюю.
       ...(result.huntLog === undefined ? {} : { huntLog: result.huntLog.map(({ rank, value, aliveSec }) => ({ rank, value, aliveSec })) }),
       ...(result.buildScore === undefined ? {} : { buildScore: result.buildScore }),
@@ -362,6 +376,20 @@ async function withLoadout(submission: RunFinishSubmission): Promise<RunFinishSu
 /** Запись очереди без её вида — ровно то тело, что ждёт сервер. */
 function toFinish({ kind: _kind, ...submission }: z.infer<typeof finishEntrySchema>): RunFinishSubmission {
   return submission;
+}
+
+/**
+ * Сервер записал забеги — записи для проверки этих забегов можно отправлять (T-0316). Заодно
+ * досылаются прежние, не ушедшие: проход очереди забегов — повод проверить связь.
+ */
+function releaseProofs(runIds: readonly string[]): void {
+  void import("./run-proof-queue")
+    .then(({ runProofs }) => {
+      const proofs = runProofs();
+      for (const runId of runIds) proofs.recorded(runId);
+      return proofs.flush();
+    })
+    .catch((error: unknown) => reportError("runs", `записи для проверки не отправлены: ${String(error)}`));
 }
 
 function pendingOf(entries: readonly QueueEntry[]): number {

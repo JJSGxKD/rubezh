@@ -3,11 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { contentBeforeT0388 } from "../../packages/core-game/test/helpers/content-before-t0388";
-import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../../packages/core-game/src/content/balance-targets";
+import { BALANCE_TARGETS, BUILD_COMPLETE_TARGETS, buildCompleteCorridorSec, MODIFIER_TARGETS, PRESSURE_TARGETS, STRONG_BOT_TARGETS } from "../../packages/core-game/src/content/balance-targets";
 import { PRESSURE } from "../../packages/core-game/src/content/pressure";
 import { createRunWorld } from "../../packages/core-game/src/game/run-world";
 import { buildScoreOf } from "../../packages/core-game/src/game/sim/player-power";
 import { DIFFICULTIES } from "../../packages/core-game/src/content/difficulty";
+import { RUN_MODIFIERS } from "../../packages/core-game/src/content/modifiers";
 import { ENEMY_STAGES } from "../../packages/core-game/src/content/stages";
 import { ENDLESS_CURVE, TIMELINE } from "../../packages/core-game/src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../../packages/core-game/src/content/unlocks";
@@ -128,6 +129,17 @@ it("подстройка под силу и расписание сборки", 
   writeFileSync(powerPath, `${rows.join("\n")}\n`, "utf8");
   console.log(rows.join("\n"));
   console.log(`\nТаблица сохранена: ${powerPath}`);
+});
+
+// Модификаторы забега (T-0119, Р105): отдельным тестом, как подстройка, — калибровка
+// гоняет только их (`-t "модификаторы"`). Строки: «Сложная» без модификатора и с каждым.
+it("модификаторы забега", { timeout: 1_800_000 }, () => {
+  const rows = modifierLines();
+  mkdirSync(dirname(REPORT_PATH), { recursive: true });
+  const modifierPath = join(dirname(REPORT_PATH), "balance-modifiers.md");
+  writeFileSync(modifierPath, `${rows.join("\n")}\n`, "utf8");
+  console.log(rows.join("\n"));
+  console.log(`\nТаблица сохранена: ${modifierPath}`);
 });
 
 // Сильный бот — отдельным тестом, как и подстройка: `-t "сильный бот"` гоняет только его.
@@ -465,16 +477,16 @@ function powerLines(): string[] {
   addRow("средний, слабое устройство", results.averageLight);
 
   const ratio = (a: string, b: string): number => (medians[b] === 0 || medians[b] === undefined ? 0 : (medians[a] ?? 0) / medians[b]);
-  const between = (value: number, range: { min: number; max: number }): boolean => value >= range.min && value <= range.max;
   const noviceToAverage = ratio("новичок", "средний");
   const fullToAverage = ratio("полный арсенал", "средний");
   const lightToStandard = ratio("средний, слабое устройство", "средний");
+  const between = (value: number, range: { min: number; max: number }): boolean => value >= range.min && value <= range.max;
   const median = (values: number[]): number => quantile([...values].sort((a, b) => a - b), 0.5);
   const levelOf = (runs: BalanceRunResult[]): number => median(runs.map((run) => run.startPressure));
 
   lines.push("", "### Вердикты по коридорам", "");
-  lines.push(verdict(`новичок к среднему ${targets.noviceToAverage.min}–${targets.noviceToAverage.max}`, between(noviceToAverage, targets.noviceToAverage), noviceToAverage.toFixed(2)));
-  lines.push(verdict(`полный к среднему ${targets.fullToAverage.min}–${targets.fullToAverage.max}`, between(fullToAverage, targets.fullToAverage), fullToAverage.toFixed(2)));
+  // Отношения лесенки меряет сильный бот (Р197, `strongBotLines`): уклоняющийся слабее человека и двугорбый, поэтому здесь они справка.
+  lines.push(`- справка (уклоняющийся бот; вердикт — у сильного): новичок к среднему ${noviceToAverage.toFixed(2)}, полный к среднему ${fullToAverage.toFixed(2)}, коридоры ${targets.noviceToAverage.min}–${targets.noviceToAverage.max} и ${targets.fullToAverage.min}–${targets.fullToAverage.max}`);
   lines.push(
     verdict(
       "порядок: новичок < средний < полный — с подстройкой и без",
@@ -526,8 +538,8 @@ function powerLines(): string[] {
       `средний → полный ${ratio("полный арсенал, без подстройки", "средний, без подстройки").toFixed(2)} → ${ratio("полный арсенал", "средний").toFixed(2)}.`,
     "",
     "Медиана бота на этих профилях двугорбая: забег либо обрывается на стене первых двух минут, либо живёт 600–1 100 с, " +
-      "поэтому на пяти seed вердикты «новичок к среднему», «порядок» и «слабое устройство» ловят удачу, а не баланс. " +
-      "Читать их надо по этой таблице на пятнадцати seed, в гейт они не входят.",
+      "поэтому на пяти seed вердикты «порядок» и «слабое устройство» ловят удачу, а не баланс. " +
+      "Читать их надо по этой таблице на пятнадцати seed, в гейт они не входят. Лесенку Р183 меряет сильный бот (`-t \"сильный бот\"`).",
   );
   return lines;
 }
@@ -545,7 +557,7 @@ function strongBotLines(): string[] {
   const profiles = [POWER_PROFILES.novice, POWER_PROFILES.average, POWER_PROFILES.full, POWER_PROFILES.veteran];
   const stances: StrongStance[] = ["kite", "stand"];
   const lines = [
-    "## Сильный бот (Р194, Р196)",
+    "## Сильный бот (Р194, Р196, Р197)",
     "",
     `«${BASE_DIFFICULTY_ID}», с подстройкой. Профили силы — ${targets.seeds} seed × ${weapons.length} оружия; «ветеран» (забег владельца v0.12.2, Р196) — ` +
       `${targets.stand.seeds} seed, старт «Очаг». «Бегает» — всегда уклоняется и собирает добычу; «стоит» — так же до ${STAND_FROM_SEC} с, дальше стоит и шагает ` +
@@ -596,6 +608,23 @@ function strongBotLines(): string[] {
       "порядок «бегает»: новичок < средний < полный",
       at("novice", "kite") < at("average", "kite") && at("average", "kite") < at("full", "kite"),
       `${fixed(at("novice", "kite"))} / ${fixed(at("average", "kite"))} / ${fixed(at("full", "kite"))} с`,
+    ),
+  );
+
+  // Отношения лесенки (Р183, Р197): подстройка калибруется сильным ботом, поэтому коридоры `PRESSURE_TARGETS` — его.
+  const ratioOf = (a: string, b: string): number => (at(b, "kite") === 0 ? 0 : at(a, "kite") / at(b, "kite"));
+  const noviceToAverage = ratioOf("novice", "average");
+  const fullToAverage = ratioOf("full", "average");
+  verdicts.push(
+    verdict(
+      `новичок к среднему, «бегает»: ${PRESSURE_TARGETS.noviceToAverage.min}–${PRESSURE_TARGETS.noviceToAverage.max}`,
+      noviceToAverage >= PRESSURE_TARGETS.noviceToAverage.min && noviceToAverage <= PRESSURE_TARGETS.noviceToAverage.max,
+      noviceToAverage.toFixed(2),
+    ),
+    verdict(
+      `полный к среднему, «бегает»: ${PRESSURE_TARGETS.fullToAverage.min}–${PRESSURE_TARGETS.fullToAverage.max}`,
+      fullToAverage >= PRESSURE_TARGETS.fullToAverage.min && fullToAverage <= PRESSURE_TARGETS.fullToAverage.max,
+      fullToAverage.toFixed(2),
     ),
   );
 
@@ -757,6 +786,51 @@ function levelLines(): string[] {
     }
   }
   return lines;
+}
+
+/**
+ * Модификаторы забега: уклоняющийся бот на «Сложной», стартовые оружия первого уровня
+ * аккаунта, те же seed. Коридор — отношение медианы к медиане без модификатора
+ * (`MODIFIER_TARGETS`); вне коридора правятся множители `RUN_MODIFIERS`, а не коридор.
+ * Бот двугорбый (гибнет на стене около 100-й секунды или живёт 10+ минут), поэтому рядом
+ * с медианой стоят p10 и p90 и доля забегов, пережитых 5 минут.
+ */
+function modifierLines(): string[] {
+  const firstLevel = unlocksAt(ACCOUNT_UNLOCKS, 1).weapons;
+  const starting = BASE_WEAPONS.filter((weapon) => firstLevel.has(weapon.id)).map((weapon) => weapon.id);
+  const runsOf = (modifierIds: string[]): BalanceRunResult[] => {
+    const runs: BalanceRunResult[] = [];
+    for (const startingWeaponId of starting) {
+      for (let seed = 1; seed <= SEEDS; seed++) {
+        runs.push(simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, difficultyId: BASE_DIFFICULTY_ID, modifierIds }));
+      }
+    }
+    return runs;
+  };
+
+  const baseline = summarizeRuns(runsOf([]));
+  const lines = [
+    "## Модификаторы забега (Р105)",
+    "",
+    `Уклоняющийся бот, «${BASE_DIFFICULTY_ID}», оружие первого уровня (${starting.join(", ")}), ${SEEDS} seed на оружие.`,
+    "",
+    "| Модификатор | медиана, с | p10 | p90 | до минуты | уровень | во сколько раз к «без модификатора» | коридор |",
+    "|---|---|---|---|---|---|---|---|",
+    `| без модификатора | ${fixed(baseline.medianSurvivalSec)} | ${fixed(baseline.p10SurvivalSec)} | ${fixed(baseline.p90SurvivalSec)} | ` +
+      `${percent(baseline.deathsBeforeMinuteRatio)} | ${baseline.medianLevel} | ×1.00 | — |`,
+  ];
+  const verdicts: string[] = [];
+  for (const modifier of RUN_MODIFIERS) {
+    const summary = summarizeRuns(runsOf([modifier.id]));
+    const ratio = summary.medianSurvivalSec / baseline.medianSurvivalSec;
+    const range = MODIFIER_TARGETS.modifierMedianRatio[modifier.id];
+    lines.push(
+      `| ${modifier.id} | ${fixed(summary.medianSurvivalSec)} | ${fixed(summary.p10SurvivalSec)} | ${fixed(summary.p90SurvivalSec)} | ` +
+        `${percent(summary.deathsBeforeMinuteRatio)} | ${summary.medianLevel} | ×${ratio.toFixed(2)} | ×${range.min}–×${range.max} |`,
+    );
+    verdicts.push(verdict(`${modifier.id}: медиана к «без модификатора» в ×${range.min}–×${range.max}`, ratio >= range.min && ratio <= range.max, `×${ratio.toFixed(2)}`));
+  }
+  return [...lines, "", ...verdicts];
 }
 
 function isOtherDifficulty(name: string): boolean {

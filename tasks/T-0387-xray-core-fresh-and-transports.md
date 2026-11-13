@@ -3,8 +3,8 @@ id: T-0387
 title: Ядро Xray — свежая версия и способы подключения, которые выдают поставщики
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-4
 size: M
 depends_on: [T-0384, T-0385, T-0386]
@@ -26,6 +26,7 @@ zones:
   - infra/prod/xray/Dockerfile
   - infra/prod/xray/check-config.sh
 shared:
+  - packages/proxy-kit/src/index.ts
   - packages/proxy-kit/README.md
   - docs/20-env-and-ports.md
   - docs/29-admin-panel.md
@@ -40,7 +41,7 @@ batch: 5
 
 # T-0387. Ядро Xray — свежая версия и способы подключения, которые выдают поставщики
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0387.json)](README.md#значки-статуса) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](T-0384-xray-multi-subscription.md) [![T-0385](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json&label=T-0385)](T-0385-xray-node-transport-security.md) [![T-0386](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0386.json&label=T-0386)](T-0386-xray-traffic-stats.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0387.json)](README.md#значки-статуса) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](archive/T-0384-xray-multi-subscription.md) [![T-0385](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json&label=T-0385)](archive/T-0385-xray-node-transport-security.md) [![T-0386](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0386.json&label=T-0386)](archive/T-0386-xray-traffic-stats.md)
 
 ## Зачем
 

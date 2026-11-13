@@ -28,7 +28,10 @@ import {
   passiveCategories,
   passiveRange,
   regularEnemies,
+  stalkerGuide,
+  unkillableEnemies,
   rubezhGuide,
+  siegeGuide,
   speedClass,
   firstLevelWeapons,
   levelWeapons,
@@ -40,7 +43,7 @@ import {
 } from "./guide-data";
 import { codexOpenedSet } from "../../state/codex-api";
 import { CodexHeader, LockedEnemyCard, useCodex } from "./codex";
-import { ElementList, ElementTag, ResistLine } from "./elements";
+import { ElementList, ElementTag, ResistLine, TrailLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
@@ -107,6 +110,7 @@ function Basics(): ReactNode {
   }));
 
   const rubezh = rubezhGuide();
+  const siege = siegeGuide();
 
   return (
     <>
@@ -121,6 +125,14 @@ function Basics(): ReactNode {
           text={t("guide.basics.rubezh.text", { time: formatDuration(rubezh.atSec), guard: t(`enemy.${rubezh.guard.id}.name`), mul: `×${String(rubezh.rewardMul)}` })}
         />
       )}
+
+      {/* Осада стоящего: кольцо на земле — обязательное чтение боя, поэтому правило есть и в гайдбуке (T-0392). */}
+      <Topic
+        index={1}
+        icon={<Swords size={20} />}
+        title={t("guide.siege.title")}
+        text={t(siege.elites ? "guide.siege.textElites" : "guide.siege.text", { time: formatDuration(siege.fromSec), hold: String(Math.round(siege.holdSec)) })}
+      />
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>
         <div className="mx-auto max-w-[300px]">
@@ -221,12 +233,13 @@ function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "c
   );
 }
 
-function Enemies(): ReactNode {
+export function Enemies(): ReactNode {
   // Кодекс (T-0127): пока ответа нет, а у гостя и при ошибке — открыто всё, как раньше.
   const codex = useCodex();
   const openedIds = codexOpenedSet(codex.state);
   const regular = regularEnemies(openedIds);
   const elite = eliteEnemies(openedIds);
+  const unkillable = unkillableEnemies(openedIds);
 
   return (
     <>
@@ -271,6 +284,12 @@ function Enemies(): ReactNode {
       {elite.map((enemy, index) => (
         <EnemyEntry key={enemy.def.id} enemy={enemy} index={index} />
       ))}
+
+      <SectionTitle>{t("guide.unkillable.title")}</SectionTitle>
+      <p className="text-sm text-text-muted">{t("guide.unkillable.text")}</p>
+      {unkillable.map((enemy, index) => (
+        <UnkillableCard key={enemy.def.id} enemy={enemy} index={index} />
+      ))}
     </>
   );
 }
@@ -278,6 +297,35 @@ function Enemies(): ReactNode {
 /** Запись списка: открытая — карточкой, закрытая — силуэтом без названия. */
 function EnemyEntry(props: { enemy: GuideEnemy; index: number }): ReactNode {
   return props.enemy.opened ? <EnemyCard enemy={props.enemy} index={props.index} /> : <LockedEnemyCard enemy={props.enemy} index={props.index} />;
+}
+
+/** Неубиваемый: без строки здоровья, урона и опыта — их у него нет; вместо них миф, время прихода и предвестие. */
+function UnkillableCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
+  const { def } = props.enemy;
+  if (!props.enemy.opened) return <LockedEnemyCard enemy={props.enemy} index={props.index} />;
+  const name = t(`enemy.${def.id}.name`);
+  const { fromSec, chaseMinSec, chaseMaxSec } = stalkerGuide();
+
+  return (
+    <Card appearIndex={Math.min(props.index, 6)}>
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <EnemyScene pattern={def.pattern} elite={false} label={name} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="font-display text-base font-bold text-text">{name}</h3>
+            <Badge tone="muted">{t(`guide.pattern.${def.pattern}.name`)}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-text-muted">{t(`guide.enemy.${def.id}.myth`)}</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.when`, { time: formatDuration(fromSec), min: chaseMinSec, max: chaseMaxSec })}</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.omen`)}</p>
+        </div>
+      </div>
+      <p className="surface-sunken mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs text-text">
+        <Lightbulb size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-accent" />
+        {t(`guide.pattern.${def.pattern}.tip`)}
+      </p>
+    </Card>
+  );
 }
 
 function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
@@ -307,6 +355,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
           <ResistLine def={def} />
+          <TrailLine def={def} />
           {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />

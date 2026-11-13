@@ -55,12 +55,15 @@ import { MediaModule } from "./modules/media/media.module.js";
 import { RestrictionsModule } from "./modules/restrictions/restrictions.module.js";
 import { TestNoticeModule } from "./modules/test-notice/test-notice.module.js";
 import { WipeModule } from "./modules/wipe/wipe.module.js";
+import { ContentModule } from "./modules/content/content.module.js";
 import { AdsModule } from "./modules/ads/ads.module.js";
 import { ClientScriptsModule } from "./modules/client-scripts/client-scripts.module.js";
 import { ShopModule } from "./modules/shop/shop.module.js";
 import { VipModule } from "./modules/vip/vip.module.js";
 import { PromoCodesModule } from "./modules/promo-codes/promo-codes.module.js";
 import { PartnersModule } from "./modules/partners/partners.module.js";
+import { StakeholdersModule } from "./modules/stakeholders/stakeholders.module.js";
+import { LedgerModule } from "./modules/ledger/ledger.module.js";
 import { SeasonsModule } from "./modules/seasons/seasons.module.js";
 import { FeedModule } from "./modules/feed/feed.module.js";
 import { OnlineModule } from "./modules/online/online.module.js";
@@ -68,10 +71,13 @@ import { CspReportsModule } from "./modules/csp-reports/csp-reports.module.js";
 import { RequestJournalModule } from "./modules/request-journal/request-journal.module.js";
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
+import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
+import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { CodexModule } from "./modules/codex/codex.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
+import { MaxModule } from "./platforms/max/max.module.js";
 
 /**
  * Модули по плану из docs/01-tech-stack.md §3: auth, runs, leaderboard,
@@ -102,7 +108,9 @@ import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.j
  * Р92 (там же, T-0060); donations — донаты проекту и знак «Поддержал
  * проект», Р109 (там же, T-0157).
  *
- * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11).
+ * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11);
+ * MaxModule — бот MAX заданий-каналов, Р188 (там же, T-0379);
+ * VkModule — сообщество VK как бот заданий, Р188 (там же, T-0378).
  */
 export const APP_MODULES = [
   RedisModule,
@@ -162,6 +170,8 @@ export const APP_MODULES = [
   VipModule,
   PromoCodesModule,
   PartnersModule,
+  StakeholdersModule,
+  LedgerModule,
   WipeModule,
   SeasonsModule,
   OnlineModule,
@@ -170,11 +180,15 @@ export const APP_MODULES = [
   RequestJournalModule,
   DonationsModule,
   BotMentionModule,
+  ExternalIdentityModule,
+  VkModule,
   AchievementsModule,
   CodexModule,
   BattlePassModule,
   RemindersModule,
   RemindersOffModule,
+  MaxModule,
+  ContentModule,
 ];
 
 /**

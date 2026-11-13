@@ -35,6 +35,7 @@ describe("вид кнопки второго шанса за рекламу", ()
       disabled: false,
       pass: false,
       labelKey: "run.continue.ad.short",
+      compactLabelKey: "run.continue.ad.short",
       ariaKey: "run.continue.ad",
     });
   });
@@ -58,6 +59,7 @@ describe("вид кнопки второго шанса за рекламу", ()
       disabled: false,
       pass: true,
       labelKey: "run.continue.vip.short",
+      compactLabelKey: "run.continue.vip.short",
       ariaKey: "run.continue.vip",
     });
   });
@@ -76,5 +78,11 @@ describe("вид кнопки второго шанса за рекламу", ()
     for (const stage of stages) {
       expect(adButtonLook(stage, NOT_LOCKED)?.variant).toBe("primary");
     }
+  });
+
+  it("подпись в одну строку: компактная версия сменяет полную по ширине (Р210)", () => {
+    expect(adButtonLook(READY, { locked: false, wide: true })).toMatchObject({ labelKey: "run.continue.ad", compactLabelKey: "run.continue.ad.medium" });
+    expect(adButtonLook(READY, NOT_LOCKED)).toMatchObject({ labelKey: "run.continue.ad.short", compactLabelKey: "run.continue.ad.short" });
+    expect(adButtonLook(READY_VIP, { locked: false, wide: true })).toMatchObject({ labelKey: "run.continue.vip.wide", compactLabelKey: "run.continue.vip.short" });
   });
 });

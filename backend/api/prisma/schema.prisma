@@ -39,6 +39,8 @@ enum Role {
   finance
   analyst
   stakeholder
+  /// внешний партнёр: пускает в панель, но только в его кабинет (T-0217, Р136); выдаётся из карточки партнёра
+  partner
 }
 
 enum Difficulty {
@@ -192,8 +194,12 @@ model Account {
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
   /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
+  /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
+  shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
 
   roles         AccountRole[]
+  // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
+  shownEmblem   TaskDef?              @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
   runs          Run[]
   purchases     Purchase[]
   sessions      AccountSession[]
@@ -235,6 +241,7 @@ model Account {
   friendBonuses    FriendBonus[]
   promoRedemptions PromoRedemption[]
   partnerBinding   PartnerBinding?
+  partnerCard      Partner?
   broadcasts       BroadcastDelivery[]
   items            Item[]
   itemEvents       ItemEvent[]
@@ -258,6 +265,10 @@ model Account {
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
+  externalLinks    ExternalIdentity[]
+  taskChannelWatch TaskChannelWatch[]
+  sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
+  sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -495,6 +506,12 @@ model Run {
   band             String?     @db.VarChar(16)
   /// исходные числа подсчёта, которых нет в других колонках, — для пересчёта: `{ power, huntLog, buildScore }`
   scoreInput       Json?       @map("score_input")
+  /// решение разбора (Р203, T-0419): `honest` — проверка команды признала забег честным, `annulled` — убран из досок рейтинга и сезона; `null` — не разбирался
+  reviewOutcome    String?     @map("review_outcome") @db.VarChar(16)
+  /// когда принято решение разбора; `null` — не разбирался
+  reviewedAt       DateTime?   @map("reviewed_at") @db.Timestamptz(3)
+  /// аккаунт команды, принявший решение; без внешнего ключа: удалённый аккаунт не должен ронять историю забега
+  reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
@@ -628,9 +645,13 @@ model Purchase {
   mode              PaymentMode
   status            PurchaseStatus
   /// идентификатор оплаты в Telegram; `null` — оплаты ещё не было
-  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(128)
+  telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(256)
   /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
   invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
+  /// последняя предварительная проверка оплаты по этому счёту (Р209); у продления — отметка первой покупки
+  checkoutAt        DateTime?       @map("checkout_at") @db.Timestamptz(3)
+  /// отказ последней проверки (`CheckoutRefusal`); `null` — пройдена или не было
+  checkoutRefusal   String?         @map("checkout_refusal") @db.VarChar(32)
   paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
   refundReason      RefundReason?   @map("refund_reason")
   /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
@@ -642,15 +663,16 @@ model Purchase {
   renewalOf         String?         @map("renewal_of") @db.Uuid
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account         Account          @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  account         Account               @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
   // SetNull, а не Restrict: вайп стирает забеги (docs/35-stage4-plan.md Р87), а покупка
   // второго шанса остаётся — без ссылки на забег, с оплатой и номером продолжения.
-  run             Run?             @relation(fields: [runId], references: [runId], onDelete: SetNull)
-  renewalFirst    Purchase?        @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
-  renewals        Purchase[]       @relation("PurchaseRenewal")
+  run             Run?                  @relation(fields: [runId], references: [runId], onDelete: SetNull)
+  renewalFirst    Purchase?             @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
+  renewals        Purchase[]            @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
+  compensation    PurchaseCompensation?
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -659,6 +681,8 @@ model Purchase {
   @@index([mode, paidAt])
   // Незавершённые возвраты — очередь поднимает их после перезапуска.
   @@index([refundRequestedAt])
+  // Лента платежей в панели (Р209): свежие счета первыми, страница — по курсору
+  @@index([invoicedAt, purchaseId])
   // Проход довыдачи: оплаченные и не выданные покупки старше срока. Товар
   // впереди: у второго шанса (`continue_run`) fulfilled_at не заполняется
   // никогда — выдачи у него нет, — и без товара каждый использованный второй
@@ -1407,7 +1431,10 @@ model RunBoost {
   runId      String    @id @map("run_id") @db.VarChar(64)
   accountId  String    @map("account_id") @db.Uuid
   boosts     String[]
-  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 }
+  /// сколько списано по ресурсам: { "coins": 270, "gems": 4 } и чем оплачен каждый
+  /// буст: "paid_with": { "fury": "credit", "aegis": "coins" } — "credit" значит
+  /// подарок пасса (`boost_credit`), его возврат — подарок, а не деньги (T-0312);
+  /// у покупок до подарков ключа нет
   cost       Json
   createdAt  DateTime  @map("created_at") @db.Timestamptz(3)
   refundedAt DateTime? @map("refunded_at") @db.Timestamptz(3)
@@ -1651,6 +1678,18 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// редкость знака у имени (T-0235, Р149): common…mythic по шкале предметов и `team`
+  /// для знака «Команда»; пусто — у достижения знака нет. Только у достижений (`CHECK` в миграции)
+  emblemTier      String?    @map("emblem_tier") @db.VarChar(16)
+  /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
+  /// партнёрской цели, связи полей — `CHECK` в миграции
+  customer        String?    @db.VarChar(80)
+  /// модель оплаты: `cpa` — за выполнение, `rs` — доля дохода
+  payModel        String?    @map("pay_model") @db.VarChar(8)
+  /// ставка: у `cpa` — центы доллара за выполнение, у `rs` — сотые доли процента
+  rate            Int?
+  /// после скольких суток удержания выполнение оплачивается; 0 — сразу
+  holdDays        Int        @default(0) @map("hold_days") @db.SmallInt
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
@@ -1662,6 +1701,8 @@ model TaskDef {
   participants TaskParticipant[]
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
+  channelWatch TaskChannelWatch[]
+  shownBy      Account[]             @relation("account_shown_emblem")
 
   @@map("task_def")
 }
@@ -1878,6 +1919,8 @@ model AdBlock {
   updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт
   updatedBy  String?    @map("updated_by") @db.Uuid
+  /// в архиве с этого момента (Р200): блок выключен и в панели виден только во вкладке «Архив»; `null` — не в архиве
+  archivedAt DateTime?  @map("archived_at") @db.Timestamptz(3)
 
   network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
   sessions AdSession[]
@@ -2143,36 +2186,39 @@ model PromoRedemption {
 /// лонча (docs/23-referral-and-partner-program.md §4); сейчас — сколько
 /// игроков он привёл и чего они стоят.
 model Partner {
-  partnerId String   @id @map("partner_id") @db.Uuid
+  partnerId      String    @id @map("partner_id") @db.Uuid
   /// как его зовёт команда: «Канал „Игровой угол“»
-  name      String   @db.VarChar(80)
+  name           String    @db.VarChar(80)
   /// как связаться: @имя, ссылка, почта
-  contact   String?  @db.VarChar(120)
+  contact        String?   @db.VarChar(120)
   /// договорённости, для команды
-  note      String?  @db.VarChar(500)
-  createdBy String   @map("created_by") @db.Uuid
-  createdAt DateTime @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+  note           String?   @db.VarChar(500)
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz(3)
   /// Telegram ID партнёра — для будущего входа в его кабинет; уникален среди партнёров (Р96)
-  telegramId     String?  @unique @map("telegram_id") @db.VarChar(20)
+  telegramId     String?   @unique @map("telegram_id") @db.VarChar(20)
   /// applied — заявка, active — активен, paused — приостановлен, rejected — отклонён;
   /// новых игроков к партнёру привязывает только active, прежние привязки статус не трогает
-  status         String   @default("active") @db.VarChar(16)
+  status         String    @default("active") @db.VarChar(16)
   /// страна, где партнёр получает выплаты, — ISO-код из двух букв
-  country        String?  @db.VarChar(2)
+  country        String?   @db.VarChar(2)
   /// валюта выплаты — код из ядра курсов (`@bh/fx`)
-  payoutCurrency String?  @map("payout_currency") @db.VarChar(8)
+  payoutCurrency String?   @map("payout_currency") @db.VarChar(8)
   /// реквизиты словами: «USDT TRC-20 на …», «карта Тинькофф»
-  payoutMethod   String?  @map("payout_method") @db.VarChar(200)
+  payoutMethod   String?   @map("payout_method") @db.VarChar(200)
   /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
-  sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
+  sharePercent   Decimal?  @map("share_percent") @db.Decimal(5, 2)
   /// общий адрес постбэка партнёра с макросами (T-0070): действует на ссылки партнёра, у которых нет своего адреса; `null` — не отправляем
   postbackUrl    String?   @map("postback_url") @db.VarChar(1024)
   /// с какого времени по кликам действует адрес: клики раньше не отправляются; задан тогда и только тогда, когда задан адрес
   postbackSince  DateTime? @map("postback_since") @db.Timestamptz(3)
   /// какие события уходят на адрес; по умолчанию одна регистрация
   postbackEvents String[]  @default(["registration"]) @map("postback_events") @db.VarChar(24)
+  /// игровой аккаунт партнёра — связь кабинета (T-0217, Р136): пишется только из карточки партнёра. Остаётся и после закрытия кабинета: по ней аккаунт не привязывается к самому себе. Один аккаунт — один партнёр
+  accountId      String?   @unique @map("account_id") @db.Uuid
 
+  account   Account?         @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
@@ -2257,8 +2303,10 @@ model OutboundProxy {
 }
 
 /// Подписка Xray для прокси исходящих запросов (docs/35-stage4-plan.md Р101, T-0093).
-/// Одна строка: key = 'main'. Адрес — шифртекстом SecretCipher; состояние узла
-/// и его слот держат CHECK в миграции
+/// Несколько подписок (Р192, T-0384): ключ неизменен с рождения — от него зависят
+/// шифртекст адреса и x-hwid; первая подписка сохранила ключ `main`. Ключ —
+/// строчные латиница и цифры (CHECK в миграции). Адрес — шифртекстом SecretCipher;
+/// состояние узла и его слот держат CHECK в миграции
 model ProxySubscription {
   key                   String    @id @db.VarChar(16)
   name                  String    @db.VarChar(60)
@@ -2279,9 +2327,19 @@ model ProxySubscription {
   trafficUsedBytes      BigInt?   @map("traffic_used_bytes")
   trafficTotalBytes     BigInt?   @map("traffic_total_bytes")
   expiresAt             DateTime? @map("expires_at") @db.Timestamptz(3)
+  /// своя маршрутизация подписки, только для сведения (T-0385): `none`, `json`, `header`,
+  /// `json+header`; null — подписка не обновлялась после T-0385 (`CHECK` в миграции)
+  routingSource         String?   @map("routing_source") @db.VarChar(12)
+  /// записей мимо туннеля; null — заголовок есть, состав не разобран
+  routingDirect         Int?      @map("routing_direct")
+  routingBlock          Int?      @map("routing_block")
+  /// `geosite:`/`geoip:` из записей мимо туннеля, до восьми
+  routingHints          String[]  @map("routing_hints") @db.VarChar(64)
   /// кто менял последним; без внешнего ключа — подписка переживает аккаунт
   updatedBy             String    @map("updated_by") @db.Uuid
   updatedAt             DateTime  @map("updated_at") @db.Timestamptz(3)
+  /// когда подключена: порядок карточек в панели
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   nodes ProxySubscriptionNode[]
 
@@ -2289,7 +2347,8 @@ model ProxySubscription {
 }
 
 /// Узлы подписки. Секретов узла (UUID, пароль) в базе нет: они только в конфиге
-/// Xray и в ответе поставщика. `slot` — вход Xray узла: порт = база + слот
+/// Xray, в файлах-частях подписок в его томе и в ответе поставщика. `slot` — вход
+/// Xray узла: порт = база + слот; слот уникален на всю систему, между подписками тоже
 model ProxySubscriptionNode {
   subscriptionKey String    @map("subscription_key") @db.VarChar(16)
   nodeKey         String    @map("node_key") @db.VarChar(16)
@@ -2304,6 +2363,12 @@ model ProxySubscriptionNode {
   latencyMs       Int?      @map("latency_ms")
   lastProbeAt     DateTime? @map("last_probe_at") @db.Timestamptz(3)
   nextProbeAt     DateTime  @map("next_probe_at") @db.Timestamptz(3)
+  /// транспорт (`NodeNetwork` proxy-kit): `tcp`, `ws`, `grpc`, `httpupgrade`, `xhttp`; null — узел
+  /// записан до T-0385 и ещё не обновлялся (`CHECK` в миграции)
+  network         String?   @db.VarChar(12)
+  /// `none`, `tls` или `reality` (`CHECK` в миграции)
+  security        String?   @db.VarChar(8)
+  flow            String?   @db.VarChar(32)
 
   subscription ProxySubscription @relation(fields: [subscriptionKey], references: [key], onDelete: Cascade)
 
@@ -2430,8 +2495,8 @@ model AdConversion {
 
   link     Link       @relation(fields: [linkCode], references: [code], onDelete: Cascade)
   click    LinkClick? @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
-  account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  account  Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase?  @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
   @@unique([purchaseId, destination])
   @@index([status, nextAttemptAt])
@@ -2787,6 +2852,16 @@ model PassClaim {
   @@map("pass_claim")
 }
 
+/// Метка закрытого месяца пасса (T-0312): пишется последней, когда незабранное
+/// выдано всем. Нет строки у прошедшего месяца — задание закрывает его снова, а
+/// двойных выдач нет: каждая награда держится на ключе кошелька и журнале `pass_claim`
+model PassClose {
+  monthKey String   @id @map("month_key") @db.VarChar(7)
+  closedAt DateTime @map("closed_at") @db.Timestamptz(3)
+
+  @@map("pass_close")
+}
+
 /// Бусты-подарки: пасс дарит буст, а не списывает самоцветы за него. Тратит
 /// подарок включение буста на забег (T-0312)
 model BoostCredit {
@@ -2798,6 +2873,541 @@ model BoostCredit {
 
   @@id([accountId, boostId])
   @@map("boost_credit")
+}
+
+// Контент игры на сервере (docs/19-content-admin.md §3, docs/35-stage4-plan.md
+// Р16 и Р160, T-0303): версии снимка, черновики поверх версий и проверки
+// черновиков в sim-worker. Это правила игры, а не данные игроков, — вайп их не
+// трогает. Публикации пока нет (T-0306): версия «из кода» заводится выкатом.
+
+/// Версия контента: неизменяемый снимок вместе со схемой, по которой он
+/// проверялся, и именами для панели. Хэш — тот же `content_hash`, что игра
+/// пишет в итог забега (`hashSnapshot` движка), поэтому уникален; на версию
+/// «из кода» его кладёт выгрузка `content:export`
+model ContentVersion {
+  versionNo     Int       @id @default(autoincrement()) @map("version_no")
+  contentHash   String    @unique @map("content_hash") @db.VarChar(64)
+  /// версия формы снимка: клиент берёт последнюю, которую понимает
+  schemaVersion Int       @map("schema_version") @db.SmallInt
+  snapshot      Json
+  /// JSON Schema снимка (`z.toJSONSchema`): ею проверяется форма правки
+  jsonSchema    Json      @map("json_schema")
+  /// тексты `nameKey` и `descriptionKey` снимка: панель показывает имена, а не id
+  names         Json
+  /// `repo` — из кода при выкате, `panel` — опубликована из панели (`CHECK` в миграции)
+  source        String    @db.VarChar(8)
+  /// без внешнего ключа — запись переживает аккаунт; `null` — завёл выкат
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// `null` — версия ещё не публиковалась
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
+
+  drafts ContentDraft[]
+
+  @@map("content_version")
+}
+
+/// Черновик: копия снимка версии, которую правит человек. Версию-основу не
+/// меняет и не двигает. Из списка уходит архивом, строка остаётся
+model ContentDraft {
+  draftId       String    @id @map("draft_id") @db.Uuid
+  baseVersionNo Int       @map("base_version_no")
+  title         String    @db.VarChar(80)
+  snapshot      Json
+  /// без внешнего ключа — черновик переживает аккаунт
+  author        String    @db.Uuid
+  updatedAt     DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+
+  base   ContentVersion @relation(fields: [baseVersionNo], references: [versionNo], onDelete: Restrict)
+  checks ContentCheck[]
+
+  @@index([updatedAt])
+  @@index([baseVersionNo])
+  @@map("content_draft")
+}
+
+/// Проверка черновика в sim-worker. Хэш — отпечаток снимка, который проверяли:
+/// правка черновика его меняет, и старый отчёт «устаревает». Один живой отчёт
+/// на пару (черновик, хэш) — частичный уникальный индекс в миграции; упавшая
+/// проверка место не занимает
+model ContentCheck {
+  checkId      String   @id @map("check_id") @db.Uuid
+  draftId      String   @map("draft_id") @db.Uuid
+  snapshotHash String   @map("snapshot_hash") @db.VarChar(64)
+  /// `queued`, `done`, `failed`, `timeout` (`CHECK` в миграции)
+  status       String   @db.VarChar(8)
+  /// итог воркера как есть (проблемы схемы и контента, отчёт симуляции) или `{ error }`
+  report       Json?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  draft ContentDraft @relation(fields: [draftId], references: [draftId], onDelete: Restrict)
+
+  @@index([draftId, createdAt])
+  @@map("content_check")
+}
+
+// Перепроверка подписки после награды (docs/35-stage4-plan.md Р115, T-0178)
+
+/// Окно наблюдения за наградой за подписку на канал: семь суток после забора
+/// сервер спрашивает бота площадки, остался ли игрок в канале. Строка на
+/// каждую выданную награду — ключ как у `task_progress`: у ежедневной и
+/// еженедельной подписки награда за каждый срок со своим окном. Состояние и
+/// допустимые значения держит `CHECK` в миграции, как и частичный индекс по
+/// `next_check_at` для `state = 'watching'` — Prisma частичные индексы не
+/// описывает. `event_no` — номер события отписки пары «игрок + задание»:
+/// награды всех открытых окон пары, списанные одной отпиской, делят номер.
+model TaskChannelWatch {
+  accountId   String    @map("account_id") @db.Uuid
+  taskId      String    @map("task_id") @db.VarChar(48)
+  periodStart DateTime  @map("period_start") @db.Date
+  /// момент забора награды
+  startedAt   DateTime  @map("started_at") @db.Timestamptz(3)
+  /// конец окна: `started_at` + 7 суток
+  watchUntil  DateTime  @map("watch_until") @db.Timestamptz(3)
+  nextCheckAt DateTime  @map("next_check_at") @db.Timestamptz(3)
+  /// последняя проверка, на которую площадка ответила
+  checkedAt   DateTime? @map("checked_at") @db.Timestamptz(3)
+  /// `watching`, `kept` (досидел), `expired` (кончилось без ответа площадки),
+  /// `penalized` (отписался) — `CHECK` в миграции
+  state       String    @default("watching") @db.VarChar(16)
+  eventNo     Int?      @map("event_no")
+  penalizedAt DateTime? @map("penalized_at") @db.Timestamptz(3)
+  /// сколько списано по ресурсам: `{ "coins": n, "gems": n, "shards": n }`
+  revoked     Json?
+  /// удержание (Р139, T-0223): был ли игрок в канале на 1-й, 3-й и 7-й день
+  /// после награды. Ставит перепроверка первой успешной проверкой после
+  /// границы; отписка закрывает пустые `false`; `null` — не известно
+  heldD1      Boolean?  @map("held_d1")
+  heldD3      Boolean?  @map("held_d3")
+  heldD7      Boolean?  @map("held_d7")
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  task    TaskDef @relation(fields: [taskId], references: [taskId])
+
+  @@id([accountId, taskId, periodStart])
+  // Разбор пары «игрок + задание»: открытые окна и последнее событие отписки.
+  @@index([accountId, taskId])
+  @@map("task_channel_watch")
+}
+
+// Снимки аудитории по суткам (tasks/T-0203)
+
+/// Закрытые московские сутки: сколько разных аккаунтов запускало игру в них,
+/// за 7 и за 30 суток, заканчивая ими. Рекорды DAU/WAU/MAU — максимум по строкам.
+/// Строку пишет ночное задание (`admin-notify/activity-snapshot.job.ts`), историю
+/// строит из сессий запуска — их вайп не стирает
+model ActivityDaily {
+  day        String   @id @db.VarChar(10)
+  dau        Int
+  wau        Int
+  mau        Int
+  computedAt DateTime @default(now()) @map("computed_at") @db.Timestamptz(3)
+
+  @@map("activity_daily")
+}
+
+// Связь с аккаунтом MAX или VK (docs/35-stage4-plan.md Р188, tasks/T-0377)
+
+/// Связь игрового аккаунта с его аккаунтом на другой площадке — для заданий «подпишись через бота»,
+/// не для входа. Пара «площадка + id» принадлежит одному аккаунту навсегда, у аккаунта на площадке
+/// одна связь: строку не меняют и не освобождают, перепривязка — только через поддержку. `CHECK` в
+/// миграции: площадка — `max` или `vk`
+model ExternalIdentity {
+  accountId      String   @map("account_id") @db.Uuid
+  platform       Platform
+  /// id игрока на площадке, как его присылает бот; в аналитику не пишется
+  externalUserId String   @map("external_user_id") @db.VarChar(64)
+  linkedAt       DateTime @default(now()) @map("linked_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, platform])
+  @@unique([platform, externalUserId])
+  @@map("external_identity")
+}
+
+// Трафик узлов Xray по часам (docs/35-stage4-plan.md Р192, T-0386): считает ядро Xray,
+// строки старше 35 суток удаляются. Внешнего ключа на подписку нет: отчёт соединяется с живыми.
+model ProxyTrafficHour {
+  hour            DateTime @db.Timestamptz(0)
+  subscriptionKey String   @map("subscription_key") @db.VarChar(16)
+  nodeKey         String   @map("node_key") @db.VarChar(16)
+  /// название узла на последнем чтении: узел мог уйти из подписки
+  nodeName        String   @map("node_name") @db.VarChar(80)
+  upBytes         BigInt   @map("up_bytes")
+  downBytes       BigInt   @map("down_bytes")
+
+  @@id([hour, subscriptionKey, nodeKey])
+  @@map("proxy_traffic_hour")
+}
+
+// Компенсация за сбой оплаты (Р209, tasks/T-0435)
+
+/// Компенсация самоцветами за сбой оплаты: одна на покупку — первичный ключ `purchase_id` не пускает вторую.
+/// Строка вставляется до кошелька, `credited_at` ставится после него: упало между — повтор доначисляет ту же сумму
+model PurchaseCompensation {
+  /// одна компенсация на покупку — первичным ключом
+  purchaseId     String    @id @map("purchase_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  /// пока только gems (Р2)
+  resource       String    @db.VarChar(32)
+  amount         Int
+  /// что предложила панель: по разнице видно, правили ли сумму
+  suggested      Int?
+  note           String    @db.VarChar(200)
+  actorAccountId String    @map("actor_account_id") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  /// когда легло в кошелёк; `null` — начисление не прошло, повтор доделает
+  creditedAt     DateTime? @map("credited_at") @db.Timestamptz(3)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("purchase_compensation")
+}
+
+// Заявки на правку с подтверждением второго участника (docs/19-content-admin.md §6, tasks/T-0309)
+
+/// Заявка на правку: один человек предлагает «было → стало» с причиной, другой с тем же правом
+/// подтверждает. Живёт 72 часа (`change-requests/change-request-types.ts`); новая заявка на ту же цель
+/// гасит прежнюю. `CHECK` в миграции: вид и статус — из списка; частичный уникальный индекс — одна
+/// живая заявка на пару «вид + цель» (Prisma частичные индексы не описывает). Строки не удаляются —
+/// по ним видно, кто и почему менял цену
+model ChangeRequest {
+  requestId String    @id @map("request_id") @db.Uuid
+  /// что правится: `sku_price` — товар магазина, `reward_setting` — награда (T-0310)
+  kind      String    @db.VarChar(24)
+  /// id товара или ключ настройки; без внешнего ключа — каталог и настройки в коде
+  target    String    @db.VarChar(64)
+  /// значения правимых полей на момент заявки — условие применения: цель всё ещё равна `before`
+  before    Json
+  after     Json
+  reason    String    @db.VarChar(200)
+  /// без внешнего ключа — заявка переживает аккаунт
+  author    String    @db.Uuid
+  /// `pending`, `approved`, `rejected`, `expired`, `superseded`
+  status    String    @db.VarChar(12)
+  /// кто решил; `null` — заявка закрылась сама (срок, новая заявка, цель изменилась)
+  decidedBy String?   @map("decided_by") @db.Uuid
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz(3)
+  createdAt DateTime  @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([kind, target, status])
+  @@map("change_request")
+}
+
+/// Правка товара магазина поверх каталога в коде (`shop/shop-overrides.ts`): только поля, которые
+/// разрешено править, — цена в звёздах и в рублях, самоцветы состава, значок, порядок. Кладётся только
+/// подтверждением заявки; итог проходит ту же схему товара, что и каталог. Без внешнего ключа — каталог в коде
+model ShopSkuOverride {
+  skuId  String   @id @map("sku_id") @db.VarChar(32)
+  fields Json
+  /// кто подтвердил последнюю правку
+  setBy  String   @map("set_by") @db.Uuid
+  setAt  DateTime @map("set_at") @db.Timestamptz(3)
+
+  @@map("shop_sku_override")
+}
+
+// Сверка оплат с выпиской площадки (Р209)
+
+/// Одна сверка выписки площадки: с какой позиции читали, до какой дочитали, сколько нашли. По `to_offset`
+/// последней удачной сверки читает следующая; сверка с ошибкой курсор не двигает
+model PaymentReconcileRun {
+  runId          String    @id @map("run_id") @db.Uuid
+  platform       String    @db.VarChar(16)
+  /// schedule — по расписанию, manual — кнопкой
+  trigger        String    @db.VarChar(16)
+  actorAccountId String?   @map("actor_account_id") @db.Uuid
+  startedAt      DateTime  @map("started_at") @db.Timestamptz(3)
+  /// `null` — сверка оборвалась, не дойдя до конца
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(3)
+  /// позиция выписки, с которой читали, и та, до которой дочитали
+  fromOffset     Int       @map("from_offset")
+  toOffset       Int?      @map("to_offset")
+  /// время первой и последней прочитанной операции
+  coveredFrom    DateTime? @map("covered_from") @db.Timestamptz(3)
+  coveredTo      DateTime? @map("covered_to") @db.Timestamptz(3)
+  scanned        Int       @default(0)
+  /// новых расхождений
+  found          Int       @default(0)
+  /// закрыто само (`matched`)
+  matched        Int       @default(0)
+  /// ошибка площадки или базы — первые 300 знаков
+  error          String?   @db.VarChar(300)
+
+  @@index([platform, finishedAt])
+  @@map("payment_reconcile_run")
+}
+
+/// Расхождение между выпиской площадки и нашими покупками: одно на `(площадка, вид, оплата)` навсегда.
+/// Внешних ключей нет: покупки у «списано, но не записано» может не быть, а аккаунт — только для показа
+model PaymentDiscrepancy {
+  discrepancyId String    @id @map("discrepancy_id") @db.Uuid
+  platform      String    @db.VarChar(16)
+  /// charged_unrecorded | recorded_missing | refund_unrecorded
+  kind          String    @db.VarChar(32)
+  chargeId      String    @map("charge_id") @db.VarChar(256)
+  /// покупка: по payload у «списано, но не записано», по оплате — у остальных; нет — null
+  purchaseId    String?   @map("purchase_id") @db.Uuid
+  accountId     String?   @map("account_id") @db.Uuid
+  /// игрок на площадке из выписки; у «записано, но нет» — null
+  payerId       String?   @map("payer_id") @db.VarChar(64)
+  amount        Int
+  /// что стояло в счёте — как пришло из выписки, до 128 знаков
+  payload       String?   @db.VarChar(128)
+  /// когда случилась операция выписки или записана оплата
+  occurredAt    DateTime  @map("occurred_at") @db.Timestamptz(3)
+  detectedAt    DateTime  @map("detected_at") @db.Timestamptz(3)
+  runId         String    @map("run_id") @db.Uuid
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz(3)
+  /// matched | retried | refunded | dismissed
+  resolution    String?   @db.VarChar(16)
+  resolvedBy    String?   @map("resolved_by") @db.Uuid
+  note          String?   @db.VarChar(200)
+
+  @@unique([platform, kind, chargeId])
+  @@index([resolvedAt, detectedAt])
+  @@index([purchaseId])
+  @@map("payment_discrepancy")
+}
+
+// Доли участников проекта (docs/35-stage4-plan.md Р217, tasks/T-0452)
+
+/// Доля участника проекта с месяца (Р217): новая доля — новая строка, конец участия — 0.
+model StakeholderShare {
+  shareId   String   @id @map("share_id") @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  /// первое число месяца по UTC, с которого действует доля
+  fromMonth DateTime @map("from_month") @db.Date
+  /// сотые доли процента: 2 550 — 25,5 %
+  shareBp   Int      @map("share_bp")
+  note      String   @db.VarChar(500)
+  setBy     String   @map("set_by") @db.Uuid
+  setAt     DateTime @default(now()) @map("set_at") @db.Timestamptz(3)
+
+  account Account @relation("StakeholderShares", fields: [accountId], references: [accountId], onDelete: Restrict)
+  setter  Account @relation("StakeholderSharesSet", fields: [setBy], references: [accountId], onDelete: Restrict)
+
+  @@unique([accountId, fromMonth])
+  @@index([fromMonth])
+  @@map("stakeholder_share")
+}
+
+// Журнал учёта: план счетов и проводки двойной записью (docs/37-accounting.md, Р219, tasks/T-0457)
+
+enum LedgerAccountType {
+  asset
+  revenue
+  expense
+  liability
+  equity
+}
+
+/// Статья учёта — расход или поступление, без валюты (Р220, tasks/T-0460): счёт статьи в валюте заводится при
+/// первой проводке. Служебные статьи (комиссии, курсовая разница, налог) не архивируются.
+enum LedgerArticleKind {
+  expense
+  income
+}
+
+model LedgerArticle {
+  /// устойчивый ключ, «vps»; в идентификатор счёта статьи входит как есть
+  articleId  String            @id @map("article_id") @db.VarChar(64)
+  kind       LedgerArticleKind
+  name       String            @db.VarChar(128)
+  /// служебная: нужна проводкам самого учёта, поэтому её не архивируют
+  system     Boolean           @default(false)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
+
+  accounts  LedgerAccount[]
+  templates LedgerTemplate[]
+
+  @@map("ledger_article")
+}
+
+/// Счёт плана счетов: место хранения или статья в одной валюте. Начальный план вставляет миграция;
+/// счёт с проводками не удаляется и не переименовывается (`onDelete: Restrict`, триггер журнала).
+model LedgerAccount {
+  /// устойчивый ключ, «stars.bot.hold»
+  accountId        String            @id @map("account_id") @db.VarChar(64)
+  type             LedgerAccountType
+  /// код валюты из справочника ядра курсов
+  currency         String            @db.VarChar(16)
+  name             String            @db.VarChar(128)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt       DateTime?         @map("archived_at") @db.Timestamptz(3)
+  /// группа места хранения: «stars.bot» у обоих состояний звёзд бота, у прочих мест — их собственный id; у статей пусто
+  place            String?           @db.VarChar(64)
+  /// шаблон комиссии места: процент в сотых долях процента (0…10 000), фикса в минимальных единицах своей валюты
+  feePercentBp     Int?              @map("fee_percent_bp")
+  feeFixed         BigInt?           @map("fee_fixed")
+  feeFixedCurrency String?           @map("fee_fixed_currency") @db.VarChar(16)
+  /// статья учёта, если счёт — статья в валюте
+  articleId        String?           @map("article_id") @db.VarChar(64)
+  article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
+
+  lines     LedgerLine[]
+  loans     LedgerLoan[]
+  templates LedgerTemplate[]
+
+  @@index([place])
+  @@index([articleId])
+  @@map("ledger_account")
+}
+
+/// Проводка. Не правится и не удаляется — триггер в миграции; исправление — сторно (`reversal_of`).
+model LedgerEntry {
+  entryId    String   @id @map("entry_id") @db.Uuid
+  /// ключ идемпотентности источника: «purchase:<id>:paid»
+  sourceKey  String   @unique @map("source_key") @db.VarChar(128)
+  at         DateTime @db.Timestamptz(3)
+  /// «YYYY-MM» по UTC — из `at`
+  period     String   @db.Char(7)
+  memo       String   @db.VarChar(500)
+  /// сторно: entry_id исходной проводки; у исходной — не больше одного сторно
+  reversalOf String?  @unique @map("reversal_of") @db.Uuid
+  meta       Json?
+  /// кто записал; null — сервер (проводки из платежей). Внешнего ключа нет: журнал переживает аккаунты
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  original LedgerEntry? @relation("LedgerReversal", fields: [reversalOf], references: [entryId], onDelete: Restrict)
+  reversal LedgerEntry? @relation("LedgerReversal")
+  lines    LedgerLine[]
+
+  @@index([period])
+  @@index([at])
+  @@map("ledger_entry")
+}
+
+/// Строка проводки: сумма в минимальных единицах валюты счёта, дебет — плюс, кредит — минус; ноль база не пускает.
+model LedgerLine {
+  lineId    String @id @map("line_id") @db.Uuid
+  entryId   String @map("entry_id") @db.Uuid
+  accountId String @map("account_id") @db.VarChar(64)
+  amount    BigInt
+
+  entry   LedgerEntry   @relation(fields: [entryId], references: [entryId], onDelete: Restrict)
+  account LedgerAccount @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+
+  @@unique([entryId, accountId])
+  @@index([accountId, entryId])
+  @@map("ledger_line")
+}
+
+// Ручные операции учёта: что ввёл человек и условия займов (docs/37-accounting.md §4, Р220, tasks/T-0461)
+
+enum LedgerOperationKind {
+  transfer
+  exchange
+  expense
+  income
+  loan
+  reversal
+}
+
+/// draft — черновик (в том числе из шаблона), pending — ждёт второго ключа (tasks/T-0462), posted — проведена,
+/// rejected — отклонена владельцем
+enum LedgerOperationStatus {
+  draft
+  pending
+  posted
+  rejected
+}
+
+/// Операция, которую вносит человек: поля вида лежат в `input`, а проводку из них собирает сервер (`op:<id>`).
+/// Черновик правится и удаляется, проведённая операция не меняется — исправление только сторно.
+model LedgerOperation {
+  operationId    String                @id @map("operation_id") @db.Uuid
+  kind           LedgerOperationKind
+  status         LedgerOperationStatus @default(draft)
+  /// поля вида без причины и ссылки: суммы десятичными строками в валюте места, дата события
+  input          Json
+  /// причина или описание, 3…500 знаков; становится описанием проводки
+  note           String                @db.VarChar(500)
+  link           String?               @db.VarChar(500)
+  /// оценка размера в долларах по курсу на момент ввода: для порога второго ключа и списка; нет курса — пусто
+  amountUsd      Decimal?              @map("amount_usd") @db.Decimal(18, 2)
+  /// ключ проводки `op:<id>` — появляется, когда операция проведена
+  sourceKey      String?               @unique @map("source_key") @db.VarChar(128)
+  /// кто внёс; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                @map("created_by") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  decidedBy      String?               @map("decided_by") @db.Uuid
+  decidedAt      DateTime?             @map("decided_at") @db.Timestamptz(3)
+  decisionNote   String?               @map("decision_note") @db.VarChar(500)
+  /// шаблон повторяющегося расхода, из которого создан черновик, и период «ГГГГ-ММ»: на период один черновик
+  templateId     String?               @map("template_id") @db.VarChar(64)
+  templatePeriod String?               @map("template_period") @db.Char(7)
+
+  loan LedgerLoan?
+
+  @@unique([templateId, templatePeriod])
+  @@index([status, createdAt])
+  @@map("ledger_operation")
+}
+
+/// Заём проекту: тело, премия и ставка погашения — условия для закрытия месяца (волна 4). Остаток — тело и премия
+/// за вычетом погашенного; счёт-обязательство `loan.<кредитор>.<валюта>` общий у займов одного кредитора в одной валюте.
+model LedgerLoan {
+  loanId      String   @id @map("loan_id") @db.Uuid
+  lender      String   @db.VarChar(128)
+  accountId   String   @map("account_id") @db.VarChar(64)
+  currency    String   @db.VarChar(16)
+  /// тело займа в минимальных единицах валюты
+  principal   BigInt
+  /// премия сверх тела в минимальных единицах той же валюты
+  premium     BigInt
+  /// доля чистой прибыли месяца на погашение, сотые доли процента: 0…10 000
+  repaymentBp Int      @map("repayment_bp")
+  operationId String   @unique @map("operation_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account   LedgerAccount   @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  operation LedgerOperation @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
+
+  @@index([accountId])
+  @@map("ledger_loan")
+}
+
+// Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
+
+enum LedgerTemplateSchedule {
+  monthly
+  yearly
+}
+
+/// Шаблон расхода: статья, место, обычная сумма и график. Сам ничего не проводит — «Расходы месяца» создаёт по нему
+/// черновик операции (`ledger_operation.template_id` + `template_period`, на период один), человек сверяет и проводит.
+/// Связи операции с шаблоном внешним ключом нет: операция живёт и после того, как шаблон забыли.
+model LedgerTemplate {
+  /// слаг из названия, «vps»; занят — «vps-2»
+  templateId     String                 @id @map("template_id") @db.VarChar(64)
+  name           String                 @db.VarChar(128)
+  articleId      String                 @map("article_id") @db.VarChar(64)
+  /// счёт места хранения, с которого платим: `bank.karta`, `stars.bot.available`
+  placeAccountId String                 @map("place_account_id") @db.VarChar(64)
+  /// обычная сумма в минимальных единицах валюты места: в реальности она могла измениться, поэтому — только черновик
+  amount         BigInt
+  schedule       LedgerTemplateSchedule
+  /// месяц года, 1…12, для `yearly`; у `monthly` пусто
+  month          Int?                   @db.SmallInt
+  note           String?                @db.VarChar(500)
+  archivedAt     DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                 @map("created_by") @db.Uuid
+
+  article      LedgerArticle @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
+  placeAccount LedgerAccount @relation(fields: [placeAccountId], references: [accountId], onDelete: Restrict)
+
+  @@index([articleId])
+  @@index([placeAccountId])
+  @@map("ledger_template")
 }
 
 // Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за

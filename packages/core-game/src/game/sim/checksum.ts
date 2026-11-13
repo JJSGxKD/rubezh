@@ -1,3 +1,5 @@
+import { STALKER_PHASES } from "./stalker";
+import { stalkerAlive } from "./stalker-body";
 import type { World } from "./world";
 
 /**
@@ -60,6 +62,66 @@ export function checksumWorld(world: World): number {
       fold(entry.y);
     }
     fold(world.cordon.pendingLeftSec);
+  }
+
+  // Осада без правил или до первого якоря в сумму не входит: суммы забегов без неё не меняются.
+  const siege = world.siege;
+  if (world.siegeRules !== null && (siege.anchored || siege.count > 0)) {
+    fold(siege.anchorX);
+    fold(siege.anchorY);
+    fold(siege.holdTicks);
+    fold(siege.warned ? 1 : 0);
+    fold(siege.level);
+    fold(siege.active ? 1 : 0);
+    fold(siege.activeLevel);
+    fold(siege.cooldownTicks);
+    fold(siege.calmTicks);
+    fold(siege.count);
+    fold(siege.rng.getState());
+  }
+
+  // Лужи — только живые: суммы забегов без врагов со следом не меняются.
+  const puddles = world.hazards.puddles;
+  for (let i = 0; i < puddles.alive.length; i++) {
+    if (puddles.alive[i] === 0) continue;
+    fold(i);
+    fold(puddles.x[i]);
+    fold(puddles.y[i]);
+    fold(puddles.ttl[i]);
+  }
+
+  // Директор Карачуна без правил или выключенный в сумму не входит: суммы забегов без него не меняются.
+  const stalker = world.stalker;
+  if (stalker.appear !== null && stalker.phase !== "off") {
+    fold(STALKER_PHASES.indexOf(stalker.phase));
+    fold(stalker.nextOmenTick);
+    fold(stalker.x);
+    fold(stalker.y);
+    fold(stalker.phaseTicks);
+    fold(stalker.chaseTicks);
+    fold(stalker.index);
+    fold(stalker.hits);
+    fold(stalker.pushes);
+    fold(stalker.relocations);
+    fold(stalker.appearedTick);
+    fold(stalker.rng.getState());
+  }
+
+  // Тело преследователя входит в сумму, пока он жив, и отброс — пока игрок летит: суммы забегов без них не меняются.
+  if (stalkerAlive(world) === 1) {
+    const body = world.stalkerBody;
+    fold(body.slot);
+    fold(body.pushWindowSum);
+    fold(body.pushCursor);
+    fold(body.seriesFactor);
+    fold(body.lastPushTick);
+    fold(body.touchCooldownTicks);
+    fold(body.recoverTicks);
+  }
+  if (world.player.knockbackTicks > 0) {
+    fold(world.player.knockbackTicks);
+    fold(world.player.knockbackVx);
+    fold(world.player.knockbackVy);
   }
 
   for (let i = 0; i < world.enemies.count; i++) {

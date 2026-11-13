@@ -719,7 +719,11 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
       track("ring_ended", { index, outcome, guards, killed, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
     }),
 
-    created.on("chestOpened", ({ index, size, rewards, fallbacks, elapsedSec }) => {
+    created.on("stalkerEnded", ({ index, outcome, hits, pushes, relocations, lifeSec, elapsedSec }) => {
+      track("stalker_ended", { index, outcome, hits, pushes, relocations, lifeSec: Math.round(lifeSec), elapsedSec: Math.round(elapsedSec) });
+    }),
+
+    created.on("chestOpened",({ index, size, rewards, fallbacks, elapsedSec }) => {
       track("chest_opened", { index, size, rewards: rewards.length, fallbacks, elapsedSec: Math.round(elapsedSec) });
       for (const reward of rewards) {
         if (reward.kind !== "weapon_evolve") continue;
@@ -764,6 +768,14 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("diagnostics", (diagnostics) => {
       pendingDiagnostics = diagnostics;
+      // Запись для проверки — у каждого забега, а не только у тестеров: сжатие и отправка
+      // уходят в фон отдельным чанком, забег уже записан (docs/28-diagnostics.md §3.4).
+      const proof = diagnostics.proof;
+      if (proof !== null) {
+        import("./run-proof-queue")
+          .then(({ queueRunProof }) => queueRunProof(proof))
+          .catch((error: unknown) => reportError("proofs", `запись для проверки не поставлена в очередь: ${String(error)}`));
+      }
       const recording = diagnostics.recording;
       if (recording === null) return;
       const clientErrors = clientErrorCount() - errorsAtRunStart;

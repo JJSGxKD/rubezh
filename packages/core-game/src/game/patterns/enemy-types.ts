@@ -19,18 +19,22 @@ export interface PatternTraits {
   solid: boolean;
   /** место врага задаёт не расстояние до игрока, а строй: отставшего не уносит вперёд */
   anchored: boolean;
+  /** убить нельзя: удар отталкивает вместо урона, здоровье не читается (`sim/stalker-body.ts`) */
+  unkillable: boolean;
 }
 
 export const PATTERN_TRAITS: Record<EnemyPattern, PatternTraits> = {
-  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false },
-  chase: { radius: 12, contactDamage: true, solid: false, anchored: false },
-  dash: { radius: 10, contactDamage: true, solid: false, anchored: false },
-  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false },
-  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false },
-  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false },
-  rush: { radius: 6, contactDamage: true, solid: false, anchored: false },
+  swarm: { radius: 7, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  chase: { radius: 12, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  dash: { radius: 10, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  orbit: { radius: 8, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  exploder: { radius: 9, contactDamage: false, solid: false, anchored: false, unkillable: false },
+  splitter: { radius: 13, contactDamage: true, solid: false, anchored: false, unkillable: false },
+  rush: { radius: 6, contactDamage: true, solid: false, anchored: false, unkillable: false },
   // Страж кольца: тело не пускает игрока, а место в строю он не бросает, куда бы ни ушёл игрок.
-  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true },
+  cordon: { radius: 14, contactDamage: true, solid: true, anchored: true, unkillable: false },
+  // Карачун (Р205): убить нельзя, удары его отталкивают; тело и числа — `sim/stalker-body.ts`.
+  stalker: { radius: 16, contactDamage: true, solid: false, anchored: false, unkillable: true },
 };
 
 /**
@@ -69,9 +73,38 @@ export function rankRadiusMul(rank: EnemyRank | "normal"): number {
  * пролетать сквозь крупного врага — запрос к сетке вернёт его не во всех
  * клетках, где он есть. Запас только расширяет выборку кандидатов, попадание
  * по-прежнему решает точное расстояние.
+ *
+ * Преследователь (Р205) в расчёт ранга и размера не входит: `findStalkerProblems` не даёт ему ни
+ * `rank`, ни `size`, его хитбокс — просто радиус паттерна. Иначе его радиус раздул бы запрос всех
+ * оружий, а в плотной толпе буфер кандидатов обрезает выборку по-другому, и забеги, не знающие о
+ * преследователе, разошлись бы с прежними эталонами.
  */
-export const MAX_PATTERN_RADIUS =
-  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX;
+export const MAX_PATTERN_RADIUS = Math.max(
+  Math.max(...Object.entries(PATTERN_TRAITS).filter(([pattern]) => pattern !== "stalker").map(([, traits]) => traits.radius)) *
+    BOSS_RADIUS_MUL *
+    ENEMY_SIZE_MAX,
+  PATTERN_TRAITS.stalker.radius,
+);
+
+/**
+ * Коридоры следа врага (`trail`, Р157): мельче 12 единиц лужу не видно, крупнее
+ * 60 она закрывает полполя; жизнь и частота держат число луж на поле в пуле
+ * (`sim/hazards.ts`), урон — в пределах того, что игрок успевает заметить.
+ */
+export const TRAIL_BOUNDS = {
+  everySec: { min: 0.5, max: 5, label: "0,5…5" },
+  radius: { min: 12, max: 60, label: "12…60" },
+  lifeSec: { min: 1, max: 8, label: "1…8" },
+  damagePerSec: { min: 1, max: 20, label: "1…20" },
+} as const;
+
+/** След врага, разложенный для симуляции: радиус уже в пикселях устройства, время — в секундах. */
+export interface EnemyTrail {
+  everySec: number;
+  radius: number;
+  lifeSec: number;
+  damagePerSec: number;
+}
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
@@ -140,6 +173,7 @@ export const PATTERN_DEFAULTS: Record<EnemyPattern, Partial<Record<NumericParam,
   splitter: { steeringPerSec: 3.2 },
   rush: { leadSec: 0.55, runSec: 2.6 },
   cordon: {},
+  stalker: {},
 };
 
 /** Параметры, которые геймдизайнер вправе задать каждому паттерну. */
@@ -152,6 +186,7 @@ const ALLOWED_PARAMS: Record<EnemyPattern, readonly string[]> = {
   splitter: ["children"],
   rush: ["leadSec", "runSec"],
   cordon: [],
+  stalker: [],
 };
 
 /** Расстояния и скорости пересчитываются в пиксели устройства, время — нет. */
@@ -204,6 +239,7 @@ export interface EnemyType {
   contactDamage: boolean;
   solid: boolean;
   anchored: boolean;
+  unkillable: boolean;
   params: ResolvedPatternParams;
   /**
    * Множитель урона по стихиям, по индексу стихии (`sim/elements.ts`):
@@ -215,6 +251,8 @@ export interface EnemyType {
   element: number;
   /** шанс наложить состояние на игрока за попадание */
   statusChance: number;
+  /** след из луж; `null` — враг следа не оставляет */
+  trail: EnemyTrail | null;
 }
 
 /**
@@ -264,6 +302,10 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (def.size !== undefined && !(def.size >= ENEMY_SIZE_MIN && def.size <= ENEMY_SIZE_MAX)) {
     problems.push(`враг ${def.id}: size вне 0,7…2,5`);
   }
+  // Запас запроса к сетке (`MAX_PATTERN_RADIUS`) не считает у преследователя ранг и размер: хитбокс — радиус паттерна.
+  if (def.pattern === "stalker" && (def.rank !== undefined || def.size !== undefined)) {
+    problems.push(`враг ${def.id}: у преследователя нет ранга и size — его хитбокс только радиус паттерна`);
+  }
   for (const [element, value] of Object.entries(def.resist ?? {})) {
     const known = element !== "physical" && (ELEMENTS as readonly string[]).includes(element);
     if (!known || !(typeof value === "number" && value >= MIN_RESIST && value <= MAX_RESIST)) {
@@ -275,6 +317,25 @@ function findBaseProblems(def: EnemyDef): string[] {
   const chance = def.statusChance;
   if (chance !== undefined && (!(chance >= 0 && chance <= 1) || !elemental)) {
     problems.push(`враг ${def.id}: statusChance от 0 до 1 и только со стихией`);
+  }
+  if (def.trail !== undefined) problems.push(...findTrailProblems(def.id, def.trail));
+  return problems;
+}
+
+/** След — непроверенные данные, как и параметры паттерна: админка пришлёт JSON. */
+function findTrailProblems(id: string, trail: unknown): string[] {
+  if (typeof trail !== "object" || trail === null || Array.isArray(trail)) return [`враг ${id}: trail должен быть объектом`];
+  const raw = trail as Record<string, unknown>;
+  const problems: string[] = [];
+  for (const key of Object.keys(TRAIL_BOUNDS) as (keyof typeof TRAIL_BOUNDS)[]) {
+    const bounds = TRAIL_BOUNDS[key];
+    const value = raw[key];
+    if (typeof value !== "number" || !(value >= bounds.min && value <= bounds.max)) {
+      problems.push(`враг ${id}: trail.${key} вне ${bounds.label}`);
+    }
+  }
+  for (const key of Object.keys(raw)) {
+    if (!(key in TRAIL_BOUNDS)) problems.push(`враг ${id}: trail.${key} не относится к следу`);
   }
   return problems;
 }
@@ -412,10 +473,20 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       contactDamage: traits.contactDamage,
       solid: traits.solid,
       anchored: traits.anchored,
+      unkillable: traits.unkillable,
       params: resolveParams(def, indexById, unitScale),
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
       element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),
       statusChance: def.element === undefined ? 0 : (def.statusChance ?? 1),
+      trail:
+        def.trail === undefined
+          ? null
+          : {
+              everySec: def.trail.everySec,
+              radius: def.trail.radius * unitScale,
+              lifeSec: def.trail.lifeSec,
+              damagePerSec: def.trail.damagePerSec,
+            },
     };
   });
 }

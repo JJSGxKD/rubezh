@@ -1,10 +1,12 @@
 import { z } from "zod";
+import { ITEM_RARITIES } from "../items/item-catalog.js";
 import { IMAGE_ID } from "../media/image-rules.js";
 import { runReward } from "../progress/progress-rules.js";
 import { DIFFICULTIES } from "../runs/run-rules.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import type { RecordedRun } from "../runs/runs-hooks.js";
 import type { EarnReason } from "../wallet/wallet-types.js";
+import { CLIENT_KINDS, isClientKind, type ClientKind } from "./client-signal-rules.js";
 
 /**
  * Задания и достижения (docs/35-stage4-plan.md Р52, WP13): каталог — в базе,
@@ -56,10 +58,44 @@ export const RUN_FILTER_KEYS = {
  * «Мастерство», «Друзья». Названия показывает клиент.
  */
 export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
-export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
 
-/** Поля достижения у обычного задания: категории, лестницы и престижа у него нет. */
-export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+/**
+ * Категории статусных и сезонных знаков (tasks/T-0235): у них нет прогресса,
+ * поэтому игрок видит их не среди четырёх категорий выше, а своими группами.
+ * Категория идёт парой с одноимённым видом цели.
+ */
+export const EMBLEM_CATEGORIES = ["status", "season"] as const;
+
+/** Все категории строки каталога, какие может хранить база (`CHECK` в миграции). */
+export const CATEGORY_IDS = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] as const;
+export type AchievementCategory = (typeof CATEGORY_IDS)[number];
+
+/**
+ * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов и
+ * отдельный тон `team` для знака «Команда». Стоит в каталоге и не плавает
+ * вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
+ */
+export const EMBLEM_TIERS = [...ITEM_RARITIES, "team"] as const;
+export type EmblemTier = (typeof EMBLEM_TIERS)[number];
+
+/**
+ * Пустые необязательные поля обычного задания: категории, лестницы, престижа и
+ * знака у имени у него нет, и заказчика с моделью оплаты (Р138) — тоже, поэтому
+ * их пустые значения лежат здесь же: так литералы определений в тестах не множатся.
+ */
+export const NO_ACHIEVEMENT_FIELDS = {
+  category: null,
+  ladder: null,
+  rung: null,
+  hidden: false,
+  hint: null,
+  prestige: 0,
+  emblemTier: null,
+  customer: null,
+  payModel: null,
+  rate: null,
+  holdDays: 0,
+} as const;
 
 /** Потолок очков престижа одного достижения — от опечатки в панели. */
 export const PRESTIGE_MAX = 10_000;
@@ -90,6 +126,35 @@ export const WEAPON_ELEMENTS: Readonly<Record<string, TaskElement>> = {
 };
 
 /**
+ * Эволюции оружия на сервере: id эволюции → id базового (tasks/T-0102,
+ * docs/39-retention-mechanics.md К1). Эволюция занимает слот базового, поэтому
+ * в итоге забега стоит её id, а не базового: без таблицы забег с «Грозой» в
+ * эволюции не считался бы ни оружием «Гроза», ни молнией. Таблицу сверяет тест
+ * с `core-game/src/content/weapons.ts` — новая эволюция роняет его, пока строку
+ * не добавили.
+ */
+export const WEAPON_EVOLUTIONS = {
+  starfall: "spark",
+  tempest: "storm",
+  blade_whirl: "knife",
+  whirl: "flail",
+  frost_crown: "wardstone",
+  forge: "hearth",
+  viper: "sting",
+  fire_rain: "meteor",
+} as const;
+
+/** Это оружие — эволюция. Через `hasOwn`: id приходит с клиента, `constructor` эволюцией не бывает. */
+export function isEvolution(id: string): boolean {
+  return Object.hasOwn(WEAPON_EVOLUTIONS, id);
+}
+
+/** Базовое оружие: у эволюции — то, из которого она выросла, у остального — оно само. */
+export function baseWeaponOf(id: string): string {
+  return isEvolution(id) ? WEAPON_EVOLUTIONS[id as keyof typeof WEAPON_EVOLUTIONS] : id;
+}
+
+/**
  * Виды целей, которые двигает забег: `sum` копит за срок, `max` помнит лучший
  * забег. Новый вид — код здесь (и строка текста у клиента), новое задание на
  * готовом виде — строка каталога в панели. `measure` получает фильтр строки
@@ -111,13 +176,13 @@ export const RUN_KINDS = {
   /** сыграть забег с оружием в наборе к концу */
   weapon_runs: {
     op: "sum",
-    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => weapon.id === filter?.weapon) ? 1 : 0),
+    measure: (run: TaskRun, filter?: RunFilter | null) => (run.weapons.some((weapon) => baseWeaponOf(weapon.id) === filter?.weapon) ? 1 : 0),
   },
   /** сыграть забег с оружием стихии */
   element_runs: {
     op: "sum",
     measure: (run: TaskRun, filter?: RunFilter | null) =>
-      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[weapon.id] === filter.element) ? 1 : 0,
+      filter?.element !== undefined && run.weapons.some((weapon) => WEAPON_ELEMENTS[baseWeaponOf(weapon.id)] === filter.element) ? 1 : 0,
   },
   /** сыграть забег на сложности */
   difficulty_runs: { op: "sum", measure: (run: TaskRun, filter?: RunFilter | null) => (run.difficulty === filter?.difficulty ? 1 : 0) },
@@ -128,6 +193,22 @@ export const RUN_KINDS = {
   },
   /** сыграть забег с оплаченным бустом */
   boost_runs: { op: "sum", measure: (run: TaskRun) => (run.boosts.length > 0 ? 1 : 0) },
+  // Счётчики итога (T-0125): забег без них — старый клиент, нет статистики или
+  // счётчики неправдоподобны — даёт ноль, а остальные виды двигает как раньше.
+  /** убить боссов */
+  boss_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.bossKills ?? 0 },
+  /** убить элит */
+  elite_kills: { op: "sum", measure: (run: TaskRun) => run.counters?.eliteKills ?? 0 },
+  /** открыть сундуков */
+  chests_opened: { op: "sum", measure: (run: TaskRun) => run.counters?.chestsOpened ?? 0 },
+  /** подобрать кристаллов */
+  crystals_collected: { op: "sum", measure: (run: TaskRun) => run.counters?.crystals ?? 0 },
+  /**
+   * сыграть забег, где к концу есть эволюция оружия. Читается из набора, а не из
+   * события: `evolution_unlocked` клиентское и до сервера не доходит, а эволюция
+   * занимает слот базового оружия.
+   */
+  evolution_runs: { op: "sum", measure: (run: TaskRun) => (run.weapons.some((weapon) => isEvolution(weapon.id)) ? 1 : 0) },
 } as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun, filter?: RunFilter | null) => number }>;
 
 export type RunKind = keyof typeof RUN_KINDS;
@@ -170,8 +251,22 @@ export type CheckedKind = (typeof CHECKED_KINDS)[number];
 /** Цели, которые засчитывает сам переход: проверить их у площадки нечем. */
 export const OPEN_KINDS: ReadonlySet<TaskKind> = new Set<TaskKind>(["link", "bot"]);
 
-export type TaskKind = RunKind | StateKind | CheckedKind;
-export const TASK_KIND_IDS: readonly TaskKind[] = [...(Object.keys(RUN_KINDS) as RunKind[]), ...(Object.keys(STATE_KINDS) as StateKind[]), ...CHECKED_KINDS];
+/**
+ * Статусные и сезонные знаки у имени (tasks/T-0235): строки каталога без прогресса.
+ * Держит ли игрок знак, сервер вычисляет при чтении по состоянию аккаунта — забег
+ * их не двигает, `claim` для них не существует, а в списке заданий игрока их нет.
+ */
+export const EMBLEM_KINDS = ["status", "season"] as const;
+export type EmblemKind = (typeof EMBLEM_KINDS)[number];
+
+export type TaskKind = RunKind | StateKind | CheckedKind | ClientKind | EmblemKind;
+export const TASK_KIND_IDS: readonly TaskKind[] = [
+  ...(Object.keys(RUN_KINDS) as RunKind[]),
+  ...(Object.keys(STATE_KINDS) as StateKind[]),
+  ...CHECKED_KINDS,
+  ...(Object.keys(CLIENT_KINDS) as ClientKind[]),
+  ...EMBLEM_KINDS,
+];
 
 export function isRunKind(kind: TaskKind): kind is RunKind {
   return Object.hasOwn(RUN_KINDS, kind);
@@ -179,6 +274,11 @@ export function isRunKind(kind: TaskKind): kind is RunKind {
 
 export function isStateKind(kind: TaskKind): kind is StateKind {
   return Object.hasOwn(STATE_KINDS, kind);
+}
+
+/** Строка статусного или сезонного знака: не задание, прогресса и награды у неё нет. */
+export function isEmblemKind(kind: string): kind is EmblemKind {
+  return (EMBLEM_KINDS as readonly string[]).includes(kind);
 }
 
 /** Категория цели у игрока: партнёрские — своей вкладкой, остальные — по сроку. */
@@ -215,14 +315,37 @@ export const taskParamsSchema = z
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 
-/** Видна ли цель игроку этой площадки: цель без площадок — всем. */
-export function visibleOn(params: TaskParams | null, platform: PlatformId): boolean {
+/** Нет подключённых площадок: каналы чужих площадок не видны (поведение до связи аккаунтов, Р188). */
+export const NO_LINKABLE: ReadonlySet<PlatformId> = new Set();
+
+/**
+ * Видна ли цель игроку этой площадки: цель без площадок — всем.
+ *
+ * Канал другой площадки (Р188, T-0377) виден, только если площадка в `linkable`:
+ * у неё есть и проверка подписки, и бот, через который игрок свяжет аккаунты.
+ * Каналом считается цель с `chat` — схема каталога даёт `chat` только подписке на
+ * канал; площадка у ссылки и бота по-прежнему значит «где видна».
+ */
+export function visibleOn(params: TaskParams | null, platform: PlatformId, linkable: ReadonlySet<PlatformId> = NO_LINKABLE): boolean {
   if (params === null) return true;
   if (params.platforms !== undefined) return params.platforms.includes(platform);
-  return params.platform === undefined || params.platform === platform;
+  if (params.platform === undefined || params.platform === platform) return true;
+  return params.chat !== undefined && linkable.has(params.platform);
 }
 
-export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected">;
+/**
+ * Как игрок проверяется в канале: `own` — канал его площадки, спрашиваем по его
+ * id; `external` — канал другой площадки, нужна связь аккаунтов и кнопка бота.
+ * У остальных целей способа нет.
+ */
+export type ChannelLinkMode = "own" | "external";
+
+export function channelLinkMode(def: Pick<TaskDef, "kind" | "params">, platform: PlatformId): ChannelLinkMode | null {
+  if (def.kind !== "channel" || def.params?.platform === undefined) return null;
+  return def.params.platform === platform ? "own" : "external";
+}
+
+export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected" | "counters">;
 
 /**
  * Засчитывается тот же забег, что приносит награду: с читами, отклонённый
@@ -249,6 +372,16 @@ export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
  * перехода, а переход после исчерпания час не продлевает.
  */
 export const TASK_LIMIT_GRACE_MIN = 60;
+
+/** Модели оплаты заказчику (Р138): за выполнение или доля дохода. */
+export const PAY_MODELS = ["cpa", "rs"] as const;
+export type PayModel = (typeof PAY_MODELS)[number];
+
+/** Ставка: у CPA — центы доллара за выполнение, у RS — сотые доли процента (1 250 — 12,5%). */
+export const PAY_RATE_MAX = { cpa: 100_000, rs: 10_000 } as const satisfies Record<PayModel, number>;
+
+/** Сколько суток удержания может требовать заказчик; 0 — сразу. */
+export const HOLD_DAYS = [0, 1, 3, 7] as const;
 
 /** Идентификатор задания: латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков. */
 const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
@@ -283,8 +416,16 @@ export const taskDefSchema = z
     limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
     /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
     image: z.string().regex(IMAGE_ID).nullable().default(null),
+    /** заказчик партнёрской цели (Р138); `null` — задание своё, и панель до заказчиков поля не слала */
+    customer: z.string().trim().min(1).max(80).nullable().default(null),
+    /** модель оплаты — вместе с заказчиком */
+    payModel: z.enum(PAY_MODELS).nullable().default(null),
+    /** ставка: центы у `cpa`, сотые доли процента у `rs` — вместе с моделью */
+    rate: z.number().int().min(1).max(PAY_RATE_MAX.cpa).nullable().default(null),
+    /** после скольких суток удержания выполнение оплачивается; 0 — сразу */
+    holdDays: z.union([z.literal(0), z.literal(1), z.literal(3), z.literal(7)]).default(0),
     /** категория достижения; `null` — не достижение, и панель до престижа поля не слала */
-    category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
+    category: z.enum(CATEGORY_IDS).nullable().default(null),
     /** лестница: достижения с общим `ladder` идут ступенями `rung` с единицы */
     ladder: z.string().regex(LADDER_ID, "лестница — латиница, цифры и подчёркивание, до 32 знаков").nullable().default(null),
     rung: z.number().int().min(1).max(100).nullable().default(null),
@@ -294,14 +435,26 @@ export const taskDefSchema = z
     hint: z.string().trim().min(1).max(120).nullable().default(null),
     /** очки престижа за выполненное достижение */
     prestige: z.number().int().min(0).max(PRESTIGE_MAX).default(0),
+    /** редкость знака у имени (T-0235); `null` — знака нет, и панель до знаков поля не слала */
+    emblemTier: z.enum(EMBLEM_TIERS).nullable().default(null),
   })
   .strict()
-  .refine((task) => task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
+  // Награды нет только у знаков статуса и сезона: их не выполняют, а держат.
+  .refine((task) => isEmblemKind(task.kind) || task.coins + task.gems + task.shards > 0, { message: "задание без награды" })
   // Лимит — у того, что выполняют действием вне игры: место в нём занимает
   // игрок, а у цели забега мест нет.
   .refine((task) => task.limit === null || isCheckedKind(task.kind), { message: "лимит выполнений — только у партнёрской цели", path: ["limit"] })
   // У цели забега рядом с текстом — её прогресс, картинку туда не ставим.
   .refine((task) => task.image === null || isCheckedKind(task.kind), { message: "картинка — только у партнёрской цели", path: ["image"] })
+  // Продаётся действие вне игры: у цели забега заказчика и удержания нет.
+  .refine((task) => isCheckedKind(task.kind) || (task.customer === null && task.holdDays === 0), { message: "заказчик и удержание — только у партнёрской цели", path: ["customer"] })
+  .refine((task) => (task.customer === null) === (task.payModel === null), { message: "заказчик и модель оплаты задаются вместе", path: ["payModel"] })
+  .refine((task) => (task.payModel === null) === (task.rate === null), { message: "ставка и модель оплаты задаются вместе", path: ["rate"] })
+  .refine((task) => task.payModel === null || task.rate === null || task.rate <= PAY_RATE_MAX[task.payModel], {
+    message: "ставка выше предела: у CPA — до 100 000 центов, у RS — до 10 000 (100%)",
+    path: ["rate"],
+  })
+  .refine((task) => task.kind === "channel" || task.holdDays === 0, { message: "Удержание проверяется только у подписки на канал", path: ["holdDays"] })
   .refine((task) => isCheckedKind(task.kind) === (task.params !== null), { message: "ссылка — у партнёрской цели, и только у неё", path: ["params"] })
   .refine((task) => task.kind !== "channel" || (task.params?.platform !== undefined && task.params.chat !== undefined), {
     message: "у подписки на канал нужны площадка и канал — по ним спрашивает бот",
@@ -351,7 +504,51 @@ export const taskDefSchema = z
     // прогресс, который до экрана заданий никто не обновляет.
     if (isStateKind(task.kind) && task.period !== "achievement") ctx.addIssue({ code: "custom", message: "друзья и уровень аккаунта — только у достижений", path: ["kind"] });
   })
+  .superRefine((task, ctx) => {
+    // Знак у имени (T-0235). У обычного достижения он необязателен, но безымянным не бывает:
+    // название игрок видит рядом с именем. Партнёрская цель знака не несёт — её рисует вкладка партнёров.
+    const achievement = task.period === "achievement" && !isCheckedKind(task.kind);
+    if (task.emblemTier !== null && !achievement) ctx.addIssue({ code: "custom", message: "знак у имени — только у достижений забега", path: ["emblemTier"] });
+    if (task.emblemTier !== null && task.title === null) ctx.addIssue({ code: "custom", message: "у знака нужно название — его игрок видит рядом с именем", path: ["title"] });
+    // Категории `status` и `season` идут парой с одноимённым видом цели.
+    const paired = task.kind === "status" ? "status" : task.kind === "season" ? "season" : null;
+    if (paired === null && (task.category === "status" || task.category === "season")) {
+      ctx.addIssue({ code: "custom", message: "категории «Статус» и «Сезоны» — только у знаков этих видов", path: ["category"] });
+    }
+    if (paired === null) return;
+    if (task.category !== paired) ctx.addIssue({ code: "custom", message: `у знака вида ${paired} категория — ${paired}`, path: ["category"] });
+    if (task.period !== "achievement") ctx.addIssue({ code: "custom", message: "знак статуса и сезона — только достижение", path: ["period"] });
+    if (task.target !== 1) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона цель — 1: его держат, а не копят", path: ["target"] });
+    if (task.coins + task.gems + task.shards + task.passPoints !== 0) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона награды нет", path: ["coins"] });
+    if (task.emblemTier === null) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нужна редкость", path: ["emblemTier"] });
+    if (task.hint === null) ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нужна подсказка — условие, которое видит игрок у закрытого знака", path: ["hint"] });
+    if (task.prestige !== 0 || task.hidden || task.ladder !== null || task.rung !== null) {
+      ctx.addIssue({ code: "custom", message: "у знака статуса и сезона нет престижа, лестницы и скрытости", path: ["prestige"] });
+    }
+  })
   .refine((task) => !isCheckedKind(task.kind) || task.target === 1, { message: "у партнёрской цели цель — 1", path: ["target"] })
+  // Цели по сигналу клиента (Р187): срок закреплён за видом, цель одна, ротации, фильтра,
+  // лимита и картинки нет — задание в игре всегда, вне пула.
+  .superRefine((task, ctx) => {
+    if (!isClientKind(task.kind)) return;
+    if (task.period !== CLIENT_KINDS[task.kind].period) {
+      const message = task.kind === "home_screen" ? "главный экран — только достижение" : "история — только недельное";
+      ctx.addIssue({ code: "custom", message, path: ["period"] });
+    }
+    if (task.target !== 1) ctx.addIssue({ code: "custom", message: "у этого задания цель — 1", path: ["target"] });
+    const extra = [
+      ["tier", task.tier !== null],
+      ["filter", task.filter !== null],
+      ["limit", task.limit !== null],
+      ["image", task.image !== null],
+    ] as const;
+    const first = extra.find(([, set]) => set);
+    if (first !== undefined) ctx.addIssue({ code: "custom", message: "ступень, фильтр, лимит и картинка — не у этого задания", path: [first[0]] });
+    // Витрина берёт только достижения с категорией: без неё игрок задание не увидит.
+    if (task.kind === "home_screen" && task.category === null) {
+      ctx.addIssue({ code: "custom", message: "у достижения «главный экран» нужна категория — без неё витрина его не покажет", path: ["category"] });
+    }
+  })
   // Повтор — только там, где каждый срок проверяет бот: повтор перехода по
   // ссылке платил бы каждый день за одно и то же нажатие.
   .refine((task) => !isCheckedKind(task.kind) || task.kind === "channel" || task.period === "achievement", {

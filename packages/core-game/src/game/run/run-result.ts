@@ -43,6 +43,7 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     startingWeaponId: options.startingWeaponId,
     mapId: world.mapId,
     difficultyId: world.difficultyLevel.id,
+    ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
     contentHash: options.contentHash,
     waveReached: world.difficulty.segment,
     survivalSec: stats.elapsedSec,
@@ -52,11 +53,14 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     bossKills: stats.bossKills,
     eliteKills: stats.eliteKills,
     chestsOpened: stats.chestsOpened,
+    rareChestsOpened: stats.rareChestsOpened,
     crystalsCollected: stats.crystalsCollected,
     secrets: { found: secretKindsFound(world), used: secretKindsUsed(world) },
+    sieges: world.siege.count,
     rubezh: describeRubezh(world),
     ...(world.prologue === null ? {} : { mode: world.mode, prologue: describePrologue(world) }),
     killsByEnemy: killsByEnemy(world),
+    enemiesSeen: enemiesSeen(world),
     damageDealt: stats.damageDealt,
     damageTaken: stats.damageTaken,
     damageByElement: damageByElement(world),
@@ -93,6 +97,35 @@ function killsByEnemy(world: World): Record<string, number> {
     if (count > 0) kills[world.enemyTypes[typeIndex].id] = count;
   }
   return kills;
+}
+
+/**
+ * Типы врагов, вышедшие в мир, — id в порядке первого появления (tasks/T-0479). Босс и элита
+ * здесь есть, даже если их не убили: по этому списку сервер открывает записи кодекса.
+ *
+ * Список копится по ходу забега (`world.seen`) и в снимок прерванного забега не входит, поэтому
+ * продолженный забег начинает с пустого. Чтобы не потерять уже встреченных, к нему добавляются
+ * типы, о которых мир и так помнит, — убитые и ещё живые. Не вернутся только те, кто вышел и
+ * ушёл без убийства (подрывник, взорвавшийся сам, страж распавшегося кольца), и только до
+ * нового появления того же типа.
+ */
+function enemiesSeen(world: World): string[] {
+  const enemies = world.enemies;
+  const seen = Uint8Array.from(world.seen.flags);
+  const indexes = [...world.seen.order];
+
+  const add = (typeIndex: number): void => {
+    if (seen[typeIndex] === 1) return;
+    seen[typeIndex] = 1;
+    indexes.push(typeIndex);
+  };
+  for (let typeIndex = 0; typeIndex < world.enemyTypes.length; typeIndex++) {
+    if (world.stats.killsByType[typeIndex] > 0) add(typeIndex);
+  }
+  for (let slot = 0; slot < enemies.count; slot++) {
+    if (enemies.alive[slot] === 1) add(enemies.type[slot]);
+  }
+  return indexes.map((typeIndex) => world.enemyTypes[typeIndex].id);
 }
 
 /** Убийства по стихиям; физических в словаре нет, стихии без убийств не попадают. */

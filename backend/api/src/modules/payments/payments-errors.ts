@@ -71,3 +71,28 @@ export class FulfillFailedError extends DomainError {
     super("fulfill_failed", "Выдача не прошла — подробности в логе сервера. Попробуйте позже", 503);
   }
 }
+
+/** Брошенного задания с таким идентификатором в очереди нет: его убрали или идентификатор чужой. */
+export class PaymentJobNotFoundError extends DomainError {
+  constructor() {
+    super("payment_job_not_found", "Задание не найдено: очередь хранит последние 1000 брошенных", 404);
+  }
+}
+
+/**
+ * Компенсация записана, но в кошелёк не легла: база или кошелёк упали между
+ * строкой и начислением (Р209). Повтор действия доначислит ту же сумму из
+ * строки, дважды не начислит. Подробности — в логе сервера.
+ */
+export class CompensationFailedError extends DomainError {
+  constructor() {
+    super("compensation_failed", "Компенсация записана, но не начислена — подробности в логе сервера. Нажмите «Компенсировать» ещё раз", 503);
+  }
+}
+
+/** Расхождения сверки с таким идентификатором нет: адрес устарел или чужой (Р209, tasks/T-0434). */
+export class DiscrepancyNotFoundError extends DomainError {
+  constructor() {
+    super("discrepancy_not_found", "Расхождение не найдено", 404);
+  }
+}

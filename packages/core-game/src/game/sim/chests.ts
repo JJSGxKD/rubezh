@@ -176,6 +176,20 @@ export function chestsOnField(world: World): number {
 // --- Открытие -----------------------------------------------------------------
 
 /**
+ * Самый крупный размер основной таблицы весов: сундук такого размера «редкий»
+ * (tasks/T-0175). Цикл, а не `Math.max(...)`: список короткий, а порядок и
+ * данные он не трогает. Пустая таблица (её не пропускает проверка контента) —
+ * 0, и редким не считается ничто.
+ */
+function largestChestSize(rules: ChestsDef): number {
+  let largest = 0;
+  for (const entry of rules.sizes) {
+    if (entry.size > largest) largest = entry.size;
+  }
+  return largest;
+}
+
+/**
  * Выдать `size` улучшений. Кандидаты те же, что у карточек уровня, поэтому
  * сундук не выдаёт то, что нельзя взять. Предложения и очередь уровней не
  * трогаются: открытие не заменяет и не откладывает выбор на уровне.
@@ -216,6 +230,7 @@ export function openChest(world: World, size: ChestSize): void {
   chests.openings.push({ index: chests.opened, size, rewards, fallbacks, elapsedSec: world.stats.elapsedSec });
   chests.opened++;
   world.stats.chestsOpened++;
+  if (size === largestChestSize(world.chestRules)) world.stats.rareChestsOpened++;
 }
 
 /**

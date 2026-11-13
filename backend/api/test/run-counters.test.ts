@@ -4,7 +4,9 @@ import { ENDLESS_CURVE, TIMELINE } from "../../../packages/core-game/src/content
 import { MAX_GEMS_PER_KILL } from "../../../packages/core-game/src/game/sim/gems";
 import { planSegment } from "../../../packages/core-game/src/game/sim/timeline";
 import { createWorld } from "../../../packages/core-game/src/game/sim/world";
-import { countersOf, countersPlausible, GEMS_PER_KILL_CEILING, rankBudget, type RunCounters } from "../src/modules/runs/run-counters.js";
+import { runFinishSchema } from "../src/modules/runs/dto/runs.dto.js";
+import { detailsOf, storedDetailsSchema } from "../src/modules/runs/run-details.js";
+import { countersOf,countersPlausible, GEMS_PER_KILL_CEILING, rankBudget, type RunCounters } from "../src/modules/runs/run-counters.js";
 
 /**
  * Счётчики итога забега (tasks/T-0125): чистые функции. Таблица бюджета рангов
@@ -12,7 +14,7 @@ import { countersOf, countersPlausible, GEMS_PER_KILL_CEILING, rankBudget, type 
  * этот тест — единственное, что не даёт ей разойтись с таймлайном.
  */
 
-const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
+const ZERO: RunCounters = { bossKills: 0, eliteKills: 0, chestsOpened: 0, rareChests: 0, crystals: 0, noHitSec: 0, noKillSec: 0, killsByElement: {} };
 
 describe("countersOf", () => {
   it("без stats — null", () => {
@@ -33,6 +35,7 @@ describe("countersOf", () => {
       bossKills: 1,
       eliteKills: 2,
       chestsOpened: 3,
+      rareChests: 0,
       crystals: 4,
     });
   });
@@ -160,5 +163,60 @@ describe("countersPlausible", () => {
     const limit = run.enemiesKilled * GEMS_PER_KILL_CEILING;
     expect(countersPlausible({ ...ZERO, crystals: limit }, run)).toBe(true);
     expect(countersPlausible({ ...ZERO, crystals: limit + 1 }, run)).toBe(false);
+  });
+});
+
+describe("редкие сундуки (T-0175)", () => {
+  const run = { survivalSec: 600, enemiesKilled: 2000 };
+  const opened: RunCounters = { ...ZERO, bossKills: 1, eliteKills: 2, chestsOpened: 2 };
+  const body = {
+    runId: "3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f61",
+    difficultyId: "hard",
+    outcome: "died",
+    survivalSec: 120,
+    level: 6,
+    enemiesKilled: 300,
+    startingWeaponId: "knife",
+    weapons: [{ id: "knife", level: 2 }],
+    contentHash: "abc",
+    deathCause: "swarm_rat",
+    cheats: false,
+    countInRating: false,
+  };
+  const baseStats = { damageTaken: 1, xpCollected: 1, waveReached: 1, topKills: [] };
+
+  it("countersOf читает rareChests; нет поля — 0", () => {
+    expect(countersOf({ bossKills: 1, chestsOpened: 2, rareChests: 1 })).toEqual({ ...ZERO, bossKills: 1, chestsOpened: 2, rareChests: 1 });
+    expect(countersOf({ bossKills: 1, chestsOpened: 2 })?.rareChests).toBe(0);
+  });
+
+  it("одно только rareChests — уже счётчики, а не их отсутствие", () => {
+    expect(countersOf({ rareChests: 1 })).toEqual({ ...ZERO, rareChests: 1 });
+  });
+
+  it("редких не больше, чем открытых сундуков: на границе — да, на единицу выше — нет", () => {
+    expect(countersPlausible({ ...opened, rareChests: 0 }, run)).toBe(true);
+    expect(countersPlausible({ ...opened, rareChests: 2 }, run)).toBe(true);
+    expect(countersPlausible({ ...opened, rareChests: 3 }, run)).toBe(false);
+  });
+
+  it("редкие без единого открытого сундука — нет", () => {
+    expect(countersPlausible({ ...ZERO, rareChests: 1 }, run)).toBe(false);
+  });
+
+  it("схема приёма: целое неотрицательное, поле необязательное", () => {
+    expect(runFinishSchema.safeParse({ ...body, stats: baseStats }).success).toBe(true);
+    expect(runFinishSchema.parse({ ...body, stats: { ...baseStats, chestsOpened: 3, rareChests: 2 } }).stats).toMatchObject({ rareChests: 2 });
+    expect(runFinishSchema.safeParse({ ...body, stats: { ...baseStats, rareChests: -1 } }).success).toBe(false);
+    expect(runFinishSchema.safeParse({ ...body, stats: { ...baseStats, rareChests: 1.5 } }).success).toBe(false);
+    expect(runFinishSchema.safeParse({ ...body, stats: { ...baseStats, rareChests: 1_000_001 } }).success).toBe(false);
+  });
+
+  it("detailsOf кладёт rareChests; не пришло — null; строка прошлой сборки без ключа читается как null", () => {
+    expect(detailsOf({ passives: [], stats: { ...baseStats, chestsOpened: 3, rareChests: 2 } })).toMatchObject({ rareChests: 2 });
+    expect(detailsOf({ passives: [], stats: baseStats })).toMatchObject({ rareChests: null });
+
+    const old = { passives: [], damageTaken: 1, xpCollected: 2, waveReached: 3, topKills: [], bossKills: 1, chestsOpened: 2 };
+    expect(storedDetailsSchema.parse(old)).toMatchObject({ chestsOpened: 2, rareChests: null });
   });
 });

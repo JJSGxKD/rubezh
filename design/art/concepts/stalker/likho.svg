@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-62.5 -62.5 125 125"><defs><filter id="srim" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
+<feMorphology in="SourceAlpha" operator="dilate" radius="1.59" result="d"/>
+<feFlood flood-color="#e6e0ff"/><feComposite in2="d" operator="in" result="o"/>
+<feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><ellipse cx="0" cy="42" rx="30" ry="8" fill="#0b0816" opacity="0.6"/><ellipse cx="0" cy="42" rx="34" ry="9.5" fill="none" stroke="#e6e0ff" stroke-width="1.6" opacity="0.6"/><g filter="url(#srim)" opacity="1">
+<path d="M-22 11 L-16.2 21 L-15.3 11 L-12.3 17.5 L-8.7 11 L-7.8 21 L-2 11 L2.3 17.5 L4.7 11 L10.2 21 L11.3 11 L13.2 17.5 L18 11 L18 7 L-22 7 Z" fill="#150f24" opacity="1"/><path d="M-22 16.5 L-16.2 24.5 L-15.3 16.5 L-12.3 21.7 L-8.7 16.5 L-7.8 24.5 L-2 16.5 L2.3 21.7 L4.7 16.5 L10.2 24.5 L11.3 16.5 L13.2 21.7 L18 16.5 L18 12.5 L-22 12.5 Z" fill="#150f24" opacity="0.6"/><path d="M-22 22 L-16.2 28 L-15.3 22 L-12.3 25.9 L-8.7 22 L-7.8 28 L-2 22 L2.3 25.9 L4.7 22 L10.2 28 L11.3 22 L13.2 25.9 L18 22 L18 18 L-22 18 Z" fill="#150f24" opacity="0.3"/>
+<path d="M-8 13 L-22 30 L-18 42 M8 11 L22 30 L28 42" fill="none" stroke="#150f24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.45"/>
+<path d="M-12 -17 Q-24 10 -20 34 M-20 34 l-4 6 M-20 34 l2 7" fill="none" stroke="#150f24" stroke-width="4" stroke-linecap="round"/>
+<path d="M18 -17 Q30 6 26 32 M26 32 l4 6 M26 32 l-2 7" fill="none" stroke="#150f24" stroke-width="4.5" stroke-linecap="round"/>
+<clipPath id="c7"><path d="M-18 17 Q-30 -9 -14 -29 Q4 -43 22 -33 Q32 -21 20 -5 Q10 13 -18 17 Z"/></clipPath>
+<g fill="#150f24"><path d="M-18 17 Q-30 -9 -14 -29 Q4 -43 22 -33 Q32 -21 20 -5 Q10 13 -18 17 Z"/></g>
+<g clip-path="url(#c7)"><g fill="#241c38" transform="translate(-3 -3)"><path d="M-18 17 Q-30 -9 -14 -29 Q4 -43 22 -33 Q32 -21 20 -5 Q10 13 -18 17 Z"/></g></g>
+<path d="M-8 -29 q-6 -10 0 -16 M0 -33 q-2 -10 6 -14" fill="none" stroke="#150f24" stroke-width="3" stroke-linecap="round"/>
+<clipPath id="c8"><ellipse cx="22" cy="-37" rx="15" ry="13"/></clipPath>
+<g fill="#150f24"><ellipse cx="22" cy="-37" rx="15" ry="13"/></g>
+<g clip-path="url(#c8)"><g fill="#241c38" transform="translate(-2 -2)"><ellipse cx="22" cy="-37" rx="15" ry="13"/></g></g>
+<circle cx="24" cy="-37" r="16.2" fill="#f6f3ff" opacity="0.22"/>
+<circle cx="24" cy="-37" r="9.5" fill="#f6f3ff"/>
+<ellipse cx="28" cy="-37" rx="3" ry="6" fill="#0b0816"/>
+<path d="M13 -45 Q24 -53 35 -45" fill="none" stroke="#0b0816" stroke-width="3" stroke-linecap="round"/>
+<path d="M18 -23 Q26 -19 34 -25" fill="none" stroke="#0b0816" stroke-width="2.4" stroke-linecap="round"/></g></svg>

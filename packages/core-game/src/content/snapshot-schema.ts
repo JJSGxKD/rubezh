@@ -47,6 +47,7 @@ const patternParams = {
   splitter: z.strictObject({ children: z.array(z.strictObject({ enemy: text, count: num.optional() })) }),
   rush: z.strictObject({ leadSec: num.optional(), runSec: num.optional() }),
   cordon: z.strictObject({}),
+  stalker: z.strictObject({}),
 } satisfies Record<EnemyPattern, z.ZodType>;
 
 const statusElements = ELEMENTS.filter((element) => element !== "physical") as [
@@ -66,6 +67,7 @@ const enemyBase = {
   resist: z.partialRecord(z.enum(statusElements), num).optional(),
   element: z.enum(statusElements).optional(),
   statusChance: num.optional(),
+  trail: z.strictObject({ everySec: num, radius: num, lifeSec: num, damagePerSec: num }).optional(),
 };
 
 /** Враг одного паттерна: параметры обязательны только там, где умолчания нет. */
@@ -86,6 +88,7 @@ const enemySchema = z.discriminatedUnion("pattern", [
   enemyOf("splitter", patternParams.splitter, true),
   enemyOf("rush", patternParams.rush, false),
   enemyOf("cordon", patternParams.cordon, false),
+  enemyOf("stalker", patternParams.stalker, false),
 ]);
 
 const stageSchema = z.strictObject({
@@ -172,6 +175,7 @@ const unlockSchema = z.strictObject({
   level: z.int().positive(),
   weapons: z.array(text).optional(),
   passives: z.array(text).optional(),
+  modifiers: z.array(text).optional(),
   slots: z
     .strictObject({
       weapons: count.optional(),
@@ -268,7 +272,15 @@ const secretsSchema = z.strictObject({
   stone: z.strictObject({ radius: num }),
   tree: z.strictObject({ radius: num, healPerSec: num, shieldEverySec: num }),
   rift: z.strictObject({ radius: num, elites: count, ringRadius: num, chestSize: chestSize, timeLimitSec: num }),
-  wisp: z.strictObject({ appearSec: num, speed: num }),
+  // Шаг огонька (Р214) — с умолчаниями: снимок, опубликованный до него, разбирается (Р160).
+  wisp: z.strictObject({
+    appearSec: num,
+    speed: num,
+    hopUnits: num.default(200),
+    swayMin: num.default(0.4),
+    swayMax: num.default(0.8),
+    waitUnits: num.default(140),
+  }),
   blessings: z.array(z.strictObject({ id: text, nameKey: text, modifiers: loadoutModifiers })),
 });
 
@@ -329,6 +341,47 @@ const pressureSchema = z.strictObject({
   }),
 });
 
+// Осада стоящего: форма — здесь, коридоры и связи между полями — `findSiegeProblems`.
+const siegeSchema = z.strictObject({
+  fromSec: num,
+  radius: num,
+  holdSec: num,
+  warnSec: num,
+  cooldownSec: num,
+  calmSec: num,
+  growth: num,
+  maxLevel: num,
+  cordon: z.strictObject({ enemy: text, count: num, ring: ringSchema }),
+  eliteCount: num,
+});
+
+const stalkerRangeSchema = z.strictObject({ min: num, max: num });
+
+// Неубиваемый преследователь: форма — здесь, коридоры и связь с врагом — `findStalkerProblems`.
+const stalkerSchema = z.strictObject({
+  enemy: text,
+  body: z.strictObject({
+    touchMaxHpShare: num,
+    knockback: z.strictObject({ distance: num, sec: num }),
+    touchCooldownSec: num,
+    recoverSec: num,
+    push: z.strictObject({ first: num, decay: num, seriesResetSec: num, maxPerSec: num }),
+  }),
+  appear: z.strictObject({
+    fromSec: num,
+    firstDelaySec: stalkerRangeSchema,
+    gapSec: stalkerRangeSchema,
+    lateGapSec: stalkerRangeSchema,
+    lateAtSec: num,
+    chaseSec: stalkerRangeSchema,
+    omenSec: num,
+    fadeSec: num,
+    appearDistance: num,
+    farDistance: num,
+    minAccountLevel: num,
+  }),
+});
+
 const balanceTargetsSchema = z.strictObject({
   passiveDeathBeforeSec: positive,
   dodgingMedianSec: range,
@@ -375,6 +428,8 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   cardToolRules: z.strictObject({ skipXpRatio: num }),
   limits: z.array(limitSchema),
   pressure: pressureSchema,
+  siege: siegeSchema,
+  stalker: stalkerSchema,
   balanceTargets: balanceTargetsSchema,
 });
 

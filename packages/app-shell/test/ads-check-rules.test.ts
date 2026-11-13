@@ -71,13 +71,13 @@ describe("отчёт и событие", () => {
 
 describe("группы каталога", () => {
   it("порядок сетей как в ответе, блоки по месту и id; блок без сети пропущен, пустая сеть и выключенные остаются", () => {
-    const sonar: AdsCheckNetwork = { ...NETWORK, network: "adsonar", name: "AdSonar", active: false };
+    const off: AdsCheckNetwork = { ...NETWORK, network: "taddy", name: "Taddy", active: false };
     const empty: AdsCheckNetwork = { ...NETWORK, network: "richads", name: "RichAds" };
     const groups = groupCatalog(
-      [sonar, NETWORK, empty],
-      [block({ blockId: "z", place: "wheel_spin" }), block({ blockId: "a", place: "wheel_spin" }), block({ blockId: "m", place: "second_chance" }), block({ blockId: "s", network: "adsonar", active: false }), block({ blockId: "x", network: "unknown" })],
+      [off, NETWORK, empty],
+      [block({ blockId: "z", place: "wheel_spin" }), block({ blockId: "a", place: "wheel_spin" }), block({ blockId: "m", place: "second_chance" }), block({ blockId: "s", network: "taddy", active: false }), block({ blockId: "x", network: "unknown" })],
     );
-    expect(groups.map((group) => group.network.network)).toEqual(["adsonar", "adsgram", "richads"]);
+    expect(groups.map((group) => group.network.network)).toEqual(["taddy", "adsgram", "richads"]);
     expect(groups[0]?.blocks.map((item) => item.blockId)).toEqual(["s"]);
     expect(groups[1]?.blocks.map((item) => item.blockId)).toEqual(["m", "a", "z"]);
     expect(groups[2]?.blocks).toEqual([]);

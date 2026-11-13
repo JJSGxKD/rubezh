@@ -156,16 +156,45 @@ export function taskFileNameAt(base, id) {
   return names.find((name) => name.startsWith(`${id}-`) && name.endsWith(".md")) ?? null;
 }
 
+/**
+ * `owner/repo` из адреса `origin` или `null`. Разбираем сами, а не отдаём `gh`
+ * подстановку `{owner}/{repo}`: в облачной сессии Claude Code `origin` смотрит
+ * на прокси (`http://…@127.0.0.1:…/git/<owner>/<repo>`), и `gh` репозиторий по
+ * нему не узнаёт.
+ */
+export function repoSlugFromUrl(url) {
+  const match = /[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec((url ?? "").trim());
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+function repoSlug() {
+  const result = tryGit(["remote", "get-url", "origin"]);
+  return result.ok ? repoSlugFromUrl(result.stdout) : null;
+}
+
+/** Метка через REST: GraphQL, на котором стоит `gh pr edit`, в облачной сессии закрыт прокси. */
+function labelRest(number, label, add) {
+  const slug = repoSlug();
+  if (slug === null) return { ok: false, stderr: "не разобрать адрес origin" };
+  const path = `repos/${slug}/issues/${String(number)}/labels`;
+  const result = add ? gh(["api", "-X", "POST", path, "-f", `labels[]=${label}`]) : gh(["api", "-X", "DELETE", `${path}/${encodeURIComponent(label)}`]);
+  return { ok: result.ok, stderr: result.stderr };
+}
+
 /** Поставить метку на PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
 export function addPrLabel(number, label) {
   const result = spawnSync("gh", ["pr", "edit", String(number), "--add-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
-  return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
+  if (result.status === 0) return { ok: true, stderr: "" };
+  const rest = labelRest(number, label, true);
+  return rest.ok ? rest : { ok: false, stderr: (result.stderr ?? "").trim() || rest.stderr };
 }
 
 /** Снять метку с PR: `{ ok, stderr }` — без исключения, решает вызывающий. */
 export function removePrLabel(number, label) {
   const result = spawnSync("gh", ["pr", "edit", String(number), "--remove-label", label], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX_BUFFER });
-  return { ok: result.status === 0, stderr: (result.stderr ?? "").trim() };
+  if (result.status === 0) return { ok: true, stderr: "" };
+  const rest = labelRest(number, label, false);
+  return rest.ok ? rest : { ok: false, stderr: (result.stderr ?? "").trim() || rest.stderr };
 }
 
 /**
@@ -183,6 +212,8 @@ export function openPrs() {
     maxBuffer: MAX_BUFFER,
   });
   if (result.status !== 0) {
+    const rest = openPrsRest();
+    if (rest !== null) return rest;
     // Причина — в лог: без неё доска молча сливает «На ревью» с «В работе».
     const reason = (result.stderr ?? "").split(/\r?\n/).find((line) => line.trim() !== "") ?? `код ${String(result.status)}`;
     console.error(`предупреждение: gh pr list не ответил — ${reason.trim()}`);
@@ -194,6 +225,49 @@ export function openPrs() {
       console.error(`предупреждение: открытых PR не меньше ${String(OPEN_PRS_LIMIT)} — доска видит только их, подними OPEN_PRS_LIMIT`);
     }
     return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * PR из ответа REST `GET /repos/{owner}/{repo}/pulls` в форме `gh pr list --json`:
+ * `{ number, headRefName, isDraft, labels, body, createdAt }` или `null` для
+ * записи без номера и ветки. Состояния проверок и коммитов REST в списке не
+ * отдаёт — у таких PR доска не видит красный CI и кругов доработки, но метки
+ * («доработка», «на ревью») и черновик видит.
+ */
+export function prFromRest(item) {
+  if (typeof item !== "object" || item === null) return null;
+  const number = item.number;
+  const headRefName = item.head?.ref;
+  if (typeof number !== "number" || typeof headRefName !== "string") return null;
+  const labels = Array.isArray(item.labels) ? item.labels.filter((label) => typeof label?.name === "string").map((label) => ({ name: label.name })) : [];
+  return {
+    number,
+    headRefName,
+    isDraft: item.draft === true,
+    labels,
+    body: typeof item.body === "string" ? item.body : "",
+    createdAt: typeof item.created_at === "string" ? item.created_at : null,
+  };
+}
+
+/**
+ * Открытые PR через REST — запасной путь для облачной сессии Claude Code: её
+ * прокси закрывает GraphQL GitHub, на котором стоит `gh pr list`, а REST
+ * пропускает. `null` — не получилось и так.
+ */
+function openPrsRest() {
+  const slug = repoSlug();
+  if (slug === null) return null;
+  const result = gh(["api", `repos/${slug}/pulls?state=open&per_page=100`]);
+  if (!result.ok) return null;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    if (!Array.isArray(parsed)) return null;
+    console.error("предупреждение: gh pr list не ответил, открытые PR прочитаны через REST — без состояния проверок");
+    return parsed.map(prFromRest).filter((pr) => pr !== null);
   } catch {
     return null;
   }

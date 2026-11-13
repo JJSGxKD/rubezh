@@ -3,6 +3,7 @@ import type { EnemyPattern } from "@bh/shared-types";
 import type { RunDevVisuals, RunGraphicsOptions } from "../../run-api";
 import type { World } from "../sim/world";
 import { CORDON_INNER_SEC } from "../sim/cordon";
+import { siegeWarning } from "../sim/siege";
 import { SIM_EVENT } from "../sim/events";
 import { NEVER_HIT } from "../sim/pools";
 import { CORDON_FORM_SEC, CORDON_PHASE, DASH_PHASE, EXPLODER_PHASE, isBoss } from "../patterns";
@@ -13,11 +14,13 @@ import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
 import { SecretsRenderer } from "./secrets-look";
-import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, ORBITER_LOOKS, orbiterLook, stageColor, stageCore, UNKILLABLE_LOOK, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
-import { artFlashStart, NO_FLASH } from "./hit-flash";
+import { artFlashStart, HIT_FLASH_TICKS, hitFlashStyle, NO_FLASH } from "./hit-flash";
+import { StalkerLook, stalkerFadeAlpha } from "./stalker-look";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
+import { Puddles } from "./puddles";
 import { Telegraphs } from "./telegraphs";
 import { WeaponEffects } from "./weapon-effects";
 import { ensureShapeTexture, lerp } from "./textures";
@@ -27,6 +30,14 @@ import { ArtGround } from "./art-ground";
 
 /** Точки оберегов кадра: объекты переиспользуются, массив растёт только при нехватке. */
 const orbiterPoints: OrbiterPoint[] = [];
+const orbiterWeaponIds: string[] = [];
+/** Оружие с собственной фигурой орбиты; прочие рисуются фигурой оберега. */
+const ORBITER_WEAPON_IDS = Object.keys(ORBITER_LOOKS);
+
+function orbiterShapeKey(weaponId: string): string {
+  return ORBITER_WEAPON_IDS.includes(weaponId) ? `bh-orbiter-${weaponId}` : "bh-orbiter";
+}
+
 /** Вращение оберега черновой арта — оборот примерно за четыре секунды. */
 const ORBITER_SPIN_PER_TICK = (Math.PI * 2) / 240;
 
@@ -91,6 +102,8 @@ export class WorldRenderer {
    * виду этого не узнать.
    */
   private readonly enemySpriteSize: Float32Array;
+  /** Тон спрайта слота (−1 — без тона): смена ступени без смены вида обязана перекрасить. */
+  private readonly enemySpriteTint: Int32Array;
   private readonly projectileSprites: Phaser.GameObjects.Image[] = [];
   private readonly player: Phaser.GameObjects.Image;
   /** ключи текстур по паре «тип и ступень»: индекс = тип × число ступеней + ступень */
@@ -99,7 +112,13 @@ export class WorldRenderer {
   private readonly blasts: Phaser.GameObjects.Image[] = [];
   private readonly pickups: PickupRenderer;
   private readonly secrets: SecretsRenderer;
+  /** лужи врагов со следом на земле */
+  private readonly puddles: Puddles;
   private readonly telegraphs: Telegraphs;
+  /** предвестие и провал неубиваемого: рисуются при любых настройках графики */
+  private readonly stalkerLook: StalkerLook;
+  /** индекс первой текстуры вспышки каймой: `flashTextureBase + тип`; у прочих типов — их обычная текстура */
+  private readonly flashTextureBase: number;
   /** граница «Очага» и молнии «Грозы» */
   private readonly weaponEffects: WeaponEffects;
   /** числа урона и вспышки гибели */
@@ -128,28 +147,43 @@ export class WorldRenderer {
     this.enemySpriteType = new Int16Array(world.config.maxEnemies).fill(-1);
     this.enemySpriteLook = new Uint8Array(world.config.maxEnemies);
     this.enemySpriteSize = new Float32Array(world.config.maxEnemies);
+    this.enemySpriteTint = new Int32Array(world.config.maxEnemies).fill(-1);
     this.artFlashStart = new Int32Array(world.config.maxEnemies).fill(NO_FLASH);
 
     const rankOf = (type: { rank: "normal" | "elite" | "boss" }): EnemyRankLook => (type.rank === "normal" ? undefined : type.rank);
-    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type)));
+    const colorByType = world.enemyTypes.map((type) => enemyColor(type.pattern, rankOf(type), type.id));
     const unitScale = world.config.unitScale;
     // Текстура на пару «тип и ступень»: ступень меняет цвет тела и садит в
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;
     world.enemyTypes.forEach((type, index) => {
-      // Опасное — с золотой каймой; у рядовых её нет. Толщина задана в игровых единицах.
-      const rim = enemyRim(rankOf(type));
+      // Опасное — с золотой каймой, неубиваемый — с лунной; у рядовых её нет. Толщина задана в игровых единицах.
+      const rim = enemyRim(rankOf(type), type.unkillable);
       for (let stage = 0; stage < this.stageCount; stage++) {
-        const key = `bh-enemy-${type.id}-s${String(stage)}`;
+        // Ступени неубиваемому не положены: он всегда нулевой, и тело остаётся чернью Нави на любой секунде.
+        const key = `bh-enemy-${type.id}-s${String(type.unkillable ? 0 : stage)}`;
         // Тени под врагом нет: на живом тесте запечённая тень смотрелась плохо.
         // Текстура ровно по размеру тела, тело в её центре, как у снарядов, поэтому
         // размер врага на экране и хитбокс прежние.
-        ensureShapeTexture(scene, key, type.radius, stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
-          core: stageCore(stage),
+        ensureShapeTexture(scene, key, type.radius, type.unkillable ? colorByType[index] : stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
+          core: type.unkillable ? null : stageCore(stage),
           rim: rim === null ? null : { color: rim.color, width: rim.width * unitScale },
         });
         this.textureKeyByType.push(key);
       }
+    });
+    // Вспышка неубиваемого — кайма ярче, а не белая заливка: своя текстура, чтобы не рисовать в кадре.
+    this.flashTextureBase = this.textureKeyByType.length;
+    world.enemyTypes.forEach((type, index) => {
+      if (!type.unkillable) {
+        this.textureKeyByType.push(this.textureKeyByType[index * this.stageCount]);
+        return;
+      }
+      const key = `bh-enemy-${type.id}-flash`;
+      ensureShapeTexture(scene, key, type.radius, colorByType[index], ENEMY_LOOKS[type.pattern].shape, {
+        rim: { color: UNKILLABLE_LOOK.rimFlash.color, width: UNKILLABLE_LOOK.rimFlash.width * unitScale },
+      });
+      this.textureKeyByType.push(key);
     });
 
     const scale = world.config.unitScale;
@@ -168,13 +202,22 @@ export class WorldRenderer {
     ensureShapeTexture(scene, "bh-dynamite", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.dynamiteWave, "wave");
     ensureShapeTexture(scene, "bh-freeze", WAVE_TEXTURE_UNITS * scale, WORLD_COLORS.freezeWave, "wave");
     ensureShapeTexture(scene, "bh-orbiter", ORBITER_RADIUS * scale, WORLD_COLORS.orbiter, "circle");
+    // Фигуры тяжёлых орбит (кистень, круговерть) крупнее оберега — для режима без арта.
+    for (const id of ORBITER_WEAPON_IDS) {
+      const look = orbiterLook(id);
+      ensureShapeTexture(scene, orbiterShapeKey(id), look.radius * scale, look.color, "circle");
+    }
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
+    this.stalkerLook = new StalkerLook(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
     // Тайники — на земле, под героем, врагами и подборами; порядок в режиме арта выставляет `applyArtMode`.
     this.secrets = new SecretsRenderer(scene, world, this.layer);
     this.secrets.place(this.layer, false);
+    // Лужи — тоже на земле: сразу над тайниками, под всем, что по ней ходит.
+    this.puddles = new Puddles(scene, world, this.layer);
+    this.layer.moveTo(this.puddles.container, 1);
     this.feedback = new CombatFeedback(scene, world, this.layer, colorByType);
 
     this.player = scene.add.image(world.player.x, world.player.y, "bh-player").setDepth(2);
@@ -223,7 +266,9 @@ export class WorldRenderer {
   sync(alpha: number): void {
     const t = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
     this.secrets.sync();
+    this.puddles.sync();
     this.syncEnemies(t);
+    this.stalkerLook.sync(t);
     this.syncProjectiles(t);
     this.pickups.sync(t);
     this.syncOrbiters(t);
@@ -284,6 +329,7 @@ export class WorldRenderer {
       // Режим сменился — кэши вида и текстуры слотов устарели целиком.
       this.enemySpriteType.fill(-1);
       this.enemySpriteLook.fill(LOOK_NONE);
+      this.enemySpriteTint.fill(-1);
       this.pickups.setArt(this.art.pickupArt());
       this.secrets.setArt(this.art.secretArt(), this.art.scale);
       this.feedback.setDeathArt(this.art.deathArt());
@@ -301,6 +347,8 @@ export class WorldRenderer {
       if (this.art.on) this.layer.moveTo(this.rings.ground, 2);
       // Тайники — следом за землёй, декором и знаком под ногами; без арта — в самом низу слоя.
       this.secrets.place(this.layer, this.art.on);
+      this.puddles.setArt(this.art.puddleArt());
+      this.layer.moveTo(this.puddles.container, this.art.on ? 4 : 1);
       this.ground.setVisible(!this.art.on);
     });
   }
@@ -388,22 +436,28 @@ export class WorldRenderer {
       }
 
       const typeIndex = enemies.type[i];
+      const type = this.world.enemyTypes[typeIndex];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
       if (this.art.applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])) {
         this.enemySpriteType[i] = -1;
-      } else if (this.enemySpriteType[i] !== texture) {
-        sprite.setTexture(this.textureKeyByType[texture]);
-        this.enemySpriteType[i] = texture;
+      } else {
+        // Неубиваемый на попадании — та же фигура с яркой каймой (текстура вспышки), а не белая заливка.
+        const figure = type.unkillable && hitFlashStyle(true, tick - enemies.hitTick[i]) === "rim" ? this.flashTextureBase + typeIndex : texture;
+        if (this.enemySpriteType[i] !== figure) {
+          sprite.setTexture(this.textureKeyByType[figure]);
+          this.enemySpriteType[i] = figure;
+        }
       }
 
-      const type = this.world.enemyTypes[typeIndex];
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
       // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
       // состояние только подсказывает, что с врагом.
       // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у
       // фигуры, и под сплошным огнём не перезапускается каждым ударом.
-      let flashing: boolean;
-      if (this.art.shows(i)) {
+      let flashing = false;
+      if (type.unkillable) {
+        // Белая заливка говорит «ранен», а он не ранен: вспышка — кайма ярче, она в текстуре выше.
+      } else if (this.art.shows(i)) {
         const start = artFlashStart(tick, enemies.hitTick[i], this.artFlashStart[i]);
         flashing = start !== null;
         if (start !== null) this.artFlashStart[i] = start;
@@ -412,20 +466,28 @@ export class WorldRenderer {
       }
       // Замерший не мигает телеграфом: его таймеры стоят, а мигание по тику
       // обещало бы удар, которого не будет.
-      let look = flashing
-        ? LOOK.hit
-        : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
-          ? frozenLook
-          : lookFor(type.pattern, enemies.phase[i], tick);
+      // Неубиваемый не краснеет, не белеет и не замерзает: знак читается всегда (Р205).
+      let look = type.unkillable
+        ? LOOK.normal
+        : flashing
+          ? LOOK.hit
+          : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
+            ? frozenLook
+            : lookFor(type.pattern, enemies.phase[i], tick);
       // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
       // только заморозка. Знак не зависит от вспышки попадания: иначе он
       // мигал бы на каждом ударе по горящему.
-      const mark = statusTones && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
-      if (look === LOOK.normal && statusTones) {
+      const mark = statusTones && !type.unkillable && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
+      if (look === LOOK.normal && statusTones && !type.unkillable) {
         if (!this.art.shows(i)) look = LOOK.status + statusTone(enemies, i, tick);
         else if (keepsFill(mark)) look = LOOK.status + mark;
       }
       this.applyLook(sprite, i, look, type.size);
+      if (type.unkillable) {
+        // Растворение — прозрачность тела; вид слота сбрасывается, чтобы следующий враг в нём не унаследовал её.
+        sprite.setAlpha(stalkerFadeAlpha(this.world));
+        this.enemySpriteLook[i] = LOOK_NONE;
+      }
       sprite.setVisible(true);
 
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
@@ -471,6 +533,11 @@ export class WorldRenderer {
       }
     }
 
+    // Кольцо осады стоящего — без выключателя: оно предупреждает о строе и элитах, и без него осада была
+    // бы внезапной. Тот же рисунок, что у взрыва, и тот же тон угрозы: замыкается к моменту осады.
+    const warning = siegeWarning(this.world);
+    if (warning !== null) this.telegraphs.ring(warning.x, warning.y, warning.radius, warning.progress);
+
     this.telegraphs.end();
     this.marks.end();
     this.art.sortEnemies(this.enemyLayer);
@@ -498,17 +565,22 @@ export class WorldRenderer {
    * же числами, что у симуляции, и от сглаженной позиции героя.
    */
   private syncOrbiters(t: number): void {
-    const drawn = orbiterRenderPoints(this.world, t, orbiterPoints);
-    const art = this.art.orbiterArt();
-    // Оберег черновой арта медленно вращается: свет в движении, а не наклейка.
-    const spin = art === null ? 0 : (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
+    const drawn = orbiterRenderPoints(this.world, t, orbiterPoints, orbiterWeaponIds);
+    // Обереги черновой арта медленно вращаются: свет в движении, а не наклейка.
+    const spin = (this.world.stats.tick + t) * ORBITER_SPIN_PER_TICK;
     for (let k = 0; k < drawn; k++) {
       const sprite = this.orbiterSprite(k);
-      if (art === null && sprite.texture.key !== "bh-orbiter") sprite.setTexture("bh-orbiter").setScale(1).setRotation(0);
-      if (art !== null && sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(ORBITER_RADIUS));
+      const look = orbiterLook(orbiterWeaponIds[k]);
+      const art = this.art.orbiterArt(look.frame);
+      if (art === null) {
+        const key = orbiterShapeKey(orbiterWeaponIds[k]);
+        if (sprite.texture.key !== key) sprite.setTexture(key).setScale(1).setRotation(0);
+      } else {
+        if (sprite.frame.name !== art.frame) sprite.setTexture(art.texture, art.frame).setScale(this.art.scale * orbiterArtScale(look.radius, look.cellUnits));
+        sprite.setRotation(spin + k);
+      }
       sprite.setVisible(true);
       sprite.setPosition(orbiterPoints[k].x, orbiterPoints[k].y);
-      if (art !== null) sprite.setRotation(spin + k);
     }
 
     for (let i = drawn; i < this.orbiterSprites.length; i++) {
@@ -524,8 +596,11 @@ export class WorldRenderer {
     // Кадр атласа другого размера, чем фигура: смена «фигура ↔ арт» — тоже смена вида.
     const art = this.art.shows(index);
     const key = art ? look + LOOK_ART : look;
-    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && sprite.visible) return;
+    const tint = art ? this.art.tintOf(index) : null;
+    const tintKey = tint ?? -1;
+    if (this.enemySpriteLook[index] === key && this.enemySpriteSize[index] === size && this.enemySpriteTint[index] === tintKey && sprite.visible) return;
     this.enemySpriteLook[index] = key;
+    this.enemySpriteTint[index] = tintKey;
     this.enemySpriteSize[index] = size;
     // Фигура строится по радиусу типа, `size` в нём уже есть; кадр атласа рисуется
     // постоянным масштабом, и без множителя хитбокс с рисунком разошлись бы.
@@ -541,6 +616,7 @@ export class WorldRenderer {
     if (look === LOOK.warning || look === LOOK.hit) sprite.setTintFill(0xffffff);
     else if (look === LOOK.frozen || look === LOOK.frozenBlink) sprite.setTintFill(WORLD_COLORS.freezeTint);
     else if (look > LOOK.status) sprite.setTintFill(STATUS_TONE_COLORS[look - LOOK.status] ?? 0xffffff);
+    else if (tint !== null) sprite.setTint(tint);
     else sprite.clearTint();
   }
 
@@ -746,8 +822,6 @@ const CORDON_FLASH_RADIUS_MUL = 2.4;
 /** Во сколько раз кольцо места внутреннего врага шире его тела. */
 const CORDON_INNER_RING_MUL = 2.2;
 
-/** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
-const HIT_FLASH_TICKS = 7;
 /** Тон героя-спрайта на попадании и лечении — умножением, рисунок остаётся виден. */
 const HERO_HURT_TINT = 0xff8a8a;
 const HERO_HEAL_TINT = 0xb4ffb0;

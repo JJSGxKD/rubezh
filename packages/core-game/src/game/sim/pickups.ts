@@ -333,6 +333,8 @@ function detonate(world: World): void {
   let found = 0;
   for (let i = 0; i < enemies.count && found < victims.length; i++) {
     if (enemies.alive[i] === 0) continue;
+    // Неубиваемого взрыв не трогает: ни убить, ни толкнуть.
+    if (world.enemyTypes[enemies.type[i]].unkillable) continue;
     const dx = enemies.x[i] - player.x;
     const dy = enemies.y[i] - player.y;
     if (dx * dx + dy * dy <= radiusSq) victims[found++] = i;

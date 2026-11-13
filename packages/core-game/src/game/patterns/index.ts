@@ -8,6 +8,7 @@ import { exploder } from "./exploder";
 import { orbit } from "./orbit";
 import { rush } from "./rush";
 import { splitter } from "./splitter";
+import { stalker } from "./stalker";
 import { swarm } from "./swarm";
 
 /**
@@ -28,6 +29,7 @@ export const PATTERNS: Record<EnemyPattern, PatternBehavior> = {
   splitter,
   rush,
   cordon,
+  stalker,
 };
 
 export function applyPattern(

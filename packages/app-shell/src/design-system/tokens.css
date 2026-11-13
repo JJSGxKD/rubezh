@@ -91,6 +91,8 @@
   --animate-glow: glow 2.4s var(--ease-base) infinite;
   --animate-float: float 3.2s var(--ease-base) infinite;
   --animate-ping-dot: ping-dot 1.6s var(--ease-out) infinite;
+  /* Точка «сейчас» на плашке онлайна: медленный пульс (tasks/T-0148). */
+  --animate-online-pulse: online-pulse 2s var(--ease-out) infinite;
   --animate-shimmer: shimmer 1.4s var(--ease-base) infinite;
   --animate-pulse-soft: pulse-soft 1s var(--ease-base) infinite;
 
@@ -461,6 +463,17 @@
     }
   }
 
+  @keyframes online-pulse {
+    from {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
   @keyframes shimmer {
     from {
       transform: translateX(-100%);
@@ -827,6 +840,11 @@
   --app-header-h: calc(var(--app-inset-top) + 3.75rem);
 }
 
+/* Плашка онлайна строкой под шапкой (tasks/T-0148): 26 px плашки и зазор. Шапку не раздвигает, содержимое отодвигает. */
+[data-app-header][data-online-line] {
+  --app-header-h: calc(var(--app-inset-top) + 3.75rem + 2rem);
+}
+
 /*
  * Стекло шапки (WP30): полупрозрачная подложка и размытие того, что под ней.
  * Кромки снизу нет: край стекла и так виден по размытию, а линия резала
@@ -835,7 +853,7 @@
  * под шапкой.
  */
 @utility surface-glass {
-  background: color-mix(in oklab, var(--color-bg) 40%, transparent);
+  background: color-mix(in oklab, var(--color-bg) 85%, transparent);
   backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.7);
 

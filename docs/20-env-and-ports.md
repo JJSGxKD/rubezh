@@ -55,6 +55,7 @@
 | Grafana | `GRAFANA_PORT` | `3001` | `3101` | через Caddy, поддомен |
 | Caddy | `HTTP_PORT` / `HTTPS_PORT` | — | `80` / `443` | `80` / `443` |
 | Спутник Xray, SOCKS-входы узлов подписки (Р101) | `XRAY_SOCKS_PORT_BASE` | — (контейнера в dev нет) | — | **не публикуется**: внутри сети `tunnel` (`internal: true`) порты `10800`–`10899`, по одному на слот узла (`XRAY_SLOT_COUNT=100`); сеть общая только у API и Xray |
+| Спутник Xray, статистика узлов (Р192) | `XRAY_STATS_PORT` | — | — | **не публикуется**: внутри сети `tunnel`, порт `10799`; служба `StatsService`, читает только API |
 
 Три правила, которые из таблицы не видны:
 
@@ -186,7 +187,7 @@ Caddy одинаково работает и за CDN, и без него.
 |---|---|---|
 | 1. Окружение и порты | `NODE_ENV`, `API_PORT`, `API_HOST`, `WEB_*_PORT`, `ADMIN_PORT`, `POSTGRES_PORT`, `REDIS_PORT` | из карты портов §2. `NODE_ENV` из `.env` читает только бэкенд: сборка клиента его игнорирует и всегда production (`scripts/vite/production-node-env.ts`), иначе Vite собирал бы отладочный React |
 | 2. Postgres и Redis | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DATABASE_URL`, `REDIS_URL` | dev — из `docker-compose.yml`; прод — секреты окружения. Миграции применяются отдельно: `pnpm --filter backend-api prisma:deploy` |
-| 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1`. `PUBLIC_API_URL` — ещё и начало адреса награды AdsGram, который создаёт панель (WP13, часть 6) |
+| 3. Адреса, CORS и туннель | `ALLOWED_ORIGINS`, `TRUST_PROXY_HOPS`, `PUBLIC_API_URL`, `PUBLIC_WEB_URL`, `DEV_TUNNEL_*_HOST` | реальные домены мини-приложений; `*` в проде запрещён; домены туннеля — из `infra/frpc/frpc.example.toml`. За Caddy `TRUST_PROXY_HOPS=1`. `PUBLIC_API_URL` — ещё и начало адреса награды AdsGram, который создаёт панель (WP13, часть 6), адреса вебхука сообщества VK `/api/v1/vk/callback` и адреса вебхука бота MAX `/api/v1/max/webhook`, который сервер сам сообщает MAX при старте (только `https`; Р188, T-0379). Вебхук VK — открытый маршрут, защищённый секретом Callback API из «Ключей интеграций» (Р188, T-0378); переменных окружения у ботов VK и MAX нет |
 | 4. Бот закрытого теста | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_API_ROOT`, `TELEGRAM_BOT_UPDATES`, `TELEGRAM_WEBHOOK_SECRET`, `VITE_TELEGRAM_BOT_USERNAME` | из BotFather; для staging — **отдельный** бот, иначе два процесса дерутся за обновления. Секрет вебхука генерируется: `openssl rand -hex 32` |
 | 5. Администраторы и их чаты | `ADMIN_TELEGRAM_IDS`, `ADMIN_CHAT_ID`, `ADMIN_CHAT_STATS`, `ADMIN_CHAT_STRESS`, `ADMIN_CHAT_RUNS`, `ADMIN_CHAT_FEEDBACK`, `ADMIN_CHAT_RUN_REVIEW`, `ADMIN_NOTIFY_REPORTS`, `ADMIN_PANEL_ENABLED`, `ADMIN_SESSION_TTL_MIN` | Telegram ID администраторов цифрами через запятую, мусор — бэкенд не стартует. Адреса чатов — ниже. Панель под `/api/v1/admin/*` (`35-stage4-plan.md`, WP17) работает вместе со входом; без него отвечает 404. `ADMIN_SESSION_TTL_MIN` — срок cookie-сессии панели, 5–1440 минут, без продления |
 | 6. Приём данных закрытого теста | `EVENTS_INGEST_ENABLED`, `DIAGNOSTICS_INGEST_ENABLED`, `INGEST_INIT_DATA_MAX_AGE_SEC`, `DIAGNOSTICS_RETENTION_DAYS` | приёмники событий и отчётов (`28-diagnostics.md` §5): выключены по умолчанию, включённый без `DATABASE_URL` не стартует. Переменные — запасные значения настроек `ingest.events` и `ingest.reports`: панель сильнее и выключает приём на ходу (§7) |
@@ -194,7 +195,7 @@ Caddy одинаково работает и за CDN, и без него.
 | 9. Авторизация игроков, приём забегов и оплата | `JWT_ACCESS_SECRET`, `AUTH_ACCESS_TTL_SEC`, `AUTH_REFRESH_TTL_DAYS`, `AUTH_INIT_DATA_MAX_AGE_SEC`, `AUTH_MAX_SESSIONS`, `AUTH_DEV_LOGIN`, `VITE_AUTH_DEV_USER`, `RUNS_*`, `PAYMENTS_ENABLED`, `PAYMENTS_TEST_MODE`, `CONTINUE_*` | секрет подписи генерируется `openssl rand -hex 32`, свой на окружение. **Вход включается секретом** (Р53): задан — вход и панель работают, и тогда без токена бота и базы бэкенд не стартует; флагов `AUTH_ENABLED` и `ADMIN_PANEL_ENABLED` больше нет — совпадающая с ключом старая строка принимается, спорящая роняет старт. Окно данных запуска для входа — не больше часа, потолок в схеме. `AUTH_DEV_LOGIN` — вход разработчика без подписи, только в development. Пороги `RUNS_*` в `.env.example` нарочно мягкие: боевые задаются только в окружении прода (`34-stage3-plan.md`, Р7). Оплата возможна при входе и чтении обновлений бота — подтверждение оплаты приходит обновлением от Telegram — и тогда включена, пока её не выключили стоп-краном в панели (`payments.stars`); `PAYMENTS_ENABLED` — его запасное значение, `true` без входа или обновлений бэкенд не запускает. `PAYMENTS_TEST_MODE` — одна звезда с немедленным возвратом, только в development. Цены `CONTINUE_*` — рабочие до решения О1 |
 | 9.1 Курсы валют | `FX_ENABLED`, `FX_COINGECKO_DEMO_KEY`, `FX_COINGECKO_PRO_KEY` | опрос выключен по умолчанию, `FX_ENABLED` — запасное значение настройки `fx.polling`: включённый раз в минуту решает, кому из источников пора, и ходит наружу — к `www.cbr.ru`, `www.ecb.europa.eu`, `open.er-api.com`, `api.coingecko.com` (с платным ключом — `pro-api.coingecko.com`), `tonapi.io`, `api.binance.com`; исходящий доступ к ним нужен серверу. Ключи CoinGecko — необязательные секреты: пусто — запросы без ключа, демо-ключ бесплатный, оба заданы — берётся платный. Тариф и частота меняются сами (`35-stage4-plan.md`, §3.12). Заданные курсы звёзд при подъёме окружения — `pnpm --filter backend-api fx:manual XTR price 1.72 RUB 90 "прайс-лист клиента Telegram"` и `… fx:manual XTR payout 0.013 USD 90 "вывод звёзд"` (Р37), без аргументов — что стоит сейчас; в контейнере — `node dist/cli/fx-manual.js` |
 | 9.2 Ключи интеграций | `SECRETS_ENCRYPTION_KEY`, `SECRETS_ENCRYPTION_KEY_PREVIOUS` | ключ шифрования ключей, которые команда задаёт в панели («Ключи интеграций», `35-stage4-plan.md` Р84): `openssl rand -base64 32`, свой у каждого окружения. Пусто — хранилище выключено, ключи сервисов только из окружения. Прежний — только на время смены ключа шифрования; без текущего бэкенд не стартует. Потерян ключ шифрования — ключи из панели не расшифруются: работает окружение, панель помечает их «не расшифровывается», и их задают заново |
-| 9.3 Спутник Xray | `XRAY_HOST`, `XRAY_SOCKS_PORT_BASE`, `XRAY_SLOT_COUNT`, `XRAY_CONFIG_PATH` | подписка Xray для прокси исходящих запросов (`35-stage4-plan.md` Р101, `tasks/T-0093`): имя контейнера в сети `tunnel` (`xray`), первый порт его локальных SOCKS-входов (`10800`, от 1024 до 65000), число входов-слотов (`100`, от 1 до 500; сумма с первым портом не выше 65535) и файл, в который API пишет конфиг (`/xray-config/config.json`, общий том с контейнером). Секретов нет: адрес подписки лежит в базе шифртекстом (`SECRETS_ENCRYPTION_KEY`) и задаётся в панели («Прокси»). В dev контейнера нет — раздел в панели показывает «не подключён» |
+| 9.3 Спутник Xray | `XRAY_HOST`, `XRAY_SOCKS_PORT_BASE`, `XRAY_SLOT_COUNT`, `XRAY_CONFIG_PATH`, `XRAY_STATUS_PATH`, `XRAY_STATS_PORT` | подписка Xray для прокси исходящих запросов (`35-stage4-plan.md` Р101, `tasks/T-0093`): имя контейнера в сети `tunnel` (`xray`), первый порт его локальных SOCKS-входов (`10800`, от 1024 до 65000), число входов-слотов на все подписки вместе (`100`, от 1 до 500; сумма с первым портом не выше 65535; подписок до десяти, входы делятся между ними поровну — `35-stage4-plan.md` Р192, `tasks/T-0384`) и файл, в который API пишет конфиг (`/xray-config/config.json`, общий том с контейнером), а также порт службы статистики (`XRAY_STATS_PORT`, `10799`, от 1024 до 65535 и вне диапазона SOCKS-входов — иначе приложение не стартует; `35-stage4-plan.md` Р192, `tasks/T-0386`). Файл статуса ядра (`XRAY_STATUS_PATH`, `/xray-status/core`; `35-stage4-plan.md` Р202, `tasks/T-0416`): две строки `version=…` и `started=…`, которые пишет контейнер Xray, а API только читает, чтобы показать запущенную версию во вкладке «Ядро Xray»; нет файла — версия неизвестна. Секретов нет: адрес подписки лежит в базе шифртекстом (`SECRETS_ENCRYPTION_KEY`) и задаётся в панели («Прокси»); токен запуска обновления ядра — ключ интеграций `github.xray-update`, только из панели. В dev контейнера нет — раздел в панели показывает «не подключён» |
 | 10. Клиентская сборка | `VITE_API_URL`, `VITE_APP_VERSION`, `VITE_DIAGNOSTICS_DEFAULT`, `VITE_DEV_TOOLS`, `VITE_ADMIN_URL`, `VITE_PREVIEW_URL` | только не-секреты: всё это попадает в бандл. `VITE_DEV_TOOLS=1` открывает инструменты команды без ответа сервера и работает только на dev-сервере. `VITE_ADMIN_URL` — адрес панели для сборки клиента: ей можно встроить клиент во фрейм и прислать черновик в страницу предпросмотра; `VITE_PREVIEW_URL` — адрес этой страницы для сборки панели (`https://tg.gonet.fun/preview/`). На dev-сервере пустые — петля с портами панели и клиента, в сборке пусто — предпросмотра нет (`35-stage4-plan.md` WP32) |
 | 11. Тесты | `TEST_DATABASE_URL`, `PLAYTEST_TEST_REDIS_URL` | адреса настоящих Postgres и Redis для интеграционных тестов (`17-testing-strategy.md` §4.2); в CI их задают сервисы workflow, локально пусто — тесты пропускаются |
 
@@ -328,6 +329,14 @@ pnpm dev:vk          # http://localhost:5175
 `pnpm --filter backend-api runs:rescore [--since 2026-10-26]`. Идёт по
 сохранённым колонкам пачками по 500, безопасно повторять; вердикты и доски не
 трогает.
+
+Повторить брошенные задания оплаты (сообщение «Задание оплаты брошено после
+всех попыток» в потоке «Покупки») — после выката исправления причины:
+`pnpm --filter backend-api payments:retry-failed` показывает, что повторится,
+с `--apply` повторяет; на проде — `docker compose exec -T api node
+dist/cli/payments-retry-failed.js --apply`. Повтор идемпотентен: запись оплаты —
+по идентификатору оплаты, выдача — по ключу покупки. Покупка, ставшая
+оплаченной, видна в карточке игрока, и возврат звёзд делается оттуда.
 
 Повтор забега тестера по записи из выгрузки —
 `pnpm replay <reportId> --from diagnostic_reports.ndjson` (архив сначала
@@ -691,11 +700,40 @@ SOCKS-вход, порт `XRAY_SOCKS_PORT_BASE` плюс слот. Порты н
 в сети `tunnel` (`internal: true`) вместе с API; выход к узлам — отдельная сеть
 `tunnel-egress`, которой у API нет. `read_only`, `cap_drop: [ALL]`, `no-new-privileges`,
 `mem_limit: 256m`. Конфиг пишет API атомарно (временный файл и `rename`) в том
-`xray-config`, `run.sh` раз в 5 секунд сверяет хеш, проверяет новый конфиг
+`xray-config`: API собирает `config.json` из файлов-частей подписок
+(`subscriptions/<ключ>.json` рядом, права `0600`, Xray их не открывает) — пропал
+`config.json`, он пересоберётся на следующем тике расписания без запроса к
+поставщикам; `run.sh` раз в 5 секунд сверяет хеш, проверяет новый конфиг
 `xray run -test` и только потом перезапускает Xray — битый конфиг не роняет
-работающие узлы. Смена версии Xray: поправить тег и digest в `Dockerfile`, прогнать
-`bash infra/prod/xray/check-config.sh` (золотые конфиги `@bh/proxy-kit` через
-`xray run -test`) и приложить результат к PR.
+работающие узлы. Учёт трафика (Р192, `tasks/T-0386`): в конфиг входят блоки `stats`,
+`policy.system` (счётчики выходов) и `api` только со службой `StatsService`; она слушает
+`0.0.0.0:XRAY_STATS_PORT` внутри сети `tunnel`, порт не публикуется, `compose.yml` не
+менялся. API раз в минуту читает счётчики со сбросом (gRPC поверх `node:http2`) и
+прибавляет их к часовым корзинам `proxy_traffic_hour`; других служб API Xray (правка
+выходов на лету и т. п.) нет.
+
+**Версия ядра.** При каждом запуске Xray `run.sh` пишет `version=` и `started=` в
+`/xray-status/core` — том `xray-status`, у API он только для чтения; по нему панель
+показывает запущенную версию (Р202). Смена версии: тег и digest в `Dockerfile` и
+`XRAY_CORE_MAX` в `packages/proxy-kit/src/xray-core.ts` — вместе, их совпадение проверяет
+`scripts/test/xray-core-pin.test.ts`. Смена версии Xray (Р192, `tasks/T-0387`):
+
+1. Открыть `https://github.com/XTLS/Xray-core/releases` и взять последний выпуск **без**
+   пометки Pre-release. Он старше действующего в `Dockerfile` — не откатываться молча,
+   сначала вопрос тимлиду.
+2. Тег и digest списка образов — `docker buildx imagetools inspect ghcr.io/xtls/xray-core:<тег>`;
+   поправить строку `FROM` в `infra/prod/xray/Dockerfile` и `XRAY_CORE_MAX` в
+   `packages/proxy-kit/src/xray-core.ts` (версия та же; тест `xray-core-pin.test.ts` сверяет).
+3. Пути, которые копирует `Dockerfile` (`/usr/local/bin/xray`, `/usr/local/share/xray`,
+   `/etc/ssl/certs/ca-certificates.crt`), проверить в новом образе: официальный образ без
+   оболочки, поэтому `docker create` и `docker cp` этих путей. Нет пути — стоп, вопрос
+   тимлиду.
+4. Прогнать `bash infra/prod/xray/check-config.sh` (золотые конфиги `@bh/proxy-kit` через
+   `xray run -test`; ключи формы ECH, постквантовой подписи и шифрования VLESS скрипт
+   порождает сам командами `xray tls ech`, `xray mldsa65`, `xray vlessenc`): все строки
+   `ok`. Что новый Xray не принял — правится в таблице `F` в `xray-config.ts` и в золотых
+   файлах.
+5. В PR — вывод `xray version` из собранного образа и вывод `check-config.sh`.
 
 **Если Xray не принял конфиг.** В панели у подписки «Обновлена … — N узлов», а узлы
 «Не отвечают» или не проверены. `docker compose logs xray` показывает строку

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
@@ -26,6 +26,8 @@ import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import { settleStalkerDeath } from "./sim/stalker";
+import { takeSiegeEvents } from "./sim/siege";
 import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
 import { hasActiveCheats, TICK_SEC, type World } from "./sim/world";
@@ -89,6 +91,8 @@ export interface MainSceneData {
   difficultyId: DifficultyId;
   /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
   mode?: RunMode;
+  /** модификатор нового забега (T-0119); продолженный берёт его из снимка */
+  modifierIds?: readonly RunModifierId[];
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -173,6 +177,7 @@ export class MainScene extends Phaser.Scene {
   private blessingAnnounced = false;
   /** сколько записей журнала колец уже ушло наружу */
   private cordonCursor = 0;
+  private siegeCursor = 0;
   /** фаза рубежа на прошлом шаге: смена фазы — повод для сообщения, после снимка отсчёт идёт от восстановленной */
   private rubezhPhase: RubezhPhase = "pending";
   private cueTracker!: CueTracker;
@@ -205,6 +210,7 @@ export class MainScene extends Phaser.Scene {
     this.secretCursor = { found: 0, used: 0, blessings: 0 };
     this.blessingAnnounced = false;
     this.cordonCursor = 0;
+    this.siegeCursor = 0;
 
     const startingWeaponId = resume?.startingWeaponId ?? data.startingWeaponId;
     // Продолженный забег — с тем набором, с которым начался: надетое могло
@@ -216,6 +222,8 @@ export class MainScene extends Phaser.Scene {
       difficultyId: resume?.difficultyId ?? data.difficultyId,
       // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
       mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
+      // Модификатор продолженного забега — тоже из снимка: оси сложности у мира другие.
+      modifierIds: resume !== undefined ? (resume.modifierIds ?? []) : (data.modifierIds ?? []),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
@@ -247,27 +255,19 @@ export class MainScene extends Phaser.Scene {
       game: this.game,
       unitScale: data.unitScale,
       renderCapFps: data.renderCapFps ?? null,
-      recording:
-        data.recordRun === true
-          ? {
-              reportId: createUuid(),
-              runId: this.runId,
-              // Метка начала — единственное обращение к часам ради записи; в
-              // симуляции часов нет и быть не может.
-              startedAt: new Date().toISOString(),
-              seed: this.seed,
-              mapId: world.mapId,
-              difficultyId: world.difficultyLevel.id,
-              startingWeaponId: this.startingWeaponId(),
-              ...(world.mode === "endless" ? {} : { mode: world.mode }),
-              contentHash: this.contentHash,
-              unitScale: data.unitScale,
-              // Продолженный забег не повторить с начала, а в забеге
-              // разработчика читы и команды в лог не пишутся.
-              replayBlocker: resume !== undefined ? "resumed" : data.dev !== undefined ? "dev" : null,
-              ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
-            }
-          : null,
+      // Запись для проверки идёт у каждого забега; полная запись — по переключателю.
+      recorder: {
+        world,
+        runId: this.runId,
+        seed: this.seed,
+        contentHash: this.contentHash,
+        startingWeaponId: this.startingWeaponId(),
+        unitScale: data.unitScale,
+        ...(data.dev === undefined ? {} : { dev: true }),
+        ...(resume === undefined ? {} : { resume }),
+        // Метка начала — единственное обращение к часам ради записи; в симуляции часов нет и быть не может.
+        ...(data.recordRun === true ? { full: { reportId: createUuid(), startedAt: new Date().toISOString() } } : {}),
+      },
     });
     this.probe = probe;
 
@@ -347,6 +347,8 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
+      this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (isPrologueWon(this.world)) break;
       if (!this.world.player.alive || isAwaitingChoice(this.world) || this.isInChest() || this.isInBlessing()) break;
@@ -617,6 +619,7 @@ export class MainScene extends Phaser.Scene {
     // где он ещё жив, — второй шанс без второго шанса.
     if (!this.ready || this.phase === "dead" || this.phase === "downed") return null;
     const world = this.world;
+    const proof = this.probe.proofDraft(world);
     return {
       format: RUN_SNAPSHOT_FORMAT,
       contentHash: this.contentHash,
@@ -626,6 +629,7 @@ export class MainScene extends Phaser.Scene {
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
       ...(world.mode === "endless" ? {} : { mode: world.mode }),
+      ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
@@ -638,6 +642,8 @@ export class MainScene extends Phaser.Scene {
       ...(this.cheatsUsed ? { cheats: true } : {}),
       ...(this.sceneData.dev === undefined ? {} : { dev: true }),
       ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
+      // Запись для проверки на этот момент: продолжение дописывает её, а не начинает новую.
+      ...(proof === null ? {} : { proof }),
     };
   }
 
@@ -675,6 +681,8 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
+      this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
     }
@@ -811,6 +819,34 @@ export class MainScene extends Phaser.Scene {
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /**
+   * Закончившиеся появления Карачуна — оболочке, для аналитики. Смерть закрывает появление после шага, как
+   * у кольца; журнал очищается сразу, чтобы запись не ушла дважды, и после восстановления снимка он пуст.
+   */
+  private emitStalkerEvents(): void {
+    settleStalkerDeath(this.world);
+    const journal = this.world.stalker.ended;
+    if (journal.length === 0) return;
+    for (const ended of journal) this.sceneData.bus.emit("stalkerEnded", ended);
+    journal.length = 0;
+  }
+
+  /** Осада стоящего — оболочке: предупреждение, начало и конец. Журнал после восстановления снимка пуст. */
+  private emitSiegeEvents(): void {
+    const events = takeSiegeEvents(this.world, this.siegeCursor);
+    this.siegeCursor = events.cursor;
+    const bus = this.sceneData.bus;
+    for (const event of events.events) {
+      if (event.kind === "warn") {
+        bus.emit("siegeWarn", { x: event.x, y: event.y, radius: event.radius, leftSec: event.leftSec, level: event.level, elapsedSec: event.elapsedSec });
+      } else if (event.kind === "start") {
+        bus.emit("siegeStart", { level: event.level, guards: event.guards, elites: event.elites, elapsedSec: event.elapsedSec });
+      } else {
+        bus.emit("siegeEnd", { level: event.level, elapsedSec: event.elapsedSec });
+      }
+    }
   }
 
   /**
