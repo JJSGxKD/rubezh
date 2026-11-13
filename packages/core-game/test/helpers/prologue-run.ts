@@ -96,6 +96,9 @@ export function guardDef() {
   return def;
 }
 
+/** Уровень аккаунта, на наборе которого откалиброваны коридоры пролога ботом. */
+const PROLOGUE_CALIBRATION_LEVEL = 16;
+
 export interface BotPrologue {
   seed: number;
   world: World;
@@ -115,7 +118,10 @@ export interface BotPrologue {
  * обязан кончиться победой, а не висеть, пока бот не умрёт (он и не умрёт — оберег).
  */
 export function playPrologueWithBot(seed: number, maxSec = 400): BotPrologue {
-  const run = createPrologueRun(seed);
+  // Коридоры пролога сняты на наборе, открытом до 16-го уровня аккаунта: «Вампиризм» и
+  // «Стойкость» (T-0286) открываются на 17-м и 19-м, настоящий пролог их не видит, а в
+  // раскладке карточек они сдвигали зерно 14 за коридор конца забега.
+  const run = createPrologueRun(seed, { loadout: { modifiers: {}, boosts: [], accountLevel: PROLOGUE_CALIBRATION_LEVEL } });
   const { world, spawner } = run;
   const bot = createBot("dodging");
   const maxTicks = Math.round(maxSec * TICK_HZ);

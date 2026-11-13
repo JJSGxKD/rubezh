@@ -71,8 +71,10 @@ describe("Кистень и «Круговерть»", () => {
   it("кистень открывается на 15-м уровне аккаунта, эволюция вместе с ним", () => {
     expect(unlocksAt(ACCOUNT_UNLOCKS, 14).weapons.has("flail")).toBe(false);
     expect(unlocksAt(ACCOUNT_UNLOCKS, 15).weapons.has("flail")).toBe(true);
-    // Верхний уровень лестницы не сдвигается: от него зависит потолок предмета профиля «полный арсенал».
-    expect(Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level))).toBe(16);
+    // Верхний уровень лестницы сам кистень не сдвигает: оружие кончается на 16-м, а 17-й и 19-й —
+    // навыки защиты Р157 (T-0286: «Вампиризм», «Стойкость»), и лестница заканчивается на 19-м.
+    expect(Math.max(...ACCOUNT_UNLOCKS.filter((row) => row.weapons !== undefined).map((row) => row.level))).toBe(16);
+    expect(Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level))).toBe(19);
     // Эволюция в лестницу не вносится: открыта вместе с базовым.
     expect(ACCOUNT_UNLOCKS.some((row) => row.weapons?.includes("whirl") === true)).toBe(false);
   });
