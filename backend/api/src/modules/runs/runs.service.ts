@@ -302,6 +302,19 @@ export class RunsService {
   }
 
   /**
+   * Повтор забега разошёлся с записью, и перепроверка сама сняла забег с рейтинга
+   * (tasks/T-0319): строка уже обновлена, остаётся привести доски и таблицу недели к базе.
+   * Тот же путь, что у «Не учитывать…» модератора, но без человека: ни права, ни аудита,
+   * причину — `replay_mismatch` — несёт сам забег.
+   */
+  async syncBoardsAfterReplay(runId: string): Promise<void> {
+    const stored = await this.runs.find(runId);
+    if (stored === null || stored.status !== "finished") return;
+    await this.refreshBoards({ accountId: stored.accountId, difficulty: stored.difficulty });
+    this.logger.log(JSON.stringify({ module: "runs", event: "run_unranked_by_replay", runId, accountId: stored.accountId }));
+  }
+
+  /**
    * Ответ на повтор итога — **по записанному забегу, а не по телу повтора**.
    * Иначе забег сдавали бы дважды: первый раз с малым временем, чтобы пройти
    * проверки, второй — тем же ключом с огромным, и `ZADD GT` поднял бы рекорд.
