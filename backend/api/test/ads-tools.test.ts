@@ -9,7 +9,7 @@ import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { PLACE_FORMAT } from "../src/modules/ads/ad-networks.js";
-import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdFunnelRow, type AdNetworkRow, type AdPassRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdCatalogBlock, type AdFunnelRow, type AdNetworkRow, type AdPassRow, type AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsToolsController } from "../src/modules/ads/ads-tools.controller.js";
 import { AdsToolsService } from "../src/modules/ads/ads-tools.service.js";
 import { secretKey, signAccessToken } from "../src/modules/auth/access-token.js";
@@ -53,8 +53,11 @@ class MemoryCatalog implements AdsCatalogRepository {
     return this.networksRows.map((row) => ({ ...row }));
   }
 
-  async blocks(): Promise<AdBlockDef[]> {
-    return this.blockRows.map((row) => ({ ...row }));
+  /** отметка архива блока (Р200): ISO-время по `blockId`, литералы `blockRows` её не несут */
+  archived = new Map<string, string>();
+
+  async blocks(): Promise<AdCatalogBlock[]> {
+    return this.blockRows.map((row) => ({ ...row, archivedAt: this.archived.get(row.blockId) ?? null }));
   }
 
   async updateNetwork(): Promise<boolean> {
@@ -71,6 +74,10 @@ class MemoryCatalog implements AdsCatalogRepository {
 
   async updateBlock(): Promise<boolean> {
     throw new Error("проверка рекламы блоки не правит");
+  }
+
+  async setBlockArchived(): Promise<never> {
+    throw new Error("проверка рекламы блоки в архив не убирает");
   }
 
   async passes(): Promise<AdPassRow[]> {
@@ -167,6 +174,17 @@ describe("проверка рекламы командой", () => {
       const body = (await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).json() as { data: { blocks: { blockId: string; network: string; place: string }[] } };
       const order = body.data.blocks.map((block) => `${block.network}:${block.place}:${block.blockId}`);
       expect(order).toEqual([...order].sort());
+    });
+
+    it("блок из архива в каталог проверки не попадает (Р200): остальные блоки на месте", async () => {
+      const catalog = new MemoryCatalog();
+      catalog.archived.set(BLOCK_ID, "2026-11-09T12:00:00.000Z");
+      const { app: server, as } = await start(catalog);
+      const { headers } = await as("owner");
+      const body = (await server.inject({ method: "GET", url: "/api/v1/tools/ads/catalog", headers })).json() as { data: { blocks: { blockId: string }[] } };
+      const ids = body.data.blocks.map((block) => block.blockId);
+      expect(ids).not.toContain(BLOCK_ID);
+      expect(ids).toEqual(expect.arrayContaining([OTHER_NETWORK_BLOCK, INTERSTITIAL_BLOCK]));
     });
 
     it("пустой каталог — пустые списки", async () => {

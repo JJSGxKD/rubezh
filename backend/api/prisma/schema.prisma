@@ -1909,6 +1909,8 @@ model AdBlock {
   updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт
   updatedBy  String?    @map("updated_by") @db.Uuid
+  /// в архиве с этого момента (Р200): блок выключен и в панели виден только во вкладке «Архив»; `null` — не в архиве
+  archivedAt DateTime?  @map("archived_at") @db.Timestamptz(3)
 
   network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
   sessions AdSession[]
