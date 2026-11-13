@@ -43,16 +43,17 @@ import {
 } from "./guide-data";
 import { ElementList, ElementTag, ResistLine, TrailLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
+import { Secrets } from "./secrets";
 
 /**
- * Гайдбук: основы, враги, оружие и улучшения — с мини-сценами вместо
+ * Гайдбук: основы, враги, оружие, улучшения и кодекс тайников — с мини-сценами вместо
  * абзацев (docs/27-design-system-and-app-shell.md §6).
  *
  * Числа и состав берутся из контента, а не пишутся текстом: враг, добавленный
  * геймдизайнером, появляется здесь сам. Текстом остаётся только то, чего в
  * данных нет, — что поведение значит для игрока и что с ним делать.
  */
-const TABS = ["basics", "enemies", "weapons", "upgrades"] as const;
+const TABS = ["basics", "enemies", "weapons", "upgrades", "secrets"] as const;
 type GuideTab = (typeof TABS)[number];
 
 export function GuideScreen(): ReactNode {
@@ -76,6 +77,7 @@ export function GuideScreen(): ReactNode {
           {tab === "enemies" ? <Enemies /> : null}
           {tab === "weapons" ? <Weapons /> : null}
           {tab === "upgrades" ? <Upgrades /> : null}
+          {tab === "secrets" ? <Secrets /> : null}
         </div>
       </ContentColumn>
     </Screen>
