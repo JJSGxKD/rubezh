@@ -42,7 +42,7 @@ describe("атлас покрывает контент", () => {
   // Новый враг без арта рисуется фигурой — это не ошибка, но черновик арта
   // обязан покрывать нынешний ростер, иначе сравнение в забеге неполное.
   const frames = new Set<string>();
-  for (const pack of ["core", "late", "r157"]) {
+  for (const pack of ["core", "late", "r157", "stages"]) {
     const atlas = JSON.parse(readFileSync(new URL(`../../../design/art/out/atlas-${pack}.json`, import.meta.url), "utf8")) as { frames: Record<string, unknown> };
     for (const name of Object.keys(atlas.frames)) frames.add(name);
   }
@@ -64,6 +64,41 @@ describe("атлас покрывает контент", () => {
         expect(artStageFor(stage, (s) => frames.has(enemyFrameName(enemy.id, s, 0))), `${enemy.id} s${String(stage)}`).toBeGreaterThanOrEqual(0);
       }
     }
+  });
+
+  it("у обычного врага на каждой ступени — свой кадр шага, не ближайший", () => {
+    for (const enemy of ENEMIES) {
+      if (enemy.rank !== undefined) continue;
+      for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
+        for (let k = 0; k < ART_WALK_FRAMES; k++) expect(frames.has(enemyFrameName(enemy.id, stage, k)), `${enemy.id} s${String(stage)} walk${String(k)}`).toBe(true);
+      }
+    }
+  });
+
+  it("у элиты и босса кадров ступеней нет", () => {
+    for (const enemy of ENEMIES) {
+      if (enemy.rank === undefined) continue;
+      for (let stage = 1; stage < ENEMY_STAGES.length; stage++) {
+        expect(frames.has(enemyFrameName(enemy.id, stage, 0)), `${enemy.id} s${String(stage)}`).toBe(false);
+      }
+    }
+  });
+
+  it("нарисованная ступень тона не получает: заплатка больше нигде не нужна", () => {
+    for (const enemy of ENEMIES) {
+      if (enemy.rank !== undefined) continue;
+      for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
+        const drawn = artStageFor(stage, (s) => frames.has(enemyFrameName(enemy.id, s, 0)));
+        expect(drawn, `${enemy.id} s${String(stage)}`).toBe(stage);
+        expect(artStageTint(stage, drawn), `${enemy.id} s${String(stage)}`).toBeNull();
+      }
+    }
+  });
+
+  it("пак ступеней подключён к забегу", () => {
+    const source = readFileSync(new URL("../src/game/render/art-atlas.ts", import.meta.url), "utf8");
+    expect(source).toContain("atlas-stages.png");
+    expect(source).toContain("atlas-stages.json");
   });
 
   it("у героя есть покой и шаг", () => {
