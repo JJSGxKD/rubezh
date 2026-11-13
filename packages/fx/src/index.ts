@@ -35,7 +35,7 @@ export {
 } from "./rates.js";
 export { SourceRateLimitedError, SourceUnavailableError, matchBySourceId, type RateSource, type SourceCurrency } from "./sources.js";
 export { MemoryRateStore } from "./memory-store.js";
-export { FALLBACK_SOURCE, refreshRates, takeSnapshot, type RateAlerts, type RefreshReport } from "./refresh.js";
+export { FALLBACK_SOURCE, buildSnapshot, refreshRates, takeSnapshot, type RateAlerts, type RefreshReport } from "./refresh.js";
 export type { RateStore, SourceState, StoredRate } from "./store.js";
 export { fetchBytes, fetchJson, retryAfterMs, type FetchLike } from "./sources/http.js";
 export { CBR_CURRENCIES, ECB_CURRENCIES, ERAPI_CURRENCIES, ERAPI_TARIFFS, FOREXRATEAPI_CURRENCIES, FOREXRATEAPI_TARIFF, createCbrSource, createEcbSource, createErApiSource, createForexRateApiSource, parseCbr, parseEcb, parseForexRateApi } from "./sources/fiat.js";

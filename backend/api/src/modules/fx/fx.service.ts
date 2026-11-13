@@ -4,6 +4,7 @@ import {
   CURRENCIES,
   Decimal,
   FRESHNESS_POLICY,
+  buildSnapshot,
   freshness,
   manualRate,
   manualToRate,
@@ -353,6 +354,14 @@ export class FxService {
   /** Снимок на сейчас — на него сошлются цена и платёж (часть 3 WP9). */
   async snapshot(now = new Date()): Promise<RatesSnapshot> {
     return await takeSnapshot(this.store, now);
+  }
+
+  /**
+   * Курсы на сейчас без записи снимка (T-0453): для просмотров, на которые ссылаться не нужно — кабинет участника
+   * считает выручку по курсу выплаты на каждый просмотр, и писать строку в базу на каждый из них нельзя.
+   */
+  async peek(now = new Date()): Promise<Omit<RatesSnapshot, "id">> {
+    return await buildSnapshot(this.store, now);
   }
 }
 
