@@ -10,6 +10,7 @@ import {
   eliteEnemies,
   evolutionRecipes,
   enemyResists,
+  enemyTrailKey,
   guideBoosts,
   passiveCategories,
   passiveRange,
@@ -161,6 +162,30 @@ describe("гайдбук", () => {
       const attack = enemy.element === undefined ? [] : [enemy.element];
       for (const element of [...strong, ...weak, ...attack]) expect(hasTranslation(`guide.element.${element}`), enemy.id).toBe(true);
     }
+  });
+
+  it("у врага со следом в гайдбуке строка про лужи, у остальных её нет", () => {
+    const lurker = ENEMIES.find((enemy) => enemy.id === "bog_lurker");
+    if (lurker === undefined) throw new Error("нет Болотника в контенте");
+    const key = enemyTrailKey(lurker);
+    expect(key).toBe("guide.enemy.trail.poison");
+    expect(t(key ?? "")).toBe("Оставляет ядовитые лужи — не стой в них");
+    // Любой враг со следом получает строку по своей стихии, и текст для каждой есть.
+    for (const element of [undefined, "fire", "cold", "lightning", "poison"] as const) {
+      const withTrail = { ...lurker, ...(element === undefined ? { element: undefined } : { element }) };
+      const trailKey = enemyTrailKey(withTrail);
+      expect(trailKey, String(element)).not.toBeNull();
+      expect(hasTranslation(trailKey ?? ""), String(element)).toBe(true);
+    }
+    for (const enemy of ENEMIES.filter((entry) => entry.trail === undefined)) expect(enemyTrailKey(enemy), enemy.id).toBeNull();
+  });
+
+  it("строка про лужи рисуется на карточке врага со следом и пуста у остальных", () => {
+    const lurker = ENEMIES.find((enemy) => enemy.id === "bog_lurker");
+    const plain = ENEMIES.find((enemy) => enemy.trail === undefined);
+    if (lurker === undefined || plain === undefined) throw new Error("нет нужных врагов в контенте");
+    expect(renderToStaticMarkup(createElement(TrailLine, { def: lurker }))).toContain("Оставляет ядовитые лужи — не стой в них");
+    expect(renderToStaticMarkup(createElement(TrailLine, { def: plain }))).toBe("");
   });
 
   it("делит стойкость врага на стойкость и слабость, а без стойкостей — пусто", () => {

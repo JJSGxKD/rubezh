@@ -232,6 +232,7 @@ describe("контент таймлайна спавна", () => {
       "bone_walker",
       "mire_shambler",
       "ice_spirit",
+      "bog_lurker",
     ]);
   });
 
@@ -406,8 +407,8 @@ describe("боссы бесконечного режима", () => {
     }
   });
 
-  it("смесь и стартовый набор кривой помещаются в пул из десяти врагов", () => {
-    expect(ENDLESS_CURVE.pool).toHaveLength(10);
+  it("смесь и стартовый набор кривой помещаются в пул из одиннадцати врагов", () => {
+    expect(ENDLESS_CURVE.pool).toHaveLength(11);
     expect(ENDLESS_CURVE.startTypes).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(ENDLESS_CURVE.mixSize).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);
