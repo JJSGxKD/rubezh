@@ -464,6 +464,30 @@ export function EnemyScene(props: {
         </Stage>
       );
     }
+    case "stalker": {
+      // Герой справа, Карачун слева, между ними пунктир толчка назад, у левого края — иней звездой.
+      // Сцена статичная: новой анимации нет.
+      const frost = hex(UNKILLABLE_LOOK.rim.color);
+      const rays = [0, 60, 120].map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        // Лучи звезды — по таблице направлений, а не тригонометрией движка: сцена рисуется только в оболочке.
+        return { deg, dx: Math.cos(rad) * 11, dy: Math.sin(rad) * 11 };
+      });
+      return (
+        <Stage label={props.label}>
+          <At x={20} y={22}>
+            {rays.map(({ deg, dx, dy }) => (
+              <line key={deg} x1={-dx} y1={-dy} x2={dx} y2={dy} stroke={frost} strokeOpacity={0.55} strokeWidth={1.2} />
+            ))}
+          </At>
+          <Player x={px} y={py} />
+          <path d={`M ${px - 14} ${py} L ${px - 50} ${py}`} stroke={frost} strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="3 3" />
+          <At x={50} y={py}>
+            <WorldShape shape={look.shape} color={color} r={12} />
+          </At>
+        </Stage>
+      );
+    }
     default:
       return (
         <Stage label={props.label}>

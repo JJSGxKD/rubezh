@@ -28,6 +28,8 @@ import {
   passiveCategories,
   passiveRange,
   regularEnemies,
+  stalkerGuide,
+  unkillableEnemies,
   rubezhGuide,
   siegeGuide,
   speedClass,
@@ -229,7 +231,7 @@ function PickupRow(props: { id: "medkit" | "magnet" | "dynamite" | "freeze" | "c
   );
 }
 
-function Enemies(): ReactNode {
+export function Enemies(): ReactNode {
   const regular = regularEnemies();
   const elite = eliteEnemies();
 
@@ -275,7 +277,41 @@ function Enemies(): ReactNode {
       {elite.map((enemy, index) => (
         <EnemyCard key={enemy.def.id} enemy={enemy} index={index} />
       ))}
+
+      <SectionTitle>{t("guide.unkillable.title")}</SectionTitle>
+      <p className="text-sm text-text-muted">{t("guide.unkillable.text")}</p>
+      {unkillableEnemies().map((enemy, index) => (
+        <UnkillableCard key={enemy.def.id} enemy={enemy} index={index} />
+      ))}
     </>
+  );
+}
+
+/** Неубиваемый: без строки здоровья, урона и опыта — их у него нет; вместо них миф, время прихода и предвестие. */
+function UnkillableCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
+  const { def } = props.enemy;
+  const name = t(`enemy.${def.id}.name`);
+  const { fromSec } = stalkerGuide();
+
+  return (
+    <Card appearIndex={Math.min(props.index, 6)}>
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <EnemyScene pattern={def.pattern} elite={false} label={name} />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="font-display text-base font-bold text-text">{name}</h3>
+            <Badge tone="muted">{t(`guide.pattern.${def.pattern}.name`)}</Badge>
+          </div>
+          <p className="mt-1 text-sm text-text-muted">{t(`guide.enemy.${def.id}.myth`)}</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.when`, { time: formatDuration(fromSec) })}</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.omen`)}</p>
+        </div>
+      </div>
+      <p className="surface-sunken mt-3 flex items-start gap-2 rounded-md px-3 py-2 text-xs text-text">
+        <Lightbulb size={14} aria-hidden="true" className="mt-0.5 shrink-0 text-accent" />
+        {t(`guide.pattern.${def.pattern}.tip`)}
+      </p>
+    </Card>
   );
 }
 

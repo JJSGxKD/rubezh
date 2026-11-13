@@ -12,7 +12,7 @@ import {
   type WeaponDef,
   type WeaponLevel,
 } from "@bh/shared-types";
-import { ACCOUNT_UNLOCKS, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { ACCOUNT_UNLOCKS, PATTERN_TRAITS, STALKER, BOOSTS, CONTENT_SNAPSHOT, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, PASSIVES, RUBEZH, unlockLevelOf, BASE_WEAPONS, WEAPON_EVOLUTIONS } from "@bh/core-game";
 
 /**
  * Что показывает гайдбук — выборка из контента, без своих копий чисел.
@@ -53,14 +53,28 @@ function toGuideEnemy(def: EnemyDef): GuideEnemy {
   return { def, children };
 }
 
+function isUnkillable(enemy: EnemyDef): boolean {
+  return PATTERN_TRAITS[enemy.pattern].unkillable;
+}
+
 /** Обычные враги в порядке контента — примерно в том, в каком они приходят. */
 export function regularEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank === undefined).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => !isUnkillable(enemy) && enemy.rank === undefined).map(toGuideEnemy);
 }
 
 /** Элита и мини-боссы: приходят только событиями таймлайна. */
 export function eliteEnemies(): GuideEnemy[] {
-  return ENEMIES.filter((enemy) => enemy.rank !== undefined).map(toGuideEnemy);
+  return ENEMIES.filter((enemy) => !isUnkillable(enemy) && enemy.rank !== undefined).map(toGuideEnemy);
+}
+
+/** Неубиваемые (Р205): враги паттерна с признаком `unkillable` — у них нет здоровья и опыта, строка статов врала бы. */
+export function unkillableEnemies(): GuideEnemy[] {
+  return ENEMIES.filter(isUnkillable).map(toGuideEnemy);
+}
+
+/** Карачун: с какой секунды приходит — из контента. */
+export function stalkerGuide(): { fromSec: number } {
+  return { fromSec: STALKER.appear.fromSec };
 }
 
 /**
