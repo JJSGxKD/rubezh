@@ -3,7 +3,7 @@ id: T-0436
 title: Сообщение игроку о компенсации и возврате звёзд — в игре и в боте
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
