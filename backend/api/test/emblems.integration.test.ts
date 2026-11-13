@@ -56,7 +56,7 @@ const live = DATABASE_URL !== "" && REDIS_URL !== "";
 const DAY = 86_400_000;
 const STAMP = String(Date.now());
 
-/** 24 отобранных достижения и редкость их знака — таблица из задачи. */
+/** 31 отобранное достижение и редкость их знака: 24 из T-0235 и 7 из T-0322 (достижения v2). */
 const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_kills_100k: "legendary",
   ach_time_100h: "legendary",
@@ -82,6 +82,14 @@ const MERIT_TIERS: Readonly<Record<string, string>> = {
   ach_weapon_hearth: "uncommon",
   ach_weapon_storm: "uncommon",
   ach_weapon_sting: "uncommon",
+  // T-0322: испытание, «Коллекционер», «Мастер Метеора» и верхние ступени стихийников
+  ach_no_hit_10: "legendary",
+  ach_collector: "epic",
+  ach_weapon_meteor: "uncommon",
+  ach_fire_10k: "epic",
+  ach_cold_10k: "epic",
+  ach_lightning_10k: "epic",
+  ach_poison_10k: "epic",
 };
 
 /** Семь статусных и сезонных знаков: [id, название, вид, категория, редкость, подсказка]. */
@@ -250,13 +258,13 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("миграция", () => {
-    it("у 24 отобранных достижений редкость знака по таблице; других, кроме семи новых, знаков нет", async () => {
+    it("у 31 отобранного достижения редкость знака по таблице; других, кроме семи новых, знаков нет", async () => {
       const rows = await prisma.$queryRaw<{ task_id: string; emblem_tier: string }[]>`
         SELECT task_id, emblem_tier FROM task_def WHERE emblem_tier IS NOT NULL AND task_id NOT LIKE 'it\_%' ORDER BY task_id`;
       const merit = rows.filter((row) => !row.task_id.startsWith("emb_"));
       expect(Object.fromEntries(merit.map((row) => [row.task_id, row.emblem_tier]))).toEqual(MERIT_TIERS);
-      expect(merit.length).toBe(24);
-      expect(rows.length).toBe(24 + SPECIAL.length);
+      expect(merit.length).toBe(31);
+      expect(rows.length).toBe(31 + SPECIAL.length);
     });
 
     it("семь новых строк: вид, категория, редкость, подсказка, цель 1, награда 0, порядок после существующих достижений", async () => {
@@ -487,12 +495,12 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
   });
 
   describe("знаки игрока: GET /achievements/emblems", () => {
-    it("в каталоге 31 знак: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
+    it("в каталоге 38 знаков: статусные и сезонные, затем заслуги; держимые отмечены, shown и auto — по умолчанию", async () => {
       const me = await account();
       await makeTester(me);
       await complete(me, "ach_runs_200", "ach_weapon_spark");
       const view = await emblems.listFor(me);
-      expect(view.items.length).toBe(24 + SPECIAL.length);
+      expect(view.items.length).toBe(31 + SPECIAL.length);
       expect(view.shown).toBe("emb_tester");
       expect(view.auto).toBe(true);
       const held = view.items.filter((item) => item.held).map((item) => item.id).sort();
