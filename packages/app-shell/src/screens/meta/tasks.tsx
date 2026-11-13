@@ -4,6 +4,8 @@ import { ContentColumn, ErrorState, InfoNotice, PageTitle, Screen, SectionTitle,
 import { t } from "../../i18n";
 import "../../i18n/tasks";
 import { loadBadges } from "../../state/badges-api";
+import { takePassOrigin, useNavigation, type PassOrigin } from "../../state/navigation";
+import { loadPass, passAvailable, usePass } from "../../state/pass-api";
 import { restrictionRefusal, useRestricted } from "../../state/restrictions";
 import { track, useShell } from "../../state/shell";
 import { rewardFeedback } from "../../state/ui-feedback";
@@ -34,6 +36,8 @@ import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { formatCountdown, msUntilReset, type ResetPeriod } from "./schedule";
 import { Achievements } from "./achievements";
+import { PassPanel } from "./pass";
+import { claimableRewards } from "./pass-rules";
 import { BotMentionRows, useBotMention } from "./bot-mention-rows";
 import { botPlace } from "./bot-mention-rules";
 import { NetworkTasks } from "./network-tasks";
@@ -74,6 +78,27 @@ const api = createTasksApi();
 const PARTNER_RESTRICTION = ["partner_tasks"];
 
 export function TasksScreen(): ReactNode {
+  // Вкладка «Пасс» (T-0314): её зовут виджет главной, уведомление о закрытии и ссылка бота —
+  // пометка лежит в навигации, экран её забирает. Читаем при первой отрисовке, а гасим в эффекте:
+  // инициализатор состояния в строгом режиме вызывается дважды, и гашение в нём теряло бы пометку.
+  const [passEntry] = useState(() => useNavigation.getState().passOrigin);
+  const [onPass, setOnPass] = useState(passEntry !== null);
+  const passFrom = useRef<PassOrigin>(passEntry ?? "tab");
+  useEffect(() => {
+    takePassOrigin();
+  }, []);
+  useEffect(() => {
+    if (!onPass) return;
+    track("pass_opened", { from: passFrom.current });
+    // Следующее открытие вкладки на этом же экране — уже обычное, с вкладки.
+    passFrom.current = "tab";
+  }, [onPass]);
+  // Пасс грузится сразу, а не по касанию вкладки: знак на вкладке должен быть до выбора.
+  const passView = usePass((state) => state.view);
+  useEffect(() => {
+    if (passAvailable()) void loadPass();
+  }, []);
+  const passWaiting = passView === null ? 0 : claimableRewards(passView).length;
   // Пока игрок не выбрал сам — вкладка с наградой, иначе партнёрские, иначе
   // ежедневные: правило в tasks-rules.ts.
   const [chosen, setView] = useState<TasksView | null>(null);
@@ -189,7 +214,7 @@ export function TasksScreen(): ReactNode {
   const tasks = sortTasks(all.filter((task) => tabOf(task) === TASK_TAB_OF[view]));
   const partner = view === "partner";
   // Юзернейм бота — только на «Дне»; запрос уходит при первом открытии вкладки (Р186).
-  const bot = useBotMention(view === "daily");
+  const bot = useBotMention(view === "daily" && !onPass);
   // Показы партнёрских заданий (T-0224): событие на задание, чья карточка
   // нарисована на вкладке «Партнёры»; ref живёт, пока открыт экран.
   const shownPartner = useRef<Set<string>>(new Set());
@@ -272,12 +297,17 @@ export function TasksScreen(): ReactNode {
         <div className="mt-2 grid gap-3">
           <SegmentedControl track="view"
             label={t("tasks.title")}
-            activeId={view}
-            onSelect={(id) => setView(id as TasksView)}
+            activeId={onPass ? "pass" : view}
+            onSelect={(id) => {
+              setOnPass(id === "pass");
+              if (id !== "pass") setView(id as TasksView);
+            }}
             items={[
               { id: "partner", label: t("tasks.partner"), badge: waiting("partner") },
               { id: "daily", label: t("tasks.daily"), badge: waiting("daily") },
               { id: "weekly", label: t("tasks.weekly"), badge: waiting("weekly") },
+              // Пасс — только с входом: очки и ступени собраны по аккаунту, гостю вкладки нет.
+              ...(tasksAvailable() ? [{ id: "pass", label: t("pass.tab"), badge: passWaiting }] : []),
               { id: "achievements", label: t("tasks.achievements"), badge: waiting("achievement") },
             ]}
           />
@@ -285,12 +315,13 @@ export function TasksScreen(): ReactNode {
         </div>
 
         {/* Витрина грузит себя сама: сбой списка заданий её не закрывает, знак вкладки лишь не обновится. */}
-        {view === "achievements" ? <Achievements onChanged={() => void refresh()} /> : null}
+        {view === "achievements" && !onPass ? <Achievements onChanged={() => void refresh()} /> : null}
+        {onPass ? <PassPanel /> : null}
 
-        {state.status === "loading" && tasksAvailable() && view !== "achievements" ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
-        {state.status === "failed" && view !== "achievements" ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
+        {state.status === "loading" && tasksAvailable() && view !== "achievements" && !onPass ? <p className="mt-4 text-sm text-text-muted">{t("tasks.loading")}</p> : null}
+        {state.status === "failed" && view !== "achievements" && !onPass ? <ErrorState text={t("tasks.failed")} onRetry={() => void load()} /> : null}
 
-        {state.status !== "ready" || view === "achievements" ? null : (
+        {state.status !== "ready" || view === "achievements" || onPass ? null : (
           // Ключ — вид: список монтируется заново, и лесенка появления
           // проигрывается при каждом переключении.
           <div key={view} className="mt-4">
