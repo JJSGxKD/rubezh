@@ -3,7 +3,7 @@ id: T-0479
 title: Итог забега — типы врагов, вышедших в мир (enemiesSeen), для кодекса
 epic: E16
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
@@ -18,6 +18,7 @@ shared:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/game/sim/**
   - docs/22-analytics-and-metrics.md
+  - packages/app-shell/test/runs-enemies-seen.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
