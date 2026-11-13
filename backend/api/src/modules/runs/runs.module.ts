@@ -1,7 +1,9 @@
 import { Module } from "@nestjs/common";
 import { PublicIdentityModule } from "../../common/public-identity.js";
+import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
+import { EventsModule } from "../events/events.module.js";
 import { RatingModule } from "../rating/rating.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
@@ -25,6 +27,10 @@ import { RunPrestige } from "./run-prestige.js";
 import { RunProofsCleanupJob } from "./run-proofs-cleanup.job.js";
 import { PrismaRunProofsRepository, RUN_PROOFS_REPOSITORY } from "./run-proofs.repository.js";
 import { RunProofsService } from "./run-proofs.service.js";
+import { ModuleRefSeasonPlaces, REPLAY_SEASON_PLACES, RunReplayFacts } from "./run-replay-facts.js";
+import { BullReplayQueue, RunReplayJob } from "./run-replay.job.js";
+import { PrismaRunReplayRepository, RUN_REPLAY_REPOSITORY } from "./run-replay.repository.js";
+import { REPLAY_QUEUE, RUN_REPLAY_FACTS, RunReplayService } from "./run-replay.service.js";
 import { PrismaRunReviewRepository, RUN_REVIEW_REPOSITORY } from "./run-review.repository.js";
 import { RunReviewService } from "./run-review.service.js";
 import { RunsHooks } from "./runs-hooks.js";
@@ -44,7 +50,7 @@ import { RunsViewService } from "./runs-view.service.js";
  * экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule, PublicIdentityModule],
+  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule, PublicIdentityModule, EventsModule],
   controllers: [RunsController, RunAdContinueController, RunGemContinueController],
   providers: [
     RunsService,
@@ -64,6 +70,15 @@ import { RunsViewService } from "./runs-view.service.js";
     RunProofsService,
     RunProofsCleanupJob,
     { provide: RUN_PROOFS_REPOSITORY, useClass: PrismaRunProofsRepository },
+    // Перепроверка повтором (T-0319): сервис, расписание, факты о месте в досках и очередь в `sim-worker`.
+    RunReplayService,
+    RunReplayJob,
+    RunReplayFacts,
+    ModuleRefSeasonPlaces,
+    { provide: RUN_REPLAY_REPOSITORY, useClass: PrismaRunReplayRepository },
+    { provide: RUN_REPLAY_FACTS, useExisting: RunReplayFacts },
+    { provide: REPLAY_SEASON_PLACES, useExisting: ModuleRefSeasonPlaces },
+    { provide: REPLAY_QUEUE, useFactory: (config: AppConfig) => new BullReplayQueue(config), inject: [APP_CONFIG] },
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
     { provide: RUN_REVIEW_REPOSITORY, useClass: PrismaRunReviewRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
@@ -75,6 +90,7 @@ import { RunsViewService } from "./runs-view.service.js";
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
   // предметов, престиж в строках рейтинга — модуль достижений (знак у имени — через общий порт `PublicIdentity`); награду, бусты и добычу в листе забега — их модули.
   // Отчёт забега и решения разбора (Р203) — ручкам панели: контроллер живёт в модуле панели, ему сервис нужен экспортом.
-  exports: [RunsService, RunsViewService, RunReviewService, RunsHooks, PrologueService, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
+  // Перепроверка повтором: исход в очереди разбора и «Повторить снова» — там же (T-0319); награды после проверки (T-0320) зовут её отсюда.
+  exports: [RunsService, RunsViewService, RunReviewService, RunReplayService, RunsHooks, PrologueService, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}
