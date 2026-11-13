@@ -97,14 +97,16 @@ describe("повтор: честная запись", () => {
     expect(result.verdict).toBe("match");
   });
 
-  it("снимок и вправду берётся: другие числа контента — другой бой, расхождение на свёртке минуты", SLOW, async () => {
+  it("снимок и вправду берётся: другие числа контента — другой бой, расхождение не позже свёртки минуты", SLOW, async () => {
     const harder = json({ ...CONTENT_SNAPSHOT, enemies: CONTENT_SNAPSHOT.enemies.map((enemy) => ({ ...enemy, hp: enemy.hp * 4 })) }) as ContentSnapshot;
     const harderHash = hashSnapshot(harder);
 
     const result = await runReplay(jobOf({ ...honest, contentHash: harderHash }, { contentSnapshot: harder }));
 
     expect(result.verdict).toBe("mismatch");
-    expect(result.divergedTick).toBe(CHECKPOINT_TICKS);
+    // Здоровье врагов вчетверо больше — первый уровень приходит позже, и выбор записи уже не ложится на забег.
+    expect(result.divergedTick).not.toBeNull();
+    expect(result.divergedTick ?? Infinity).toBeLessThanOrEqual(CHECKPOINT_TICKS);
   });
 });
 
@@ -441,8 +443,16 @@ describe("сборка воркера", () => {
   }, 60_000);
 });
 
-/** Своя база Redis и своё имя очереди: чужие `flushdb` её не заденут, а мы чужого не тронем. */
-const REDIS_URL = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
+/** Своя база Redis и своё имя очереди: чужие `flushdb` её не заденут, а мы чужого не тронем (как в `queue.integration.test.ts`). */
+function redisUrl(): string {
+  const source = process.env.PLAYTEST_TEST_REDIS_URL ?? "";
+  if (source === "") return "";
+  const parsed = new URL(source);
+  parsed.pathname = "/0";
+  return parsed.toString();
+}
+
+const REDIS_URL = redisUrl();
 
 function fakeCheckRun(seed: number): BalanceRunResult {
   return { seed, skill: "dodging", startingWeaponId: "w", survivalSec: 100 + seed, level: 3, wave: 2, enemiesKilled: 50, xpCollected: 10, peakEnemies: 9, firstLevelUpSec: 10, chestsFound: 1, chestsOpened: 1, evolutions: 0, buildCompleteSec: 0, buildPicks: 0, damageTakenByMinute: [], startPower: 0, startPressure: 1, endPressure: 1, buildScoreByMinute: [], killsByMinute: [], huntLogCountByMinute: [], buildPointsByMinute: [], huntLog: [], timedOut: false };
