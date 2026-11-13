@@ -88,6 +88,9 @@ export const PERMISSIONS = [
   // Каталог заданий и достижений (WP13, Р52): цели и награды без релиза —
   // награды ложатся в кошелёк, поэтому отдельное право, а не «контент»
   "tasks.edit",
+  // Ленты батл-пасса по месяцам (T-0313, Р46): награды ступеней ложатся в кошелёк игроков,
+  // поэтому своё право, а не «контент»; пройденные игроками ступени не правятся
+  "pass.edit",
   // Акции магазина (WP10, часть 8): скидка от цены каталога на срок в
   // пределах честной скидки — сама цена каталога остаётся за «sku.price.*»
   "shop.promo.edit",
@@ -184,6 +187,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "changelog.edit",
     "changelog.publish",
     "tasks.edit",
+    "pass.edit",
     "shop.promo.edit",
     "promo.edit",
     "home.edit",
@@ -212,6 +216,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.view",
     "changelog.edit",
     "tasks.edit",
+    "pass.edit",
     "home.edit",
     "diagnostics.view",
     "tools.dev",
