@@ -147,7 +147,7 @@ describe("planSteps: что и как запускать", () => {
     expect(byId(plan, "typecheck").commands[0]?.args).toEqual(["typecheck"]);
     const tests = byId(plan, "tests");
     expect(tests.label).toBe("тесты core-game, app-shell");
-    expect(tests.commands[0]?.args).toEqual(["exec", "vitest", "run", "packages/app-shell/", "packages/core-game/"]);
+    expect(tests.commands[0]?.args).toEqual(["exec", "vitest", "run", "--passWithNoTests", "packages/app-shell/", "packages/core-game/"]);
     expect(byId(plan, "build").skipReason).toBeNull();
     expect(byId(plan, "build").commands.map((c) => c.args[0])).toEqual(["build", "budget"]);
   });
