@@ -26,6 +26,7 @@ shared:
   - backend/api/test/route-permissions.test.ts
   - docs/30-configuration-map.md
   - docs/29-admin-panel.md
+  - packages/fx/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: high
