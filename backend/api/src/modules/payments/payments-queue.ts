@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy, type OnModuleInit } from "@nestjs/common";
 import { Queue, Worker, type Job } from "bullmq";
 import type { Redis } from "ioredis";
+import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { createQueueConnection } from "../../infra/queues.js";
@@ -35,6 +36,10 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * задание повторяется целиком, запись оплаты отвечает «уже записано», а
  * выдача идемпотентна ключом покупки.
  *
+ * Брошенное задание очередь хранит (`removeOnFail`): панель читает их
+ * (`failedJobs`) и повторяет кнопкой (`retryFailed`) — тем же путём, что
+ * команда на сервере, со свежей серией попыток (Р209, WP53, tasks/T-0431).
+ *
  * Redis недоступен — задание выполняется сразу: оплата не должна ждать
  * очередь. Не вышло и так — ошибка в лог со всеми полями оплаты: по ним
  * человек сверит покупку руками. Заказанный возврат к тому же записан в базе,
@@ -43,6 +48,10 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
 
 const QUEUE_NAME = "payments";
 const ENQUEUE_TIMEOUT_MS = 2_000;
+/** Чтение и повтор брошенных заданий идут по просьбе человека из панели: подождать можно дольше, чем при приёме оплаты. */
+const FAILED_TIMEOUT_MS = 5_000;
+/** Причина в строке панели и хронологии: первая строка сообщения, не весь стек. */
+const REASON_MAX = 200;
 const JOB_OPTIONS = {
   attempts: 10,
   backoff: { type: "exponential", delay: 2_000, jitter: 0.5 },
@@ -57,6 +66,22 @@ type PaymentsJob =
   | { kind: "refund"; order: RefundOrder }
   /** возврат, о котором сообщила площадка; `at` — когда пришло обновление, а не когда запись прошла */
   | { kind: "refunded"; chargeId: string; at: number };
+
+/** Брошенное задание очереди — строка для панели (Р209, WP53). Поля, которых в данных задания нет или они не разобрались, — `null`. */
+export interface FailedPaymentJob {
+  jobId: string;
+  kind: "confirm" | "refund" | "refunded" | "unknown";
+  chargeId: string | null;
+  purchaseId: string | null;
+  payerId: string | null;
+  /** у подтверждения — сумма оплаты; у возвратов — null */
+  amount: number | null;
+  /** первая непустая строка причины, до 200 знаков */
+  reason: string;
+  attempts: number;
+  /** когда задание бросилось (`finishedOn`); нет — null */
+  failedAt: Date | null;
+}
 
 /** Название события в логе, если задание не удалось выполнить даже без очереди. */
 const UNRECORDED_EVENTS: Record<PaymentsJob["kind"], string> = {
@@ -123,6 +148,38 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
   /** Возврат от площадки: игрок оспорил оплату или вернула поддержка. Ошибка сюда не пробивается — как у `confirm`. */
   async refunded(chargeId: string, nowMs = Date.now()): Promise<void> {
     await this.run({ kind: "refunded", chargeId, at: nowMs }, `refunded-${fingerprint(chargeId)}`);
+  }
+
+  /**
+   * Брошенные задания, свежие первыми (BullMQ отдаёт их по времени провала).
+   * Очереди нет — `null`: панель говорит «недоступна», а не «брошенных нет».
+   */
+  async failedJobs(limit: number): Promise<FailedPaymentJob[] | null> {
+    if (this.queue === null) return null;
+    const jobs = await withTimeout(this.queue.getFailed(0, limit - 1), FAILED_TIMEOUT_MS, "брошенные задания оплаты");
+    return jobs.map(viewOf);
+  }
+
+  /**
+   * Повторить брошенное задание целиком со свежей серией попыток: иначе первая
+   * же неудача снова была бы «последней». Запись оплаты идемпотентна по
+   * идентификатору оплаты, выдача — по ключу покупки, возврат — по
+   * идентификатору оплаты, так что повтор ничего не удваивает. Задание успели
+   * повторить, пока человек смотрел список, — `not_failed`, а не ошибка.
+   */
+  async retryFailed(jobId: string): Promise<"retried" | "not_found" | "not_failed"> {
+    if (this.queue === null) return "not_found";
+    const job = await withTimeout(this.queue.getJob(jobId), FAILED_TIMEOUT_MS, "задание оплаты");
+    if (job === undefined) return "not_found";
+    if ((await withTimeout(job.getState(), FAILED_TIMEOUT_MS, "состояние задания оплаты")) !== "failed") return "not_failed";
+    try {
+      await withTimeout(job.retry("failed", { resetAttemptsMade: true, resetAttemptsStarted: true }), FAILED_TIMEOUT_MS, "повтор задания оплаты");
+      return "retried";
+    } catch (error: unknown) {
+      // BullMQ отказывает, когда задание уже не в «failed»: его повторил другой. Причина — в лог, на случай, если это был не он.
+      this.log("warn", "failed_job_retry_refused", { jobId, reason: reasonOf(error) });
+      return "not_failed";
+    }
   }
 
   /**
@@ -241,6 +298,46 @@ function describeJob(job: PaymentsJob): Record<string, unknown> {
   }
   const { payment } = job;
   return { kind: job.kind, platform: payment.platform, chargeId: payment.chargeId, purchaseId: payment.payload, payerId: payment.payerId, amount: payment.totalAmount };
+}
+
+// Данные задания из Redis — граница системы: разбираем схемой, а не приведением. Неполное не прячет строку:
+// человеку нужно увидеть брошенное задание и всё, что о нём известно.
+const text = z.string().nullable().catch(null);
+const jobData = z
+  .object({
+    kind: z.enum(["confirm", "refund", "refunded", "unknown"]).catch("unknown"),
+    payment: z.object({ chargeId: text, payload: text, payerId: text, totalAmount: z.number().finite().nullable().catch(null) }).optional().catch(undefined),
+    order: z.object({ chargeId: text, purchaseId: text, payerId: text }).optional().catch(undefined),
+    chargeId: text,
+  })
+  .catch({ kind: "unknown", chargeId: null });
+
+type FailedJobSource = Pick<Job<PaymentsJob>, "id" | "data" | "failedReason" | "attemptsMade" | "finishedOn">;
+
+function viewOf(job: FailedJobSource): FailedPaymentJob {
+  const data = jobData.parse(job.data);
+  const common = {
+    jobId: job.id ?? "",
+    reason: firstLine(job.failedReason),
+    attempts: job.attemptsMade,
+    failedAt: typeof job.finishedOn === "number" && Number.isFinite(job.finishedOn) ? new Date(job.finishedOn) : null,
+  };
+  switch (data.kind) {
+    case "confirm":
+      return { ...common, kind: "confirm", chargeId: data.payment?.chargeId ?? null, purchaseId: data.payment?.payload ?? null, payerId: data.payment?.payerId ?? null, amount: data.payment?.totalAmount ?? null };
+    case "refund":
+      return { ...common, kind: "refund", chargeId: data.order?.chargeId ?? null, purchaseId: data.order?.purchaseId ?? null, payerId: data.order?.payerId ?? null, amount: null };
+    case "refunded":
+      return { ...common, kind: "refunded", chargeId: data.chargeId, purchaseId: null, payerId: null, amount: null };
+    case "unknown":
+      return { ...common, kind: "unknown", chargeId: null, purchaseId: null, payerId: null, amount: null };
+  }
+}
+
+/** Первая непустая строка причины, не длиннее 200 знаков: срез по знакам, а не по кодовым единицам — пара суррогатов не рвётся. */
+function firstLine(reason: string | undefined): string {
+  const line = (reason ?? "").split(/\r?\n/).find((candidate) => candidate.trim() !== "") ?? "";
+  return [...line.trim()].slice(0, REASON_MAX).join("");
 }
 
 function reasonOf(error: unknown): string {
