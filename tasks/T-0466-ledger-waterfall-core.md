@@ -16,6 +16,8 @@ zones:
   - packages/ledger/test/entries.test.ts
 shared:
   - docs/37-accounting.md
+  - backend/api/src/modules/ledger/ledger-problems.ts
+  - backend/api/test/ledger-journal.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

@@ -22,6 +22,8 @@ export function describeProblem(problem: EntryProblem): string {
       return `Счёта «${problem.accountId}» нет в плане счетов`;
     case "duplicate_account":
       return `Счёт «${problem.accountId}» встречается в проводке больше одного раза`;
+    case "bad_period":
+      return `Месяц проводки «${problem.period}» не в формате ГГГГ-ММ или позже месяца даты`;
     case "unbalanced":
       return `Проводка не сходится в валюте ${problem.currency}: сумма строк ${sumText(problem.sum, problem.currency)} вместо нуля`;
   }
