@@ -19,6 +19,7 @@ zones:
   - apps/admin/test/payments-tabs.test.ts
 shared:
   - apps/admin/src/ui/help.ts
+  - apps/admin/src/screens/payments/PaymentParts.tsx
   - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
