@@ -9,6 +9,10 @@ import type { ChangeRequest, ChangeTarget, RequestStatus } from "../../../api/ch
 
 export const PRICES_TAB = { id: "prices", title: "Цены и награды" } as const;
 
+/** Виды заявок: цена товара и число награды (tasks/T-0310). */
+export const KIND_SKU = "sku_price";
+export const KIND_REWARD = "reward_setting";
+
 export function isPricesTab(value: string | undefined): value is typeof PRICES_TAB.id {
   return value === PRICES_TAB.id;
 }
@@ -80,7 +84,8 @@ const badgeText = (badge: unknown): string => (badge === "hit" ? "«Хит»" : 
 export function describeChange(kind: string, before: unknown, after: unknown): string[] {
   const was = record(before);
   const now = record(after);
-  if (kind !== "sku_price") return Object.keys(now).map((key) => `${key} ${show(was[key])} → ${show(now[key])}`);
+  if (kind === KIND_REWARD) return [`${show(was.value)} → ${show(now.value)}`];
+  if (kind !== KIND_SKU) return Object.keys(now).map((key) => `${key} ${show(was[key])} → ${show(now[key])}`);
   const lines: string[] = [];
   if ("stars" in now) lines.push(`цена ${show(was.stars)} → ${show(now.stars)} ⭐`);
   if ("baseRub" in now) lines.push(`цена ${show(was.baseRub)} → ${show(now.baseRub)} ₽`);
@@ -149,4 +154,48 @@ export function proposalProblem(draft: ProposalDraft, target: ChangeTarget): str
 export function beforeOf(target: ChangeTarget, after: Record<string, unknown>): Record<string, unknown> {
   const current = record(target.current);
   return Object.fromEntries(Object.keys(after).map((key) => [key, current[key]]));
+}
+
+/** Значение награды в цели: число или строка (лестницы); как его отдаёт сервер. */
+export function rewardValueOf(value: unknown): number | string | null {
+  const raw = record(value).value;
+  return typeof raw === "number" || typeof raw === "string" ? raw : null;
+}
+
+/** Форма заявки на награду: значение строкой — как его вводит человек. */
+export interface RewardDraft {
+  value: string;
+  reason: string;
+}
+
+export function emptyRewardDraft(target: ChangeTarget): RewardDraft {
+  const current = rewardValueOf(target.current);
+  return { value: current === null ? "" : String(current), reason: "" };
+}
+
+/** Значение в формате сервера: число, если награда числом, иначе строка; `null` — не разобралось. */
+function rewardTyped(draft: RewardDraft, target: ChangeTarget): number | string | null {
+  const current = rewardValueOf(target.current);
+  const text = draft.value.trim();
+  if (typeof current === "number") return WHOLE.test(text) ? Number(text) : null;
+  return text === "" ? null : text;
+}
+
+/** В заявку идёт только `value`; «было» сервер берёт сам. Невалидное значение не идёт — о нём скажет `rewardProblem`. */
+export function rewardAfter(draft: RewardDraft, target: ChangeTarget): Record<string, unknown> {
+  const value = rewardTyped(draft, target);
+  return value === null ? {} : { value };
+}
+
+/** Почему форму нельзя отправить; `null` — можно. Пределы и формат лестниц проверяет сервер и отвечает словами. */
+export function rewardProblem(draft: RewardDraft, target: ChangeTarget): string | null {
+  const current = rewardValueOf(target.current);
+  if (current === null) return "Значение награды не разобралось — обновите страницу";
+  const value = rewardTyped(draft, target);
+  if (value === null) return typeof current === "number" ? "Значение — целое число" : "Значение не заполнено: формат — в подсказке к награде";
+  if (value === current) return "Ничего не изменено: поменяйте значение";
+  const reason = draft.reason.trim();
+  if (reason === "") return "Укажите причину: по ней второй участник решит, подтверждать ли";
+  if (reason.length > REASON_MAX) return `Причина не длиннее ${String(REASON_MAX)} знаков`;
+  return null;
 }
