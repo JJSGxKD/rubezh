@@ -20,6 +20,8 @@ shared:
   - backend/api/test/admin-ledger.http.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
