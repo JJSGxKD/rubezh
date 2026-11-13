@@ -4,6 +4,7 @@ import { api } from "../services";
 import { Dialog } from "./dialog";
 import { CENTERED, SOURCE_TYPES, cropOf, encodeWithin, maxZoom, outputSide, panBy, sizeProblem, sourceProblem, zoomTo, type CropRect, type Framing } from "./image-crop";
 import { Button, Help, Notice } from "./kit";
+import { SOURCE_DEBOUNCE_MS, SOURCE_MESSAGES, shouldTakeFromSource, takeSourceImage, type SourceReading } from "./source-image";
 
 /**
  * Картинка из панели (docs/35-stage4-plan.md Р82, О42): выбрать файл,
@@ -11,17 +12,80 @@ import { Button, Help, Notice } from "./kit";
  * только проверяет. Результат видно сразу в том размере, в каком его увидит
  * игрок.
  *
+ * Источник (`source`) — у задания-подписки на канал, бота или Mini App
+ * (Р158): пока поле пусто и источник прошёл проверку формы, панель сама берёт
+ * его аватарку без окна кадрирования. Своя загруженная картинка сильнее;
+ * убранную руками панель не подставляет, пока не нажмут «Обновить с источника».
+ *
  * Своя подпись, а не `Field`: тот оборачивает поле в `<label>`, и нажатие на
  * подпись нажимало бы первую кнопку.
  */
-export function ImageField({ label, help, profile, value, onChange }: { label: string; help?: string; profile: ImageProfileId; value: string | null; onChange: (imageId: string | null) => void }) {
+type SourceState = { kind: "idle" } | { kind: "loading" } | { kind: "miss"; outcome: "none" | "failed"; message: string };
+
+export function ImageField({
+  label,
+  help,
+  profile,
+  value,
+  onChange,
+  source,
+}: {
+  label: string;
+  help?: string;
+  profile: ImageProfileId;
+  value: string | null;
+  onChange: (imageId: string | null) => void;
+  source?: SourceReading;
+}) {
   const input = useRef<HTMLInputElement>(null);
-  const [source, setSource] = useState<ImageBitmap | null>(null);
+  const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   // Загруженная, но ещё не сохранённая с заданием: без напоминания её легко
   // оставить в форме и решить, что игроки её уже видят.
   const [uploaded, setUploaded] = useState<string | null>(null);
   const { shownAs, minSide } = IMAGE_PROFILES[profile];
+
+  // Состояние подстановки с источника. Взятое асинхронно пишется через самую свежую `onChange`:
+  // пока шёл запрос, оператор мог править другие поля формы.
+  const [sourceState, setSourceState] = useState<SourceState>({ kind: "idle" });
+  const taken = useRef<{ imageId: string; key: string } | null>(null);
+  const attempted = useRef<string | null>(null);
+  const removed = useRef(false);
+  const run = useRef(0);
+  const latestChange = useRef(onChange);
+  latestChange.current = onChange;
+  const sourceKey = source?.state === "ready" ? source.key : null;
+
+  const take = async (reading: Extract<SourceReading, { state: "ready" }>): Promise<void> => {
+    run.current += 1;
+    const id = run.current;
+    attempted.current = reading.key;
+    setSourceState({ kind: "loading" });
+    const result = await takeSourceImage(api, reading.request);
+    if (id !== run.current) return;
+    if (!result.ok) return setSourceState({ kind: "miss", outcome: result.outcome, message: result.message });
+    taken.current = { imageId: result.imageId, key: reading.key };
+    removed.current = false;
+    setUploaded(result.imageId);
+    setSourceState({ kind: "idle" });
+    latestChange.current(result.imageId);
+  };
+
+  // Ввод затих — берём; уходим из формы или меняем источник — устаревший ответ отбрасывается.
+  useEffect(() => {
+    if (source?.state !== "ready") return;
+    const timer = setTimeout(() => {
+      if (shouldTakeFromSource({ reading: source, image: value, taken: taken.current, removedByHand: removed.current, attemptedKey: attempted.current })) void take(source);
+    }, SOURCE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // `source` целиком не нужен: его суть — ключ.
+  }, [sourceKey, value]);
+  useEffect(
+    () => () => {
+      run.current += 1;
+    },
+    [],
+  );
 
   const pick = async (file: File | undefined): Promise<void> => {
     // Тот же файл можно выбрать снова — после отмены обрезки.
@@ -29,24 +93,27 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
     if (file === undefined) return;
     const unfit = sourceProblem(file);
     if (unfit !== null) return setProblem(unfit);
-    let bitmap: ImageBitmap;
+    let opened: ImageBitmap;
     try {
-      bitmap = await createImageBitmap(file);
+      opened = await createImageBitmap(file);
     } catch {
       return setProblem("Не получилось открыть файл — он повреждён или это не PNG, JPEG и не WebP");
     }
-    const small = sizeProblem(bitmap, minSide);
+    const small = sizeProblem(opened, minSide);
     if (small !== null) {
-      bitmap.close();
+      opened.close();
       return setProblem(small);
     }
     setProblem(null);
-    setSource(bitmap);
+    setBitmap(opened);
   };
 
+  const sourceNoun = source === undefined || source.state === "none" ? null : source.kind === "channel" ? "канала" : "бота";
+  const fromSource = value !== null && value === taken.current?.imageId;
+
   const closeCrop = (): void => {
-    source?.close();
-    setSource(null);
+    bitmap?.close();
+    setBitmap(null);
   };
 
   return (
@@ -58,15 +125,41 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
       <div className="flex items-center gap-3">
         <Thumb imageId={value} />
         <div className="flex flex-col gap-1">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => input.current?.click()}>{value === null ? "Загрузить…" : "Заменить…"}</Button>
-            {value === null ? null : <Button onClick={() => onChange(null)}>Убрать</Button>}
+            {value === null ? null : (
+              <Button
+                onClick={() => {
+                  // Убрали руками — сама не вернётся до «Обновить с источника»; ответ, который ещё в пути, не нужен.
+                  removed.current = true;
+                  run.current += 1;
+                  setSourceState({ kind: "idle" });
+                  onChange(null);
+                }}
+              >
+                Убрать
+              </Button>
+            )}
+            {source?.state === "ready" ? (
+              <Button
+                disabled={sourceState.kind === "loading"}
+                onClick={() => {
+                  removed.current = false;
+                  void take(source);
+                }}
+              >
+                Обновить с источника
+              </Button>
+            ) : null}
           </div>
-          {value !== null && value === uploaded ? (
+          {value !== null && value === uploaded && !fromSource ? (
             <span className="text-xs text-warning">загружена — нажмите «Сохранить», чтобы игроки её увидели</span>
+          ) : fromSource && sourceNoun !== null ? (
+            <span className="text-xs text-warning">Картинка {sourceNoun} — нажмите «Сохранить», чтобы игроки её увидели</span>
           ) : (
             <span className="text-xs text-text-muted">{value === null ? "нет — у игрока значок" : shownAs}</span>
           )}
+          <SourceStatus state={sourceState} unsupported={source?.state === "unsupported" && value === null} onRetry={() => (source?.state === "ready" ? void take(source) : undefined)} />
         </div>
       </div>
       {problem === null ? null : (
@@ -75,13 +168,14 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
         </span>
       )}
       <input ref={input} type="file" accept={SOURCE_TYPES.join(",")} className="hidden" onChange={(event) => void pick(event.target.files?.[0])} />
-      {source === null ? null : (
+      {bitmap === null ? null : (
         <CropDialog
-          source={source}
+          source={bitmap}
           profile={profile}
           onClose={closeCrop}
           onUploaded={(imageId) => {
             setUploaded(imageId);
+            setSourceState({ kind: "idle" });
             onChange(imageId);
             closeCrop();
           }}
@@ -89,6 +183,26 @@ export function ImageField({ label, help, profile, value, onChange }: { label: s
       )}
     </div>
   );
+}
+
+/** Что с картинкой источника: идёт загрузка, у источника её нет, площадка не отдаёт, сбой с повтором. */
+function SourceStatus({ state, unsupported, onRetry }: { state: SourceState; unsupported: boolean; onRetry: () => void }) {
+  if (state.kind === "loading") {
+    return (
+      <span role="status" className="text-xs text-text-muted">
+        {SOURCE_MESSAGES.loading}
+      </span>
+    );
+  }
+  if (state.kind === "miss") {
+    return (
+      <span role={state.outcome === "failed" ? "alert" : "status"} className={`flex items-center gap-2 text-xs ${state.outcome === "failed" ? "text-danger" : "text-text-muted"}`}>
+        {state.message}
+        {state.outcome === "failed" ? <Button onClick={onRetry}>Повторить</Button> : null}
+      </span>
+    );
+  }
+  return unsupported ? <span className="text-xs text-text-muted">{SOURCE_MESSAGES.unsupported}</span> : null;
 }
 
 /** Сохранённая картинка в размере игрока; не загрузилась — так и сказано, а не пустой квадрат. */
