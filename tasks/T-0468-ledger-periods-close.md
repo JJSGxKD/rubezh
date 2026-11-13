@@ -17,6 +17,7 @@ shared:
   - backend/api/prisma/migrations/
   - backend/api/src/modules/ledger/ledger.module.ts
   - backend/api/src/modules/ledger/ledger.service.ts
+  - backend/api/src/modules/ledger/ledger.repository.ts
   - backend/api/src/modules/ledger/operations/operations.service.ts
   - backend/api/src/modules/admin/admin-ledger.controller.ts
   - backend/api/test/admin-ledger.http.test.ts
@@ -119,7 +120,9 @@ batch: 5
      проводки закрытия, `closed`; аудит `ledger.period.close`;
    - `reopen(owner, period, reason)` — проверка «выплат не было» через
      хук T-0469 (пока — всегда разрешено), сторно, `review`, аудит;
-   - замок в `LedgerService.post`: месяц проводки закрыт → 409.
+   - замок в `LedgerService.post`: месяц проводки закрыт → 409; проверку держит
+     вставка проводки под `FOR SHARE` в своей транзакции (`ledger.repository.ts`),
+     а не запрос до неё: иначе месяц закрылся бы между проверкой и вставкой.
 6. **Маршруты**: `GET /periods` (список месяцев со статусами),
    `GET /periods/:p` (чек-лист, отчёт), `POST /periods/:p/review`,
    `POST /periods/:p/close`, `POST /periods/:p/reopen` — право
