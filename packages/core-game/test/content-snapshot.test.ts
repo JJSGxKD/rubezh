@@ -212,6 +212,16 @@ describe("схема снимка", () => {
     expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
   });
 
+  it("старый снимок без полей шага огонька разбирается с умолчаниями (Р214, Р160)", () => {
+    const old = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { appearSec: 90, speed: 80 } } })) as unknown;
+    const parsed = contentSnapshotSchema.safeParse(old);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.secrets.wisp).toEqual({ appearSec: 90, speed: 80, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 });
+    // Лишнее поле в огоньке по-прежнему отказ: схема строгая.
+    const extra = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { ...SECRETS.wisp, hops: 3 } } })) as unknown;
+    expect(contentSnapshotSchema.safeParse(extra).success).toBe(false);
+  });
+
   it("подстройка в схеме: принимает умолчание, ловит лишнее поле и пропажу раздела", () => {
     const raw = (pressure: Record<string, unknown>): unknown => JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, pressure }));
     expect(contentSnapshotSchema.safeParse(raw({ ...PRESSURE })).success).toBe(true);
