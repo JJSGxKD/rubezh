@@ -36,6 +36,7 @@ shared:
   - backend/api/test/ledger-operations.integration.test.ts
   - backend/api/test/ledger-operations.test.ts
   - backend/api/test/route-permissions.test.ts
+  - backend/api/test/ledger-templates.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
