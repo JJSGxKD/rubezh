@@ -288,8 +288,11 @@ describe("способы подключения поставщиков (Р192, T
       expect(ws.transport).toEqual({ network: "ws" });
     });
 
-    it("без extra поля в транспорте нет", () => {
+    it("без extra поля в транспорте нет; пустой объект — то же самое, и ключ узла тот же", () => {
       expect(node(L.VLESS_XHTTP).transport).not.toHaveProperty("extra");
+      const empty = node(L.VLESS_XHTTP.replace("#XHTTP", "&extra=%7B%7D#XHTTP"));
+      expect(empty.transport).not.toHaveProperty("extra");
+      expect(empty.key).toBe(node(L.VLESS_XHTTP).key);
     });
   });
 
