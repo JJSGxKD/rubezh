@@ -26,19 +26,34 @@ export interface ImageProfile {
   maxSide: number;
   /** кто вправе загрузить — тот же, кто правит то, к чему картинка */
   permission: Permission;
+  /**
+   * Кто вправе смотреть картинку. Нет поля — открыта: её видит игрок по адресу `/api/v1/media`. Есть — закрыта:
+   * в панели показывается только с этим правом, игроку не отдаётся вовсе, а кеш браузера и CDN её не хранит.
+   * Снимок чека операции учёта — не для чужих глаз (tasks/T-0462).
+   */
+  viewPermission?: Permission;
 }
 
 /**
  * Профили картинок. Квадрат задания показывается в 44 px, на плотности 3 —
  * 132 точки: 96 ещё терпимо, а больше 512 — лишний вес без пользы глазу.
  * Квадрат слайда главной — 56 px, на плотности 3 — 168 точек.
+ * Снимок чека — фотография или скриншот документа, не квадрат: короткая сторона от 300 px, чтобы читались
+ * цифры, длинная до 1600 px; грузит тот, кто вносит операции, видит тот, кто видит учёт (tasks/T-0462).
  */
 export const IMAGE_PROFILES = {
   task: { title: "картинка задания", square: true, minSide: 96, maxSide: 512, permission: "tasks.edit" },
   home_slide: { title: "картинка слайда главной", square: true, minSide: 112, maxSide: 512, permission: "home.edit" },
+  finance_receipt: { title: "снимок чека", square: false, minSide: 300, maxSide: 1_600, permission: "finance.entry.create", viewPermission: "ledger.view" },
 } as const satisfies Record<string, ImageProfile>;
 
 export type ImageProfileId = keyof typeof IMAGE_PROFILES;
+
+/** Право на показ картинки профиля; `null` — профиль открытый. */
+export function viewPermissionOf(profileId: ImageProfileId): Permission | null {
+  const profile: ImageProfile = IMAGE_PROFILES[profileId];
+  return profile.viewPermission ?? null;
+}
 
 export const IMAGE_PROFILE_IDS = Object.keys(IMAGE_PROFILES) as [ImageProfileId, ...ImageProfileId[]];
 
