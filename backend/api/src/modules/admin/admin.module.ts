@@ -20,6 +20,7 @@ import { AdminPromoCodesController } from "./admin-promo-codes.controller.js";
 import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
 import { AdminCabinetController } from "./admin-cabinet.controller.js";
+import { AdminMyProjectController } from "./admin-my-project.controller.js";
 import { AdminStakeholdersController } from "./admin-stakeholders.controller.js";
 import { StakeholdersModule } from "../stakeholders/stakeholders.module.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
@@ -151,6 +152,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminPartnersController,
     AdminCabinetController,
     AdminStakeholdersController,
+    AdminMyProjectController,
     AdminRequestsController,
     AdminUiClicksController,
     AdminContentController,

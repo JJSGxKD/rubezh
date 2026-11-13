@@ -176,9 +176,9 @@ describe("«Мой проект» по HTTP", () => {
     const share = (accountId: string, fromMonth: string, shareBp: number) =>
       shares.rows.push({ accountId, fromMonth, shareBp, note: "договорённость", setBy: accountId, setByName: "Владелец", setAt: NOW });
 
-    /** Оплата в текущем месяце: 10 000 ⭐ и 300 ⭐ возврата — чистая выручка 9 700. */
+    /** Оплата в текущем месяце: оплачено 10 000 ⭐, из них 300 ⭐ возвращено — чистая выручка 9 700. */
     const revenue = () => {
-      months.rows.push({ chargedStars: 10_000, paidAt: START, refundedAt: null, product: "shop_item", platform: "telegram" });
+      months.rows.push({ chargedStars: 9_700, paidAt: START, refundedAt: null, product: "shop_item", platform: "telegram" });
       months.rows.push({ chargedStars: 300, paidAt: START, refundedAt: new Date(START.getTime() + DAY_MS), product: "vip", platform: "vk" });
     };
 
@@ -219,7 +219,7 @@ describe("«Мой проект» по HTTP", () => {
       { name: "Борис", sharePercent: 10, me: false },
     ]);
     expect(view.ownerSharePercent).toBe(65);
-    expect(view.project.revenue.stars).toEqual({ paid: 10_300, refunded: 300, net: 9_700 });
+    expect(view.project.revenue.stars).toEqual({ paid: 10_000, refunded: 300, net: 9_700 });
     expect(view.project.revenue.usd).toBe("126.10");
     expect(view.project.revenue.rub).toBe("11349.00");
     expect(view.project.draft).toEqual({ sharePercent: 25, usd: "31.52", rub: "2837.25", stars: 2_425 });
