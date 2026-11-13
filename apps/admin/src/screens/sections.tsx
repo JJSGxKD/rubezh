@@ -4,7 +4,7 @@ import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
-import { TasksScreen } from "./tasks/TasksScreen";
+import { TasksSection } from "./tasks/CustomerReport";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
@@ -59,7 +59,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
-  tasks: () => <TasksScreen />,
+  tasks: () => <TasksSection />,
   pass: () => <PassScreen />,
   balance: (id, tab) => <BalanceScreen id={id} tab={tab} />,
   rating: (id, tab) => <RatingScreen id={id} tab={tab} />,
