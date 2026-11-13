@@ -2,13 +2,18 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGua
 import { isCurrencyCode } from "@bh/fx";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
-import { RateLimitedError } from "../../common/domain-error.js";
+import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
 import { accountOf } from "../auth/auth.guard.js";
+import type { AccessTokenClaims } from "../auth/access-token.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { FEE_PERCENT_BP_MAX, NAME_MAX, type ArticleView, type CreateArticleInput, type CreatePlaceInput, type PlaceView, type UpdatePlaceInput } from "../ledger/ledger-chart.js";
 import { LedgerChartService } from "../ledger/ledger-chart.service.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger/ledger.service.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../ledger/ledger-view.js";
+import { OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
+import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
+import type { OperationFilter } from "../ledger/operations/operations.repository.js";
+import { OperationsService } from "../ledger/operations/operations.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -64,13 +69,38 @@ const PLACE_PROBLEM = "Некорректное место хранения: н�
 const ARTICLE_PROBLEM = "Некорректная статья: название до 128 знаков, вид — расход или поступление";
 const ID_PROBLEM = "Некорректный идентификатор";
 
+const operationIdSchema = z.string().uuid();
+const OPERATION_ID_PROBLEM = "Некорректный идентификатор операции";
+
+/** Список операций: статус и вид необязательны, страница — по курсору, как у журнала. */
+const operationsQuerySchema = z
+  .object({
+    status: z.preprocess(blankIsAbsent, z.enum(OPERATION_STATUSES).optional()),
+    kind: z.preprocess(blankIsAbsent, z.enum(OPERATION_KINDS).optional()),
+    cursor: z.preprocess(blankIsAbsent, z.string().regex(/^[A-Za-z0-9_-]{1,256}$/u).optional()),
+    limit: z.preprocess(blankIsAbsent, z.coerce.number().int().min(1).max(MAX_JOURNAL_LIMIT).default(DEFAULT_JOURNAL_LIMIT)),
+  })
+  .strict();
+
+/** Тело операции: ошибка схемы называет поле, а не просто «некорректно» — форма операции длинная. */
+function parseOperation(body: unknown): OperationInput {
+  const parsed = operationInputSchema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const field = parsed.error.issues[0]?.path.join(".") ?? "";
+  throw new ValidationError(field === "" ? "Некорректная операция: нужен вид (kind) и его поля" : `Некорректная операция: проверьте поле «${field}»`);
+}
+
 /**
  * Журнал учёта в панели (docs/37-accounting.md §9, Р219, tasks/T-0457): остатки по счетам и журнал проводок
- * с фильтрами и страницами по курсору. Только чтение: проводки пишет сервер, ручные операции — волна 3.
- * Видят владелец и финансы (`ledger.view`).
+ * с фильтрами и страницами по курсору. Проводки журнала по HTTP не пишутся: их пишет сервер, а человек вносит
+ * операции (ниже). Видят владелец и финансы (`ledger.view`).
  *
  * Места хранения и статьи (Р220, tasks/T-0460): справочник правится отсюда без релиза. Читает тот, кто видит
  * журнал (`ledger.view`), менять — `finance.entry.create`; порядок и аудит — `LedgerChartService`.
+ *
+ * Ручные операции (Р220, tasks/T-0461): перевод, обмен, расход, поступление, заём и исправление. Человек
+ * описывает событие, сервер собирает проводку; черновик правится, проведённая операция — нет. Список и показ —
+ * `ledger.view`, внесение, правка, проведение и удаление черновика — `finance.entry.create`.
  */
 @Controller("admin/ledger")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -78,6 +108,7 @@ export class AdminLedgerController {
   constructor(
     private readonly ledger: LedgerService,
     private readonly chart: LedgerChartService,
+    private readonly operations: OperationsService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -170,10 +201,60 @@ export class AdminLedgerController {
     return { data: { ok: true } };
   }
 
+  @Get("operations")
+  @RequirePermission("ledger.view")
+  async listOperations(@Query() query: unknown): Promise<{ data: OperationPage }> {
+    const input = parse(() => operationsQuerySchema.parse(query ?? {}), "Некорректные параметры списка операций: статус и вид — из списка, страница — от 1 до 100 записей");
+    const filter: OperationFilter = { status: input.status, kind: input.kind };
+    return { data: await this.operations.list(filter, input.cursor ?? null, input.limit) };
+  }
+
+  @Get("operations/:id")
+  @RequirePermission("ledger.view")
+  async operation(@Param("id") id: string): Promise<{ data: { operation: OperationView } }> {
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    return { data: { operation: await this.operations.get(operationId) } };
+  }
+
+  @Post("operations")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async createOperation(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    return { data: { operation: await this.operations.create(actor, parseOperation(body)) } };
+  }
+
+  @Patch("operations/:id")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async updateOperation(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    return { data: { operation: await this.operations.update(actor, operationId, parseOperation(body)) } };
+  }
+
+  @Post("operations/:id/submit")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async submitOperation(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    return { data: { operation: await this.operations.submit(actor, operationId) } };
+  }
+
+  @Post("operations/:id/discard")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async discardOperation(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.operations.discard(actor, parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM));
+    return { data: { ok: true } };
+  }
+
   /** Автор изменения; частота — как у прочих действий панели, по аккаунту. */
-  private async mutator(request: unknown): Promise<{ accountId: string }> {
+  private async mutator(request: unknown): Promise<AccessTokenClaims> {
     const actor = accountOf(request);
     if (!(await this.limiter.consume(ADMIN_LIMITS.mutate, actor.accountId))) throw new RateLimitedError("Слишком много действий — подождите минуту");
-    return { accountId: actor.accountId };
+    return actor;
   }
 }

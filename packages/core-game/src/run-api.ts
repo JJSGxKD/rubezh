@@ -417,7 +417,22 @@ export interface RunEvents {
    */
   ringEnded: { index: number; outcome: "broken" | "held" | "died"; guards: number; killed: number; lifeSec: number; elapsedSec: number };
   /**
-   * Осада стоящего (Р197, T-0392): за `leftSec` секунд до осады на земле загорелось кольцо радиуса
+   * Появление Карачуна закончилось (аналитика, `stalker_ended`, T-0427): растворился (`faded`), срезан
+   * строем стражей (`cut`) или игрок погиб (`died`). Приходит один раз на появление, в том числе когда
+   * он не успел выйти (`lifeSec` 0). `hits` — касаний, дошедших до игрока, `pushes` — ударов оружия,
+   * сдвинувших его, `relocations` — сколько раз его отбросили дальше `farDistance`.
+   */
+  stalkerEnded: {
+    index: number;
+    outcome: "faded" | "cut" | "died";
+    hits: number;
+    pushes: number;
+    relocations: number;
+    lifeSec: number;
+    elapsedSec: number;
+  };
+  /**
+   * Осада стоящего (Р197, T-0392): за `leftSec` секунд секунд до осады на земле загорелось кольцо радиуса
    * `radius` вокруг якоря `(x, y)`. Приходит один раз на отсчёт; ушёл из круга — осады не будет, события
    * об отмене нет: кольцо гаснет само.
    */
