@@ -24,6 +24,11 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
   - docs/27-design-system-and-app-shell.md
+  - packages/app-shell/src/index.tsx
+  - packages/app-shell/src/screens/home-showcase.tsx
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/design-system/tokens.css
+  - packages/app-shell/test/notifications.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

@@ -12,12 +12,11 @@ import {
   gainText,
   lockedVipCount,
   monthGenitive,
-  parsePassStart,
   pointsToNext,
 } from "../src/screens/meta/pass-rules";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { ANALYTICS_EVENTS } from "../src/state/analytics";
-import { useNavigation } from "../src/state/navigation";
+import { parsePassStart, useNavigation } from "../src/state/navigation";
 import {
   PASS_ALREADY_CLAIMED,
   PASS_TIER_NOT_REACHED,
@@ -201,7 +200,8 @@ describe("лента на экране", () => {
   });
 
   it("пока идёт забор, кнопки не нажимаются", () => {
-    expect(render(MID, null, "6:free")).toContain("disabled");
+    expect(render(MID, null, "6:free")).toContain('disabled=""');
+    expect(render(MID, null, null)).not.toContain('disabled=""');
   });
 });
 
