@@ -851,6 +851,39 @@ describe("OperationsService: черновик и проведение", () => {
     expect(ledger.balanceOf("bank.rub")).toBe(-150_000n);
   });
 
+  it("сбой между проводкой и отметкой: правка черновика отказывает 409, ввод прежний, а повторный submit доводит операцию до «проведена»", async () => {
+    const { service, repository, ledger, audit } = harness();
+    const created = await service.create(OWNER, VPS);
+    repository.failMarkPosted = 1;
+    await expect(service.submit(OWNER, created.operationId)).rejects.toThrow("соединение с базой потеряно");
+    const auditBefore = audit.length;
+
+    const edit = await domainError(service.update(OWNER, created.operationId, { ...VPS, amount: "2000" }));
+
+    expect(edit).toMatchObject({ code: "ledger_operation_not_draft", status: 409 });
+    expect(repository.rows.get(created.operationId)?.input).toMatchObject({ amount: "1500" });
+    expect(repository.rows.get(created.operationId)?.status).toBe("draft");
+    expect(audit).toHaveLength(auditBefore);
+
+    // Ввод остался тем, по которому записана проводка, поэтому повтор не упирается в «ключ занят другими строками».
+    const retry = await service.submit(OWNER, created.operationId);
+
+    expect(retry.status).toBe("posted");
+    expect(retry.input).toMatchObject({ amount: "1500" });
+    expect(ledger.entries.size).toBe(1);
+    expect(ledger.balanceOf("bank.rub")).toBe(-150_000n);
+  });
+
+  it("правка автором, у которого проводка уже записана, тоже отказывает: проверка проводки не зависит от того, кто правит", async () => {
+    const { service, repository } = harness();
+    const created = await service.create(FINANCE, VPS);
+    repository.failMarkPosted = 1;
+    await expect(service.submit(FINANCE, created.operationId)).rejects.toThrow();
+
+    expect((await domainError(service.update(FINANCE, created.operationId, { ...VPS, amount: "1" }))).code).toBe("ledger_operation_not_draft");
+    expect((await domainError(service.update(OWNER, created.operationId, { ...VPS, amount: "1" }))).code).toBe("ledger_operation_not_draft");
+  });
+
   it("два одновременных submit дают одну проводку и одну отметку", async () => {
     const { service, ledger, audit } = harness();
     const created = await service.create(OWNER, VPS);

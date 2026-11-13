@@ -106,11 +106,14 @@ export class OperationsService {
     return await this.get(operationId);
   }
 
-  /** Правка черновика целиком: тело заменяет ввод. Автор или владелец; проведённая операция не правится. */
+  /** Правка черновика целиком: тело заменяет ввод. Автор или владелец; проведённая операция и черновик с уже записанной проводкой не правятся. */
   async update(actor: OperationActor, operationId: string, raw: OperationInput): Promise<OperationView> {
     const stored = await this.stored(operationId);
     if (stored.status !== "draft") throw new LedgerOperationNotDraftError(operationId, stored.status);
     if (stored.createdBy !== actor.accountId && !(await this.isOwner(actor))) throw new ForbiddenError("Править черновик может его автор или владелец");
+    // Проводка уже записана, отметки ещё нет (сбой между ними): ввод теперь описывает проводку в журнале. Другой ввод
+    // под тем же ключом `op:<id>` вышел бы «ключ занят другими строками», и операция застряла бы навсегда.
+    if (await this.repository.entryExists(operationSourceKey(operationId))) throw new LedgerOperationNotDraftError(operationId, "posted");
 
     const prepared = await this.prepare(operationId, raw);
     const { fields, note, link } = splitInput(prepared.input);
