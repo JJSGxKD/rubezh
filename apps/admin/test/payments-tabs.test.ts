@@ -18,8 +18,10 @@ import {
   compensationProblem,
   discrepancyButtons,
   discrepancyLabel,
+  gemsProblem,
   jobKindLabel,
   lastRunLine,
+  manualGrantsLine,
   resolutionLabel,
   tabOfRoute,
 } from "../src/screens/payments/payments-tabs";
@@ -120,6 +122,23 @@ describe("проверка окна компенсации", () => {
   it("всё верно — можно", () => {
     expect(compensationProblem(1, 500, note)).toBeNull();
     expect(compensationProblem(500, 500, note)).toBeNull();
+  });
+});
+
+describe("сумма и ручные начисления", () => {
+  it("сумма без причины", () => {
+    expect(gemsProblem(300, 500)).toBeNull();
+    expect(gemsProblem(-1, 500)).toBe("Сумма — целое число от 1 до 500 самоцветов");
+  });
+
+  it("ручные начисления одной строкой", () => {
+    expect(manualGrantsLine([{ at: "2026-11-11T12:00:00.000Z", resource: "gems", amount: 100 }])).toBe("100 самоцветов 11.11");
+    expect(
+      manualGrantsLine([
+        { at: "2026-11-11T12:00:00.000Z", resource: "gems", amount: 1 },
+        { at: "2026-11-09T12:00:00.000Z", resource: "coins", amount: 50 },
+      ]),
+    ).toBe("1 самоцвет 11.11, 50 монеты 09.11");
   });
 });
 
