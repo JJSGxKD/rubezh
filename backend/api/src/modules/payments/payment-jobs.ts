@@ -142,7 +142,7 @@ export class PaymentJobs implements OnModuleInit {
     const failed = await readFailedJobs(this.queue, FAILED_LOOKUP_LIMIT, (reason) => this.log("warn", "payment_jobs_unreadable", { reason }));
     if (failed === null) throw new PurchaseActionUnavailableError(QUEUE_UNAVAILABLE);
     const job = failed.find((candidate) => candidate.jobId === jobId);
-    if (job === undefined) throw new PaymentJobNotFoundError();
+    if (job === undefined) throw await this.whyNotFailed(jobId);
 
     const purchase = await this.purchaseOf(job);
     if (purchase !== null) forbidOwnPurchase(this.config, actor, purchase);
@@ -163,6 +163,22 @@ export class PaymentJobs implements OnModuleInit {
     }
     this.log("log", "payment_job_retried", { jobId, kind: job.kind, purchaseId: job.purchaseId, actorAccountId: actor.accountId });
     return { jobId, purchaseId: job.purchaseId };
+  }
+
+  /**
+   * Задания нет среди брошенных: после повтора оно уходит из списка в очередь
+   * или выполняется, и повторное нажатие — не «не найдено», а «уже не брошено»
+   * (409). Не найдено — когда задания нет совсем. Задание брошено, но в прочитанные
+   * 1000 не попало, — тоже «не найдено»: вид и покупка неизвестны, «своя ли» не
+   * проверить, а вслепую повторять нельзя.
+   */
+  private async whyNotFailed(jobId: string): Promise<PaymentJobNotFoundError | PurchaseActionUnavailableError> {
+    try {
+      return (await this.queue.jobState(jobId)) === "not_failed" ? new PurchaseActionUnavailableError(ALREADY_NOT_FAILED) : new PaymentJobNotFoundError();
+    } catch (error: unknown) {
+      this.log("warn", "payment_job_state_unreadable", { jobId, reason: error instanceof Error ? error.message : "unknown" });
+      return new PurchaseActionUnavailableError(QUEUE_UNAVAILABLE);
+    }
   }
 
   /** Покупка задания. Нет покупки (внешний возврат, мусор в счёте, покупку удалили) — `null`: повтор от этого не зависит. */

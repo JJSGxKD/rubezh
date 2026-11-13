@@ -39,6 +39,8 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * Брошенное задание очередь хранит (`removeOnFail`): панель читает их
  * (`failedJobs`) и повторяет кнопкой (`retryFailed`) — тем же путём, что
  * команда на сервере, со свежей серией попыток (Р209, WP53, tasks/T-0431).
+ * `jobState` только читает: по нему панель отличает уже повторенное задание
+ * от несуществующего.
  *
  * Redis недоступен — задание выполняется сразу: оплата не должна ждать
  * очередь. Не вышло и так — ошибка в лог со всеми полями оплаты: по ним
@@ -180,6 +182,22 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
       this.log("warn", "failed_job_retry_refused", { jobId, reason: reasonOf(error) });
       return "not_failed";
     }
+  }
+
+  /**
+   * Где сейчас задание, без изменений. Брошенное задание после повтора уходит из
+   * списка брошенных, и по одному списку «повторено или выполнилось» не
+   * отличить от «нет совсем»: первое — 409, второе — 404. Очереди нет —
+   * `not_found`, как у повтора.
+   */
+  async jobState(jobId: string): Promise<"failed" | "not_failed" | "not_found"> {
+    if (this.queue === null) return "not_found";
+    const job = await withTimeout(this.queue.getJob(jobId), FAILED_TIMEOUT_MS, "задание оплаты");
+    if (job === undefined) return "not_found";
+    const state = await withTimeout(job.getState(), FAILED_TIMEOUT_MS, "состояние задания оплаты");
+    // «unknown» — задание убрали, пока его читали.
+    if (state === "unknown") return "not_found";
+    return state === "failed" ? "failed" : "not_failed";
   }
 
   /**
