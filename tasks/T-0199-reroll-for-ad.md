@@ -3,7 +3,7 @@ id: T-0199
 title: Переброс карточек за рекламу — один раз за забег, когда заряды кончились
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -58,6 +58,16 @@ shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/admin.test.ts
+  - packages/core-game/src/game/sim/create-world.ts
+  - packages/core-game/src/engine/run-engine.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
+  - apps/admin/src/api/review.ts
+  - docs/27-design-system-and-app-shell.md
+  - docs/32-balance.md
+  - docs/35-stage4-plan.md
+  - docs/39-retention-mechanics.md
 runner: any
 executor: sonnet-5.5
 effort: extra
