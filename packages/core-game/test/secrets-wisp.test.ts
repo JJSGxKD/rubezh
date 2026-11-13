@@ -369,7 +369,7 @@ describe("детерминизм огонька", () => {
     expect(track(7, 900)).toEqual(track(7, 900));
   });
 
-  it("другой seed — другая дорога (отклонение берётся из потока тайников)", () => {
+  it("другой seed — другая дорога (отклонение берётся из потока огонька)", () => {
     expect(track(7, 900)).not.toEqual(track(8, 900));
   });
 
@@ -393,18 +393,29 @@ describe("детерминизм огонька", () => {
     expect(world.secrets.rng.getState()).toBe(created);
   });
 
-  it("шаг тратит ровно одну выборку потока тайников", () => {
+  it("шаг тратит ровно одну выборку потока огонька, а поток тайников не трогает", () => {
     const world = appeared();
     const wisp = wispOf(world);
     const shrine = places(world)[0];
-    const before = world.secrets.rng.getState();
+    const secretsBefore = world.secrets.rng.getState();
+    const before = world.secrets.wispRng.getState();
     escort(world, shrine);
     run(world, 1);
     expect(wisp.flying).toBe(true);
-    const spent = world.secrets.rng.getState();
+    const spent = world.secrets.wispRng.getState();
     expect(spent).not.toBe(before);
     // Полёт и ожидание поток не трогают.
     run(world, 10);
-    expect(world.secrets.rng.getState()).toBe(spent);
+    expect(world.secrets.wispRng.getState()).toBe(spent);
+    // Раскладка, разлом и благословения капища не зависят от дороги игрока за огоньком.
+    expect(world.secrets.rng.getState()).toBe(secretsBefore);
+  });
+
+  it("поток огонька выведен от seed забега и не совпадает с потоком тайников", () => {
+    const first = setup(WISP_RULES, 3);
+    const second = setup(WISP_RULES, 3);
+    expect(first.secrets.wispRng.getState()).toBe(second.secrets.wispRng.getState());
+    expect(first.secrets.wispRng.getState()).not.toBe(first.secrets.rng.getState());
+    expect(setup(WISP_RULES, 4).secrets.wispRng.getState()).not.toBe(first.secrets.wispRng.getState());
   });
 });

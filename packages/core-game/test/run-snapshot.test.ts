@@ -517,6 +517,7 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
     const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { rng: unknown; sites: Record<string, unknown>[]; blessings: unknown; offer: unknown } };
     const broken = [
       { ...saved, secrets: { ...saved.secrets, rng: "много" } },
+      { ...saved, secrets: { ...saved.secrets, wispRng: "много" } },
       { ...saved, secrets: { ...saved.secrets, blessings: "fury" } },
       { ...saved, secrets: { ...saved.secrets, blessings: [1] } },
       { ...saved, secrets: { ...saved.secrets, offer: { siteIndex: 99, options: ["fury"] } } },
@@ -570,6 +571,7 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
       expect(wispOf(original.world).hops).toBeGreaterThan(1);
       expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
       expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+      expect(resumed.world.secrets.wispRng.getState()).toBe(original.world.secrets.wispRng.getState());
       expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
     });
 

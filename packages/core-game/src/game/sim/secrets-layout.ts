@@ -2,7 +2,7 @@ import type { SecretKind, SecretsDef } from "@bh/shared-types";
 import { drawWeighted } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import type { WorldBounds } from "./map-types";
-import type { Rng } from "./rng";
+import { createRng, deriveSeed, STREAM_SALT, type Rng } from "./rng";
 import { radiusOf } from "./secrets-rules";
 import { clampToBounds, type ElitePoolStep, type SecretSite, type SecretState } from "./world";
 
@@ -30,6 +30,8 @@ export function createSecretState(
   bounds: WorldBounds,
   elitePool: readonly ElitePoolStep[] = [],
 ): SecretState {
+  // Поток огонька выводится из начального состояния потока тайников — до первого броска раскладки.
+  const wispRng = createRng(deriveSeed(rng.getState(), STREAM_SALT.wisp));
   const sites: SecretSite[] = [];
   const gap = def.minGapUnits * unitScale;
 
@@ -57,6 +59,7 @@ export function createSecretState(
 
   return {
     rng,
+    wispRng,
     sites,
     elitePool,
     manualBlessing: false,

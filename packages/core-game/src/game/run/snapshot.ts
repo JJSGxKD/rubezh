@@ -89,6 +89,8 @@ interface SiteSnapshot {
  */
 interface SecretsSnapshot {
   rng: number;
+  /** поток отклонений огонька */
+  wispRng: number;
   sites: SiteSnapshot[];
   offer: { siteIndex: number; options: string[] } | null;
   blessings: string[];
@@ -222,6 +224,7 @@ function capturedSecrets(world: World): SecretsSnapshot {
   const secrets = world.secrets;
   return {
     rng: secrets.rng.getState(),
+    wispRng: secrets.wispRng.getState(),
     sites: secrets.sites.map((site) => ({
       kind: site.kind,
       x: site.x,
@@ -290,6 +293,7 @@ function restoreSecrets(world: World, input: unknown): void {
     };
   });
   const rng = asNumber(raw.rng, "secrets.rng");
+  const wispRng = asNumber(raw.wispRng, "secrets.wispRng");
   const blessings = asArray(raw.blessings, "secrets.blessings").map((id, i) => asString(id, `secrets.blessings[${i}]`));
   let offer: SecretsSnapshot["offer"] = null;
   if (raw.offer !== null) {
@@ -301,6 +305,7 @@ function restoreSecrets(world: World, input: unknown): void {
   }
 
   secrets.rng.setState(rng);
+  secrets.wispRng.setState(wispRng);
   parsed.forEach((state, i) => Object.assign(secrets.sites[i], state));
   secrets.offer = offer;
   // Журналы — для сцены: после восстановления она начинает с чистого, событие не повторяется.

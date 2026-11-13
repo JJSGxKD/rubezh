@@ -398,10 +398,10 @@ function updateWisp(world: World, index: number, tick: number, elapsedSec: numbe
     site.hopX = target.x - scratch.x * stopAt;
     site.hopY = target.y - scratch.y * stopAt;
   } else {
-    // Сторона чередуется по чётности шагов, величина — из потока тайников (одна выборка на шаг).
+    // Сторона чередуется по чётности шагов, величина — из потока огонька (одна выборка на шаг).
     const side = site.hops % 2 === 0 ? 1 : -1;
     const { swayMin, swayMax } = rules.wisp;
-    const sway = swayMin + world.secrets.rng.nextFloat() * (swayMax - swayMin);
+    const sway = swayMin + world.secrets.wispRng.nextFloat() * (swayMax - swayMin);
     const sideShift = side * sway * hop;
     // Перпендикуляр к направлению на цель — поворотом на 90 градусов, без тригонометрии.
     const bounds = world.config.bounds;
