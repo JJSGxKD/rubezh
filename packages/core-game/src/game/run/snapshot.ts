@@ -28,7 +28,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 17;
+export const WORLD_SNAPSHOT_VERSION = 18;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -74,6 +74,13 @@ interface SiteSnapshot {
   wave: { slot: number; type: number }[];
   /** разлом Нави: сколько тиков идёт волна — отсчёт срока */
   waveTicks: number;
+  /** огонёк: сделано шагов; чётность — сторона следующего отклонения */
+  hops: number;
+  /** огонёк: летит к точке шага */
+  flying: boolean;
+  /** огонёк: куда летит */
+  hopX: number;
+  hopY: number;
 }
 
 /**
@@ -83,6 +90,8 @@ interface SiteSnapshot {
  */
 interface SecretsSnapshot {
   rng: number;
+  /** поток отклонений огонька */
+  wispRng: number;
   sites: SiteSnapshot[];
   offer: { siteIndex: number; options: string[] } | null;
   blessings: string[];
@@ -227,6 +236,7 @@ function capturedSecrets(world: World): SecretsSnapshot {
   const secrets = world.secrets;
   return {
     rng: secrets.rng.getState(),
+    wispRng: secrets.wispRng.getState(),
     sites: secrets.sites.map((site) => ({
       kind: site.kind,
       x: site.x,
@@ -240,6 +250,10 @@ function capturedSecrets(world: World): SecretsSnapshot {
       opened: site.opened,
       wave: site.wave.map((entry) => ({ slot: entry.slot, type: entry.type })),
       waveTicks: site.waveTicks,
+      hops: site.hops,
+      flying: site.flying,
+      hopX: site.hopX,
+      hopY: site.hopY,
     })),
     offer: secrets.offer === null ? null : { siteIndex: secrets.offer.siteIndex, options: [...secrets.offer.options] },
     blessings: [...secrets.blessings],
@@ -284,9 +298,14 @@ function restoreSecrets(world: World, input: unknown): void {
         };
       }),
       waveTicks: asNumber(site.waveTicks, `secrets.sites[${i}].waveTicks`),
+      hops: asNumber(site.hops, `secrets.sites[${i}].hops`),
+      flying: asBoolean(site.flying, `secrets.sites[${i}].flying`),
+      hopX: asNumber(site.hopX, `secrets.sites[${i}].hopX`),
+      hopY: asNumber(site.hopY, `secrets.sites[${i}].hopY`),
     };
   });
   const rng = asNumber(raw.rng, "secrets.rng");
+  const wispRng = asNumber(raw.wispRng, "secrets.wispRng");
   const blessings = asArray(raw.blessings, "secrets.blessings").map((id, i) => asString(id, `secrets.blessings[${i}]`));
   let offer: SecretsSnapshot["offer"] = null;
   if (raw.offer !== null) {
@@ -298,6 +317,7 @@ function restoreSecrets(world: World, input: unknown): void {
   }
 
   secrets.rng.setState(rng);
+  secrets.wispRng.setState(wispRng);
   parsed.forEach((state, i) => Object.assign(secrets.sites[i], state));
   secrets.offer = offer;
   // Журналы — для сцены: после восстановления она начинает с чистого, событие не повторяется.
