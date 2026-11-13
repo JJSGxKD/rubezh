@@ -13,6 +13,11 @@ export interface EntryDraft {
   at: Date;
   memo: string;
   lines: EntryLine[];
+  /**
+   * Месяц, за который проводка («YYYY-MM»), если он отличается от месяца `at`:
+   * расход за ноябрь, оплаченный 2 декабря. Раньше месяца `at` — можно, позже — нет.
+   */
+  period?: string;
   /** sourceKey исходной проводки, если эта — сторно */
   reversalOf?: string;
 }
@@ -24,9 +29,12 @@ export type EntryProblem =
   | { kind: "zero_line"; accountId: string }
   | { kind: "unknown_account"; accountId: string }
   | { kind: "duplicate_account"; accountId: string }
-  | { kind: "unbalanced"; currency: string; sum: bigint };
+  | { kind: "unbalanced"; currency: string; sum: bigint }
+  | { kind: "bad_period"; period: string };
 
 export const MAX_SOURCE_KEY_LENGTH = 128;
+
+const PERIOD_RE = /^\d{4}-(?:0[1-9]|1[0-2])$/u;
 
 /**
  * Всё, что мешает записать проводку. Пустой список — проводку можно писать.
@@ -42,6 +50,9 @@ export function findEntryProblems(draft: EntryDraft, accounts: ReadonlyMap<strin
   }
   if (draft.lines.length < 2) {
     problems.push({ kind: "too_few_lines" });
+  }
+  if (draft.period !== undefined && !isValidPeriodFor(draft.period, draft.at)) {
+    problems.push({ kind: "bad_period", period: draft.period });
   }
 
   const seen = new Set<string>();
@@ -76,6 +87,27 @@ export function findEntryProblems(draft: EntryDraft, accounts: ReadonlyMap<strin
     }
   }
   return problems;
+}
+
+/**
+ * «YYYY-MM» и не позже месяца даты проводки. Строки «YYYY-MM» сравниваются
+ * как строки: при четырёх цифрах года и двух цифрах месяца порядок тот же, что
+ * у времени. Дата, которую не разобрать, сравнение пропускает: её ошибка — не
+ * ошибка месяца, а `periodOf` на ней бросит исключение, как и раньше.
+ */
+function isValidPeriodFor(period: string, at: Date): boolean {
+  if (!PERIOD_RE.test(period)) {
+    return false;
+  }
+  if (Number.isNaN(at.getTime())) {
+    return true;
+  }
+  return period <= periodOf(at);
+}
+
+/** Месяц проводки в отчёте: «за какой месяц», а если не указан — месяц даты. */
+export function periodOfEntry(draft: Pick<EntryDraft, "at" | "period">): string {
+  return draft.period ?? periodOf(draft.at);
 }
 
 /**

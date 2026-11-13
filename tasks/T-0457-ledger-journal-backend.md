@@ -3,8 +3,8 @@ id: T-0457
 title: Журнал учёта в базе — план счетов, запись проводок, остатки и журнал для панели
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0456]
@@ -18,6 +18,10 @@ zones:
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/package.json
+  - backend/api/tsconfig.json
+  - backend/api/Dockerfile
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - pnpm-lock.yaml
   - backend/api/src/app.module.ts
   - backend/api/src/modules/admin/admin.module.ts

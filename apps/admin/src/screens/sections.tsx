@@ -4,7 +4,7 @@ import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
-import { TasksScreen } from "./tasks/TasksScreen";
+import { TasksSection } from "./tasks/CustomerReport";
 import { DiagnosticsScreen } from "./diagnostics/DiagnosticsScreen";
 import { ExportsScreen } from "./exports/ExportsScreen";
 import { FunnelScreen } from "./funnel/FunnelScreen";
@@ -30,6 +30,7 @@ import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
 import { SecretsScreen } from "./secrets/SecretsScreen";
 import { SettingsScreen } from "./settings/SettingsScreen";
+import { StakeholdersScreen } from "./stakeholders/StakeholdersScreen";
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -47,6 +48,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
+  stakeholders: () => <StakeholdersScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
   csp: () => <CspReportsScreen />,
   requests: () => <RequestsScreen />,
@@ -59,7 +61,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   broadcasts: (id) => <BroadcastsScreen id={id} />,
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
-  tasks: () => <TasksScreen />,
+  tasks: () => <TasksSection />,
   pass: () => <PassScreen />,
   balance: (id, tab) => <BalanceScreen id={id} tab={tab} />,
   rating: (id, tab) => <RatingScreen id={id} tab={tab} />,

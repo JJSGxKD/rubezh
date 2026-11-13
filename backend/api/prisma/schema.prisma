@@ -3042,6 +3042,50 @@ model PurchaseCompensation {
   @@map("purchase_compensation")
 }
 
+// Заявки на правку с подтверждением второго участника (docs/19-content-admin.md §6, tasks/T-0309)
+
+/// Заявка на правку: один человек предлагает «было → стало» с причиной, другой с тем же правом
+/// подтверждает. Живёт 72 часа (`change-requests/change-request-types.ts`); новая заявка на ту же цель
+/// гасит прежнюю. `CHECK` в миграции: вид и статус — из списка; частичный уникальный индекс — одна
+/// живая заявка на пару «вид + цель» (Prisma частичные индексы не описывает). Строки не удаляются —
+/// по ним видно, кто и почему менял цену
+model ChangeRequest {
+  requestId String    @id @map("request_id") @db.Uuid
+  /// что правится: `sku_price` — товар магазина, `reward_setting` — награда (T-0310)
+  kind      String    @db.VarChar(24)
+  /// id товара или ключ настройки; без внешнего ключа — каталог и настройки в коде
+  target    String    @db.VarChar(64)
+  /// значения правимых полей на момент заявки — условие применения: цель всё ещё равна `before`
+  before    Json
+  after     Json
+  reason    String    @db.VarChar(200)
+  /// без внешнего ключа — заявка переживает аккаунт
+  author    String    @db.Uuid
+  /// `pending`, `approved`, `rejected`, `expired`, `superseded`
+  status    String    @db.VarChar(12)
+  /// кто решил; `null` — заявка закрылась сама (срок, новая заявка, цель изменилась)
+  decidedBy String?   @map("decided_by") @db.Uuid
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz(3)
+  createdAt DateTime  @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([kind, target, status])
+  @@map("change_request")
+}
+
+/// Правка товара магазина поверх каталога в коде (`shop/shop-overrides.ts`): только поля, которые
+/// разрешено править, — цена в звёздах и в рублях, самоцветы состава, значок, порядок. Кладётся только
+/// подтверждением заявки; итог проходит ту же схему товара, что и каталог. Без внешнего ключа — каталог в коде
+model ShopSkuOverride {
+  skuId  String   @id @map("sku_id") @db.VarChar(32)
+  fields Json
+  /// кто подтвердил последнюю правку
+  setBy  String   @map("set_by") @db.Uuid
+  setAt  DateTime @map("set_at") @db.Timestamptz(3)
+
+  @@map("shop_sku_override")
+}
+
 // Сверка оплат с выпиской площадки (Р209)
 
 /// Одна сверка выписки площадки: с какой позиции читали, до какой дочитали, сколько нашли. По `to_offset`
@@ -3125,4 +3169,71 @@ model StakeholderShare {
   @@unique([accountId, fromMonth])
   @@index([fromMonth])
   @@map("stakeholder_share")
+}
+
+// Журнал учёта: план счетов и проводки двойной записью (docs/37-accounting.md, Р219, tasks/T-0457)
+
+enum LedgerAccountType {
+  asset
+  revenue
+  expense
+  liability
+  equity
+}
+
+/// Счёт плана счетов: место хранения или статья в одной валюте. Начальный план вставляет миграция;
+/// счёт с проводками не удаляется и не переименовывается (`onDelete: Restrict`, триггер журнала).
+model LedgerAccount {
+  /// устойчивый ключ, «stars.bot.hold»
+  accountId  String            @id @map("account_id") @db.VarChar(64)
+  type       LedgerAccountType
+  /// код валюты из справочника ядра курсов
+  currency   String            @db.VarChar(16)
+  name       String            @db.VarChar(128)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
+
+  lines LedgerLine[]
+
+  @@map("ledger_account")
+}
+
+/// Проводка. Не правится и не удаляется — триггер в миграции; исправление — сторно (`reversal_of`).
+model LedgerEntry {
+  entryId    String   @id @map("entry_id") @db.Uuid
+  /// ключ идемпотентности источника: «purchase:<id>:paid»
+  sourceKey  String   @unique @map("source_key") @db.VarChar(128)
+  at         DateTime @db.Timestamptz(3)
+  /// «YYYY-MM» по UTC — из `at`
+  period     String   @db.Char(7)
+  memo       String   @db.VarChar(500)
+  /// сторно: entry_id исходной проводки; у исходной — не больше одного сторно
+  reversalOf String?  @unique @map("reversal_of") @db.Uuid
+  meta       Json?
+  /// кто записал; null — сервер (проводки из платежей). Внешнего ключа нет: журнал переживает аккаунты
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  original LedgerEntry? @relation("LedgerReversal", fields: [reversalOf], references: [entryId], onDelete: Restrict)
+  reversal LedgerEntry? @relation("LedgerReversal")
+  lines    LedgerLine[]
+
+  @@index([period])
+  @@index([at])
+  @@map("ledger_entry")
+}
+
+/// Строка проводки: сумма в минимальных единицах валюты счёта, дебет — плюс, кредит — минус; ноль база не пускает.
+model LedgerLine {
+  lineId    String @id @map("line_id") @db.Uuid
+  entryId   String @map("entry_id") @db.Uuid
+  accountId String @map("account_id") @db.VarChar(64)
+  amount    BigInt
+
+  entry   LedgerEntry   @relation(fields: [entryId], references: [entryId], onDelete: Restrict)
+  account LedgerAccount @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+
+  @@unique([entryId, accountId])
+  @@index([accountId, entryId])
+  @@map("ledger_line")
 }

@@ -14,9 +14,10 @@ import { DebugOverlay } from "./debug-overlay";
 import { orbiterRenderPoints } from "./orbiter-points";
 import { PickupRenderer } from "./pickups";
 import { SecretsRenderer } from "./secrets-look";
-import { ENEMY_LOOKS, enemyColor, enemyRim, ORBITER_LOOKS, orbiterLook, stageColor, stageCore, WORLD_COLORS, type EnemyRankLook } from "./looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, ORBITER_LOOKS, orbiterLook, stageColor, stageCore, UNKILLABLE_LOOK, WORLD_COLORS, type EnemyRankLook } from "./looks";
 import { PlayerRings } from "./player-rings";
-import { artFlashStart, NO_FLASH } from "./hit-flash";
+import { artFlashStart, HIT_FLASH_TICKS, hitFlashStyle, NO_FLASH } from "./hit-flash";
+import { StalkerLook, stalkerFadeAlpha } from "./stalker-look";
 import { HERO_MARK_RISE, keepsFill, MARK_RISE, StatusMarks } from "./status-marks";
 import { activePlayerStatus, activeStatus, playerStatusTone, STATUS_TONE, STATUS_TONE_COLORS, statusTone } from "./status-tones";
 import { Puddles } from "./puddles";
@@ -114,6 +115,10 @@ export class WorldRenderer {
   /** лужи врагов со следом на земле */
   private readonly puddles: Puddles;
   private readonly telegraphs: Telegraphs;
+  /** предвестие и провал неубиваемого: рисуются при любых настройках графики */
+  private readonly stalkerLook: StalkerLook;
+  /** индекс первой текстуры вспышки каймой: `flashTextureBase + тип`; у прочих типов — их обычная текстура */
+  private readonly flashTextureBase: number;
   /** граница «Очага» и молнии «Грозы» */
   private readonly weaponEffects: WeaponEffects;
   /** числа урона и вспышки гибели */
@@ -152,19 +157,33 @@ export class WorldRenderer {
     // середину ядро, поэтому одной текстуры на тип не хватает.
     this.stageCount = world.stages.length;
     world.enemyTypes.forEach((type, index) => {
-      // Опасное — с золотой каймой; у рядовых её нет. Толщина задана в игровых единицах.
-      const rim = enemyRim(rankOf(type));
+      // Опасное — с золотой каймой, неубиваемый — с лунной; у рядовых её нет. Толщина задана в игровых единицах.
+      const rim = enemyRim(rankOf(type), type.unkillable);
       for (let stage = 0; stage < this.stageCount; stage++) {
-        const key = `bh-enemy-${type.id}-s${String(stage)}`;
+        // Ступени неубиваемому не положены: он всегда нулевой, и тело остаётся чернью Нави на любой секунде.
+        const key = `bh-enemy-${type.id}-s${String(type.unkillable ? 0 : stage)}`;
         // Тени под врагом нет: на живом тесте запечённая тень смотрелась плохо.
         // Текстура ровно по размеру тела, тело в её центре, как у снарядов, поэтому
         // размер врага на экране и хитбокс прежние.
-        ensureShapeTexture(scene, key, type.radius, stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
-          core: stageCore(stage),
+        ensureShapeTexture(scene, key, type.radius, type.unkillable ? colorByType[index] : stageColor(colorByType[index], stage), ENEMY_LOOKS[type.pattern].shape, {
+          core: type.unkillable ? null : stageCore(stage),
           rim: rim === null ? null : { color: rim.color, width: rim.width * unitScale },
         });
         this.textureKeyByType.push(key);
       }
+    });
+    // Вспышка неубиваемого — кайма ярче, а не белая заливка: своя текстура, чтобы не рисовать в кадре.
+    this.flashTextureBase = this.textureKeyByType.length;
+    world.enemyTypes.forEach((type, index) => {
+      if (!type.unkillable) {
+        this.textureKeyByType.push(this.textureKeyByType[index * this.stageCount]);
+        return;
+      }
+      const key = `bh-enemy-${type.id}-flash`;
+      ensureShapeTexture(scene, key, type.radius, colorByType[index], ENEMY_LOOKS[type.pattern].shape, {
+        rim: { color: UNKILLABLE_LOOK.rimFlash.color, width: UNKILLABLE_LOOK.rimFlash.width * unitScale },
+      });
+      this.textureKeyByType.push(key);
     });
 
     const scale = world.config.unitScale;
@@ -190,6 +209,7 @@ export class WorldRenderer {
     }
 
     this.telegraphs = new Telegraphs(scene, world, this.layer);
+    this.stalkerLook = new StalkerLook(scene, world, this.layer);
     this.weaponEffects = new WeaponEffects(scene, world, this.layer);
     this.pickups = new PickupRenderer(scene, world, this.layer);
     // Тайники — на земле, под героем, врагами и подборами; порядок в режиме арта выставляет `applyArtMode`.
@@ -248,6 +268,7 @@ export class WorldRenderer {
     this.secrets.sync();
     this.puddles.sync();
     this.syncEnemies(t);
+    this.stalkerLook.sync(t);
     this.syncProjectiles(t);
     this.pickups.sync(t);
     this.syncOrbiters(t);
@@ -415,22 +436,28 @@ export class WorldRenderer {
       }
 
       const typeIndex = enemies.type[i];
+      const type = this.world.enemyTypes[typeIndex];
       const texture = typeIndex * this.stageCount + Math.min(enemies.stage[i], this.stageCount - 1);
       if (this.art.applyEnemy(sprite, i, texture, tick, enemies.vx[i], enemies.vy[i])) {
         this.enemySpriteType[i] = -1;
-      } else if (this.enemySpriteType[i] !== texture) {
-        sprite.setTexture(this.textureKeyByType[texture]);
-        this.enemySpriteType[i] = texture;
+      } else {
+        // Неубиваемый на попадании — та же фигура с яркой каймой (текстура вспышки), а не белая заливка.
+        const figure = type.unkillable && hitFlashStyle(true, tick - enemies.hitTick[i]) === "rim" ? this.flashTextureBase + typeIndex : texture;
+        if (this.enemySpriteType[i] !== figure) {
+          sprite.setTexture(this.textureKeyByType[figure]);
+          this.enemySpriteType[i] = figure;
+        }
       }
 
-      const type = this.world.enemyTypes[typeIndex];
       // Попадание важнее телеграфа: игрок должен видеть, что снаряд дошёл.
       // Тон состояния — ниже обоих: телеграф предупреждает об ударе, а
       // состояние только подсказывает, что с врагом.
       // У спрайта белая заливка — крупное белое пятно: вспышка короче, чем у
       // фигуры, и под сплошным огнём не перезапускается каждым ударом.
-      let flashing: boolean;
-      if (this.art.shows(i)) {
+      let flashing = false;
+      if (type.unkillable) {
+        // Белая заливка говорит «ранен», а он не ранен: вспышка — кайма ярче, она в текстуре выше.
+      } else if (this.art.shows(i)) {
         const start = artFlashStart(tick, enemies.hitTick[i], this.artFlashStart[i]);
         flashing = start !== null;
         if (start !== null) this.artFlashStart[i] = start;
@@ -439,20 +466,28 @@ export class WorldRenderer {
       }
       // Замерший не мигает телеграфом: его таймеры стоят, а мигание по тику
       // обещало бы удар, которого не будет.
-      let look = flashing
-        ? LOOK.hit
-        : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
-          ? frozenLook
-          : lookFor(type.pattern, enemies.phase[i], tick);
+      // Неубиваемый не краснеет, не белеет и не замерзает: знак читается всегда (Р205).
+      let look = type.unkillable
+        ? LOOK.normal
+        : flashing
+          ? LOOK.hit
+          : freezeLeft > 0 && isTimeFrozen(this.world, isBoss(type))
+            ? frozenLook
+            : lookFor(type.pattern, enemies.phase[i], tick);
       // У спрайта состояние — знаком над головой (status-marks.ts), заливкой —
       // только заморозка. Знак не зависит от вспышки попадания: иначе он
       // мигал бы на каждом ударе по горящему.
-      const mark = statusTones && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
-      if (look === LOOK.normal && statusTones) {
+      const mark = statusTones && !type.unkillable && this.art.shows(i) ? activeStatus(enemies, i) : STATUS_TONE.none;
+      if (look === LOOK.normal && statusTones && !type.unkillable) {
         if (!this.art.shows(i)) look = LOOK.status + statusTone(enemies, i, tick);
         else if (keepsFill(mark)) look = LOOK.status + mark;
       }
       this.applyLook(sprite, i, look, type.size);
+      if (type.unkillable) {
+        // Растворение — прозрачность тела; вид слота сбрасывается, чтобы следующий враг в нём не унаследовал её.
+        sprite.setAlpha(stalkerFadeAlpha(this.world));
+        this.enemySpriteLook[i] = LOOK_NONE;
+      }
       sprite.setVisible(true);
 
       const x = lerp(enemies.prevX[i], enemies.x[i], t);
@@ -787,8 +822,6 @@ const CORDON_FLASH_RADIUS_MUL = 2.4;
 /** Во сколько раз кольцо места внутреннего врага шире его тела. */
 const CORDON_INNER_RING_MUL = 2.2;
 
-/** Сколько тиков держится вспышка попадания — около двух десятых секунды. */
-const HIT_FLASH_TICKS = 7;
 /** Тон героя-спрайта на попадании и лечении — умножением, рисунок остаётся виден. */
 const HERO_HURT_TINT = 0xff8a8a;
 const HERO_HEAL_TINT = 0xb4ffb0;

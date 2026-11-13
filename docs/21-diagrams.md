@@ -55,6 +55,9 @@ erDiagram
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
     ACCOUNT ||--o{ STAKEHOLDER_SHARE : "доли участника проекта: по строке на месяц начала (Р217)"
     ACCOUNT ||--o{ STAKEHOLDER_SHARE : "назначил долю: владелец"
+    LEDGER_ACCOUNT ||--o{ LEDGER_LINE : "строки проводок по счёту (Р219)"
+    LEDGER_ENTRY ||--|{ LEDGER_LINE : "строки проводки: в каждой валюте сумма — ноль"
+    LEDGER_ENTRY |o--o| LEDGER_ENTRY : "сторно: ссылка на исходную, у исходной — не больше одного"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -1341,6 +1344,27 @@ erDiagram
         datetime credited_at "nullable: когда легло в кошелёк; пусто — повтор доначислит ту же сумму"
     }
 
+    CHANGE_REQUEST {
+        uuid request_id PK
+        string kind "sku_price, reward_setting (CHECK)"
+        string target "id товара или ключ настройки, БЕЗ внешнего ключа: каталог и настройки в коде"
+        jsonb before "значения правимых полей на момент заявки: цель всё ещё равна им — условие применения"
+        jsonb after "что станет: только изменяемые поля"
+        string reason "до 200 знаков, обязательна"
+        uuid author "без FK: заявка переживает аккаунт"
+        string status "pending, approved, rejected, expired, superseded (CHECK)"
+        uuid decided_by "nullable, без FK: кто подтвердил, отклонил или отозвал; пусто — закрылась сама"
+        datetime decided_at "nullable"
+        datetime created_at "срок жизни — 72 часа от него; частичный UNIQUE (kind, target) где status = pending"
+    }
+
+    SHOP_SKU_OVERRIDE {
+        string sku_id PK "товар каталога в коде, БЕЗ внешнего ключа"
+        jsonb fields "правка поверх каталога: stars, baseRub, contents.gems, badge, sort"
+        uuid set_by "без FK: кто подтвердил последнюю правку"
+        datetime set_at
+    }
+
     PAYMENT_RECONCILE_RUN {
         uuid run_id PK "одна сверка выписки площадки"
         string platform "площадка выписки"
@@ -1385,6 +1409,34 @@ erDiagram
         string note "причина, до 500 знаков: видят владелец и финансы, участнику не отдаётся"
         uuid set_by FK "Restrict: кто назначил (владелец)"
         datetime set_at
+    }
+
+    LEDGER_ACCOUNT {
+        string account_id PK "устойчивый ключ: stars.bot.hold, revenue.shop.telegram"
+        enum type "asset | revenue | expense | liability | equity"
+        string currency "код из справочника ядра курсов: XTR, GRAM, USDT, RUB"
+        string name "подпись для панели"
+        datetime created_at "порядок показа внутри типа"
+        datetime archived_at "nullable: счёт скрыт, строки остаются"
+    }
+
+    LEDGER_ENTRY {
+        uuid entry_id PK
+        string source_key UK "ключ идемпотентности: purchase:<id>:paid; до 128 знаков"
+        datetime at "когда случилось"
+        string period "ГГГГ-ММ по UTC, из at; CHECK по формату"
+        string memo "до 500 знаков"
+        uuid reversal_of UK,FK "nullable, Restrict: сторно — entry_id исходной; у исходной не больше одного"
+        json meta "nullable: плоское примечание для разбора"
+        uuid created_by "nullable: кто записал; пусто — сервер; без внешнего ключа, журнал переживает аккаунты"
+        datetime created_at
+    }
+
+    LEDGER_LINE {
+        uuid line_id PK
+        uuid entry_id FK "Restrict"
+        string account_id FK "Restrict"
+        bigint amount "минимальные единицы валюты счёта, дебет плюс, кредит минус; CHECK: не ноль; (entry_id, account_id) уникальны"
     }
 ```
 
@@ -1753,6 +1805,17 @@ erDiagram
   удаляются: по ним видно, когда и по какой цене продавали. Пределы скидки
   и порядок срока держит и база; пересечение и отдых между акциями товара —
   сервис, проверкой и вставкой под блокировкой товара.
+- **`CHANGE_REQUEST`, `SHOP_SKU_OVERRIDE` — цены с подтверждением второго
+  участника** (`19-content-admin.md` §6, T-0309): цена товара — каталог в коде,
+  панель кладёт правку поверх него, но только заявкой. Заявка — «было → стало» с
+  причиной; подтверждает другой человек с правом `sku.price.edit`, и в одной
+  транзакции под блокировкой цели правка попадает в `SHOP_SKU_OVERRIDE`, если
+  цель всё ещё равна `before`. Живая заявка на цель одна — частичный уникальный
+  индекс: новая гасит прежнюю (`superseded`), через 72 часа заявка `expired`.
+  Связей нет: товар — каталог в коде, люди — без внешнего ключа. Строки заявок не
+  удаляются: по ним видно, кто и почему менял цену; вайп их не трогает. Покупка,
+  начатая до правки, оплачивается по цене счёта (`purchase.price_stars`), а не по
+  новой. Поток — §4.41.
 - **`PROMO_*` — промокоды** (`35-stage4-plan.md`, WP41, Р74): кампания —
   то, что заводит команда; код — то, что вводит игрок; активация — один
   игрок в одной кампании, первичным ключом, поэтому второй код той же пачки
@@ -1894,6 +1957,19 @@ erDiagram
   — доля владельца, строки у неё нет. Снятие роли `stakeholder` доли не
   стирает. Изменение — в журнал аудита (`stakeholders.share.set`). При
   вайпе таблица остаётся: это решения владельца о деньгах.
+- **`LEDGER_ACCOUNT`, `LEDGER_ENTRY`, `LEDGER_LINE` — журнал учёта** (Р219,
+  T-0457; `37-accounting.md` §2–§3). Проводка — запись и две и больше строк,
+  которые ложатся одной транзакцией; в каждой валюте сумма строк ноль — это
+  проверка ядра `@bh/ledger` до записи, а не ограничение базы. Идемпотентность
+  держит уникальный `source_key`: повтор с теми же строками отдаёт ту же
+  проводку, с другими — отказ `ledger_source_conflict`. **Журнал не правится:**
+  триггеры `BEFORE UPDATE OR DELETE` и `BEFORE TRUNCATE` на `ledger_entry` и
+  `ledger_line` отвечают «Журнал учёта не правится — исправление сторно», а
+  исправление — новая проводка с `reversal_of` (уникален: сторно у проводки
+  одно). Счёт с проводками не удаляется и не переименовывается: внешние ключи
+  `Restrict`, а смена `account_id` — это `UPDATE` строк. Начальный план счетов
+  вставляет миграция (`37-accounting.md` §3). `created_by` без внешнего ключа,
+  как журнал аудита. При вайпе таблицы остаются.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -2260,7 +2336,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
-    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — T-0457"]
+    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — модуль бэкенда"]
     PRK["packages/promo-kit<br/>модель промо-материала: форматы, слои, подстановка,<br/>правила правки партнёром: ядро без игры, Nest, Prisma и Fabric"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
@@ -2281,6 +2357,7 @@ flowchart TD
     API --> ST
     API --> FX
     API --> PK
+    API --> LG
     SH --> DT
     ADM --> DT
 ```
@@ -2310,8 +2387,9 @@ flowchart TD
   (`dist`), тесты и dev-запуск — исходником;
 - любых стрелок **из** `ledger` — ядро учёта переходит в другие проекты и не
   знает ни об игре, ни о Nest, ни о Prisma, ни о справочнике валют
-  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` появится с журналом
-  в базе (T-0457).
+  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` — журнал учёта в
+  базе (T-0457): бэкенд берёт ядро собранным (`dist`), как `fx`, а проводки и
+  таблицы живут в его модуле `modules/ledger`.
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -2458,6 +2536,7 @@ flowchart LR
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
+        LEDGER["ledger<br/>журнал учёта вокруг packages/ledger: план счетов,<br/>проводки двойной записью, ключ источника,<br/>остатки и журнал для панели, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
@@ -2636,6 +2715,8 @@ flowchart LR
     ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
     ADMINAPI -. карточка: кошелёк .-> WALLET
     ADMINAPI -. курсы, заданные курсы .-> FXM
+    ADMINAPI -. "остатки и журнал, право ledger.view" .-> LEDGER
+    LEDGER --> PG
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
     ADMINAPI -. "настройки, право settings.edit" .-> SETTINGS
@@ -5336,6 +5417,75 @@ sequenceDiagram
   его закрывает «Разобрано» (T-0434).
 - **Само закрывается**, если при следующей сверке условие пропало: оплата
   записалась, возврат отмечен, оплата нашлась в выписке (`resolution = matched`).
+
+### 4.42 Правка цены заявкой с подтверждением второго участника (этап 4, реализовано)
+
+Цена товара — каталог в коде, правка команды ложится поверх него (`19-content-admin.md`
+§6, `29-admin-panel.md` §5.8, `tasks/T-0309`). Предлагает один, подтверждает другой.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Автор (панель)
+    participant C as AdminChangeRequestsController
+    participant S as ChangeRequestsService
+    participant K as SkuPriceKind
+    participant D as Postgres (change_request, shop_sku_override)
+    participant N as Лента и чат админов
+    participant B as Второй участник (панель)
+    participant V as ShopService (витрина и счета)
+    participant J as Журнал действий
+
+    A->>C: POST admin/change-requests {kind, target, after, reason}
+    C->>S: propose(актёр, тело)
+    Note over S: право sku.price.edit, схема тела, причина до 200 знаков
+    S->>D: транзакция под блокировкой пары вид+цель
+    S->>K: prepare — было из каталога с действующей правкой, схема товара
+    alt не по схеме: цена 0, лишнее поле, ничего не меняется
+        K-->>A: 422 change_request_value_invalid
+    else
+        S->>D: прежняя живая заявка → superseded или expired, новая → pending
+        S->>J: change_request.create
+        S->>N: строка ленты участникам с правом, кроме автора, и сообщение в общий чат
+        S-->>A: 201 заявка
+    end
+
+    B->>C: POST admin/change-requests/:id/approve
+    C->>S: approve(актёр, заявка)
+    alt решает автор
+        S-->>B: 403 change_request_own
+    else
+        S->>D: транзакция под блокировкой цели, заявка уже не pending → 409 closed
+        alt прошло 72 часа
+            S->>D: заявка → expired
+            S-->>B: 409 change_request_expired
+        else
+            S->>K: current — цель всё ещё равна было
+            alt цель изменилась
+                S->>D: заявка → superseded
+                S-->>B: 409 change_request_stale
+            else
+                S->>D: заявка → approved, upsert shop_sku_override, одной транзакцией
+                S->>J: change_request.approve и change_request.apply
+                S->>V: сбросить кэш правок реплики
+                S-->>B: 201 заявка approved
+            end
+        end
+    end
+
+    Note over V,D: покупка до правки остаётся по цене счёта, новые счета и витрина берут новую
+```
+
+- **Блокировка — на пару «вид + цель».** Две заявки на один товар и два подтверждения
+  одной заявки выстраиваются в очередь; частичный уникальный индекс держит «одна
+  живая заявка на цель» и под гонкой.
+- **Закрывается заявка до записи правки**, обе — в одной транзакции: проход срока
+  (`expired`) не может опередить применение, а упавшая запись откатывает и заявку.
+- **Правка и каталог.** Витрина, счёт и выдача берут товар из `ShopOverrides`:
+  каталог в коде плюс правка, итог проходит `shopSkuSchema`; битая правка
+  пропускается с записью в лог. Кэш реплики — 10 секунд.
+- **Уведомление не блокирует решение:** сбой ленты или чата — предупреждение в логе,
+  заявка уже записана.
 
 ## 5. Топология развёртывания
 

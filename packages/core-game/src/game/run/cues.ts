@@ -25,6 +25,7 @@ export class CueTracker {
   private eliteKills: number;
   private xp: number;
   private elitesAlive: number;
+  private stalkerHits: number;
   private readonly lastCooldown: number[] = [];
   private readonly enemyAlive: Uint8Array;
   private readonly enemyType: Uint8Array;
@@ -39,6 +40,7 @@ export class CueTracker {
     this.kills = world.stats.enemiesKilled;
     this.eliteKills = countEliteKills(world);
     this.xp = world.stats.xpCollected;
+    this.stalkerHits = world.stalker.hits;
     this.elitesAlive = this.scanEnemies(null);
     this.rememberCooldowns();
   }
@@ -59,6 +61,7 @@ export class CueTracker {
       // Удар, погашенный щитом, — всё равно удар: игрок должен его почувствовать.
       if (kind === SIM_EVENT.playerHit || kind === SIM_EVENT.shield) cues.playerHit++;
       else if (kind === SIM_EVENT.ward) cues.ward = (cues.ward ?? 0) + 1;
+      else if (kind === SIM_EVENT.stalkerOmen) cues.stalkerOmens = (cues.stalkerOmens ?? 0) + 1;
       else if (kind === SIM_EVENT.heal) cues.heal++;
       else if (kind === SIM_EVENT.magnet) cues.magnet++;
       else if (kind === SIM_EVENT.dynamite) cues.dynamite++;
@@ -81,6 +84,14 @@ export class CueTracker {
       any = true;
     }
     this.kills = kills;
+
+    // Счётчик касаний сбрасывается с новым появлением: падение — это начало отсчёта заново.
+    const stalkerHits = world.stalker.hits;
+    if (stalkerHits !== this.stalkerHits) {
+      cues.stalkerTouches = stalkerHits > this.stalkerHits ? stalkerHits - this.stalkerHits : stalkerHits;
+      this.stalkerHits = stalkerHits;
+    }
+    if ((cues.stalkerOmens ?? 0) > 0 || (cues.stalkerTouches ?? 0) > 0) any = true;
 
     const eliteKills = countEliteKills(world);
     if (eliteKills > this.eliteKills) {
@@ -172,6 +183,8 @@ function emptyCues(): RunCues {
     dynamite: 0,
     freeze: 0,
     ward: 0,
+    stalkerOmens: 0,
+    stalkerTouches: 0,
     explosions: 0,
     explosionsNear: 0,
     strikes: 0,
@@ -194,6 +207,8 @@ function resetCues(cues: RunCues): void {
   cues.dynamite = 0;
   cues.freeze = 0;
   cues.ward = 0;
+  cues.stalkerOmens = 0;
+  cues.stalkerTouches = 0;
   cues.explosions = 0;
   cues.explosionsNear = 0;
   cues.strikes = 0;

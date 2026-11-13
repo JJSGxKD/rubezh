@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BOOSTS, CONTENT_SNAPSHOT, DROPS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { BOOSTS, CONTENT_SNAPSHOT, DROPS, ENEMIES, ENEMY_LOOKS, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { RUBEZH_REWARD_MUL } from "@bh/shared-types";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
@@ -23,7 +23,7 @@ import {
 } from "../src/screens/guide/guide-data";
 import { TrailLine } from "../src/screens/guide/elements";
 import { GuideScreen } from "../src/screens/guide/GuideScreen";
-import { EnemyScene, PickupIcon } from "../src/screens/guide/scenes";
+import { EnemyScene, PickupIcon, WorldShape } from "../src/screens/guide/scenes";
 
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
@@ -75,6 +75,13 @@ describe("гайдбук", () => {
     expect(markup).toContain(`Боссы стоят ${bossSeconds} с`);
     expect(hasTranslation("guide.pickup.freeze.name")).toBe(true);
     expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
+  });
+
+  it("рисует «капюшон» Карачуна: та же фигура и цвет тела, что на канве", () => {
+    const markup = renderToStaticMarkup(createElement("svg", null, createElement(WorldShape, { shape: "hood", color: ENEMY_LOOKS.stalker.color, r: 16 })));
+    expect(ENEMY_LOOKS.stalker.shape).toBe("hood");
+    expect(markup).toContain("<polygon");
+    expect(markup).toContain(`fill="#${ENEMY_LOOKS.stalker.color.toString(16).padStart(6, "0")}"`);
   });
 
   it("не держит в словарях ключей удалённых огонька, кастера и их паттернов", () => {
