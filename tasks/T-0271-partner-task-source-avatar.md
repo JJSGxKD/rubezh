@@ -3,7 +3,7 @@ id: T-0271
 title: Картинка партнёрского задания — аватар канала, бота или Mini App берётся с источника сам
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -26,6 +26,11 @@ shared:
   - apps/admin/src/screens/tasks/TasksScreen.tsx
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
+  - apps/admin/src/api/proxies.ts
+  - backend/api/test/outbound.test.ts
+  - docs/21-diagrams.md
+  - docs/30-configuration-map.md
+  - docs/35-stage4-plan.md
 runner: any
 executor: sonnet-5.5
 effort: high
