@@ -4,6 +4,7 @@ import { addPassive, addWeapon, passiveSlotOf, weaponSlotOf } from "../progressi
 import { killEnemy } from "../sim/combat";
 import { createDirection, ringDirection } from "../sim/directions";
 import { spawnGem } from "../sim/gems";
+import { summonStalker } from "../sim/stalker";
 import { PICKUP_KIND, spawnPickup } from "../sim/pickups";
 import { clampToBounds, despawnEnemy, spawnEnemy, TICK_SEC, type World } from "../sim/world";
 
@@ -52,6 +53,8 @@ export function applyDevCommand(world: World, command: RunDevCommand): DevComman
       return cheat(true);
     case "jumpToMinute":
       return cheat(jumpToMinute(world, command.minute));
+    case "summonStalker":
+      return cheat(summonStalker(world));
     case "stepTicks":
       // Шаг исполняет сцена: ей нужен спавнер и рендер, а миру — только ввод.
       return { applied: false, cheat: false };

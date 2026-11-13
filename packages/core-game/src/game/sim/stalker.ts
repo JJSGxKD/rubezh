@@ -221,6 +221,21 @@ function startOmen(world: World, appear: StalkerAppearDef): void {
   pushOmenEvent(world, appear);
 }
 
+/**
+ * Команда разработчика «призвать Карачуна» (стенд эффектов, tasks/T-0425): начать предвестие сейчас же, в
+ * обход отметки, паузы и блокировок (босс, строй, разлом). Идущее появление не перебивает; нет правил в мире,
+ * тела или игрока — отказ. Поток случайности тратится как при обычном предвестии: направление и длина
+ * погони бросаются из него же, поэтому команда доступна только в забеге разработчика.
+ */
+export function summonStalker(world: World): boolean {
+  const state = world.stalker;
+  const appear = state.appear;
+  if (appear === null || world.stalkerBody.typeIndex < 0 || !world.player.alive) return false;
+  if (state.phase === "omen" || state.phase === "chase" || state.phase === "fading") return false;
+  startOmen(world, appear);
+  return true;
+}
+
 function stepWaiting(world: World, appear: StalkerAppearDef): void {
   const state = world.stalker;
   if (world.stats.tick < state.nextOmenTick) return;
