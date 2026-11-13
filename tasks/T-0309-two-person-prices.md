@@ -3,7 +3,7 @@ id: T-0309
 title: Цены товаров в панели с подтверждением второго участника — заявка на правку, подтверждает другой человек с правом, правка ложится поверх каталога в коде
 epic: E7
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -24,11 +24,16 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - backend/api/src/modules/shop/shop-catalog.ts
   - backend/api/src/modules/shop/shop.service.ts
+  - backend/api/src/modules/shop/shop.module.ts
   - backend/api/src/modules/roles/permissions.ts
   - backend/api/src/modules/notifications/notification-kinds.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
   - apps/admin/src/screens/balance/BalanceScreen.tsx
+  - apps/admin/src/screens/balance/BalanceWorkspace.tsx
+  - packages/app-shell/src/screens/meta/notifications.tsx
+  - packages/app-shell/src/i18n/ru-account.json
+  - packages/app-shell/test/notifications.test.ts
   - docs/19-content-admin.md
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
