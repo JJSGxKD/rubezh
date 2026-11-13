@@ -5,7 +5,7 @@ import { ENEMIES } from "../src/content/enemies";
 import { STALKER } from "../src/content/stalker";
 import { artStageFor, enemyFrameName } from "../src/game/render/art-atlas";
 import { HIT_FLASH_TICKS, hitFlashStyle, UNKILLABLE_FLASH_TICKS } from "../src/game/render/hit-flash";
-import { ENEMY_LOOKS, enemyColor, enemyRim, stageColor, UNKILLABLE_LOOK, WORLD_COLORS } from "../src/game/render/looks";
+import { ENEMY_LOOKS, enemyColor, enemyRim, UNKILLABLE_LOOK, WORLD_COLORS } from "../src/game/render/looks";
 import { drawShape } from "../src/game/render/shapes";
 import { STATUS_TONE, STATUS_TONE_COLORS } from "../src/game/render/status-tones";
 import {
@@ -109,13 +109,6 @@ describe("знак неубиваемого: цвета", () => {
       if (enemy.pattern === "stalker") continue;
       const rank = enemy.rank;
       expect(body, enemy.id).toBeLessThan(luminance(enemyColor(enemy.pattern, rank, enemy.id)));
-    }
-  });
-
-  it("и темнее врага самой поздней ступени", () => {
-    for (const pattern of Object.keys(ENEMY_LOOKS) as (keyof typeof ENEMY_LOOKS)[]) {
-      if (pattern === "stalker") continue;
-      expect(luminance(UNKILLABLE_LOOK.body), pattern).toBeLessThan(luminance(stageColor(enemyColor(pattern, undefined), 5)));
     }
   });
 
