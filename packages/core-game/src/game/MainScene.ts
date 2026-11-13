@@ -250,27 +250,19 @@ export class MainScene extends Phaser.Scene {
       game: this.game,
       unitScale: data.unitScale,
       renderCapFps: data.renderCapFps ?? null,
-      recording:
-        data.recordRun === true
-          ? {
-              reportId: createUuid(),
-              runId: this.runId,
-              // Метка начала — единственное обращение к часам ради записи; в
-              // симуляции часов нет и быть не может.
-              startedAt: new Date().toISOString(),
-              seed: this.seed,
-              mapId: world.mapId,
-              difficultyId: world.difficultyLevel.id,
-              startingWeaponId: this.startingWeaponId(),
-              ...(world.mode === "endless" ? {} : { mode: world.mode }),
-              contentHash: this.contentHash,
-              unitScale: data.unitScale,
-              // Продолженный забег не повторить с начала, а в забеге
-              // разработчика читы и команды в лог не пишутся.
-              replayBlocker: resume !== undefined ? "resumed" : data.dev !== undefined ? "dev" : null,
-              ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
-            }
-          : null,
+      // Запись для проверки идёт у каждого забега; полная запись — по переключателю.
+      recorder: {
+        world,
+        runId: this.runId,
+        seed: this.seed,
+        contentHash: this.contentHash,
+        startingWeaponId: this.startingWeaponId(),
+        unitScale: data.unitScale,
+        ...(data.dev === undefined ? {} : { dev: true }),
+        ...(resume === undefined ? {} : { resume }),
+        // Метка начала — единственное обращение к часам ради записи; в симуляции часов нет и быть не может.
+        ...(data.recordRun === true ? { full: { reportId: createUuid(), startedAt: new Date().toISOString() } } : {}),
+      },
     });
     this.probe = probe;
 
@@ -621,6 +613,7 @@ export class MainScene extends Phaser.Scene {
     // где он ещё жив, — второй шанс без второго шанса.
     if (!this.ready || this.phase === "dead" || this.phase === "downed") return null;
     const world = this.world;
+    const proof = this.probe.proofDraft(world);
     return {
       format: RUN_SNAPSHOT_FORMAT,
       contentHash: this.contentHash,
@@ -642,6 +635,8 @@ export class MainScene extends Phaser.Scene {
       ...(this.cheatsUsed ? { cheats: true } : {}),
       ...(this.sceneData.dev === undefined ? {} : { dev: true }),
       ...(isEmptyLoadout(world.runLoadout) ? {} : { loadout: world.runLoadout }),
+      // Запись для проверки на этот момент: продолжение дописывает её, а не начинает новую.
+      ...(proof === null ? {} : { proof }),
     };
   }
 

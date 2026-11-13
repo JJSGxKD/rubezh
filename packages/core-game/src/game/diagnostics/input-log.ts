@@ -99,38 +99,82 @@ export class InputLogWriter {
     };
   }
 
+  /**
+   * Лог на этот момент, писатель не меняется: забег продолжает писать, а снимок
+   * прерванного забега получает то, что было записано к снимку (запись для проверки
+   * переживает продолжение). Незакрытая серия кодируется во временной копии.
+   */
+  snapshot(): EncodedInputLog {
+    if (this.overflowed) return { encoding: INPUT_LOG_ENCODING, ticks: this.ticks, data: "", truncated: true };
+    const copy = new Uint8Array(this.length + MAX_TOKEN_BYTES);
+    copy.set(this.bytes.subarray(0, this.length));
+    let length = this.length;
+    if (this.runLength > 0) {
+      // Серия не влезла бы в потолок и при закрытии писателя: лог обрезан и сейчас.
+      if (this.length + MAX_TOKEN_BYTES > this.bytes.length) return { encoding: INPUT_LOG_ENCODING, ticks: this.ticks, data: "", truncated: true };
+      length = encodeRun(copy, length, this.runCode, this.runLength, this.previousCode);
+    }
+    return { encoding: INPUT_LOG_ENCODING, ticks: this.ticks, data: encodeBase64(copy.subarray(0, length)), truncated: false };
+  }
+
+  /**
+   * Писатель, который продолжает записанный лог. Лог приходит из хранилища устройства,
+   * поэтому читается по-настоящему: битый — `InputLogError`, а не писатель с мусором в
+   * начале. Продолжение начинает новую серию, даже если код тот же: серия, разбитая
+   * снимком, пишется двумя токенами — лишние пара байт на снимок, а читается она как
+   * цельная.
+   */
+  static restore(log: Pick<EncodedInputLog, "encoding" | "ticks" | "data" | "truncated">, maxBytes = INPUT_LOG_MAX_BYTES): InputLogWriter {
+    const writer = new InputLogWriter(maxBytes);
+    writer.ticks = log.ticks;
+    if (log.truncated) {
+      writer.overflowed = true;
+      return writer;
+    }
+    const codes = decodeInputLog(log);
+    const bytes = decodeBase64(log.data);
+    if (bytes.length > maxBytes) throw new InputLogError("лог длиннее потолка");
+    writer.bytes.set(bytes);
+    writer.length = bytes.length;
+    // Направление, от которого считается короткий поворот следующей серии, — последнее записанное.
+    writer.previousCode = codes.length === 0 ? IDLE_CODE : codes[codes.length - 1];
+    return writer;
+  }
+
   private flushRun(): void {
     if (this.runLength === 0 || this.overflowed) return;
     if (this.length + MAX_TOKEN_BYTES > this.bytes.length) {
       this.overflowed = true;
       return;
     }
-
-    const code = this.runCode;
-    const delta = code === IDLE_CODE || this.previousCode === IDLE_CODE ? 0 : circularDelta(this.previousCode, code);
-    if (delta !== 0 && Math.abs(delta) <= SHORT_MAX_DELTA && this.runLength <= SHORT_MAX_RUN) {
-      const nibble = delta > 0 ? delta - 1 : delta + 16;
-      this.bytes[this.length++] = SHORT_TOKEN | (nibble << 3) | (this.runLength - 1);
-    } else {
-      const rest = this.runLength - 1;
-      const high = Math.floor(rest / (LENGTH_LOW_BITS + 1));
-      this.bytes[this.length++] =
-        (code === IDLE_CODE ? IDLE_FLAG : 0) | (high > 0 ? LENGTH_CONTINUES : 0) | (rest & LENGTH_LOW_BITS);
-      if (high > 0) this.writeVarint(high);
-      if (code !== IDLE_CODE) this.bytes[this.length++] = code;
-    }
-    this.previousCode = code;
+    this.length = encodeRun(this.bytes, this.length, this.runCode, this.runLength, this.previousCode);
+    this.previousCode = this.runCode;
     this.runLength = 0;
   }
+}
 
-  private writeVarint(value: number): void {
-    let rest = value;
-    while (rest >= 0x80) {
-      this.bytes[this.length++] = (rest % 0x80) | 0x80;
-      rest = Math.floor(rest / 0x80);
-    }
-    this.bytes[this.length++] = rest;
+/** Записать одну серию в `target` с позиции `at`; вернуть позицию за ней. */
+function encodeRun(target: Uint8Array, at: number, code: number, runLength: number, previousCode: number): number {
+  let length = at;
+  const delta = code === IDLE_CODE || previousCode === IDLE_CODE ? 0 : circularDelta(previousCode, code);
+  if (delta !== 0 && Math.abs(delta) <= SHORT_MAX_DELTA && runLength <= SHORT_MAX_RUN) {
+    const nibble = delta > 0 ? delta - 1 : delta + 16;
+    target[length++] = SHORT_TOKEN | (nibble << 3) | (runLength - 1);
+    return length;
   }
+  const rest = runLength - 1;
+  const high = Math.floor(rest / (LENGTH_LOW_BITS + 1));
+  target[length++] = (code === IDLE_CODE ? IDLE_FLAG : 0) | (high > 0 ? LENGTH_CONTINUES : 0) | (rest & LENGTH_LOW_BITS);
+  if (high > 0) {
+    let remaining = high;
+    while (remaining >= 0x80) {
+      target[length++] = (remaining % 0x80) | 0x80;
+      remaining = Math.floor(remaining / 0x80);
+    }
+    target[length++] = remaining;
+  }
+  if (code !== IDLE_CODE) target[length++] = code;
+  return length;
 }
 
 /** Коды всех шагов. Лог, описывающий не `ticks` шагов, — битый, а не короткий. */
