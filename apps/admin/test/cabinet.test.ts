@@ -1,12 +1,15 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CABINET_LIMITS,
+  CABINET_ROW_ACTIONS,
   CABINET_TEXTS,
   LINK_SOURCES,
   SOURCE_TITLES,
   codeProblem,
   copyBlockedReason,
   copyCabinetPromo,
+  copyRowHint,
   createCabinetLink,
   emptyLinkForm,
   fetchCabinetLinks,
@@ -167,6 +170,49 @@ describe("раздел «Кабинет»", () => {
   it("команда с множеством прав кабинетом не начинается: он последний в меню", () => {
     const route = resolveRoute(null, ["partner.cabinet", "players.view"]);
     expect(route?.section).toBe("players");
+  });
+});
+
+// Вёрстка по снимкам экрана (T-0218, блок «Интерфейс»): на 320 px подпись кнопки в карточке строки отнимала у названия
+// и кода почти всю ширину, а разрыв «где угодно» рубил слова посреди. Компонентов тест не рисует — держит решение.
+describe("вёрстка кабинета на узком экране", () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+
+  it("подписи кнопок в строках короткие, полное название действия — в aria-label", () => {
+    expect(CABINET_ROW_ACTIONS.copyAddress.length).toBeLessThanOrEqual(12);
+    expect(CABINET_ROW_ACTIONS.copyPromo.length).toBeLessThanOrEqual(12);
+    expect(CABINET_ROW_ACTIONS.copyPromoFull).toBe("Сделать копию с новым словом");
+    expect(source("../src/screens/cabinet/PromosTab.tsx")).toContain("aria-label={CABINET_ROW_ACTIONS.copyPromoFull}");
+    expect(source("../src/screens/cabinet/LinksTab.tsx")).toContain("aria-label={`Скопировать адрес ссылки ${link.campaign}`}");
+  });
+
+  it("потолок копий — один раз над таблицей, в строке только пачка и вышедший срок", () => {
+    const full = { used: 5, max: 5 };
+    expect(copyBlockedReason(PROMO, full)).toBe(CABINET_TEXTS.ceiling);
+    expect(copyRowHint(PROMO, full)).toBeNull();
+    expect(copyRowHint({ ...PROMO, kind: "batch" }, full)).toBe(CABINET_TEXTS.batchNote);
+    expect(copyRowHint({ ...PROMO, state: "expired" }, full)).toBe("Срок кода вышел — копию не сделать");
+    expect(copyRowHint(PROMO, { used: 1, max: 5 })).toBeNull();
+    expect(source("../src/screens/cabinet/PromosTab.tsx")).toContain("{CABINET_TEXTS.ceiling}</p>");
+  });
+
+  it("название ссылки и код переносятся по словам, а не рвутся посреди слова", () => {
+    const links = source("../src/screens/cabinet/LinksTab.tsx");
+    const promos = source("../src/screens/cabinet/PromosTab.tsx");
+    expect(links).toContain('<span className="break-words">{link.campaign}</span>');
+    expect(promos).toContain("font-mono break-words");
+    expect(promos).not.toContain("font-mono break-all");
+  });
+
+  it("кнопки кабинета — в теле карточки партнёра, а нижняя панель переносится строками", () => {
+    const card = source("../src/screens/partners/PartnerCard.tsx");
+    const footer = card.slice(card.indexOf("footer={"), card.indexOf("{state.status ===")).replaceAll(String.fromCharCode(13), "");
+    expect(footer).toContain('<div className="flex w-full flex-wrap items-center justify-end gap-2">');
+    // Пять кнопок внизу на 320 px занимали половину окна: кабинет с состоянием «открыт/закрыт» живёт в теле.
+    expect(footer).not.toContain("кабинет");
+    expect(footer).not.toContain("Кабинет");
+    expect(card).toContain("Кабинет партнёра");
+    expect(card).toContain("Кабинет глазами партнёра");
   });
 });
 

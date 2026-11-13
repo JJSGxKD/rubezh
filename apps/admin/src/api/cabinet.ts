@@ -27,6 +27,17 @@ export const CABINET_TEXTS = {
   needTelegramId: "Сначала укажите Telegram ID партнёра — кнопка «Изменить»",
 } as const;
 
+/**
+ * Подписи кнопок в строках таблиц кабинета. Кнопка в карточке на телефоне стоит рядом с текстом и отнимает у него
+ * ширину: на 320 px длинная подпись оставляла названию и коду по три-четыре знака в строке, поэтому подпись короткая,
+ * а полное название действия — в `aria-label`.
+ */
+export const CABINET_ROW_ACTIONS = {
+  copyAddress: "Копировать",
+  copyPromo: "Копия",
+  copyPromoFull: "Сделать копию с новым словом",
+} as const;
+
 /** Окна карточки партнёра: открыть и закрыть кабинет, посмотреть его глазами партнёра. */
 export const CABINET_DIALOG = {
   openTitle: (name: string) => `Открыть кабинет партнёру «${name}»?`,
@@ -138,6 +149,16 @@ export function copyBlockedReason(promo: CabinetPromo, copies: { used: number; m
   if (promo.state === "expired") return "Срок кода вышел — копию не сделать";
   if (copies.used >= copies.max) return CABINET_TEXTS.ceiling;
   return null;
+}
+
+/**
+ * Пояснение под кнопкой копии в строке. Потолок копий одинаков у всех строк, и в каждой карточке на телефоне он
+ * занимал по четыре строки подряд: его показывают один раз над таблицей, а в строке остаётся только то, что
+ * относится к ней самой — пачка или вышедший срок.
+ */
+export function copyRowHint(promo: CabinetPromo, copies: { used: number; max: number }): string | null {
+  const reason = copyBlockedReason(promo, copies);
+  return reason === CABINET_TEXTS.ceiling ? null : reason;
 }
 
 /** Погашено из лимита: «12 из 300» или «12», если лимита нет. */

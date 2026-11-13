@@ -105,20 +105,10 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
       description={detail === null ? undefined : (detail.partner.contact ?? "Связь не указана")}
       footer={
         detail === null ? undefined : (
-          <>
+          <div className="flex w-full flex-wrap items-center justify-end gap-2">
             {canEdit ? (
               <Button className="mr-auto" onClick={() => setEditing(true)}>
                 Изменить
-              </Button>
-            ) : null}
-            <Button onClick={() => setViewingCabinet(true)}>Кабинет глазами партнёра</Button>
-            {canCabinet ? (
-              <Button
-                disabled={!detail.cabinet.open && detail.partner.telegramId === null}
-                blockedBy={!detail.cabinet.open && detail.partner.telegramId === null ? CABINET_TEXTS.needTelegramId : null}
-                onClick={() => setTogglingCabinet(true)}
-              >
-                {detail.cabinet.open ? "Закрыть кабинет" : "Открыть кабинет"}
               </Button>
             ) : null}
             {canLink ? (
@@ -133,7 +123,7 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
             <Button tone="primary" onClick={() => navigate({ section: "promo-codes", id: `${PARTNER_CODE_ROUTE}${detail.partner.partnerId}` })}>
               Завести код партнёра
             </Button>
-          </>
+          </div>
         )
       }
     >
@@ -159,7 +149,18 @@ export function PartnerCard({ partnerId, canEdit, onClose, onChanged }: { partne
           <p className="text-sm text-text-muted">{detail.cabinet.open ? CABINET_DIALOG.closeNote : CABINET_DIALOG.openNote}</p>
         </ConfirmDialog>
       )}
-      {detail === null ? null : <CardBody detail={detail} canEdit={canEdit} canLink={canLink} onChangeStatus={() => setChangingStatus(true)} onChanged={refresh} />}
+      {detail === null ? null : (
+        <CardBody
+          detail={detail}
+          canEdit={canEdit}
+          canLink={canLink}
+          canCabinet={canCabinet}
+          onChangeStatus={() => setChangingStatus(true)}
+          onViewCabinet={() => setViewingCabinet(true)}
+          onToggleCabinet={() => setTogglingCabinet(true)}
+          onChanged={refresh}
+        />
+      )}
     </Dialog>
   );
 }
@@ -168,15 +169,22 @@ function CardBody({
   detail,
   canEdit,
   canLink,
+  canCabinet,
   onChangeStatus,
+  onViewCabinet,
+  onToggleCabinet,
   onChanged,
 }: {
   detail: PartnerDetail;
   canEdit: boolean;
   canLink: boolean;
+  canCabinet: boolean;
   onChangeStatus: () => void;
+  onViewCabinet: () => void;
+  onToggleCabinet: () => void;
   onChanged: () => void;
 }) {
+  const needsTelegramId = !detail.cabinet.open && detail.partner.telegramId === null;
   const { stats, status } = detail.partner;
   return (
     <div className="flex flex-col gap-5">
@@ -188,6 +196,18 @@ function CardBody({
         <Badge tone={statusTone(status)}>{STATUS_TITLES[status]}</Badge>
         {canEdit ? <Button onClick={onChangeStatus}>Сменить статус…</Button> : null}
         {bindsNewPlayers(status) ? null : <span className="text-xs text-warning">{NO_BINDING_NOTE}</span>}
+      </section>
+
+      {/* Кабинет — здесь, а не в нижней панели: пять кнопок внизу на 320 px съедали половину окна, а состояние кабинета нигде не читалось. */}
+      <section className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-text-muted">Кабинет партнёра</span>
+        <Badge tone={detail.cabinet.open ? "success" : "neutral"}>{detail.cabinet.open ? "открыт" : "закрыт"}</Badge>
+        <Button onClick={onViewCabinet}>Кабинет глазами партнёра</Button>
+        {canCabinet ? (
+          <Button disabled={needsTelegramId} blockedBy={needsTelegramId ? CABINET_TEXTS.needTelegramId : null} onClick={onToggleCabinet}>
+            {detail.cabinet.open ? "Закрыть кабинет" : "Открыть кабинет"}
+          </Button>
+        ) : null}
       </section>
 
       <section className="grid grid-cols-2 gap-2 md:grid-cols-4">

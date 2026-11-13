@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { CABINET_TEXTS, SOURCE_TITLES, fetchCabinetLinks, type CabinetLink, type LinkSource } from "../../api/cabinet";
+import { Copy } from "lucide-react";
+import { CABINET_ROW_ACTIONS, CABINET_TEXTS, SOURCE_TITLES, fetchCabinetLinks, type CabinetLink, type LinkSource } from "../../api/cabinet";
 import { formatDateTime, formatNumber } from "../../format";
 import { api } from "../../services";
 import { HELP } from "../../ui/help";
@@ -60,7 +61,7 @@ export function LinksTab({ partnerId }: { partnerId: string | null }) {
         rowKey={(link) => link.code}
         empty={viewOnly ? "У партнёра пока нет ссылок" : CABINET_TEXTS.noLinks}
         columns={[
-          { title: "Название", primary: true, render: (link) => <span className="break-all">{link.campaign}</span> },
+          { title: "Название", primary: true, render: (link) => <span className="break-words">{link.campaign}</span> },
           { title: "Источник", render: (link) => sourceTitle(link.source) },
           { title: "Заметка", render: (link) => (link.note === null ? <span className="text-text-muted">—</span> : <span className="break-words">{link.note}</span>) },
           { title: "Переходов", align: "right", render: (link) => formatNumber(link.clicks) },
@@ -71,7 +72,8 @@ export function LinksTab({ partnerId }: { partnerId: string | null }) {
             render: (link) =>
               link.url === null ? null : (
                 <Button onClick={() => copyLink(link.url ?? "")} aria-label={`Скопировать адрес ссылки ${link.campaign}`}>
-                  Копировать адрес
+                  <Copy size={14} aria-hidden="true" />
+                  {CABINET_ROW_ACTIONS.copyAddress}
                 </Button>
               ),
           },
