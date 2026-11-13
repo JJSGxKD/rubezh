@@ -251,6 +251,9 @@ describe("действия поддержки покупок, партнёров
     expect(actionTitle("payments.job.retry")).toBe("Повтор брошенного задания оплаты");
     expect(actionTitle("payments.compensate")).toBe("Компенсация за сбой оплаты");
     expect(actionTitle("payments.reconcile.run")).toBe("Сверка оплат вручную");
+    expect(actionTitle("payments.discrepancy.retry")).toBe("Повтор учёта по сверке");
+    expect(actionTitle("payments.discrepancy.refund")).toBe("Возврат звёзд по сверке");
+    expect(actionTitle("payments.discrepancy.dismiss")).toBe("Расхождение сверки разобрано");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
     expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");

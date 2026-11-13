@@ -513,3 +513,148 @@ describe("брошенные задания: состояние без изме�
     }
   });
 });
+
+describe("подтверждение со временем и повтор по выписке (tasks/T-0434, Р209, WP53)", () => {
+  const PURCHASE_ID = "11111111-1111-4111-8111-111111111111";
+  const AT = NOW - 3_600_000;
+  const payment: ConfirmedPayment = { platform: "telegram", chargeId: "charge:1", payload: PURCHASE_ID, payerId: "555000111", currency: "XTR", totalAmount: 50 };
+
+  /** Подтверждение подставное и записывает, с чем его позвали; результат — выданная покупка: дальше очереди делать нечего. */
+  function confirming() {
+    const confirmed: unknown[][] = [];
+    const refunded: unknown[][] = [];
+    const confirmation = {
+      confirm: async (...args: unknown[]) => {
+        confirmed.push(args);
+        return { kind: "duplicate", purchase: { fulfilledAt: new Date(NOW) } };
+      },
+      refunded: async (...args: unknown[]) => void refunded.push(args),
+    } as unknown as PaymentConfirmation;
+    const purchases = new MemoryPurchasesRepository();
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(purchases, starsProviders()), new RunsHooks(), starsProviders(), new PurchaseFulfillment(), purchases, new PaymentsHooks());
+    const added: RecordedAdd[] = [];
+    function attachQueue(): void {
+      const fake = { add: async (name: string, data: unknown, options: { jobId?: string }) => void added.push({ name, data, jobId: options.jobId }) };
+      Object.assign(queue as unknown as { queue: unknown }, { queue: fake });
+    }
+    return { queue, confirmed, refunded, added, attachQueue };
+  }
+
+  let logged: { level: string; event: string; fields: Record<string, unknown> }[];
+
+  beforeEach(() => {
+    logged = [];
+    for (const level of ["log", "warn", "error"] as const) {
+      vi.spyOn(Logger.prototype, level).mockImplementation((message: unknown) => {
+        const fields = JSON.parse(String(message)) as Record<string, unknown>;
+        logged.push({ level, event: String(fields.event), fields });
+      });
+    }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("confirm(payment, at) кладёт время прихода обновления в задание", async () => {
+    const { queue, added, attachQueue } = confirming();
+    attachQueue();
+
+    await queue.confirm(payment, AT);
+
+    expect(added).toEqual([{ name: "confirm", data: { kind: "confirm", payment, at: AT }, jobId: `confirm-${fingerprintOf("charge:1")}` }]);
+  });
+
+  it("время по умолчанию — момент вызова, а не ноль: обычное подтверждение от бота несёт время прихода", async () => {
+    const { queue, added, attachQueue } = confirming();
+    attachQueue();
+    const before = Date.now();
+
+    await queue.confirm(payment);
+
+    const data = added[0]?.data as { at?: number } | undefined;
+    expect(data?.at).toBeGreaterThanOrEqual(before);
+    expect(data?.at).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("process с временем зовёт confirmation.confirm(payment, at): оплата записывается временем оплаты, а не временем повтора", async () => {
+    const { queue, confirmed } = confirming();
+
+    await queue.process({ data: { kind: "confirm", payment, at: AT } });
+
+    expect(confirmed).toStrictEqual([[payment, AT]]);
+  });
+
+  it("старое задание без времени — confirm(payment, undefined): запись временем обработки, как раньше", async () => {
+    const { queue, confirmed } = confirming();
+
+    await queue.process({ data: { kind: "confirm", payment } });
+
+    expect(confirmed).toStrictEqual([[payment, undefined]]);
+  });
+
+  it("без очереди confirm(payment, at) выполняется сразу и с тем же временем", async () => {
+    const { queue, confirmed } = confirming();
+
+    await queue.confirm(payment, AT);
+
+    expect(confirmed).toStrictEqual([[payment, AT]]);
+  });
+
+  it("replay подтверждения: идентификатор confirm-<отпечаток>-reconcile, в задании — время операции площадки", async () => {
+    const { queue, added, attachQueue } = confirming();
+    attachQueue();
+
+    await queue.replay({ kind: "confirm", payment, at: AT }, "reconcile");
+
+    expect(added).toEqual([{ name: "confirm", data: { kind: "confirm", payment, at: AT }, jobId: `confirm-${fingerprintOf("charge:1")}-reconcile` }]);
+  });
+
+  it("replay возврата: идентификатор refunded-<отпечаток>-reconcile", async () => {
+    const { queue, added, attachQueue } = confirming();
+    attachQueue();
+
+    await queue.replay({ kind: "refunded", chargeId: "charge:1", at: AT }, "reconcile");
+
+    expect(added).toEqual([{ name: "refunded", data: { kind: "refunded", chargeId: "charge:1", at: AT }, jobId: `refunded-${fingerprintOf("charge:1")}-reconcile` }]);
+  });
+
+  it("идентификатор повтора не совпадает с идентификатором прежнего задания той же оплаты: BullMQ не отбросит его как дубль", async () => {
+    const { queue, added, attachQueue } = confirming();
+    attachQueue();
+
+    await queue.confirm(payment, AT);
+    await queue.replay({ kind: "confirm", payment, at: AT }, "reconcile");
+
+    expect(added).toHaveLength(2);
+    expect(added[0]?.jobId).not.toBe(added[1]?.jobId);
+  });
+
+  it("без очереди replay выполняет запись сразу: подтверждение — со временем операции, возврат — с ним же", async () => {
+    const { queue, confirmed, refunded } = confirming();
+
+    await queue.replay({ kind: "confirm", payment, at: AT }, "reconcile");
+    await queue.replay({ kind: "refunded", chargeId: "charge:1", at: AT }, "reconcile");
+
+    expect(confirmed).toStrictEqual([[payment, AT]]);
+    expect(refunded).toStrictEqual([["charge:1", AT]]);
+  });
+
+  it("ошибка записи при replay не пробивается наружу — в лог со всеми полями оплаты, как у обычного задания", async () => {
+    const confirmation = {
+      confirm: async () => {
+        throw new Error("база недоступна");
+      },
+    } as unknown as PaymentConfirmation;
+    const purchases = new MemoryPurchasesRepository();
+    const queue = new PaymentsQueue(config(), confirmation, new PaymentRefunds(purchases, starsProviders()), new RunsHooks(), starsProviders(), new PurchaseFulfillment(), purchases, new PaymentsHooks());
+
+    await expect(queue.replay({ kind: "confirm", payment, at: AT }, "reconcile")).resolves.toBeUndefined();
+
+    expect(logged).toContainEqual({
+      level: "error",
+      event: "payment_unrecorded",
+      fields: expect.objectContaining({ module: "payments", kind: "confirm", chargeId: "charge:1", purchaseId: PURCHASE_ID, reason: "база недоступна" }) as Record<string, unknown>,
+    });
+  });
+});

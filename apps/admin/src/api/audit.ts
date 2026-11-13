@@ -166,6 +166,9 @@ const ACTION_TITLES: Record<string, string> = {
   "payments.retry": "Повтор учёта покупки",
   "payments.job.retry": "Повтор брошенного задания оплаты",
   "payments.compensate": "Компенсация за сбой оплаты",
+  "payments.discrepancy.retry": "Повтор учёта по сверке",
+  "payments.discrepancy.refund": "Возврат звёзд по сверке",
+  "payments.discrepancy.dismiss": "Расхождение сверки разобрано",
   "payments.reconcile.run": "Сверка оплат вручную",
 };
 

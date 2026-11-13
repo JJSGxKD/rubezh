@@ -279,6 +279,96 @@ describe.skipIf(DATABASE_URL === "")("сверка оплат на живом Po
     });
   });
 
+  describe("действия по расхождениям (tasks/T-0434)", () => {
+    /** Расхождение в базе: вставляется как находка сверки, а читается обратно — так проверяется и запись, и чтение. */
+    async function insert(name: string, patch: Partial<FoundDiscrepancy> = {}, detectedAt = at(29, 5)): Promise<string> {
+      const runId = await startRun("telegram", at(29));
+      await repository.insertFound(runId, "telegram", [found(charge(name), patch)], detectedAt);
+      const row = await prisma.paymentDiscrepancy.findFirst({ where: { platform: "telegram", chargeId: charge(name) } });
+      if (row === null) throw new Error("расхождение не вставилось");
+      return row.discrepancyId;
+    }
+
+    it("два одновременных claim одного расхождения — ровно один true: занявший пишет решение, актёра, причину и время", async () => {
+      const id = await insert("claim-race");
+      const first = randomUUID();
+      const second = randomUUID();
+
+      const results = await Promise.all([repository.claim(id, "retried", first, "повтор по выписке", at(30, 1)), repository.claim(id, "dismissed", second, "ложное", at(30, 2))]);
+
+      expect(results.filter((result) => result)).toHaveLength(1);
+      const winner = results[0] ? { resolution: "retried", resolvedBy: first, note: "повтор по выписке", resolvedAt: at(30, 1) } : { resolution: "dismissed", resolvedBy: second, note: "ложное", resolvedAt: at(30, 2) };
+      expect(await prisma.paymentDiscrepancy.findUnique({ where: { discrepancyId: id } })).toMatchObject(winner);
+    });
+
+    it("claim закрытого — false, прежнее решение не меняется; claim несуществующего — false", async () => {
+      const id = await insert("claim-closed");
+      const actor = randomUUID();
+      await prisma.paymentDiscrepancy.update({ where: { discrepancyId: id }, data: { resolvedAt: at(30, 3), resolution: "matched" } });
+
+      expect(await repository.claim(id, "dismissed", actor, "поздно", at(30, 4))).toBe(false);
+      expect(await repository.claim(randomUUID(), "dismissed", actor, "нет такого", at(30, 4))).toBe(false);
+
+      expect(await prisma.paymentDiscrepancy.findUnique({ where: { discrepancyId: id } })).toMatchObject({ resolution: "matched", resolvedAt: at(30, 3), resolvedBy: null, note: null });
+    });
+
+    it("byId — строка расхождения целиком, закрытая тоже; нет такого — null", async () => {
+      const purchaseId = randomUUID();
+      const id = await insert("by-id", { purchaseId, accountId: telegramAccount, amount: 75, payload: "счёт", occurredAt: at(28, 9) });
+
+      expect(await repository.byId(id)).toEqual({
+        discrepancyId: id,
+        platform: "telegram",
+        kind: "charged_unrecorded",
+        chargeId: charge("by-id"),
+        purchaseId,
+        accountId: telegramAccount,
+        payerId: "555000111",
+        amount: 75,
+        payload: "счёт",
+        occurredAt: at(28, 9),
+        detectedAt: at(29, 5),
+        resolution: null,
+        resolvedAt: null,
+        resolvedBy: null,
+        note: null,
+      });
+      expect(await repository.claim(id, "refunded", telegramAccount, "вернули", at(30, 5))).toBe(true);
+      expect(await repository.byId(id)).toMatchObject({ resolution: "refunded", resolvedAt: at(30, 5), resolvedBy: telegramAccount, note: "вернули" });
+      expect(await repository.byId(randomUUID())).toBeNull();
+    });
+
+    it("byPurchase — все расхождения покупки, открытые и закрытые, по времени обнаружения; чужих нет", async () => {
+      const purchaseId = randomUUID();
+      const late = await insert("by-purchase-late", { purchaseId, kind: "refund_unrecorded" }, at(29, 30));
+      const early = await insert("by-purchase-early", { purchaseId }, at(29, 10));
+      await insert("by-purchase-other", { purchaseId: randomUUID() });
+      await repository.claim(early, "dismissed", telegramAccount, "ложное", at(30, 6));
+
+      const rows = await repository.byPurchase(purchaseId);
+
+      expect(rows.map((row) => row.discrepancyId)).toEqual([early, late]);
+      expect(await repository.byPurchase(randomUUID())).toEqual([]);
+    });
+
+    it("openByPurchases — только открытые по списку покупок; пустой список и список длиннее одной порции", async () => {
+      const mine = randomUUID();
+      const closed = randomUUID();
+      const other = randomUUID();
+      const openOne = await insert("open-by-mine", { purchaseId: mine });
+      const closedOne = await insert("open-by-closed", { purchaseId: closed });
+      await insert("open-by-other", { purchaseId: other });
+      await repository.claim(closedOne, "dismissed", telegramAccount, "ложное", at(30, 7));
+
+      const rows = await repository.openByPurchases([mine, closed, randomUUID()]);
+
+      expect(rows.map((row) => row.discrepancyId)).toEqual([openOne]);
+      expect(await repository.openByPurchases([])).toEqual([]);
+      const many = Array.from({ length: 2500 }, () => randomUUID());
+      expect(await repository.openByPurchases([...many, mine])).toHaveLength(1);
+    });
+  });
+
   describe("overview", () => {
     it("открытые, закрытые за 30 суток и последняя сверка площадки; свежие первыми", async () => {
       const now = at(25);
