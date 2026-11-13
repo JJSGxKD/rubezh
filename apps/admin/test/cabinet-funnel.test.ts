@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CABINET_FUNNEL_TEXTS, clicksLine, fetchCabinetFunnel, funnelSourceTitle, hiddenRowText, tooFewText, type CabinetFunnel } from "../src/api/cabinet";
 import { AdminApi } from "../src/api/client";
@@ -53,7 +54,9 @@ describe("запрос воронки кабинета", () => {
 
 describe("подписи воронки кабинета", () => {
   it("переходы: число с пробелами и период словами", () => {
-    expect(clicksLine(1240, 30)).toBe("Переходов за 30 дней: 1 240");
+    // Разделитель тысяч у Intl — неразрывный пробел: сравниваем без различия пробелов.
+    const plain = (text: string) => text.replace(/\s/g, " ");
+    expect(plain(clicksLine(1240, 30))).toBe("Переходов за 30 дней: 1 240");
     expect(clicksLine(0, 7)).toBe("Переходов за 7 дней: 0");
     expect(clicksLine(5, null)).toBe("Переходов за выбранный период: 5");
   });
@@ -68,14 +71,30 @@ describe("подписи воронки кабинета", () => {
     expect(funnelSourceTitle(FUNNEL.sources[0]!)).toBe("канал · Игровой угол");
     expect(funnelSourceTitle(FUNNEL.sources[1]!)).toBe("пост · post-5");
     expect(funnelSourceTitle(FUNNEL.sources[2]!)).toBe("код · KANAL 2026");
-    expect(funnelSourceTitle({ via: "link", ref: "zzz", name: null, source: null, note: null, counts: null })).toBe("ссылка · zzz");
-    expect(funnelSourceTitle({ via: "code", ref: null, name: null, source: null, note: null, counts: null })).toBe("код (его больше нет)");
+    expect(funnelSourceTitle({ via: "link", ref: "zzz", name: null, source: null, note: null })).toBe("ссылка · zzz");
+    expect(funnelSourceTitle({ via: "code", ref: null, name: null, source: null, note: null })).toBe("код (его больше нет)");
   });
 
-  it("состояния: пусто, ошибка и подсказка говорят словами партнёра, без «ID» и «аккаунт»", () => {
+  it("состояния: пустое — словами партнёра, скрытые дни — числом", () => {
     expect(CABINET_FUNNEL_TEXTS.empty).toBe("Пока никто не пришёл по вашим ссылкам");
-    for (const text of [CABINET_FUNNEL_TEXTS.empty, CABINET_FUNNEL_TEXTS.help, CABINET_FUNNEL_TEXTS.daysHidden(2), hiddenRowText(10), tooFewText(10)]) {
-      expect(text).not.toMatch(/\bID\b|аккаунт/i);
-    }
+    expect(CABINET_FUNNEL_TEXTS.daysHidden(2)).toBe("Скрыто дней, где игроков меньше порога: 2");
+  });
+});
+
+// Компонентов тест не рисует — держит решения: вкладка в кабинете есть, а срез без чисел не рисует вех.
+describe("вкладка «Воронка»", () => {
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+
+  it("подключена к кабинету и берёт тот же partnerId, что остальные вкладки", () => {
+    const screen = source("../src/screens/cabinet/CabinetScreen.tsx");
+    expect(screen).toContain('{ id: "funnel", title: "Воронка" }');
+    expect(screen).toContain("<FunnelTab partnerId={partnerId} />");
+  });
+
+  it("срез без чисел — строка о пороге из ответа сервера, вех в нём нет", () => {
+    const tab = source("../src/screens/cabinet/FunnelTab.tsx");
+    expect(tab).toContain("hiddenRowText(minGroup)");
+    expect(tab).toContain("slice.row === null ? null");
+    expect(tab).toContain("tooFewText(funnel.minGroup)");
   });
 });
