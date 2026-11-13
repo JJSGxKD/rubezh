@@ -3,6 +3,8 @@ import { LOADOUT_STATS } from "@bh/shared-types";
 import { describe, expect, it } from "vitest";
 import { SECRETS } from "../src/content/secrets";
 import { LOADOUT_BOUNDS } from "../src/game/progression/run-loadout";
+import { DEFAULT_SIM_CONFIG } from "../src/game/sim/create-world";
+import { PLAYER_RUN_SPEED } from "../src/game/sim/secrets-rules";
 import { findSecretsProblems } from "../src/game/sim/secrets";
 
 // Тайники рубежа — данные геймдизайнера (docs/35-stage4-plan.md, Р153).
@@ -164,6 +166,34 @@ describe("проверка данных тайников называет пол
   it("огонёк: срок появления и скорость", () => {
     expect(problemsOf(patched({ wisp: { ...SECRETS.wisp, appearSec: -1 } }))).toContain("secrets.wisp.appearSec");
     expect(problemsOf(patched({ wisp: { ...SECRETS.wisp, speed: 0 } }))).toContain("secrets.wisp.speed");
+  });
+
+  it("огонёк: потолок скорости равен бегу игрока из настроек симуляции", () => {
+    expect(PLAYER_RUN_SPEED).toBe(DEFAULT_SIM_CONFIG.player.speedPxSec);
+  });
+
+  it("огонёк: скорость ниже бега игрока — иначе его не догнать", () => {
+    expect(problemsOf(patched({ wisp: { ...SECRETS.wisp, speed: PLAYER_RUN_SPEED } }))).toContain("secrets.wisp.speed");
+    expect(problemsOf(patched({ wisp: { ...SECRETS.wisp, speed: PLAYER_RUN_SPEED - 1 } }))).toBe("");
+  });
+
+  it("огонёк: каждое поле шага вне коридора называется (Р214)", () => {
+    const wisp = (patch: Partial<SecretsDef["wisp"]>): SecretsDef => patched({ wisp: { ...SECRETS.wisp, ...patch } });
+    expect(problemsOf(wisp({ hopUnits: 79 }))).toContain("secrets.wisp.hopUnits");
+    expect(problemsOf(wisp({ hopUnits: 601 }))).toContain("secrets.wisp.hopUnits");
+    expect(problemsOf(wisp({ hopUnits: Number.NaN }))).toContain("secrets.wisp.hopUnits");
+    expect(problemsOf(wisp({ swayMin: -0.1 }))).toContain("secrets.wisp.swayMin");
+    expect(problemsOf(wisp({ swayMax: 1.3 }))).toContain("secrets.wisp.swayMax");
+    expect(problemsOf(wisp({ swayMin: 0.9, swayMax: 0.5 }))).toContain("secrets.wisp.swayMax");
+    expect(problemsOf(wisp({ waitUnits: 39 }))).toContain("secrets.wisp.waitUnits");
+    expect(problemsOf(wisp({ waitUnits: 401 }))).toContain("secrets.wisp.waitUnits");
+    // Границы коридора допустимы.
+    expect(problemsOf(wisp({ hopUnits: 80, swayMin: 0, swayMax: 0, waitUnits: 40 }))).toBe("");
+    expect(problemsOf(wisp({ hopUnits: 600, swayMin: 1.2, swayMax: 1.2, waitUnits: 400 }))).toBe("");
+  });
+
+  it("огонёк: боевые числа Р214", () => {
+    expect(SECRETS.wisp).toEqual({ appearSec: 90, speed: 150, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 });
   });
 
   it("расстояние между тайниками", () => {

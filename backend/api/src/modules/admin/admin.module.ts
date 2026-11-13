@@ -24,6 +24,7 @@ import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminMediaController } from "./admin-media.controller.js";
 import { AdminPaymentCompensationController } from "./admin-payment-compensation.controller.js";
+import { AdminPaymentJobsController } from "./admin-payment-jobs.controller.js";
 import { AdminPaymentsController } from "./admin-payments.controller.js";
 import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
@@ -134,6 +135,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminPurchasesController,
     AdminPaymentsController,
     AdminPaymentCompensationController,
+    AdminPaymentJobsController,
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,

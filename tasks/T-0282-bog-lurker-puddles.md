@@ -45,7 +45,7 @@ batch: 6
 
 # T-0282. Болотник — враг, оставляющий ядовитые лужи: поле `trail` у врага, лужи в мире, облик на земле
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0282.json)](README.md#значки-статуса) [![T-0281](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0281.json&label=T-0281)](T-0281-ice-spirit-and-flail.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0282.json)](README.md#значки-статуса) [![T-0281](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0281.json&label=T-0281)](archive/T-0281-ice-spirit-and-flail.md)
 
 ## Зачем
 
