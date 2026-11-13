@@ -3,8 +3,8 @@ id: T-0442
 title: Экраны не ездят вбок — вкладки в своей строке, шапка не просвечивает
 epic: E6
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

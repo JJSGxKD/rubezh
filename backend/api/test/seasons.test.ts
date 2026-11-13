@@ -492,7 +492,7 @@ describe("единая сложность в сезонах (T-0191, Р126)", ()
     const { repository, asked } = repositoryOf(rows);
     const rating = { boardsFor: async () => ALL_BOARDS, separate: async () => [] as string[] };
     const restrictions = { restrictedAccounts: async () => [] as string[], status: async () => null };
-    const projection = new SeasonsProjection(schedule, store as unknown as SeasonBoardStore, repository, new RunsHooks(), new RestrictionsHooks(), restrictions as never, rating as never);
+    const projection = new SeasonsProjection(schedule, store as unknown as SeasonBoardStore, repository, new RunsHooks(), new RestrictionsHooks(), restrictions as never, rating as never, { set: async () => "OK", eval: async () => 1 } as never);
     return { schedule, store, asked, projection };
   }
 

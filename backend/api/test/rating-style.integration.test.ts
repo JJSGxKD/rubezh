@@ -149,7 +149,7 @@ describe.skipIf(!live)("дивизионы и стиль игрока на жи�
     const settings = panelSettings({ [START_KEY]: settingOf(start), [POINTS_FROM_KEY]: settingOf(start) });
     const schedule = new SeasonSchedule(settings);
     const rating = ratingRestrictions(runs, leaderboard, undefined, settings);
-    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, new RunsHooks(), new RestrictionsHooks(), rating.gate, rating.rating);
+    const projection = new SeasonsProjection(schedule, seasonStore, seasonsRepository, new RunsHooks(), new RestrictionsHooks(), rating.gate, rating.rating, { set: async () => "OK", eval: async () => 1 } as never);
     const view = new SeasonsViewService(schedule, seasonsRepository, seasonStore, friends, rating.gate, rating.rating);
     const close = new SeasonsCloseService(redis, schedule, closeRepository, rating.gate);
     return { schedule, projection, view, close };

@@ -50,6 +50,7 @@ export function feedTextOf(item: FeedItem): { key: string; params: Record<string
     case "long_run":
       return { key: TEXT_KEYS.long_run, params: { name: item.name, minutes: Math.floor(seconds / 60) } };
     case "week_record":
+      if (item.points !== null) return { key: "feed.weekRecordPoints", params: { name: item.name, points: item.points } };
       return { key: TEXT_KEYS.week_record, params: { name: item.name, time: formatDuration(seconds) } };
     case "boss":
     case "chest":

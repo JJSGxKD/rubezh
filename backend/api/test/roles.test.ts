@@ -56,6 +56,16 @@ describe("перечень прав и состав ролей", () => {
     }
   });
 
+  it("лента платежей payments.view — у владельца и администратора, у остальных ролей её нет, финансам тоже (T-0429, Р209)", () => {
+    for (const role of ROLES) {
+      expect(ROLE_PERMISSIONS[role].includes("payments.view"), role).toBe(role === "owner" || role === "admin");
+    }
+  });
+
+  it("компенсация за сбой оплаты payments.compensate — только у владельца, администратору её не дают (T-0429, Р209)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("payments.compensate"))).toEqual(["owner"]);
+  });
+
   it("правила фильтра имён names.edit — у владельца, администратора и модератора, у остальных ролей нет (T-0338)", () => {
     for (const role of ROLES) {
       expect(ROLE_PERMISSIONS[role].includes("names.edit"), role).toBe(role === "owner" || role === "admin" || role === "moderator");

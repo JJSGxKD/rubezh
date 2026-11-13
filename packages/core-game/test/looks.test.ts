@@ -199,3 +199,19 @@ describe("облик ступеней врагов", () => {
     expect(new Set(colors).size).toBe(ENEMY_STAGES.length);
   });
 });
+
+describe("тон врага по id", () => {
+  it("Ледяной дух — холодного тона, не розовое кольцо ворона", () => {
+    const ice = enemyColor("orbit", undefined, "ice_spirit");
+    expect(ice).not.toBe(enemyColor("orbit", undefined));
+    expect((ice & 0xff) > ((ice >> 16) & 0xff)).toBe(true);
+  });
+
+  it("ранг по-прежнему смешивается с тоном по id", () => {
+    expect(enemyColor("orbit", "elite", "ice_spirit")).not.toBe(enemyColor("orbit", undefined, "ice_spirit"));
+  });
+
+  it("без id и с неизвестным id цвет берётся по паттерну", () => {
+    expect(enemyColor("orbit", undefined, "raven")).toBe(enemyColor("orbit", undefined));
+  });
+});

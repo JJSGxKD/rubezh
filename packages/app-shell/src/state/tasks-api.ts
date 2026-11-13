@@ -51,6 +51,8 @@ const taskSchema = z.object({
   slots: z.optional(z.nullable(z.object({ left: z.number(), total: z.number(), holdUntil: z.nullable(z.string()) }))),
   /** картинка 1:1 партнёрской цели (Р82) — путь от адреса API; сервер до картинок поля не отдавал */
   image: z.optional(z.nullable(z.string())),
+  /** сутки окна перепроверки подписки (Р115) у наблюдаемых заданий; сервер до T-0183 поля не отдавал */
+  recheckDays: z.optional(z.nullable(z.number())),
   /** ступень пула ротации — экрану не нужна, сервер до ротации поля не отдавал */
   tier: z.optional(z.nullable(z.string())),
   /** оружие, стихия или сложность цели — по ним строится текст; сервер до ротации поля не отдавал */
