@@ -6,6 +6,8 @@ import { chooseUpgrade, isAwaitingChoice } from "../../src/game/progression/leve
 import { captureWorld, restoreWorld } from "../../src/game/run/snapshot";
 import { createRunWorld, type RunWorld } from "../../src/game/run-world";
 import { applyContinue } from "../../src/game/sim/continue";
+import { chooseBlessing, isAwaitingBlessing } from "../../src/game/sim/secrets";
+import { settleCordonDeath } from "../../src/game/sim/cordon";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/input-code";
 import { stepWorld, type SimInput } from "../../src/game/sim/step";
 import { TICK_SEC, type World } from "../../src/game/sim/world";
@@ -24,7 +26,9 @@ export interface ProofRunOptions {
   difficultyId?: DifficultyId;
   unitScale?: number;
   /** сырое направление пальца на тике; `null` — палец не на экране */
-  steer: (tick: number) => readonly [number, number] | null;
+  steer: (tick: number, world: World) => readonly [number, number] | null;
+  /** капище ждёт игрока, как в забеге с `pauseOnChest`; выбор — последнее из предложенных, не первое */
+  manualBlessing?: boolean;
   choose?: (offers: readonly UpgradeOption[]) => string;
   continues?: boolean;
   loadout?: RunLoadout;
@@ -71,6 +75,7 @@ export function runWithProof(options: ProofRunOptions): ProofRun {
     ...(options.loadout === undefined ? {} : { loadout: options.loadout }),
   };
   let runWorld = createRunWorld(worldOptions);
+  runWorld.world.secrets.manualBlessing = options.manualBlessing === true;
   const startingWeaponId = (world: World): string => world.weaponTypes[world.loadout.weapons[0].typeIndex].id;
   const open = (world: World, resume?: { proof?: unknown }): RunRecorder =>
     openRunRecorder({
@@ -104,6 +109,7 @@ export function runWithProof(options: ProofRunOptions): ProofRun {
     snapshotTick = world.stats.tick;
 
     runWorld = createRunWorld(worldOptions);
+    runWorld.world.secrets.manualBlessing = options.manualBlessing === true;
     restoreWorld(runWorld.world, runWorld.spawner, worldSnapshot);
     // Сцена после перезапуска начинает с покоя: код прошлого кадра не помнит.
     code = IDLE_CODE;
@@ -121,6 +127,13 @@ export function runWithProof(options: ProofRunOptions): ProofRun {
       recorder?.continued(world.stats.tick);
       continue;
     }
+    if (isAwaitingBlessing(world)) {
+      const offered = world.secrets.offer?.options ?? [];
+      const id = offered[offered.length - 1];
+      if (!chooseBlessing(world, id)) throw new Error(`благословение «${id}» не применилось: тест ошибся в сценарии`);
+      recorder?.choice(world.stats.tick, `blessing:${id}`);
+      continue;
+    }
     if (isAwaitingChoice(world)) {
       offersLog.push({ tick: world.stats.tick, ids: world.progression.offers.map((offer) => offer.id) });
       const optionId = choose(world.progression.offers);
@@ -134,11 +147,13 @@ export function runWithProof(options: ProofRunOptions): ProofRun {
       if (options.snapshotAfterChoice === true && snapshotTick === null) interrupt();
       continue;
     }
-    const direction = options.steer(world.stats.tick);
+    const direction = options.steer(world.stats.tick, world);
     code = quantizeDirection(direction?.[0] ?? 0, direction?.[1] ?? 0, code);
     spawner.update(world, TICK_SEC);
     stepWorld(world, inputOfCode(code, input));
     recorder?.stepped(code, world);
+    // Как в сцене: смерть закрывает кольцо стражей после шага и после свёртки тика.
+    settleCordonDeath(world);
     const frameMs = 1000 / 60;
     perf.frame(frameMs, world.enemies.aliveCount + world.projectiles.aliveCount);
     recorder?.frame({

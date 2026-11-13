@@ -1,14 +1,15 @@
 import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { CONTENT_HASH } from "../src/content/hash";
-import { decodeInputLog, InputLogWriter } from "../src/game/diagnostics/input-log";
-import { replayRecording } from "../src/game/diagnostics/replay";
+import { decodeInputLog, INPUT_LOG_MAX_BYTES, InputLogWriter } from "../src/game/diagnostics/input-log";
+import { replayLoadout, replayRecording } from "../src/game/diagnostics/replay";
 import { buildRunProof, packRunProof, RUN_PROOF_MAX_PACKED_BYTES } from "../src/game/diagnostics/run-proof";
 import { CHECKPOINT_TICKS, openRunRecorder } from "../src/game/diagnostics/run-recorder";
 import { createRunWorld } from "../src/game/run-world";
 import { captureWorld } from "../src/game/run/snapshot";
 import { checksumWorld } from "../src/game/sim/checksum";
 import { DIRECTION_CODES, IDLE_CODE } from "../src/game/sim/input-code";
+import type { World } from "../src/game/sim/world";
 import { RUN_PROOF_SCHEMA, type RunProof } from "../src/run-api";
 import { circling } from "./helpers/recorded-run";
 import { runWithProof } from "./helpers/proof-run";
@@ -32,7 +33,7 @@ function must(proof: RunProof | null): RunProof {
 
 describe("запись для проверки: забег без продолжения", () => {
   it("повторяется до свёртки мира, и итог повтора равен итогу записи", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 600, steer: circling(150) });
+    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 600, steer: circling(300) });
     const proof = must(run.proof);
 
     expect(proof.schema).toBe(RUN_PROOF_SCHEMA);
@@ -46,7 +47,7 @@ describe("запись для проверки: забег без продолж
   });
 
   it("несёт только то, что задаёт исход: ни кадров, ни событий, ни производительности, ни видеоадаптера", SLOW, () => {
-    const proof = must(runWithProof({ seed: SEED, maxTicks: 900, steer: circling(150) }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: 900, steer: circling(300) }).proof);
 
     expect(Object.keys(proof).sort()).toEqual(
       [
@@ -86,18 +87,21 @@ describe("запись для проверки: забег без продолж
 
   it("снаряжение, уровень аккаунта и слабое устройство: набор в записи, класс устройства — отдельным полем", SLOW, () => {
     const loadout = { modifiers: { damage: 0.2, maxHp: 20 }, boosts: ["insight"], accountLevel: 9, deviceClass: "light" as const };
-    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(150), loadout }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(300), loadout }).proof);
 
     // Схема приёмника держит класс устройства на верхнем уровне, а в наборе его нет.
     expect(proof.loadout).toEqual({ modifiers: { damage: 0.2, maxHp: 20 }, boosts: ["insight"], accountLevel: 9 });
     expect(proof.deviceClass).toBe("light");
     expect(replayRecording(proof).verdict).toBe("match");
-    // Без верхнего поля повтор шёл бы с другим потолком врагов — и не сошёлся бы.
-    expect(replayRecording({ ...proof, deviceClass: "standard" }).verdict).toBe("mismatch");
+    // Приёмник держит класс устройства отдельным полем: повтор возвращает его в набор,
+    // иначе слабое устройство шло бы с потолком врагов обычного.
+    expect(replayLoadout(proof)).toEqual({ ...proof.loadout, deviceClass: "light" });
+    expect(replayLoadout({ ...proof, deviceClass: "standard" })).toEqual(proof.loadout);
+    expect(replayLoadout({ ...proof, loadout: undefined, deviceClass: "standard" })).toBeUndefined();
   });
 
   it("забег с записью и без неё побитно одинаков", SLOW, () => {
-    const options = { seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(150) };
+    const options = { seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(300) };
     const recorded = runWithProof(options);
     const bare = runWithProof({ ...options, record: false });
 
@@ -108,7 +112,7 @@ describe("запись для проверки: забег без продолж
   });
 
   it("рядом с полной записью проверка — её подмножество: тот же ввод, выборы, продолжения и свёртки", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(150), full: true });
+    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(300), full: true });
     const proof = must(run.proof);
     const recording = run.recording;
 
@@ -120,12 +124,12 @@ describe("запись для проверки: забег без продолж
     expect(proof.result).toEqual(recording?.result);
     expect(recording?.events.length).toBeGreaterThan(0);
     // Без полной записи рекордер не собирает ни событий, ни кадров.
-    const light = runWithProof({ seed: SEED, maxTicks: 300, steer: circling(150) });
+    const light = runWithProof({ seed: SEED, maxTicks: 300, steer: circling(300) });
     expect(light.recording).toBeNull();
   });
 
   it("забег разработчика не повторить: причина `dev`, записи и снимка записи нет", () => {
-    const run = runWithProof({ seed: SEED, maxTicks: 300, steer: circling(150), dev: true });
+    const run = runWithProof({ seed: SEED, maxTicks: 300, steer: circling(300), dev: true });
 
     expect(run.recorder?.blocker).toBe("dev");
     expect(run.proof).toBeNull();
@@ -145,7 +149,7 @@ describe("запись для проверки: продолжение из сн
   const THROUGH = 3 * CHECKPOINT_TICKS + 900;
 
   it("снимок на третьей минуте → продолжение: запись покрывает весь забег, повтор совпадает, `resumed` нет", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(150), snapshotAtTick: AT });
+    const run = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(300), snapshotAtTick: AT });
     const proof = must(run.proof);
 
     expect(run.snapshotTick).toBeGreaterThanOrEqual(AT);
@@ -167,8 +171,8 @@ describe("запись для проверки: продолжение из сн
   });
 
   it("продолженный забег даёт тот же исход, что непрерванный", SLOW, () => {
-    const through = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(150), snapshotAtTick: AT });
-    const straight = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(150) });
+    const through = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(300), snapshotAtTick: AT });
+    const straight = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(300) });
 
     expect(must(through.proof).result.checksum).toBe(must(straight.proof).result.checksum);
     expect(must(through.proof).choices).toEqual(must(straight.proof).choices);
@@ -177,7 +181,7 @@ describe("запись для проверки: продолжение из сн
   });
 
   it("снимок сразу после выбора улучшения, на том же тике, тоже повторяется", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: 1_800, steer: circling(150), snapshotAfterChoice: true });
+    const run = runWithProof({ seed: SEED, maxTicks: 1_800, steer: circling(300), snapshotAfterChoice: true });
     const proof = must(run.proof);
 
     expect(run.snapshotTick).not.toBeNull();
@@ -189,7 +193,7 @@ describe("запись для проверки: продолжение из сн
   });
 
   it("свёртка в тике снимка сверяется: подмена даёт расхождение ровно на этом тике", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(150), snapshotAtTick: AT });
+    const run = runWithProof({ seed: SEED, maxTicks: THROUGH, steer: circling(300), snapshotAtTick: AT });
     const proof = must(run.proof);
     const checkpoints = proof.checkpoints.map(([tick, sum]): [number, number] => (tick === run.snapshotTick ? [tick, sum ^ 1] : [tick, sum]));
 
@@ -199,8 +203,8 @@ describe("запись для проверки: продолжение из сн
   });
 
   it("снимок в любой момент даёт ту же запись: момент снимка исход не меняет", SLOW, () => {
-    const first = runWithProof({ seed: SEED, maxTicks: 1_500, steer: circling(150), snapshotAtTick: 700 });
-    const second = runWithProof({ seed: SEED, maxTicks: 1_500, steer: circling(150), snapshotAtTick: 1_100 });
+    const first = runWithProof({ seed: SEED, maxTicks: 1_500, steer: circling(300), snapshotAtTick: 700 });
+    const second = runWithProof({ seed: SEED, maxTicks: 1_500, steer: circling(300), snapshotAtTick: 1_100 });
 
     expect(must(first.proof).input.ticks).toBe(1_500);
     expect(must(second.proof).input.ticks).toBe(1_500);
@@ -222,8 +226,18 @@ describe("запись для проверки: продолжение из сн
     expect(replayRecording(proof).verdict).toBe("match");
   });
 
+  it("стартовое оружие продолженного забега берётся из записи: слот мира мог уйти в эволюцию", () => {
+    const { world } = createRunWorld({ seed: SEED, mapId: "", difficultyId: "normal", unitScale: 2 });
+    const common = { world, runId: "run-proof", seed: SEED, contentHash: CONTENT_HASH, unitScale: 2 };
+    const draft = openRunRecorder({ ...common, startingWeaponId: "spark" }).draft(world);
+    expect(draft?.startingWeaponId).toBe("spark");
+
+    const resumed = openRunRecorder({ ...common, startingWeaponId: "эволюция", resume: { proof: JSON.parse(JSON.stringify(draft)) } });
+    expect(resumed.proof(world, null)?.startingWeaponId).toBe("spark");
+  });
+
   it("снимок прошлой сборки без записи — `resumed`, как раньше: записи нет", () => {
-    const run = runWithProof({ seed: SEED, maxTicks: 900, steer: circling(150), snapshotAtTick: 400, dropProofFromSnapshot: true });
+    const run = runWithProof({ seed: SEED, maxTicks: 900, steer: circling(300), snapshotAtTick: 400, dropProofFromSnapshot: true });
 
     expect(run.recorder?.blocker).toBe("resumed");
     expect(run.proof).toBeNull();
@@ -240,16 +254,56 @@ describe("запись для проверки: продолжение из сн
       (snapshot) => (snapshot.proof = { ...(snapshot.proof as object), unitScale: 3 }),
     ];
     for (const tamperSnapshot of broken) {
-      const run = runWithProof({ seed: SEED, maxTicks: 900, steer: circling(150), snapshotAtTick: 400, tamperSnapshot });
+      const run = runWithProof({ seed: SEED, maxTicks: 900, steer: circling(300), snapshotAtTick: 400, tamperSnapshot });
       expect(run.recorder?.blocker).toBe("resumed");
       expect(run.proof).toBeNull();
     }
   });
 });
 
+describe("запись для проверки: капище", () => {
+  const around = circling(300);
+  /** Палец ведёт к первому капищу, стоит в его круге, пока оно не откроется, и дальше водит круги. */
+  function towardShrine(tick: number, world: World): readonly [number, number] | null {
+    const shrine = world.secrets.sites.find((site) => site.kind === "shrine");
+    if (shrine === undefined) return null;
+    if (shrine.used) return around(tick);
+    const dx = shrine.x - world.player.x;
+    const dy = shrine.y - world.player.y;
+    return Math.sqrt(dx * dx + dy * dy) < 20 ? null : [dx, dy];
+  }
+
+  it("выбор благословения лежит в записи, и повтор берёт тот же, а не первое из предложенных", SLOW, () => {
+    const run = runWithProof({ seed: SEED, maxTicks: 3 * CHECKPOINT_TICKS, steer: towardShrine, manualBlessing: true, difficultyId: "easy" });
+    const proof = must(run.proof);
+
+    const chosen = proof.choices.filter(([, optionId]) => optionId.startsWith("blessing:"));
+    expect(chosen).toHaveLength(1);
+    // Первое из предложенных повтор взял бы и без записи — выбор должен быть другим.
+    const offered = run.world.secrets.blessingLog[0]?.options.map((blessing) => blessing.id) ?? [];
+    expect(offered.length).toBeGreaterThan(1);
+    expect(chosen[0][1]).toBe(`blessing:${offered[offered.length - 1]}`);
+
+    const outcome = replayRecording(proof);
+    expect(outcome.reason).toBeNull();
+    expect(outcome.verdict).toBe("match");
+
+    // Подмена на первое из предложенных — другой забег.
+    const swapped: RunProof = { ...proof, choices: proof.choices.map(([tick, optionId]) => [tick, optionId.startsWith("blessing:") ? `blessing:${offered[0]}` : optionId]) };
+    expect(replayRecording(swapped).verdict).toBe("mismatch");
+  });
+
+  it("капище, найденное до снимка и открытое после него, повторяется: выбор ложится в продолженную запись", SLOW, () => {
+    const run = runWithProof({ seed: SEED, maxTicks: 2_400, steer: towardShrine, manualBlessing: true, difficultyId: "easy", snapshotAtTick: 200 });
+
+    expect(must(run.proof).choices.some(([, optionId]) => optionId.startsWith("blessing:"))).toBe(true);
+    expect(replayRecording(must(run.proof)).verdict).toBe("match");
+  });
+});
+
 describe("запись для проверки: подмена", () => {
   it("другой настоящий вариант вместо выбора — расхождение на свёртке или итоге", SLOW, () => {
-    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(150) });
+    const run = runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS + 300, steer: circling(300) });
     const proof = must(run.proof);
     const [tick, chosen] = proof.choices[0];
     const alternative = run.offers.find((offer) => offer.tick === tick)?.ids.find((id) => id !== chosen);
@@ -263,7 +317,7 @@ describe("запись для проверки: подмена", () => {
   });
 
   it("выбор, которого не было в предложении, — расхождение с тиком выбора", SLOW, () => {
-    const proof = must(runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS, steer: circling(150) }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: CHECKPOINT_TICKS, steer: circling(300) }).proof);
     const [tick] = proof.choices[0];
 
     const outcome = replayRecording({ ...proof, choices: [[tick, "not_an_option"], ...proof.choices.slice(1)] });
@@ -273,14 +327,14 @@ describe("запись для проверки: подмена", () => {
   });
 
   it("завышенное время в итоге при честном вводе — расхождение итога", SLOW, () => {
-    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(150) }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(300) }).proof);
 
     const outcome = replayRecording({ ...proof, result: { ...proof.result, survivalSec: proof.result.survivalSec + 120 } });
     expect(outcome.verdict).toBe("mismatch");
   });
 
   it("чужой хэш контента, неповторимую и битую запись повтор не принимает", () => {
-    const proof = must(runWithProof({ seed: SEED, maxTicks: 200, steer: circling(150) }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: 200, steer: circling(300) }).proof);
 
     expect(replayRecording(proof, "другой-хэш").verdict).toBe("content_mismatch");
     expect(replayRecording({ ...proof, replayBlocker: "resumed" }).verdict).toBe("not_replayable");
@@ -293,21 +347,30 @@ describe("запись для проверки: размер и сжатие", (
     return JSON.parse(gunzipSync(Buffer.from(payload, "base64")).toString("utf8"));
   }
 
-  /** Запись из `ticks` шагов случайного ввода: сжимается хуже всего. */
-  function noisyProof(ticks: number, inputLogBytes: number): RunProof {
+  /**
+   * Запись из `ticks` шагов ввода. `chaos` — доля шагов с произвольным кодом: при 1 лог раздут до
+   * двух байт на шаг, и сжимается он хуже всего; при малой — это круги вокруг толпы.
+   */
+  function noisyProof(ticks: number, inputLogBytes: number, chaos: number): RunProof {
     const { world } = createRunWorld({ seed: 1, mapId: "", difficultyId: "normal", unitScale: 2 });
     const recorder = openRunRecorder({ world, runId: "noisy", seed: 1, contentHash: CONTENT_HASH, startingWeaponId: "spark", unitScale: 2, inputLogBytes });
     let state = 7;
-    for (let tick = 1; tick <= ticks; tick++) {
+    let code = 0;
+    const random = (): number => {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return state / 0x1_0000_0000;
+    };
+    for (let tick = 1; tick <= ticks; tick++) {
+      // Худший честный случай: палец ведёт круги, код меняется почти каждый тик, изредка — разворот.
+      code = random() < chaos ? Math.floor(random() * DIRECTION_CODES) : (code + 1) % DIRECTION_CODES;
       world.stats.tick = tick;
-      recorder.stepped(state % 3 === 0 ? IDLE_CODE : state % DIRECTION_CODES, world);
+      recorder.stepped(code, world);
     }
     return must(recorder.proof(world, null));
   }
 
   it("сжимается gzip и кодируется base64: распакованная запись равна исходной", async () => {
-    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(150) }).proof);
+    const proof = must(runWithProof({ seed: SEED, maxTicks: 1_200, steer: circling(300) }).proof);
 
     const packed = await packRunProof(proof);
     expect(packed.ok).toBe(true);
@@ -320,7 +383,7 @@ describe("запись для проверки: размер и сжатие", (
 
   it("десять минут худшего честного ввода укладываются в 64 КБ после сжатия", async () => {
     // Потолок лога ввода (48 КБ) стоит так, что честный забег в потолок упереться не может.
-    const proof = noisyProof(10 * CHECKPOINT_TICKS, 48_000);
+    const proof = noisyProof(10 * CHECKPOINT_TICKS, INPUT_LOG_MAX_BYTES, 0.01);
 
     const packed = await packRunProof(proof);
     expect(packed.ok).toBe(true);
@@ -328,7 +391,7 @@ describe("запись для проверки: размер и сжатие", (
   });
 
   it("запись больше 64 КБ после сжатия — `proof_overflow`, отправлять нечего", async () => {
-    const proof = noisyProof(60_000, 400_000);
+    const proof = noisyProof(100_000, 400_000, 1);
 
     expect(proof.input.truncated).toBe(false);
     expect(await packRunProof(proof)).toEqual({ ok: false, blocker: "proof_overflow" });
