@@ -200,6 +200,8 @@ const SEASONS_GROUP = "Сезоны рейтинга";
 
 const RATING_GROUP = "Рейтинг";
 
+const REPLAY_GROUP = "Перепроверка забегов";
+
 const BOT_MENTION_GROUP = "Юзернейм бота";
 
 const ACHIEVEMENTS_GROUP = "Достижения";
@@ -715,6 +717,30 @@ export const SETTINGS = {
     { min: 0, max: 100_000, unit: ["очко", "очка", "очков"] },
     800,
   ),
+  /**
+   * Перепроверка забегов повтором на сервере (docs/35-stage4-plan.md WP5, tasks/T-0319).
+   * Верх досок, высокие дивизионы, редкая добыча и победа над Стражем повторяются всегда —
+   * это правило, а не настройка; ключи — про остальные забеги и про то, чем отвечает расхождение.
+   * Редактор панели принимает только целые, поэтому доля выборки — проценты (5 — это 0,05).
+   */
+  replaySampleRate: integer(
+    "replay.sample-rate",
+    REPLAY_GROUP,
+    "Повтор выборкой, процентов забегов",
+    "Какая доля остальных рейтинговых забегов повторяется на сервере для наблюдения за детерминизмом движка, проценты: 5 — это 0,05. Верх досок, рубин и золото, эпическая добыча и победа над Стражем повторяются всегда. 0 — выборки нет",
+    { min: 0, max: 100, unit: ["процент", "процента", "процентов"] },
+    5,
+  ),
+  replayMismatchVerdict: {
+    key: "replay.mismatch-verdict",
+    group: REPLAY_GROUP,
+    title: "Вердикт при расхождении повтора",
+    hint: "Чем отвечает сервер, когда повтор разошёлся с записью: suspicious — подозрительный (забег уходит из рейтинга в разбор), rejected — отклонённый. На первых неделях — suspicious: сначала меряем, насколько движок сервера расходится с iPhone",
+    kind: "text",
+    schema: z.enum(["suspicious", "rejected"], { message: "suspicious или rejected" }),
+    fromEnv: () => null,
+    fallback: "suspicious",
+  } satisfies SettingDefinition<string>,
   paymentsStars: feature(
     "payments.stars",
     "Оплата звёздами",
