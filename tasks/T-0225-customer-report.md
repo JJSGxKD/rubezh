@@ -3,7 +3,7 @@ id: T-0225
 title: Отчёт заказчику партнёрских заданий — по дням, без ID, экран и CSV
 epic: E14
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
