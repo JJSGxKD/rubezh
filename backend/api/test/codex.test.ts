@@ -3,8 +3,11 @@ import { ENEMIES } from "../../../packages/core-game/src/content/enemies";
 import { Prisma } from "../src/generated/prisma/client.js";
 import { CODEX_ENEMY_IDS, CODEX_REWARD_TASK_ID, newEntries, percentOf } from "../src/modules/codex/codex-rules.js";
 import { EVENT_DICTIONARY } from "../src/modules/events/event-dictionary.js";
-import { enemiesSeenOf } from "../src/modules/runs/runs-hooks.js";
+import type { CodexRepository } from "../src/modules/codex/codex.repository.js";
+import { CodexService } from "../src/modules/codex/codex.service.js";
+import { RunsHooks, enemiesSeenOf, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { STATE_KINDS, TASK_KIND_IDS, isStateKind, taskDefSchema } from "../src/modules/tasks/task-rules.js";
+import type { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { WIPE_ORDER, WIPE_PLAN } from "../src/modules/wipe/wipe-plan.js";
 
 // Кодекс врагов (tasks/T-0127, docs/39-retention-mechanics.md К2): чистые
@@ -145,5 +148,64 @@ describe("вайп и словарь событий", () => {
     expect(schema.safeParse({ opened: 7, total: 11, claimable: false }).success).toBe(true);
     expect(schema.safeParse({ opened: -1, total: 11, claimable: false }).success).toBe(false);
     expect(schema.safeParse({ opened: 7, total: 11 }).success).toBe(false);
+  });
+});
+
+describe("слушатель забега: процент считается по списку сервера", () => {
+  const NOW = new Date("2026-11-13T12:00:00.000Z");
+
+  /** Забег, который засчитывается заданиям: ничего лишнего, только то, что читает слушатель. */
+  function recordedRun(enemiesSeen: string[]): RecordedRun {
+    return {
+      runId: "codex-unit-run",
+      accountId: "00000000-0000-4000-8000-000000000001",
+      difficulty: "hard",
+      outcome: "died",
+      survivalSec: 400,
+      level: 22,
+      enemiesKilled: 400,
+      startingWeaponId: "spark",
+      weapons: [{ id: "spark", level: 3 }],
+      boosts: [],
+      xpCollected: 600,
+      counters: null,
+      enemiesSeen,
+      deathCause: null,
+      cheats: false,
+      continues: 0,
+      ranked: true,
+      verdict: "ok",
+      reasons: [],
+      finishedAt: NOW,
+    };
+  }
+
+  function setup(alreadyOpened: string[]) {
+    const applied: number[] = [];
+    const opened = alreadyOpened.map((enemyId) => ({ enemyId, firstSeenAt: NOW }));
+    const repository: CodexRepository = {
+      opened: async () => opened,
+      open: async (_accountId, ids) => [...ids],
+    };
+    const tasks = {
+      achievementDefs: async () => [{ taskId: "ach_codex_30", period: "achievement", kind: "codex_percent", target: 30 }],
+      applyState: async (_accountId: string, deltas: { amount: number }[]) => {
+        for (const delta of deltas) applied.push(delta.amount);
+      },
+    } as unknown as TasksService;
+    return { applied, service: new CodexService(repository, tasks, new RunsHooks()) };
+  }
+
+  it("запись о враге, которого убрали из контента, в процент не идёт: из списка открыто 2, лишняя запись не считается", async () => {
+    const [first, second] = CODEX_ENEMY_IDS;
+    const { applied, service } = setup(["враг_из_прошлого_поезда", first ?? ""]);
+    await service.onRun(recordedRun([second ?? ""]));
+    expect(applied).toEqual([percentOf(2, CODEX_ENEMY_IDS.length)]);
+  });
+
+  it("босс открывается неубитым: в итоге он есть только в enemiesSeen", async () => {
+    const { applied, service } = setup([]);
+    await service.onRun(recordedRun(enemiesSeenOf({ enemiesSeen: ["boss_ram"], topKills: [{ enemy: "swarm_rat", count: 40 }] })));
+    expect(applied).toEqual([percentOf(2, CODEX_ENEMY_IDS.length)]);
   });
 });

@@ -68,7 +68,9 @@ export class CodexService implements OnModuleInit {
       if (fresh.length === 0) return;
       const inserted = await this.db(this.repository.open(run.accountId, fresh, run.finishedAt));
       if (inserted.length === 0) return;
-      await this.syncPercent(run.accountId, known.size + inserted.length, run.finishedAt);
+      // Запись про врага, которого убрали из контента, в процент не идёт — как и в ответе кодекса.
+      const listedKnown = CODEX_ENEMY_IDS.filter((id) => known.has(id)).length;
+      await this.syncPercent(run.accountId, listedKnown + inserted.length, run.finishedAt);
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "codex", event: "codex_failed", runId: run.runId, accountId: run.accountId, reason: error instanceof Error ? error.message : "unknown" }));
     }
