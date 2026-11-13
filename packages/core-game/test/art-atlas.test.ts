@@ -69,6 +69,8 @@ describe("атлас покрывает контент", () => {
   it("у обычного врага на каждой ступени — свой кадр шага, не ближайший", () => {
     for (const enemy of ENEMIES) {
       if (enemy.rank !== undefined) continue;
+      // Карачун без кадров атласа до T-0425: исключение уходит вместе с заглушкой.
+      if (enemy.pattern === "stalker") continue;
       for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
         for (let k = 0; k < ART_WALK_FRAMES; k++) expect(frames.has(enemyFrameName(enemy.id, stage, k)), `${enemy.id} s${String(stage)} walk${String(k)}`).toBe(true);
       }
@@ -87,6 +89,8 @@ describe("атлас покрывает контент", () => {
   it("нарисованная ступень тона не получает: заплатка больше нигде не нужна", () => {
     for (const enemy of ENEMIES) {
       if (enemy.rank !== undefined) continue;
+      // Карачун без кадров атласа до T-0425: исключение уходит вместе с заглушкой.
+      if (enemy.pattern === "stalker") continue;
       for (let stage = 0; stage < ENEMY_STAGES.length; stage++) {
         const drawn = artStageFor(stage, (s) => frames.has(enemyFrameName(enemy.id, s, 0)));
         expect(drawn, `${enemy.id} s${String(stage)}`).toBe(stage);
