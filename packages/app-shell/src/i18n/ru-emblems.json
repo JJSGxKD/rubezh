@@ -1,0 +1,18 @@
+{
+  "emblems.open": "Знаки · {count}",
+  "emblems.title": "Знаки",
+  "emblems.group.status": "Статус",
+  "emblems.group.season": "Сезоны",
+  "emblems.group.merit": "Заслуги",
+  "emblems.season": "{title} · сезон {season}",
+  "emblems.rarity": "Есть у {percent}% игроков",
+  "emblems.wear": "Носить у имени",
+  "emblems.current": "Сейчас у имени",
+  "emblems.auto": "По умолчанию",
+  "emblems.autoNow": "По умолчанию — сейчас «{title}»",
+  "emblems.autoNone": "По умолчанию — без знака",
+  "emblems.loading": "Загружаем знаки…",
+  "emblems.failed": "Не удалось загрузить знаки — проверь связь",
+  "emblems.chooseFailed": "Не удалось сменить знак — попробуй ещё раз",
+  "emblems.sheet.hint": "Выбери знак, который будет виден рядом с именем в рейтинге и у друзей"
+}
