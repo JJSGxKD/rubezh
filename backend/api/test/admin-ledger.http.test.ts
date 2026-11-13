@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
 import { afterEach, describe, expect, it } from "vitest";
+import { Decimal, type CurrencyCode, type Rate } from "@bh/fx";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
@@ -16,6 +17,7 @@ import { PanelLoginService } from "../src/modules/admin/panel-login.service.js";
 import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
+import { FxService } from "../src/modules/fx/fx.service.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import type { ArticleView, CreateArticleInput, CreatePlaceInput, PlaceView, UpdatePlaceInput } from "../src/modules/ledger/ledger-chart.js";
 import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.js";
@@ -62,6 +64,29 @@ const BALANCES: AccountBalanceView[] = [
   { accountId: "stars.bot.hold", name: "Звёзды бота — в холде", type: "asset", currency: "XTR", balance: "50" },
   { accountId: "revenue.shop.telegram", name: "Выручка: магазин, Telegram", type: "revenue", currency: "XTR", balance: "50" },
 ];
+
+const RATES_AT = new Date("2026-11-13T09:00:00.000Z");
+
+function rate(currency: CurrencyCode, usdPerUnit: string): Rate {
+  return { currency, usdPerUnit: new Decimal(usdPerUnit), sources: ["test"], observedAt: RATES_AT };
+}
+
+/** Подменный сервис курсов: снимок без записи; `empty` — курсов нет совсем. */
+class FakeFx {
+  empty = false;
+  failing = false;
+
+  async peek() {
+    if (this.failing) throw new Error("хранилище курсов недоступно");
+    const rates = this.empty ? [] : [rate("RUB", "0.01")];
+    const payout = this.empty ? [] : [rate("XTR", "0.013")];
+    return {
+      takenAt: RATES_AT,
+      rates: new Map(rates.map((item) => [item.currency, item])),
+      payout: new Map(payout.map((item) => [item.currency, item])),
+    };
+  }
+}
 
 const PAGE: JournalPage = {
   entries: [
@@ -334,6 +359,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const accounts = new MemoryAccountRepository();
     const roles = new MemoryRolesRepository();
     const ledger = new FakeLedger();
+    const fx = new FakeFx();
     const chart = new FakeChart();
     const operations = new FakeOperations();
     const periods = new FakePeriods();
@@ -349,6 +375,7 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: LedgerService, useValue: ledger },
+        { provide: FxService, useValue: fx },
         { provide: LedgerChartService, useValue: chart },
         { provide: OperationsService, useValue: operations },
         { provide: PeriodsService, useValue: periods },
@@ -380,7 +407,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, periods, templates, login, staff };
+    return { ledger, fx, chart, operations, periods, templates, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -409,7 +436,7 @@ describe("журнал учёта в панели по HTTP", () => {
     expect(ctx.ledger.journalCalls).toHaveLength(0);
   });
 
-  it("финансы и владелец видят остатки: { data: { accounts } }", async () => {
+  it("финансы и владелец видят остатки с оценкой: у счёта value, у ответа rates и итоги активов", async () => {
     const ctx = await start();
     const finance = await ctx.staff("954", "Финансы", "finance");
     const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
@@ -417,8 +444,48 @@ describe("журнал учёта в панели по HTTP", () => {
     for (const cookie of [finance, owner]) {
       const response = await get("/balances", cookie);
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ data: { accounts: BALANCES } });
+      expect(response.json()).toEqual({
+        data: {
+          accounts: [
+            { ...BALANCES[0], value: { usd: "0.65", rub: "65.00" } },
+            { ...BALANCES[1], value: { usd: "0.65", rub: "65.00" } },
+          ],
+          rates: { at: "2026-11-13T09:00:00.000Z" },
+          totalUsd: "0.65",
+          totalRub: "65.00",
+        },
+      });
     }
+  });
+
+  it("курсов нет: value, итоги и rates — null, суммы в родной валюте остаются", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("956", "Финансы", "finance");
+    ctx.fx.empty = true;
+
+    const response = await get("/balances", finance);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      data: {
+        accounts: [
+          { ...BALANCES[0], value: null },
+          { ...BALANCES[1], value: null },
+        ],
+        rates: null,
+        totalUsd: null,
+        totalRub: null,
+      },
+    });
+  });
+
+  it("сбой чтения курсов не роняет остатки: ответ без оценки", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("957", "Финансы", "finance");
+    ctx.fx.failing = true;
+
+    const response = await get("/balances", finance);
+    expect(response.statusCode).toBe(200);
+    expect(response.json<{ data: { rates: unknown } }>().data.rates).toBeNull();
   });
 
   it("финансы и владелец видят журнал: { data: { entries, next } }, без параметров — лимит 50 и пустой фильтр", async () => {

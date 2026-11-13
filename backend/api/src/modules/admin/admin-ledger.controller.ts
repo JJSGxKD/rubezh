@@ -1,13 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Logger, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
 import { isCurrencyCode } from "@bh/fx";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
 import { RateLimitedError, ValidationError } from "../../common/domain-error.js";
+import { FxService } from "../fx/fx.service.js";
 import { accountOf } from "../auth/auth.guard.js";
 import type { AccessTokenClaims } from "../auth/access-token.js";
 import { RateLimiter } from "../ingest/rate-limiter.js";
 import { FEE_PERCENT_BP_MAX, NAME_MAX, type ArticleView, type CreateArticleInput, type CreatePlaceInput, type PlaceView, type UpdatePlaceInput } from "../ledger/ledger-chart.js";
 import { LedgerChartService } from "../ledger/ledger-chart.service.js";
+import { totalAssets, valueOf, type Valuation, type ValuationSnapshot } from "../ledger/ledger-valuation.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger/ledger.service.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../ledger/ledger-view.js";
 import { OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
@@ -48,6 +50,16 @@ const journalQuerySchema = z
 
 /** Остатки читаются без параметров: лишний параметр — опечатка клиента, а не «молчаливо проигнорировать». */
 const noQuerySchema = z.object({}).strict();
+
+/** Остатки с оценкой в долларах и рублях (Р219, tasks/T-0459): `value` — `null`, если для валюты нет курса. */
+export interface BalancesResponse {
+  accounts: (AccountBalanceView & { value: Valuation | null })[];
+  /** когда сняты курсы; `null` — курсов нет, суммы только в родной валюте */
+  rates: { at: string } | null;
+  /** итог активов; `null` — у какого-то актива нет оценки */
+  totalUsd: string | null;
+  totalRub: string | null;
+}
 
 const nameSchema = z.string().trim().min(1).max(NAME_MAX);
 /** Валюта — только из справочника ядра курсов: «ABC» и «rub» отсекаются здесь, а не в базе. */
@@ -131,13 +143,26 @@ export class AdminLedgerController {
     private readonly periods: PeriodsService,
     private readonly templates: TemplatesService,
     private readonly limiter: RateLimiter,
+    private readonly fx: FxService,
   ) {}
+
+  private readonly log = new Logger(AdminLedgerController.name);
 
   @Get("balances")
   @RequirePermission("ledger.view")
-  async balances(@Query() query: unknown): Promise<{ data: { accounts: AccountBalanceView[] } }> {
+  async balances(@Query() query: unknown): Promise<{ data: BalancesResponse }> {
     parse(() => noQuerySchema.parse(query ?? {}), "Остатки не принимают параметров");
-    return { data: { accounts: await this.ledger.balances() } };
+    const accounts = await this.ledger.balances();
+    const rates = await this.currentRates();
+    const total = totalAssets(accounts, rates?.snapshot ?? null);
+    return {
+      data: {
+        accounts: accounts.map((account) => ({ ...account, value: rates === null ? null : valueOf(account.balance, account.currency, rates.snapshot) })),
+        rates: rates === null ? null : { at: rates.at },
+        totalUsd: total?.usd ?? null,
+        totalRub: total?.rub ?? null,
+      },
+    };
   }
 
   @Get("journal")
@@ -310,6 +335,21 @@ export class AdminLedgerController {
     const input = parse(() => reopenSchema.parse(body), REOPEN_PROBLEM);
     await this.periods.reopen(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM), input.reason);
     return { data: { ok: true } };
+  }
+
+  /**
+   * Текущие курсы без записи снимка. Сбой чтения курсов остатки не роняет: деньги видны и без оценки, а причину
+   * разбирают по журналу. Пустой снимок (ни рубля, ни выплаты звезды) — тоже «курсов нет».
+   */
+  private async currentRates(): Promise<{ snapshot: ValuationSnapshot; at: string } | null> {
+    try {
+      const snapshot = await this.fx.peek();
+      if (snapshot.rates.size === 0 && snapshot.payout.size === 0) return null;
+      return { snapshot, at: snapshot.takenAt.toISOString() };
+    } catch (error) {
+      this.log.warn(`Курсы для оценки остатков не прочитаны: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   @Get("templates")
