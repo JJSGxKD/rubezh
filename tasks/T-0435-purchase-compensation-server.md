@@ -22,6 +22,7 @@ shared:
   - backend/api/prisma/migrations/
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/payments/payments-errors.ts
   - backend/api/src/modules/payments/payments.module.ts
