@@ -49,7 +49,7 @@ export type HapticType =
  * места по сессии показа.
  */
 export interface AdShowRequest {
-  /** сеть из выдачи сервера: `adsgram`, `adsonar`, `richads`, `taddy` */
+  /** сеть из выдачи сервера: `adsgram`, `richads`, `taddy` */
   network: string;
   /** блок в кабинете сети; `null` — показ по ключам сети */
   blockId: string | null;
@@ -341,6 +341,16 @@ export interface ThemeColors {
  * Каждая подписка возвращает функцию отписки: оболочка монтирует и
  * размонтирует экраны, и подписка без отписки — утечка на каждом переходе.
  */
+/**
+ * Полоса кнопок площадки поверх приложения (Telegram во весь экран: «Закрыть»
+ * и меню). Числа — CSS-пиксели от верха окна: `top` — где полоса начинается
+ * (под системной зоной), `height` — её высота.
+ */
+export interface ButtonBar {
+  top: number;
+  height: number;
+}
+
 export interface PlatformUi {
   /**
    * Подготовить возможности площадки: смонтировать SDK, подписаться на
@@ -363,6 +373,16 @@ export interface PlatformUi {
 
   readonly insets: SafeAreaInsets;
   onInsetsChange(handler: (insets: SafeAreaInsets) => void): Unsubscribe;
+
+  /**
+   * Полоса кнопок площадки поверх приложения; `null` — её нет. Нет свойства —
+   * площадка полосы не знает (VK, MAX, браузер), оболочка читает его как
+   * `null`. Объект остаётся тем же, пока полоса не изменилась. Отступы
+   * `insets` от неё не зависят (счётчик онлайна, Р107).
+   */
+  readonly buttonBar?: ButtonBar | null;
+  /** Нет метода — полоса не меняется. */
+  onButtonBarChange?(handler: (bar: ButtonBar | null) => void): Unsubscribe;
 
   readonly viewport: ViewportState;
   onViewportChange(handler: (viewport: ViewportState) => void): Unsubscribe;
@@ -514,6 +534,8 @@ export interface EnemyPatternParams {
   };
   /** Страж кольца держит место в строю; числа кольца — у события таймлайна, а не у врага. */
   cordon: Record<string, never>;
+  /** Неубиваемый преследователь (Р205): числа тела — `core-game/src/content/stalker.ts`, а не у врага. */
+  stalker: Record<string, never>;
 }
 
 export type EnemyPattern = keyof EnemyPatternParams;
@@ -552,6 +574,22 @@ export type ElementId = (typeof ELEMENTS)[number];
 
 /** Стихии, у которых есть состояние и сопротивление, — всё, кроме физического. */
 export type StatusElement = Exclude<ElementId, "physical">;
+
+/**
+ * След врага: за ним на земле остаются лужи (`sim/hazards.ts`, Р157). Задаётся
+ * данными любому паттерну; стихия лужи — `element` врага, шанс состояния — его
+ * `statusChance`. Коридоры проверяет тест контента.
+ */
+export interface EnemyTrailDef {
+  /** как часто враг оставляет лужу, секунды его жизни; первая — через столько же после появления (0,5…5) */
+  everySec: number;
+  /** радиус лужи в игровых единицах (12…60) */
+  radius: number;
+  /** сколько лужа живёт, секунды (1…8) */
+  lifeSec: number;
+  /** урон игроку в луже в секунду (1…20); бьёт тиками по полсекунды */
+  damagePerSec: number;
+}
 
 interface EnemyDefBase {
   id: string;
@@ -607,6 +645,8 @@ interface EnemyDefBase {
   element?: StatusElement;
   /** шанс наложить состояние за попадание, от 0 до 1; не задан — каждое попадание */
   statusChance?: number;
+  /** след из луж за врагом; не задан — врага без следа */
+  trail?: EnemyTrailDef;
 }
 
 /**
@@ -1249,10 +1289,112 @@ export interface SecretsDef {
    * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
    */
   rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
-  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
-  wisp: { appearSec: number; speed: number };
+  /**
+   * огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и
+   * ведёт к ближайшему неоткрытому шагами (Р214): перелёт длиной `hopUnits` в сторону цели со
+   * скоростью `speed` и боковым отклонением `swayMin…swayMax` долей шага, каждый следующий шаг — в
+   * другую сторону; после посадки ждёт, пока игрок не подойдёт ближе `waitUnits`; последний шаг
+   * идёт прямо к краю круга цели. Нет неоткрытых мест — гаснет
+   */
+  wisp: { appearSec: number; speed: number; hopUnits: number; swayMin: number; swayMax: number; waitUnits: number };
   /** набор благословений капища */
   blessings: readonly BlessingDef[];
+}
+
+/**
+ * Осада стоящего — данные геймдизайнера (`core-game/src/content/siege.ts`, Р197, tasks/T-0392).
+ * Кто после `fromSec` долго стоит в одном круге, того рубеж берёт в осаду: строй стражей и кольцо элит.
+ * Расстояния и радиусы — в игровых единицах, время — в секундах.
+ */
+export interface SiegeDef {
+  /** с какой секунды забега директор следит за стоянием; раньше стоять можно */
+  fromSec: number;
+  /** круг стояния вокруг якоря: пока игрок в нём, копится счётчик; вышел — якорь переезжает */
+  radius: number;
+  /** сколько секунд стоять до осады */
+  holdSec: number;
+  /** за сколько секунд до осады на земле загорается кольцо предупреждения; меньше `holdSec` */
+  warnSec: number;
+  /** пауза после осады, секунды: новой осады в ней нет */
+  cooldownSec: number;
+  /** сколько секунд подряд вне осады снимают один уровень */
+  calmSec: number;
+  /** во сколько раз число стражей и элит растёт за уровень, от 1 до 2 */
+  growth: number;
+  /** уровень осады растёт с каждой осадой забега до этого потолка, от 1 до 10 */
+  maxLevel: number;
+  /** строй: страж, сколько их на нулевом уровне и числа кольца (как у события `cordon`) */
+  cordon: { enemy: string; count: number; ring: CordonRingDef };
+  /** сколько элит выходит кольцом на нулевом уровне; типы — те, что таймлайн к этой секунде уже выпускал */
+  eliteCount: number;
+}
+
+/**
+ * Тело неубиваемого преследователя (docs/35-stage4-plan.md, Р205, tasks/T-0421): удары оружия его
+ * не убивают, а отталкивают, а касание снимает долю здоровья и отбрасывает игрока. Расстояния — в
+ * игровых единицах, время — в секундах.
+ */
+export interface StalkerBodyDef {
+  /** доля максимума здоровья игрока за одно касание, мимо брони и сопротивлений */
+  touchMaxHpShare: number;
+  /** отброс игрока после касания: на сколько единиц и за сколько секунд */
+  knockback: { distance: number; sec: number };
+  /** сколько после касания он не бьёт снова */
+  touchCooldownSec: number;
+  /** сколько после касания он стоит на месте */
+  recoverSec: number;
+  push: {
+    /** первый толчок серии, единиц */
+    first: number;
+    /** каждый следующий толчок серии — предыдущий, умноженный на это */
+    decay: number;
+    /** столько секунд без попаданий — серия сначала */
+    seriesResetSec: number;
+    /** за любые 60 тиков подряд — не дальше этого, единиц */
+    maxPerSec: number;
+  };
+}
+
+/** Отрезок значений `[min, max]`, из которого поток случайности бросает число. */
+export interface StalkerRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Когда и как появляется преследователь (Р205, tasks/T-0423). Время — в секундах, расстояния — в
+ * игровых единицах.
+ */
+export interface StalkerAppearDef {
+  /** с какой секунды забега он приходит */
+  fromSec: number;
+  /** первое предвестие — через столько секунд после `fromSec` */
+  firstDelaySec: StalkerRange;
+  /** пауза от конца появления до следующего предвестия на `fromSec` */
+  gapSec: StalkerRange;
+  /** она же на `lateAtSec` и дальше; между ними — линейно */
+  lateGapSec: StalkerRange;
+  lateAtSec: number;
+  /** сколько секунд длится погоня */
+  chaseSec: StalkerRange;
+  /** сколько горит предвестие до выхода */
+  omenSec: number;
+  /** сколько он стоит, растворяясь, после погони */
+  fadeSec: number;
+  /** на каком расстоянии от игрока выходит: на виду и у самого узкого экрана */
+  appearDistance: number;
+  /** дальше этого от игрока он растворяется и возникает ближе */
+  farDistance: number;
+  /** ниже этого уровня аккаунта он не приходит; забег без уровня идёт с ним */
+  minAccountLevel: number;
+}
+
+/** Правила преследователя целиком: какой враг им служит, как устроено его тело и когда он приходит. */
+export interface StalkerDef {
+  /** id врага паттерна `stalker` */
+  enemy: string;
+  body: StalkerBodyDef;
+  appear: StalkerAppearDef;
 }
 
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
@@ -1634,6 +1776,8 @@ export interface RunResult {
   eliteKills: number;
   /** открытые сундуки забега */
   chestsOpened: number;
+  /** из них редких: открытых сундуков наибольшего размера из таблицы весов (tasks/T-0175) */
+  rareChestsOpened: number;
   /** подобранные кристаллы опыта: слитый с соседним — один, улетевший и запасной опыт сундука — нет */
   crystalsCollected: number;
   /**
@@ -1641,6 +1785,11 @@ export interface RunResult {
    * записи прошлой сборки поля не знают, а движок отдаёт его всегда.
    */
   secrets?: RunSecretsSummary;
+  /**
+   * Сколько раз рубеж брал игрока в осаду за стояние (tasks/T-0392). Необязательное: итог прошлой
+   * сборки поля не знает, а движок отдаёт его всегда. Рейтинг и очки эффективности осада не меняет.
+   */
+  sieges?: number;
   /**
    * Рубеж: пришёл ли страж, пал ли он и сколько здоровья у него осталось —
    * «почти победил» для экрана смерти (T-0120). Необязательное: итог прошлой
@@ -1791,6 +1940,8 @@ export interface RunFinishStats {
   bossKills?: number;
   eliteKills?: number;
   chestsOpened?: number;
+  /** редкие сундуки: не больше `chestsOpened` (tasks/T-0175) */
+  rareChests?: number;
   crystals?: number;
   /** серии и убийства по стихиям (tasks/T-0321): необязательные по той же причине */
   noHitSec?: number;
@@ -1875,6 +2026,8 @@ export interface LeaderboardEntry {
   isMe: boolean;
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester?: true | undefined;
+  /** поддержал проект (Р109); нет поля — не поддержал */
+  supporter?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
@@ -1929,7 +2082,7 @@ export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  best: Record<DifficultyId, { survivalSec: number; rank: number; points?: number | null } | null>;
   recent: RecentRun[];
   /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
   prologueDone?: boolean;

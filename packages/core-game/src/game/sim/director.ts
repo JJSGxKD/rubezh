@@ -8,6 +8,8 @@ import {
 } from "./directions";
 import { startCordon } from "./cordon";
 import { applySegmentPressure, isPressureActive, refreshPressure } from "./pressure";
+import { updateSiege } from "./siege";
+import { stalkerAlive } from "./stalker-body";
 import { spawnOnRing, spawnRandomOnRing, type Spawner } from "./spawner";
 import { planSegment, segmentStartSec, type SegmentEvent, type SegmentPlan } from "./timeline";
 import type { World } from "./world";
@@ -94,6 +96,8 @@ export function createTimelineDirector(
       debt = saved.debt;
     },
     update(world, dtSec) {
+      // Осада стоящего идёт под директором: мир без него (стенды, сценарные эталоны) её не знает.
+      updateSiege(world);
       let steps = 0;
       while (
         steps++ < MAX_SEGMENT_STEPS_PER_TICK &&
@@ -172,7 +176,8 @@ function isSegmentPlan(value: unknown): value is SegmentPlan {
 }
 
 function atCap(world: World): boolean {
-  return world.enemies.aliveCount >= world.difficulty.maxAlive;
+  // Неубиваемый преследователь в потолок живых не входит: он не толпа, и рядовые идут мимо него.
+  return world.enemies.aliveCount - stalkerAlive(world) >= world.difficulty.maxAlive;
 }
 
 /**

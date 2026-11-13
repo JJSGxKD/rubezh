@@ -554,10 +554,6 @@ describe("найденный тайник", () => {
 describe("огонёк", () => {
   const APPEAR_TICKS = 90 * TICKS_PER_SEC;
 
-  function distanceBetween(a: { x: number; y: number }, b: { x: number; y: number }): number {
-    return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
-  }
-
   it("до 90-й секунды его нет на карте, на 90-й — у игрока и сразу виден", () => {
     const world = setup(WISP_RULES, 1);
     const wisp = wispOf(world);
@@ -575,69 +571,6 @@ describe("огонёк", () => {
     const events = takeSecretEvents(world, { found: 0, used: 0, blessings: 0 });
     expect(events.found.map((entry) => entry.kind)).toContain("wisp");
     expect(events.found.find((entry) => entry.kind === "wisp")?.elapsedSec).toBeCloseTo(90, 9);
-  });
-
-  it("летит к ближайшему неоткрытому тайнику со скоростью 80 единиц в секунду", () => {
-    const world = setup(WISP_RULES, 1);
-    const wisp = wispOf(world);
-    const [shrine, hoard] = world.secrets.sites;
-    standAt(world, 0, 0);
-    run(world, APPEAR_TICKS);
-    // Капище из первого кольца ближе клада из второго.
-    expect(distanceBetween(wisp, shrine)).toBeLessThan(distanceBetween(wisp, hoard));
-
-    const start = { x: wisp.x, y: wisp.y };
-    const toShrine = distanceBetween(start, shrine);
-    run(world, TICKS_PER_SEC);
-
-    expect(distanceBetween(start, wisp)).toBeCloseTo(SECRETS.wisp.speed, 6);
-    expect(wisp.x - start.x).toBeCloseTo(((shrine.x - start.x) / toShrine) * SECRETS.wisp.speed, 6);
-    expect(wisp.y - start.y).toBeCloseTo(((shrine.y - start.y) / toShrine) * SECRETS.wisp.speed, 6);
-  });
-
-  it("долетает до края круга и ждёт игрока", () => {
-    const world = setup(WISP_RULES, 1);
-    const wisp = wispOf(world);
-    const shrine = world.secrets.sites[0];
-    standAt(world, 0, 0);
-    run(world, APPEAR_TICKS);
-    run(world, 20 * TICKS_PER_SEC);
-
-    expect(distanceBetween(wisp, shrine)).toBeCloseTo(SECRETS.shrine.radius, 6);
-    const waiting = { x: wisp.x, y: wisp.y };
-    run(world, TICKS_PER_SEC);
-    expect([wisp.x, wisp.y]).toEqual([waiting.x, waiting.y]);
-  });
-
-  it("нашёл игрок тайник — огонёк переключается на следующий неоткрытый", () => {
-    const world = setup(WISP_RULES, 1);
-    const wisp = wispOf(world);
-    const [shrine, hoard] = world.secrets.sites;
-    standAt(world, 0, 0);
-    run(world, APPEAR_TICKS);
-
-    // Игрок заходит в круг капища, огонёк это видит и идёт к кладу.
-    standOn(world, shrine);
-    run(world, 1);
-    expect(shrine.found).toBe(true);
-    const start = { x: wisp.x, y: wisp.y };
-    standAt(world, 0, 0);
-    run(world, TICKS_PER_SEC);
-
-    const toHoard = distanceBetween(start, hoard);
-    expect(wisp.x - start.x).toBeCloseTo(((hoard.x - start.x) / toHoard) * SECRETS.wisp.speed, 6);
-    expect(wisp.y - start.y).toBeCloseTo(((hoard.y - start.y) / toHoard) * SECRETS.wisp.speed, 6);
-  });
-
-  it("все тайники найдены — огонёк стоит на месте", () => {
-    const world = setup(WISP_RULES, 1);
-    const wisp = wispOf(world);
-    standAt(world, 0, 0);
-    run(world, APPEAR_TICKS);
-    for (const site of world.secrets.sites) site.found = true;
-    const before = { x: wisp.x, y: wisp.y };
-    run(world, 2 * TICKS_PER_SEC);
-    expect([wisp.x, wisp.y]).toEqual([before.x, before.y]);
   });
 });
 

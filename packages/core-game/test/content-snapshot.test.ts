@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildExport,
   collectNameKeys,
+  HASH_FILE,
   NAMES_FILE,
   readDictionary,
   SCHEMA_FILE,
@@ -83,6 +84,8 @@ describe("снимок контента: состав и хэш", () => {
       "cardToolRules",
       "limits",
       "pressure",
+      "siege",
+      "stalker",
       "balanceTargets",
     ]);
   });
@@ -207,6 +210,16 @@ describe("схема снимка", () => {
     // Вид тайника в весах кольца — только из мест: огонёк в кольцо не бросается.
     const wispRing = raw({ ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] });
     expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
+  });
+
+  it("старый снимок без полей шага огонька разбирается с умолчаниями (Р214, Р160)", () => {
+    const old = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { appearSec: 90, speed: 80 } } })) as unknown;
+    const parsed = contentSnapshotSchema.safeParse(old);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.secrets.wisp).toEqual({ appearSec: 90, speed: 80, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 });
+    // Лишнее поле в огоньке по-прежнему отказ: схема строгая.
+    const extra = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { ...SECRETS.wisp, hops: 3 } } })) as unknown;
+    expect(contentSnapshotSchema.safeParse(extra).success).toBe(false);
   });
 
   it("подстройка в схеме: принимает умолчание, ловит лишнее поле и пропажу раздела", () => {
@@ -445,12 +458,17 @@ describe("выгрузка снимка: pnpm content:export", () => {
     expect(JSON.parse(files[NAMES_FILE])).toEqual({});
   });
 
-  it("пишет три файла в каталог, создавая его", () => {
+  it("кладёт хэш движка: сервер сам его не посчитает, он берёт версию 0 по этому хэшу", () => {
+    const { files } = buildExport(CONTENT_SNAPSHOT, dictionary);
+    expect(JSON.parse(files[HASH_FILE])).toEqual({ hash: CONTENT_HASH });
+  });
+
+  it("пишет четыре файла в каталог, создавая его", () => {
     const dir = mkdtempSync(join(tmpdir(), "content-export-"));
     try {
       const target = join(dir, "nested", "dist");
       writeExport(target);
-      for (const name of [SNAPSHOT_FILE, SCHEMA_FILE, NAMES_FILE]) {
+      for (const name of [SNAPSHOT_FILE, SCHEMA_FILE, NAMES_FILE, HASH_FILE]) {
         expect(() => JSON.parse(readFileSync(join(target, name), "utf8")), name).not.toThrow();
       }
     } finally {

@@ -80,6 +80,8 @@ const finishFields = {
       bossKills: z.optional(z.number()),
       eliteKills: z.optional(z.number()),
       chestsOpened: z.optional(z.number()),
+      // Редкие сундуки (T-0175): записи прошлых сборок их не знают.
+      rareChests: z.optional(z.number()),
       crystals: z.optional(z.number()),
       // Серии и убийства по стихиям (T-0321): записи прошлых сборок их не знают.
       noHitSec: z.optional(z.number()),
@@ -192,6 +194,8 @@ export const useRuns = create<RunsStore>((set, get) => ({
     const client = api();
     if (client === null || flushing) return;
     flushing = true;
+    /** забеги, которые сервер принял в этом проходе: их записи для проверки можно отправлять */
+    const recorded: string[] = [];
 
     try {
       // По одному и по порядку: у сервера нет пакетной записи, старт обязан
@@ -235,6 +239,7 @@ export const useRuns = create<RunsStore>((set, get) => ({
           continue;
         }
         const result = response.data;
+        recorded.push(head.runId);
         set({ lastSubmitted: { runId: head.runId, result } });
         useMeta.getState().mergeRemote({ best: { [head.difficultyId]: result.bestSurvivalSec } });
         track("run_synced", {
@@ -249,6 +254,7 @@ export const useRuns = create<RunsStore>((set, get) => ({
       }
     } finally {
       flushing = false;
+      releaseProofs(recorded);
     }
   },
 
@@ -317,6 +323,7 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       bossKills: result.bossKills,
       eliteKills: result.eliteKills,
       chestsOpened: result.chestsOpened,
+      rareChests: result.rareChestsOpened,
       crystals: Math.round(result.crystalsCollected),
       noHitSec: result.noHitSec,
       noKillSec: result.noKillSec,
@@ -362,6 +369,20 @@ async function withLoadout(submission: RunFinishSubmission): Promise<RunFinishSu
 /** Запись очереди без её вида — ровно то тело, что ждёт сервер. */
 function toFinish({ kind: _kind, ...submission }: z.infer<typeof finishEntrySchema>): RunFinishSubmission {
   return submission;
+}
+
+/**
+ * Сервер записал забеги — записи для проверки этих забегов можно отправлять (T-0316). Заодно
+ * досылаются прежние, не ушедшие: проход очереди забегов — повод проверить связь.
+ */
+function releaseProofs(runIds: readonly string[]): void {
+  void import("./run-proof-queue")
+    .then(({ runProofs }) => {
+      const proofs = runProofs();
+      for (const runId of runIds) proofs.recorded(runId);
+      return proofs.flush();
+    })
+    .catch((error: unknown) => reportError("runs", `записи для проверки не отправлены: ${String(error)}`));
 }
 
 function pendingOf(entries: readonly QueueEntry[]): number {

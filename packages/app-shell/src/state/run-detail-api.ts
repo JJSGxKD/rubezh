@@ -29,6 +29,8 @@ const detailSchema = z.object({
   topKills: z.array(z.object({ enemy: z.string(), count: z.number() })),
   continues: z.number(),
   rating: z.string(),
+  /** очки эффективности (T-0293); сервер до карточки забега поля не отдавал, `null` — очков нет */
+  points: z.optional(z.nullable(z.number())),
   boosts: z.array(z.string()),
   reward: z.nullable(
     z.object({

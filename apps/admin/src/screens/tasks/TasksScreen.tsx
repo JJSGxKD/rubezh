@@ -6,6 +6,7 @@ import {
   CHANNEL_KIND,
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
+  CLIENT_KINDS,
   FILTER_KEYS,
   FILTER_LABELS,
   FILTER_OPTIONS,
@@ -53,12 +54,16 @@ import {
 import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
+import { readSource, refillSourceImages, takeSourceImage } from "../../ui/source-image";
+import { toast } from "../../ui/toast";
+import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
+import { TaskCustomerFields } from "./task-customer-fields";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -81,29 +86,50 @@ export function TasksScreen() {
   const { state, reload } = useApi(() => fetchTasks(api), []);
   const [input, setInput] = useState<TaskDef>(EMPTY);
   const [original, setOriginal] = useState<TaskDef | null>(null);
+  // Значения при открытии окна: по ним видно, тронул ли оператор форму.
+  const [initial, setInitial] = useState<TaskDef>(EMPTY);
+  const [open, setOpen] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
   /** Новый порядок группы сразу, пока запрос в пути: без него строка прыгала бы назад и вперёд. */
   const [override, setOverride] = useState<{ group: TaskGroup; ids: string[] } | null>(null);
   /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
   const [reordering, setReordering] = useState(false);
+  /** Идёт «Картинки источников»: задания обходятся по одному, повторный запуск поверх не нужен. */
+  const [refilling, setRefilling] = useState(false);
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
+  /** Прежние заказчики — подсказка к полю: отчёт группирует по строке, и опечатка разбила бы заказчика надвое. */
+  const customers = [...new Set(catalog.flatMap((task) => (task.customer === null ? [] : [task.customer])))].sort((x, y) => x.localeCompare(y, "ru"));
   const problem = taskProblem(input, original === null, catalog);
 
   const reset = () => {
+    setOpen(false);
     setInput(EMPTY);
     setOriginal(null);
+    setFormError(null);
+  };
+
+  const openForm = (task: TaskDef | null) => {
+    const value = task === null ? EMPTY : { ...task };
+    setInput(value);
+    setInitial(value);
+    setOriginal(task);
+    setOutcome(null);
+    setFormError(null);
+    setOpen(true);
   };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (problem !== null) return;
     setPending(true);
+    setFormError(null);
     const result = await saveTask(api, input);
     setPending(false);
-    if (!result.ok) return setOutcome({ tone: "danger", error: result.error });
+    if (!result.ok) return setFormError(result.error.message);
     setOutcome({ tone: "success", text: original === null ? `Задание ${result.data.taskId} заведено — игроки увидят его в течение полуминуты` : `Задание ${result.data.taskId} сохранено` });
     reset();
     reload();
@@ -111,7 +137,8 @@ export function TasksScreen() {
 
   const partner = PARTNER_KINDS.has(input.kind);
   const filterKey = FILTER_KEYS[input.kind];
-  const pooled = !partner && input.period !== "achievement";
+  const clientKind = CLIENT_KINDS.has(input.kind);
+  const pooled = !partner && !clientKind && input.period !== "achievement";
   const achievement = isAchievement(input);
   const stateKind = STATE_KINDS.has(input.kind);
   const channel = input.kind === CHANNEL_KIND;
@@ -133,6 +160,20 @@ export function TasksScreen() {
     reload();
   };
 
+  // Заведённым заданиям без картинки — аватарки источников (Р158): сохранение то же, что у формы.
+  const refill = async (tasks: readonly TaskDef[]) => {
+    setRefilling(true);
+    setOutcome(null);
+    const summary = await refillSourceImages(tasks, {
+      take: (request) => takeSourceImage(api, request),
+      save: async (task) => (await saveTask(api, task)).ok,
+    });
+    setRefilling(false);
+    if (summary.updated > 0) toast.success(summary.text);
+    else toast(summary.text);
+    reload();
+  };
+
   const number = (field: "target" | "coins" | "gems" | "shards" | "passPoints") => ({
     value: String(input[field]),
     onChange: (event: { target: { value: string } }) => setInput({ ...input, [field]: event.target.value === "" ? 0 : Number(event.target.value) }),
@@ -144,9 +185,25 @@ export function TasksScreen() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title={original === null ? "Новое задание" : `Задание ${original.taskId}`}>
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto]">
-        <form onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
+      {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
+      <FormDialog
+        open={open}
+        wide
+        title={original === null ? "Новое задание" : `Задание ${original.taskId}`}
+        dirty={isDirty(initial, input)}
+        onClose={reset}
+        footer={(requestClose) => (
+          <>
+            {formError === null ? null : <span className="mr-auto text-sm text-danger">{formError}</span>}
+            <Button onClick={requestClose}>Отмена</Button>
+            <Button tone="primary" type="submit" form="task-form" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
+              {original === null ? "Завести" : "Сохранить"}
+            </Button>
+          </>
+        )}
+      >
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_auto]">
+        <form id="task-form" onSubmit={(event) => void submit(event)} className="flex min-w-0 flex-col gap-3">
           <FieldRow>
             <Field label="id" hint="латиница, навсегда">
               <Input value={input.taskId} disabled={original !== null} onChange={(event) => setInput({ ...input, taskId: event.target.value.trim() })} placeholder="daily_boss" maxLength={48} className="w-44" />
@@ -163,7 +220,7 @@ export function TasksScreen() {
               </Field>
             ) : (
               <Field label="Срок" help={HELP.tasks.period}>
-                <Select value={input.period} disabled={original !== null || partner || stateKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
+                <Select value={input.period} disabled={original !== null || partner || stateKind || clientKind} onChange={(event) => setInput(withPeriod(input, TASK_PERIODS.find((period) => period === event.target.value) ?? "daily"))}>
                   {TASK_PERIODS.map((period) => (
                     <option key={period} value={period}>
                       {PERIOD_TITLES[period]}
@@ -208,14 +265,22 @@ export function TasksScreen() {
                 </Select>
               </Field>
             ) : null}
-            {partner ? null : (
+            {partner || clientKind ? null : (
               <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
                 <Input {...number("target")} min={1} />
               </Field>
             )}
           </FieldRow>
+          {clientKind ? <Notice tone="info">{HELP.tasks.clientSignal}</Notice> : null}
           {partner ? (
-            <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
+            <ImageField
+              label="Картинка"
+              help={HELP.tasks.image}
+              profile="task"
+              value={input.image}
+              onChange={(image) => setInput((current) => ({ ...current, image }))}
+              source={readSource(input)}
+            />
           ) : null}
           {partner ? (
             <FieldRow>
@@ -278,6 +343,7 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {partner ? <TaskCustomerFields input={input} onChange={setInput} customers={customers} channel={channel} /> : null}
           {channel ? (
             <Notice tone="info">
               Бот проверяет подписку, когда игрок нажимает «Проверить», — сделайте его администратором канала: без этого площадка подписчиков не покажет.
@@ -366,37 +432,48 @@ export function TasksScreen() {
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button tone="primary" type="submit" disabled={problem !== null || pending} blockedBy={pending ? null : problem}>
-              {original === null ? "Завести" : "Сохранить"}
-            </Button>
-            {original === null ? null : <Button onClick={reset}>Отмена</Button>}
-          </div>
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
-          <div className="min-w-0 xl:sticky xl:top-4 xl:self-start">
+          <div className="min-w-0 md:sticky md:top-0 md:self-start">
             <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
           </div>
         </div>
-        {outcome === null ? null : <div className="mt-3">{outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}</div>}
-      </Panel>
+      </FormDialog>
 
       {state.status === "ok" ? <RotationPanel rotation={state.data.rotation} catalog={state.data.tasks} /> : null}
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
       {state.status === "ok"
-        ? groupByPeriod(state.data.tasks).map((group) => (
-            <Panel key={group.group} title={GROUP_TITLES[group.group]} help={HELP.tasks.order}>
+        ? groupByPeriod(state.data.tasks).map((group, index) => (
+            <Panel
+              key={group.group}
+              title={GROUP_TITLES[group.group]}
+              help={HELP.tasks.order}
+              {...(index === 0 || group.group === "partner"
+                ? {
+                    actions: (
+                      <>
+                        {group.group === "partner" ? (
+                          <Button disabled={refilling || group.tasks.every((task) => !task.active || task.image !== null || readSource(task).state !== "ready")} onClick={() => void refill(group.tasks)}>
+                            {refilling ? "Берём картинки…" : "Картинки источников"}
+                          </Button>
+                        ) : null}
+                        {index === 0 ? (
+                          <Button tone="primary" onClick={() => openForm(null)}>
+                            Новое задание
+                          </Button>
+                        ) : null}
+                      </>
+                    ),
+                  }
+                : {})}
+            >
               <DataTable
                 rows={override?.group === group.group ? applyOrder(group.tasks, override.ids, (task) => task.taskId) : group.tasks}
                 reorder={{ labelOf: (task) => task.taskId, onReorder: (ids) => void move(group.group, ids), disabled: reordering }}
                 rowKey={(task) => task.taskId}
-                onRowClick={(task) => {
-                  setInput({ ...task });
-                  setOriginal(task);
-                  setOutcome(null);
-                }}
-                empty="Пусто — заведите задание выше"
+                onRowClick={openForm}
+                empty="Пусто — заведите кнопкой «Новое задание»"
                 columns={[
                   { title: "id", render: (task) => <span className="font-mono text-xs">{task.taskId}</span> },
                   { title: "Вид", render: (task) => KIND_TITLES[task.kind] ?? task.kind },

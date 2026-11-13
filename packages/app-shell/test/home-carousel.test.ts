@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { hasTranslation } from "../src/i18n";
 import "../src/i18n/home";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { createHomeApi, forgetHomeForTests, safeLink, slideImageUrl, type HomeSlide } from "../src/state/home-api";
-import { visibleSlides } from "../src/screens/home-carousel";
+import { tapDonateSlide, visibleSlides } from "../src/screens/home-carousel";
+import { useShell } from "../src/state/shell";
 import { textOf, titleOf } from "../src/screens/home-slide";
 
 // Карусель главной (docs/35-stage4-plan.md WP42): слайды решает сервер, клиент
@@ -95,5 +96,32 @@ describe("слайды при скрытом журнале (Р125)", () => {
     const shown = visibleSlides([...ALL, team("changelog"), team("shop")]);
 
     expect(shown.map((slide) => slide.id)).toEqual(["promo:bundle_m", "vip", "starter", "invite", "channel", "task:a", "team:shop"]);
+  });
+});
+
+describe("слайд доната (tasks/T-0158)", () => {
+  const donate: HomeSlide = { id: "donate", kind: "donate" };
+
+  it("слайд на своём месте среди прочих; журнал скрыт — донат не пропадает", () => {
+    expect(visibleSlides([ALL[3] as HomeSlide, donate, ALL[4] as HomeSlide]).map((slide) => slide.id)).toEqual(["starter", "donate", "invite"]);
+  });
+
+  it("заголовок и подпись — словами из словаря, а не ключами", () => {
+    expect([titleOf(donate), textOf(donate, NOW)]).toEqual(["Поддержать проект", "Знак «Меценат» и наше спасибо"]);
+    expect(hasTranslation("home.slide.donate.text")).toBe(true);
+  });
+
+  it("касание открывает лист и шлёт home_slide_clicked со slide: donate и местом; чужой слайд не трогает", () => {
+    const events: { event: string; payload: unknown }[] = [];
+    useShell.setState({ analytics: (event, payload) => void events.push({ event, payload }) });
+    const show = vi.fn();
+
+    expect(tapDonateSlide(donate, 2, show)).toBe(true);
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([{ event: "home_slide_clicked", payload: { slide: "donate", position: 2 } }]);
+
+    expect(tapDonateSlide(ALL[4] as HomeSlide, 0, show)).toBe(false);
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(events).toHaveLength(1);
   });
 });

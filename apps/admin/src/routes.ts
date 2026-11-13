@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, Award, BookOpen, Briefcase, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -13,6 +13,8 @@ export interface Section {
   hint: string;
   /** право, без которого раздел не показывается; сервер проверит его сам */
   permission: string;
+  /** раздел открывает любое из этих прав вместо одного `permission`: «Мой проект» — и участнику, и финансам */
+  anyOf?: readonly string[];
   /** значок у пункта меню: по нему раздел находят глазами раньше, чем читают */
   icon: LucideIcon;
 }
@@ -34,12 +36,16 @@ export interface SectionGroup {
 export const SECTION_GROUPS: readonly SectionGroup[] = [
   {
     title: "Обзор",
-    sections: [{ id: "overview", title: "Сводка", hint: "Как идёт игра сегодня против вчера и что ждёт вас", permission: "analytics.gameplay.view", icon: Gauge }],
+    sections: [
+      { id: "overview", title: "Сводка", hint: "Как идёт игра сегодня против вчера и что ждёт вас", permission: "analytics.gameplay.view", icon: Gauge },
+      { id: "online", title: "Онлайн", hint: "Сколько игроков сейчас в приложении и в забеге по площадкам, рекорд", permission: "analytics.gameplay.view", icon: Radio },
+    ],
   },
   {
     title: "Поддержка",
     sections: [
       { id: "players", title: "Игроки", hint: "Найти игрока и открыть карточку: забеги, покупки, кошелёк, ограничения", permission: "players.view", icon: Users },
+      { id: "payments", title: "Платежи", hint: "Все покупки игроков: оплата, выдача, возвраты и сбои — и что с ними сделать", permission: "payments.view", icon: Receipt },
       { id: "review", title: "Разбор забегов", hint: "Забеги, которые антифрод счёл подозрительными или отклонил", permission: "players.view", icon: ShieldAlert },
       { id: "names", title: "Фильтр имён", hint: "Слова и фразы, которые убираются из ников игроков, и перечистка старых", permission: "names.edit", icon: Eraser },
     ],
@@ -57,19 +63,34 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
   {
     title: "Доход",
     sections: [
+      {
+        id: "my-project",
+        title: "Мой проект",
+        hint: "Доля, выручка месяца и черновик своей части",
+        permission: "revenue.split.own.view",
+        anyOf: ["revenue.split.own.view", "revenue.split.view"],
+        icon: Briefcase,
+      },
       { id: "promos", title: "Акции", hint: "Скидки на товары магазина на срок", permission: "shop.promo.edit", icon: Percent },
       { id: "ads", title: "Реклама", hint: "Рекламные сети, их блоки и показы по местам в игре", permission: "ads.view", icon: Tv },
       { id: "fx", title: "Курсы", hint: "Курсы валют и звёзд, по которым считаются цены и выручка", permission: "analytics.revenue.view", icon: Coins },
+      { id: "stakeholders", title: "Участники", hint: "Участники проекта и их доли: с какого месяца и что менялось", permission: "revenue.split.view", icon: PieChart },
     ],
   },
   {
     title: "Вовлечение",
     sections: [
       { id: "tasks", title: "Задания", hint: "Задания, достижения и задания рекламных сетей: цели, частота и награды", permission: "tasks.edit", icon: ListChecks },
+      { id: "pass", title: "Батл-пасс", hint: "Ленты месяца: 30 ступеней двух лент, копия прошлого месяца", permission: "pass.edit", icon: Award },
+      { id: "rating", title: "Рейтинг", hint: "Доски по сложностям, архив недельных сезонов и места игроков", permission: "players.view", icon: Trophy },
       { id: "broadcasts", title: "Рассылки", hint: "Сообщения игрокам в бота с выбором аудитории", permission: "broadcast.edit", icon: Send },
       { id: "changelog", title: "Журнал обновлений", hint: "«Что нового» по версиям — игроки видят его в игре и в боте", permission: "changelog.edit", icon: BookOpen },
       { id: "home", title: "Главная", hint: "Слайды команды в карусели наверху главной игры", permission: "home.edit", icon: House },
     ],
+  },
+  {
+    title: "Контент",
+    sections: [{ id: "balance", title: "Баланс", hint: "Числа игры — враги, таймлайн, оружие, навыки, сундуки — в черновике, без релиза", permission: "content.view", icon: Scale }],
   },
   {
     title: "Эксплуатация",
@@ -122,7 +143,7 @@ export function hrefOf(route: Route): string {
 }
 
 export function visibleSections(permissions: readonly string[], sections: readonly Section[] = SECTIONS): Section[] {
-  return sections.filter((section) => permissions.includes(section.permission));
+  return sections.filter((section) => (section.anyOf ?? [section.permission]).some((right) => permissions.includes(right)));
 }
 
 /** Меню по правам: группа без единого открытого раздела не показывается вовсе. */

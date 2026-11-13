@@ -34,6 +34,8 @@ export interface AccountView {
   created: boolean;
   /** знак «Тестер» (Р87); поля нет — не тестер */
   tester?: true;
+  /** знак «Меценат» (Р109); поля нет — не поддержал */
+  supporter?: true;
 }
 
 interface SessionView {
@@ -149,7 +151,7 @@ function view(result: {
   accessToken: string;
   expiresInSec: number;
   refreshToken: string;
-  account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean; testerAt?: Date | null };
+  account: { accountId: string; displayName: string; photoUrl: string | null; createdAt: Date; created: boolean; testerAt?: Date | null; supporterAt?: Date | null };
 }): SessionView {
   return {
     accessToken: result.accessToken,
@@ -163,6 +165,7 @@ function view(result: {
       created: result.account.created,
       // Дата знака наружу не уходит — только сам знак, и только у тестера.
       ...(result.account.testerAt ? { tester: true as const } : {}),
+      ...(result.account.supporterAt ? { supporter: true as const } : {}),
     },
   };
 }

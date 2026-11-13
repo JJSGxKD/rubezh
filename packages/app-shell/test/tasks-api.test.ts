@@ -1,8 +1,9 @@
 import ru from "../src/i18n/ru.json";
+import { t } from "../src/i18n";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
-import { taskHint, taskTitle } from "../src/screens/meta/task-row";
+import { goalText, taskHint, taskTitle } from "../src/screens/meta/task-row";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import {
   NETWORK_TASK_CHECKS_MS,
@@ -281,6 +282,21 @@ describe("ротация заданий и новые виды цели", () => 
     for (const difficulty of ["normal", "hard"]) expect(names[`difficulty.${difficulty}.name`], `difficulty.${difficulty}.name`).toBeTypeOf("string");
   });
 
+  it("тексты боссов, элит, сундуков, кристаллов и эволюций склоняются для 1, 2 и 5 (T-0126)", () => {
+    const expected: Record<string, [string, string, string]> = {
+      boss_kills: ["Убей 1 босса", "Убей 2 босса", "Убей 5 боссов"],
+      elite_kills: ["Убей 1 элиту", "Убей 2 элиты", "Убей 5 элит"],
+      chests_opened: ["Открой 1 сундук", "Открой 2 сундука", "Открой 5 сундуков"],
+      crystals_collected: ["Подбери 1 кристалл", "Подбери 2 кристалла", "Подбери 5 кристаллов"],
+      evolution_runs: ["Получи эволюцию оружия в 1 забеге", "Получи эволюцию оружия в 2 забегах", "Получи эволюцию оружия в 5 забегах"],
+    };
+    for (const [kind, texts] of Object.entries(expected)) {
+      const key = `task.kind.${kind}` as keyof typeof ruTasks;
+      expect(ruTasks[key], key).toBeTypeOf("string");
+      [1, 2, 5].forEach((target, index) => expect(goalText({ kind, target }), `${kind}: ${String(target)}`).toBe(texts[index]));
+    }
+  });
+
   it("текст цели с фильтром строится из имён оружия, стихии и сложности", () => {
     expect(goalFilterParams({ kind: "weapon_runs", filter: { weapon: "spark" } })).toEqual({ weapon: "Искра" });
     expect(goalFilterParams({ kind: "element_runs", filter: { element: "fire" } })).toEqual({ element: "Огонь" });
@@ -410,5 +426,16 @@ describe("название достижения в строке задания",
   it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {
     expect(taskHint(row())).toBeNull();
     expect(taskHint(row({ category: "partner", kind: "channel" }))).toContain("Награда каждый день");
+  });
+});
+
+describe("правило отписки на карточке (T-0183)", () => {
+  it("recheckDays: с числом, с null и без поля (старый сервер) ответ разбирается", async () => {
+    const view = await createTasksApi(server([], { tasks: [{ ...TASK, recheckDays: 7 }, { ...TASK, recheckDays: null }, TASK] })).view();
+    expect(view.ok && view.data.tasks.map((task) => task.recheckDays)).toEqual([7, null, undefined]);
+  });
+
+  it("словарь: подстановка {days} даёт «в течение 7 суток»", () => {
+    expect(t("tasks.recheck", { days: 7 })).toBe("Отпишетесь в течение 7 суток — награду спишут");
   });
 });

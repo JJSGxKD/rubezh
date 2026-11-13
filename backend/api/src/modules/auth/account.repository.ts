@@ -69,6 +69,11 @@ export interface Account extends AccountIdentity {
    */
   testerAt?: Date | null;
   /**
+   * Знак «Меценат» (Р109): когда аккаунт поддержал проект; `null` — не поддержал. Необязателен в типе по той же причине,
+   * что `testerAt`.
+   */
+  supporterAt?: Date | null;
+  /**
    * Ник с площадки как пришёл при последнем входе — только для панели
    * (tasks/T-0150); `null` — аккаунт заведён до этого поля и не входил после.
    * Необязателен в типе по той же причине, что `testerAt`.
@@ -274,6 +279,7 @@ type AccountRow = {
   bannedAt: Date | null;
   banReason: string | null;
   testerAt: Date | null;
+  supporterAt: Date | null;
   platformName: string | null;
   nameLockedAt: Date | null;
 };
@@ -290,6 +296,7 @@ function toAccount(row: AccountRow, created: boolean): Account {
     bannedAt: row.bannedAt,
     banReason: row.banReason,
     testerAt: row.testerAt,
+    supporterAt: row.supporterAt,
     platformName: row.platformName,
     nameLockedAt: row.nameLockedAt,
     created,

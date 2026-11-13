@@ -43,15 +43,15 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
   const first: PostbackEvent = "purchase_first";
   const repeat: PostbackEvent = "purchase_repeat";
   // Кандидаты — по первому касанию за окно: индекс `(first_start_kind, first_at)`.
-  // Аккаунт команды конверсией не становится: свои проверки сети не нужны —
+  // Аккаунт команды (любая роль, кроме `partner`: партнёр — игрок, T-0217) конверсией не становится: свои проверки сети не нужны —
   // строка пишется пропущенной, отправить её можно руками. В `network` —
   // имя назначения: колонка обязательна и нужна коду прошлого релиза.
   const registrations = await prisma.$executeRaw`
       WITH ${targets}
       INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, status, reason, next_attempt_at, created_at)
       SELECT gen_random_uuid(), t.destination, t.destination, l.code, c.click_id, q.account_id, ${EVENT_GOAL.registration}::smallint,
-             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
-             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'team' END,
+             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
+             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') THEN 'team' END,
              ${now}, ${now}
       FROM targets t
       JOIN link l ON l.code = t.link_code
@@ -100,8 +100,8 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
       INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, purchase_id, status, reason, next_attempt_at, created_at)
       SELECT gen_random_uuid(), t.destination, t.destination, t.link_code, t.click_id, t.account_id,
              (CASE WHEN paid.n = 1 THEN ${EVENT_GOAL.purchase_first} ELSE ${EVENT_GOAL.purchase_repeat} END)::smallint, paid.purchase_id,
-             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
-             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id) THEN 'team' END,
+             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id AND r.role <> 'partner') THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
+             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = t.account_id AND r.role <> 'partner') THEN 'team' END,
              ${now}, ${now}
       FROM paid
       JOIN attributed t ON t.account_id = paid.account_id
@@ -123,8 +123,8 @@ export async function sweepClickLaunches(prisma: PrismaClient, now: Date, target
       WITH ${targets}
       INSERT INTO ad_conversion (conversion_id, network, destination, link_code, click_id, account_id, goal, status, reason, next_attempt_at, created_at)
       SELECT gen_random_uuid(), t.destination, t.destination, l.code, c.click_id, q.account_id, ${EVENT_GOAL.d1_return}::smallint,
-             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
-             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) THEN 'team' END,
+             (CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') THEN 'skipped' ELSE 'pending' END)::ad_conversion_status,
+             CASE WHEN EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') THEN 'team' END,
              ${now}, ${now}
       FROM targets t
       JOIN link l ON l.code = t.link_code

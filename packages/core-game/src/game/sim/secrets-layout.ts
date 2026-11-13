@@ -2,7 +2,7 @@ import type { SecretKind, SecretsDef } from "@bh/shared-types";
 import { drawWeighted } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import type { WorldBounds } from "./map-types";
-import type { Rng } from "./rng";
+import { createRng, deriveSeed, type Rng } from "./rng";
 import { radiusOf } from "./secrets-rules";
 import { clampToBounds, type ElitePoolStep, type SecretSite, type SecretState } from "./world";
 
@@ -30,6 +30,8 @@ export function createSecretState(
   bounds: WorldBounds,
   elitePool: readonly ElitePoolStep[] = [],
 ): SecretState {
+  // Поток огонька выводится из начального состояния потока тайников — до первого броска раскладки.
+  const wispRng = createRng(deriveSeed(rng.getState(), WISP_STREAM_SALT));
   const sites: SecretSite[] = [];
   const gap = def.minGapUnits * unitScale;
 
@@ -57,6 +59,7 @@ export function createSecretState(
 
   return {
     rng,
+    wispRng,
     sites,
     elitePool,
     manualBlessing: false,
@@ -68,11 +71,14 @@ export function createSecretState(
   };
 }
 
+/** Соль потока отклонений огонька (рядом с `STREAM_SALT` в `rng.ts` её не держим: файл вне зон задачи). */
+const WISP_STREAM_SALT = 0x57495350;
+
 /** Номер кольца огонька: он не принадлежит ни одному. */
 const WISP_RING = -1;
 
 function newSite(kind: SecretKind, ring: number, active: boolean): SecretSite {
-  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [], waveTicks: 0 };
+  return { kind, ring, x: 0, y: 0, active, visible: false, found: false, used: false, holdTicks: 0, opened: false, wave: [], waveTicks: 0, hops: 0, flying: false, hopX: 0, hopY: 0 };
 }
 
 function isClear(sites: readonly SecretSite[], x: number, y: number, gap: number): boolean {

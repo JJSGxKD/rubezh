@@ -8,6 +8,16 @@ import * as L from "./fixtures/links.js";
 const LINKS = [L.VLESS_REALITY, L.VLESS_WS_TLS, L.VMESS_BASE64, L.TROJAN_GRPC, L.SS_SIP002];
 const PLAIN = LINKS.join("\n");
 
+describe("маршрутизация подписки", () => {
+  it("ссылки открытым текстом и в base64 маршрутизации не несут: routing — null, узлы прежние", () => {
+    for (const body of [PLAIN, Buffer.from(PLAIN, "utf8").toString("base64")]) {
+      const parsed = parseSubscription(body);
+      expect(parsed.routing, body.slice(0, 12)).toBeNull();
+      expect(parsed.nodes).toHaveLength(5);
+    }
+  });
+});
+
 describe("форматы тела", () => {
   it("открытый текст", () => {
     const parsed = parseSubscription(PLAIN);

@@ -5,6 +5,7 @@ import { rollPickups } from "./pickups";
 import { dropChest } from "./chests";
 import { onRubezhEnemyKilled } from "./rubezh";
 import { stageOf } from "./stages";
+import { pushStalker } from "./stalker-body";
 import { registerKill } from "./streaks";
 import { CHAIN_SHARE, chainTargets, damageMultiplier, ELEMENT_LIGHTNING, ELEMENT_PHYSICAL, tryApplyStatus } from "./elements";
 import { despawnEnemy, NO_OWNER_TYPE, type World } from "./world";
@@ -32,6 +33,11 @@ export function damageEnemy(
   statusChance = 0,
 ): void {
   if (world.enemies.alive[index] === 0 || amount <= 0) return;
+  // Неубиваемого удар отталкивает: ни здоровья, ни счётчиков, ни состояний, ни перескока молнии.
+  if (world.enemyTypes[world.enemies.type[index]].unkillable) {
+    pushStalker(world, index);
+    return;
+  }
   // Шок проверяется до удара: перескакивает молния, которая пришла в уже
   // шокированного, а не та, что шок только что наложила.
   const chains = element === ELEMENT_LIGHTNING && world.enemies.shockTimer[index] > 0;
@@ -66,6 +72,11 @@ export function inflictDamage(
 ): number {
   const enemies = world.enemies;
   if (enemies.alive[index] === 0 || amount <= 0) return 0;
+  // Любой путь урона, минуя `damageEnemy`, тоже упирается в неубиваемого: толчок вместо здоровья.
+  if (world.enemyTypes[enemies.type[index]].unkillable) {
+    pushStalker(world, index);
+    return 0;
+  }
 
   const cheats = world.cheats;
   const dealt = cheats.oneHitKill ? enemies.hp[index] : amount * cheats.damageMul;

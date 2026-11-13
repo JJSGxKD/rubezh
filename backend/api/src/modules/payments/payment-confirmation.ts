@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { z } from "zod";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { FeatureSwitches } from "../settings/feature-switches.js";
@@ -9,6 +9,7 @@ import type { PlatformId } from "../../platforms/ports/platform.js";
 import { AccountRestrictions } from "../restrictions/account-restrictions.js";
 import { RestrictionsService } from "../restrictions/restrictions.service.js";
 import { answerOf, decideCheckout, isRenewal, refuse, type CheckoutDecision, type PreCheckout } from "./checkout-answer.js";
+import { PaymentCheckoutMarks } from "./payment-checkout-marks.js";
 import { PaymentsHooks, type SubscriptionState } from "./payments-hooks.js";
 import { PurchaseRevocation } from "./purchase-revocation.js";
 import { SUBSCRIPTION_PRODUCTS } from "./purchase-types.js";
@@ -57,6 +58,9 @@ export interface SubscriptionUpdate {
  */
 const CHECKOUT_READ_TIMEOUT_MS = 3_000;
 
+/** Запись отметки проверки идёт после ответа площадке и его не держит; зависшая запись не должна висеть вечно. */
+const CHECKOUT_MARK_TIMEOUT_MS = 2_000;
+
 const purchaseId = z.uuid();
 
 @Injectable()
@@ -76,6 +80,8 @@ export class PaymentConfirmation {
     // возврат только записывается и отзывает остаток, а предварительная проверка не спрашивает про покупки.
     private readonly restrictions?: AccountRestrictions,
     private readonly system?: RestrictionsService,
+    // Отметка последней проверки для карточки платежа (T-0430). Без неё, как в тестах, проверка только отвечает площадке.
+    @Optional() private readonly checkoutMarks?: PaymentCheckoutMarks,
   ) {}
 
   async answerCheckout(query: PreCheckout, nowMs = Date.now()): Promise<CheckoutDecision> {
@@ -94,7 +100,24 @@ export class PaymentConfirmation {
       ok: decision.ok,
       ...(decision.ok ? {} : { reason: decision.reason }),
     });
+    // Не ждём: у площадки на весь ответ десять секунд, и они уже потрачены на ответ.
+    void this.recordCheckout(query.payload, decision, nowMs);
     return decision;
+  }
+
+  /**
+   * Запомнить проверку в покупке, чтобы «не смог оплатить» в карточке платежа
+   * объяснялось причиной отказа, а не только строкой лога. Сбой записи — предупреждение: ответ
+   * площадке уже ушёл, и отметка его не меняет. Не UUID в счёте — писать некуда.
+   */
+  private async recordCheckout(payload: string, decision: CheckoutDecision, nowMs: number): Promise<void> {
+    const id = purchaseId.safeParse(payload);
+    if (this.checkoutMarks === undefined || !id.success) return;
+    try {
+      await withTimeout(this.checkoutMarks.mark(id.data, new Date(nowMs), decision.ok ? null : decision.reason), CHECKOUT_MARK_TIMEOUT_MS, "отметка проверки оплаты");
+    } catch (error: unknown) {
+      this.log("warn", "checkout_mark_failed", { purchaseId: id.data, reason: error instanceof Error ? error.message : "unknown" });
+    }
   }
 
   async confirm(payment: ConfirmedPayment, nowMs = Date.now()): Promise<ConfirmOutcome> {

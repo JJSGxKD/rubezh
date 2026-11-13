@@ -10,17 +10,23 @@ import { ProxiesService } from "./proxies.service.js";
 import { PROXIES_REPOSITORY, PrismaProxiesRepository } from "./proxies.repository.js";
 import { PROXY_CIPHER } from "./proxy-password.js";
 import { ProxyRoutes } from "./proxy-routes.service.js";
+import { SubscriptionCommands } from "./subscription/subscription-commands.js";
 import { HOST_RESOLVER, systemResolver, type HostResolver } from "./subscription/subscription-download.js";
 import { SubscriptionRoutes } from "./subscription/subscription-routes.js";
 import { SUBSCRIPTION_REPOSITORY, PrismaSubscriptionRepository, type SubscriptionRepository } from "./subscription/subscription.repository.js";
 import { SubscriptionScheduler } from "./subscription/subscription.scheduler.js";
 import { ProxySubscriptionService } from "./subscription/subscription.service.js";
 import { SubscriptionSync } from "./subscription/subscription.sync.js";
+import { TrafficCollector } from "./subscription/traffic/traffic.collector.js";
+import { PrismaTrafficRepository, TRAFFIC_REPOSITORY, type TrafficRepository } from "./subscription/traffic/traffic.repository.js";
+import { TrafficService } from "./subscription/traffic/traffic.service.js";
+import { Http2StatsSource, STATS_SOURCE, type StatsSource } from "./subscription/traffic/xray-stats.client.js";
 import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscription/xray-config-writer.js";
 
 /**
  * Прокси для исходящих запросов (docs/35-stage4-plan.md Р91, tasks/T-0065) и
- * подписка Xray (Р101, tasks/T-0093).
+ * подписки Xray (Р101, Р192, tasks/T-0093, tasks/T-0384) с учётом их трафика
+ * (Р192, tasks/T-0386).
  *
  * Модуль глобальный, как приёмник журнала запросов: клиент исходящих
  * (`infra/outbound`) берёт список прокси и режимы из `OUTBOUND_ROUTES`, не
@@ -56,9 +62,23 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
     },
     ProxyRoutes,
     { provide: OUTBOUND_ROUTES, useExisting: ProxyRoutes },
+    { provide: TRAFFIC_REPOSITORY, useClass: PrismaTrafficRepository },
+    {
+      provide: STATS_SOURCE,
+      inject: [APP_CONFIG],
+      useFactory: (config: AppConfig): StatsSource => new Http2StatsSource({ host: config.xray.host, port: config.xray.statsPort }),
+    },
+    {
+      provide: TrafficCollector,
+      inject: [STATS_SOURCE, TRAFFIC_REPOSITORY, SUBSCRIPTION_REPOSITORY, APP_CONFIG],
+      // Без базы счётчикам негде жить: таймер не запускается (как расписание подписок).
+      useFactory: (source: StatsSource, repository: TrafficRepository, subscriptions: SubscriptionRepository, config: AppConfig): TrafficCollector =>
+        new TrafficCollector({ source, repository, subscriptions, autostart: config.databaseUrl !== "" }),
+    },
+    TrafficService,
     {
       provide: SubscriptionSync,
-      inject: [SUBSCRIPTION_REPOSITORY, PROXY_CIPHER, Outbound, HOST_RESOLVER, CONFIG_WRITER, SubscriptionRoutes, REDIS, ProxyRoutes, APP_CONFIG],
+      inject: [SUBSCRIPTION_REPOSITORY, PROXY_CIPHER, Outbound, HOST_RESOLVER, CONFIG_WRITER, SubscriptionRoutes, REDIS, ProxyRoutes, APP_CONFIG, TrafficCollector],
       useFactory: (
         repository: SubscriptionRepository,
         cipher: SecretCipher | null,
@@ -69,6 +89,7 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
         redis: Redis,
         proxyRoutes: ProxyRoutes,
         config: AppConfig,
+        traffic: TrafficCollector,
       ): SubscriptionSync =>
         new SubscriptionSync({
           repository,
@@ -79,7 +100,8 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
           routes,
           redis,
           changed: () => proxyRoutes.changed("subscription"),
-          xray: { basePort: config.xray.socksPortBase, slotCount: config.xray.slotCount },
+          xray: { basePort: config.xray.socksPortBase, slotCount: config.xray.slotCount, statsPort: config.xray.statsPort },
+          beforeWrite: () => traffic.flush(),
         }),
     },
     {
@@ -100,9 +122,15 @@ import { CONFIG_WRITER, FileConfigWriter, type ConfigWriter } from "./subscripti
         return new SubscriptionScheduler({ repository, routes, sync, writer, proxyFetch, redis, settings, changed: () => proxyRoutes.changed("subscription"), autostart: config.databaseUrl !== "" });
       },
     },
+    {
+      provide: SubscriptionCommands,
+      inject: [SUBSCRIPTION_REPOSITORY, CONFIG_WRITER, SubscriptionSync, APP_CONFIG],
+      useFactory: (repository: SubscriptionRepository, writer: ConfigWriter, sync: SubscriptionSync, config: AppConfig): SubscriptionCommands =>
+        new SubscriptionCommands({ repository, writer, sync, xray: { slotCount: config.xray.slotCount } }),
+    },
     ProxySubscriptionService,
     ProxiesService,
   ],
-  exports: [OUTBOUND_ROUTES, ProxiesService, ProxySubscriptionService],
+  exports: [OUTBOUND_ROUTES, ProxiesService, ProxySubscriptionService, TrafficService],
 })
 export class ProxiesModule {}

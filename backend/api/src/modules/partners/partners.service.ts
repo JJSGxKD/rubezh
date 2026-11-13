@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
-import { ValidationError } from "../../common/domain-error.js";
+import { DisabledError, ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { NO_POSTBACK_ADDRESS, checkedPostbackEvents, checkedPostbackUrl, nextPostback, postbackLogForm, sameEvents } from "../ad-conversions/postback-settings.js";
 import { partnerFunnelView, type PartnerFunnelView } from "../funnel/funnel-report.js";
 import { PARTNER_FUNNEL, type PartnerFunnelSource } from "../funnel/funnel.repository.js";
 import { campaignState, type PromoCampaignState } from "../promo-codes/promo-code-rules.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
+import { PARTNER_ACCOUNTS, PartnerAccountTakenError, type CabinetState, type PartnerAccounts } from "./partner-cabinet.js";
 import { PartnerNotFoundError, PartnerTelegramTakenError } from "./partner-errors.js";
 import { PARTNER_LINKS, type PartnerLinks, type PartnerLinksSource, type PartnerLinkStats } from "./partner-links.repository.js";
 import { PARTNER_RULES, PARTNER_STATUSES, withTerms, type PartnerFull, type PartnerInput, type PartnerPatch, type PartnerStats, type PartnerStatus, type PartnerUpdateInput } from "./partner-rules.js";
@@ -23,6 +24,10 @@ import { PARTNERS_REPOSITORY, type PartnerBindingView, type PartnerCampaignRow, 
  * способ выплаты и процент — только записываются: что и когда начисляется,
  * решит модель учёта (О44). Статус меняется отдельно, с причиной: он
  * решает, привязывает ли партнёр новых игроков.
+ *
+ * Кабинет партнёра (Р136, T-0217): «Открыть кабинет» находит аккаунт по Telegram ID карточки, выдаёт ему
+ * роль `partner` и записывает связь, «Закрыть» снимает роль и оставляет связь — она защищает от привязки
+ * партнёра к самому себе. Роль и связь пишутся только отсюда.
  *
  * Общий адрес постбэка (T-0070) — ещё одно условие партнёра: регистрация приведённого им игрока уходит на
  * него, если у ссылки партнёра нет своего адреса. Полный адрес видят те, кто правит партнёров
@@ -47,6 +52,8 @@ export interface PartnerDetail {
   links: PartnerLinkStats[];
   /** игроков, привязанных по ссылкам; привязанные кодами сюда не входят */
   linkBound: number;
+  /** кабинет партнёра: связанный аккаунт и открыт ли он сейчас */
+  cabinet: CabinetState;
   rules: typeof PARTNER_RULES;
 }
 
@@ -71,13 +78,15 @@ export class PartnersService {
   /**
    * `partnerLinks` — источник ссылок для карточки. Необязателен: сервис партнёров живёт и без модуля
    * ссылок, карточка тогда показывает пустой блок. `funnel` — источник воронки игроков партнёра (T-0068),
-   * так же необязателен: без него воронка пустая.
+   * так же необязателен: без него воронка пустая. `accounts` — связь карточки с аккаунтом для кабинета
+   * (T-0217): без неё карточка показывает «кабинета нет», а открыть его нельзя.
    */
   constructor(
     @Inject(PARTNERS_REPOSITORY) private readonly repository: PartnersRepository,
     private readonly roles: RolesService,
     @Optional() @Inject(PARTNER_LINKS) private readonly partnerLinks: PartnerLinksSource | null = null,
     @Optional() @Inject(PARTNER_FUNNEL) private readonly funnelSource: PartnerFunnelSource | null = null,
+    @Optional() @Inject(PARTNER_ACCOUNTS) private readonly accounts: PartnerAccounts | null = null,
   ) {}
 
   async catalog(actor: AccountRef, at = new Date()): Promise<{ partners: PartnerView[]; rules: typeof PARTNER_RULES }> {
@@ -91,10 +100,11 @@ export class PartnersService {
     const canEdit = await this.roles.can(actor, "partners.edit");
     const partner = await this.db(this.repository.byId(partnerId, at));
     if (partner === null) throw new PartnerNotFoundError();
-    const [daily, codes, linked] = await Promise.all([
+    const [daily, codes, linked, cabinet] = await Promise.all([
       this.db(this.repository.daily(partnerId, new Date(at.getTime() - DAILY_DAYS * 86_400_000))),
       this.db(this.repository.campaigns(partnerId)),
       this.partnerLinks === null ? NO_LINKS : this.db(this.partnerLinks.forPartner(partnerId)),
+      this.cabinetState(partnerId),
     ]);
     return {
       partner: seenBy(withTerms(partner), canEdit),
@@ -102,6 +112,7 @@ export class PartnersService {
       codes: codes.map((code) => ({ ...code, state: campaignState(code, at) })),
       links: linked.links,
       linkBound: linked.bound,
+      cabinet,
       rules: PARTNER_RULES,
     };
   }
@@ -185,6 +196,69 @@ export class PartnersService {
     });
     this.logger.log(JSON.stringify({ module: "partners", event: "partner_status", partnerId, status, actor: actor.accountId }));
     return await this.view(partnerId, at);
+  }
+
+  /**
+   * Открыть кабинет: аккаунт — по Telegram ID карточки, роль `partner` — через `RolesService.grant` (права,
+   * уровни, запрет выдать роль себе и запись в журнал — там), связь с аккаунтом — после выдачи, чтобы отказ
+   * выдачи не оставил связи без роли. Выдавать вправе тот, у кого есть и `partners.edit`, и `roles.assign`
+   * (владелец и администратор): отказ — до поиска аккаунтов. Повторное открытие безвредно.
+   */
+  async openCabinet(actor: AccountRef, partnerId: string, at = new Date()): Promise<CabinetState> {
+    const accounts = this.cabinetAccounts();
+    await this.roles.require(actor, "partners.edit");
+    await this.roles.require(actor, "roles.assign");
+    const partner = await this.db(this.repository.byId(partnerId, at));
+    if (partner === null) throw new PartnerNotFoundError();
+    const { telegramId } = withTerms(partner);
+    if (telegramId === null) throw new ValidationError("Сначала укажите Telegram ID партнёра");
+    const account = await this.db(accounts.byTelegramId(telegramId));
+    if (account === null) throw new ValidationError("Партнёр ещё не заходил в игру — пусть откроет её один раз");
+    const holder = await this.db(accounts.partnerOf(account.accountId));
+    if (holder !== null && holder.partnerId !== partnerId) throw new PartnerAccountTakenError(holder.name);
+    // Telegram ID карточки сменили: связь переносится на новый аккаунт только после того, как прежний закрыт —
+    // иначе у прежнего осталась бы роль без карточки.
+    const previous = await this.db(accounts.linkedTo(partnerId));
+    const moved = previous !== null && previous.accountId !== account.accountId;
+    if (moved && (await this.roles.rolesFor(previous)).includes("partner")) throw new ValidationError("Кабинет уже открыт на другой аккаунт — сначала закройте его");
+
+    const granted = await this.roles.grant(actor, account.accountId, "partner");
+    await this.db(accounts.link(partnerId, account.accountId, at));
+    if (granted || previous === null || moved) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "partner.cabinet", target: partnerId, before: { open: false }, after: { open: true, accountId: account.accountId } });
+      this.logger.log(JSON.stringify({ module: "partners", event: "partner_cabinet_opened", partnerId, accountId: account.accountId, actor: actor.accountId }));
+    }
+    return { accountId: account.accountId, open: true };
+  }
+
+  /**
+   * Закрыть кабинет: роль снимается у связанного аккаунта (а не у найденного по нынешнему Telegram ID),
+   * связь остаётся. Закрытого или не открывавшегося кабинета закрывать нечего — ответ тот же, записей нет.
+   */
+  async closeCabinet(actor: AccountRef, partnerId: string, at = new Date()): Promise<CabinetState> {
+    const accounts = this.cabinetAccounts();
+    await this.roles.require(actor, "partners.edit");
+    await this.roles.require(actor, "roles.assign");
+    if ((await this.db(this.repository.byId(partnerId, at))) === null) throw new PartnerNotFoundError();
+    const linked = await this.db(accounts.linkedTo(partnerId));
+    if (linked === null) return { accountId: null, open: false };
+    const revoked = await this.roles.revoke(actor, linked.accountId, "partner");
+    if (revoked) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "partner.cabinet", target: partnerId, before: { open: true }, after: { open: false, accountId: linked.accountId } });
+      this.logger.log(JSON.stringify({ module: "partners", event: "partner_cabinet_closed", partnerId, accountId: linked.accountId, actor: actor.accountId }));
+    }
+    return { accountId: linked.accountId, open: false };
+  }
+
+  private async cabinetState(partnerId: string): Promise<CabinetState> {
+    const linked = this.accounts === null ? null : await this.db(this.accounts.linkedTo(partnerId));
+    if (linked === null) return { accountId: null, open: false };
+    return { accountId: linked.accountId, open: (await this.roles.rolesFor(linked)).includes("partner") };
+  }
+
+  private cabinetAccounts(): PartnerAccounts {
+    if (this.accounts === null) throw new DisabledError("Кабинет партнёров не подключён");
+    return this.accounts;
   }
 
   private async view(partnerId: string, at: Date): Promise<PartnerView> {

@@ -36,6 +36,18 @@ export const NOTIFICATION_KINDS = {
   }),
   /** сообщение команды из панели — простой текст: разметка из панели ломает строку ленты */
   team_message: z.object({ text: z.string().min(1).max(TEAM_MESSAGE_MAX) }),
+  /** извинение команды за сбой оплаты или возврат звёзд (Р209) */
+  purchase_support: z.object({
+    action: z.enum(["compensated", "refunded"]),
+    stars: z.number().int().nonnegative(),
+    gems: z.number().int().nonnegative(),
+    /** когда игрок платил — по нему дата в тексте */
+    paidAt: z.iso.datetime(),
+    /** у возврата — причина; у компенсации — null */
+    reason: z.enum(["manual", "undeliverable"]).nullable(),
+    /** у возврата забран остаток покупки */
+    revoked: z.boolean(),
+  }),
   /** вышла версия — что нового, в журнале обновлений (WP31) */
   app_update: z.object({ version: z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/) }),
   /** напоминание: в таблице недели игрока обогнали (tasks/T-0128); сложность — доска, на которой это случилось */
@@ -49,6 +61,8 @@ export const NOTIFICATION_KINDS = {
    * больше, чем в двух лентах по 30 ступеней
    */
   pass_closed: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), rewards: z.number().int().min(1).max(60) }),
+  /** команде: новая заявка на правку цены ждёт подтверждения второго участника (T-0309); в бота не дублируется */
+  change_request_pending: z.object({ requestId: z.string().uuid(), kind: id, target: id, authorName: name }),
 } as const;
 
 export type NotificationKind = keyof typeof NOTIFICATION_KINDS;

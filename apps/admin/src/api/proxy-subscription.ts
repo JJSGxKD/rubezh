@@ -2,14 +2,17 @@ import { z } from "zod";
 import type { AdminApi, ApiResult } from "./client";
 
 /**
- * Подписка Xray для прокси (`/admin/proxy-subscription`, docs/35-stage4-plan.md
- * Р101, tasks/T-0093): одна подписка на систему, её узлы работают как прокси
- * для исходящих запросов сервера. Адрес подписки секретный: сервер его не
- * отдаёт никогда — только подсказку «хост …abcd»; панель шлёт адрес лишь тогда,
- * когда его ввели.
+ * Подписки Xray для прокси (`/admin/proxy-subscriptions`, docs/35-stage4-plan.md
+ * Р101, Р192, tasks/T-0093, tasks/T-0384): подписок до десяти, узлы всех
+ * включённых работают общим запасом прокси для исходящих запросов сервера.
+ * Адрес подписки секретный: сервер его не отдаёт никогда — только подсказку
+ * «хост …abcd»; панель шлёт адрес лишь тогда, когда его ввели. Действия идут по
+ * ключу подписки: его выдаёт сервер при создании. Транспорт, безопасность и
+ * маршрутизация подписки — сведения для человека (T-0385): перебор узлов ими не
+ * руководствуется.
  */
 
-const ROOT = "/proxy-subscription";
+const ROOT = "/proxy-subscriptions";
 
 export const NODE_STATES = ["unknown", "healthy", "down"] as const;
 export type NodeState = (typeof NODE_STATES)[number];
@@ -22,10 +25,37 @@ const nodeSchema = z.object({
   host: z.string(),
   state: z.enum(NODE_STATES),
   latencyMs: z.number().nullable(),
+  /** транспорт, безопасность и flow из разбора; незнакомое значение показывается как есть, а не роняет ответ; null — узел до первого обновления после выкатки */
+  network: z.string().nullable(),
+  security: z.string().nullable(),
+  flow: z.string().nullable(),
 });
 export type SubscriptionNode = z.infer<typeof nodeSchema>;
 
+/** Своя маршрутизация подписки: только для сведения, наш перебор её не применяет. */
+const routingSchema = z.object({
+  source: z.enum(["none", "json", "header", "json+header"]),
+  /** записей мимо туннеля; null — заголовок поставщика есть, состав не разобран */
+  direct: z.number().nullable(),
+  block: z.number().nullable(),
+  /** geosite:/geoip: из записей мимо туннеля */
+  hints: z.array(z.string()),
+});
+export type SubscriptionRouting = z.infer<typeof routingSchema>;
+
+/** Под каким устройством сервер ходит к поставщику: одно на подписку. */
+const deviceSchema = z.object({
+  count: z.number(),
+  /** первые знаки идентификатора устройства; null — на сервере нет ключа шифрования */
+  hwidPrefix: z.string().nullable(),
+  os: z.string(),
+  userAgent: z.string(),
+});
+export type SubscriptionDevice = z.infer<typeof deviceSchema>;
+
 const subscriptionSchema = z.object({
+  /** по ключу идут все действия; неизменен с рождения */
+  key: z.string(),
   name: z.string(),
   /** «хост …abcd» — сверить с кабинетом поставщика */
   urlHint: z.string(),
@@ -38,6 +68,10 @@ const subscriptionSchema = z.object({
   trafficTotalBytes: z.number().nullable(),
   expiresAt: z.string().nullable(),
   updatedAt: z.string(),
+  /** null — подписка не обновлялась после выкатки */
+  routing: routingSchema.nullable(),
+  device: deviceSchema,
+  nodes: z.array(nodeSchema),
 });
 export type SubscriptionInfo = z.infer<typeof subscriptionSchema>;
 
@@ -46,8 +80,14 @@ const overviewSchema = z.object({
   encryption: z.boolean(),
   /** контейнер Xray подключён: есть куда писать конфиг */
   sidecar: z.object({ connected: z.boolean() }),
-  subscription: subscriptionSchema.nullable(),
-  nodes: z.array(nodeSchema),
+  /** сколько подписок можно подключить */
+  limit: z.number(),
+  /** входов Xray всего */
+  slotCount: z.number(),
+  /** доля входов одной подписки сейчас */
+  slotQuota: z.number(),
+  /** по времени подключения */
+  subscriptions: z.array(subscriptionSchema),
 });
 export type SubscriptionOverview = z.infer<typeof overviewSchema>;
 
@@ -70,28 +110,38 @@ export function countriesOf(text: string): string[] {
     .filter((code) => code !== "");
 }
 
-export function fetchSubscription(api: AdminApi): Promise<ApiResult<SubscriptionOverview>> {
+const pathOf = (key: string, action = ""): string => `${ROOT}/${encodeURIComponent(key)}${action}`;
+
+export function fetchSubscriptions(api: AdminApi): Promise<ApiResult<SubscriptionOverview>> {
   return api.request(ROOT, { schema: overviewSchema });
 }
 
 /** Тело записи: строки обрезаны; адрес — только если введён, иначе сервер оставит прежний. */
-export function saveSubscription(api: AdminApi, form: SubscriptionForm): Promise<ApiResult<SubscriptionOverview>> {
+function bodyOf(form: SubscriptionForm): Record<string, unknown> {
   const url = form.url.trim();
   const body: Record<string, unknown> = { name: form.name.trim(), countries: countriesOf(form.countries), enabled: form.enabled };
   if (url !== "") body.url = url;
-  return api.request(ROOT, { method: "PUT", body, schema: overviewSchema });
+  return body;
+}
+
+export function createSubscription(api: AdminApi, form: SubscriptionForm): Promise<ApiResult<SubscriptionOverview>> {
+  return api.request(ROOT, { method: "POST", body: bodyOf(form), schema: overviewSchema });
+}
+
+export function updateSubscription(api: AdminApi, key: string, form: SubscriptionForm): Promise<ApiResult<SubscriptionOverview>> {
+  return api.request(pathOf(key), { method: "PUT", body: bodyOf(form), schema: overviewSchema });
 }
 
 /** «Обновить сейчас»: сервер ходит к поставщику, это до пятнадцати секунд. */
-export function refreshSubscription(api: AdminApi): Promise<ApiResult<SubscriptionOverview>> {
-  return api.request(`${ROOT}/refresh`, { method: "POST", schema: overviewSchema, timeoutMs: 30_000 });
+export function refreshSubscription(api: AdminApi, key: string): Promise<ApiResult<SubscriptionOverview>> {
+  return api.request(pathOf(key, "/refresh"), { method: "POST", schema: overviewSchema, timeoutMs: 30_000 });
 }
 
-/** «Проверить узлы»: узлы встают в очередь проверок, их разберёт расписание. */
-export function probeSubscription(api: AdminApi): Promise<ApiResult<SubscriptionOverview>> {
-  return api.request(`${ROOT}/probe`, { method: "POST", schema: overviewSchema });
+/** «Проверить узлы»: узлы подписки встают в очередь проверок, их разберёт расписание. */
+export function probeSubscription(api: AdminApi, key: string): Promise<ApiResult<SubscriptionOverview>> {
+  return api.request(pathOf(key, "/probe"), { method: "POST", schema: overviewSchema });
 }
 
-export function deleteSubscription(api: AdminApi): Promise<ApiResult<{ removed: true }>> {
-  return api.request(ROOT, { method: "DELETE", schema: z.object({ removed: z.literal(true) }) });
+export function deleteSubscription(api: AdminApi, key: string): Promise<ApiResult<{ removed: true }>> {
+  return api.request(pathOf(key), { method: "DELETE", schema: z.object({ removed: z.literal(true) }) });
 }

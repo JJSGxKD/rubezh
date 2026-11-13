@@ -1,7 +1,8 @@
 import { useEffect, useId, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { ChevronRight } from "lucide-react";
-import type { ApiError } from "../api/client";
+import { errorDetails, type ApiError } from "../api/client";
 import { SortableItem, SortableList } from "./sortable-list";
+import { copyErrorDetails } from "./toast";
 import { useNarrow } from "./use-media";
 
 /**
@@ -236,9 +237,21 @@ export function Notice({ tone = "danger", children }: { tone?: "danger" | "warni
 }
 
 export function ErrorNotice({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
+  const details = errorDetails(error);
   return (
     <div className="flex items-center gap-3">
-      <Notice>{error.message}</Notice>
+      <div className="min-w-0 space-y-1">
+        <Notice>{error.message}</Notice>
+        {error.reason === null ? null : <p className="text-xs text-text-muted">{error.reason}</p>}
+        {details === null ? null : (
+          <p className="flex items-center gap-2 text-xs text-text-muted">
+            <span className="min-w-0 break-all font-mono">{details}</span>
+            <button type="button" className="shrink-0 underline hover:text-text" onClick={() => copyErrorDetails(error)}>
+              Скопировать
+            </button>
+          </p>
+        )}
+      </div>
       {onRetry === undefined ? null : <Button onClick={onRetry}>Повторить</Button>}
     </div>
   );

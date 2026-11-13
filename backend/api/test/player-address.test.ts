@@ -43,6 +43,12 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/name-rules/name-rules-reclean.service.ts",
   // подписка Xray — раздел панели, игрок её не видит
   "modules/proxies/subscription/",
+  // ядро Xray (T-0416): раздел панели, тексты отказов — сотруднику
+  "modules/proxies/xray-core/",
+  // контент и баланс (T-0303): версии, черновики, проверка — раздел панели, тексты сотруднику
+  "modules/content/",
+  // заявки на правку цен (T-0309): раздел панели, тексты сотруднику
+  "modules/change-requests/",
   "modules/media/image-rules.ts",
   "modules/media/media-errors.ts",
   "modules/promo-codes/promo-code-rules.ts",
@@ -73,8 +79,26 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   // выбор событий постбэка в панели (T-0071): тексты задаёт спецификация
   { code: "postback_events_empty", fragment: "Выберите хотя бы одно событие" },
   { code: "postback_events_no_address", fragment: "Сначала задайте адрес постбэка" },
+  // «Открыть кабинет» в карточке партнёра (T-0217): тексты сотруднику, первый задаёт спецификация
+  { code: "partner_cabinet_no_telegram", fragment: "Сначала укажите Telegram ID партнёра" },
+  { code: "partner_cabinet_other_account", fragment: "сначала закройте его" },
+  // подписки Xray в панели (T-0384): тексты сотруднику задаёт спецификация
+  { code: "proxy_subscription_limit", fragment: "удалите лишнюю" },
+  { code: "proxy_subscription_busy", fragment: "повторите через минуту" },
+  // лента платежей в панели (T-0429): устаревший курсор страницы — сотруднику, текст задаёт спецификация
+  { code: "validation_failed", fragment: "откройте ленту заново" },
+  // «Повторить учёт» в карточке платежа (T-0431): отказ читает сотрудник поддержки, текст задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "запустите сверку с Telegram" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
+  // компенсация за сбой оплаты в панели (T-0435): оба текста владельцу задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "Повторите учёт — знак мецената встанет сам" },
+  { code: "compensation_pending", fragment: "нажмите «Компенсировать» ещё раз" },
+  // сверка оплат с выпиской (T-0433): отказ кнопки «Сверить сейчас» читает сотрудник, текст задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "подождите минуту" },
+  // действия по расхождениям сверки (T-0434): отказы читает сотрудник поддержки, оба текста задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "нажмите «Разобрано» с причиной" },
+  { code: "purchase_action_unavailable", fragment: "разберите его там" },
 ];
 
 /** Существительные и формы, похожие на повелительное «-ите/-йте/-ьте», но им не являющиеся. */
