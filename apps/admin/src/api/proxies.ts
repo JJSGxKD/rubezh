@@ -144,6 +144,7 @@ const SERVICE_TITLES: Record<string, string> = {
   "fx.tonapi": "Курсы: TON API",
   "fx.binance": "Курсы: Binance",
   "telegram.bot": "Bot API Telegram",
+  "telegram.web": "Страницы и CDN Telegram",
   "taddy.api": "Taddy: реклама",
   "taddy.exchange": "Taddy: лента заданий",
   "ads.creatives": "Креативы рекламных сетей",

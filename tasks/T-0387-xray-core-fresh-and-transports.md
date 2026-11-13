@@ -3,8 +3,8 @@ id: T-0387
 title: Ядро Xray — свежая версия и способы подключения, которые выдают поставщики
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-4
 size: M
 depends_on: [T-0384, T-0385, T-0386]
@@ -26,6 +26,7 @@ zones:
   - infra/prod/xray/Dockerfile
   - infra/prod/xray/check-config.sh
 shared:
+  - packages/proxy-kit/src/index.ts
   - packages/proxy-kit/README.md
   - docs/20-env-and-ports.md
   - docs/29-admin-panel.md
