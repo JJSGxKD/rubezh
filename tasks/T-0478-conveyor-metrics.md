@@ -3,8 +3,8 @@ id: T-0478
 title: Метрики конвейера — с первого ревью, круги доработки, провалы поезда по причинам
 epic: E0
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0477]
@@ -13,6 +13,7 @@ zones:
   - scripts/test/lead-metrics.test.ts
 shared:
   - tasks/README.md
+  - scripts/test/lead-conveyor.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
@@ -89,9 +90,9 @@ batch: 5
 
 ## Критерии приёмки
 
-- [ ] Отчёт за период: с первого ревью, круги, время до мерджа, провалы
+- [x] Отчёт за период: с первого ревью, круги, время до мерджа, провалы
       поезда по причинам и файлам, пачки.
-- [ ] Тесты и гейт зелёные.
+- [x] Тесты и гейт зелёные.
 
 ## PR
 

@@ -1140,7 +1140,12 @@ Workflow({ name: "pipeline", args: { lanes: 6, maxTasks: 4, priority: ["T-0477"]
   потока (база `rubezh_test`, схема `t<номер задачи>`, Redis 13); адреса
   собираются из `DATABASE_URL` основного `.env` и не печатаются;
 - `node scripts/lead/workflow-running.mjs <каталог прогона>` — сколько агентов
-  сценария сейчас идут.
+  сценария сейчас идут;
+- `node scripts/lead/metrics.mjs --since 2026-11-13` — метрики конвейера
+  Markdown-текстом для чата (отправляет человек; без `--since` — сутки): доля PR
+  с первого ревью, круги доработки, время до мерджа, провалы поезда по причинам
+  (конфликты — с топ-5 файлов), пачки. PR и метки — из GitHub, провалы и пачки — из
+  `.lead/train.log`; тесты — `scripts/test/lead-metrics.test.ts`.
 
 Тесты — `scripts/test/lead-conveyor.test.ts`.
 
