@@ -15,13 +15,16 @@ import type { RunModifierDef } from "@bh/shared-types";
 // меньше единицы (иначе орда слабее базы, а награда за неё выше), опыт в бою не
 // меньше единицы.
 export const RUN_MODIFIERS: RunModifierDef[] = [
-  // Больше врагов и быстрее уровни: враги чуть злее, общая масса орды выше базы.
+  // Больше врагов и быстрее уровни: враги крепче и злее, общая масса орды выше базы.
+  // Здоровье и урон подняты до калибровки Р194 (docs/32-balance.md §2.10): при 1,0 и 1,1
+  // полтора раза больше опыта перебрасывал бота через стену первой элиты, и «Спешка»
+  // выходила легче базы.
   {
     id: "hurry",
     nameKey: "modifier.hurry.name",
     descriptionKey: "modifier.hurry.description",
-    enemyHpMul: 1,
-    enemyDamageMul: 1.1,
+    enemyHpMul: 1.35,
+    enemyDamageMul: 1.25,
     spawnRateMul: 1.5,
     maxAliveMul: 1.25,
     xpMul: 1.5,

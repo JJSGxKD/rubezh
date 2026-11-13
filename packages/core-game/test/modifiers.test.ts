@@ -18,8 +18,8 @@ const HURRY: RunModifierDef = {
   id: "hurry",
   nameKey: "modifier.hurry.name",
   descriptionKey: "modifier.hurry.description",
-  enemyHpMul: 1,
-  enemyDamageMul: 1.1,
+  enemyHpMul: 1.35,
+  enemyDamageMul: 1.25,
   spawnRateMul: 1.5,
   maxAliveMul: 1.25,
   xpMul: 1.5,
@@ -41,7 +41,7 @@ describe("данные модификаторов", () => {
   });
 
   it("числа из таблицы решения: «Спешка» и «Инверсия»", () => {
-    expect(findRunModifier("hurry")).toMatchObject({ enemyHpMul: 1, enemyDamageMul: 1.1, spawnRateMul: 1.5, maxAliveMul: 1.25, xpMul: 1.5 });
+    expect(findRunModifier("hurry")).toMatchObject({ enemyHpMul: 1.35, enemyDamageMul: 1.25, spawnRateMul: 1.5, maxAliveMul: 1.25, xpMul: 1.5 });
     expect(findRunModifier("inverse")).toMatchObject({ enemyHpMul: 2, enemyDamageMul: 1.3, spawnRateMul: 0.6, maxAliveMul: 0.7, xpMul: 1.6 });
     expect(findRunModifier("nope")).toBeUndefined();
   });
@@ -61,7 +61,7 @@ describe("данные модификаторов", () => {
       expect(texts[modifier.descriptionKey], modifier.descriptionKey).toBeTruthy();
     }
     expect(texts["modifier.hurry.name"]).toBe("Спешка");
-    expect(texts["modifier.hurry.description"]).toBe("Врагов на полтора раза больше и они чуть злее, зато опыт в бою растёт быстрее.");
+    expect(texts["modifier.hurry.description"]).toBe("Врагов на полтора раза больше, они крепче и злее, зато опыт в бою растёт быстрее.");
     expect(texts["modifier.inverse.name"]).toBe("Инверсия");
     expect(texts["modifier.inverse.description"]).toBe("Врагов меньше, но они вдвое крепче и бьют больнее. Опыт в бою растёт быстрее.");
   });
@@ -91,7 +91,7 @@ describe("проверка данных модификатора называе�
   });
 
   it("модификатор без отличий от сложности", () => {
-    const plain = broken({ enemyDamageMul: 1, spawnRateMul: 1, maxAliveMul: 1, xpMul: 1 });
+    const plain = broken({ enemyHpMul: 1, enemyDamageMul: 1, spawnRateMul: 1, maxAliveMul: 1, xpMul: 1 });
     expect(findModifierProblems([plain]).join("\n")).toMatch(/hurry.*ничем не отличается/);
   });
 
@@ -128,8 +128,8 @@ describe("composeDifficulty", () => {
       id: "easy",
       nameKey: easy.nameKey,
       descriptionKey: easy.descriptionKey,
-      enemyHpMul: 1,
-      enemyDamageMul: 1.1,
+      enemyHpMul: 1.35,
+      enemyDamageMul: 1.25,
       spawnRateMul: 1.5,
       maxAliveMul: 1.25,
       xpMul: 1.5,

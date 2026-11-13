@@ -642,7 +642,7 @@ golden-тесты, и тест контента требует, чтобы он�
 ```ts
 // packages/core-game/src/content/modifiers.ts — id обязан быть в RUN_MODIFIER_IDS (shared-types)
 { id: "hurry", nameKey: "modifier.hurry.name", descriptionKey: "modifier.hurry.description",
-  enemyHpMul: 1, enemyDamageMul: 1.1, spawnRateMul: 1.5, maxAliveMul: 1.25, xpMul: 1.5 }
+  enemyHpMul: 1.35, enemyDamageMul: 1.25, spawnRateMul: 1.5, maxAliveMul: 1.25, xpMul: 1.5 }
 ```
 
 Что ещё нужно, чтобы модификатор появился: id и множитель **награды** за забег — в
