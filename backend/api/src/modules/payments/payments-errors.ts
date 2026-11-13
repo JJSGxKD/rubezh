@@ -71,3 +71,10 @@ export class FulfillFailedError extends DomainError {
     super("fulfill_failed", "Выдача не прошла — подробности в логе сервера. Попробуйте позже", 503);
   }
 }
+
+/** Брошенного задания с таким идентификатором в очереди нет: его убрали или идентификатор чужой. */
+export class PaymentJobNotFoundError extends DomainError {
+  constructor() {
+    super("payment_job_not_found", "Задание не найдено: очередь хранит последние 1000 брошенных", 404);
+  }
+}
