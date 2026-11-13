@@ -3,7 +3,7 @@ id: T-0459
 title: Раздел «Бухгалтерия» в панели — остатки по местам хранения и журнал проводок
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
