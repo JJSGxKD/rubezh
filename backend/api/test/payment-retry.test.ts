@@ -87,10 +87,11 @@ function setup(env: Record<string, string> = {}) {
   });
 
   /** Очередь-подмена: список брошенных (`null` — очереди нет), задания, которые уже не брошены, и что было повторено. */
-  const queueState: { failed: FailedPaymentJob[] | null; notFailed: Set<string>; retried: string[]; asked: number[] } = { failed: [], notFailed: new Set(), retried: [], asked: [] };
+  const queueState: { failed: FailedPaymentJob[] | null; error: Error | null; notFailed: Set<string>; retried: string[]; asked: number[] } = { failed: [], error: null, notFailed: new Set(), retried: [], asked: [] };
   const queue = {
     failedJobs: async (limit: number) => {
       queueState.asked.push(limit);
+      if (queueState.error !== null) throw queueState.error;
       return queueState.failed;
     },
     // Как BullMQ: повторить можно только брошенное — второй вызов по тому же заданию отвечает «не брошено»
@@ -219,6 +220,15 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     await expect(attempt).rejects.toBeInstanceOf(PurchaseActionUnavailableError);
     await expect(attempt).rejects.toMatchObject({ message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена" });
+    expect(s.rolesRepository.entries).toEqual([]);
+  });
+
+  it("очередь не ответила (Redis лежит) — тот же 409 «Очередь оплаты недоступна», а не ошибка сервера", async () => {
+    put(s, purchase(target.accountId));
+    s.queueState.error = new Error("нет ответа");
+
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена" });
+
     expect(s.rolesRepository.entries).toEqual([]);
   });
 

@@ -134,9 +134,10 @@ function setup(env: Record<string, string> = {}) {
   });
   const sources = new PaymentFeedSources();
 
-  /** Очередь-подмена: список брошенных (`null` — очереди нет) и ответы на повтор по идентификатору задания. */
-  const queueState: { failed: FailedPaymentJob[] | null; asked: number[]; retried: string[]; answers: Map<string, "retried" | "not_found" | "not_failed"> } = {
+  /** Очередь-подмена: список брошенных (`null` — очереди нет; `error` — не ответила) и ответы на повтор по идентификатору задания. */
+  const queueState: { failed: FailedPaymentJob[] | null; error: Error | null; asked: number[]; retried: string[]; answers: Map<string, "retried" | "not_found" | "not_failed"> } = {
     failed: [],
+    error: null,
     asked: [],
     retried: [],
     answers: new Map(),
@@ -144,6 +145,7 @@ function setup(env: Record<string, string> = {}) {
   const queue = {
     failedJobs: async (limit: number) => {
       queueState.asked.push(limit);
+      if (queueState.error !== null) throw queueState.error;
       return queueState.failed;
     },
     retryFailed: async (jobId: string) => {
@@ -212,6 +214,18 @@ describe("PaymentJobs.list: список брошенных заданий", () 
     s.queueState.failed = null;
 
     expect(await s.jobs.list(admin)).toEqual({ available: false, jobs: [] });
+  });
+
+  it("очередь не ответила (Redis лежит) — available: false, а не ошибка сервера; причина — в лог", async () => {
+    s.queueState.error = new Error("брошенные задания оплаты: нет ответа за 5000 мс");
+
+    expect(await s.jobs.list(admin)).toEqual({ available: false, jobs: [] });
+
+    expect(logged).toContainEqual({
+      level: "warn",
+      event: "payment_jobs_unreadable",
+      fields: expect.objectContaining({ module: "payments", reason: "брошенные задания оплаты: нет ответа за 5000 мс" }) as Record<string, unknown>,
+    });
   });
 
   it.each([["moderator" as const], ["game_designer" as const]])("роль %s без payments.view — ForbiddenError, очередь не читается", async (role) => {
@@ -353,6 +367,14 @@ describe("PaymentJobs.retryJob: повтор одного задания", () =>
 
     await expect(attempt).rejects.toBeInstanceOf(PurchaseActionUnavailableError);
     await expect(attempt).rejects.toMatchObject({ message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена" });
+    expect(s.queueState.retried).toEqual([]);
+  });
+
+  it("очередь не ответила (Redis лежит) — тот же 409 «Очередь оплаты недоступна», а не ошибка сервера", async () => {
+    s.queueState.error = new Error("нет ответа");
+
+    await expect(s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW)).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена" });
+
     expect(s.queueState.retried).toEqual([]);
   });
 
@@ -515,6 +537,17 @@ describe("PaymentJobs: источник карточки платежа", () => 
     expect(await s.sources.timeline(mine)).toEqual([]);
     expect((await s.sources.marks([mine.purchaseId])).size).toBe(0);
     expect(await s.sources.actions(mine)).toEqual([]);
+  });
+
+  it("очередь не ответила — карточка не ломается: пустой вклад и строка feed_source_failed в логе", async () => {
+    const mine = put(s, purchase(target.accountId));
+    s.queueState.error = new Error("нет ответа");
+
+    expect(await s.sources.timeline(mine)).toEqual([]);
+    expect(await s.sources.actions(mine)).toEqual([]);
+    expect((await s.sources.marks([mine.purchaseId])).size).toBe(0);
+
+    expect(logged.filter((line) => line.event === "feed_source_failed")).toHaveLength(3);
   });
 
   it("перерегистрация на старте не удваивает строки: источник один", async () => {

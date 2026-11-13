@@ -66,6 +66,20 @@ export function jobBelongsTo(job: FailedPaymentJob, purchase: Pick<StoredPurchas
   }
 }
 
+/**
+ * Брошенные задания для действия человека в панели. Очереди нет или она не
+ * ответила за положенное время — `null`: панель говорит «недоступна», а не
+ * падает ошибкой сервера, пока Redis лежит. Причина — в лог вызывающего.
+ */
+export async function readFailedJobs(queue: Pick<PaymentsQueue, "failedJobs">, limit: number, onError: (reason: string) => void): Promise<FailedPaymentJob[] | null> {
+  try {
+    return await queue.failedJobs(limit);
+  } catch (error: unknown) {
+    onError(error instanceof Error ? error.message : "unknown");
+    return null;
+  }
+}
+
 /** Свою покупку не повторяют — только вход разработчика, чтобы проверить на себе. */
 export function forbidOwnPurchase(config: AppConfig, actor: AccountRef, purchase: Pick<StoredPurchase, "accountId">): void {
   if (actor.accountId === purchase.accountId && !config.auth.devLogin) throw new ForbiddenError("Повторять учёт своей покупки нельзя");
@@ -112,7 +126,7 @@ export class PaymentJobs implements OnModuleInit {
    */
   async list(actor: AccountRef): Promise<{ available: boolean; jobs: FailedPaymentJob[] }> {
     await this.roles.require(actor, "payments.view");
-    const failed = await this.queue.failedJobs(LIST_LIMIT);
+    const failed = await readFailedJobs(this.queue, LIST_LIMIT, (reason) => this.log("warn", "payment_jobs_unreadable", { reason }));
     if (failed === null) return { available: false, jobs: [] };
     const withPayer = await this.roles.can(actor, "players.pii.view");
     return { available: true, jobs: withPayer ? failed : failed.map((job) => ({ ...job, payerId: null })) };
@@ -125,7 +139,7 @@ export class PaymentJobs implements OnModuleInit {
    */
   async retryJob(actor: AccountRef, jobId: string, note: string, now = new Date()): Promise<{ jobId: string; purchaseId: string | null }> {
     await this.roles.require(actor, "payments.support");
-    const failed = await this.queue.failedJobs(FAILED_LOOKUP_LIMIT);
+    const failed = await readFailedJobs(this.queue, FAILED_LOOKUP_LIMIT, (reason) => this.log("warn", "payment_jobs_unreadable", { reason }));
     if (failed === null) throw new PurchaseActionUnavailableError(QUEUE_UNAVAILABLE);
     const job = failed.find((candidate) => candidate.jobId === jobId);
     if (job === undefined) throw new PaymentJobNotFoundError();

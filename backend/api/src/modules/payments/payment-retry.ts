@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
-import { FAILED_LOOKUP_LIMIT, QUEUE_UNAVAILABLE, actorNameOf, forbidOwnPurchase, jobBelongsTo } from "./payment-jobs.js";
+import { FAILED_LOOKUP_LIMIT, QUEUE_UNAVAILABLE, actorNameOf, forbidOwnPurchase, jobBelongsTo, readFailedJobs } from "./payment-jobs.js";
 import { PurchaseActionUnavailableError, PurchaseNotFoundError } from "./payments-errors.js";
 import { PaymentsHooks } from "./payments-hooks.js";
 import { PaymentsQueue, type FailedPaymentJob } from "./payments-queue.js";
@@ -70,7 +70,7 @@ export class PaymentRetry {
 
   /** Брошенные задания покупки; очереди нет — `null`: заданий мы просто не видим. */
   private async abandonedJobs(purchase: StoredPurchase): Promise<FailedPaymentJob[] | null> {
-    const failed = await this.queue.failedJobs(FAILED_LOOKUP_LIMIT);
+    const failed = await readFailedJobs(this.queue, FAILED_LOOKUP_LIMIT, (reason) => this.log("warn", "payment_jobs_unreadable", { reason }));
     return failed === null ? null : failed.filter((job) => jobBelongsTo(job, purchase));
   }
 
