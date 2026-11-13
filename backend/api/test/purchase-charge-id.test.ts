@@ -10,13 +10,13 @@ const read = (path: string): string => readFileSync(fileURLToPath(new URL(path, 
 
 describe("длина идентификатора оплаты Telegram", () => {
   const schema = read("../prisma/schema.prisma");
-  const api = read("../src/platforms/telegram/telegram-bot-api.ts");
+  const api = read("../src/platforms/telegram/telegram-update-schema.ts");
   const column = /telegramChargeId\s+String\?\s+@unique\s+@map\("telegram_charge_id"\)\s+@db\.VarChar\((\d+)\)/.exec(schema);
   const input = /telegram_payment_charge_id:\s*z\.string\(\)\.min\(1\)\.max\((\d+)\)/.exec(api);
 
   it("колонка purchase.telegram_charge_id вмещает всё, что пропускает проверка входа", () => {
     expect(column, "колонка telegram_charge_id в schema.prisma").not.toBeNull();
-    expect(input, "проверка telegram_payment_charge_id в telegram-bot-api.ts").not.toBeNull();
+    expect(input, "проверка telegram_payment_charge_id в telegram-update-schema.ts").not.toBeNull();
     expect(Number(column?.[1])).toBeGreaterThanOrEqual(Number(input?.[1]));
   });
 

@@ -3,8 +3,8 @@ id: T-0393
 title: Слой Bot API 10.x — оформленные и эфемерные сообщения, темы, виджеты и приём widget_query
 epic: E5
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -16,10 +16,15 @@ zones:
   - backend/api/test/telegram-bot-api-v10.test.ts
 shared:
   - backend/api/src/platforms/telegram/telegram-bot-api.ts
+  - backend/api/src/platforms/telegram/telegram-update-schema.ts
   - backend/api/src/platforms/telegram/bot-update-queue.ts
   - backend/api/src/platforms/telegram/bot-identity.ts
   - backend/api/test/bot-update-queue.test.ts
   - backend/api/test/bot-fallback.test.ts
+  - backend/api/test/telegram-link-host.test.ts
+  - backend/api/test/telegram-link-origin.test.ts
+  - backend/api/test/purchase-charge-id.test.ts
+  - backend/api/test/welcome.test.ts
   - docs/16-tech-stack-decisions.md
   - docs/28-diagnostics.md
 runner: any
