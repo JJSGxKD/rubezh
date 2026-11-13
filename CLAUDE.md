@@ -364,7 +364,7 @@ IEEE 754), степень — умножением в цикле, направл
 // Болотник: преследует и оставляет ядовитые лужи; коридоры: everySec 0,5…5,
 // radius 12…60, lifeSec 1…8, damagePerSec 1…20 — вне них тест контента называет
 // врага и поле: «враг X: trail.radius вне 12…60»
-{ id: "bog_lurker", hp: 40, speed: 34, damage: 8, xp: 6, threat: 6, pattern: "chase",
+{ id: "bog_lurker", hp: 40, speed: 34, damage: 8, xp: 6, threat: 3.75, pattern: "chase",
   element: "poison", statusChance: 0.5, resist: { poison: 0.6, fire: -0.4 },
   trail: { everySec: 1.5, radius: 26, lifeSec: 4, damagePerSec: 5 } }
 ```
