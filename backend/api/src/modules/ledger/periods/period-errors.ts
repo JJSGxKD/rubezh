@@ -7,7 +7,7 @@ import type { PeriodStatus } from "./period-rules.js";
 /** В закрытый месяц проводки не пишутся: поправка — в открытом месяце, а закрытие сначала снимают. */
 export class LedgerPeriodClosedError extends DomainError {
   constructor(period: string) {
-    super("ledger_period_closed", `Месяц ${period} закрыт: проводки в него не пишутся. Укажите дату в открытом месяце или снимите закрытие`, 409);
+    super("ledger_period_closed", `Месяц ${period} закрыт: проводки в него не пишутся. Дата должна быть в открытом месяце, либо сначала нужно снять закрытие`, 409);
   }
 }
 
@@ -40,7 +40,7 @@ export class LedgerPeriodBlockedError extends DomainError {
 /** Пока считалось закрытие, журнал месяца или состояние месяца поменялись: считать заново, а не писать по устаревшему. */
 export class LedgerPeriodChangedError extends DomainError {
   constructor(period: string) {
-    super("ledger_period_changed", `Пока шло закрытие, в месяце ${period} появились новые проводки: повторите закрытие`, 409);
+    super("ledger_period_changed", `Пока шло закрытие, в месяце ${period} появились новые проводки: закрытие нужно повторить`, 409);
   }
 }
 
