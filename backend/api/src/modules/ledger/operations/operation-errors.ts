@@ -40,6 +40,6 @@ export class LedgerOperationTemplateTakenError extends DomainError {
 /** Проводка записана, а черновика уже нет: его удалили в тот же миг. Проводка остаётся в журнале — смотреть по ключу. */
 export class LedgerOperationVanishedError extends DomainError {
   constructor(sourceKey: string) {
-    super("ledger_operation_vanished", `Черновик удалили в тот же миг, когда его проводили: проводка записана в журнал под ключом «${sourceKey}» — проверьте её там`, 409);
+    super("ledger_operation_vanished", `Черновик удалили в тот же миг, когда его проводили: проводка записана в журнал под ключом «${sourceKey}», её нужно проверить там`, 409);
   }
 }
