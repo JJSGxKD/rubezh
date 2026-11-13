@@ -3,8 +3,8 @@ id: T-0477
 title: Конвейер тимлида в репозитории — поезд мерджей, статус, ожидание работы и сценарий
 epic: E0
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
@@ -16,6 +16,7 @@ shared:
   - .gitignore
   - tasks/README.md
   - docs/09-ci-cd.md
+  - eslint.config.js
 runner: local
 executor: sonnet-5.5
 effort: high
@@ -108,13 +109,13 @@ batch: 5
 
 ## Критерии приёмки
 
-- [ ] Поезд, вливание по одному, статус и ожидание работы — в
+- [x] Поезд, вливание по одному, статус и ожидание работы — в
       `scripts/lead/`, без абсолютных путей и секретов.
-- [ ] Сценарий конвейера запускается по имени из `.claude/workflows/`; при
+- [x] Сценарий конвейера запускается по имени из `.claude/workflows/`; при
       `extra` — два ревьюера.
-- [ ] Описание в `tasks/README.md` достаточно, чтобы другой тимлид поднял
+- [x] Описание в `tasks/README.md` достаточно, чтобы другой тимлид поднял
       конвейер.
-- [ ] Тесты и гейт зелёные.
+- [x] Тесты и гейт зелёные.
 
 ## PR
 
