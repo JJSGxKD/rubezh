@@ -10,7 +10,8 @@ const heading = createHeading();
  */
 export const stalker: PatternBehavior = {
   update(world, index) {
-    if (world.stalkerBody.recoverTicks > 0) {
+    // Растворяющийся стоит: конец погони виден, а не «пропал на месте» (`sim/stalker.ts`).
+    if (world.stalkerBody.recoverTicks > 0 || world.stalker.phase === "fading") {
       stopEnemy(world, index);
       return;
     }

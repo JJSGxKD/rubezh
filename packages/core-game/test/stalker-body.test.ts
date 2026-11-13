@@ -618,7 +618,9 @@ describe("снимок забега и контрольная сумма", () =>
   });
 
   it("мир без Карачуна считает ту же сумму, что и до задачи: тело в неё не входит", () => {
-    const a = makeWorld();
+    // Директор появлений (T-0423) складывает своё состояние в сумму, пока включён, — поэтому он выключен:
+    // уровень аккаунта 1 ниже порога новичка.
+    const a = makeWorld({ loadout: { modifiers: {}, boosts: [], accountLevel: 1 } });
     const b = makeWorld({}, null);
     expect(checksumWorld(a)).toBe(checksumWorld(b));
   });
