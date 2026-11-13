@@ -129,7 +129,8 @@ export class StalkerLook {
     this.container = scene.add.container(0, 0);
     layer.add(this.container);
 
-    const typeIndex = world.stalkerBody.typeIndex;
+    // По признаку типа, а не по состоянию тела: правила забегу могут выдать позже (команда разработчика).
+    const typeIndex = world.enemyTypes.findIndex((type) => type.unkillable);
     this.enabled = typeIndex >= 0;
     this.bodyRadius = this.enabled ? world.enemyTypes[typeIndex].radius : 0;
     this.rayMaxPx = Math.max(8, Math.ceil(this.bodyRadius * RAY_MAX_RADII));

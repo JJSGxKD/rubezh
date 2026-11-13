@@ -223,17 +223,28 @@ function startOmen(world: World, appear: StalkerAppearDef): void {
 
 /**
  * Команда разработчика «призвать Карачуна» (стенд эффектов, tasks/T-0425): начать предвестие сейчас же, в
- * обход отметки, паузы и блокировок (босс, строй, разлом). Идущее появление не перебивает; нет правил в мире,
- * тела или игрока — отказ. Поток случайности тратится как при обычном предвестии: направление и длина
- * погони бросаются из него же, поэтому команда доступна только в забеге разработчика.
+ * обход отметки, паузы и блокировок (босс, строй, разлом). Идущее появление не перебивает; нет тела или
+ * игрока — отказ. Пока забег не получил правила из контента (подключение — T-0424), `fallback` их ставит:
+ * команда работает только в забеге разработчика, где правила и так не влияют на исход. Поток случайности
+ * тратится как при обычном предвестии: направление и длина погони бросаются из него же.
  */
-export function summonStalker(world: World): boolean {
+export function summonStalker(world: World, fallback?: StalkerDef): boolean {
   const state = world.stalker;
+  if (state.appear === null && fallback !== undefined) equipStalker(world, fallback);
   const appear = state.appear;
   if (appear === null || world.stalkerBody.typeIndex < 0 || !world.player.alive) return false;
   if (state.phase === "omen" || state.phase === "chase" || state.phase === "fading") return false;
   startOmen(world, appear);
   return true;
+}
+
+/** Выдать миру без правил правила из контента: тело и появление. Нет типа врага в мире — ничего не меняет. */
+function equipStalker(world: World, def: StalkerDef): void {
+  const typeIndex = world.enemyTypes.findIndex((type) => type.id === def.enemy);
+  if (typeIndex < 0) return;
+  world.stalkerBody.rules = def.body;
+  world.stalkerBody.typeIndex = typeIndex;
+  world.stalker.appear = def.appear;
 }
 
 function stepWaiting(world: World, appear: StalkerAppearDef): void {

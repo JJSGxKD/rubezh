@@ -1,4 +1,5 @@
 import type { RunDevCommand } from "../../run-api";
+import { STALKER } from "../../content/stalker";
 import { addXp, prepareOffers, refreshPlayerStats } from "../progression/levels";
 import { addPassive, addWeapon, passiveSlotOf, weaponSlotOf } from "../progression/loadout";
 import { killEnemy } from "../sim/combat";
@@ -54,7 +55,7 @@ export function applyDevCommand(world: World, command: RunDevCommand): DevComman
     case "jumpToMinute":
       return cheat(jumpToMinute(world, command.minute));
     case "summonStalker":
-      return cheat(summonStalker(world));
+      return cheat(summonStalker(world, STALKER));
     case "stepTicks":
       // Шаг исполняет сцена: ей нужен спавнер и рендер, а миру — только ввод.
       return { applied: false, cheat: false };

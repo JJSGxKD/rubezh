@@ -365,9 +365,24 @@ describe("команда разработчика summonStalker", () => {
     expect(summonStalker(world)).toBe(false);
   });
 
-  it("без правил в мире — отказ", () => {
+  it("без правил в мире и без запасных — отказ", () => {
     const world = createWorld({ seed: 7, enemies: [RAT, KARACHUN], config: { progressionEnabled: false } });
     expect(summonStalker(world)).toBe(false);
     expect(world.stalker.phase).toBe("off");
+  });
+
+  it("забег без правил (до подключения в T-0424) получает их из запасных и доходит до выхода", () => {
+    const world = createWorld({ seed: 7, enemies: [RAT, KARACHUN], config: { progressionEnabled: false } });
+    world.cheats.godMode = true;
+    expect(summonStalker(world, STALKER)).toBe(true);
+    expect(world.stalker.phase).toBe("omen");
+    for (let i = 0; i < OMEN_TICKS; i++) stepWorld(world, IDLE_INPUT);
+    expect(world.stalker.phase).toBe("chase");
+    expect(world.stalkerBody.slot).toBeGreaterThanOrEqual(0);
+  });
+
+  it("запасные правила без врага в мире — отказ", () => {
+    const world = createWorld({ seed: 7, enemies: [RAT], config: { progressionEnabled: false } });
+    expect(summonStalker(world, STALKER)).toBe(false);
   });
 });
