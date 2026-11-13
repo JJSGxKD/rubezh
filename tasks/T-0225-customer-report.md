@@ -3,8 +3,8 @@ id: T-0225
 title: Отчёт заказчику партнёрских заданий — по дням, без ID, экран и CSV
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0222, T-0223, T-0224]
@@ -19,7 +19,7 @@ zones:
   - apps/admin/test/customer-report.test.ts
 shared:
   - backend/api/src/modules/admin/admin.module.ts
-  - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
   - docs/07-monetization-and-ads.md
   - docs/29-admin-panel.md

@@ -250,6 +250,9 @@ importers:
       '@bh/fx':
         specifier: workspace:*
         version: link:../../packages/fx
+      '@bh/ledger':
+        specifier: workspace:*
+        version: link:../../packages/ledger
       '@bh/proxy-kit':
         specifier: workspace:*
         version: link:../../packages/proxy-kit
