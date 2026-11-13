@@ -3,8 +3,8 @@ id: T-0416
 title: Сервер «Ядра Xray» — запущенная версия, свежий выпуск, совместимость и запуск обновления
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0415, T-0387]
