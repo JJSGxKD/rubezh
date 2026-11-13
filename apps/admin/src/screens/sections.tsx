@@ -30,6 +30,7 @@ import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
 import { SecretsScreen } from "./secrets/SecretsScreen";
 import { SettingsScreen } from "./settings/SettingsScreen";
+import { MyProjectScreen } from "./my-project/MyProjectScreen";
 import { StakeholdersScreen } from "./stakeholders/StakeholdersScreen";
 
 /**
@@ -48,6 +49,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
+  "my-project": () => <MyProjectScreen />,
   stakeholders: () => <StakeholdersScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
   csp: () => <CspReportsScreen />,
