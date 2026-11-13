@@ -60,7 +60,7 @@ export function BalanceWorkspace({
   const [tab, setTab] = useState<TabId>(isTabId(initialTab) ? initialTab : "enemies");
   const [editor, setEditor] = useState<EditorState>(() => ({ snapshot: draft === null ? version.snapshot : draft.snapshot, errors: {} }));
   const [changes, setChanges] = useState<DraftChange[]>(() => diff?.changes ?? []);
-  const [sheetOpen, setSheetOpen] = useState(draft !== null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [busyPath, setBusyPath] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
@@ -190,10 +190,8 @@ export function BalanceWorkspace({
 
       <TabBar label="Разделы баланса" tabs={TABS} active={tab} counts={counts} onSelect={selectTab} />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
-        </div>
+      <div className="flex min-w-0 flex-col gap-4">
+        {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
         {draft !== null && sheetOpen ? (
           <EditsSheet
             changes={changes}
@@ -203,6 +201,7 @@ export function BalanceWorkspace({
             canEdit={canEdit && !narrow}
             busyPath={busyPath}
             onRevert={(change) => void revert(change)}
+            onClose={() => setSheetOpen(false)}
             onGo={(path) => {
               const owner = tabOfPath(path);
               if (owner !== null) selectTab(owner);

@@ -143,7 +143,7 @@ function GroupCell({ items, ctx }: { items: readonly GroupItem[]; ctx: CellConte
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {items.map((item, index) => (
-        <span key={index} className="inline-flex items-center gap-1">
+        <span key={index} className="inline-flex items-center gap-1 whitespace-nowrap">
           <span className="text-xs text-text-muted">
             {item.label}
             {item.note === undefined || item.note === "" ? "" : ` (${item.note})`}
