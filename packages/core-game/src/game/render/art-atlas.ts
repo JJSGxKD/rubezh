@@ -215,6 +215,8 @@ export class ArtMode {
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[]; hurt: ArtFrame | null } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
+  /** Кадры лужи: свежая, подсохшая, гаснущая; пусто — арта луж нет, рисуется круг. */
+  private puddleFrames: ArtFrame[] = [];
   private orbiterFrames = new Map<string, ArtFrame>();
   private secretFrames: SecretArt | null = null;
   private statusMarkFrames: StatusMarkArt = [];
@@ -285,6 +287,9 @@ export class ArtMode {
       scale: this.scale,
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
+    // Лужа — все три кадра или ни одного: недорисованная смена кадров хуже ровного круга.
+    const puddles = [0, 1, 2].map((k) => this.atlas.find(`fx/puddle_bog${String(k)}`));
+    this.puddleFrames = puddles.every((frame): frame is ArtFrame => frame !== null) ? puddles : [];
     this.orbiterFrames = new Map();
     for (const name of ORBITER_FRAME_NAMES) {
       const frame = this.atlas.find(name);
@@ -323,6 +328,11 @@ export class ArtMode {
   /** Кадры подборов для `PickupRenderer`; `null` — режим выключен. */
   pickupArt(): PickupArt | null {
     return this.enabled ? this.pickupFrames : null;
+  }
+
+  /** Кадры луж для `Puddles`; `null` — режим выключен или кадров нет. */
+  puddleArt(): readonly ArtFrame[] | null {
+    return this.enabled && this.puddleFrames.length > 0 ? this.puddleFrames : null;
   }
 
   /** Кадры развеивания для `CombatFeedback`; `null` — режим выключен. */
