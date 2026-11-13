@@ -22,6 +22,8 @@ export interface FxScene {
 const WEAPON_SCENE_TICKS = 90;
 const EVENT_SCENE_TICKS = 60;
 const SWARM_AROUND = 10;
+/** Предвестие 90 тиков (1,5 с), дальше выход и шаги к герою. */
+const STALKER_SCENE_TICKS = 150;
 
 /** Сцена оружия: последний уровень и рой вокруг. Каталог растёт вместе с `WEAPONS`. */
 function weaponScene(weapon: (typeof WEAPONS)[number]): FxScene {
@@ -65,6 +67,15 @@ const EVENT_SCENES: FxScene[] = [
     commands: [{ kind: "spawnEnemy", id: "tank_ghoul", count: 1 }],
     cheats: { oneHitKill: true },
     ticks: EVENT_SCENE_TICKS,
+  },
+  {
+    id: "karachun",
+    note: "Предвестие инеем 1,5 с, выход Карачуна, шаг к герою: туман, иней звездой, лунная кайма и провал под ногами.",
+    startingWeaponId: "spark",
+    commands: [{ kind: "summonStalker" }],
+    // Враги не заморожены: Карачун обязан выйти и дойти до героя.
+    cheats: { freezeEnemies: false },
+    ticks: STALKER_SCENE_TICKS,
   },
 ];
 
