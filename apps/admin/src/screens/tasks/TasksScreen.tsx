@@ -61,6 +61,7 @@ import { HELP } from "../../ui/help";
 import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
+import { TaskCustomerFields } from "./task-customer-fields";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -96,6 +97,8 @@ export function TasksScreen() {
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
+  /** Прежние заказчики — подсказка к полю: отчёт группирует по строке, и опечатка разбила бы заказчика надвое. */
+  const customers = [...new Set(catalog.flatMap((task) => (task.customer === null ? [] : [task.customer])))].sort((x, y) => x.localeCompare(y, "ru"));
   const problem = taskProblem(input, original === null, catalog);
 
   const reset = () => {
@@ -315,6 +318,7 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {partner ? <TaskCustomerFields input={input} onChange={setInput} customers={customers} channel={channel} /> : null}
           {channel ? (
             <Notice tone="info">
               Бот проверяет подписку, когда игрок нажимает «Проверить», — сделайте его администратором канала: без этого площадка подписчиков не покажет.

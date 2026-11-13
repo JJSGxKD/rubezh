@@ -55,6 +55,13 @@ const ATLASES = [
     png: new URL("../../../../../design/art/out/atlas-r157.png", import.meta.url).href,
     json: new URL("../../../../../design/art/out/atlas-r157.json", import.meta.url).href,
   },
+  // Ступени 3–5 обычных врагов (с 8, 11 и 14-й минуты): без пака рисуется кадр
+  // ступени 2 с тоном (artStageTint).
+  {
+    key: "art-stages",
+    png: new URL("../../../../../design/art/out/atlas-stages.png", import.meta.url).href,
+    json: new URL("../../../../../design/art/out/atlas-stages.json", import.meta.url).href,
+  },
   {
     key: ART_ENV_KEY,
     png: new URL("../../../../../design/art/out/atlas-env.png", import.meta.url).href,

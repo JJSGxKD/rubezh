@@ -3,8 +3,8 @@ id: T-0222
 title: Заказчик партнёрского задания — модель оплаты CPA или RS, ставка и срок удержания
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0105, T-0106, T-0126, T-0167, T-0178]
