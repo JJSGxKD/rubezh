@@ -123,7 +123,7 @@ export function PassBoard(props: PassBoardProps): ReactNode {
 
       {/* Лента на обе строки — одна прокрутка: бесплатная и VIP листаются вместе. */}
       <div className="relative">
-        <div ref={scroller} className="overflow-x-auto pb-1 [scrollbar-width:none]">
+        <div ref={scroller} className="relative overflow-x-auto pb-1 [scrollbar-width:none]">
           <div className="grid w-max gap-1.5">
             {LANES.map((lane) => (
               <LaneRow key={lane} lane={lane} {...props} />
