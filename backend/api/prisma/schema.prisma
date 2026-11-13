@@ -199,7 +199,7 @@ model Account {
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
-  shownEmblem   TaskDef?      @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
+  shownEmblem   TaskDef?              @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
   runs          Run[]
   purchases     Purchase[]
   sessions      AccountSession[]
