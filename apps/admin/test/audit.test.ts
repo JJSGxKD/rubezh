@@ -240,6 +240,7 @@ describe("действия поддержки покупок, партнёров
   it("названы словами и ведут к своему объекту", () => {
     expect(actionTitle("payments.refund")).toBe("Возврат звёзд вручную");
     expect(actionTitle("payments.fulfill")).toBe("Повторная выдача покупки");
+    expect(actionTitle("payments.compensate")).toBe("Компенсация за сбой оплаты");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
     expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");

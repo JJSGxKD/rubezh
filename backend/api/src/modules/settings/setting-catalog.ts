@@ -203,6 +203,8 @@ const PROLOGUE_GROUP = "Пролог";
 
 const MAX_BOT_GROUP = "Бот MAX";
 
+const PAYMENTS_GROUP = "Платежи";
+
 /** Имя бота MAX в ссылке `max.ru/<имя>`: латиница, цифры, знак подчёркивания, точка и дефис; без «@» и без адреса. */
 const MAX_BOT_USERNAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
 
@@ -993,6 +995,26 @@ export const SETTINGS = {
     fromEnv: () => null,
     fallback: "",
   } satisfies SettingDefinition<string>,
+  /**
+   * Компенсация за сбой оплаты (docs/35-stage4-plan.md Р209, tasks/T-0435): во сколько раз панель
+   * предлагает больше эквивалента покупки. Без окружения: число правится в панели без релиза.
+   */
+  paymentsCompensationMultiplier: integer(
+    "payments.compensation.multiplier",
+    PAYMENTS_GROUP,
+    "Множитель компенсации",
+    "Во сколько раз панель предлагает больше эквивалента покупки при компенсации за сбой оплаты. Сумму в окне можно поправить",
+    { min: 1, max: 5, unit: ["раз", "раза", "раз"] },
+    2,
+  ),
+  paymentsCompensationMaxGems: integer(
+    "payments.compensation.max-gems",
+    PAYMENTS_GROUP,
+    "Потолок компенсации, самоцветы",
+    "Больше за одну покупку начислить нельзя — ни предложением, ни вручную в окне",
+    { min: 1, max: 20_000, unit: ["самоцвет", "самоцвета", "самоцветов"] },
+    2_000,
+  ),
 } as const;
 
 export const SETTING_LIST: readonly SettingDefinition[] = Object.values(SETTINGS);
