@@ -3,7 +3,7 @@ id: T-0322
 title: Достижения v2 — «Без единой царапины», «Пацифист», стихийники, «Коллекционер», «Мастер Метеора», «Душа компании»; знаки у трудных
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -28,6 +28,12 @@ shared:
   - packages/app-shell/src/i18n/ru-tasks.json
   - packages/app-shell/test/tasks-api.test.ts
   - docs/39-retention-mechanics.md
+  - backend/api/test/achievements.integration.test.ts
+  - backend/api/test/emblems.integration.test.ts
+  - backend/api/test/tasks-external-channel.test.ts
+  - packages/app-shell/src/state/tasks-api.ts
+  - docs/21-diagrams.md
+  - docs/22-analytics-and-metrics.md
 runner: any
 executor: sonnet-5.5
 effort: high

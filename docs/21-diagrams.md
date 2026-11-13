@@ -709,10 +709,10 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot; знаки без прогресса — status, season"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs, boss_kills, elite_kills, chests_opened, crystals_collected, evolution_runs, no_hit_sec, no_kill_sec, element_kills; состояния игрока, которые забег не двигает, — friends, account_level, weapon_masters (цель считается по числу «Мастеров оружия»); партнёрские — channel, link, bot; знаки без прогресса — status, season"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
-        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
+        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, element_kills, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
         int target "больше нуля"
         string title "nullable: текст по виду цели у клиента"
         int coins
