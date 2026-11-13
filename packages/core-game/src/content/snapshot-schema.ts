@@ -47,6 +47,7 @@ const patternParams = {
   splitter: z.strictObject({ children: z.array(z.strictObject({ enemy: text, count: num.optional() })) }),
   rush: z.strictObject({ leadSec: num.optional(), runSec: num.optional() }),
   cordon: z.strictObject({}),
+  stalker: z.strictObject({}),
 } satisfies Record<EnemyPattern, z.ZodType>;
 
 const statusElements = ELEMENTS.filter((element) => element !== "physical") as [
@@ -87,6 +88,7 @@ const enemySchema = z.discriminatedUnion("pattern", [
   enemyOf("splitter", patternParams.splitter, true),
   enemyOf("rush", patternParams.rush, false),
   enemyOf("cordon", patternParams.cordon, false),
+  enemyOf("stalker", patternParams.stalker, false),
 ]);
 
 const stageSchema = z.strictObject({
@@ -352,6 +354,33 @@ const siegeSchema = z.strictObject({
   eliteCount: num,
 });
 
+const stalkerRangeSchema = z.strictObject({ min: num, max: num });
+
+// Неубиваемый преследователь: форма — здесь, коридоры и связь с врагом — `findStalkerProblems`.
+const stalkerSchema = z.strictObject({
+  enemy: text,
+  body: z.strictObject({
+    touchMaxHpShare: num,
+    knockback: z.strictObject({ distance: num, sec: num }),
+    touchCooldownSec: num,
+    recoverSec: num,
+    push: z.strictObject({ first: num, decay: num, seriesResetSec: num, maxPerSec: num }),
+  }),
+  appear: z.strictObject({
+    fromSec: num,
+    firstDelaySec: stalkerRangeSchema,
+    gapSec: stalkerRangeSchema,
+    lateGapSec: stalkerRangeSchema,
+    lateAtSec: num,
+    chaseSec: stalkerRangeSchema,
+    omenSec: num,
+    fadeSec: num,
+    appearDistance: num,
+    farDistance: num,
+    minAccountLevel: num,
+  }),
+});
+
 const balanceTargetsSchema = z.strictObject({
   passiveDeathBeforeSec: positive,
   dodgingMedianSec: range,
@@ -399,6 +428,7 @@ export const contentSnapshotSchema: z.ZodType<ContentSnapshot> = z.strictObject(
   limits: z.array(limitSchema),
   pressure: pressureSchema,
   siege: siegeSchema,
+  stalker: stalkerSchema,
   balanceTargets: balanceTargetsSchema,
 });
 

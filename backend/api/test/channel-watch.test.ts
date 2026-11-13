@@ -18,14 +18,18 @@ import {
   closesPartnerTasks,
   isFinalCheck,
   nextCheckAfter,
+  paidRetention,
+  retentionMarks,
   shouldGiveUp,
   watchUntil,
+  type RetentionPatch,
 } from "../src/modules/tasks/channel-watch-rules.js";
 import {
   PrismaChannelWatchRepository,
   type ChannelWatchRepository,
   type NewWatch,
   type Penalty,
+  type RetentionMark,
   type WatchKey,
   type WatchRow,
   type WatchState,
@@ -91,7 +95,7 @@ class MemoryWatch implements ChannelWatchRepository {
 
   async start(row: NewWatch): Promise<boolean> {
     if (this.rows.some((candidate) => same(candidate, row))) return false;
-    this.rows.push({ ...row, checkedAt: null, state: "watching", eventNo: null, penalizedAt: null, revoked: null });
+    this.rows.push({ ...row, checkedAt: null, state: "watching", eventNo: null, penalizedAt: null, revoked: null, heldD1: null, heldD3: null, heldD7: null });
     return true;
   }
 
@@ -123,6 +127,17 @@ class MemoryWatch implements ChannelWatchRepository {
     for (const row of this.open(keys)) {
       row.state = state;
       if (state === "kept") row.checkedAt = closedAt;
+    }
+  }
+
+  /** Как в базе: пустая отметка заполняется, поставленная остаётся — повтор задания её не перепишет. */
+  async markRetention(items: readonly RetentionMark[]): Promise<void> {
+    for (const item of items) {
+      for (const row of this.rows.filter((candidate) => same(candidate, item.key))) {
+        row.heldD1 ??= item.marks.heldD1 ?? null;
+        row.heldD3 ??= item.marks.heldD3 ?? null;
+        row.heldD7 ??= item.marks.heldD7 ?? null;
+      }
     }
   }
 
@@ -355,6 +370,211 @@ describe("правила окна наблюдения", () => {
   });
 });
 
+describe("отметки удержания: правила", () => {
+  const empty = { startedAt: MON, heldD1: null, heldD3: null, heldD7: null };
+
+  it("в канале: отметка дня N ставится не раньше чем через N суток от забора", () => {
+    expect(retentionMarks(empty, at(MON, DAY - 1), true)).toEqual({});
+    expect(retentionMarks(empty, at(MON, 26 * HOUR), true)).toEqual({ heldD1: true });
+    expect(retentionMarks(empty, at(MON, 3 * DAY), true)).toEqual({ heldD1: true, heldD3: true });
+    expect(retentionMarks(empty, at(MON, 7 * DAY), true)).toEqual({ heldD1: true, heldD3: true, heldD7: true });
+  });
+
+  it("первая успешная проверка после обеих границ ставит обе отметки разом", () => {
+    expect(retentionMarks(empty, at(MON, 80 * HOUR), true)).toEqual({ heldD1: true, heldD3: true });
+  });
+
+  it("уже поставленная отметка (и `true`, и `false`) в ответ не попадает", () => {
+    expect(retentionMarks({ ...empty, heldD1: true }, at(MON, 80 * HOUR), true)).toEqual({ heldD3: true });
+    expect(retentionMarks({ ...empty, heldD1: false }, at(MON, 80 * HOUR), true)).toEqual({ heldD3: true });
+    expect(retentionMarks({ startedAt: MON, heldD1: true, heldD3: true, heldD7: true }, at(MON, 8 * DAY), true)).toEqual({});
+  });
+
+  it("нет в канале: все пустые отметки становятся `false`, а поставленные остаются", () => {
+    expect(retentionMarks(empty, at(MON, 12 * HOUR), false)).toEqual({ heldD1: false, heldD3: false, heldD7: false });
+    expect(retentionMarks({ ...empty, heldD1: true }, at(MON, 30 * HOUR), false)).toEqual({ heldD3: false, heldD7: false });
+    expect(retentionMarks({ startedAt: MON, heldD1: true, heldD3: true, heldD7: null }, at(MON, 5 * DAY), false)).toEqual({ heldD7: false });
+  });
+
+  it("`paidRetention`: срок 0 оплачивается всегда, 1, 3 и 7 — по своей отметке `true`", () => {
+    const marks = { heldD1: true, heldD3: true, heldD7: null };
+    expect(paidRetention(empty, 0)).toBe(true);
+    expect(paidRetention(marks, 0)).toBe(true);
+    expect(paidRetention(marks, 1)).toBe(true);
+    expect(paidRetention(marks, 3)).toBe(true);
+    // пустая отметка — «неизвестно», не оплачивается
+    expect(paidRetention(marks, 7)).toBe(false);
+    expect(paidRetention({ heldD1: true, heldD3: false, heldD7: false }, 3)).toBe(false);
+    expect(paidRetention({ heldD1: true, heldD3: true, heldD7: true }, 7)).toBe(true);
+  });
+
+  it("окна нет (площадка без проверки) — оплачивается только срок 0", () => {
+    expect(paidRetention(null, 0)).toBe(true);
+    expect(paidRetention(null, 1)).toBe(false);
+    expect(paidRetention(null, 7)).toBe(false);
+  });
+
+  it("патч несёт только три отметки", () => {
+    const patch: RetentionPatch = { heldD1: true };
+    expect(Object.keys(patch)).toEqual(["heldD1"]);
+  });
+});
+
+describe("отметки удержания: проход по расписанию", () => {
+  const marksOf = (ctx: Ctx, accountId: string) => windowsOf(ctx, accountId).map((row) => [row.heldD1, row.heldD3, row.heldD7]);
+
+  it("проверка через 26 часов, в канале: `held_d1` — `true`, остальные пусты", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+
+    await ctx.service.tick(at(MON, 26 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, null, null]]);
+  });
+
+  it("раньше суток отметок нет: проверка через 12 часов в канале ничего не ставит", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+
+    await ctx.service.tick(at(MON, 12 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[null, null, null]]);
+  });
+
+  it("проверка через 80 часов, `held_d1` пуст: `held_d1` и `held_d3` — `true`, `held_d7` пуст", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+
+    await ctx.service.tick(at(MON, 80 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, true, null]]);
+  });
+
+  it("неделя проверок каждые шесть часов: три отметки `true`, окно `kept`, каждая — первой проверкой после границы", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    const seen: unknown[][] = [];
+
+    for (let hours = 6; hours <= 7 * 24; hours += 6) {
+      await ctx.service.tick(at(MON, hours * HOUR));
+      seen.push([hours, ...(marksOf(ctx, player.accountId)[0] ?? [])]);
+    }
+
+    expect(seen.find((line) => line[1] === true)?.[0]).toBe(24);
+    expect(seen.find((line) => line[2] === true)?.[0]).toBe(72);
+    expect(seen.find((line) => line[3] === true)?.[0]).toBe(168);
+    expect(windowsOf(ctx, player.accountId)[0]).toMatchObject({ state: "kept", heldD1: true, heldD3: true, heldD7: true });
+  });
+
+  it("отписка на 2-е сутки: `held_d3` и `held_d7` — `false`, `held_d1` прежний", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    await ctx.service.tick(at(MON, 24 * HOUR));
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, null, null]]);
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(at(MON, 30 * HOUR));
+
+    expect(windowsOf(ctx, player.accountId)[0]).toMatchObject({ state: "penalized", heldD1: true, heldD3: false, heldD7: false });
+  });
+
+  it("отписка раньше суток закрывает все три отметки `false`", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(at(MON, 6 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[false, false, false]]);
+  });
+
+  it("вернувшийся после отписки удержанным не считается: закрытое окно больше не проверяется, отметки остаются `false`", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+    await ctx.service.tick(at(MON, 30 * HOUR));
+    ctx.membership.members.add(`${CHAT}|${player.platformUserId}`);
+
+    await ctx.service.tick(at(MON, 8 * DAY));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[false, false, false]]);
+  });
+
+  it("отписка закрывает отметки всех открытых окон пары, а у каждого окна поставленное остаётся", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    const def = channelDef("sub_daily");
+    await claim(ctx, player, def, "2026-10-05", MON);
+    await claim(ctx, player, def, "2026-10-06", at(MON, 18 * HOUR));
+    await ctx.service.tick(at(MON, 25 * HOUR));
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, null, null], [null, null, null]]);
+    unsubscribe(ctx, player);
+
+    await ctx.service.tick(at(MON, 31 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, false, false], [false, false, false]]);
+  });
+
+  it("сбой площадки — отметок нет: окно ждёт следующей проверки", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    ctx.membership.failure = new MembershipUnavailableError("площадка недоступна");
+
+    await ctx.service.tick(at(MON, 80 * HOUR));
+
+    expect(marksOf(ctx, player.accountId)).toEqual([[null, null, null]]);
+    expect(windowsOf(ctx, player.accountId)[0]?.state).toBe("watching");
+    // площадка ожила — первая успешная проверка ставит обе отметки
+    ctx.membership.failure = null;
+    await ctx.service.tick(at(MON, 86 * HOUR));
+    expect(marksOf(ctx, player.accountId)).toEqual([[true, true, null]]);
+  });
+
+  it("окно закрылось по сроку без ответа: пустая отметка дня 7 остаётся пустой, а не `false`", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    await ctx.service.tick(at(MON, 4 * DAY));
+    ctx.membership.failure = new MembershipUnavailableError("площадка недоступна");
+
+    await ctx.service.tick(at(MON, 8 * DAY));
+
+    expect(windowsOf(ctx, player.accountId)[0]).toMatchObject({ state: "expired", heldD1: true, heldD3: true, heldD7: null });
+  });
+
+  it("проверка ровно на исходе окна ставит отметку дня 7 и закрывает окно как `kept`", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+
+    await ctx.service.tick(at(MON, 7 * DAY));
+
+    expect(windowsOf(ctx, player.accountId)[0]).toMatchObject({ state: "kept", heldD1: true, heldD3: true, heldD7: true });
+  });
+
+  it("штраф работает как прежде: списание, уведомление, событие отписки — вместе с отметками", async () => {
+    const ctx = setup();
+    const player = await person(ctx);
+    await claim(ctx, player, channelDef("sub_daily"), "2026-10-05", MON);
+    unsubscribe(ctx, player);
+
+    const result = await ctx.service.tick(at(MON, 2 * DAY));
+
+    expect(result.penalized).toBe(1);
+    expect(ctx.wallet.of(player.accountId, "coins")).toBe(0);
+    expect(unsubscribed(ctx)).toHaveLength(1);
+    expect(windowsOf(ctx, player.accountId)[0]).toMatchObject({ state: "penalized", eventNo: 1, heldD1: false, heldD3: false, heldD7: false });
+  });
+});
+
 describe("заведение окна", () => {
   it("награда за подписку заводит окно: забор + 7 суток, первая проверка через 6 часов", async () => {
     const ctx = setup();
@@ -376,6 +596,9 @@ describe("заведение окна", () => {
         eventNo: null,
         penalizedAt: null,
         revoked: null,
+        heldD1: null,
+        heldD3: null,
+        heldD7: null,
       },
     ]);
     expect(log.of("channel_watch_started")).toHaveLength(1);

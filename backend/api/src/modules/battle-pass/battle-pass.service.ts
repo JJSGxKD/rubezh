@@ -74,7 +74,7 @@ export class BattlePassService {
     const [points, claimed, ribbon, vip] = await Promise.all([
       this.db(this.repository.points(account.accountId, monthKey)),
       this.db(this.repository.claimed(account.accountId, monthKey)),
-      this.ribbon(monthKey),
+      this.ribbon(monthKey, at),
       this.db(this.vip.activeAt(account.accountId, at)),
     ]);
     return passViewOf({ monthKey, points, pointsPerTier: this.settings.get(SETTINGS.passPointsPerTier), vip, ribbon, claimed });
@@ -88,7 +88,7 @@ export class BattlePassService {
     const [points, claimed, ribbon, vipNow] = await Promise.all([
       this.db(this.repository.points(accountId, monthKey)),
       this.db(this.repository.claimed(accountId, monthKey)),
-      this.ribbon(monthKey),
+      this.ribbon(monthKey, at),
       lane === "vip" ? this.db(this.vip.activeAt(accountId, at)) : Promise.resolve(false),
     ]);
     const block = claimBlock({ tier, lane, points, pointsPerTier, vipNow, claimed });
@@ -145,8 +145,8 @@ export class BattlePassService {
    * Лента месяца: из базы, если её завели и она проходит схему, иначе по умолчанию. Порченая
    * лента не должна валить пасс: игрок увидит ленту по умолчанию, а команда — ошибку в логе.
    */
-  private async ribbon(monthKey: string): Promise<readonly PassTierDef[]> {
-    const stored = await this.db(this.repository.season(monthKey));
+  private async ribbon(monthKey: string, at: Date): Promise<readonly PassTierDef[]> {
+    const stored = await this.db(this.repository.season(monthKey, at));
     if (stored === null) return DEFAULT_RIBBON;
     const parsed = passRibbonSchema.safeParse(stored);
     if (parsed.success) return parsed.data;

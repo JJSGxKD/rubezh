@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
+import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
@@ -16,6 +17,8 @@ import { NamesScreen } from "./names/NamesScreen";
 import { OnlineScreen } from "./online";
 import { OverviewScreen } from "./overview/OverviewScreen";
 import { PartnersScreen } from "./partners/PartnersScreen";
+import { PassScreen } from "./pass/PassScreen";
+import { PaymentsScreen } from "./payments/PaymentsScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
@@ -36,6 +39,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   overview: () => <OverviewScreen />,
   online: () => <OnlineScreen />,
   players: (id) => <PlayersScreen id={id} />,
+  payments: (id) => <PaymentsScreen id={id} />,
   review: () => <ReviewScreen />,
   names: () => <NamesScreen />,
   funnel: (id) => <FunnelScreen focus={id} />,
@@ -56,6 +60,8 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
   tasks: () => <TasksScreen />,
+  pass: () => <PassScreen />,
+  balance: (id, tab) => <BalanceScreen id={id} tab={tab} />,
   rating: (id, tab) => <RatingScreen id={id} tab={tab} />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,

@@ -534,6 +534,8 @@ export interface EnemyPatternParams {
   };
   /** Страж кольца держит место в строю; числа кольца — у события таймлайна, а не у врага. */
   cordon: Record<string, never>;
+  /** Неубиваемый преследователь (Р205): числа тела — `core-game/src/content/stalker.ts`, а не у врага. */
+  stalker: Record<string, never>;
 }
 
 export type EnemyPattern = keyof EnemyPatternParams;
@@ -1325,6 +1327,74 @@ export interface SiegeDef {
   cordon: { enemy: string; count: number; ring: CordonRingDef };
   /** сколько элит выходит кольцом на нулевом уровне; типы — те, что таймлайн к этой секунде уже выпускал */
   eliteCount: number;
+}
+
+/**
+ * Тело неубиваемого преследователя (docs/35-stage4-plan.md, Р205, tasks/T-0421): удары оружия его
+ * не убивают, а отталкивают, а касание снимает долю здоровья и отбрасывает игрока. Расстояния — в
+ * игровых единицах, время — в секундах.
+ */
+export interface StalkerBodyDef {
+  /** доля максимума здоровья игрока за одно касание, мимо брони и сопротивлений */
+  touchMaxHpShare: number;
+  /** отброс игрока после касания: на сколько единиц и за сколько секунд */
+  knockback: { distance: number; sec: number };
+  /** сколько после касания он не бьёт снова */
+  touchCooldownSec: number;
+  /** сколько после касания он стоит на месте */
+  recoverSec: number;
+  push: {
+    /** первый толчок серии, единиц */
+    first: number;
+    /** каждый следующий толчок серии — предыдущий, умноженный на это */
+    decay: number;
+    /** столько секунд без попаданий — серия сначала */
+    seriesResetSec: number;
+    /** за любые 60 тиков подряд — не дальше этого, единиц */
+    maxPerSec: number;
+  };
+}
+
+/** Отрезок значений `[min, max]`, из которого поток случайности бросает число. */
+export interface StalkerRange {
+  min: number;
+  max: number;
+}
+
+/**
+ * Когда и как появляется преследователь (Р205, tasks/T-0423). Время — в секундах, расстояния — в
+ * игровых единицах.
+ */
+export interface StalkerAppearDef {
+  /** с какой секунды забега он приходит */
+  fromSec: number;
+  /** первое предвестие — через столько секунд после `fromSec` */
+  firstDelaySec: StalkerRange;
+  /** пауза от конца появления до следующего предвестия на `fromSec` */
+  gapSec: StalkerRange;
+  /** она же на `lateAtSec` и дальше; между ними — линейно */
+  lateGapSec: StalkerRange;
+  lateAtSec: number;
+  /** сколько секунд длится погоня */
+  chaseSec: StalkerRange;
+  /** сколько горит предвестие до выхода */
+  omenSec: number;
+  /** сколько он стоит, растворяясь, после погони */
+  fadeSec: number;
+  /** на каком расстоянии от игрока выходит: на виду и у самого узкого экрана */
+  appearDistance: number;
+  /** дальше этого от игрока он растворяется и возникает ближе */
+  farDistance: number;
+  /** ниже этого уровня аккаунта он не приходит; забег без уровня идёт с ним */
+  minAccountLevel: number;
+}
+
+/** Правила преследователя целиком: какой враг им служит, как устроено его тело и когда он приходит. */
+export interface StalkerDef {
+  /** id врага паттерна `stalker` */
+  enemy: string;
+  body: StalkerBodyDef;
+  appear: StalkerAppearDef;
 }
 
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */

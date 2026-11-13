@@ -7,6 +7,11 @@
 # В золотых файлах стоят выдуманные значения: `{{KEY}}` — ключ узла, PUBLICKEYn —
 # не настоящий ключ REALITY. Xray проверяет форму ключа (32 байта в base64url),
 # поэтому перед прогоном файлы копируются во временный каталог с подстановкой.
+# То же с остальными значениями, чью форму проверяет ядро: MLDSA65VERIFYn — публичный
+# ключ постквантовой подписи, ECHCONFIGn — список конфигов ECH, VLESSENCKEYn — ключ
+# шифрования VLESS. Настоящие по форме значения Xray порождает сам (`xray mldsa65`,
+# `xray tls ech`, `xray vlessenc`) на каждом прогоне: ни в репозитории, ни в скрипте
+# ключей нет, а выданные ключи нигде, кроме этого каталога, не живут.
 #
 #   bash infra/prod/xray/check-config.sh
 set -euo pipefail
@@ -24,10 +29,26 @@ mount="$(host_path "$work")"
 
 docker build --quiet --tag "$image" "$(host_path "$root/infra/prod/xray")" > /dev/null
 
+xray() { docker run --rm --entrypoint xray "$image" "$@"; }
+pqv="$(xray mldsa65 | sed -n 's/^Verify: //p')"
+ech="$(xray tls ech | sed -n '/^ECH config list:/{n;p;}')"
+# Из строки `"encryption": "mlkem768x25519plus.native.0rtt.<ключ>"` нужен только ключ: префикс есть в золотом файле.
+enckey="$(xray vlessenc | sed -n 's/^"encryption": ".*\.0rtt\.\(.*\)"$/\1/p' | head -n 1)"
+if [ -z "$pqv" ] || [ -z "$ech" ] || [ -z "$enckey" ]; then
+  echo "ОШИБКА: Xray не выдал ключи для подстановки (mldsa65, tls ech, vlessenc)"
+  exit 1
+fi
+
 failed=0
 for file in "$fixtures"/*.json; do
   name="$(basename "$file")"
-  sed -e 's/{{KEY}}/0123456789abcdef/g' -e 's/PUBLICKEY[0-9]*/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/g' "$file" > "$work/$name"
+  # `|` вместо `/` в разделителе sed: в списке ECH есть и `/`, и `+`, и `=`.
+  sed -e 's/{{KEY}}/0123456789abcdef/g' \
+    -e 's/PUBLICKEY[0-9]*/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/g' \
+    -e "s|MLDSA65VERIFY[0-9]*|$pqv|g" \
+    -e "s|ECHCONFIG[0-9]*|$ech|g" \
+    -e "s|VLESSENCKEY[0-9]*|$enckey|g" \
+    "$file" > "$work/$name"
   if docker run --rm --entrypoint xray --volume "$mount:/c:ro" "$image" run -test -c "/c/$name" > "$work/$name.log" 2>&1; then
     echo "ok     $name"
   else

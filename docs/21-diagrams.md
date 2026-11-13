@@ -53,6 +53,8 @@ erDiagram
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
+    ACCOUNT ||--o{ STAKEHOLDER_SHARE : "доли участника проекта: по строке на месяц начала (Р217)"
+    ACCOUNT ||--o{ STAKEHOLDER_SHARE : "назначил долю: владелец"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -364,7 +366,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update, task_unsubscribed"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -1298,6 +1300,9 @@ erDiagram
         int event_no "nullable: номер события отписки пары; только у penalized (CHECK)"
         datetime penalized_at "nullable: момент штрафа; вместе с event_no"
         json revoked "nullable: списано по ресурсам coins, gems, shards"
+        boolean held_d1 "nullable: был в канале на 1-й день (Р139); null — не известно"
+        boolean held_d3 "nullable: то же на 3-й день"
+        boolean held_d7 "nullable: то же на 7-й день"
     }
 
     ACTIVITY_DAILY {
@@ -1334,6 +1339,52 @@ erDiagram
         uuid actor_account_id "кто нажал; без внешнего ключа, как в журнале аудита"
         datetime created_at "когда занята покупка"
         datetime credited_at "nullable: когда легло в кошелёк; пусто — повтор доначислит ту же сумму"
+    }
+
+    PAYMENT_RECONCILE_RUN {
+        uuid run_id PK "одна сверка выписки площадки"
+        string platform "площадка выписки"
+        string trigger "schedule | manual"
+        uuid actor_account_id "nullable: кто нажал «Сверить сейчас»; без внешнего ключа"
+        datetime started_at "когда началась"
+        datetime finished_at "nullable: пусто — сверка оборвалась, не дойдя до конца"
+        int from_offset "позиция выписки, с которой читали"
+        int to_offset "nullable: позиция, до которой дочитали; пусто у сверки с ошибкой — курсор не двигается"
+        datetime covered_from "nullable: время первой прочитанной операции"
+        datetime covered_to "nullable: время последней прочитанной операции"
+        int scanned "прочитано операций"
+        int found "новых расхождений"
+        int matched "закрыто само"
+        string error "nullable: ошибка площадки или базы, первые 300 знаков"
+    }
+
+    PAYMENT_DISCREPANCY {
+        uuid discrepancy_id PK "одно расхождение — одна строка навсегда: уникальный ключ (platform, kind, charge_id)"
+        string platform "площадка выписки"
+        string kind "charged_unrecorded | recorded_missing | refund_unrecorded"
+        string charge_id "идентификатор оплаты на площадке, до 256 знаков"
+        uuid purchase_id "nullable: покупка по payload или по оплате; без внешнего ключа — покупки может не быть"
+        uuid account_id "nullable: для показа; без внешнего ключа"
+        string payer_id "nullable: игрок на площадке из выписки"
+        int amount "сумма операции; у «записано, но нет» — chargedStars"
+        string payload "nullable: что стояло в счёте, до 128 знаков"
+        datetime occurred_at "когда случилась операция выписки или записана оплата"
+        datetime detected_at "когда сверка нашла"
+        uuid run_id "сверка, нашедшая расхождение; без внешнего ключа"
+        datetime resolved_at "nullable: когда закрыто"
+        string resolution "nullable: matched | retried | refunded | dismissed"
+        uuid resolved_by "nullable: кто разобрал; без внешнего ключа"
+        string note "nullable: пометка разбора, до 200 знаков"
+    }
+
+    STAKEHOLDER_SHARE {
+        uuid share_id PK
+        uuid account_id FK "Restrict: участник проекта; роль снимается, доля остаётся"
+        date from_month "первое число месяца по UTC, с которого действует доля; CHECK: день месяца равен 1"
+        int share_bp "сотые доли процента: 2550 — 25,5 %; CHECK: 0…10000; ноль — конец участия"
+        string note "причина, до 500 знаков: видят владелец и финансы, участнику не отдаётся"
+        uuid set_by FK "Restrict: кто назначил (владелец)"
+        datetime set_at
     }
 ```
 
@@ -1385,6 +1436,10 @@ erDiagram
   (ключ `season_overtaken:сезон:игровой день`), `season_closing`
   (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
   день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
+  Извинение за сбой оплаты и возврат звёзд (Р209, T-0436) — вид
+  `purchase_support` (ключи `purchase_support:compensated:покупка` и
+  `purchase_support:refunded:покупка`, поток — §4.40); в бота уходит по ключу
+  игрока `bot.teamMessage`, как сообщение команды, и не считается напоминанием.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -1461,8 +1516,16 @@ erDiagram
   считаются одним нарушением с общим `event_no`; со второго события пары
   `partner_tasks` закрывается на 30 суток. Событие идёт под замком пары
   (`pg_try_advisory_xact_lock`, без ожидания) и кончается отметкой
-  `penalized`, поэтому всё до неё идемпотентно по ключам. Вайп стирает
-  таблицу вместе с прогрессом заданий.
+  `penalized`, поэтому всё до неё идемпотентно по ключам. Те же проверки
+  ставят отметки удержания (`35-stage4-plan.md` Р139, T-0223):
+  `held_d1`, `held_d3`, `held_d7` — первой успешной проверкой не раньше
+  чем через 1, 3 и 7 суток после награды, «в канале» — `true`. Отписка
+  закрывает ещё пустые отметки `false`, поставленная не меняется никогда
+  (`COALESCE` в одном `UPDATE`); нет ответа площадки — нет отметки, а
+  окно, закрывшееся без ответа, оставляет пустую отметку: это «неизвестно»,
+  а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
+  `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
+  заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -1811,6 +1874,26 @@ erDiagram
   Внешний ключ — только на покупку (`Restrict`); аккаунт получателя и актёра
   без ключей, как в журнале аудита: запись о деньгах не должна исчезнуть вместе
   с человеком. При вайпе таблица остаётся — это история денег, как покупки.
+- **`PAYMENT_RECONCILE_RUN` и `PAYMENT_DISCREPANCY` — сверка оплат с выпиской
+  площадки** (Р209, T-0433, поток — §4.41). Внешних ключей нет: покупки у
+  «списано, но не записано» может не быть вовсе, а аккаунт нужен только для
+  показа. Уникальный ключ `(platform, kind, charge_id)` — правило «одно
+  расхождение — одна строка навсегда»: повторную находку база не пустит, и
+  второго сообщения команде не будет, а закрытое расхождение той же оплаты не
+  заводится заново. Курсор сверки — `to_offset` последней удачной строки
+  `PAYMENT_RECONCILE_RUN` (удачная — с `finished_at` и без `error`). При вайпе
+  обе таблицы остаются — это история денег.
+- **`STAKEHOLDER_SHARE` — доли участников проекта** (Р217, T-0452;
+  `29-admin-panel.md` §6.6). Доля действует с первого числа месяца по UTC;
+  уникальность `(account_id, from_month)` — это правило «запись на тот же
+  месяц заменяет прежнюю», а новый месяц — новая строка, поэтому история
+  долей не правится. Конец участия — строка с нулём. Сумма долей всех
+  участников на любой месяц не больше 10 000 б. п. (100 %): проверку делает
+  код (`stakeholder-rules.ts`) под блокировкой `pg_advisory_xact_lock`, а
+  база держит только диапазон `share_bp` и «первое число». Остаток до 100 %
+  — доля владельца, строки у неё нет. Снятие роли `stakeholder` доли не
+  стирает. Изменение — в журнал аудита (`stakeholders.share.set`). При
+  вайпе таблица остаётся: это решения владельца о деньгах.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -2177,6 +2260,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
+    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — T-0457"]
     PRK["packages/promo-kit<br/>модель промо-материала: форматы, слои, подстановка,<br/>правила правки партнёром: ядро без игры, Nest, Prisma и Fabric"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
@@ -2223,7 +2307,11 @@ flowchart TD
 - любых стрелок **из** `shared-types` — это лист графа;
 - любых стрелок **из** `fx` — ядро курсов станет отдельным сервисом и не
   знает ни об игре, ни о Nest, ни о Prisma. Бэкенд берёт его собранным
-  (`dist`), тесты и dev-запуск — исходником.
+  (`dist`), тесты и dev-запуск — исходником;
+- любых стрелок **из** `ledger` — ядро учёта переходит в другие проекты и не
+  знает ни об игре, ни о Nest, ни о Prisma, ни о справочнике валют
+  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` появится с журналом
+  в базе (T-0457).
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -2623,6 +2711,9 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    ADMINAPI -. "порт SourceAvatars: аватарка канала, бота, Mini App (Р158)" .-> TGADP
+    TGADP -- "telegram.web: страница бота и CDN Telegram, без перенаправлений" --> OUTBOUND
+    OUTBOUND -- "telegram.web" --> TGAPI
     TASKS -. "порт ChannelMemberships: groups.isMember (Р188)" .-> VKADP
     TASKS -. "порт ExternalLinkStarters: vk.me/сообщество?ref=код" .-> VKADP
     VKADP -. "consume(vk, код, id игрока)" .-> EXTIDENT
@@ -5109,7 +5200,7 @@ sequenceDiagram
 
 Владелец извиняется самоцветами из карточки платежа (Р209, WP53, `tasks/T-0435`):
 панель спрашивает предложение, потом начисляет. Окно — T-0438, сообщение игроку —
-T-0436 (слушает то же событие поддержки).
+T-0436 (слушает то же событие поддержки, а о возврате звёзд — событие `onRefundDone`).
 
 ```mermaid
 sequenceDiagram
@@ -5121,6 +5212,8 @@ sequenceDiagram
     participant W as WalletService
     participant A as Журнал действий
     participant H as PaymentsHooks
+    participant N as PurchaseNotices
+    participant F as NotificationsService (лента и бот)
 
     P->>C: GET admin/payments/:id/compensation
     C->>S: preview(актёр, покупка)
@@ -5148,7 +5241,10 @@ sequenceDiagram
         alt отметку поставил этот вызов
             S->>A: payments.compensate (цель — аккаунт)
             S->>H: emitSupport kind=compensate, gems
-            Note over H: поток «Покупки» команде; сообщение игроку — T-0436
+            Note over H: поток «Покупки» команде
+            H->>N: onSupport (только compensate с самоцветами)
+            N->>F: deliver purchase_support:compensated:покупка → лента и дубль в бота
+            Note over N,F: сбой ленты — warn purchase_notice_failed, начисление не откатывается
         end
         S-->>P: {gems, balance, repaired}
     end
@@ -5166,6 +5262,80 @@ sequenceDiagram
 - **Карточка платежа** получает строку `compensated`, пометку и действие
   `compensate` из источника хронологии (`PaymentFeedSources`), не зная об этом
   модуле; действие пропадает после начисления.
+- **Сообщение игроку — извинение с суммой и датой оплаты** (T-0436): строка
+  ленты и дубль в бота тем же механизмом, что «Сообщение команды» (ключ игрока
+  `bot.teamMessage`, без потолка, тихие часы к нему не применяются). Ключ
+  события — действие и покупка, повтор не удваивает ни ленту, ни бота.
+- **О возврате звёзд игрок узнаёт так же**, но только когда возврат отмечен
+  впервые и причина — `manual` (поддержка) или `undeliverable` (товара нет):
+  `PaymentRefunds.refund` после отзыва остатка зовёт `emitRefundDone`, а
+  `PurchaseNotices` пишет `purchase_support:refunded:покупка`. Тестовая оплата,
+  неиспользованный второй шанс, внешний возврат, лишняя оплата и повтор
+  задания сообщений не дают.
+
+### 4.41 Сверка оплат с выпиской площадки (этап 4, реализована серверная часть)
+
+Раз в сутки и по кнопке сервер читает выписку звёзд бота с курсора, сравнивает
+её с покупками и записывает расхождения (Р209, WP53, `tasks/T-0433`). Действия
+по расхождениям — T-0434, экран — T-0438.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as Таймер (час) / кнопка панели
+    participant R as PaymentReconciler
+    participant L as Redis (payments:reconcile:lock)
+    participant D as Postgres (сверки, расхождения, покупки)
+    participant X as PaymentStatement (порт площадки)
+    participant H as PaymentsHooks
+    participant N as ReconcileAlertNotifier
+    participant C as Поток «Покупки»
+
+    T->>R: tick() / runNow(актёр)
+    alt выключатель payments.reconcile выключен
+        R-->>T: тишина / 409 «Сверка выключена в настройках»
+    end
+    R->>L: SET NX PX 15 минут
+    alt лок занят
+        R-->>T: по расписанию ничего / 409 «Сверка уже идёт — подождите минуту»
+    end
+    loop по каждой площадке с выпиской
+        R->>D: lastFinished(площадка)
+        Note over R: по расписанию — только если удачная была больше 23 часов назад
+        R->>D: startRun(с позиции: прошлая to_offset минус 100)
+        loop страницы по 100, пока страница полная, до 100 страниц
+            R->>X: page(offset, 100) — под таймаутом 20 с
+            X-->>R: операции, от старых к новым
+        end
+        R->>D: открытые расхождения, покупки по оплатам, по payload, оплаченные внутри отрезка
+        R->>R: compare — три вида, свежее 15 минут не сверяется
+        R->>D: insertFound (уникальный ключ: повторная находка — не новая)
+        R->>D: resolveMatched — сошедшееся закрывается само
+        alt ошибка площадки или базы
+            R->>D: finishRun(error, без to_offset): следующая сверка начнёт с того же места
+        else дочитали
+            R->>D: finishRun(to_offset, счётчики)
+            opt есть новые
+                R->>H: emitReconcileFound
+                H->>N: onReconcileFound
+                N->>C: одно сообщение на сверку
+            end
+        end
+    end
+    R->>L: снять лок своим токеном
+```
+
+- **Курсор — позиция в выписке, а не время.** Выписка идёт от старых к новым,
+  позиции не сдвигаются; сверка начинает с `to_offset` прошлой удачной минус 100
+  (запас на границе). Сверка с ошибкой курсор не двигает.
+- **Одна сверка на все реплики** — лок Redis; срок проверяется под локом, а
+  чтение останавливается за 20 секунд до его конца, чтобы сверка не пережила лок.
+- **«Записано, но нет в выписке»** ищется только внутри прочитанного отрезка:
+  от первой операции плюс 30 минут до последней. Покупка, оплата которой
+  записана повтором много позже самой оплаты, может дать ложное расхождение —
+  его закрывает «Разобрано» (T-0434).
+- **Само закрывается**, если при следующей сверке условие пропало: оплата
+  записалась, возврат отмечен, оплата нашлась в выписке (`resolution = matched`).
 
 ## 5. Топология развёртывания
 

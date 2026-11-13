@@ -261,6 +261,8 @@ model Account {
   botMentionTasks  BotMentionTask[]
   externalLinks    ExternalIdentity[]
   taskChannelWatch TaskChannelWatch[]
+  sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
+  sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -2948,6 +2950,12 @@ model TaskChannelWatch {
   penalizedAt DateTime? @map("penalized_at") @db.Timestamptz(3)
   /// сколько списано по ресурсам: `{ "coins": n, "gems": n, "shards": n }`
   revoked     Json?
+  /// удержание (Р139, T-0223): был ли игрок в канале на 1-й, 3-й и 7-й день
+  /// после награды. Ставит перепроверка первой успешной проверкой после
+  /// границы; отписка закрывает пустые `false`; `null` — не известно
+  heldD1      Boolean?  @map("held_d1")
+  heldD3      Boolean?  @map("held_d3")
+  heldD7      Boolean?  @map("held_d7")
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   task    TaskDef @relation(fields: [taskId], references: [taskId])
@@ -3032,4 +3040,89 @@ model PurchaseCompensation {
 
   @@index([createdAt])
   @@map("purchase_compensation")
+}
+
+// Сверка оплат с выпиской площадки (Р209)
+
+/// Одна сверка выписки площадки: с какой позиции читали, до какой дочитали, сколько нашли. По `to_offset`
+/// последней удачной сверки читает следующая; сверка с ошибкой курсор не двигает
+model PaymentReconcileRun {
+  runId          String    @id @map("run_id") @db.Uuid
+  platform       String    @db.VarChar(16)
+  /// schedule — по расписанию, manual — кнопкой
+  trigger        String    @db.VarChar(16)
+  actorAccountId String?   @map("actor_account_id") @db.Uuid
+  startedAt      DateTime  @map("started_at") @db.Timestamptz(3)
+  /// `null` — сверка оборвалась, не дойдя до конца
+  finishedAt     DateTime? @map("finished_at") @db.Timestamptz(3)
+  /// позиция выписки, с которой читали, и та, до которой дочитали
+  fromOffset     Int       @map("from_offset")
+  toOffset       Int?      @map("to_offset")
+  /// время первой и последней прочитанной операции
+  coveredFrom    DateTime? @map("covered_from") @db.Timestamptz(3)
+  coveredTo      DateTime? @map("covered_to") @db.Timestamptz(3)
+  scanned        Int       @default(0)
+  /// новых расхождений
+  found          Int       @default(0)
+  /// закрыто само (`matched`)
+  matched        Int       @default(0)
+  /// ошибка площадки или базы — первые 300 знаков
+  error          String?   @db.VarChar(300)
+
+  @@index([platform, finishedAt])
+  @@map("payment_reconcile_run")
+}
+
+/// Расхождение между выпиской площадки и нашими покупками: одно на `(площадка, вид, оплата)` навсегда.
+/// Внешних ключей нет: покупки у «списано, но не записано» может не быть, а аккаунт — только для показа
+model PaymentDiscrepancy {
+  discrepancyId String    @id @map("discrepancy_id") @db.Uuid
+  platform      String    @db.VarChar(16)
+  /// charged_unrecorded | recorded_missing | refund_unrecorded
+  kind          String    @db.VarChar(32)
+  chargeId      String    @map("charge_id") @db.VarChar(256)
+  /// покупка: по payload у «списано, но не записано», по оплате — у остальных; нет — null
+  purchaseId    String?   @map("purchase_id") @db.Uuid
+  accountId     String?   @map("account_id") @db.Uuid
+  /// игрок на площадке из выписки; у «записано, но нет» — null
+  payerId       String?   @map("payer_id") @db.VarChar(64)
+  amount        Int
+  /// что стояло в счёте — как пришло из выписки, до 128 знаков
+  payload       String?   @db.VarChar(128)
+  /// когда случилась операция выписки или записана оплата
+  occurredAt    DateTime  @map("occurred_at") @db.Timestamptz(3)
+  detectedAt    DateTime  @map("detected_at") @db.Timestamptz(3)
+  runId         String    @map("run_id") @db.Uuid
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz(3)
+  /// matched | retried | refunded | dismissed
+  resolution    String?   @db.VarChar(16)
+  resolvedBy    String?   @map("resolved_by") @db.Uuid
+  note          String?   @db.VarChar(200)
+
+  @@unique([platform, kind, chargeId])
+  @@index([resolvedAt, detectedAt])
+  @@index([purchaseId])
+  @@map("payment_discrepancy")
+}
+
+// Доли участников проекта (docs/35-stage4-plan.md Р217, tasks/T-0452)
+
+/// Доля участника проекта с месяца (Р217): новая доля — новая строка, конец участия — 0.
+model StakeholderShare {
+  shareId   String   @id @map("share_id") @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  /// первое число месяца по UTC, с которого действует доля
+  fromMonth DateTime @map("from_month") @db.Date
+  /// сотые доли процента: 2 550 — 25,5 %
+  shareBp   Int      @map("share_bp")
+  note      String   @db.VarChar(500)
+  setBy     String   @map("set_by") @db.Uuid
+  setAt     DateTime @default(now()) @map("set_at") @db.Timestamptz(3)
+
+  account Account @relation("StakeholderShares", fields: [accountId], references: [accountId], onDelete: Restrict)
+  setter  Account @relation("StakeholderSharesSet", fields: [setBy], references: [accountId], onDelete: Restrict)
+
+  @@unique([accountId, fromMonth])
+  @@index([fromMonth])
+  @@map("stakeholder_share")
 }

@@ -129,6 +129,14 @@ describe("чистота слоя симуляции", () => {
     expect(file?.source).not.toMatch(/world\.rng/);
   });
 
+  it("директор Карачуна (T-0423) в проверяемом слое и берёт случайность только из своего потока", () => {
+    const file = sources.find(({ path }) => path.replace(/\\/g, "/").endsWith("/sim/stalker.ts"));
+    expect(file, "game/sim/stalker.ts").toBeDefined();
+    // world.rng директор не трогает: направление, длина погони и пауза бросаются из stalker.rng,
+    // иначе появление Карачуна сдвинуло бы все golden-прогоны и предложения уровней.
+    expect(file?.source).not.toMatch(/world\.rng/);
+  });
+
   it("не использует Date.now, new Date и performance.now", () => {
     for (const { path, source } of sources) {
       expect(source, path).not.toMatch(/Date\.now|new Date\(|performance\.now/);

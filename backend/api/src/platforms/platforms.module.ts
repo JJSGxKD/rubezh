@@ -1,5 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 import { APP_CONFIG, type AppConfig } from "../config/app-config.js";
+import { Outbound } from "../infra/outbound/outbound.js";
 import { SETTINGS_READER, type SettingsReader } from "../modules/settings/settings.service.js";
 import { AppLinks } from "./ports/app-links.js";
 import { BotMentions } from "./ports/bot-mention.js";
@@ -9,6 +10,7 @@ import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
 import { PaymentStatements } from "./ports/payment-statement.js";
 import { MessagePreparers } from "./ports/prepared-message.js";
+import { SourceAvatars } from "./ports/source-avatar.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
 import { BotIdentity } from "./telegram/bot-identity.js";
 import { TelegramAppLinks } from "./telegram/telegram-app-links.js";
@@ -21,6 +23,7 @@ import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
 import { TelegramMessagePreparer } from "./telegram/telegram-message-preparer.js";
 import { TelegramMessenger } from "./telegram/telegram-messenger.js";
+import { TelegramSourceAvatar } from "./telegram/telegram-source-avatar.js";
 import { UnsupportedLaunchVerifier } from "./unsupported.js";
 
 /**
@@ -50,6 +53,14 @@ export function paymentStatementsFor(config: AppConfig, telegramApi: TelegramBot
 /** Подписка на канал для заданий (Р52): пока только Telegram — у MAX и VK ботов ещё нет. */
 export function channelMembershipsFor(config: AppConfig, telegramApi: MembershipBotApi): ChannelMemberships {
   return new ChannelMemberships([new TelegramChannelMembership(telegramApi, config.telegram.botToken !== "")]);
+}
+
+/**
+ * Картинка источника задания (Р158): пока только Telegram — у MAX и VK адаптера нет, и панель
+ * просит загрузить картинку руками. Страницы и CDN Telegram — отдельным сервисом исходящих.
+ */
+export function sourceAvatarsFor(config: AppConfig, telegramApi: TelegramBotApi, origin: LinkOrigin, outbound: Pick<Outbound, "forService">): SourceAvatars {
+  return new SourceAvatars([new TelegramSourceAvatar(telegramApi, origin, outbound.forService("telegram.web"), config.telegram.botToken !== "")]);
 }
 
 /** Юзернейм бота в имени и bio (Р110): пока только Telegram — у MAX и VK такой возможности нет, заданий там нет. */
@@ -87,9 +98,10 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: AppLinks, inject: [BotIdentity, TELEGRAM_LINK_ORIGIN], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
     { provide: ChannelMemberships, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: channelMembershipsFor },
+    { provide: SourceAvatars, inject: [APP_CONFIG, TELEGRAM_BOT_API, TELEGRAM_LINK_ORIGIN, Outbound], useFactory: sourceAvatarsFor },
     { provide: BotMentions, inject: [APP_CONFIG, TELEGRAM_BOT_API, BotIdentity], useFactory: botMentionsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, PaymentStatements, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, BotMentions, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, PaymentStatements, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, SourceAvatars, BotMentions, MessagePreparers],
 })
 export class PlatformsModule {}

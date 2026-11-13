@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, Award, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -43,6 +43,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     title: "Поддержка",
     sections: [
       { id: "players", title: "Игроки", hint: "Найти игрока и открыть карточку: забеги, покупки, кошелёк, ограничения", permission: "players.view", icon: Users },
+      { id: "payments", title: "Платежи", hint: "Все покупки игроков: оплата, выдача, возвраты и сбои — и что с ними сделать", permission: "payments.view", icon: Receipt },
       { id: "review", title: "Разбор забегов", hint: "Забеги, которые антифрод счёл подозрительными или отклонил", permission: "players.view", icon: ShieldAlert },
       { id: "names", title: "Фильтр имён", hint: "Слова и фразы, которые убираются из ников игроков, и перечистка старых", permission: "names.edit", icon: Eraser },
     ],
@@ -69,11 +70,16 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     title: "Вовлечение",
     sections: [
       { id: "tasks", title: "Задания", hint: "Задания, достижения и задания рекламных сетей: цели, частота и награды", permission: "tasks.edit", icon: ListChecks },
+      { id: "pass", title: "Батл-пасс", hint: "Ленты месяца: 30 ступеней двух лент, копия прошлого месяца", permission: "pass.edit", icon: Award },
       { id: "rating", title: "Рейтинг", hint: "Доски по сложностям, архив недельных сезонов и места игроков", permission: "players.view", icon: Trophy },
       { id: "broadcasts", title: "Рассылки", hint: "Сообщения игрокам в бота с выбором аудитории", permission: "broadcast.edit", icon: Send },
       { id: "changelog", title: "Журнал обновлений", hint: "«Что нового» по версиям — игроки видят его в игре и в боте", permission: "changelog.edit", icon: BookOpen },
       { id: "home", title: "Главная", hint: "Слайды команды в карусели наверху главной игры", permission: "home.edit", icon: House },
     ],
+  },
+  {
+    title: "Контент",
+    sections: [{ id: "balance", title: "Баланс", hint: "Числа игры — враги, таймлайн, оружие, навыки, сундуки — в черновике, без релиза", permission: "content.view", icon: Scale }],
   },
   {
     title: "Эксплуатация",

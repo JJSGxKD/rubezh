@@ -1,4 +1,6 @@
 import type { RunHuntEntry } from "@bh/shared-types";
+import type { RunProofDraft } from "../../run-api";
+import { decodeInputLog, INPUT_LOG_ENCODING, InputLogError } from "../diagnostics/input-log";
 import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
@@ -7,8 +9,10 @@ import { createHazardState } from "../sim/hazards";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
 import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
+import { stalkerGapRange, STALKER_PHASES, type StalkerPhase, type StalkerState } from "../sim/stalker";
+import { resetStalkerBody, stalkerAlive, type StalkerBodyState } from "../sim/stalker-body";
 import type { Spawner } from "../sim/spawner";
-import type { World } from "../sim/world";
+import { TICK_HZ, type World } from "../sim/world";
 
 /**
  * Снимок забега: всё, что меняется по ходу игры, в виде, пригодном для
@@ -97,8 +101,14 @@ interface SecretsSnapshot {
   blessings: string[];
 }
 
+/** Динамическая часть тела преследователя; окно толчков — обычным массивом чисел. */
+type StalkerBodySnapshot = Omit<StalkerBodyState, "pushWindow" | "rules" | "typeIndex"> & { pushWindow: number[] };
+
 /** Состояние осады; журнал событий для сцены (`log`) в снимок не входит. */
 type SiegeSnapshot = Omit<SiegeState, "rng" | "log"> & { rng: number };
+
+/** Состояние директора Карачуна; правила (`appear`) и журнал для сцены (`ended`) в снимок не входят. */
+type StalkerSnapshot = Omit<StalkerState, "rng" | "appear" | "ended"> & { rng: number };
 
 export interface WorldSnapshot {
   version: number;
@@ -130,6 +140,16 @@ export interface WorldSnapshot {
   hazards?: { puddles: EncodedPool; trail: EncodedPool };
   /** осада стоящего: поток, якорь, счётчик, уровень, перезарядка; в снимках без поля осада начинается заново (T-0392) */
   siege?: SiegeSnapshot;
+  /**
+   * Тело неубиваемого преследователя: слот, окно и серия толчков, таймеры касания; правила и тип не входят
+   * (мир создаётся из того же контента). В снимках без поля преследователя нет (T-0421)
+   */
+  stalkerBody?: StalkerBodySnapshot;
+  /**
+   * Директор Карачуна: поток, фаза, отметки и счётчики появления. В снимках без поля фаза — по правилам
+   * нового мира, а первое предвестие — не раньше обычной паузы от секунды снимка (T-0423)
+   */
+  stalker?: StalkerSnapshot;
   /**
    * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
    * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
@@ -172,6 +192,8 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
       trail: encodeRecord(world.hazards.trail, world.enemies.count),
     },
     siege: capturedSiege(world.siege),
+    stalkerBody: capturedStalkerBody(world.stalkerBody),
+    stalker: capturedStalker(world.stalker),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
     rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
@@ -197,7 +219,8 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
 
   world.rng.setState(asNumber(snapshot.rng, "rng"));
   world.cardRng.setState(asNumber(snapshot.cardRng, "cardRng"));
-  assignNumbers(world.player, snapshot.player, "player");
+  // Снимок до отброса преследователя полей отброса не знает: игрок стоит, а не ошибка чтения.
+  assignNumbers(world.player, { knockbackTicks: 0, knockbackVx: 0, knockbackVy: 0, ...asRecord(snapshot.player, "player") }, "player");
   world.player.alive = asBoolean(asRecord(snapshot.player, "player").alive, "player.alive");
   assignNumbers(world.playerStats, snapshot.playerStats, "playerStats");
   assignNumbers(world.playerStatsBase, snapshot.playerStatsBase, "playerStatsBase");
@@ -225,10 +248,71 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   restoreSecrets(world, snapshot.secrets);
   restoreSiege(world, snapshot.siege);
   restoreHazards(world, snapshot.hazards);
+  restoreStalkerBody(world, snapshot.stalkerBody);
+  restoreStalker(world, snapshot.stalker);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
   world.events.written = 0;
+}
+
+/** Потолки записи для проверки из снимка: страховка от битых данных, а не правила игры. */
+const MAX_PROOF_CHOICES = 4_000;
+const MAX_PROOF_CONTINUES = 64;
+const MAX_PROOF_CHECKPOINTS = 720;
+const MAX_PROOF_OPTION_ID = 64;
+
+/**
+ * Запись для проверки из снимка прерванного забега (tasks/T-0316). Снимок пришёл из
+ * хранилища устройства, поэтому форма и лог ввода проверяются, а не приводятся: годную
+ * запись продолженный забег дописывает дальше. Нет записи (снимок прошлой сборки, забег
+ * разработчика) или она битая — `null`, и забег не повторить с начала. Битая запись
+ * продолжению не мешает: проверка нужна серверу, а не игроку.
+ */
+export function readProofDraft(input: unknown): RunProofDraft | null {
+  if (input === undefined) return null;
+  try {
+    const record = asRecord(input, "proof");
+    const unitScale = asNumber(record.unitScale, "proof.unitScale");
+    if (!Number.isFinite(unitScale) || unitScale <= 0) throw new SnapshotError("proof.unitScale: ожидалось положительное число");
+    const startingWeaponId = asString(record.startingWeaponId, "proof.startingWeaponId");
+    if (startingWeaponId.length > MAX_PROOF_OPTION_ID) throw new SnapshotError("proof.startingWeaponId: слишком длинный id");
+    const log = asRecord(record.input, "proof.input");
+    const ticks = asCount(log.ticks, "proof.input.ticks");
+    const data = asString(log.data, "proof.input.data");
+    const truncated = asBoolean(log.truncated, "proof.input.truncated");
+    if (log.encoding !== INPUT_LOG_ENCODING) throw new SnapshotError("proof.input.encoding: незнакомая кодировка");
+    const encoded = { encoding: INPUT_LOG_ENCODING, ticks, data, truncated } as const;
+    // Лог читается целиком: битый не дописать, а продолжение поверх него дало бы запись с мусором в начале.
+    if (!truncated) decodeInputLog(encoded);
+    const choices = asArray(record.choices, "proof.choices");
+    if (choices.length > MAX_PROOF_CHOICES) throw new SnapshotError("proof.choices: слишком много выборов");
+    const continues = asArray(record.continues, "proof.continues");
+    if (continues.length > MAX_PROOF_CONTINUES) throw new SnapshotError("proof.continues: слишком много продолжений");
+    const checkpoints = asArray(record.checkpoints, "proof.checkpoints");
+    if (checkpoints.length > MAX_PROOF_CHECKPOINTS) throw new SnapshotError("proof.checkpoints: слишком много свёрток");
+    return {
+      unitScale,
+      startingWeaponId,
+      input: encoded,
+      choices: choices.map((entry, index): [number, string] => {
+        const pair = asArray(entry, `proof.choices[${index}]`);
+        const optionId = asString(pair[1], `proof.choices[${index}][1]`);
+        if (pair.length !== 2 || optionId.length > MAX_PROOF_OPTION_ID) throw new SnapshotError(`proof.choices[${index}]: не пара «тик, вариант»`);
+        return [asCount(pair[0], `proof.choices[${index}][0]`), optionId];
+      }),
+      continues: continues.map((tick, index) => asCount(tick, `proof.continues[${index}]`)),
+      checkpoints: checkpoints.map((entry, index): [number, number] => {
+        const pair = asArray(entry, `proof.checkpoints[${index}]`);
+        const checksum = asNumber(pair[1], `proof.checkpoints[${index}][1]`);
+        if (pair.length !== 2 || !Number.isInteger(checksum)) throw new SnapshotError(`proof.checkpoints[${index}]: не пара «тик, свёртка»`);
+        return [asCount(pair[0], `proof.checkpoints[${index}][0]`), checksum];
+      }),
+    };
+  } catch (error: unknown) {
+    if (error instanceof SnapshotError || error instanceof InputLogError) return null;
+    throw error;
+  }
 }
 
 function capturedSecrets(world: World): SecretsSnapshot {
@@ -420,6 +504,126 @@ function restoreSiege(world: World, input: unknown): void {
   };
   state.rng.setState(asNumber(raw.rng, "siege.rng"));
   Object.assign(state, restored);
+}
+
+function capturedStalkerBody(state: StalkerBodyState): StalkerBodySnapshot {
+  return {
+    slot: state.slot,
+    pushWindow: Array.from(state.pushWindow),
+    pushCursor: state.pushCursor,
+    pushWindowSum: state.pushWindowSum,
+    seriesFactor: state.seriesFactor,
+    lastPushTick: state.lastPushTick,
+    touchCooldownTicks: state.touchCooldownTicks,
+    recoverTicks: state.recoverTicks,
+  };
+}
+
+/**
+ * Тело преследователя. Отсутствие поля — снимок до него: версию формата не поднимали, старый снимок
+ * читается, и преследователя в нём нет. Слот сверяется с пулом: он обязан быть слотом пула или −1.
+ */
+function restoreStalkerBody(world: World, input: unknown): void {
+  const state = world.stalkerBody;
+  resetStalkerBody(state);
+  if (input === undefined) return;
+
+  const raw = asRecord(input, "stalkerBody");
+  const window = asArray(raw.pushWindow, "stalkerBody.pushWindow");
+  if (window.length !== state.pushWindow.length) {
+    throw new SnapshotError(`stalkerBody.pushWindow: ${window.length} значений вместо ${state.pushWindow.length}`);
+  }
+  const values = window.map((value, i) => asNumber(value, `stalkerBody.pushWindow[${i}]`));
+  const slot = asNumber(raw.slot, "stalkerBody.slot");
+  if (!Number.isInteger(slot) || slot < -1 || slot >= world.config.maxEnemies) {
+    throw new SnapshotError(`stalkerBody.slot: ${slot} вне [-1, ${world.config.maxEnemies})`);
+  }
+  const cursor = asCount(raw.pushCursor, "stalkerBody.pushCursor", state.pushWindow.length - 1);
+
+  state.slot = slot;
+  state.pushWindow.set(values);
+  state.pushCursor = cursor;
+  state.pushWindowSum = asNumber(raw.pushWindowSum, "stalkerBody.pushWindowSum");
+  state.seriesFactor = asNumber(raw.seriesFactor, "stalkerBody.seriesFactor");
+  state.lastPushTick = asNumber(raw.lastPushTick, "stalkerBody.lastPushTick");
+  state.touchCooldownTicks = asCount(raw.touchCooldownTicks, "stalkerBody.touchCooldownTicks");
+  state.recoverTicks = asCount(raw.recoverTicks, "stalkerBody.recoverTicks");
+}
+
+function capturedStalker(state: StalkerState): StalkerSnapshot {
+  return {
+    rng: state.rng.getState(),
+    phase: state.phase,
+    nextOmenTick: state.nextOmenTick,
+    x: state.x,
+    y: state.y,
+    phaseTicks: state.phaseTicks,
+    chaseTicks: state.chaseTicks,
+    index: state.index,
+    hits: state.hits,
+    pushes: state.pushes,
+    relocations: state.relocations,
+    appearedTick: state.appearedTick,
+  };
+}
+
+/**
+ * Директор Карачуна. Отсутствие поля — снимок до него: версию формата не поднимали, старый снимок читается.
+ * Фаза — по правилам нового мира (ждёт или выключен), а первое предвестие — не раньше обычной паузы от
+ * секунды снимка: забег, начатый давно, не должен вывалить Карачуна сразу; так же читается снимок мира без
+ * директора (фаза `off`). Выключенный в мире директор
+ * (нет правил, пролог, «Лёгкая», новичок) остаётся выключенным, что бы ни говорил снимок. Погоня и
+ * растворение требуют живого тела: оно восстановлено выше.
+ */
+function restoreStalker(world: World, input: unknown): void {
+  const state = world.stalker;
+  state.ended = [];
+  const appear = state.appear;
+  if (appear === null || state.phase === "off") {
+    if (input !== undefined) asRecord(input, "stalker");
+    return;
+  }
+
+  // Снимок мира без директора (фаза `off`) для мира с директором — то же, что снимок без поля.
+  const saved = input === undefined ? null : asRecord(input, "stalker");
+  if (saved === null || saved.phase === "off") {
+    const range = stalkerGapRange(appear, world.stats.tick / TICK_HZ);
+    state.phase = "waiting";
+    state.nextOmenTick = world.stats.tick + Math.max(1, Math.round(state.rng.nextRange(range.min, range.max) * TICK_HZ));
+    state.phaseTicks = 0;
+    state.chaseTicks = 0;
+    state.index = 0;
+    state.hits = 0;
+    state.pushes = 0;
+    state.relocations = 0;
+    state.appearedTick = -1;
+    return;
+  }
+
+  const raw = saved;
+  const phase = asString(raw.phase, "stalker.phase");
+  if (!(STALKER_PHASES as readonly string[]).includes(phase)) {
+    throw new SnapshotError(`stalker.phase: «${phase}» — неизвестная фаза`);
+  }
+  const restored = phase as StalkerPhase;
+  if ((restored === "chase" || restored === "fading") && stalkerAlive(world) === 0) {
+    throw new SnapshotError(`stalker.phase: ${restored}, а тела Карачуна в снимке нет`);
+  }
+  const appearedTick = asNumber(raw.appearedTick, "stalker.appearedTick");
+  if (!Number.isInteger(appearedTick) || appearedTick < -1) throw new SnapshotError(`stalker.appearedTick: ${appearedTick} вне [-1, ∞)`);
+
+  state.rng.setState(asNumber(raw.rng, "stalker.rng"));
+  state.phase = restored;
+  state.nextOmenTick = asCount(raw.nextOmenTick, "stalker.nextOmenTick");
+  state.x = asNumber(raw.x, "stalker.x");
+  state.y = asNumber(raw.y, "stalker.y");
+  state.phaseTicks = asCount(raw.phaseTicks, "stalker.phaseTicks");
+  state.chaseTicks = asCount(raw.chaseTicks, "stalker.chaseTicks");
+  state.index = asCount(raw.index, "stalker.index");
+  state.hits = asCount(raw.hits, "stalker.hits");
+  state.pushes = asCount(raw.pushes, "stalker.pushes");
+  state.relocations = asCount(raw.relocations, "stalker.relocations");
+  state.appearedTick = appearedTick;
 }
 
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {

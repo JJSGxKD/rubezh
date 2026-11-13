@@ -12,6 +12,8 @@ import { stepHazards, tickTrail } from "./hazards";
 import { updatePickups } from "./pickups";
 import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
+import { stepStalker } from "./stalker";
+import { stalkerAlive, stalkerTouch, tickStalkerBody } from "./stalker-body";
 import { vectorLength } from "./vector";
 import { clampToBounds, damagePlayer, despawnProjectile, TICK_SEC, type World } from "./world";
 
@@ -51,6 +53,8 @@ export function stepWorld(world: World, input: SimInput): void {
   // улучшения её не съедают.
   if (world.player.invulnerableTicks > 0) world.player.invulnerableTicks--;
   tickFreeze(world);
+  // Таймеры тела преследователя и окно толчков — до оружия: удары этого тика ложатся в свежий слот окна.
+  tickStalkerBody(world);
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
@@ -63,6 +67,9 @@ export function stepWorld(world: World, input: SimInput): void {
   // Кольцо стражей — после переноса отставших и до сетки: исчезнувшие по времени
   // стражи не должны попасть в сетку этого тика.
   updateCordon(world, dt);
+  // Директор Карачуна — после кольца (строй, вставший в этом тике, срезает погоню сразу) и до сетки:
+  // вышедший Карачун попадает в сетку того же тика.
+  stepStalker(world);
   world.enemyGrid.rebuild(
     world.player.x,
     world.player.y,
@@ -94,8 +101,10 @@ export function stepWorld(world: World, input: SimInput): void {
   world.stats.elapsedSec = world.stats.tick * dt;
   // Пик считается в конце шага: спавн отрабатывает до него, значит сюда
   // попадает та самая толпа, которую игрок видел на экране.
-  if (world.enemies.aliveCount > world.stats.peakEnemies) {
-    world.stats.peakEnemies = world.enemies.aliveCount;
+  // Неубиваемый преследователь — не толпа: в пик он не входит.
+  const crowd = world.enemies.aliveCount - stalkerAlive(world);
+  if (crowd > world.stats.peakEnemies) {
+    world.stats.peakEnemies = crowd;
   }
 }
 
@@ -126,22 +135,30 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   const player = world.player;
   if (!player.alive) return;
 
-  const magnitude = vectorLength(input.moveX, input.moveY);
-  const speed =
-    world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul * playerSlowFactor(player);
-  const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
-  const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
+  // Отброс после касания преследователя: скорость отброса вместо ввода, взгляд не меняется.
+  const knocked = player.knockbackTicks > 0;
+  if (knocked) {
+    player.vx = player.knockbackVx;
+    player.vy = player.knockbackVy;
+    player.knockbackTicks--;
+  } else {
+    const magnitude = vectorLength(input.moveX, input.moveY);
+    const speed =
+      world.config.player.speedPxSec * world.playerStats.moveSpeedMul * world.cheats.moveSpeedMul * playerSlowFactor(player);
+    const desiredVx = magnitude < 1e-3 ? 0 : (input.moveX / magnitude) * speed;
+    const desiredVy = magnitude < 1e-3 ? 0 : (input.moveY / magnitude) * speed;
 
-  // Направление взгляда запоминается только при движении: на остановке
-  // оружие, бьющее по направлению, должно смотреть туда же, куда игрок шёл.
-  if (magnitude >= 1e-3) {
-    player.faceX = input.moveX / magnitude;
-    player.faceY = input.moveY / magnitude;
+    // Направление взгляда запоминается только при движении: на остановке
+    // оружие, бьющее по направлению, должно смотреть туда же, куда игрок шёл.
+    if (magnitude >= 1e-3) {
+      player.faceX = input.moveX / magnitude;
+      player.faceY = input.moveY / magnitude;
+    }
+
+    const maxDelta = world.config.player.accelerationPxSec2 * dt;
+    player.vx += clamp(desiredVx - player.vx, -maxDelta, maxDelta);
+    player.vy += clamp(desiredVy - player.vy, -maxDelta, maxDelta);
   }
-
-  const maxDelta = world.config.player.accelerationPxSec2 * dt;
-  player.vx += clamp(desiredVx - player.vx, -maxDelta, maxDelta);
-  player.vy += clamp(desiredVy - player.vy, -maxDelta, maxDelta);
 
   const radius = world.config.player.radius;
   const bounds = world.config.bounds;
@@ -162,6 +179,11 @@ function movePlayer(world: World, input: SimInput, dt: number): void {
   player.y = nextY;
   // Тело стража не пускает: выталкивание — после зажима границами карты.
   pushPlayerOutOfGuards(world);
+  // Отброс кончился: игрок стоит, разгон заново, а не остаток скорости отброса.
+  if (knocked && player.knockbackTicks === 0) {
+    player.vx = 0;
+    player.vy = 0;
+  }
 }
 
 function regeneratePlayer(world: World, dt: number): void {
@@ -189,7 +211,10 @@ function recycleLostEnemies(world: World): void {
   for (let i = 0; i < enemies.count; i++) {
     if (enemies.alive[i] === 0) continue;
     // Место стража задаёт строй, а не расстояние до игрока: его не уносят вперёд.
-    if (world.enemyTypes[enemies.type[i]].anchored) continue;
+    const type = world.enemyTypes[enemies.type[i]];
+    if (type.anchored) continue;
+    // Преследователя никто не уносит: куда и когда он уходит, решает директор преследователя.
+    if (type.unkillable) continue;
     const dx = enemies.x[i] - player.x;
     const dy = enemies.y[i] - player.y;
     if (dx * dx + dy * dy <= limitSq) continue;
@@ -227,7 +252,7 @@ function updateEnemies(world: World, dt: number): void {
     }
     // Заморозка подбором стоит над паттерном так же: телеграф, фитиль и рывок
     // не ведутся, а горение и яд уже отработали выше.
-    if (isTimeFrozen(world, isBoss(type))) {
+    if (isTimeFrozen(world, isBoss(type) || type.unkillable)) {
       enemies.vx[i] = 0;
       enemies.vy[i] = 0;
       continue;
@@ -256,6 +281,14 @@ function updateEnemies(world: World, dt: number): void {
     const dx = player.x - enemies.x[i];
     const dy = player.y - enemies.y[i];
     const contactDistance = type.radius + playerRadius;
+
+    // Касание преследователя — своя ветка: перезарядка в тиках тела, а не в `attackCooldown`.
+    if (type.unkillable) {
+      if (world.stalker.phase !== "fading" && world.stalkerBody.touchCooldownTicks === 0 && dx * dx + dy * dy <= contactDistance * contactDistance) {
+        stalkerTouch(world, i);
+      }
+      continue;
+    }
 
     if (enemies.attackCooldown[i] > 0) {
       enemies.attackCooldown[i] -= dt;
