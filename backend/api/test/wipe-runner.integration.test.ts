@@ -438,14 +438,14 @@ describe.skipIf(DATABASE_URL === "")("команда вайпа на време�
     expect(seen).toBe("10min");
   });
 
-  it("runWipe: 27 моделей пусты, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
+  it("runWipe: 28 моделей пусты, остальное на месте, у покупки второго шанса обнулён только run_id", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
 
     const result = await runWipe(prisma, NOW);
 
     const after = await planWipe(prisma, NOW);
     for (const model of WIPE_ORDER) expect(after.rows[model], model).toBe(0);
-    expect(WIPE_ORDER).toHaveLength(27);
+    expect(WIPE_ORDER).toHaveLength(28);
     // Строки заданий «юзернейм бота» стёрты у всех, а аккаунты остались: серия после вайпа начинается заново.
     expect(await prisma.botMentionTask.count()).toBe(0);
     expect(after.rows).toMatchObject({ Account: 2, Friendship: 1, AccountRestriction: 1, VipSubscription: 1, VipPeriod: 1, Purchase: 3, TesterCompensation: 1 });
