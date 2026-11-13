@@ -26,6 +26,7 @@ zones:
   - infra/prod/xray/Dockerfile
   - infra/prod/xray/check-config.sh
 shared:
+  - packages/proxy-kit/src/index.ts
   - packages/proxy-kit/README.md
   - docs/20-env-and-ports.md
   - docs/29-admin-panel.md
