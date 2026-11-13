@@ -3,8 +3,8 @@ id: T-0286
 title: Навыки защиты — Вампиризм (лечение за убийство) и Стойкость (щит раз в 30 с): новые параметры игрока
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0281]
