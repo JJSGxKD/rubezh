@@ -151,12 +151,12 @@ function tableOf(model: string): string {
 }
 
 describe("захват таблиц на время вайпа: список и текст", () => {
-  it("список — 27 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
+  it("список — 28 таблиц плана по @@map, purchase и tester_compensation, ровно и без повторов", () => {
     const expected = [...WIPE_ORDER.map((model) => tableOf(model)), "purchase", "tester_compensation"];
 
     expect([...WIPE_LOCK_TABLES].sort()).toEqual([...expected].sort());
     expect(new Set(WIPE_LOCK_TABLES).size).toBe(WIPE_LOCK_TABLES.length);
-    expect(WIPE_LOCK_TABLES).toHaveLength(29);
+    expect(WIPE_LOCK_TABLES).toHaveLength(30);
   });
 
   it("текст отказа по сроку: 10 секунд из «Решений», остальные — со склонением", () => {
@@ -527,7 +527,7 @@ describe.skipIf(DATABASE_URL === "")("захват таблиц на время 
     createdAt: NOW,
   });
 
-  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 27 таблиц плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
+  it("внутри транзакции взяты SHARE ROW EXCLUSIVE на 28 таблиц плана, purchase и tester_compensation; lock_timeout — 10 секунд", async (ctx) => {
     if (skipReason !== "") return ctx.skip();
     let locked: string[] = [];
     let lockTimeout = "";

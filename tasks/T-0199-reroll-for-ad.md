@@ -60,6 +60,8 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
   - backend/api/test/admin.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
   - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/src/engine/run-engine.ts
   - backend/api/src/modules/admin-notify/run-review-card.ts
