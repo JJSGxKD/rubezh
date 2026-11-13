@@ -12,7 +12,7 @@ zones:
   - apps/admin/src/screens/balance/check/**
   - apps/admin/test/balance-check.test.ts
 shared:
-  - apps/admin/src/screens/balance/BalanceScreen.tsx
+  - apps/admin/src/screens/balance/BalanceWorkspace.tsx
   - apps/admin/src/api/content.ts
   - apps/admin/src/ui/help.ts
   - docs/19-content-admin.md
