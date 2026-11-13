@@ -71,6 +71,10 @@ describe("перечень прав и состав ролей", () => {
     expect(ROLE_PERMISSIONS.stakeholder).toEqual(["revenue.split.own.view"]);
   });
 
+  it("журнал учёта ledger.view — у владельца и финансов; администратору, участнику и маркетологу бухгалтерию не показываем (T-0457, Р219)", () => {
+    expect(ROLES.filter((role) => ROLE_PERMISSIONS[role].includes("ledger.view"))).toEqual(["owner", "finance"]);
+  });
+
   it("правила фильтра имён names.edit — у владельца, администратора и модератора, у остальных ролей нет (T-0338)", () => {
     for (const role of ROLES) {
       expect(ROLE_PERMISSIONS[role].includes("names.edit"), role).toBe(role === "owner" || role === "admin" || role === "moderator");

@@ -55,6 +55,9 @@ erDiagram
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
     ACCOUNT ||--o{ STAKEHOLDER_SHARE : "доли участника проекта: по строке на месяц начала (Р217)"
     ACCOUNT ||--o{ STAKEHOLDER_SHARE : "назначил долю: владелец"
+    LEDGER_ACCOUNT ||--o{ LEDGER_LINE : "строки проводок по счёту (Р219)"
+    LEDGER_ENTRY ||--|{ LEDGER_LINE : "строки проводки: в каждой валюте сумма — ноль"
+    LEDGER_ENTRY |o--o| LEDGER_ENTRY : "сторно: ссылка на исходную, у исходной — не больше одного"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -1386,6 +1389,34 @@ erDiagram
         uuid set_by FK "Restrict: кто назначил (владелец)"
         datetime set_at
     }
+
+    LEDGER_ACCOUNT {
+        string account_id PK "устойчивый ключ: stars.bot.hold, revenue.shop.telegram"
+        enum type "asset | revenue | expense | liability | equity"
+        string currency "код из справочника ядра курсов: XTR, GRAM, USDT, RUB"
+        string name "подпись для панели"
+        datetime created_at "порядок показа внутри типа"
+        datetime archived_at "nullable: счёт скрыт, строки остаются"
+    }
+
+    LEDGER_ENTRY {
+        uuid entry_id PK
+        string source_key UK "ключ идемпотентности: purchase:<id>:paid; до 128 знаков"
+        datetime at "когда случилось"
+        string period "ГГГГ-ММ по UTC, из at; CHECK по формату"
+        string memo "до 500 знаков"
+        uuid reversal_of UK,FK "nullable, Restrict: сторно — entry_id исходной; у исходной не больше одного"
+        json meta "nullable: плоское примечание для разбора"
+        uuid created_by "nullable: кто записал; пусто — сервер; без внешнего ключа, журнал переживает аккаунты"
+        datetime created_at
+    }
+
+    LEDGER_LINE {
+        uuid line_id PK
+        uuid entry_id FK "Restrict"
+        string account_id FK "Restrict"
+        bigint amount "минимальные единицы валюты счёта, дебет плюс, кредит минус; CHECK: не ноль; (entry_id, account_id) уникальны"
+    }
 ```
 
 Что важно понимать по этой схеме:
@@ -1894,6 +1925,19 @@ erDiagram
   — доля владельца, строки у неё нет. Снятие роли `stakeholder` доли не
   стирает. Изменение — в журнал аудита (`stakeholders.share.set`). При
   вайпе таблица остаётся: это решения владельца о деньгах.
+- **`LEDGER_ACCOUNT`, `LEDGER_ENTRY`, `LEDGER_LINE` — журнал учёта** (Р219,
+  T-0457; `37-accounting.md` §2–§3). Проводка — запись и две и больше строк,
+  которые ложатся одной транзакцией; в каждой валюте сумма строк ноль — это
+  проверка ядра `@bh/ledger` до записи, а не ограничение базы. Идемпотентность
+  держит уникальный `source_key`: повтор с теми же строками отдаёт ту же
+  проводку, с другими — отказ `ledger_source_conflict`. **Журнал не правится:**
+  триггеры `BEFORE UPDATE OR DELETE` и `BEFORE TRUNCATE` на `ledger_entry` и
+  `ledger_line` отвечают «Журнал учёта не правится — исправление сторно», а
+  исправление — новая проводка с `reversal_of` (уникален: сторно у проводки
+  одно). Счёт с проводками не удаляется и не переименовывается: внешние ключи
+  `Restrict`, а смена `account_id` — это `UPDATE` строк. Начальный план счетов
+  вставляет миграция (`37-accounting.md` §3). `created_by` без внешнего ключа,
+  как журнал аудита. При вайпе таблицы остаются.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -2260,7 +2304,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
-    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — T-0457"]
+    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — модуль бэкенда"]
     PRK["packages/promo-kit<br/>модель промо-материала: форматы, слои, подстановка,<br/>правила правки партнёром: ядро без игры, Nest, Prisma и Fabric"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
@@ -2281,6 +2325,7 @@ flowchart TD
     API --> ST
     API --> FX
     API --> PK
+    API --> LG
     SH --> DT
     ADM --> DT
 ```
@@ -2310,8 +2355,9 @@ flowchart TD
   (`dist`), тесты и dev-запуск — исходником;
 - любых стрелок **из** `ledger` — ядро учёта переходит в другие проекты и не
   знает ни об игре, ни о Nest, ни о Prisma, ни о справочнике валют
-  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` появится с журналом
-  в базе (T-0457).
+  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` — журнал учёта в
+  базе (T-0457): бэкенд берёт ядро собранным (`dist`), как `fx`, а проводки и
+  таблицы живут в его модуле `modules/ledger`.
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -2458,6 +2504,7 @@ flowchart LR
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
+        LEDGER["ledger<br/>журнал учёта вокруг packages/ledger: план счетов,<br/>проводки двойной записью, ключ источника,<br/>остатки и журнал для панели, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
@@ -2636,6 +2683,8 @@ flowchart LR
     ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
     ADMINAPI -. карточка: кошелёк .-> WALLET
     ADMINAPI -. курсы, заданные курсы .-> FXM
+    ADMINAPI -. "остатки и журнал, право ledger.view" .-> LEDGER
+    LEDGER --> PG
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
     ADMINAPI -. "настройки, право settings.edit" .-> SETTINGS
