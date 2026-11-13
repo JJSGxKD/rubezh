@@ -147,7 +147,7 @@ export class TemplatesService {
       patch.amount = this.minor(input.amount, place.currency);
     } else if (place.currency !== oldPlace.currency) {
       // Сумма хранится в минимальных единицах: те же цифры в другой валюте — совсем другие деньги.
-      throw new LedgerTemplateInvalidError("Место в другой валюте: укажите сумму заново");
+      throw new LedgerTemplateInvalidError("Место в другой валюте: сумму нужно задать заново");
     }
 
     if (input.schedule !== undefined || input.month !== undefined) {

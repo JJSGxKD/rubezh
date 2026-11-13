@@ -18,6 +18,6 @@ export class LedgerTemplateNotFoundError extends DomainError {
 /** Архивный шаблон не правится: нужен новый — архив нужен, чтобы шаблон перестал создавать черновики. */
 export class LedgerTemplateArchivedError extends DomainError {
   constructor(templateId: string) {
-    super("ledger_template_archived", `Шаблон «${templateId}» в архиве — править его нельзя, заведите новый`, 409);
+    super("ledger_template_archived", `Шаблон «${templateId}» в архиве — править нельзя, нужен новый шаблон`, 409);
   }
 }
