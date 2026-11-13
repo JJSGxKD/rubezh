@@ -9,6 +9,7 @@ import { AdminSettingsController } from "../src/modules/admin/admin-settings.con
 import { AdminSettingsService } from "../src/modules/admin/admin-settings.service.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { ChangeKindRegistry } from "../src/modules/change-requests/change-request-kinds.js";
+import type { ChangeRequestRow, ChangeTx } from "../src/modules/change-requests/change-request-types.js";
 import { PrismaChangeRequestsRepository } from "../src/modules/change-requests/change-requests.repository.js";
 import { ChangeRequestsService } from "../src/modules/change-requests/change-requests.service.js";
 import type { ChangeRequestsNotifier } from "../src/modules/change-requests/change-requests-notifier.js";
@@ -35,7 +36,7 @@ import { PrismaProgressRepository } from "../src/modules/progress/progress.repos
 import { RunRewards, type RewardJob } from "../src/modules/progress/run-rewards.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
-import { SETTING_LIST, SETTINGS, settingByKey } from "../src/modules/settings/setting-catalog.js";
+import { SETTING_LIST, SETTINGS, settingByKey, type SettingDefinition, type SettingValue } from "../src/modules/settings/setting-catalog.js";
 import { PrismaSettingsRepository } from "../src/modules/settings/settings.repository.js";
 import { SettingsService } from "../src/modules/settings/settings.service.js";
 import { ShopOverrides, PrismaShopOverrideRepository } from "../src/modules/shop/shop-overrides.js";
@@ -154,13 +155,136 @@ describe("награды: правила без базы", () => {
   });
 });
 
+/** Транзакция в памяти: одна таблица `app_setting`, достаточно для вида правки. */
+function memoryTx(initial: Record<string, unknown> = {}) {
+  const rows = new Map<string, { value: unknown; updatedBy: string | null }>(Object.entries(initial).map(([key, value]) => [key, { value, updatedBy: null }]));
+  const tx = {
+    appSetting: {
+      findUnique: async ({ where }: { where: { key: string } }) => {
+        const found = rows.get(where.key);
+        return found === undefined ? null : { key: where.key, value: found.value, updatedBy: found.updatedBy };
+      },
+      upsert: async ({ where, create }: { where: { key: string }; create: { value: unknown; updatedBy: string } }) => {
+        rows.set(where.key, { value: create.value, updatedBy: create.updatedBy });
+        return null;
+      },
+    },
+  };
+  return { rows, tx: tx as unknown as ChangeTx };
+}
+
+function requestRow(patch: Partial<ChangeRequestRow>): ChangeRequestRow {
+  return {
+    requestId: randomUUID(),
+    kind: "reward_setting",
+    target: "rewards.run-max-coins",
+    before: { value: 600 },
+    after: { value: 800 },
+    reason: "причина",
+    author: randomUUID(),
+    status: "pending",
+    decidedBy: null,
+    decidedAt: null,
+    createdAt: NOW,
+    ...patch,
+  };
+}
+
+describe("награды: вид правки без базы", () => {
+  const reloaded: string[] = [];
+  const settings = {
+    get: <T extends SettingValue>(setting: SettingDefinition<T>): T => setting.fallback,
+    refresh: async () => undefined,
+    reload: async (key: string) => void reloaded.push(key),
+  };
+  const kind = new RewardSettingKind(settings);
+
+  it("prepare: «было» — из базы или умолчание; без изменений, вне пределов, не награда — отказ словами", async () => {
+    const empty = memoryTx();
+    expect(await kind.prepare(empty.tx, "rewards.run-max-coins", { value: 800 })).toEqual({ before: { value: 600 }, after: { value: 800 } });
+    const stored = memoryTx({ "rewards.run-max-coins": 700 });
+    expect(await kind.prepare(stored.tx, "rewards.run-max-coins", { value: 800 })).toEqual({ before: { value: 700 }, after: { value: 800 } });
+    // Лестница приводится к каноническому виду, а «то же значение» узнаётся и с пробелами.
+    expect(await kind.prepare(empty.tx, "rewards.level-ladder", { value: " 1:50:10:5 ;20:80:20:10" })).toEqual({ before: { value: "1:50:10:5" }, after: { value: "1:50:10:5; 20:80:20:10" } });
+    const refused: [string, unknown][] = [
+      ["rewards.run-max-coins", { value: 600 }],
+      ["rewards.run-max-coins", { value: 0 }],
+      ["rewards.run-max-coins", { value: 1.5 }],
+      ["rewards.run-max-coins", { value: "много" }],
+      ["rewards.run-max-coins", { value: 800, extra: 1 }],
+      ["rewards.run-max-coins", {}],
+      ["rewards.run-min-sec", { value: 5 }],
+      ["rewards.level-ladder", { value: "1:50:10:5; 1:60:10:5" }],
+      ["rewards.level-ladder", { value: "1:50:10:5" }],
+      ["rewards.daily-ladder", { value: "60/0" }],
+      ["notify.chat.general", { value: "1" }],
+      ["rewards.nope", { value: 1 }],
+    ];
+    for (const [target, input] of refused) {
+      await expect(kind.prepare(empty.tx, target, input), `${target} ${JSON.stringify(input)}`).rejects.toMatchObject({ code: "change_request_value_invalid" });
+    }
+  });
+
+  it("current и apply: правка ложится в app_setting с тем, кто подтвердил; «было» сверяется с базой", async () => {
+    const db = memoryTx();
+    const request = requestRow({});
+    expect(await kind.current(db.tx, request)).toEqual({ value: 600 });
+    await kind.apply(db.tx, request, "approver-id");
+    expect(db.rows.get("rewards.run-max-coins")).toEqual({ value: 800, updatedBy: "approver-id" });
+    expect(await kind.current(db.tx, request)).toEqual({ value: 800 });
+    // Битое значение в базе читается как умолчание — так же, как у читателя настройки.
+    expect(await kind.current(memoryTx({ "rewards.run-max-coins": "мусор" }).tx, request)).toEqual({ value: 600 });
+    // Ключа нет в каталоге — заявка устарела.
+    expect(await kind.current(db.tx, requestRow({ target: "rewards.gone" }))).toBeNull();
+    await expect(kind.apply(db.tx, requestRow({ after: { value: 0 } }), "x")).rejects.toMatchObject({ code: "change_request_value_invalid" });
+    expect(db.rows.get("rewards.run-max-coins")?.value).toBe(800);
+  });
+
+  it("afterCommit перечитывает ключ; цели — все пять ключей «деньги» со значением и умолчанием", async () => {
+    await kind.afterCommit(requestRow({}));
+    expect(reloaded).toEqual(["rewards.run-max-coins"]);
+    const targets = await kind.targets();
+    expect(targets.map((target) => target.target).sort()).toEqual([...MONEY_KEYS].sort());
+    expect(targets.find((target) => target.target === "rewards.run-min-sec")).toMatchObject({ current: { value: 30 }, inCode: { value: 30 }, overridden: false });
+    expect(targets.every((target) => typeof target.hint === "string" && target.hint !== "")).toBe(true);
+  });
+
+  it("предупреждение о потолке кошелька: выше — есть, в пределах — нет; это совет, не отказ", () => {
+    const warn = (target: string, value: number | string) => kind.warnings(requestRow({ target, after: { value } }));
+    expect(warn("rewards.run-max-coins", 20_000)).toEqual([]);
+    expect(warn("rewards.run-max-coins", 20_001)[0]).toContain("Выше суточного потолка — часть не начислится");
+    expect(warn("rewards.run-max-xp", 99_999)).toEqual([]);
+    expect(warn("rewards.level-ladder", "1:100:10:5")).toEqual([]);
+    expect(warn("rewards.level-ladder", "1:101:10:5")[0]).toContain("монеты за уровень");
+    expect(warn("rewards.level-ladder", "1:50:100:1")).toEqual([]);
+    expect(warn("rewards.daily-ladder", "60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10")).toEqual([]);
+    expect(warn("rewards.daily-ladder", "60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 1100/10")[0]).toContain("монеты награды дня");
+    expect(warn("rewards.daily-ladder", "60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/70")[0]).toContain("осколки");
+    expect(kind.warnings(requestRow({ target: "rewards.gone" }))).toEqual([]);
+  });
+
+  it("describe: название и «было → стало» словами", () => {
+    expect(kind.describe(requestRow({ before: { value: 600 }, after: { value: 1_500 } }))).toBe("Награда за забег: потолок монет: 600 → 1 500");
+    expect(kind.describe(requestRow({ target: "rewards.level-ladder", before: { value: "1:50:10:5" }, after: { value: "1:60:10:5" } }))).toBe("Награды за уровень аккаунта: «1:50:10:5» → «1:60:10:5»");
+  });
+
+  it("обычная правка ключей «деньги» закрыта в контроллере — 409 раньше, чем сервис настроек", async () => {
+    const controller = new AdminSettingsController({} as unknown as AdminSettingsService, { consume: () => Promise.resolve(true) } as unknown as RateLimiter);
+    const request = { account: { accountId: randomUUID(), platform: "telegram", platformUserId: "1" } };
+    for (const key of MONEY_KEYS) {
+      expect(await codeOf(controller.save(request, key, { value: key.endsWith("ladder") ? "1:50:10:5" : 700 })), key).toBe("change_request_required");
+      expect(await codeOf(controller.reset(request, key)), key).toBe("change_request_required");
+    }
+  });
+});
+
 describe.skipIf(DATABASE_URL === "")("награды в панели на живом Postgres", () => {
   let config: AppConfig;
   let prisma: PrismaClient;
   const roleAccounts: string[] = [];
 
   beforeAll(() => {
-    config = loadAppConfig({ NODE_ENV: "test", DATABASE_URL, ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
+    config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV, ADMIN_TELEGRAM_IDS: OWNER_ID } as NodeJS.ProcessEnv);
     prisma = testPrisma(DATABASE_URL, 10);
   });
 
