@@ -3,7 +3,7 @@ id: T-0452
 title: Доли участников проекта — сервер
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -22,6 +22,8 @@ shared:
   - backend/api/src/modules/roles/permissions.ts
   - backend/api/test/roles.test.ts
   - backend/api/test/route-permissions.test.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
 runner: any
