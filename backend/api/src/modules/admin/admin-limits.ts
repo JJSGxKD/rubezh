@@ -22,6 +22,8 @@ export const ADMIN_LIMITS = {
   sourceAvatar: { scope: "admin:source-avatar", limit: 30, windowSec: 600 },
   /** проверка черновика контента занимает процессор воркера до двух минут — десяток за десять минут хватит человеку с запасом */
   contentCheck: { scope: "admin:content-check", limit: 10, windowSec: 600 },
+  /** публикация и откат баланса меняют игру у всех — человеку хватает нескольких в минуту, а залипшая кнопка или скрипт упрутся в лимит */
+  contentPublish: { scope: "admin:content-publish", limit: 20, windowSec: 600 },
   /** сверка читает выписку площадки страницами — три раза за десять минут хватит */
   reconcile: { scope: "admin:payments-reconcile", limit: 3, windowSec: 600 },
 } satisfies Record<string, RateLimit>;
