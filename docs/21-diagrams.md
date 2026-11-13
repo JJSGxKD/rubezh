@@ -142,6 +142,7 @@ erDiagram
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
+    ACCOUNT ||--o{ SECRET_FOUND : "найденные виды тайников рубежа"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -1244,6 +1245,12 @@ erDiagram
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
     }
 
+    SECRET_FOUND {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
+        string kind PK "вид тайника: shrine, hoard, stone, tree, rift, wisp; внешнего ключа нет, список видов — SECRETS_CODEX_KINDS на сервере"
+        datetime first_at "время записи забега, в котором вид найден первым; не переписывается"
+    }
+
     PASS_PROGRESS {
         uuid account_id PK,FK "каскадом"
         string month_key PK "ГГГГ-ММ по Москве (CHECK)"
@@ -1654,6 +1661,18 @@ erDiagram
   а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
   `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
   заданий.
+- **`SECRET_FOUND` — кодекс тайников** (`35-stage4-plan.md` Р153,
+  `design/art/meta-v2.md` §5.3, T-0261): по строке на пару «аккаунт — вид
+  тайника», найденный вид не закрывается и не переписывается (`ON CONFLICT DO
+  NOTHING`). Записи открывает слушатель записи забега (`RunsHooks`) — один раз
+  на забег и только для забегов, засчитываемых заданиям (читы, отклонённые
+  разбором записи и пролог ничего не открывают); виды он берёт из итога забега
+  (`stats.secretsFound`, со слов клиента) и фильтрует по списку сервера. Награда —
+  достижение `ach_secrets_all` «Следопыт» в `TASK_DEF` (все шесть видов, знак у
+  имени редкости `epic`): вид `secrets_kinds`, как у `friends` и `account_level`, —
+  состояние с действием «максимум», число видов дописывает модуль кодекса при
+  записи. Ответ для гайдбука — `GET /api/v1/codex/secrets`. Вайп стирает записи
+  вместе с прогрессом заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -2754,6 +2773,7 @@ flowchart LR
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         EXTIDENT["external-identity<br/>связь аккаунта с MAX и VK для заданий:<br/>одноразовые коды в Redis, пары в базе,<br/>порт ExternalLinkStarters, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
+        SECRETSCODEX["secrets-codex<br/>кодекс тайников: виды по итогу забега,<br/>число видов в достижение «Следопыт»,<br/>ответ для гайдбука, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
@@ -3010,6 +3030,10 @@ flowchart LR
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
+    CADDY -- "/api/v1/codex/secrets" --> SECRETSCODEX
+    SECRETSCODEX -- "secret_found" --> PG
+    RUNS -. "записанный забег, RunsHooks: какие тайники нашёл игрок" .-> SECRETSCODEX
+    SECRETSCODEX -. "число видов «максимум», награда в заданиях, T-0261" .-> TASKS
     ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
