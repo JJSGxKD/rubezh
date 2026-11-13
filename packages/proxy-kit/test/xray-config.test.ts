@@ -2,7 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parseShareLink } from "../src/share-link.js";
 import type { ProxyNode } from "../src/node.js";
+import { parseSubscription } from "../src/subscription.js";
+import { trafficOfStats } from "../src/xray-stats.js";
 import { assignSlots, buildXrayConfig, outboundTag, type PlacedNode } from "../src/xray-config.js";
+import * as J from "./fixtures/xray-json.js";
 import * as L from "./fixtures/links.js";
 
 // Конфиг спутника: Xray с локальным SOCKS-входом на каждый узел. Золотые
@@ -281,5 +284,124 @@ describe("слоты", () => {
     const { slots, overflow } = assignSlots(["a", "b"], new Map(), options({ slotCount: 3, limit: 3, reserved: new Set([0, 1]) }));
     expect(Object.fromEntries(slots)).toEqual({ a: 2 });
     expect(overflow).toEqual(["b"]);
+  });
+});
+
+describe("способы подключения поставщиков (docs/35-stage4-plan.md Р192, tasks/T-0387)", () => {
+  const LINK_CASES: [string, string][] = [
+    ["vless-xhttp-extra-reality", L.VLESS_XHTTP_EXTRA],
+    ["vless-tls-ech", L.VLESS_TLS_ECH],
+    ["vless-tls-pinned", L.VLESS_TLS_PINNED],
+    ["vless-reality-pqv", L.VLESS_REALITY_PQV],
+    ["vless-encryption", L.VLESS_ENCRYPTION],
+    ["vless-vision-udp443", L.VLESS_VISION_UDP443],
+    ["vmess-raw-http-header", L.VMESS_RAW_HTTP],
+  ];
+
+  /** Узел из JSON-подписки: цепочка и старые поля закрепления ссылкой не передаются. */
+  function jsonNode(outbounds: Record<string, unknown>[]): ProxyNode {
+    const parsed = parseSubscription(JSON.stringify([J.config("x", outbounds)]));
+    if (parsed.nodes.length !== 1) throw new Error(`узлов ${parsed.nodes.length}, пропусков ${JSON.stringify(parsed.skipped)}`);
+    return parsed.nodes[0] as ProxyNode;
+  }
+
+  const JSON_CASES: [string, () => ProxyNode][] = [
+    ["vless-dialer-fragment", () => jsonNode([J.OUT_VLESS_DIALER, J.OUT_FRAGMENT])],
+    ["vless-tls-legacy-pinning", () => jsonNode([J.OUT_VLESS_TLS_LEGACY_PINNING])],
+  ];
+
+  describe("конфиг совпадает с золотым файлом", () => {
+    for (const [name, link] of LINK_CASES) {
+      it(name, () => {
+        const source = node(link);
+        expect(buildXrayConfig([placed("main", source, 0)], OPTIONS)).toEqual(golden(name, source));
+      });
+    }
+    for (const [name, make] of JSON_CASES) {
+      it(name, () => {
+        const source = make();
+        expect(buildXrayConfig([placed("main", source, 0)], OPTIONS)).toEqual(golden(name, source));
+      });
+    }
+  });
+
+  type Built = { outbounds: { tag: string; protocol: string; settings?: Record<string, unknown>; streamSettings?: Record<string, unknown> }[]; inbounds: unknown[]; routing: { rules: unknown[] } };
+
+  describe("узел с цепочкой на freedom", () => {
+    const chained = jsonNode([J.OUT_VLESS_DIALER, J.OUT_FRAGMENT]);
+
+    it("два выхода — узел и <тег>-dial; sockopt.dialerProxy ведёт на второй; вход и правило — одни", () => {
+      const config = buildXrayConfig([placed("main", chained, 0)], OPTIONS) as Built;
+      const tag = outboundTag("main", chained.key);
+
+      expect(config.outbounds.map((outbound) => outbound.tag)).toEqual(["block", tag, `${tag}-dial`]);
+      expect(config.outbounds[1]?.streamSettings?.["sockopt"]).toEqual({ dialerProxy: `${tag}-dial` });
+      expect(config.outbounds[2]).toEqual({ tag: `${tag}-dial`, protocol: "freedom", settings: J.FRAGMENT_SETTINGS });
+      expect(config.inbounds).toHaveLength(1);
+      expect(config.routing.rules).toEqual([{ type: "field", inboundTag: ["in-0"], outboundTag: tag }]);
+    });
+
+    it("служебный выход — сразу после выхода своего узла, у соседнего узла — свой", () => {
+      const other = node(L.VLESS_WS_TLS);
+      const config = buildXrayConfig([placed("main", other, 0), placed("main", chained, 1)], OPTIONS) as Built;
+      expect(config.outbounds.map((outbound) => outbound.tag)).toEqual(["block", outboundTag("main", other.key), outboundTag("main", chained.key), `${outboundTag("main", chained.key)}-dial`]);
+      expect(config.outbounds[1]?.streamSettings).not.toHaveProperty("sockopt");
+    });
+
+    it("один и тот же узел из двух подписок — две цепочки со своими тегами", () => {
+      const config = buildXrayConfig([placed("a", chained, 0), placed("b", chained, 1)], OPTIONS) as Built;
+      const tags = config.outbounds.map((outbound) => outbound.tag);
+      expect(new Set(tags).size).toBe(tags.length);
+      expect(tags).toContain(`${outboundTag("a", chained.key)}-dial`);
+      expect(tags).toContain(`${outboundTag("b", chained.key)}-dial`);
+    });
+
+    it("тег с суффиксом -dial счётчик трафика узлом не считает", () => {
+      const key = "0123456789abcdef";
+      const stats = { stats: { port: 10799 } };
+      const config = buildXrayConfig([placed("main", { ...chained, key }, 0)], { ...OPTIONS, ...stats }) as Built;
+      const dial = config.outbounds.find((outbound) => outbound.tag.endsWith("-dial"));
+      expect(dial?.tag).toBe(`out-main-${key}-dial`);
+      expect(trafficOfStats([{ name: `outbound>>>${dial?.tag ?? ""}>>>traffic>>>uplink`, value: 100n }])).toEqual([]);
+    });
+  });
+
+  describe("поля узла на своих местах", () => {
+    const stream = (source: ProxyNode): Record<string, unknown> => {
+      const config = buildXrayConfig([placed("main", source, 0)], OPTIONS) as Built;
+      return config.outbounds[1]?.streamSettings ?? {};
+    };
+
+    it("extra — в xhttpSettings.extra, TLS-поля — в tlsSettings, постквантовая подпись — в realitySettings", () => {
+      expect((stream(node(L.VLESS_XHTTP_EXTRA))["xhttpSettings"] as Record<string, unknown>)["extra"]).toEqual(L.XHTTP_EXTRA);
+      expect(stream(node(L.VLESS_TLS_ECH))["tlsSettings"]).toMatchObject({ echConfigList: L.ECH_CONFIG });
+      expect(stream(node(L.VLESS_TLS_PINNED))["tlsSettings"]).toMatchObject({ pinnedPeerCertSha256: L.PIN_HEX, verifyPeerCertByName: "example.com" });
+      expect(stream(node(L.VLESS_REALITY_PQV))["realitySettings"]).toMatchObject({ mldsa65Verify: L.MLDSA65_VERIFY });
+    });
+
+    it("echForceQuery уходит в tlsSettings, когда задан", () => {
+      const source = jsonNode([J.withStream(J.OUT_VLESS_WS_TLS, { tlsSettings: { serverName: "example.com", echConfigList: L.ECH_CONFIG, echForceQuery: "full" } })]);
+      expect(stream(source)["tlsSettings"]).toMatchObject({ echConfigList: L.ECH_CONFIG, echForceQuery: "full" });
+    });
+
+    it("rawHeader — в tcpSettings.header", () => {
+      expect(stream(node(L.VMESS_RAW_HTTP))["tcpSettings"]).toEqual({ header: L.RAW_HTTP_HEADER });
+    });
+
+    it("шифрование VLESS — в users[0].encryption; без него — none", () => {
+      const users = (source: ProxyNode): Record<string, unknown>[] => {
+        const config = buildXrayConfig([placed("main", source, 0)], OPTIONS) as Built;
+        return ((config.outbounds[1]?.settings?.["vnext"] as { users: Record<string, unknown>[] }[])[0] as { users: Record<string, unknown>[] }).users;
+      };
+      expect(users(node(L.VLESS_ENCRYPTION))[0]).toMatchObject({ encryption: L.VLESS_ENCRYPTION_VALUE });
+      expect(users(node(L.VLESS_WS_TLS))[0]).toMatchObject({ encryption: "none" });
+    });
+
+    it("узел без новых полей собирается как прежде: ни лишних ключей, ни служебного выхода", () => {
+      const config = buildXrayConfig([placed("main", node(L.VLESS_WS_TLS), 0)], OPTIONS) as Built;
+      expect(config.outbounds).toHaveLength(2);
+      expect(config.outbounds[1]?.streamSettings).not.toHaveProperty("sockopt");
+      expect(config.outbounds[1]?.streamSettings?.["tlsSettings"]).toEqual({ serverName: "cdn.example.com", alpn: ["h2", "http/1.1"], fingerprint: "firefox" });
+    });
   });
 });

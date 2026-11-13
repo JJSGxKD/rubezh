@@ -85,6 +85,7 @@ describe("снимок контента: состав и хэш", () => {
       "limits",
       "pressure",
       "siege",
+      "stalker",
       "balanceTargets",
     ]);
   });

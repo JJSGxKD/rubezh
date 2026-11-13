@@ -2,7 +2,7 @@ import { z } from "zod";
 import { decodeBase64 } from "../internal/base64.js";
 import { cleanName, parsePort } from "../internal/text.js";
 import type { NodeSecurity, NodeTransport, ShareLinkResult } from "../node.js";
-import { fail, finishNode, listOf, networkOf, streamFromParams, UUID } from "./common.js";
+import { fail, finishNode, listOf, networkOf, streamFromParams, tcpHeaderOf, UUID } from "./common.js";
 import { isFail, parseUri } from "./uri.js";
 
 /** Шифры VMess, которые собирает Xray из ссылки. */
@@ -85,9 +85,14 @@ function parseJsonForm(link: string): ShareLinkResult {
   const network = networkOf(text(data.net) === "" ? "tcp" : text(data.net));
   if (network === null) return fail("unsupported_transport", "net");
   const kind = text(data.type);
-  if (network === "tcp" && kind !== "" && kind !== "none") return fail("unsupported_option", "type");
 
   const transport: NodeTransport = { network };
+  if (network === "tcp") {
+    // HTTP-маскировка: путь и хосты — списки через запятую, как в ссылках.
+    const header = tcpHeaderOf(kind, listOf(text(data.path)), listOf(text(data.host)), "type");
+    if (!header.ok) return header;
+    if (header.rawHeader !== undefined) transport.rawHeader = header.rawHeader;
+  }
   if (network === "ws" || network === "httpupgrade" || network === "xhttp") {
     if (text(data.path) !== "") transport.path = text(data.path);
     if (text(data.host) !== "") transport.host = text(data.host);

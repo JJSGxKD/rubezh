@@ -1,3 +1,4 @@
+import { stalkerAlive } from "./stalker-body";
 import type { World } from "./world";
 
 /**
@@ -76,6 +77,23 @@ export function checksumWorld(world: World): number {
     fold(siege.calmTicks);
     fold(siege.count);
     fold(siege.rng.getState());
+  }
+
+  // Тело преследователя входит в сумму, пока он жив, и отброс — пока игрок летит: суммы забегов без них не меняются.
+  if (stalkerAlive(world) === 1) {
+    const body = world.stalkerBody;
+    fold(body.slot);
+    fold(body.pushWindowSum);
+    fold(body.pushCursor);
+    fold(body.seriesFactor);
+    fold(body.lastPushTick);
+    fold(body.touchCooldownTicks);
+    fold(body.recoverTicks);
+  }
+  if (world.player.knockbackTicks > 0) {
+    fold(world.player.knockbackTicks);
+    fold(world.player.knockbackVx);
+    fold(world.player.knockbackVy);
   }
 
   for (let i = 0; i < world.enemies.count; i++) {
