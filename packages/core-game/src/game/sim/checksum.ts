@@ -1,3 +1,4 @@
+import { STALKER_PHASES } from "./stalker";
 import { stalkerAlive } from "./stalker-body";
 import type { World } from "./world";
 
@@ -77,6 +78,23 @@ export function checksumWorld(world: World): number {
     fold(siege.calmTicks);
     fold(siege.count);
     fold(siege.rng.getState());
+  }
+
+  // Директор Карачуна без правил или выключенный в сумму не входит: суммы забегов без него не меняются.
+  const stalker = world.stalker;
+  if (stalker.appear !== null && stalker.phase !== "off") {
+    fold(STALKER_PHASES.indexOf(stalker.phase));
+    fold(stalker.nextOmenTick);
+    fold(stalker.x);
+    fold(stalker.y);
+    fold(stalker.phaseTicks);
+    fold(stalker.chaseTicks);
+    fold(stalker.index);
+    fold(stalker.hits);
+    fold(stalker.pushes);
+    fold(stalker.relocations);
+    fold(stalker.appearedTick);
+    fold(stalker.rng.getState());
   }
 
   // Тело преследователя входит в сумму, пока он жив, и отброс — пока игрок летит: суммы забегов без них не меняются.

@@ -353,6 +353,8 @@ const siegeSchema = z.strictObject({
   eliteCount: num,
 });
 
+const stalkerRangeSchema = z.strictObject({ min: num, max: num });
+
 // Неубиваемый преследователь: форма — здесь, коридоры и связь с врагом — `findStalkerProblems`.
 const stalkerSchema = z.strictObject({
   enemy: text,
@@ -362,6 +364,19 @@ const stalkerSchema = z.strictObject({
     touchCooldownSec: num,
     recoverSec: num,
     push: z.strictObject({ first: num, decay: num, seriesResetSec: num, maxPerSec: num }),
+  }),
+  appear: z.strictObject({
+    fromSec: num,
+    firstDelaySec: stalkerRangeSchema,
+    gapSec: stalkerRangeSchema,
+    lateGapSec: stalkerRangeSchema,
+    lateAtSec: num,
+    chaseSec: stalkerRangeSchema,
+    omenSec: num,
+    fadeSec: num,
+    appearDistance: num,
+    farDistance: num,
+    minAccountLevel: num,
   }),
 });
 

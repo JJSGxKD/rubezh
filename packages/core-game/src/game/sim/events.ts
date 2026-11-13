@@ -32,6 +32,12 @@ export const SIM_EVENT = {
   freeze: 9,
   /** оберег пролога удержал здоровье на пороге; `radius` несёт, сколько урона он принял (T-0278) */
   ward: 10,
+  /** на земле проступает предвестие Карачуна; `radius` — сколько секунд оно горит до выхода (T-0423) */
+  stalkerOmen: 11,
+  /** Карачун вышел в точке предвестия; `radius` не несёт */
+  stalkerAppear: 12,
+  /** погоня кончилась, Карачун стоит и растворяется; `radius` — сколько секунд до исчезновения */
+  stalkerFade: 13,
 } as const;
 
 export type SimEventKind = (typeof SIM_EVENT)[keyof typeof SIM_EVENT];
