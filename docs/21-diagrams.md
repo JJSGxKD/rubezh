@@ -2638,6 +2638,9 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    ADMINAPI -. "порт SourceAvatars: аватарка канала, бота, Mini App (Р158)" .-> TGADP
+    TGADP -- "telegram.web: страница бота и CDN Telegram, без перенаправлений" --> OUTBOUND
+    OUTBOUND -- "telegram.web" --> TGAPI
     TASKS -. "порт ChannelMemberships: groups.isMember (Р188)" .-> VKADP
     TASKS -. "порт ExternalLinkStarters: vk.me/сообщество?ref=код" .-> VKADP
     VKADP -. "consume(vk, код, id игрока)" .-> EXTIDENT
