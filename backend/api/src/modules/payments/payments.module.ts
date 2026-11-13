@@ -5,6 +5,7 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
+import { PaymentCheckoutMarks } from "./payment-checkout-marks.js";
 import { PaymentFeedSources } from "./payment-feed-sources.js";
 import { PaymentJobs } from "./payment-jobs.js";
 import { PaymentRetry } from "./payment-retry.js";
@@ -63,6 +64,7 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PaymentFeedSources,
     PaymentJobs,
     PaymentRetry,
+    PaymentCheckoutMarks,
     PurchaseCompensations,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
     { provide: PAYMENTS_FEED_REPOSITORY, useClass: PrismaPaymentsFeedRepository },

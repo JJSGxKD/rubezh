@@ -1,4 +1,5 @@
 import type { SubscriptionNode } from "../../api/proxy-subscription";
+import { CountryFlag } from "../../ui/country-flag";
 import { Badge, Button, DataTable, type Column } from "../../ui/kit";
 import { nodeRows, nodesToggleLabel, type NodeRow } from "./subscription-view";
 
@@ -13,7 +14,7 @@ const NODE_COLUMNS: Column<NodeRow>[] = [
   { title: "Протокол", render: (row) => row.protocol },
   { title: "Транспорт", render: (row) => row.transportText },
   { title: "Безопасность", render: (row) => row.securityText },
-  { title: "Страна", render: (row) => row.countryText },
+  { title: "Страна", render: (row) => <CountryFlag code={row.country} /> },
   { title: "Хост", render: (row) => <code className="font-mono text-xs break-all">{row.host}</code> },
   { title: "Задержка", align: "right", render: (row) => row.latencyText },
 ];

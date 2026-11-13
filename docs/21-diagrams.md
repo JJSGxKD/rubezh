@@ -448,6 +448,8 @@ erDiagram
         enum status "pending|paid|refunded"
         string telegram_charge_id UK "nullable: id оплаты в Telegram"
         datetime invoiced_at "когда выставлен последний счёт"
+        datetime checkout_at "nullable: последняя предварительная проверка (Р209)"
+        string checkout_refusal "nullable: отказ этой проверки"
         datetime paid_at "nullable: продолжение выдано"
         enum refund_reason "nullable: test_mode|unused|external|undeliverable|manual"
         datetime refund_requested_at "nullable"
@@ -712,6 +714,10 @@ erDiagram
         boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
         string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
         int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
+        string customer "nullable, до 80 знаков: кто платит за партнёрское задание (Р138); null — задание своё; только у партнёрской цели (CHECK)"
+        string pay_model "nullable: cpa — за выполнение, rs — доля дохода; null вместе с customer (CHECK)"
+        int rate "nullable: у cpa — центы доллара за выполнение, 1–100 000; у rs — сотые доли процента, 1–10 000; вместе с pay_model (CHECK)"
+        smallint hold_days "0, 1, 3 или 7: после скольких суток удержания выполнение оплачивается; 0 — сразу; не ноль только у подписки на канал (схема)"
         int sort
         boolean active
         datetime created_at
@@ -3554,6 +3560,7 @@ sequenceDiagram
     TG->>B: pre_checkout_query — в очереди bot-updates с приоритетом
     B->>P: чей счёт, та ли сумма, свежий ли, жив ли забег
     P->>TG: answerPreCheckoutQuery — до 10 секунд
+    P-)DB: отметка проверки в purchase — после ответа площадке, не ждётся
     TG->>B: successful_payment — сообщением в личке
     B->>Q: подтверждение, jobId от id оплаты
     Q->>DB: pending → paid, telegram_charge_id UK
@@ -3569,6 +3576,13 @@ sequenceDiagram
   очереди `bot-updates` (T-0027), а подтверждение — своим заданием, которое
   повторяется, пока запись не пройдёт. Redis недоступен — запись сразу, не
   прошла и так — ошибка в лог со всеми полями оплаты.
+- **Проверка оставляет след в покупке** (T-0430, Р209): время и отказ
+  последней проверки — две колонки `checkout_at` и `checkout_refusal`, их
+  читает карточка платежа в панели («пройдена» или «отказ — счёт устарел»).
+  Отметка пишется **после** ответа площадке и не ждётся: у Telegram на весь
+  ответ десять секунд. Сбой записи — предупреждение `checkout_mark_failed`
+  в логе, а не ошибка. Проверка продления подписки идёт по счёту первой
+  покупки и перезаписывает её отметку.
 - **Отказаться от денег можно только на проверке.** После
   `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
   Его сервер делает сам — через ту же очередь, с повтором: тестовая оплата

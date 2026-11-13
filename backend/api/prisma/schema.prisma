@@ -640,6 +640,10 @@ model Purchase {
   telegramChargeId  String?         @unique @map("telegram_charge_id") @db.VarChar(256)
   /// когда выставлен последний счёт: к устаревшему счёту оплата не принимается
   invoicedAt        DateTime        @map("invoiced_at") @db.Timestamptz(3)
+  /// последняя предварительная проверка оплаты по этому счёту (Р209); у продления — отметка первой покупки
+  checkoutAt        DateTime?       @map("checkout_at") @db.Timestamptz(3)
+  /// отказ последней проверки (`CheckoutRefusal`); `null` — пройдена или не было
+  checkoutRefusal   String?         @map("checkout_refusal") @db.VarChar(32)
   paidAt            DateTime?       @map("paid_at") @db.Timestamptz(3)
   refundReason      RefundReason?   @map("refund_reason")
   /// возврат заказан, но Telegram его ещё не подтвердил — очередь повторяет
@@ -1663,6 +1667,15 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
+  /// партнёрской цели, связи полей — `CHECK` в миграции
+  customer        String?    @db.VarChar(80)
+  /// модель оплаты: `cpa` — за выполнение, `rs` — доля дохода
+  payModel        String?    @map("pay_model") @db.VarChar(8)
+  /// ставка: у `cpa` — центы доллара за выполнение, у `rs` — сотые доли процента
+  rate            Int?
+  /// после скольких суток удержания выполнение оплачивается; 0 — сразу
+  holdDays        Int        @default(0) @map("hold_days") @db.SmallInt
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.

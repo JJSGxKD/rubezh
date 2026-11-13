@@ -3,8 +3,8 @@ id: T-0430
 title: Предварительная проверка оплаты в хронологии платежа
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: S
 depends_on: [T-0429]
@@ -12,12 +12,15 @@ zones:
   - backend/api/src/modules/payments/payment-checkout-marks.ts
   - backend/api/src/modules/payments/payment-confirmation.ts
   - backend/api/test/payment-checkout-marks.test.ts
+  - backend/api/test/payment-checkout-marks.integration.test.ts
   - backend/api/test/payment-confirmation.test.ts
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/
   - backend/api/src/modules/payments/payments.module.ts
   - docs/21-diagrams.md
+  - docs/29-admin-panel.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
