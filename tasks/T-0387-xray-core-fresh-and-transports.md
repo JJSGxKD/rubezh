@@ -3,7 +3,7 @@ id: T-0387
 title: Ядро Xray — свежая версия и способы подключения, которые выдают поставщики
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead2-4
 size: M
