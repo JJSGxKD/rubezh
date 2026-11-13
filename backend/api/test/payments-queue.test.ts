@@ -429,3 +429,87 @@ describe("брошенные задания: повтор", () => {
     expect(await queue.retryFailed("confirm-aaaa")).toBe("not_found");
   });
 });
+
+describe("брошенные задания: состояние без изменений", () => {
+  beforeEach(() => {
+    for (const level of ["log", "warn", "error"] as const) vi.spyOn(Logger.prototype, level).mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  interface StateJob {
+    getState: () => Promise<string>;
+    retry: () => Promise<void>;
+  }
+
+  function attach(queue: PaymentsQueue, getJob: (jobId: string) => Promise<StateJob | undefined>): void {
+    Object.assign(queue as unknown as { queue: unknown }, { queue: { getJob } });
+  }
+
+  it("очереди нет — not_found: спросить не у кого", async () => {
+    const { queue } = setup();
+
+    expect(await queue.jobState("confirm-aaaa")).toBe("not_found");
+  });
+
+  it("задания нет в хранилище — not_found", async () => {
+    const { queue } = setup();
+    const asked: string[] = [];
+    attach(queue, async (jobId) => {
+      asked.push(jobId);
+      return undefined;
+    });
+
+    expect(await queue.jobState("confirm-aaaa")).toBe("not_found");
+    expect(asked).toEqual(["confirm-aaaa"]);
+  });
+
+  it("брошенное задание — failed", async () => {
+    const { queue } = setup();
+    attach(queue, async () => ({ getState: async () => "failed", retry: async () => undefined }));
+
+    expect(await queue.jobState("confirm-aaaa")).toBe("failed");
+  });
+
+  it.each([["completed"], ["waiting"], ["active"], ["delayed"], ["prioritized"], ["waiting-children"]])("повторённое или выполненное задание (%s) — not_failed", async (state) => {
+    const { queue } = setup();
+    attach(queue, async () => ({ getState: async () => state, retry: async () => undefined }));
+
+    expect(await queue.jobState("confirm-aaaa")).toBe("not_failed");
+  });
+
+  it("состояние «unknown» (задание убрали, пока его читали) — not_found", async () => {
+    const { queue } = setup();
+    attach(queue, async () => ({ getState: async () => "unknown", retry: async () => undefined }));
+
+    expect(await queue.jobState("confirm-aaaa")).toBe("not_found");
+  });
+
+  it("только читает: повтор не зовётся ни для какого состояния", async () => {
+    const { queue } = setup();
+    const retry = vi.fn(async () => undefined);
+    for (const state of ["failed", "completed", "waiting"]) {
+      attach(queue, async () => ({ getState: async () => state, retry }));
+      await queue.jobState("confirm-aaaa");
+    }
+
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("Redis не ответил за 5 с — ошибка с названием вызова, а не вечное ожидание", async () => {
+    vi.useFakeTimers();
+    try {
+      const { queue } = setup();
+      attach(queue, () => new Promise<StateJob | undefined>(() => undefined));
+
+      const assertion = expect(queue.jobState("confirm-aaaa")).rejects.toThrow("задание оплаты");
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

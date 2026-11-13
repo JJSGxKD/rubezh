@@ -134,13 +134,29 @@ function setup(env: Record<string, string> = {}) {
   });
   const sources = new PaymentFeedSources();
 
-  /** Очередь-подмена: список брошенных (`null` — очереди нет; `error` — не ответила) и ответы на повтор по идентификатору задания. */
-  const queueState: { failed: FailedPaymentJob[] | null; error: Error | null; asked: number[]; retried: string[]; answers: Map<string, "retried" | "not_found" | "not_failed"> } = {
+  /**
+   * Очередь-подмена: список брошенных (`null` — очереди нет; `error` — не ответила), ответы на повтор по
+   * идентификатору задания и состояния заданий, которых нет в списке (`states`, по умолчанию — «нет совсем»).
+   * Настоящий повтор, как в BullMQ, уводит задание из брошенных: оно больше не в списке и уже не «failed».
+   */
+  const queueState: {
+    failed: FailedPaymentJob[] | null;
+    error: Error | null;
+    stateError: Error | null;
+    asked: number[];
+    retried: string[];
+    stated: string[];
+    answers: Map<string, "retried" | "not_found" | "not_failed">;
+    states: Map<string, "failed" | "not_failed" | "not_found">;
+  } = {
     failed: [],
     error: null,
+    stateError: null,
     asked: [],
     retried: [],
+    stated: [],
     answers: new Map(),
+    states: new Map(),
   };
   const queue = {
     failedJobs: async (limit: number) => {
@@ -150,7 +166,16 @@ function setup(env: Record<string, string> = {}) {
     },
     retryFailed: async (jobId: string) => {
       queueState.retried.push(jobId);
-      return queueState.answers.get(jobId) ?? "retried";
+      const answer = queueState.answers.get(jobId);
+      if (answer !== undefined) return answer;
+      if (queueState.failed !== null) queueState.failed = queueState.failed.filter((job) => job.jobId !== jobId);
+      queueState.states.set(jobId, "not_failed");
+      return "retried";
+    },
+    jobState: async (jobId: string) => {
+      queueState.stated.push(jobId);
+      if (queueState.stateError !== null) throw queueState.stateError;
+      return queueState.states.get(jobId) ?? "not_found";
     },
   } as unknown as PaymentsQueue;
 
@@ -347,7 +372,7 @@ describe("PaymentJobs.retryJob: повтор одного задания", () =>
     expect(s.events).toEqual([]);
   });
 
-  it("очередь ответила not_failed — задание уже повторили: 409, журнала и сообщения нет", async () => {
+  it("очередь ответила not_failed — задание повторил другой запрос между списком и повтором: 409, журнала и сообщения нет", async () => {
     put(s, purchase(target.accountId));
     s.queueState.failed = [failedJob()];
     s.queueState.answers.set("confirm-aaaa1111", "not_failed");
@@ -358,6 +383,82 @@ describe("PaymentJobs.retryJob: повтор одного задания", () =>
     await expect(attempt).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: "Задание уже не брошено: его повторили или оно выполнилось" });
     expect(s.rolesRepository.entries).toEqual([]);
     expect(s.events).toEqual([]);
+  });
+
+  it("повтор уже повторенного: первый вызов повторил и задание ушло из брошенных, второй — 409 «Задание уже не брошено», журнал и сообщение один раз", async () => {
+    put(s, purchase(target.accountId));
+    s.queueState.failed = [failedJob()];
+
+    await s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW);
+    expect(s.queueState.failed).toEqual([]);
+
+    const second = s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW);
+
+    await expect(second).rejects.toBeInstanceOf(PurchaseActionUnavailableError);
+    await expect(second).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: "Задание уже не брошено: его повторили или оно выполнилось" });
+    expect(s.queueState.retried).toEqual(["confirm-aaaa1111"]);
+    expect(s.rolesRepository.entries).toHaveLength(1);
+    expect(s.events).toHaveLength(1);
+    expect(logged.filter((line) => line.event === "payment_job_retried")).toHaveLength(1);
+  });
+
+  it("задания нет среди брошенных, но оно есть в очереди и не брошено (повторено, выполнено) — 409, а не 404: состояние читается без изменений", async () => {
+    s.queueState.failed = [];
+    s.queueState.states.set("confirm-aaaa1111", "not_failed");
+
+    const attempt = s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW);
+
+    await expect(attempt).rejects.toBeInstanceOf(PurchaseActionUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ status: 409, message: "Задание уже не брошено: его повторили или оно выполнилось" });
+    expect(s.queueState.stated).toEqual(["confirm-aaaa1111"]);
+    expect(s.queueState.retried).toEqual([]);
+    expect(s.rolesRepository.entries).toEqual([]);
+    expect(s.events).toEqual([]);
+  });
+
+  it("задания нет среди брошенных и нет в очереди совсем — 404 «Задание не найдено»", async () => {
+    s.queueState.failed = [];
+
+    await expect(s.jobs.retryJob(admin, "confirm-zzzz9999", NOTE, NOW)).rejects.toMatchObject({ code: "payment_job_not_found", status: 404 });
+
+    expect(s.queueState.stated).toEqual(["confirm-zzzz9999"]);
+    expect(s.queueState.retried).toEqual([]);
+  });
+
+  it("задание брошено, но не попало в прочитанные 1000 — 404: вид и покупка неизвестны, «своя ли» не проверить, вслепую не повторяем", async () => {
+    s.queueState.failed = [];
+    s.queueState.states.set("confirm-aaaa1111", "failed");
+
+    await expect(s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW)).rejects.toMatchObject({ code: "payment_job_not_found", status: 404 });
+
+    expect(s.queueState.retried).toEqual([]);
+    expect(s.rolesRepository.entries).toEqual([]);
+  });
+
+  it("очередь не ответила на вопрос о состоянии — 409 «Очередь оплаты недоступна», а не ошибка сервера", async () => {
+    s.queueState.failed = [];
+    s.queueState.stateError = new Error("задание оплаты: нет ответа за 5000 мс");
+
+    await expect(s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW)).rejects.toMatchObject({
+      code: "purchase_action_unavailable",
+      status: 409,
+      message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена",
+    });
+
+    expect(logged).toContainEqual({
+      level: "warn",
+      event: "payment_job_state_unreadable",
+      fields: expect.objectContaining({ module: "payments", jobId: "confirm-aaaa1111", reason: "задание оплаты: нет ответа за 5000 мс" }) as Record<string, unknown>,
+    });
+  });
+
+  it("задание есть среди брошенных — состояние не спрашивается", async () => {
+    put(s, purchase(target.accountId));
+    s.queueState.failed = [failedJob()];
+
+    await s.jobs.retryJob(admin, "confirm-aaaa1111", NOTE, NOW);
+
+    expect(s.queueState.stated).toEqual([]);
   });
 
   it("очереди нет — 409 с причиной, повтор не пробуется", async () => {
