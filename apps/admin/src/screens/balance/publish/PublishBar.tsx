@@ -105,7 +105,7 @@ function PublishAllDialog({
   }, [open, draftId]);
 
   const model = preview.status === "ok" ? dialogModel(preview.data) : null;
-  const blocking = model === null ? "Считаем правки…" : model.canConfirm ? null : (model.warnings[0] ?? "Публиковать нечего");
+  const blocking = preview.status === "error" ? "Правки получить не удалось — публиковать вслепую нельзя" : model === null ? "Считаем правки…" : model.canConfirm ? null : (model.warnings[0] ?? "Публиковать нечего");
 
   return (
     <ConfirmDialog
