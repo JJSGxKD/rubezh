@@ -38,6 +38,7 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   evolution_runs: "Эволюции",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  secrets_kinds: "Виды тайников",
   status: "Знак статуса",
   season: "Знак сезона",
   channel: "Подписка на канал",
@@ -97,7 +98,7 @@ export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, Tas
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
  * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
  */
-export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level"]);
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "secrets_kinds"]);
 
 /**
  * Знаки статусов и сезонов у имени (T-0235, `tasks/task-rules.ts`, `EMBLEM_KINDS`): строки каталога без

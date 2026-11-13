@@ -190,8 +190,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 65 достижений (48 и 17 про боссов, элит, сундуки, кристаллы и эволюции), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(65);
+    it("ровно 66 достижений (48, 17 про боссов, элит, сундуки, кристаллы и эволюции и «Следопыт» про тайники), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(66);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -255,7 +255,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBe(56);
+      expect(added.length).toBe(57); // 56 прежних новых и «Следопыт» (T-0261)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
       expect(catalog.reduce((sum, task) => sum + task.coins, 0)).toBeLessThanOrEqual(20_000);
