@@ -4,13 +4,15 @@ import { nodeRows, nodesToggleLabel, type NodeRow } from "./subscription-view";
 
 /**
  * Узлы одной подписки Xray (docs/35-stage4-plan.md Р101, Р192): таблица с
- * состоянием и задержкой, рабочие сверху. Подписок несколько — таблица свёрнута
+ * состоянием, протоколом, транспортом, безопасностью и задержкой, рабочие сверху. Подписок несколько — таблица свёрнута
  * кнопкой «Показать узлы (37)», чтобы список подписок читался целиком.
  */
 const NODE_COLUMNS: Column<NodeRow>[] = [
   { title: "Узел", primary: true, render: (row) => <span className="font-medium">{row.name}</span> },
   { title: "Состояние", render: (row) => <Badge tone={row.tone}>{row.statusLabel}</Badge> },
   { title: "Протокол", render: (row) => row.protocol },
+  { title: "Транспорт", render: (row) => row.transportText },
+  { title: "Безопасность", render: (row) => row.securityText },
   { title: "Страна", render: (row) => row.countryText },
   { title: "Хост", render: (row) => <code className="font-mono text-xs break-all">{row.host}</code> },
   { title: "Задержка", align: "right", render: (row) => row.latencyText },

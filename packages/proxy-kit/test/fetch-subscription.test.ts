@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchSubscription, SubscriptionFetchError, type FetchSubscriptionOptions } from "../src/fetch-subscription.js";
+import { DEVICE_OS, fetchSubscription, SubscriptionFetchError, type FetchSubscriptionOptions } from "../src/fetch-subscription.js";
 
 // Загрузка подписки: сеть и проверка адреса приходят аргументами. Адрес
 // подписки секретный целиком — в тексте ошибок его нет.
@@ -50,6 +50,22 @@ describe("загрузка подписки", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.init.redirect).toBe("manual");
     expect(new Headers(calls[0]?.init.headers).get("user-agent")).toBe("v2rayN/7.0");
+  });
+
+  it("заголовок routing приходит как есть; без заголовка — null", async () => {
+    const value = "happ://routing/onadd/eyJEaXJlY3RTaXRlcyI6W119";
+    const withHeader = setup(() => new Response(BODY, { headers: { routing: value } }));
+    expect((await fetchSubscription(URL_SECRET, withHeader.options)).routingHeader).toBe(value);
+
+    const without = setup(() => new Response(BODY));
+    expect((await fetchSubscription(URL_SECRET, without.options)).routingHeader).toBeNull();
+  });
+
+  it("DEVICE_OS — то, что уходит поставщику заголовком x-device-os", async () => {
+    const { calls, options } = setup(() => new Response(BODY));
+    await fetchSubscription(URL_SECRET, options);
+    expect(new Headers(calls[0]?.init.headers).get("x-device-os")).toBe(DEVICE_OS);
+    expect(DEVICE_OS).toBe("Linux");
   });
 
   it("свой User-Agent; без заголовков подписки — null", async () => {

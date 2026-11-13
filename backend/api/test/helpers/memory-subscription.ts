@@ -77,8 +77,12 @@ export class MemorySubscriptionRepository implements SubscriptionRepository {
       trafficUsedBytes: write.trafficUsedBytes,
       trafficTotalBytes: write.trafficTotalBytes,
       expiresAt: write.expiresAt,
+      routingSource: write.routing.source,
+      routingDirect: write.routing.direct,
+      routingBlock: write.routing.block,
+      routingHints: [...write.routing.hints],
     };
-    this.nodes = [...this.nodes.filter((node) => node.subscriptionKey !== key), ...write.nodes.map((node) => ({ ...node, subscriptionKey: key }))];
+    this.nodes =[...this.nodes.filter((node) => node.subscriptionKey !== key), ...write.nodes.map((node) => ({ ...node, subscriptionKey: key }))];
   }
 
   async recordFailure(key: string, at: Date, note: string): Promise<void> {

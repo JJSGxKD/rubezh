@@ -1046,6 +1046,10 @@ erDiagram
         bigint traffic_used_bytes "nullable"
         bigint traffic_total_bytes "nullable"
         datetime expires_at "nullable"
+        string routing_source "nullable: none, json, header или json+header (CHECK); null — не обновлялась после T-0385"
+        int routing_direct "nullable: записей мимо туннеля; null — заголовок есть, состав не разобран"
+        int routing_block "nullable: записей, которые блокируются"
+        string[] routing_hints "geosite:/geoip: из записей мимо туннеля, до восьми"
         uuid updated_by "без внешнего ключа"
         datetime updated_at
         datetime created_at "когда подключена: порядок карточек в панели"
@@ -1064,6 +1068,9 @@ erDiagram
         int latency_ms "nullable"
         datetime last_probe_at "nullable"
         datetime next_probe_at
+        string network "nullable: tcp, ws, grpc, httpupgrade или xhttp (CHECK); null — узел записан до T-0385"
+        string security "nullable: none, tls или reality (CHECK)"
+        string flow "nullable: flow VLESS"
     }
 
     PROXY_SUBSCRIPTION ||--o{ PROXY_SUBSCRIPTION_NODE : "узлы подписки"
@@ -1828,7 +1835,10 @@ erDiagram
   порядок карточек. Секретов узла (UUID, пароль) в таблицах нет — они только в
   конфиге Xray, в файлах-частях подписок его тома и в ответе поставщика. Слот узла
   уникален на всю систему: порт входа Xray = база + слот, узел не меняет порт между
-  обновлениями, а узлы разных подписок не делят вход. Выключенная подписка держит
+  обновлениями, а узлы разных подписок не делят вход. Транспорт, безопасность и
+  flow узла и сводка своей маршрутизации подписки (T-0385) — сведения для панели,
+  перебор их не использует; пусто у записанного до миграции — поля появляются при
+  следующем обновлении. Выключенная подписка держит
   свои узлы и слоты — включение назад не требует загрузки. При вайпе таблицы
   остаются — это настройка команды.
 - **`PROXY_TRAFFIC_HOUR` — трафик узлов Xray по часам** (Р192, T-0386, поток — §4.30).

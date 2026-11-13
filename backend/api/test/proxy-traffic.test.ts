@@ -150,6 +150,10 @@ const snapshot = (key: string, name: string, nodes: readonly [string, string][])
     trafficUsedBytes: null,
     trafficTotalBytes: null,
     expiresAt: null,
+    routingSource: null,
+    routingDirect: null,
+    routingBlock: null,
+    routingHints: [],
     updatedBy: ACTOR.accountId,
     updatedAt: NOW,
     createdAt: NOW,
@@ -167,6 +171,9 @@ const snapshot = (key: string, name: string, nodes: readonly [string, string][])
     latencyMs: 40,
     lastProbeAt: NOW,
     nextProbeAt: NOW,
+    network: null,
+    security: null,
+    flow: null,
   })),
 });
 
