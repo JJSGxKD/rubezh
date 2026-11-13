@@ -30,6 +30,7 @@ shared:
   - backend/api/test/change-requests.integration.test.ts
   - apps/admin/src/api/change-requests.ts
   - apps/admin/test/balance-rewards.test.ts
+  - backend/api/test/reward-settings-di.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

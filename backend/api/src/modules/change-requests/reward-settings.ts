@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { z } from "zod";
 import { WEEK_STEP_MUL, levelMul, parseDailyLadder } from "../daily/daily-rules.js";
 import { MAX_LEVEL, maxLevelReward, parseLevelLadder } from "../progress/progress-rules.js";
@@ -78,7 +78,8 @@ export class RewardSettingKind implements ChangeKindHandler {
   readonly kind = "reward_setting" as const;
   readonly permission = "sku.price.edit" as const;
 
-  constructor(private readonly settings: Pick<SettingsService, "get" | "refresh" | "reload">) {}
+  // Явный токен: тип Pick<…> стирается в Object, и Nest не нашёл бы зависимость при старте приложения.
+  constructor(@Inject(SettingsService) private readonly settings: Pick<SettingsService, "get" | "refresh" | "reload">) {}
 
   async prepare(tx: ChangeTx, target: string, input: unknown): Promise<{ before: JsonValue; after: JsonValue }> {
     const setting = requireSetting(target);
