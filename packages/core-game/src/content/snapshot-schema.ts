@@ -66,6 +66,7 @@ const enemyBase = {
   resist: z.partialRecord(z.enum(statusElements), num).optional(),
   element: z.enum(statusElements).optional(),
   statusChance: num.optional(),
+  trail: z.strictObject({ everySec: num, radius: num, lifeSec: num, damagePerSec: num }).optional(),
 };
 
 /** Враг одного паттерна: параметры обязательны только там, где умолчания нет. */

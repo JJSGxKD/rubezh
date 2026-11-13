@@ -573,6 +573,22 @@ export type ElementId = (typeof ELEMENTS)[number];
 /** Стихии, у которых есть состояние и сопротивление, — всё, кроме физического. */
 export type StatusElement = Exclude<ElementId, "physical">;
 
+/**
+ * След врага: за ним на земле остаются лужи (`sim/hazards.ts`, Р157). Задаётся
+ * данными любому паттерну; стихия лужи — `element` врага, шанс состояния — его
+ * `statusChance`. Коридоры проверяет тест контента.
+ */
+export interface EnemyTrailDef {
+  /** как часто враг оставляет лужу, секунды его жизни; первая — через столько же после появления (0,5…5) */
+  everySec: number;
+  /** радиус лужи в игровых единицах (12…60) */
+  radius: number;
+  /** сколько лужа живёт, секунды (1…8) */
+  lifeSec: number;
+  /** урон игроку в луже в секунду (1…20); бьёт тиками по полсекунды */
+  damagePerSec: number;
+}
+
 interface EnemyDefBase {
   id: string;
   hp: number;
@@ -627,6 +643,8 @@ interface EnemyDefBase {
   element?: StatusElement;
   /** шанс наложить состояние за попадание, от 0 до 1; не задан — каждое попадание */
   statusChance?: number;
+  /** след из луж за врагом; не задан — врага без следа */
+  trail?: EnemyTrailDef;
 }
 
 /**
