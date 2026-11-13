@@ -38,8 +38,11 @@ export function trainStatus({ queue, done, failed }) {
     const word = firstWord(line);
     if (PR_NUMBER.test(word)) lastFail.set(word, { line: index + 1, pr: Number(word), reason: line.trim().slice(word.length).trim() });
   });
-  // По номеру строки: линия берёт первым самый давний открытый провал.
-  const open = [...lastFail.values()].filter((f) => !queued.includes(f.pr)).sort((a, b) => a.line - b.line);
+  // Провал открыт, пока PR не вернули в очередь и не влили: влитому провал после
+  // доработки уже не нужен. По номеру строки: линия берёт первым самый давний.
+  const open = [...lastFail.values()]
+    .filter((f) => !queued.includes(f.pr) && !doneNums.includes(String(f.pr)))
+    .sort((a, b) => a.line - b.line);
   return { queued, approved, failed: open };
 }
 
