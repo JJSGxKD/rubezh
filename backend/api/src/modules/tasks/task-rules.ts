@@ -51,6 +51,7 @@ export const RUN_FILTER_KEYS = {
   element_runs: "element",
   difficulty_runs: "difficulty",
   difficulty_survive_sec: "difficulty",
+  element_kills: "element",
 } as const;
 
 /**
@@ -209,6 +210,17 @@ export const RUN_KINDS = {
    * занимает слот базового оружия.
    */
   evolution_runs: { op: "sum", measure: (run: TaskRun) => (run.weapons.some((weapon) => isEvolution(weapon.id)) ? 1 : 0) },
+  // Испытания и стихии (T-0322): серии и убийства по стихии добивающего удара берутся
+  // из тех же счётчиков итога, и без них — ноль, как у видов выше.
+  /** продержаться в одном забеге без единого попадания, секунд */
+  no_hit_sec: { op: "max", measure: (run: TaskRun) => run.counters?.noHitSec ?? 0 },
+  /** продержаться в одном забеге, никого не убив, секунд */
+  no_kill_sec: { op: "max", measure: (run: TaskRun) => run.counters?.noKillSec ?? 0 },
+  /** убить врагов стихией добивающего удара; без фильтра стихии — ноль, а не сумма всех */
+  element_kills: {
+    op: "sum",
+    measure: (run: TaskRun, filter?: RunFilter | null) => (filter?.element === undefined ? 0 : (run.counters?.killsByElement[filter.element] ?? 0)),
+  },
 } as const satisfies Record<string, { op: "sum" | "max"; measure: (run: TaskRun, filter?: RunFilter | null) => number }>;
 
 export type RunKind = keyof typeof RUN_KINDS;
@@ -224,9 +236,36 @@ export const STATE_KINDS = {
   friends: { op: "max" },
   /** уровень аккаунта */
   account_level: { op: "max" },
+  /**
+   * «Мастера оружия», которых игрок выполнил (T-0322): считает сервер по каталогу и
+   * прогрессу, а не забег; цель — число «Мастеров» (`DYNAMIC_TARGET_KINDS`).
+   */
+  weapon_masters: { op: "max" },
 } as const satisfies Record<string, { op: "max" }>;
 
 export type StateKind = keyof typeof STATE_KINDS;
+
+/**
+ * Виды, у которых цель считается, а не хранится (T-0322): хранимый `target` строки
+ * сервер не читает, панель показывает «считается сама». «Коллекционер» требует всех
+ * «Мастеров оружия», сколько их включено сейчас, — новое оружие поднимает цель.
+ */
+export const DYNAMIC_TARGET_KINDS = ["weapon_masters"] as const satisfies readonly StateKind[];
+
+/** «Мастера оружия» каталога: включённые достижения вида «забеги с оружием». */
+export function masterIdsOf(defs: readonly TaskDef[]): string[] {
+  return defs.filter((def) => def.active && def.period === "achievement" && def.kind === "weapon_runs").map((def) => def.taskId);
+}
+
+/**
+ * Строки каталога с посчитанной целью: у видов `DYNAMIC_TARGET_KINDS` — число включённых
+ * «Мастеров», но не меньше единицы (схема нуля не допускает). Остальные строки не
+ * меняются, исходный список — тоже.
+ */
+export function withDynamicTargets(defs: readonly TaskDef[]): TaskDef[] {
+  const target = Math.max(1, masterIdsOf(defs).length);
+  return defs.map((def) => ((DYNAMIC_TARGET_KINDS as readonly TaskKind[]).includes(def.kind) ? { ...def, target } : def));
+}
 
 /**
  * Партнёрские цели (Р52): их выполняет не забег, а действие игрока вне игры,
