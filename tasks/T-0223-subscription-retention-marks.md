@@ -3,8 +3,8 @@ id: T-0223
 title: Отметки удержания подписки на 1-й, 3-й и 7-й день — из перепроверки отписки
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0178, T-0222]
@@ -28,7 +28,7 @@ batch: 4
 
 # T-0223. Отметки удержания подписки на 1-й, 3-й и 7-й день — из перепроверки отписки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0223.json)](README.md#значки-статуса) [![T-0178](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json&label=T-0178)](archive/T-0178-channel-unsubscribe-recheck.md) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](T-0222-task-customer-and-pay-model.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0223.json)](README.md#значки-статуса) [![T-0178](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0178.json&label=T-0178)](archive/T-0178-channel-unsubscribe-recheck.md) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](archive/T-0222-task-customer-and-pay-model.md)
 
 ## Зачем
 

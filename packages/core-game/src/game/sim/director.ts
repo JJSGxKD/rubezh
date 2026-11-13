@@ -9,6 +9,7 @@ import {
 import { startCordon } from "./cordon";
 import { applySegmentPressure, isPressureActive, refreshPressure } from "./pressure";
 import { updateSiege } from "./siege";
+import { stalkerAlive } from "./stalker-body";
 import { spawnOnRing, spawnRandomOnRing, type Spawner } from "./spawner";
 import { planSegment, segmentStartSec, type SegmentEvent, type SegmentPlan } from "./timeline";
 import type { World } from "./world";
@@ -175,7 +176,8 @@ function isSegmentPlan(value: unknown): value is SegmentPlan {
 }
 
 function atCap(world: World): boolean {
-  return world.enemies.aliveCount >= world.difficulty.maxAlive;
+  // Неубиваемый преследователь в потолок живых не входит: он не толпа, и рядовые идут мимо него.
+  return world.enemies.aliveCount - stalkerAlive(world) >= world.difficulty.maxAlive;
 }
 
 /**

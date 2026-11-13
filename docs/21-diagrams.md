@@ -364,7 +364,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update, task_unsubscribed"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -1298,6 +1298,9 @@ erDiagram
         int event_no "nullable: номер события отписки пары; только у penalized (CHECK)"
         datetime penalized_at "nullable: момент штрафа; вместе с event_no"
         json revoked "nullable: списано по ресурсам coins, gems, shards"
+        boolean held_d1 "nullable: был в канале на 1-й день (Р139); null — не известно"
+        boolean held_d3 "nullable: то же на 3-й день"
+        boolean held_d7 "nullable: то же на 7-й день"
     }
 
     ACTIVITY_DAILY {
@@ -1385,6 +1388,10 @@ erDiagram
   (ключ `season_overtaken:сезон:игровой день`), `season_closing`
   (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
   день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
+  Извинение за сбой оплаты и возврат звёзд (Р209, T-0436) — вид
+  `purchase_support` (ключи `purchase_support:compensated:покупка` и
+  `purchase_support:refunded:покупка`, поток — §4.40); в бота уходит по ключу
+  игрока `bot.teamMessage`, как сообщение команды, и не считается напоминанием.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -1461,8 +1468,16 @@ erDiagram
   считаются одним нарушением с общим `event_no`; со второго события пары
   `partner_tasks` закрывается на 30 суток. Событие идёт под замком пары
   (`pg_try_advisory_xact_lock`, без ожидания) и кончается отметкой
-  `penalized`, поэтому всё до неё идемпотентно по ключам. Вайп стирает
-  таблицу вместе с прогрессом заданий.
+  `penalized`, поэтому всё до неё идемпотентно по ключам. Те же проверки
+  ставят отметки удержания (`35-stage4-plan.md` Р139, T-0223):
+  `held_d1`, `held_d3`, `held_d7` — первой успешной проверкой не раньше
+  чем через 1, 3 и 7 суток после награды, «в канале» — `true`. Отписка
+  закрывает ещё пустые отметки `false`, поставленная не меняется никогда
+  (`COALESCE` в одном `UPDATE`); нет ответа площадки — нет отметки, а
+  окно, закрывшееся без ответа, оставляет пустую отметку: это «неизвестно»,
+  а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
+  `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
+  заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -2698,6 +2713,7 @@ flowchart LR
     ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
     ADMINAPI -- "возврат и выдача покупки поддержкой" --> PAY
     ADMINAPI -- "лента платежей и карточка платежа: чтение, реестр источников хронологии (Р209)" --> PAY
+    ADMINAPI -- "очередь payments: брошенные задания и повтор, по одному и по покупке (Р209)" --> QUEUE
     REF -. "можно ли: награды за друзей" .-> RESTR
     FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
     ADS -. "можно ли: награды за рекламу" .-> RESTR
@@ -2748,7 +2764,9 @@ flowchart LR
 вход, приёмник, оплата — не знают Telegram, а просят порты
 `platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт,
 состоит ли игрок в канале и что значит ответ Bot API, знает адаптер
-`platforms/telegram/`; у MAX и VK запуск игры — заглушки. Зато оба служат ботами для заданий (Р188): бот MAX (`platforms/max/`) и сообщество VK (`platforms/vk/`) связывают аккаунт и проверяют подписку на канал или вступление в сообщество, но игру не запускают. Бот и инструменты команды в чате администраторов порта не
+`platforms/telegram/`; у MAX и VK запуск игры — заглушки. Зато оба служат ботами для заданий (Р188): бот MAX (`platforms/max/`) и сообщество VK (`platforms/vk/`) связывают аккаунт и проверяют подписку на канал или вступление в сообщество, но игру не запускают. Выписка площадки для сверки оплат (Р209) — тоже порт: `PaymentStatements`
+(`platforms/ports/payment-statement.ts`) ← адаптер Telegram на `getStarTransactions`
+(`platforms/telegram/telegram-star-statement.ts`); без токена бота реестр пуст. Бот и инструменты команды в чате администраторов порта не
 требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
@@ -5106,7 +5124,7 @@ sequenceDiagram
 
 Владелец извиняется самоцветами из карточки платежа (Р209, WP53, `tasks/T-0435`):
 панель спрашивает предложение, потом начисляет. Окно — T-0438, сообщение игроку —
-T-0436 (слушает то же событие поддержки).
+T-0436 (слушает то же событие поддержки, а о возврате звёзд — событие `onRefundDone`).
 
 ```mermaid
 sequenceDiagram
@@ -5118,6 +5136,8 @@ sequenceDiagram
     participant W as WalletService
     participant A as Журнал действий
     participant H as PaymentsHooks
+    participant N as PurchaseNotices
+    participant F as NotificationsService (лента и бот)
 
     P->>C: GET admin/payments/:id/compensation
     C->>S: preview(актёр, покупка)
@@ -5145,7 +5165,10 @@ sequenceDiagram
         alt отметку поставил этот вызов
             S->>A: payments.compensate (цель — аккаунт)
             S->>H: emitSupport kind=compensate, gems
-            Note over H: поток «Покупки» команде; сообщение игроку — T-0436
+            Note over H: поток «Покупки» команде
+            H->>N: onSupport (только compensate с самоцветами)
+            N->>F: deliver purchase_support:compensated:покупка → лента и дубль в бота
+            Note over N,F: сбой ленты — warn purchase_notice_failed, начисление не откатывается
         end
         S-->>P: {gems, balance, repaired}
     end
@@ -5163,6 +5186,16 @@ sequenceDiagram
 - **Карточка платежа** получает строку `compensated`, пометку и действие
   `compensate` из источника хронологии (`PaymentFeedSources`), не зная об этом
   модуле; действие пропадает после начисления.
+- **Сообщение игроку — извинение с суммой и датой оплаты** (T-0436): строка
+  ленты и дубль в бота тем же механизмом, что «Сообщение команды» (ключ игрока
+  `bot.teamMessage`, без потолка, тихие часы к нему не применяются). Ключ
+  события — действие и покупка, повтор не удваивает ни ленту, ни бота.
+- **О возврате звёзд игрок узнаёт так же**, но только когда возврат отмечен
+  впервые и причина — `manual` (поддержка) или `undeliverable` (товара нет):
+  `PaymentRefunds.refund` после отзыва остатка зовёт `emitRefundDone`, а
+  `PurchaseNotices` пишет `purchase_support:refunded:покупка`. Тестовая оплата,
+  неиспользованный второй шанс, внешний возврат, лишняя оплата и повтор
+  задания сообщений не дают.
 
 ## 5. Топология развёртывания
 

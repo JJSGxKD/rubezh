@@ -7,6 +7,7 @@ import { ChannelMemberships } from "./ports/channel-membership.js";
 import { LaunchVerifiers } from "./ports/launch-verifier.js";
 import { Messengers } from "./ports/messenger.js";
 import { PaymentProviders } from "./ports/payment-provider.js";
+import { PaymentStatements } from "./ports/payment-statement.js";
 import { MessagePreparers } from "./ports/prepared-message.js";
 import { TELEGRAM_BOT_API, type TelegramBotApi } from "./telegram/telegram-bot-api.js";
 import { BotIdentity } from "./telegram/bot-identity.js";
@@ -15,6 +16,7 @@ import { SettingsLinkOrigin } from "./telegram/settings-link-origin.js";
 import { TELEGRAM_LINK_ORIGIN, fixedLinkOrigin, type LinkOrigin } from "./telegram/telegram-link-format.js";
 import { TelegramBotMention } from "./telegram/telegram-bot-mention.js";
 import { TelegramChannelMembership, type MembershipBotApi } from "./telegram/telegram-channel-membership.js";
+import { TelegramStarStatement } from "./telegram/telegram-star-statement.js";
 import { TelegramStarsProvider } from "./telegram/telegram-stars-provider.js";
 import { TelegramLaunchVerifier } from "./telegram/telegram-launch-verifier.js";
 import { TelegramMessagePreparer } from "./telegram/telegram-message-preparer.js";
@@ -38,6 +40,11 @@ export function launchVerifiersFor(config: AppConfig): LaunchVerifiers {
 /** Оплата: у Telegram — звёзды; у MAX и VK способов оплаты пока нет, и продажа там не предлагается. */
 export function paymentProvidersFor(config: AppConfig, telegramApi: TelegramBotApi): PaymentProviders {
   return new PaymentProviders([new TelegramStarsProvider(telegramApi, config.telegram.updates !== "off")]);
+}
+
+/** Выписка площадки для сверки оплат (Р209): пока только звёзды Telegram, и только при токене бота — без него читать нечего. */
+export function paymentStatementsFor(config: AppConfig, telegramApi: TelegramBotApi): PaymentStatements {
+  return new PaymentStatements(config.telegram.botToken === "" ? [] : [new TelegramStarStatement(telegramApi)]);
 }
 
 /** Подписка на канал для заданий (Р52): пока только Telegram — у MAX и VK ботов ещё нет. */
@@ -75,6 +82,7 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
   providers: [
     { provide: LaunchVerifiers, inject: [APP_CONFIG], useFactory: launchVerifiersFor },
     { provide: PaymentProviders, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentProvidersFor },
+    { provide: PaymentStatements, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: paymentStatementsFor },
     { provide: TELEGRAM_LINK_ORIGIN, inject: [SETTINGS_READER], useFactory: linkOriginFor },
     { provide: AppLinks, inject: [BotIdentity, TELEGRAM_LINK_ORIGIN], useFactory: appLinksFor },
     { provide: Messengers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messengersFor },
@@ -82,6 +90,6 @@ export function messengersFor(config: AppConfig, telegramApi: TelegramBotApi): M
     { provide: BotMentions, inject: [APP_CONFIG, TELEGRAM_BOT_API, BotIdentity], useFactory: botMentionsFor },
     { provide: MessagePreparers, inject: [APP_CONFIG, TELEGRAM_BOT_API], useFactory: messagePreparersFor },
   ],
-  exports: [LaunchVerifiers, PaymentProviders, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, BotMentions, MessagePreparers],
+  exports: [LaunchVerifiers, PaymentProviders, PaymentStatements, AppLinks, TELEGRAM_LINK_ORIGIN, Messengers, ChannelMemberships, BotMentions, MessagePreparers],
 })
 export class PlatformsModule {}

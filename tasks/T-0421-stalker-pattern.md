@@ -3,8 +3,8 @@ id: T-0421
 title: Паттерн неубиваемого преследователя — толчки вместо урона, тяжёлое касание
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []

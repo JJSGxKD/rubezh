@@ -3,8 +3,8 @@ id: T-0436
 title: Сообщение игроку о компенсации и возврате звёзд — в игре и в боте
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0435]
@@ -34,7 +34,7 @@ batch: 4
 
 # T-0436. Сообщение игроку о компенсации и возврате звёзд — в игре и в боте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0436.json)](README.md#значки-статуса) [![T-0435](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0435.json&label=T-0435)](T-0435-purchase-compensation-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0436.json)](README.md#значки-статуса) [![T-0435](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0435.json&label=T-0435)](archive/T-0435-purchase-compensation-server.md)
 
 ## Зачем
 

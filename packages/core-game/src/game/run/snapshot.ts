@@ -8,6 +8,7 @@ import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
 import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
+import { resetStalkerBody, type StalkerBodyState } from "../sim/stalker-body";
 import type { Spawner } from "../sim/spawner";
 import type { World } from "../sim/world";
 
@@ -29,7 +30,7 @@ import type { World } from "../sim/world";
  */
 
 /** Меняется при любой правке формата: старый снимок тогда не читается, а не читается криво. */
-export const WORLD_SNAPSHOT_VERSION = 17;
+export const WORLD_SNAPSHOT_VERSION = 18;
 
 export class SnapshotError extends Error {
   constructor(message: string) {
@@ -75,6 +76,13 @@ interface SiteSnapshot {
   wave: { slot: number; type: number }[];
   /** разлом Нави: сколько тиков идёт волна — отсчёт срока */
   waveTicks: number;
+  /** огонёк: сделано шагов; чётность — сторона следующего отклонения */
+  hops: number;
+  /** огонёк: летит к точке шага */
+  flying: boolean;
+  /** огонёк: куда летит */
+  hopX: number;
+  hopY: number;
 }
 
 /**
@@ -84,10 +92,15 @@ interface SiteSnapshot {
  */
 interface SecretsSnapshot {
   rng: number;
+  /** поток отклонений огонька */
+  wispRng: number;
   sites: SiteSnapshot[];
   offer: { siteIndex: number; options: string[] } | null;
   blessings: string[];
 }
+
+/** Динамическая часть тела преследователя; окно толчков — обычным массивом чисел. */
+type StalkerBodySnapshot = Omit<StalkerBodyState, "pushWindow" | "rules" | "typeIndex"> & { pushWindow: number[] };
 
 /** Состояние осады; журнал событий для сцены (`log`) в снимок не входит. */
 type SiegeSnapshot = Omit<SiegeState, "rng" | "log"> & { rng: number };
@@ -117,6 +130,11 @@ export interface WorldSnapshot {
   cordon?: Omit<CordonState, "ended">;
   /** осада стоящего: поток, якорь, счётчик, уровень, перезарядка; в снимках без поля осада начинается заново (T-0392) */
   siege?: SiegeSnapshot;
+  /**
+   * Тело неубиваемого преследователя: слот, окно и серия толчков, таймеры касания; правила и тип не входят
+   * (мир создаётся из того же контента). В снимках без поля преследователя нет (T-0421)
+   */
+  stalkerBody?: StalkerBodySnapshot;
   /**
    * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
    * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
@@ -155,6 +173,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     chest: { rng: world.chests.rng.getState(), dropped: world.chests.dropped, opened: world.chests.opened },
     secrets: capturedSecrets(world),
     siege: capturedSiege(world.siege),
+    stalkerBody: capturedStalkerBody(world.stalkerBody),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
     rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
@@ -180,7 +199,8 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
 
   world.rng.setState(asNumber(snapshot.rng, "rng"));
   world.cardRng.setState(asNumber(snapshot.cardRng, "cardRng"));
-  assignNumbers(world.player, snapshot.player, "player");
+  // Снимок до отброса преследователя полей отброса не знает: игрок стоит, а не ошибка чтения.
+  assignNumbers(world.player, { knockbackTicks: 0, knockbackVx: 0, knockbackVy: 0, ...asRecord(snapshot.player, "player") }, "player");
   world.player.alive = asBoolean(asRecord(snapshot.player, "player").alive, "player.alive");
   assignNumbers(world.playerStats, snapshot.playerStats, "playerStats");
   assignNumbers(world.playerStatsBase, snapshot.playerStatsBase, "playerStatsBase");
@@ -207,6 +227,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   restoreHunt(world, snapshot.hunt);
   restoreSecrets(world, snapshot.secrets);
   restoreSiege(world, snapshot.siege);
+  restoreStalkerBody(world, snapshot.stalkerBody);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
@@ -276,6 +297,7 @@ function capturedSecrets(world: World): SecretsSnapshot {
   const secrets = world.secrets;
   return {
     rng: secrets.rng.getState(),
+    wispRng: secrets.wispRng.getState(),
     sites: secrets.sites.map((site) => ({
       kind: site.kind,
       x: site.x,
@@ -289,6 +311,10 @@ function capturedSecrets(world: World): SecretsSnapshot {
       opened: site.opened,
       wave: site.wave.map((entry) => ({ slot: entry.slot, type: entry.type })),
       waveTicks: site.waveTicks,
+      hops: site.hops,
+      flying: site.flying,
+      hopX: site.hopX,
+      hopY: site.hopY,
     })),
     offer: secrets.offer === null ? null : { siteIndex: secrets.offer.siteIndex, options: [...secrets.offer.options] },
     blessings: [...secrets.blessings],
@@ -333,9 +359,14 @@ function restoreSecrets(world: World, input: unknown): void {
         };
       }),
       waveTicks: asNumber(site.waveTicks, `secrets.sites[${i}].waveTicks`),
+      hops: asNumber(site.hops, `secrets.sites[${i}].hops`),
+      flying: asBoolean(site.flying, `secrets.sites[${i}].flying`),
+      hopX: asNumber(site.hopX, `secrets.sites[${i}].hopX`),
+      hopY: asNumber(site.hopY, `secrets.sites[${i}].hopY`),
     };
   });
   const rng = asNumber(raw.rng, "secrets.rng");
+  const wispRng = asNumber(raw.wispRng, "secrets.wispRng");
   const blessings = asArray(raw.blessings, "secrets.blessings").map((id, i) => asString(id, `secrets.blessings[${i}]`));
   let offer: SecretsSnapshot["offer"] = null;
   if (raw.offer !== null) {
@@ -347,6 +378,7 @@ function restoreSecrets(world: World, input: unknown): void {
   }
 
   secrets.rng.setState(rng);
+  secrets.wispRng.setState(wispRng);
   parsed.forEach((state, i) => Object.assign(secrets.sites[i], state));
   secrets.offer = offer;
   // Журналы — для сцены: после восстановления она начинает с чистого, событие не повторяется.
@@ -426,6 +458,50 @@ function restoreSiege(world: World, input: unknown): void {
   };
   state.rng.setState(asNumber(raw.rng, "siege.rng"));
   Object.assign(state, restored);
+}
+
+function capturedStalkerBody(state: StalkerBodyState): StalkerBodySnapshot {
+  return {
+    slot: state.slot,
+    pushWindow: Array.from(state.pushWindow),
+    pushCursor: state.pushCursor,
+    pushWindowSum: state.pushWindowSum,
+    seriesFactor: state.seriesFactor,
+    lastPushTick: state.lastPushTick,
+    touchCooldownTicks: state.touchCooldownTicks,
+    recoverTicks: state.recoverTicks,
+  };
+}
+
+/**
+ * Тело преследователя. Отсутствие поля — снимок до него: версию формата не поднимали, старый снимок
+ * читается, и преследователя в нём нет. Слот сверяется с пулом: он обязан быть слотом пула или −1.
+ */
+function restoreStalkerBody(world: World, input: unknown): void {
+  const state = world.stalkerBody;
+  resetStalkerBody(state);
+  if (input === undefined) return;
+
+  const raw = asRecord(input, "stalkerBody");
+  const window = asArray(raw.pushWindow, "stalkerBody.pushWindow");
+  if (window.length !== state.pushWindow.length) {
+    throw new SnapshotError(`stalkerBody.pushWindow: ${window.length} значений вместо ${state.pushWindow.length}`);
+  }
+  const values = window.map((value, i) => asNumber(value, `stalkerBody.pushWindow[${i}]`));
+  const slot = asNumber(raw.slot, "stalkerBody.slot");
+  if (!Number.isInteger(slot) || slot < -1 || slot >= world.config.maxEnemies) {
+    throw new SnapshotError(`stalkerBody.slot: ${slot} вне [-1, ${world.config.maxEnemies})`);
+  }
+  const cursor = asCount(raw.pushCursor, "stalkerBody.pushCursor", state.pushWindow.length - 1);
+
+  state.slot = slot;
+  state.pushWindow.set(values);
+  state.pushCursor = cursor;
+  state.pushWindowSum = asNumber(raw.pushWindowSum, "stalkerBody.pushWindowSum");
+  state.seriesFactor = asNumber(raw.seriesFactor, "stalkerBody.seriesFactor");
+  state.lastPushTick = asNumber(raw.lastPushTick, "stalkerBody.lastPushTick");
+  state.touchCooldownTicks = asCount(raw.touchCooldownTicks, "stalkerBody.touchCooldownTicks");
+  state.recoverTicks = asCount(raw.recoverTicks, "stalkerBody.recoverTicks");
 }
 
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {

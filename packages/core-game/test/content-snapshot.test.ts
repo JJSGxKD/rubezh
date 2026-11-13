@@ -85,6 +85,7 @@ describe("снимок контента: состав и хэш", () => {
       "limits",
       "pressure",
       "siege",
+      "stalker",
       "balanceTargets",
     ]);
   });
@@ -209,6 +210,16 @@ describe("схема снимка", () => {
     // Вид тайника в весах кольца — только из мест: огонёк в кольцо не бросается.
     const wispRing = raw({ ...SECRETS, rings: [{ ...SECRETS.rings[0], kinds: [{ kind: "wisp", weight: 1 }] }, ...SECRETS.rings.slice(1)] });
     expect(contentSnapshotSchema.safeParse(wispRing).success).toBe(false);
+  });
+
+  it("старый снимок без полей шага огонька разбирается с умолчаниями (Р214, Р160)", () => {
+    const old = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { appearSec: 90, speed: 80 } } })) as unknown;
+    const parsed = contentSnapshotSchema.safeParse(old);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.secrets.wisp).toEqual({ appearSec: 90, speed: 80, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 });
+    // Лишнее поле в огоньке по-прежнему отказ: схема строгая.
+    const extra = JSON.parse(JSON.stringify({ ...CONTENT_SNAPSHOT, secrets: { ...SECRETS, wisp: { ...SECRETS.wisp, hops: 3 } } })) as unknown;
+    expect(contentSnapshotSchema.safeParse(extra).success).toBe(false);
   });
 
   it("подстройка в схеме: принимает умолчание, ловит лишнее поле и пропажу раздела", () => {

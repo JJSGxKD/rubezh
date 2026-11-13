@@ -534,6 +534,8 @@ export interface EnemyPatternParams {
   };
   /** Страж кольца держит место в строю; числа кольца — у события таймлайна, а не у врага. */
   cordon: Record<string, never>;
+  /** Неубиваемый преследователь (Р205): числа тела — `core-game/src/content/stalker.ts`, а не у врага. */
+  stalker: Record<string, never>;
 }
 
 export type EnemyPattern = keyof EnemyPatternParams;
@@ -1269,8 +1271,14 @@ export interface SecretsDef {
    * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
    */
   rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
-  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
-  wisp: { appearSec: number; speed: number };
+  /**
+   * огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и
+   * ведёт к ближайшему неоткрытому шагами (Р214): перелёт длиной `hopUnits` в сторону цели со
+   * скоростью `speed` и боковым отклонением `swayMin…swayMax` долей шага, каждый следующий шаг — в
+   * другую сторону; после посадки ждёт, пока игрок не подойдёт ближе `waitUnits`; последний шаг
+   * идёт прямо к краю круга цели. Нет неоткрытых мест — гаснет
+   */
+  wisp: { appearSec: number; speed: number; hopUnits: number; swayMin: number; swayMax: number; waitUnits: number };
   /** набор благословений капища */
   blessings: readonly BlessingDef[];
 }
@@ -1301,6 +1309,39 @@ export interface SiegeDef {
   cordon: { enemy: string; count: number; ring: CordonRingDef };
   /** сколько элит выходит кольцом на нулевом уровне; типы — те, что таймлайн к этой секунде уже выпускал */
   eliteCount: number;
+}
+
+/**
+ * Тело неубиваемого преследователя (docs/35-stage4-plan.md, Р205, tasks/T-0421): удары оружия его
+ * не убивают, а отталкивают, а касание снимает долю здоровья и отбрасывает игрока. Расстояния — в
+ * игровых единицах, время — в секундах.
+ */
+export interface StalkerBodyDef {
+  /** доля максимума здоровья игрока за одно касание, мимо брони и сопротивлений */
+  touchMaxHpShare: number;
+  /** отброс игрока после касания: на сколько единиц и за сколько секунд */
+  knockback: { distance: number; sec: number };
+  /** сколько после касания он не бьёт снова */
+  touchCooldownSec: number;
+  /** сколько после касания он стоит на месте */
+  recoverSec: number;
+  push: {
+    /** первый толчок серии, единиц */
+    first: number;
+    /** каждый следующий толчок серии — предыдущий, умноженный на это */
+    decay: number;
+    /** столько секунд без попаданий — серия сначала */
+    seriesResetSec: number;
+    /** за любые 60 тиков подряд — не дальше этого, единиц */
+    maxPerSec: number;
+  };
+}
+
+/** Правила преследователя целиком: какой враг им служит и как устроено его тело. */
+export interface StalkerDef {
+  /** id врага паттерна `stalker` */
+  enemy: string;
+  body: StalkerBodyDef;
 }
 
 /** Какие виды тайников забег нашёл и использовал: без повторов, в каноническом порядке. */
@@ -1988,7 +2029,7 @@ export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  best: Record<DifficultyId, { survivalSec: number; rank: number; points?: number | null } | null>;
   recent: RecentRun[];
   /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
   prologueDone?: boolean;
