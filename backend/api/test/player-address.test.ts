@@ -45,6 +45,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/proxies/subscription/",
   // контент и баланс (T-0303): версии, черновики, проверка — раздел панели, тексты сотруднику
   "modules/content/",
+  // заявки на правку цен (T-0309): раздел панели, тексты сотруднику
+  "modules/change-requests/",
   "modules/media/image-rules.ts",
   "modules/media/media-errors.ts",
   "modules/promo-codes/promo-code-rules.ts",

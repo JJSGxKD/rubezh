@@ -29,6 +29,7 @@ shared:
   - backend/api/src/modules/notifications/notification-kinds.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/player-address.test.ts
   - apps/admin/src/screens/balance/BalanceScreen.tsx
   - apps/admin/src/screens/balance/BalanceWorkspace.tsx
   - packages/app-shell/src/screens/meta/notifications.tsx
