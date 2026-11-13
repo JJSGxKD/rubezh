@@ -119,3 +119,31 @@ export function patchDraft(api: AdminApi, draftId: string, path: string, value: 
 export function fetchDiff(api: AdminApi, draftId: string): Promise<ApiResult<DraftDiff>> {
   return api.request(`${ADMIN_CONTENT}/drafts/${encodeURIComponent(draftId)}/diff`, { schema: diffSchema });
 }
+
+/** Статусы проверки: `queued` — ещё считается, остальные — конец (tasks/T-0303). */
+export const checkStatusSchema = z.enum(["queued", "done", "failed", "timeout"]);
+export type CheckStatus = z.infer<typeof checkStatusSchema>;
+
+const checkViewSchema = z.object({
+  checkId: z.string(),
+  draftId: z.string(),
+  /** хэш снимка, который проверяли: сменился хэш черновика — прогон устарел */
+  snapshotHash: z.string(),
+  status: checkStatusSchema,
+  /** итог воркера как есть: форму разбирает экран проверки (`screens/balance/check`) */
+  report: z.unknown(),
+  createdAt: dateText,
+});
+export type CheckView = z.infer<typeof checkViewSchema>;
+
+const startedCheckSchema = z.object({ check: checkViewSchema, reused: z.boolean() });
+export type StartedCheck = z.infer<typeof startedCheckSchema>;
+
+/** Поставить проверку черновика: тот же снимок, что уже считали, отдаёт прошлый итог. */
+export function startCheck(api: AdminApi, draftId: string): Promise<ApiResult<StartedCheck>> {
+  return api.request(`${ADMIN_CONTENT}/drafts/${encodeURIComponent(draftId)}/check`, { method: "POST", body: {}, schema: startedCheckSchema });
+}
+
+export function fetchCheck(api: AdminApi, checkId: string): Promise<ApiResult<CheckView>> {
+  return api.request(`${ADMIN_CONTENT}/checks/${encodeURIComponent(checkId)}`, { schema: checkViewSchema });
+}

@@ -137,6 +137,24 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { kind: "cordon", enemy: "cordon_guard", count: 60, ring: { radius: 300, minRadius: 120, shrinkPerSec: 3.3, lifeSec: 50 } },
     ],
   },
+  {
+    // Болотник показывается отдельно, до смеси кривой: игрок должен успеть понять, что
+    // лужи за ним — зона, из которой уходят, а не декор. Состав 300-й секунды плюс он; события
+    // отрезка уже отыграли, поэтому здесь их нет. Бюджет угрозы отрезка 13,4: не ниже 300-го
+    // (13,0) и не выше кривой, которая начинается на 330-й (14,4). Состав подобран калибровкой
+    // сильного бота и лесенки профилей (docs/32-balance.md §2.2): медиана тридцати забегов
+    // прыгает на десятки секунд от любой правки расписания, и прежние варианты выходили за
+    // коридоры полного арсенала, сборки набора или осады.
+    fromSec: 315,
+    spawns: [
+      { enemy: "swarm_rat", perSec: 3 },
+      { enemy: "circler_crow", perSec: 1.4 },
+      { enemy: "rushing_bats", perSec: 1.2 },
+      { enemy: "bone_walker", perSec: 0.7 },
+      { enemy: "dasher_wolf", perSec: 0.3 },
+      { enemy: "bog_lurker", perSec: 0.4, burst: 3 },
+    ],
+  },
 ];
 
 /**
@@ -171,6 +189,9 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     "tank_ghoul",
     "bone_walker",
     "mire_shambler",
+    // Болотник стоит перед Ледяным духом: место в пуле подобрано калибровкой (двигает только
+    // забеги дольше 690-й секунды, docs/32-balance.md §2.2).
+    "bog_lurker",
     "ice_spirit",
   ],
   startTypes: 5,

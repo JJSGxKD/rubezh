@@ -10,7 +10,9 @@ import { TabBar } from "../../ui/tab-bar";
 import { toastError } from "../../ui/toast";
 import { useNarrow } from "../../ui/use-media";
 import type { CellContext } from "./balance-cells";
-import { afterPatch, describePath, indexChanges, mergeChange, revertOf, type EditorState } from "./balance-rules";
+import { CheckPanel, CheckRails } from "./check/CheckPanel";
+import { useCheck } from "./check/use-check";
+import { afterPatch, describeChange, describePath, indexChanges, mergeChange, revertOf, type EditorState } from "./balance-rules";
 import { parseSnapshot } from "./balance-snapshot";
 import { TABS, isTabId, tabOfPath, tablesFor, type TabId } from "./balance-tables";
 import { BalanceTable } from "./BalanceTable";
@@ -69,6 +71,10 @@ export function BalanceWorkspace({
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
+  // Хэш снимка черновика и последняя правка: по ним проверка узнаёт, что прогон устарел (tasks/T-0305).
+  const [hash, setHash] = useState(draft?.snapshotHash ?? "");
+  const [lastEdit, setLastEdit] = useState<string | null>(null);
+  const check = useCheck(draft?.draftId ?? null, hash, draft?.lastCheck ?? null);
 
   const parsed = useMemo(() => parseSnapshot(editor.snapshot), [editor.snapshot]);
   const changeIndex = useMemo(() => indexChanges(changes), [changes]);
@@ -80,7 +86,11 @@ export function BalanceWorkspace({
     const result = await patchDraft(api, draft.draftId, path, value);
     setBusyPath((current) => (current === path ? null : current));
     setEditor((previous) => afterPatch(previous, { path, typed, wasText }, result, names));
-    if (result.ok) setChanges((previous) => mergeChange(previous, result.data));
+    if (result.ok) {
+      setChanges((previous) => mergeChange(previous, result.data));
+      setHash(result.data.snapshotHash);
+      if (result.data.changed) setLastEdit(describeChange({ path, from: result.data.from, to: result.data.to }, editor.snapshot, names));
+    }
     // Отказ формы — строка под записью; всё остальное (связь, права, лимит) строкой не объяснить.
     else if (result.error.kind !== "rejected") toastError(result.error);
   };
@@ -94,6 +104,8 @@ export function BalanceWorkspace({
     if (result.ok) {
       setEditor((previous) => afterPatch(previous, { path: change.path, typed: "", wasText: "" }, result, names));
       setChanges((previous) => mergeChange(previous, result.data));
+      setHash(result.data.snapshotHash);
+      setLastEdit(`${describePath(change.path, editor.snapshot, names)}: вернули прежнее`);
     } else toastError(result.error);
   };
 
@@ -181,9 +193,7 @@ export function BalanceWorkspace({
             Правки · {changeCount}
           </Button>
         )}
-        <Button disabled title="Проверка симуляцией и коридорами — следующим шагом">
-          Проверить
-        </Button>
+        {draft === null ? null : <CheckRails rails={check.rails} />}
       </div>
 
       {narrow && !onPrices ? <Notice tone="info">На телефоне баланс только читается: править таблицу чисел на узком экране — способ ошибиться.</Notice> : null}
@@ -197,24 +207,40 @@ export function BalanceWorkspace({
       {onPrices ? (
         <PricesTab />
       ) : (
-        <div className="flex min-w-0 flex-col gap-4">
-          {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
-          {draft !== null && sheetOpen ? (
-            <EditsSheet
-              changes={changes}
-              truncated={diff?.truncated === true}
-              snapshot={editor.snapshot}
-              names={names}
-              canEdit={canEdit && !narrow}
-              busyPath={busyPath}
-              onRevert={(change) => void revert(change)}
-              onClose={() => setSheetOpen(false)}
+        <div className={draft === null ? "flex min-w-0 flex-col gap-4" : "grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]"}>
+          <div className="flex min-w-0 flex-col gap-4">
+            {parsed.ok ? tablesFor(tab, parsed.snapshot, names).map((model) => <BalanceTable key={model.key} model={model} ctx={ctx} />) : <Notice>{parsed.message}</Notice>}
+            {draft !== null && sheetOpen ? (
+              <EditsSheet
+                changes={changes}
+                truncated={diff?.truncated === true}
+                snapshot={editor.snapshot}
+                names={names}
+                canEdit={canEdit && !narrow}
+                busyPath={busyPath}
+                onRevert={(change) => void revert(change)}
+                onClose={() => setSheetOpen(false)}
+                onGo={(path) => {
+                  const owner = tabOfPath(path);
+                  if (owner !== null) selectTab(owner);
+                }}
+              />
+            ) : null}
+          </div>
+          {draft === null ? null : (
+            <CheckPanel
+              versionNo={version.versionNo}
+              check={check}
+              canEdit={canEdit}
+              lastEdit={lastEdit}
               onGo={(path) => {
                 const owner = tabOfPath(path);
-                if (owner !== null) selectTab(owner);
+                if (owner === null) return false;
+                selectTab(owner);
+                return true;
               }}
             />
-          ) : null}
+          )}
         </div>
       )}
 
