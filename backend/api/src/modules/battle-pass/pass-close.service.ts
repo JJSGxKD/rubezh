@@ -149,7 +149,7 @@ export class PassCloseService {
   private async closeMonth(month: string, now: Date, lock: HeldLock): Promise<PassClosed | null> {
     const { startsAt, endsAt } = monthBounds(month);
     const pointsPerTier = this.settings.get(SETTINGS.passPointsPerTier);
-    const ribbon = await this.ribbon(month);
+    const ribbon = await this.ribbon(month, now);
     const total = { accounts: 0, rewards: 0, failed: 0 };
     let after = FIRST_ACCOUNT;
     for (;;) {
@@ -284,8 +284,8 @@ export class PassCloseService {
   }
 
   /** Лента месяца — как у ручного забора: из базы, если проходит схему, иначе по умолчанию. */
-  private async ribbon(month: string): Promise<readonly PassTierDef[]> {
-    const stored = await this.timed(this.pass.season(month));
+  private async ribbon(month: string, at: Date): Promise<readonly PassTierDef[]> {
+    const stored = await this.timed(this.pass.season(month, at));
     if (stored === null) return DEFAULT_RIBBON;
     const parsed = passRibbonSchema.safeParse(stored);
     if (parsed.success) return parsed.data;

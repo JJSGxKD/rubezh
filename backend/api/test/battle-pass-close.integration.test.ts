@@ -349,12 +349,24 @@ describe.skipIf(DATABASE_URL === "")("закрытие месяца пасса �
       const month = await freeMonth();
       const { closeAt } = times(month);
       const custom = DEFAULT_RIBBON.map((tier) => (tier.tier === 1 ? { ...tier, free: { coins: 777 } satisfies PassReward } : tier));
-      await prisma.$executeRaw`INSERT INTO pass_season (month_key, tiers, published_at) VALUES (${month}, ${JSON.stringify(custom)}::jsonb, now())`;
+      await prisma.$executeRaw`INSERT INTO pass_season (month_key, tiers, published_at) VALUES (${month}, ${JSON.stringify(custom)}::jsonb, ${new Date(closeAt.getTime() - DAY)})`;
       const me = await reached(1, month);
 
       await replica().closeDue(closeAt);
 
       expect(await ledger(me.accountId, month)).toEqual({ coins: { count: 1, amount: 777 } });
+    }, RACE_TIMEOUT_MS);
+
+    it("лента, опубликованная после закрытия, не действует: игрок видел ленту по умолчанию (T-0313)", async () => {
+      const month = await freeMonth();
+      const { closeAt } = times(month);
+      const custom = DEFAULT_RIBBON.map((tier) => (tier.tier === 1 ? { ...tier, free: { coins: 777 } satisfies PassReward } : tier));
+      await prisma.$executeRaw`INSERT INTO pass_season (month_key, tiers, published_at) VALUES (${month}, ${JSON.stringify(custom)}::jsonb, ${new Date(closeAt.getTime() + DAY)})`;
+      const me = await reached(1, month);
+
+      await replica().closeDue(closeAt);
+
+      expect(await ledger(me.accountId, month)).not.toEqual({ coins: { count: 1, amount: 777 } });
     }, RACE_TIMEOUT_MS);
 
     it("бусты-подарки ступеней 5, 15 и 25 выдаются по одному, а повторное закрытие их не удваивает", async () => {
