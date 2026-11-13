@@ -8,6 +8,7 @@ import { createRunWorld } from "../run-world";
 import { checksumWorld } from "../sim/checksum";
 import { applyContinue } from "../sim/continue";
 import { settleCordonDeath } from "../sim/cordon";
+import { settleStalkerDeath } from "../sim/stalker";
 import { inputOfCode } from "../sim/input-code";
 import { chooseBlessing, isAwaitingBlessing } from "../sim/secrets";
 import { stepWorld, type SimInput } from "../sim/step";
@@ -164,6 +165,7 @@ export function replayRecording(recording: ReplaySource, contentHash: string = C
     checkCheckpoint();
     // Как в сцене: смерть закрывает кольцо стражей после шага и после свёртки тика.
     settleCordonDeath(world);
+    settleStalkerDeath(world);
   }
   const trailing = applyChoices();
   if (trailing !== null) return verdict("mismatch", trailing, resultOf(), divergedAtTick ?? world.stats.tick);

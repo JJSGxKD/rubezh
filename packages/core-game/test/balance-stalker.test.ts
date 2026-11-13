@@ -80,7 +80,7 @@ describe("шина сцены: stalkerEnded", () => {
   it("сцена раздаёт весь журнал появлений и очищает его, чтобы запись не ушла дважды", () => {
     expect(SCENE_SOURCE).toMatch(/emit\("stalkerEnded",\s*ended\)/);
     expect(SCENE_SOURCE).toContain("settleStalkerDeath(this.world)");
-    expect(SCENE_SOURCE).toMatch(/stalker\.ended\.length = 0/);
+    expect(SCENE_SOURCE).toMatch(/journal\.length = 0/);
     // Раздача идёт в обоих циклах шагов: боевом и пошаговой паузе.
     expect(SCENE_SOURCE.match(/this\.emitStalkerEvents\(\)/g)?.length).toBe(2);
   });
