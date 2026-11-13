@@ -10,13 +10,14 @@ import {
   errorLine,
   formatValue,
   indexChanges,
+  mergeChange,
   parsePath,
   readAtPath,
   revertOf,
   setAtPath,
 } from "../src/screens/balance/balance-rules";
 import { parseSnapshot } from "../src/screens/balance/balance-snapshot";
-import { TABS, cellPaths, tablesFor, type CellModel } from "../src/screens/balance/balance-tables";
+import { TABS, cellPaths, tabOfPath, tablesFor, type CellModel } from "../src/screens/balance/balance-tables";
 import { SECTIONS, SECTION_GROUPS } from "../src/routes";
 import { fakeFetch, json } from "./helpers";
 
@@ -324,6 +325,35 @@ describe("ошибка сервера под записью", () => {
     expect(calls[0]?.url).toBe("/api/v1/admin/content/drafts/5f1f2a0e-6f3b-4c58-8a7e-0b6a5b0f1c11");
     expect(calls[0]?.init.method).toBe("PATCH");
     expect(JSON.parse(String(calls[0]?.init.body))).toEqual({ path: "enemies[id=dasher_wolf].damage", value: 0 });
+  });
+});
+
+describe("список правок после ответа", () => {
+  const result = (path: string, from: unknown, to: unknown, changed = true) => ({ draftId: "d", path, from, to, changed, snapshotHash: "h", updatedAt: "2026-11-01T00:00:00.000Z" });
+  const path = "enemies[id=dasher_wolf].damage";
+
+  it("новая правка встаёт в конец, прежнее число — из ответа", () => {
+    expect(mergeChange([], result(path, 7, 9))).toEqual([{ path, from: 7, to: 9 }]);
+  });
+
+  it("вторая правка той же ячейки хранит прежним число из основы, а не промежуточное", () => {
+    expect(mergeChange([{ path, from: 7, to: 9 }], result(path, 9, 11))).toEqual([{ path, from: 7, to: 11 }]);
+  });
+
+  it("вернули к основе — правки больше нет; то же число — список не меняется", () => {
+    expect(mergeChange([{ path, from: 7, to: 9 }], result(path, 9, 7))).toEqual([]);
+    const same = [{ path, from: 7, to: 9 }];
+    expect(mergeChange(same, result(path, 9, 9, false))).toEqual(same);
+  });
+});
+
+describe("раздел по пути", () => {
+  it("каждый корень снимка ведёт в свою вкладку; незнакомый — никуда", () => {
+    expect(tabOfPath("enemies[id=swarm_rat].hp")).toBe("enemies");
+    expect(tabOfPath("endlessCurve.maxAlive")).toBe("timeline");
+    expect(tabOfPath("chests.sizes[0].weight")).toBe("drops");
+    expect(tabOfPath("difficulties[0].enemyHpMul")).toBe("xp");
+    expect(tabOfPath("somethingNew.x")).toBeNull();
   });
 });
 

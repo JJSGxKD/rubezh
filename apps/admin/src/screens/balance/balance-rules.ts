@@ -430,3 +430,17 @@ export function afterPatch(state: EditorState, input: PatchInput, result: ApiRes
 export function errorLine(error: CellError): string {
   return `${error.message.replace(/\.$/, "")}. Было ${error.was}.`;
 }
+
+/**
+ * Список правок после принятой правки, без повторного запроса разницы: ячейка
+ * вернулась к прежнему числу — правки больше нет, число сменилось ещё раз —
+ * прежнее остаётся тем, что было в основе, а новое заменяет промежуточное.
+ */
+export function mergeChange(changes: readonly DraftChange[], result: PatchResult): DraftChange[] {
+  if (!result.changed) return [...changes];
+  const existing = changes.find((change) => change.path === result.path);
+  const from = existing === undefined ? result.from : existing.from;
+  if (JSON.stringify(from) === JSON.stringify(result.to)) return changes.filter((change) => change.path !== result.path);
+  const next: DraftChange = { path: result.path, from, to: result.to };
+  return existing === undefined ? [...changes, next] : changes.map((change) => (change.path === result.path ? next : change));
+}

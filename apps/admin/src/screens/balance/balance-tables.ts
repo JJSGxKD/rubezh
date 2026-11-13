@@ -124,7 +124,7 @@ function enemiesTable(snapshot: BalanceSnapshot, names: Names): TableModel {
   });
   return {
     key: "enemies",
-    columns: [col("name", "Враг", "enemy", false), col("hp", "Здоровье", "hp"), col("speed", "Скорость", "speed"), col("damage", "Урон", "damage"), col("xp", "Опыт", "xp"), col("threat", "Угроза", "threat"), col("pattern", "Поведение", "pattern", false), col("resist", "Стойкость", "resist", false)],
+    columns: [col("name", "Враг", undefined, false), col("hp", "Здоровье", "hp"), col("speed", "Скорость", "speed"), col("damage", "Урон", "damage"), col("xp", "Опыт", "xp"), col("threat", "Угроза", "threat"), col("pattern", "Поведение", "pattern", false), col("resist", "Стойкость", "resist", false)],
     rows,
   };
 }
@@ -134,7 +134,7 @@ function enemiesTable(snapshot: BalanceSnapshot, names: Names): TableModel {
 function stagesTable(snapshot: BalanceSnapshot, names: Names): TableModel {
   return {
     key: "stages",
-    columns: [col("name", "Ступень", "stage", false), col("fromSec", "С секунды", "stageFrom"), col("weight", "Вес", "stageWeight"), col("hp", "Здоровье ×", "stageMul"), col("damage", "Урон ×", "stageMul"), col("speed", "Скорость ×", "stageMul"), col("xp", "Опыт ×", "stageMul")],
+    columns: [col("name", "Ступень", undefined, false), col("fromSec", "С секунды", "stageFrom"), col("weight", "Вес", "stageWeight"), col("hp", "Здоровье ×", "stageMul"), col("damage", "Урон ×", "stageMul"), col("speed", "Скорость ×", "stageMul"), col("xp", "Опыт ×", "stageMul")],
     rows: snapshot.stages.map((stage, index) => ({
       key: String(index),
       title: (stage.nameKey === undefined ? undefined : names[stage.nameKey]) ?? `Ступень ${String(index + 1)}`,
@@ -245,7 +245,7 @@ function weaponsTable(snapshot: BalanceSnapshot, names: Names): TableModel {
   return {
     key: "weapons",
     columns: [
-      col("name", "Оружие", "weapon", false),
+      col("name", "Оружие", undefined, false),
       col("damage", "Урон", "weaponDamage"),
       col("cooldown", "Перезарядка, с", "cooldown"),
       col("projectiles", "Снарядов", "projectiles"),
@@ -285,7 +285,7 @@ function passivesTable(snapshot: BalanceSnapshot, names: Names): TableModel {
   const levelColumns = Array.from({ length: depth }, (_, index) => col(`level${String(index)}`, `Ур. ${String(index + 1)}`, "passiveLevels"));
   return {
     key: "passives",
-    columns: [col("name", "Навык", undefined, false), col("category", "Категория", "passiveCategory", false), col("stat", "Что меняет", "passiveStat", false), ...levelColumns],
+    columns: [col("name", "Навык", undefined, false), col("category", "Категория", "passiveCategory", false), col("stat", "Что меняет", undefined, false), ...levelColumns],
     rows: snapshot.passives.map((passive): RowModel => ({
       key: passive.id,
       title: names[passive.nameKey] ?? passive.id,
@@ -415,4 +415,24 @@ export function tablesFor(tab: TabId, snapshot: BalanceSnapshot, names: Names): 
     case "xp":
       return xpTables(snapshot, names);
   }
+}
+
+const TAB_OF_ROOT: Readonly<Record<string, TabId>> = {
+  enemies: "enemies",
+  stages: "stages",
+  timeline: "timeline",
+  endlessCurve: "timeline",
+  weapons: "weapons",
+  passives: "passives",
+  accountUnlocks: "unlocks",
+  drops: "drops",
+  chests: "drops",
+  levelCurve: "xp",
+  difficulties: "xp",
+};
+
+/** В каком разделе лежит ячейка с этим путём; незнакомый корень — `null`. */
+export function tabOfPath(path: string): TabId | null {
+  const root = /^[A-Za-z_][A-Za-z0-9_]*/.exec(path)?.[0];
+  return root === undefined ? null : (TAB_OF_ROOT[root] ?? null);
 }
