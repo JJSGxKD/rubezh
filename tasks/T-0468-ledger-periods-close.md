@@ -3,7 +3,7 @@ id: T-0468
 title: Месяцы учёта — сверка с блокерами, закрытие с водопадом, снятие закрытия
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -24,6 +24,9 @@ shared:
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
   - docs/37-accounting.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/route-permissions.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
