@@ -32,6 +32,6 @@ export class RunsWelcomeProgress implements WelcomeProgressSource, OnModuleInit 
     if (best === null) return { best: null, runs: profile.runs };
     // Глазами игрока: в тени ограничения рейтинга он видит в доске и себя.
     const total = await this.view.boardSize(account.accountId, "hard");
-    return { best: { survivalSec: best.survivalSec, rank: best.rank, total }, runs: profile.runs };
+    return { best: { points: best.points, survivalSec: best.survivalSec, rank: best.rank, total }, runs: profile.runs };
   }
 }

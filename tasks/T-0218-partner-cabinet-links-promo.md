@@ -38,7 +38,7 @@ batch: 4
 
 # T-0218. Кабинет партнёра в панели — свои ссылки и промокоды, доступ из карточки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json)](README.md#значки-статуса) [![T-0217](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0217.json&label=T-0217)](T-0217-partner-role-and-account.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0218.json)](README.md#значки-статуса) [![T-0217](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0217.json&label=T-0217)](archive/T-0217-partner-role-and-account.md)
 
 ## Зачем
 

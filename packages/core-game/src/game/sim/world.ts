@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -6,8 +6,12 @@ import type { LoadoutState } from "../progression/loadout";
 import type { RunBoosts } from "../progression/boosts";
 import type { WeaponType } from "../weapons/weapon-types";
 import type { CordonState } from "./cordon";
+import type { HazardState } from "./hazards";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
+import type { SiegeState } from "./siege";
+import type { StalkerState } from "./stalker";
+import type { StalkerBodyState } from "./stalker-body";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -137,6 +141,13 @@ export interface PlayerState {
   poisonStacks: number;
   poisonDps: number;
   poisonSource: number;
+  /**
+   * Отброс после касания неубиваемого преследователя (`sim/stalker-body.ts`): сколько тиков игрок ещё
+   * летит и с какой скоростью. Пока он идёт, ввод не действует; закончился — скорость ноль, разгон заново.
+   */
+  knockbackTicks: number;
+  knockbackVx: number;
+  knockbackVy: number;
 }
 
 export interface RunStats {
@@ -296,6 +307,13 @@ export interface SecretSite {
   wave: SecretWaveEnemy[];
   /** разлом Нави: сколько тиков идёт волна — по ним отсчитывается срок `timeLimitSec`; остальные виды — ноль */
   waveTicks: number;
+  /** огонёк: сколько шагов сделал — чётность задаёт сторону отклонения следующего; остальные виды — ноль */
+  hops: number;
+  /** огонёк: летит к точке `hopX, hopY`; остальные виды — всегда `false` */
+  flying: boolean;
+  /** огонёк: куда летит, пока `flying`; остальные виды — ноль */
+  hopX: number;
+  hopY: number;
 }
 
 /**
@@ -344,6 +362,11 @@ export interface BlessingOffered {
 export interface SecretState {
   /** собственный поток случайности: `world.rng` тайники не трогают */
   rng: Rng;
+  /**
+   * Отдельный поток отклонений огонька. Шаги зависят от того, как идёт игрок, и из общего потока
+   * тайников сдвигали бы бросок разлома и благословений: раскладка забега не должна зависеть от дороги.
+   */
+  wispRng: Rng;
   sites: SecretSite[];
   /**
    * Элиты, которые таймлайн уже выпускал, по секундам (`buildElitePool`): из них разлом Нави набирает
@@ -444,8 +467,27 @@ export interface World {
   secrets: SecretState;
   /** кольцо стражей: одно за раз, состояние входит в снимок (Р112) */
   cordon: CordonState;
+  /** лужи врагов со следом (`sim/hazards.ts`, Р157); состояние входит в снимок */
+  hazards: HazardState;
   /** рубеж: страж на отметке и победа в итоге; состояние входит в снимок (T-0120) */
   rubezh: RubezhState;
+  /**
+   * осада стоящего (Р197): правила и состояние. Правил нет (`null`) в прологе, на «Лёгкой», в мире без
+   * них (стенды, тесты паттернов) — тогда осада не идёт. Состояние входит в снимок
+   */
+  siegeRules: SiegeDef | null;
+  siege: SiegeState;
+  /**
+   * тело неубиваемого преследователя (Р205): правила, слот, серия толчков, таймеры касания. Правил в мире
+   * нет (`rules: null`) — преследователя не выпустить. Динамическая часть входит в снимок
+   */
+  stalkerBody: StalkerBodyState;
+  /**
+   * директор преследователя (Р205, T-0423): фаза появления, отметки, собственный поток случайности.
+   * Фаза `off` — директора нет (правил нет, пролог, «Лёгкая», новичок). В `createRunWorld` подключается
+   * задачей T-0424. Состояние входит в снимок
+   */
+  stalker: StalkerState;
   /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
   mode: RunMode;
   /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */
@@ -557,8 +599,11 @@ export function clampToBounds(value: number, halfExtent: number): number {
  * Здоровье и урон берут множители текущего отрезка и застывают в слоте: враг,
  * вышедший на пятой минуте, не должен крепчать вместе с таймлайном, пока
  * игрок его добивает.
+ *
+ * `flat` — без ступени и множителей: так выходит неубиваемый преследователь, у которого здоровье и
+ * урон не читаются, а ступень не выбирается и генератор не тратит.
  */
-export function spawnEnemy(world: World, typeIndex: number, x: number, y: number): number {
+export function spawnEnemy(world: World, typeIndex: number, x: number, y: number, rng: Rng = world.rng, flat = false): number {
   const pool = world.enemies;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxEnemies);
   if (slot < 0) return -1;
@@ -566,7 +611,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   const type = world.enemyTypes[typeIndex];
   // Элита ступеней не получает: она сама и есть контрольная точка сложности,
   // и приходит событием таймлайна в назначенную минуту.
-  const stageIndex = isElite(type) ? 0 : pickStage(world);
+  const stageIndex = flat || isElite(type) ? 0 : pickStage(world, rng);
   const stage = world.stages[stageIndex] ?? world.stages[0];
   pool.x[slot] = x;
   pool.y[slot] = y;
@@ -576,9 +621,11 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.prevY[slot] = y;
   pool.vx[slot] = 0;
   pool.vy[slot] = 0;
-  pool.hp[slot] = type.hp * world.difficulty.hpMul * stage.hpMul;
+  // Порядок умножения прежний: `(hp × сложность) × ступень` — иначе последние биты здоровья расходятся с
+  // эталонами, и забеги, не знающие о преследователе, сдвигаются.
+  pool.hp[slot] = flat ? type.hp : type.hp * world.difficulty.hpMul * stage.hpMul;
   pool.maxHp[slot] = pool.hp[slot];
-  pool.damage[slot] = type.damage * world.difficulty.damageMul * stage.damageMul;
+  pool.damage[slot] = flat ? type.damage : type.damage * world.difficulty.damageMul * stage.damageMul;
   // Страж пролога слабее обычного; обычному забегу эта строка ничего не стоит.
   if (world.prologue !== null) onPrologueSpawn(world, typeIndex, slot);
   pool.hitTick[slot] = NEVER_HIT;
@@ -594,6 +641,8 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.dirX[slot] = 0;
   pool.dirY[slot] = 0;
   pool.ringRadius[slot] = 0;
+  // Отсчёт следа прежнего врага слота не достаётся новому: первая лужа — через everySec.
+  world.hazards.trail.ticks[slot] = 0;
   clearStatuses(world, slot, NO_OWNER_TYPE);
   if (slot >= pool.count) pool.count = slot + 1;
   pool.aliveCount++;
@@ -627,8 +676,11 @@ export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
  * (docs/26-stage2-plan.md, WP1, «Аналитика»). И он же знает стихию атаки:
  * касание, взрыв и снаряд врага несут стихию его типа, поэтому паттернам не
  * нужно передавать её каждому попаданию.
+ *
+ * `bypassMitigation` — урон мимо брони и сопротивлений (касание неубиваемого преследователя, Р205):
+ * щит, неуязвимость и бессмертие разработчика работают как у любого попадания.
  */
-export function damagePlayer(world: World, amount: number, sourceType: number): void {
+export function damagePlayer(world: World, amount: number, sourceType: number, bypassMitigation = false): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
@@ -648,10 +700,10 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
 
   const source = sourceType >= 0 ? world.enemyTypes[sourceType] : undefined;
   const element = source?.element ?? ELEMENT_PHYSICAL;
-  const incoming = amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
+  const incoming = bypassMitigation ? amount : amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.
-  const reduced = Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
+  const reduced = bypassMitigation ? incoming : Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {

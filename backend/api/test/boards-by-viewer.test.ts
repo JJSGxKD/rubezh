@@ -343,9 +343,9 @@ describe("карточка /start считает место по доске ак
     }
 
     // Обычные: общая доска из двух, отдельная в неё не входит.
-    expect(await progress.progress("102")).toEqual({ best: { survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
-    expect(await progress.progress("101")).toEqual({ best: { survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
+    expect(await progress.progress("102")).toEqual({ best: { points: 100, survivalSec: 100, rank: 1, total: 2 }, runs: 1 });
+    expect(await progress.progress("101")).toEqual({ best: { points: 50, survivalSec: 50, rank: 2, total: 2 }, runs: 1 });
     // Аккаунт с отдельной доской: полная из трёх, он на первом месте.
-    expect(await progress.progress("103")).toEqual({ best: { survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
+    expect(await progress.progress("103")).toEqual({ best: { points: 300, survivalSec: 300, rank: 1, total: 3 }, runs: 1 });
   });
 });

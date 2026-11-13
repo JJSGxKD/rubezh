@@ -90,6 +90,7 @@ export function Tile({
       <span className="flex flex-wrap items-baseline gap-x-2">
         <span className="font-display text-2xl font-semibold tabular-nums">{formatNumber(value)}</span>
         <span className={`text-xs ${TONE_CLASS[delta.tone]}`}>{delta.text}</span>
+        {delta.previous === null ? null : <span className="text-xs text-text-muted">· {delta.previous}</span>}
       </span>
       <span className="truncate text-xs text-text-muted">{sub}</span>
     </div>
@@ -129,7 +130,7 @@ export function PeriodSwitch({ value, onChange }: { value: OverviewDays; onChang
   );
 }
 
-/** Вехи полосами: высота — доля от «Вошли в бота», под полосой — число, название и доля от прошлой. */
+/** Вехи полосами: высота — доля от «Вошли в бота», под полосой — число, название и доля от шага выше. */
 export function FunnelBars({ funnel }: { funnel: Overview["today"]["funnel"] }) {
   const bars = funnelBars(funnel);
   return (
@@ -141,7 +142,7 @@ export function FunnelBars({ funnel }: { funnel: Overview["today"]["funnel"] }) 
           </div>
           <b className="font-display text-sm font-normal text-text tabular-nums">{formatNumber(bar.count)}</b>
           <span className="leading-tight">{bar.title}</span>
-          <span>{bar.ofPrev === null ? "—" : `${String(bar.ofPrev)}% от прошлого`}</span>
+          <span>{bar.ofPrev === null ? "—" : `${String(bar.ofPrev)}% от шага выше`}</span>
         </div>
       ))}
     </div>

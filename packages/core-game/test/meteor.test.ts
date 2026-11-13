@@ -59,11 +59,12 @@ describe("данные «Метеора»", () => {
     expect(ratio).toBeLessThanOrEqual(EVOLUTION_POWER_RATIO.max);
   });
 
-  it("базовое стоит после «Жала» и до всех эволюций, «Ливень» — последний", () => {
+  it("базовое стоит после «Жала» и до всех эволюций, «Ливень» — предпоследний", () => {
     const ids = WEAPONS.map((weapon) => weapon.id);
     expect(ids.indexOf("meteor")).toBe(ids.indexOf("sting") + 1);
     expect(ids.indexOf("meteor")).toBeLessThan(ids.indexOf(WEAPON_EVOLUTIONS[0]?.id ?? ""));
-    expect(ids.at(-1)).toBe("fire_rain");
+    // После «Ливня» идёт только эволюция «Кистеня» (T-0281).
+    expect(ids.at(-2)).toBe("fire_rain");
   });
 });
 

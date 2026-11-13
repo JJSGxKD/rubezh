@@ -20,6 +20,8 @@ import type {
   PrologueDef,
   RubezhDef,
   SecretsDef,
+  SiegeDef,
+  StalkerDef,
   TimelineSegmentDef,
   WeaponDef,
 } from "@bh/shared-types";
@@ -36,10 +38,15 @@ import { resolveWeaponTypes, type WeaponType } from "../weapons/weapon-types";
 import { createRng, deriveSeed, STREAM_SALT } from "./rng";
 import { findChestsProblems } from "./chests";
 import { createSecretState, findSecretsProblems } from "./secrets";
+import { createSiegeState } from "./siege";
+import { findSiegeProblems } from "./siege-rules";
 import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
+import { createHazardState } from "./hazards";
 import { createRubezhState } from "./rubezh";
+import { createStalkerState } from "./stalker";
+import { createStalkerBodyState, findStalkerProblems } from "./stalker-body";
 import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
 import { resolveMap } from "./map-types";
@@ -111,7 +118,7 @@ const FALLBACK_SECRETS: SecretsDef = {
   stone: { radius: 30 },
   tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
   rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5, timeLimitSec: 90 },
-  wisp: { appearSec: 90, speed: 80 },
+  wisp: { appearSec: 90, speed: 150, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 },
   blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
 
@@ -188,6 +195,17 @@ export interface CreateWorldOptions {
   secrets?: SecretsDef;
   /** правила рубежа (страж на отметке); по умолчанию рубежа нет: стража в мире не будет */
   rubezh?: RubezhDef;
+  /**
+   * осада стоящего (Р197); по умолчанию осады нет. Правила в мир не попадают в прологе и на «Лёгкой»
+   * (уровень с id `easy`, переданный явно): обучение не наказывает за остановку. Идёт осада только
+   * под директором спавна
+   */
+  siege?: SiegeDef;
+  /**
+   * правила неубиваемого преследователя (Р205, tasks/T-0421); по умолчанию их нет, и выпустить
+   * преследователя в такой мир нельзя. В мир забега их подключает `createRunWorld` (T-0424)
+   */
+  stalker?: StalkerDef;
   /**
    * Пролог первого забега (T-0278): оберег, большой первый сундук, «Советуем», Страж
    * по силе набранного и своя кривая опыта. Без поля — обычный бесконечный забег.
@@ -275,6 +293,22 @@ export function createWorld(options: CreateWorldOptions): World {
   const secretProblems = findSecretsProblems(secretRules);
   if (secretProblems.length > 0) {
     throw new Error(`Некорректный контент тайников:\n${secretProblems.join("\n")}`);
+  }
+
+  const siegeRules = options.siege ?? null;
+  if (siegeRules !== null) {
+    const siegeProblems = findSiegeProblems(siegeRules, options.enemies);
+    if (siegeProblems.length > 0) {
+      throw new Error(`Некорректный контент осады:\n${siegeProblems.join("\n")}`);
+    }
+  }
+
+  const stalkerRules = options.stalker;
+  if (stalkerRules !== undefined) {
+    const stalkerProblems = findStalkerProblems(stalkerRules, options.enemies);
+    if (stalkerProblems.length > 0) {
+      throw new Error(`Некорректные правила преследователя:\n${stalkerProblems.join("\n")}`);
+    }
   }
 
   const pressureRules = options.pressure ?? null;
@@ -371,7 +405,21 @@ export function createWorld(options: CreateWorldOptions): World {
         : [],
     ),
     cordon: createCordonState(),
+    hazards: createHazardState(maxEnemies),
+    stalkerBody: createStalkerBodyState(stalkerRules, enemyTypes),
+    stalker: createStalkerState(
+      createRng(deriveSeed(options.seed, STREAM_SALT.stalker)),
+      stalkerRules,
+      enemyTypes.findIndex((type) => type.id === stalkerRules?.enemy),
+      // Новичку Карачуна нет: пролог и «Лёгкая» обучают, ниже `minAccountLevel` аккаунт ещё не готов.
+      // Забег без уровня (стенд, боты, разработчик) идёт с Карачуном.
+      prologueRules === null &&
+        options.difficulty?.id !== "easy" &&
+        (runLoadout.accountLevel === undefined || stalkerRules === undefined || runLoadout.accountLevel >= stalkerRules.appear.minAccountLevel),
+    ),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
+    siegeRules: prologueRules !== null || options.difficulty?.id === "easy" ? null : siegeRules,
+    siege: createSiegeState(createRng(deriveSeed(options.seed, STREAM_SALT.siege))),
     mode: prologueRules === null ? "endless" : "prologue",
     prologue: prologueRules === null ? null : createPrologueState(prologueRules),
     cardRng: createRng(deriveSeed(options.seed, STREAM_SALT.cards)),
@@ -442,6 +490,9 @@ export function createWorld(options: CreateWorldOptions): World {
       poisonStacks: 0,
       poisonDps: 0,
       poisonSource: -1,
+      knockbackTicks: 0,
+      knockbackVx: 0,
+      knockbackVy: 0,
     },
     enemies: createEnemyPool(maxEnemies),
     projectiles: createProjectilePool(maxProjectiles),

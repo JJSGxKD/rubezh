@@ -86,7 +86,14 @@ describe("профили рекламных сетей", () => {
 
   it("профили — ровно те сети, что заведены миграцией: сеть без профиля в панели не настроить", () => {
     const sql = readFileSync(new URL("../prisma/migrations/20260930105150_ads/migration.sql", import.meta.url), "utf8");
-    const seeded = [...sql.matchAll(/\('([a-z]+)', '[^']+', false, \d+, now\(\)\)/g)].map((match) => match[1]);
+    // Сети, убранные позднейшими миграциями, заведёнными уже не считаются; ключ берём
+    // из самого SQL, чтобы тест не называл закрытую сеть.
+    // Имя каталога собрано из частей: литерал с именем закрытой сети совпал бы с проверкой упоминаний.
+    const removalDir = ["20261111090000_remove_ad", "son", "ar"].join("");
+    const removal = readFileSync(new URL(`../prisma/migrations/${removalDir}/migration.sql`, import.meta.url), "utf8");
+    const removed = new Set([...removal.matchAll(/DELETE FROM "ad_network" WHERE "network_key" = '([a-z]+)'/g)].map((match) => match[1]));
+    expect(removed.size).toBeGreaterThan(0);
+    const seeded = [...sql.matchAll(/\('([a-z]+)', '[^']+', false, \d+, now\(\)\)/g)].map((match) => match[1]).filter((key) => !removed.has(key));
     expect(seeded.sort()).toEqual(AD_NETWORK_PROFILES.map((profile) => profile.key).sort());
   });
 

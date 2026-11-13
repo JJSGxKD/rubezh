@@ -35,6 +35,13 @@ export interface StoredSubscription extends UrlColumns {
   trafficUsedBytes: bigint | null;
   trafficTotalBytes: bigint | null;
   expiresAt: Date | null;
+  /** своя маршрутизация, только для сведения: `none`, `json`, `header`, `json+header`; null — не обновлялась после T-0385 */
+  routingSource: string | null;
+  /** записей мимо туннеля; null — заголовок есть, состав не разобран */
+  routingDirect: number | null;
+  routingBlock: number | null;
+  /** `geosite:`/`geoip:` из записей мимо туннеля, до восьми */
+  routingHints: string[];
   updatedBy: string;
   updatedAt: Date;
   /** когда подключена: порядок карточек в панели */
@@ -54,6 +61,19 @@ export interface StoredNode {
   latencyMs: number | null;
   lastProbeAt: Date | null;
   nextProbeAt: Date;
+  /** транспорт (`NodeNetwork` proxy-kit); null — узел записан до T-0385 и ещё не обновлялся */
+  network: string | null;
+  /** `none`, `tls` или `reality` */
+  security: string | null;
+  flow: string | null;
+}
+
+/** Маршрутизация подписки к записи: источник словом из перечня `routing_source`, числа — как их отдал разбор. */
+export interface RoutingWrite {
+  source: string;
+  direct: number | null;
+  block: number | null;
+  hints: string[];
 }
 
 export interface SubscriptionSnapshot {
@@ -71,6 +91,7 @@ export interface RefreshWrite {
   trafficUsedBytes: bigint | null;
   trafficTotalBytes: bigint | null;
   expiresAt: Date | null;
+  routing: RoutingWrite;
 }
 
 export interface ProbeWrite {
@@ -113,7 +134,7 @@ export interface SubscriptionRepository {
 const isState = (value: string): value is NodeState => (NODE_STATES as readonly string[]).includes(value);
 
 type NodeRow = Omit<StoredNode, "state"> & { state: string };
-type SubscriptionRow = Omit<StoredSubscription, "countries"> & { countries: string[] | null; nodes: NodeRow[] };
+type SubscriptionRow = Omit<StoredSubscription, "countries" | "routingHints"> & { countries: string[] | null; routingHints: string[] | null; nodes: NodeRow[] };
 
 /** Состояние держит CHECK в базе; незнакомое значение — строка, записанная в обход миграции. */
 function nodeOf(row: NodeRow): StoredNode {
@@ -125,10 +146,10 @@ const bytes = (value: Uint8Array): Uint8Array<ArrayBuffer> => Uint8Array.from(va
 
 function snapshotOf(row: SubscriptionRow): SubscriptionSnapshot {
   const { nodes, ...subscription } = row;
-  return { subscription: { ...subscription, countries: row.countries ?? [] }, nodes: nodes.map(nodeOf) };
+  return { subscription: { ...subscription, countries: row.countries ?? [], routingHints: row.routingHints ?? [] }, nodes: nodes.map(nodeOf) };
 }
 
-/** Адрес и итоги обновления, которые меняются только вместе с адресом: другой адрес — другая подписка. */
+/** Адрес и итоги обновления (трафик, срок, маршрутизация), которые меняются только вместе с адресом: другой адрес — другая подписка. */
 function addressColumns(row: StoredSubscription) {
   return {
     urlIv: bytes(row.urlIv),
@@ -143,6 +164,10 @@ function addressColumns(row: StoredSubscription) {
     trafficUsedBytes: row.trafficUsedBytes,
     trafficTotalBytes: row.trafficTotalBytes,
     expiresAt: row.expiresAt,
+    routingSource: row.routingSource,
+    routingDirect: row.routingDirect,
+    routingBlock: row.routingBlock,
+    routingHints: row.routingHints,
   };
 }
 
@@ -195,6 +220,10 @@ export class PrismaSubscriptionRepository implements SubscriptionRepository {
           trafficUsedBytes: write.trafficUsedBytes,
           trafficTotalBytes: write.trafficTotalBytes,
           expiresAt: write.expiresAt,
+          routingSource: write.routing.source,
+          routingDirect: write.routing.direct,
+          routingBlock: write.routing.block,
+          routingHints: write.routing.hints,
         },
       });
     });

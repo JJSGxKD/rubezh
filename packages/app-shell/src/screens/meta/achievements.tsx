@@ -12,7 +12,7 @@ import { loadWallet } from "../../state/wallet-api";
 import { burstAt, RewardBurst, type Burst } from "../reward-burst";
 import { ICON_RESOURCE, mainResource } from "../reward-burst-rules";
 import { AchievementCardView, CategoryIcon, achievementTitle, categoryLabel } from "./achievement-card";
-import { FAVORITES_MAX, cards, groupByCategory, nextFavorites, openedCount } from "./achievements-rules";
+import { FAVORITES_MAX, cards, groupByCategory, nextFavorites, openedCount, readyCards, withoutReady } from "./achievements-rules";
 
 /**
  * Витрина достижений — содержимое вкладки «Достижения» на экране заданий
@@ -27,6 +27,41 @@ type Loaded = { status: "loading" } | { status: "failed" } | { status: "ready"; 
 
 const achievements = createAchievementsApi();
 const tasks = createTasksApi();
+
+/**
+ * Три любимых: на узкой колонке по одному в ряд, с 30 rem — по три. Название
+ * переносится по словам, а не рвётся посреди слова.
+ */
+export function FavoritesStrip(props: { items: readonly OpenAchievement[]; busy: boolean; onRemove: (item: OpenAchievement) => void }): ReactNode {
+  return (
+    <div className="@container">
+      <ul className="grid grid-cols-1 gap-2 @min-[30rem]:grid-cols-3">
+        {Array.from({ length: FAVORITES_MAX }, (_, slot) => {
+          const item = props.items[slot];
+          // В один столбец видно только первое пустое место.
+          const emptyClass = slot === props.items.length ? "" : "hidden @min-[30rem]:block";
+          return item === undefined ? (
+            <li key={`empty-${String(slot)}`} aria-hidden="true" className={`surface-sunken h-14 rounded-lg ${emptyClass}`.trim()} />
+          ) : (
+            <li key={item.id} className="surface-card relative flex min-h-14 min-w-0 items-center gap-1.5 rounded-lg py-1 pr-9 pl-2 text-accent">
+              <CategoryIcon category={item.category} size={18} />
+              <span className="line-clamp-2 min-w-0 break-words text-xs font-semibold text-text">{achievementTitle(item)}</span>
+              <button
+                type="button"
+                aria-label={`${t("achievements.favorite.remove")}: ${achievementTitle(item)}`}
+                disabled={props.busy}
+                onClick={() => props.onRemove(item)}
+                className="absolute inset-y-0 right-0 inline-flex w-9 items-center justify-center text-text-muted disabled:opacity-40"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 export function Achievements(props: { onChanged: () => void }): ReactNode {
   const [state, setState] = useState<Loaded>({ status: "loading" });
@@ -109,9 +144,34 @@ export function Achievements(props: { onChanged: () => void }): ReactNode {
   const open = view.items.filter(isOpenAchievement);
   const favoriteItems = view.favorites.flatMap((id) => open.filter((item) => item.id === id));
   let index = 0;
+  // Готовое к забору — группой над шапкой; секции ниже без этих карточек.
+  const ready = readyCards(view.items);
+  const sectionItems = withoutReady(view.items);
+  const cardView = (card: (typeof ready)[number]): ReactNode => {
+    const id = card.kind === "ladder" ? card.current.id : card.item.id;
+    return (
+      <AchievementCardView
+        key={card.kind === "ladder" ? `ladder:${card.ladder}` : id}
+        card={card}
+        index={index++}
+        claiming={claiming === id}
+        notice={notice?.id === id ? notice.text : null}
+        favorites={view.favorites}
+        favoritesBusy={favoritesBusy}
+        onClaim={(item) => void claim(item)}
+        onToggleFavorite={toggleFavorite}
+      />
+    );
+  };
 
   return (
     <div>
+      {ready.length === 0 ? null : (
+        <section aria-label={t("tasks.claimableGroup")}>
+          <SectionTitle>{t("tasks.claimableGroup")}</SectionTitle>
+          <div className="mb-3 grid gap-2">{ready.map(cardView)}</div>
+        </section>
+      )}
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="font-display text-base font-bold text-accent">{t("achievements.prestige", { points: formatNumber(view.prestige) })}</span>
@@ -120,53 +180,17 @@ export function Achievements(props: { onChanged: () => void }): ReactNode {
         <SectionTitle as="h3" spacing="mt-4 mb-2">
           {t("achievements.favorites.title")}
         </SectionTitle>
-        <ul className="grid grid-cols-3 gap-2">
-          {Array.from({ length: FAVORITES_MAX }, (_, slot) => {
-            const item = favoriteItems[slot];
-            return item === undefined ? (
-              <li key={`empty-${String(slot)}`} aria-hidden="true" className="surface-sunken h-14 rounded-lg" />
-            ) : (
-              <li key={item.id} className="surface-card relative flex h-14 min-w-0 items-center gap-1.5 rounded-lg py-1 pr-9 pl-2 text-accent">
-                <CategoryIcon category={item.category} size={18} />
-                <span className="line-clamp-2 min-w-0 text-xs font-semibold text-text">{achievementTitle(item)}</span>
-                <button
-                  type="button"
-                  aria-label={`${t("achievements.favorite.remove")}: ${achievementTitle(item)}`}
-                  disabled={favoritesBusy}
-                  onClick={() => toggleFavorite(item)}
-                  className="absolute inset-y-0 right-0 inline-flex w-9 items-center justify-center text-text-muted disabled:opacity-40"
-                >
-                  <X size={16} aria-hidden="true" />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <FavoritesStrip items={favoriteItems} busy={favoritesBusy} onRemove={toggleFavorite} />
         {favoriteItems.length === 0 ? <p className="mt-2 text-xs text-text-muted">{t("achievements.favorites.empty")}</p> : null}
         {favoritesNotice === null ? null : <p className="mt-2 text-xs font-semibold text-text-muted">{favoritesNotice}</p>}
       </Card>
 
       {view.items.length === 0 ? <p className="mt-4 text-sm text-text-muted">{t("tasks.empty")}</p> : null}
-      {groupByCategory(view.items).map((group) => (
+      {groupByCategory(sectionItems).map((group) => (
         <section key={group.category}>
           <SectionTitle>{categoryLabel(group.category)}</SectionTitle>
           <div className="grid gap-2">
-            {cards(group.items).map((card) => {
-              const id = card.kind === "ladder" ? card.current.id : card.item.id;
-              return (
-                <AchievementCardView
-                  key={card.kind === "ladder" ? `ladder:${card.ladder}` : id}
-                  card={card}
-                  index={index++}
-                  claiming={claiming === id}
-                  notice={notice?.id === id ? notice.text : null}
-                  favorites={view.favorites}
-                  favoritesBusy={favoritesBusy}
-                  onClaim={(item) => void claim(item)}
-                  onToggleFavorite={toggleFavorite}
-                />
-              );
-            })}
+            {cards(group.items).map(cardView)}
           </div>
         </section>
       ))}

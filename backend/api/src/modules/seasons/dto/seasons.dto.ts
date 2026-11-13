@@ -82,6 +82,8 @@ export type Overview = z.infer<typeof overviewSchema>;
 /** Запись таблицы недели — форма записи вечного рейтинга (`runs-view.service.ts`). */
 const boardEntry = z.object({
   rank: count,
+  /** лучший забег недели: по нему открывается карточка забега (T-0297); поля нет у записей прошлой сборки */
+  runId: z.string().optional(),
   name: z.string(),
   photoUrl: z.string().nullable(),
   /** знак «Тестер»; поля нет — не тестер */
@@ -110,6 +112,8 @@ export const boardViewSchema = z.object({
   scoring,
   total: count,
   entries: z.array(boardEntry),
+  /** число принятых друзей — только у `scope=friends`, иначе поля нет: по нему экран отличает «друзей нет» от «друзья не играли на этой неделе» */
+  friendCount: count.nullable().optional(),
   me: z.object({ rank: count, points: z.number().nullable(), survivalSec: z.number(), style: z.string().nullable(), division }).nullable(),
 });
 

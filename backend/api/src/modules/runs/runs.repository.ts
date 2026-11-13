@@ -114,6 +114,8 @@ export interface RecentRun {
 }
 
 export interface BestRunRow {
+  /** ключ забега: по нему строка рейтинга открывает карточку забега (T-0297) */
+  runId?: string;
   accountId: string;
   displayName: string;
   photoUrl: string | null;
@@ -176,6 +178,8 @@ export interface RunDetailRow {
   ranked: boolean;
   ratingRestricted: RatingRestricted | null;
   verdict: RunVerdict | null;
+  /** очки эффективности (T-0293): по ним лист решает, есть ли у забега карточка (T-0297); поля нет — не прислано */
+  points?: number | null;
 }
 
 export const RUNS_REPOSITORY = Symbol("RUNS_REPOSITORY");
@@ -378,6 +382,7 @@ export class PrismaRunsRepository implements RunsRepository {
         ranked: true,
         ratingRestricted: true,
         verdict: true,
+        points: true,
       },
     });
     if (row === null) return null;
@@ -401,6 +406,7 @@ export class PrismaRunsRepository implements RunsRepository {
       ranked: row.ranked,
       ratingRestricted: ratingRestrictedOf(row.ratingRestricted),
       verdict: row.verdict,
+      points: row.points,
     };
   }
 
@@ -413,6 +419,7 @@ export class PrismaRunsRepository implements RunsRepository {
       orderBy: [{ accountId: "asc" }, { points: "desc" }, { finishedAt: "asc" }],
       distinct: ["accountId"],
       select: {
+        runId: true,
         accountId: true,
         survivalSec: true,
         points: true,
@@ -424,6 +431,7 @@ export class PrismaRunsRepository implements RunsRepository {
       },
     });
     return rows.map((row) => ({
+      runId: row.runId,
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
@@ -454,6 +462,7 @@ export class PrismaRunsRepository implements RunsRepository {
       where: { ...ratedWhere(since), accountId, difficulty, status: "finished", OR: shadow ? [{ ranked: true }, { ratingRestricted: "silent" }] : [{ ranked: true }], points: { not: null } },
       orderBy: [{ points: "desc" }, { finishedAt: "asc" }],
       select: {
+        runId: true,
         accountId: true,
         survivalSec: true,
         points: true,
@@ -466,6 +475,7 @@ export class PrismaRunsRepository implements RunsRepository {
     });
     if (row === null) return null;
     return {
+      runId: row.runId,
       accountId: row.accountId,
       displayName: row.account.displayName,
       photoUrl: row.account.photoUrl,
@@ -514,7 +524,8 @@ export class PrismaRunsRepository implements RunsRepository {
 
   async review(limit: number): Promise<ReviewRow[]> {
     const rows = await this.prisma.run.findMany({
-      where: { verdict: { in: ["suspicious", "rejected"] } },
+      // Забег с решением разбора (честный или аннулированный) из очереди уходит (Р203).
+      where: { verdict: { in: ["suspicious", "rejected"] }, reviewOutcome: null },
       orderBy: { finishedAt: "desc" },
       take: limit,
       select: {
@@ -553,11 +564,21 @@ export class PrismaRunsRepository implements RunsRepository {
 }
 
 /**
- * Снят с рейтинга модератором: вердикт честный, читов нет и сдан не под
- * ограничением — иначе забег и не был бы рейтинговым. Другого пути к такому
- * сочетанию нет, поэтому отдельная пометка не нужна.
+ * Снят с рейтинга модератором: нерейтинговый забег без читов, сданный не под
+ * ограничением и не пролог, — и либо с честным вердиктом без решения разбора
+ * (иначе он и не был бы рейтинговым), либо признанный честным разбором
+ * (Р203: «Честный» и «Вернуть забег» возвращают в рейтинг и подозрительный
+ * забег). Аннулированный сюда не попадает: вернуть его можно только отменой
+ * аннулирования, с причиной. Другого пути к такому сочетанию нет, поэтому
+ * отдельная пометка не нужна.
  */
-const UNRANKED_BY_MODERATOR = { ranked: false, verdict: "ok" as const, cheats: false, ratingRestricted: null };
+const UNRANKED_BY_MODERATOR = {
+  ranked: false,
+  cheats: false,
+  ratingRestricted: null,
+  mode: { not: "prologue" as const },
+  OR: [{ verdict: "ok" as const, reviewOutcome: null }, { reviewOutcome: "honest" }],
+};
 
 /** Колонка — строкой: незнакомое значение читается как «без ограничения», а не роняет чтение. */
 function ratingRestrictedOf(value: string | null): RatingRestricted | null {

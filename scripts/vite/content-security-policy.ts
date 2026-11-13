@@ -99,8 +99,6 @@ export const GRASPIL_CONNECT_ORIGINS = ["https://wb.graspil.com"] as const;
 export const AD_SCRIPT_ORIGINS = [
   "https://sad.adsgram.ai",
   "https://*.adsgram.ai",
-  "https://static.sonartech.io",
-  "https://*.sonartech.io",
   "https://richinfo.co",
   "https://*.richinfo.co",
   "https://sdk.taddy.pro",
