@@ -512,6 +512,21 @@ model Run {
   reviewedBy       String?     @map("reviewed_by") @db.Uuid
   createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
 
+  /// перепроверка повтором на сервере (T-0319, WP5): `pending` — ждёт исхода, затем `match`, `mismatch`, `content_mismatch`, `not_replayable`, `broken`, `timeout` или `no_proof`; `null` — повтор забегу не нужен
+  replayVerdict      String?   @map("replay_verdict") @db.VarChar(16)
+  /// тик первого расхождения повтора с записью; `null` — не разошёлся или разошёлся только итог
+  replayDivergedTick Int?      @map("replay_diverged_tick")
+  /// когда исход повтора записан; `null` — исхода нет
+  replayedAt         DateTime? @map("replayed_at") @db.Timestamptz(3)
+  /// повтор был обязателен (верх досок, рубин и золото, эпическая добыча, победа над Стражем), а не выборкой: по нему приоритет очереди и последствия для наград (T-0320)
+  replayRequired     Boolean   @default(false) @map("replay_required")
+  /// номер попытки повтора: растёт по «Повторить снова»; входит в идентификатор задания, чтобы исход прошлой попытки не лёг на новую
+  replayAttempt      Int       @default(0) @map("replay_attempt")
+  /// когда задание поставлено в очередь `replay`; `null` — ещё не поставлено (записи нет или Redis был недоступен)
+  replayQueuedAt     DateTime? @map("replay_queued_at") @db.Timestamptz(3)
+  /// что воркер насчитал и что сказал: `{ reason, replayed: { ticks, survivalSec, level, enemiesKilled, checksum } | null, durationMs }` — для таблицы «заявлено / повтор» в разборе
+  replayResult       Json?     @map("replay_result")
+
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
@@ -528,6 +543,8 @@ model Run {
   @@index([difficulty, finishedAt])
   // Очередь разбора: подозрительные и отклонённые, свежие первыми.
   @@index([verdict, finishedAt])
+  // Перепроверка повтором (T-0319): ожидающие постановки, застрявшие и без записи — одним проходом по `replay_verdict`.
+  @@index([replayVerdict, finishedAt])
   @@map("run")
 }
 
