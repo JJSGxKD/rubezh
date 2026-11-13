@@ -3,8 +3,8 @@ id: T-0453
 title: Кабинет участника «Мой проект» — выручка месяца, холд и черновик части (сервер)
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0452]
