@@ -70,6 +70,7 @@ import { RequestJournalModule } from "./modules/request-journal/request-journal.
 import { DonationsModule } from "./modules/donations/donations.module.js";
 import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
+import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
@@ -105,7 +106,8 @@ import { MaxModule } from "./platforms/max/max.module.js";
  * проект», Р109 (там же, T-0157).
  *
  * platforms — адаптеры площадок за портами (docs/35-stage4-plan.md, §3.11);
- * MaxModule — бот MAX заданий-каналов, Р188 (там же, T-0379).
+ * MaxModule — бот MAX заданий-каналов, Р188 (там же, T-0379);
+ * VkModule — сообщество VK как бот заданий, Р188 (там же, T-0378).
  */
 export const APP_MODULES = [
   RedisModule,
@@ -174,6 +176,7 @@ export const APP_MODULES = [
   DonationsModule,
   BotMentionModule,
   ExternalIdentityModule,
+  VkModule,
   AchievementsModule,
   BattlePassModule,
   RemindersModule,

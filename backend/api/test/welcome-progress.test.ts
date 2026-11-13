@@ -11,7 +11,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
  */
 describe("рекорд для карточки /start", () => {
   const view = {
-    profile: async () => ({ runs: 7, best: { hard: { survivalSec: 612, rank: 3 }, normal: { survivalSec: 700, rank: 2 }, easy: { survivalSec: 900, rank: 1 } } }),
+    profile: async () => ({ runs: 7, best: { hard: { points: 2340, survivalSec: 612, rank: 3 }, normal: { survivalSec: 700, rank: 2 }, easy: { survivalSec: 900, rank: 1 } } }),
     boardSize: async (_accountId: string, difficulty: string) => (difficulty === "hard" ? 40 : 5),
   } as unknown as RunsViewService;
 
@@ -22,7 +22,7 @@ describe("рекорд для карточки /start", () => {
     const progress = new RunsWelcomeProgress(registry, accounts, view);
     progress.onModuleInit();
     expect(registry.source).toBe(progress);
-    expect(await progress.progress("7")).toEqual({ best: { survivalSec: 612, rank: 3, total: 40 }, runs: 7 });
+    expect(await progress.progress("7")).toEqual({ best: { points: 2340, survivalSec: 612, rank: 3, total: 40 }, runs: 7 });
   });
 
   it("рекорд только на нерейтинговых сложностях — как будто рекорда нет, но число забегов остаётся", async () => {
