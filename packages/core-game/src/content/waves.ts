@@ -137,6 +137,22 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { kind: "cordon", enemy: "cordon_guard", count: 60, ring: { radius: 300, minRadius: 120, shrinkPerSec: 3.3, lifeSec: 50 } },
     ],
   },
+  {
+    // Болотник показывается отдельно, до смеси кривой: игрок должен успеть понять, что
+    // лужи за ним — зона, из которой уходят, а не декор. Состав 300-й секунды плюс он; события
+    // отрезка уже отыграли, поэтому здесь их нет. Костяной ходок уступает ему бюджет угрозы
+    // (0,7 → 0,15 в секунду): отрезок не может быть выше кривой, которая начинается на 330-й
+    // (14,4 в секунду) — иначе бюджет упал бы на стыке.
+    fromSec: 315,
+    spawns: [
+      { enemy: "swarm_rat", perSec: 3 },
+      { enemy: "circler_crow", perSec: 1.8 },
+      { enemy: "rushing_bats", perSec: 1 },
+      { enemy: "bone_walker", perSec: 0.15 },
+      { enemy: "dasher_wolf", perSec: 0.4 },
+      { enemy: "bog_lurker", perSec: 0.4, burst: 3 },
+    ],
+  },
 ];
 
 /**
@@ -172,6 +188,7 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     "bone_walker",
     "mire_shambler",
     "ice_spirit",
+    "bog_lurker",
   ],
   startTypes: 5,
   typesPerSegment: 1,

@@ -82,6 +82,23 @@ export const ENEMIES: EnemyDef[] = [
     resist: { cold: 0.5, fire: -0.5 },
     params: { orbitRadius: 150, shrinkPerSec: 10 },
   },
+  // Болотник: медленный преследователь, который зонирует поле. За ним остаются
+  // лужи яда (`trail`): стоять в них больно, поэтому приходится двигаться и
+  // выбирать путь. Стойкость к яду парная: огонь выжигает болото (Р157,
+  // docs/32-balance.md §2.5). Числа стартовые, калибрует геймдизайнер.
+  {
+    id: "bog_lurker",
+    hp: 40,
+    speed: 34,
+    damage: 8,
+    xp: 6,
+    threat: 6,
+    pattern: "chase",
+    element: "poison",
+    statusChance: 0.5,
+    resist: { poison: 0.6, fire: -0.4 },
+    trail: { everySec: 1.5, radius: 26, lifeSec: 4, damagePerSec: 5 },
+  },
   { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder", resist: { fire: 0.7, cold: -0.3 }, element: "fire" },
   // Нетопыри не преследуют вовсе: берут упреждение, проносятся мимо насквозь
   // и через пару секунд заходят снова. Давление от них не в погоне, а в том,

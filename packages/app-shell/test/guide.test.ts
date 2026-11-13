@@ -21,6 +21,7 @@ import {
   weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
+import { TrailLine } from "../src/screens/guide/elements";
 import { GuideScreen } from "../src/screens/guide/GuideScreen";
 import { EnemyScene, PickupIcon } from "../src/screens/guide/scenes";
 
