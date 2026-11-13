@@ -15,6 +15,9 @@ COPY --from=xray /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificat
 
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
     XRAY_LOCATION_ASSET=/usr/local/share/xray
+# Каталог статуса ядра (Р202): run.sh пишет сюда версию, API читает её через общий том.
+# Владелец — пользователь Xray: Docker переносит его в пустой том при первом подключении.
+RUN mkdir -p /xray-status && chown 65532:65532 /xray-status
 # Тот же пользователь, что в официальном образе: без прав на запись.
 USER 65532:65532
 # Скрипт монтируется томом (бит исполняемости из Windows не выставить).

@@ -710,13 +710,20 @@ SOCKS-вход, порт `XRAY_SOCKS_PORT_BASE` плюс слот. Порты н
 `0.0.0.0:XRAY_STATS_PORT` внутри сети `tunnel`, порт не публикуется, `compose.yml` не
 менялся. API раз в минуту читает счётчики со сбросом (gRPC поверх `node:http2`) и
 прибавляет их к часовым корзинам `proxy_traffic_hour`; других служб API Xray (правка
-выходов на лету и т. п.) нет. Смена версии Xray (Р192, `tasks/T-0387`):
+выходов на лету и т. п.) нет.
+
+**Версия ядра.** При каждом запуске Xray `run.sh` пишет `version=` и `started=` в
+`/xray-status/core` — том `xray-status`, у API он только для чтения; по нему панель
+показывает запущенную версию (Р202). Смена версии: тег и digest в `Dockerfile` и
+`XRAY_CORE_MAX` в `packages/proxy-kit/src/xray-core.ts` — вместе, их совпадение проверяет
+`scripts/test/xray-core-pin.test.ts`. Смена версии Xray (Р192, `tasks/T-0387`):
 
 1. Открыть `https://github.com/XTLS/Xray-core/releases` и взять последний выпуск **без**
    пометки Pre-release. Он старше действующего в `Dockerfile` — не откатываться молча,
    сначала вопрос тимлиду.
 2. Тег и digest списка образов — `docker buildx imagetools inspect ghcr.io/xtls/xray-core:<тег>`;
-   поправить строку `FROM` в `infra/prod/xray/Dockerfile`.
+   поправить строку `FROM` в `infra/prod/xray/Dockerfile` и `XRAY_CORE_MAX` в
+   `packages/proxy-kit/src/xray-core.ts` (версия та же; тест `xray-core-pin.test.ts` сверяет).
 3. Пути, которые копирует `Dockerfile` (`/usr/local/bin/xray`, `/usr/local/share/xray`,
    `/etc/ssl/certs/ca-certificates.crt`), проверить в новом образе: официальный образ без
    оболочки, поэтому `docker create` и `docker cp` этих путей. Нет пути — стоп, вопрос
