@@ -18,6 +18,8 @@ export const ADMIN_LIMITS = {
   broadcastTest: { scope: "admin:broadcast-test", limit: 10, windowSec: 600 },
   /** картинка ложится в базу навсегда: обрезали, передумали, загрузили снова — три десятка за десять минут хватит */
   imageUpload: { scope: "admin:image-upload", limit: 30, windowSec: 600 },
+  /** аватарка источника задания — запрос на страницу Telegram и в Bot API: оператор вводит канал, ждёт и правит — тридцать за десять минут хватит с запасом */
+  sourceAvatar: { scope: "admin:source-avatar", limit: 30, windowSec: 600 },
   /** проверка черновика контента занимает процессор воркера до двух минут — десяток за десять минут хватит человеку с запасом */
   contentCheck: { scope: "admin:content-check", limit: 10, windowSec: 600 },
 } satisfies Record<string, RateLimit>;
