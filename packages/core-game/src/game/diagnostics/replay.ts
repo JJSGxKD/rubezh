@@ -1,4 +1,4 @@
-import type { DeviceClass, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
+import type { DeviceClass, RunLoadout, RunMode, RunModifierId, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../../content/hash";
 import type { ContentSnapshot } from "../../content/snapshot";
 import type { RunRecording, RunRecordingResult, RunReplayBlocker } from "../../run-api";
@@ -63,6 +63,7 @@ export type ReplaySource = Pick<
   "runId" | "seed" | "mapId" | "difficultyId" | "startingWeaponId" | "contentHash" | "unitScale" | "input" | "choices" | "checkpoints" | "result"
 > & {
   mode?: RunMode;
+  modifierIds?: readonly RunModifierId[];
   continues?: number[];
   loadout?: RunLoadout;
   /** класс устройства отдельным полем, как у записи для проверки: набор в ней без него */
@@ -131,6 +132,7 @@ export function* replaySteps(recording: ReplaySource, contentHash: string = CONT
     mapId: recording.mapId,
     difficultyId: recording.difficultyId,
     ...(recording.mode === undefined ? {} : { mode: recording.mode }),
+    ...(recording.modifierIds === undefined ? {} : { modifierIds: recording.modifierIds }),
     ...(recording.startingWeaponId === "" ? {} : { startingWeaponId: recording.startingWeaponId }),
     unitScale: recording.unitScale,
     ...(loadout === undefined ? {} : { loadout }),
