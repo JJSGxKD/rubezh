@@ -13,11 +13,15 @@ zones:
   - apps/sim-worker/test/replay-job.test.ts
 shared:
   - apps/sim-worker/src/main.ts
+  - apps/sim-worker/src/queue.ts
+  - apps/sim-worker/src/metrics.ts
   - apps/sim-worker/package.json
   - packages/core-game/src/game/diagnostics/replay.ts
   - packages/core-game/src/index.ts
+  - scripts/test/layer-boundaries.test.ts
   - docs/28-diagnostics.md
   - docs/21-diagrams.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: extra
