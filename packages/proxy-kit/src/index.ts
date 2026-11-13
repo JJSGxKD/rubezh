@@ -22,6 +22,7 @@ export {
   type UserInfo,
 } from "./subscription.js";
 export { checkSubscriptionUrl, isPublicAddress, type UrlCheck } from "./url-guard.js";
+export { compareXrayVersions, findXrayCoreProblems, formatXrayVersion, parseXrayVersion, XRAY_CORE_BLOCKS, XRAY_CORE_MAX, XRAY_CORE_MIN, xrayCompatibility, type XrayCompatibility, type XrayCoreBlock, type XrayVersion } from "./xray-core.js";
 export { assignSlots, buildXrayConfig, GROUP_FORMAT, outboundTag, type PlacedNode, type SlotOptions, type XrayConfigOptions } from "./xray-config.js";
 export {
   decodeQueryStatsResponse,
