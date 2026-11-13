@@ -57,8 +57,6 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/roles/roles.service.ts",
   // уведомления в чат администраторов
   "modules/admin-notify/",
-  // действия по расхождениям сверки оплат (T-0434): отказы и подписи читает сотрудник поддержки, игрок файл не видит
-  "modules/payments/payment-discrepancies.ts",
   // слоги имени, а не текст: «вы» — приставка
   "modules/auth/display-name-words.ts",
 ];
@@ -96,6 +94,9 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "compensation_pending", fragment: "нажмите «Компенсировать» ещё раз" },
   // сверка оплат с выпиской (T-0433): отказ кнопки «Сверить сейчас» читает сотрудник, текст задаёт спецификация
   { code: "purchase_action_unavailable", fragment: "подождите минуту" },
+  // действия по расхождениям сверки (T-0434): отказы читает сотрудник поддержки, оба текста задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "нажмите «Разобрано» с причиной" },
+  { code: "purchase_action_unavailable", fragment: "разберите его там" },
 ];
 
 /** Существительные и формы, похожие на повелительное «-ите/-йте/-ьте», но им не являющиеся. */
