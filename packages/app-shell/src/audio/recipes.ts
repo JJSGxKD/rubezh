@@ -147,6 +147,15 @@ export const SOUND_RECIPES = {
       { kind: "hiss", dur: 0.02, seed: 21, filter: "lowpass", f0: 1800, peak: 0.15, decay: 0.015 },
     ],
   },
+  // Груз «Кистеня»: глухой низкий удар, ниже и тише камня оберега, — бьёт
+  // редко, поэтому звук тяжёлый, но не громче оберега (docs/31).
+  flail: {
+    bus: "weapons", level: 0.4, voices: 1, gap: 0.2, send: 0.1, dur: 0.16, variants: 3, pitch: [1, 0.944, 1.059],
+    layers: [
+      { kind: "tone", wave: "triangle", f0: 150, f1: 80, glide: 0.07, peak: 0.34, decay: 0.12 },
+      { kind: "hiss", dur: 0.03, seed: 61, filter: "lowpass", f0: 900, peak: 0.14, decay: 0.025 },
+    ],
+  },
   // Игла «Жала»: шипение и стеклянный щелчок в полосе 3–5 кГц — выше «Искры»
   // и «Ножа», поэтому в общей подложке оружия его слышно отдельно.
   sting: {

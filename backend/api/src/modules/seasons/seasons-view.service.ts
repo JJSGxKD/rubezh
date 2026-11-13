@@ -162,7 +162,7 @@ export class SeasonsViewService {
     } else if (!friendsScope) me = await this.shadowStanding(accountId, season, boardKey, difficulty, board, scoring);
     else if (standing.me !== null && standing.own !== null) me = shadowMe(standing.me.rank, standing.own, scoring, await this.divisionOutOfBoard(boardKey, difficulty, board, standing.own.score));
     else me = null;
-    return boardViewSchema.parse({ seasonKey: season.key, difficulty, scoring, total: standing.total, entries, me });
+    return boardViewSchema.parse({ seasonKey: season.key, difficulty, scoring, total: standing.total, entries, ...(standing.friendCount === null ? {} : { friendCount: standing.friendCount }), me });
   }
 
   /** Строка «меня»: место и счёт из таблицы, время и стиль — из лучшего забега игрока. */
@@ -185,7 +185,7 @@ export class SeasonsViewService {
       this.store.rank(boardKey, difficulty, accountId, board),
       this.store.best(boardKey, difficulty, accountId, board),
     ]);
-    return { top, total, me: rank === null || best === null ? null : { rank, score: best }, own: null };
+    return { friendCount: null, top, total, me: rank === null || best === null ? null : { rank, score: best }, own: null };
   }
 
   /**
@@ -205,7 +205,7 @@ export class SeasonsViewService {
     // Как у Redis при равном счёте: выше идентификатор.
     const ordered = [...scores.entries()].sort(([leftId, left], [rightId, right]) => right - left || (leftId < rightId ? 1 : -1)).map(([id, score]) => ({ accountId: id, score }));
     const place = ordered.findIndex((entry) => entry.accountId === accountId);
-    return { top: ordered.slice(0, BOARD_LIMIT), total: ordered.length, me: place < 0 ? null : { rank: place + 1, score: ordered[place]?.score ?? 0 }, own };
+    return { friendCount: friends.length, top: ordered.slice(0, BOARD_LIMIT), total: ordered.length, me: place < 0 ? null : { rank: place + 1, score: ordered[place]?.score ?? 0 }, own };
   }
 
   /** Место игрока из тени: лучший забег недели вместе со сданными молча, среди настоящих игроков. */

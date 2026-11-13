@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ProxyNode } from "../node.js";
+import { routingOfConfigs, type RoutingSummary } from "../routing.js";
 import type { SkippedLink } from "../subscription.js";
 import { parseOutbound } from "./outbound.js";
 
@@ -17,11 +18,12 @@ const SERVICE_PROTOCOLS: ReadonlySet<string> = new Set(["freedom", "blackhole", 
 /** Схема, по которой протокол попадает в `scheme` пропуска: из JSON туда не должно попасть что попало. */
 const SCHEME = /^[a-z][a-z0-9+.-]{0,31}$/;
 
-const config = z.object({ remarks: z.unknown().optional(), outbounds: z.array(z.unknown()) });
+/** `routing` читается как есть: что в нём правила, решает `routingOfConfigs`, а мусор там не повод отбросить конфиг. */
+const config = z.object({ remarks: z.unknown().optional(), outbounds: z.array(z.unknown()), routing: z.unknown().optional() });
 const withProtocol = z.object({ protocol: z.string() });
 
 export type XrayJsonResult =
-  | { kind: "ok"; nodes: ProxyNode[]; skipped: SkippedLink[]; truncated: boolean }
+  | { kind: "ok"; nodes: ProxyNode[]; skipped: SkippedLink[]; truncated: boolean; routing: RoutingSummary | null }
   | { kind: "unsupported_format" | "empty" };
 
 /** Что разбирается и считается в `maxLinks`: выход-узел либо то, что выходом не оказалось. */
@@ -69,6 +71,7 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
   };
 
   let configs = 0;
+  const parsedConfigs: object[] = [];
   let typed = 0;
   let problems = 0;
   for (const element of Array.isArray(raw) ? raw : [raw]) {
@@ -79,6 +82,7 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
       continue;
     }
     configs++;
+    parsedConfigs.push(parsed.data);
     const remarks = typeof parsed.data.remarks === "string" ? parsed.data.remarks : "";
     for (const outbound of parsed.data.outbounds) {
       const header = isObject(outbound) ? withProtocol.safeParse(outbound) : null;
@@ -110,5 +114,5 @@ export function parseXrayJson(text: string, maxLinks: number): XrayJsonResult {
     }
     skipped.push({ index, scheme: item.scheme, reason: result.reason, detail: result.detail });
   });
-  return { kind: "ok", nodes: [...nodes.values()], skipped, truncated: total > maxLinks };
+  return { kind: "ok", nodes: [...nodes.values()], skipped, truncated: total > maxLinks, routing: routingOfConfigs(parsedConfigs) };
 }

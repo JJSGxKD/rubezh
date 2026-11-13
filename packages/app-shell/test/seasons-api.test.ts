@@ -159,6 +159,14 @@ describe("клиент сезона: board", () => {
     expect(response.ok && response.data.me).toBeNull();
   });
 
+  it("friendCount разбирается, а без него (старый сервер) ответ тоже годится", async () => {
+    const withCount = await createSeasonsApi(server([], { ...BOARD, friendCount: 2 })).board("hard", "friends");
+    const without = await createSeasonsApi(server([], BOARD)).board("hard", "friends");
+
+    expect(withCount.ok && withCount.data.friendCount).toBe(2);
+    expect(without.ok && without.data.friendCount).toBeUndefined();
+  });
+
   it("битая запись таблицы — ошибка схемы", async () => {
     const response = await createSeasonsApi(server([], { ...BOARD, entries: [{ rank: "первый" }] })).board("hard", "all");
 

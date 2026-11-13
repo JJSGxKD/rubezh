@@ -78,7 +78,7 @@ describe("команда", () => {
 
   it("у каждой роли есть объяснение, разделы считаются из прав", () => {
     for (const [id] of ROLE_NAMES) expect(rolePurpose(id), id).not.toBe("");
-    expect(sectionsOfRole(["players.view"])).toBe("Игроки, Разбор забегов");
+    expect(sectionsOfRole(["players.view"])).toBe("Игроки, Разбор забегов, Рейтинг");
     expect(sectionsOfRole([])).toBe("в панели пока ни одного раздела");
   });
 

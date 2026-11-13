@@ -336,3 +336,45 @@ describe("не тот формат", () => {
     expect(() => parseSubscription(Buffer.from(JSON.stringify([J.config("a", J.OUT_TROJAN_GRPC)])).toString("base64"))).toThrow(SubscriptionFormatError);
   });
 });
+
+describe("маршрутизация конфигов", () => {
+  const rules = (...items: Record<string, unknown>[]): Record<string, unknown> => ({ routing: { domainStrategy: "IPIfNonMatch", rules: items } });
+
+  it("образец панели: у JSON-подписки есть сводка маршрутизации, узлы прежние", () => {
+    const body = readFileSync(new URL("./fixtures/xray-json/remnawave-array.json", import.meta.url), "utf8");
+    const parsed = parseSubscription(body);
+
+    expect(parsed.routing).toEqual({ sources: ["json"], direct: 2, block: 0, hints: ["geoip:private"] });
+    expect(parsed.nodes.map((item) => item.name)).toEqual(["🇩🇪 Germany", "[NL] Netherlands"]);
+    expect(parsed.skipped).toEqual([]);
+  });
+
+  it("конфиг без правил в direct и block — routing: null; правила в proxy не считаются", () => {
+    expect(parse(J.config("a", J.OUT_VLESS_WS_TLS, { routing: undefined })).routing).toBeNull();
+    expect(parse(J.config("a", J.OUT_VLESS_WS_TLS, rules({ type: "field", outboundTag: "proxy", domain: ["geosite:google"] }))).routing).toBeNull();
+  });
+
+  it("правила собираются со всех конфигов подписки; повтор записи считается один раз", () => {
+    const first = J.config("a", J.OUT_VLESS_WS_TLS, rules({ type: "field", outboundTag: "direct", domain: ["geosite:category-ru"] }, { type: "field", outboundTag: "block", ip: ["geoip:cn"] }));
+    const second = J.config("b", J.OUT_VLESS_GRPC, rules({ type: "field", outboundTag: "direct", domain: ["geosite:category-ru", "geoip:ru"] }));
+
+    expect(parse([first, second]).routing).toEqual({ sources: ["json"], direct: 2, block: 1, hints: ["geosite:category-ru", "geoip:ru"] });
+  });
+
+  it("мусор вместо routing не роняет разбор и узлы не трогает", () => {
+    for (const routing of [5, "x", null, [], { rules: "x" }, { rules: [5, null] }]) {
+      const parsed = parse(J.config("a", J.OUT_VLESS_WS_TLS, { routing }));
+      expect(parsed.nodes, JSON.stringify(routing)).toHaveLength(1);
+      expect(parsed.routing, JSON.stringify(routing)).toBeNull();
+    }
+  });
+
+  it("правила из элемента, который не конфиг (нет outbounds), в сводку не попадают", () => {
+    const notConfig = { routing: { rules: [{ outboundTag: "direct", domain: ["a.example.com"] }] } };
+    const parsed = parse([5, null, notConfig, J.config("a", J.OUT_VLESS_WS_TLS)]);
+
+    expect(parsed.nodes).toHaveLength(1);
+    // только прежнее правило фикстуры `geoip:private`
+    expect(parsed.routing).toEqual({ sources: ["json"], direct: 1, block: 0, hints: ["geoip:private"] });
+  });
+});

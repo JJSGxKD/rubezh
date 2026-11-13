@@ -30,7 +30,7 @@ const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.Process
 const ACCOUNT = "3f6b1a52-8c1e-4d6a-9b6e-1d2c3b4a5f60";
 
 const VIEW: FeedView = {
-  events: [{ id: "0123456789ab", kind: "long_run", name: "Алиса", at: "2026-11-04T11:00:00.000Z", seconds: 700 }],
+  events: [{ id: "0123456789ab", kind: "long_run", name: "Алиса", at: "2026-11-04T11:00:00.000Z", seconds: 700, points: null }],
   refreshSec: 300,
 };
 

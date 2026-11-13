@@ -668,6 +668,8 @@ model Purchase {
   @@index([mode, paidAt])
   // Незавершённые возвраты — очередь поднимает их после перезапуска.
   @@index([refundRequestedAt])
+  // Лента платежей в панели (Р209): свежие счета первыми, страница — по курсору
+  @@index([invoicedAt, purchaseId])
   // Проход довыдачи: оплаченные и не выданные покупки старше срока. Товар
   // впереди: у второго шанса (`continue_run`) fulfilled_at не заполняется
   // никогда — выдачи у него нет, — и без товара каждый использованный второй
@@ -2294,6 +2296,14 @@ model ProxySubscription {
   trafficUsedBytes      BigInt?   @map("traffic_used_bytes")
   trafficTotalBytes     BigInt?   @map("traffic_total_bytes")
   expiresAt             DateTime? @map("expires_at") @db.Timestamptz(3)
+  /// своя маршрутизация подписки, только для сведения (T-0385): `none`, `json`, `header`,
+  /// `json+header`; null — подписка не обновлялась после T-0385 (`CHECK` в миграции)
+  routingSource         String?   @map("routing_source") @db.VarChar(12)
+  /// записей мимо туннеля; null — заголовок есть, состав не разобран
+  routingDirect         Int?      @map("routing_direct")
+  routingBlock          Int?      @map("routing_block")
+  /// `geosite:`/`geoip:` из записей мимо туннеля, до восьми
+  routingHints          String[]  @map("routing_hints") @db.VarChar(64)
   /// кто менял последним; без внешнего ключа — подписка переживает аккаунт
   updatedBy             String    @map("updated_by") @db.Uuid
   updatedAt             DateTime  @map("updated_at") @db.Timestamptz(3)
@@ -2322,6 +2332,12 @@ model ProxySubscriptionNode {
   latencyMs       Int?      @map("latency_ms")
   lastProbeAt     DateTime? @map("last_probe_at") @db.Timestamptz(3)
   nextProbeAt     DateTime  @map("next_probe_at") @db.Timestamptz(3)
+  /// транспорт (`NodeNetwork` proxy-kit): `tcp`, `ws`, `grpc`, `httpupgrade`, `xhttp`; null — узел
+  /// записан до T-0385 и ещё не обновлялся (`CHECK` в миграции)
+  network         String?   @db.VarChar(12)
+  /// `none`, `tls` или `reality` (`CHECK` в миграции)
+  security        String?   @db.VarChar(8)
+  flow            String?   @db.VarChar(32)
 
   subscription ProxySubscription @relation(fields: [subscriptionKey], references: [key], onDelete: Cascade)
 
