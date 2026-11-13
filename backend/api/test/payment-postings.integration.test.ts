@@ -57,12 +57,18 @@ describe.skipIf(DATABASE_URL === "")("проводки из платежей н�
     return accountId;
   }
 
+  /**
+   * Строка покупки под проверки базы: у второго шанса номер продолжения и секунда цены заданы, а товара каталога
+   * нет (`purchase_continue_check`, `purchase_sku_check`); у остальных — наоборот.
+   */
   function row(accountId: string, bought: Bought) {
+    const byProduct =
+      bought.product === "continue_run" ? { continueNo: 1, elapsedSec: 60 } : { sku: bought.product === "donation" ? "donation" : `pp-${bought.purchaseId.slice(0, 8)}` };
     return {
       purchaseId: bought.purchaseId,
       accountId,
       product: bought.product,
-      sku: bought.product === "donation" ? "donation" : `pp-${bought.purchaseId.slice(0, 8)}`,
+      ...byProduct,
       priceStars: bought.stars,
       chargedStars: bought.stars,
       mode: "live" as const,
