@@ -14,6 +14,7 @@ import { PlayerSummary } from "./PlayerSummary";
 import { PurchasesPanel } from "./PurchasesPanel";
 import { RatingRunsPanel } from "./RatingRunsPanel";
 import { RestrictionsPanel } from "./RestrictionsPanel";
+import { SeasonPlacesPanel } from "./SeasonPlacesPanel";
 import { SocialPanel } from "./SocialPanel";
 
 /**
@@ -56,6 +57,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
               <Runs card={state.data} />
               {/* Таблица с действием в строке — на всю ширину. */}
               <RatingRunsPanel accountId={accountId} ratingClosed={ratingClosed} onChanged={reload} />
+              <SeasonPlacesPanel accountId={accountId} />
               <Funnel card={state.data} />
             </div>
           ) : null}
