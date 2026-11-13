@@ -3,8 +3,8 @@ id: T-0432
 title: Порт выписки площадки и выписка звёзд Telegram
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
