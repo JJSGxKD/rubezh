@@ -19,6 +19,7 @@ shared:
   - packages/core-game/src/run-api.ts
   - packages/core-game/src/engine/run-bus.ts
   - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/diagnostics/replay.ts
   - packages/core-game/test/**
   - scripts/balance/balance-sim.ts
   - docs/32-balance.md
