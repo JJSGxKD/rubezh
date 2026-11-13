@@ -8,6 +8,7 @@ import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
 import { AdminLedgerController } from "../src/modules/admin/admin-ledger.controller.js";
+import { AdminMediaController } from "../src/modules/admin/admin-media.controller.js";
 import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
@@ -22,11 +23,15 @@ import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.j
 import { LedgerCursorInvalidError } from "../src/modules/ledger/ledger-errors.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../src/modules/ledger/ledger-view.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
-import { LedgerOperationInvalidError, LedgerOperationNotDraftError } from "../src/modules/ledger/operations/operation-errors.js";
+import { LedgerOperationInvalidError, LedgerOperationNotDraftError, LedgerOperationNotPendingError } from "../src/modules/ledger/operations/operation-errors.js";
 import type { OperationInput } from "../src/modules/ledger/operations/operation-input.js";
 import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
+import { IMAGE_FILE, imageIdOf, imagePath } from "../src/modules/media/image-rules.js";
+import { MediaController } from "../src/modules/media/media.controller.js";
+import { MEDIA_REPOSITORY } from "../src/modules/media/media.repository.js";
+import { MediaService } from "../src/modules/media/media.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Role } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -36,6 +41,7 @@ import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.j
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
+import { MemoryMedia } from "./helpers/memory-media.js";
 import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
@@ -212,6 +218,28 @@ class FakeOperations {
   async discard(actor: { accountId: string }, operationId: string): Promise<void> {
     this.record("discard", actor, operationId);
   }
+
+  async approve(actor: { accountId: string }, operationId: string, note?: string): Promise<OperationView> {
+    this.record("approve", actor, operationId, note);
+    return { ...OPERATION, status: "posted" };
+  }
+
+  async reject(actor: { accountId: string }, operationId: string, note: string): Promise<OperationView> {
+    this.record("reject", actor, operationId, note);
+    return { ...OPERATION, status: "rejected", decisionNote: note };
+  }
+}
+
+/** WebP без потерь (`VP8L`) нужных сторон: заголовок настоящий, содержимое — заполнитель. */
+function receiptWebp(width: number, height: number): Buffer {
+  const bits = ((width - 1) & 0x3fff) | (((height - 1) & 0x3fff) << 14);
+  const body = Buffer.from([0x2f, bits & 0xff, (bits >>> 8) & 0xff, (bits >>> 16) & 0xff, (bits >>> 24) & 0xff, ...new Array<number>(16).fill(7)]);
+  const header = Buffer.alloc(20);
+  header.write("RIFF", 0, "latin1");
+  header.writeUInt32LE(12 + body.length, 4);
+  header.write("WEBPVP8L", 8, "latin1");
+  header.writeUInt32LE(body.length, 16);
+  return Buffer.concat([header, body]);
 }
 
 describe("журнал учёта в панели по HTTP", () => {
@@ -230,8 +258,9 @@ describe("журнал учёта в панели по HTTP", () => {
     const chart = new FakeChart();
     const operations = new FakeOperations();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
+    const images = new MemoryMedia();
     @Module({
-      controllers: [AdminSessionController, AdminLedgerController],
+      controllers: [AdminSessionController, AdminLedgerController, AdminMediaController, MediaController],
       providers: [
         { provide: APP_CONFIG, useValue: cfg },
         { provide: REDIS, useValue: { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis },
@@ -242,6 +271,8 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: LedgerService, useValue: ledger },
         { provide: LedgerChartService, useValue: chart },
         { provide: OperationsService, useValue: operations },
+        { provide: MEDIA_REPOSITORY, useValue: images },
+        MediaService,
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -269,7 +300,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, login, staff };
+    return { ledger, chart, operations, images, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -733,5 +764,123 @@ describe("журнал учёта в панели по HTTP", () => {
     const conflict = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_draft");
+  });
+
+  // ---- Второй ключ и снимок чека (Р220, tasks/T-0462) ----
+
+  it("подтверждает и отклоняет только владелец: финансы, администратор и маркетолог — 403, сервис не вызывается; без сессии — 401", async () => {
+    const ctx = await start();
+    const others = [await ctx.staff("1001", "Финансы", "finance"), await ctx.staff("1002", "Администратор", "admin"), await ctx.staff("1003", "Маркетолог", "marketer")];
+
+    for (const cookie of others) {
+      expect((await send("POST", `/operations/${OPERATION_ID}/approve`, cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", `/operations/${OPERATION_ID}/reject`, cookie, { note: "Не согласовано" })).statusCode).toBe(403);
+    }
+    expect((await app!.inject({ method: "POST", url: `${BASE}/operations/${OPERATION_ID}/approve`, payload: {} })).statusCode).toBe(401);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("владелец: approve с комментарием и без, reject с причиной — сервису уходят id, автор и текст; ответ — операция", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const approved = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "Согласовано" });
+    const quiet = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, {});
+    const rejected = await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "Сумма не сходится" });
+
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json()).toEqual({ data: { operation: { ...OPERATION, status: "posted" } } });
+    expect(quiet.statusCode).toBe(200);
+    expect(rejected.json()).toEqual({ data: { operation: { ...OPERATION, status: "rejected", decisionNote: "Сумма не сходится" } } });
+    expect(ctx.operations.calls.map((call) => [call.method, call.args])).toEqual([
+      ["approve", [OPERATION_ID, "Согласовано"]],
+      ["approve", [OPERATION_ID, undefined]],
+      ["reject", [OPERATION_ID, "Сумма не сходится"]],
+    ]);
+    expect(ctx.operations.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it("решение с неверным телом — 400 и сервис не вызывается: reject без причины, короткая причина, лишнее поле, плохой id", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, {})).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "  " })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/reject`, owner, { note: "ab" })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "Согласовано", extra: 1 })).statusCode).toBe(400);
+    expect((await send("POST", `/operations/${OPERATION_ID}/approve`, owner, { note: "x".repeat(501) })).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/approve", owner, {})).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/reject", owner, { note: "Нет такой" })).statusCode).toBe(400);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("повторное решение доходит как 409 ledger_operation_not_pending", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    ctx.operations.failWith = new LedgerOperationNotPendingError(OPERATION_ID, "posted");
+
+    const response = await send("POST", `/operations/${OPERATION_ID}/approve`, owner, {});
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_pending");
+  });
+
+  const uploadReceipt = (cookie: string, bytes: Buffer, profile = "finance_receipt") =>
+    app!.inject({ method: "POST", url: "/api/v1/admin/media/images", headers: headers(cookie), payload: { profile, data: bytes.toString("base64") } });
+
+  it("снимок чека: финансам и владельцу загрузка — 200, маркетологу — 403; 640×480 принимается, сторона меньше 300 или больше 1600 — нет", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1010", "Финансы", "finance");
+    const marketer = await ctx.staff("1011", "Маркетолог", "marketer");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const receipt = receiptWebp(640, 480);
+
+    expect((await uploadReceipt(marketer, receipt)).statusCode).toBe(403);
+    expect(ctx.images.rows.size).toBe(0);
+    const uploaded = await uploadReceipt(finance, receipt);
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json()).toMatchObject({ data: { imageId: imageIdOf(receipt), width: 640, height: 480 } });
+    expect((await uploadReceipt(owner, receiptWebp(1_600, 300))).statusCode).toBe(200);
+    expect((await uploadReceipt(finance, receiptWebp(640, 299))).statusCode).toBe(400);
+    expect((await uploadReceipt(finance, receiptWebp(1_601, 400))).statusCode).toBe(400);
+  });
+
+  it("снимок чека показывают только тем, кто видит учёт: финансы и владелец — 200, маркетолог и администратор — 403, без сессии — 401; игроку — 404", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1012", "Финансы", "finance");
+    const marketer = await ctx.staff("1013", "Маркетолог", "marketer");
+    const admin = await ctx.staff("1014", "Администратор", "admin");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const receipt = receiptWebp(640, 480);
+    const { imageId } = (await uploadReceipt(finance, receipt)).json<{ data: { imageId: string } }>().data;
+    const adminPath = `/api/v1/admin/media/${imageId}.webp`;
+    expect(IMAGE_FILE.test(`${imageId}.webp`)).toBe(true);
+
+    for (const cookie of [finance, owner]) {
+      const shown = await app!.inject({ method: "GET", url: adminPath, headers: headers(cookie) });
+      expect(shown.statusCode).toBe(200);
+      expect(shown.rawPayload.equals(receipt)).toBe(true);
+      // Чек — не публичная картинка: ни CDN, ни общий кеш его хранить не должны.
+      expect(String(shown.headers["cache-control"])).toMatch(/private/);
+      expect(String(shown.headers["cache-control"])).not.toMatch(/public/);
+    }
+    for (const cookie of [marketer, admin]) expect((await app!.inject({ method: "GET", url: adminPath, headers: headers(cookie) })).statusCode).toBe(403);
+    expect((await app!.inject({ method: "GET", url: adminPath })).statusCode).toBe(401);
+
+    // Адреса игрока для чека нет, даже когда картинка уже в памяти реплики после показа в панели.
+    expect((await app!.inject({ method: "GET", url: imagePath(imageId) })).statusCode).toBe(404);
+  });
+
+  it("картинки других профилей закрытие не задевает: слайд главной видит любой вошедший в панель и игрок", async () => {
+    const ctx = await start();
+    const marketer = await ctx.staff("1015", "Маркетолог", "marketer");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const square = receiptWebp(512, 512);
+
+    expect((await uploadReceipt(owner, square, "home_slide")).statusCode).toBe(200);
+    const imageId = imageIdOf(square);
+
+    expect((await app!.inject({ method: "GET", url: `/api/v1/admin/media/${imageId}.webp`, headers: headers(marketer) })).statusCode).toBe(200);
+    expect((await app!.inject({ method: "GET", url: imagePath(imageId) })).statusCode).toBe(200);
   });
 });
