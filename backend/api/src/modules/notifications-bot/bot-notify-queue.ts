@@ -18,6 +18,8 @@ import { BotNotifySender } from "./bot-notify-sender.js";
  *   постановка ничего не удвоит;
  * - площадка просит подождать — задание встаёт заново с её паузой, не больше
  *   `MAX_DEFERRALS` раз, потом исход «не доставлено»;
+ * - тихие часы (Р199) — задание встаёт заново на конец тихих часов, один раз и
+ *   без траты `MAX_DEFERRALS`: это не отказ площадки;
  * - сбой базы или Redis — штатный повтор BullMQ с растущей паузой;
  * - темп общий на все реплики: лимитер BullMQ живёт в Redis.
  */
@@ -35,6 +37,8 @@ const jobSchema = z.object({
   payload: z.unknown(),
   /** сколько раз площадка уже просила подождать */
   deferrals: z.number().int().min(0).default(0),
+  /** задание уже ждало конца тихих часов (Р199): второй раз не откладывается */
+  quietDeferred: z.boolean().default(false),
 });
 
 type BotJob = z.input<typeof jobSchema>;
@@ -93,6 +97,10 @@ export class BotNotifyQueue implements OnModuleInit, OnApplicationBootstrap, OnM
     const data = jobSchema.parse(job.data);
     const delivery = await this.sender.deliver(data);
     if (delivery.status === "failed") this.log("warn", "bot_notify_rejected", { kind: data.kind, reason: delivery.reason });
+    if (delivery.status === "deferred") {
+      await this.deferToMorning(data, delivery.afterSec);
+      return;
+    }
     if (delivery.status !== "retry") return;
     if (data.deferrals >= MAX_DEFERRALS || this.queue === null) {
       await this.notifications.markBot(data.notificationId, "failed");
@@ -105,6 +113,17 @@ export class BotNotifyQueue implements OnModuleInit, OnApplicationBootstrap, OnM
       ENQUEUE_TIMEOUT_MS,
       "очередь дубля в бота",
     );
+  }
+
+  /** Тихие часы: то же задание после их конца, с отметкой, что откладывалось. Счётчик отказов площадки не меняется. */
+  private async deferToMorning(data: z.output<typeof jobSchema>, afterSec: number): Promise<void> {
+    if (this.queue === null) {
+      await this.notifications.markBot(data.notificationId, "failed");
+      this.log("warn", "bot_notify_deferred_out", { kind: data.kind });
+      return;
+    }
+    const next: BotJob = { ...data, quietDeferred: true };
+    await withTimeout(this.queue.add("notify", next, { ...JOB_OPTIONS, jobId: `${data.notificationId}-q`, delay: Math.max(1, afterSec) * 1000 }), ENQUEUE_TIMEOUT_MS, "очередь дубля в бота");
   }
 
   private log(level: "log" | "warn", event: string, fields: Record<string, unknown>): void {

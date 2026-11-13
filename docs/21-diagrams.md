@@ -2733,7 +2733,8 @@ flowchart LR
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
         NOTIF["notifications<br/>лента уведомлений: пишут модули,<br/>чистка старше 90 дней, реализовано"]
-        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, реализовано"]
+        NOTIFBOT["notifications-bot<br/>дубль в бота по выбору игрока:<br/>очередь, потолок вида, тихие часы с Р199, реализовано"]
+        BOTMSGS["bot-messages<br/>правила сообщений бота: звук и тихие часы,<br/>событие bot_message_sent, сборка оформленного<br/>сообщения из RichDocument, реализовано"]
         BADGES["badges<br/>знаки меню одним ответом:<br/>счётчики соседей, реализовано"]
         HISTORY["history<br/>история имущества: чтение<br/>журналов кошелька, предметов<br/>и покупок, реализовано"]
         DAILY["daily<br/>награда дня: неделя без сброса,<br/>ступени, множитель уровня, реализовано"]
@@ -3034,6 +3035,9 @@ flowchart LR
     NOTIFBOT -- "можно ли писать: account_messaging" --> PG
     NOTIFBOT -. "выбор игрока" .-> ACCSET
     NOTIFBOT -. "порт Messengers: sendMessage" .-> TGADP
+    NOTIFBOT -. "звук и тихие часы дубля, событие отправки" .-> BOTMSGS
+    BOTMSGS -- "bot-loud:аккаунт:день, INCR + EXPIRE" --> REDIS
+    BOTMSGS -. "серверное событие bot_message_sent" .-> EVENTS
     REMINDERS -. "season_overtaken, season_closing, daily_reward_ready: notify" .-> NOTIF
     REMINDERS -- "награда дня, рейтинговые забеги, account_messaging, итог суток" --> PG
     REMINDERS -- "лок прохода, курсоры, снимок, окна потолка" --> REDIS
