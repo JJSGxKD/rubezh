@@ -39,7 +39,7 @@ import {
   type EvolutionRecipe,
   type GuideEnemy,
 } from "./guide-data";
-import { ElementList, ElementTag, ResistLine } from "./elements";
+import { ElementList, ElementTag, ResistLine, TrailLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
@@ -306,6 +306,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
           <ResistLine def={def} />
+          <TrailLine def={def} />
           {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />

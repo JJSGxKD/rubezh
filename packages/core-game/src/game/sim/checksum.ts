@@ -80,6 +80,16 @@ export function checksumWorld(world: World): number {
     fold(siege.rng.getState());
   }
 
+  // Лужи — только живые: суммы забегов без врагов со следом не меняются.
+  const puddles = world.hazards.puddles;
+  for (let i = 0; i < puddles.alive.length; i++) {
+    if (puddles.alive[i] === 0) continue;
+    fold(i);
+    fold(puddles.x[i]);
+    fold(puddles.y[i]);
+    fold(puddles.ttl[i]);
+  }
+
   // Директор Карачуна без правил или выключенный в сумму не входит: суммы забегов без него не меняются.
   const stalker = world.stalker;
   if (stalker.appear !== null && stalker.phase !== "off") {

@@ -87,6 +87,26 @@ export const MAX_PATTERN_RADIUS = Math.max(
 );
 
 /**
+ * Коридоры следа врага (`trail`, Р157): мельче 12 единиц лужу не видно, крупнее
+ * 60 она закрывает полполя; жизнь и частота держат число луж на поле в пуле
+ * (`sim/hazards.ts`), урон — в пределах того, что игрок успевает заметить.
+ */
+export const TRAIL_BOUNDS = {
+  everySec: { min: 0.5, max: 5, label: "0,5…5" },
+  radius: { min: 12, max: 60, label: "12…60" },
+  lifeSec: { min: 1, max: 8, label: "1…8" },
+  damagePerSec: { min: 1, max: 20, label: "1…20" },
+} as const;
+
+/** След врага, разложенный для симуляции: радиус уже в пикселях устройства, время — в секундах. */
+export interface EnemyTrail {
+  everySec: number;
+  radius: number;
+  lifeSec: number;
+  damagePerSec: number;
+}
+
+/**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.
  * Один и тот же вид объекта у всех типов — горячий цикл читает поля без
  * ветвлений и без проверок на `undefined`.
@@ -231,6 +251,8 @@ export interface EnemyType {
   element: number;
   /** шанс наложить состояние на игрока за попадание */
   statusChance: number;
+  /** след из луж; `null` — враг следа не оставляет */
+  trail: EnemyTrail | null;
 }
 
 /**
@@ -295,6 +317,25 @@ function findBaseProblems(def: EnemyDef): string[] {
   const chance = def.statusChance;
   if (chance !== undefined && (!(chance >= 0 && chance <= 1) || !elemental)) {
     problems.push(`враг ${def.id}: statusChance от 0 до 1 и только со стихией`);
+  }
+  if (def.trail !== undefined) problems.push(...findTrailProblems(def.id, def.trail));
+  return problems;
+}
+
+/** След — непроверенные данные, как и параметры паттерна: админка пришлёт JSON. */
+function findTrailProblems(id: string, trail: unknown): string[] {
+  if (typeof trail !== "object" || trail === null || Array.isArray(trail)) return [`враг ${id}: trail должен быть объектом`];
+  const raw = trail as Record<string, unknown>;
+  const problems: string[] = [];
+  for (const key of Object.keys(TRAIL_BOUNDS) as (keyof typeof TRAIL_BOUNDS)[]) {
+    const bounds = TRAIL_BOUNDS[key];
+    const value = raw[key];
+    if (typeof value !== "number" || !(value >= bounds.min && value <= bounds.max)) {
+      problems.push(`враг ${id}: trail.${key} вне ${bounds.label}`);
+    }
+  }
+  for (const key of Object.keys(raw)) {
+    if (!(key in TRAIL_BOUNDS)) problems.push(`враг ${id}: trail.${key} не относится к следу`);
   }
   return problems;
 }
@@ -437,6 +478,15 @@ export function resolveEnemyTypes(defs: readonly EnemyDef[], unitScale: number):
       resistMul: ELEMENTS.map((element) => (element === "physical" ? 1 : 1 - (def.resist?.[element] ?? 0))),
       element: def.element === undefined ? ELEMENT_PHYSICAL : ELEMENTS.indexOf(def.element),
       statusChance: def.element === undefined ? 0 : (def.statusChance ?? 1),
+      trail:
+        def.trail === undefined
+          ? null
+          : {
+              everySec: def.trail.everySec,
+              radius: def.trail.radius * unitScale,
+              lifeSec: def.trail.lifeSec,
+              damagePerSec: def.trail.damagePerSec,
+            },
     };
   });
 }
