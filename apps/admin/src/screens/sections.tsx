@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
+import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
@@ -56,6 +57,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
   tasks: () => <TasksScreen />,
+  balance: (id, tab) => <BalanceScreen id={id} tab={tab} />,
   rating: (id, tab) => <RatingScreen id={id} tab={tab} />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,
