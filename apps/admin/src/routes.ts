@@ -1,4 +1,4 @@
-import { Activity, Award, BookOpen, Briefcase, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, Award, BookOpen, Briefcase, BriefcaseBusiness, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -104,6 +104,10 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "csp", title: "Блокировки клиента", hint: "Какие адреса политика источников клиента заблокировала и сколько раз", permission: "diagnostics.view", icon: ShieldX },
       { id: "exports", title: "Выгрузки", hint: "Архив событий и отчётов диагностики за период", permission: "data.export", icon: Download },
     ],
+  },
+  {
+    title: "Партнёрам",
+    sections: [{ id: "cabinet", title: "Кабинет", hint: "Ваши ссылки и промокоды: переходы, запуски и копии кодов с новым словом", permission: "partner.cabinet", icon: BriefcaseBusiness }],
   },
   {
     title: "Команда",
