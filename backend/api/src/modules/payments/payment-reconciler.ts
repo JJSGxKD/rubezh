@@ -24,7 +24,7 @@ import {
   type DiscrepancyResolution,
   type ReconcileTrigger,
 } from "./payment-reconcile.js";
-import { PAYMENT_RECONCILE_REPOSITORY, type DiscrepancyRow, type PaymentReconcileRepository } from "./payment-reconcile.repository.js";
+import { PAYMENT_RECONCILE_REPOSITORY, type DiscrepancyRow, type InsertedFound, type PaymentReconcileRepository } from "./payment-reconcile.repository.js";
 import { PurchaseActionUnavailableError } from "./payments-errors.js";
 import { PaymentsHooks } from "./payments-hooks.js";
 
@@ -272,6 +272,9 @@ export class PaymentReconciler implements OnApplicationBootstrap, OnModuleDestro
     const runId = randomUUID();
     const read: StatementEntry[] = [];
     let started = false;
+    // Что уже вставлено и сколько было открыто: сбой после вставки не должен потерять сообщение команде.
+    let fresh: InsertedFound | null = null;
+    let openBefore = 0;
     try {
       const last = await this.repository.lastFinished(platform);
       if (trigger === "schedule" && !due(last?.finishedAt ?? null, now)) return null;
@@ -291,6 +294,7 @@ export class PaymentReconciler implements OnApplicationBootstrap, OnModuleDestro
 
       // Открытые расхождения — до вставки новых: «закрылось само» относится только к прежним.
       const openRows = await this.repository.open(platform);
+      openBefore = openRows.length;
       const open = openRows.flatMap((row) => {
         const kind = kindSchema.safeParse(row.kind);
         return kind.success ? [{ discrepancyId: row.discrepancyId, kind: kind.data, chargeId: row.chargeId }] : [];
@@ -303,6 +307,7 @@ export class PaymentReconciler implements OnApplicationBootstrap, OnModuleDestro
 
       const found = compare({ entries, byCharge, byPayload, paidInWindow, now });
       const inserted = await this.repository.insertFound(runId, platform, found, now);
+      fresh = inserted;
 
       const closing = settled(open, {
         recordedCharges: new Set(byCharge.keys()),
@@ -325,25 +330,34 @@ export class PaymentReconciler implements OnApplicationBootstrap, OnModuleDestro
       });
 
       this.log("log", "reconcile_finished", { platform, trigger, fromOffset, toOffset, scanned: entries.length, found: inserted.inserted, matched, open: openAfter });
-      const kinds: Partial<Record<DiscrepancyKind, number>> = {};
-      for (const item of inserted.items) {
-        kinds[item.kind] = (kinds[item.kind] ?? 0) + 1;
-        this.log("warn", "discrepancy_found", { platform, kind: item.kind, chargeId: item.chargeId, purchaseId: item.purchaseId });
-      }
-      if (inserted.inserted > 0) await this.hooks.emitReconcileFound({ platform, found: inserted.inserted, open: openAfter, kinds, at: now });
+      await this.announce(platform, inserted, openAfter, now);
       return { platform, scanned: entries.length, found: inserted.inserted, matched, open: openAfter, error: null };
     } catch (error: unknown) {
       const reason = clipError(error);
       this.log("warn", "reconcile_failed", { platform, trigger, reason });
+      // Расхождения уже в базе, а следующая сверка найдёт их не новыми: сообщение уходит сейчас, число открытых — с запасом.
+      if (fresh !== null) await this.announce(platform, fresh, openBefore + fresh.inserted, now);
+      const foundBefore = fresh?.inserted ?? 0;
       if (started) {
         // Курсор не пишется: следующая сверка начнёт с того же места. Прочитанное — для разбора, не для курсора.
         const covered = coverOf(read);
         await this.repository
-          .finishRun(runId, { finishedAt: finishedAt(now, startedMs), toOffset: null, coveredFrom: covered?.from ?? null, coveredTo: covered?.to ?? null, scanned: read.length, found: 0, matched: 0, error: reason })
+          .finishRun(runId, { finishedAt: finishedAt(now, startedMs), toOffset: null, coveredFrom: covered?.from ?? null, coveredTo: covered?.to ?? null, scanned: read.length, found: foundBefore, matched: 0, error: reason })
           .catch((writeError: unknown) => this.log("error", "reconcile_run_unwritten", { platform, runId, reason: reasonOf(writeError) }));
       }
-      return { platform, scanned: read.length, found: 0, matched: 0, open: 0, error: reason };
+      return { platform, scanned: read.length, found: foundBefore, matched: 0, open: 0, error: reason };
     }
+  }
+
+  /** Новые расхождения — в лог, а команде — одним сообщением; ничего нового — тишина. */
+  private async announce(platform: PlatformId, inserted: InsertedFound, open: number, now: Date): Promise<void> {
+    if (inserted.inserted === 0) return;
+    const kinds: Partial<Record<DiscrepancyKind, number>> = {};
+    for (const item of inserted.items) {
+      kinds[item.kind] = (kinds[item.kind] ?? 0) + 1;
+      this.log("warn", "discrepancy_found", { platform, kind: item.kind, chargeId: item.chargeId, purchaseId: item.purchaseId });
+    }
+    await this.hooks.emitReconcileFound({ platform, found: inserted.inserted, open, kinds, at: now });
   }
 
   /**

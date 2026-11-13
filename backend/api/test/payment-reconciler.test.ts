@@ -94,6 +94,8 @@ class MemoryReconcileRepository implements PaymentReconcileRepository {
   readonly byIdsCalls: string[][] = [];
   readonly windows: { platform: PlatformId; from: Date; to: Date }[] = [];
   failStartRun = false;
+  /** Итог удачной сверки не записался (один раз): база упала после вставки расхождений. */
+  failNextFinish = false;
 
   /** Удачная сверка прошлых суток — как строка в базе. */
   succeeded(platform: PlatformId, toOffset: number, finishedAt: Date): void {
@@ -171,6 +173,10 @@ class MemoryReconcileRepository implements PaymentReconcileRepository {
   }
 
   async finishRun(runId: string, result: FinishedRun): Promise<void> {
+    if (this.failNextFinish && result.error === null) {
+      this.failNextFinish = false;
+      throw new Error("база недоступна");
+    }
     const run = this.runs.find((candidate) => candidate.runId === runId);
     if (run === undefined) throw new Error("нет строки сверки");
     Object.assign(run, result);
@@ -779,6 +785,23 @@ describe("PaymentReconciler: расхождения и сообщение ком
       ["charged_unrecorded", "c2", null],
       ["refund_unrecorded", "c3", s.repository.purchases[0]?.purchaseId],
     ]);
+  });
+
+  it("база упала после вставки расхождений — сообщение уходит всё равно: следующая сверка найдёт их не новыми", async () => {
+    const s = setup();
+    seed(s);
+    s.repository.failNextFinish = true;
+
+    const [summary] = (await s.reconciler.run("schedule", null, NOW)) ?? [];
+
+    expect(summary).toMatchObject({ platform: "telegram", found: 3, error: "база недоступна" });
+    expect(s.repository.runs[0]).toMatchObject({ toOffset: null, found: 3, error: "база недоступна" });
+    expect(s.found).toEqual([{ platform: "telegram", found: 3, open: 3, kinds: { charged_unrecorded: 2, refund_unrecorded: 1 }, at: NOW }]);
+    // Курсор не двинулся: следующая сверка читает то же место и новых расхождений уже не видит.
+    s.found.length = 0;
+    await s.reconciler.run("schedule", null, new Date(NOW.getTime() + 60_000));
+    expect(s.statement.calls.at(-1)).toEqual({ offset: 0, limit: 100 });
+    expect(s.found).toEqual([]);
   });
 
   it("слушатель сообщения упал — сверка не падает", async () => {
