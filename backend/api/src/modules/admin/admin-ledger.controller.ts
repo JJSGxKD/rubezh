@@ -14,6 +14,8 @@ import { OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type Operati
 import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
 import type { OperationFilter } from "../ledger/operations/operations.repository.js";
 import { OperationsService } from "../ledger/operations/operations.service.js";
+import type { PeriodListItem, PeriodReportView } from "../ledger/periods/period-view.js";
+import { PeriodsService } from "../ledger/periods/periods.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -70,6 +72,13 @@ const ARTICLE_PROBLEM = "Некорректная статья: название
 const ID_PROBLEM = "Некорректный идентификатор";
 
 const operationIdSchema = z.string().uuid();
+
+/** Месяц учёта в адресе: «ГГГГ-ММ» с месяцем от 01 до 12. */
+const periodSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/u);
+const PERIOD_PROBLEM = "Некорректный месяц: нужен вид ГГГГ-ММ";
+/** Причина снятия закрытия: длину проверяет сервис (3…500 знаков), здесь — что это строка и больше ничего. */
+const reopenSchema = z.strictObject({ reason: z.string() });
+const REOPEN_PROBLEM = "Для снятия закрытия нужна причина — строка reason";
 const OPERATION_ID_PROBLEM = "Некорректный идентификатор операции";
 
 /** Список операций: статус и вид необязательны, страница — по курсору, как у журнала. */
@@ -101,6 +110,9 @@ function parseOperation(body: unknown): OperationInput {
  * Ручные операции (Р220, tasks/T-0461): перевод, обмен, расход, поступление, заём и исправление. Человек
  * описывает событие, сервер собирает проводку; черновик правится, проведённая операция — нет. Список и показ —
  * `ledger.view`, внесение, правка, проведение и удаление черновика — `finance.entry.create`.
+ *
+ * Месяцы учёта (Р222, tasks/T-0468): список и отчёт месяца — `ledger.view`; поставить на сверку, закрыть и снять
+ * закрытие — `finance.period.close`, право только у владельца. Правила состояний, расчёт и аудит — `PeriodsService`.
  */
 @Controller("admin/ledger")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -109,6 +121,7 @@ export class AdminLedgerController {
     private readonly ledger: LedgerService,
     private readonly chart: LedgerChartService,
     private readonly operations: OperationsService,
+    private readonly periods: PeriodsService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -248,6 +261,46 @@ export class AdminLedgerController {
   async discardOperation(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
     const actor = await this.mutator(request);
     await this.operations.discard(actor, parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Get("periods")
+  @RequirePermission("ledger.view")
+  async listPeriods(): Promise<{ data: { periods: PeriodListItem[] } }> {
+    return { data: { periods: await this.periods.list() } };
+  }
+
+  @Get("periods/:period")
+  @RequirePermission("ledger.view")
+  async period(@Param("period") period: string): Promise<{ data: { period: PeriodReportView } }> {
+    return { data: { period: await this.periods.report(parse(() => periodSchema.parse(period), PERIOD_PROBLEM)) } };
+  }
+
+  @Post("periods/:period/review")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async reviewPeriod(@Req() request: unknown, @Param("period") period: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.periods.startReview(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Post("periods/:period/close")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async closePeriod(@Req() request: unknown, @Param("period") period: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.periods.close(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Post("periods/:period/reopen")
+  @HttpCode(200)
+  @RequirePermission("finance.period.close")
+  async reopenPeriod(@Req() request: unknown, @Param("period") period: string, @Body() body: unknown): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    const input = parse(() => reopenSchema.parse(body), REOPEN_PROBLEM);
+    await this.periods.reopen(actor, parse(() => periodSchema.parse(period), PERIOD_PROBLEM), input.reason);
     return { data: { ok: true } };
   }
 
