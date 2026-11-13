@@ -411,6 +411,93 @@ describe("переброс за рекламу в оболочке", () => {
     });
   });
 
+  describe("смена забега", () => {
+    const NEXT_RUN_ID = "run-reroll-2";
+    const started = { runId: NEXT_RUN_ID, difficultyId: "hard", startingWeaponId: "spark" };
+
+    it("«Ещё раз» не размонтирует экран, но заметка забега A не показывается на выборе с тем же номером в забеге B", async () => {
+      const fake = await choosing();
+      outcomes = [{ kind: "closed" }];
+      await useAdReroll.getState().prepare(input());
+      await useAdReroll.getState().watch();
+      const seqA = useRun.getState().offerSeq;
+      expect(useAdReroll.getState()).toMatchObject({ notice: "closed", noticeSeq: seqA });
+
+      useRun.getState().restart();
+      // Сразу после рестарта, до того как экран что-то перерисует: от забега A не осталось ничего.
+      expect(useAdReroll.getState()).toMatchObject({ stage: { kind: "idle" }, notice: null, noticeSeq: null, runId: null, watched: null, offeredSeq: null });
+
+      fake.emit("started", started);
+      levelUp(fake);
+      // Номера выбора в двух забегах совпали: именно это раньше выдавало чужую заметку.
+      expect(useRun.getState().offerSeq).toBe(seqA);
+      const { notice, noticeSeq } = useAdReroll.getState();
+      expect(noticeSeq === useRun.getState().offerSeq ? notice : null).toBeNull();
+    });
+
+    it("в новом забеге заряды есть, prepare не зовётся — стор всё равно чист", async () => {
+      const fake = await choosing();
+      outcomes = [{ kind: "failed" }];
+      await useAdReroll.getState().prepare(input());
+      await useAdReroll.getState().watch();
+      expect(useAdReroll.getState().notice).toBe("failed");
+
+      useRun.getState().restart();
+      fake.emit("started", started);
+      levelUp(fake, { tools: { reroll: 1, skip: 1, banish: 1 }, canAdReroll: false });
+      expect(useAdReroll.getState()).toMatchObject({ stage: { kind: "idle" }, notice: null, runId: null });
+    });
+
+    it("готовая кнопка забега A исчезает при рестарте: нажатие до нового вопроса ничего не забирает и ролика не показывает", async () => {
+      const fake = await choosing();
+      await useAdReroll.getState().prepare(input());
+      expect(useAdReroll.getState().stage).toEqual({ kind: "ready", pass: false });
+
+      useRun.getState().restart();
+      fake.emit("started", started);
+      await useAdReroll.getState().watch();
+
+      expect(watched).toBe(0);
+      expect(server.asked.filter((entry) => entry.startsWith("claim"))).toEqual([]);
+      expect(fake.calls).toEqual([]);
+    });
+
+    it("забег B спрашивает сервер о себе, а сброс на смену забега не трогает уже закреплённый за ним стор", async () => {
+      const fake = await choosing();
+      await useAdReroll.getState().prepare(input());
+
+      useRun.getState().restart();
+      fake.emit("started", started);
+      levelUp(fake);
+      await useAdReroll.getState().prepare(input({ runId: NEXT_RUN_ID }));
+      expect(server.asked).toEqual([`view:${RUN_ID}`, `view:${NEXT_RUN_ID}`]);
+      expect(useAdReroll.getState()).toMatchObject({ runId: NEXT_RUN_ID, stage: { kind: "ready", pass: false } });
+
+      // Обновление карточек и новый выбор забега не сбрасывают кнопку: id забега прежний.
+      levelUp(fake, { refreshed: true });
+      levelUp(fake, { level: 6 });
+      expect(useAdReroll.getState()).toMatchObject({ runId: NEXT_RUN_ID, stage: { kind: "ready", pass: false } });
+    });
+
+    it("выход с экрана забега тоже сбрасывает стор: ответ сервера по ушедшему забегу ничего не меняет", async () => {
+      await choosing();
+      let release: (value: ApiResult<AdRerollView>) => void = () => undefined;
+      let asked = 0;
+      server.view = () => {
+        asked++;
+        return new Promise((resolve) => (release = resolve));
+      };
+      const asking = useAdReroll.getState().prepare(input());
+      await vi.waitFor(() => expect(asked).toBe(1));
+
+      useRun.getState().stop();
+      expect(useAdReroll.getState()).toMatchObject({ stage: { kind: "idle" }, runId: null });
+      release({ ok: true, data: { status: "available", pass: null } });
+      await asking;
+      expect(useAdReroll.getState().stage).toEqual({ kind: "idle" });
+    });
+  });
+
   describe("стор забега", () => {
     it("запоминает забег из started и несёт canAdReroll из выбора; новый выбор считается, обновление карточек — нет", async () => {
       const fake = await choosing();
