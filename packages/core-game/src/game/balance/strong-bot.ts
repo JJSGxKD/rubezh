@@ -8,6 +8,7 @@ import { BANISH_PREFIX, canReroll, itemKeyOf, REROLL_COMMAND } from "../progress
 import { ORBITER_RADIUS } from "../weapons";
 import { createDirection, ringDirection } from "../sim/directions";
 import type { Bot } from "./bot";
+import { stalkerFleeDirection } from "./stalker-flee";
 
 /**
  * Сильный бот калибровки — модель опытного игрока (Р194, T-0389).
@@ -493,6 +494,7 @@ function chooseGap(
 }
 
 const gap = { x: 1, y: 0 };
+const fleeAway = { x: 0, y: 0 };
 
 export function createStrongBot(options: StrongBotOptions): Bot {
   const { stance } = options;
@@ -507,6 +509,20 @@ export function createStrongBot(options: StrongBotOptions): Bot {
 
   return {
     input(world): SimInput {
+      // От неубиваемого уходят обе стойки: живой человек со связкой тоже не стоит под ним (Р205).
+      // Шаг и пауза стоящего на время бегства не действуют, а отсчёт после него начинается заново.
+      if (stalkerFleeDirection(world, fleeAway)) {
+        stepLeft = 0;
+        pauseLeft = 0;
+        const recalculate = calls % STRONG_BOT.reactionTicks === 0;
+        calls++;
+        if (recalculate) {
+          chooseGap(world, holdDistance(world), fleeAway.x, fleeAway.y, null, gap);
+          lastX = gap.x;
+          lastY = gap.y;
+        }
+        return { moveX: lastX, moveY: lastY };
+      }
       if (stance === "stand" && world.stats.elapsedSec >= STAND_FROM_SEC) return standInput(world);
 
       const recalculate = calls % STRONG_BOT.reactionTicks === 0;
