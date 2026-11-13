@@ -156,4 +156,9 @@ describe("отображение чисел и времени", () => {
     expect(formatDelta(-20)).toBe("−20");
     expect(formatDelta(0)).toBe("0");
   });
+
+  it("раздел «Участники»: виден с revenue.split.view и не виден с одним revenue.split.own.view", () => {
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).toContain("stakeholders");
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).not.toContain("stakeholders");
+  });
 });

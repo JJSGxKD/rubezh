@@ -119,6 +119,9 @@ export function describeNotification(item: NotificationItem): Described | null {
     }
     case "daily_reward_ready":
       return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
+    // Команде (T-0309): заявка на правку цены ждёт подтверждения; решается в панели, поэтому касание никуда не ведёт.
+    case "change_request_pending":
+      return { icon: <Megaphone size={20} />, title: t("notification.change_request_pending.title"), text: t("notification.change_request_pending", { name: typeof item.data.authorName === "string" ? item.data.authorName : t("notifications.someone") }), target: null };
     default:
       return null;
   }
