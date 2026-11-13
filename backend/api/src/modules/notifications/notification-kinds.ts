@@ -56,6 +56,11 @@ export const NOTIFICATION_KINDS = {
   season_closing: z.object({ endsAt: z.iso.datetime() }),
   /** напоминание: награда дня сегодня не забрана */
   daily_reward_ready: z.object({}),
+  /**
+   * пасс месяца закрыт: незабранные награды зачислены сами (T-0312); месяц `ГГГГ-ММ`, наград не
+   * больше, чем в двух лентах по 30 ступеней
+   */
+  pass_closed: z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/), rewards: z.number().int().min(1).max(60) }),
   /** команде: новая заявка на правку цены ждёт подтверждения второго участника (T-0309); в бота не дублируется */
   change_request_pending: z.object({ requestId: z.string().uuid(), kind: id, target: id, authorName: name }),
 } as const;

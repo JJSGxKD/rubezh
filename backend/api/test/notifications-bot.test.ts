@@ -516,3 +516,55 @@ describe("сообщение бота о компенсации и возвра�
     });
   });
 });
+
+/**
+ * Закрытие месяца пасса (tasks/T-0312): уведомление дублируется в бота тем же путём, что сообщение
+ * команды, — ключ игрока `bot.teamMessage`, без потолка, не напоминание. Без правила в `BOT_NOTIFY`
+ * очередь вид не принимает, и текст бота остался бы мёртвым.
+ */
+describe("сообщение бота о закрытии пасса (T-0312)", () => {
+  /** 21:00 UTC — полночь по Москве: тихие часы напоминаний */
+  const QUIET = new Date(Date.UTC(2026, 10, 4, 21, 0));
+  const payload = { month: "2026-10", rewards: 5 };
+  let s: ReturnType<typeof setup>;
+
+  const job = (accountId: string, data: unknown = payload): BotNotifyJob => ({ notificationId: randomUUID(), accountId, kind: "pass_closed", payload: data });
+
+  beforeEach(() => {
+    s = setup({ "reminders.enabled": true });
+  });
+
+  it("у вида есть правило дубля: ключ bot.teamMessage, включено, без потолка, не напоминание", () => {
+    expect(botRuleOf("pass_closed")).toEqual({ setting: "bot.teamMessage", byDefault: true, throttleSec: 0 });
+    expect(botRuleOf("pass_closed")).not.toHaveProperty("reminder");
+    expect(botRuleOf("pass_closed")).toEqual(botRuleOf("team_message"));
+  });
+
+  it("уходит текстом и кнопкой в игру; в тихие часы не задерживается, окно напоминаний не занимает", async () => {
+    const target = await player(s);
+
+    expect(await s.sender.deliver(job(target.accountId), QUIET)).toEqual({ status: "sent" });
+    expect(s.messenger.sent).toHaveLength(1);
+    expect(s.messenger.sent[0]?.message.text).toBe("Пасс октября закрыт: 5 наград зачислено на счёт.");
+    expect(s.messenger.sent[0]?.message.button).toEqual({ text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-pass_closed" });
+    expect(s.messenger.sent[0]?.message).not.toHaveProperty("action");
+    expect([...s.redis.keys.keys()]).not.toContain(`bot-notify:${target.accountId}:reminder`);
+  });
+
+  it("игрок выключил «Сообщения команды» — бот молчит, а строка ленты остаётся", async () => {
+    const target = await player(s);
+    s.settings.set("bot.teamMessage", false);
+
+    expect(await s.sender.deliver(job(target.accountId), NOW)).toEqual({ status: "skipped", reason: "opted_out" });
+    expect(s.messenger.sent).toEqual([]);
+  });
+
+  it("писать нельзя — не пишем; данные не по схеме — писать нечего", async () => {
+    const blocked = await player(s, false);
+    expect(await s.sender.deliver(job(blocked.accountId), NOW)).toEqual({ status: "skipped", reason: "not_allowed" });
+
+    const target = await player(s);
+    expect(await s.sender.deliver(job(target.accountId, { month: "2026-10", rewards: 0 }), NOW)).toEqual({ status: "skipped", reason: "bad_payload" });
+    expect(s.messenger.sent).toEqual([]);
+  });
+});

@@ -77,6 +77,10 @@ function textOf(kind: string, payload: unknown): string | null {
       const data = NOTIFICATION_KINDS.daily_reward_ready.safeParse(payload);
       return data.success ? "Награда дня ждёт тебя в «Рубеже». Загляни и забери её сегодня." : null;
     }
+    case "pass_closed": {
+      const data = NOTIFICATION_KINDS.pass_closed.safeParse(payload);
+      return data.success ? passClosedText(data.data.month, data.data.rewards) : null;
+    }
     default:
       return null;
   }
@@ -105,4 +109,15 @@ function purchaseSupportText(data: NotificationPayload<"purchase_support">): str
 /** `ЧЧ:ММ` по Москве: сезон кончается в 03:00, и игроку важно именно московское время. */
 function moscowTime(at: Date): string {
   return TIME_FORMAT.format(at);
+}
+
+const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"] as const;
+
+/** «Пасс октября закрыт: 5 наград зачислено на счёт.» — месяц в родительном падеже, сказуемое согласуется с числом. */
+function passClosedText(month: string, rewards: number): string {
+  const name = MONTHS_GENITIVE[Number(month.slice(5, 7)) - 1] ?? month;
+  const lastTwo = rewards % 100;
+  const last = rewards % 10;
+  const phrase = last === 1 && lastTwo !== 11 ? "награда зачислена" : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14) ? "награды зачислены" : "наград зачислено";
+  return `Пасс ${name} закрыт: ${String(rewards)} ${phrase} на счёт.`;
 }

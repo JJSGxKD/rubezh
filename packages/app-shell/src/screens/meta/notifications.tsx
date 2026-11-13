@@ -119,6 +119,9 @@ export function describeNotification(item: NotificationItem): Described | null {
     }
     case "daily_reward_ready":
       return { icon: <CalendarCheck size={20} />, text: t("notification.daily_reward_ready"), target: "daily", over: true };
+    // Пасс месяца закрыт (T-0312): тот же текст, что в сообщении бота. Экран пасса — T-0314, пока касание никуда не ведёт.
+    case "pass_closed":
+      return passClosed(item.data);
     // Команде (T-0309): заявка на правку цены ждёт подтверждения; решается в панели, поэтому касание никуда не ведёт.
     case "change_request_pending":
       return { icon: <Megaphone size={20} />, title: t("notification.change_request_pending.title"), text: t("notification.change_request_pending", { name: typeof item.data.authorName === "string" ? item.data.authorName : t("notifications.someone") }), target: null };
@@ -171,6 +174,21 @@ function purchaseSupport(data: Record<string, unknown>): Described | null {
   const text = t(`notification.purchase_support.refunded.${data.reason}`, { stars: formatNumber(stars), date });
   return { icon: <Undo2 size={20} />, title: t("notification.purchase_support.refunded.title"), text: data.revoked === true ? `${text} ${t("notification.purchase_support.revoked")}` : text, target: null };
 }
+
+/**
+ * «Пасс октября закрыт: 5 наград зачислено на счёт.» Месяц приходит как `ГГГГ-ММ`; родительный падеж
+ * берётся у числа с днём — отдельно названный месяц стоит в именительном. Битые данные — строки нет.
+ */
+function passClosed(data: Record<string, unknown>): Described | null {
+  const rewards = amountOf(data.rewards);
+  const match = typeof data.month === "string" ? /^(\d{4})-(0[1-9]|1[0-2])$/.exec(data.month) : null;
+  if (rewards === 0 || match === null) return null;
+  const month = PASS_MONTH.formatToParts(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1))).find((part) => part.type === "month")?.value;
+  if (month === undefined) return null;
+  return { icon: <Gift size={20} />, text: t("notification.pass_closed", { month, amount: formatNumber(rewards), n: rewards }), target: null };
+}
+
+const PASS_MONTH = new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" });
 
 /** Срок закрытия — датой вперёд: относительное «минут назад» из `formatWhen` для будущего не годится. */
 const CLOSED_DATE = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
