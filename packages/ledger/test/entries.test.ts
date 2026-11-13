@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerAccount } from "../src/accounts.js";
-import { findEntryProblems, periodOf, reverse, type EntryDraft } from "../src/entries.js";
+import { findEntryProblems, periodOf, periodOfEntry, reverse, type EntryDraft } from "../src/entries.js";
 
 const AT = new Date("2026-11-01T10:00:00Z");
 
@@ -148,5 +148,50 @@ describe("periodOf", () => {
     expect(periodOf(new Date("2026-11-01T00:00:00.000Z"))).toBe("2026-11");
     expect(periodOf(new Date("2026-01-05T12:00:00Z"))).toBe("2026-01");
     expect(periodOf(new Date("2026-12-31T23:59:59Z"))).toBe("2026-12");
+  });
+});
+
+describe("месяц проводки «за какой месяц»", () => {
+  it("без period месяц берётся из даты", () => {
+    expect(periodOfEntry(PAID)).toBe("2026-11");
+  });
+
+  it("period раньше месяца даты — без проблем, и он же месяц проводки", () => {
+    const late = draft(PAID.lines, { period: "2026-10" });
+    expect(findEntryProblems(late, ACCOUNTS)).toEqual([]);
+    expect(periodOfEntry(late)).toBe("2026-10");
+  });
+
+  it("period равен месяцу даты — без проблем", () => {
+    expect(findEntryProblems(draft(PAID.lines, { period: "2026-11" }), ACCOUNTS)).toEqual([]);
+  });
+
+  it("расход «за будущий месяц» запрещён", () => {
+    expect(findEntryProblems(draft(PAID.lines, { period: "2026-12" }), ACCOUNTS)).toContainEqual({
+      kind: "bad_period",
+      period: "2026-12",
+    });
+    expect(findEntryProblems(draft(PAID.lines, { period: "2027-01" }), ACCOUNTS)).toContainEqual({
+      kind: "bad_period",
+      period: "2027-01",
+    });
+  });
+
+  it("не «YYYY-MM» — bad_period", () => {
+    for (const period of ["2026-13", "2026-00", "2026-1", "26-10", "2026/10", "2026-10-01", ""]) {
+      expect(findEntryProblems(draft(PAID.lines, { period }), ACCOUNTS)).toContainEqual({ kind: "bad_period", period });
+    }
+  });
+
+  it("граница месяца по UTC: 1 декабря 00:00 — декабрь допустим, 30 ноября 23:59 — нет", () => {
+    const first = draft(PAID.lines, { at: new Date("2026-12-01T00:00:00Z"), period: "2026-12" });
+    expect(findEntryProblems(first, ACCOUNTS)).toEqual([]);
+    const last = draft(PAID.lines, { at: new Date("2026-11-30T23:59:59Z"), period: "2026-12" });
+    expect(findEntryProblems(last, ACCOUNTS)).toContainEqual({ kind: "bad_period", period: "2026-12" });
+  });
+
+  it("сторно не переносит period исходной проводки", () => {
+    const back = reverse(draft(PAID.lines, { period: "2026-10" }), "r1", AT, "возврат");
+    expect(back.period).toBeUndefined();
   });
 });
