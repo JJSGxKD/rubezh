@@ -12,6 +12,7 @@ zones:
   - packages/app-shell/test/guide-stalker.test.ts
   - packages/app-shell/test/run-stalker-event.test.ts
 shared:
+  - packages/core-game/src/index.ts
   - packages/app-shell/src/screens/guide/guide-data.ts
   - packages/app-shell/src/screens/guide/GuideScreen.tsx
   - packages/app-shell/src/screens/guide/scenes.tsx
@@ -104,7 +105,7 @@ batch: 5
    - `"guide.unkillable.title": "Неубиваемые"`;
    - `"guide.unkillable.text": "Их нельзя убить — уходи. Удары только отталкивают, и каждый следующий подряд слабее. Касание снимает треть здоровья. Скоро он растворится сам."`;
    - `"guide.enemy.karachun.myth": "Дух внезапной смерти и самой длинной ночи в году. Недаром говорят: «пришёл карачун» — значит, конец пришёл без спроса."`;
-   - `"guide.enemy.karachun.when": "Приходит после {time}, внезапно и с любой стороны, и гонится 10–20 секунд."` — `{time}` из `STALKER.appear.fromSec` через `formatDuration` («4:00»);
+   - `"guide.enemy.karachun.when": "Приходит после {time}, внезапно и с любой стороны, и гонится {min}–{max} секунд."` — `{time}` из `STALKER.appear.fromSec` через `formatDuration` («4:00»), `{min}` и `{max}` из `STALKER.appear.chaseSec` (числа только из контента);
    - `"guide.enemy.karachun.omen": "Перед ним на земле проступает иней звездой и стелется холодный туман. Видишь иней — уходи с этого места."`.
 7. **Сцена `stalker`** в `scenes.tsx` вместо заглушки: герой, Карачун фигурой
    `hood` в лунной кайме, между ними пунктир толчка назад и иней звездой у
