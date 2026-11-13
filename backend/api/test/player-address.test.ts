@@ -87,6 +87,9 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "purchase_action_unavailable", fragment: "запустите сверку с Telegram" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
+  // компенсация за сбой оплаты в панели (T-0435): оба текста владельцу задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "Повторите учёт — знак мецената встанет сам" },
+  { code: "compensation_pending", fragment: "нажмите «Компенсировать» ещё раз" },
 ];
 
 /** Существительные и формы, похожие на повелительное «-ите/-йте/-ьте», но им не являющиеся. */
