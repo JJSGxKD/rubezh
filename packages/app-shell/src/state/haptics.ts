@@ -61,10 +61,17 @@ const GLOBAL_MIN_INTERVAL_MS = 35;
 const lastAt = new Map<HapticEvent, number>();
 let lastAnyAt = Number.NEGATIVE_INFINITY;
 
-export function haptic(event: HapticEvent, nowMs: number = performance.now()): boolean {
+export function haptic(
+  event: HapticEvent,
+  nowMs: number = performance.now(),
+): boolean {
   if (!useSettings.getState().haptics) return false;
   const rule = HAPTIC_RULES[event];
-  if (nowMs - (lastAt.get(event) ?? Number.NEGATIVE_INFINITY) < rule.minIntervalMs) return false;
+  if (
+    nowMs - (lastAt.get(event) ?? Number.NEGATIVE_INFINITY) <
+    rule.minIntervalMs
+  )
+    return false;
   if (nowMs - lastAnyAt < GLOBAL_MIN_INTERVAL_MS) return false;
   lastAt.set(event, nowMs);
   lastAnyAt = nowMs;
@@ -77,7 +84,10 @@ export function haptic(event: HapticEvent, nowMs: number = performance.now()): b
  * важнее почувствовать: взрыв динамита и взрыв рядом сильнее попадания,
  * появление элиты — предупреждение, подбор — мягкое подтверждение.
  */
-export function hapticForCues(cues: RunCues, nowMs: number = performance.now()): HapticEvent | null {
+export function hapticForCues(
+  cues: RunCues,
+  nowMs: number = performance.now(),
+): HapticEvent | null {
   const event: HapticEvent | null =
     cues.dynamite > 0
       ? "dynamite"
