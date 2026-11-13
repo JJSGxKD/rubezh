@@ -122,7 +122,10 @@ export function planCueSounds(cues: RunCues, gemStreak: number): SoundRequest[] 
   // (`35-stage4-plan.md`, Р57): угрозу читают глазами по телеграфу, а ухо
   // слышит результат — попадание по игроку. Появление элиты остаётся: это
   // предупреждение, а не атака.
+  // Предвестие Карачуна — начало угрозы, а не атака (Р205): звучит и стоит выше рогов.
+  if ((cues.stalkerOmens ?? 0) > 0) add("stalkerOmen");
   if (cues.playerHit > 0) add("hurt");
+  if ((cues.stalkerTouches ?? 0) > 0) add("stalkerStrike");
   if (cues.dynamite > 0) add("dynamite");
   if (cues.freeze > 0) add("freeze");
   // Босс — тоже элита по рангу, но звучит своим рогом: элитный рог здесь

@@ -18,6 +18,7 @@ import type {
   StoredLedgerEntry,
   StoredLedgerLine,
 } from "../src/modules/ledger/ledger.repository.js";
+import { describeProblem } from "../src/modules/ledger/ledger-problems.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
 
 /**
@@ -149,6 +150,13 @@ describe("журнал учёта: запись проводки", () => {
     await service.post(paid(1, 50n, { at: new Date("2026-10-31T22:30:00Z") }));
 
     expect(repository.entries[0]?.period).toBe("2026-10");
+  });
+
+  it("описание проблемы «bad_period» — русский текст с самим месяцем", () => {
+    const text = describeProblem({ kind: "bad_period", period: "2026-13" });
+
+    expect(text).toContain("2026-13");
+    expect(text).toContain("ГГГГ-ММ");
   });
 
   it("проводку вносит человек — в createdBy его аккаунт", async () => {

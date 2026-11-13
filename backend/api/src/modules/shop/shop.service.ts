@@ -19,7 +19,8 @@ import { ShopChoice, choiceOf } from "./shop-choice.js";
 import { ShopSkuNotFoundError, ShopSkuUnavailableError } from "./shop-errors.js";
 import { promoOffer, type PromoRow } from "./shop-promo-rules.js";
 import { ShopPromoService } from "./shop-promo.service.js";
-import { SHOP_SKUS, contentsOf, priceProduct, skuById, type ShopKind, type ShopResource, type ShopSku } from "./shop-catalog.js";
+import { contentsOf, priceProduct, type ShopKind, type ShopResource, type ShopSku } from "./shop-catalog.js";
+import { NO_SHOP_OVERRIDES, ShopOverrides } from "./shop-overrides.js";
 
 /**
  * Магазин (docs/35-stage4-plan.md §3.6, WP10): витрина с ценой способа оплаты
@@ -88,6 +89,8 @@ export class ShopService implements OnModuleInit {
     private readonly revocation: PurchaseRevocation = new PurchaseRevocation(),
     private readonly restrictions: AccountRestrictions,
     private readonly choice: ShopChoice,
+    // Правки команды поверх каталога (T-0309); без них — каталог в коде, как у тестов без базы.
+    private readonly overrides: ShopOverrides = new ShopOverrides(NO_SHOP_OVERRIDES),
   ) {}
 
   onModuleInit(): void {
@@ -96,7 +99,7 @@ export class ShopService implements OnModuleInit {
   }
 
   async view(account: AccountRef, at = new Date()): Promise<ShopView> {
-    const skus = [...SHOP_SKUS].sort((a, b) => a.sort - b.sort);
+    const skus = [...(await this.overrides.skus())].sort((a, b) => a.sort - b.sort);
     const owned = await this.payments.ownedOnce(
       account,
       skus.filter((sku) => sku.once).map((sku) => sku.id),
@@ -141,7 +144,7 @@ export class ShopService implements OnModuleInit {
   async order(account: AccountRef, skuId: string, at = new Date()): Promise<ShopInvoice> {
     // Закрытые покупки (T-0024) отвечают раньше всего остального: аккаунту незачем знать, что с товаром.
     await this.restrictions.ensure(account.accountId, "purchases", at);
-    const sku = skuById(skuId);
+    const sku = await this.overrides.sku(skuId);
     if (sku === undefined) throw new ShopSkuNotFoundError();
     const method = methodFor(account.platform);
     if (method === undefined) throw new PaymentsUnsupportedError();
@@ -172,7 +175,7 @@ export class ShopService implements OnModuleInit {
    * открытых счетов (`INVOICE_TTL_SEC`).
    */
   async fulfill(purchase: StoredPurchase): Promise<void> {
-    const sku = purchase.sku === null ? undefined : skuById(purchase.sku);
+    const sku = purchase.sku === null ? undefined : await this.overrides.sku(purchase.sku);
     if (sku === undefined) throw new UndeliverableError(`товара ${purchase.sku ?? "—"} нет в каталоге — выдавать нечего`);
     for (const { resource, amount } of contentsOf(sku)) {
       await this.wallet.grant({

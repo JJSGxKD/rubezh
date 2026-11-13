@@ -233,6 +233,35 @@ export const SOUND_RECIPES = {
     ],
   },
 
+  // Карачун: предвестие — полторы секунды на то, чтобы понять, откуда он выйдет
+  // (Р205). Это начало угрозы, а не атака врага, поэтому звучит. Не рог: нет
+  // низа и пилы, только шипящий выдох с полосой, что поднимается к концу, и
+  // треск инея щелчками — не спутать с телеграфом рывка и рогом элиты.
+  stalkerOmen: {
+    bus: "threats", level: 0.5, voices: 1, gap: 1.2, send: 0.5, duck: 1.2, dur: 1.6, variants: 1,
+    layers: [
+      { kind: "hiss", dur: 1.6, seed: 201, filter: "bandpass", f0: 1400, f1: 4200, glide: 1.5, q: 2.5, attack: 1.3, peak: 0.34, decay: 0.3 },
+      { kind: "hiss", t: 0.4, dur: 1.2, seed: 202, filter: "highpass", f0: 6500, attack: 0.9, peak: 0.08, decay: 0.25 },
+      { kind: "tone", wave: "sine", f0: 880, f1: 1760, glide: 1.5, attack: 1.2, peak: 0.04, decay: 0.3 },
+      { kind: "hiss", t: 0.95, dur: 0.02, seed: 211, filter: "highpass", f0: 7000, peak: 0.22, decay: 0.015 },
+      { kind: "hiss", t: 1.12, dur: 0.02, seed: 212, filter: "highpass", f0: 7600, peak: 0.26, decay: 0.015 },
+      { kind: "hiss", t: 1.27, dur: 0.02, seed: 213, filter: "highpass", f0: 7000, peak: 0.28, decay: 0.015 },
+      { kind: "hiss", t: 1.38, dur: 0.02, seed: 214, filter: "highpass", f0: 8000, peak: 0.3, decay: 0.015 },
+      { kind: "hiss", t: 1.47, dur: 0.02, seed: 215, filter: "highpass", f0: 7400, peak: 0.3, decay: 0.015 },
+    ],
+  },
+
+  // Касание Карачуна звучит поверх обычного `hurt`: глухой тяжёлый удар с
+  // ледяным призвуком — «это не крыса» слышно сразу.
+  stalkerStrike: {
+    bus: "player", level: 0.6, voices: 1, gap: 0.3, send: 0.2, duck: 0.4, dur: 0.4, variants: 1,
+    layers: [
+      { kind: "tone", f0: 95, f1: 42, glide: 0.16, peak: 0.7, decay: 0.26 },
+      { kind: "hiss", dur: 0.14, seed: 221, filter: "lowpass", f0: 700, f1: 200, glide: 0.12, peak: 0.4, decay: 0.12 },
+      { kind: "bell", f: 2637, t: 0.02, peak: 0.1, decay: 0.28, ratio: 3.5, index: 0.8 },
+    ],
+  },
+
   // --- персонаж ---------------------------------------------------------------
   hurt: {
     bus: "player", level: 0.55, voices: 1, gap: 0.18, send: 0.05, duck: 0.25, dur: 0.24, variants: 2, pitch: [1, 0.91],

@@ -3,8 +3,8 @@ id: T-0454
 title: Раздел «Участники» в панели — доли и их история
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0452]
