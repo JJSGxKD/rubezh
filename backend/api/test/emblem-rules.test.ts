@@ -302,6 +302,56 @@ describe("каталог заданий: виды status и season", () => {
     expect(accepted({ tier: "easy" })).toBe(false);
   });
 
+  it("у знака статуса и сезона нет заказчика, модели оплаты, ставки и удержания", () => {
+    // Заказчик продаёт действие вне игры (Р138): знак держат, а не выполняют. Рядом с редкостью знака
+    // поля заказчика не уживаются ни по одному из двух правил схемы, ни по CHECK в базе (params у знака пуст).
+    expect(accepted({ customer: "Acme", payModel: "cpa", rate: 40 })).toBe(false);
+    expect(accepted({ customer: "Acme", payModel: "rs", rate: 1250 })).toBe(false);
+    expect(accepted({ holdDays: 1 })).toBe(false);
+    expect(accepted({ holdDays: 7 })).toBe(false);
+    expect(accepted({ payModel: "cpa" })).toBe(false);
+    expect(accepted({ rate: 10 })).toBe(false);
+    for (const kind of EMBLEM_KINDS) {
+      expect(accepted({ kind, category: kind, customer: "Acme", payModel: "cpa", rate: 40 }), kind).toBe(false);
+      expect(accepted({ kind, category: kind, holdDays: 3 }), kind).toBe(false);
+    }
+    // без полей заказчика — как прежде, а пустые значения берутся умолчаниями
+    const parsed = taskDefSchema.parse(row());
+    expect(parsed).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+    expect(taskDefSchema.safeParse(row({ ...NO_ACHIEVEMENT_FIELDS, category: "status", hint: "Оформить VIP", emblemTier: "legendary" })).success).toBe(true);
+  });
+
+  it("у достижения со знаком заказчика тоже нет, а у партнёрской цели с заказчиком знака нет", () => {
+    expect(taskDefSchema.safeParse(merit({ customer: "Acme", payModel: "cpa", rate: 40 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(merit({ holdDays: 1 })).success).toBe(false);
+    const partner = {
+      taskId: "p_channel",
+      period: "achievement",
+      kind: "channel",
+      target: 1,
+      title: "Канал",
+      coins: 10,
+      gems: 0,
+      shards: 0,
+      passPoints: 0,
+      sort: 1,
+      active: true,
+      params: { platform: "telegram", chat: "@example_channel", url: "https://t.me/example_channel" },
+      customer: "Acme",
+      payModel: "cpa",
+      rate: 40,
+      holdDays: 3,
+    };
+    expect(taskDefSchema.safeParse(partner).success).toBe(true);
+    expect(taskDefSchema.safeParse({ ...partner, emblemTier: "rare" }).success).toBe(false);
+  });
+
+  it("общий литерал пустых полей несёт обе группы: знак у имени и заказчика", () => {
+    expect(Object.keys(NO_ACHIEVEMENT_FIELDS).sort()).toEqual(
+      ["category", "customer", "emblemTier", "hidden", "hint", "holdDays", "ladder", "payModel", "prestige", "rate", "rung"].sort(),
+    );
+  });
+
   it("редкость знака — из шкалы, у достижения принимается любая", () => {
     for (const tier of EMBLEM_TIERS) expect(taskDefSchema.safeParse(merit({ emblemTier: tier })).success, tier).toBe(true);
     expect(taskDefSchema.safeParse(merit({ emblemTier: "gold" })).success).toBe(false);

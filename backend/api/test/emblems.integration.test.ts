@@ -27,7 +27,7 @@ import { RolesService, type AccountRef } from "../src/modules/roles/roles.servic
 import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { TaskNotFoundError, TaskShapeLockedError } from "../src/modules/tasks/tasks-errors.js";
-import type { TaskDef } from "../src/modules/tasks/task-rules.js";
+import { NO_ACHIEVEMENT_FIELDS, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
 import { PrismaVipRepository } from "../src/modules/vip/vip.repository.js";
@@ -759,6 +759,61 @@ describe.skipIf(!live)("знаки у имени на живых Postgres и Red
         await tasks.save(actor, before);
       }
       expect(await current("ach_boost_1")).toEqual(before);
+    });
+
+    it("знак у имени и заказчик живут в одной строке каталога: у знака заказчика нет, у партнёрской цели знака нет, правка одной группы другую не трогает", async () => {
+      // Строки знаков — из миграции, поля заказчика (миграция раньше по порядку) у них пусты.
+      expect(await current("emb_vip")).toMatchObject({ emblemTier: "legendary", customer: null, payModel: null, rate: null, holdDays: 0 });
+      // База держит это и сама: params у знака пуст, а заказчик и удержание — только у партнёрской цели.
+      await expect(prisma.$executeRaw`UPDATE task_def SET customer = 'X', pay_model = 'cpa', rate = 5 WHERE task_id = 'emb_vip'`).rejects.toThrow();
+      await expect(prisma.$executeRaw`UPDATE task_def SET hold_days = 1 WHERE task_id = 'emb_season_top10'`).rejects.toThrow();
+
+      // Достижение со знаком: правка редкости не заводит заказчика, прежняя редкость возвращается.
+      const merit = await current("ach_boost_50");
+      expect(merit).toMatchObject({ emblemTier: "rare", customer: null, payModel: null, rate: null, holdDays: 0 });
+      try {
+        await tasks.save(actor, { ...merit, emblemTier: "epic" });
+        expect(await current("ach_boost_50")).toMatchObject({ emblemTier: "epic", customer: null, payModel: null, rate: null, holdDays: 0 });
+      } finally {
+        await tasks.save(actor, merit);
+      }
+      expect(await current("ach_boost_50")).toEqual(merit);
+
+      // Партнёрская цель с заказчиком: записывается и читается вместе с каталогом знаков, редкости знака у неё нет.
+      const id = `it_emb_cust_${STAMP}`;
+      const partner: TaskDef = {
+        taskId: id,
+        period: "achievement",
+        kind: "channel",
+        params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" },
+        filter: null,
+        tier: null,
+        target: 1,
+        title: null,
+        coins: 10,
+        gems: 0,
+        shards: 0,
+        passPoints: 0,
+        sort: 0,
+        active: false,
+        limit: null,
+        image: null,
+        ...NO_ACHIEVEMENT_FIELDS,
+        customer: "Канал «Игровой угол»",
+        payModel: "cpa",
+        rate: 40,
+        holdDays: 3,
+      };
+      try {
+        await tasks.save(actor, partner);
+        expect(await current(id)).toMatchObject({ emblemTier: null, customer: "Канал «Игровой угол»", payModel: "cpa", rate: 40, holdDays: 3 });
+        await tasks.save(actor, { ...partner, payModel: "rs", rate: 1_250, holdDays: 7 });
+        expect(await current(id)).toMatchObject({ emblemTier: null, customer: "Канал «Игровой угол»", payModel: "rs", rate: 1_250, holdDays: 7 });
+        // Знаки статуса и сезона правка партнёрской цели не задела.
+        expect(await current("emb_vip")).toMatchObject({ emblemTier: "legendary", customer: null, holdDays: 0 });
+      } finally {
+        await prisma.$executeRaw`DELETE FROM task_def WHERE task_id = ${id}`;
+      }
     });
   });
 
