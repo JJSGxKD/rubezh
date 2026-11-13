@@ -3,12 +3,15 @@ import { Inject, Injectable } from "@nestjs/common";
 import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import type { PlatformId } from "../../platforms/ports/platform.js";
-import { DISCREPANCY_KINDS, type DiscrepancyKind, type FoundDiscrepancy, type KnownPurchase, type ReconcileTrigger } from "./payment-reconcile.js";
+import { DISCREPANCY_KINDS, type DiscrepancyKind, type DiscrepancyResolution, type FoundDiscrepancy, type KnownPurchase, type ReconcileTrigger } from "./payment-reconcile.js";
 
 /**
  * Хранилище сверки оплат в Postgres (Р209, WP53, tasks/T-0433): строки
  * сверок, расхождения и чтение покупок для сравнения. Запрос к базе живёт
  * здесь, а не в сервисе (docs/15-engineering-standards.md §2.3).
+ *
+ * Действия команды над расхождением (tasks/T-0434) — чтение и условный захват
+ * `claim`, интерфейс `PaymentDiscrepancyStore`.
  *
  * Внешних ключей у таблиц нет: покупки у «списано, но не записано» может не
  * быть, а аккаунт нужен только для показа. Площадка покупки — площадка её
@@ -128,6 +131,24 @@ export interface PaymentReconcileRepository {
   overview(now: Date): Promise<ReconcileRows>;
 }
 
+/**
+ * Чтение и захват расхождений для действий команды (Р209, tasks/T-0434). Отдельный интерфейс: сверке
+ * они не нужны, а подставные хранилища её тестов не обязаны их знать. Реализует всё тот же класс Postgres.
+ */
+export interface PaymentDiscrepancyStore {
+  /** Расхождение по идентификатору, открытое или закрытое; нет — `null`. */
+  byId(discrepancyId: string): Promise<DiscrepancyRow | null>;
+  /** Все расхождения покупки, открытые и закрытые, по времени обнаружения. */
+  byPurchase(purchaseId: string): Promise<DiscrepancyRow[]>;
+  /** Открытые расхождения этих покупок — пометка ленты платежей. */
+  openByPurchases(purchaseIds: readonly string[]): Promise<DiscrepancyRow[]>;
+  /**
+   * Занять открытое расхождение под решение человека: условное обновление `resolved_at is null`, поэтому из двух
+   * одновременных нажатий занимает одно. `true` — занял; расхождение уже закрыто или его нет — `false`.
+   */
+  claim(discrepancyId: string, resolution: DiscrepancyResolution, actorAccountId: string, note: string, at: Date): Promise<boolean>;
+}
+
 /** Поля строки расхождения для обзора: без `run_id` — он нужен базе, а не панели. */
 const DISCREPANCY_SELECT = {
   discrepancyId: true,
@@ -172,7 +193,7 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
 }
 
 @Injectable()
-export class PrismaPaymentReconcileRepository implements PaymentReconcileRepository {
+export class PrismaPaymentReconcileRepository implements PaymentReconcileRepository, PaymentDiscrepancyStore {
   constructor(@Inject(PRISMA) private readonly prisma: PrismaClient) {}
 
   async lastFinished(platform: PlatformId): Promise<LastFinished | null> {
@@ -290,6 +311,41 @@ export class PrismaPaymentReconcileRepository implements PaymentReconcileReposit
       closed += result.count;
     }
     return closed;
+  }
+
+  async byId(discrepancyId: string): Promise<DiscrepancyRow | null> {
+    return await this.prisma.paymentDiscrepancy.findUnique({ where: { discrepancyId }, select: DISCREPANCY_SELECT });
+  }
+
+  async byPurchase(purchaseId: string): Promise<DiscrepancyRow[]> {
+    return await this.prisma.paymentDiscrepancy.findMany({
+      where: { purchaseId },
+      orderBy: [{ detectedAt: "asc" }, { discrepancyId: "asc" }],
+      select: DISCREPANCY_SELECT,
+    });
+  }
+
+  async openByPurchases(purchaseIds: readonly string[]): Promise<DiscrepancyRow[]> {
+    const found: DiscrepancyRow[] = [];
+    for (const part of chunks(purchaseIds, CHUNK)) {
+      found.push(
+        ...(await this.prisma.paymentDiscrepancy.findMany({
+          where: { purchaseId: { in: part }, resolvedAt: null },
+          orderBy: [{ detectedAt: "asc" }, { discrepancyId: "asc" }],
+          select: DISCREPANCY_SELECT,
+        })),
+      );
+    }
+    return found;
+  }
+
+  async claim(discrepancyId: string, resolution: DiscrepancyResolution, actorAccountId: string, note: string, at: Date): Promise<boolean> {
+    // `resolved_at: null` — условие занятия: закрытое (само, другим нажатием) не перезаписывается.
+    const result = await this.prisma.paymentDiscrepancy.updateMany({
+      where: { discrepancyId, resolvedAt: null },
+      data: { resolvedAt: at, resolution, resolvedBy: actorAccountId, note },
+    });
+    return result.count === 1;
   }
 
   async overview(now: Date): Promise<ReconcileRows> {
