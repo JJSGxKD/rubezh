@@ -3,7 +3,7 @@ id: T-0431
 title: Брошенные задания оплаты и «Повторить учёт» — сервер
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
