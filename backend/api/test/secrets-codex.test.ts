@@ -76,7 +76,7 @@ describe("награда за кодекс: достижение, а не отд
       kind: "secrets_kinds",
       target: 6,
       title: "Следопыт",
-      coins: 400,
+      coins: 800,
       gems: 0,
       shards: 0,
       passPoints: 0,
