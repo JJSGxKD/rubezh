@@ -8,6 +8,8 @@ import { PrismaLedgerChartRepository } from "../src/modules/ledger/ledger-chart.
 import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.js";
 import { PrismaLedgerRepository } from "../src/modules/ledger/ledger.repository.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
+import type { OperationApprovals } from "../src/modules/ledger/operations/approval.js";
+import type { MediaService } from "../src/modules/media/media.service.js";
 import type { OperationInput } from "../src/modules/ledger/operations/operation-input.js";
 import type { OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import { PrismaOperationsRepository } from "../src/modules/ledger/operations/operations.repository.js";
@@ -102,7 +104,9 @@ describe.skipIf(DATABASE_URL === "")("ручные операции учёта �
     chart = new LedgerChartService(new PrismaLedgerChartRepository(prisma), ledger, roles);
     const fx = { peek: async () => ({ takenAt: new Date(), rates: rates({ RUB: "0.0125", GRAM: "5" }), payout: rates({ XTR: "0.013" }) }) } as unknown as FxService;
     operationsRepository = new PrismaOperationsRepository(prisma);
-    operations = new OperationsService(operationsRepository, ledger, chart, fx, roles);
+    // Второй ключ и снимок чека (T-0462) проверяет `ledger-approval.integration.test.ts`: здесь операции проводятся сразу.
+    const approvals = { required: async () => false } as unknown as OperationApprovals;
+    operations = new OperationsService(operationsRepository, ledger, chart, fx, roles, approvals, { require: async () => undefined } as unknown as MediaService);
 
     // У звёзд — шаблон «1 % + 5 звёзд»: обе части в валюте места, поэтому плательщик фиксы однозначен и на общей базе.
     const created = [

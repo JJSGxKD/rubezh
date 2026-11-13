@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PublicIdentityModule } from "../../common/public-identity.js";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { RatingModule } from "../rating/rating.module.js";
@@ -47,7 +48,7 @@ import { RunsViewService } from "./runs-view.service.js";
  * экспорт.
  */
 @Module({
-  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule],
+  imports: [AuthModule, AdsModule, RestrictionsModule, WalletModule, RatingModule, PublicIdentityModule],
   controllers: [RunsController, RunAdContinueController, RunAdRerollController, RunGemContinueController],
   providers: [
     RunsService,
@@ -78,7 +79,7 @@ import { RunsViewService } from "./runs-view.service.js";
   // Хуки, чтение и рейтинг — сводке плейтеста, карточке `/start` и
   // уведомлениям в чат: они читают забеги, но не принимают их. Сверку
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
-  // предметов, престиж в строках рейтинга — модуль достижений; награду, бусты и добычу в листе забега — их модули.
+  // предметов, престиж в строках рейтинга — модуль достижений (знак у имени — через общий порт `PublicIdentity`); награду, бусты и добычу в листе забега — их модули.
   // Отчёт забега и решения разбора (Р203) — ручкам панели: контроллер живёт в модуле панели, ему сервис нужен экспортом.
   exports: [RunsService, RunsViewService, RunReviewService, RunsHooks, PrologueService, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
