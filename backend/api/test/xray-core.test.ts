@@ -757,7 +757,7 @@ describe("ключ интеграций github.xray-update", () => {
   it("описание: ключ, сервис, только из панели, ссылка на выпуск токена", () => {
     expect(secret.key).toBe("github.xray-update");
     expect(secret.service).toBe("Обновление ядра Xray · GitHub");
-    expect(secret.fromEnv({} as never)).toBeNull();
+    expect(secret.fromEnv()).toBeNull();
     expect(secret.cabinetUrl).toBe("https://github.com/settings/personal-access-tokens/new");
   });
 
