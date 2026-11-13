@@ -105,6 +105,6 @@ describe("размер врага: запас запросов к сетке", (
   it("преследователь с рангом или size — ошибка контента: запас его не покрывает", () => {
     expect(findEnemyContentProblems([enemyOf("stalker", { rank: "boss" })]).join(" ")).toMatch(/у преследователя нет ранга и size/);
     expect(findEnemyContentProblems([enemyOf("stalker", { size: 1.2 })]).join(" ")).toMatch(/у преследователя нет ранга и size/);
-    expect(findEnemyContentProblems([enemyOf("stalker")]).join(" ")).not.toMatch(/у преследователя нет ранга и size/);
+    expect(findEnemyContentProblems([enemyOf("stalker", {})]).join(" ")).not.toMatch(/у преследователя нет ранга и size/);
   });
 });
