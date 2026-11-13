@@ -67,7 +67,7 @@ describe("каталог сцен эффектов", () => {
     expect(scene?.commands.some((command) => command.kind === "summonStalker")).toBe(true);
     expect(scene?.cheats?.freezeEnemies).not.toBe(true);
     expect(scene?.ticks).toBe(150);
-    expect(scene?.note).toContain("предвестие");
+    expect(scene?.note.toLowerCase()).toContain("предвестие инеем 1,5 с");
   });
 
   it("неизвестная сцена — null", () => {
