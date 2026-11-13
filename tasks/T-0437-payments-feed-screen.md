@@ -18,6 +18,7 @@ zones:
   - apps/admin/src/screens/players/PurchasesPanel.tsx
   - apps/admin/test/payments.test.ts
 shared:
+  - apps/admin/src/api/players.ts
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
