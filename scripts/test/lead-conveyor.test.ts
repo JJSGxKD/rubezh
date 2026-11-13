@@ -195,6 +195,7 @@ describe("файлы конвейера", () => {
     "test-env.sh",
     "train-status.mjs",
     "workflow-running.mjs",
+    "metrics.mjs",
   ];
 
   it("все на месте", () => {
