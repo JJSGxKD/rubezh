@@ -29,6 +29,7 @@ shared:
   - scripts/test/event-dictionary.test.ts
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: high
