@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AdminApi } from "../src/api/client";
 import {
+  CATEGORY_TITLES,
   CLIENT_KINDS,
+  EMBLEM_TIERS,
+  EMBLEM_TIER_TITLES,
   FILTER_KEYS,
   KIND_TITLES,
   NO_ACHIEVEMENT_FIELDS,
@@ -11,6 +14,7 @@ import {
   completionsLabel,
   fetchTasks,
   groupByPeriod,
+  isEmblemRow,
   networkTaskProblem,
   networkTaskState,
   reorderTasks,
@@ -496,5 +500,106 @@ describe("задания по сигналу клиента (T-0375)", () => {
     expect(CLIENT_KINDS.get("home_screen")).toBe("achievement");
     expect(CLIENT_KINDS.get("story_share")).toBe("weekly");
     expect(CLIENT_KINDS.has("channel")).toBe(false);
+  });
+});
+
+describe("знаки у имени в форме (T-0235)", () => {
+  const achievement = (patch: Partial<TaskDef> = {}) => task({ taskId: "ach_kills_100k", period: "achievement", kind: "kills", target: 100_000, coins: 1500, title: "Погибель орды", category: "combat", ...patch });
+  /** Заведённая миграцией строка знака статуса: цели и награды нет. */
+  const emblem = (patch: Partial<TaskDef> = {}) =>
+    task({ taskId: "emb_vip", period: "achievement", kind: "status", target: 1, coins: 0, title: "VIP", category: "status", hint: "Оформить VIP", emblemTier: "legendary", sort: 900, ...patch });
+
+  it("достижению можно поставить любую редкость знака или не ставить: без неё знака нет", () => {
+    expect(taskProblem(achievement(), false, [])).toBeNull();
+    for (const tier of EMBLEM_TIERS) expect(taskProblem(achievement({ emblemTier: tier }), false, []), tier).toBeNull();
+  });
+
+  it("у знака нужно название: безымянного знака рядом с именем не бывает", () => {
+    expect(taskProblem(achievement({ emblemTier: "epic", title: null }), false, [])).toMatch(/нужно название/);
+    expect(taskProblem(achievement({ emblemTier: "epic", title: "   " }), false, [])).toMatch(/нужно название/);
+    expect(taskProblem(achievement({ emblemTier: null, title: null }), false, [])).toBeNull();
+  });
+
+  it("знак у ежедневного и недельного задания — отказ", () => {
+    expect(taskProblem(task({ emblemTier: "rare" }), true, [])).toMatch(/только у достижений/);
+    expect(taskProblem(task({ period: "weekly", emblemTier: "rare" }), true, [])).toMatch(/только у достижений/);
+  });
+
+  it("знак статуса или сезона: без цели и награды сохраняется, нужны название, условие и редкость", () => {
+    expect(isEmblemRow(emblem())).toBe(true);
+    expect(isEmblemRow(achievement())).toBe(false);
+    expect(taskProblem(emblem(), false, [])).toBeNull();
+    expect(taskProblem(emblem({ kind: "season", category: "season", taskId: "emb_season_top10" }), false, [])).toBeNull();
+    expect(taskProblem(emblem({ title: null }), false, [])).toMatch(/нужно название/);
+    expect(taskProblem(emblem({ hint: null }), false, [])).toMatch(/нужна подсказка/);
+    expect(taskProblem(emblem({ hint: "   " }), false, [])).toMatch(/нужна подсказка/);
+    expect(taskProblem(emblem({ emblemTier: null }), false, [])).toMatch(/нужна редкость/);
+    expect(taskProblem(emblem({ hint: "я".repeat(121) }), false, [])).toMatch(/до 120/);
+  });
+
+  it("новый знак статуса или сезона форма не заведёт: их заводит миграция", () => {
+    expect(taskProblem(emblem({ taskId: "emb_new" }), true, [])).toMatch(/миграция/);
+  });
+
+  it("подписи: вид, категория, цель знака и редкость словами", () => {
+    expect(KIND_TITLES.status).toBe("Знак статуса");
+    expect(KIND_TITLES.season).toBe("Знак сезона");
+    expect(CATEGORY_TITLES.status).toBe("Статус");
+    expect(CATEGORY_TITLES.season).toBe("Сезоны");
+    expect(targetLabel(emblem())).toBe("—");
+    expect(rewardLabel(emblem())).toBe("");
+    expect(Object.keys(EMBLEM_TIER_TITLES)).toEqual([...EMBLEM_TIERS]);
+    expect(EMBLEM_TIERS).toEqual(["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"]);
+  });
+
+  it("знаки статуса и сезона лежат среди достижений, в конце по месту", () => {
+    const groups = groupByPeriod([emblem(), achievement({ sort: 130 })]);
+    expect(groups.find((group) => group.group === "achievement")?.tasks.map((row) => row.taskId)).toEqual(["ach_kills_100k", "emb_vip"]);
+    expect(taskGroupOf(emblem())).toBe("achievement");
+  });
+
+  it("сохранение: редкость знака уходит у достижения и знака статуса, у ежедневного — пусто", async () => {
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }), json(200, { data: task() }), json(200, { data: task() }));
+    const api = new AdminApi(fetch);
+    await saveTask(api, achievement({ emblemTier: "legendary" }));
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ emblemTier: "legendary", title: "Погибель орды" });
+    await saveTask(api, emblem({ title: " VIP ", hint: " Оформить VIP " }));
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ kind: "status", category: "status", emblemTier: "legendary", title: "VIP", hint: "Оформить VIP", coins: 0, target: 1 });
+    await saveTask(api, task({ emblemTier: "rare" }));
+    expect(JSON.parse(String(calls[2]?.init.body))).toMatchObject({ emblemTier: null });
+  });
+
+  it("у знака статуса и сезона нет заказчика и удержания: форма отказывает, а в запрос они не уходят", async () => {
+    expect(taskProblem(emblem({ customer: "Acme", payModel: "cpa", rate: 40 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ holdDays: 3 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ payModel: "rs" }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ rate: 10 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem(), false, [])).toBeNull();
+    // у достижения со знаком — тоже: заказчик только у партнёрской цели
+    expect(taskProblem(achievement({ emblemTier: "epic", customer: "Acme", payModel: "cpa", rate: 40 }), false, [])).toMatch(/только у партнёрских/);
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }), json(200, { data: task() }));
+    const api = new AdminApi(fetch);
+    await saveTask(api, emblem({ customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 }));
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ kind: "status", emblemTier: "legendary", customer: null, payModel: null, rate: null, holdDays: 0 });
+    // у партнёрской цели с заказчиком знака нет, а заказчик остаётся
+    await saveTask(api, task({ taskId: "p_channel", period: "achievement", kind: "channel", target: 1, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, emblemTier: "rare", customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 }));
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ emblemTier: null, customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 });
+  });
+
+  it("общий литерал пустых полей несёт знак у имени и заказчика", () => {
+    expect(NO_ACHIEVEMENT_FIELDS).toMatchObject({ emblemTier: null, customer: null, payModel: null, rate: null, holdDays: 0 });
+  });
+
+  it("смена срока на ежедневный снимает знак вместе с остальными полями достижения", () => {
+    expect(withPeriod(achievement({ emblemTier: "epic" }), "daily")).toMatchObject({ emblemTier: null, category: null });
+  });
+
+  it("каталог со знаками разбирается; от старого сервера без поля — со знаком «нет»", async () => {
+    const withEmblem = { ...emblem(), kind: "status" };
+    const old = { taskId: "ach_old", period: "achievement", kind: "kills", target: 10, title: null, coins: 10, gems: 0, shards: 0, passPoints: 0, sort: 10, active: true };
+    const { fetch } = fakeFetch(json(200, { data: { tasks: [withEmblem, old], kinds: ["kills", "status", "season"], periods: ["achievement"] } }));
+    const list = await fetchTasks(new AdminApi(fetch));
+    expect(list.ok && list.data.tasks[0]).toMatchObject({ taskId: "emb_vip", category: "status", emblemTier: "legendary" });
+    expect(list.ok && list.data.tasks[1]).toMatchObject({ emblemTier: null });
   });
 });
