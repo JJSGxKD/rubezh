@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { UpgradeOption } from "@bh/shared-types";
-import { cardTapAction, toolButtons } from "../src/screens/run/card-tools-rules";
+import { adRerollButton, cardTapAction, toolButtons } from "../src/screens/run/card-tools-rules";
 import { boostIcon } from "../src/screens/boost-icons";
 import ruBoosts from "../src/i18n/ru-boosts.json";
 import ruRun from "../src/i18n/ru-run.json";
@@ -65,6 +65,32 @@ describe("кнопки действий", () => {
   });
 });
 
+describe("кнопка переброса за рекламу (tasks/T-0199)", () => {
+  const ready = { kind: "ready", pass: false } as const;
+  const base = { left: tools(0, 0, 0), canAdReroll: true, stage: ready, banishing: false };
+
+  it("зарядов переброса нет, движок обещает переброс, стадия готова — кнопка есть; у VIP — с пометкой пропуска", () => {
+    expect(adRerollButton(base)).toEqual({ kind: "ready", pass: false });
+    expect(adRerollButton({ ...base, stage: { kind: "ready", pass: true } })).toEqual({ kind: "ready", pass: true });
+    // Заряды пропуска и изгнания кнопку не прячут: прячет только заряд переброса.
+    expect(adRerollButton({ ...base, left: tools(0, 2, 1) })).toEqual({ kind: "ready", pass: false });
+  });
+
+  it("пока идёт ролик — кнопка занята", () => {
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: false } })).toEqual({ kind: "busy" });
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: true } })).toEqual({ kind: "busy" });
+  });
+
+  it("есть заряд переброса, движок не обещает переброса, режим изгнания, стадии idle, checking и gone — кнопки нет", () => {
+    expect(adRerollButton({ ...base, left: tools(1, 0, 0) })).toEqual({ kind: "hidden" });
+    expect(adRerollButton({ ...base, canAdReroll: false })).toEqual({ kind: "hidden" });
+    expect(adRerollButton({ ...base, banishing: true })).toEqual({ kind: "hidden" });
+    for (const kind of ["idle", "checking", "gone"] as const) expect(adRerollButton({ ...base, stage: { kind } }), kind).toEqual({ kind: "hidden" });
+    // Идёт ролик, а режим изгнания включён: кнопки в режиме изгнания нет и тогда.
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: false }, banishing: true })).toEqual({ kind: "hidden" });
+  });
+});
+
 describe("тап по карточке", () => {
   it("обычный режим — выбор", () => {
     expect(cardTapAction("choose", option("weapon_new"))).toBe("choose");
@@ -88,6 +114,15 @@ describe("тексты и значок", () => {
       "run.tools.banish.cancel",
       "run.tools.caption",
       "run.tools.left",
+      "run.tools.rerollAd",
+      "run.tools.rerollAd.short",
+      "run.tools.rerollAd.pass",
+      "run.tools.rerollAd.pass.short",
+      "run.tools.rerollAd.once",
+      "run.tools.rerollAd.notice.closed",
+      "run.tools.rerollAd.notice.failed",
+      "run.tools.rerollAd.notice.claim_failed",
+      "run.tools.rerollAd.notice.restricted",
     ]) {
       expect(ruRun, key).toHaveProperty([key]);
     }
