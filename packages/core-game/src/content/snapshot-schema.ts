@@ -140,6 +140,8 @@ const playerStats = [
   "resistCold",
   "resistLightning",
   "resistPoison",
+  "healOnKill",
+  "wardIntervalSec",
 ] as const;
 
 const category = z.enum(PASSIVE_CATEGORIES as [string, ...string[]]) as z.ZodType<(typeof PASSIVE_CATEGORIES)[number]>;

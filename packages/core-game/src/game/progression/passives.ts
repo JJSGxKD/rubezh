@@ -50,6 +50,13 @@ export interface PlayerStats {
   lightningDamageMul: number;
   poisonDamageMul: number;
   statusChanceMul: number;
+  /**
+   * Защита через игру (Р157): здоровье за убийство и период щита оберега в
+   * секундах. Ноль у обоих — навыка нет; лечение и щит считает
+   * `sim/defense-skills.ts`.
+   */
+  healOnKill: number;
+  wardIntervalSec: number;
 }
 
 /** База, к которой применяются пассивки: значения игрока без улучшений. */
@@ -90,6 +97,9 @@ type ResistKey = "resistFire" | "resistCold" | "resistLightning" | "resistPoison
  */
 const MAX_PASSIVE_RESIST = 0.9;
 
+/** Щит оберега не чаще этого: чаще — гасится каждое второе попадание толпы. */
+const MIN_WARD_INTERVAL_SEC = 5;
+
 export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[] {
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -122,6 +132,15 @@ export function findPassiveContentProblems(defs: readonly PassiveDef[]): string[
       if (def.levels.some((value) => !(value > 0 && value <= MAX_PASSIVE_RESIST))) {
         problems.push(`пассивка ${def.id}: сопротивление — доля от 0 до ${MAX_PASSIVE_RESIST}`);
       }
+    }
+    if (def.stat === "healOnKill" || def.stat === "wardIntervalSec") {
+      // Ноль у этих параметров значит «навыка нет»: уровень с нулём или минусом
+      // отключил бы навык молча, а умножать ноль нечем.
+      if (def.op !== "add") problems.push(`пассивка ${def.id}: ${def.stat} задаётся только слагаемым`);
+      if (def.levels.some((value) => !(value > 0))) problems.push(`пассивка ${def.id}: ${def.stat} — больше нуля`);
+    }
+    if (def.stat === "wardIntervalSec" && def.levels.some((value) => value < MIN_WARD_INTERVAL_SEC)) {
+      problems.push(`пассивка ${def.id}: щит чаще раза в ${MIN_WARD_INTERVAL_SEC} с слишком частый`);
     }
     // Контент приходит и из JSON админки: тип не спасает от опечатки в категории.
     if (!PASSIVE_CATEGORIES.includes(def.category)) {
@@ -179,6 +198,8 @@ export function createBaseStats(
     lightningDamageMul: 1 + mod("damageLightning"),
     poisonDamageMul: 1 + mod("damagePoison"),
     statusChanceMul: 1 + mod("statusChance"),
+    healOnKill: 0,
+    wardIntervalSec: 0,
   };
 }
 
@@ -218,6 +239,10 @@ function applyPassive(stats: PlayerStats, type: PassiveType, value: number): voi
   const resists = RESIST_STATS[type.stat];
   if (resists !== undefined) {
     for (const key of resists) stats[key] += value;
+    return;
+  }
+  if (type.stat === "healOnKill" || type.stat === "wardIntervalSec") {
+    stats[type.stat] += value;
     return;
   }
 

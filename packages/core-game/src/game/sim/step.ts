@@ -3,6 +3,7 @@ import { isAwaitingChoice, prepareOffers } from "../progression/levels";
 import { updateWeapons } from "../weapons";
 import { damageEnemy, inflictDamage } from "./combat";
 import { pushPlayerOutOfGuards, updateCordon } from "./cordon";
+import { tickWard } from "./defense-skills";
 import { ELEMENT_FIRE, ELEMENT_POISON, isFrozen, movementFactor, tickStatuses, type StatusTick } from "./elements";
 import { isTimeFrozen, tickFreeze } from "./freeze";
 import { stepRubezh } from "./rubezh";
@@ -53,6 +54,7 @@ export function stepWorld(world: World, input: SimInput): void {
   snapshotPositions(world);
   movePlayer(world, input, dt);
   regeneratePlayer(world, dt);
+  tickWard(world);
   tickPlayerStatuses(world, dt);
   // Отставшие уносятся вперёд до перестроения сетки: сетка строится вокруг
   // игрока, и переехавший враг обязан попасть в неё уже на новом месте.

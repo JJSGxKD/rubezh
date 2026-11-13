@@ -3,6 +3,7 @@ import { recordHunt } from "../run/hunt-log";
 import { dropGems } from "./gems";
 import { rollPickups } from "./pickups";
 import { dropChest } from "./chests";
+import { healOnKill } from "./defense-skills";
 import { onRubezhEnemyKilled } from "./rubezh";
 import { stageOf } from "./stages";
 import { registerKill } from "./streaks";
@@ -100,6 +101,7 @@ export function killEnemy(world: World, index: number): void {
   world.stats.enemiesKilled++;
   world.stats.killsByType[typeIndex]++;
   registerKill(world);
+  healOnKill(world);
   recordHunt(world, index, type);
   if (type.rank === "boss") world.stats.bossKills++;
   else if (type.rank === "elite") world.stats.eliteKills++;

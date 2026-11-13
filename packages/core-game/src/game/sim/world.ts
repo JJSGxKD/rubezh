@@ -124,6 +124,17 @@ export interface PlayerState {
   /** сколько попаданий ещё погасит щит буста (`progression/boosts.ts`) */
   shieldHits: number;
   /**
+   * Навыки защиты (Р157, `sim/defense-skills.ts`), всё в тиках и числах — снимок
+   * забега переносит игрока как набор чисел. `wardShield` — 1, если один из
+   * `shieldHits` поставила «Стойкость»: он тратится последним и держит её
+   * таймер; `wardTicks` — сколько тиков идёт отсчёт до следующего щита;
+   * `healWindowStart` и `healedInWindow` — окно потолка лечения «Вампиризма».
+   */
+  wardShield: number;
+  wardTicks: number;
+  healWindowStart: number;
+  healedInWindow: number;
+  /**
    * Состояния от стихийных атак врагов (`sim/player-status.ts`): таймеры в
    * секундах, урон по времени в секунду, источник — тип врага, наложившего
    * состояние, или −1. Числами прямо в игроке: снимок забега переносит их
@@ -648,6 +659,9 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
   // неуязвимость после — иначе толпа вокруг сняла бы его в тот же тик.
   if (player.shieldHits > 0) {
     player.shieldHits--;
+    // Первым тратится щит буста, щит «Стойкости» — последним (`sim/defense-skills.ts`):
+    // пока он цел, таймер оберега стоит.
+    if (player.shieldHits < player.wardShield) player.wardShield = 0;
     player.invulnerableTicks = Math.max(player.invulnerableTicks, SHIELD_GRACE_TICKS);
     pushSimEvent(world.events, { kind: SIM_EVENT.shield, x: player.x, y: player.y, radius: amount, tick: world.stats.tick });
     return;

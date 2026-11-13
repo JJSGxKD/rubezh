@@ -994,7 +994,11 @@ export type PlayerStat =
   | "resistFire"
   | "resistCold"
   | "resistLightning"
-  | "resistPoison";
+  | "resistPoison"
+  /** здоровье за каждое убийство (Р157): слагаемое, 0 — навыка нет */
+  | "healOnKill"
+  /** раз во сколько секунд оберег сам ставит щит на одно попадание; 0 — навыка нет, меньше — лучше */
+  | "wardIntervalSec";
 
 /**
  * Пассивное улучшение. `levels` — итоговое значение на каждом уровне, а не
