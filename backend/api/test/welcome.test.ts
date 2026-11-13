@@ -155,7 +155,7 @@ function setup(
   const registry = new WelcomeProgressRegistry();
   registry.source = { progress };
   const router = new BotRouter();
-  const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername }; } });
+  const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: botUsername, topicsEnabled: false }; } });
   const entries: ChannelEntry[] = [];
   let entryFails = false;
   const auth = {
