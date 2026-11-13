@@ -46,7 +46,9 @@ export {
 // Цвета состояний — гайдбук красит стихию так же, как канва красит врага.
 export { ELEMENT_TONE, STATUS_TONE_COLORS } from "./game/render/status-tones";
 // Умолчания паттернов — гайдбук берёт из них то, что враг не задал сам.
-export { PATTERN_DEFAULTS } from "./game/patterns/enemy-types";
+export { PATTERN_DEFAULTS, PATTERN_TRAITS } from "./game/patterns/enemy-types";
+// Числа Карачуна — гайдбук берёт из них время прихода (tasks/T-0427).
+export { STALKER } from "./content/stalker";
 
 // Контракт забега — только типы, без реализации.
 export type {
