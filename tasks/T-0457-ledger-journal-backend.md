@@ -18,6 +18,9 @@ zones:
 shared:
   - backend/api/prisma/schema.prisma
   - backend/api/package.json
+  - backend/api/tsconfig.json
+  - backend/api/Dockerfile
+  - backend/api/src/modules/wipe/wipe-plan.ts
   - pnpm-lock.yaml
   - backend/api/src/app.module.ts
   - backend/api/src/modules/admin/admin.module.ts

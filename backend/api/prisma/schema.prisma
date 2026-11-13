@@ -3063,3 +3063,70 @@ model StakeholderShare {
   @@index([fromMonth])
   @@map("stakeholder_share")
 }
+
+// Журнал учёта: план счетов и проводки двойной записью (docs/37-accounting.md, Р219, tasks/T-0457)
+
+enum LedgerAccountType {
+  asset
+  revenue
+  expense
+  liability
+  equity
+}
+
+/// Счёт плана счетов: место хранения или статья в одной валюте. Начальный план вставляет миграция;
+/// счёт с проводками не удаляется и не переименовывается (`onDelete: Restrict`, триггер журнала).
+model LedgerAccount {
+  /// устойчивый ключ, «stars.bot.hold»
+  accountId  String            @id @map("account_id") @db.VarChar(64)
+  type       LedgerAccountType
+  /// код валюты из справочника ядра курсов
+  currency   String            @db.VarChar(16)
+  name       String            @db.VarChar(128)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
+
+  lines LedgerLine[]
+
+  @@map("ledger_account")
+}
+
+/// Проводка. Не правится и не удаляется — триггер в миграции; исправление — сторно (`reversal_of`).
+model LedgerEntry {
+  entryId    String   @id @map("entry_id") @db.Uuid
+  /// ключ идемпотентности источника: «purchase:<id>:paid»
+  sourceKey  String   @unique @map("source_key") @db.VarChar(128)
+  at         DateTime @db.Timestamptz(3)
+  /// «YYYY-MM» по UTC — из `at`
+  period     String   @db.Char(7)
+  memo       String   @db.VarChar(500)
+  /// сторно: entry_id исходной проводки; у исходной — не больше одного сторно
+  reversalOf String?  @unique @map("reversal_of") @db.Uuid
+  meta       Json?
+  /// кто записал; null — сервер (проводки из платежей). Внешнего ключа нет: журнал переживает аккаунты
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  original LedgerEntry? @relation("LedgerReversal", fields: [reversalOf], references: [entryId], onDelete: Restrict)
+  reversal LedgerEntry? @relation("LedgerReversal")
+  lines    LedgerLine[]
+
+  @@index([period])
+  @@index([at])
+  @@map("ledger_entry")
+}
+
+/// Строка проводки: сумма в минимальных единицах валюты счёта, дебет — плюс, кредит — минус; ноль база не пускает.
+model LedgerLine {
+  lineId    String @id @map("line_id") @db.Uuid
+  entryId   String @map("entry_id") @db.Uuid
+  accountId String @map("account_id") @db.VarChar(64)
+  amount    BigInt
+
+  entry   LedgerEntry   @relation(fields: [entryId], references: [entryId], onDelete: Restrict)
+  account LedgerAccount @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+
+  @@unique([entryId, accountId])
+  @@index([accountId, entryId])
+  @@map("ledger_line")
+}
