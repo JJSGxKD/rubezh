@@ -6,6 +6,7 @@ import type { BotOutcome } from "../src/modules/notifications/notifications.repo
 import { BotNotifyQueue } from "../src/modules/notifications-bot/bot-notify-queue.js";
 import { botRuleOf } from "../src/modules/notifications-bot/bot-notify-rules.js";
 import { BotNotifySender, type BotDelivery, type BotNotifyJob } from "../src/modules/notifications-bot/bot-notify-sender.js";
+import { botMessageOf } from "../src/modules/notifications-bot/bot-notify-texts.js";
 import { loadAppConfig } from "../src/config/app-config.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { Messengers, type Messenger, type OutgoingMessage, type SendOutcome } from "../src/platforms/ports/messenger.js";
@@ -376,5 +377,140 @@ describe("очередь дубля в бота", () => {
   it("без очереди (вход игроков выключен) слушатель ленты молчит, а не падает", async () => {
     const { queue } = queueWith({ status: "sent" });
     await expect(queue.enqueue({ notificationId: randomUUID(), accountId: randomUUID(), kind: "friend_request", payload: {}, at: NOW })).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Извинение за сбой оплаты и возврат звёзд (docs/35-stage4-plan.md Р209, tasks/T-0436):
+ * тот же путь, что у сообщения команды, — ключ игрока `bot.teamMessage`, без потолка
+ * и не напоминание. Тексты закреплены дословно: это деньги игрока, и каждое слово
+ * решал тимлид.
+ */
+describe("сообщение бота о компенсации и возврате звёзд (Р209)", () => {
+  /** Оплата в 22:30 UTC 10.11 — по Москве уже 11.11 */
+  const PAID_AT = "2026-11-10T22:30:00.000Z";
+  const launch = (param: string): string => `https://t.me/rubezh_bot/play?startapp=${param}`;
+  const compensated = (gems: number) => ({ action: "compensated", stars: 50, gems, paidAt: PAID_AT, reason: null, revoked: false });
+  const refunded = (reason: "manual" | "undeliverable", revoked: boolean) => ({ action: "refunded", stars: 50, gems: 0, paidAt: PAID_AT, reason, revoked });
+  const text = (payload: unknown): string | undefined => botMessageOf("purchase_support", payload, launch)?.text;
+
+  it("компенсация: сумма звёзд, дата оплаты по Москве и число самоцветов, кнопка «▶ Открыть игру» с параметром вида", () => {
+    expect(botMessageOf("purchase_support", compensated(120), launch)).toEqual({
+      text: "Команда «Рубежа»: прости — с твоей оплатой 50 ⭐ от 11.11 случился сбой на нашей стороне. Мы начислили тебе 120 самоцветов, они уже на счёте в игре.",
+      button: { text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-purchase_support" },
+    });
+  });
+
+  it("склонение самоцветов: 1 — самоцвет, 3 — самоцвета, 12 и 120 — самоцветов", () => {
+    expect(text(compensated(1))).toContain("Мы начислили тебе 1 самоцвет, они уже");
+    expect(text(compensated(3))).toContain("Мы начислили тебе 3 самоцвета, они уже");
+    expect(text(compensated(12))).toContain("Мы начислили тебе 12 самоцветов, они уже");
+    expect(text(compensated(120))).toContain("Мы начислили тебе 120 самоцветов, они уже");
+    expect(text(compensated(21))).toContain("21 самоцвет, они");
+    expect(text(compensated(22))).toContain("22 самоцвета, они");
+    expect(text(compensated(14))).toContain("14 самоцветов, они");
+  });
+
+  it("возврат поддержкой: без остатка и с забранным остатком — фраза дописана через пробел", () => {
+    expect(text(refunded("manual", false))).toBe("Команда «Рубежа»: вернули тебе 50 ⭐ за покупку от 11.11 по решению поддержки. Звёзды уже на твоём счёте.");
+    expect(text(refunded("manual", true))).toBe(
+      "Команда «Рубежа»: вернули тебе 50 ⭐ за покупку от 11.11 по решению поддержки. Звёзды уже на твоём счёте. Остаток покупки списан со счёта в игре.",
+    );
+  });
+
+  it("возврат, потому что товара больше нет: с остатком и без", () => {
+    expect(text(refunded("undeliverable", false))).toBe(
+      "Команда «Рубежа»: вернули тебе 50 ⭐ за покупку от 11.11 — этого товара больше нет в магазине. Прости за неудобство, звёзды уже на твоём счёте.",
+    );
+    expect(text(refunded("undeliverable", true))).toBe(
+      "Команда «Рубежа»: вернули тебе 50 ⭐ за покупку от 11.11 — этого товара больше нет в магазине. Прости за неудобство, звёзды уже на твоём счёте. Остаток покупки списан со счёта в игре.",
+    );
+  });
+
+  it("дата — день и месяц по Москве: 22:30 UTC 10.11 это 11.11, полдень 11.11 — тоже 11.11, а 21:00 UTC 31.12 — уже 01.01", () => {
+    expect(text({ ...compensated(5), paidAt: "2026-11-10T22:30:00.000Z" })).toContain("от 11.11 случился");
+    expect(text({ ...compensated(5), paidAt: "2026-11-11T12:00:00.000Z" })).toContain("от 11.11 случился");
+    expect(text({ ...compensated(5), paidAt: "2026-12-31T21:00:00.000Z" })).toContain("от 01.01 случился");
+  });
+
+  it("данные не по схеме — писать нечего: null, а не «undefined» в тексте", () => {
+    expect(botMessageOf("purchase_support", {}, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...compensated(5), action: "gifted" }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...compensated(5), stars: -1 }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...compensated(5), gems: 1.5 }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...compensated(5), paidAt: "вчера" }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...refunded("manual", false), reason: "external" }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", { ...refunded("manual", false), revoked: "да" }, launch)).toBeNull();
+    expect(botMessageOf("purchase_support", null, launch)).toBeNull();
+  });
+
+  it("возврат без причины — не по смыслу вида: писать нечего", () => {
+    expect(botMessageOf("purchase_support", { ...refunded("manual", false), reason: null }, launch)).toBeNull();
+  });
+
+  it("нет ссылки на игру — сообщение уходит без кнопки: новость важнее кнопки", () => {
+    expect(botMessageOf("purchase_support", compensated(5), () => null)?.button).toBeNull();
+  });
+
+  it("правило дубля — как у сообщения команды: ключ bot.teamMessage, включено, без потолка, не напоминание", () => {
+    expect(botRuleOf("purchase_support")).toEqual({ setting: "bot.teamMessage", byDefault: true, throttleSec: 0 });
+    expect(botRuleOf("purchase_support")).not.toHaveProperty("reminder");
+    expect(botRuleOf("purchase_support")).toEqual(botRuleOf("team_message"));
+  });
+
+  describe("отправка", () => {
+    let s: ReturnType<typeof setup>;
+    /** 21:00 UTC — полночь по Москве: тихие часы напоминаний */
+    const QUIET = new Date(Date.UTC(2026, 10, 4, 21, 0));
+
+    const job = (accountId: string, payload: unknown = compensated(120)): BotNotifyJob => ({ notificationId: randomUUID(), accountId, kind: "purchase_support", payload });
+
+    beforeEach(() => {
+      s = setup({ "reminders.enabled": true });
+    });
+
+    it("уходит текстом и кнопкой; в тихие часы не задерживается, окно напоминаний не занимает", async () => {
+      const target = await player(s);
+
+      expect(await s.sender.deliver(job(target.accountId), QUIET)).toEqual({ status: "sent" });
+      expect(s.messenger.sent).toHaveLength(1);
+      expect(s.messenger.sent[0]?.message.text).toContain("Мы начислили тебе 120 самоцветов");
+      expect(s.messenger.sent[0]?.message.button).toEqual({ text: "▶ Открыть игру", url: "https://t.me/rubezh_bot/play?startapp=n-purchase_support" });
+      // без кнопки «Не напоминать»: это не напоминание
+      expect(s.messenger.sent[0]?.message).not.toHaveProperty("action");
+      expect([...s.redis.keys.keys()]).not.toContain(`bot-notify:${target.accountId}:reminder`);
+    });
+
+    it("напоминания выключены в панели — извинение всё равно уходит", async () => {
+      const off = setup({ "reminders.enabled": false });
+      const target = await player(off);
+
+      expect(await off.sender.deliver(job(target.accountId), QUIET)).toEqual({ status: "sent" });
+    });
+
+    it("потолка нет: два извинения подряд — оба уходят", async () => {
+      const target = await player(s);
+
+      expect(await s.sender.deliver(job(target.accountId), NOW)).toEqual({ status: "sent" });
+      expect(await s.sender.deliver(job(target.accountId, refunded("manual", false)), NOW)).toEqual({ status: "sent" });
+      expect(s.messenger.sent).toHaveLength(2);
+    });
+
+    it("игрок выключил «Сообщения команды» — бот молчит, а строка ленты остаётся", async () => {
+      const target = await player(s);
+      s.settings.set("bot.teamMessage", false);
+
+      expect(await s.sender.deliver(job(target.accountId), NOW)).toEqual({ status: "skipped", reason: "opted_out" });
+      expect(s.messenger.sent).toEqual([]);
+    });
+
+    it("писать нельзя — не пишем; данные не по схеме — писать нечего", async () => {
+      const blocked = await player(s, false);
+      expect(await s.sender.deliver(job(blocked.accountId), NOW)).toEqual({ status: "skipped", reason: "not_allowed" });
+
+      const target = await player(s);
+      expect(await s.sender.deliver(job(target.accountId, { action: "compensated" }), NOW)).toEqual({ status: "skipped", reason: "bad_payload" });
+      expect(s.messenger.sent).toEqual([]);
+    });
   });
 });
