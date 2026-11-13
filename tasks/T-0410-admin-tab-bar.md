@@ -3,8 +3,8 @@ id: T-0410
 title: Вкладки панели — общий компонент TabBar из карточки игрока
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / haiku-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []

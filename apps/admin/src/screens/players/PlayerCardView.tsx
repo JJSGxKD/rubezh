@@ -6,6 +6,7 @@ import { formatDateTime, formatDelta, formatDuration, formatNumber } from "../..
 import { Button, DataTable, ErrorNotice, KeyValue, Loading, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
 import { navigate, useHashRoute } from "../../ui/router";
+import { TabBar } from "../../ui/tab-bar";
 import { useApi } from "../../ui/use-api";
 import { CARD_TABS, cardTabOf, tabCounts, type CardTab } from "./card-rules";
 import { PlayerHeader } from "./PlayerHeader";
@@ -48,7 +49,7 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
       {state.status === "ok" ? (
         <>
           <PlayerHeader card={state.data} active={active} onChanged={changed} />
-          <Tabs active={tab} counts={tabCounts(state.data, active)} onSelect={open} />
+          <TabBar label="Карточка игрока" tabs={CARD_TABS} active={tab} counts={tabCounts(state.data, active)} onSelect={open} />
           {tab === "summary" ? <PlayerSummary card={state.data} onTab={open} /> : null}
           {tab === "runs" ? (
             <div className="flex flex-col gap-4">
@@ -64,31 +65,6 @@ export function PlayerCardView({ accountId }: { accountId: string }) {
           {tab === "restrictions" ? <RestrictionsPanel accountId={accountId} playerName={state.data.account.displayName} restrictions={restrictions.state} onChanged={changed} /> : null}
         </>
       ) : null}
-    </div>
-  );
-}
-
-/** Вкладки строкой под шапкой: активная — черта акцента снизу, число ожидающего — значком; на телефоне прокручивается строка, не страница. */
-function Tabs({ active, counts, onSelect }: { active: CardTab; counts: Partial<Record<CardTab, number>>; onSelect: (tab: CardTab) => void }) {
-  return (
-    <div role="tablist" aria-label="Карточка игрока" className="flex gap-1 overflow-x-auto border-b border-border [scrollbar-width:none]">
-      {CARD_TABS.map((item) => {
-        const selected = item.id === active;
-        const count = counts[item.id];
-        return (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            onClick={() => onSelect(item.id)}
-            className={`-mb-px flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-medium transition-colors ${selected ? "border-accent text-text" : "border-transparent text-text-muted hover:text-text"}`}
-          >
-            {item.title}
-            {count === undefined ? null : <span className="inline-flex min-w-5 justify-center rounded-pill bg-warning/15 px-1.5 text-xs font-semibold text-warning tabular-nums">{count}</span>}
-          </button>
-        );
-      })}
     </div>
   );
 }
