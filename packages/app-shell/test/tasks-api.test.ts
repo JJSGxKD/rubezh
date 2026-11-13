@@ -457,8 +457,8 @@ describe("достижения v2: испытания, стихии, «Колл�
   });
 
   it("«Коллекционер»: «{value} из {count}», а без значения — с нуля", () => {
-    expect(goalText({ kind: "weapon_masters", target: 7, value: 6 })).toBe("Стань мастером каждого оружия — 6 из 7");
-    expect(goalText({ kind: "weapon_masters", target: 7 })).toBe("Стань мастером каждого оружия — 0 из 7");
+    expect(goalText({ kind: "weapon_masters", target: 7, value: 6 })).toBe("Стань мастером каждого оружия — 6 из 7");
+    expect(goalText({ kind: "weapon_masters", target: 7 })).toBe("Стань мастером каждого оружия — 0 из 7");
   });
 
   it("ключи всех четырёх видов есть в словаре", () => {
