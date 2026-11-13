@@ -91,7 +91,7 @@ export function PassBoard(props: PassBoardProps): ReactNode {
   }, []);
 
   return (
-    <div className="grid gap-3">
+    <div className="grid min-w-0 gap-3">
       <Card>
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
           <span
@@ -122,7 +122,7 @@ export function PassBoard(props: PassBoardProps): ReactNode {
       <p className="px-0.5 text-xs text-text-muted">{t("pass.hint")}</p>
 
       {/* Лента на обе строки — одна прокрутка: бесплатная и VIP листаются вместе. */}
-      <div className="relative">
+      <div className="relative min-w-0">
         <div ref={scroller} className="relative overflow-x-auto pb-1 [scrollbar-width:none]">
           <div className="grid w-max gap-1.5">
             {LANES.map((lane) => (
