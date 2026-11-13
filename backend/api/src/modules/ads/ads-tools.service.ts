@@ -4,7 +4,7 @@ import { ValidationError } from "../../common/domain-error.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { PLACE_FORMAT, deliveryOf, profileOf, type AdFormat } from "./ad-networks.js";
-import { ADS_CATALOG_REPOSITORY, type AdBlockDef, type AdNetworkRow, type AdsCatalogRepository } from "./ads-catalog.repository.js";
+import { ADS_CATALOG_REPOSITORY, type AdCatalogBlock, type AdNetworkRow, type AdsCatalogRepository } from "./ads-catalog.repository.js";
 
 /**
  * Проверка рекламы командой (docs/35-stage4-plan.md, Р165; tasks/T-0333): каталог
@@ -79,7 +79,7 @@ export class AdsToolsService {
     private readonly roles: RolesService,
   ) {}
 
-  /** Сети и блоки, которые умеют показывать SDK; выключенные тоже — проверка нужна и им. */
+  /** Сети и блоки, которые умеют показывать SDK; выключенные тоже — проверка нужна и им, а блоки из архива (Р200) — нет. */
   async catalog(): Promise<ToolsAdsCatalog> {
     const [networks, blocks] = await this.read();
     return buildCatalog(networks, blocks);
@@ -100,12 +100,12 @@ export class AdsToolsService {
     this.logger.log(JSON.stringify({ module: "ads", event: "ad_tested", actor: actor.accountId, network: input.network, format: input.format, live: input.live, outcome: input.outcome, reason: input.reason ?? null, ms: input.ms }));
   }
 
-  private async read(): Promise<[AdNetworkRow[], AdBlockDef[]]> {
+  private async read(): Promise<[AdNetworkRow[], AdCatalogBlock[]]> {
     return await withTimeout(Promise.all([this.repository.networks(), this.repository.blocks()]), DB_TIMEOUT_MS, "реклама");
   }
 }
 
-function buildCatalog(networkRows: AdNetworkRow[], blockRows: AdBlockDef[]): ToolsAdsCatalog {
+function buildCatalog(networkRows: AdNetworkRow[], blockRows: AdCatalogBlock[]): ToolsAdsCatalog {
   const networks: ToolsAdsNetwork[] = [];
   for (const row of [...networkRows].sort((a, b) => a.priority - b.priority || byText(a.networkKey, b.networkKey))) {
     const profile = profileOf(row.networkKey);
@@ -121,6 +121,8 @@ function buildCatalog(networkRows: AdNetworkRow[], blockRows: AdBlockDef[]): Too
 
   const blocks: ToolsAdsBlock[] = [];
   for (const row of blockRows) {
+    // Блок в архиве не выдают и не проверяют (Р200).
+    if (row.archivedAt !== null) continue;
     const network = networks.find((candidate) => candidate.network === row.networkKey);
     const format = PLACE_FORMAT[row.place];
     if (network === undefined || format === "task" || !network.formats.includes(format)) continue;

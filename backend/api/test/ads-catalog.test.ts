@@ -21,7 +21,7 @@ import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { AppLinks } from "../src/platforms/ports/app-links.js";
 import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
-import type { AdBlockDef, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdNetworksReorderResult, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
+import type { AdBlockDef, AdCatalogBlock, AdFunnelRow, AdNetworkEdit, AdNetworkRow, AdNetworksReorderResult, AdPassRow, AdsCatalogRepository } from "../src/modules/ads/ads-catalog.repository.js";
 import { AdsCatalogService, blockEditSchema, networkEditSchema, networkOrderSchema, type AdBlockEdit } from "../src/modules/ads/ads-catalog.service.js";
 import { AD_NETWORK_PROFILES } from "../src/modules/ads/ad-networks.js";
 import {
@@ -58,6 +58,8 @@ class MemoryCatalog implements AdsCatalogRepository {
     { networkKey: "taddy", name: "Taddy", active: false, priority: 40, keys: {} },
   ];
   blockRows: AdBlockDef[] = [];
+  /** отметка архива (Р200): ISO-время по `blockId`, литералы `blockRows` её не несут */
+  archived = new Map<string, string>();
   funnelFrom: Date | null = null;
   passesWindow: [Date, Date] | null = null;
   funnelWindow: [Date, Date] | null = null;
@@ -67,8 +69,8 @@ class MemoryCatalog implements AdsCatalogRepository {
     return this.networksRows.map((row) => ({ ...row }));
   }
 
-  async blocks(): Promise<AdBlockDef[]> {
-    return this.blockRows.map((row) => ({ ...row }));
+  async blocks(): Promise<AdCatalogBlock[]> {
+    return this.blockRows.map((row) => ({ ...row, archivedAt: this.archived.get(row.blockId) ?? null }));
   }
 
   async updateNetwork(edit: AdNetworkEdit): Promise<boolean> {
@@ -100,9 +102,22 @@ class MemoryCatalog implements AdsCatalogRepository {
 
   async updateBlock(block: AdBlockDef): Promise<boolean> {
     const index = this.blockRows.findIndex((row) => row.blockId === block.blockId);
-    if (index < 0) return false;
+    if (index < 0 || this.archived.has(block.blockId)) return false;
     this.blockRows[index] = { ...block };
     return true;
+  }
+
+  async setBlockArchived(blockId: string, archived: boolean, _actorAccountId: string, at: Date): Promise<{ block: AdCatalogBlock; changed: boolean } | null> {
+    const row = this.blockRows.find((candidate) => candidate.blockId === blockId);
+    if (row === undefined) return null;
+    const changed = archived !== this.archived.has(blockId);
+    if (changed && archived) {
+      this.archived.set(blockId, at.toISOString());
+      row.active = false;
+    } else if (changed) {
+      this.archived.delete(blockId);
+    }
+    return { block: { ...row, archivedAt: this.archived.get(blockId) ?? null }, changed };
   }
 
   async passes(from: Date, to: Date): Promise<AdPassRow[]> {

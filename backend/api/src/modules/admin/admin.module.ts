@@ -42,6 +42,7 @@ import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { MediaModule } from "../media/media.module.js";
+import { AdminAdBlockArchiveController } from "./admin-ad-block-archive.controller.js";
 import { AdminAdsController } from "./admin-ads.controller.js";
 import { AdminNameRuleCandidatesController } from "./admin-name-rule-candidates.controller.js";
 import { AdminNameRulesRecleanController } from "./admin-name-rules-reclean.controller.js";
@@ -154,6 +155,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminPaymentJobsController,
     AdminPaymentReconcileController,
     AdminAdsController,
+    AdminAdBlockArchiveController,
     AdminNameRulesController,
     AdminNameRulesStatsController,
     AdminNameRuleCandidatesController,

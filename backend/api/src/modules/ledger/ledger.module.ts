@@ -12,6 +12,8 @@ import { NoPeriodHooks, PERIOD_HOOKS } from "./periods/period-hooks.js";
 import { PERIODS_REPOSITORY } from "./periods/period-types.js";
 import { PrismaPeriodsRepository } from "./periods/periods.repository.js";
 import { PeriodsService } from "./periods/periods.service.js";
+import { PrismaTemplatesRepository, TEMPLATES_REPOSITORY } from "./templates/templates.repository.js";
+import { TemplatesService } from "./templates/templates.service.js";
 
 /**
  * Журнал учёта (docs/37-accounting.md, Р219): план счетов, проводки двойной записью, остатки и страницы
@@ -21,7 +23,8 @@ import { PeriodsService } from "./periods/periods.service.js";
  * Проводки из платежей (Р219, T-0458) — задание сверки `LedgerSyncJob`: раз в десять минут сверяет `purchase`
  * с журналом и досоздаёт оплату, выход из холда и возврат; модуль платежей не трогает, только читает его таблицу.
  * Ручные операции (Р220, T-0461) — `OperationsService`: человек описывает событие, сервер собирает проводку;
- * размер операции оценивается по курсам, поэтому нужен модуль курсов.
+ * размер операции оценивается по курсам, поэтому нужен модуль курсов. Шаблоны повторяющихся расходов (Р220, T-0463) —
+ * `TemplatesService`: «Расходы месяца» создаёт по ним черновики операций, проводит их человек.
  * Месяцы учёта (Р222, T-0468) — `PeriodsService`: сверка, закрытие с водопадом, снятие закрытия; закрытый месяц
  * запирает журнал замком в транзакции вставки проводки (`PrismaLedgerRepository.insertEntry`), а выплаты по месяцу
  * (T-0469) подключаются хуками `PERIOD_HOOKS`.
@@ -33,15 +36,17 @@ import { PeriodsService } from "./periods/periods.service.js";
     LedgerChartService,
     OperationsService,
     PeriodsService,
+    TemplatesService,
     LedgerSyncPass,
     LedgerSyncJob,
     { provide: LEDGER_REPOSITORY, useClass: PrismaLedgerRepository },
     { provide: LEDGER_CHART_REPOSITORY, useClass: PrismaLedgerChartRepository },
     { provide: OPERATIONS_REPOSITORY, useClass: PrismaOperationsRepository },
+    { provide: TEMPLATES_REPOSITORY, useClass: PrismaTemplatesRepository },
     { provide: PAYMENT_POSTINGS_REPOSITORY, useClass: PrismaPaymentPostingsRepository },
     { provide: PERIODS_REPOSITORY, useClass: PrismaPeriodsRepository },
     { provide: PERIOD_HOOKS, useClass: NoPeriodHooks },
   ],
-  exports: [LedgerService, LedgerChartService, OperationsService, PeriodsService],
+  exports: [LedgerService, LedgerChartService, OperationsService, TemplatesService, PeriodsService],
 })
 export class LedgerModule {}

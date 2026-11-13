@@ -100,7 +100,7 @@ describe("ссылки сервера после переключения дом
   it("launch, chat и miniAppLink идут с новым доменом, диплинки прежние", async () => {
     const settings = reader("https://t.me");
     const origin = new SettingsLinkOrigin(settings.source);
-    const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: "rubezh_bot" }; } }, origin);
+    const identity = new BotIdentity(config, { async getMe() { return { id: 1, username: "rubezh_bot", topicsEnabled: false }; } }, origin);
     await identity.refresh();
     const links = appLinksFor(identity, origin);
 

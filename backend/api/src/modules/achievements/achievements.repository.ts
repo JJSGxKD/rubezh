@@ -4,6 +4,7 @@ import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { ACHIEVEMENT_PERIOD_START } from "../tasks/tasks.repository.js";
 import { RARITY_QUERY_TIMEOUT_MS } from "./achievement-rules.js";
+import { emblemHoldersSql } from "./emblems.repository.js";
 
 /**
  * Хранилище достижений (tasks/T-0106): престиж, избранное и редкость. Определения
@@ -48,9 +49,10 @@ export interface AchievementsRepository {
   /**
    * Заменить избранное одной транзакцией под блокировкой строки аккаунта: два запроса
    * игрока разом идут друг за другом, а не врозь по ключам таблицы. Каждое достижение
-   * должно быть выполнено этим игроком.
+   * должно быть выполнено этим игроком, кроме `verified` — статусных и сезонных знаков: прогресса у них
+   * нет, держит ли игрок знак, служба проверила до вызова.
    */
-  replaceFavorites(accountId: string, ids: readonly string[]): Promise<FavoritesResult>;
+  replaceFavorites(accountId: string, ids: readonly string[], verified?: readonly string[]): Promise<FavoritesResult>;
   rarity(): Promise<RarityState>;
   rarityComputedAt(): Promise<Date | null>;
   /**
@@ -95,24 +97,25 @@ export class PrismaAchievementsRepository implements AchievementsRepository {
     return rows.map((raw) => slotSchema.parse(raw).task_id);
   }
 
-  async replaceFavorites(accountId: string, ids: readonly string[]): Promise<FavoritesResult> {
+  async replaceFavorites(accountId: string, ids: readonly string[], verified: readonly string[] = []): Promise<FavoritesResult> {
     return await this.prisma.$transaction(
       async (tx) => {
         // Строка аккаунта — под блокировкой, не мешающей внешним ключам: второй запрос
         // этого игрока ждёт здесь и читает уже новое избранное.
         const locked = await tx.$queryRaw<unknown[]>`SELECT account_id FROM account WHERE account_id = ${accountId}::uuid FOR NO KEY UPDATE`;
         if (locked.length === 0) return { status: "missing", missing: [...ids] };
-        if (ids.length > 0) {
+        const checked = ids.filter((id) => !verified.includes(id));
+        if (checked.length > 0) {
           const owned = await tx.$queryRaw<unknown[]>`
             SELECT p.task_id
             FROM task_progress p
             JOIN task_def d ON d.task_id = p.task_id AND d.period = 'achievement' AND d.category IS NOT NULL
-            WHERE p.account_id = ${accountId}::uuid AND p.task_id = ANY(${[...ids]}::text[])
+            WHERE p.account_id = ${accountId}::uuid AND p.task_id = ANY(${checked}::text[])
               AND p.period_start = ${ACHIEVEMENT_PERIOD_START}::date AND p.completed_at IS NOT NULL
             ORDER BY d.sort, d.task_id
             FOR KEY SHARE OF d`;
           const have = new Set(owned.map((raw) => slotSchema.parse(raw).task_id));
-          const missing = ids.filter((id) => !have.has(id));
+          const missing = checked.filter((id) => !have.has(id));
           if (missing.length > 0) return { status: "missing", missing };
         }
         const current = (await tx.$queryRaw<unknown[]>`SELECT task_id FROM achievement_favorite WHERE account_id = ${accountId}::uuid ORDER BY slot`).map(
@@ -155,7 +158,8 @@ export class PrismaAchievementsRepository implements AchievementsRepository {
         await tx.$queryRaw`SELECT set_config('statement_timeout', ${String(RARITY_QUERY_TIMEOUT_MS)}, true)`;
         // Население — игроки хотя бы с одним записанным забегом, держатели — выполнившие среди них.
         // Игрок без забегов, но с достижением (друзья, уровень аккаунта), ни в числитель, ни в
-        // знаменатель не входит: иначе «есть у N%» считалось бы не среди играющих.
+        // знаменатель не входит: иначе «есть у N%» считалось бы не среди играющих. Статусные и
+        // сезонные знаки прогресса не имеют: их держателей считают правила знаков (`emblemHoldersSql`).
         const raw = await tx.$queryRaw<unknown[]>`
           WITH pop AS MATERIALIZED (
             SELECT a.account_id FROM account a
@@ -163,10 +167,12 @@ export class PrismaAchievementsRepository implements AchievementsRepository {
           ), held AS (
             SELECT p.task_id, count(*)::int AS holders
             FROM task_progress p
-            JOIN task_def d ON d.task_id = p.task_id AND d.period = 'achievement' AND d.category IS NOT NULL
+            JOIN task_def d ON d.task_id = p.task_id AND d.period = 'achievement' AND d.category IS NOT NULL AND d.kind NOT IN ('status', 'season')
             JOIN pop ON pop.account_id = p.account_id
             WHERE p.period_start = ${ACHIEVEMENT_PERIOD_START}::date AND p.completed_at IS NOT NULL
             GROUP BY p.task_id
+            UNION ALL
+            ${emblemHoldersSql(now)}
           )
           SELECT d.task_id, COALESCE(h.holders, 0)::int AS holders, (SELECT count(*) FROM pop)::int AS population
           FROM task_def d LEFT JOIN held h ON h.task_id = d.task_id

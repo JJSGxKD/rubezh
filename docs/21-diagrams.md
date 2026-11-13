@@ -50,6 +50,7 @@ erDiagram
         datetime name_locked_at "nullable: ник закреплён модератором, вход display_name не перезаписывает"
         datetime supporter_at "nullable: знак «Меценат» (Р109, Р149) — когда подтверждён первый донат; снимается внешним возвратом, если других донатов нет"
         datetime prologue_done_at "nullable: пролог пройден (T-0279, Р151) — победа в нём; аккаунтам с забегами до выката миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты"
+        string shown_emblem_id FK "nullable: знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — по умолчанию. Держит ли он знак сейчас, сервер считает при чтении; вайп колонку не трогает"
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
@@ -57,6 +58,9 @@ erDiagram
     ACCOUNT ||--o{ STAKEHOLDER_SHARE : "назначил долю: владелец"
     LEDGER_ACCOUNT ||--o{ LEDGER_LINE : "строки проводок по счёту (Р219)"
     LEDGER_ARTICLE ||--o{ LEDGER_ACCOUNT : "счета статьи по валютам: заводятся при первой проводке (Р220)"
+    LEDGER_ARTICLE ||--o{ LEDGER_TEMPLATE : "статья расхода шаблона (Р220, T-0463)"
+    LEDGER_ACCOUNT ||--o{ LEDGER_TEMPLATE : "счёт места хранения, с которого платит шаблон"
+    LEDGER_TEMPLATE |o..o{ LEDGER_OPERATION : "черновик по шаблону на период: связь по template_id без внешнего ключа, на период один"
     LEDGER_ENTRY ||--|{ LEDGER_LINE : "строки проводки: в каждой валюте сумма — ноль"
     LEDGER_ENTRY |o--o| LEDGER_ENTRY : "сторно: ссылка на исходную, у исходной — не больше одного"
     LEDGER_OPERATION |o..o| LEDGER_ENTRY : "проведённая операция — проводка op:<id> по ключу источника, без внешнего ключа (Р220)"
@@ -138,6 +142,7 @@ erDiagram
     TASK_DEF ||--o| ACHIEVEMENT_RARITY : "редкость достижения: сколько игроков выполнили"
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
+    TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -705,7 +710,7 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot; знаки без прогресса — status, season"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
         json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
@@ -718,12 +723,13 @@ erDiagram
         int completion_limit "nullable: сколько игроков получат награду партнёрской цели (Р82), 1–1 000 000"
         int completions "игроков, выполнивших цель; растёт под блокировкой строки"
         string image_id FK "nullable: картинка 1:1 партнёрской цели (Р82); пока ссылается — картинку не удалить"
-        string category "nullable: combat|collection|mastery|friends, только у достижений (CHECK)"
+        string category "nullable: combat|collection|mastery|friends, только у достижений; status|season — у знаков статуса и сезона, парой с одноимённым видом (CHECK)"
         string ladder "nullable: лестница достижений; вместе с rung (CHECK)"
         smallint rung "nullable: ступень лестницы с единицы; вместе с ladder (CHECK)"
         boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
         string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
         int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
+        string emblem_tier "nullable: редкость знака у имени (T-0235) — common|uncommon|rare|epic|legendary|mythic или team; только у достижений (CHECK); null — знака нет"
         string customer "nullable, до 80 знаков: кто платит за партнёрское задание (Р138); null — задание своё; только у партнёрской цели (CHECK)"
         string pay_model "nullable: cpa — за выполнение, rs — доля дохода; null вместе с customer (CHECK)"
         int rate "nullable: у cpa — центы доллара за выполнение, 1–100 000; у rs — сотые доли процента, 1–10 000; вместе с pay_model (CHECK)"
@@ -841,6 +847,7 @@ erDiagram
         datetime created_at
         datetime updated_at
         uuid updated_by "nullable, без FK"
+        datetime archived_at "nullable: убран «В архив» (Р200), блок выключен; null — не в архиве"
     }
 
     AD_SESSION {
@@ -1481,6 +1488,20 @@ erDiagram
         string template_period "nullable: ГГГГ-ММ; (template_id, template_period) уникальны — на период один черновик; CHECK: только парой и в этом формате"
     }
 
+    LEDGER_TEMPLATE {
+        string template_id PK "слаг из названия: vps; занят — суффикс -2"
+        string name "до 128 знаков; входит в описание черновика: «VPS за ноябрь 2026»"
+        string article_id FK "Restrict: статья расхода"
+        string place_account_id FK "Restrict: счёт места хранения, с которого платим"
+        bigint amount "обычная сумма в минимальных единицах валюты места; CHECK: больше нуля"
+        enum schedule "monthly | yearly"
+        smallint month "nullable: месяц года 1…12 у yearly, у monthly пусто; CHECK"
+        string note "nullable: пометка для команды, до 500 знаков"
+        datetime archived_at "nullable: архивный шаблон черновиков не создаёт и не правится"
+        datetime created_at
+        uuid created_by "кто завёл; без внешнего ключа, как в журнале"
+    }
+
     LEDGER_LOAN {
         uuid loan_id PK
         string lender "имя кредитора, до 128 знаков"
@@ -1665,6 +1686,31 @@ erDiagram
   до трёх слотов, чужое выполненное в слот не ставится; замена идёт одной
   транзакцией под блокировкой строки аккаунта. Вайп стирает избранное
   вместе с прогрессом заданий, редкость не трогает.
+- **Знаки у имени — `TASK_DEF.emblem_tier`, `ACCOUNT.shown_emblem_id`**
+  (`35-stage4-plan.md` Р149, T-0235): знак — достижение, которое носят, поэтому
+  отдельного каталога нет. У 24 отобранных достижений (верхние ступени лестниц,
+  скрытые, «Мастера оружия») есть редкость знака; она стоит в каталоге и не
+  плавает вместе с «есть у N%». Статусные и сезонные знаки — семь строк того же
+  `TASK_DEF` с периодом `achievement`, видами `status` и `season` и такими же
+  категориями (`emb_vip`, `emb_tester`, `emb_supporter`, `emb_team`,
+  `emb_season_champion`, `emb_season_top10`, `emb_season_top100`): цель 1,
+  награды нет, прогресса в `TASK_PROGRESS` у них не бывает, `claim` для них — 404,
+  в списке заданий их нет. Заказчика (`customer`, `pay_model`, `rate`,
+  `hold_days`, Р138) у знаков нет: схема строки каталога и `CHECK
+  task_def_customer_kind_check` пускают его только к партнёрской цели с `params`.
+  Держит ли игрок такой знак, сервер вычисляет при чтении: VIP — по самому
+  позднему `VIP_PERIOD.ends_at`, «Тестер» и «Меценат» — по
+  `ACCOUNT.tester_at` и `supporter_at`, «Команда» — по любой строке
+  `ACCOUNT_ROLE`, кроме внешней роли `partner`, сезонные — по лучшему месту в
+  `SEASON_RESULT` на таблице не меньше `MIN_BOARD`; номер сезона — сколько
+  закрытых `SEASON` не позже последнего, где порог взят. Истёкший VIP знака не
+  держит, и снимать ничего не нужно. Выбранный знак в `shown_emblem_id`: если он
+  больше не держится, показывается знак по умолчанию (Команда → VIP →
+  Меценат → Тестер). Знак на список аккаунтов готовит `EmblemsService.of` —
+  четыре запроса (аккаунт, VIP, сезоны, достижения), сколько бы строк ни было.
+  «Есть у N%» у статусных и сезонных знаков считает тот же проход редкости теми
+  же правилами в той же транзакции. Вайп колонку не трогает, но выбранное
+  перестаёт действовать само: прогресса, который его держал, уже нет.
 - **`PASS_PROGRESS`, `PASS_SEASON`, `PASS_CLAIM`, `BOOST_CREDIT`, `PASS_CLOSE` — батл-пасс**
   (`35-stage4-plan.md` Р46, §3.15, T-0311): месяц — календарный по Москве
   (UTC+3 без летнего времени), ключ `ГГГГ-ММ`; граница — 1-е число 00:00 МСК.
@@ -1760,7 +1806,10 @@ erDiagram
   коде (`ads/ad-networks.ts`): публичные ключи сети лежат в `keys`, блок
   встаёт только в место формата сети и с идентификатором её вида, а у
   форматов, которые показываются по ключам сети, блока в кабинете нет —
-  `external_id` пуст. Секреты подтверждений сети в базу не пишутся (Р53). Сессия показа — воронка с меткой каждого
+  `external_id` пуст. Секреты подтверждений сети в базу не пишутся (Р53). Блок
+  не удаляют — на него ссылаются сессии показа: ненужный убирают «В архив»
+  (`archived_at`, Р200), он выключается, сеть и место остаются, а показы и
+  воронка считаются как прежде. Сессия показа — воронка с меткой каждого
   шага; выполненной её делает досмотр от клиента только там, где успех —
   показ, клик и целевое действие подтверждает сервер. Выбор сети и кулдаун
   места считаются по сессиям игрока в месте с начала вчерашних суток —
@@ -2115,6 +2164,17 @@ erDiagram
   убирается. Номер раза в ключах и отдельный префикс `reopen:` — поэтому
   повторное закрытие не конфликтует со сторнированным первым. При вайпе таблица
   остаётся.
+- **`LEDGER_TEMPLATE` — шаблоны повторяющихся расходов** (Р220, T-0463;
+  `37-accounting.md` §8). Шаблон хранит статью, место, обычную сумму и график
+  (каждый месяц или месяц года) и **сам ничего не проводит**: «Расходы месяца»
+  создаёт по каждому действующему шаблону, наступившему в периоде, **черновик**
+  операции через `OperationsService.create` с `template_id` и `template_period`.
+  Дублей не бывает по уникальному `(template_id, template_period)` в
+  `LEDGER_OPERATION`: повтор действия и две одновременные команды дают «уже
+  было», а не вторую операцию. Убранный черновик освобождает период. Внешнего
+  ключа от операции к шаблону нет — операция живёт и после того, как шаблон
+  забыли. Период — от прошлого месяца до следующего. Месяц годового шаблона и
+  сумма больше нуля — проверки базы. При вайпе таблица остаётся.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -2719,7 +2779,7 @@ flowchart LR
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         EXTIDENT["external-identity<br/>связь аккаунта с MAX и VK для заданий:<br/>одноразовые коды в Redis, пары в базе,<br/>порт ExternalLinkStarters, реализовано"]
-        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
+        ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
@@ -2976,6 +3036,7 @@ flowchart LR
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
+    ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
     CADDY -- "/api/v1/me/test-notice" --> TESTNOTICE
     TESTNOTICE -- "test_notice" --> PG
     ADMINAPI -. "принял ли предупреждение" .-> TESTNOTICE
