@@ -106,6 +106,30 @@ export const PASSIVES: PassiveDef[] = [
     op: "add",
     levels: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
   },
+  {
+    // Защита через игру (Р157, T-0286): здоровье за каждое убийство. Три уровня,
+    // потому что шаг — целое число здоровья, а не процент. Лечение от убийств не
+    // выше 4% максимума в секунду (`sim/defense-skills.ts`).
+    id: "vampirism",
+    nameKey: "passive.vampirism.name",
+    descriptionKey: "passive.vampirism.description",
+    category: "defense",
+    stat: "healOnKill",
+    op: "add",
+    levels: [1, 2, 3],
+  },
+  {
+    // Оберег сам ставит щит на одно попадание — раз в 30, 25, 20 секунд. Значение
+    // уровня — итоговый период, меньше — лучше. Тот же `shieldHits`, что у «Эгиды»,
+    // но от «Стойкости» его не больше одного.
+    id: "steadfast",
+    nameKey: "passive.steadfast.name",
+    descriptionKey: "passive.steadfast.description",
+    category: "defense",
+    stat: "wardIntervalSec",
+    op: "add",
+    levels: [30, 25, 20],
+  },
 ];
 
 /**

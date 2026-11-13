@@ -43,6 +43,9 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   // всю калибровку (docs/32-balance.md §3.1).
   { level: 15, weapons: ["flail"] },
   { level: 16, weapons: ["meteor"] },
+  // Защита через игру (Р157, T-0286): навыки слота защиты на двух последних уровнях лестницы.
+  { level: 17, passives: ["vampirism"] },
+  { level: 19, passives: ["steadfast"] },
 ];
 
 /**

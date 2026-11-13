@@ -120,6 +120,12 @@ export function passiveChanges(type: PassiveType, fromLevel: number | null, toLe
   const to = round(rawTo * scale);
   const from = rawFrom === null ? null : round(rawFrom * scale);
 
+  // Защита через игру: не множитель и не прибавка к параметру, а правило —
+  // «лечение за убийство 1 → 2», «щит раз в 30 с → 25 с» (меньше — лучше).
+  if (type.stat === "healOnKill" || type.stat === "wardIntervalSec") {
+    return [change(`upgrade.stat.passive.${type.stat}`, from, to, "value", type.stat === "wardIntervalSec")];
+  }
+
   return [
     change(
       `upgrade.stat.passive.${type.stat}`,

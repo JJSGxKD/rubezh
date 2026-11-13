@@ -913,12 +913,21 @@ describe("уровни навыков до 15-й минуты", () => {
   const EPS = 1e-9;
 
   /** Отступ уровня от нейтрали: прибавка для сложения, расстояние до единицы для множителя. */
-  const gain = (passive: PassiveDef, value: number): number => (passive.op === "add" ? value : Math.abs(value - 1));
+  const gain = (passive: PassiveDef, value: number): number =>
+    // Период щита: меньше — лучше, поэтому прибавкой считается сколько секунд снято со ста.
+    passive.stat === "wardIntervalSec" ? 100 - value : passive.op === "add" ? value : Math.abs(value - 1);
 
-  it("у всех, кроме «Залпа», от 6 до 8 уровней; «Залп» без изменений", () => {
+  /** Навыки-правила (Р157, T-0286): три уровня, шаг — целое число или секунды, а не процент. */
+  const RULE_PASSIVES = new Set(["vampirism", "steadfast"]);
+
+  it("у всех, кроме «Залпа» и навыков-правил, от 6 до 8 уровней; «Залп» без изменений", () => {
     for (const passive of PASSIVES) {
       if (passive.id === "volley") {
         expect(passive.levels, passive.id).toEqual([1, 2]);
+        continue;
+      }
+      if (RULE_PASSIVES.has(passive.id)) {
+        expect(passive.levels, passive.id).toHaveLength(3);
         continue;
       }
       expect(passive.levels.length, passive.id).toBeGreaterThanOrEqual(6);
