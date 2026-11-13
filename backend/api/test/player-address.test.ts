@@ -57,6 +57,8 @@ export const TEAM_PATHS: readonly string[] = [
   "modules/roles/roles.service.ts",
   // уведомления в чат администраторов
   "modules/admin-notify/",
+  // действия по расхождениям сверки оплат (T-0434): отказы и подписи читает сотрудник поддержки, игрок файл не видит
+  "modules/payments/payment-discrepancies.ts",
   // слоги имени, а не текст: «вы» — приставка
   "modules/auth/display-name-words.ts",
 ];
