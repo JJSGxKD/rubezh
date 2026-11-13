@@ -3,7 +3,7 @@ id: T-0417
 title: Workflow обновления ядра Xray — PR с версией и digest, проверка конфига в CI
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-60 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
