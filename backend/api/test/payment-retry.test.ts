@@ -3,6 +3,10 @@ import { Logger } from "@nestjs/common";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ForbiddenError } from "../src/common/domain-error.js";
 import { loadAppConfig, type AppConfig } from "../src/config/app-config.js";
+import { PaymentDiscrepancies } from "../src/modules/payments/payment-discrepancies.js";
+import { PaymentFeedSources } from "../src/modules/payments/payment-feed-sources.js";
+import type { DiscrepancyResolution } from "../src/modules/payments/payment-reconcile.js";
+import type { DiscrepancyRow, PaymentDiscrepancyStore } from "../src/modules/payments/payment-reconcile.repository.js";
 import { PaymentRetry } from "../src/modules/payments/payment-retry.js";
 import { PurchaseActionUnavailableError, PurchaseNotFoundError } from "../src/modules/payments/payments-errors.js";
 import { PaymentsHooks, type SupportAction } from "../src/modules/payments/payments-hooks.js";
@@ -10,6 +14,7 @@ import type { FailedPaymentJob, PaymentsQueue } from "../src/modules/payments/pa
 import type { StoredPurchase } from "../src/modules/payments/purchase-types.js";
 import { RolesService, type AccountRef } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
+import { starsProviders } from "./helpers/fake-stars-api.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryPurchasesRepository } from "./helpers/memory-purchases.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
@@ -18,7 +23,9 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
  * «Повторить учёт» по покупке (tasks/T-0431, Р209, WP53): все брошенные
  * задания одной покупки повторяются разом. Очередь подменена, роли, аккаунты
  * и покупки — в памяти; закрепляется то, где такое действие ломается: покупка
- * без заданий, двойное нажатие, чужая и своя покупка.
+ * без заданий, двойное нажатие, чужая и своя покупка. Без брошенных заданий
+ * повтор идёт по открытому расхождению сверки (tasks/T-0434): настоящий
+ * `PaymentDiscrepancies` на хранилище в памяти и подставной очереди.
  */
 
 const NOW = new Date(Date.UTC(2026, 10, 12, 9, 30));
@@ -26,6 +33,7 @@ const OWNER_ID = "777000111";
 const NOTE = "Игрок написал в поддержку: оплата не пришла";
 const PURCHASE_ID = "11111111-1111-4111-8111-111111111111";
 const OTHER_PURCHASE_ID = "22222222-2222-4222-8222-222222222222";
+const DISCREPANCY_ID = "33333333-3333-4333-8333-333333333333";
 const CHARGE_ID = "charge-abc";
 
 const NOTHING_TO_RETRY = "Повторять нечего: брошенных заданий по этой покупке нет. Если звёзды списаны, а оплаты нет — запустите сверку с Telegram";
@@ -87,7 +95,15 @@ function setup(env: Record<string, string> = {}) {
   });
 
   /** Очередь-подмена: список брошенных (`null` — очереди нет), задания, которые уже не брошены, и что было повторено. */
-  const queueState: { failed: FailedPaymentJob[] | null; error: Error | null; notFailed: Set<string>; retried: string[]; asked: number[] } = { failed: [], error: null, notFailed: new Set(), retried: [], asked: [] };
+  const queueState: {
+    failed: FailedPaymentJob[] | null;
+    error: Error | null;
+    notFailed: Set<string>;
+    retried: string[];
+    asked: number[];
+    /** повторы по выписке площадки (T-0434): что поставлено заданием `replay` и с какой меткой */
+    replayed: { job: unknown; tag: string }[];
+  } = { failed: [], error: null, notFailed: new Set(), retried: [], asked: [], replayed: [] };
   const queue = {
     failedJobs: async (limit: number) => {
       queueState.asked.push(limit);
@@ -101,10 +117,48 @@ function setup(env: Record<string, string> = {}) {
       queueState.retried.push(jobId);
       return "retried";
     },
+    replay: async (job: unknown, tag: string) => void queueState.replayed.push({ job, tag }),
+    dispatchRefunds: async () => undefined,
   } as unknown as PaymentsQueue;
 
-  const retry = new PaymentRetry(cfg, queue, purchases, roles, accounts, hooks);
-  return { cfg, accounts, rolesRepository, roles, purchases, hooks, events, queueState, queue, retry };
+  /** Расхождения сверки в памяти: условный захват, как `updateMany … where resolved_at is null` в базе. */
+  const discrepancyRows: DiscrepancyRow[] = [];
+  const store: PaymentDiscrepancyStore = {
+    byId: async (discrepancyId) => discrepancyRows.find((row) => row.discrepancyId === discrepancyId) ?? null,
+    byPurchase: async (purchaseId) => discrepancyRows.filter((row) => row.purchaseId === purchaseId),
+    openByPurchases: async (purchaseIds) => discrepancyRows.filter((row) => row.resolvedAt === null && row.purchaseId !== null && purchaseIds.includes(row.purchaseId)),
+    claim: async (discrepancyId, resolution: DiscrepancyResolution, actorAccountId, note, at) => {
+      const row = discrepancyRows.find((candidate) => candidate.discrepancyId === discrepancyId);
+      if (row === undefined || row.resolvedAt !== null) return false;
+      Object.assign(row, { resolution, resolvedBy: actorAccountId, note, resolvedAt: at });
+      return true;
+    },
+  };
+  const discrepancies = new PaymentDiscrepancies(cfg, store, queue, starsProviders(), purchases, roles, accounts, hooks, new PaymentFeedSources());
+
+  const retry = new PaymentRetry(cfg, queue, purchases, roles, accounts, hooks, discrepancies);
+  return { cfg, accounts, rolesRepository, roles, purchases, hooks, events, queueState, queue, retry, discrepancyRows };
+}
+
+function discrepancy(accountId: string | null, patch: Partial<DiscrepancyRow> = {}): DiscrepancyRow {
+  return {
+    discrepancyId: DISCREPANCY_ID,
+    platform: "telegram",
+    kind: "charged_unrecorded",
+    chargeId: CHARGE_ID,
+    purchaseId: PURCHASE_ID,
+    accountId,
+    payerId: "555000111",
+    amount: 50,
+    payload: PURCHASE_ID,
+    occurredAt: new Date(NOW.getTime() - 7_200_000),
+    detectedAt: new Date(NOW.getTime() - 3_600_000),
+    resolution: null,
+    resolvedAt: null,
+    resolvedBy: null,
+    note: null,
+    ...patch,
+  };
 }
 
 type Setup = ReturnType<typeof setup>;
@@ -149,7 +203,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
 
-    expect(result).toEqual({ retried: ["confirm-aaaa1111", "refund-bbbb2222"] });
+    expect(result).toEqual({ retried: ["confirm-aaaa1111", "refund-bbbb2222"], replayed: null });
     expect(s.queueState.retried).toEqual(["confirm-aaaa1111", "refund-bbbb2222"]);
     expect(s.queueState.asked).toEqual([1000]);
     expect(s.rolesRepository.entries).toHaveLength(1);
@@ -179,7 +233,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
 
-    expect(result).toEqual({ retried: ["confirm-mine0000"] });
+    expect(result).toEqual({ retried: ["confirm-mine0000"], replayed: null });
     expect(s.queueState.retried).toEqual(["confirm-mine0000"]);
   });
 
@@ -189,7 +243,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
 
-    expect(result).toEqual({ retried: ["refunded-cccc3333"] });
+    expect(result).toEqual({ retried: ["refunded-cccc3333"], replayed: null });
     expect(s.events[0]?.detail).toBe("повторено заданий: 1");
   });
 
@@ -254,7 +308,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
 
-    expect(result).toEqual({ retried: ["refund-bbbb2222"] });
+    expect(result).toEqual({ retried: ["refund-bbbb2222"], replayed: null });
     expect(s.rolesRepository.entries[0]).toMatchObject({ after: { purchaseId: PURCHASE_ID, jobs: ["refund-bbbb2222"], note: NOTE } });
     expect(s.events[0]?.detail).toBe("повторено заданий: 1");
   });
@@ -308,7 +362,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
 
     const result = await dev.retry.retry(me, PURCHASE_ID, NOTE, NOW);
 
-    expect(result).toEqual({ retried: ["confirm-aaaa1111"] });
+    expect(result).toEqual({ retried: ["confirm-aaaa1111"], replayed: null });
   });
 
   it("владелец (из списка окружения) повторяет учёт", async () => {
@@ -316,7 +370,7 @@ describe("PaymentRetry: «Повторить учёт»", () => {
     put(s, purchase(target.accountId));
     s.queueState.failed = [failedJob()];
 
-    expect(await s.retry.retry(owner, PURCHASE_ID, NOTE, NOW)).toEqual({ retried: ["confirm-aaaa1111"] });
+    expect(await s.retry.retry(owner, PURCHASE_ID, NOTE, NOW)).toEqual({ retried: ["confirm-aaaa1111"], replayed: null });
   });
 
   it("имени актёра нет в аккаунтах — в сообщении команде стоит его id", async () => {
@@ -336,6 +390,152 @@ describe("PaymentRetry: «Повторить учёт»", () => {
       throw new Error("поток недоступен");
     });
 
-    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).resolves.toEqual({ retried: ["confirm-aaaa1111"] });
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).resolves.toEqual({ retried: ["confirm-aaaa1111"], replayed: null });
+  });
+});
+
+describe("PaymentRetry: «Повторить учёт» по выписке площадки (tasks/T-0434)", () => {
+  let s: Setup;
+  let admin: AccountRef;
+  let target: AccountRef;
+
+  const OCCURRED_AT = new Date(NOW.getTime() - 7_200_000);
+
+  beforeEach(async () => {
+    for (const level of ["log", "warn", "error"] as const) vi.spyOn(Logger.prototype, level).mockImplementation(() => undefined);
+    s = setup();
+    admin = await person(s, "900001", "admin", "Анна из поддержки");
+    target = await person(s, "900002");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Покупка, которую оплатили, но мы не записали: оплаты и номера платежа у неё нет. */
+  function unpaid(accountId: string): StoredPurchase {
+    return purchase(accountId, { status: "pending", telegramChargeId: null, paidAt: null, chargedStars: 50 });
+  }
+
+  it("брошенных заданий нет, есть открытое «списано, но не записано» — повтор идёт по выписке: replayed — id расхождения, задание поставлено со временем операции", async () => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId, { occurredAt: OCCURRED_AT }));
+
+    const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    expect(result).toEqual({ retried: [], replayed: DISCREPANCY_ID });
+    expect(s.queueState.replayed).toEqual([
+      {
+        job: { kind: "confirm", payment: { platform: "telegram", chargeId: CHARGE_ID, payload: PURCHASE_ID, payerId: "555000111", currency: "XTR", totalAmount: 50 }, at: OCCURRED_AT.getTime() },
+        tag: "reconcile",
+      },
+    ]);
+    expect(s.queueState.retried).toEqual([]);
+    expect(s.discrepancyRows[0]).toMatchObject({ resolution: "retried", resolvedBy: admin.accountId, note: NOTE, resolvedAt: NOW });
+    expect(s.rolesRepository.entries).toHaveLength(1);
+    expect(s.rolesRepository.entries[0]).toMatchObject({ actorAccountId: admin.accountId, action: "payments.discrepancy.retry", target: target.accountId });
+    expect(s.events).toHaveLength(1);
+    expect(s.events[0]).toMatchObject({ kind: "retry", actorName: "Анна из поддержки", note: NOTE, at: NOW, detail: "запись по выписке площадки" });
+  });
+
+  it("открытый «возврат в Telegram, но не у нас» — задание возврата по выписке", async () => {
+    put(s, purchase(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId, { kind: "refund_unrecorded", occurredAt: OCCURRED_AT }));
+
+    const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    expect(result).toEqual({ retried: [], replayed: DISCREPANCY_ID });
+    expect(s.queueState.replayed).toEqual([{ job: { kind: "refunded", chargeId: CHARGE_ID, at: OCCURRED_AT.getTime() }, tag: "reconcile" }]);
+  });
+
+  it("брошенные задания есть — повторяются они, расхождение не трогается", async () => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId));
+    s.queueState.failed = [failedJob()];
+
+    const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    expect(result).toEqual({ retried: ["confirm-aaaa1111"], replayed: null });
+    expect(s.queueState.replayed).toEqual([]);
+    expect(s.discrepancyRows[0]).toMatchObject({ resolution: null, resolvedAt: null });
+  });
+
+  it("очереди нет, а расхождение открыто — повтор по выписке: ему очередь не нужна, задание выполнится сразу", async () => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId));
+    s.queueState.failed = null;
+
+    const result = await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    expect(result).toEqual({ retried: [], replayed: DISCREPANCY_ID });
+  });
+
+  it("очереди нет и расхождения нет — «Очередь оплаты недоступна», а не «Повторять нечего»", async () => {
+    put(s, unpaid(target.accountId));
+    s.queueState.failed = null;
+
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).rejects.toMatchObject({ message: "Очередь оплаты недоступна: Redis не отвечает или оплата выключена" });
+  });
+
+  const notRetryable: [string, Partial<DiscrepancyRow>][] = [
+    ["закрытое", { resolvedAt: NOW, resolution: "dismissed" }],
+    ["«записано, но нет в выписке»", { kind: "recorded_missing" }],
+    ["расхождение другой покупки", { purchaseId: OTHER_PURCHASE_ID }],
+  ];
+
+  it.each(notRetryable)("%s — не повод повторять: прежний отказ дословно, ничего не поставлено и не записано", async (_name, patch) => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId, patch));
+
+    const attempt = s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    await expect(attempt).rejects.toBeInstanceOf(PurchaseActionUnavailableError);
+    await expect(attempt).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: NOTHING_TO_RETRY });
+    expect(s.queueState.replayed).toEqual([]);
+    expect(s.rolesRepository.entries).toEqual([]);
+    expect(s.events).toEqual([]);
+  });
+
+  it("двойное нажатие: расхождение уже занято первым — второй раз прежний отказ, задание и журнал — один раз", async () => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId));
+    await s.retry.retry(admin, PURCHASE_ID, NOTE, NOW);
+
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).rejects.toMatchObject({ message: NOTHING_TO_RETRY });
+
+    expect(s.queueState.replayed).toHaveLength(1);
+    expect(s.rolesRepository.entries).toHaveLength(1);
+    expect(s.events).toHaveLength(1);
+  });
+
+  it("без payments.support — ForbiddenError, расхождение остаётся открытым", async () => {
+    const weak = await person(s, "910001", "moderator");
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId));
+
+    await expect(s.retry.retry(weak, PURCHASE_ID, NOTE, NOW)).rejects.toBeInstanceOf(ForbiddenError);
+
+    expect(s.queueState.replayed).toEqual([]);
+    expect(s.discrepancyRows[0]?.resolvedAt).toBeNull();
+  });
+
+  it("своя покупка — отказ раньше, чем что-либо поставлено по выписке", async () => {
+    put(s, unpaid(admin.accountId));
+    s.discrepancyRows.push(discrepancy(admin.accountId));
+
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).rejects.toMatchObject({ message: "Повторять учёт своей покупки нельзя" });
+
+    expect(s.queueState.replayed).toEqual([]);
+    expect(s.discrepancyRows[0]?.resolvedAt).toBeNull();
+  });
+
+  it("повтор по выписке не принят (в выписке нет игрока) — отказ расхождения доходит до человека, расхождение остаётся открытым", async () => {
+    put(s, unpaid(target.accountId));
+    s.discrepancyRows.push(discrepancy(target.accountId, { payerId: null }));
+
+    await expect(s.retry.retry(admin, PURCHASE_ID, NOTE, NOW)).rejects.toMatchObject({ code: "purchase_action_unavailable", status: 409, message: "В выписке нет игрока — вернуть или записать оплату нельзя" });
+
+    expect(s.queueState.replayed).toEqual([]);
+    expect(s.discrepancyRows[0]?.resolvedAt).toBeNull();
   });
 });

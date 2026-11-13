@@ -3,8 +3,8 @@ id: T-0434
 title: Действия по расхождениям сверки и «Повторить учёт» по выписке площадки
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0431, T-0433]
@@ -21,8 +21,10 @@ zones:
 shared:
   - backend/api/src/modules/payments/payments-errors.ts
   - backend/api/src/modules/payments/payments.module.ts
+  - backend/api/src/modules/admin/admin-payment-jobs.controller.ts
   - apps/admin/src/api/audit.ts
   - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
 runner: any

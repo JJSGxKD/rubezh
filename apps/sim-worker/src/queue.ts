@@ -5,6 +5,7 @@ import { checkJobSchema, jsonBytes, type CheckJobInput } from "./job";
 import { CONTENT_CHECK_QUEUE, QUEUE_BUSY_MESSAGE, QUEUE_MAX_WAITING, SNAPSHOT_MAX_BYTES, SNAPSHOT_TOO_LARGE } from "./limits";
 import { logEvent, logThrottled } from "./log";
 import type { Metrics, Outcome } from "./metrics";
+import type { RunGate } from "./replay-job";
 
 /**
  * Очередь `content-check` (docs/35-stage4-plan.md Р15, tasks/T-0302): сервер
@@ -66,6 +67,8 @@ export interface CheckWorkerOptions {
   /** имя очереди; в тестах — своё, чтобы не задеть чужое */
   queueName?: string;
   metrics: Metrics;
+  /** затвор, общий с воркером повтора забега: тяжёлая работа процесса идёт по одной, проверка — первой (tasks/T-0318) */
+  gate?: RunGate;
   deps?: CheckDeps;
 }
 
@@ -82,7 +85,8 @@ export function createCheckWorker(options: CheckWorkerOptions): Worker<CheckJobI
       const started = performance.now();
       const seconds = (): number => (performance.now() - started) / 1000;
       try {
-        const result = await runCheck(job.data, { baseRuns, ...options.deps });
+        const check = (): Promise<CheckResult> => runCheck(job.data, { baseRuns, ...options.deps });
+        const result = await (options.gate === undefined ? check() : options.gate.run("check", check));
         options.metrics.observe(CONTENT_CHECK_QUEUE, outcomeOf(result), seconds());
         return result;
       } catch (error: unknown) {
