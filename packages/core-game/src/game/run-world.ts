@@ -79,6 +79,8 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     ...(prologue ? { prologue: PROLOGUE } : { pressure: content.pressure }),
     // Пролог и «Лёгкую» осада не касается: мир сам не берёт правил, если режим или уровень её исключают.
     siege: content.siege,
+    // Карачун — часть боевого забега (Р205): пролог, «Лёгкую» и новичка ниже порога мир отсекает сам.
+    stalker: content.stalker,
     timeline,
     endlessCurve,
     continueRules: content.continueRules,

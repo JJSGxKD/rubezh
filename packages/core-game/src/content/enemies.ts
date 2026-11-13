@@ -51,7 +51,7 @@ export const ENEMIES: EnemyDef[] = [
   // Карачун (Р205): убить нельзя, числа тела — в `content/stalker.ts`. hp и damage движок не читает,
   // xp ноль: добычи с него нет. В таймлайн и в поток его не вносят — выпускает директор преследователя
   // (T-0423).
-  { id: "karachun", hp: 1, speed: 110, damage: 0, xp: 0, pattern: "stalker" },
+  { id: "karachun", hp: 1, speed: 150, damage: 0, xp: 0, pattern: "stalker" },
   // Волк морозит: замедление после рывка — вторая причина от него уходить.
   { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash", resist: { cold: 0.4, fire: -0.25 }, element: "cold" },
   // Вороны берут числом и теснотой кольца: приходят стаей, заходят широко и

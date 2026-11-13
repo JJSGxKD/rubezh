@@ -26,6 +26,7 @@ export class RunBus {
     secretUsed: new Set(),
     secretBlessing: new Set(),
     ringEnded: new Set(),
+    stalkerEnded: new Set(),
     siegeWarn: new Set(),
     siegeStart: new Set(),
     siegeEnd: new Set(),
