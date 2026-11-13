@@ -3,8 +3,8 @@ id: T-0306
 title: Публикация контента — версия сначала команде, потом всем, только после зелёной проверки; откат кнопкой; версия для клиента по его схеме
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-61 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0305]
