@@ -3,8 +3,8 @@ id: T-0219
 title: Кабинет партнёра — воронка по своим ссылкам и кодам, без ID и малых групп
 epic: E14
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0218]
