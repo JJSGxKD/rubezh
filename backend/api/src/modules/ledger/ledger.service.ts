@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable } from "@nestjs/common";
-import { balances, findEntryProblems, formatMinor, periodOf, reverse as reverseEntry, type EntryDraft, type EntryLine, type LedgerAccount } from "@bh/ledger";
+import { Inject, Injectable, Optional } from "@nestjs/common";
+import { balances, findEntryProblems, formatMinor, periodOfEntry, reverse as reverseEntry, type EntryDraft, type EntryLine, type LedgerAccount } from "@bh/ledger";
 import { z } from "zod";
 import { ValidationError } from "../../common/domain-error.js";
 import { currencySpec } from "./ledger-currencies.js";
 import { decodeCursor, encodeCursor } from "./ledger-cursor.js";
 import { LedgerAlreadyReversedError, LedgerEntryInvalidError, LedgerEntryNotFoundError, LedgerSourceConflictError } from "./ledger-errors.js";
 import { describeProblem } from "./ledger-problems.js";
+import { LedgerPeriodClosedError } from "./periods/period-errors.js";
+import { PERIOD_LOCK, type PeriodLock } from "./periods/period-lock.js";
 import type { AccountBalanceView, JournalEntryView, JournalFilterInput, JournalPage, LedgerMeta } from "./ledger-view.js";
 import { LEDGER_REPOSITORY, type LedgerRepository, type StoredLedgerEntry } from "./ledger.repository.js";
 
@@ -53,12 +55,21 @@ function sameLines(a: readonly EntryLine[], b: readonly EntryLine[]): boolean {
 export class LedgerService {
   private cache: { loadedAt: number; accounts: Map<string, LedgerAccount> } | null = null;
 
-  constructor(@Inject(LEDGER_REPOSITORY) private readonly repository: LedgerRepository) {}
+  /**
+   * `periodLock` — замок закрытых месяцев (Р222, tasks/T-0468). Не задан — журнал работает без замка, как до месяцев
+   * учёта: так его собирают тесты и всё, что месяцев не знает.
+   */
+  constructor(
+    @Inject(LEDGER_REPOSITORY) private readonly repository: LedgerRepository,
+    @Optional() @Inject(PERIOD_LOCK) private readonly periodLock?: PeriodLock,
+  ) {}
 
   /**
    * Записать проводку. Повтор с теми же строками отдаёт ту же проводку (`created: false`), повтор с другими —
    * `LedgerSourceConflictError`: тихая перезапись скрыла бы ошибку источника. Описание и время повтора не
-   * сравниваются — повторное задание их не обязано помнить.
+   * сравниваются — повторное задание их не обязано помнить. Месяц проводки — «за какой месяц», если он указан,
+   * а иначе месяц даты; в закрытый месяц не пишется ничего — `LedgerPeriodClosedError` (повтор уже записанной
+   * проводки замок не трогает).
    */
   async post(input: LedgerPostInput, actor?: LedgerActor): Promise<PostResult> {
     await this.assertValid(input);
@@ -71,13 +82,16 @@ export class LedgerService {
       throw new LedgerEntryInvalidError(`Исходной проводки «${input.reversalOf}» в журнале нет`);
     }
 
+    const period = periodOfEntry(input);
+    if (this.periodLock !== undefined && (await this.periodLock.isClosed(period))) throw new LedgerPeriodClosedError(period);
+
     const entryId = randomUUID();
     const outcome = await this.repository.insertEntry(
       {
         entryId,
         sourceKey: input.sourceKey,
         at: input.at,
-        period: periodOf(input.at),
+        period,
         memo: input.memo,
         reversalOfId: original?.entryId ?? null,
         meta: input.meta ?? null,

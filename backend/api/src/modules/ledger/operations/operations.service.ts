@@ -148,7 +148,9 @@ export class OperationsService {
       if (!result.ok) throw invalid(result.problems);
       built = result.built;
       await this.ensureAccounts(built);
-      entryId = (await this.ledger.post(built.draft, ledgerActor)).entryId;
+      // Поступление «за какой месяц» (Р222): проводка принадлежит этому месяцу, и замок закрытого месяца смотрит на него.
+      const draft = input.kind === "income" ? { ...built.draft, period: input.forMonth } : built.draft;
+      entryId = (await this.ledger.post(draft, ledgerActor)).entryId;
     }
 
     const loan = built?.loan ?? null;
