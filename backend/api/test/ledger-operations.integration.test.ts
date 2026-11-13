@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Decimal, rateOf, type CurrencyCode, type Rate } from "@bh/fx";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
 import type { PrismaClient } from "../src/generated/prisma/client.js";
 import type { FxService } from "../src/modules/fx/fx.service.js";
@@ -46,6 +46,7 @@ describe.skipIf(DATABASE_URL === "")("ручные операции учёта �
   let ledger: LedgerService;
   let chart: LedgerChartService;
   let operations: OperationsService;
+  let operationsRepository: PrismaOperationsRepository;
   const audit: AuditEntry[] = [];
   const run = randomUUID().slice(0, 8);
   const owner: OperationActor = { accountId: randomUUID(), platform: "telegram", platformUserId: "9001" };
@@ -100,7 +101,8 @@ describe.skipIf(DATABASE_URL === "")("ручные операции учёта �
     } as unknown as RolesService;
     chart = new LedgerChartService(new PrismaLedgerChartRepository(prisma), ledger, roles);
     const fx = { peek: async () => ({ takenAt: new Date(), rates: rates({ RUB: "0.0125", GRAM: "5" }), payout: rates({ XTR: "0.013" }) }) } as unknown as FxService;
-    operations = new OperationsService(new PrismaOperationsRepository(prisma), ledger, chart, fx, roles);
+    operationsRepository = new PrismaOperationsRepository(prisma);
+    operations = new OperationsService(operationsRepository, ledger, chart, fx, roles);
 
     // У звёзд — шаблон «1 % + 5 звёзд»: обе части в валюте места, поэтому плательщик фиксы однозначен и на общей базе.
     const created = [
@@ -201,6 +203,30 @@ describe.skipIf(DATABASE_URL === "")("ручные операции учёта �
     await operations.submit(owner, posted.operationId);
     expect((await domainError(operations.discard(owner, posted.operationId))).code).toBe("ledger_operation_not_draft");
     expect(await prisma.ledgerOperation.count({ where: { operationId: posted.operationId } })).toBe(1);
+  });
+
+  it("сбой между проводкой и отметкой: черновик с записанной проводкой не правится и не удаляется, повторный submit доводит его до «проведена»", async () => {
+    const draft = await create(owner, expense("700"));
+    const balanceBefore = await balanceOf(bank);
+    const failure = vi.spyOn(operationsRepository, "markPosted").mockRejectedValueOnce(new Error("соединение с базой потеряно"));
+    try {
+      await expect(operations.submit(owner, draft.operationId)).rejects.toThrow("соединение с базой потеряно");
+    } finally {
+      failure.mockRestore();
+    }
+    expect(await entriesWithKey(`op:${draft.operationId}`)).toBe(1);
+
+    // Правка поменяла бы ввод, а проводка в журнале осталась бы по старому: повтор упёрся бы в «ключ занят другими строками».
+    expect(await domainError(operations.update(owner, draft.operationId, expense("1")))).toMatchObject({ code: "ledger_operation_not_draft", status: 409 });
+    expect((await domainError(operations.discard(owner, draft.operationId))).code).toBe("ledger_operation_not_draft");
+    const stored = await prisma.ledgerOperation.findUniqueOrThrow({ where: { operationId: draft.operationId } });
+    expect(stored).toMatchObject({ status: "draft", input: expect.objectContaining({ amount: "700" }) });
+
+    const retry = await operations.submit(owner, draft.operationId);
+
+    expect(retry.status).toBe("posted");
+    expect(await entriesWithKey(`op:${draft.operationId}`)).toBe(1);
+    expect(await balanceOf(bank)).toBe(balanceBefore - 70_000n);
   });
 
   it("перевод с комиссией по шаблону места списания: процент округлён вверх, комиссия — в статью «Комиссия вывода»", async () => {
