@@ -1,4 +1,4 @@
-import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardToolRules, CardTools, ChestReward, ChestSize, ChestSource, ChestsDef, ContinueDef, DifficultyDef, DropsDef, LevelCurveDef, LimitDef, LoadoutLimits, LoadoutStat, PressureDef, RunLoadout, RunMode, RunModifierId, SecretKind, SecretsDef, SiegeDef, UpgradeOption } from "@bh/shared-types";
 import type { EnemyType } from "../patterns/enemy-types";
 import { markSpawn, type HuntState } from "../run/hunt-log";
 import type { PassiveType, PlayerStats, PlayerStatsBase } from "../progression/passives";
@@ -507,6 +507,11 @@ export interface World {
    * каждый отрезок таймлайна; от забега к забегу он не меняется.
    */
   difficultyLevel: DifficultyDef;
+  /**
+   * Модификаторы забега: действие уже в `difficultyLevel`, здесь они нужны снимку,
+   * итогу и записи. Пустой — забег без модификатора.
+   */
+  modifierIds: readonly RunModifierId[];
   player: PlayerState;
   /** характеристики игрока с учётом пассивок — пересчитываются при улучшении */
   playerStats: PlayerStats;

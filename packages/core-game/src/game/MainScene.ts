@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { DifficultyId, RunLoadout, RunMode, RunOutcome } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunModifierId, RunOutcome } from "@bh/shared-types";
 import { CONTENT_HASH } from "../content/hash";
 import { hashSnapshot, type ContentSnapshot } from "../content/snapshot";
 import type { RunBus } from "../engine/run-bus";
@@ -91,6 +91,8 @@ export interface MainSceneData {
   difficultyId: DifficultyId;
   /** режим нового забега; продолженный берёт режим из снимка. Без поля — `endless` */
   mode?: RunMode;
+  /** модификатор нового забега (T-0119); продолженный берёт его из снимка */
+  modifierIds?: readonly RunModifierId[];
   /** чем начинать забег; по умолчанию — первое стартовое оружие контента */
   startingWeaponId?: string;
   /** шина событий наружу: экраны рисует оболочка, движок только сообщает */
@@ -220,6 +222,8 @@ export class MainScene extends Phaser.Scene {
       difficultyId: resume?.difficultyId ?? data.difficultyId,
       // Режим продолженного забега — из снимка: пролог не должен превратиться в обычный забег (и наоборот).
       mode: resume !== undefined ? (resume.mode ?? "endless") : (data.mode ?? "endless"),
+      // Модификатор продолженного забега — тоже из снимка: оси сложности у мира другие.
+      modifierIds: resume !== undefined ? (resume.modifierIds ?? []) : (data.modifierIds ?? []),
       ...(startingWeaponId === undefined ? {} : { startingWeaponId }),
       unitScale: data.unitScale,
       ...(loadout === undefined ? {} : { loadout }),
@@ -625,6 +629,7 @@ export class MainScene extends Phaser.Scene {
       difficultyId: world.difficultyLevel.id,
       startingWeaponId: this.startingWeaponId(),
       ...(world.mode === "endless" ? {} : { mode: world.mode }),
+      ...(world.modifierIds.length === 0 ? {} : { modifierIds: [...world.modifierIds] }),
       summary: {
         survivalSec: world.stats.elapsedSec,
         level: world.progression.level,
