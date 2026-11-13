@@ -193,7 +193,7 @@ interface Rig {
   setCreate(handler: (input: OperationInput, template: { templateId: string; period: string } | undefined) => Promise<void>): void;
 }
 
-function rig(places: PlaceView[] = [place()], articles: ArticleView[] = [article(), article({ articleId: "domains", name: "Домены" })]): Rig {
+function rig(places: PlaceView[] = [place()], articles: ArticleView[] = [article(), article({ articleId: "domains", name: "Домены" }), article({ articleId: "cdn", name: "CDN" })]): Rig {
   const repository = new MemoryTemplates();
   const audit: AuditEntry[] = [];
   const created: Rig["created"] = [];
@@ -321,11 +321,11 @@ describe("шаблоны: правка и архив", () => {
     const { service } = rig();
     await service.create(actor, vpsBody);
     await service.create(actor, domainsBody);
-    await service.archive(actor, "domains");
+    await service.archive(actor, "domeny");
     const list = await service.list();
     expect(list.map((view) => [view.templateId, view.archived, view.articleName, view.placeName])).toEqual([
       ["vps", false, "VPS", "Карта"],
-      ["domains", true, "Домены", "Карта"],
+      ["domeny", true, "Домены", "Карта"],
     ]);
   });
 });
