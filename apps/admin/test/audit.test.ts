@@ -243,6 +243,7 @@ describe("действия поддержки покупок, партнёров
     expect(actionTitle("payments.retry")).toBe("Повтор учёта покупки");
     expect(actionTitle("payments.job.retry")).toBe("Повтор брошенного задания оплаты");
     expect(actionTitle("payments.compensate")).toBe("Компенсация за сбой оплаты");
+    expect(actionTitle("payments.reconcile.run")).toBe("Сверка оплат вручную");
     expect(actionTitle("partner.status")).toBe("Смена статуса партнёра");
     expect(actionTitle("links.retarget")).toBe("Смена цели ссылки");
     expect(actionTitle("links.postback.set")).toBe("Адрес постбэка ссылки");
