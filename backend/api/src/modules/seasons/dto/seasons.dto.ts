@@ -90,6 +90,17 @@ const boardEntry = z.object({
   tester: z.literal(true).optional(),
   /** знак «Меценат» (Р109); поля нет — не поддержал */
   supporter: z.literal(true).optional(),
+  /** знак у имени (T-0240): выбранный игроком или по умолчанию; поля нет — знака нет или источник знаков недоступен */
+  emblem: z
+    .object({
+      id: z.string(),
+      title: z.string(),
+      tier: z.string(),
+      category: z.enum(["status", "season", "merit"]),
+      /** порядковый номер сезона — только у сезонного знака */
+      season: z.number().int().positive().optional(),
+    })
+    .optional(),
   /** очки лучшего забега недели; `null` — в сезоне по времени у забега очков нет */
   points: z.number().nullable(),
   /** время того же забега: в сезоне по очкам — подпись, в сезоне по времени — главное число */

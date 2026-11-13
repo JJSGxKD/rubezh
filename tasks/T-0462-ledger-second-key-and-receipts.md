@@ -3,8 +3,8 @@ id: T-0462
 title: Второй ключ на крупные операции финансов, уведомление и картинка чека
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0461]
@@ -25,6 +25,18 @@ shared:
   - backend/api/prisma/migrations/
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
+  - docs/37-accounting.md
+  - backend/api/src/modules/admin/admin-media.controller.ts
+  - backend/api/src/modules/ledger/ledger.module.ts
+  - backend/api/src/modules/ledger/operations/operation-errors.ts
+  - backend/api/src/modules/ledger/operations/operation-input.ts
+  - backend/api/src/modules/ledger/operations/operation-view.ts
+  - backend/api/src/modules/ledger/operations/operations.repository.ts
+  - backend/api/test/ledger-operations.integration.test.ts
+  - backend/api/test/ledger-operations.test.ts
+  - backend/api/test/route-permissions.test.ts
+  - backend/api/test/ledger-templates.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -145,12 +157,12 @@ batch: 5
 
 ## Критерии приёмки
 
-- [ ] Крупная операция финансов и любое исправление ждут владельца и до
+- [x] Крупная операция финансов и любое исправление ждут владельца и до
       подтверждения ничего не проводят; владелец проводит сразу.
-- [ ] Владелец получает карточку в потоке «Бухгалтерия» и видит решение в
+- [x] Владелец получает карточку в потоке «Бухгалтерия» и видит решение в
       той же ветке.
-- [ ] Картинка чека загружается и показывается только тем, кто видит учёт.
-- [ ] Тесты и гейт зелёные.
+- [x] Картинка чека загружается и показывается только тем, кто видит учёт.
+- [x] Тесты и гейт зелёные.
 
 ## PR
 
