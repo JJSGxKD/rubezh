@@ -45,7 +45,7 @@ export function publishBlockReason(input: { latest: ContentCheckRecord | null; f
   if (forSnapshot === null) {
     if (latest === null) return "Проверки черновика не было — запустите «Проверить» и дождитесь зелёного итога";
     if (latest.status === "failed") return `Последняя проверка не посчиталась — ${RERUN}`;
-    return `Черновик менялся после последней проверки — ${RERUN}`;
+    return `Черновик менялся после проверки — ${RERUN}`;
   }
   if (forSnapshot.status === "queued") return "Проверка ещё идёт — дождитесь итога";
   if (forSnapshot.status === "failed") return `Проверка не посчиталась — ${RERUN}`;
