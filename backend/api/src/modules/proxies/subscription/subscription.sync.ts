@@ -1,14 +1,14 @@
-import { assignSlots, parseSubscription, SubscriptionFetchError, SubscriptionFormatError, type ProxyNode } from "@bh/proxy-kit";
+import { assignSlots, hasOwnRouting, mergeRouting, parseRoutingHeader, parseSubscription, SubscriptionFetchError, SubscriptionFormatError, type ProxyNode, type RoutingSummary } from "@bh/proxy-kit";
 import type { Outbound } from "../../../infra/outbound/outbound.js";
 import { SecretUnreadableError, type SecretCipher } from "../../secrets/secret-cipher.js";
 import { loadSubscription, subscriptionHwid, type HostResolver } from "./subscription-download.js";
 import { REFRESH_LOCK_KEY, REFRESH_LOCK_TTL_MS, withLock, type LockRedis, type LockResult } from "./subscription-lock.js";
 import { fetchErrorNote, formatErrorNote, joinNotes, noNodesNote, NOTES, overflowNote, successNote } from "./subscription.messages.js";
 import { slotQuota } from "./subscription-rules.js";
-import type { StoredNode, StoredSubscription, SubscriptionRepository } from "./subscription.repository.js";
+import type { RoutingWrite, StoredNode, StoredSubscription, SubscriptionRepository } from "./subscription.repository.js";
 import type { SubscriptionRoutes } from "./subscription-routes.js";
 import { openUrl } from "./subscription-url.js";
-import { assembleConfig, missingParts, type AssemblyResult } from "./xray-config-assembly.js";
+import { assembleConfig, missingParts, type AssemblyDeps, type AssemblyResult } from "./xray-config-assembly.js";
 import { SidecarMissingError, type ConfigPart, type ConfigWriter } from "./xray-config-writer.js";
 
 /**
@@ -29,6 +29,7 @@ import { SidecarMissingError, type ConfigPart, type ConfigWriter } from "./xray-
 
 const NAME_MAX = 80;
 const HOST_MAX = 255;
+const FLOW_MAX = 32;
 
 export interface SyncDeps {
   repository: SubscriptionRepository;
@@ -41,7 +42,9 @@ export interface SyncDeps {
   redis: LockRedis;
   /** сообщить остальным репликам, что таблицы изменились */
   changed: () => Promise<void>;
-  xray: { basePort: number; slotCount: number };
+  xray: AssemblyDeps["xray"];
+  /** снять счётчики трафика перед записью конфига (tasks/T-0386) */
+  beforeWrite?: AssemblyDeps["beforeWrite"];
 }
 
 export type RefreshResult = { status: "busy" } | { status: "absent" } | { status: "disabled" } | { status: "ok" | "failed"; note: string };
@@ -139,6 +142,7 @@ export class SubscriptionSync {
     const used = info === null || (info.uploadBytes === null && info.downloadBytes === null) ? null : BigInt((info.uploadBytes ?? 0) + (info.downloadBytes ?? 0));
     const total = info?.totalBytes ?? null;
     const expires = info?.expireUnixSec ?? null;
+    const routing = mergeRouting(parsed.routing, parseRoutingHeader(fetched.routingHeader));
     await this.deps.repository.applyRefresh(key, {
       at: now,
       ok: overflow.length === 0,
@@ -148,6 +152,7 @@ export class SubscriptionSync {
       trafficUsedBytes: used,
       trafficTotalBytes: total === null ? null : BigInt(total),
       expiresAt: expires === null ? null : new Date(expires * 1000),
+      routing: routingWrite(routing),
     });
     await this.deps.routes.reload();
     await this.deps.changed();
@@ -183,9 +188,29 @@ export class SubscriptionSync {
   }
 }
 
+/**
+ * Своя маршрутизация к записи: источники через «+» в порядке `json`, `header`.
+ * Правила, которые всё шлют в туннель, маршрутизацией не считаются — тогда `none`.
+ */
+function routingWrite(routing: RoutingSummary | null): RoutingWrite {
+  if (routing === null || !hasOwnRouting(routing)) return { source: "none", direct: 0, block: 0, hints: [] };
+  return { source: routing.sources.join("+"), direct: routing.direct, block: routing.block, hints: routing.hints };
+}
+
 /** Узел для таблицы; уцелевший узел сохраняет итоги проверок, новый ждёт первой. */
 function storedNode(subscriptionKey: string, node: ProxyNode, slot: number, previous: StoredNode | undefined, now: Date): StoredNode {
-  const base = { subscriptionKey, nodeKey: node.key, slot, protocol: node.protocol, name: node.name.slice(0, NAME_MAX), country: node.country, host: node.host.slice(0, HOST_MAX) };
+  const base = {
+    subscriptionKey,
+    nodeKey: node.key,
+    slot,
+    protocol: node.protocol,
+    name: node.name.slice(0, NAME_MAX),
+    country: node.country,
+    host: node.host.slice(0, HOST_MAX),
+    network: node.transport.network,
+    security: node.security.kind,
+    flow: node.flow?.slice(0, FLOW_MAX) ?? null,
+  };
   return previous === undefined
     ? { ...base, state: "unknown", failures: 0, latencyMs: null, lastProbeAt: null, nextProbeAt: now }
     : { ...base, state: previous.state, failures: previous.failures, latencyMs: previous.latencyMs, lastProbeAt: previous.lastProbeAt, nextProbeAt: previous.nextProbeAt };

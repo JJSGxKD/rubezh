@@ -51,6 +51,8 @@ export async function callBotApi<T>(
     // работы это тот же нативный сигнал, который понимает наш `fetch`.
     return await run(abort as unknown as GrammySignal);
   } catch (error: unknown) {
+    // Своя ошибка изнутри вызова (например, отказ файлового хоста) уходит как есть.
+    if (error instanceof TelegramApiError) throw error;
     if (error instanceof GrammyError) {
       throw new TelegramApiError(method, error.error_code, error.description, error.parameters.retry_after ?? null);
     }

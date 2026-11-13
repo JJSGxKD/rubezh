@@ -35,6 +35,16 @@ export class TaskNotJoinedError extends DomainError {
   }
 }
 
+/**
+ * Канал другой площадки, а аккаунт с ней ещё не связан (Р188): подписку нечем
+ * проверить, пока игрок не открыл бота и не нажал «Начать».
+ */
+export class TaskLinkRequiredError extends DomainError {
+  constructor() {
+    super("task_link_required", "Сначала открой бота и нажми «Начать» — так мы узнаем твой аккаунт", 409);
+  }
+}
+
 /** Площадка не ответила или задание настроено так, что проверить подписку нечем. */
 export class TaskCheckUnavailableError extends DomainError {
   constructor() {

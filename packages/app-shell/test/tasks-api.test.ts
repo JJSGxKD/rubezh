@@ -1,4 +1,5 @@
 import ru from "../src/i18n/ru.json";
+import { t } from "../src/i18n";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import "../src/i18n/tasks";
 import { describe, expect, it } from "vitest";
@@ -425,5 +426,16 @@ describe("название достижения в строке задания",
   it("у обычного задания подсказки нет, у повтора партнёрской подписки — как раньше", () => {
     expect(taskHint(row())).toBeNull();
     expect(taskHint(row({ category: "partner", kind: "channel" }))).toContain("Награда каждый день");
+  });
+});
+
+describe("правило отписки на карточке (T-0183)", () => {
+  it("recheckDays: с числом, с null и без поля (старый сервер) ответ разбирается", async () => {
+    const view = await createTasksApi(server([], { tasks: [{ ...TASK, recheckDays: 7 }, { ...TASK, recheckDays: null }, TASK] })).view();
+    expect(view.ok && view.data.tasks.map((task) => task.recheckDays)).toEqual([7, null, undefined]);
+  });
+
+  it("словарь: подстановка {days} даёт «в течение 7 суток»", () => {
+    expect(t("tasks.recheck", { days: 7 })).toBe("Отпишетесь в течение 7 суток — награду спишут");
   });
 });

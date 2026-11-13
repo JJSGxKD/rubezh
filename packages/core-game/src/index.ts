@@ -34,9 +34,11 @@ export {
   ENEMY_LOOKS,
   enemyColor,
   GEM_TIERS,
+  HOOD_GEOMETRY,
   PICKUP_LOOKS,
   stageColor,
   stageCore,
+  UNKILLABLE_LOOK,
   WORLD_COLORS,
   type ShapeKind,
   type ShapeLook,
@@ -70,6 +72,9 @@ export type {
   RunOptions,
   RunPassiveInspection,
   RunPerfSummary,
+  RunProof,
+  RunProofDraft,
+  RunProofProgress,
   RunInputLog,
   RunRecording,
   RunRecordingEvent,
@@ -85,7 +90,11 @@ export type {
   RunSnapshotSummary,
 } from "./run-api";
 // Версия формата снимка — оболочка сверяет сохранение до того, как предложить «Продолжить».
-export { RADAR_BLIP, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api";
+export { RADAR_BLIP, RUN_PROOF_SCHEMA, RUN_RECORDING_SCHEMA, RUN_SNAPSHOT_FORMAT } from "./run-api";
+
+// Запись для проверки (tasks/T-0316): оболочка сжимает её и отправляет на сервер после записи
+// забега. Файл не тянет симуляцию — движок остаётся отдельным чанком.
+export { packRunProof, RUN_PROOF_MAX_PACKED_BYTES, type PackedRunProof } from "./game/diagnostics/run-proof";
 
 // Счётчики забега из тела снимка чужой сборки — для засчёта прерванного забега
 // (tasks/T-0163). Файл ничего не импортирует: движок остаётся отдельным чанком.

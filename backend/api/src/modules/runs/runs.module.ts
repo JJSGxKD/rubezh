@@ -24,6 +24,8 @@ import { RunPrestige } from "./run-prestige.js";
 import { RunProofsCleanupJob } from "./run-proofs-cleanup.job.js";
 import { PrismaRunProofsRepository, RUN_PROOFS_REPOSITORY } from "./run-proofs.repository.js";
 import { RunProofsService } from "./run-proofs.service.js";
+import { PrismaRunReviewRepository, RUN_REVIEW_REPOSITORY } from "./run-review.repository.js";
+import { RunReviewService } from "./run-review.service.js";
 import { RunsHooks } from "./runs-hooks.js";
 import { RunsViewService } from "./runs-view.service.js";
 
@@ -46,6 +48,7 @@ import { RunsViewService } from "./runs-view.service.js";
   providers: [
     RunsService,
     RunsViewService,
+    RunReviewService,
     RunsHooks,
     PrologueService,
     { provide: PROLOGUE_STORE, useClass: PrismaPrologueStore },
@@ -61,6 +64,7 @@ import { RunsViewService } from "./runs-view.service.js";
     RunProofsCleanupJob,
     { provide: RUN_PROOFS_REPOSITORY, useClass: PrismaRunProofsRepository },
     { provide: RUNS_REPOSITORY, useClass: PrismaRunsRepository },
+    { provide: RUN_REVIEW_REPOSITORY, useClass: PrismaRunReviewRepository },
     { provide: RUN_AD_CONTINUES_REPOSITORY, useClass: PrismaRunAdContinuesRepository },
     { provide: RUN_GEM_CONTINUES_REPOSITORY, useClass: PrismaRunGemContinuesRepository },
     { provide: LEADERBOARD_STORE, useClass: RedisLeaderboardStore },
@@ -69,6 +73,7 @@ import { RunsViewService } from "./runs-view.service.js";
   // уведомлениям в чат: они читают забеги, но не принимают их. Сверку
   // продолжений подключает модуль оплаты, проверку снимка снаряжения — модуль
   // предметов, престиж в строках рейтинга — модуль достижений; награду, бусты и добычу в листе забега — их модули.
-  exports: [RunsService, RunsViewService, RunsHooks, PrologueService, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
+  // Отчёт забега и решения разбора (Р203) — ручкам панели: контроллер живёт в модуле панели, ему сервис нужен экспортом.
+  exports: [RunsService, RunsViewService, RunReviewService, RunsHooks, PrologueService, RunContinues, RunLoadouts, RunPrestige, RunExtras, RatingRestrictions, RUNS_REPOSITORY, LEADERBOARD_STORE],
 })
 export class RunsModule {}

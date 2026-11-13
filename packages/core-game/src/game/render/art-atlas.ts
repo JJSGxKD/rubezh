@@ -1,6 +1,8 @@
 import type Phaser from "phaser";
 import { SECRET_KINDS } from "@bh/shared-types";
+import { mixChannels, STAGE_LOOKS } from "./looks";
 import { ART_ENV_KEY, ART_GROUND_KEY } from "./art-ground";
+import { ORBITER_FRAME_NAMES } from "./looks";
 import type { PickupArt } from "./pickups";
 import { secretFrameName, type SecretArt, type SecretLookState } from "./secrets-look";
 import { STATUS_MARK_FRAMES, type StatusMarkArt } from "./status-marks";
@@ -20,12 +22,12 @@ import { STATUS_TONE } from "./status-tones";
 export const ART_PPU = 2.5;
 
 /**
- * Во сколько раз растянуть кадр оберега, чтобы его свечение совпало с зоной
- * удара: ячейка кадра — 16 единиц (`units` в design/art/src/fx.mjs), свечение
- * — 0,8 ячейки, а бьёт оберег на `ORBITER_RADIUS` вокруг себя.
+ * Во сколько раз растянуть кадр оберега, чтобы его свечение совпало с
+ * радиусом рисунка: ячейка кадра — `cellUnits` единиц (`units` в
+ * design/art/src/fx.mjs, у оберега 16), свечение — 0,8 ячейки.
  */
-export function orbiterArtScale(orbiterRadius: number): number {
-  return (orbiterRadius * 2) / (16 * 0.8);
+export function orbiterArtScale(orbiterRadius: number, cellUnits = 16): number {
+  return (orbiterRadius * 2) / (cellUnits * 0.8);
 }
 
 /** Кадров шага у врага и героя. */
@@ -47,6 +49,18 @@ const ATLASES = [
     key: "art-late",
     png: new URL("../../../../../design/art/out/atlas-late.png", import.meta.url).href,
     json: new URL("../../../../../design/art/out/atlas-late.json", import.meta.url).href,
+  },
+  {
+    key: "art-r157",
+    png: new URL("../../../../../design/art/out/atlas-r157.png", import.meta.url).href,
+    json: new URL("../../../../../design/art/out/atlas-r157.json", import.meta.url).href,
+  },
+  // Ступени 3–5 обычных врагов (с 8, 11 и 14-й минуты): без пака рисуется кадр
+  // ступени 2 с тоном (artStageTint).
+  {
+    key: "art-stages",
+    png: new URL("../../../../../design/art/out/atlas-stages.png", import.meta.url).href,
+    json: new URL("../../../../../design/art/out/atlas-stages.json", import.meta.url).href,
   },
   {
     key: ART_ENV_KEY,
@@ -92,6 +106,25 @@ export function frameForEnemy(tick: number, slot: number, moving: boolean, lastF
  * Имя кадра врага. У элиты и босса ступеней нет — у них только `s0`, как и в
  * игре (content/stages.ts).
  */
+/** Наибольшая нарисованная ступень не выше `stage`; `-1` — рисунка нет вовсе. */
+export function artStageFor(stage: number, has: (stage: number) => boolean): number {
+  for (let s = stage; s >= 0; s--) if (has(s)) return s;
+  return -1;
+}
+
+/**
+ * Тон ступени без своего рисунка: белый, смешанный с цветом ступени на
+ * разницу её тона и тона нарисованной. `null` — тон не нужен.
+ */
+export function artStageTint(stage: number, drawn: number): number | null {
+  if (drawn < 0 || drawn >= stage) return null;
+  const last = STAGE_LOOKS.length - 1;
+  const look = STAGE_LOOKS[Math.min(stage, last)];
+  const drawnLook = STAGE_LOOKS[Math.min(drawn, last)];
+  if (look === undefined || drawnLook === undefined) return null;
+  return mixChannels(0xffffff, look.mixColor, Math.max(0, look.mix - drawnLook.mix));
+}
+
 export function enemyFrameName(id: string, stage: number, frame: number): string {
   return `${id}/s${String(stage)}/walk${String(frame)}`;
 }
@@ -184,10 +217,14 @@ export class ArtMode {
   private enabled = false;
   /** кадры по индексу «(тип × ступени + ступень) × кадры шага + кадр»; `null` — арта нет */
   private frames: (ArtFrame | null)[] = [];
+  /** Тон текстуры по индексу «тип × ступени + ступень»; `null` — рисунок своей ступени. */
+  private stageTints: (number | null)[] = [];
   private heroFrames: { idle: ArtFrame[]; walk: ArtFrame[]; hurt: ArtFrame | null } | null = null;
   private pickupFrames: PickupArt | null = null;
   private deathFrames: ArtFrame[] = [];
-  private orbiterFrame: ArtFrame | null = null;
+  /** Кадры лужи: свежая, подсохшая, гаснущая; пусто — арта луж нет, рисуется круг. */
+  private puddleFrames: ArtFrame[] = [];
+  private orbiterFrames = new Map<string, ArtFrame>();
   private secretFrames: SecretArt | null = null;
   private statusMarkFrames: StatusMarkArt = [];
   /** показанный кадр у слота врага; −1 — слот рисуется фигурой */
@@ -236,8 +273,12 @@ export class ArtMode {
   private buildFrames(): void {
     this.world.enemyTypes.forEach((type) => {
       for (let stage = 0; stage < this.stageCount; stage++) {
+        const wanted = type.rank === "normal" ? stage : 0;
+        // Нет кадров нужной ступени — берём ближайшую нарисованную ниже и красим тоном (Р215).
+        const drawn = type.rank === "normal" ? artStageFor(wanted, (s) => this.atlas.find(enemyFrameName(type.id, s, 0)) !== null) : 0;
+        this.stageTints.push(type.rank === "normal" ? artStageTint(wanted, drawn) : null);
         for (let k = 0; k < ART_WALK_FRAMES; k++) {
-          this.frames.push(this.atlas.find(enemyFrameName(type.id, type.rank === "normal" ? stage : 0, k)));
+          this.frames.push(drawn < 0 ? null : this.atlas.find(enemyFrameName(type.id, drawn, k)));
         }
       }
     });
@@ -253,7 +294,14 @@ export class ArtMode {
       scale: this.scale,
     };
     this.deathFrames = Array.from({ length: 6 }, (_, k) => this.atlas.find(`fx/death${String(k)}`)).filter((frame): frame is ArtFrame => frame !== null);
-    this.orbiterFrame = this.atlas.find("fx/orbiter_ward0");
+    // Лужа — все три кадра или ни одного: недорисованная смена кадров хуже ровного круга.
+    const puddles = [0, 1, 2].map((k) => this.atlas.find(`fx/puddle_bog${String(k)}`));
+    this.puddleFrames = puddles.every((frame): frame is ArtFrame => frame !== null) ? puddles : [];
+    this.orbiterFrames = new Map();
+    for (const name of ORBITER_FRAME_NAMES) {
+      const frame = this.atlas.find(name);
+      if (frame !== null) this.orbiterFrames.set(name, frame);
+    }
     // Тайники: кадры `secret/<вид>/<состояние>` атласа env; нет кадра — тайник остаётся фигурой.
     const states: readonly SecretLookState[] = ["found", "active", "hint"];
     this.secretFrames = Object.fromEntries(
@@ -271,11 +319,12 @@ export class ArtMode {
   }
 
   /**
-   * Кадр оберега «Оберегов»; `null` — режим выключен. Плоский бирюзовый круг
-   * фигуры среди спрайтов выглядел заплаткой.
+   * Кадр объекта орбиты по имени кадра из `orbiterLook`; `null` — режим
+   * выключен или кадра нет в атласе (тогда рисуется фигура). Плоский
+   * бирюзовый круг среди спрайтов выглядел заплаткой.
    */
-  orbiterArt(): ArtFrame | null {
-    return this.enabled ? this.orbiterFrame : null;
+  orbiterArt(frameName: string): ArtFrame | null {
+    return this.enabled ? (this.orbiterFrames.get(frameName) ?? null) : null;
   }
 
   /** Кадры тайников для `SecretsRenderer`; `null` — режим выключен. */
@@ -286,6 +335,11 @@ export class ArtMode {
   /** Кадры подборов для `PickupRenderer`; `null` — режим выключен. */
   pickupArt(): PickupArt | null {
     return this.enabled ? this.pickupFrames : null;
+  }
+
+  /** Кадры луж для `Puddles`; `null` — режим выключен или кадров нет. */
+  puddleArt(): readonly ArtFrame[] | null {
+    return this.enabled && this.puddleFrames.length > 0 ? this.puddleFrames : null;
   }
 
   /** Кадры развеивания для `CombatFeedback`; `null` — режим выключен. */
@@ -314,6 +368,13 @@ export class ArtMode {
       this.shown[slot] = index;
     }
     return true;
+  }
+
+  /** Тон текстуры, которую слот показывает сейчас; `null` — рисунок своей ступени или фигура. */
+  tintOf(slot: number): number | null {
+    const shown = this.shown[slot];
+    if (shown < 0) return null;
+    return this.stageTints[Math.floor(shown / ART_WALK_FRAMES)] ?? null;
   }
 
   /** Слот врага освободился: следующий в нём начнёт с кадра 0, а не унаследует чужой. */

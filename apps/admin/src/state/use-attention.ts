@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { attentionTotal, fetchAttention } from "../api/attention";
+import { fetchPulse, type Pulse } from "../api/pulse";
 import { api } from "../services";
 
 /**
@@ -38,4 +39,32 @@ export function useAttention(enabled: boolean): number {
   }, [enabled]);
 
   return enabled ? total : 0;
+}
+
+/** Пульс для шапки (tasks/T-0360): тем же приёмом, что «Ждёт вас», но раз в 30 с. */
+export const PULSE_REFRESH_MS = 30_000;
+
+export function usePulse(enabled: boolean): Pulse | null {
+  const [pulse, setPulse] = useState<Pulse | null>(null);
+
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetchPulse(api).then((result) => {
+        if (alive && result.ok) setPulse(result.data);
+      });
+    };
+    refresh();
+    const timer = setInterval(refresh, PULSE_REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [enabled]);
+
+  return enabled ? pulse : null;
 }

@@ -3,8 +3,8 @@ id: T-0414
 title: Флаги стран у узлов Xray и ручных прокси
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0413, T-0384, T-0385]
@@ -29,7 +29,7 @@ batch: 5
 
 # T-0414. Флаги стран у узлов Xray и ручных прокси
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0414.json)](README.md#значки-статуса) [![T-0413](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0413.json&label=T-0413)](T-0413-country-flags-import.md) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](T-0384-xray-multi-subscription.md) [![T-0385](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json&label=T-0385)](T-0385-xray-node-transport-security.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0414.json)](README.md#значки-статуса) [![T-0413](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0413.json&label=T-0413)](archive/T-0413-country-flags-import.md) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](archive/T-0384-xray-multi-subscription.md) [![T-0385](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json&label=T-0385)](archive/T-0385-xray-node-transport-security.md)
 
 ## Зачем
 

@@ -34,6 +34,8 @@ function lightness(color: number): number {
 describe("враги в красной гамме", () => {
   it("оттенок каждого — от 330° до 20°, насыщенность не ниже 0,45", () => {
     for (const pattern of PATTERNS) {
+      // Карачун — знак неубиваемого (Р205, T-0425): чернь Нави вне красной гаммы, его цвета проверяет stalker-look.test.ts.
+      if (pattern === "stalker") continue;
       const { h, s } = hsv(ENEMY_LOOKS[pattern].color);
       expect(h >= 330 || h <= 20, `${pattern}: оттенок ${String(Math.round(h))}°`).toBe(true);
       expect(s, `${pattern}: насыщенность`).toBeGreaterThanOrEqual(0.45);
@@ -43,7 +45,7 @@ describe("враги в красной гамме", () => {
   it("формы у всех поведений разные: главное различие типа — форма, а не оттенок", () => {
     const shapes = PATTERNS.map((pattern) => ENEMY_LOOKS[pattern].shape);
     expect(new Set(shapes).size).toBe(PATTERNS.length);
-    expect(PATTERNS).toHaveLength(8);
+    expect(PATTERNS).toHaveLength(9);
   });
 });
 
@@ -56,6 +58,8 @@ describe("кольцо стражей", () => {
 describe("цвет ранга", () => {
   it("элита отличается от рядового у каждого поведения", () => {
     for (const pattern of PATTERNS) {
+      // Карачун — знак неубиваемого (Р205, T-0425): чернь Нави вне красной гаммы, его цвета проверяет stalker-look.test.ts.
+      if (pattern === "stalker") continue;
       expect(enemyColor(pattern, "elite"), pattern).not.toBe(enemyColor(pattern, undefined));
     }
   });
@@ -63,6 +67,8 @@ describe("цвет ранга", () => {
   it("босс отличается от рядового и от элиты — и у chase тоже", () => {
     // Цвет смешения босса — #ff4f8f, а не цвет chase (#e0245e): иначе его босс не отличался бы от рядового.
     for (const pattern of PATTERNS) {
+      // Карачун — знак неубиваемого (Р205, T-0425): чернь Нави вне красной гаммы, его цвета проверяет stalker-look.test.ts.
+      if (pattern === "stalker") continue;
       expect(enemyColor(pattern, "boss"), pattern).not.toBe(enemyColor(pattern, undefined));
       expect(enemyColor(pattern, "boss"), pattern).not.toBe(enemyColor(pattern, "elite"));
     }
@@ -93,6 +99,8 @@ describe("цвет ранга", () => {
 describe("красная гамма и у рангов", () => {
   it("тело элиты и босса остаётся в красной гамме: оттенок 330°–20°", () => {
     for (const pattern of PATTERNS) {
+      // Карачун — знак неубиваемого (Р205, T-0425): чернь Нави вне красной гаммы, его цвета проверяет stalker-look.test.ts.
+      if (pattern === "stalker") continue;
       for (const rank of ["elite", "boss"] as const) {
         const { h } = hsv(enemyColor(pattern, rank));
         expect(h >= 330 || h <= 20, `${pattern}/${rank}: оттенок ${String(Math.round(h))}°`).toBe(true);
@@ -189,5 +197,21 @@ describe("облик ступеней врагов", () => {
   it("красит одного и того же врага в разный цвет на каждой из ступеней", () => {
     const colors = ENEMY_STAGES.map((_, index) => stageColor(0xcc3333, index));
     expect(new Set(colors).size).toBe(ENEMY_STAGES.length);
+  });
+});
+
+describe("тон врага по id", () => {
+  it("Ледяной дух — холодного тона, не розовое кольцо ворона", () => {
+    const ice = enemyColor("orbit", undefined, "ice_spirit");
+    expect(ice).not.toBe(enemyColor("orbit", undefined));
+    expect((ice & 0xff) > ((ice >> 16) & 0xff)).toBe(true);
+  });
+
+  it("ранг по-прежнему смешивается с тоном по id", () => {
+    expect(enemyColor("orbit", "elite", "ice_spirit")).not.toBe(enemyColor("orbit", undefined, "ice_spirit"));
+  });
+
+  it("без id и с неизвестным id цвет берётся по паттерну", () => {
+    expect(enemyColor("orbit", undefined, "raven")).toBe(enemyColor("orbit", undefined));
   });
 });

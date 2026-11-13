@@ -3,8 +3,8 @@ id: T-0271
 title: Картинка партнёрского задания — аватар канала, бота или Mini App берётся с источника сам
 epic: E14
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0167, T-0222]
@@ -26,6 +26,11 @@ shared:
   - apps/admin/src/screens/tasks/TasksScreen.tsx
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
+  - apps/admin/src/api/proxies.ts
+  - backend/api/test/outbound.test.ts
+  - docs/21-diagrams.md
+  - docs/30-configuration-map.md
+  - docs/35-stage4-plan.md
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -36,7 +41,7 @@ batch: 4
 
 # T-0271. Картинка партнёрского задания — аватар канала, бота или Mini App берётся с источника сам
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0271.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](T-0222-task-customer-and-pay-model.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0271.json)](README.md#значки-статуса) [![T-0167](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0167.json&label=T-0167)](archive/T-0167-admin-sortable-list-tasks-order.md) [![T-0222](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0222.json&label=T-0222)](archive/T-0222-task-customer-and-pay-model.md)
 
 ## Зачем
 

@@ -46,9 +46,15 @@ export const PERMISSIONS = [
   // Ручное начисление и списание в кошельке игрока — только владельцу: право
   // начислять валюту дороже любого другого права над игроками
   "players.wallet.adjust",
-  // Поддержка покупок: вернуть звёзды (остаток товара забирается) и повторить
-  // выдачу — владелец и админ; каждое действие с причиной, в журнале и в потоке «Покупки»
+  // Поддержка покупок: вернуть звёзды (остаток товара забирается), повторить
+  // выдачу, повторить учёт, сверка с площадкой и действия по расхождениям (Р209) —
+  // владелец и админ; каждое действие с причиной, в журнале и в потоке «Покупки»
   "payments.support",
+  // Лента платежей (Р209, WP53): все покупки всех игроков и карточка платежа — только чтение
+  "payments.view",
+  // Компенсация за сбой оплаты самоцветами (Р209): начисление валюты — только владельцу,
+  // как `players.wallet.adjust`
+  "payments.compensate",
   // Рассылки и каналы
   "broadcast.edit",
   "broadcast.send",
@@ -63,6 +69,12 @@ export const PERMISSIONS = [
   "fx.rates.edit",
   "revenue.split.view",
   "revenue.split.own.view",
+  // Доли участников проекта (Р217, T-0452): назначить долю с месяца — только владельцу, видят доли
+  // и участник (`revenue.split.own.view`), и финансы (`revenue.split.view`); в наборы ролей не входит
+  "stakeholders.manage",
+  // Журнал учёта (Р219, T-0457): остатки по местам хранения и журнал проводок — только чтение;
+  // видят финансы и владелец (docs/37-accounting.md §9). Ручные операции — своё право волны 3
+  "ledger.view",
   // Реклама и партнёры
   "ads.view",
   "ads.edit",
@@ -79,6 +91,9 @@ export const PERMISSIONS = [
   // Каталог заданий и достижений (WP13, Р52): цели и награды без релиза —
   // награды ложатся в кошелёк, поэтому отдельное право, а не «контент»
   "tasks.edit",
+  // Ленты батл-пасса по месяцам (T-0313, Р46): награды ступеней ложатся в кошелёк игроков,
+  // поэтому своё право, а не «контент»; пройденные игроками ступени не правятся
+  "pass.edit",
   // Акции магазина (WP10, часть 8): скидка от цены каталога на срок в
   // пределах честной скидки — сама цена каталога остаётся за «sku.price.*»
   "shop.promo.edit",
@@ -161,6 +176,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "players.restrict",
     "players.message",
     "payments.support",
+    "payments.view",
     "broadcast.edit",
     "broadcast.send",
     "broadcast.approve",
@@ -174,6 +190,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "changelog.edit",
     "changelog.publish",
     "tasks.edit",
+    "pass.edit",
     "shop.promo.edit",
     "promo.edit",
     "home.edit",
@@ -202,6 +219,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "ads.view",
     "changelog.edit",
     "tasks.edit",
+    "pass.edit",
     "home.edit",
     "diagnostics.view",
     "tools.dev",
@@ -232,6 +250,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "sku.price.view",
     "analytics.revenue.view",
     "finance.entry.create",
+    "ledger.view",
     "revenue.split.view",
     "partners.view",
     "partners.payout.create",
