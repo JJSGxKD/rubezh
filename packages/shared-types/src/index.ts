@@ -2029,7 +2029,7 @@ export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  best: Record<DifficultyId, { survivalSec: number; rank: number; points?: number | null } | null>;
   recent: RecentRun[];
   /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
   prologueDone?: boolean;
