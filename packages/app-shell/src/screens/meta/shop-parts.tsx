@@ -162,7 +162,7 @@ export function ItemCard(props: { item: ShopItem; index: number; busy: string | 
   const stars = price.stars;
   const badge = badgeLabel(item.badge);
   return (
-    <Card appearIndex={props.index} stripe={item.kind === "starter" || props.forYou === true ? "accent" : undefined} disabled={item.owned}>
+    <Card appearIndex={props.index} stripe={item.kind === "starter" || props.forYou === true ? "accent" : undefined} cut={props.forYou === true} disabled={item.owned}>
       {props.forYou === true ? <p className="mb-1 font-display text-xs font-semibold tracking-widest text-accent uppercase">{t("shop.forYou")}</p> : null}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -194,7 +194,7 @@ export function ItemCard(props: { item: ShopItem; index: number; busy: string | 
       ) : stars === null ? null : (
         <div className="mt-3">
           {price.promo === null ? null : <p className="mb-1.5 text-xs font-semibold text-danger">{t("shop.promo.left", { time: promoLeft(price.promo, props.now) })}</p>}
-          <StarsButton stars={stars} full={price.full} label={buyLabel(item, price)} busy={props.busy === item.sku} disabled={props.busy !== null} glow={props.forYou} cut={props.forYou} onClick={props.onBuy} />
+          <StarsButton stars={stars} full={price.full} label={buyLabel(item, price)} busy={props.busy === item.sku} disabled={props.busy !== null} glow={props.forYou} onClick={props.onBuy} />
         </div>
       )}
     </Card>

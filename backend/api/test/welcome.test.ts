@@ -28,7 +28,7 @@ import { PNG_RENDER_TIMEOUT_MS } from "./helpers/card-render.js";
 // Приветствие по /start (docs/28-diagnostics.md §6.1.2).
 
 const TOKEN = "123456:TEST-welcome";
-const VETERAN: WelcomeProgress = { best: { survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
+const VETERAN: WelcomeProgress = { best: { points: 2340, survivalSec: 462.7, rank: 3, total: 41 }, runs: 12 };
 
 function start(fromId: number, patch: { language?: string; name?: string; chat?: string; text?: string; premium?: boolean } = {}): TelegramUpdate {
   return {
@@ -75,9 +75,11 @@ describe("карточка приветствия", () => {
     expect(welcomeCacheKey(card)).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("подпись рекорда без сложности: «рекорд» и «best», а ключ кэша зависит от времени, места и числа игроков", () => {
-    expect(WELCOME_TEXTS.ru.recordLabel()).toBe("рекорд");
-    expect(WELCOME_TEXTS.en.recordLabel()).toBe("best");
+  it("подпись рекорда: очки и время забега, а ключ кэша зависит от очков, места и числа игроков", () => {
+    expect(WELCOME_TEXTS.ru.pointsLabel(462.7)).toBe("очков · за 7:43");
+    expect(WELCOME_TEXTS.en.pointsLabel(462.7)).toBe("points · in 7:43");
+    const first: WelcomeCard = { language: "ru", name: "Анна", progress: VETERAN };
+    expect(welcomeCacheKey(first)).not.toBe(welcomeCacheKey({ ...first, progress: { ...VETERAN, best: { ...VETERAN.best!, points: 2341 } } }));
     const card: WelcomeCard = { language: "ru", name: "Анна", progress: VETERAN };
     expect(welcomeCacheKey(card)).not.toBe(welcomeCacheKey({ ...card, progress: { ...VETERAN, best: { ...VETERAN.best!, rank: 4 } } }));
     expect(welcomeCacheKey(card)).not.toBe(welcomeCacheKey({ ...card, progress: { ...VETERAN, best: { ...VETERAN.best!, total: 42 } } }));
@@ -85,11 +87,11 @@ describe("карточка приветствия", () => {
 
   it("рисует рекорд и место, а новичку — суть игры", () => {
     const veteran = renderWelcomeSvg({ language: "ru", name: "Анна", progress: VETERAN });
-    expect(veteran).toContain("7:43");
+    expect(veteran).toContain("2\u00a0340");
+    expect(veteran).toContain("очков · за 7:43");
     expect(veteran).toContain("#3 из 41");
     expect(veteran).toContain("12 забегов");
     // Сложность одна: подписи «Лёгкая / Нормальная / Сложная» на карточке больше нет.
-    expect(veteran).toContain("рекорд");
     expect(veteran).not.toMatch(/Лёгкая|Нормальная|Сложная/);
     expect(renderWelcomeSvg({ language: "en", name: "Zoe", progress: VETERAN })).not.toMatch(/Easy|Normal|Hard/);
     const newcomer = renderWelcomeSvg({ language: "en", name: "Zoe", progress: { best: null, runs: 0 } });
