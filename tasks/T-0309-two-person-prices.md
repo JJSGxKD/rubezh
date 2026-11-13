@@ -3,8 +3,8 @@ id: T-0309
 title: Цены товаров в панели с подтверждением второго участника — заявка на правку, подтверждает другой человек с правом, правка ложится поверх каталога в коде
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0304]
