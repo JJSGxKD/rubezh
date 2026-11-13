@@ -113,6 +113,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   ContentVersion: keep("версии контента игры — правила, а не данные игроков (T-0303)"),
   ContentDraft: keep("черновики контента команды (T-0303)"),
   ContentCheck: keep("проверки черновиков контента (T-0303)"),
+  ContentCurrent: keep("какая версия контента в игре у команды и у всех — правила игры, а не данные игроков (T-0306)"),
 
   // --- остаются: курсы валют ---
   FxQuote: keep("курсы валют — не данные игрока"),

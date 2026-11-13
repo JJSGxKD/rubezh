@@ -2902,7 +2902,8 @@ model ContentVersion {
   /// `null` — версия ещё не публиковалась
   publishedAt   DateTime? @map("published_at") @db.Timestamptz(3)
 
-  drafts ContentDraft[]
+  drafts  ContentDraft[]
+  current ContentCurrent[]
 
   @@map("content_version")
 }
@@ -3410,4 +3411,25 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Публикация контента (docs/19-content-admin.md §4.4–§4.5, tasks/T-0306): какая версия
+// сейчас в игре у какой аудитории. Правила игры, а не данные игроков, — вайп не трогает.
+
+/// Указатель «какая версия в игре»: не больше одной строки на аудиторию. `team` — аккаунты с
+/// ролью, смотрят версию глазами до игроков; `all` — все. Нет строки `team` — команда играет
+/// версией «всем»; нет строки `all` — версию никто не публиковал, клиент играет встроенной.
+/// Откат — смена номера версии в строке, новой версии он не создаёт
+model ContentCurrent {
+  /// `team` или `all` (`CHECK` в миграции)
+  audience  String   @id @db.VarChar(4)
+  versionNo Int      @map("version_no")
+  /// без внешнего ключа — запись переживает аккаунт; `null` — версию поставил выкат
+  setBy     String?  @map("set_by") @db.Uuid
+  setAt     DateTime @map("set_at") @db.Timestamptz(3)
+
+  version ContentVersion @relation(fields: [versionNo], references: [versionNo], onDelete: Restrict)
+
+  @@index([versionNo])
+  @@map("content_current")
 }
