@@ -14,7 +14,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { buildReport, exitCodeOf, formatDuration, planSteps, runPlan } from "./lib.mjs";
+import { buildReport, exitCodeOf, formatDuration, onlyScriptsChanged, planSteps, runPlan } from "./lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const USAGE = `Использование: pnpm verify [--write <файл>] [--db] [--base <ветка>]`;
@@ -56,7 +56,17 @@ function changedFiles(base) {
   }
   const committed = lines(git(["diff", "--name-only", "--no-renames", `${base}...HEAD`]));
   const working = lines(git(["diff", "--name-only", "--no-renames", "HEAD"]));
-  return [...new Set([...committed, ...working])];
+  const files = [...new Set([...committed, ...working])];
+  return files.filter((file) => file !== "package.json" || !rootScriptsOnly(base));
+}
+
+/** Корневой `package.json` отличается от базового только разделом `scripts` — всё остальное не задето. */
+function rootScriptsOnly(base) {
+  try {
+    return onlyScriptsChanged(git(["show", `${base}:package.json`]), readFileSync(resolve(ROOT, "package.json"), "utf8"));
+  } catch {
+    return false;
+  }
 }
 
 /** Пакеты монорепо: каталоги с `package.json` (кроме корня) и их зависимости друг от друга. */
@@ -108,7 +118,7 @@ function main(argv) {
   console.error(`pnpm verify: ${String(files.length)} файлов в диффе с ${flags.base}, голова ${head.slice(0, 8)}`);
 
   const results = runPlan(plan, (command, step) => {
-    console.error(`→ ${step.label} …`);
+    console.error(`→ ${step.label}: ${command.cmd} ${command.args.slice(0, 2).join(" ")} …`);
     const outcome = runCommand(command);
     console.error(`  ${outcome.code === 0 && !outcome.timedOut ? "ок" : "красный"}, ${formatDuration(outcome.ms)}`);
     return outcome;

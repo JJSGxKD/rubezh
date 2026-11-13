@@ -5,6 +5,7 @@ import {
   exitCodeOf,
   formatDuration,
   lintCandidates,
+  onlyScriptsChanged,
   planSteps,
   runPlan,
   summarizeFailure,
@@ -379,5 +380,27 @@ describe("exitCodeOf: код выхода", () => {
 
   it("1, если хоть один шаг красный", () => {
     expect(exitCodeOf([ok("a", "a"), { id: "b", label: "b", status: "fail", ms: 1 }])).toBe(1);
+  });
+});
+
+describe("onlyScriptsChanged: правка только раздела scripts корневого package.json", () => {
+  const before = JSON.stringify({ name: "x", scripts: { a: "1" }, devDependencies: { vitest: "5.0.0" } });
+
+  it("новый скрипт зависимостей не задевает", () => {
+    const after = JSON.stringify({ name: "x", scripts: { a: "1", verify: "2" }, devDependencies: { vitest: "5.0.0" } });
+    expect(onlyScriptsChanged(before, after)).toBe(true);
+  });
+
+  it("смена зависимости или версии движка — задевает всё", () => {
+    const deps = JSON.stringify({ name: "x", scripts: { a: "1" }, devDependencies: { vitest: "5.1.0" } });
+    const engines = JSON.stringify({ name: "x", scripts: { a: "1" }, devDependencies: { vitest: "5.0.0" }, engines: { node: "24" } });
+    expect(onlyScriptsChanged(before, deps)).toBe(false);
+    expect(onlyScriptsChanged(before, engines)).toBe(false);
+  });
+
+  it("нечитаемый JSON или отсутствие прежней версии — осторожно: задевает всё", () => {
+    expect(onlyScriptsChanged("{", before)).toBe(false);
+    expect(onlyScriptsChanged(before, "")).toBe(false);
+    expect(onlyScriptsChanged(null, before)).toBe(false);
   });
 });

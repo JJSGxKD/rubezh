@@ -29,6 +29,8 @@ const TIMEOUTS = {
   typecheck: 10 * MINUTE,
   lint: 5 * MINUTE,
   tests: 15 * MINUTE,
+  // Все пакеты сразу на общей машине с шестью агентами идут дольше четверти часа.
+  testsAll: 45 * MINUTE,
   build: 12 * MINUTE,
   zones: MINUTE,
   docs: 2 * MINUTE,
@@ -87,6 +89,22 @@ export function withDependents(units, graph) {
     }
   }
   return [...result].sort();
+}
+
+/**
+ * Правка корневого `package.json` задевает всё, но новый скрипт `pnpm` —
+ * нет: если отличается только раздел `scripts`, остальное не поменялось.
+ * Нечитаемое или отсутствующее — осторожно «нет»: тогда задевает всё.
+ */
+export function onlyScriptsChanged(before, after) {
+  if (typeof before !== "string" || typeof after !== "string") return false;
+  try {
+    const { scripts: _before, ...restBefore } = JSON.parse(before);
+    const { scripts: _after, ...restAfter } = JSON.parse(after);
+    return JSON.stringify(restBefore) === JSON.stringify(restAfter);
+  } catch {
+    return false;
+  }
 }
 
 /** Файлы для eslint: только существующие `.ts` и `.tsx` (удалённым линтить нечего), без сценариев Workflow. */
@@ -165,7 +183,7 @@ export function planSteps({ files, dirs, graph, db, env, exists, base = "origin/
   if (!hasCode) {
     tests = skipped("tests", "тесты", "код не затронут");
   } else if (all) {
-    tests = { id: "tests", label: "тесты всех пакетов", skipReason: null, timeoutMs: TIMEOUTS.tests, commands: [pnpm("exec", "vitest", "run")], unsetEnv: ["TEST_DATABASE_URL"] };
+    tests = { id: "tests", label: "тесты всех пакетов", skipReason: null, timeoutMs: TIMEOUTS.testsAll, commands: [pnpm("exec", "vitest", "run")], unsetEnv: ["TEST_DATABASE_URL"] };
   } else {
     const named = [...units, ...expanded.filter((dir) => !units.includes(dir))].filter((dir) => !(dbRuns && dir === BACKEND_UNIT));
     if (named.length === 0) {
