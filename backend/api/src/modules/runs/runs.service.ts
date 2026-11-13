@@ -224,6 +224,7 @@ export class RunsService {
       xpCollected: run.stats?.xpCollected ?? null,
       // Неправдоподобные счётчики в задания и достижения не идут.
       counters: judged.reasons.includes("counters_implausible") ? null : counters,
+      secretsFound: run.stats?.secretsFound ?? [],
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues.length,

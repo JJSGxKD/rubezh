@@ -52,6 +52,12 @@ export interface RecordedRun {
    * за неё награда при вердикте `ok` и без читов; поля нет — победы нет.
    */
   rubezhCleared?: boolean;
+  /**
+   * Виды тайников, найденные в забеге, — со слов клиента (`stats.secretsFound`, tasks/T-0261).
+   * Открывает записи кодекса тайников. Необязательное: слушатели, которым тайники не нужны,
+   * поле не читают, а итог старой сборки его не присылает.
+   */
+  secretsFound?: readonly string[];
 }
 
 export type RunListener = (run: RecordedRun) => Promise<void>;
