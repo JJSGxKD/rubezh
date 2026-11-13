@@ -22,7 +22,6 @@ import { testPrisma } from "./helpers/test-prisma.js";
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const DAY_MS = 86_400_000;
 
 type Product = "shop_item" | "continue_run" | "vip" | "donation";
 
@@ -223,9 +222,9 @@ describe.skipIf(DATABASE_URL === "")("проводки из платежей н�
       passes += 1;
     }
 
+    // Пятьсот на круг: 1 200 оплат — не меньше трёх проходов. Верхней границы нет: соседние файлы теста могли оставить свои оплаты.
     expect(drained).toBe(true);
     expect(passes).toBeGreaterThanOrEqual(3);
-    expect(passes).toBeLessThanOrEqual(4);
     // Ни одной пропущенной: у каждой оплаты есть и «оплата», и «выход».
     expect(await entryCount(batch)).toBe(2_400);
     expect(await sums(batch)).toEqual({ "stars.bot.available": 12_000n, "revenue.shop.telegram": -12_000n });
