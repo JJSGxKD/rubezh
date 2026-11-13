@@ -11,6 +11,7 @@ import { updateGems } from "./gems";
 import { updatePickups } from "./pickups";
 import { isAwaitingBlessing, updateSecrets } from "./secrets";
 import { recycleEnemyForward } from "./spawner";
+import { stepStalker } from "./stalker";
 import { stalkerAlive, stalkerTouch, tickStalkerBody } from "./stalker-body";
 import { vectorLength } from "./vector";
 import { clampToBounds, damagePlayer, despawnProjectile, TICK_SEC, type World } from "./world";
@@ -65,6 +66,9 @@ export function stepWorld(world: World, input: SimInput): void {
   // Кольцо стражей — после переноса отставших и до сетки: исчезнувшие по времени
   // стражи не должны попасть в сетку этого тика.
   updateCordon(world, dt);
+  // Директор Карачуна — после кольца (строй, вставший в этом тике, срезает погоню сразу) и до сетки:
+  // вышедший Карачун попадает в сетку того же тика.
+  stepStalker(world);
   world.enemyGrid.rebuild(
     world.player.x,
     world.player.y,
@@ -274,7 +278,7 @@ function updateEnemies(world: World, dt: number): void {
 
     // Касание преследователя — своя ветка: перезарядка в тиках тела, а не в `attackCooldown`.
     if (type.unkillable) {
-      if (world.stalkerBody.touchCooldownTicks === 0 && dx * dx + dy * dy <= contactDistance * contactDistance) {
+      if (world.stalker.phase !== "fading" && world.stalkerBody.touchCooldownTicks === 0 && dx * dx + dy * dy <= contactDistance * contactDistance) {
         stalkerTouch(world, i);
       }
       continue;
