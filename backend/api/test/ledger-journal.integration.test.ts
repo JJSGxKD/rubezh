@@ -316,6 +316,7 @@ describe.skipIf(DATABASE_URL === "")("журнал учёта на живом Po
       await service.post(pair(key("wildx1"), account("hold"), account("revenue"), 1n));
       expect((await service.journal({ sourcePrefix: key("wild_") }, null)).entries.map((entry) => entry.sourceKey)).toEqual([key("wild_1")]);
       expect((await service.journal({ sourcePrefix: key("wild%") }, null)).entries).toEqual([]);
+      expect((await service.journal({ sourcePrefix: key("wild\\") }, null)).entries).toEqual([]);
     });
 
     it("у проводок в ответе строки со знаком и подписью счёта", async () => {

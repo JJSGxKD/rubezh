@@ -21,6 +21,7 @@ shared:
   - backend/api/tsconfig.json
   - backend/api/Dockerfile
   - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - pnpm-lock.yaml
   - backend/api/src/app.module.ts
   - backend/api/src/modules/admin/admin.module.ts
