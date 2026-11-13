@@ -175,4 +175,12 @@ describe("отображение чисел и времени", () => {
   it("«Мой проект» — первый в группе «Доход»", () => {
     expect(SECTION_GROUPS.find((group) => group.title === "Доход")?.sections[0]?.id).toBe("my-project");
   });
+
+  it("«Бухгалтерия» видна с ledger.view и не видна участнику проекта; стоит в «Доходе» после «Моего проекта»", () => {
+    expect(visibleSections(["ledger.view"], MENU).map((section) => section.id)).toContain("ledger");
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).not.toContain("ledger");
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).not.toContain("ledger");
+    const ids = SECTION_GROUPS.find((group) => group.title === "Доход")?.sections.map((section) => section.id) ?? [];
+    expect(ids.indexOf("ledger")).toBe(ids.indexOf("my-project") + 1);
+  });
 });
