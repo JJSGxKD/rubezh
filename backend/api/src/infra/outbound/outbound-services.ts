@@ -5,6 +5,9 @@
  *
  * - `fx.*` — источники курсов (`modules/fx/fx.refresher.ts`);
  * - `telegram.bot` — Bot API;
+ * - `telegram.web` — публичные страницы Telegram и его CDN: аватарка бота и Mini App для
+ *   задания (Р158). Отдельно от `telegram.bot`: это не Bot API и ходит не на его хост,
+ *   поэтому у сервиса свой режим маршрута и своя строка в журнале;
  * - `vk.api` — методы API VK ключом сообщества: проверка вступления, ответы игрокам (Р188);
  * - `max.bot` — Bot API MAX: бот заданий-каналов (Р188);
  * - `taddy.api`, `taddy.exchange` — реклама и лента заданий Taddy;
@@ -24,6 +27,7 @@ export const OUTBOUND_SERVICES = [
   "fx.tonapi",
   "fx.binance",
   "telegram.bot",
+  "telegram.web",
   "vk.api",
   "max.bot",
   "taddy.api",

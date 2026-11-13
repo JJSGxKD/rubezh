@@ -1,6 +1,7 @@
 import { Api, GrammyError, HttpError, InputFile } from "grammy";
 import { z } from "zod";
 import { chatTargetOf, type ChatRef } from "../ports/chat-target.js";
+import { readBounded } from "../ports/source-avatar.js";
 
 /**
  * Методы Bot API, которые нужны боту, — поверх клиента grammY
@@ -239,22 +240,25 @@ export interface SentPhoto {
   fileId: string | null;
 }
 
+/** Путь файла в ответе `getFile`: без `..`, запроса и якоря — он вставляется в адрес как есть. */
+const FILE_PATH = /^[A-Za-z0-9_\-./]{1,256}$/;
+
 export class TelegramBotApi {
   private readonly api: Api;
 
   constructor(
-    token: string,
+    private readonly token: string,
     /**
      * Адрес Bot API. Не константа: у локального сервера Bot API свой хост, а
      * методы и пути те же (docs/20-env-and-ports.md §3.1).
      */
-    apiRoot: string,
+    private readonly apiRoot: string,
     /**
      * Сеть — нативный `fetch` (undici), а не `node-fetch`, который grammY
      * берёт на Node по умолчанию: один HTTP-клиент на бэкенд
      * (docs/16-tech-stack-decisions.md §5), и тесты подменяют его так же.
      */
-    fetchImpl: FetchLike = fetch,
+    private readonly fetchImpl: FetchLike = fetch,
   ) {
     this.api = new Api(token, {
       apiRoot,
@@ -466,6 +470,36 @@ export class TelegramBotApi {
     return { firstName: chat.first_name ?? null, lastName: chat.last_name ?? null, bio: chat.bio ?? null };
   }
 
+  /**
+   * Крупная аватарка канала или чата (`big_file_id`, 640×640); `null` — фото
+   * нет. Чужой чат без бота внутри отвечает 400 или 403: вызывающий решает,
+   * что с этим делать.
+   */
+  async getChatPhoto(chat: string, signal?: AbortSignal): Promise<string | null> {
+    const result = await this.call("getChat", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getChat(chat, abort));
+    const info = z.object({ photo: z.object({ big_file_id: z.string().min(1).max(256) }).optional() }).parse(result);
+    return info.photo?.big_file_id ?? null;
+  }
+
+  /**
+   * Файл по `file_id`: `getFile`, затем скачивание с файлового хоста Bot API.
+   * `null` — Telegram пути не дал или файл больше `maxBytes` (читается не
+   * дальше предела). Адрес файла несёт токен: наружу из ошибок он не уходит.
+   */
+  async downloadFile(fileId: string, maxBytes: number, signal?: AbortSignal): Promise<Uint8Array | null> {
+    const file = await this.call("getFile", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getFile(fileId, abort));
+    const path = z.object({ file_path: z.string().optional() }).parse(file).file_path;
+    if (path === undefined || !FILE_PATH.test(path) || path.split("/").includes("..")) return null;
+    return await this.call("downloadFile", REQUEST_TIMEOUT_MS, signal, async (abort) => {
+      const response = await this.fetchImpl(`${this.apiRoot}/file/bot${this.token}/${path}`, { method: "GET", signal: abort as unknown as AbortSignal, redirect: "manual" });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new TelegramApiError("downloadFile", response.status, "файл не отдан", null);
+      }
+      return await readBounded(response, maxBytes);
+    });
+  }
+
   /** Вернуть звёзды игроку. Отказ `CHARGE_ALREADY_REFUNDED` — повтор уже сделанного возврата. */
   async refundStarPayment(userId: number, chargeId: string, signal?: AbortSignal): Promise<void> {
     await this.call("refundStarPayment", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.refundStarPayment(userId, chargeId, abort));
@@ -503,6 +537,7 @@ export class TelegramBotApi {
       // работы это тот же нативный сигнал, который понимает наш `fetch`.
       return await run(abort as unknown as GrammySignal);
     } catch (error: unknown) {
+      if (error instanceof TelegramApiError) throw error;
       if (error instanceof GrammyError) {
         throw new TelegramApiError(method, error.error_code, error.description, error.parameters.retry_after ?? null);
       }
