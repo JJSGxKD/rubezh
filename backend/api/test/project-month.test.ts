@@ -106,10 +106,10 @@ describe("месяц проекта: площадки и источники", ()
 });
 
 describe("месяц проекта: деньги и черновик части", () => {
-  it("10 000 ⭐ и возврат 300 ⭐ — чистая 9 700, 126,10 $ по 0,013; доля 25 % — 31,52 $ и 2 425 ⭐", () => {
-    const result = month([row({ chargedStars: 10_000 }), row({ chargedStars: 300, refundedAt: daysAgo(2) })], { shareBp: 2_500 });
+  it("оплачено 10 000 ⭐, возвращено 300 ⭐ — чистая 9 700, 126,10 $ по 0,013; доля 25 % — 31,52 $ и 2 425 ⭐", () => {
+    const result = month([row({ chargedStars: 9_700 }), row({ chargedStars: 300, refundedAt: daysAgo(2) })], { shareBp: 2_500 });
 
-    expect(result.revenue.stars).toEqual({ paid: 10_300, refunded: 300, net: 9_700 });
+    expect(result.revenue.stars).toEqual({ paid: 10_000, refunded: 300, net: 9_700 });
     expect(result.revenue.usd).toBe("126.10");
     expect(result.revenue.rub).toBe("11349.00");
     // 126,10 × 0,25 = 31,525 $ — вниз до цента; рубли — от точных 31,525
