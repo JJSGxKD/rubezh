@@ -89,6 +89,8 @@ const finishFields = {
       killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
       // Встреченные враги для кодекса (T-0479): записи прошлых сборок их не знают.
       enemiesSeen: z.optional(z.array(z.string())),
+      // Найденные виды тайников для кодекса (T-0261): записи прошлых сборок их не знают.
+      secretsFound: z.optional(z.array(z.string())),
       // Очки эффективности (T-0293): журнал охоты, оценка сборки и сила на старте; записи прошлых сборок их не знают.
       huntLog: z.optional(z.array(z.object({ rank: z.enum(["elite", "boss"]), value: z.number(), aliveSec: z.number() }))),
       buildScore: z.optional(z.number()),
@@ -102,6 +104,9 @@ const TOP_KILLS = 5;
 
 /** Потолок списка встреченных врагов — тот же, что у сервера (`runFinishSchema`). */
 const MAX_ENEMIES_SEEN = 64;
+
+/** Потолок списка найденных видов тайников — тот же, что у сервера (`runFinishSchema`). */
+const MAX_SECRETS_FOUND = 12;
 
 const startEntrySchema = z.object({
   kind: z.literal("start"),
@@ -335,6 +340,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       killsByElement: result.killsByElement,
       // Потолок сервера — 64: лишнее обрезается здесь, иначе итог целиком уйдёт в отказ формы.
       ...(result.enemiesSeen === undefined ? {} : { enemiesSeen: result.enemiesSeen.slice(0, MAX_ENEMIES_SEEN) }),
+      // Видов шесть, потолок сервера — двенадцать: обрезка страхует итог от отказа формы.
+      ...(result.secrets === undefined ? {} : { secretsFound: result.secrets.found.slice(0, MAX_SECRETS_FOUND) }),
       // Для очков эффективности (T-0293): без них сервер считает оси охоты и сборки единицей, а полосу берёт среднюю.
       ...(result.huntLog === undefined ? {} : { huntLog: result.huntLog.map(({ rank, value, aliveSec }) => ({ rank, value, aliveSec })) }),
       ...(result.buildScore === undefined ? {} : { buildScore: result.buildScore }),
