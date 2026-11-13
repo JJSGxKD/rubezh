@@ -25,6 +25,11 @@ shared:
   - docs/19-content-admin.md
   - docs/30-configuration-map.md
   - docs/32-balance.md
+  - docs/29-admin-panel.md
+  - backend/api/src/modules/progress/progress.service.ts
+  - backend/api/test/change-requests.integration.test.ts
+  - apps/admin/src/api/change-requests.ts
+  - apps/admin/test/balance-rewards.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
