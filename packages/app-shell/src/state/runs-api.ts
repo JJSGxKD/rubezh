@@ -124,7 +124,7 @@ export const runCardSchema = z.object({
 
 export type RunCard = z.infer<typeof runCardSchema>;
 
-const bestSchema = z.nullable(z.object({ survivalSec: z.number(), rank: z.number() }));
+const bestSchema = z.nullable(z.object({ survivalSec: z.number(), rank: z.number(), points: z.optional(z.nullable(z.number())) }));
 
 const profileSchema = z.object({
   runs: z.number(),
