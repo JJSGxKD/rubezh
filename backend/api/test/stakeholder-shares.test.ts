@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SHARE_BP, monthKey, overLimit, parseMonth, percentToBp, shareAt, type ShareRecord } from "../src/modules/stakeholders/stakeholder-rules.js";
+import { StakeholderMonthPastError, StakeholderRoleRequiredError, StakeholderSharesOverError } from "../src/modules/stakeholders/stakeholder-errors.js";
+import { MAX_SHARE_BP, formatBp, monthKey, monthLabel, overLimit, parseMonth, percentToBp, shareAt, type ShareRecord } from "../src/modules/stakeholders/stakeholder-rules.js";
 import { stakeholdersView } from "../src/modules/stakeholders/stakeholder-view.js";
 import type { ParticipantRow, StoredShare } from "../src/modules/stakeholders/stakeholders.repository.js";
 
@@ -136,6 +137,35 @@ describe("percentToBp: проценты в базисные пункты", () =>
     expect(() => percentToBp(100.01)).toThrow();
     expect(() => percentToBp(Number.NaN)).toThrow();
     expect(() => percentToBp(Number.POSITIVE_INFINITY)).toThrow();
+  });
+});
+
+describe("подписи и тексты ошибок", () => {
+  it("monthLabel — месяц словами в родительном падеже", () => {
+    expect(monthLabel("2026-12")).toBe("декабря 2026");
+    expect(monthLabel("2027-01")).toBe("января 2027");
+    expect(monthLabel("2026-03")).toBe("марта 2026");
+  });
+
+  it("formatBp — проценты по-русски, без лишних нулей", () => {
+    expect(formatBp(11_000)).toBe("110");
+    expect(formatBp(11_050)).toBe("110,5");
+    expect(formatBp(10_001)).toBe("100,01");
+    expect(formatBp(0)).toBe("0");
+  });
+
+  it("ошибки долей — с кодом, статусом и русским текстом", () => {
+    const past = new StakeholderMonthPastError();
+    expect([past.code, past.status]).toEqual(["stakeholder_month_past", 400]);
+    expect(past.message).toBe("Долю можно поменять только с текущего месяца или позже: прошлые месяцы не пересчитываются");
+
+    const role = new StakeholderRoleRequiredError();
+    expect([role.code, role.status]).toEqual(["stakeholder_role_required", 409]);
+    expect(role.message).toBe("У аккаунта нет роли «Участник проекта» — долю больше нуля назначить нельзя");
+
+    const over = new StakeholderSharesOverError("2026-12", 11_050);
+    expect([over.code, over.status]).toEqual(["stakeholder_shares_over", 409]);
+    expect(over.message).toBe("С декабря 2026 доли участников в сумме дали бы 110,5 % — больше 100 %");
   });
 });
 
