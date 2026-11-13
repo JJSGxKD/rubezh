@@ -60,7 +60,7 @@ export interface RecordedRun {
   rubezhCleared?: boolean;
 }
 
-/** Статистика итога, из которой видно, кого игрок встретил: ключи `topKills` и (после T-0125) `enemiesSeen`. */
+/** Статистика итога, из которой видно, кого игрок встретил: `enemiesSeen` (T-0479) и ключи `topKills`. */
 export interface SeenStats {
   enemiesSeen?: readonly string[] | undefined;
   topKills?: readonly { enemy: string; count: number }[] | undefined;
@@ -68,8 +68,9 @@ export interface SeenStats {
 
 /**
  * Кого игрок встретил в забеге: объединение `enemiesSeen` и ключей `topKills`
- * без повторов, порядок первого появления. Убитый встречен точно, а босс в
- * `topKills` не попадает — без `enemiesSeen` полный кодекс был бы недостижим.
+ * без повторов, порядок первого появления. Источник — `enemiesSeen`: там и
+ * неубитые босс с элитой. Ключи `topKills` — запас для сборки клиента без этого поля: убитый
+ * встречен точно.
  * Итог без статистики — пусто.
  */
 export function enemiesSeenOf(stats: SeenStats | undefined): string[] {
