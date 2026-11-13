@@ -3,8 +3,8 @@ id: T-0463
 title: Шаблоны повторяющихся расходов — черновики операций периода одним действием
 epic: E15
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0461]
@@ -18,8 +18,11 @@ shared:
   - backend/api/src/modules/ledger/ledger.module.ts
   - backend/api/src/modules/admin/admin-ledger.controller.ts
   - backend/api/test/admin-ledger.http.test.ts
+  - backend/api/test/route-permissions.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high

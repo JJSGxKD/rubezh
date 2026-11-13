@@ -153,6 +153,8 @@ const ACTION_TITLES: Record<string, string> = {
   "ads.networks.reorder": "Порядок рекламных сетей",
   "ads.block.create": "Новый рекламный блок",
   "ads.block.update": "Правка рекламного блока",
+  "ads.block.archive": "Рекламный блок в архив",
+  "ads.block.unarchive": "Рекламный блок из архива",
   "ads.test": "Проверка рекламы командой",
   "names.rule.create": "Новое правило фильтра имён",
   "names.rule.update": "Правка правила фильтра имён",

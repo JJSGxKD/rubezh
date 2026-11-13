@@ -14,6 +14,8 @@ import { NOTE_MAX, NOTE_MIN, OPERATION_KINDS, OPERATION_STATUSES, operationInput
 import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
 import type { OperationFilter } from "../ledger/operations/operations.repository.js";
 import { OperationsService } from "../ledger/operations/operations.service.js";
+import { createTemplateSchema, draftPeriodSchema, updateTemplateSchema, type CreateTemplateInput, type UpdateTemplateInput } from "../ledger/templates/template-input.js";
+import { TemplatesService, type DraftPeriodResult, type TemplateView } from "../ledger/templates/templates.service.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
@@ -69,6 +71,9 @@ const PLACE_PROBLEM = "Некорректное место хранения: н�
 const ARTICLE_PROBLEM = "Некорректная статья: название до 128 знаков, вид — расход или поступление";
 const ID_PROBLEM = "Некорректный идентификатор";
 
+const TEMPLATE_PROBLEM = "Некорректный шаблон: название до 128 знаков, статья расхода и место из справочника, сумма — числом, график — каждый месяц или раз в год с месяцем от 1 до 12";
+const PERIOD_PROBLEM = "Некорректный период: нужен период в виде ГГГГ-ММ";
+
 const operationIdSchema = z.string().uuid();
 const OPERATION_ID_PROBLEM = "Некорректный идентификатор операции";
 
@@ -110,6 +115,8 @@ function parseOperation(body: unknown): OperationInput {
  *
  * Второй ключ (Р220, tasks/T-0462): крупная операция финансов и любое исправление после `submit` ждут владельца;
  * подтвердить и отклонить — `finance.operation.approve`, только у владельца.
+ * Шаблоны повторяющихся расходов (Р220, tasks/T-0463): список — `ledger.view`, заведение, правка, архив и «Расходы
+ * месяца» — `finance.entry.create`. «Расходы месяца» создаёт черновики операций, а не проводки.
  */
 @Controller("admin/ledger")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -118,6 +125,7 @@ export class AdminLedgerController {
     private readonly ledger: LedgerService,
     private readonly chart: LedgerChartService,
     private readonly operations: OperationsService,
+    private readonly templates: TemplatesService,
     private readonly limiter: RateLimiter,
   ) {}
 
@@ -279,6 +287,50 @@ export class AdminLedgerController {
   async discardOperation(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
     const actor = await this.mutator(request);
     await this.operations.discard(actor, parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Get("templates")
+  @RequirePermission("ledger.view")
+  async listTemplates(): Promise<{ data: { templates: TemplateView[] } }> {
+    return { data: { templates: await this.templates.list() } };
+  }
+
+  @Post("templates")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async createTemplate(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { template: TemplateView } }> {
+    const actor = await this.mutator(request);
+    const input: CreateTemplateInput = parse(() => createTemplateSchema.parse(body), TEMPLATE_PROBLEM);
+    return { data: { template: await this.templates.create(actor, input) } };
+  }
+
+  /** «Расходы месяца»: по шаблонам периода — черновики операций; повтор не плодит дублей. */
+  @Post("templates/draft-period")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async draftPeriod(@Req() request: unknown, @Body() body: unknown): Promise<{ data: DraftPeriodResult }> {
+    const actor = await this.mutator(request);
+    const input = parse(() => draftPeriodSchema.parse(body), PERIOD_PROBLEM);
+    return { data: await this.templates.draftPeriod(actor, input.period) };
+  }
+
+  @Patch("templates/:id")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async updateTemplate(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { template: TemplateView } }> {
+    const actor = await this.mutator(request);
+    const templateId = parse(() => idSchema.parse(id), ID_PROBLEM);
+    const input: UpdateTemplateInput = parse(() => updateTemplateSchema.parse(body), TEMPLATE_PROBLEM);
+    return { data: { template: await this.templates.update(actor, templateId, input) } };
+  }
+
+  @Post("templates/:id/archive")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async archiveTemplate(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.templates.archive(actor, parse(() => idSchema.parse(id), ID_PROBLEM));
     return { data: { ok: true } };
   }
 

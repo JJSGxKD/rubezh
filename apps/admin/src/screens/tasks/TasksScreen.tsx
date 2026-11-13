@@ -7,6 +7,9 @@ import {
   CHANNEL_PLATFORMS,
   CHANNEL_PLATFORM_TITLES,
   CLIENT_KINDS,
+  EMBLEM_KINDS,
+  EMBLEM_TIERS,
+  EMBLEM_TIER_TITLES,
   FILTER_KEYS,
   FILTER_LABELS,
   FILTER_OPTIONS,
@@ -16,6 +19,7 @@ import {
   LADDER_MAX,
   NO_ACHIEVEMENT_FIELDS,
   NO_CATEGORY_TITLE,
+  NO_EMBLEM_TITLE,
   NO_TIER_TITLE,
   PARTNER_KINDS,
   PARTNER_PLATFORMS,
@@ -35,6 +39,7 @@ import {
   fetchTasks,
   groupByPeriod,
   isAchievement,
+  isEmblemRow,
   partnerPlatforms,
   reorderTasks,
   rewardLabel,
@@ -46,6 +51,7 @@ import {
   withKind,
   withPeriod,
   withPlatform,
+  type EmblemTier,
   type PoolTier,
   type TaskGroup,
   type TaskParams,
@@ -141,6 +147,9 @@ export function TasksScreen() {
   const pooled = !partner && !clientKind && input.period !== "achievement";
   const achievement = isAchievement(input);
   const stateKind = STATE_KINDS.has(input.kind);
+  // Знак статуса или сезона: цели и награды нет, правятся название, условие, редкость, порядок и «включено».
+  const emblemRow = isEmblemRow(input);
+  const setEmblemTier = (value: string) => setInput({ ...input, emblemTier: EMBLEM_TIERS.find((tier) => tier === value) ?? null });
   const channel = input.kind === CHANNEL_KIND;
   const setParams = (patch: Partial<TaskParams>) => setInput({ ...input, params: { ...(input.params ?? { url: "" }), ...patch } });
 
@@ -231,11 +240,13 @@ export function TasksScreen() {
             )}
             <Field label="Вид цели" help={HELP.tasks.kind}>
               <Select value={input.kind} disabled={original !== null} onChange={(event) => setInput(withKind(input, event.target.value))}>
-                {kinds.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {KIND_TITLES[kind] ?? kind}
-                  </option>
-                ))}
+                {kinds
+                  .filter((kind) => !EMBLEM_KINDS.has(kind) || kind === input.kind)
+                  .map((kind) => (
+                    <option key={kind} value={kind}>
+                      {KIND_TITLES[kind] ?? kind}
+                    </option>
+                  ))}
               </Select>
             </Field>
             {filterKey === undefined ? null : (
@@ -265,7 +276,7 @@ export function TasksScreen() {
                 </Select>
               </Field>
             ) : null}
-            {partner || clientKind ? null : (
+            {partner || clientKind || emblemRow ? null : (
               <Field label="Цель" hint={TIME_KINDS.has(input.kind) ? `в секундах: ${targetLabel(input)}` : undefined}>
                 <Input {...number("target")} min={1} />
               </Field>
@@ -353,7 +364,8 @@ export function TasksScreen() {
           {partner && !channel ? (
             <Notice tone="info">Засчитывается переход по ссылке из игры: проверить, что игрок открыл сайт или запустил бота, без постбэка партнёра нечем.</Notice>
           ) : null}
-          {achievement ? (
+          {emblemRow ? <Notice tone="info">{HELP.tasks.emblemRow}</Notice> : null}
+          {achievement && !emblemRow ? (
             <FieldRow>
               <Field label="Категория" help={HELP.tasks.category}>
                 <Select value={input.category ?? ""} onChange={(event) => setInput({ ...input, category: ACHIEVEMENT_CATEGORIES.find((category) => category === event.target.value) ?? null })}>
@@ -408,19 +420,42 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {emblemRow ? null : (
+            <FieldRow>
+              <Field label="Монеты">
+                <Input {...number("coins")} />
+              </Field>
+              <Field label="Самоцветы" hint="по умолчанию — только достижения">
+                <Input {...number("gems")} />
+              </Field>
+              <Field label="Осколки">
+                <Input {...number("shards")} />
+              </Field>
+              <Field label="Очки заданий" help={HELP.tasks.passPoints}>
+                <Input {...number("passPoints")} />
+              </Field>
+            </FieldRow>
+          )}
+          {achievement ? (
+            <FieldRow>
+              <Field label="Знак у имени" help={HELP.tasks.emblem}>
+                <Select value={input.emblemTier ?? ""} onChange={(event) => setEmblemTier(event.target.value)}>
+                  {emblemRow ? null : <option value="">{NO_EMBLEM_TITLE}</option>}
+                  {EMBLEM_TIERS.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {EMBLEM_TIER_TITLES[tier]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              {emblemRow ? (
+                <Field label={`Условие — ${String(input.hint?.trim().length ?? 0)} из ${String(HINT_MAX)}`} hint="его игрок видит у закрытого знака">
+                  <Input value={input.hint ?? ""} onChange={(event) => setInput({ ...input, hint: event.target.value === "" ? null : event.target.value })} maxLength={HINT_MAX + 20} className="w-80" />
+                </Field>
+              ) : null}
+            </FieldRow>
+          ) : null}
           <FieldRow>
-            <Field label="Монеты">
-              <Input {...number("coins")} />
-            </Field>
-            <Field label="Самоцветы" hint="по умолчанию — только достижения">
-              <Input {...number("gems")} />
-            </Field>
-            <Field label="Осколки">
-              <Input {...number("shards")} />
-            </Field>
-            <Field label="Очки заданий" help={HELP.tasks.passPoints}>
-              <Input {...number("passPoints")} />
-            </Field>
             <RowItem>
               <label className="flex items-center gap-1.5 text-sm">
                 <input type="checkbox" checked={input.active} onChange={(event) => setInput({ ...input, active: event.target.checked })} />
@@ -428,15 +463,20 @@ export function TasksScreen() {
               </label>
             </RowItem>
           </FieldRow>
-          <Field label={`Заголовок — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`} hint="пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»)">
+          <Field
+            label={`${emblemRow ? "Название" : "Заголовок"} — ${String(input.title?.trim().length ?? 0)} из ${String(TITLE_MAX)}`}
+            hint={emblemRow ? "его игрок видит рядом с именем" : "пусто — игрок увидит текст по виду цели со склонением числа («Сыграй 3 забега»); у достижения со знаком название обязательно"}
+          >
             <Input value={input.title ?? ""} onChange={(event) => setInput({ ...input, title: event.target.value === "" ? null : event.target.value })} maxLength={TITLE_MAX + 20} className="w-full max-w-xl" />
           </Field>
           {original === null ? null : <Notice tone="info">{channel ? "Повтор" : "Срок"} и вид не меняются: прогресс игроков записан по ним. Нужно другое — заведите новое задание и выключите это.</Notice>}
         </form>
           {/* Строка так, как её увидит игрок в «Заданиях», — до выполнения и готовой к забору (Р83). */}
-          <div className="min-w-0 md:sticky md:top-0 md:self-start">
-            <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
-          </div>
+          {emblemRow ? null : (
+            <div className="min-w-0 md:sticky md:top-0 md:self-start">
+              <PhonePreview kind="task" draft={taskPreview(input)} height={320} caption="Так увидит игрок — вкладка заданий" />
+            </div>
+          )}
         </div>
       </FormDialog>
 
@@ -506,9 +546,14 @@ export function TasksScreen() {
                             task.ladder === null ? <span className="text-text-muted">нет</span> : <span className="whitespace-nowrap font-mono text-xs">{`${task.ladder} · ${String(task.rung ?? "?")}`}</span>,
                         },
                         { title: "Престиж", help: HELP.tasks.prestige, align: "right" as const, render: (task: TaskDef) => String(task.prestige) },
+                        {
+                          title: "Знак",
+                          help: HELP.tasks.emblem,
+                          render: (task: TaskDef) => (task.emblemTier === null ? <span className="text-text-muted">нет</span> : <EmblemTierBadge tier={task.emblemTier} />),
+                        },
                       ]
                     : []),
-                  { title: "Награда", render: (task) => rewardLabel(task) },
+                  { title: "Награда", render: (task) => (isEmblemRow(task) ? <span className="text-text-muted">нет</span> : rewardLabel(task)) },
                   // Счёт выполнивших ведётся у партнёрских целей: у них есть лимит.
                   ...(group.group === "partner"
                     ? [
@@ -546,6 +591,11 @@ export function TasksScreen() {
       {state.status === "ok" ? <NetworkTasksPanel rows={state.data.networks} onSaved={reload} /> : null}
     </div>
   );
+}
+
+/** Редкость знака словом: цвета знаков игра берёт из своей палитры, панель их не рисует. */
+function EmblemTierBadge({ tier }: { tier: EmblemTier }) {
+  return <Badge tone={tier === "team" ? "info" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
 }
 
 /**

@@ -17,6 +17,7 @@ import {
   type AdNetworkProfile,
 } from "./ad-networks.js";
 import {
+  AdBlockArchivedError,
   AdBlockInvalidError,
   AdBlockLimitError,
   AdBlockShapeLockedError,
@@ -30,6 +31,7 @@ import { AdsService } from "./ads.service.js";
 import {
   ADS_CATALOG_REPOSITORY,
   type AdBlockDef,
+  type AdCatalogBlock,
   type AdFunnelRow,
   type AdPassRow,
   type AdNetworkEdit,
@@ -41,7 +43,8 @@ import {
  * Реклама в панели (docs/29-admin-panel.md, раздел «Реклама»; WP12): какие
  * сети включены и в каком порядке, блоки мест и воронка показов. Читать —
  * `ads.view`, менять — `ads.edit`; каждое изменение — в аудит. Удаления нет:
- * на блок ссылаются сессии показов, его выключают.
+ * на блок ссылаются сессии показов, его выключают, а отслужившего убирают в
+ * архив (`ad-block-archive.service.ts`, Р200).
  */
 
 const DB_TIMEOUT_MS = 3_000;
@@ -103,7 +106,7 @@ export interface AdNetworkView extends AdNetworkRow {
   problem: string | null;
 }
 
-export interface AdBlockView extends AdBlockDef {
+export interface AdBlockView extends AdCatalogBlock {
   /** блок не по профилю сети — выдача его пропускает; `null` — по правилам */
   problem: string | null;
 }
@@ -209,6 +212,7 @@ export class AdsCatalogService {
     const before = input.blockId === null ? null : ((await this.db(this.repository.blocks())).find((candidate) => candidate.blockId === input.blockId) ?? null);
     if (input.blockId !== null) {
       if (before === null) throw new AdCatalogNotFoundError("block");
+      if (before.archivedAt !== null) throw new AdBlockArchivedError();
       if (before.networkKey !== input.networkKey || before.place !== input.place) throw new AdBlockShapeLockedError();
     }
     const edit = await this.checkedBlock(input);
@@ -220,7 +224,11 @@ export class AdsCatalogService {
       return created;
     }
     const block: AdBlockDef = { ...edit, blockId: edit.blockId };
-    if (!(await this.db(this.repository.updateBlock(block, actor.accountId, at)))) throw new AdCatalogNotFoundError("block");
+    if (!(await this.db(this.repository.updateBlock(block, actor.accountId, at)))) {
+      // Запись не прошла: блок успели убрать в архив между чтением и записью или он пропал.
+      const now = (await this.db(this.repository.blocks())).find((candidate) => candidate.blockId === block.blockId);
+      throw now !== undefined && now.archivedAt !== null ? new AdBlockArchivedError() : new AdCatalogNotFoundError("block");
+    }
     await this.roles.audit({ actorAccountId: actor.accountId, action: "ads.block.update", target: block.blockId, before, after: block });
     this.changed({ event: "ad_block_updated", blockId: block.blockId, actor: actor.accountId });
     return block;

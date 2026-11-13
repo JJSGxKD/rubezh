@@ -194,8 +194,12 @@ model Account {
   supporterAt    DateTime? @map("supporter_at") @db.Timestamptz(3)
   /// пролог пройден (T-0279, Р151): победа в нём; аккаунтам, игравшим до пролога, миграция ставит дату выката. Пусто — «Награда дня» и «Задания» закрыты
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
+  /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
+  shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
 
   roles         AccountRole[]
+  // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
+  shownEmblem   TaskDef?              @relation("account_shown_emblem", fields: [shownEmblemId], references: [taskId], onDelete: SetNull)
   runs          Run[]
   purchases     Purchase[]
   sessions      AccountSession[]
@@ -1672,6 +1676,9 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// редкость знака у имени (T-0235, Р149): common…mythic по шкале предметов и `team`
+  /// для знака «Команда»; пусто — у достижения знака нет. Только у достижений (`CHECK` в миграции)
+  emblemTier      String?    @map("emblem_tier") @db.VarChar(16)
   /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
   /// партнёрской цели, связи полей — `CHECK` в миграции
   customer        String?    @db.VarChar(80)
@@ -1693,6 +1700,7 @@ model TaskDef {
   rarity       AchievementRarity?
   favorites    AchievementFavorite[]
   channelWatch TaskChannelWatch[]
+  shownBy      Account[]             @relation("account_shown_emblem")
 
   @@map("task_def")
 }
@@ -1909,6 +1917,8 @@ model AdBlock {
   updatedAt  DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт
   updatedBy  String?    @map("updated_by") @db.Uuid
+  /// в архиве с этого момента (Р200): блок выключен и в панели виден только во вкладке «Архив»; `null` — не в архиве
+  archivedAt DateTime?  @map("archived_at") @db.Timestamptz(3)
 
   network  AdNetwork   @relation(fields: [networkKey], references: [networkKey])
   sessions AdSession[]
@@ -3213,7 +3223,8 @@ model LedgerArticle {
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
 
-  accounts LedgerAccount[]
+  accounts  LedgerAccount[]
+  templates LedgerTemplate[]
 
   @@map("ledger_article")
 }
@@ -3239,8 +3250,9 @@ model LedgerAccount {
   articleId        String?           @map("article_id") @db.VarChar(64)
   article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
 
-  lines LedgerLine[]
-  loans LedgerLoan[]
+  lines     LedgerLine[]
+  loans     LedgerLoan[]
+  templates LedgerTemplate[]
 
   @@index([place])
   @@index([articleId])
@@ -3362,4 +3374,40 @@ model LedgerLoan {
 
   @@index([accountId])
   @@map("ledger_loan")
+}
+
+// Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
+
+enum LedgerTemplateSchedule {
+  monthly
+  yearly
+}
+
+/// Шаблон расхода: статья, место, обычная сумма и график. Сам ничего не проводит — «Расходы месяца» создаёт по нему
+/// черновик операции (`ledger_operation.template_id` + `template_period`, на период один), человек сверяет и проводит.
+/// Связи операции с шаблоном внешним ключом нет: операция живёт и после того, как шаблон забыли.
+model LedgerTemplate {
+  /// слаг из названия, «vps»; занят — «vps-2»
+  templateId     String                 @id @map("template_id") @db.VarChar(64)
+  name           String                 @db.VarChar(128)
+  articleId      String                 @map("article_id") @db.VarChar(64)
+  /// счёт места хранения, с которого платим: `bank.karta`, `stars.bot.available`
+  placeAccountId String                 @map("place_account_id") @db.VarChar(64)
+  /// обычная сумма в минимальных единицах валюты места: в реальности она могла измениться, поэтому — только черновик
+  amount         BigInt
+  schedule       LedgerTemplateSchedule
+  /// месяц года, 1…12, для `yearly`; у `monthly` пусто
+  month          Int?                   @db.SmallInt
+  note           String?                @db.VarChar(500)
+  archivedAt     DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                 @map("created_by") @db.Uuid
+
+  article      LedgerArticle @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
+  placeAccount LedgerAccount @relation(fields: [placeAccountId], references: [accountId], onDelete: Restrict)
+
+  @@index([articleId])
+  @@index([placeAccountId])
+  @@map("ledger_template")
 }

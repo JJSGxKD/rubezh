@@ -42,6 +42,13 @@ export class AdBlockShapeLockedError extends DomainError {
   }
 }
 
+/** Блок в архиве не правится (Р200): сначала «Вернуть». */
+export class AdBlockArchivedError extends DomainError {
+  constructor() {
+    super("ad_block_archived", "Блок в архиве — верните его, чтобы изменить", 409);
+  }
+}
+
 /** Ключ сети не похож на значение из кабинета или такого ключа у сети нет. */
 export class AdNetworkKeysError extends DomainError {
   constructor(message: string) {
