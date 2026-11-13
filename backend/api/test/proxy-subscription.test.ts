@@ -27,7 +27,7 @@ import { SubscriptionRoutes } from "../src/modules/proxies/subscription/subscrip
 import { SUBSCRIPTION_REPOSITORY, type StoredNode, type StoredSubscription } from "../src/modules/proxies/subscription/subscription.repository.js";
 import { SubscriptionScheduler } from "../src/modules/proxies/subscription/subscription.scheduler.js";
 import { ProxySubscriptionService } from "../src/modules/proxies/subscription/subscription.service.js";
-import { noNodesNote } from "../src/modules/proxies/subscription/subscription.messages.js";
+import { noNodesNote, successNote } from "../src/modules/proxies/subscription/subscription.messages.js";
 import { SubscriptionSync } from "../src/modules/proxies/subscription/subscription.sync.js";
 import { SUBSCRIPTION_USER_AGENT, subscriptionHwid } from "../src/modules/proxies/subscription/subscription-download.js";
 import { sealUrl } from "../src/modules/proxies/subscription/subscription-url.js";
@@ -66,9 +66,9 @@ const nodeLink = (index: number, name = `[DE] Узел ${String(index)}`): strin
   `vless://${UUID}@n${String(index)}.example.org:443?type=ws&security=tls&sni=n${String(index)}.example.org&path=%2Fws#${encodeURIComponent(name)}`;
 const HYSTERIA = "hysteria2://secret@h.example.org:443#hy";
 const bodyOf = (...lines: string[]): string => lines.join("\n");
-/** Ссылки, которые разбор пропускает: транспорт kcp, неподдерживаемый параметр безопасности, битый uuid. */
+/** Ссылки, которые разбор пропускает: транспорт kcp, параметр allowInsecure, битый uuid. */
 const SKIPPED_TRANSPORT = `vless://${UUID}@k.example.org:443?type=kcp#kcp`;
-const SKIPPED_OPTION = `vless://${UUID}@o.example.org:443?type=ws&security=tls&ech=abc#ech`;
+const SKIPPED_OPTION = `vless://${UUID}@o.example.org:443?type=ws&security=tls&allowInsecure=1#insecure`;
 const SKIPPED_MALFORMED = "vless://not-a-uuid@m.example.org:443?type=ws#bad";
 
 const answer = (body: string, init: ResponseInit = {}): Response => new Response(body, { status: 200, ...init });
@@ -166,7 +166,7 @@ describe("обновление подписки", () => {
 
     const result = await r.sync.refresh("main", NOW);
 
-    expect(result).toEqual({ status: "ok", note: "3 узла, пропущено 1 (протокол: 1)" });
+    expect(result).toEqual({ status: "ok", note: "3 узла, пропущено 1 — протокол: hysteria2 1" });
     const config = r.writer.last as { inbounds: { port: number; listen: string; protocol: string }[] };
     expect(config.inbounds.map((inbound) => inbound.port)).toEqual([10800, 10801, 10802]);
     // Внутри сети tunnel вход слушает на всех интерфейсах: API живёт в другом контейнере; наружу порт не публикуется.
@@ -176,7 +176,7 @@ describe("обновление подписки", () => {
       [1, "unknown"],
       [2, "unknown"],
     ]);
-    expect(r.repository.subscription).toMatchObject({ lastRefreshOk: true, lastRefreshNote: "3 узла, пропущено 1 (протокол: 1)", lastRefreshAt: NOW });
+    expect(r.repository.subscription).toMatchObject({ lastRefreshOk: true, lastRefreshNote: "3 узла, пропущено 1 — протокол: hysteria2 1", lastRefreshAt: NOW });
     expect(r.changed).toHaveBeenCalled();
   });
 
@@ -274,8 +274,8 @@ describe("обновление подписки", () => {
     ["HTTP 500", () => new Response("сбой", { status: 500 }), "Поставщик ответил кодом 500"],
     ["формат Clash", () => answer("proxies:\n  - name: a\n    type: vless\n"), "Формат подписки не поддерживается: нужен список ссылок (base64 или текст) или JSON-конфиг Xray"],
     ["пустое тело", () => answer(""), "Подписка пустая"],
-    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов: пропущено 2 (протокол: 2)"],
-    ["все узлы отсеяны по разным причинам", () => answer(bodyOf(HYSTERIA, HYSTERIA, SKIPPED_TRANSPORT, SKIPPED_OPTION, SKIPPED_MALFORMED)), "В подписке нет подходящих узлов: пропущено 5 (протокол: 2, транспорт: 1, параметры: 1, ссылка: 1)"],
+    ["только неподдерживаемые узлы", () => answer(bodyOf(HYSTERIA, HYSTERIA)), "В подписке нет подходящих узлов: пропущено 2 — протокол: hysteria2 2"],
+    ["все узлы отсеяны по разным причинам", () => answer(bodyOf(HYSTERIA, HYSTERIA, SKIPPED_TRANSPORT, SKIPPED_OPTION, SKIPPED_MALFORMED)), "В подписке нет подходящих узлов: пропущено 5 — протокол: hysteria2 2; транспорт: type 1; параметры: allowInsecure 1; ссылка: uuid 1"],
     ["сеть упала", () => Promise.reject(new TypeError("fetch failed")), "Не удалось связаться с поставщиком"],
     ["слишком большой ответ", () => answer("x", { headers: { "content-length": String(3 * 1024 * 1024) } }), "Ответ поставщика больше 2 МБ"],
   ];
@@ -304,7 +304,7 @@ describe("обновление подписки", () => {
     const skip = (reason: SkipReason, count: number): SkippedLink[] => Array.from({ length: count }, (_, index) => ({ index, scheme: "vless", reason, detail: "x" }));
 
     it("причины идут в порядке словаря, числа складываются в общее", () => {
-      expect(noNodesNote([...skip("unsupported_option", 3), ...skip("unsupported_scheme", 9)])).toBe("В подписке нет подходящих узлов: пропущено 12 (протокол: 9, параметры: 3)");
+      expect(noNodesNote([...skip("unsupported_option", 3), ...skip("unsupported_scheme", 9)])).toBe("В подписке нет подходящих узлов: пропущено 12 — протокол: x 9; параметры: x 3");
     });
 
     it("ничего не пропущено — без разбивки", () => {
@@ -313,6 +313,52 @@ describe("обновление подписки", () => {
 
     it("разбивка не выходит за предел колонки", () => {
       expect(noNodesNote(skip("malformed", 100_000)).length).toBeLessThanOrEqual(300);
+    });
+  });
+
+  describe("итог обновления называет параметры отсева (Р192, T-0387)", () => {
+    const skip = (reason: SkipReason, detail: string, count: number, scheme = "vless"): SkippedLink[] => Array.from({ length: count }, (_, index) => ({ index, scheme, reason, detail }));
+
+    it("после числа по причине — имена параметров с числами, как в спецификации", () => {
+      const skipped = [...skip("unsupported_option", "allowInsecure", 2), ...skip("unsupported_option", "dialerProxy", 1), ...skip("unsupported_transport", "type", 1)];
+      expect(successNote(37, skipped)).toBe("37 узлов, пропущено 4 — параметры: allowInsecure 2, dialerProxy 1; транспорт: type 1");
+    });
+
+    it("не больше трёх имён на причину: самые частые, при равенстве — по алфавиту", () => {
+      const skipped = [
+        ...skip("unsupported_option", "e", 1),
+        ...skip("unsupported_option", "d", 1),
+        ...skip("unsupported_option", "c", 3),
+        ...skip("unsupported_option", "b", 2),
+        ...skip("unsupported_option", "a", 2),
+      ];
+      expect(successNote(1, skipped)).toBe("1 узел, пропущено 9 — параметры: c 3, a 2, b 2");
+    });
+
+    it("noNodesNote — те же имена", () => {
+      expect(noNodesNote([...skip("unsupported_option", "dialerProxy.redirect", 2), ...skip("unsupported_scheme", "hysteria2", 1)])).toBe(
+        "В подписке нет подходящих узлов: пропущено 3 — протокол: hysteria2 1; параметры: dialerProxy.redirect 2",
+      );
+    });
+
+    it("ничего не пропущено — только число узлов", () => {
+      expect(successNote(2, [])).toBe("2 узла");
+    });
+
+    it("в заметку идут только имена: всё, что на имя не похоже, сворачивается в «прочее»", () => {
+      const skipped = [...skip("unsupported_option", "https://t.example.org/sub/tok-9f8e7d6c5b4a", 2), ...skip("malformed", "a b", 1), ...skip("unsupported_scheme", "x".repeat(40), 1)];
+      const note = successNote(1, skipped);
+      expect(note).toBe("1 узел, пропущено 4 — протокол: прочее 1; параметры: прочее 2; ссылка: прочее 1");
+      expect(note).not.toMatch(/tok-9f8e7d6c5b4a|example\.org/);
+    });
+
+    it("длинная заметка не выходит за предел колонки", () => {
+      const names = Array.from({ length: 5 }, (_, index) => `param${String(index)}`);
+      const skipped = ["unsupported_scheme", "unsupported_transport", "unsupported_option", "unsupported_cipher", "malformed"].flatMap((reason) =>
+        names.flatMap((name, index) => skip(reason as SkipReason, `${name}${"x".repeat(20)}`, 1000 - index)),
+      );
+      expect(successNote(10, skipped).length).toBeLessThanOrEqual(300);
+      expect(noNodesNote(skipped).length).toBeLessThanOrEqual(300);
     });
   });
 
@@ -1093,7 +1139,7 @@ describe("подписка по HTTP в панели", () => {
     const response = await call("POST", `/${key}/refresh`, "own");
 
     expect(response.statusCode).toBe(200);
-    expect(overviewOf(response).subscriptions[0]?.lastRefreshNote).toBe("3 узла, пропущено 1 (протокол: 1)");
+    expect(overviewOf(response).subscriptions[0]?.lastRefreshNote).toBe("3 узла, пропущено 1 — протокол: hysteria2 1");
     expect(await auditText()).not.toMatch(AUDIT_URL);
     expect((await roles.recentAudit(10)).find((item) => item.action === "proxy_subscription.refresh")?.target).toBe(key);
   });
