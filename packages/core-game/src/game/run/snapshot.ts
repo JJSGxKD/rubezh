@@ -6,9 +6,10 @@ import { RUBEZH_PHASES, type RubezhPhase } from "../sim/rubezh";
 import { restoreBlessings } from "../sim/secrets";
 import { createSiegeState, type SiegeState } from "../sim/siege";
 import { SIEGE_LEVEL_CEILING } from "../sim/siege-rules";
-import { resetStalkerBody, type StalkerBodyState } from "../sim/stalker-body";
+import { stalkerGapRange, STALKER_PHASES, type StalkerPhase, type StalkerState } from "../sim/stalker";
+import { resetStalkerBody, stalkerAlive, type StalkerBodyState } from "../sim/stalker-body";
 import type { Spawner } from "../sim/spawner";
-import type { World } from "../sim/world";
+import { TICK_HZ, type World } from "../sim/world";
 
 /**
  * Снимок забега: всё, что меняется по ходу игры, в виде, пригодном для
@@ -103,6 +104,9 @@ type StalkerBodySnapshot = Omit<StalkerBodyState, "pushWindow" | "rules" | "type
 /** Состояние осады; журнал событий для сцены (`log`) в снимок не входит. */
 type SiegeSnapshot = Omit<SiegeState, "rng" | "log"> & { rng: number };
 
+/** Состояние директора Карачуна; правила (`appear`) и журнал для сцены (`ended`) в снимок не входят. */
+type StalkerSnapshot = Omit<StalkerState, "rng" | "appear" | "ended"> & { rng: number };
+
 export interface WorldSnapshot {
   version: number;
   rng: number;
@@ -133,6 +137,11 @@ export interface WorldSnapshot {
    * (мир создаётся из того же контента). В снимках без поля преследователя нет (T-0421)
    */
   stalkerBody?: StalkerBodySnapshot;
+  /**
+   * Директор Карачуна: поток, фаза, отметки и счётчики появления. В снимках без поля фаза — по правилам
+   * нового мира, а первое предвестие — не раньше обычной паузы от секунды снимка (T-0423)
+   */
+  stalker?: StalkerSnapshot;
   /**
    * Рубеж: поток, фаза и секунда победы. В снимках без поля до отметки страж «ждёт»,
    * после — «пропущен»: в уже начатый забег он не вмешивается (T-0120)
@@ -172,6 +181,7 @@ export function captureWorld(world: World, spawner: Spawner): WorldSnapshot {
     secrets: capturedSecrets(world),
     siege: capturedSiege(world.siege),
     stalkerBody: capturedStalkerBody(world.stalkerBody),
+    stalker: capturedStalker(world.stalker),
     // Журнал закончившихся колец не входит: после восстановления он пуст, событие не повторяется.
     cordon: capturedCordon(world.cordon),
     rubezh: { rng: world.rubezh.rng.getState(), phase: world.rubezh.phase, clearedSec: world.rubezh.clearedSec },
@@ -226,6 +236,7 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   restoreSecrets(world, snapshot.secrets);
   restoreSiege(world, snapshot.siege);
   restoreStalkerBody(world, snapshot.stalkerBody);
+  restoreStalker(world, snapshot.stalker);
 
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
@@ -441,6 +452,82 @@ function restoreStalkerBody(world: World, input: unknown): void {
   state.lastPushTick = asNumber(raw.lastPushTick, "stalkerBody.lastPushTick");
   state.touchCooldownTicks = asCount(raw.touchCooldownTicks, "stalkerBody.touchCooldownTicks");
   state.recoverTicks = asCount(raw.recoverTicks, "stalkerBody.recoverTicks");
+}
+
+function capturedStalker(state: StalkerState): StalkerSnapshot {
+  return {
+    rng: state.rng.getState(),
+    phase: state.phase,
+    nextOmenTick: state.nextOmenTick,
+    x: state.x,
+    y: state.y,
+    phaseTicks: state.phaseTicks,
+    chaseTicks: state.chaseTicks,
+    index: state.index,
+    hits: state.hits,
+    pushes: state.pushes,
+    relocations: state.relocations,
+    appearedTick: state.appearedTick,
+  };
+}
+
+/**
+ * Директор Карачуна. Отсутствие поля — снимок до него: версию формата не поднимали, старый снимок читается.
+ * Фаза — по правилам нового мира (ждёт или выключен), а первое предвестие — не раньше обычной паузы от
+ * секунды снимка: забег, начатый давно, не должен вывалить Карачуна сразу; так же читается снимок мира без
+ * директора (фаза `off`). Выключенный в мире директор
+ * (нет правил, пролог, «Лёгкая», новичок) остаётся выключенным, что бы ни говорил снимок. Погоня и
+ * растворение требуют живого тела: оно восстановлено выше.
+ */
+function restoreStalker(world: World, input: unknown): void {
+  const state = world.stalker;
+  state.ended = [];
+  const appear = state.appear;
+  if (appear === null || state.phase === "off") {
+    if (input !== undefined) asRecord(input, "stalker");
+    return;
+  }
+
+  // Снимок мира без директора (фаза `off`) для мира с директором — то же, что снимок без поля.
+  const saved = input === undefined ? null : asRecord(input, "stalker");
+  if (saved === null || saved.phase === "off") {
+    const range = stalkerGapRange(appear, world.stats.tick / TICK_HZ);
+    state.phase = "waiting";
+    state.nextOmenTick = world.stats.tick + Math.max(1, Math.round(state.rng.nextRange(range.min, range.max) * TICK_HZ));
+    state.phaseTicks = 0;
+    state.chaseTicks = 0;
+    state.index = 0;
+    state.hits = 0;
+    state.pushes = 0;
+    state.relocations = 0;
+    state.appearedTick = -1;
+    return;
+  }
+
+  const raw = saved;
+  const phase = asString(raw.phase, "stalker.phase");
+  if (!(STALKER_PHASES as readonly string[]).includes(phase)) {
+    throw new SnapshotError(`stalker.phase: «${phase}» — неизвестная фаза`);
+  }
+  const restored = phase as StalkerPhase;
+  if ((restored === "chase" || restored === "fading") && stalkerAlive(world) === 0) {
+    throw new SnapshotError(`stalker.phase: ${restored}, а тела Карачуна в снимке нет`);
+  }
+  const appearedTick = asNumber(raw.appearedTick, "stalker.appearedTick");
+  if (!Number.isInteger(appearedTick) || appearedTick < -1) throw new SnapshotError(`stalker.appearedTick: ${appearedTick} вне [-1, ∞)`);
+
+  state.rng.setState(asNumber(raw.rng, "stalker.rng"));
+  state.phase = restored;
+  state.nextOmenTick = asCount(raw.nextOmenTick, "stalker.nextOmenTick");
+  state.x = asNumber(raw.x, "stalker.x");
+  state.y = asNumber(raw.y, "stalker.y");
+  state.phaseTicks = asCount(raw.phaseTicks, "stalker.phaseTicks");
+  state.chaseTicks = asCount(raw.chaseTicks, "stalker.chaseTicks");
+  state.index = asCount(raw.index, "stalker.index");
+  state.hits = asCount(raw.hits, "stalker.hits");
+  state.pushes = asCount(raw.pushes, "stalker.pushes");
+  state.relocations = asCount(raw.relocations, "stalker.relocations");
+  state.appearedTick = appearedTick;
 }
 
 function capturedCordon(state: CordonState): Omit<CordonState, "ended"> {
