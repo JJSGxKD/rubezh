@@ -4,9 +4,9 @@ import { NotificationsService } from "../notifications/notifications.service.js"
 import { InsufficientFundsError } from "../wallet/wallet-errors.js";
 import { InsufficientBalance } from "../wallet/wallet-ledger.js";
 import { WalletService } from "../wallet/wallet.service.js";
-import { BOOST_PRICES, MAX_BOOSTS_PER_RUN, priceOf, type BoostPrice } from "./boost-catalog.js";
+import { BOOST_PRICES, MAX_BOOSTS_PER_RUN, type BoostPrice } from "./boost-catalog.js";
 import { BoostRunStartedError } from "./boosts-errors.js";
-import { BOOSTS_REPOSITORY, type BoostCost, type BoostsRepository } from "./boosts.repository.js";
+import { BOOSTS_REPOSITORY, type BoostCost, type BoostLine, type BoostsRepository, type PaidWith } from "./boosts.repository.js";
 
 /**
  * Бусты на забег (docs/35-stage4-plan.md §3.5, Р39, Р17): каталог с ценами,
@@ -22,7 +22,10 @@ export interface BoostCatalogView {
 export interface ActivationView {
   runId: string;
   boosts: string[];
+  /** списано из кошелька: подарочные бусты в стоимость не входят */
   cost: BoostCost;
+  /** чем оплачен каждый буст: `credit` — подарком пасса, иначе ресурсом кошелька */
+  paidWith: Record<string, PaidWith>;
 }
 
 @Injectable()
@@ -43,17 +46,24 @@ export class BoostsService {
    * Купить бусты на забег. Повтор с тем же забегом — тот же ответ без
    * списания: игрок, у которого оборвалась связь на «В бой», нажмёт ещё раз.
    * Повтор с другим набором — тоже прежний набор: на забег покупка одна.
+   *
+   * Подаренный пассом буст (T-0312) берёт подарок вместо денег: цену платит только
+   * то, на что подарка нет. Что чем оплачено — в ответе (`paidWith`) и в журнале забега.
    */
   async activate(accountId: string, runId: string, boosts: readonly string[], at = new Date()): Promise<ActivationView> {
     if (boosts.length === 0 || boosts.length > MAX_BOOSTS_PER_RUN || new Set(boosts).size !== boosts.length) {
       throw new ValidationError(`На забег — от одного до ${MAX_BOOSTS_PER_RUN} разных бустов`);
     }
-    const cost = priceOf(boosts);
-    if (cost === null) throw new ValidationError("Такого буста нет");
+    const lines: BoostLine[] = [];
+    for (const boostId of boosts) {
+      const price = BOOST_PRICES[boostId];
+      if (price === undefined) throw new ValidationError("Такого буста нет");
+      lines.push({ boostId, ...price });
+    }
 
     let outcome;
     try {
-      outcome = await this.repository.activate({ accountId, runId, boosts, cost, at });
+      outcome = await this.repository.activate({ accountId, runId, boosts, lines, at });
     } catch (error: unknown) {
       if (!(error instanceof InsufficientBalance)) throw error;
       const balance = (await this.wallet.balances(accountId))[error.resource];
@@ -62,9 +72,9 @@ export class BoostsService {
     if (outcome.status === "started") throw new BoostRunStartedError();
     if (outcome.status === "foreign") throw new ValidationError("Некорректный забег");
     if (outcome.status === "created") {
-      this.logger.log(JSON.stringify({ module: "boosts", event: "bought", accountId, runId, boosts: outcome.row.boosts, cost: outcome.row.cost }));
+      this.logger.log(JSON.stringify({ module: "boosts", event: "bought", accountId, runId, boosts: outcome.row.boosts, cost: outcome.row.cost, paid_with: outcome.row.paidWith }));
     }
-    return { runId: outcome.row.runId, boosts: outcome.row.boosts, cost: outcome.row.cost };
+    return { runId: outcome.row.runId, boosts: outcome.row.boosts, cost: outcome.row.cost, paidWith: outcome.row.paidWith };
   }
 
   /**

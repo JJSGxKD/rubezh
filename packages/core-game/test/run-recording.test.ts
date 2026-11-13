@@ -241,6 +241,38 @@ describe("повтор забега по записи", () => {
     });
   });
 
+  describe("модификатор забега (T-0119)", () => {
+    const options = { seed: CIRCLING_SEED, maxTicks: 2 * CHECKPOINT_TICKS + 30, steer: circling(150), difficultyId: "hard" as const };
+
+    it("запись несёт модификатор, а повтор с ним совпадает с оригиналом", { timeout: 30_000 }, () => {
+      const recording = recordHeadlessRun({ ...options, modifierIds: ["hurry"] });
+      expect(recording.modifierIds).toEqual(["hurry"]);
+      expect(recording.choices.length).toBeGreaterThan(0);
+
+      const outcome = replayRecording(recording);
+      expect(outcome.reason).toBeNull();
+      expect(outcome.verdict).toBe("match");
+      expect(outcome.actual).toEqual(recording.result);
+    });
+
+    it("то же для «Инверсии», а запись без модификатора поля не несёт", { timeout: 30_000 }, () => {
+      const inverse = recordHeadlessRun({ ...options, modifierIds: ["inverse"] });
+      expect(inverse.modifierIds).toEqual(["inverse"]);
+      expect(replayRecording(inverse).verdict).toBe("match");
+
+      const plain = recordHeadlessRun(options);
+      expect("modifierIds" in plain).toBe(false);
+      expect(replayRecording(plain).verdict).toBe("match");
+    });
+
+    it("без модификатора в записи тот же ввод расходится: повтор обязан его знать", { timeout: 30_000 }, () => {
+      const recording = recordHeadlessRun({ ...options, modifierIds: ["hurry"] });
+      const { modifierIds, ...without } = recording;
+      expect(modifierIds).toEqual(["hurry"]);
+      expect(replayRecording(without).verdict).not.toBe("match");
+    });
+  });
+
   it("неповторимую, чужую по контенту и битую запись не повторяет", () => {
     const recording = recordHeadlessRun({ seed: 5, maxTicks: 200, steer: circling(150) });
     expect(replayRecording({ ...recording, replayBlocker: "resumed" }).verdict).toBe("not_replayable");

@@ -1,4 +1,4 @@
-import type { DifficultyId, RunLoadout, RunMode } from "@bh/shared-types";
+import type { DifficultyId, RunLoadout, RunMode, RunModifierId } from "@bh/shared-types";
 import {
   RUN_PROOF_SCHEMA,
   type RunProof,
@@ -26,6 +26,8 @@ export interface RunProofHeader {
   startingWeaponId: string;
   /** режим забега; у обычного забега поля нет */
   mode?: RunMode;
+  /** модификатор забега (T-0119); у забега без него поля нет */
+  modifierIds?: RunModifierId[];
   contentHash: string;
   unitScale: number;
   /** почему забег не повторить; `null` — повторяется. `input_overflow` и `proof_overflow` вычисляются позже. */
@@ -50,6 +52,7 @@ export function buildRunProof(header: RunProofHeader, progress: RunProofProgress
     mapId: header.mapId,
     difficultyId: header.difficultyId,
     mode: header.mode ?? "endless",
+    ...(header.modifierIds === undefined || header.modifierIds.length === 0 ? {} : { modifierIds: [...header.modifierIds] }),
     startingWeaponId: header.startingWeaponId,
     contentHash: header.contentHash,
     unitScale: header.unitScale,

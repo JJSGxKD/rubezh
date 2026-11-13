@@ -90,6 +90,13 @@ export interface VipRepository {
    * которым отзыв не нужен; в базе он есть всегда.
    */
   cutPeriod?(purchaseId: string, at: Date): Promise<CutPeriod | null>;
+  /**
+   * У кого из `accountIds` VIP шёл хоть мгновение в промежутке `[from, to)` — по
+   * журналу периодов, а не по тому, что VIP идёт сейчас. Так закрытие месяца пасса
+   * (tasks/T-0312) узнаёт, кто за этот месяц платил. Необязателен только ради
+   * подмен VIP в тестах, которым закрытие не нужно; в базе он есть всегда.
+   */
+  withVipDuring?(accountIds: readonly string[], from: Date, to: Date): Promise<Set<string>>;
 }
 
 /** Сколько подписок аккаунта читать: больше двух бывает, только если игрок годами подписывается заново. */
@@ -107,6 +114,7 @@ const periodSchema = z.object({ starts_at: z.date(), ends_at: z.date() });
 const cutHeadSchema = z.object({ account_id: z.uuid() });
 const cutRowSchema = z.object({ subscription_id: z.uuid(), ends_at: z.date(), keep_until: z.date() });
 const untilSchema = z.object({ until: z.date().nullable() });
+const holderSchema = z.object({ account_id: z.uuid() });
 
 @Injectable()
 export class PrismaVipRepository implements VipRepository {
@@ -202,6 +210,16 @@ export class PrismaVipRepository implements VipRepository {
       const [latest] = await tx.$queryRaw<unknown[]>`SELECT max(ends_at) AS until FROM vip_period WHERE account_id = ${accountId}::uuid`;
       return { subscriptionId: period.subscription_id, removedSec: Math.round(cutMs / 1000), until: untilSchema.parse(latest).until };
     });
+  }
+
+  async withVipDuring(accountIds: readonly string[], from: Date, to: Date): Promise<Set<string>> {
+    if (accountIds.length === 0) return new Set();
+    // Один запрос по индексу `(account_id, ends_at)`: период, кончившийся ровно к началу
+    // промежутка, и начавшийся ровно с его концом, в промежуток не входят.
+    const rows = await this.prisma.$queryRaw<unknown[]>`
+      SELECT DISTINCT account_id::text AS account_id FROM vip_period
+      WHERE account_id = ANY(${[...accountIds]}::uuid[]) AND starts_at < ${to} AND ends_at > ${from}`;
+    return new Set(rows.map((raw) => holderSchema.parse(raw).account_id));
   }
 
   async setRenewal(subscriptionId: string, renewal: VipRenewal, cancelledBy: VipCanceller | null, at: Date): Promise<"updated" | "unchanged" | "missing"> {
