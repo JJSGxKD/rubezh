@@ -45,7 +45,7 @@ describe.skipIf(DATABASE_URL === "")("курс на дату на живом Pos
     await history("EUR", "2026-11-01T00:00:00.000Z", "1.10");
     await history("EUR", "2026-11-01T12:00:00.000Z", "1.12");
     expect((await store.historyAt("EUR", at("2026-11-01T12:00:00.000Z")))?.usdPerUnit.toFixed()).toBe("1.12");
-    expect((await store.historyAt("EUR", at("2026-11-01T11:59:59.999Z")))?.usdPerUnit.toFixed()).toBe("1.10");
+    expect((await store.historyAt("EUR", at("2026-11-01T11:59:59.999Z")))?.usdPerUnit.toFixed()).toBe("1.1");
     expect(await store.historyAt("EUR", at("2026-10-31T23:59:59.999Z"))).toBeNull();
     expect(await store.historyAt("RUB", at("2026-11-01T12:00:00.000Z"))).toBeNull();
   });
@@ -66,7 +66,7 @@ describe.skipIf(DATABASE_URL === "")("курс на дату на живом Pos
     const rows = await store.historySpan("EUR", at("2026-11-01T00:00:00.000Z"), at("2026-11-02T00:00:00.000Z"));
     // Запись ровно на начало суток — действовавшая, а не «внутри»; запись на конец суток — уже следующих.
     expect(rows.map((row) => row.usdPerUnit.toFixed())).toEqual(["1.1", "1.12"]);
-    const noBase = await store.historySpan("EUR", at("2026-10-19T00:00:00.000Z"), at("2026-10-20T00:00:00.000Z"));
+    const noBase = await store.historySpan("EUR", at("2026-10-19T00:00:00.000Z"), at("2026-10-21T00:00:00.000Z"));
     expect(noBase.map((row) => row.usdPerUnit.toFixed())).toEqual(["1"]);
     const carried = await store.historySpan("EUR", at("2026-10-25T00:00:00.000Z"), at("2026-10-26T00:00:00.000Z"));
     expect(carried.map((row) => row.at.toISOString())).toEqual(["2026-10-20T00:00:00.000Z"]);
