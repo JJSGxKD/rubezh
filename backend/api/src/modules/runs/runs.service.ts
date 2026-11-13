@@ -267,6 +267,25 @@ export class RunsService {
     const changed = await this.runs.setRanked(runId, ranked, since);
     if (changed === null) throw new RunRankingConflictError(ranked);
 
+    await this.refreshBoards(changed);
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: ranked ? "players.run.rerank" : "players.run.unrank",
+      target: changed.accountId,
+      // Направление — в названии действия; в записи — какой забег и почему, чтобы журнал читался без карточки.
+      after: { runId, difficulty: changed.difficulty, survivalSec: changed.survivalSec, comment },
+    });
+    this.logger.log(JSON.stringify({ module: "runs", event: ranked ? "run_reranked" : "run_unranked", runId, accountId: changed.accountId, actor: actor.accountId }));
+    return { accountId: changed.accountId, ranked };
+  }
+
+  /**
+   * Доски игрока по базе после того, как его забег снят с рейтинга или возвращён. Доска
+   * сложности пересчитывается по лучшему оставшемуся рейтинговому забегу; игроку с закрытым
+   * рейтингом её не трогаем — вернётся по сроку уже без снятого.
+   */
+  private async refreshBoards(changed: { accountId: string; difficulty: Difficulty }): Promise<void> {
+    const since = this.rating.since();
     if ((await this.rating.hold(changed.accountId)) === null) {
       // Правится то, что положено аккаунту: отдельная доска — только полная, остальные — обе.
       const boards = await this.rating.boardsFor(changed.accountId);
@@ -278,17 +297,8 @@ export class RunsService {
       const after = await this.runs.bestRunOf(changed.accountId, changed.difficulty, false, since);
       if (after?.points != null && after.points !== best?.points) await this.leaderboard.submit(changed.difficulty, changed.accountId, after.points, boards);
     }
-    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение модератора они узнают отсюда.
+    // Недельная таблица сезона и другие проекции пересчитываются по базе: решение они узнают отсюда.
     await this.hooks.emitRankingChanged({ accountId: changed.accountId, difficulty: changed.difficulty });
-    await this.roles.audit({
-      actorAccountId: actor.accountId,
-      action: ranked ? "players.run.rerank" : "players.run.unrank",
-      target: changed.accountId,
-      // Направление — в названии действия; в записи — какой забег и почему, чтобы журнал читался без карточки.
-      after: { runId, difficulty: changed.difficulty, survivalSec: changed.survivalSec, comment },
-    });
-    this.logger.log(JSON.stringify({ module: "runs", event: ranked ? "run_reranked" : "run_unranked", runId, accountId: changed.accountId, actor: actor.accountId }));
-    return { accountId: changed.accountId, ranked };
   }
 
   /**
