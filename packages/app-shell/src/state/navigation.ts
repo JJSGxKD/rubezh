@@ -78,6 +78,8 @@ export interface NavigationStore {
   runCardId: string | null;
   /** как сдвинулся мир последним переходом — для `ScreenTransition` */
   motion: ScreenMotion;
+  /** откуда игрока позвали на вкладку «Пасс»; «Задания» забирают пометку при открытии (`takePassOrigin`) */
+  passOrigin: PassOrigin | null;
   push(screen: ScreenId): void;
   pop(): void;
   replace(screen: ScreenId): void;
@@ -88,6 +90,7 @@ export const useNavigation = create<NavigationStore>((set, get) => ({
   stack: ["lobby"],
   runCardId: null,
   motion: "rise",
+  passOrigin: null,
 
   push(screen): void {
     if (current(get().stack) === screen) return;
@@ -141,6 +144,43 @@ export function openRunCardFromStart(param: string | null | undefined): boolean 
   if (runId === null) return false;
   useNavigation.setState({ runCardId: runId });
   useNavigation.getState().push("runCard");
+  return true;
+}
+
+/** Откуда открыт пасс — разрез события `pass_opened`: вкладка, виджет главной, уведомление, стартовая ссылка. */
+export type PassOrigin = "tab" | "widget" | "notification" | "link";
+
+/**
+ * Открыть вкладку «Пасс» в «Заданиях» (tasks/T-0314): виджет главной, уведомление
+ * о закрытии месяца, стартовая ссылка. Вкладка не адрес, поэтому «Задания»
+ * узнают о ней по пометке в сторе и забирают её при открытии.
+ */
+export function openPass(from: PassOrigin): void {
+  useNavigation.setState({ passOrigin: from });
+  useNavigation.getState().resetTo("tasks");
+}
+
+/** Забрать пометку «открыть на пассе»: читается один раз, повторное открытие «Заданий» начинается с обычной вкладки. */
+export function takePassOrigin(): PassOrigin | null {
+  const origin = useNavigation.getState().passOrigin;
+  if (origin !== null) useNavigation.setState({ passOrigin: null });
+  return origin;
+}
+
+/**
+ * Стартовый параметр, который ведёт на пасс: кнопка под уведомлением бота о
+ * закрытии месяца (`n-pass_closed`, `notifications-bot/bot-notify-texts.ts`) и
+ * пара `pass-…` для ссылок команды. Чужие параметры и мусор — не пасс.
+ */
+export function parsePassStart(param: string | null | undefined): boolean {
+  if (param === null || param === undefined) return false;
+  return param === "n-pass_closed" || /^pass-[A-Za-z0-9]{1,24}$/.test(param);
+}
+
+/** Открыть пасс по стартовому параметру при запуске; `false` — параметр не про пасс, ничего не открыто. */
+export function openPassFromStart(param: string | null | undefined): boolean {
+  if (!parsePassStart(param)) return false;
+  openPass("link");
   return true;
 }
 

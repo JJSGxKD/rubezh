@@ -15,7 +15,7 @@ import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { usePrologue } from "./state/prologue";
 import { watchPlatform } from "./state/platform";
-import { openRunCardFromStart, useNavigation } from "./state/navigation";
+import { openPassFromStart, openRunCardFromStart, useNavigation } from "./state/navigation";
 import { launchStartParam } from "./state/run-card-start";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
@@ -127,7 +127,10 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
   if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
   // Ссылка на карточку забега (`?startapp=run-<id>`): по ней при запуске открывается карточка поверх главной.
-  openRunCardFromStart(launchStartParam(options.adapter.signedLaunchData()));
+  const startParam = launchStartParam(options.adapter.signedLaunchData());
+  openRunCardFromStart(startParam);
+  // Кнопка под уведомлением бота о закрытии пасса (`n-pass_closed`): сразу вкладка «Пасс».
+  openPassFromStart(startParam);
   // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
   // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
   const fxScene = options.capabilities.devFxScene;
