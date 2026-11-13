@@ -188,6 +188,24 @@ describe("напоминания бота в ленте (T-0128)", () => {
   });
 });
 
+describe("заявка на правку цены ждёт команду (T-0309)", () => {
+  const row = (data: Record<string, unknown>) => describeNotification({ id: "n6", kind: "change_request_pending", data, createdAt: "2026-11-13T09:00:00.000Z", read: false });
+
+  it("строка с именем автора, заголовком и без перехода: решается в панели, а не в игре", () => {
+    const described = row({ requestId: "0c4a5c1e-6a57-4d43-8a2a-0f3f6d0a9b10", kind: "sku_price", target: "gems_60", authorName: "Аня" });
+
+    expect(described?.title).toBe("Заявка на правку цены");
+    expect(described?.text).toBe("Аня предлагает поменять цену в магазине. Решить заявку можно в панели: «Баланс» → «Цены и награды».");
+    expect(described?.target).toBeNull();
+    expect(described?.icon).toBeDefined();
+  });
+
+  it("имя не строкой — запасное слово, а не «undefined» в тексте", () => {
+    expect(row({ kind: "sku_price" })?.text).toContain("предлагает поменять цену");
+    expect(row({ kind: "sku_price" })?.text).not.toContain("undefined");
+  });
+});
+
 describe("уведомление об отписке от канала (T-0177)", () => {
   const AT = "2026-10-28T10:00:00.000Z";
   const CLOSED_UNTIL = "2026-11-27T09:00:00.000Z";

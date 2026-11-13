@@ -3,8 +3,8 @@ id: T-0466
 title: Водопад месяца в ядре учёта и месяц проводки «за какой месяц»
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: [T-0456]
@@ -16,6 +16,8 @@ zones:
   - packages/ledger/test/entries.test.ts
 shared:
   - docs/37-accounting.md
+  - backend/api/src/modules/ledger/ledger-problems.ts
+  - backend/api/test/ledger-journal.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -133,11 +135,11 @@ batch: 5
 
 ## Критерии приёмки
 
-- [ ] Водопад считает строго по `docs/11` §3, без потери копеек: сумма
+- [x] Водопад считает строго по `docs/11` §3, без потери копеек: сумма
       выплат и доли владельца равна прибыли к разделу.
-- [ ] Убыток и ноль не дают выплат; займ не гасится больше остатка.
-- [ ] Проводка может нести месяц раньше своей даты, но не позже.
-- [ ] Тесты и гейт зелёные.
+- [x] Убыток и ноль не дают выплат; займ не гасится больше остатка.
+- [x] Проводка может нести месяц раньше своей даты, но не позже.
+- [x] Тесты и гейт зелёные.
 
 ## PR
 

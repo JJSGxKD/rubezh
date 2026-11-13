@@ -1,4 +1,4 @@
-import { Activity, Award, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, Award, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, PieChart, Radio, Receipt, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -64,6 +64,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "promos", title: "Акции", hint: "Скидки на товары магазина на срок", permission: "shop.promo.edit", icon: Percent },
       { id: "ads", title: "Реклама", hint: "Рекламные сети, их блоки и показы по местам в игре", permission: "ads.view", icon: Tv },
       { id: "fx", title: "Курсы", hint: "Курсы валют и звёзд, по которым считаются цены и выручка", permission: "analytics.revenue.view", icon: Coins },
+      { id: "stakeholders", title: "Участники", hint: "Участники проекта и их доли: с какого месяца и что менялось", permission: "revenue.split.view", icon: PieChart },
     ],
   },
   {

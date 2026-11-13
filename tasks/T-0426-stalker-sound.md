@@ -3,8 +3,8 @@ id: T-0426
 title: Звук и вибрация Карачуна — холодный выдох предвестия, тяжёлое касание
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0423]

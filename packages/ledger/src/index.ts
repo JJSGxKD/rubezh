@@ -10,9 +10,21 @@ export {
   MAX_SOURCE_KEY_LENGTH,
   findEntryProblems,
   periodOf,
+  periodOfEntry,
   reverse,
   type EntryDraft,
   type EntryLine,
   type EntryProblem,
 } from "./entries.js";
 export { formatMinor, toMinor, type CurrencySpec } from "./money.js";
+export {
+  BASIS_POINTS,
+  computeWaterfall,
+  type WaterfallInput,
+  type WaterfallLine,
+  type WaterfallLoan,
+  type WaterfallPayout,
+  type WaterfallResult,
+  type WaterfallShare,
+  type WaterfallTranche,
+} from "./waterfall.js";
