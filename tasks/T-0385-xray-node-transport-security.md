@@ -3,8 +3,8 @@ id: T-0385
 title: Пул Xray — транспорт и безопасность узла, устройство и маршрутизация подписки
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead2-4
 size: M
 depends_on: [T-0384]
@@ -41,6 +41,9 @@ shared:
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
   - docs/30-configuration-map.md
+  - backend/api/test/proxy-subscription.test.ts
+  - backend/api/test/proxy-subscriptions-multi.test.ts
+  - backend/api/test/proxy-traffic.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra
