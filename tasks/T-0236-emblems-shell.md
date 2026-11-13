@@ -3,7 +3,7 @@ id: T-0236
 title: Знаки у имени — клиент: все знаки в профиле, выбор знака, знак в рейтинге и у друзей
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -15,6 +15,11 @@ zones:
   - packages/app-shell/src/screens/meta/emblem-rules.ts
   - packages/app-shell/test/emblem-rules.test.ts
   - packages/app-shell/test/emblems-api.test.ts
+  - packages/app-shell/test/emblem-chip.test.ts
+  - packages/app-shell/src/screens/meta/emblem-preview.tsx
+  - packages/app-shell/src/state/public-emblem.ts
+  - packages/app-shell/src/i18n/emblems.ts
+  - packages/app-shell/src/i18n/ru-emblems.json
 shared:
   - packages/app-shell/src/screens/meta/profile.tsx
   - packages/app-shell/src/screens/meta/rating.tsx
@@ -27,6 +32,12 @@ shared:
   - packages/app-shell/src/state/analytics.ts
   - packages/app-shell/src/i18n/ru.json
   - packages/app-shell/src/i18n/ru-tasks.json
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/screens/meta/rating-podium.tsx
+  - packages/app-shell/src/state/navigation.ts
+  - packages/app-shell/src/app/lazy-screens.tsx
+  - packages/app-shell/src/app/App.tsx
+  - packages/app-shell/test/achievements-rules.test.ts
   - packages/app-shell/src/screens/gallery.tsx
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
