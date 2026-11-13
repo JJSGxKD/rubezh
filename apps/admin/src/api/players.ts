@@ -78,7 +78,7 @@ const walletEntrySchema = z.object({
   createdAt: iso,
 });
 
-const purchaseSchema = z.object({
+export const purchaseSchema = z.object({
   purchaseId: z.string(),
   /** до магазина (WP10) сервер поля не отдавал — всё было вторым шансом */
   product: z.string().optional(),
