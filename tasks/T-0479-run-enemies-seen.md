@@ -3,8 +3,8 @@ id: T-0479
 title: Итог забега — типы врагов, вышедших в мир (enemiesSeen), для кодекса
 epic: E16
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
