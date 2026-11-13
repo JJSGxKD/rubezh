@@ -20,6 +20,7 @@ shared:
   - backend/api/test/admin-ledger.http.test.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/route-permissions.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
 runner: any
