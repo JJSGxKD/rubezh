@@ -27,7 +27,7 @@ import { fakeFetch, json } from "./helpers";
  * языком, права на изменение и текст отказа архива под кнопкой.
  */
 
-const plain = (text: string) => text.replace(/[  ]/g, " ");
+const plain = (text: string) => text.replace(/[  ]/g, " ");
 const noop = () => undefined;
 
 const PLACE: Place = {
