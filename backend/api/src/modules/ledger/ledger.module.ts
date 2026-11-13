@@ -8,6 +8,8 @@ import { LedgerService } from "./ledger.service.js";
 import { OPERATIONS_REPOSITORY, PrismaOperationsRepository } from "./operations/operations.repository.js";
 import { OperationsService } from "./operations/operations.service.js";
 import { PAYMENT_POSTINGS_REPOSITORY, PrismaPaymentPostingsRepository } from "./payment-postings.repository.js";
+import { PrismaTemplatesRepository, TEMPLATES_REPOSITORY } from "./templates/templates.repository.js";
+import { TemplatesService } from "./templates/templates.service.js";
 
 /**
  * Журнал учёта (docs/37-accounting.md, Р219): план счетов, проводки двойной записью, остатки и страницы
@@ -17,7 +19,8 @@ import { PAYMENT_POSTINGS_REPOSITORY, PrismaPaymentPostingsRepository } from "./
  * Проводки из платежей (Р219, T-0458) — задание сверки `LedgerSyncJob`: раз в десять минут сверяет `purchase`
  * с журналом и досоздаёт оплату, выход из холда и возврат; модуль платежей не трогает, только читает его таблицу.
  * Ручные операции (Р220, T-0461) — `OperationsService`: человек описывает событие, сервер собирает проводку;
- * размер операции оценивается по курсам, поэтому нужен модуль курсов.
+ * размер операции оценивается по курсам, поэтому нужен модуль курсов. Шаблоны повторяющихся расходов (Р220, T-0463) —
+ * `TemplatesService`: «Расходы месяца» создаёт по ним черновики операций, проводит их человек.
  */
 @Module({
   imports: [FxModule],
@@ -25,13 +28,15 @@ import { PAYMENT_POSTINGS_REPOSITORY, PrismaPaymentPostingsRepository } from "./
     LedgerService,
     LedgerChartService,
     OperationsService,
+    TemplatesService,
     LedgerSyncPass,
     LedgerSyncJob,
     { provide: LEDGER_REPOSITORY, useClass: PrismaLedgerRepository },
     { provide: LEDGER_CHART_REPOSITORY, useClass: PrismaLedgerChartRepository },
     { provide: OPERATIONS_REPOSITORY, useClass: PrismaOperationsRepository },
+    { provide: TEMPLATES_REPOSITORY, useClass: PrismaTemplatesRepository },
     { provide: PAYMENT_POSTINGS_REPOSITORY, useClass: PrismaPaymentPostingsRepository },
   ],
-  exports: [LedgerService, LedgerChartService, OperationsService],
+  exports: [LedgerService, LedgerChartService, OperationsService, TemplatesService],
 })
 export class LedgerModule {}

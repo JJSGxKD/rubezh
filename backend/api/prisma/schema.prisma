@@ -3221,7 +3221,8 @@ model LedgerArticle {
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
 
-  accounts LedgerAccount[]
+  accounts  LedgerAccount[]
+  templates LedgerTemplate[]
 
   @@map("ledger_article")
 }
@@ -3247,8 +3248,9 @@ model LedgerAccount {
   articleId        String?           @map("article_id") @db.VarChar(64)
   article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
 
-  lines LedgerLine[]
-  loans LedgerLoan[]
+  lines     LedgerLine[]
+  loans     LedgerLoan[]
+  templates LedgerTemplate[]
 
   @@index([place])
   @@index([articleId])
@@ -3368,4 +3370,40 @@ model LedgerLoan {
 
   @@index([accountId])
   @@map("ledger_loan")
+}
+
+// Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
+
+enum LedgerTemplateSchedule {
+  monthly
+  yearly
+}
+
+/// Шаблон расхода: статья, место, обычная сумма и график. Сам ничего не проводит — «Расходы месяца» создаёт по нему
+/// черновик операции (`ledger_operation.template_id` + `template_period`, на период один), человек сверяет и проводит.
+/// Связи операции с шаблоном внешним ключом нет: операция живёт и после того, как шаблон забыли.
+model LedgerTemplate {
+  /// слаг из названия, «vps»; занят — «vps-2»
+  templateId     String                 @id @map("template_id") @db.VarChar(64)
+  name           String                 @db.VarChar(128)
+  articleId      String                 @map("article_id") @db.VarChar(64)
+  /// счёт места хранения, с которого платим: `bank.karta`, `stars.bot.available`
+  placeAccountId String                 @map("place_account_id") @db.VarChar(64)
+  /// обычная сумма в минимальных единицах валюты места: в реальности она могла измениться, поэтому — только черновик
+  amount         BigInt
+  schedule       LedgerTemplateSchedule
+  /// месяц года, 1…12, для `yearly`; у `monthly` пусто
+  month          Int?                   @db.SmallInt
+  note           String?                @db.VarChar(500)
+  archivedAt     DateTime?              @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// кто завёл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                 @map("created_by") @db.Uuid
+
+  article      LedgerArticle @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
+  placeAccount LedgerAccount @relation(fields: [placeAccountId], references: [accountId], onDelete: Restrict)
+
+  @@index([articleId])
+  @@index([placeAccountId])
+  @@map("ledger_template")
 }
