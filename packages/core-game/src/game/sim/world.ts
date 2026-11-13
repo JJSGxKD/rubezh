@@ -9,6 +9,7 @@ import type { CordonState } from "./cordon";
 import { onPrologueSpawn, wardHealth, type PrologueState } from "../run/prologue";
 import type { RubezhState } from "./rubezh";
 import type { SiegeState } from "./siege";
+import type { StalkerBodyState } from "./stalker-body";
 import type { Rng } from "./rng";
 import { ELEMENT_PHYSICAL } from "./element-ids";
 import { clearStatuses } from "./elements";
@@ -138,6 +139,13 @@ export interface PlayerState {
   poisonStacks: number;
   poisonDps: number;
   poisonSource: number;
+  /**
+   * Отброс после касания неубиваемого преследователя (`sim/stalker-body.ts`): сколько тиков игрок ещё
+   * летит и с какой скоростью. Пока он идёт, ввод не действует; закончился — скорость ноль, разгон заново.
+   */
+  knockbackTicks: number;
+  knockbackVx: number;
+  knockbackVy: number;
 }
 
 export interface RunStats {
@@ -453,6 +461,11 @@ export interface World {
    */
   siegeRules: SiegeDef | null;
   siege: SiegeState;
+  /**
+   * тело неубиваемого преследователя (Р205): правила, слот, серия толчков, таймеры касания. Правил в мире
+   * нет (`rules: null`) — преследователя не выпустить. Динамическая часть входит в снимок
+   */
+  stalkerBody: StalkerBodyState;
   /** режим забега: в `prologue` включены оберег, большой первый сундук и «Советуем» (T-0278) */
   mode: RunMode;
   /** пролог первого забега; `null` — обычный забег. Состояние входит в снимок */
@@ -564,8 +577,11 @@ export function clampToBounds(value: number, halfExtent: number): number {
  * Здоровье и урон берут множители текущего отрезка и застывают в слоте: враг,
  * вышедший на пятой минуте, не должен крепчать вместе с таймлайном, пока
  * игрок его добивает.
+ *
+ * `flat` — без ступени и множителей: так выходит неубиваемый преследователь, у которого здоровье и
+ * урон не читаются, а ступень не выбирается и генератор не тратит.
  */
-export function spawnEnemy(world: World, typeIndex: number, x: number, y: number, rng: Rng = world.rng): number {
+export function spawnEnemy(world: World, typeIndex: number, x: number, y: number, rng: Rng = world.rng, flat = false): number {
   const pool = world.enemies;
   const slot = findFreeSlot(pool.alive, pool.count, world.config.maxEnemies);
   if (slot < 0) return -1;
@@ -573,7 +589,7 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   const type = world.enemyTypes[typeIndex];
   // Элита ступеней не получает: она сама и есть контрольная точка сложности,
   // и приходит событием таймлайна в назначенную минуту.
-  const stageIndex = isElite(type) ? 0 : pickStage(world, rng);
+  const stageIndex = flat || isElite(type) ? 0 : pickStage(world, rng);
   const stage = world.stages[stageIndex] ?? world.stages[0];
   pool.x[slot] = x;
   pool.y[slot] = y;
@@ -583,9 +599,11 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.prevY[slot] = y;
   pool.vx[slot] = 0;
   pool.vy[slot] = 0;
-  pool.hp[slot] = type.hp * world.difficulty.hpMul * stage.hpMul;
+  // Порядок умножения прежний: `(hp × сложность) × ступень` — иначе последние биты здоровья расходятся с
+  // эталонами, и забеги, не знающие о преследователе, сдвигаются.
+  pool.hp[slot] = flat ? type.hp : type.hp * world.difficulty.hpMul * stage.hpMul;
   pool.maxHp[slot] = pool.hp[slot];
-  pool.damage[slot] = type.damage * world.difficulty.damageMul * stage.damageMul;
+  pool.damage[slot] = flat ? type.damage : type.damage * world.difficulty.damageMul * stage.damageMul;
   // Страж пролога слабее обычного; обычному забегу эта строка ничего не стоит.
   if (world.prologue !== null) onPrologueSpawn(world, typeIndex, slot);
   pool.hitTick[slot] = NEVER_HIT;
@@ -634,8 +652,11 @@ export const SHIELD_GRACE_TICKS = Math.round(0.5 * TICK_HZ);
  * (docs/26-stage2-plan.md, WP1, «Аналитика»). И он же знает стихию атаки:
  * касание, взрыв и снаряд врага несут стихию его типа, поэтому паттернам не
  * нужно передавать её каждому попаданию.
+ *
+ * `bypassMitigation` — урон мимо брони и сопротивлений (касание неубиваемого преследователя, Р205):
+ * щит, неуязвимость и бессмертие разработчика работают как у любого попадания.
  */
-export function damagePlayer(world: World, amount: number, sourceType: number): void {
+export function damagePlayer(world: World, amount: number, sourceType: number, bypassMitigation = false): void {
   const player = world.player;
   if (!player.alive || amount <= 0 || player.invulnerableTicks > 0) return;
 
@@ -655,10 +676,10 @@ export function damagePlayer(world: World, amount: number, sourceType: number): 
 
   const source = sourceType >= 0 ? world.enemyTypes[sourceType] : undefined;
   const element = source?.element ?? ELEMENT_PHYSICAL;
-  const incoming = amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
+  const incoming = bypassMitigation ? amount : amount * (1 - playerResist(world, element)) * playerDamageTakenMul(player);
   // Броня вычитается, но не обнуляет урон: иначе несколько уровней брони
   // делают рой безобидным, и вся кривая сложности перестаёт работать.
-  const reduced = Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
+  const reduced = bypassMitigation ? incoming : Math.max(incoming * MIN_DAMAGE_RATIO, incoming - world.playerStats.armor);
   // Бессмертие не глушит само попадание: разработчику нужно видеть, кто и
   // когда бьёт, иначе режим проверки телеграфов бесполезен.
   if (!world.cheats.godMode) {
