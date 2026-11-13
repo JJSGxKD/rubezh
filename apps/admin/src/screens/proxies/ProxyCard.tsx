@@ -1,5 +1,6 @@
 import { checkSummary, proxyAddress, type ProxyRow } from "../../api/proxies";
 import { formatDateTime } from "../../format";
+import { CountryFlag } from "../../ui/country-flag";
 import { HELP } from "../../ui/help";
 import { Badge, Button, Help } from "../../ui/kit";
 
@@ -21,7 +22,7 @@ export function ProxyCard({ row, editable, checking, onCheck, onEdit }: { row: P
         </div>
         <code className="font-mono text-xs break-all">{proxyAddress(row)}</code>
         <p className="text-xs text-text-muted">
-          {row.username === null ? "Без логина" : `${row.username}${row.passwordSet ? " · пароль задан" : ""}`} · {row.country} · порядок {row.priority}
+          {row.username === null ? "Без логина" : `${row.username}${row.passwordSet ? " · пароль задан" : ""}`} · <CountryFlag code={row.country} /> · порядок {row.priority}
         </p>
         <p className="text-xs text-text-muted">
           {look.detail}
