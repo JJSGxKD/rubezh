@@ -196,6 +196,7 @@ describe("файлы конвейера", () => {
     "train-status.mjs",
     "workflow-running.mjs",
     "metrics.mjs",
+    "review-stats.mjs",
   ];
 
   it("все на месте", () => {
