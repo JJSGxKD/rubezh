@@ -176,6 +176,9 @@ export function GalleryScreen(): ReactNode {
         <SectionTitle>{t("gallery.widgets")}</SectionTitle>
         <WidgetsPreview />
 
+        <SectionTitle>Батл-пасс</SectionTitle>
+        <PassPreview />
+
         <SectionTitle>{t("gallery.rarity")}</SectionTitle>
         <RarityPreview />
 
@@ -950,4 +953,22 @@ function WidgetsPreview(): ReactNode {
     };
   }, []);
   return Showcase === null ? <p className="text-xs text-text-muted">{t("app.loading")}</p> : <Showcase now={Date.now()} />;
+}
+
+/** Вкладка «Пасс» во всех состояниях (tasks/T-0314): своим чанком, он нужен только заданиям и витрине. */
+function PassPreview(): ReactNode {
+  const [Showcase, setShowcase] = useState<typeof import("./meta/pass").PassShowcase | null>(null);
+  useEffect(() => {
+    let alive = true;
+    import("./meta/pass").then(
+      (module) => {
+        if (alive) setShowcase(() => module.PassShowcase);
+      },
+      (error: unknown) => console.warn("Чанк пасса не загрузился:", error),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return Showcase === null ? <p className="text-xs text-text-muted">{t("app.loading")}</p> : <Showcase />;
 }
