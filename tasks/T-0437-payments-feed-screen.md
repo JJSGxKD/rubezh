@@ -3,8 +3,8 @@ id: T-0437
 title: Раздел «Платежи» в панели — лента и карточка платежа
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0431]
@@ -18,6 +18,7 @@ zones:
   - apps/admin/src/screens/players/PurchasesPanel.tsx
   - apps/admin/test/payments.test.ts
 shared:
+  - apps/admin/src/api/players.ts
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
