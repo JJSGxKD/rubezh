@@ -63,3 +63,57 @@ export function shouldGiveUp(now: Date, until: Date): boolean {
 export function closesPartnerTasks(eventNo: number): boolean {
   return eventNo >= 2;
 }
+
+/** Сроки удержания подписки, на которых отмечается, остался ли игрок в канале (Р139). */
+export const RETENTION_DAYS = [1, 3, 7] as const;
+export type RetentionDay = (typeof RETENTION_DAYS)[number];
+
+/** Отметки окна: `true` — был в канале, `false` — не был, `null` — не известно. */
+export interface RetentionMarks {
+  heldD1: boolean | null;
+  heldD3: boolean | null;
+  heldD7: boolean | null;
+}
+
+/** Окно для расчёта отметок: момент забора награды и то, что уже поставлено. */
+export interface RetentionWindow extends RetentionMarks {
+  startedAt: Date;
+}
+
+/** Какие отметки поставить: только пустые, остальные ключи отсутствуют. */
+export type RetentionPatch = Partial<{ [K in keyof RetentionMarks]: boolean }>;
+
+const MARK_FIELDS = [
+  [1, "heldD1"],
+  [3, "heldD3"],
+  [7, "heldD7"],
+] as const satisfies readonly (readonly [RetentionDay, keyof RetentionMarks])[];
+
+/**
+ * Какие отметки удержания поставить после ответа площадки (Р139). В канале —
+ * `true` у каждой пустой отметки, чьи сутки от забора награды уже прошли, то
+ * есть первой успешной проверкой после границы. Нет в канале — отписка
+ * закрывает будущее: все ещё пустые отметки становятся `false`, и вернувшийся
+ * позже удержанным не считается. Поставленная отметка не меняется никогда.
+ */
+export function retentionMarks(window: RetentionWindow, checkAt: Date, inChannel: boolean): RetentionPatch {
+  const patch: RetentionPatch = {};
+  for (const [days, field] of MARK_FIELDS) {
+    if (window[field] !== null) continue;
+    if (!inChannel) patch[field] = false;
+    else if (checkAt.getTime() >= window.startedAt.getTime() + days * DAY_MS) patch[field] = true;
+  }
+  return patch;
+}
+
+/**
+ * Оплачивается ли выполнение с удержанием `holdDays`: 0 — всегда, 1, 3 и 7 —
+ * когда отметка этого дня `true`. Пустая отметка («неизвестно», сбой площадки)
+ * и отсутствие окна (площадка без проверки) не оплачиваются.
+ */
+export function paidRetention(window: RetentionMarks | null, holdDays: number): boolean {
+  if (holdDays === 0) return true;
+  if (window === null) return false;
+  for (const [days, field] of MARK_FIELDS) if (days === holdDays) return window[field] === true;
+  return false;
+}
