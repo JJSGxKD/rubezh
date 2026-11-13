@@ -5232,6 +5232,75 @@ sequenceDiagram
   неиспользованный второй шанс, внешний возврат, лишняя оплата и повтор
   задания сообщений не дают.
 
+### 4.41 Правка цены заявкой с подтверждением второго участника (этап 4, реализовано)
+
+Цена товара — каталог в коде, правка команды ложится поверх него (`19-content-admin.md`
+§6, `29-admin-panel.md` §5.8, `tasks/T-0309`). Предлагает один, подтверждает другой.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Автор (панель)
+    participant C as AdminChangeRequestsController
+    participant S as ChangeRequestsService
+    participant K as SkuPriceKind
+    participant D as Postgres (change_request, shop_sku_override)
+    participant N as Лента и чат админов
+    participant B as Второй участник (панель)
+    participant V as ShopService (витрина и счета)
+    participant J as Журнал действий
+
+    A->>C: POST admin/change-requests {kind, target, after, reason}
+    C->>S: propose(актёр, тело)
+    Note over S: право sku.price.edit, схема тела, причина до 200 знаков
+    S->>D: транзакция под блокировкой пары вид+цель
+    S->>K: prepare — было из каталога с действующей правкой, схема товара
+    alt не по схеме: цена 0, лишнее поле, ничего не меняется
+        K-->>A: 422 change_request_value_invalid
+    else
+        S->>D: прежняя живая заявка → superseded или expired, новая → pending
+        S->>J: change_request.create
+        S->>N: строка ленты участникам с правом, кроме автора, и сообщение в общий чат
+        S-->>A: 201 заявка
+    end
+
+    B->>C: POST admin/change-requests/:id/approve
+    C->>S: approve(актёр, заявка)
+    alt решает автор
+        S-->>B: 403 change_request_own
+    else
+        S->>D: транзакция под блокировкой цели, заявка уже не pending → 409 closed
+        alt прошло 72 часа
+            S->>D: заявка → expired
+            S-->>B: 409 change_request_expired
+        else
+            S->>K: current — цель всё ещё равна было
+            alt цель изменилась
+                S->>D: заявка → superseded
+                S-->>B: 409 change_request_stale
+            else
+                S->>D: заявка → approved, upsert shop_sku_override, одной транзакцией
+                S->>J: change_request.approve и change_request.apply
+                S->>V: сбросить кэш правок реплики
+                S-->>B: 201 заявка approved
+            end
+        end
+    end
+
+    Note over V,D: покупка до правки остаётся по цене счёта, новые счета и витрина берут новую
+```
+
+- **Блокировка — на пару «вид + цель».** Две заявки на один товар и два подтверждения
+  одной заявки выстраиваются в очередь; частичный уникальный индекс держит «одна
+  живая заявка на цель» и под гонкой.
+- **Закрывается заявка до записи правки**, обе — в одной транзакции: проход срока
+  (`expired`) не может опередить применение, а упавшая запись откатывает и заявку.
+- **Правка и каталог.** Витрина, счёт и выдача берут товар из `ShopOverrides`:
+  каталог в коде плюс правка, итог проходит `shopSkuSchema`; битая правка
+  пропускается с записью в лог. Кэш реплики — 10 секунд.
+- **Уведомление не блокирует решение:** сбой ленты или чата — предупреждение в логе,
+  заявка уже записана.
+
 ## 5. Топология развёртывания
 
 ```mermaid
