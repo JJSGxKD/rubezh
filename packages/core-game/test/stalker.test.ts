@@ -37,6 +37,8 @@ const APPEAR = STALKER.appear;
 const OMEN_TICKS = Math.round(APPEAR.omenSec * TICK_HZ);
 const FADE_TICKS = Math.round(APPEAR.fadeSec * TICK_HZ);
 const FROM_TICK = APPEAR.fromSec * TICK_HZ;
+/** Двадцать минут симуляции на загруженной машине CI идут дольше пяти секунд по умолчанию. */
+const LONG_RUN_TIMEOUT_MS = 120_000;
 
 function makeWorld(patch: Partial<CreateWorldOptions> = {}, rules: StalkerDef | null = STALKER, seed = 7): World {
   const world = createWorld({
@@ -198,7 +200,7 @@ describe("расписание появлений", () => {
       quarters.add(`${dx >= 0 ? "+" : "-"}${dy >= 0 ? "+" : "-"}`);
     }
     expect([...quarters].sort()).toEqual(["++", "+-", "-+", "--"]);
-  });
+}, LONG_RUN_TIMEOUT_MS);
 
   it("пауза к поздним минутам короче: средняя на 5-й минуте больше, чем на 15-й", () => {
     const meanGap = (sec: number): number => {
@@ -220,7 +222,7 @@ describe("расписание появлений", () => {
     // 15-я минута — это lateAtSec: пауза уже в позднем коридоре.
     expect(late).toBeGreaterThanOrEqual(APPEAR.lateGapSec.min);
     expect(late).toBeLessThanOrEqual(APPEAR.lateGapSec.max);
-  });
+}, LONG_RUN_TIMEOUT_MS);
 
   it("коридор паузы идёт линейно от gapSec на fromSec до lateGapSec на lateAtSec и дальше не меняется", () => {
     expect(stalkerGapRange(APPEAR, APPEAR.fromSec)).toEqual(APPEAR.gapSec);
@@ -245,7 +247,7 @@ describe("расписание появлений", () => {
     }
     expect(appearances).toBeGreaterThanOrEqual(5);
     expect(world.stalker.index).toBeGreaterThanOrEqual(appearances - 1);
-  });
+  }, LONG_RUN_TIMEOUT_MS);
 });
 
 describe("оттолкнули далеко", () => {
@@ -438,7 +440,7 @@ describe("свой поток случайности", () => {
     expect(withRules.rng.getState()).toBe(without.rng.getState());
     expect(withRules.rng.getState()).toBe(initial);
     expect(withRules.stalker.rng.getState()).not.toBe(streamAtStart);
-  });
+  }, LONG_RUN_TIMEOUT_MS);
 
   it("поток растёт из соли STREAM_SALT.stalker", () => {
     expect(STREAM_SALT.stalker).toBe(0x5354414c);
