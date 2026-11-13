@@ -3,8 +3,8 @@ id: T-0451
 title: Плитка «Лучший забег» на главной — очки, время рядом
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
@@ -16,6 +16,7 @@ zones:
   - packages/app-shell/test/runs-api.test.ts
 shared:
   - packages/app-shell/src/i18n/ru-home.json
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: medium

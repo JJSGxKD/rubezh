@@ -83,6 +83,8 @@ export const TEAM_TEXTS: readonly { code: string; fragment: string }[] = [
   { code: "proxy_subscription_busy", fragment: "повторите через минуту" },
   // лента платежей в панели (T-0429): устаревший курсор страницы — сотруднику, текст задаёт спецификация
   { code: "validation_failed", fragment: "откройте ленту заново" },
+  // «Повторить учёт» в карточке платежа (T-0431): отказ читает сотрудник поддержки, текст задаёт спецификация
+  { code: "purchase_action_unavailable", fragment: "запустите сверку с Telegram" },
   // ошибка разработчика: потолка начислений нет в коде
   { code: "wallet_cap_missing", fragment: "добавьте потолок в wallet-limits.ts" },
   // компенсация за сбой оплаты в панели (T-0435): оба текста владельцу задаёт спецификация

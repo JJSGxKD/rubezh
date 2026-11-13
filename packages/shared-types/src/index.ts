@@ -1269,8 +1269,14 @@ export interface SecretsDef {
    * размера `chestSize`; за `timeLimitSec` секунд не добил — разлом закрыт без награды
    */
   rift: { radius: number; elites: number; ringRadius: number; chestSize: ChestSize; timeLimitSec: number };
-  /** огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и летит к ближайшему неоткрытому */
-  wisp: { appearSec: number; speed: number };
+  /**
+   * огонёк — один на забег, если на карте есть места: на секунде `appearSec` появляется у игрока и
+   * ведёт к ближайшему неоткрытому шагами (Р214): перелёт длиной `hopUnits` в сторону цели со
+   * скоростью `speed` и боковым отклонением `swayMin…swayMax` долей шага, каждый следующий шаг — в
+   * другую сторону; после посадки ждёт, пока игрок не подойдёт ближе `waitUnits`; последний шаг
+   * идёт прямо к краю круга цели. Нет неоткрытых мест — гаснет
+   */
+  wisp: { appearSec: number; speed: number; hopUnits: number; swayMin: number; swayMax: number; waitUnits: number };
   /** набор благословений капища */
   blessings: readonly BlessingDef[];
 }
@@ -1988,7 +1994,7 @@ export interface RunProfile {
   runs: number;
   totalKills: number;
   totalSurvivalSec: number;
-  best: Record<DifficultyId, { survivalSec: number; rank: number } | null>;
+  best: Record<DifficultyId, { survivalSec: number; rank: number; points?: number | null } | null>;
   recent: RecentRun[];
   /** пролог пройден (T-0279): `false` — награда дня и задания закрыты; нет поля — сервер до пролога, разделы открыты */
   prologueDone?: boolean;
