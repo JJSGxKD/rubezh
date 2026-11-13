@@ -154,6 +154,12 @@ function main(argv) {
     case "check-digest":
       assertDigest(args[0]);
       return;
+    case "branch":
+      console.log(branchOf(args[0]));
+      return;
+    case "title":
+      console.log(titleOf(args[0]));
+      return;
     case "current":
       console.log(currentVersion(readRepo(DOCKERFILE)));
       return;
@@ -169,7 +175,7 @@ function main(argv) {
       return;
     }
     default:
-      throw new Error("Команда: check-version | check-digest | current | apply | body");
+      throw new Error("Команда: check-version | check-digest | branch | title | current | apply | body");
   }
 }
 
