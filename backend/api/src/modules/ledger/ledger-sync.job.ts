@@ -235,7 +235,10 @@ export class LedgerSyncJob implements OnApplicationBootstrap, OnModuleDestroy {
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    if (this.config.databaseUrl === "") return;
+    // Без базы сверять нечего; без возможной оплаты (вход и чтение обновлений бота) живых покупок в этом процессе
+    // не появится — так же, как у очереди оплаты и её довыдачи. Заодно приложение, поднятое в тесте без бота,
+    // не запускает проход по общей базе, где лежат покупки соседних тестов, и не держит закрытие приложения.
+    if (this.config.databaseUrl === "" || !this.config.payments.possible) return;
     const producer = createQueueConnection(this.config, "producer");
     const consumer = createQueueConnection(this.config, "worker");
     this.connections = [producer, consumer];

@@ -1,6 +1,7 @@
 import { findEntryProblems, type EntryLine, type LedgerAccount } from "@bh/ledger";
-import { describe, expect, it } from "vitest";
-import { LedgerSyncPass } from "../src/modules/ledger/ledger-sync.job.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { AppConfig } from "../src/config/app-config.js";
+import { LedgerSyncJob, LedgerSyncPass, SYNC_INTERVAL_MS } from "../src/modules/ledger/ledger-sync.job.js";
 import type { LedgerPostInput, PostResult } from "../src/modules/ledger/ledger.service.js";
 import {
   paymentSourceKey,
@@ -13,6 +14,37 @@ import {
 import { cursorOf, type PaymentPostingsRepository, type PostingCandidate, type PostingStream, type StreamCursor } from "../src/modules/ledger/payment-postings.repository.js";
 import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { panelSettings } from "./helpers/settings.js";
+
+/** Очередь и воркер BullMQ подменены: тест расписания не ходит в Redis, а только считает, что завели. */
+const bull = vi.hoisted(() => ({ queues: 0, workers: 0, schedulers: [] as unknown[][] }));
+vi.mock("bullmq", () => ({
+  Queue: class {
+    constructor() {
+      bull.queues += 1;
+    }
+    upsertJobScheduler(...args: unknown[]): Promise<void> {
+      bull.schedulers.push(args);
+      return Promise.resolve();
+    }
+    add(): Promise<void> {
+      return Promise.resolve();
+    }
+    close(): Promise<void> {
+      return Promise.resolve();
+    }
+  },
+  Worker: class {
+    constructor() {
+      bull.workers += 1;
+    }
+    on(): this {
+      return this;
+    }
+    close(): Promise<void> {
+      return Promise.resolve();
+    }
+  },
+}));
 
 /**
  * Правила проводок из платежей (Р219, tasks/T-0458, docs/37-accounting.md §4, §5, §8): чистая функция без базы.
@@ -633,5 +665,55 @@ describe("задание сверки: метрики", () => {
     expect(pass.metrics.count("refund", "created")).toBe(0);
     expect(pass.metrics.durations).toHaveLength(2);
     expect(pass.metrics.durations.every((seconds) => seconds >= 0)).toBe(true);
+  });
+});
+
+describe("задание сверки: когда расписание запускается", () => {
+  /** Конфигурация с адресами базы и Redis; настоящий клиент ioredis ленивый и до первой команды не соединяется. */
+  const config = (patch: { databaseUrl?: string; possible?: boolean } = {}): AppConfig =>
+    ({
+      databaseUrl: patch.databaseUrl ?? "postgres://db.test/app",
+      redisUrl: "redis://127.0.0.1:1",
+      payments: { possible: patch.possible ?? true },
+    }) as unknown as AppConfig;
+
+  beforeEach(() => {
+    bull.queues = 0;
+    bull.workers = 0;
+    bull.schedulers = [];
+  });
+
+  it("оплата возможна и база есть — заводятся очередь, воркер и расписание раз в десять минут", async () => {
+    const job = new LedgerSyncJob(config(), harness().pass);
+
+    await job.onApplicationBootstrap();
+
+    expect(bull.queues).toBe(1);
+    expect(bull.workers).toBe(1);
+    expect(bull.schedulers).toHaveLength(1);
+    expect(bull.schedulers[0]?.[0]).toBe("every-10-min");
+    expect(bull.schedulers[0]?.[1]).toEqual({ every: SYNC_INTERVAL_MS });
+    await job.onModuleDestroy();
+  });
+
+  it("оплата в процессе невозможна (нет входа или чтения обновлений бота) — задание не запускается", async () => {
+    const job = new LedgerSyncJob(config({ possible: false }), harness().pass);
+
+    await job.onApplicationBootstrap();
+    await job.onModuleDestroy();
+
+    expect(bull.queues).toBe(0);
+    expect(bull.workers).toBe(0);
+    expect(bull.schedulers).toEqual([]);
+  });
+
+  it("базы нет — задание не запускается", async () => {
+    const job = new LedgerSyncJob(config({ databaseUrl: "" }), harness().pass);
+
+    await job.onApplicationBootstrap();
+    await job.onModuleDestroy();
+
+    expect(bull.queues).toBe(0);
+    expect(bull.workers).toBe(0);
   });
 });
