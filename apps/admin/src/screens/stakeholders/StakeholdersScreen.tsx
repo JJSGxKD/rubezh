@@ -19,7 +19,7 @@ function ParticipantCard({ participant, canManage, onEdit }: { participant: Part
   return (
     <li className="flex flex-col gap-2 rounded-sm border border-border bg-surface px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2 font-medium">
+        <span className="flex min-w-24 flex-1 flex-wrap items-center gap-2 font-medium">
           {participant.name}
           {participant.hasRole ? null : <Badge tone="warning">роли нет</Badge>}
         </span>
