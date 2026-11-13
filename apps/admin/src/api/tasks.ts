@@ -506,6 +506,8 @@ function emblemRowProblem(task: TaskDef): string | null {
   if (hint === "") return "У знака нужна подсказка — условие, которое игрок видит у закрытого знака";
   if (hint.length > HINT_MAX) return `Подсказка — до ${String(HINT_MAX)} знаков`;
   if (task.emblemTier === null) return "У знака статуса и сезона нужна редкость";
+  // Заказчик продаёт действие вне игры, а знак держат: те же правила у схемы сервера и CHECK базы.
+  if (task.customer !== null || task.payModel !== null || task.rate !== null || task.holdDays !== 0) return "У знака статуса и сезона нет заказчика и удержания";
   return null;
 }
 

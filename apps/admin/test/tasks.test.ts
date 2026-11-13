@@ -569,6 +569,27 @@ describe("знаки у имени в форме (T-0235)", () => {
     expect(JSON.parse(String(calls[2]?.init.body))).toMatchObject({ emblemTier: null });
   });
 
+  it("у знака статуса и сезона нет заказчика и удержания: форма отказывает, а в запрос они не уходят", async () => {
+    expect(taskProblem(emblem({ customer: "Acme", payModel: "cpa", rate: 40 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ holdDays: 3 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ payModel: "rs" }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem({ rate: 10 }), false, [])).toMatch(/нет заказчика/);
+    expect(taskProblem(emblem(), false, [])).toBeNull();
+    // у достижения со знаком — тоже: заказчик только у партнёрской цели
+    expect(taskProblem(achievement({ emblemTier: "epic", customer: "Acme", payModel: "cpa", rate: 40 }), false, [])).toMatch(/только у партнёрских/);
+    const { fetch, calls } = fakeFetch(json(200, { data: task() }), json(200, { data: task() }));
+    const api = new AdminApi(fetch);
+    await saveTask(api, emblem({ customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 }));
+    expect(JSON.parse(String(calls[0]?.init.body))).toMatchObject({ kind: "status", emblemTier: "legendary", customer: null, payModel: null, rate: null, holdDays: 0 });
+    // у партнёрской цели с заказчиком знака нет, а заказчик остаётся
+    await saveTask(api, task({ taskId: "p_channel", period: "achievement", kind: "channel", target: 1, params: { platform: "telegram", chat: "@rubezh_game", url: "https://t.me/rubezh_game" }, emblemTier: "rare", customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 }));
+    expect(JSON.parse(String(calls[1]?.init.body))).toMatchObject({ emblemTier: null, customer: "Acme", payModel: "cpa", rate: 40, holdDays: 3 });
+  });
+
+  it("общий литерал пустых полей несёт знак у имени и заказчика", () => {
+    expect(NO_ACHIEVEMENT_FIELDS).toMatchObject({ emblemTier: null, customer: null, payModel: null, rate: null, holdDays: 0 });
+  });
+
   it("смена срока на ежедневный снимает знак вместе с остальными полями достижения", () => {
     expect(withPeriod(achievement({ emblemTier: "epic" }), "daily")).toMatchObject({ emblemTier: null, category: null });
   });
