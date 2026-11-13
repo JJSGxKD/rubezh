@@ -1,4 +1,6 @@
 import { ContentModule } from "../content/content.module.js";
+import { ChangeRequestsModule } from "../change-requests/change-requests.module.js";
+import { AdminChangeRequestsController } from "./admin-change-requests.controller.js";
 import { AdminContentController } from "./admin-content.controller.js";
 import { LinksModule } from "../links/links.module.js";
 import { AdConversionsModule } from "../ad-conversions/ad-conversions.module.js";
@@ -107,7 +109,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, ChangeRequestsModule, OnlineCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -151,6 +153,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminRequestsController,
     AdminUiClicksController,
     AdminContentController,
+    AdminChangeRequestsController,
     AdminPulseController,
   ],
   providers: [
