@@ -657,12 +657,12 @@ model Purchase {
   renewalOf         String?         @map("renewal_of") @db.Uuid
   createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  account         Account          @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  account         Account               @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
   // SetNull, а не Restrict: вайп стирает забеги (docs/35-stage4-plan.md Р87), а покупка
   // второго шанса остаётся — без ссылки на забег, с оплатой и номером продолжения.
-  run             Run?             @relation(fields: [runId], references: [runId], onDelete: SetNull)
-  renewalFirst    Purchase?        @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
-  renewals        Purchase[]       @relation("PurchaseRenewal")
+  run             Run?                  @relation(fields: [runId], references: [runId], onDelete: SetNull)
+  renewalFirst    Purchase?             @relation("PurchaseRenewal", fields: [renewalOf], references: [purchaseId], onDelete: Restrict)
+  renewals        Purchase[]            @relation("PurchaseRenewal")
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
@@ -2171,29 +2171,29 @@ model PromoRedemption {
 /// лонча (docs/23-referral-and-partner-program.md §4); сейчас — сколько
 /// игроков он привёл и чего они стоят.
 model Partner {
-  partnerId String   @id @map("partner_id") @db.Uuid
+  partnerId      String    @id @map("partner_id") @db.Uuid
   /// как его зовёт команда: «Канал „Игровой угол“»
-  name      String   @db.VarChar(80)
+  name           String    @db.VarChar(80)
   /// как связаться: @имя, ссылка, почта
-  contact   String?  @db.VarChar(120)
+  contact        String?   @db.VarChar(120)
   /// договорённости, для команды
-  note      String?  @db.VarChar(500)
-  createdBy String   @map("created_by") @db.Uuid
-  createdAt DateTime @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+  note           String?   @db.VarChar(500)
+  createdBy      String    @map("created_by") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @map("updated_at") @db.Timestamptz(3)
   /// Telegram ID партнёра — для будущего входа в его кабинет; уникален среди партнёров (Р96)
-  telegramId     String?  @unique @map("telegram_id") @db.VarChar(20)
+  telegramId     String?   @unique @map("telegram_id") @db.VarChar(20)
   /// applied — заявка, active — активен, paused — приостановлен, rejected — отклонён;
   /// новых игроков к партнёру привязывает только active, прежние привязки статус не трогает
-  status         String   @default("active") @db.VarChar(16)
+  status         String    @default("active") @db.VarChar(16)
   /// страна, где партнёр получает выплаты, — ISO-код из двух букв
-  country        String?  @db.VarChar(2)
+  country        String?   @db.VarChar(2)
   /// валюта выплаты — код из ядра курсов (`@bh/fx`)
-  payoutCurrency String?  @map("payout_currency") @db.VarChar(8)
+  payoutCurrency String?   @map("payout_currency") @db.VarChar(8)
   /// реквизиты словами: «USDT TRC-20 на …», «карта Тинькофф»
-  payoutMethod   String?  @map("payout_method") @db.VarChar(200)
+  payoutMethod   String?   @map("payout_method") @db.VarChar(200)
   /// доля от платежей приведённых игроков, 0–100: записывается, но пока не начисляется (О44)
-  sharePercent   Decimal? @map("share_percent") @db.Decimal(5, 2)
+  sharePercent   Decimal?  @map("share_percent") @db.Decimal(5, 2)
   /// общий адрес постбэка партнёра с макросами (T-0070): действует на ссылки партнёра, у которых нет своего адреса; `null` — не отправляем
   postbackUrl    String?   @map("postback_url") @db.VarChar(1024)
   /// с какого времени по кликам действует адрес: клики раньше не отправляются; задан тогда и только тогда, когда задан адрес
@@ -2203,7 +2203,7 @@ model Partner {
   /// игровой аккаунт партнёра — связь кабинета (T-0217, Р136): пишется только из карточки партнёра. Остаётся и после закрытия кабинета: по ней аккаунт не привязывается к самому себе. Один аккаунт — один партнёр
   accountId      String?   @unique @map("account_id") @db.Uuid
 
-  account   Account?        @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
+  account   Account?         @relation(fields: [accountId], references: [accountId], onDelete: SetNull)
   campaigns PromoCampaign[]
   bindings  PartnerBinding[]
   links     Link[]
@@ -2480,8 +2480,8 @@ model AdConversion {
 
   link     Link       @relation(fields: [linkCode], references: [code], onDelete: Cascade)
   click    LinkClick? @relation(fields: [clickId], references: [clickId], onDelete: Cascade)
-  account  Account   @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
-  purchase Purchase? @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+  account  Account    @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+  purchase Purchase?  @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
 
   @@unique([purchaseId, destination])
   @@index([status, nextAttemptAt])
@@ -3137,20 +3137,53 @@ enum LedgerAccountType {
   equity
 }
 
+/// Статья учёта — расход или поступление, без валюты (Р220, tasks/T-0460): счёт статьи в валюте заводится при
+/// первой проводке. Служебные статьи (комиссии, курсовая разница, налог) не архивируются.
+enum LedgerArticleKind {
+  expense
+  income
+}
+
+model LedgerArticle {
+  /// устойчивый ключ, «vps»; в идентификатор счёта статьи входит как есть
+  articleId  String            @id @map("article_id") @db.VarChar(64)
+  kind       LedgerArticleKind
+  name       String            @db.VarChar(128)
+  /// служебная: нужна проводкам самого учёта, поэтому её не архивируют
+  system     Boolean           @default(false)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
+
+  accounts LedgerAccount[]
+
+  @@map("ledger_article")
+}
+
 /// Счёт плана счетов: место хранения или статья в одной валюте. Начальный план вставляет миграция;
 /// счёт с проводками не удаляется и не переименовывается (`onDelete: Restrict`, триггер журнала).
 model LedgerAccount {
   /// устойчивый ключ, «stars.bot.hold»
-  accountId  String            @id @map("account_id") @db.VarChar(64)
-  type       LedgerAccountType
+  accountId        String            @id @map("account_id") @db.VarChar(64)
+  type             LedgerAccountType
   /// код валюты из справочника ядра курсов
-  currency   String            @db.VarChar(16)
-  name       String            @db.VarChar(128)
-  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  archivedAt DateTime?         @map("archived_at") @db.Timestamptz(3)
+  currency         String            @db.VarChar(16)
+  name             String            @db.VarChar(128)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  archivedAt       DateTime?         @map("archived_at") @db.Timestamptz(3)
+  /// группа места хранения: «stars.bot» у обоих состояний звёзд бота, у прочих мест — их собственный id; у статей пусто
+  place            String?           @db.VarChar(64)
+  /// шаблон комиссии места: процент в сотых долях процента (0…10 000), фикса в минимальных единицах своей валюты
+  feePercentBp     Int?              @map("fee_percent_bp")
+  feeFixed         BigInt?           @map("fee_fixed")
+  feeFixedCurrency String?           @map("fee_fixed_currency") @db.VarChar(16)
+  /// статья учёта, если счёт — статья в валюте
+  articleId        String?           @map("article_id") @db.VarChar(64)
+  article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
 
   lines LedgerLine[]
 
+  @@index([place])
+  @@index([articleId])
   @@map("ledger_account")
 }
 
