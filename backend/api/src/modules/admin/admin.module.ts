@@ -22,10 +22,14 @@ import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
 import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminStakeholdersController } from "./admin-stakeholders.controller.js";
+import { AdminLedgerController } from "./admin-ledger.controller.js";
+import { LedgerModule } from "../ledger/ledger.module.js";
 import { StakeholdersModule } from "../stakeholders/stakeholders.module.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminPassController } from "./admin-pass.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
+import { AdminCustomerReportController } from "./admin-customer-report.controller.js";
+import { CUSTOMER_REPORT_REPOSITORY, PrismaCustomerReportRepository } from "../tasks/customer-report.repository.js";
 import { AdminMediaController } from "./admin-media.controller.js";
 import { AdminPaymentCompensationController } from "./admin-payment-compensation.controller.js";
 import { AdminPaymentJobsController } from "./admin-payment-jobs.controller.js";
@@ -112,7 +116,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, LedgerModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -135,6 +139,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminChangelogController,
     AdminHomeController,
     AdminTasksController,
+    AdminCustomerReportController,
     AdminPassController,
     AdminMediaController,
     AdminRestrictionsController,
@@ -156,6 +161,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminPartnersController,
     AdminCabinetController,
     AdminStakeholdersController,
+    AdminLedgerController,
     AdminRequestsController,
     AdminUiClicksController,
     AdminContentController,
@@ -171,6 +177,8 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminAllTimeService,
     { provide: ALL_TIME_STORE, useClass: RedisAllTimeStore },
     AdminExportsService,
+    // Отчёт заказчику партнёрских заданий (T-0225): читает только панель
+    { provide: CUSTOMER_REPORT_REPOSITORY, useClass: PrismaCustomerReportRepository },
     AdminSocialService,
     AdminSettingsService,
     AdminSecretsService,

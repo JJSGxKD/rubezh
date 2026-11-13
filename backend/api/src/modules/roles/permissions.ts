@@ -72,6 +72,9 @@ export const PERMISSIONS = [
   // Доли участников проекта (Р217, T-0452): назначить долю с месяца — только владельцу, видят доли
   // и участник (`revenue.split.own.view`), и финансы (`revenue.split.view`); в наборы ролей не входит
   "stakeholders.manage",
+  // Журнал учёта (Р219, T-0457): остатки по местам хранения и журнал проводок — только чтение;
+  // видят финансы и владелец (docs/37-accounting.md §9). Ручные операции — своё право волны 3
+  "ledger.view",
   // Реклама и партнёры
   "ads.view",
   "ads.edit",
@@ -247,6 +250,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "sku.price.view",
     "analytics.revenue.view",
     "finance.entry.create",
+    "ledger.view",
     "revenue.split.view",
     "partners.view",
     "partners.payout.create",
