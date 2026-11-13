@@ -16,6 +16,7 @@ shared:
   - apps/admin/src/routes.ts
   - apps/admin/src/App.tsx
   - apps/admin/src/ui/help.ts
+  - apps/admin/src/screens/sections.tsx
   - docs/19-content-admin.md
   - docs/29-admin-panel.md
 runner: any
