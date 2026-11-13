@@ -159,7 +159,7 @@ export class LedgerChartService {
       await this.roles.audit({ actorAccountId: actor.accountId, action: "ledger.place.create", target: accountId, after: { name, currency: input.currency, fee: created.fee } });
       return created;
     }
-    throw new LedgerChartInvalidError(`Мест с названием «${name}» уже слишком много — назовите иначе`);
+    throw new LedgerChartInvalidError(`Мест с названием «${name}» уже слишком много — нужно другое название`);
   }
 
   /** Название и шаблон комиссии; `fee: null` снимает шаблон. Составное место (звёзды бота) не переименовывается. */
@@ -207,7 +207,7 @@ export class LedgerChartService {
       await this.roles.audit({ actorAccountId: actor.accountId, action: "ledger.article.create", target: articleId, after: { name, kind: input.kind } });
       return { articleId, kind: input.kind, name, system: false, archived: false };
     }
-    throw new LedgerChartInvalidError(`Статей с названием «${name}» уже слишком много — назовите иначе`);
+    throw new LedgerChartInvalidError(`Статей с названием «${name}» уже слишком много — нужно другое название`);
   }
 
   /** Новое название — и у статьи, и у названий её счетов в журнале. */

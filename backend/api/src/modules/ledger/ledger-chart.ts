@@ -48,8 +48,8 @@ export function slugify(name: string): string {
     slug += TRANSLIT[char] ?? (/[a-z0-9]/u.test(char) ? char : "-");
   }
   slug = slug.replace(/-{2,}/gu, "-").replace(/^-|-$/gu, "");
-  if (slug.length < SLUG_MIN) throw new ChartRuleError(`Из названия получается идентификатор короче ${String(SLUG_MIN)} знаков — добавьте букв или цифр`);
-  if (slug.length > SLUG_MAX) throw new ChartRuleError(`Название длинное: идентификатор из него длиннее ${String(SLUG_MAX)} знаков — сократите`);
+  if (slug.length < SLUG_MIN) throw new ChartRuleError(`Из названия получается идентификатор короче ${String(SLUG_MIN)} знаков — нужно больше букв или цифр`);
+  if (slug.length > SLUG_MAX) throw new ChartRuleError(`Название длинное: идентификатор из него длиннее ${String(SLUG_MAX)} знаков — нужно сократить`);
   return slug;
 }
 
@@ -198,7 +198,7 @@ export class LedgerPlaceNotFoundError extends DomainError {
 /** В месте лежат деньги: архив спрятал бы остаток из панели, а в отчётах он остался бы. */
 export class LedgerPlaceNotEmptyError extends DomainError {
   constructor(placeId: string) {
-    super("ledger_place_not_empty", `В месте «${placeId}» есть остаток — переведите его, потом архивируйте`, 409);
+    super("ledger_place_not_empty", `В месте «${placeId}» есть остаток — сначала нужно перевести его, потом архивировать`, 409);
   }
 }
 
