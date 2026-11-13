@@ -3,8 +3,8 @@ id: T-0305
 title: Панель «Баланс» — «Проверить»: проверки контента и симуляция черновика против версии в игре полосами с коридорами, рельсы шагов
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0304]
