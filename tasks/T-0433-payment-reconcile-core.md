@@ -3,7 +3,7 @@ id: T-0433
 title: Сверка оплат с выпиской площадки — таблицы, расписание, сообщение команде
 epic: E1
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -23,6 +23,7 @@ shared:
   - backend/api/prisma/migrations/
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/player-address.test.ts
   - backend/api/src/modules/settings/setting-catalog.ts
   - backend/api/src/modules/payments/payments-hooks.ts
   - backend/api/src/modules/payments/payments.module.ts
