@@ -16,6 +16,7 @@ import { NamesScreen } from "./names/NamesScreen";
 import { OnlineScreen } from "./online";
 import { OverviewScreen } from "./overview/OverviewScreen";
 import { PartnersScreen } from "./partners/PartnersScreen";
+import { PassScreen } from "./pass/PassScreen";
 import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
@@ -56,6 +57,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
   tasks: () => <TasksScreen />,
+  pass: () => <PassScreen />,
   rating: (id, tab) => <RatingScreen id={id} tab={tab} />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,
