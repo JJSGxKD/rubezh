@@ -16,6 +16,7 @@ shared:
   - backend/api/src/modules/fx/fx.store.ts
   - backend/api/src/modules/fx/fx.service.ts
   - backend/api/src/modules/fx/fx.module.ts
+  - backend/api/test/fx.test.ts
   - docs/35-stage4-plan.md
 runner: any
 executor: sonnet-5.5
