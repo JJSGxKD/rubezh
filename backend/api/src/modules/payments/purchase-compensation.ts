@@ -51,6 +51,9 @@ const MANUAL_SCAN_LIMIT = 100;
 const NOTE_MIN = 3;
 const NOTE_MAX = 200;
 
+const GEMS_PROBLEM = "Сумма — целое число самоцветов, от 1";
+const NOTE_PROBLEM = "Причина — от 3 до 200 символов";
+
 export interface CompensationPreview {
   purchaseId: string;
   /** `null` — можно; иначе — почему нельзя, текстом из решений */
@@ -262,9 +265,9 @@ export class PurchaseCompensations implements OnModuleInit {
 
 /** Граница сервиса: его зовут и не из HTTP, а колонка примечания — 200 знаков. */
 function checkInput(input: { gems: number; note: string }): void {
-  if (!Number.isInteger(input.gems) || input.gems < 1) throw new ValidationError("Укажите сумму от 1 самоцвета");
+  if (!Number.isInteger(input.gems) || input.gems < 1) throw new ValidationError(GEMS_PROBLEM);
   const length = [...input.note.trim()].length;
-  if (length < NOTE_MIN || length > NOTE_MAX) throw new ValidationError(`Укажите причину: от ${String(NOTE_MIN)} до ${String(NOTE_MAX)} символов`);
+  if (length < NOTE_MIN || length > NOTE_MAX) throw new ValidationError(NOTE_PROBLEM);
 }
 
 /** Начислено в кошелёк: строка есть и отметка стоит. */
