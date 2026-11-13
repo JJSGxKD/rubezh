@@ -25,6 +25,8 @@ shared:
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/src/dev/fx-scenes.ts
   - packages/app-shell/test/fx-scenes.test.ts
+  - packages/app-shell/test/guide.test.ts
+  - packages/core-game/src/index.ts
   - docs/17-testing-strategy.md
 runner: any
 executor: sonnet-5.5
