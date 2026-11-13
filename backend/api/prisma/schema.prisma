@@ -2944,6 +2944,12 @@ model TaskChannelWatch {
   penalizedAt DateTime? @map("penalized_at") @db.Timestamptz(3)
   /// сколько списано по ресурсам: `{ "coins": n, "gems": n, "shards": n }`
   revoked     Json?
+  /// удержание (Р139, T-0223): был ли игрок в канале на 1-й, 3-й и 7-й день
+  /// после награды. Ставит перепроверка первой успешной проверкой после
+  /// границы; отписка закрывает пустые `false`; `null` — не известно
+  heldD1      Boolean?  @map("held_d1")
+  heldD3      Boolean?  @map("held_d3")
+  heldD7      Boolean?  @map("held_d7")
 
   account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   task    TaskDef @relation(fields: [taskId], references: [taskId])
