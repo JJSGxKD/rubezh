@@ -78,6 +78,8 @@ export function buildRunResult(world: World, options: RunResultOptions): RunResu
     cheats: options.cheats === true,
     continues: continueSeconds(world),
     ...(world.boosts.ids.length === 0 ? {} : { boosts: [...world.boosts.ids] }),
+    // Переброс за рекламу: сервер сверит число с книгой показов (T-0199); без него поля нет.
+    ...(world.progression.adRerolls === 0 ? {} : { adRerolls: world.progression.adRerolls }),
     ...(pressure === undefined ? {} : { pressure }),
     huntLog: world.hunt.log.map((entry) => ({ ...entry })),
     buildScore: buildScore(world),

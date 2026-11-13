@@ -405,6 +405,8 @@ export interface ProgressionState {
   toolsTotal: CardTools;
   /** изгнанные предметы забега: ключи `weapon:<id>` и `passive:<id>`, без повторов */
   banished: string[];
+  /** сколько раз за забег переброс взят за рекламу, 0..`MAX_AD_REROLLS` (tasks/T-0199) */
+  adRerolls: number;
   /** сколько раз нажата каждая запись «Предела», в порядке `limitTypes` (`progression/limit.ts`) */
   limitStacks: number[];
 }

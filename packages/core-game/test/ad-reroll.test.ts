@@ -330,7 +330,7 @@ describe("запись и итог забега", () => {
 
   it("команда при ненулевых зарядах не ложится на забег: заряды берутся из набора записи", () => {
     const recording = recorded();
-    const withCharges = { ...recording, loadout: { modifiers: {}, boosts: ["control"], accountLevel: 9 } };
+    const withCharges = { ...recording, loadout: { modifiers: {}, boosts: ["control"] } };
     const outcome = replayRecording(withCharges);
     expect(outcome.verdict).toBe("mismatch");
     expect(outcome.reason).toContain(AD_REROLL_COMMAND);
