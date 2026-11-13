@@ -20,6 +20,8 @@ import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { StakeholderSharesOverError } from "../src/modules/stakeholders/stakeholder-errors.js";
 import { monthKey, type ShareRecord } from "../src/modules/stakeholders/stakeholder-rules.js";
 import {
@@ -126,6 +128,7 @@ describe("доли участников в панели по HTTP", () => {
         { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: STAKEHOLDERS_REPOSITORY, useValue: storage },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         StakeholdersService,
         PanelLoginService,
