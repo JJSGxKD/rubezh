@@ -15,7 +15,7 @@ import type { RunCounters } from "../src/modules/runs/run-counters.js";
 import { RunsHooks, type RecordedRun } from "../src/modules/runs/runs-hooks.js";
 import { PrismaTasksRepository } from "../src/modules/tasks/tasks.repository.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
-import type { TaskDef } from "../src/modules/tasks/task-rules.js";
+import { isEmblemKind, type TaskDef } from "../src/modules/tasks/task-rules.js";
 import { PrismaWalletRepository } from "../src/modules/wallet/wallet.repository.js";
 import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
@@ -202,8 +202,8 @@ describe.skipIf(!live)("достижения v2 на живых Postgres и Redi
       expect(catalog.find((task) => task.taskId === "ach_collector")?.emblemTier).toBe("epic");
     });
 
-    it("порядок в списке — после последнего достижения, шагом десять, id не повторяются", () => {
-      const old = catalog.filter((task) => !NEW_ROWS.some((row) => row[0] === task.taskId) && task.period === "achievement");
+    it("порядок в списке — после последнего достижения (знаки статусов идут своим блоком и не в счёт), id не повторяются", () => {
+      const old = catalog.filter((task) => !NEW_ROWS.some((row) => row[0] === task.taskId) && task.period === "achievement" && !isEmblemKind(task.kind));
       const lastOld = Math.max(...old.map((task) => task.sort));
       const sorts = NEW_ROWS.map((row) => catalog.find((task) => task.taskId === row[0])?.sort ?? -1);
       expect(Math.min(...sorts)).toBeGreaterThan(lastOld);
