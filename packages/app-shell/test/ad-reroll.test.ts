@@ -413,7 +413,7 @@ describe("переброс за рекламу в оболочке", () => {
 
   describe("смена забега", () => {
     const NEXT_RUN_ID = "run-reroll-2";
-    const started = { runId: NEXT_RUN_ID, difficultyId: "hard", startingWeaponId: "spark" };
+    const started = { runId: NEXT_RUN_ID, difficultyId: "hard" as const, startingWeaponId: "spark" };
 
     it("«Ещё раз» не размонтирует экран, но заметка забега A не показывается на выборе с тем же номером в забеге B", async () => {
       const fake = await choosing();
