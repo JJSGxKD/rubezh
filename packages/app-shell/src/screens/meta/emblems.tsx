@@ -75,17 +75,22 @@ export function EmblemsBody(props: { view: EmblemsView; onPick: (item: EmblemIte
       {shown === undefined ? null : (
         <Card compact>
           <p className="mb-1.5 text-xs text-text-muted">{t("emblems.current")}</p>
-          <EmblemChip emblem={shown} size="l" fit="full" />
+          <div className="flex">
+            <EmblemChip emblem={shown} size="l" fit="full" />
+          </div>
         </Card>
       )}
       {groupEmblems(view.items).map((group) => (
         <section key={group.category}>
           <SectionTitle>{t(GROUP_KEYS[group.category])}</SectionTitle>
-          <ul className="@container grid grid-cols-1 gap-2 @min-[32rem]:grid-cols-2">
-            {group.items.map((item) => (
-              <EmblemRow key={item.id} item={item} current={item.id === view.shown && !view.auto} onPick={props.onPick} />
-            ))}
-          </ul>
+          {/* Контейнерный запрос действует на потомков, а не на сам контейнер: колонки — у списка внутри. */}
+          <div className="@container">
+            <ul className="grid grid-cols-1 gap-2 @min-[32rem]:grid-cols-2">
+              {group.items.map((item) => (
+                <EmblemRow key={item.id} item={item} current={item.id === view.shown && !view.auto} onPick={props.onPick} />
+              ))}
+            </ul>
+          </div>
         </section>
       ))}
     </>

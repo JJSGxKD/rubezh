@@ -43,7 +43,7 @@ const VIEW: EmblemsView = {
     item(CHIPS[4] as EmblemLook, true, { title: "VIP", percent: 2.1 }),
     item({ id: "emb_supporter", title: "Меценат", tier: "epic", category: "status" }, false),
     item(CHIPS[5] as EmblemLook, false),
-    item({ id: "emb_season_top10", title: "Топ-10 сезона", tier: "legendary", category: "season", season: 2 }, true),
+    item({ id: "emb_season_top10", title: "Топ-10", tier: "legendary", category: "season", season: 2 }, true),
     item(CHIPS[3] as EmblemLook, true, { percent: 6 }),
     item(CHIPS[2] as EmblemLook, false, { hint: "Пройди забег без единого попадания", percent: 1.5 }),
     item({ id: "ach_hidden_marathon", title: "Скрытый знак", tier: "epic", category: "merit" }, false, { hint: "Не всё на виду", percent: null }),
@@ -52,7 +52,7 @@ const VIEW: EmblemsView = {
 
 const ROW: LeaderboardEntry = {
   rank: 4,
-  name: "Ярослава Длинноимённая",
+  name: "Ярослава Д.",
   photoUrl: null,
   survivalSec: 1_788,
   level: 38,
