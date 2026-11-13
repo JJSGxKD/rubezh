@@ -26,7 +26,7 @@ batch: 4
 
 # T-0440. Враги поздних ступеней — рисунок ближайшей ступени с тоном вместо фигуры
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0440.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0440.json)](../README.md#значки-статуса)
 
 ## Зачем
 

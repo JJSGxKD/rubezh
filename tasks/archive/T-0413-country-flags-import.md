@@ -27,7 +27,7 @@ batch: 5
 
 # T-0413. Флаги стран для панели — сжатые SVG владельца статическими файлами
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0413.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0413.json)](../README.md#значки-статуса)
 
 ## Зачем
 
