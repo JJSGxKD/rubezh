@@ -21,6 +21,7 @@ shared:
   - docs/22-analytics-and-metrics.md
   - docs/21-diagrams.md
   - docs/30-configuration-map.md
+  - backend/api/test/ledger-journal.integration.test.ts
 runner: any
 executor: sonnet-5.5
 effort: extra

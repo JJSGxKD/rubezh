@@ -13,7 +13,9 @@ import { testPrisma } from "./helpers/test-prisma.js";
  *
  * Журнал не стирается — триггер этого не позволит, — поэтому тест ничего не убирает: каждый прогон берёт
  * свой префикс ключей и свои счета (`it.<прогон>.…`) и проверяет только их. Реальные счета плана тронуты
- * одной проверкой остатков — по разнице до и после.
+ * одной проверкой, и она читает не общий остаток, а строки своих проводок по ключам источника: задание
+ * проводок из платежей (T-0458, `payment-postings.integration.test.ts`) в соседнем файле пишет в те же
+ * `stars.bot.*` и `revenue.*`, и разница общего остатка до и после поплыла бы.
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -200,22 +202,24 @@ describe.skipIf(DATABASE_URL === "")("журнал учёта на живом Po
     expect(await prisma.ledgerEntry.count({ where: { sourceKey: key("ghost") } })).toBe(0);
   });
 
-  it("остатки после оплаты и сторно: звёзды в холде и выручка растут на 50, после сторно — возвращаются", async () => {
-    const stars = async () => {
-      const rows = await service.balances();
-      return { hold: BigInt(rows.find((row) => row.accountId === "stars.bot.hold")?.balance ?? "x"), revenue: BigInt(rows.find((row) => row.accountId === "revenue.shop.telegram")?.balance ?? "x") };
+  it("оплата и сторно на счетах звёзд бота: в холде +50, выручка −50 по строкам своих проводок, после сторно — нули", async () => {
+    // Суммируются строки только этих двух проводок: общий остаток читать нельзя — в те же счета пишет и проход
+    // сверки платежей из соседнего файла.
+    const mine = async () => {
+      const rows = await prisma.ledgerLine.groupBy({ by: ["accountId"], _sum: { amount: true }, where: { entry: { sourceKey: { in: [key("paid"), key("refunded")] } } } });
+      const sum = (accountId: string) => rows.find((row) => row.accountId === accountId)?._sum.amount ?? 0n;
+      return { hold: sum("stars.bot.hold"), revenue: sum("revenue.shop.telegram") };
     };
     const draft = (sourceKey: string) => pair(sourceKey, "stars.bot.hold", "revenue.shop.telegram", 50n);
-    const before = await stars();
 
+    expect(await mine()).toEqual({ hold: 0n, revenue: 0n });
     await service.post(draft(key("paid")));
-    const paid = await stars();
+    const paid = await mine();
     await service.reverse(key("paid"), key("refunded"), AT, "Возврат звёзд");
-    const refunded = await stars();
+    const refunded = await mine();
 
-    expect(paid.hold - before.hold).toBe(50n);
-    expect(paid.revenue - before.revenue).toBe(50n);
-    expect(refunded).toEqual(before);
+    expect(paid).toEqual({ hold: 50n, revenue: -50n });
+    expect(refunded).toEqual({ hold: 0n, revenue: 0n });
     const reversal = await prisma.ledgerEntry.findUniqueOrThrow({ where: { sourceKey: key("refunded") }, include: { lines: true, original: true } });
     expect(reversal.original?.sourceKey).toBe(key("paid"));
     expect(reversal.lines.map((line) => [line.accountId, line.amount]).sort()).toEqual([
