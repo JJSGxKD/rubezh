@@ -660,6 +660,7 @@ model Purchase {
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
+  compensation    PurchaseCompensation?
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -2993,4 +2994,29 @@ model ProxyTrafficHour {
 
   @@id([hour, subscriptionKey, nodeKey])
   @@map("proxy_traffic_hour")
+}
+
+// Компенсация за сбой оплаты (Р209, tasks/T-0435)
+
+/// Компенсация самоцветами за сбой оплаты: одна на покупку — первичный ключ `purchase_id` не пускает вторую.
+/// Строка вставляется до кошелька, `credited_at` ставится после него: упало между — повтор доначисляет ту же сумму
+model PurchaseCompensation {
+  /// одна компенсация на покупку — первичным ключом
+  purchaseId     String    @id @map("purchase_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  /// пока только gems (Р2)
+  resource       String    @db.VarChar(32)
+  amount         Int
+  /// что предложила панель: по разнице видно, правили ли сумму
+  suggested      Int?
+  note           String    @db.VarChar(200)
+  actorAccountId String    @map("actor_account_id") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  /// когда легло в кошелёк; `null` — начисление не прошло, повтор доделает
+  creditedAt     DateTime? @map("credited_at") @db.Timestamptz(3)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("purchase_compensation")
 }

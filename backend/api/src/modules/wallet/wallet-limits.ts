@@ -65,6 +65,8 @@ export const EXCHANGE_RESOURCES: Record<ExchangeReason, readonly WalletResource[
   boost_refund: ["coins", "gems"],
   // Бонус тестеру и самоцветы за второй шанс (Р87, tasks/T-0042): только самоцветы.
   wipe_compensation: ["gems"],
+  // Компенсация за сбой оплаты (Р209, tasks/T-0435): только самоцветы (Р2).
+  payment_compensation: ["gems"],
 };
 
 /**

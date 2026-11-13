@@ -34,6 +34,7 @@
   "history.reason.season_reward": "Награда сезона",
   "history.reason.promo_reward": "Промокод",
   "history.reason.purchase": "Покупка",
+  "history.reason.payment_compensation": "Компенсация за сбой оплаты",
   "history.reason.refund_revoke": "Возврат звёзд за покупку",
   "history.reason.task_revoke": "Списание награды за отписку",
   "history.reason.salvage": "Разбор предмета",
