@@ -56,7 +56,8 @@ export class AdminMediaController {
   @Get(":file")
   async image(@Param("file") file: string, @Req() request: unknown, @Res() reply: ImageReply): Promise<void> {
     const imageId = IMAGE_FILE.exec(file)?.[1];
-    const image = imageId === undefined ? null : await this.media.read(imageId);
+    // Закрытую картинку (снимок чека) отдаёт только тому, у кого есть право на показ.
+    const image = imageId === undefined ? null : await this.media.readForPanel(accountOf(request), imageId);
     if (image === null) throw new ImageNotFoundError();
     sendImage(reply, image, request);
   }
