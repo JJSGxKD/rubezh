@@ -38,6 +38,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   AuditEntry: keep("журнал действий команды"),
   AccountRestriction: keep("ограничения действуют и после вайпа"),
   Purchase: keep("журнал покупок не стирается никогда; по нему возвращается купленное"),
+  PurchaseCompensation: keep("компенсации за сбой оплаты — история денег, как покупки"),
   VipSubscription: keep("подписка VIP остаётся"),
   VipPeriod: keep("неистёкший VIP остаётся"),
   AnalyticsEvent: keep("аналитика задним числом не восстанавливается"),

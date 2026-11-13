@@ -411,6 +411,21 @@ describe.skipIf(DATABASE_URL === "")("задания на живом Postgres", 
     expect(Number(left?.n)).toBe(0);
     expect((await repository.completions()).get(task.taskId)).toBe(1);
   });
+  it("заказчик: поля пишутся и читаются каталогом, CHECK держит связи", async () => {
+    const task = await limitedTask(null);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+    const sold: TaskDef = { ...task, customer: "Канал «Игровой угол»", payModel: "rs", rate: 1_250, holdDays: 7 };
+    expect(await repository.update(sold, await account(), NOON)).toBe(true);
+    expect((await repository.catalog()).find((candidate) => candidate.taskId === task.taskId)).toMatchObject({ customer: "Канал «Игровой угол»", payModel: "rs", rate: 1_250, holdDays: 7 });
+
+    const id = task.taskId;
+    await expect(prisma.$executeRaw`UPDATE task_def SET pay_model = NULL WHERE task_id = ${id}`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE task_def SET rate = NULL WHERE task_id = ${id}`).rejects.toThrow();
+    await expect(prisma.$executeRaw`UPDATE task_def SET hold_days = 2 WHERE task_id = ${id}`).rejects.toThrow();
+    const runTask = (await repository.catalog()).find((candidate) => candidate.params === null);
+    await expect(prisma.$executeRaw`UPDATE task_def SET customer = 'X', pay_model = 'cpa', rate = 5 WHERE task_id = ${runTask?.taskId ?? ""}`).rejects.toThrow();
+
+  });
   it("картинка задания: читается каталогом и меняется правкой; пока на неё ссылаются, не удаляется; у цели забега её нет", async () => {
     const bytes = Buffer.concat([webp("square96"), Buffer.from(String(Date.now()))]);
     const imageId = imageIdOf(bytes);

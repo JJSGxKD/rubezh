@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { unseenPartnerShows } from "../src/screens/meta/tasks";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import "../src/i18n/tasks";
+import { ResetLine, unseenPartnerShows } from "../src/screens/meta/tasks";
 import type { TaskItem } from "../src/state/tasks-api";
 
 // Показы партнёрских заданий (tasks/T-0224): событие task_shown на каждую
@@ -50,5 +53,13 @@ describe("показы партнёрских заданий", () => {
   it("без партнёрских заданий показов нет", () => {
     expect(unseenPartnerShows([runTask], new Set())).toEqual([]);
     expect(unseenPartnerShows([], new Set())).toEqual([]);
+  });
+});
+
+describe("строка обновления на вкладке «День»", () => {
+  it("стоит на плашке, а не голым текстом", () => {
+    const html = renderToStaticMarkup(createElement(ResetLine, { period: "daily" }));
+    expect(html).toContain("surface-sunken");
+    expect(html).toContain("rounded-pill");
   });
 });

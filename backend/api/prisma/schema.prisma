@@ -664,6 +664,7 @@ model Purchase {
   vipSubscription VipSubscription?
   vipPeriod       VipPeriod?
   adConversions   AdConversion[]
+  compensation    PurchaseCompensation?
 
   @@unique([runId, continueNo])
   // Покупки игрока и доля возвратов на аккаунт (О4).
@@ -1666,6 +1667,15 @@ model TaskDef {
   hint            String?    @db.VarChar(120)
   /// очки престижа за выполненное достижение; у ежедневных и недельных — ноль
   prestige        Int        @default(0)
+  /// заказчик партнёрского задания (Р138); `null` — задание своё. Только у
+  /// партнёрской цели, связи полей — `CHECK` в миграции
+  customer        String?    @db.VarChar(80)
+  /// модель оплаты: `cpa` — за выполнение, `rs` — доля дохода
+  payModel        String?    @map("pay_model") @db.VarChar(8)
+  /// ставка: у `cpa` — центы доллара за выполнение, у `rs` — сотые доли процента
+  rate            Int?
+  /// после скольких суток удержания выполнение оплачивается; 0 — сразу
+  holdDays        Int        @default(0) @map("hold_days") @db.SmallInt
   createdAt       DateTime   @map("created_at") @db.Timestamptz(3)
   updatedAt       DateTime   @map("updated_at") @db.Timestamptz(3)
   /// кто менял последним; без внешнего ключа — запись переживает аккаунт.
@@ -2997,4 +3007,29 @@ model ProxyTrafficHour {
 
   @@id([hour, subscriptionKey, nodeKey])
   @@map("proxy_traffic_hour")
+}
+
+// Компенсация за сбой оплаты (Р209, tasks/T-0435)
+
+/// Компенсация самоцветами за сбой оплаты: одна на покупку — первичный ключ `purchase_id` не пускает вторую.
+/// Строка вставляется до кошелька, `credited_at` ставится после него: упало между — повтор доначисляет ту же сумму
+model PurchaseCompensation {
+  /// одна компенсация на покупку — первичным ключом
+  purchaseId     String    @id @map("purchase_id") @db.Uuid
+  accountId      String    @map("account_id") @db.Uuid
+  /// пока только gems (Р2)
+  resource       String    @db.VarChar(32)
+  amount         Int
+  /// что предложила панель: по разнице видно, правили ли сумму
+  suggested      Int?
+  note           String    @db.VarChar(200)
+  actorAccountId String    @map("actor_account_id") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  /// когда легло в кошелёк; `null` — начисление не прошло, повтор доделает
+  creditedAt     DateTime? @map("credited_at") @db.Timestamptz(3)
+
+  purchase Purchase @relation(fields: [purchaseId], references: [purchaseId], onDelete: Restrict)
+
+  @@index([createdAt])
+  @@map("purchase_compensation")
 }

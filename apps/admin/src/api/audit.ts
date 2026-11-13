@@ -162,6 +162,7 @@ const ACTION_TITLES: Record<string, string> = {
   "names.reclean.finish": "Итог перечистки ников",
   "payments.refund": "Возврат звёзд вручную",
   "payments.fulfill": "Повторная выдача покупки",
+  "payments.compensate": "Компенсация за сбой оплаты",
 };
 
 /** Незнакомое действие — новее панели — показывается как записано: лучше код, чем пустота. */
