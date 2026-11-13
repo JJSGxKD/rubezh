@@ -22,6 +22,7 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - apps/admin/src/api/audit.ts
   - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
 runner: any
