@@ -75,6 +75,7 @@ function Lane({ title, value, problem, season, onChange }: { title: string; valu
         {number("coins", "Монеты", season.caps.coins)}
         {number("gems", "Самоцветы", season.caps.gems)}
       </FieldRow>
+      <p className="-mb-1 text-xs text-text-muted">Осколки по редкостям</p>
       <FieldRow>
         {RARITIES.map((rarity) => (
           <div key={rarity}>{number(rarity, RARITY_LABELS[rarity], season.caps[`shard_${rarity}`])}</div>
