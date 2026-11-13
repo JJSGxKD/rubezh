@@ -3,8 +3,8 @@ id: T-0424
 title: Карачун в забеге — подключение, шина сцены, калибровка и эталоны
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0392, T-0422, T-0423, T-0425, T-0426]
