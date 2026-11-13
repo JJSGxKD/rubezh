@@ -19,6 +19,7 @@ const COMMAND_KINDS = [
   "heal",
   "jumpToMinute",
   "stepTicks",
+  "summonStalker",
 ];
 
 describe("каталог сцен эффектов", () => {
@@ -58,6 +59,15 @@ describe("каталог сцен эффектов", () => {
         if (command.kind === "spawnEnemy") expect(enemies.has(command.id), `${scene.id}: ${command.id}`).toBe(true);
       }
     }
+  });
+
+  it("сцена «karachun»: предвестие с команды разработчика, враги не заморожены, чтобы он дошёл", () => {
+    const scene = fxScene("karachun");
+    expect(scene).not.toBeNull();
+    expect(scene?.commands.some((command) => command.kind === "summonStalker")).toBe(true);
+    expect(scene?.cheats?.freezeEnemies).not.toBe(true);
+    expect(scene?.ticks).toBe(150);
+    expect(scene?.note).toContain("предвестие");
   });
 
   it("неизвестная сцена — null", () => {
