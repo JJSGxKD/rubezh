@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cabinetStateSchema } from "./cabinet";
 import type { AdminApi, ApiResult } from "./client";
 import type { FunnelRow, Period } from "./funnel";
 import { LINK_NETWORKS, LINK_TARGETS, canonicalEvents } from "./links";
@@ -140,6 +141,8 @@ const detailSchema = z.object({
   links: z.array(partnerLinkSchema).catch([]),
   /** игроков, привязанных по ссылкам; привязанные кодами сюда не входят */
   linkBound: z.number().catch(0),
+  /** кабинет партнёра (T-0217): с каким аккаунтом связан и открыт ли; сервер старее — «не открывался» */
+  cabinet: cabinetStateSchema.catch({ accountId: null, open: false }),
   rules: rulesSchema,
 });
 export type PartnerDetail = z.infer<typeof detailSchema>;
