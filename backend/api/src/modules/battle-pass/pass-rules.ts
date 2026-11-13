@@ -117,6 +117,21 @@ export const passRibbonSchema = z
     }
   });
 
+/**
+ * Правка одной ступени из панели: обе ленты разом, ни лишних полей, ни номера
+ * ступени (он в адресе). Лишнее поле — отказ схемой, а не молчаливое отбрасывание:
+ * так «случайный шанс» из чужой формы не пройдёт незамеченным (Р11).
+ */
+export const tierEditSchema = z.object({ free: passRewardSchema, vip: passRewardSchema }).strict();
+
+export type PassTierEdit = z.infer<typeof tierEditSchema>;
+
+/** Потолок количества по ресурсам, которые пасс вправе выдавать: подсказка форме панели. */
+export function passRewardCaps(): Record<string, number> {
+  const resources: WalletResource[] = ["coins", "gems", ...ITEM_RARITIES.map((rarity): WalletResource => `shard_${rarity}`)];
+  return Object.fromEntries(resources.map((resource) => [resource, capOf(resource)] as const).filter(([, cap]) => cap > 0));
+}
+
 /** Строки начисления кошельком: только ненулевое, осколки — ресурсами `shard_<редкость>`. Буст кошельку не нужен. */
 export function rewardLines(reward: PassReward): { resource: WalletResource; amount: number }[] {
   const lines: { resource: WalletResource; amount: number }[] = [];
