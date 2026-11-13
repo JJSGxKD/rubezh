@@ -1,4 +1,6 @@
 import type { RunHuntEntry } from "@bh/shared-types";
+import type { RunProofDraft } from "../../run-api";
+import { decodeInputLog, INPUT_LOG_ENCODING, InputLogError } from "../diagnostics/input-log";
 import { captureHunt, MAX_HUNT_ENTRIES, type HuntSnapshot } from "./hunt-log";
 import { MAX_CARD_TOOLS } from "../progression/card-tools";
 import { CORDON_SOURCES, createCordonState, type CordonSource, type CordonState } from "../sim/cordon";
@@ -209,6 +211,65 @@ export function restoreWorld(world: World, spawner: Spawner, input: unknown): vo
   if (snapshot.spawner !== null) spawner.loadState?.(snapshot.spawner);
   // События — только для рендера: новый рендер начинает с чистого буфера.
   world.events.written = 0;
+}
+
+/** Потолки записи для проверки из снимка: страховка от битых данных, а не правила игры. */
+const MAX_PROOF_CHOICES = 4_000;
+const MAX_PROOF_CONTINUES = 64;
+const MAX_PROOF_CHECKPOINTS = 720;
+const MAX_PROOF_OPTION_ID = 64;
+
+/**
+ * Запись для проверки из снимка прерванного забега (tasks/T-0316). Снимок пришёл из
+ * хранилища устройства, поэтому форма и лог ввода проверяются, а не приводятся: годную
+ * запись продолженный забег дописывает дальше. Нет записи (снимок прошлой сборки, забег
+ * разработчика) или она битая — `null`, и забег не повторить с начала. Битая запись
+ * продолжению не мешает: проверка нужна серверу, а не игроку.
+ */
+export function readProofDraft(input: unknown): RunProofDraft | null {
+  if (input === undefined) return null;
+  try {
+    const record = asRecord(input, "proof");
+    const unitScale = asNumber(record.unitScale, "proof.unitScale");
+    if (!Number.isFinite(unitScale) || unitScale <= 0) throw new SnapshotError("proof.unitScale: ожидалось положительное число");
+    const startingWeaponId = asString(record.startingWeaponId, "proof.startingWeaponId");
+    if (startingWeaponId.length > MAX_PROOF_OPTION_ID) throw new SnapshotError("proof.startingWeaponId: слишком длинный id");
+    const log = asRecord(record.input, "proof.input");
+    const ticks = asCount(log.ticks, "proof.input.ticks");
+    const data = asString(log.data, "proof.input.data");
+    const truncated = asBoolean(log.truncated, "proof.input.truncated");
+    if (log.encoding !== INPUT_LOG_ENCODING) throw new SnapshotError("proof.input.encoding: незнакомая кодировка");
+    const encoded = { encoding: INPUT_LOG_ENCODING, ticks, data, truncated } as const;
+    // Лог читается целиком: битый не дописать, а продолжение поверх него дало бы запись с мусором в начале.
+    if (!truncated) decodeInputLog(encoded);
+    const choices = asArray(record.choices, "proof.choices");
+    if (choices.length > MAX_PROOF_CHOICES) throw new SnapshotError("proof.choices: слишком много выборов");
+    const continues = asArray(record.continues, "proof.continues");
+    if (continues.length > MAX_PROOF_CONTINUES) throw new SnapshotError("proof.continues: слишком много продолжений");
+    const checkpoints = asArray(record.checkpoints, "proof.checkpoints");
+    if (checkpoints.length > MAX_PROOF_CHECKPOINTS) throw new SnapshotError("proof.checkpoints: слишком много свёрток");
+    return {
+      unitScale,
+      startingWeaponId,
+      input: encoded,
+      choices: choices.map((entry, index): [number, string] => {
+        const pair = asArray(entry, `proof.choices[${index}]`);
+        const optionId = asString(pair[1], `proof.choices[${index}][1]`);
+        if (pair.length !== 2 || optionId.length > MAX_PROOF_OPTION_ID) throw new SnapshotError(`proof.choices[${index}]: не пара «тик, вариант»`);
+        return [asCount(pair[0], `proof.choices[${index}][0]`), optionId];
+      }),
+      continues: continues.map((tick, index) => asCount(tick, `proof.continues[${index}]`)),
+      checkpoints: checkpoints.map((entry, index): [number, number] => {
+        const pair = asArray(entry, `proof.checkpoints[${index}]`);
+        const checksum = asNumber(pair[1], `proof.checkpoints[${index}][1]`);
+        if (pair.length !== 2 || !Number.isInteger(checksum)) throw new SnapshotError(`proof.checkpoints[${index}]: не пара «тик, свёртка»`);
+        return [asCount(pair[0], `proof.checkpoints[${index}][0]`), checksum];
+      }),
+    };
+  } catch (error: unknown) {
+    if (error instanceof SnapshotError || error instanceof InputLogError) return null;
+    throw error;
+  }
 }
 
 function capturedSecrets(world: World): SecretsSnapshot {

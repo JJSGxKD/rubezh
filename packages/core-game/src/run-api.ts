@@ -1,5 +1,5 @@
 import type { ContentSnapshot } from "./content/snapshot";
-import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DifficultyId, RunLoadout, RunMode, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
+import type { BlessingDef, CardTools, ChestReward, ChestSize, ChestSource, DeviceClass, DifficultyId, RunLoadout, RunMode, RunOutcome, RunPressureStart, RunResult, SecretKind, StatusElement, UpgradeOption } from "@bh/shared-types";
 
 /**
  * Публичный контракт забега: чем оболочка приложения управляет движком и что
@@ -230,6 +230,13 @@ export interface RunSnapshot {
   dev?: boolean;
   /** набор на забег; нет поля — забег без снаряжения, в том числе снимок прошлой сборки */
   loadout?: RunLoadout;
+  /**
+   * Запись для проверки на момент снимка: продолженный забег дописывает её дальше, и
+   * повтор идёт от зерна по всему забегу. Нет поля — снимок прошлой сборки (или забег
+   * разработчика): такой забег по записи не повторить, причина `resumed`. Формат снимка из-за
+   * поля не меняется.
+   */
+  proof?: RunProofDraft;
 }
 
 export interface RunSnapshotSummary {
@@ -464,6 +471,12 @@ export interface RunDiagnostics {
   perf: RunPerfSummary;
   /** полная запись — только с `diagnostics.recordRun` */
   recording: RunRecording | null;
+  /**
+   * Запись для проверки (`run-proof-v1`) — у каждого забега; `null`, если забег по ней не
+   * повторить, причина — в `proofBlocker`. Сжимает и отправляет оболочка.
+   */
+  proof: RunProof | null;
+  proofBlocker: RunReplayBlocker | null;
 }
 
 /** Версия формата записи. Меняется формат — растёт версия. */
@@ -472,11 +485,14 @@ export const RUN_RECORDING_SCHEMA = "rubezh.run.v1";
 /**
  * Почему забег по записи не повторить:
  *
- * - `resumed` — забег продолжен из снимка, лог начинается с середины;
+ * - `resumed` — забег продолжен из снимка, в котором записи для проверки не было
+ *   (снимок прошлой сборки) или она не читается, не про этот мир или считана в других
+ *   пикселях: лог начинается с середины;
  * - `dev` — забег разработчика: читы и команды в лог не пишутся;
- * - `input_overflow` — лог ввода не влез в потолок.
+ * - `input_overflow` — лог ввода не влез в потолок;
+ * - `proof_overflow` — запись для проверки после сжатия больше 64 КБ: её не отправляют.
  */
-export type RunReplayBlocker = "resumed" | "dev" | "input_overflow";
+export type RunReplayBlocker = "resumed" | "dev" | "input_overflow" | "proof_overflow";
 
 /**
  * Полная запись забега (docs/28-diagnostics.md §3.3–§3.4): по ней видно, где
@@ -525,6 +541,64 @@ export interface RunRecording {
   loadout?: RunLoadout;
   /** свёртка мира раз в минуту забега: где повтор разошёлся с оригиналом */
   checkpoints: [tick: number, checksum: number][];
+}
+
+/** Формат записи для проверки. Меняется формат — растёт версия. */
+export const RUN_PROOF_SCHEMA = "run-proof-v1";
+
+/**
+ * Ход забега в записи для проверки: всё, что вместе с зерном задаёт исход. Эти же поля
+ * лежат в снимке прерванного забега (`RunProofDraft`) и в записи (`RunProof`).
+ */
+export interface RunProofProgress {
+  /** лог ввода `rle-v1`: код направления на каждый шаг симуляции */
+  input: RunInputLog;
+  /** выборы улучшений и действия с карточками (`~reroll`, `~skip`, `~banish:…`), капища (`blessing:…`): тик и вариант */
+  choices: [tick: number, optionId: string][];
+  /** тики вторых шансов */
+  continues: number[];
+  /**
+   * Свёртка мира раз в минуту забега и в тике каждого снимка: где повтор разошёлся с
+   * оригиналом, в том числе где продолженный мир разошёлся с тем, что шёл от зерна.
+   */
+  checkpoints: [tick: number, checksum: number][];
+}
+
+/**
+ * Запись для проверки — подмножество полной записи диагностики (docs/28-diagnostics.md §3.4,
+ * docs/35-stage4-plan.md WP5): всё, что задаёт исход забега, и ничего лишнего. Кадров,
+ * событий, производительности и видеоадаптера в ней нет. Форма — поле в поле со схемой
+ * приёмника `backend/api/src/modules/runs/dto/run-proof.dto.ts`; тест сверяет их
+ * (`scripts/test/run-proof-schema.test.ts`).
+ */
+export interface RunProof extends RunProofProgress {
+  schema: typeof RUN_PROOF_SCHEMA;
+  runId: string;
+  seed: number;
+  mapId: string;
+  difficultyId: DifficultyId;
+  mode: RunMode;
+  startingWeaponId: string;
+  contentHash: string;
+  /** физических пикселей на игровую единицу: мир считается в них */
+  unitScale: number;
+  /** снимок снаряжения и бусты; класс устройства лежит отдельным полем, а не здесь */
+  loadout: RunLoadout;
+  /** слабое устройство — потолок живых врагов ниже, и повтор без него шёл бы в другой бой */
+  deviceClass: DeviceClass;
+  result: RunRecordingResult;
+}
+
+/**
+ * Запись для проверки на момент снимка прерванного забега. Шапку (зерно, карта, набор)
+ * продолженный забег берёт из самого снимка, поэтому здесь только ход и то, чего снимок не
+ * помнит: масштаб, в котором мир начал считать (в других пикселях забег от зерна не
+ * повторить), и стартовое оружие — слот оружия при эволюции меняется на месте, и снимок
+ * назвал бы стартовым уже эволюцию.
+ */
+export interface RunProofDraft extends RunProofProgress {
+  unitScale: number;
+  startingWeaponId: string;
 }
 
 export interface RunRecordingResult {
