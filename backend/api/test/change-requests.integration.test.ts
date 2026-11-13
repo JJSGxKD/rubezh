@@ -104,7 +104,7 @@ describe.skipIf(DATABASE_URL === "")("заявки на правку цен на
 
   // Цели — настоящие товары каталога, поэтому таблицы чистятся целиком: другие тесты их не трогают.
   beforeEach(async () => {
-    await prisma.changeRequest.deleteMany();
+    await prisma.changeRequest.deleteMany({ where: { OR: [{ kind: { not: "reward_setting" } }, { target: { startsWith: "gems_" } }] } });
     await prisma.shopSkuOverride.deleteMany();
   });
 
@@ -114,7 +114,7 @@ describe.skipIf(DATABASE_URL === "")("заявки на правку цен на
   });
 
   afterAll(async () => {
-    await prisma.changeRequest.deleteMany();
+    await prisma.changeRequest.deleteMany({ where: { OR: [{ kind: { not: "reward_setting" } }, { target: { startsWith: "gems_" } }] } });
     await prisma.shopSkuOverride.deleteMany();
     await prisma.accountRole.deleteMany({ where: { accountId: { in: roleAccounts } } });
     await prisma.$disconnect();
@@ -450,8 +450,9 @@ describe.skipIf(DATABASE_URL === "")("заявки на правку цен на
       expect((await prisma.shopSkuOverride.findUnique({ where: { skuId: "gems_60" } }))?.fields).toEqual({ stars: 60 });
 
       const overview = await call("GET", "", designer);
-      const body = overview.json<{ data: { requests: { requestId: string; status: string }[]; targets: { sku_price: { target: string; current: { stars: number }; inCode: { stars: number }; overridden: boolean }[] } } }>().data;
-      expect(body.requests.map((request) => [request.requestId, request.status])).toEqual([[requestId, "approved"]]);
+      const body = overview.json<{ data: { requests: { requestId: string; status: string; kind: string }[]; targets: { sku_price: { target: string; current: { stars: number }; inCode: { stars: number }; overridden: boolean }[] } } }>().data;
+      // Заявки на награды (T-0310) в списке тоже есть и идут параллельным файлом: смотрим только цены.
+      expect(body.requests.filter((request) => request.kind === "sku_price").map((request) => [request.requestId, request.status])).toEqual([[requestId, "approved"]]);
       expect(body.targets.sku_price.find((target) => target.target === "gems_60")).toMatchObject({ current: { stars: 60 }, inCode: { stars: 50 }, overridden: true });
     });
   });

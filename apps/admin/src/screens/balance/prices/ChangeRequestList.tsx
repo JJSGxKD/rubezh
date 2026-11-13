@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { ChangeRequest, RequestStatus } from "../../../api/change-requests";
 import { formatDateTime } from "../../../format";
-import { Badge, Button } from "../../../ui/kit";
+import { Badge, Button, Notice } from "../../../ui/kit";
 import { describeChange, requestActions, requestStatusTitle, timeLeft } from "./prices-rules";
 
 const STATUS_TONES: Record<RequestStatus, "warning" | "success" | "neutral" | "info"> = {
@@ -59,6 +59,15 @@ export function ChangeRequestList({
                 <li key={line}>{line}</li>
               ))}
             </ul>
+            {request.warnings === undefined || request.warnings.length === 0 ? null : (
+              <ul aria-label="Предупреждения" className="flex flex-col gap-1">
+                {request.warnings.map((warning) => (
+                  <li key={warning}>
+                    <Notice tone="warning">{warning}</Notice>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="break-words text-sm text-text-muted">«{request.reason}»</p>
             <p className="text-xs text-text-muted">
               Автор: {request.authorName ?? "—"}, {formatDateTime(request.createdAt)}
