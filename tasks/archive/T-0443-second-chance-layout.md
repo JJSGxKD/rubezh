@@ -30,7 +30,7 @@ batch: 4
 
 # T-0443. «Второй шанс» — подпись ролика в одну строку, самоцветы и звёзды ровной парой
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0443.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0443.json)](../README.md#значки-статуса)
 
 ## Зачем
 

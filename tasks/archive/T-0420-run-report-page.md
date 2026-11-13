@@ -28,7 +28,7 @@ batch: 5
 
 # T-0420. Страница отчёта забега в «Разборе забегов» — «Честный», «Аннулировать», «Вернуть забег», «Ограничить игрока»
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0420.json)](README.md#значки-статуса) [![T-0419](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0419.json&label=T-0419)](T-0419-run-report-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0420.json)](../README.md#значки-статуса) [![T-0419](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0419.json&label=T-0419)](T-0419-run-report-server.md)
 
 ## Зачем
 

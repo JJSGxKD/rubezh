@@ -25,7 +25,7 @@ batch: 4
 
 # T-0442. Экраны не ездят вбок — вкладки в своей строке, шапка не просвечивает
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0442.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0442.json)](../README.md#значки-статуса)
 
 ## Зачем
 

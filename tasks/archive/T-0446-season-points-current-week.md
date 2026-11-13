@@ -34,7 +34,7 @@ batch: 4
 
 # T-0446. Недельный сезон по очкам с идущей недели — панель пускает, таблица пересобирается сама
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0446.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0446.json)](../README.md#значки-статуса)
 
 ## Зачем
 
