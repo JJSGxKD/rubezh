@@ -3,7 +3,7 @@ id: T-0463
 title: Шаблоны повторяющихся расходов — черновики операций периода одним действием
 epic: E15
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
