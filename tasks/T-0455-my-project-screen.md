@@ -3,8 +3,8 @@ id: T-0455
 title: Кабинет участника «Мой проект» в панели
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
 depends_on: [T-0452, T-0453]
