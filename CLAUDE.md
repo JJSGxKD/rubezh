@@ -879,7 +879,9 @@ export const SECRETS: SecretsDef = {
 
 - в PowerShell 5.1 **нет `&&`** — разделять `;`, условное продолжение это
   `A; if ($?) { B }`;
-- вместо `cp` / `rm -rf` — `Copy-Item` / `Remove-Item -Recurse -Force`;
+- вместо `cp` — `Copy-Item`; вместо `rm -rf` — `cmd /c rmdir /s /q <путь>`, а
+  рабочие копии — `git worktree remove --force <путь>`: `Remove-Item -Recurse`
+  идёт по junction'ам pnpm и стирает лишнее, поэтому хук его не пропускает;
 - `nvm-windows` не читает `.nvmrc`, версию Node называем явно;
 - CI и **прод-сервер — Ubuntu Server LTS**: скрипты в `.github/workflows` и в
   контейнерах пишутся под bash.
@@ -901,6 +903,13 @@ export const SECRETS: SecretsDef = {
 
 Переводы строк нормализуются `.gitattributes` (всё хранится с LF): скрипт с
 CRLF внутри Linux-контейнера падает с `bad interpreter`.
+
+**Правила выше — не только текст: часть проверяют хуки Claude Code**
+(`.claude/settings.json`, `scripts/hooks/`, Р224). До выполнения они не
+пропускают `npm install`, `git push --force`, `Remove-Item -Recurse`, запись в
+`.env` и `.claude/launch.json`, тесты на Redis 14 и базе `bullet_heaven`,
+`npx` непроверенных пакетов; после правки `*.ts` показывают ошибки eslint,
+чистоты симуляции и границ слоёв (`tasks/README.md`, «Окружение исполнителя»).
 
 ## Сборка и проверка перед PR
 
