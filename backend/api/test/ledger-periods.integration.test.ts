@@ -9,6 +9,7 @@ import { PrismaLedgerRepository } from "../src/modules/ledger/ledger.repository.
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
 import { PrismaPeriodLock } from "../src/modules/ledger/periods/period-lock.js";
 import { periodRange } from "../src/modules/ledger/periods/period-rules.js";
+import type { SourceShare } from "../src/modules/ledger/periods/period-types.js";
 import { PrismaPeriodsRepository } from "../src/modules/ledger/periods/periods.repository.js";
 import { PeriodsService } from "../src/modules/ledger/periods/periods.service.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
@@ -21,6 +22,9 @@ import { testPrisma } from "./helpers/test-prisma.js";
  * Р222, tasks/T-0468): закрытие пишет проводки налога и долгов под ключами месяца и раза, в закрытый месяц ничего
  * не проводится, два одновременных закрытия — одно, снятие закрытия сторнирует проводки закрытия, повторное
  * закрытие не конфликтует с первым, блокеры находятся запросами к операциям и покупкам.
+ *
+ * Доли участников в основных сценариях подменены (`TestRepository.sharesByPeriod`): таблицу `stakeholder_share` другие
+ * файлы чистят целиком, и настоящая строка пропадала бы посреди теста; чтение долей из базы проверяет отдельный короткий тест.
  *
  * Журнал не стирается, поэтому каждый тест берёт свой месяц в прошлом веке (`19ГГ-ММ`): другие файлы пишут в 2026
  * и позже, и месяц теста никому больше не принадлежит. Счета теста — со своим суффиксом прогона. По окончании
@@ -43,10 +47,20 @@ async function domainError(promise: Promise<unknown>): Promise<DomainError> {
   throw new Error("ожидалась доменная ошибка, а вызов прошёл");
 }
 
+/** Всё как у настоящего репозитория, кроме долей: их тест задаёт сам. */
+class TestRepository extends PrismaPeriodsRepository {
+  readonly sharesByPeriod = new Map<string, SourceShare[]>();
+
+  protected override async shares(period: string): Promise<SourceShare[]> {
+    return this.sharesByPeriod.get(period) ?? [];
+  }
+}
+
 describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Postgres", () => {
   let prisma: PrismaClient;
   let ledger: LedgerService;
   let periods: PeriodsService;
+  let repository: TestRepository;
   let people: PrismaAccountRepository;
   const run = randomUUID().slice(0, 8);
   const audit: AuditEntry[] = [];
@@ -111,24 +125,24 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
     });
   }
 
+  /** Аккаунт для строк, у которых есть внешний ключ на аккаунт (покупка, доля). */
   async function person(name: string): Promise<string> {
     const account = await people.upsert({ platform: "telegram", platformUserId: String(940_000_000 + Math.floor(Math.random() * 50_000_000)), displayName: name, username: null, photoUrl: null }, NOW.getTime());
     createdAccounts.push(account.accountId);
     return account.accountId;
   }
 
-  /** Доля участника с месяца: строка пишется напрямую — проверка предела здесь не предмет теста. */
-  async function share(accountId: string, period: string, bp: number) {
-    await prisma.stakeholderShare.upsert({
-      where: { accountId_fromMonth: { accountId, fromMonth: new Date(`${period}-01T00:00:00.000Z`) } },
-      create: { shareId: randomUUID(), accountId, fromMonth: new Date(`${period}-01T00:00:00.000Z`), shareBp: bp, note: "доля теста", setBy: accountId },
-      update: { shareBp: bp },
-    });
+  /** Участник месяца: доля подменена в тестовом репозитории, настоящая строка не нужна. */
+  function stakeholder(period: string, name: string, bp: number): string {
+    const accountId = randomUUID();
+    repository.sharesByPeriod.set(period, [...(repository.sharesByPeriod.get(period) ?? []), { accountId, name, bp }]);
+    return accountId;
   }
 
   async function entryKeys(prefix: string): Promise<string[]> {
-    const rows = await prisma.ledgerEntry.findMany({ where: { sourceKey: { startsWith: prefix } }, select: { sourceKey: true }, orderBy: { sourceKey: "asc" } });
-    return rows.map((row) => row.sourceKey);
+    const rows = await prisma.ledgerEntry.findMany({ where: { sourceKey: { startsWith: prefix } }, select: { sourceKey: true } });
+    // порядок по кодам знаков, а не по правилам сортировки базы: у каждой локали он свой
+    return rows.map((row) => row.sourceKey).sort();
   }
 
   const lineSum = async (accountId: string, period: string) => (await prisma.ledgerLine.aggregate({ where: { accountId, entry: { period } }, _sum: { amount: true } }))._sum.amount ?? 0n;
@@ -143,8 +157,9 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
     } as unknown as FxService;
     const settings: SettingsReader = { get: (setting) => setting.fallback, onChange: () => undefined };
     const roles = { audit: async (entry: AuditEntry) => void audit.push(entry) } as unknown as RolesService;
+    repository = new TestRepository(prisma);
     periods = new PeriodsService(
-      new PrismaPeriodsRepository(prisma),
+      repository,
       fx,
       settings,
       roles,
@@ -175,8 +190,7 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
 
   it("закрытие: налог с чека и долг участнику — проводками `close:<м>:r0:…`, месяц закрыт, снимок и аудит на месте", async () => {
     const period = await freshPeriod();
-    const alice = await person("Алиса");
-    await share(alice, period, 2_500);
+    const alice = stakeholder(period, "Алиса", 2_500);
     await sale(period, `${period}:s1`, 10_000n);
     await income(period, `${period}:i1`, 400_000n, "individual");
     await periods.startReview(owner, period, NOW);
@@ -251,8 +265,7 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
 
   it("два одновременных закрытия — одно: второе получает 409, проводок закрытия ровно столько, сколько у одного", async () => {
     const period = await freshPeriod();
-    const alice = await person("Алиса");
-    await share(alice, period, 1_000);
+    const alice = stakeholder(period, "Алиса", 1_000);
     await sale(period, `${period}:s1`, 10_000n);
     await periods.startReview(owner, period, NOW);
 
@@ -267,8 +280,7 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
 
   it("снятие закрытия сторнирует все проводки закрытия, месяц снова «на сверке»; повторное закрытие — ключи r1 без конфликта", async () => {
     const period = await freshPeriod();
-    const alice = await person("Алиса");
-    await share(alice, period, 2_500);
+    const alice = stakeholder(period, "Алиса", 2_500);
     await sale(period, `${period}:s1`, 10_000n);
     await income(period, `${period}:i1`, 400_000n, "legal");
     await periods.startReview(owner, period, NOW);
@@ -404,5 +416,28 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     const row = await prisma.ledgerPeriod.findUniqueOrThrow({ where: { period } });
     expect(row).toMatchObject({ status: "review", reopenedCount: 1 });
+  });
+
+  it("доли читаются из stakeholder_share: последняя запись истории не позже месяца, ноль — конец участия", async () => {
+    const period = await freshPeriod();
+    const reader = new PrismaPeriodsRepository(prisma);
+    const anna = await person("Анна");
+    const boris = await person("Борис");
+    const at = (month: string) => new Date(`${month}-01T00:00:00.000Z`);
+    // у Анны две записи — до месяца и в нём; у Бориса запись «0 %» до месяца: участие кончилось
+    await prisma.stakeholderShare.createMany({
+      data: [
+        { shareId: randomUUID(), accountId: anna, fromMonth: at("1900-01"), shareBp: 1_000, note: "доля теста", setBy: anna },
+        { shareId: randomUUID(), accountId: anna, fromMonth: at(period), shareBp: 3_000, note: "доля теста", setBy: anna },
+        { shareId: randomUUID(), accountId: boris, fromMonth: at("1900-01"), shareBp: 2_000, note: "доля теста", setBy: boris },
+        { shareId: randomUUID(), accountId: boris, fromMonth: at("1900-02"), shareBp: 0, note: "доля теста", setBy: boris },
+      ],
+    });
+    try {
+      const shares = (await reader.loadMonth(period)).shares.filter((share) => share.accountId === anna || share.accountId === boris);
+      expect(shares).toEqual([{ accountId: anna, name: "Анна", bp: 3_000 }]);
+    } finally {
+      await prisma.stakeholderShare.deleteMany({ where: { accountId: { in: [anna, boris] } } });
+    }
   });
 });

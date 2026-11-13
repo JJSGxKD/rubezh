@@ -554,7 +554,7 @@ function fullSource(): MonthSource {
   return {
     lines: NOVEMBER,
     receipts: RECEIPTS,
-    yearReceiptsMinor: 500_000_000n,
+    yearReceiptsMinor: 5_000_000n,
     receiptsMissing: [],
     openOperations: [],
     unpostedPurchaseIds: [],
