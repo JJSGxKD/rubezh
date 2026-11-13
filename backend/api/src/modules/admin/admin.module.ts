@@ -9,6 +9,7 @@ import { BroadcastsModule } from "../broadcasts/broadcasts.module.js";
 import { ChangelogModule } from "../changelog/changelog.module.js";
 import { PlayerListModule } from "../player-list/player-list.module.js";
 import { ShopModule } from "../shop/shop.module.js";
+import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
 import { TasksModule } from "../tasks/tasks.module.js";
 import { AdsModule } from "../ads/ads.module.js";
 import { TestNoticeModule } from "../test-notice/test-notice.module.js";
@@ -23,12 +24,14 @@ import { AdminCabinetController } from "./admin-cabinet.controller.js";
 import { AdminStakeholdersController } from "./admin-stakeholders.controller.js";
 import { StakeholdersModule } from "../stakeholders/stakeholders.module.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
+import { AdminPassController } from "./admin-pass.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
 import { AdminCustomerReportController } from "./admin-customer-report.controller.js";
 import { CUSTOMER_REPORT_REPOSITORY, PrismaCustomerReportRepository } from "../tasks/customer-report.repository.js";
 import { AdminMediaController } from "./admin-media.controller.js";
 import { AdminPaymentCompensationController } from "./admin-payment-compensation.controller.js";
 import { AdminPaymentJobsController } from "./admin-payment-jobs.controller.js";
+import { AdminPaymentReconcileController } from "./admin-payment-reconcile.controller.js";
 import { AdminPaymentsController } from "./admin-payments.controller.js";
 import { AdminPurchasesController } from "./admin-purchases.controller.js";
 import { AdminRestrictionsController } from "./admin-restrictions.controller.js";
@@ -111,7 +114,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -135,12 +138,14 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminHomeController,
     AdminTasksController,
     AdminCustomerReportController,
+    AdminPassController,
     AdminMediaController,
     AdminRestrictionsController,
     AdminPurchasesController,
     AdminPaymentsController,
     AdminPaymentCompensationController,
     AdminPaymentJobsController,
+    AdminPaymentReconcileController,
     AdminAdsController,
     AdminNameRulesController,
     AdminNameRulesStatsController,

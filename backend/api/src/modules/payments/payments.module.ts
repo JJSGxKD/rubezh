@@ -9,6 +9,8 @@ import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
 import { PaymentCheckoutMarks } from "./payment-checkout-marks.js";
 import { PaymentFeedSources } from "./payment-feed-sources.js";
 import { PaymentJobs } from "./payment-jobs.js";
+import { PAYMENT_RECONCILE_REPOSITORY, PrismaPaymentReconcileRepository } from "./payment-reconcile.repository.js";
+import { PaymentReconciler } from "./payment-reconciler.js";
 import { PaymentRetry } from "./payment-retry.js";
 import { PAYMENTS_FEED_REPOSITORY, PrismaPaymentsFeedRepository } from "./payments-feed.repository.js";
 import { PaymentsFeed } from "./payments-feed.service.js";
@@ -70,11 +72,13 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     PaymentJobs,
     PaymentRetry,
     PaymentCheckoutMarks,
+    PaymentReconciler,
     PurchaseCompensations,
     PurchaseNotices,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
     { provide: PAYMENTS_FEED_REPOSITORY, useClass: PrismaPaymentsFeedRepository },
     { provide: PURCHASE_COMPENSATION_REPOSITORY, useClass: PrismaPurchaseCompensationRepository },
+    { provide: PAYMENT_RECONCILE_REPOSITORY, useClass: PrismaPaymentReconcileRepository },
   ],
   // Репозиторий — карточке игрока в панели: покупки аккаунта читаются, не меняются.
   // Сервис и выдача — магазину и VIP: они выставляют счета на товары и выдают их;
@@ -83,8 +87,10 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
   // панели же (`admin/admin-payments.controller.ts`), а реестр источников хронологии — модулям, которые
   // добавляют в карточку платежа свои строки: брошенные задания, сверка, компенсация (Р209). Брошенные
   // задания очереди и «Повторить учёт» (`PaymentJobs`, `PaymentRetry`) — панели: `admin/admin-payment-jobs.controller.ts`.
+  // Сверка оплат с выпиской площадки (Р209, tasks/T-0433) — панели: `admin/admin-payment-reconcile.controller.ts`;
+  // действия по расхождениям (T-0434) живут в этом же модуле и берут репозиторий сверки отсюда.
   // Компенсация за сбой оплаты — панели же (`admin/admin-payment-compensation.controller.ts`):
   // кошелёк подключён ради неё, цикла нет — кошелёк платежей не знает.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY, PaymentsFeed, PaymentFeedSources, PaymentJobs, PaymentRetry, PurchaseCompensations],
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY, PaymentsFeed, PaymentFeedSources, PaymentJobs, PaymentRetry, PurchaseCompensations, PaymentReconciler, PAYMENT_RECONCILE_REPOSITORY],
 })
 export class PaymentsModule {}

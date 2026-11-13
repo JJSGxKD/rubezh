@@ -165,6 +165,7 @@ const ACTION_TITLES: Record<string, string> = {
   "payments.retry": "Повтор учёта покупки",
   "payments.job.retry": "Повтор брошенного задания оплаты",
   "payments.compensate": "Компенсация за сбой оплаты",
+  "payments.reconcile.run": "Сверка оплат вручную",
 };
 
 /** Незнакомое действие — новее панели — показывается как записано: лучше код, чем пустота. */
