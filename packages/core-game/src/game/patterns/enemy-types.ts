@@ -280,6 +280,10 @@ function findBaseProblems(def: EnemyDef): string[] {
   if (def.size !== undefined && !(def.size >= ENEMY_SIZE_MIN && def.size <= ENEMY_SIZE_MAX)) {
     problems.push(`враг ${def.id}: size вне 0,7…2,5`);
   }
+  // Запас запроса к сетке (`MAX_PATTERN_RADIUS`) не считает у преследователя ранг и размер: хитбокс — радиус паттерна.
+  if (def.pattern === "stalker" && (def.rank !== undefined || def.size !== undefined)) {
+    problems.push(`враг ${def.id}: у преследователя нет ранга и size — его хитбокс только радиус паттерна`);
+  }
   for (const [element, value] of Object.entries(def.resist ?? {})) {
     const known = element !== "physical" && (ELEMENTS as readonly string[]).includes(element);
     if (!known || !(typeof value === "number" && value >= MIN_RESIST && value <= MAX_RESIST)) {

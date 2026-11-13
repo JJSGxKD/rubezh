@@ -84,14 +84,27 @@ describe("размер врага: запас запросов к сетке", (
   it("MAX_PATTERN_RADIUS не меньше радиуса любого врага с size из коридора", () => {
     for (const pattern of Object.keys(PATTERN_TRAITS) as EnemyPattern[]) {
       for (const rank of [undefined, "elite", "boss"] as const) {
-        const type = resolveEnemyTypes([enemyOf(pattern, { rank, size: ENEMY_SIZE_MAX }), enemy({ id: "y" })], 1)[0];
+        // Преследователю ранг и size запрещены самим контентом (тест ниже): его хитбокс — радиус паттерна.
+        const size = pattern === "stalker" ? undefined : ENEMY_SIZE_MAX;
+        if (pattern === "stalker" && rank !== undefined) continue;
+        const type = resolveEnemyTypes([enemyOf(pattern, { rank, ...(size === undefined ? {} : { size }) }), enemy({ id: "y" })], 1)[0];
         expect(type.radius, `${pattern}/${rank ?? "normal"}`).toBeLessThanOrEqual(MAX_PATTERN_RADIUS);
       }
     }
   });
 
   it("запас считается с верхом коридора и боссом, а не с обычным радиусом", () => {
-    const largest = Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius));
+    const largest = Math.max(
+      ...Object.entries(PATTERN_TRAITS)
+        .filter(([pattern]) => pattern !== "stalker")
+        .map(([, traits]) => traits.radius),
+    );
     expect(MAX_PATTERN_RADIUS).toBeCloseTo(largest * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX, 9);
+  });
+
+  it("преследователь с рангом или size — ошибка контента: запас его не покрывает", () => {
+    expect(findEnemyContentProblems([enemyOf("stalker", { rank: "boss" })]).join(" ")).toMatch(/у преследователя нет ранга и size/);
+    expect(findEnemyContentProblems([enemyOf("stalker", { size: 1.2 })]).join(" ")).toMatch(/у преследователя нет ранга и size/);
+    expect(findEnemyContentProblems([enemyOf("stalker")]).join(" ")).not.toMatch(/у преследователя нет ранга и size/);
   });
 });
