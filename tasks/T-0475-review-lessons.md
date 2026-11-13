@@ -11,6 +11,7 @@ depends_on: []
 zones:
   - scripts/lead/review-stats.mjs
   - scripts/test/review-stats.test.ts
+  - scripts/test/lead-conveyor.test.ts
 shared:
   - .claude/skills/review-pr/SKILL.md
   - .claude/skills/take-task/SKILL.md
