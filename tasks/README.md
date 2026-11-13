@@ -1215,6 +1215,28 @@ Workflow({ name: "pipeline", args: { lanes: 6, maxTasks: 4, priority: ["T-0477"]
   настройки репозитория, секреты и переменные Actions.
 - **Прод.** Сервер исполнителю недоступен и не нужен. Выкат — только релизом
   тимлидов.
+- **Хуки: что блокируется и почему.** В `.claude/settings.json` подключены хуки
+  Claude Code (`scripts/hooks/*.mjs`, Р224): они действуют на каждую сессию и
+  каждого агента в репозитории. Перед выполнением (`PreToolUse`, выход 2 —
+  запрет, причина и «как правильно» в ответе) не пропускаются: `npm install`,
+  `npm i`, `npm ci` — в репозитории только pnpm; `git push` с `--force`, `-f`,
+  `--force-with-lease` и refspec с `+` — чужую историю не перезаписываем;
+  `Remove-Item -Recurse` — он идёт по junction'ам pnpm, рабочие копии удаляют
+  `git worktree remove --force` и `cmd /c rmdir /s /q`; запись в `.env`
+  (перенаправление, `tee`, `Set-Content`, `Out-File`, `sed -i`, `cp` в `.env`) и
+  правка `.env`, `.env.*` (кроме `.env.example`) и `.claude/launch.json` —
+  их правит только владелец; тестовые запуски с `redis://…/14` или базой
+  `bullet_heaven` — тесты идут на Redis 13 и `rubezh_test` (`source
+  scripts/lead/test-env.sh t<номер>`); `npx` не из списка `prisma`, `vitest`,
+  `tsc`, `eslint`, `playwright` — сначала спросить. Текст запрещённой команды
+  внутри сообщения коммита, тела PR или here-doc хук не трогает. После правки
+  `*.ts` и `*.tsx` (`PostToolUse`) он показывает ошибки eslint этого файла,
+  нарушения чистоты симуляции (те же запреты, что `sim-purity.test.ts`) и
+  границ слоёв (общий список — `scripts/hooks/layer-rules.mjs`, его читает и
+  `layer-boundaries.test.ts`); правка уже сделана, находка только сообщает о
+  ней. Сломанный хук (мусор на входе, исключение) работу не блокирует: выход 0
+  и строка в stderr. Хук не отменяет правило: обойти его другой командой — то
+  же нарушение; нужен запрещённый шаг — вопрос в PR.
 - **Облачная сессия Claude Code** (claude.ai/code) закрывает GraphQL GitHub:
   `gh pr list`, `gh pr create`, `gh pr edit`, `gh pr ready` в ней не работают.
   `pnpm task next`, `board`, `streams` и `resume` тогда читают открытые PR и
