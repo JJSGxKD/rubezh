@@ -89,6 +89,8 @@ const finishFields = {
       noHitSec: z.optional(z.number()),
       noKillSec: z.optional(z.number()),
       killsByElement: z.optional(z.partialRecord(z.enum(ELEMENTS), z.number())),
+      // Встреченные враги для кодекса (T-0479): записи прошлых сборок их не знают.
+      enemiesSeen: z.optional(z.array(z.string())),
       // Очки эффективности (T-0293): журнал охоты, оценка сборки и сила на старте; записи прошлых сборок их не знают.
       huntLog: z.optional(z.array(z.object({ rank: z.enum(["elite", "boss"]), value: z.number(), aliveSec: z.number() }))),
       buildScore: z.optional(z.number()),
@@ -99,6 +101,9 @@ const finishFields = {
 
 /** Сколько врагов в «кого больше всего убил» — столько же хранит сервер. */
 const TOP_KILLS = 5;
+
+/** Потолок списка встреченных врагов — тот же, что у сервера (`runFinishSchema`). */
+const MAX_ENEMIES_SEEN = 64;
 
 const startEntrySchema = z.object({
   kind: z.literal("start"),
@@ -332,6 +337,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
       noHitSec: result.noHitSec,
       noKillSec: result.noKillSec,
       killsByElement: result.killsByElement,
+      // Потолок сервера — 64: лишнее обрезается здесь, иначе итог целиком уйдёт в отказ формы.
+      ...(result.enemiesSeen === undefined ? {} : { enemiesSeen: result.enemiesSeen.slice(0, MAX_ENEMIES_SEEN) }),
       // Для очков эффективности (T-0293): без них сервер считает оси охоты и сборки единицей, а полосу берёт среднюю.
       ...(result.huntLog === undefined ? {} : { huntLog: result.huntLog.map(({ rank, value, aliveSec }) => ({ rank, value, aliveSec })) }),
       ...(result.buildScore === undefined ? {} : { buildScore: result.buildScore }),

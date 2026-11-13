@@ -1850,6 +1850,12 @@ export interface RunResult {
   prologue?: RunPrologue;
   /** убийства по id врага; враги без убийств не попадают */
   killsByEnemy: Record<string, number>;
+  /**
+   * Типы врагов, вышедшие в мир, — id в порядке первого появления, без повторов (tasks/T-0479).
+   * Не «убил», а «встретил»: босс и элита здесь есть, даже если их не убили. Необязательное:
+   * итог прошлой сборки поля не знает.
+   */
+  enemiesSeen?: string[];
   damageDealt: number;
   damageTaken: number;
   /**
@@ -2002,6 +2008,8 @@ export interface RunFinishStats {
   noHitSec?: number;
   noKillSec?: number;
   killsByElement?: Partial<Record<ElementId, number>>;
+  /** типы врагов, вышедшие в мир (tasks/T-0479): по ним сервер открывает записи кодекса; записи прошлых сборок поля не знают */
+  enemiesSeen?: string[];
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;
