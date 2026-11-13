@@ -179,8 +179,8 @@ describe.skipIf(DATABASE_URL === "")("места хранения и стать�
     const second = await chart.createArticle(actor, { name: `Хостинг ${run}`, kind: "income" });
     createdArticles.push(first.articleId, second.articleId);
 
-    expect(first).toMatchObject({ articleId: `hosting-${run}`, kind: "expense", system: false, archived: false });
-    expect(second.articleId).toBe(`hosting-${run}-2`);
+    expect(first).toMatchObject({ articleId: `khosting-${run}`, kind: "expense", system: false, archived: false });
+    expect(second.articleId).toBe(`khosting-${run}-2`);
 
     const accountId = await chart.ensureArticleAccount(first.articleId, "USD");
     createdAccounts.push(accountId);
