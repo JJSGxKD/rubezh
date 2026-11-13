@@ -3,8 +3,8 @@ id: T-0420
 title: Страница отчёта забега в «Разборе забегов» — «Честный», «Аннулировать», «Вернуть забег», «Ограничить игрока»
 epic: E11
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0419]
