@@ -173,9 +173,15 @@ describe("переброс за рекламу в оболочке", () => {
 
     it("пока сервер отвечает, кнопки нет: стадия «проверяем»", async () => {
       let release: (value: ApiResult<AdRerollView>) => void = () => undefined;
-      server.view = () => new Promise((resolve) => (release = resolve));
+      let asked = 0;
+      server.view = () => {
+        asked++;
+        return new Promise((resolve) => (release = resolve));
+      };
       const asking = useAdReroll.getState().prepare(input());
       expect(useAdReroll.getState().stage).toEqual({ kind: "checking" });
+      // Перед вопросом оболочка отправляет очередь забегов: до сервера дело доходит не сразу.
+      await vi.waitFor(() => expect(asked).toBe(1));
       release({ ok: true, data: { status: "available", pass: null } });
       await asking;
       expect(useAdReroll.getState().stage).toEqual({ kind: "ready", pass: false });
@@ -232,8 +238,13 @@ describe("переброс за рекламу в оболочке", () => {
 
     it("ответ по ушедшему забегу ничего не меняет", async () => {
       let release: (value: ApiResult<AdRerollView>) => void = () => undefined;
-      server.view = () => new Promise((resolve) => (release = resolve));
+      let asked = 0;
+      server.view = () => {
+        asked++;
+        return new Promise((resolve) => (release = resolve));
+      };
       const asking = useAdReroll.getState().prepare(input());
+      await vi.waitFor(() => expect(asked).toBe(1));
       useAdReroll.getState().reset();
       release({ ok: true, data: { status: "available", pass: null } });
       await asking;
