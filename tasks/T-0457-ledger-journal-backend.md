@@ -3,7 +3,7 @@ id: T-0457
 title: Журнал учёта в базе — план счетов, запись проводок, остатки и журнал для панели
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
