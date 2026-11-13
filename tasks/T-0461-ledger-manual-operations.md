@@ -3,7 +3,7 @@ id: T-0461
 title: Ручные операции учёта — перевод, обмен, расход, поступление, заём, исправление (сервер)
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
@@ -18,6 +18,8 @@ shared:
   - backend/api/src/modules/ledger/ledger.module.ts
   - backend/api/src/modules/admin/admin-ledger.controller.ts
   - backend/api/test/admin-ledger.http.test.ts
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
 runner: any
