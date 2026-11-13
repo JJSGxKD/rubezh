@@ -114,7 +114,7 @@ const FALLBACK_SECRETS: SecretsDef = {
   stone: { radius: 30 },
   tree: { radius: 120, healPerSec: 0.02, shieldEverySec: 60 },
   rift: { radius: 50, elites: 6, ringRadius: 300, chestSize: 5, timeLimitSec: 90 },
-  wisp: { appearSec: 90, speed: 80 },
+  wisp: { appearSec: 90, speed: 150, hopUnits: 200, swayMin: 0.4, swayMax: 0.8, waitUnits: 140 },
   blessings: [{ id: "fallback", nameKey: "blessing.fallback", modifiers: { damage: 0.1 } }],
 };
 

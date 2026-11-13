@@ -505,6 +505,11 @@ export class TelegramBotApi {
     await this.call("refundStarPayment", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.refundStarPayment(userId, chargeId, abort));
   }
 
+  /** Выписка звёзд бота: операции по порядку времени, от старых к новым (`offset`, `limit` 1–100). Ответ разбирает адаптер выписки. */
+  async getStarTransactions(offset: number, limit: number, signal?: AbortSignal): Promise<unknown> {
+    return this.call("getStarTransactions", REQUEST_TIMEOUT_MS, signal, (abort) => this.api.getStarTransactions({ offset, limit }, abort));
+  }
+
   /**
    * Отменить продление подписки игрока (`canceled: true`) или вернуть то,
    * что отменил бот. Отменённое игроком бот вернуть не может — только сам
