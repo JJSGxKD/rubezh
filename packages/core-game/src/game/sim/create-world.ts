@@ -44,6 +44,7 @@ import { findPressureProblems, initPressure, isPressureActive } from "./pressure
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
 import { createRubezhState } from "./rubezh";
+import { createStalkerState } from "./stalker";
 import { createStalkerBodyState, findStalkerProblems } from "./stalker-body";
 import { createPrologueState } from "../run/prologue";
 import { gridCellSize, SpatialGrid } from "./grid";
@@ -404,6 +405,16 @@ export function createWorld(options: CreateWorldOptions): World {
     ),
     cordon: createCordonState(),
     stalkerBody: createStalkerBodyState(stalkerRules, enemyTypes),
+    stalker: createStalkerState(
+      createRng(deriveSeed(options.seed, STREAM_SALT.stalker)),
+      stalkerRules,
+      enemyTypes.findIndex((type) => type.id === stalkerRules?.enemy),
+      // Новичку Карачуна нет: пролог и «Лёгкая» обучают, ниже `minAccountLevel` аккаунт ещё не готов.
+      // Забег без уровня (стенд, боты, разработчик) идёт с Карачуном.
+      prologueRules === null &&
+        options.difficulty?.id !== "easy" &&
+        (runLoadout.accountLevel === undefined || stalkerRules === undefined || runLoadout.accountLevel >= stalkerRules.appear.minAccountLevel),
+    ),
     rubezh: createRubezhState(createRng(deriveSeed(options.seed, STREAM_SALT.rubezh)), options.rubezh ?? null, enemyTypes),
     siegeRules: prologueRules !== null || options.difficulty?.id === "easy" ? null : siegeRules,
     siege: createSiegeState(createRng(deriveSeed(options.seed, STREAM_SALT.siege))),
