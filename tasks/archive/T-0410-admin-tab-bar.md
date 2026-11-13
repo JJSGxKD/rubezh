@@ -25,7 +25,7 @@ batch: 4
 
 # T-0410. Вкладки панели — общий компонент TabBar из карточки игрока
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0410.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0410.json)](../README.md#значки-статуса)
 
 ## Зачем
 

@@ -25,7 +25,7 @@ batch: 5
 
 # T-0412. Раздел «Настройки» — вкладки по группам с адресом вместо одной ленты
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0412.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0412.json)](../README.md#значки-статуса)
 
 ## Зачем
 

@@ -36,7 +36,7 @@ batch: 5
 
 # T-0419. Отчёт забега для разбора и решения «Честный», «Аннулировать», «Вернуть забег» — сервер
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0419.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0419.json)](../README.md#значки-статуса)
 
 ## Зачем
 

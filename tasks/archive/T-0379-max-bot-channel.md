@@ -41,7 +41,7 @@ batch: 5
 
 # T-0379. Бот MAX — связывает аккаунт по стартовому параметру и проверяет подписку на канал
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0379.json)](README.md#значки-статуса) [![T-0377](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0377.json&label=T-0377)](archive/T-0377-external-account-link-base.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0379.json)](../README.md#значки-статуса) [![T-0377](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0377.json&label=T-0377)](T-0377-external-account-link-base.md)
 
 ## Зачем
 

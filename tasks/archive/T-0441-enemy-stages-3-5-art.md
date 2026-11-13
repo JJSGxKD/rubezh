@@ -33,7 +33,7 @@ batch: 5
 
 # T-0441. Рисунки ступеней 3–5 для всех обычных врагов
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0441.json)](README.md#значки-статуса) [![T-0440](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0440.json&label=T-0440)](T-0440-art-stage-fallback.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0441.json)](../README.md#значки-статуса) [![T-0440](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0440.json&label=T-0440)](T-0440-art-stage-fallback.md)
 
 ## Зачем
 

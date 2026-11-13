@@ -42,7 +42,7 @@ batch: 4
 
 # T-0429. Лента и карточка платежа в панели — сервер, права и источники хронологии
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0429.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0429.json)](../README.md#значки-статуса)
 
 ## Зачем
 

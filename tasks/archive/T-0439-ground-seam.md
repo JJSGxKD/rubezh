@@ -27,7 +27,7 @@ batch: 4
 
 # T-0439. Земля забега без швов — нет тонкой полосы на стыке клеток
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0439.json)](README.md#значки-статуса)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0439.json)](../README.md#значки-статуса)
 
 ## Зачем
 

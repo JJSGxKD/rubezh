@@ -54,7 +54,7 @@ batch: 5
 
 # T-0385. Пул Xray — транспорт и безопасность узла, устройство и маршрутизация подписки
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json)](README.md#значки-статуса) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](archive/T-0384-xray-multi-subscription.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0385.json)](../README.md#значки-статуса) [![T-0384](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0384.json&label=T-0384)](T-0384-xray-multi-subscription.md)
 
 ## Зачем
 
