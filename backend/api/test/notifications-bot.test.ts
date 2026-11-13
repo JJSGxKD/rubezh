@@ -438,6 +438,8 @@ describe("сообщение бота о компенсации и возвра�
     expect(botMessageOf("purchase_support", { ...compensated(5), action: "gifted" }, launch)).toBeNull();
     expect(botMessageOf("purchase_support", { ...compensated(5), stars: -1 }, launch)).toBeNull();
     expect(botMessageOf("purchase_support", { ...compensated(5), gems: 1.5 }, launch)).toBeNull();
+    // извиняться за начисление нуля самоцветов незачем
+    expect(botMessageOf("purchase_support", compensated(0), launch)).toBeNull();
     expect(botMessageOf("purchase_support", { ...compensated(5), paidAt: "вчера" }, launch)).toBeNull();
     expect(botMessageOf("purchase_support", { ...refunded("manual", false), reason: "external" }, launch)).toBeNull();
     expect(botMessageOf("purchase_support", { ...refunded("manual", false), revoked: "да" }, launch)).toBeNull();

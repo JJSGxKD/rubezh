@@ -1,6 +1,7 @@
+import { pluralRu } from "../../common/card/labels.js";
 import { GAME_DAY_TIME_ZONE } from "../../common/game-day.js";
 import type { OutgoingMessage } from "../../platforms/ports/messenger.js";
-import { NOTIFICATION_KINDS } from "../notifications/notification-kinds.js";
+import { NOTIFICATION_KINDS, type NotificationPayload } from "../notifications/notification-kinds.js";
 import { REMINDER_OFF_DATA } from "../reminders/reminder-rules.js";
 import type { Difficulty } from "../runs/run-rules.js";
 
@@ -32,6 +33,9 @@ export const DIFFICULTY_NAMES: Record<Difficulty, string> = { easy: "Обуче�
 
 const TIME_FORMAT = new Intl.DateTimeFormat("en-GB", { timeZone: GAME_DAY_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
+/** `ДД.ММ` по Москве: день оплаты для игрока — по игровым суткам, а не по поясу сервера. */
+const DATE_FORMAT = new Intl.DateTimeFormat("ru-RU", { timeZone: GAME_DAY_TIME_ZONE, day: "2-digit", month: "2-digit" });
+
 export function botMessageOf(kind: string, payload: unknown, launch: (startParam: string) => string | null): OutgoingMessage | null {
   const text = textOf(kind, payload);
   if (text === null) return null;
@@ -54,6 +58,10 @@ function textOf(kind: string, payload: unknown): string | null {
       const data = NOTIFICATION_KINDS.team_message.safeParse(payload);
       return data.success ? `Сообщение команды «Рубежа»:\n\n${data.data.text}` : null;
     }
+    case "purchase_support": {
+      const data = NOTIFICATION_KINDS.purchase_support.safeParse(payload);
+      return data.success ? purchaseSupportText(data.data) : null;
+    }
     // Напоминания пишутся на «ты» и без рода (Р163): «обогнали», «ты теперь», «успей».
     case "season_overtaken": {
       const data = NOTIFICATION_KINDS.season_overtaken.safeParse(payload);
@@ -72,6 +80,26 @@ function textOf(kind: string, payload: unknown): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Извинение за сбой оплаты и возврат звёзд (Р209): на «ты», без давления и без зова в магазин (Р11).
+ * Компенсация без самоцветов и возврат без причины — не по смыслу вида: писать нечего.
+ */
+function purchaseSupportText(data: NotificationPayload<"purchase_support">): string | null {
+  const date = DATE_FORMAT.format(new Date(data.paidAt));
+  if (data.action === "compensated") {
+    if (data.gems === 0) return null;
+    const gems = `${String(data.gems)} ${pluralRu(data.gems, "самоцвет", "самоцвета", "самоцветов")}`;
+    return `Команда «Рубежа»: прости — с твоей оплатой ${String(data.stars)} ⭐ от ${date} случился сбой на нашей стороне. Мы начислили тебе ${gems}, они уже на счёте в игре.`;
+  }
+  if (data.reason === null) return null;
+  const head = `Команда «Рубежа»: вернули тебе ${String(data.stars)} ⭐ за покупку от ${date}`;
+  const body =
+    data.reason === "manual"
+      ? `${head} по решению поддержки. Звёзды уже на твоём счёте.`
+      : `${head} — этого товара больше нет в магазине. Прости за неудобство, звёзды уже на твоём счёте.`;
+  return data.revoked ? `${body} Остаток покупки списан со счёта в игре.` : body;
 }
 
 /** `ЧЧ:ММ` по Москве: сезон кончается в 03:00, и игроку важно именно московское время. */
