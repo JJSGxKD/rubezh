@@ -13,6 +13,7 @@ zones:
   - scripts/test/lead-metrics.test.ts
 shared:
   - tasks/README.md
+  - scripts/test/lead-conveyor.test.ts
 runner: any
 executor: sonnet-5.5
 effort: medium
