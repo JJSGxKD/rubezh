@@ -3225,6 +3225,7 @@ model LedgerAccount {
   article          LedgerArticle?    @relation(fields: [articleId], references: [articleId], onDelete: Restrict)
 
   lines LedgerLine[]
+  loans LedgerLoan[]
 
   @@index([place])
   @@index([articleId])
@@ -3269,4 +3270,79 @@ model LedgerLine {
   @@unique([entryId, accountId])
   @@index([accountId, entryId])
   @@map("ledger_line")
+}
+
+// Ручные операции учёта: что ввёл человек и условия займов (docs/37-accounting.md §4, Р220, tasks/T-0461)
+
+enum LedgerOperationKind {
+  transfer
+  exchange
+  expense
+  income
+  loan
+  reversal
+}
+
+/// draft — черновик (в том числе из шаблона), pending — ждёт второго ключа (tasks/T-0462), posted — проведена,
+/// rejected — отклонена владельцем
+enum LedgerOperationStatus {
+  draft
+  pending
+  posted
+  rejected
+}
+
+/// Операция, которую вносит человек: поля вида лежат в `input`, а проводку из них собирает сервер (`op:<id>`).
+/// Черновик правится и удаляется, проведённая операция не меняется — исправление только сторно.
+model LedgerOperation {
+  operationId    String                @id @map("operation_id") @db.Uuid
+  kind           LedgerOperationKind
+  status         LedgerOperationStatus @default(draft)
+  /// поля вида без причины и ссылки: суммы десятичными строками в валюте места, дата события
+  input          Json
+  /// причина или описание, 3…500 знаков; становится описанием проводки
+  note           String                @db.VarChar(500)
+  link           String?               @db.VarChar(500)
+  /// оценка размера в долларах по курсу на момент ввода: для порога второго ключа и списка; нет курса — пусто
+  amountUsd      Decimal?              @map("amount_usd") @db.Decimal(18, 2)
+  /// ключ проводки `op:<id>` — появляется, когда операция проведена
+  sourceKey      String?               @unique @map("source_key") @db.VarChar(128)
+  /// кто внёс; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  createdBy      String                @map("created_by") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  decidedBy      String?               @map("decided_by") @db.Uuid
+  decidedAt      DateTime?             @map("decided_at") @db.Timestamptz(3)
+  decisionNote   String?               @map("decision_note") @db.VarChar(500)
+  /// шаблон повторяющегося расхода, из которого создан черновик, и период «ГГГГ-ММ»: на период один черновик
+  templateId     String?               @map("template_id") @db.VarChar(64)
+  templatePeriod String?               @map("template_period") @db.Char(7)
+
+  loan LedgerLoan?
+
+  @@unique([templateId, templatePeriod])
+  @@index([status, createdAt])
+  @@map("ledger_operation")
+}
+
+/// Заём проекту: тело, премия и ставка погашения — условия для закрытия месяца (волна 4). Остаток — тело и премия
+/// за вычетом погашенного; счёт-обязательство `loan.<кредитор>.<валюта>` общий у займов одного кредитора в одной валюте.
+model LedgerLoan {
+  loanId      String   @id @map("loan_id") @db.Uuid
+  lender      String   @db.VarChar(128)
+  accountId   String   @map("account_id") @db.VarChar(64)
+  currency    String   @db.VarChar(16)
+  /// тело займа в минимальных единицах валюты
+  principal   BigInt
+  /// премия сверх тела в минимальных единицах той же валюты
+  premium     BigInt
+  /// доля чистой прибыли месяца на погашение, сотые доли процента: 0…10 000
+  repaymentBp Int      @map("repayment_bp")
+  operationId String   @unique @map("operation_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  account   LedgerAccount   @relation(fields: [accountId], references: [accountId], onDelete: Restrict)
+  operation LedgerOperation @relation(fields: [operationId], references: [operationId], onDelete: Restrict)
+
+  @@index([accountId])
+  @@map("ledger_loan")
 }

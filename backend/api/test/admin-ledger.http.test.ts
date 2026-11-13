@@ -22,6 +22,11 @@ import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.j
 import { LedgerCursorInvalidError } from "../src/modules/ledger/ledger-errors.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../src/modules/ledger/ledger-view.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
+import { LedgerOperationInvalidError, LedgerOperationNotDraftError } from "../src/modules/ledger/operations/operation-errors.js";
+import type { OperationInput } from "../src/modules/ledger/operations/operation-input.js";
+import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
+import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
+import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Role } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -36,7 +41,8 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
  * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
- * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`.
+ * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`;
+ * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
  */
@@ -146,6 +152,68 @@ class FakeChart {
   }
 }
 
+const OPERATION_ID = "00000000-0000-4000-8000-0000000000a1";
+
+const OPERATION: OperationView = {
+  operationId: OPERATION_ID,
+  kind: "expense",
+  status: "draft",
+  input: { kind: "expense", note: "Оплата сервера за ноябрь", at: "2026-11-10", from: "bank.rub", article: "vps", amount: "1500" },
+  amountUsd: "18.75",
+  createdBy: "00000000-0000-4000-8000-0000000000b1",
+  createdAt: "2026-11-13T12:00:00.000Z",
+  decidedBy: null,
+  decidedAt: null,
+  decisionNote: null,
+  templateId: null,
+  templatePeriod: null,
+  receiptMissing: false,
+  entry: null,
+  loan: null,
+};
+
+const OPERATION_PAGE: OperationPage = { operations: [OPERATION], next: null };
+
+/** Подменный сервис операций: помнит вызовы с автором и отдаёт готовые ответы; может отказать, как настоящий. */
+class FakeOperations {
+  readonly calls: { method: string; actor: string | null; args: unknown[] }[] = [];
+  failWith: Error | null = null;
+
+  private record(method: string, actor: { accountId: string } | null, ...args: unknown[]): void {
+    this.calls.push({ method, actor: actor?.accountId ?? null, args });
+    if (this.failWith !== null) throw this.failWith;
+  }
+
+  async list(filter: OperationFilter, cursor: string | null, limit: number): Promise<OperationPage> {
+    this.record("list", null, filter, cursor, limit);
+    return OPERATION_PAGE;
+  }
+
+  async get(operationId: string): Promise<OperationView> {
+    this.record("get", null, operationId);
+    return OPERATION;
+  }
+
+  async create(actor: { accountId: string }, input: OperationInput): Promise<OperationView> {
+    this.record("create", actor, input);
+    return OPERATION;
+  }
+
+  async update(actor: { accountId: string }, operationId: string, input: OperationInput): Promise<OperationView> {
+    this.record("update", actor, operationId, input);
+    return OPERATION;
+  }
+
+  async submit(actor: { accountId: string }, operationId: string): Promise<OperationView> {
+    this.record("submit", actor, operationId);
+    return { ...OPERATION, status: "posted" };
+  }
+
+  async discard(actor: { accountId: string }, operationId: string): Promise<void> {
+    this.record("discard", actor, operationId);
+  }
+}
+
 describe("журнал учёта в панели по HTTP", () => {
   let app: NestFastifyApplication | null = null;
 
@@ -160,6 +228,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const roles = new MemoryRolesRepository();
     const ledger = new FakeLedger();
     const chart = new FakeChart();
+    const operations = new FakeOperations();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
     @Module({
       controllers: [AdminSessionController, AdminLedgerController],
@@ -172,6 +241,7 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: LedgerService, useValue: ledger },
         { provide: LedgerChartService, useValue: chart },
+        { provide: OperationsService, useValue: operations },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -199,7 +269,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, login, staff };
+    return { ledger, chart, operations, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -457,5 +527,211 @@ describe("журнал учёта в панели по HTTP", () => {
     expect((await send("PATCH", "/articles/vps", finance, { name: "" })).statusCode).toBe(400);
     expect((await send("PATCH", "/articles/vps", finance, { name: "Сервер", kind: "income" })).statusCode).toBe(400);
     expect(ctx.chart.calls).toHaveLength(2);
+  });
+
+  // ---- Ручные операции (Р220, tasks/T-0461) ----
+
+  const EXPENSE_BODY = { kind: "expense", note: "Оплата сервера за ноябрь", at: "2026-11-10", from: "bank.rub", article: "vps", amount: "1500" };
+
+  /** Правильное тело каждого вида: сервис получает ровно его, без добавленных и потерянных полей. */
+  const BODIES: Record<string, object> = {
+    transfer: { kind: "transfer", note: "Перевод на карту", at: "2026-11-10", from: "bank.rub", to: "bank.tbank", amount: "1000", fee: { amount: "15", fixed: { amount: "0.05", currency: "GRAM", from: "wallet.ton" } } },
+    exchange: { kind: "exchange", note: "Вывод 10 000 ⭐ через Fragment", at: "2026-11-10T09:30:00Z", from: "stars.bot.available", to: "wallet.ton", given: "10000", received: "52.3", receipt: { payer: "individual", number: "1" } },
+    expense: EXPENSE_BODY,
+    income: { kind: "income", note: "Выплата AdsGram за октябрь", at: "2026-11-10", to: "bank.rub", article: "ads_adsgram", amount: "120.40", forMonth: "2026-10", link: "https://example.com/report" },
+    loan: { kind: "loan", note: "Заём на рекламу", at: "2026-11-10", to: "bank.rub", lender: "Иван Петров", amount: "100000", premium: "10000", repaymentBp: 2500 },
+    reversal: { kind: "reversal", note: "Оплатили с другого счёта", at: "2026-11-10", sourceKey: "op:00000000-0000-4000-8000-0000000000a1" },
+  };
+
+  it("операции читает тот, кто видит журнал: финансы и владелец — 200, маркетолог, администратор и участник проекта — 403", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("980", "Финансы", "finance");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const denied = [await ctx.staff("981", "Маркетолог", "marketer"), await ctx.staff("982", "Администратор", "admin"), await ctx.staff("983", "Участник", "stakeholder")];
+
+    for (const cookie of [finance, owner]) {
+      const list = await get("/operations", cookie);
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toEqual({ data: OPERATION_PAGE });
+      const one = await get(`/operations/${OPERATION_ID}`, cookie);
+      expect(one.statusCode).toBe(200);
+      expect(one.json()).toEqual({ data: { operation: OPERATION } });
+    }
+    for (const cookie of denied) {
+      expect((await get("/operations", cookie)).statusCode).toBe(403);
+      expect((await get(`/operations/${OPERATION_ID}`, cookie)).statusCode).toBe(403);
+    }
+    expect(ctx.operations.calls.map((call) => call.method)).toEqual(["list", "get", "list", "get"]);
+  });
+
+  it("список: параметры доходят до сервиса, без параметров — страница в 50 записей без фильтров", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("984", "Финансы", "finance");
+
+    expect((await get("/operations", finance)).statusCode).toBe(200);
+    expect((await get("/operations?status=pending&kind=loan&cursor=abc_DEF-1&limit=20", finance)).statusCode).toBe(200);
+    expect((await get("/operations?status=&kind=&cursor=", finance)).statusCode).toBe(200);
+
+    expect(ctx.operations.calls.map((call) => call.args)).toEqual([
+      [{ status: undefined, kind: undefined }, null, 50],
+      [{ status: "pending", kind: "loan" }, "abc_DEF-1", 20],
+      [{ status: undefined, kind: undefined }, null, 50],
+    ]);
+  });
+
+  it.each(["status=done", "kind=payout", "limit=0", "limit=101", "limit=abc", "unknown=1", "cursor=%20%20", "status=draft&status=posted"])("список: некорректный запрос %s — 400", async (query) => {
+    const ctx = await start();
+    const finance = await ctx.staff("985", "Финансы", "finance");
+
+    expect((await get(`/operations?${query}`, finance)).statusCode).toBe(400);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("операция по идентификатору: не uuid — 400, сервис не вызывается", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("986", "Финансы", "finance");
+
+    for (const id of ["abc", "123", "00000000-0000-4000-8000-00000000000g", "%20"]) {
+      expect((await get(`/operations/${id}`, finance)).statusCode, id).toBe(400);
+    }
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("участник проекта, маркетолог и администратор не вносят и не проводят операции: 403, сервис не вызывается", async () => {
+    const ctx = await start();
+    const staffCookies = [await ctx.staff("987", "Участник", "stakeholder"), await ctx.staff("988", "Маркетолог", "marketer"), await ctx.staff("989", "Администратор", "admin")];
+
+    for (const cookie of staffCookies) {
+      expect((await send("POST", "/operations", cookie, EXPENSE_BODY)).statusCode).toBe(403);
+      expect((await send("PATCH", `/operations/${OPERATION_ID}`, cookie, EXPENSE_BODY)).statusCode).toBe(403);
+      expect((await send("POST", `/operations/${OPERATION_ID}/submit`, cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", `/operations/${OPERATION_ID}/discard`, cookie, {})).statusCode).toBe(403);
+    }
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("без сессии — 401 на внесении и на проведении", async () => {
+    const ctx = await start();
+
+    expect((await app!.inject({ method: "POST", url: `${BASE}/operations`, payload: EXPENSE_BODY })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "POST", url: `${BASE}/operations/${OPERATION_ID}/submit`, payload: {} })).statusCode).toBe(401);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it.each(Object.keys(BODIES))("финансы вносят операцию вида %s: 200, в сервис уходит тело как есть, автор — аккаунт", async (kind) => {
+    const ctx = await start();
+    const finance = await ctx.staff("990", "Финансы", "finance");
+
+    const response = await send("POST", "/operations", finance, BODIES[kind]);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { operation: OPERATION } });
+    const call = ctx.operations.calls[0];
+    expect(call?.method).toBe("create");
+    expect(call?.actor).not.toBeNull();
+    expect(call?.args).toEqual([BODIES[kind]]);
+  });
+
+  it("владелец вносит так же, как финансы", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await send("POST", "/operations", owner, EXPENSE_BODY)).statusCode).toBe(200);
+    expect(ctx.operations.calls[0]?.method).toBe("create");
+  });
+
+  it("лишнее поле в теле — 400, и в теле каждого вида, и в комиссии, и в чеке", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("991", "Финансы", "finance");
+
+    for (const kind of Object.keys(BODIES)) {
+      expect((await send("POST", "/operations", finance, { ...BODIES[kind], extra: 1 })).statusCode, kind).toBe(400);
+    }
+    expect((await send("POST", "/operations", finance, { ...BODIES.transfer, fee: { percent: 2 } })).statusCode).toBe(400);
+    expect((await send("POST", "/operations", finance, { ...BODIES.exchange, receipt: { payer: "legal", picture: "x" } })).statusCode).toBe(400);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["без вида", { ...EXPENSE_BODY, kind: undefined }],
+    ["неизвестный вид", { ...EXPENSE_BODY, kind: "payout" }],
+    ["отрицательная сумма", { ...EXPENSE_BODY, amount: "-5" }],
+    ["сумма с порядком", { ...EXPENSE_BODY, amount: "1e3" }],
+    ["сумма числом, а не строкой", { ...EXPENSE_BODY, amount: 1500 }],
+    ["сумма с запятой", { ...EXPENSE_BODY, amount: "1,5" }],
+    ["причина короче трёх знаков", { ...EXPENSE_BODY, note: "ab" }],
+    ["без причины", { ...EXPENSE_BODY, note: undefined }],
+    ["ссылка не https", { ...EXPENSE_BODY, link: "http://example.com/check" }],
+    ["дата словами", { ...EXPENSE_BODY, at: "вчера" }],
+    ["без даты", { ...EXPENSE_BODY, at: undefined }],
+    ["пустое место", { ...EXPENSE_BODY, from: "" }],
+    ["чужой вид поля: «received» у расхода", { ...EXPENSE_BODY, received: "1" }],
+    ["месяц поступления вне 01–12", { ...BODIES.income, forMonth: "2026-13" }],
+    ["ставка погашения больше 100 %", { ...BODIES.loan, repaymentBp: 10_001 }],
+    ["валюта фиксы вне справочника", { ...BODIES.transfer, fee: { fixed: { amount: "1", currency: "ABC" } } }],
+    ["плательщик чека не из списка", { ...BODIES.exchange, receipt: { payer: "company" } }],
+  ])("внесение: %s — 400 validation_failed, сервис не вызывается", async (_title, body) => {
+    const ctx = await start();
+    const finance = await ctx.staff("992", "Финансы", "finance");
+
+    const response = await send("POST", "/operations", finance, body);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("validation_failed");
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("ошибка схемы называет поле: форма операции длинная, «некорректно» без названия бесполезно", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("993", "Финансы", "finance");
+
+    const response = await send("POST", "/operations", finance, { ...EXPENSE_BODY, amount: "-5" });
+
+    expect(response.json<{ error: { message: string } }>().error.message).toContain("«amount»");
+  });
+
+  it("правка, проведение и удаление: финансы — 200, идентификатор и автор доходят до сервиса", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("994", "Финансы", "finance");
+
+    const updated = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
+    const submitted = await send("POST", `/operations/${OPERATION_ID}/submit`, finance, {});
+    const discarded = await send("POST", `/operations/${OPERATION_ID}/discard`, finance, {});
+
+    expect(updated.json()).toEqual({ data: { operation: OPERATION } });
+    expect(submitted.json()).toEqual({ data: { operation: { ...OPERATION, status: "posted" } } });
+    expect(discarded.json()).toEqual({ data: { ok: true } });
+    expect(ctx.operations.calls.map((call) => [call.method, call.args[0]])).toEqual([
+      ["update", OPERATION_ID],
+      ["submit", OPERATION_ID],
+      ["discard", OPERATION_ID],
+    ]);
+    expect(ctx.operations.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it("правка, проведение и удаление: идентификатор не uuid — 400; правка с неверным телом — 400", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("995", "Финансы", "finance");
+
+    expect((await send("PATCH", "/operations/abc", finance, EXPENSE_BODY)).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/submit", finance, {})).statusCode).toBe(400);
+    expect((await send("POST", "/operations/abc/discard", finance, {})).statusCode).toBe(400);
+    expect((await send("PATCH", `/operations/${OPERATION_ID}`, finance, { ...EXPENSE_BODY, amount: "-1" })).statusCode).toBe(400);
+    expect(ctx.operations.calls).toHaveLength(0);
+  });
+
+  it("отказы сервиса доходят как есть: сборка — 400 ledger_operation_invalid с текстом, не черновик — 409", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("996", "Финансы", "finance");
+
+    ctx.operations.failWith = new LedgerOperationInvalidError("Откуда: места хранения «bank.net» нет");
+    const invalid = await send("POST", "/operations", finance, EXPENSE_BODY);
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "ledger_operation_invalid", message: "Откуда: места хранения «bank.net» нет" });
+
+    ctx.operations.failWith = new LedgerOperationNotDraftError(OPERATION_ID, "posted");
+    const conflict = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_draft");
   });
 });

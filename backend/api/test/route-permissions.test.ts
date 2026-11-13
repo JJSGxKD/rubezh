@@ -98,10 +98,10 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
-  it("учёт в панели: чтение закрыто ledger.view, правка мест и статей — finance.entry.create (T-0457, T-0460, Р219, Р220)", () => {
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций — finance.entry.create (T-0457, T-0460, T-0461, Р219, Р220)", () => {
     const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
-    const reading = ["articles", "balances", "journal", "places"];
-    const writing = ["archiveArticle", "archivePlace", "createArticle", "createPlace", "renameArticle", "updatePlace"];
+    const reading = ["articles", "balances", "journal", "listOperations", "operation", "places"];
+    const writing = ["archiveArticle", "archivePlace", "createArticle", "createOperation", "createPlace", "discardOperation", "renameArticle", "submitOperation", "updateOperation", "updatePlace"];
 
     expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing].sort());
     for (const route of ledgerRoutes) {
