@@ -185,7 +185,8 @@ describe("таблица узлов", () => {
   it("страна без значения — прочерк; порядок равных стабилен по названию", () => {
     const rows = nodeRows([node({ nodeKey: "b", name: "Б", country: null }), node({ nodeKey: "a", name: "А" })]);
     expect(rows.map((row) => row.name)).toEqual(["А", "Б"]);
-    expect(rows[1]?.countryText).toBe("—");
+    expect(rows[1]?.country).toBeNull();
+    expect(rows[0]?.country).toBe("DE");
   });
 });
 
