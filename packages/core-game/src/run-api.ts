@@ -843,6 +843,8 @@ export type RunDevCommand =
   | { kind: "killAll" }
   | { kind: "heal" }
   | { kind: "jumpToMinute"; minute: number }
+  /** предвестие Карачуна сейчас же, в обход отметки и блокировок — стенд эффектов (T-0425) */
+  | { kind: "summonStalker" }
   /** шаг симуляции на паузе — разглядеть телеграф или столкновение по тикам */
   | { kind: "stepTicks"; ticks: number };
 
