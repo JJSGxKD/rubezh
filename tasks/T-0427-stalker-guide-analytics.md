@@ -3,7 +3,7 @@ id: T-0427
 title: Карачун в гайдбуке и аналитике — «его нельзя убить — уходи», событие stalker_ended
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
