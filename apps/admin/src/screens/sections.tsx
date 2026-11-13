@@ -30,6 +30,7 @@ import { AuditScreen } from "./roles/AuditScreen";
 import { RolesScreen } from "./roles/RolesScreen";
 import { SecretsScreen } from "./secrets/SecretsScreen";
 import { SettingsScreen } from "./settings/SettingsScreen";
+import { StakeholdersScreen } from "./stakeholders/StakeholdersScreen";
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -47,6 +48,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   roles: () => <RolesScreen />,
   audit: () => <AuditScreen />,
   fx: () => <FxScreen />,
+  stakeholders: () => <StakeholdersScreen />,
   diagnostics: (id) => <DiagnosticsScreen id={id} />,
   csp: () => <CspReportsScreen />,
   requests: () => <RequestsScreen />,
