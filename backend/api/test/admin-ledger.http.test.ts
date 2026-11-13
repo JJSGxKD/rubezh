@@ -17,6 +17,8 @@ import { PANEL_LOGIN_STORE } from "../src/modules/admin/panel-login.store.js";
 import { ACCOUNT_REPOSITORY } from "../src/modules/auth/account.repository.js";
 import { AuthGuard } from "../src/modules/auth/auth.guard.js";
 import { RateLimiter } from "../src/modules/ingest/rate-limiter.js";
+import type { ArticleView, CreateArticleInput, CreatePlaceInput, PlaceView, UpdatePlaceInput } from "../src/modules/ledger/ledger-chart.js";
+import { LedgerChartService } from "../src/modules/ledger/ledger-chart.service.js";
 import { LedgerCursorInvalidError } from "../src/modules/ledger/ledger-errors.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../src/modules/ledger/ledger-view.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
@@ -33,7 +35,8 @@ import { MemoryPanelLoginStore } from "./helpers/memory-panel-login.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 
 /**
- * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`.
+ * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
+ * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
  */
@@ -84,6 +87,65 @@ class FakeLedger {
   }
 }
 
+const PLACE: PlaceView = {
+  placeId: "bank.karta-t-banka",
+  name: "Карта Т-Банка",
+  currency: "RUB",
+  archived: false,
+  balance: "0.00",
+  fee: null,
+  accounts: [{ accountId: "bank.karta-t-banka", name: "Карта Т-Банка", balance: "0.00" }],
+};
+
+const ARTICLE: ArticleView = { articleId: "vps", kind: "expense", name: "Сервер (VPS)", system: false, archived: false };
+
+/** Подменный сервис мест и статей: помнит вызовы и отдаёт готовые ответы. */
+class FakeChart {
+  readonly calls: { method: string; actor: string | null; args: unknown[] }[] = [];
+
+  private record(method: string, actor: { accountId: string } | null, ...args: unknown[]): void {
+    this.calls.push({ method, actor: actor?.accountId ?? null, args });
+  }
+
+  async places(): Promise<PlaceView[]> {
+    this.record("places", null);
+    return [PLACE];
+  }
+
+  async createPlace(actor: { accountId: string }, input: CreatePlaceInput): Promise<PlaceView> {
+    this.record("createPlace", actor, input);
+    return PLACE;
+  }
+
+  async updatePlace(actor: { accountId: string }, placeId: string, input: UpdatePlaceInput): Promise<PlaceView> {
+    this.record("updatePlace", actor, placeId, input);
+    return PLACE;
+  }
+
+  async archivePlace(actor: { accountId: string }, placeId: string): Promise<void> {
+    this.record("archivePlace", actor, placeId);
+  }
+
+  async articles(): Promise<ArticleView[]> {
+    this.record("articles", null);
+    return [ARTICLE];
+  }
+
+  async createArticle(actor: { accountId: string }, input: CreateArticleInput): Promise<ArticleView> {
+    this.record("createArticle", actor, input);
+    return ARTICLE;
+  }
+
+  async renameArticle(actor: { accountId: string }, articleId: string, name: string): Promise<ArticleView> {
+    this.record("renameArticle", actor, articleId, name);
+    return ARTICLE;
+  }
+
+  async archiveArticle(actor: { accountId: string }, articleId: string): Promise<void> {
+    this.record("archiveArticle", actor, articleId);
+  }
+}
+
 describe("журнал учёта в панели по HTTP", () => {
   let app: NestFastifyApplication | null = null;
 
@@ -97,6 +159,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const accounts = new MemoryAccountRepository();
     const roles = new MemoryRolesRepository();
     const ledger = new FakeLedger();
+    const chart = new FakeChart();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
     @Module({
       controllers: [AdminSessionController, AdminLedgerController],
@@ -108,6 +171,7 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: ADMIN_SESSION_STORE, useValue: new MemoryAdminSessionStore() },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
         { provide: LedgerService, useValue: ledger },
+        { provide: LedgerChartService, useValue: chart },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -135,7 +199,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, login, staff };
+    return { ledger, chart, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -266,5 +330,132 @@ describe("журнал учёта в панели по HTTP", () => {
       const response = await app!.inject({ method, url: `${BASE}/journal`, headers: headers(owner), payload: {} });
       expect(response.statusCode, method).toBe(404);
     }
+  });
+
+  const send = (method: "POST" | "PATCH", path: string, cookie: string, payload: unknown) => app!.inject({ method, url: `${BASE}${path}`, headers: headers(cookie), payload: payload as object });
+
+  it("места и статьи читает тот, кто видит журнал: финансы — 200, маркетолог — 403", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("970", "Финансы", "finance");
+    const marketer = await ctx.staff("971", "Маркетолог", "marketer");
+
+    const places = await get("/places", finance);
+    expect(places.statusCode).toBe(200);
+    expect(places.json()).toEqual({ data: { places: [PLACE] } });
+    const articles = await get("/articles", finance);
+    expect(articles.statusCode).toBe(200);
+    expect(articles.json()).toEqual({ data: { articles: [ARTICLE] } });
+
+    expect((await get("/places", marketer)).statusCode).toBe(403);
+    expect((await get("/articles", marketer)).statusCode).toBe(403);
+    expect(ctx.chart.calls.map((call) => call.method)).toEqual(["places", "articles"]);
+  });
+
+  it("маркетолог, администратор и участник проекта не меняют места и статьи: 403, сервис не вызывается", async () => {
+    const ctx = await start();
+    const staffCookies = [await ctx.staff("972", "Маркетолог", "marketer"), await ctx.staff("973", "Администратор", "admin"), await ctx.staff("974", "Участник", "stakeholder")];
+
+    for (const cookie of staffCookies) {
+      expect((await send("POST", "/places", cookie, { name: "Карта", currency: "RUB" })).statusCode).toBe(403);
+      expect((await send("PATCH", "/places/bank.rub", cookie, { name: "Банк" })).statusCode).toBe(403);
+      expect((await send("POST", "/places/bank.rub/archive", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/articles", cookie, { name: "Аренда", kind: "expense" })).statusCode).toBe(403);
+      expect((await send("PATCH", "/articles/vps", cookie, { name: "Сервер" })).statusCode).toBe(403);
+      expect((await send("POST", "/articles/vps/archive", cookie, {})).statusCode).toBe(403);
+    }
+    expect(ctx.chart.calls).toHaveLength(0);
+  });
+
+  it("финансы заводят место: 200, в сервис уходят разобранные название, валюта и шаблон комиссии, автор — аккаунт", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("975", "Финансы", "finance");
+
+    const response = await send("POST", "/places", finance, { name: "Карта Т-Банка", currency: "RUB", fee: { percentBp: 150, fixed: "10.50", fixedCurrency: "RUB" } });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: { place: PLACE } });
+    const call = ctx.chart.calls[0];
+    expect(call?.method).toBe("createPlace");
+    expect(call?.actor).not.toBeNull();
+    expect(call?.args).toEqual([{ name: "Карта Т-Банка", currency: "RUB", fee: { percentBp: 150, fixed: "10.50", fixedCurrency: "RUB" } }]);
+  });
+
+  it("место без шаблона комиссии тоже заводится, а владелец проходит так же, как финансы", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await send("POST", "/places", owner, { name: "Копилка", currency: "USD" })).statusCode).toBe(200);
+    expect(ctx.chart.calls[0]?.args).toEqual([{ name: "Копилка", currency: "USD" }]);
+  });
+
+  it.each([
+    ["валюта «ABC» вне справочника", { name: "Карта", currency: "ABC" }],
+    ["валюта строчными", { name: "Карта", currency: "rub" }],
+    ["без названия", { currency: "RUB" }],
+    ["пустое название из пробелов", { name: "   ", currency: "RUB" }],
+    ["лишнее поле — схема строгая", { name: "Карта", currency: "RUB", balance: "100" }],
+    ["процент больше 100", { name: "Карта", currency: "RUB", fee: { percentBp: 10_001 } }],
+    ["процент дробью", { name: "Карта", currency: "RUB", fee: { percentBp: 1.5 } }],
+    ["фикса не числом", { name: "Карта", currency: "RUB", fee: { fixed: "много", fixedCurrency: "RUB" } }],
+    ["валюта фиксы вне справочника", { name: "Карта", currency: "RUB", fee: { fixed: "1", fixedCurrency: "ABC" } }],
+    ["лишнее поле в шаблоне", { name: "Карта", currency: "RUB", fee: { percent: 2 } }],
+  ])("заведение места: %s — 400, сервис не вызывается", async (_title, payload) => {
+    const ctx = await start();
+    const finance = await ctx.staff("976", "Финансы", "finance");
+
+    const response = await send("POST", "/places", finance, payload);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("validation_failed");
+    expect(ctx.chart.calls).toHaveLength(0);
+  });
+
+  it("правка места: название и шаблон доходят до сервиса, null снимает шаблон; пустое тело и чужие поля — 400", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("977", "Финансы", "finance");
+
+    expect((await send("PATCH", "/places/stars.bot", finance, { fee: null })).statusCode).toBe(200);
+    expect((await send("PATCH", "/places/bank.rub", finance, { name: "Банк", fee: { percentBp: 0 } })).statusCode).toBe(200);
+    expect(ctx.chart.calls.map((call) => call.args)).toEqual([
+      ["stars.bot", { fee: null }],
+      ["bank.rub", { name: "Банк", fee: { percentBp: 0 } }],
+    ]);
+
+    expect((await send("PATCH", "/places/bank.rub", finance, {})).statusCode).toBe(400);
+    expect((await send("PATCH", "/places/bank.rub", finance, { currency: "USD" })).statusCode).toBe(400);
+    expect((await send("PATCH", "/places/BANK%20RUB", finance, { name: "Банк" })).statusCode).toBe(400);
+    expect(ctx.chart.calls).toHaveLength(2);
+  });
+
+  it("архив места и статьи: 200 с телом { data: { ok: true } }", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("978", "Финансы", "finance");
+
+    const place = await send("POST", "/places/bank.rub/archive", finance, {});
+    const article = await send("POST", "/articles/vps/archive", finance, {});
+
+    expect(place.statusCode).toBe(200);
+    expect(place.json()).toEqual({ data: { ok: true } });
+    expect(article.statusCode).toBe(200);
+    expect(ctx.chart.calls.map((call) => [call.method, call.args[0]])).toEqual([
+      ["archivePlace", "bank.rub"],
+      ["archiveArticle", "vps"],
+    ]);
+  });
+
+  it("статьи: заведение и переименование; вид только expense или income, название обязательно, лишнее — 400", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("979", "Финансы", "finance");
+
+    expect((await send("POST", "/articles", finance, { name: "Аренда", kind: "expense" })).statusCode).toBe(200);
+    expect((await send("PATCH", "/articles/vps", finance, { name: "Сервер" })).statusCode).toBe(200);
+    expect(ctx.chart.calls.map((call) => call.args)).toEqual([[{ name: "Аренда", kind: "expense" }], ["vps", "Сервер"]]);
+
+    expect((await send("POST", "/articles", finance, { name: "Аренда", kind: "revenue" })).statusCode).toBe(400);
+    expect((await send("POST", "/articles", finance, { name: "Аренда" })).statusCode).toBe(400);
+    expect((await send("POST", "/articles", finance, { name: "Аренда", kind: "expense", system: true })).statusCode).toBe(400);
+    expect((await send("PATCH", "/articles/vps", finance, { name: "" })).statusCode).toBe(400);
+    expect((await send("PATCH", "/articles/vps", finance, { name: "Сервер", kind: "income" })).statusCode).toBe(400);
+    expect(ctx.chart.calls).toHaveLength(2);
   });
 });

@@ -1,9 +1,16 @@
-import { Controller, Get, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from "@nestjs/common";
+import { isCurrencyCode } from "@bh/fx";
 import { z } from "zod";
 import { RequirePermission } from "../../common/access.js";
+import { RateLimitedError } from "../../common/domain-error.js";
+import { accountOf } from "../auth/auth.guard.js";
+import { RateLimiter } from "../ingest/rate-limiter.js";
+import { FEE_PERCENT_BP_MAX, NAME_MAX, type ArticleView, type CreateArticleInput, type CreatePlaceInput, type PlaceView, type UpdatePlaceInput } from "../ledger/ledger-chart.js";
+import { LedgerChartService } from "../ledger/ledger-chart.service.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger/ledger.service.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../ledger/ledger-view.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
+import { ADMIN_LIMITS } from "./admin-limits.js";
 import { parse } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
 
@@ -33,15 +40,46 @@ const journalQuerySchema = z
 /** Остатки читаются без параметров: лишний параметр — опечатка клиента, а не «молчаливо проигнорировать». */
 const noQuerySchema = z.object({}).strict();
 
+const nameSchema = z.string().trim().min(1).max(NAME_MAX);
+/** Валюта — только из справочника ядра курсов: «ABC» и «rub» отсекаются здесь, а не в базе. */
+const currencySchema = z.string().refine(isCurrencyCode);
+/** Идентификаторы мест и статей: строчные латиница и цифры, точка, дефис, подчёркивание (`bank.rub`, `ads_taddy`). */
+const idSchema = z.string().regex(/^[a-z0-9._-]{1,64}$/u);
+
+/** Шаблон комиссии: процент — сотые доли процента; фикса — десятичной строкой в единицах её валюты. */
+const feeSchema = z.strictObject({
+  percentBp: z.number().int().min(0).max(FEE_PERCENT_BP_MAX).nullable().optional(),
+  fixed: z.string().regex(/^\d{1,18}(\.\d{1,18})?$/u).nullable().optional(),
+  fixedCurrency: currencySchema.nullable().optional(),
+});
+
+const createPlaceSchema = z.strictObject({ name: nameSchema, currency: currencySchema, fee: feeSchema.optional() });
+const updatePlaceSchema = z
+  .strictObject({ name: nameSchema.optional(), fee: feeSchema.nullable().optional() })
+  .refine((body) => body.name !== undefined || body.fee !== undefined);
+const createArticleSchema = z.strictObject({ name: nameSchema, kind: z.enum(["expense", "income"]) });
+const renameArticleSchema = z.strictObject({ name: nameSchema });
+
+const PLACE_PROBLEM = "Некорректное место хранения: название до 128 знаков, валюта из справочника, процент комиссии от 0 до 10 000 сотых процента, фикса — числом со своей валютой";
+const ARTICLE_PROBLEM = "Некорректная статья: название до 128 знаков, вид — расход или поступление";
+const ID_PROBLEM = "Некорректный идентификатор";
+
 /**
  * Журнал учёта в панели (docs/37-accounting.md §9, Р219, tasks/T-0457): остатки по счетам и журнал проводок
  * с фильтрами и страницами по курсору. Только чтение: проводки пишет сервер, ручные операции — волна 3.
  * Видят владелец и финансы (`ledger.view`).
+ *
+ * Места хранения и статьи (Р220, tasks/T-0460): справочник правится отсюда без релиза. Читает тот, кто видит
+ * журнал (`ledger.view`), менять — `finance.entry.create`; порядок и аудит — `LedgerChartService`.
  */
 @Controller("admin/ledger")
 @UseGuards(AdminSessionGuard, PermissionGuard)
 export class AdminLedgerController {
-  constructor(private readonly ledger: LedgerService) {}
+  constructor(
+    private readonly ledger: LedgerService,
+    private readonly chart: LedgerChartService,
+    private readonly limiter: RateLimiter,
+  ) {}
 
   @Get("balances")
   @RequirePermission("ledger.view")
@@ -62,5 +100,80 @@ export class AdminLedgerController {
       ...(input.source === undefined ? {} : { sourcePrefix: input.source }),
     };
     return { data: await this.ledger.journal(filter, input.cursor ?? null, input.limit) };
+  }
+
+  @Get("places")
+  @RequirePermission("ledger.view")
+  async places(): Promise<{ data: { places: PlaceView[] } }> {
+    return { data: { places: await this.chart.places() } };
+  }
+
+  @Post("places")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async createPlace(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { place: PlaceView } }> {
+    const actor = await this.mutator(request);
+    const input: CreatePlaceInput = parse(() => createPlaceSchema.parse(body), PLACE_PROBLEM);
+    return { data: { place: await this.chart.createPlace(actor, input) } };
+  }
+
+  @Patch("places/:id")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async updatePlace(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { place: PlaceView } }> {
+    const actor = await this.mutator(request);
+    const placeId = parse(() => idSchema.parse(id), ID_PROBLEM);
+    const input: UpdatePlaceInput = parse(() => updatePlaceSchema.parse(body), PLACE_PROBLEM);
+    return { data: { place: await this.chart.updatePlace(actor, placeId, input) } };
+  }
+
+  @Post("places/:id/archive")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async archivePlace(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.chart.archivePlace(actor, parse(() => idSchema.parse(id), ID_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  @Get("articles")
+  @RequirePermission("ledger.view")
+  async articles(): Promise<{ data: { articles: ArticleView[] } }> {
+    return { data: { articles: await this.chart.articles() } };
+  }
+
+  @Post("articles")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async createArticle(@Req() request: unknown, @Body() body: unknown): Promise<{ data: { article: ArticleView } }> {
+    const actor = await this.mutator(request);
+    const input: CreateArticleInput = parse(() => createArticleSchema.parse(body), ARTICLE_PROBLEM);
+    return { data: { article: await this.chart.createArticle(actor, input) } };
+  }
+
+  @Patch("articles/:id")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async renameArticle(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { article: ArticleView } }> {
+    const actor = await this.mutator(request);
+    const articleId = parse(() => idSchema.parse(id), ID_PROBLEM);
+    const input = parse(() => renameArticleSchema.parse(body), ARTICLE_PROBLEM);
+    return { data: { article: await this.chart.renameArticle(actor, articleId, input.name) } };
+  }
+
+  @Post("articles/:id/archive")
+  @HttpCode(200)
+  @RequirePermission("finance.entry.create")
+  async archiveArticle(@Req() request: unknown, @Param("id") id: string): Promise<{ data: { ok: true } }> {
+    const actor = await this.mutator(request);
+    await this.chart.archiveArticle(actor, parse(() => idSchema.parse(id), ID_PROBLEM));
+    return { data: { ok: true } };
+  }
+
+  /** Автор изменения; частота — как у прочих действий панели, по аккаунту. */
+  private async mutator(request: unknown): Promise<{ accountId: string }> {
+    const actor = accountOf(request);
+    if (!(await this.limiter.consume(ADMIN_LIMITS.mutate, actor.accountId))) throw new RateLimitedError("Слишком много действий — подождите минуту");
+    return { accountId: actor.accountId };
   }
 }

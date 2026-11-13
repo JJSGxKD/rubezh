@@ -3,8 +3,8 @@ id: T-0460
 title: Места хранения и статьи учёта — сервер
 epic: E15
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0457]
@@ -23,6 +23,9 @@ shared:
   - backend/api/test/admin-ledger.http.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
+  - backend/api/src/modules/wipe/wipe-plan.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/route-permissions.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
