@@ -3,8 +3,8 @@ id: T-0461
 title: Ручные операции учёта — перевод, обмен, расход, поступление, заём, исправление (сервер)
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0460, T-0453]
