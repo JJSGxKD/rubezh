@@ -3,8 +3,8 @@ id: T-0475
 title: Уроки команды из ревью — категории замечаний и «Частые замечания» в скиллах
 epic: E0
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: []
