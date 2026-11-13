@@ -3,7 +3,7 @@ id: T-0286
 title: Навыки защиты — Вампиризм (лечение за убийство) и Стойкость (щит раз в 30 с): новые параметры игрока
 epic: E10
 priority: P2
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -15,9 +15,15 @@ shared:
   - packages/shared-types/src/index.ts
   - packages/core-game/src/content/upgrades.ts
   - packages/core-game/src/content/unlocks.ts
+  - packages/core-game/src/content/snapshot-schema.ts
+  - packages/core-game/src/game/sim/defense-skills.ts
+  - packages/core-game/src/game/balance/power-profiles.ts
+  - packages/app-shell/src/screens/guide/guide-data.ts
+  - scripts/test/power-profiles.test.ts
   - packages/core-game/src/game/progression/passives.ts
   - packages/core-game/src/game/progression/upgrade-changes.ts
   - packages/core-game/src/game/sim/world.ts
+  - packages/core-game/src/game/sim/create-world.ts
   - packages/core-game/src/game/sim/combat.ts
   - packages/core-game/src/game/sim/step.ts
   - packages/core-game/src/game/run/snapshot.ts
