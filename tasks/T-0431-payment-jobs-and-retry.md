@@ -3,8 +3,8 @@ id: T-0431
 title: Брошенные задания оплаты и «Повторить учёт» — сервер
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0429]
@@ -22,6 +22,7 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - apps/admin/src/api/audit.ts
   - apps/admin/test/audit.test.ts
+  - backend/api/test/player-address.test.ts
   - docs/21-diagrams.md
   - docs/29-admin-panel.md
 runner: any
