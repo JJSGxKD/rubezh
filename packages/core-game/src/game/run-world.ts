@@ -90,6 +90,10 @@ export function createRunWorld(options: RunWorldOptions): RunWorld {
     // Рубеж — часть боевого контента вне снимка: страж берётся из `content.enemies`, а без него в снимке рубежа нет.
     rubezh: prologue ? prologueRubezh(RUBEZH) : RUBEZH,
     ...(prologue ? { prologue: PROLOGUE } : { pressure: content.pressure }),
+    // Пролог и «Лёгкую» осада не касается: мир сам не берёт правил, если режим или уровень её исключают.
+    siege: content.siege,
+    // Карачун — часть боевого забега (Р205): пролог, «Лёгкую» и новичка ниже порога мир отсекает сам.
+    stalker: content.stalker,
     timeline,
     endlessCurve,
     continueRules: content.continueRules,

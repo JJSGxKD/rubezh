@@ -1,4 +1,4 @@
-import type { NodeSecurity, NodeTransport, ProxyNode } from "./node.js";
+import type { LegacyPinning, NodeSecurity, NodeTransport, ProxyNode } from "./node.js";
 
 /**
  * Имена полей конфига Xray — одной таблицей: формат сверяется с образом
@@ -7,7 +7,6 @@ import type { NodeSecurity, NodeTransport, ProxyNode } from "./node.js";
  */
 const F = {
   tagIn: (slot: number): string => `in-${slot}`,
-  tagOut: (key: string): string => `out-${key}`,
   block: "block",
   inbounds: "inbounds",
   outbounds: "outbounds",
@@ -22,32 +21,73 @@ const F = {
   grpc: "grpcSettings",
   httpupgrade: "httpupgradeSettings",
   xhttp: "xhttpSettings",
+  tcp: "tcpSettings",
+  sockopt: "sockopt",
+  dialerProxy: "dialerProxy",
+  freedom: "freedom",
+  stats: "stats",
+  api: "api",
+  policy: "policy",
+  apiTag: "api",
+  statsService: "StatsService",
+  statsUplink: "statsOutboundUplink",
+  statsDownlink: "statsOutboundDownlink",
 } as const;
 
 export interface XrayConfigOptions {
   basePort: number;
   slotCount: number;
   listen: string;
+  /**
+   * Счётчики трафика выходов и служба их чтения. Не задано — блоков `stats`,
+   * `api` и `policy` в конфиге нет, и конфиг прежний. Служба одна — `StatsService`:
+   * она отдаёт только счётчики и их сброс, правки выходов на лету через неё нет.
+   */
+  stats?: { port: number };
+}
+
+/** Ключ подписки (группы узлов): строчные латиница и цифры. Он входит в тег выхода, поэтому формат жёсткий. */
+export const GROUP_FORMAT = /^[a-z0-9]{1,16}$/;
+
+/** Узел в конфиге: из какой подписки (`group`), сам узел и его вход Xray. */
+export interface PlacedNode {
+  group: string;
+  node: ProxyNode;
+  slot: number;
 }
 
 /**
- * Слоты узлов. Прежние слоты сохраняются (порт узла не прыгает между
- * обновлениями подписки), новые узлы берут наименьшие свободные по порядку
- * списка, а не поместившиеся — в `overflow`.
+ * Тег выхода — с ключом подписки: один и тот же узел может прийти из двух
+ * подписок, и ключ узла сам по себе уникален только внутри подписки.
  */
-export function assignSlots(
-  keys: readonly string[],
-  previous: ReadonlyMap<string, number>,
-  slotCount: number,
-): { slots: Map<string, number>; overflow: string[] } {
+export const outboundTag = (group: string, key: string): string => `out-${group}-${key}`;
+
+export interface SlotOptions {
+  /** сколько всего входов у спутника */
+  slotCount: number;
+  /** слоты узлов других подписок: их не брать */
+  reserved: ReadonlySet<number>;
+  /** сколько слотов может занять эта подписка (её доля) */
+  limit: number;
+}
+
+/**
+ * Слоты узлов одной подписки. Прежние слоты сохраняются (порт узла не прыгает
+ * между обновлениями подписки), если они свободны от чужих и доля ещё не
+ * выбрана; новые узлы берут наименьшие свободные по порядку списка, а
+ * не поместившиеся (нет свободных слотов или выбрана доля) — в `overflow`.
+ */
+export function assignSlots(keys: readonly string[], previous: ReadonlyMap<string, number>, options: SlotOptions): { slots: Map<string, number>; overflow: string[] } {
+  const { slotCount, reserved } = options;
+  const limit = Math.max(0, options.limit);
   const unique = [...new Set(keys)];
   const slots = new Map<string, number>();
-  const used = new Set<number>();
+  const used = new Set(reserved);
   const pending: string[] = [];
 
   for (const key of unique) {
     const slot = previous.get(key);
-    if (slot !== undefined && Number.isInteger(slot) && slot >= 0 && slot < slotCount && !used.has(slot)) {
+    if (slots.size < limit && slot !== undefined && Number.isInteger(slot) && slot >= 0 && slot < slotCount && !used.has(slot)) {
       slots.set(key, slot);
       used.add(slot);
     } else {
@@ -58,6 +98,10 @@ export function assignSlots(
   const overflow: string[] = [];
   let free = 0;
   for (const key of pending) {
+    if (slots.size >= limit) {
+      overflow.push(key);
+      continue;
+    }
     while (free < slotCount && used.has(free)) free++;
     if (free >= slotCount) {
       overflow.push(key);
@@ -71,25 +115,42 @@ export function assignSlots(
 
 /**
  * Конфиг Xray спутника: по локальному SOCKS-входу на узел, без TUN. Порт входа —
- * `basePort + слот`. Узел без слота в конфиг не входит.
+ * `basePort + слот`. Узлы всех подписок идут одним конфигом.
  *
  * Выход `block` идёт первым: это выход по умолчанию Xray, и всё, что не
  * попало в правила, упирается в него, а не уходит напрямую.
+ *
+ * Конфиг с общим слотом у двух узлов или с ключом подписки не по формату не
+ * собирается: два входа на одном порту или тег с мусором Xray принял бы молча.
+ * Так же не собирается конфиг, где порт статистики совпал с портом входа.
  */
-export function buildXrayConfig(nodes: readonly ProxyNode[], slots: ReadonlyMap<string, number>, options: XrayConfigOptions): Record<string, unknown> {
-  const placed = nodes
-    .map((node) => ({ node, slot: slots.get(node.key) }))
-    .filter((entry): entry is { node: ProxyNode; slot: number } => entry.slot !== undefined)
-    .sort((a, b) => a.slot - b.slot);
-
-  for (const { slot } of placed) {
+export function buildXrayConfig(nodes: readonly PlacedNode[], options: XrayConfigOptions): Record<string, unknown> {
+  const slots = new Set<number>();
+  const tags = new Set<string>();
+  for (const { group, node, slot } of nodes) {
+    if (!GROUP_FORMAT.test(group)) throw new RangeError(`Ключ подписки «${group}» не по формату ${String(GROUP_FORMAT)}`);
     if (!Number.isInteger(slot) || slot < 0 || slot >= options.slotCount) {
       throw new RangeError(`Слот ${slot} вне диапазона 0…${options.slotCount - 1}`);
     }
+    if (slots.has(slot)) throw new RangeError(`Слот ${slot} занят дважды`);
+    slots.add(slot);
+    const tag = outboundTag(group, node.key);
+    if (tags.has(tag)) throw new RangeError(`Выход ${tag} задан дважды`);
+    tags.add(tag);
   }
 
+  if (options.stats !== undefined) {
+    const { port } = options.stats;
+    if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new RangeError(`Порт статистики ${port} вне диапазона 1…65535`);
+    if (port >= options.basePort && port < options.basePort + options.slotCount) {
+      throw new RangeError(`Порт статистики ${port} лежит среди портов SOCKS-входов ${options.basePort}…${options.basePort + options.slotCount - 1}`);
+    }
+  }
+
+  const placed = [...nodes].sort((a, b) => a.slot - b.slot);
   return {
     log: { loglevel: "warning", access: "none" },
+    ...(options.stats === undefined ? {} : statsBlocks(options.listen, options.stats.port)),
     [F.inbounds]: placed.map(({ slot }) => ({
       tag: F.tagIn(slot),
       listen: options.listen,
@@ -97,23 +158,52 @@ export function buildXrayConfig(nodes: readonly ProxyNode[], slots: ReadonlyMap<
       protocol: F.socks,
       settings: { auth: "noauth", udp: false },
     })),
-    [F.outbounds]: [{ tag: F.block, protocol: F.blackhole }, ...placed.map(({ node }) => outbound(node))],
+    [F.outbounds]: [{ tag: F.block, protocol: F.blackhole }, ...placed.flatMap(({ group, node }) => outboundsOf(group, node))],
     [F.routing]: {
       domainStrategy: "AsIs",
-      rules: placed.map(({ node, slot }) => ({ type: "field", inboundTag: [F.tagIn(slot)], outboundTag: F.tagOut(node.key) })),
+      rules: placed.map(({ group, node, slot }) => ({ type: "field", inboundTag: [F.tagIn(slot)], outboundTag: outboundTag(group, node.key) })),
     },
   };
 }
 
-function outbound(node: ProxyNode): Record<string, unknown> {
-  return { tag: F.tagOut(node.key), protocol: node.protocol, settings: settingsOf(node), [F.stream]: streamOf(node.transport, node.security), [F.mux]: { enabled: false } };
+/**
+ * Блоки учёта трафика: счётчики только по выходам (по входам и пользователям
+ * не нужны) и служба API, слушающая `listen:port`. Правило маршрутизации к ней
+ * не нужно: у `api.listen` собственный слушатель.
+ */
+function statsBlocks(listen: string, port: number): Record<string, unknown> {
+  return {
+    [F.stats]: {},
+    [F.api]: { tag: F.apiTag, listen: `${listen}:${port}`, services: [F.statsService] },
+    [F.policy]: { system: { [F.statsUplink]: true, [F.statsDownlink]: true } },
+  };
+}
+
+/** Тег служебного выхода `freedom` узла: суффикс `-dial` счётчик трафика узлом не считает (`xray-stats.ts`), и байты не задваиваются. */
+const dialerTagOf = (group: string, key: string): string => `${outboundTag(group, key)}-dial`;
+
+/**
+ * Выход узла, а у узла с цепочкой — ещё и служебный `freedom` сразу за ним: узел
+ * подключается через него (`sockopt.dialerProxy`). Входов у служебного выхода нет.
+ */
+function outboundsOf(group: string, node: ProxyNode): Record<string, unknown>[] {
+  const stream = streamOf(node.transport, node.security);
+  if (node.dialer === undefined) return [outbound(group, node, stream)];
+
+  const dialerTag = dialerTagOf(group, node.key);
+  const chained = { ...stream, [F.sockopt]: { [F.dialerProxy]: dialerTag } };
+  return [outbound(group, node, chained), { tag: dialerTag, protocol: F.freedom, settings: node.dialer.settings }];
+}
+
+function outbound(group: string, node: ProxyNode, stream: Record<string, unknown>): Record<string, unknown> {
+  return { tag: outboundTag(group, node.key), protocol: node.protocol, settings: settingsOf(node), [F.stream]: stream, [F.mux]: { enabled: false } };
 }
 
 function settingsOf(node: ProxyNode): Record<string, unknown> {
   const { host: address, port, secret } = node;
   switch (node.protocol) {
     case "vless":
-      return { vnext: [{ address, port, users: [{ id: secret, encryption: "none", ...(node.flow === null ? {} : { flow: node.flow }) }] }] };
+      return { vnext: [{ address, port, users: [{ id: secret, encryption: node.cipher ?? "none", ...(node.flow === null ? {} : { flow: node.flow }) }] }] };
     case "vmess":
       return { vnext: [{ address, port, users: [{ id: secret, alterId: 0, security: node.cipher ?? "auto" }] }] };
     case "trojan":
@@ -127,9 +217,25 @@ function streamOf(transport: NodeTransport, security: NodeSecurity): Record<stri
   const stream: Record<string, unknown> = { network: transport.network, security: security.kind };
 
   if (security.kind === "tls") {
-    stream[F.tls] = { serverName: security.serverName, ...(security.alpn.length > 0 ? { alpn: security.alpn } : {}), ...(security.fingerprint === null ? {} : { fingerprint: security.fingerprint }) };
+    stream[F.tls] = {
+      serverName: security.serverName,
+      ...(security.alpn.length > 0 ? { alpn: security.alpn } : {}),
+      ...(security.fingerprint === null ? {} : { fingerprint: security.fingerprint }),
+      ...(security.ech === undefined ? {} : { echConfigList: security.ech }),
+      ...(security.echForceQuery === undefined ? {} : { echForceQuery: security.echForceQuery }),
+      ...(security.pinnedPeerCertSha256 === undefined ? {} : { pinnedPeerCertSha256: security.pinnedPeerCertSha256 }),
+      ...(security.verifyPeerCertByName === undefined ? {} : { verifyPeerCertByName: security.verifyPeerCertByName }),
+      ...legacyPinningOf(security.legacyPinning),
+    };
   } else if (security.kind === "reality") {
-    stream[F.reality] = { serverName: security.serverName, fingerprint: security.fingerprint, publicKey: security.publicKey, shortId: security.shortId, spiderX: security.spiderX };
+    stream[F.reality] = {
+      serverName: security.serverName,
+      fingerprint: security.fingerprint,
+      publicKey: security.publicKey,
+      shortId: security.shortId,
+      spiderX: security.spiderX,
+      ...(security.mldsa65Verify === undefined ? {} : { mldsa65Verify: security.mldsa65Verify }),
+    };
   }
 
   const present = (entries: Record<string, string | undefined>): Record<string, string> =>
@@ -150,12 +256,23 @@ function streamOf(transport: NodeTransport, security: NodeSecurity): Record<stri
       break;
     }
     case "xhttp": {
-      const settings = present({ path: transport.path, host: transport.host, mode: transport.mode });
+      const settings = { ...present({ path: transport.path, host: transport.host, mode: transport.mode }), ...(transport.extra === undefined ? {} : { extra: transport.extra }) };
       if (Object.keys(settings).length > 0) stream[F.xhttp] = settings;
       break;
     }
     case "tcp":
+      if (transport.rawHeader !== undefined) stream[F.tcp] = { header: transport.rawHeader };
       break;
   }
   return stream;
+}
+
+/** Старые поля закрепления сертификата — по одному, по именам из типа: ничего чужого в `tlsSettings` не попадёт. */
+function legacyPinningOf(pinning: LegacyPinning | undefined): Record<string, unknown> {
+  if (pinning === undefined) return {};
+  return {
+    ...(pinning.pinnedPeerCertificateChainSha256 === undefined ? {} : { pinnedPeerCertificateChainSha256: pinning.pinnedPeerCertificateChainSha256 }),
+    ...(pinning.pinnedPeerCertificatePublicKeySha256 === undefined ? {} : { pinnedPeerCertificatePublicKeySha256: pinning.pinnedPeerCertificatePublicKeySha256 }),
+    ...(pinning.verifyPeerCertInNames === undefined ? {} : { verifyPeerCertInNames: pinning.verifyPeerCertInNames }),
+  };
 }

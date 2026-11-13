@@ -188,6 +188,16 @@ export const EVENT_DICTIONARY = {
     }),
   },
   run_abandoned: { version: 1, payload: runOutcome },
+  // Серверное событие: бот MAX или VK применил одноразовый код и сервер закрепил
+  // (или отклонил) связь игрового аккаунта с аккаунтом площадки (tasks/T-0377,
+  // Р188). `result`: `linked` — новая связь, `already` — та же пара уже была,
+  // `taken` — id площадки занят другим аккаунтом или у аккаунта другая связь.
+  // Игрок — по обычному конверту; id площадки в нагрузку не пишется. Шлёт
+  // только сервер, клиент его не пишет.
+  external_account_linked: {
+    version: 1,
+    payload: payload({ platform: z.enum(["max", "vk"]), result: z.enum(["linked", "already", "taken"]) }),
+  },
   run_paused: { version: 1, payload: payload({ reason: id, elapsedSec: seconds }) },
   upgrade_offered: { version: 1, payload: payload({ level: count, count, queued: count }) },
   upgrade_chosen: { version: 1, payload: payload({ option: id, level: count }) },
@@ -360,6 +370,11 @@ export const EVENT_DICTIONARY = {
     version: 1,
     payload: payload({ banner: id, place: z.enum(["carousel", "gems"]), position: count }),
   },
+  // Нажал «Поддержать через Tribute» (docs/35-stage4-plan.md, Р109, T-0158):
+  // сколько игроков идёт к донату и откуда. Оплата по ссылке — вне игры и вне
+  // таблицы покупок, поэтому клик — всё, что видно; донат звёздами — штатные
+  // purchase_* с product = donation. `way` называет сервер по площадке игрока.
+  donation_link_clicked: { version: 1, payload: payload({ way: z.enum(["tribute_telegram", "tribute_web"]), place: z.enum(["about", "profile", "home"]) }) },
   // Карусель главной (docs/35-stage4-plan.md WP42): какие слайды видят и по
   // каким идут — порядок слайдов по данным, а не на глаз. Показ — раз за
   // заход и только если слайд был виден дольше секунды: пролистанный мимо
@@ -390,6 +405,9 @@ export const EVENT_DICTIONARY = {
   // и стиля в нагрузке нет: распределение по кругам и доля открывших блок.
   rating_circle_changed: { version: 1, payload: payload({ circle: z.enum(["all", "friends", "division"]) }) },
   rating_style_opened: { version: 1, payload: payload({}) },
+  // Карточка забега (tasks/T-0297, WP35): откуда её открывают — из таблицы, с
+  // экрана итогов или из истории. Забега и игрока в нагрузке нет: доли входов.
+  leaderboard_run_opened: { version: 1, payload: payload({ from: z.enum(["rating", "results", "history"]) }) },
   // Реклама глазами клиента (docs/35-stage4-plan.md WP12, §3.7). Шаги показа
   // лежат в ad_session — там исход и код отказа; события добавляют то, чего
   // таблица не знает: устройство из конверта и сколько игрок ждал.

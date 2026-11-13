@@ -47,6 +47,7 @@ function result(): RunResult {
     bossKills: 0,
     eliteKills: 0,
     chestsOpened: 0,
+    rareChestsOpened: 0,
     crystalsCollected: 0,
     noHitSec: 0,
     noKillSec: 0,
@@ -315,5 +316,19 @@ describe("второй шанс за самоцветы", () => {
     await first;
 
     expect(useGemContinue.getState().stage).toEqual({ kind: "idle" });
+  });
+
+  it("рядом со звёздами — на кнопке значок и цена, баланс строкой сетки (Р210)", () => {
+    const stage = { kind: "ready", offer: { continueNo: 1, priceGems: 7, balance: 12 }, notice: null } as const;
+    const paired = renderToStaticMarkup(createElement(GemContinueView, { stage, locked: false, primary: false, paired: true, onBuy: () => undefined }));
+    const button = (/<button[\s\S]*?<\/button>/.exec(paired)?.[0] ?? "").replace(/aria-label="[^"]*"/, "");
+    expect(button).not.toContain("Продолжить за");
+    expect(button).not.toMatch(/>Продолжить</);
+    expect(button).toContain("7");
+    expect(paired).toContain('aria-label="Продолжить за 7');
+    expect(paired).toMatch(/<div[^>]*col-span-full[^>]*>[\s\S]*У тебя 12/);
+
+    const alone = renderToStaticMarkup(createElement(GemContinueView, { stage, locked: false, primary: false, paired: false, onBuy: () => undefined }));
+    expect(alone).toContain("Продолжить");
   });
 });

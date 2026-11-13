@@ -587,3 +587,34 @@ describe("mergeProblems: зависимости и задел", () => {
     expect(result.some((problem) => problem.includes("«задел»"))).toBe(true);
   });
 });
+
+// T-0390, Р195: PR самостоятельного мерджа — из ветки текущей попытки.
+describe("mergeProblems: попытки", () => {
+  it("PR из task/T-NNNN-2 при attempt: 2 в dev — причин нет", () => {
+    expect(problems({ task: devTask({ attempt: "2" }), branchTask: branchTask({ attempt: "2" }), pr: pr({ headRefName: "task/T-0500-2" }) })).toEqual([]);
+  });
+
+  it("PR из ветки прежней попытки — отказ, названы обе попытки", () => {
+    const found = problems({ task: devTask({ attempt: "2" }), branchTask: branchTask({ attempt: "2" }), pr: pr({ headRefName: "task/T-0500" }) });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("попытка 1");
+    expect(found[0]).toContain("task/T-0500-2");
+  });
+
+  it("PR из ветки будущей попытки — отказ", () => {
+    const found = problems({ task: devTask({ attempt: "2" }), branchTask: branchTask({ attempt: "2" }), pr: pr({ headRefName: "task/T-0500-3" }) });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("попытка 3");
+  });
+
+  it("ветка с суффиксом -1 — не ветка задачи", () => {
+    const found = problems({ pr: pr({ headRefName: "task/T-0500-1" }) });
+    expect(found.some((reason) => reason.includes("не task/T-NNNN"))).toBe(true);
+  });
+
+  it("поток поменял attempt в ветке — отказ, поле названо", () => {
+    const found = problems({ branchTask: branchTask({ attempt: "2" }) });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain("attempt");
+  });
+});

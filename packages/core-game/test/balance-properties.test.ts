@@ -4,9 +4,12 @@ import { BALANCE_TARGETS, MODIFIER_TARGETS } from "../src/content/balance-target
 import { RUN_MODIFIER_IDS } from "@bh/shared-types";
 import { DEFAULT_DIFFICULTY_ID } from "../src/content/difficulty";
 import { RUBEZH } from "../src/content/rubezh";
+import { ENEMY_STAGES } from "../src/content/stages";
+import { ENDLESS_CURVE } from "../src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
+import { withoutStalker } from "./helpers/without-stalker";
 import {
   POWER_PROFILES,
   simulateBalanceRun,
@@ -163,10 +166,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 316.0833333333333,
-      level: 22,
-      wave: 10,
-      enemiesKilled: 2035,
+      survivalSec: 185.21666666666667,
+      level: 15,
+      wave: 6,
+      enemiesKilled: 793,
     });
   });
 
@@ -195,14 +198,19 @@ const PROFILE_WEAPONS = STARTING_WEAPONS.includes("spark") ? ["spark"] : STARTIN
 
 const profileCache = new Map<string, BalanceRunResult[]>();
 
-/** Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз. */
+/**
+ * Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз.
+ * Без Карачуна (Р205, T-0424): правило касается подстройки, а Карачун не меняет силу игрока, зато
+ * сдвигает любой исход пяти забегов — бот бросает уклонение от толпы ради бегства, и порядок профилей на
+ * таком выборе выпадает случаем (на пяти seed с ним «полный» 525 с против «среднего» 586 с, без него 647 против 462).
+ */
 function profileRuns(profile: PowerProfile, pressure: boolean): BalanceRunResult[] {
   const key = `${profile.id}:${String(pressure)}`;
   const known = profileCache.get(key);
   if (known !== undefined) return known;
 
   const runs = PROFILE_WEAPONS.flatMap((startingWeaponId) =>
-    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure })),
+    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure, content: withoutStalker() })),
   );
   profileCache.set(key, runs);
   return runs;
@@ -277,5 +285,80 @@ describe("модификаторы забега: коридор медианы",
   it("пустой список модификаторов — тот же забег, что без поля", { timeout: 60_000 }, () => {
     const plain = simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200 });
     expect(simulateBalanceRun({ seed: 6, skill: "dodging", maxSec: 200, modifierIds: [] })).toEqual(plain);
+  });
+});
+
+// Враги жирнее с 2,5 минуты, набор к 15-й (Р194, T-0388).
+
+/**
+ * Значения до T-0388: `hpMul` ступеней обычных врагов и `ENDLESS_CURVE.hpGrowth`.
+ * Они нужны только для сравнения «было → стало»; правка контента их не двигает.
+ */
+const HP_MUL_BEFORE_T0388 = [
+  { fromSec: 0, hpMul: 1 },
+  { fromSec: 150, hpMul: 1.9 },
+  { fromSec: 330, hpMul: 3.6 },
+  { fromSec: 480, hpMul: 5 },
+  { fromSec: 660, hpMul: 7 },
+  { fromSec: 840, hpMul: 9.5 },
+] as const;
+const HP_GROWTH_BEFORE_T0388 = 1.14;
+
+/** Степень умножением в цикле: как в симуляции, без `Math.pow`. */
+function growthPower(base: number, steps: number): number {
+  let value = 1;
+  for (let i = 0; i < steps; i++) value *= base;
+  return value;
+}
+
+/**
+ * Множитель здоровья обычного врага на секунде `sec`, без «Сложной» и подстройки:
+ * `hpMul` ступени, открытой к этой секунде (последней из открытых), на рост
+ * бесконечной кривой за прошедшие отрезки. Враг, вышедший в эту секунду из новейшей
+ * ступени, получает ровно это число; рулетка весов подмешивает прежние ступени, но
+ * Р194 говорит о том, насколько крепче стал новый враг.
+ */
+function stageHpMulAt(sec: number, stages: readonly { fromSec: number; hpMul: number }[], hpGrowth: number): number {
+  let hpMul = stages[0].hpMul;
+  for (const stage of stages) if (stage.fromSec <= sec) hpMul = stage.hpMul;
+  const steps = sec < ENDLESS_CURVE.fromSec ? 0 : Math.floor((sec - ENDLESS_CURVE.fromSec) / ENDLESS_CURVE.segmentSec);
+  return hpMul * growthPower(hpGrowth, steps);
+}
+
+/** Во сколько раз здоровье обычного врага крепче, чем до T-0388, на секунде `sec`. */
+const hpRatioAt = (sec: number): number =>
+  stageHpMulAt(sec, ENEMY_STAGES, ENDLESS_CURVE.hpGrowth) / stageHpMulAt(sec, HP_MUL_BEFORE_T0388, HP_GROWTH_BEFORE_T0388);
+
+describe("враги жирнее с 2,5 минуты (Р194, T-0388)", () => {
+  it("до второй ступени здоровье прежнее: ранний бой и пролог не меняются", () => {
+    expect(hpRatioAt(0)).toBe(1);
+    expect(hpRatioAt(60)).toBe(1);
+    expect(hpRatioAt(120)).toBe(1);
+    expect(hpRatioAt(149)).toBe(1);
+  });
+
+  it("со второй ступени (150 с) здоровье вдвое выше прежнего, ±5%", () => {
+    expect(hpRatioAt(150)).toBeGreaterThanOrEqual(2 * 0.95);
+    expect(hpRatioAt(150)).toBeLessThanOrEqual(2 * 1.05);
+  });
+
+  it("к 600 с здоровье втрое выше прежнего, ±7%", () => {
+    expect(hpRatioAt(600)).toBeGreaterThanOrEqual(3 * 0.93);
+    expect(hpRatioAt(600)).toBeLessThanOrEqual(3 * 1.07);
+  });
+
+  it("после 600 с здоровье растёт быстрее прежнего: на 900 с не меньше ×3,4", () => {
+    expect(hpRatioAt(900)).toBeGreaterThanOrEqual(3.4);
+    expect(ENDLESS_CURVE.hpGrowth).toBeGreaterThan(HP_GROWTH_BEFORE_T0388);
+  });
+
+  it("к прежнему растёт по ступеням: на открытии каждой не ниже предыдущей (с допуском 3% на шаг кривой), на последней выше, чем на второй", () => {
+    // Отношение считают ступень и кривая вместе. Между 330 и 480 с ступень растёт медленнее
+    // прежней, а лишний шаг кривой (1,16 против 1,14) ещё мал, поэтому допуск есть.
+    const openings = ENEMY_STAGES.map((stage) => hpRatioAt(stage.fromSec));
+    for (let i = 1; i < openings.length; i++) {
+      expect(openings[i], `ступень на ${ENEMY_STAGES[i].fromSec} с`).toBeGreaterThanOrEqual(openings[i - 1] * 0.97);
+    }
+    expect(openings[openings.length - 1]).toBeGreaterThan(openings[1]);
   });
 });

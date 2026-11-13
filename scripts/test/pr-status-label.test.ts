@@ -140,6 +140,18 @@ describe("pull_request_review", () => {
 });
 
 describe("остальные события и ветки", () => {
+  it("ветка попытки task/T-NNNN-2 — ветка задачи: метки ставятся, как у task/T-NNNN", () => {
+    expect(plan({ headRef: "task/T-0042-2", action: "opened" })).toEqual({ add: ["на ревью"], remove: [] });
+    expect(plan({ headRef: "task/T-0042-12", action: "ready_for_review", labels: ["в работе"] })).toEqual({ add: ["на ревью"], remove: ["в работе"] });
+    expect(plan({ headRef: "task/T-0042-2", eventName: "pull_request_review", action: "submitted", reviewState: "changes_requested", labels: ["на ревью"] })).toEqual({ add: ["доработка"], remove: ["на ревью"] });
+  });
+
+  it("task/T-NNNN-1 и task/T-NNNN-02 — не ветки задач", () => {
+    for (const headRef of ["task/T-0042-1", "task/T-0042-02", "task/T-0042-0"]) {
+      expect(plan({ headRef })).toEqual(NOTHING);
+    }
+  });
+
   it("ветка не task/T-NNNN — ничего", () => {
     for (const headRef of ["feat/x", "dev", "task/T-12", "task/T-0042-x", undefined]) {
       expect(plan({ headRef })).toEqual(NOTHING);

@@ -15,7 +15,8 @@ import { useInstall } from "./state/install";
 import { useMeta } from "./state/meta";
 import { usePrologue } from "./state/prologue";
 import { watchPlatform } from "./state/platform";
-import { useNavigation } from "./state/navigation";
+import { openRunCardFromStart, useNavigation } from "./state/navigation";
+import { launchStartParam } from "./state/run-card-start";
 import { useTools } from "./state/tools";
 import { useRuns } from "./state/runs";
 import { recoverDownedRun } from "./state/run";
@@ -23,6 +24,7 @@ import { settleInterruptedRun } from "./state/run-interrupted";
 import { useSettings } from "./state/settings";
 import { initShell, track, type ShellBuildInfo, type ShellCapabilities } from "./state/shell";
 import { createDeferredSink, fanOut, noopAnalytics, type AnalyticsSink, type TimedSink } from "./state/analytics";
+import { FX_SOUND_PAGE } from "./state/dev-url";
 import { installErrorReporting } from "./state/error-reporting";
 import { useFeedback } from "./state/feedback";
 import { useGraphics } from "./state/graphics";
@@ -124,10 +126,15 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   render(<App />);
   // Снимки экранов: экран из адреса dev-сервера открывается поверх главной.
   if (options.capabilities.devStartScreen !== undefined) useNavigation.getState().push(options.capabilities.devStartScreen);
+  // Ссылка на карточку забега (`?startapp=run-<id>`): по ней при запуске открывается карточка поверх главной.
+  openRunCardFromStart(launchStartParam(options.adapter.signedLaunchData()));
   // Стенд эффектов: сцену задаёт только main.tsx и только на dev-сервере
   // (state/dev-url.ts), отдельный чанк подгружается лишь тогда.
   const fxScene = options.capabilities.devFxScene;
-  if (fxScene !== undefined) {
+  if (fxScene?.id === FX_SOUND_PAGE) {
+    // Страница рендера звуков (pnpm fx:sound): сцена не нужна, нужен только синтез.
+    void import("./dev/fx-sound").then(({ startFxSound }) => startFxSound());
+  } else if (fxScene !== undefined) {
     void import("./dev/fx-stand").then(({ startFxStand }) => startFxStand(fxScene.id, fxScene.ground));
   }
   // Забеги, не дошедшие до сервера в прошлый раз, уходят после главной: ради
@@ -149,6 +156,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
   // нужна, первому кадру нет (docs/34-stage3-plan.md, WP1). Статический
   // импорт утащил бы её и клиента авторизации в первую загрузку.
   let stopAccountSync = (): void => undefined;
+  let stopOnline = (): void => undefined;
   let unmounted = false;
   if (options.capabilities.auth !== undefined) {
     import("./state/session")
@@ -186,6 +194,17 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
               return loadBadges();
             })
             .catch((error: unknown) => console.warn("Знаки меню не загрузились:", error));
+          // Счётчик онлайна: пинг после входа, остановка при смене аккаунта и
+          // размонтировании (docs/35-stage4-plan.md Р107).
+          stopOnline();
+          import("./state/online-ping")
+            .then(async ({ startOnlinePing }) => {
+              const stop = await startOnlinePing();
+              stopOnline();
+              if (unmounted) stop();
+              else stopOnline = stop;
+            })
+            .catch((error: unknown) => console.warn("Счётчик онлайна не загрузился:", error));
         });
         return useSession.getState().signIn();
       })
@@ -216,6 +235,7 @@ export async function mountAppShell(options: MountOptions): Promise<MountedShell
       stopTelemetry();
       unmounted = true;
       stopAccountSync();
+      stopOnline();
       root.unmount();
     },
   };

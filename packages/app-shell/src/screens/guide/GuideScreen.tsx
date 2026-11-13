@@ -29,6 +29,7 @@ import {
   passiveRange,
   regularEnemies,
   rubezhGuide,
+  siegeGuide,
   speedClass,
   firstLevelWeapons,
   levelWeapons,
@@ -38,7 +39,7 @@ import {
   type EvolutionRecipe,
   type GuideEnemy,
 } from "./guide-data";
-import { ElementList, ElementTag, ResistLine } from "./elements";
+import { ElementList, ElementTag, ResistLine, TrailLine } from "./elements";
 import { EnemyScene, GemRow, PickupIcon, StageMark, WeaponScene } from "./scenes";
 
 /**
@@ -105,6 +106,7 @@ function Basics(): ReactNode {
   }));
 
   const rubezh = rubezhGuide();
+  const siege = siegeGuide();
 
   return (
     <>
@@ -119,6 +121,14 @@ function Basics(): ReactNode {
           text={t("guide.basics.rubezh.text", { time: formatDuration(rubezh.atSec), guard: t(`enemy.${rubezh.guard.id}.name`), mul: `×${String(rubezh.rewardMul)}` })}
         />
       )}
+
+      {/* Осада стоящего: кольцо на земле — обязательное чтение боя, поэтому правило есть и в гайдбуке (T-0392). */}
+      <Topic
+        index={1}
+        icon={<Swords size={20} />}
+        title={t("guide.siege.title")}
+        text={t(siege.elites ? "guide.siege.textElites" : "guide.siege.text", { time: formatDuration(siege.fromSec), hold: String(Math.round(siege.holdSec)) })}
+      />
 
       <Topic index={1} icon={<Crosshair size={20} />} title={t("guide.basics.move.title")} text={t("guide.basics.move.text")}>
         <div className="mx-auto max-w-[300px]">
@@ -296,6 +306,7 @@ function EnemyCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
             {t(`guide.enemy.speed.${speedClass(def.speed)}`).toLowerCase()}
           </p>
           <ResistLine def={def} />
+          <TrailLine def={def} />
           {children.length === 0 ? null : (
             <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
               <Shuffle size={12} aria-hidden="true" className="shrink-0" />

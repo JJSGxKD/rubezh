@@ -71,7 +71,11 @@ export function macroQuery(network: LinkNetwork): string {
  */
 const MACRO_VALUE = /^[\x21-\x7e]{1,256}$/;
 
-function isMacroValue(value: string): boolean {
+/**
+ * Годится ли значение метки. Одно правило на метки сети и на `click_id` и `sub1`…`sub5` партнёра
+ * (`click-params.ts`): второго не заводят.
+ */
+export function isMacroValue(value: string): boolean {
   return MACRO_VALUE.test(value) && !value.includes("{");
 }
 

@@ -222,6 +222,7 @@ describe("контент таймлайна спавна", () => {
     expect(pool.indexOf("bone_walker")).toBe(pool.indexOf("tank_ghoul") + 1);
     expect(pool.indexOf("mire_shambler")).toBe(pool.indexOf("tank_ghoul") + 2);
     // Прежние типы идут в прежнем порядке — без огонька, который стоял пятым.
+    // Болотник встал перед Ледяным духом по калибровке сильного бота (docs/32-balance.md §2.2).
     expect(pool).toEqual([
       "swarm_rat",
       "circler_crow",
@@ -232,6 +233,8 @@ describe("контент таймлайна спавна", () => {
       "tank_ghoul",
       "bone_walker",
       "mire_shambler",
+      "bog_lurker",
+      "ice_spirit",
     ]);
   });
 
@@ -406,8 +409,8 @@ describe("боссы бесконечного режима", () => {
     }
   });
 
-  it("смесь и стартовый набор кривой помещаются в пул из девяти врагов", () => {
-    expect(ENDLESS_CURVE.pool).toHaveLength(9);
+  it("смесь и стартовый набор кривой помещаются в пул из одиннадцати врагов", () => {
+    expect(ENDLESS_CURVE.pool).toHaveLength(11);
     expect(ENDLESS_CURVE.startTypes).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(ENDLESS_CURVE.mixSize).toBeLessThanOrEqual(ENDLESS_CURVE.pool.length);
     expect(findTimelineProblems(TIMELINE, ENDLESS_CURVE, ENEMIES)).toEqual([]);

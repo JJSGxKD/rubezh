@@ -55,6 +55,8 @@ export const ALL_PATTERNS_WEIGHTS: Record<EnemyPattern, number> = {
   splitter: 1,
   // Одинокий страж в обычной популяции бессмыслен: он держит место в строю кольца.
   cordon: 0,
+  // Неубиваемый преследователь выходит только директором преследователя, в популяцию не идёт.
+  stalker: 0,
 };
 
 export interface ScriptedRunResult {

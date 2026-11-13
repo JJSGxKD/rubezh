@@ -16,7 +16,7 @@ import type { AdPlace, AdSuccess } from "./ads-rules.js";
  * `appId`. Секреты подтверждений (вебхуки, адрес награды) — только в
  * окружении (Р53) и сюда не попадают.
  *
- * **Сеть знает свои площадки** (Р77, часть 8): SDK AdsGram, AdSonar, RichAds
+ * **Сеть знает свои площадки** (Р77, часть 8): SDK AdsGram, RichAds
  * и Taddy живёт только в Telegram. Блок с чужой площадкой не сохраняется и не
  * выдаётся, а пустой список площадок у блока значит «везде, где работает
  * сеть», — иначе блок AdsGram «на всех площадках» считался бы рекламой в VK.
@@ -25,7 +25,7 @@ import type { AdPlace, AdSuccess } from "./ads-rules.js";
  * показывает его наш рекламный блок — `delivery: "api"` у формата. SDK
  * Taddy остаётся только для учёта аудитории — `trackAudience` у профиля.
  *
- * `verified` — профиль сверен с документацией сети (все четыре — 01.10.2026)
+ * `verified` — профиль сверен с документацией сети (все три — 01.10.2026)
  * и рабочей интеграцией источника (`vpnsibcom_web`: вид ключей в продакшене).
  * Новая сеть без сверки заводится с `false` — панель так и пишет: «сверить с
  * кабинетом».
@@ -167,38 +167,6 @@ export const AD_NETWORK_PROFILES: readonly AdNetworkProfile[] = [
         success: ["cpa"],
         maxActive: 1,
         note: "В кабинете AdsGram Task-блок один на аккаунт. Награда — по адресу награды AdsGram, серверным подтверждением.",
-      },
-    ],
-    verified: true,
-  },
-  {
-    key: "adsonar",
-    title: "AdSonar",
-    cabinet: "https://partner.adsonar.co",
-    platforms: ["telegram"],
-    keys: [
-      {
-        key: "appId",
-        title: "Application ID",
-        hint: "partner.adsonar.co → приложение → идентификатор: app_ и буквы с цифрами; уходит в адрес скрипта sonar.js",
-        example: "app_133d2148",
-        pattern: "^app_[0-9a-z]{4,32}$",
-      },
-    ],
-    formats: [
-      {
-        format: "rewarded",
-        title: "Rewarded (`Sonar.show`, событие `onReward`)",
-        unit: { title: "Ad Unit", hint: "partner.adsonar.co → Create Ad Unit → тип Rewarded: имя блока", example: "rewarded_wheel", pattern: "^[A-Za-z0-9_-]{1,64}$" },
-        success: ["view"],
-        note: "Метод показа у всех форматов один — формат задаёт сам блок в кабинете: блок этого места должен быть типа Rewarded.",
-      },
-      {
-        format: "interstitial",
-        title: "Interstitial (`Sonar.show`, закрывает игрок — `onClose`)",
-        unit: { title: "Ad Unit", hint: "partner.adsonar.co → Create Ad Unit → тип Interstitial: имя блока", example: "interstitial_between", pattern: "^[A-Za-z0-9_-]{1,64}$" },
-        success: ["view"],
-        note: "Блок этого места в кабинете — типа Interstitial. Баннер (контейнер на странице) в места игры не ложится.",
       },
     ],
     verified: true,

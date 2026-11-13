@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { buildXrayConfig, checkSubscriptionUrl } from "@bh/proxy-kit";
+import { checkSubscriptionUrl } from "@bh/proxy-kit";
 import type { Redis } from "ioredis";
 import { RateLimitedError, ValidationError } from "../../../common/domain-error.js";
 import { APP_CONFIG, type AppConfig } from "../../../config/app-config.js";
@@ -9,25 +9,31 @@ import { SecretUnreadableError, type SecretCipher } from "../../secrets/secret-c
 import { SubscriptionBusyError, SubscriptionNotFoundError, SubscriptionStorageDisabledError } from "../proxies-errors.js";
 import { PROXY_CIPHER } from "../proxy-password.js";
 import { ProxyRoutes } from "../proxy-routes.service.js";
+import { SubscriptionCommands } from "./subscription-commands.js";
 import { takeMinute } from "./subscription-lock.js";
 import { SubscriptionRoutes } from "./subscription-routes.js";
+import { newSubscriptionKey, slotQuota, SUBSCRIPTIONS_MAX } from "./subscription-rules.js";
 import { openUrl, sealUrl } from "./subscription-url.js";
-import { nodeViews, subscriptionAudit, subscriptionView, type SubscriptionOverview } from "./subscription-views.js";
-import { SUBSCRIPTION_KEY, SUBSCRIPTION_REPOSITORY, type StoredSubscription, type SubscriptionRepository } from "./subscription.repository.js";
-import { SubscriptionSync, XRAY_LISTEN } from "./subscription.sync.js";
-import { CONFIG_WRITER, SidecarMissingError, type ConfigWriter } from "./xray-config-writer.js";
+import { subscriptionHwidPrefix } from "./subscription-download.js";
+import { nodeViews, subscriptionAudit, subscriptionView, type SubscriptionsOverview } from "./subscription-views.js";
+import { SUBSCRIPTION_REPOSITORY, type StoredSubscription, type SubscriptionRepository } from "./subscription.repository.js";
+import { SubscriptionSync } from "./subscription.sync.js";
+import { CONFIG_WRITER, type ConfigWriter } from "./xray-config-writer.js";
 
 /**
- * Подписка Xray в панели (docs/35-stage4-plan.md Р101, tasks/T-0093): просмотр,
- * сохранение, включение, удаление, обновление и проверка узлов. Смотреть —
- * `proxies.view`, менять — `proxies.edit` (права T-0065, новых нет). Адрес
- * подписки панель не получает никогда и в аудит он не попадает: там название и
- * подсказка «хост …abcd». Каждая правка — в аудит и сообщением репликам.
+ * Подписки Xray в панели (docs/35-stage4-plan.md Р101, Р192, tasks/T-0093,
+ * tasks/T-0384): список, создание, правка, включение, удаление, обновление и
+ * проверка узлов. Смотреть — `proxies.view`, менять — `proxies.edit` (права
+ * T-0065, новых нет). Адрес подписки панель не получает никогда и в аудит он не
+ * попадает: там название и подсказка «хост …abcd». Каждая правка — в аудит с
+ * ключом подписки целью и сообщением репликам.
+ *
+ * Всё, что меняет конфиг Xray, делает `SubscriptionCommands` под общим замком.
  */
 
 export interface SubscriptionInput {
   name: string;
-  /** нет — прежний адрес; при первом подключении обязателен */
+  /** при создании обязателен; при правке нет — прежний адрес */
   url?: string | undefined;
   countries: string[];
   enabled: boolean;
@@ -46,6 +52,7 @@ export class ProxySubscriptionService {
     @Inject(PROXY_CIPHER) private readonly cipher: SecretCipher | null,
     private readonly roles: RolesService,
     private readonly sync: SubscriptionSync,
+    private readonly commands: SubscriptionCommands,
     private readonly routes: SubscriptionRoutes,
     @Inject(CONFIG_WRITER) private readonly writer: ConfigWriter,
     @Inject(REDIS) private readonly redis: Redis,
@@ -53,109 +60,24 @@ export class ProxySubscriptionService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async view(actor: AccountRef): Promise<SubscriptionOverview> {
+  async list(actor: AccountRef): Promise<SubscriptionsOverview> {
     await this.roles.require(actor, "proxies.view");
     return await this.overview();
   }
 
-  async save(actor: AccountRef, input: SubscriptionInput, at = new Date()): Promise<SubscriptionOverview> {
+  async create(actor: AccountRef, input: SubscriptionInput, at = new Date()): Promise<SubscriptionsOverview> {
     await this.roles.require(actor, "proxies.edit");
-    const before = (await this.repository.load())?.subscription ?? null;
-    const url = input.url?.trim();
-    if (before === null && (url === undefined || url === "")) throw new ValidationError("Укажите адрес подписки");
+    const url = this.checkedUrl(input.url);
+    if (url === null) throw new ValidationError("Укажите адрес подписки");
+    if (this.cipher === null) throw new SubscriptionStorageDisabledError();
 
-    let row: StoredSubscription;
-    let replaced = false;
-    if (url !== undefined && url !== "") {
-      if (!checkSubscriptionUrl(url).ok) throw new ValidationError(PUBLIC_HTTPS);
-      if (this.cipher === null) throw new SubscriptionStorageDisabledError();
-      replaced = before === null || this.openOrNull(before) !== url;
-      row = { ...this.draft(before, input, actor, at), ...(replaced ? sealUrl(this.cipher, SUBSCRIPTION_KEY, url) : this.urlOf(before)) };
-    } else if (before !== null) {
-      row = this.draft(before, input, actor, at);
-    } else {
-      throw new ValidationError("Укажите адрес подписки");
-    }
-    // Новый адрес — другая подписка: итог и узлы прежней к ней не относятся.
-    if (replaced) row = { ...row, lastRefreshAt: null, lastRefreshOk: null, lastRefreshNote: null, providerIntervalHours: null, trafficUsedBytes: null, trafficTotalBytes: null, expiresAt: null };
-
-    await this.repository.save(row, { dropNodes: replaced && before !== null });
-    await this.reload();
-    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.save", target: SUBSCRIPTION_KEY, ...(before === null ? {} : { before: subscriptionAudit(before) }), after: subscriptionAudit(row) });
-    if (before !== null && before.enabled !== row.enabled) {
-      await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.toggle", target: SUBSCRIPTION_KEY, before: { enabled: before.enabled }, after: { enabled: row.enabled } });
-    }
-    await this.proxyRoutes.changed("subscription");
-    return await this.overview();
-  }
-
-  /** «Обновить сейчас»: не чаще раза в минуту; итог — в строке подписки. */
-  async refresh(actor: AccountRef, at = new Date()): Promise<SubscriptionOverview> {
-    await this.roles.require(actor, "proxies.edit");
-    await this.requireMinute(MANUAL_REFRESH_KEY);
-    const result = await this.sync.refresh(at);
-    if (result.status === "absent") throw new SubscriptionNotFoundError();
-    if (result.status === "disabled") throw new ValidationError("Подписка выключена — сначала включите её");
-    if (result.status === "busy") throw new SubscriptionBusyError();
-    const current = (await this.repository.load())?.subscription;
-    await this.roles.audit({
-      actorAccountId: actor.accountId,
-      action: "proxy_subscription.refresh",
-      target: SUBSCRIPTION_KEY,
-      after: { name: current?.name ?? null, urlHint: current?.urlHint ?? null, ok: result.status === "ok", note: result.note },
-    });
-    return await this.overview();
-  }
-
-  /** «Проверить узлы»: все узлы встают в очередь проверок, их разберёт расписание. */
-  async probe(actor: AccountRef, at = new Date()): Promise<SubscriptionOverview> {
-    await this.roles.require(actor, "proxies.edit");
-    const snapshot = await this.repository.load();
-    if (snapshot === null) throw new SubscriptionNotFoundError();
-    await this.requireMinute(MANUAL_PROBE_KEY);
-    await this.repository.scheduleAllProbes(SUBSCRIPTION_KEY, at);
-    await this.reload();
-    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.probe", target: SUBSCRIPTION_KEY, after: { name: snapshot.subscription.name, urlHint: snapshot.subscription.urlHint, nodes: snapshot.nodes.length } });
-    await this.proxyRoutes.changed("subscription");
-    return await this.overview();
-  }
-
-  async remove(actor: AccountRef): Promise<void> {
-    await this.roles.require(actor, "proxies.edit");
-    const snapshot = await this.repository.load();
-    if (snapshot === null) throw new SubscriptionNotFoundError();
-
-    // Пустой конфиг убирает входы Xray. Нет контейнера — удалять нечего, подписка всё равно уходит.
-    try {
-      await this.writer.write(buildXrayConfig([], new Map(), { basePort: this.config.xray.socksPortBase, slotCount: this.config.xray.slotCount, listen: XRAY_LISTEN }));
-    } catch (error: unknown) {
-      if (!(error instanceof SidecarMissingError)) this.logger.warn(JSON.stringify({ module: "proxy-subscription", event: "empty_config_failed", reason: error instanceof Error ? error.name : "unknown" }));
-    }
-    await this.repository.remove(SUBSCRIPTION_KEY);
-    await this.reload();
-    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.delete", target: SUBSCRIPTION_KEY, before: subscriptionAudit(snapshot.subscription) });
-    await this.proxyRoutes.changed("subscription");
-  }
-
-  private async overview(): Promise<SubscriptionOverview> {
-    const [snapshot, connected] = await Promise.all([this.repository.load(), this.writer.available()]);
-    return {
-      encryption: this.cipher !== null,
-      sidecar: { connected },
-      subscription: snapshot === null ? null : subscriptionView(snapshot.subscription),
-      nodes: snapshot === null ? [] : nodeViews(snapshot.nodes),
-    };
-  }
-
-  /** Строка без адреса: поля формы поверх прежней строки (или пустой для первого подключения). */
-  private draft(before: StoredSubscription | null, input: SubscriptionInput, actor: AccountRef, at: Date): StoredSubscription {
-    const base = before ?? {
-      key: SUBSCRIPTION_KEY,
-      urlIv: new Uint8Array(),
-      urlTag: new Uint8Array(),
-      urlCt: new Uint8Array(),
-      urlKeyId: "",
-      urlHint: "",
+    const key = newSubscriptionKey();
+    const row: StoredSubscription = {
+      key,
+      name: input.name,
+      ...sealUrl(this.cipher, key, url),
+      enabled: input.enabled,
+      countries: [...new Set(input.countries)],
       lastRefreshAt: null,
       lastRefreshOk: null,
       lastRefreshNote: null,
@@ -163,13 +85,134 @@ export class ProxySubscriptionService {
       trafficUsedBytes: null,
       trafficTotalBytes: null,
       expiresAt: null,
+      routingSource: null,
+      routingDirect: null,
+      routingBlock: null,
+      routingHints: [],
+      updatedBy: actor.accountId,
+      updatedAt: at,
+      createdAt: at,
     };
-    return { ...base, name: input.name, enabled: input.enabled, countries: [...new Set(input.countries)], updatedBy: actor.accountId, updatedAt: at };
+    await this.commands.create(row);
+    await this.reload();
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.save", target: key, after: subscriptionAudit(row) });
+    await this.proxyRoutes.changed("subscription");
+    return await this.overview();
   }
 
-  private urlOf(row: StoredSubscription | null): Pick<StoredSubscription, "urlIv" | "urlTag" | "urlCt" | "urlKeyId" | "urlHint"> {
-    if (row === null) throw new ValidationError("Укажите адрес подписки");
-    return { urlIv: row.urlIv, urlTag: row.urlTag, urlCt: row.urlCt, urlKeyId: row.urlKeyId, urlHint: row.urlHint };
+  async update(actor: AccountRef, key: string, input: SubscriptionInput, at = new Date()): Promise<SubscriptionsOverview> {
+    await this.roles.require(actor, "proxies.edit");
+    const before = await this.subscriptionOf(key);
+    const url = this.checkedUrl(input.url);
+    const draft: StoredSubscription = { ...before, name: input.name, enabled: input.enabled, countries: [...new Set(input.countries)], updatedBy: actor.accountId, updatedAt: at };
+
+    let row = draft;
+    let replaced = false;
+    if (url !== null) {
+      if (this.cipher === null) throw new SubscriptionStorageDisabledError();
+      replaced = this.openOrNull(before) !== url;
+      if (replaced) row = { ...draft, ...sealUrl(this.cipher, key, url) };
+    }
+    // Новый адрес — другая подписка: итог и узлы прежней к ней не относятся.
+    if (replaced) {
+      row = {
+        ...row,
+        lastRefreshAt: null,
+        lastRefreshOk: null,
+        lastRefreshNote: null,
+        providerIntervalHours: null,
+        trafficUsedBytes: null,
+        trafficTotalBytes: null,
+        expiresAt: null,
+        routingSource: null,
+        routingDirect: null,
+        routingBlock: null,
+        routingHints: [],
+      };
+    }
+
+    await this.commands.update(before, row, replaced);
+    await this.reload();
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.save", target: key, before: subscriptionAudit(before), after: subscriptionAudit(row) });
+    if (before.enabled !== row.enabled) {
+      await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.toggle", target: key, before: { enabled: before.enabled }, after: { enabled: row.enabled } });
+    }
+    await this.proxyRoutes.changed("subscription");
+    return await this.overview();
+  }
+
+  /** «Обновить сейчас»: не чаще раза в минуту на подписку; итог — в строке подписки. */
+  async refresh(actor: AccountRef, key: string, at = new Date()): Promise<SubscriptionsOverview> {
+    await this.roles.require(actor, "proxies.edit");
+    const subscription = await this.subscriptionOf(key);
+    if (!subscription.enabled) throw new ValidationError("Подписка выключена — сначала включите её");
+    await this.requireMinute(`${MANUAL_REFRESH_KEY}:${key}`);
+    const result = await this.sync.refresh(key, at);
+    if (result.status === "absent") throw new SubscriptionNotFoundError();
+    if (result.status === "disabled") throw new ValidationError("Подписка выключена — сначала включите её");
+    if (result.status === "busy") throw new SubscriptionBusyError();
+    const current = (await this.repository.load(key))?.subscription;
+    await this.roles.audit({
+      actorAccountId: actor.accountId,
+      action: "proxy_subscription.refresh",
+      target: key,
+      after: { name: current?.name ?? null, urlHint: current?.urlHint ?? null, ok: result.status === "ok", note: result.note },
+    });
+    return await this.overview();
+  }
+
+  /** «Проверить узлы»: все узлы подписки встают в очередь проверок, их разберёт расписание. */
+  async probe(actor: AccountRef, key: string, at = new Date()): Promise<SubscriptionsOverview> {
+    await this.roles.require(actor, "proxies.edit");
+    const snapshot = await this.repository.load(key);
+    if (snapshot === null) throw new SubscriptionNotFoundError();
+    await this.requireMinute(`${MANUAL_PROBE_KEY}:${key}`);
+    await this.repository.scheduleAllProbes(key, at);
+    await this.reload();
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.probe", target: key, after: { name: snapshot.subscription.name, urlHint: snapshot.subscription.urlHint, nodes: snapshot.nodes.length } });
+    await this.proxyRoutes.changed("subscription");
+    return await this.overview();
+  }
+
+  async remove(actor: AccountRef, key: string): Promise<void> {
+    await this.roles.require(actor, "proxies.edit");
+    const before = await this.subscriptionOf(key);
+    await this.commands.remove(key);
+    await this.reload();
+    await this.roles.audit({ actorAccountId: actor.accountId, action: "proxy_subscription.delete", target: key, before: subscriptionAudit(before) });
+    await this.proxyRoutes.changed("subscription");
+  }
+
+  private async overview(): Promise<SubscriptionsOverview> {
+    const [all, connected] = await Promise.all([this.repository.list(), this.writer.available()]);
+    const slotCount = this.config.xray.slotCount;
+    return {
+      encryption: this.cipher !== null,
+      sidecar: { connected },
+      limit: SUBSCRIPTIONS_MAX,
+      slotCount,
+      slotQuota: slotQuota(slotCount, all.length),
+      subscriptions: all.map(({ subscription, nodes }) => ({ ...subscriptionView(subscription, this.hwidPrefixOf(subscription.key)), nodes: nodeViews(nodes) })),
+    };
+  }
+
+  /** Отпечаток устройства подписки; без ключа шифрования его нет. Полный `x-hwid` из сервиса не выходит. */
+  private hwidPrefixOf(key: string): string | null {
+    return this.cipher === null ? null : subscriptionHwidPrefix(this.cipher, key);
+  }
+
+  private async subscriptionOf(key: string): Promise<StoredSubscription> {
+    const snapshot = await this.repository.load(key);
+    if (snapshot === null) throw new SubscriptionNotFoundError();
+    return snapshot.subscription;
+  }
+
+  /** Адрес из формы: пусто — `null` (прежний остаётся); непубличный — отказ. */
+  private checkedUrl(raw: string | undefined): string | null {
+    const url = raw?.trim();
+    if (url === undefined || url === "") return null;
+    if (!checkSubscriptionUrl(url).ok) throw new ValidationError(PUBLIC_HTTPS);
+    return url;
   }
 
   /** Прежний адрес для сравнения с новым; не читается — считается другим. */

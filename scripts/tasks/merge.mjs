@@ -1,4 +1,5 @@
 import { AHEAD_LABEL, REVIEW_LABEL, STATUS_LABELS } from "./board.mjs";
+import { attemptOf, currentBranchOf, parseTaskBranch, taskBranch } from "./branch.mjs";
 import { BASE, diffNumstat, fetchOrigin, gh, hasCommit, isAncestor, readFileAt, readOriginTasks, taskFileNameAt, toolsMatchBase } from "./git-io.mjs";
 import { readTasks as readRegistryTasks } from "./registry.mjs";
 import { SELF_MERGE_MESSAGE, parseFrontmatter, parseOwner, selfMergePathProblem, selfMergeProblems } from "./task-file.mjs";
@@ -17,7 +18,6 @@ import { matches } from "./zones.mjs";
  */
 
 const TASK_ID_RE = /^T-\d{4}$/;
-const BRANCH_RE = /^task\/(T-\d{4})$/;
 const FULL_SHA_RE = /^[0-9a-f]{40}$/i;
 
 /** Проверки, которые не мешают мерджу: доска (`board`) сама зависит от состояния PR. */
@@ -98,12 +98,13 @@ export function diffProblems(changes, task, fileName) {
  * вынужденные файлы (tasks/README.md, «Что исполнитель решает сам»), поэтому
  * для него проверяется только запрет на путях.
  */
-const PINNED_FIELDS = ["zones", "runner", "effort", "merge"];
+const PINNED_FIELDS = ["zones", "runner", "effort", "merge", "attempt"];
 
 const show = (value) => (Array.isArray(value) ? `[${[...value].sort().join(", ")}]` : String(value));
 
 function pinnedValue(task, field) {
   if (field === "merge") return task.merge ?? "lead";
+  if (field === "attempt") return String(attemptOf(task));
   const value = task[field];
   return Array.isArray(value) ? [...value].sort() : value;
 }
@@ -210,12 +211,17 @@ export function selfCheckProblems(comments, headSha, stream, { prAuthor, headCom
  */
 export function mergeProblems({ task, branchTask, fileName, pr, mergeable, comments, headSha, changes, upToDate, toolsMatchDev, dependencyStatuses }) {
   const problems = [];
-  const id = BRANCH_RE.exec(pr?.headRefName ?? "")?.[1];
+  const branch = parseTaskBranch(pr?.headRefName);
+  const id = branch?.id;
   if (id === undefined) problems.push(`ветка PR «${String(pr?.headRefName)}» — не task/T-NNNN: самостоятельно вливаются только PR задач`);
   const name = id ?? "задачи";
 
   if (task === null || task === undefined) problems.push(`файла ${name} нет в ${BASE}: пометку merge: self читают оттуда`);
   else {
+    // PR прежней попытки — не PR задачи (Р195): действует только ветка попытки из шапки на dev.
+    if (branch !== null && branch.attempt !== attemptOf(task)) {
+      problems.push(`ветка PR ${String(pr.headRefName)} — попытка ${String(branch.attempt)}, а у ${name} в ${BASE} действует попытка ${String(attemptOf(task))}: вливается только PR из ${currentBranchOf(task)}`);
+    }
     if (task.merge !== "self") problems.push(`в ${BASE} у ${name} нет «merge: self» (там ${task.merge ?? "поля нет — это lead"}): пометка — из ${BASE}, дописать её в ветке PR нельзя`);
     else {
       const forbidden = selfMergeProblems(task, fileName);
@@ -316,11 +322,11 @@ function readJson(args, what) {
   }
 }
 
-/** Единственный открытый PR ветки задачи со всеми полями; `UNKNOWN` в `mergeable` перечитывается один раз. */
-function loadPr(id) {
-  const list = readJson(["pr", "list", "--head", `task/${id}`, "--state", "open", "--json", "number"], "gh pr list");
-  if (!Array.isArray(list) || list.length === 0) throw new Error(`Открытого PR ветки task/${id} нет: вливать нечего.`);
-  if (list.length > 1) throw new Error(`Открытых PR ветки task/${id} несколько (${list.map((pr) => `#${String(pr.number)}`).join(", ")}): оставь один.`);
+/** Единственный открытый PR ветки текущей попытки задачи со всеми полями; `UNKNOWN` в `mergeable` перечитывается один раз. */
+function loadPr(branch) {
+  const list = readJson(["pr", "list", "--head", branch, "--state", "open", "--json", "number"], "gh pr list");
+  if (!Array.isArray(list) || list.length === 0) throw new Error(`Открытого PR ветки ${branch} нет: вливать нечего.`);
+  if (list.length > 1) throw new Error(`Открытых PR ветки ${branch} несколько (${list.map((pr) => `#${String(pr.number)}`).join(", ")}): оставь один.`);
   const view = () => readJson(["pr", "view", String(list[0].number), "--json", PR_FIELDS], "gh pr view");
   const first = view();
   if (first.mergeable !== "UNKNOWN") return first;
@@ -354,7 +360,11 @@ export function runMerge(positional) {
   const id = positional[0];
   if (id === undefined || !TASK_ID_RE.test(id)) throw new Error("Укажи задачу: pnpm task merge T-NNNN");
   fetchOrigin();
-  const pr = loadPr(id);
+  // Ветка PR — ветка текущей попытки задачи из `origin/dev` (Р195); задачи в dev нет — ветка первой попытки,
+  // причину отказа назовёт `mergeProblems`.
+  const devFile = taskFileNameAt(BASE, id);
+  const devText = devFile === null ? null : readFileAt(BASE, `tasks/${devFile}`);
+  const pr = loadPr(devText === null ? taskBranch(id) : currentBranchOf({ ...parseFrontmatter(devText).data, id }));
   const headSha = typeof pr.headRefOid === "string" ? pr.headRefOid : "";
   if (!FULL_SHA_RE.test(headSha) || !hasCommit(headSha)) {
     throw new Error(`Голова PR #${String(pr.number)} (${headSha || "SHA не получен"}) не получена локально: повтори команду, если поток только что пушил.`);

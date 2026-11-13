@@ -21,10 +21,17 @@ export class ProxyLimitError extends DomainError {
   }
 }
 
-/** Подписки Xray нет — 404, а не пустая карточка. */
+/** Подписки Xray с таким ключом нет — 404, а не пустая карточка. */
 export class SubscriptionNotFoundError extends DomainError {
   constructor() {
     super("proxy_subscription_not_found", "Подписка Xray не подключена", 404);
+  }
+}
+
+/** Подписок уже предел (`SUBSCRIPTIONS_MAX`, Р192): входов спутника на большее число не хватит. */
+export class SubscriptionLimitError extends DomainError {
+  constructor(limit: number) {
+    super("proxy_subscription_limit", `Подписок уже ${String(limit)} — удалите лишнюю, чтобы добавить новую`, 409);
   }
 }
 
@@ -35,10 +42,10 @@ export class SubscriptionStorageDisabledError extends DomainError {
   }
 }
 
-/** Обновление подписки уже идёт (на этой или другой реплике). */
+/** Подписки сейчас обновляются (на этой или другой реплике): правка конфига подождёт — замок общий. */
 export class SubscriptionBusyError extends DomainError {
   constructor() {
-    super("proxy_subscription_busy", "Обновление уже идёт на сервере; итог появится в разделе через минуту", 409);
+    super("proxy_subscription_busy", "Подписки сейчас обновляются на сервере — повторите через минуту", 409);
   }
 }
 

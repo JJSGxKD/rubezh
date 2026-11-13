@@ -35,12 +35,100 @@ export type ShapeKind =
   /** заморозка: ледяной кристалл о шести лучах */
   | "freeze"
   /** сундук забега: корпус, крышка и замок */
-  | "chest";
+  | "chest"
+  /** неубиваемый: высокий силуэт в капюшоне с посохом, низ плаща рваный */
+  | "hood";
 
 export interface ShapeLook {
   shape: ShapeKind;
   color: number;
 }
+
+/**
+ * Знак неубиваемого (Р205): чернь Нави, лунная кайма, провал под ногами. Золото — элите и боссу
+ * («убей, получишь награду»), бледная кайма говорит «не трогай». Иней — только в предвестии: он близок к тону
+ * заморозки (`status-tones.ts`), и на теле читался бы как состояние. Знак общий для любого врага с
+ * `unkillable`, а не только для Карачуна.
+ */
+export const UNKILLABLE_LOOK = {
+  body: 0x241c38,
+  shade: 0x150f24,
+  deep: 0x0b0816,
+  light: 0x4d4170,
+  rim: { color: 0xe6e0ff, width: 2 },
+  /** кайма на попадании: ярче и толще, а не белая заливка — белая говорит «ранен», а он не ранен */
+  rimFlash: { color: 0xffffff, width: 3 },
+  pit: { color: 0x0b0816, ring: 0xe6e0ff },
+  frost: 0xcfe9ff,
+} as const;
+
+/** Одна ступень подола: ровный верх и рваный низ из шести зубцов. */
+function hemStrip(top: number, base: number, tooth: number): readonly (readonly [number, number])[] {
+  const edge: [number, number][] = [];
+  const steps = 6;
+  for (let i = 0; i <= steps; i++) edge.push([0.56 - (1.12 * i) / steps, i % 2 === 0 ? base : base + tooth]);
+  return [[0.56, top], ...edge, [-0.56, top]];
+}
+
+/**
+ * Рисунок фигуры «капюшон» в долях радиуса от центра (x вправо, y вниз), по design/art/concepts/stalker/karachun.svg
+ * в плоских формах: плащ книзу шире, провал лица в капюшоне с двумя глазами, посох сбоку, ног нет — низ рваный
+ * подол тремя ступенями прозрачности. Всё внутри квадрата 2r × 2r. Одни и те же таблицы читают канва
+ * (`shapes.ts`) и гайдбук оболочки, чтобы картинка в гайдбуке совпадала с забегом.
+ */
+export const HOOD_GEOMETRY = {
+  /** силуэт плаща: остриё капюшона вверху */
+  cloak: [
+    [-0.52, 0.675],
+    [-0.36, -0.245],
+    [-0.28, -0.515],
+    [-0.04, -0.805],
+    [0.08, -1],
+    [0.2, -0.765],
+    [0.36, -0.495],
+    [0.4, -0.245],
+    [0.52, 0.675],
+  ],
+  /** тень на правой стороне плаща */
+  shade: [
+    [0.4, -0.245],
+    [0.52, 0.675],
+    [0.24, 0.675],
+    [0.3, -0.2],
+  ],
+  /** складки плаща: x1, y1, x2, y2 */
+  folds: [
+    [-0.24, -0.125, -0.4, 0.635],
+    [0.12, 0.115, 0.12, 0.675],
+  ],
+  /** провал лица в капюшоне */
+  face: [
+    [-0.08, -0.685],
+    [0.08, -0.805],
+    [0.28, -0.605],
+    [0.32, -0.445],
+    [0.24, -0.325],
+    [-0.08, -0.325],
+    [-0.16, -0.485],
+  ],
+  /** два глаза: x, y, радиус */
+  eyes: [
+    [0.06, -0.525, 0.04],
+    [0.2, -0.505, 0.034],
+  ],
+  /** посох сбоку: x1, y1, x2, y2 */
+  staff: [0.68, 0.8, 0.64, -0.8],
+  /** навершие посоха — ромбик */
+  staffHead: [
+    [0.64, -0.98],
+    [0.72, -0.86],
+    [0.64, -0.74],
+    [0.56, -0.86],
+  ],
+  /** три ступени подола: сверху плотный, книзу истаивает */
+  hem: [hemStrip(0.5, 0.66, 0.12), hemStrip(0.66, 0.78, 0.12), hemStrip(0.78, 0.88, 0.12)],
+  hemAlpha: [1, 0.6, 0.3],
+} as const;
 
 /**
  * Все враги — красная гамма, поэтому главное различие типа — форма, а оттенок
@@ -63,6 +151,19 @@ export const ENEMY_LOOKS: Record<EnemyPattern, ShapeLook> = {
   // Страж кольца: временный облик — ромб, который в красной гамме врагов не занят;
   // рисунок для него должен нарисовать дизайнер.
   cordon: { shape: "diamond", color: 0xb3203f },
+  // Неубиваемый преследователь: капюшон цвета нави, темнее земли и любого врага (знак — UNKILLABLE_LOOK).
+  stalker: { shape: "hood", color: UNKILLABLE_LOOK.body },
+};
+
+/**
+ * Тон тела конкретного врага, когда тон его паттерна не подходит: красная гамма
+ * паттерна не говорит о стихии. Форма остаётся от паттерна.
+ */
+export const ENEMY_TONE_BY_ID: Readonly<Record<string, number>> = {
+  // тон холода: тот же голубой, которым читается холод в гайдбуке и на знаках состояний
+  ice_spirit: 0x6fc8ff,
+  // болотная зелень, темнее тона яда (`STATUS_TONE_COLORS`): тело не сливается с лужей и знаком отравления
+  bog_lurker: 0x5fa043,
 };
 
 /** Ранг врага на канве: обычный не задан. */
@@ -83,23 +184,52 @@ const RANK_TINT = {
  * подбирается вручную для каждого паттерна, — иначе новый паттерн однажды
  * останется без своего цвета элиты.
  */
-export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook): number {
-  const color = ENEMY_LOOKS[pattern].color;
+export function enemyColor(pattern: EnemyPattern, rank: EnemyRankLook, enemyId?: string): number {
+  const color = (enemyId === undefined ? undefined : ENEMY_TONE_BY_ID[enemyId]) ?? ENEMY_LOOKS[pattern].color;
   if (rank === undefined) return color;
   return mixChannels(color, RANK_TINT[rank].color, RANK_TINT[rank].mix);
 }
 
-/** Кайма опасного: золотая, толще у босса. Обводка у рядовых «странновато выглядит» — её нет. */
+/** Кайма опасного: золотая, толще у босса; у неубиваемого — лунная. Обводка у рядовых «странновато выглядит» — её нет. */
 export interface EnemyRim {
   color: number;
   /** толщина в игровых единицах */
   width: number;
 }
 
-export function enemyRim(rank: EnemyRankLook): EnemyRim | null {
+export function enemyRim(rank: EnemyRankLook, unkillable = false): EnemyRim | null {
+  // Неубиваемый — всегда лунная кайма: ранга у него нет, а золото ему не положено.
+  if (unkillable) return UNKILLABLE_LOOK.rim;
   if (rank === "elite") return { color: 0xffd15c, width: 2 };
   if (rank === "boss") return { color: 0xffd15c, width: 3 };
   return null;
+}
+
+/** Облик объекта орбиты: кадр арта, радиус рисунка (единицы) и цвет фигуры без арта. */
+export interface OrbiterLook {
+  frame: string;
+  radius: number;
+  /** ячейка кадра в единицах (`units` в design/art/src/fx.mjs) */
+  cellUnits: number;
+  color: number;
+}
+
+const WARD_LOOK: OrbiterLook = { frame: "fx/orbiter_ward0", radius: 16, cellUnits: 16, color: 0x46d9c6 };
+
+/**
+ * Облик по id оружия-орбиты. Груз кистеня крупнее камня-оберега: рисунок
+ * только крупнее, зона удара в симуляции у всех одна (`ORBITER_RADIUS`).
+ */
+export const ORBITER_LOOKS: Readonly<Record<string, OrbiterLook>> = {
+  flail: { frame: "fx/orbiter_flail0", radius: 24, cellUnits: 20, color: 0xb8c4d9 },
+  whirl: { frame: "fx/orbiter_whirl0", radius: 26, cellUnits: 22, color: 0xe6edff },
+};
+
+/** Имена кадров всех видов объектов орбиты — их атлас ищет при сборке. */
+export const ORBITER_FRAME_NAMES: readonly string[] = [WARD_LOOK.frame, ...Object.values(ORBITER_LOOKS).map((look) => look.frame)];
+
+export function orbiterLook(weaponId: string): OrbiterLook {
+  return ORBITER_LOOKS[weaponId] ?? WARD_LOOK;
 }
 
 /**
@@ -135,7 +265,7 @@ export function stageCore(stage: number): number | null {
   return STAGE_LOOKS[Math.min(stage, STAGE_LOOKS.length - 1)]?.core ?? null;
 }
 
-function mixChannels(from: number, to: number, ratio: number): number {
+export function mixChannels(from: number, to: number, ratio: number): number {
   const channel = (shift: number): number => {
     const a = (from >> shift) & 0xff;
     const b = (to >> shift) & 0xff;

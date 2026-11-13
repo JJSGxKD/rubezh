@@ -2,7 +2,9 @@ import type { UpgradeOption } from "@bh/shared-types";
 import type { SimInput } from "../sim/step";
 import type { World } from "../sim/world";
 import { chestSizeOf } from "../sim/chests";
+import { stalkerAlive } from "../sim/stalker-body";
 import { ORBITER_RADIUS } from "../weapons";
+import { stalkerFleeDirection } from "./stalker-flee";
 
 /**
  * Бот-игрок для калибровки баланса (docs/26-stage2-plan.md, WP4.6).
@@ -24,11 +26,15 @@ import { ORBITER_RADIUS } from "../weapons";
  * два прогона одного seed давали бы разные числа, и таблица калибровки
  * перестала бы что-либо значить.
  */
-export type BotSkill = "passive" | "dodging";
+export type BotSkill = "passive" | "dodging" | "strong";
 
 export interface Bot {
   input(world: World): SimInput;
-  choose(offers: readonly UpgradeOption[]): string;
+  /**
+   * Выбор карточки уровня. Мир нужен тем, кто смотрит на набор (сильный бот);
+   * пассивный и уклоняющийся решают по одним предложениям.
+   */
+  choose(offers: readonly UpgradeOption[], world?: World): string;
 }
 
 /**
@@ -84,7 +90,12 @@ export interface DodgingBotOptions {
  */
 export const DODGING_BOT_DEFAULTS: DodgingBotOptions = { reactionTicks: 18, attentionCount: 4 };
 
-export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> = {}): Bot {
+/**
+ * Пассивный и уклоняющийся боты — ранний бой. Сильный бот (`createStrongBot`,
+ * `strong-bot.ts`) собирается отдельно: он строится поверх уклоняющегося, и общий
+ * вход здесь замкнул бы модули в круг.
+ */
+export function createBot(skill: Exclude<BotSkill, "strong">, options: Partial<DodgingBotOptions> = {}): Bot {
   if (skill === "passive") return passiveBot();
   const merged: DodgingBotOptions = { ...DODGING_BOT_DEFAULTS, ...options };
   // Имена полей берутся из самого объекта: так сообщение всегда называет
@@ -94,7 +105,7 @@ export function createBot(skill: BotSkill, options: Partial<DodgingBotOptions> =
       throw new Error(`Бот калибровки: ${name} должен быть целым числом от 1`);
     }
   }
-  return dodgingBot(merged);
+  return createDodgingBot(merged);
 }
 
 function passiveBot(): Bot {
@@ -106,6 +117,10 @@ function passiveBot(): Bot {
 }
 
 const scratchChest = { x: 0, y: 0 };
+const scratchStalker = { x: 0, y: 0 };
+
+/** Вес ухода от неубиваемого против ухода от толпы: от него бегут в первую очередь (Р205). */
+const STALKER_FLEE_WEIGHT = 2;
 
 /**
  * Направление к ближайшему сундуку в пределах `CHEST_SEEK_RADIUS_UNITS`.
@@ -132,7 +147,8 @@ function seekChest(world: World, out: { x: number; y: number }): boolean {
   return found;
 }
 
-function dodgingBot(options: DodgingBotOptions): Bot {
+/** Уклоняющийся бот без проверки параметров: её делает `createBot`, а сильный бот берёт проверенные константы. */
+export function createDodgingBot(options: DodgingBotOptions): Bot {
   const { reactionTicks, attentionCount } = options;
   // Последнее направление: когда вокруг пусто, бот продолжает идти, а не
   // замирает — стоящий на месте «уклоняющийся» не отличался бы от пассивного.
@@ -160,6 +176,8 @@ function dodgingBot(options: DodgingBotOptions): Bot {
       // мешает, а полный проход по пулу на каждом тике стоил бы прогону минуты.
       const found = world.enemyGrid.queryInto(player.x, player.y, reach, world.queryBuffer);
 
+      // Преследователь учтён отдельно: к нему бот не идёт и в список внимания он не входит.
+      const stalkerSlot = stalkerAlive(world) === 1 ? world.stalkerBody.slot : -1;
       let noticed = 0;
       let nearestX = 0;
       let nearestY = 0;
@@ -167,7 +185,7 @@ function dodgingBot(options: DodgingBotOptions): Bot {
 
       for (let k = 0; k < found; k++) {
         const i = world.queryBuffer[k];
-        if (world.enemies.alive[i] === 0) continue;
+        if (world.enemies.alive[i] === 0 || i === stalkerSlot) continue;
 
         const dx = player.x - world.enemies.x[i];
         const dy = player.y - world.enemies.y[i];
@@ -207,6 +225,12 @@ function dodgingBot(options: DodgingBotOptions): Bot {
         const weight = 1 - attentionDistance[k] / danger;
         awayX += attentionX[k] * weight;
         awayY += attentionY[k] * weight;
+      }
+
+      const fleeing = stalkerFleeDirection(world, scratchStalker);
+      if (fleeing) {
+        awayX += STALKER_FLEE_WEIGHT * scratchStalker.x;
+        awayY += STALKER_FLEE_WEIGHT * scratchStalker.y;
       }
 
       const length = Math.sqrt(awayX * awayX + awayY * awayY);

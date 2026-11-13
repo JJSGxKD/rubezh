@@ -53,10 +53,15 @@ export const FIELDS = [
   "merge",
   "design",
   "batch",
+  "attempt",
 ];
 
-/** Необязательные поля: задачи, заведённые до них, остаются как были. */
-export const OPTIONAL_FIELDS = new Set(["author", "batch", "merge"]);
+/**
+ * Необязательные поля: задачи, заведённые до них, остаются как были. `attempt` —
+ * попытка задачи (T-0390, Р195): нет поля — попытка 1, поле пишет только
+ * `pnpm task restart` и всегда последней строкой шапки.
+ */
+export const OPTIONAL_FIELDS = new Set(["author", "batch", "merge", "attempt"]);
 
 /**
  * Белый список путей `merge: self` (Р176, поправка claude-lead-1 от 28.10.2026):
@@ -118,6 +123,21 @@ export function selfMergeProblems(data, fileName) {
     }
   }
   return reasons;
+}
+
+/**
+ * Шапка задачи после снятия захвата (T-0390, Р195): `status: ready`, `owner:`
+ * пустой, `attempt: N` — последней строкой шапки (стоящую в другом месте строку
+ * заменяет на месте). Тело файла не трогается.
+ */
+export function withRestartedHeader(text, attempt) {
+  const end = text.indexOf("\n---", 4);
+  let header = text
+    .slice(0, end)
+    .replace(/^status: .*$/m, "status: ready")
+    .replace(/^owner:.*$/m, "owner:");
+  header = /^attempt:.*$/m.test(header) ? header.replace(/^attempt:.*$/m, `attempt: ${String(attempt)}`) : `${header}\nattempt: ${String(attempt)}`;
+  return header + text.slice(end);
 }
 
 /** Пачка очереди, с которой задача уходит в main (docs/38-release-plan.md): целое число от 1 без ведущих нулей. */
@@ -455,6 +475,12 @@ export function validateTask(fileName, data, context) {
   if (Object.hasOwn(data, "owner") && text("owner") === null) fail("owner", `ожидается строка или пусто, а не ${show(data.owner)}`);
   if (Object.hasOwn(data, "batch") && (text("batch") === null || !BATCH_RE.test(data.batch))) {
     fail("batch", `ожидается номер пачки очереди — целое число от 1, например 2, а не ${show(data.batch)}`);
+  }
+  if (Object.hasOwn(data, "attempt")) {
+    if (data.attempt === "1") fail("attempt", "попытка 1 пишется без поля");
+    else if (text("attempt") === null || !/^(?:[2-9]|[1-9]\d+)$/.test(data.attempt)) {
+      fail("attempt", `ожидается целое число от 2, а не ${show(data.attempt)}`);
+    }
   }
   if (Object.hasOwn(data, "author") && (text("author") === null || !CODE_NAME_RE.test(data.author))) {
     fail("author", `ожидается кодовое имя вида claude-lead-1, а не ${show(data.author)}`);

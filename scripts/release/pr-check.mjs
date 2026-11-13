@@ -7,6 +7,7 @@ import { PLAYER_NOTES_SECTION, parsePlayerNotes } from "./player-notes.mjs";
 import { TEAM_SECTION, extractSection } from "./team-summary.mjs";
 import { EFFORTS, EXECUTORS } from "../tasks/task-file.mjs";
 import { STATUS_LABELS } from "../tasks/board.mjs";
+import { parseTaskBranch } from "../tasks/branch.mjs";
 
 /**
  * Проверка заголовка и метки релиза на PR (docs/09-ci-cd.md §8.1, «Проверка PR»).
@@ -124,14 +125,14 @@ export function checkSummary(body, number) {
  * лежит в `tasks/` ветки PR и принадлежит той же задаче, что и ветка.
  */
 export function checkTaskLine(body, headRefName, taskFiles) {
-  const branch = /^task\/(T-\d{4})$/.exec(headRefName ?? "");
-  if (!branch) return [];
+  const branch = parseTaskBranch(headRefName);
+  if (branch === null) return [];
 
   const first = (body ?? "").replace(/\r\n/g, "\n").split("\n").find((line) => line.trim() !== "") ?? "";
   const match = /^Задача:\s*`?tasks\/(?:archive\/)?(T-\d{4})-[^\s`/]+\.md`?\s*$/.exec(first.trim());
   // Задача закрывается в PR на месте, в `tasks/`; путь в архив тоже принимается — файл ищется в обеих папках ветки.
-  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch[1]}-….md»`];
-  if (match[1] !== branch[1]) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch[1]}`];
+  if (!match) return [`задача: первая строка описания должна быть «Задача: tasks/${branch.id}-….md»`];
+  if (match[1] !== branch.id) return [`задача: в строке «Задача:» ${match[1]}, а ветка ${branch.id}`];
 
   const file = first.trim().replace(/^Задача:\s*`?tasks\//, "").replace(/`$/, "");
   if (!taskFiles.includes(file)) return [`задача: файла tasks/${file} нет в ветке PR`];
@@ -148,7 +149,7 @@ const LAUNCHER_LINE = /^Запустил:\s*(владелец|помощник\s
  * Задачу, которую тимлид делает сам, подписывает его имя `claude-lead-N`.
  */
 export function checkRunnerLines(body, headRefName) {
-  if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];
+  if (parseTaskBranch(headRefName) === null) return [];
 
   const lines = (body ?? "").replace(/\r\n/g, "\n").split("\n").map((line) => line.trimEnd());
   const errors = [];
@@ -172,7 +173,7 @@ export function checkRunnerLines(body, headRefName) {
  * или с двумя PR не проходит. Остальные ветки метки статуса не несут.
  */
 export function checkStatusLabels(labelNames, headRefName) {
-  if (!/^task\/T-\d{4}$/.test(headRefName ?? "")) return [];
+  if (parseTaskBranch(headRefName) === null) return [];
   const present = STATUS_LABELS.filter((name) => labelNames.includes(name));
   if (present.length === 0) return [`статус: нет метки статуса — поставь одну из: ${STATUS_LABELS.join(", ")}`];
   if (present.length > 1) return [`статус: меток статуса несколько (${present.join(", ")}) — оставь одну`];

@@ -33,6 +33,11 @@ export function findTimelineProblems(
   return problems;
 }
 
+/** Неубиваемый преследователь (Р205) таймлайну не принадлежит: выпускает его свой директор (tasks/T-0423). */
+function stalkerOutsideTimeline(id: string): string {
+  return `преследователь ${id} не приходит таймлайном: его выпускает директор преследователя`;
+}
+
 function findSegmentProblems(
   timeline: readonly TimelineSegmentDef[],
   threatById: ReadonlyMap<string, number>,
@@ -69,6 +74,7 @@ function findSegmentProblems(
         // контрольная точка сложности перестаёт быть контрольной точкой.
         problems.push(`${where}: элита ${spawn.enemy} приходит только событием`);
       }
+      if (enemyById.get(spawn.enemy)?.pattern === "stalker") problems.push(`${where}: ${stalkerOutsideTimeline(spawn.enemy)}`);
       if (enemyById.get(spawn.enemy)?.pattern === "cordon") {
         problems.push(`${where}: страж ${spawn.enemy} приходит только событием cordon`);
       }
@@ -99,6 +105,7 @@ function findEventProblems(
     if (!threatById.has(event.enemy)) {
       problems.push(`${where}: в событии ${event.kind} нет врага ${event.enemy}`);
     }
+    if (enemyById.get(event.enemy)?.pattern === "stalker") problems.push(`${where}: ${stalkerOutsideTimeline(event.enemy)}`);
     const guard = enemyById.get(event.enemy)?.pattern === "cordon";
     if (event.kind === "cordon") {
       if (event.ring === undefined) problems.push(`${where}: у события cordon нет ring`);
@@ -125,12 +132,12 @@ function findEventProblems(
  * стражи приходят снаружи экрана (radius меньше кольца спавна), а строй не
  * сжимается до тесноты, в которой игрока раздавит стенка.
  */
-const CORDON_MAX_COUNT = 64;
+export const CORDON_MAX_COUNT = 64;
 const CORDON_MAX_RADIUS = 420;
 const CORDON_MIN_RADIUS_FLOOR = 60;
 const CORDON_LIFE_SEC = { min: 5, max: 120 } as const;
 
-function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
+export function findRingProblems(ring: CordonRingDef, where: string, guard: EnemyDef | undefined, enemyById: ReadonlyMap<string, EnemyDef>): string[] {
   const problems: string[] = [];
   if (!(ring.minRadius >= CORDON_MIN_RADIUS_FLOOR)) {
     problems.push(`${where}: ring.minRadius — не меньше ${CORDON_MIN_RADIUS_FLOOR}: теснее строй раздавит игрока`);
@@ -166,6 +173,7 @@ function findInnerProblems(inner: readonly CordonInnerDef[], where: string, enem
     const at = `${where}: ring.inner[${index}]`;
     const def = enemyById.get(entry.enemy);
     if (def === undefined) problems.push(`${at} — врага ${entry.enemy} нет в контенте`);
+    else if (def.pattern === "stalker") problems.push(`${at} — ${stalkerOutsideTimeline(entry.enemy)}`);
     else if (def.rank !== "elite" && def.rank !== "boss") problems.push(`${at} — враг ${entry.enemy} не элита и не босс`);
     else if (def.pattern === "cordon") problems.push(`${at} — страж ${entry.enemy} не может быть внутри строя`);
     if (!Number.isInteger(entry.count) || entry.count < 1 || entry.count > INNER_MAX_COUNT) {
@@ -208,6 +216,7 @@ function findCurveProblems(
   for (const id of curve.pool) {
     if (!threatById.has(id)) problems.push(`кривая: врага ${id} нет в контенте`);
     else if (eliteIds.has(id)) problems.push(`кривая: элита ${id} не входит в обычную смесь`);
+    else if (enemyById.get(id)?.pattern === "stalker") problems.push(`кривая: ${stalkerOutsideTimeline(id)}`);
     else if (enemyById.get(id)?.pattern === "cordon") problems.push(`кривая: страж ${id} не входит в обычную смесь: он приходит только кольцом`);
   }
 

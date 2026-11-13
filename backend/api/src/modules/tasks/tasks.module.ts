@@ -2,10 +2,17 @@ import { Module } from "@nestjs/common";
 import { AdsModule } from "../ads/ads.module.js";
 import { AuthModule } from "../auth/auth.module.js";
 import { BattlePassModule } from "../battle-pass/battle-pass.module.js";
+import { ExternalIdentityModule } from "../external-identity/external-identity.module.js";
 import { MediaModule } from "../media/media.module.js";
+import { NotificationsModule } from "../notifications/notifications.module.js";
 import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { RunsModule } from "../runs/runs.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
+import { ChannelWatchJob } from "./channel-watch.job.js";
+import { CHANNEL_WATCH_REPOSITORY, PrismaChannelWatchRepository } from "./channel-watch.repository.js";
+import { ChannelWatchService } from "./channel-watch.service.js";
+import { TaskSignalsController } from "./task-signals.controller.js";
+import { TaskSignalsService } from "./task-signals.service.js";
 import { TasksController } from "./tasks.controller.js";
 import { NETWORK_TASKS_REPOSITORY, PrismaNetworkTasksRepository } from "./network-tasks.repository.js";
 import { NetworkTasksService } from "./network-tasks.service.js";
@@ -27,18 +34,30 @@ import { TasksService } from "./tasks.service.js";
  * Задания рекламных сетей (WP13, часть 6) — `NetworkTasksService`: модуль
  * заданий — хозяин места `task`, сколько заданий сети и какая награда за
  * них, решает он.
+ *
+ * Канал другой площадки (Р188, T-0377): подписку на нём проверяют по id, который
+ * бот площадки связал с аккаунтом, — связь и ссылку на бота даёт
+ * `ExternalIdentityModule`.
+ *
+ * Перепроверка подписки после награды (Р115, T-0178) — `ChannelWatchService` и
+ * его расписание `ChannelWatchJob`: наружу они не выходят, службу окон зовёт
+ * только забор награды из `TasksService`.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule],
-  controllers: [TasksController],
+  imports: [AuthModule, RunsModule, WalletModule, AdsModule, MediaModule, RestrictionsModule, BattlePassModule, NotificationsModule, ExternalIdentityModule],
+  controllers: [TasksController, TaskSignalsController],
   providers: [
     TasksService,
+    TaskSignalsService,
     TaskPointsService,
     NetworkTasksService,
+    ChannelWatchService,
+    ChannelWatchJob,
+    { provide: CHANNEL_WATCH_REPOSITORY, useClass: PrismaChannelWatchRepository },
     { provide: TASKS_REPOSITORY, useClass: PrismaTasksRepository },
     { provide: TASK_POINTS_REPOSITORY, useClass: PrismaTaskPointsRepository },
     { provide: NETWORK_TASKS_REPOSITORY, useClass: PrismaNetworkTasksRepository },
   ],
-  exports: [TasksService, NetworkTasksService],
+  exports: [TasksService, NetworkTasksService, TASKS_REPOSITORY],
 })
 export class TasksModule {}

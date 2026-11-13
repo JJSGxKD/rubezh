@@ -326,6 +326,26 @@ describe("снимок забега", () => {
     expect(resumed.world.stats.crystalsCollected).toBe(77);
   });
 
+  it("круг «снять и поднять» сохраняет число редких сундуков (T-0175)", () => {
+    const run = newRun(1);
+    run.world.stats.chestsOpened = 4;
+    run.world.stats.rareChestsOpened = 2;
+    const saved = roundTrip(run);
+
+    const resumed = newRun(1);
+    restoreWorld(resumed.world, resumed.director, saved);
+
+    expect(resumed.world.stats.rareChestsOpened).toBe(2);
+    expect(resumed.world.stats.chestsOpened).toBe(4);
+  });
+
+  it("снимок без rareChestsOpened в stats — SnapshotError, а не ноль (T-0175)", () => {
+    const run = newRun(1);
+    const saved = structuredClone(roundTrip(run)) as { stats: { scalars: Record<string, number> } };
+    delete saved.stats.scalars.rareChestsOpened;
+    expect(() => restoreWorld(newRun(1).world, newRun(1).director, saved)).toThrow(SnapshotError);
+  });
+
   it("отказывается читать испорченный снимок, а не рождает мир с NaN", () => {
     const run = newRun(1);
     advance(run, 5 * 60);
@@ -499,6 +519,7 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
     const saved = structuredClone(roundTrip(newRun(4, WITH_SECRETS))) as { secrets: { rng: unknown; sites: Record<string, unknown>[]; blessings: unknown; offer: unknown } };
     const broken = [
       { ...saved, secrets: { ...saved.secrets, rng: "много" } },
+      { ...saved, secrets: { ...saved.secrets, wispRng: "много" } },
       { ...saved, secrets: { ...saved.secrets, blessings: "fury" } },
       { ...saved, secrets: { ...saved.secrets, blessings: [1] } },
       { ...saved, secrets: { ...saved.secrets, offer: { siteIndex: 99, options: ["fury"] } } },
@@ -507,6 +528,103 @@ describe("снимок с тайниками (tasks/T-0352)", () => {
     for (const input of broken) {
       expect(() => restoreWorld(newRun(4, WITH_SECRETS).world, newRun(4).director, input)).toThrow(SnapshotError);
     }
+  });
+
+  describe("огонёк (Р214)", () => {
+    const wispOf = (world: World): SecretSite => {
+      const wisp = world.secrets.sites.find((site) => site.kind === "wisp");
+      if (wisp === undefined) throw new Error("в раскладке нет огонька");
+      return wisp;
+    };
+
+    /** Игрок идёт за огоньком: каждый тик стоит на нём, пока огонёк далеко от тайников. */
+    const escort = (world: World, ticks: number): void => {
+      for (let i = 0; i < ticks; i++) {
+        standOn(world, wispOf(world));
+        stepWorld(world, idle);
+      }
+    };
+
+    /** Мир ровно на 90-й секунде: огонёк только что появился у игрока. */
+    const ready = (): Run => {
+      const run = newRun(8, WITH_SECRETS);
+      for (let i = 0; i < 90 * 60; i++) stepWorld(run.world, idle);
+      return run;
+    };
+
+    const resumeFrom = (original: Run): Run => {
+      const resumed = newRun(8, WITH_SECRETS);
+      restoreWorld(resumed.world, resumed.director, roundTrip(original));
+      return resumed;
+    };
+
+    it("посреди перелёта: те же координаты через 120 тиков, что у непрерванного", () => {
+      const original = ready();
+      escort(original.world, 31);
+      const wisp = wispOf(original.world);
+      expect(wisp.flying).toBe(true);
+      expect(wisp.hops).toBe(1);
+
+      const resumed = resumeFrom(original);
+      expect(wispOf(resumed.world)).toEqual(wisp);
+      escort(original.world, 120);
+      escort(resumed.world, 120);
+
+      expect(wispOf(original.world).hops).toBeGreaterThan(1);
+      expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
+      expect(resumed.world.secrets.rng.getState()).toBe(original.world.secrets.rng.getState());
+      expect(resumed.world.secrets.wispRng.getState()).toBe(original.world.secrets.wispRng.getState());
+      expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    });
+
+    it("на ожидании: сторона следующего шага и отклонение те же", () => {
+      const original = ready();
+      escort(original.world, 1);
+      while (wispOf(original.world).flying) escort(original.world, 1);
+      const wisp = wispOf(original.world);
+      expect(wisp.hops).toBe(1);
+      const hopsBefore = wisp.hops;
+      // Игрок отстал: огонёк стоит и ждёт.
+      standOn(original.world, { ...wisp, x: wisp.x + 600 });
+      for (let i = 0; i < 30; i++) stepWorld(original.world, idle);
+      expect(wispOf(original.world).flying).toBe(false);
+
+      const resumed = resumeFrom(original);
+      expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
+      escort(original.world, 120);
+      escort(resumed.world, 120);
+
+      expect(wispOf(original.world).hops).toBeGreaterThan(hopsBefore);
+      expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
+      expect(checksumWorld(resumed.world)).toBe(checksumWorld(original.world));
+    });
+
+    it("погасший огонёк возвращается погасшим и не появляется снова", () => {
+      const original = ready();
+      escort(original.world, 2);
+      for (const site of original.world.secrets.sites) site.found = true;
+      escort(original.world, 200);
+      expect(wispOf(original.world).used).toBe(true);
+      expect(wispOf(original.world).active).toBe(false);
+
+      const resumed = resumeFrom(original);
+      expect(wispOf(resumed.world)).toEqual(wispOf(original.world));
+      for (let i = 0; i < 300; i++) stepWorld(resumed.world, idle);
+      expect(wispOf(resumed.world).active).toBe(false);
+    });
+
+    it("в снимке нет полей шага или они битые — SnapshotError", () => {
+      const saved = structuredClone(roundTrip(ready())) as { secrets: { sites: Record<string, unknown>[] } };
+      const wispIndex = saved.secrets.sites.length - 1;
+      for (const field of ["hops", "flying", "hopX", "hopY"]) {
+        const missing = structuredClone(saved);
+        delete missing.secrets.sites[wispIndex][field];
+        expect(() => restoreWorld(newRun(8, WITH_SECRETS).world, newRun(8).director, missing), field).toThrow(SnapshotError);
+      }
+      const broken = structuredClone(saved);
+      broken.secrets.sites[wispIndex].flying = "да";
+      expect(() => restoreWorld(newRun(8, WITH_SECRETS).world, newRun(8).director, broken)).toThrow(SnapshotError);
+    });
   });
 
   it("незнакомое благословение из снимка пропускается: забег идёт без прибавки, а не падает", () => {

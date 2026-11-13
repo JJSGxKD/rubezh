@@ -3,8 +3,8 @@ id: T-0305
 title: Панель «Баланс» — «Проверить»: проверки контента и симуляция черновика против версии в игре полосами с коридорами, рельсы шагов
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0304]
@@ -12,7 +12,8 @@ zones:
   - apps/admin/src/screens/balance/check/**
   - apps/admin/test/balance-check.test.ts
 shared:
-  - apps/admin/src/screens/balance/BalanceScreen.tsx
+  - apps/admin/src/screens/balance/BalanceWorkspace.tsx
+  - design/screens/T-0305/**
   - apps/admin/src/api/content.ts
   - apps/admin/src/ui/help.ts
   - docs/19-content-admin.md

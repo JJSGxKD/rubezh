@@ -77,6 +77,13 @@ function targetsWithS2s(code: string, events: readonly string[], since: Date | s
   )`;
 }
 
+/** Набор, где AdsGram получает названные события и клики с момента `since`: события и окно прямой ветки. */
+function targetsAdsgramOnly(code: string, events: readonly string[], since: Date | string = "-infinity"): Prisma.Sql {
+  return Prisma.sql`targets(link_code, destination, events, since) AS (
+    SELECT l.code, 'adsgram'::text, ARRAY[${Prisma.join(events)}]::text[], ${since}::timestamptz FROM link l WHERE l.code = ${code}
+  )`;
+}
+
 describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgres", () => {
   let prisma: PrismaClient;
   let conversions: PrismaConversionsRepository;
@@ -745,6 +752,40 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     expect(await conversions.requeue(code, row?.conversionId ?? "", new Date())).toMatchObject({ status: "pending", reason: null });
   });
 
+  it("аккаунт партнёра командным не считается: регистрация и покупка уходят в сеть, а с ролью аналитика или вместе с ней — пропущены как team (T-0217)", async () => {
+    const code = await adsgramLink("launch");
+    const partner = await playerFromClick(code);
+    await prisma.accountRole.create({ data: { accountId: partner.accountId, role: "partner" } });
+    const analyst = await playerFromClick(code);
+    await prisma.accountRole.create({ data: { accountId: analyst.accountId, role: "analyst" } });
+    // Партнёр, которому заодно выдали роль команды, — по-прежнему команда.
+    const both = await playerFromClick(code);
+    await prisma.accountRole.createMany({ data: [{ accountId: both.accountId, role: "partner" }, { accountId: both.accountId, role: "analyst" }] });
+    for (const player of [partner, analyst, both]) await purchase(player.accountId, 40);
+
+    await conversions.sweep(new Date());
+
+    const shape = async (accountId: string) => (await ofAccount(accountId)).map((row) => [row.goal, row.status, row.reason]);
+    expect(await shape(partner.accountId)).toEqual([[1, "pending", null], [2, "pending", null]]);
+    expect(await shape(analyst.accountId)).toEqual([[1, "skipped", "team"], [2, "skipped", "team"]]);
+    expect(await shape(both.accountId)).toEqual([[1, "skipped", "team"], [2, "skipped", "team"]]);
+  });
+
+  it("прямая ссылка: аккаунт партнёра уходит в сеть (pending), аккаунт аналитика — team (T-0217)", async () => {
+    const code = await adsgramLink("launch");
+    const partner = await playerFromDirect(code);
+    await prisma.accountRole.create({ data: { accountId: partner.accountId, role: "partner" } });
+    const analyst = await playerFromDirect(code);
+    await prisma.accountRole.create({ data: { accountId: analyst.accountId, role: "analyst" } });
+    for (const player of [partner, analyst]) await purchase(player.accountId, 40);
+
+    await conversions.sweep(new Date());
+
+    const shape = async (accountId: string) => (await ofAccount(accountId)).map((row) => [row.goal, row.status, row.reason]);
+    expect(await shape(partner.accountId)).toEqual([[1, "pending", null], [2, "pending", null]]);
+    expect(await shape(analyst.accountId)).toEqual([[1, "skipped", "team"], [2, "skipped", "team"]]);
+  });
+
   it("прямая ссылка: ссылка без сети с тем же параметром конверсий не порождает", async () => {
     const code = await plainLink();
     const player = await playerFromDirect(code);
@@ -847,31 +888,33 @@ describe.skipIf(DATABASE_URL === "")("конверсии на живом Postgre
     expect(await ofAccount(clicked.accountId)).toHaveLength(1);
   });
 
-  it("прямая ссылка: прямая ветка уважает набор назначений — события по списку, окно since, имя назначения на строке", async () => {
+  it("прямая ссылка: прямая ветка уважает набор назначений — события по списку, окно since, имя назначения на строке; назначения не рекламных сетей ей не достаются", async () => {
     const code = await adsgramLink("launch");
     const player = await playerFromDirect(code);
     const first = await purchase(player.accountId, 40);
     await purchase(player.accountId, 30);
 
-    // S2S получает регистрацию и первую покупку, повторные — нет; метки у обоих назначений одни.
-    const targets = targetsWithS2s(code, ["registration", "purchase_first"]);
+    // AdsGram получает регистрацию и первую покупку, повторные — нет.
+    const targets = targetsAdsgramOnly(code, ["registration", "purchase_first"]);
     await new CustomTargets(prisma, targets).sweep(new Date());
     await new CustomTargets(prisma, targets).sweep(new Date());
     const rows = await ofAccount(player.accountId);
     expect(rows.map((row) => [row.goal, row.destination, row.network, row.clickId])).toEqual([
       [1, "adsgram", "adsgram", null],
-      [1, "s2s", "s2s", null],
       [2, "adsgram", "adsgram", null],
-      [2, "s2s", "s2s", null],
-      [3, "adsgram", "adsgram", null],
     ]);
     for (const row of rows) expect(row.networkParams).toEqual(SAMPLE_PARAMS);
-    expect(rows.filter((row) => row.destination === "s2s" && row.goal === 2).map((row) => row.purchaseId)).toEqual([first]);
+    expect(rows.map((row) => row.purchaseId)).toEqual([null, first]);
 
     // Назначение, подключённое «с часа вперёд», запуск раньше since не получает.
     const early = await playerFromDirect(code);
-    await new CustomTargets(prisma, targetsWithS2s(code, ["registration"], new Date(Date.now() + 60 * MINUTE))).sweep(new Date());
-    expect((await ofAccount(early.accountId)).map((row) => row.destination)).toEqual(["adsgram"]);
+    await new CustomTargets(prisma, targetsAdsgramOnly(code, ["registration"], new Date(Date.now() + 60 * MINUTE))).sweep(new Date());
+    expect(await ofAccount(early.accountId)).toEqual([]);
+
+    // S2S из набора прямому запуску не достаётся: адрес постбэка работает по кликам (T-0070).
+    const late = await playerFromDirect(code);
+    await new CustomTargets(prisma, targetsWithS2s(code, ["registration", "purchase_first"])).sweep(new Date());
+    expect((await ofAccount(late.accountId)).map((row) => row.destination)).toEqual(["adsgram"]);
   });
 
   it("прямая ссылка: журнал и счёт по ссылке видят строки без клика", async () => {

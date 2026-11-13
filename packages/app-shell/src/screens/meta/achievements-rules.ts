@@ -108,3 +108,28 @@ export function nextFavorites(current: readonly string[], id: string, unlocked: 
 export function openedCount(items: readonly AchievementItem[]): number {
   return items.filter((item) => item.done).length;
 }
+
+/** Показываемая ступень карточки готова к забору. */
+function isReadyCard(card: AchievementCard): boolean {
+  const shown = card.kind === "ladder" ? card.current : card.item;
+  return isOpenAchievement(shown) && shown.done && !shown.claimed;
+}
+
+/** Карточки с готовой наградой, в порядке `cards` — для группы «Можно забрать» (T-0373). */
+export function readyCards(items: readonly AchievementItem[]): AchievementCard[] {
+  return cards(items).filter(isReadyCard);
+}
+
+/** Записи без готовых карточек: лестница с готовой ступенью уходит в группу целиком. */
+export function withoutReady(items: readonly AchievementItem[]): AchievementItem[] {
+  const ladders = new Set<string>();
+  const singles = new Set<string>();
+  for (const card of readyCards(items)) {
+    if (card.kind === "ladder") ladders.add(card.ladder);
+    else singles.add(card.item.id);
+  }
+  return items.filter((item) => {
+    if (isOpenAchievement(item) && item.ladder !== undefined && item.ladder !== null) return !ladders.has(item.ladder);
+    return !singles.has(item.id);
+  });
+}

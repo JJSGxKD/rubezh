@@ -764,6 +764,14 @@ function subscribe(created: RunSession, set: SetState, get: GetState, bindLoadou
 
     created.on("diagnostics", (diagnostics) => {
       pendingDiagnostics = diagnostics;
+      // Запись для проверки — у каждого забега, а не только у тестеров: сжатие и отправка
+      // уходят в фон отдельным чанком, забег уже записан (docs/28-diagnostics.md §3.4).
+      const proof = diagnostics.proof;
+      if (proof !== null) {
+        import("./run-proof-queue")
+          .then(({ queueRunProof }) => queueRunProof(proof))
+          .catch((error: unknown) => reportError("proofs", `запись для проверки не поставлена в очередь: ${String(error)}`));
+      }
       const recording = diagnostics.recording;
       if (recording === null) return;
       const clientErrors = clientErrorCount() - errorsAtRunStart;

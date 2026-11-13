@@ -1,8 +1,9 @@
-import type { Prisma, PrismaClient } from "../../generated/prisma/client.js";
+import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { parseStartParam } from "../attribution/start-param.js";
-import { isLinkNetwork, networkParamsOf } from "../links/link-networks.js";
+import { LINK_NETWORKS, isLinkNetwork, networkParamsOf } from "../links/link-networks.js";
 import { DONATION_PRODUCT } from "../payments/purchase-types.js";
 import { CONVERSION_WINDOWS } from "./conversion-rules.js";
+import { countedRun } from "./counted-run.js";
 import { destinationOf, type DestinationKind } from "./destinations/destination.js";
 import { EVENT_GOAL } from "./postback-events.js";
 
@@ -17,7 +18,9 @@ import { EVENT_GOAL } from "./postback-events.js";
  * хранить, нет.
  *
  * Кому и что отправлять, решает набор назначений (`destinations/destination-targets.ts`), как и в
- * проходе по кликам: второй точки, где это решается, нет.
+ * проходе по кликам: второй точки, где это решается, нет. Из набора берутся только назначения
+ * рекламных сетей (`LINK_NETWORKS`): адрес постбэка s2s и партнёра (T-0070) работает по кликам —
+ * у прямого запуска нет ни `click_id`, ни `sub`, и событий им он не порождает.
  *
  * Параметр разбирается в TypeScript, а не в SQL: правило разбора одно и живёт в
  * `attribution/start-param.ts`. Повтор и параллельный проход ничего не задваивают: вставка идёт
@@ -26,6 +29,9 @@ import { EVENT_GOAL } from "./postback-events.js";
 
 /** Кандидатов за проход: проход раз в минуту, остальные уйдут со следующим. */
 const BATCH = 500;
+
+/** Назначения рекламных сетей из набора: имя назначения совпадает с именем сети ссылки. */
+const NETWORK_DESTINATIONS = Prisma.join(LINK_NETWORKS);
 
 /** Запуск по прямой ссылке, за который сети положена строка. */
 export interface DirectCandidate {
@@ -40,7 +46,7 @@ export interface DirectCandidate {
   purchaseId: string | null;
   /** `first_start_param` аккаунта как записан */
   startParam: string | null;
-  /** аккаунт команды: строка пишется пропущенной */
+  /** аккаунт команды (роль, кроме `partner`): строка пишется пропущенной */
   team: boolean;
 }
 
@@ -136,7 +142,7 @@ async function insert(prisma: PrismaClient, rows: readonly DirectRow[]): Promise
  * что у прохода по кликам. Возвращает, сколько строк вставлено.
  */
 export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targets: Prisma.Sql): Promise<{ registrations: number; purchases: number }> {
-  const { registrationDays, purchaseDays, purchaseSettleMin, minRunSec } = CONVERSION_WINDOWS;
+  const { registrationDays, purchaseDays, purchaseSettleMin } = CONVERSION_WINDOWS;
   const registration = "registration";
   const first = "purchase_first";
   const repeat = "purchase_repeat";
@@ -146,10 +152,10 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
   const registrationRows = await prisma.$queryRaw<CandidateRow[]>`
     WITH ${targets}
     SELECT q.account_id, l.code AS link_code, l.network, t.destination, q.first_start_param,
-           EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) AS team
+           EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') AS team
     FROM acquisition q
     JOIN link l ON l.code = q.first_start_ref
-    JOIN targets t ON t.link_code = l.code
+    JOIN targets t ON t.link_code = l.code AND t.destination IN (${NETWORK_DESTINATIONS})
     JOIN account a ON a.account_id = q.account_id AND a.created_at >= q.first_at - interval '1 minute'
     WHERE q.first_start_kind = 'link'
       AND q.first_at > ${now}::timestamptz - make_interval(days => ${registrationDays + 1})
@@ -161,11 +167,8 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
         OR EXISTS (
           SELECT 1 FROM run r
           WHERE r.account_id = q.account_id
-            AND r.finished_at IS NOT NULL
+            AND ${countedRun("r")}
             AND r.finished_at <= q.first_at + make_interval(days => ${registrationDays})
-            AND r.cheats = false
-            AND r.survival_sec >= ${minRunSec}
-            AND (r.verdict IS NULL OR r.verdict <> 'rejected')
         )
       )
     ORDER BY q.first_at, q.account_id, t.destination
@@ -178,10 +181,10 @@ export async function sweepDirectLaunches(prisma: PrismaClient, now: Date, targe
     WITH ${targets},
     attributed AS (
       SELECT q.account_id, q.first_at, l.code AS link_code, l.network, t.destination, t.events, q.first_start_param,
-             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id) AS team
+             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = q.account_id AND r.role <> 'partner') AS team
       FROM acquisition q
       JOIN link l ON l.code = q.first_start_ref
-      JOIN targets t ON t.link_code = l.code
+      JOIN targets t ON t.link_code = l.code AND t.destination IN (${NETWORK_DESTINATIONS})
       JOIN account a ON a.account_id = q.account_id AND a.created_at >= q.first_at - interval '1 minute'
       WHERE q.first_start_kind = 'link'
         AND q.first_at > ${now}::timestamptz - make_interval(days => ${purchaseDays + 1})

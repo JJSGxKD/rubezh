@@ -41,6 +41,11 @@ export const ACCOUNT_UNLOCKS: AccountUnlockDef[] = [
   { level: 12, modifiers: ["inverse"] },
   { level: 14, passives: ["tempering"], slots: { passives: { attack: 3 } } },
   // Оружие поезда: уровни 15–20 отданы новому оружию (Р105).
+  // Кистень (Р157, T-0281): первое оружие волны нового контента. Он не выше
+  // «Метеора»: верхний уровень лестницы задаёт потолок уровня предмета у
+  // профиля «полный арсенал» (`power-profiles.ts`), и его сдвиг переписал бы
+  // всю калибровку (docs/32-balance.md §3.1).
+  { level: 15, weapons: ["flail"] },
   { level: 16, weapons: ["meteor"] },
 ];
 

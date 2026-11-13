@@ -9,6 +9,7 @@ import { buildRunResult } from "../../src/game/run/run-result";
 import { createRunWorld } from "../../src/game/run-world";
 import { IDLE_CODE, inputOfCode, quantizeDirection } from "../../src/game/sim/input-code";
 import { applyContinue } from "../../src/game/sim/continue";
+import { settleCordonDeath } from "../../src/game/sim/cordon";
 import { stepWorld, type SimInput } from "../../src/game/sim/step";
 import { TICK_SEC } from "../../src/game/sim/world";
 import type { RunRecording } from "../../src/run-api";
@@ -86,6 +87,8 @@ export function recordHeadlessRun(options: RecordedRunOptions): RunRecording {
     spawner.update(world, TICK_SEC);
     stepWorld(world, inputOfCode(code, input));
     recorder.stepped(code, world);
+    // Как в сцене: смерть закрывает кольцо стражей после шага и после свёртки тика.
+    settleCordonDeath(world);
     const frameMs = 1000 / 60;
     perf.frame(frameMs, world.enemies.aliveCount + world.projectiles.aliveCount);
     recorder.frame({

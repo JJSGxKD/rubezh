@@ -5,6 +5,7 @@ import { CONVERSIONS_REPOSITORY, PrismaConversionsRepository } from "./conversio
 import { AdConversionsService } from "./conversions.service.js";
 import { AdsgramDestination } from "./destinations/adsgram.destination.js";
 import { POSTBACK_DESTINATIONS, type PostbackDestination } from "./destinations/destination.js";
+import { TemplateDestination } from "./destinations/template.destination.js";
 
 /**
  * Конверсии закупленной рекламы (WP43, docs/35-stage4-plan.md Р86): вывод
@@ -19,7 +20,7 @@ import { POSTBACK_DESTINATIONS, type PostbackDestination } from "./destinations/
     { provide: CONVERSIONS_REPOSITORY, useClass: PrismaConversionsRepository },
     {
       provide: POSTBACK_DESTINATIONS,
-      useFactory: (secrets: SecretsReader): PostbackDestination[] => [new AdsgramDestination(secrets)],
+      useFactory: (secrets: SecretsReader): PostbackDestination[] => [new AdsgramDestination(secrets), new TemplateDestination("s2s"), new TemplateDestination("partner")],
       inject: [SECRETS_READER],
     },
   ],

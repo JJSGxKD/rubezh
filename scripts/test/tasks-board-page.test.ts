@@ -79,6 +79,17 @@ describe("очки и авторы сделанных задач", () => {
     expect(credits.get("T-0001").login).toBeNull();
   });
 
+  it("влитой PR из ветки task/T-NNNN-2 засчитывается задаче T-NNNN (Р195)", () => {
+    const merged = [pr(300, "T-0001", "old", "2026-10-05T10:00:00Z"), { ...pr(310, "T-0001", "new", "2026-10-07T10:00:00Z"), headRefName: "task/T-0001-2" }];
+    const credits = taskCredits(done(task("T-0001", { attempt: "2" })), merged);
+    expect(credits.get("T-0001")).toMatchObject({ login: "new", pr: 310 });
+  });
+
+  it("ветка task/T-NNNN-1 и чужая задача с тем же началом номера не засчитываются", () => {
+    const merged = [{ ...pr(1, "T-0001", "a", "2026-10-05T10:00:00Z"), headRefName: "task/T-0001-1" }, { ...pr(2, "T-0001", "b", "2026-10-05T10:00:00Z"), headRefName: "task/T-0010-2" }];
+    expect(taskCredits(done(task("T-0001")), merged).get("T-0001").login).toBeNull();
+  });
+
   it("PR нет — login, pr и mergedAt равны null", () => {
     expect(taskCredits(done(task("T-0001")), []).get("T-0001")).toMatchObject({ login: null, pr: null, mergedAt: null });
   });
@@ -98,6 +109,14 @@ describe("очки и авторы сделанных задач", () => {
 });
 
 describe("влитые PR задач из gh", () => {
+  it("ветка с суффиксом попытки task/T-NNNN-2 оставляется, task/T-NNNN-1 — нет", () => {
+    const parsed = parseMergedTaskPrs([
+      { number: 1, headRefName: "task/T-0001-2", author: { login: "a" }, mergedAt: "2026-10-06T10:00:00Z" },
+      { number: 2, headRefName: "task/T-0001-1", author: { login: "a" }, mergedAt: "2026-10-06T10:00:00Z" },
+    ]);
+    expect(parsed.map((item: { number: number }) => item.number)).toEqual([1]);
+  });
+
   it("оставляет ветки task/T-NNNN, автор может быть null", () => {
     const parsed = [
       { number: 1, headRefName: "task/T-0001", author: { login: "a" }, mergedAt: "2026-10-06T10:00:00Z" },

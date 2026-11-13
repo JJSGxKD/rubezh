@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { WORLD_COLORS, type ShapeKind } from "./looks";
+import { HOOD_GEOMETRY, UNKILLABLE_LOOK, WORLD_COLORS, type ShapeKind } from "./looks";
 
 export type { ShapeKind } from "./looks";
 
@@ -65,6 +65,9 @@ function drawRim(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec, rim: { 
     case "hexagon":
       graphics.strokePoints(points(r - half, HEXAGON).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
       return;
+    case "hood":
+      graphics.strokePoints(points(r - half, HOOD_GEOMETRY.cloak).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
+      return;
     case "mote":
       graphics.strokePoints(points(r - half, MOTE).map((point) => ({ x: point.x + half, y: point.y + half })), true, true);
       return;
@@ -107,6 +110,9 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
       // Четыре тонких луча: рой не похож ни на тех, кто идёт на игрока, ни на
       // кристалл — у кристалла грани и свет, здесь только острые лучи.
       graphics.fillPoints(points(r, MOTE), true);
+      return;
+    case "hood":
+      drawHood(graphics, spec);
       return;
     case "gem":
       drawGem(graphics, spec, false);
@@ -210,6 +216,35 @@ function drawBody(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void 
     default:
       graphics.fillCircle(r, r, r);
   }
+}
+
+/**
+ * Неубиваемый: высокий силуэт в капюшоне (design/art/concepts/stalker/karachun.svg), сведённый к плоским
+ * формам. Плащ книзу шире, в капюшоне тёмный провал лица с двумя бледными глазами, посох вертикальной
+ * линией сбоку, ног нет — низ рваный подол тремя ступенями прозрачности. Фигура вписана в квадрат 2r × 2r
+ * и не выходит за него. Иней на теле не рисуется: он только в предвестии (`UNKILLABLE_LOOK`).
+ */
+function drawHood(graphics: Phaser.GameObjects.Graphics, spec: ShapeSpec): void {
+  const r = spec.radius;
+  const look = UNKILLABLE_LOOK;
+  graphics.fillStyle(spec.color, 1);
+  graphics.fillPoints(points(r, HOOD_GEOMETRY.cloak), true);
+  graphics.fillStyle(look.shade, 1);
+  graphics.fillPoints(points(r, HOOD_GEOMETRY.shade), true);
+  graphics.lineStyle(Math.max(1, r * 0.05), look.light, 0.6);
+  for (const [x1, y1, x2, y2] of HOOD_GEOMETRY.folds) graphics.lineBetween(r + x1 * r, r + y1 * r, r + x2 * r, r + y2 * r);
+  HOOD_GEOMETRY.hem.forEach((strip, step) => {
+    graphics.fillStyle(look.shade, HOOD_GEOMETRY.hemAlpha[step] ?? 1);
+    graphics.fillPoints(points(r, strip), true);
+  });
+  graphics.fillStyle(look.deep, 1);
+  graphics.fillPoints(points(r, HOOD_GEOMETRY.face), true);
+  graphics.fillStyle(look.rim.color, 1);
+  for (const [x, y, radius] of HOOD_GEOMETRY.eyes) graphics.fillCircle(r + x * r, r + y * r, Math.max(0.8, radius * r));
+  graphics.lineStyle(Math.max(1.2, r * 0.1), look.light, 1);
+  graphics.lineBetween(r + HOOD_GEOMETRY.staff[0] * r, r + HOOD_GEOMETRY.staff[1] * r, r + HOOD_GEOMETRY.staff[2] * r, r + HOOD_GEOMETRY.staff[3] * r);
+  graphics.fillStyle(look.light, 1);
+  graphics.fillPoints(points(r, HOOD_GEOMETRY.staffHead), true);
 }
 
 /**

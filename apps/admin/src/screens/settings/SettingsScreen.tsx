@@ -7,7 +7,6 @@ import {
   SOURCE_TITLES,
   URL_MAX,
   fetchSettings,
-  groupSettings,
   parseInteger,
   resetSetting,
   saveSetting,
@@ -19,7 +18,9 @@ import {
 import { formatDateTime, plural } from "../../format";
 import { Badge, Button, DataTable, ErrorNotice, Input, Loading, Notice, Panel } from "../../ui/kit";
 import { HELP } from "../../ui/help";
+import { navigate } from "../../ui/router";
 import { useApi } from "../../ui/use-api";
+import { settingsTabOf, settingsTabs } from "./settings-tabs";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -33,14 +34,18 @@ export function settingAnchor(key: string): string {
  * отсюда сильнее окружения сервера и доходит до всех реплик за секунды;
  * «Сбросить» возвращает то, что записано в `.env` сервера.
  *
- * `focus` — ключ из адреса: раздел, который предупреждает о настройке,
- * ведёт к её строке, и её не нужно искать на длинной странице.
+ * Группы каталога — вкладки-чипы, вкладка в адресе: `#/settings/<группа>`.
+ * `focus` — хвост адреса: имя группы или ключ настройки; раздел, который
+ * предупреждает о настройке, ведёт к её строке (открывается её группа,
+ * строка подсвечена), и её не нужно искать на длинной странице (Р201).
  */
 export function SettingsScreen({ focus = null }: { focus?: string | null }) {
   const { state, reload } = useApi(() => fetchSettings(api), []);
+  const tabs = state.status === "ok" ? settingsTabs(state.data.settings) : [];
+  const { tab, focus: focusRow } = settingsTabOf(focus, tabs);
   useEffect(() => {
-    if (focus !== null && state.status === "ok") document.getElementById(settingAnchor(focus))?.scrollIntoView({ block: "center" });
-  }, [focus, state.status]);
+    if (focusRow !== null && state.status === "ok") document.getElementById(settingAnchor(focusRow))?.scrollIntoView({ block: "center" });
+  }, [focusRow, state.status]);
   const [editing, setEditing] = useState<{ key: string; value: SettingValue } | null>(null);
   const [pending, setPending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome>(null);
@@ -66,6 +71,12 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
       () => resetSetting(api, row.key),
       (saved) => `«${saved.title}» снова из ${saved.source === "env" ? "окружения" : "умолчания"}: ${settingText(saved, saved.value)}`,
     );
+
+  const choose = (id: string) => {
+    setEditing(null);
+    setOutcome(null);
+    navigate({ section: "settings", id });
+  };
 
   const editor = (row: SettingRow) => {
     if (row.kind === "boolean") {
@@ -124,8 +135,25 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
       {outcome === null ? null : outcome.tone === "success" ? <Notice tone="success">{outcome.text}</Notice> : <Notice>{outcome.error.message}</Notice>}
       {state.status === "loading" ? <Loading /> : null}
       {state.status === "error" ? <ErrorNotice error={state.error} onRetry={reload} /> : null}
-      {state.status === "ok"
-        ? groupSettings(state.data.settings).map(({ group, rows }) => (
+      {state.status === "ok" && tab === null ? <Notice tone="info">Настроек нет</Notice> : null}
+      {state.status === "ok" && tab !== null ? (
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Группа настроек">
+          {tabs.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={item.id === tab.id}
+              onClick={() => choose(item.id)}
+              className={`rounded-pill border px-3 py-1 text-xs transition-colors ${item.id === tab.id ? "border-accent bg-accent/15 text-accent" : "border-border text-text-muted hover:border-border-strong hover:text-text"}`}
+            >
+              {item.title} · {item.rows.length}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {state.status === "ok" && tab !== null
+        ? [tab].map(({ title: group, rows }) => (
             <Panel key={group} title={group} help={HELP.settings.settings} actions={<Button onClick={reload}>Обновить</Button>}>
               <DataTable
                 rows={rows}
@@ -134,7 +162,7 @@ export function SettingsScreen({ focus = null }: { focus?: string | null }) {
                   {
                     title: "Настройка",
                     render: (row) => (
-                      <div id={settingAnchor(row.key)} className={`flex max-w-md flex-col gap-0.5 ${row.key === focus ? "-mx-2 rounded-sm bg-accent/10 px-2 py-1 ring-1 ring-accent/50" : ""}`}>
+                      <div id={settingAnchor(row.key)} className={`flex max-w-md flex-col gap-0.5 ${row.key === focusRow ? "-mx-2 rounded-sm bg-accent/10 px-2 py-1 ring-1 ring-accent/50" : ""}`}>
                         <span>{row.title}</span>
                         <span className="text-xs text-text-muted">{row.hint}</span>
                       </div>

@@ -58,6 +58,9 @@ const LINK = {
   partnerTag: null as string | null,
   title: null as string | null,
   hiddenAt: null as string | null,
+  postbackUrl: null as string | null,
+  postbackSince: null as string | null,
+  postbackEvents: ["registration"],
 };
 
 const AUTO = { ...LINK, code: "AutoCode001", campaign: "oct", source: "tgads", auto: true, autoKey: "src-tgads_cmp-oct" };
@@ -67,6 +70,7 @@ const counts = (patch: Partial<Record<"pending" | "sent" | "failed" | "skipped",
 const CONVERSION: Conversion = {
   conversionId: "0b6f2c1e-5d4a-4e8b-9c7d-1a2b3c4d5e6f",
   goal: 1,
+  destination: "adsgram",
   status: "pending",
   reason: null,
   attempts: 0,

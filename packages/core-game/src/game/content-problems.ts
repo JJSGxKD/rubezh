@@ -10,6 +10,7 @@ import { findCardToolProblems, findUnlockProblems } from "./progression/unlocks"
 import { findEnemyContentProblems } from "./patterns";
 import { findChestsProblems } from "./sim/chests";
 import { findSecretsProblems } from "./sim/secrets";
+import { findSiegeProblems } from "./sim/siege-rules";
 import { findContinueProblems } from "./sim/continue";
 import { findPressureProblems } from "./sim/pressure";
 import { findDifficultyContentProblems } from "./sim/difficulty";
@@ -17,6 +18,8 @@ import { findDropsContentProblems } from "./sim/gems";
 import { findMapContentProblems } from "./sim/map-types";
 import { MAX_PICKUPS } from "./sim/pickups";
 import { findStageProblems } from "./sim/stages";
+import { findStalkerMapProblems } from "./sim/stalker";
+import { findStalkerProblems } from "./sim/stalker-body";
 import { findTimelineProblems } from "./sim/timeline-content";
 import { findWeaponContentProblems } from "./weapons";
 
@@ -82,6 +85,9 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("maxBoostsPerRun", findBoostLimitProblems(content));
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
   add("pressure", findPressureProblems(content.pressure));
+  add("siege", findSiegeProblems(content.siege, content.enemies));
+  add("stalker", findStalkerProblems(content.stalker, content.enemies, { maxAccountLevel: Math.max(...content.accountUnlocks.map((entry) => entry.level)) }));
+  add("stalker", findStalkerMapProblems(content.stalker, content.maps));
   return problems;
 }
 

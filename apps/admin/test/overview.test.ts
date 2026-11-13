@@ -35,11 +35,24 @@ const DAY: OverviewDay = {
 
 describe("сводка", () => {
   it("сравнение со вчера к тому же часу: проценты, ровно, от нуля — без «бесконечности»", () => {
-    expect(versusBefore(125, 100)).toEqual({ text: "+25% к вчера", tone: "up" });
-    expect(versusBefore(90, 100)).toEqual({ text: "−10% к вчера", tone: "down" });
-    expect(versusBefore(100, 100)).toEqual({ text: "как вчера", tone: "flat" });
-    expect(versusBefore(0, 0)).toEqual({ text: "как вчера", tone: "flat" });
-    expect(versusBefore(7, 0)).toEqual({ text: "вчера к этому часу — 0", tone: "up" });
+    expect(versusBefore(125, 100)).toMatchObject({ text: "+25% к вчера", tone: "up" });
+    expect(versusBefore(90, 100)).toMatchObject({ text: "−10% к вчера", tone: "down" });
+    expect(versusBefore(100, 100)).toMatchObject({ text: "как вчера", tone: "flat" });
+    expect(versusBefore(0, 0)).toMatchObject({ text: "как вчера", tone: "flat", previous: null });
+    expect(versusBefore(7, 0)).toMatchObject({ text: "вчера к этому часу — 0", tone: "up", previous: null });
+  });
+
+  it("рядом с процентом — прошлое значение и его окно; процент с разрядами", () => {
+    expect(versusBefore(125, 100)).toMatchObject({ text: "+25% к вчера", previous: "вчера к этому часу — 100", tone: "up" });
+    expect(versusBefore(10700, 100)).toMatchObject({ text: `+${formatNumber(10600)}% к вчера`, previous: "вчера к этому часу — 100" });
+    expect(versusBefore(90, 100, 7)).toMatchObject({ previous: `прошлые 7 дней — ${formatNumber(100)}` });
+    expect(versusBefore(5, 0, 30)).toMatchObject({ text: "в прошлые 30 дней — 0", previous: null });
+  });
+
+  it("вехи воронки подписаны «от шага выше», а не «от прошлого»", () => {
+    const html = renderToStaticMarkup(createElement(FunnelBars, { funnel: DAY.funnel }));
+    expect(html).toContain("от шага выше");
+    expect(html).not.toContain("от прошлого");
   });
 
   it("новые игроки — суммой и словами по источникам, крупные первыми, нули не показываются", () => {
@@ -99,10 +112,10 @@ describe("сводка: реклама", () => {
 
   it("сеть — по ключу сервера: известные именем, незнакомая — самим ключом", () => {
     expect(networkTitle("adsgram")).toBe("AdsGram");
-    expect(networkTitle("adsonar")).toBe("AdSonar");
     expect(networkTitle("richads")).toBe("RichAds");
     expect(networkTitle("taddy")).toBe("Taddy");
     expect(networkTitle("newnet")).toBe("newnet");
+    expect(networkTitle("unknown_net")).toBe("unknown_net");
   });
 
   it("ответ без рекламы и без выручки разбирается; сервер старее панели — тоже", () => {
@@ -205,7 +218,7 @@ describe("сводка: вехи полосами и период", () => {
     expect(versusBefore(125, 100, 7).text).toBe("+25% к прошлым 7 дням");
     expect(versusBefore(90, 100, 30).text).toBe("−10% к прошлым 30 дням");
     expect(versusBefore(100, 100, 7).tone).toBe("flat");
-    expect(versusBefore(5, 0, 7)).toEqual({ text: "в прошлые 7 дней — 0", tone: "up" });
+    expect(versusBefore(5, 0, 7)).toMatchObject({ text: "в прошлые 7 дней — 0", tone: "up" });
   });
 });
 
@@ -266,12 +279,12 @@ describe("сводка: разметка рекламы и вех", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("вехи: семь полос, у первой «—», у остальных доля от прошлого", () => {
+  it("вехи: семь полос, у первой «—», у остальных доля от шага выше", () => {
     const html = renderToStaticMarkup(createElement(FunnelBars, { funnel: FUNNEL }));
     expect(html.match(/role="img"/g)).toHaveLength(7);
     expect(html).toContain("Вошли в бота");
-    expect(html).toContain("83% от прошлого");
-    expect(html).toContain("86% от прошлого");
+    expect(html).toContain("83% от шага выше");
+    expect(html).toContain("86% от шага выше");
     expect(html).toContain("—");
   });
 });
