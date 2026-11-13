@@ -12,7 +12,8 @@ import { isPressureActive } from "../sim/pressure";
 import { describeRubezh } from "../sim/rubezh";
 import { stepWorld } from "../sim/step";
 import { DEFAULT_SIM_CONFIG } from "../sim/create-world";
-import { createWorld, TICK_SEC } from "../sim/world";
+import { settleStalkerDeath } from "../sim/stalker";
+import { createWorld, TICK_SEC, type World } from "../sim/world";
 import { createBot, type BotSkill, type DodgingBotOptions } from "./bot";
 import { isBuildComplete } from "./build-complete";
 import { createStrongBot, type StrongStance } from "./strong-bot";
@@ -118,6 +119,11 @@ export interface BalanceRunResult {
   rubezh?: RunRubezh;
   /** сколько раз рубеж брал бота в осаду за стояние (Р197); необязательное: фикстуры воркера о ней не знают */
   sieges?: number;
+  /**
+   * Карачун за забег (Р205, T-0424): сколько появлений закончилось, касаний дошло до игрока и ударов
+   * оружия его сдвинуло. Необязательное: фикстуры воркера о нём не знают.
+   */
+  stalker?: { appearances: number; hits: number; pushes: number };
   /** забег упёрся в аварийный потолок, а не кончился смертью или сборкой набора */
   timedOut: boolean;
   /** урон, полученный за каждую полную минуту забега; неполная последняя в массив не входит */
@@ -157,6 +163,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     chests: content.chests,
     secrets: content.secrets,
     siege: content.siege,
+    stalker: content.stalker,
     ...(options.pressure === false ? {} : { pressure: content.pressure }),
     boosts: content.boosts,
     maxBoostsPerRun: content.maxBoostsPerRun,
@@ -242,6 +249,8 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
   }
 
   const pressured = isPressureActive(world);
+  // Смерть посреди появления закрывает его в журнале: сцена делает то же после шага.
+  settleStalkerDeath(world);
   return {
     seed: options.seed,
     skill: options.skill,
@@ -260,6 +269,7 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     buildPicks: buildCompleteSec === 0 ? picks : buildPicks,
     rubezh: describeRubezh(world),
     sieges: world.siege.count,
+    stalker: summarizeStalker(world),
     timedOut: world.player.alive && !(options.stopOnBuild === true && buildCompleteSec > 0),
     damageTakenByMinute,
     startPower: pressured ? world.difficulty.startPower : 0,
@@ -271,6 +281,17 @@ export function simulateBalanceRun(options: BalanceRunOptions): BalanceRunResult
     buildPointsByMinute,
     huntLog: world.hunt.log.map((entry) => ({ ...entry })),
   };
+}
+
+/** Появления Карачуна за прогон — по журналу законченных. */
+function summarizeStalker(world: World): { appearances: number; hits: number; pushes: number } {
+  let hits = 0;
+  let pushes = 0;
+  for (const entry of world.stalker.ended) {
+    hits += entry.hits;
+    pushes += entry.pushes;
+  }
+  return { appearances: world.stalker.ended.length, hits, pushes };
 }
 
 function startingWeaponOf(world: { loadout: { weapons: { typeIndex: number }[] }; weaponTypes: { id: string }[] }): string {

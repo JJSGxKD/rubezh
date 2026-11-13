@@ -26,6 +26,7 @@ import { takeChestEvents, type ChestCursor } from "./sim/chests";
 import { describePressureStart } from "./sim/pressure";
 import { chooseBlessing, isAwaitingBlessing, takeSecretEvents, type SecretCursor } from "./sim/secrets";
 import { settleCordonDeath, takeCordonEvents } from "./sim/cordon";
+import { settleStalkerDeath } from "./sim/stalker";
 import { takeSiegeEvents } from "./sim/siege";
 import type { RubezhPhase } from "./sim/rubezh";
 import { isEmptyLoadout } from "./progression/run-loadout";
@@ -342,6 +343,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
       this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (isPrologueWon(this.world)) break;
@@ -674,6 +676,7 @@ export class MainScene extends Phaser.Scene {
       this.emitChestEvents();
       this.emitSecretEvents();
       this.emitCordonEvents();
+      this.emitStalkerEvents();
       this.emitSiegeEvents();
       this.emitRubezhEvents();
       if (!this.world.player.alive || isAwaitingChoice(this.world) || isAwaitingBlessing(this.world)) break;
@@ -811,6 +814,18 @@ export class MainScene extends Phaser.Scene {
     const events = takeCordonEvents(this.world, this.cordonCursor);
     this.cordonCursor = events.cursor;
     for (const ended of events.ended) this.sceneData.bus.emit("ringEnded", ended);
+  }
+
+  /**
+   * Закончившиеся появления Карачуна — оболочке, для аналитики. Смерть закрывает появление после шага, как
+   * у кольца; журнал очищается сразу, чтобы запись не ушла дважды, и после восстановления снимка он пуст.
+   */
+  private emitStalkerEvents(): void {
+    settleStalkerDeath(this.world);
+    const journal = this.world.stalker.ended;
+    if (journal.length === 0) return;
+    for (const ended of journal) this.sceneData.bus.emit("stalkerEnded", ended);
+    journal.length = 0;
   }
 
   /** Осада стоящего — оболочке: предупреждение, начало и конец. Журнал после восстановления снимка пуст. */
