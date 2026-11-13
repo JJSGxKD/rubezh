@@ -3346,3 +3346,31 @@ model LedgerLoan {
   @@index([accountId])
   @@map("ledger_loan")
 }
+
+// Месяцы учёта: сверка, закрытие и замок (docs/37-accounting.md §13, Р222, tasks/T-0468)
+
+/// open — открыт (строки у такого месяца может не быть вовсе), review — на сверке, closed — закрыт.
+enum LedgerPeriodStatus {
+  open
+  review
+  closed
+}
+
+/// Месяц учёта по UTC, «ГГГГ-ММ». Закрытый месяц запирает журнал: проводка с его месяцем отклоняется. `snapshot` —
+/// параметры и итог закрытия (ставки, доли, займы, курсы, водопад), по нему месяц пересчитывается без базы и не
+/// зависит от того, что поменяют потом; снимается вместе с закрытием. `reopened_count` входит в ключи проводок
+/// закрытия (`close:<месяц>:r<N>:…`), поэтому повторное закрытие не конфликтует со сторнированными.
+model LedgerPeriod {
+  period        String             @id @db.Char(7)
+  status        LedgerPeriodStatus @default(open)
+  reviewAt      DateTime?          @map("review_at") @db.Timestamptz(3)
+  /// кто поставил на сверку и закрыл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  reviewBy      String?            @map("review_by") @db.Uuid
+  closedAt      DateTime?          @map("closed_at") @db.Timestamptz(3)
+  closedBy      String?            @map("closed_by") @db.Uuid
+  reopenedCount Int                @default(0) @map("reopened_count")
+  snapshot      Json?
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("ledger_period")
+}
