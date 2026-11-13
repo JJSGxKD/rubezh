@@ -2003,6 +2003,8 @@ export interface RunFinishStats {
   killsByElement?: Partial<Record<ElementId, number>>;
   /** типы врагов, вышедшие в мир (tasks/T-0479): по ним сервер открывает записи кодекса; записи прошлых сборок поля не знают */
   enemiesSeen?: string[];
+  /** найденные виды тайников (tasks/T-0261): по ним сервер открывает кодекс тайников; записи прошлых сборок поля не знают */
+  secretsFound?: string[];
   /** журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): записи прошлых сборок их не знают */
   huntLog?: RunHuntEntry[];
   buildScore?: number;

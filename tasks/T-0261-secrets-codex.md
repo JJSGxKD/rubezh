@@ -44,6 +44,7 @@ shared:
   - packages/app-shell/test/runs-secrets-found.test.ts
   - packages/app-shell/test/achievements-api.test.ts
   - packages/core-game/src/index.ts
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: high
