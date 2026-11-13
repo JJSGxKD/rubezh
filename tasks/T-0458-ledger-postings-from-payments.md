@@ -3,8 +3,8 @@ id: T-0458
 title: Проводки из платежей — оплата, выход из холда, возврат; досоздание за прошлое
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0457, T-0453]
