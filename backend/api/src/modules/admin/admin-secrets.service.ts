@@ -94,7 +94,7 @@ export class AdminSecretsService {
     await this.roles.require(actor, "secrets.edit");
     const secret = this.definition(key);
     if (secret.generated === undefined) throw new SecretNotGeneratedError();
-    const value = randomBytes(GENERATED_SECRET_BYTES).toString("base64url");
+    const value = secret.generated.generate?.() ?? randomBytes(GENERATED_SECRET_BYTES).toString("base64url");
     const before = this.state(secret);
     await this.secrets.write(secret, value, actor.accountId);
     const after = this.state(secret);

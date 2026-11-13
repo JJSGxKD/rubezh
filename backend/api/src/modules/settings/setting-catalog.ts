@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { DEFAULT_DAILY_LADDER_TEXT, parseDailyLadder } from "../daily/daily-rules.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { MAX_COINS_PER_RUN, MAX_XP_PER_RUN, MIN_REWARDED_SEC, DEFAULT_LEVEL_LADDER_TEXT, parseLevelLadder } from "../progress/progress-rules.js";
 import { pointsFromOf } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
@@ -22,8 +24,11 @@ import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
 
 export type SettingValue = string | boolean | number;
 
-/** `amounts` — список сумм через запятую («50, 100, 250»): редактор панели — текстовое поле, правило — `parseAmounts`. */
-export type SettingKind = "chat" | "boolean" | "url" | "number" | "amounts";
+/**
+ * `amounts` — список сумм через запятую («50, 100, 250»): редактор панели — текстовое поле, правило — `parseAmounts`.
+ * `text` — короткая строка со своим правилом в схеме (имя бота): панель шлёт её как есть, проверяет сервер.
+ */
+export type SettingKind = "chat" | "boolean" | "url" | "number" | "amounts" | "text";
 
 /**
  * Пределы числа и в чём оно — для редактора панели: поле не даст ввести
@@ -53,6 +58,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
   /**
+   * Ключ «деньги» (tasks/T-0310; docs/19-content-admin.md §6): число награды или
+   * цены в той же валюте, что продаётся за звёзды. Обычная правка настроек его не
+   * меняет — только заявка со вторым участником (`change-requests/reward-settings.ts`).
+   */
+  readonly money?: true;
+  /**
    * Проверка, которой нужно текущее время, — только при сохранении из панели;
    * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
    * базы через неё не отсекается.
@@ -63,6 +74,8 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
 
 const NOTIFY_GROUP = "Уведомления команде";
+
+const REWARDS_GROUP = "Награды";
 
 const chatSchema = z
   .string()
@@ -108,6 +121,52 @@ export function telegramLinkOriginOf(value: string): string | null {
   return bare && TELEGRAM_LINK_ORIGINS.includes(url.origin) ? url.origin : null;
 }
 
+const VK_GROUP = "Сообщество VK";
+
+/** Домены VK, с которых принимается ссылка на сообщество. */
+const VK_HOSTS: ReadonlySet<string> = new Set(["vk.com", "www.vk.com", "m.vk.com", "vk.ru", "www.vk.ru", "m.vk.ru"]);
+const VK_SCREEN_NAME = /^[A-Za-z0-9_.]{3,32}$/;
+const VK_NUMERIC_ID = /^\d{1,12}$/;
+const VK_ID_NAME = /^(?:club|public)(\d{1,12})$/;
+
+/** Сообщество VK: короткое имя для ссылок, числовой id (если он известен из записи) и адрес страницы. */
+export interface VkCommunityRef {
+  readonly screenName: string;
+  readonly id: string | null;
+  readonly url: string;
+}
+
+/**
+ * Сообщество VK из записи: ссылка `https://vk.com/<имя>`, короткое имя,
+ * `club<id>` или `public<id>`, просто число — id. Это же правило читает
+ * проверка в панели (настройка `vk.community`) и задание-канал
+ * (`params.chat`), поэтому оно здесь, а не в адаптере: сервер и панель не
+ * разойдутся в том, что считать сообществом. Не сообщество — `null`.
+ */
+export function parseVkCommunity(raw: string): VkCommunityRef | null {
+  let name = raw.trim();
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(name)) {
+    if (!URL.canParse(name)) return null;
+    const url = new URL(name);
+    const plain = url.protocol === "https:" && VK_HOSTS.has(url.hostname) && url.search === "" && url.hash === "" && url.username === "" && url.password === "" && url.port === "";
+    const path = url.pathname.replace(/\/$/, "");
+    if (!plain || path.indexOf("/") !== 0 || path.lastIndexOf("/") !== 0) return null;
+    name = path.slice(1);
+  } else if (name.startsWith("@")) {
+    name = name.slice(1);
+  }
+  if (VK_NUMERIC_ID.test(name)) return { screenName: `club${name}`, id: name, url: `https://vk.com/club${name}` };
+  const idForm = VK_ID_NAME.exec(name);
+  if (idForm !== null) return { screenName: name, id: idForm[1] ?? null, url: `https://vk.com/${name}` };
+  return VK_SCREEN_NAME.test(name) ? { screenName: name, id: null, url: `https://vk.com/${name}` } : null;
+}
+
+const vkCommunitySchema = z
+  .string()
+  .trim()
+  .max(256)
+  .refine((value) => value === "" || parseVkCommunity(value) !== null, { message: "ссылка https://vk.com/…, короткое имя или club<id> — или пусто" });
+
 const FEATURES_GROUP = "Функции сервера";
 
 const ADS_GROUP = "Реклама";
@@ -151,6 +210,19 @@ const PROXY_GROUP = "Прокси";
 const REMINDERS_GROUP = "Напоминания";
 
 const PROLOGUE_GROUP = "Пролог";
+
+const MAX_BOT_GROUP = "Бот MAX";
+
+const PAYMENTS_GROUP = "Платежи";
+
+/** Имя бота MAX в ссылке `max.ru/<имя>`: латиница, цифры, знак подчёркивания, точка и дефис; без «@» и без адреса. */
+const MAX_BOT_USERNAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/;
+
+const maxBotUsernameSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((value) => value === "" || MAX_BOT_USERNAME.test(value), { message: "имя бота без «@» и адреса, например rubezh_bot, или пусто" });
 
 /**
  * Предел награды за сутки — суточный потолок причины `task_reward`
@@ -599,16 +671,17 @@ export const SETTINGS = {
   /**
    * Переход недельных сезонов на очки (tasks/T-0294, Р66): сезоны, начавшиеся не
    * раньше этого понедельника, ранжируются по очкам лучшего забега недели, раньше —
-   * по времени. Идущий в момент выката сезон дотягивается по времени: менять
-   * правила посреди недели нечестно к тем, кто уже играл. Миграция ставит
-   * понедельник после выката на каждой среде. Число ГГГГММДД, как у
+   * по времени. Миграция ставит понедельник после выката на каждой среде; владелец
+   * может поставить и понедельник идущей недели (Р212): она переходит на очки сразу,
+   * а таблица недели пересобирается из базы сама (`SeasonsProjection.switchBoard`).
+   * Прошлые недели не пускаются: их итоги в архиве. Число ГГГГММДД, как у
    * `seasons.start-date`; 0 — сезонов по очкам нет.
    */
   ratingPointsFrom: {
     key: "rating.points-from",
     group: RATING_GROUP,
     title: "Сезоны по очкам с понедельника",
-    hint: "Понедельник, с которого недельные сезоны ранжируются по очкам эффективности, числом ГГГГММДД: 20261109. Сезоны раньше идут по времени. 0 — сезонов по очкам нет",
+    hint: "Понедельник, с которого недельные сезоны ранжируются по очкам эффективности, числом ГГГГММДД: 20261109. Сезоны раньше идут по времени. Понедельник идущей недели переводит её на очки сразу: таблица недели пересоберётся из базы. 0 — сезонов по очкам нет",
     kind: "number",
     schema: z
       .number()
@@ -621,8 +694,8 @@ export const SETTINGS = {
     fallback: 0,
     saveCheck: (value, now) => {
       const from = pointsFromOf(value);
-      // Дата не раньше следующей недели: сезон, который уже идёт, менять правила не может.
-      return from !== null && from.getTime() <= seasonOf(now).startsAt.getTime() ? "Сезоны по очкам не могут начаться с идущей или прошлой недели — укажите понедельник следующей недели или позже" : null;
+      // Идущая неделя пускается (её таблица пересоберётся сама), прошлые — нет: их итоги уже в архиве.
+      return from !== null && from.getTime() < seasonOf(now).startsAt.getTime() ? "Сезоны по очкам не могут начаться с прошлой недели — укажите понедельник идущей недели или позже" : null;
     },
   } satisfies SettingDefinition<number>,
   ratingSeasonThresholdPoints: integer(
@@ -638,6 +711,17 @@ export const SETTINGS = {
     "Оплата звёздами",
     "Новые счета на второй шанс и подтверждение перед оплатой. Уже оплаченное засчитывается всегда. Нужны вход и чтение обновлений бота",
     (config) => config.payments.starsEnv,
+    true,
+  ),
+  /**
+   * Сверка оплат с выпиской площадки (Р209): ключа площадки нет — выписку читает токен
+   * бота (Р53), а не отдельный секрет, поэтому это просто выключатель, без запасной переменной.
+   */
+  paymentsReconcile: feature(
+    "payments.reconcile",
+    "Сверка оплат с площадкой",
+    "Раз в сутки сверяет выписку звёзд бота с покупками и сообщает о расхождениях в поток «Покупки». Выключено — молчит расписание и кнопка «Сверить сейчас»",
+    () => null,
     true,
   ),
   /**
@@ -901,6 +985,145 @@ export const SETTINGS = {
     "Пауза между проверками здорового узла (запрос на ipify через него). Не отвечающий узел проверяется реже, с ростом паузы до часа. Действует со следующей проверки, без перезапуска",
     { min: 1, max: 60, unit: ["минута", "минуты", "минут"] },
     5,
+  ),
+  /**
+   * Имя бота MAX для ссылки на него (docs/35-stage4-plan.md Р188, tasks/T-0379).
+   * Окружения нет: имя задаёт человек, который завёл бота, — в панели.
+   */
+  maxBotUsername: {
+    key: "max.bot-username",
+    group: MAX_BOT_GROUP,
+    title: "Имя бота MAX",
+    hint: "Имя бота в ссылке max.ru/<имя>, без «@»: по ней игрок открывает бота из задания «подпишитесь на канал MAX». Пусто — таких заданий игрокам не видно",
+    kind: "text",
+    schema: maxBotUsernameSchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  /**
+   * Сообщество VK для заданий (docs/35-stage4-plan.md Р188, tasks/T-0378). Без
+   * окружения: меняется из панели. Вид «ссылка»: редактор панели знает только
+   * чат, ссылку, число и список сумм, а ссылка на сообщество — одновременно и
+   * то, что видит игрок; сервер принимает и короткое имя (`parseVkCommunity`).
+   */
+  vkCommunity: {
+    key: "vk.community",
+    group: VK_GROUP,
+    title: "Сообщество VK для заданий",
+    hint: "Сообщество VK для заданий: игрок вступает в него, бот пишет от его имени. Ссылка на сообщество — https://vk.com/короткое_имя или https://vk.com/club123456. Пусто — задания «вступи в сообщество» никому не видны",
+    kind: "url",
+    schema: vkCommunitySchema,
+    fromEnv: () => null,
+    fallback: "",
+  } satisfies SettingDefinition<string>,
+  /**
+   * Компенсация за сбой оплаты (docs/35-stage4-plan.md Р209, tasks/T-0435): во сколько раз панель
+   * предлагает больше эквивалента покупки. Без окружения: число правится в панели без релиза.
+   */
+  paymentsCompensationMultiplier: integer(
+    "payments.compensation.multiplier",
+    PAYMENTS_GROUP,
+    "Множитель компенсации",
+    "Во сколько раз панель предлагает больше эквивалента покупки при компенсации за сбой оплаты. Сумму в окне можно поправить",
+    { min: 1, max: 5, unit: ["раз", "раза", "раз"] },
+    2,
+  ),
+  paymentsCompensationMaxGems: integer(
+    "payments.compensation.max-gems",
+    PAYMENTS_GROUP,
+    "Потолок компенсации, самоцветы",
+    "Больше за одну покупку начислить нельзя — ни предложением, ни вручную в окне",
+    { min: 1, max: 20_000, unit: ["самоцвет", "самоцвета", "самоцветов"] },
+    2_000,
+  ),
+  /**
+   * Награды числами (docs/19-content-admin.md §6, tasks/T-0310): монеты и опыт за
+   * забег, награды за уровень и награда дня. Ключи «деньги»: правятся заявкой
+   * со вторым участником, а не здесь. Умолчание — прежние постоянные в
+   * `progress/progress-rules.ts` и `daily/daily-rules.ts`; окружения нет. Потолки
+   * кошелька (`wallet/wallet-limits.ts`) остаются в коде.
+   */
+  rewardsRunMaxCoins: {
+    ...integer(
+      "rewards.run-max-coins",
+      REWARDS_GROUP,
+      "Награда за забег: потолок монет",
+      "Больше монет за один забег не начисляется, как бы долго игрок ни жил. Выше суточного потолка кошелька из забегов (20 000) часть не начислится",
+      { min: 1, max: 100_000, unit: ["монета", "монеты", "монет"] },
+      MAX_COINS_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMaxXp: {
+    ...integer(
+      "rewards.run-max-xp",
+      REWARDS_GROUP,
+      "Награда за забег: потолок опыта",
+      "Больше опыта за один забег не начисляется. Влияет на то, как быстро растёт уровень аккаунта",
+      { min: 1, max: 100_000, unit: ["очко", "очка", "очков"] },
+      MAX_XP_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMinSec: {
+    ...integer(
+      "rewards.run-min-sec",
+      REWARDS_GROUP,
+      "Награда за забег: минимальная длина",
+      "Забег короче этого времени награды не даёт: иначе «нажал и вышел» фармили бы монеты",
+      { min: 10, max: 600, unit: ["секунда", "секунды", "секунд"] },
+      MIN_REWARDED_SEC,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsLevelLadder: {
+    key: "rewards.level-ladder",
+    group: REWARDS_GROUP,
+    title: "Награды за уровень аккаунта",
+    hint: "Ступени «с уровня:монет за уровень:самоцветов:раз в сколько уровней» через «;» (до восьми, первая — с первого уровня). Монеты за уровень = число × номер уровня; самоцветы — на каждом уровне, кратном последнему числу. Например 1:50:10:5; 20:80:20:10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseLevelLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_LEVEL_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
+  rewardsDailyLadder: {
+    key: "rewards.daily-ladder",
+    group: REWARDS_GROUP,
+    title: "Награда дня: неделя",
+    hint: "Семь дней через запятую, у каждого «монеты/осколки»: основа до множителей недели и уровня. Седьмой день обычно крупнее. Например 60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseDailyLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_DAILY_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
+  /**
+   * Холд оплаты звёздами (docs/35-stage4-plan.md Р218, tasks/T-0453): через сколько дней после оплаты звёзды
+   * доступны к выводу. Кабинет участника считает по нему, сколько выручки месяца ещё в холде. Ключ назван по
+   * площадке: у MAX и VK будут свои сроки.
+   */
+  paymentsHoldDaysTelegram: integer(
+    "payments.hold-days.telegram",
+    PAYMENTS_GROUP,
+    "Холд оплаты звёздами, дней",
+    "Через сколько дней звёзды оплаты становятся доступны к выводу. Кабинет участника считает по нему, сколько выручки ещё в холде",
+    { min: 0, max: 90, unit: ["день", "дня", "дней"] },
+    21,
   ),
 } as const;
 

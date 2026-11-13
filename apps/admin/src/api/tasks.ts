@@ -65,7 +65,7 @@ export const FILTER_KEYS: Record<string, FilterKey> = {
 export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
 
 /** Русские имена для выбора фильтра: панель движка не знает, список сверяет только глаз команды. */
-export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало", meteor: "Метеор" };
+export const WEAPON_TITLES: Record<string, string> = { spark: "Искра", knife: "Нож", wardstone: "Оберег", hearth: "Очаг", storm: "Гроза", sting: "Жало", meteor: "Метеор", flail: "Кистень" };
 export const ELEMENT_TITLES: Record<string, string> = { fire: "Огонь", cold: "Холод", lightning: "Молния", poison: "Яд" };
 export const DIFFICULTY_TITLES: Record<string, string> = { easy: "Лёгкая", normal: "Нормальная", hard: "Сложная" };
 export const FILTER_OPTIONS: Record<FilterKey, Record<string, string>> = { weapon: WEAPON_TITLES, element: ELEMENT_TITLES, difficulty: DIFFICULTY_TITLES };
@@ -179,6 +179,9 @@ const paramsSchema = z.object({
 });
 export type TaskParams = z.infer<typeof paramsSchema>;
 
+export const PAY_MODELS = ["cpa", "rs"] as const;
+export type PayModel = (typeof PAY_MODELS)[number];
+
 const filterSchema = z.object({
   weapon: z.string().optional(),
   element: z.string().optional(),
@@ -208,6 +211,11 @@ const taskSchema = z.object({
   limit: z.number().nullable().default(null),
   /** картинка 1:1 партнёрской цели — id из `media`; сервер до картинок поля не отдавал */
   image: z.string().nullable().default(null),
+  /** заказчик, модель оплаты, ставка и срок удержания партнёрской цели (Р138); сервер до них полей не отдавал */
+  customer: z.string().nullable().default(null),
+  payModel: z.enum(PAY_MODELS).nullable().default(null),
+  rate: z.number().nullable().default(null),
+  holdDays: z.number().default(0),
   /** поля достижения с престижем (T-0106); сервер до них полей не отдавал */
   category: z.enum(ALL_CATEGORIES).nullable().default(null),
   ladder: z.string().nullable().default(null),
@@ -220,6 +228,13 @@ const taskSchema = z.object({
 });
 
 export type TaskDef = z.infer<typeof taskSchema>;
+
+/** Пределы и варианты полей заказчика — те же, что у сервера и в `CHECK` базы (`tasks/task-rules.ts`). */
+export const CUSTOMER_MAX = 80;
+export const PAY_RATE_MAX: Record<PayModel, number> = { cpa: 100_000, rs: 10_000 };
+export const HOLD_DAYS = [0, 1, 3, 7] as const;
+export const HOLD_TITLES: Record<(typeof HOLD_DAYS)[number], string> = { 0: "сразу", 1: "1 сутки", 3: "3 суток", 7: "7 суток" };
+export const PAY_MODEL_TITLES: Record<PayModel, string> = { cpa: "CPA — за выполнение", rs: "RS — доля дохода" };
 
 /** Пределы лимита — те же, что у сервера и в `CHECK` базы (`tasks/task-rules.ts`). */
 export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
@@ -273,7 +288,7 @@ export function fetchTasks(api: AdminApi): Promise<ApiResult<TaskCatalog>> {
 export function saveTask(api: AdminApi, task: TaskDef): Promise<ApiResult<TaskDef>> {
   const title = task.title?.trim() ?? "";
   // Место в списке правкой не задаётся: новое задание встаёт в конец, у существующего остаётся прежнее.
-  const body: Partial<TaskDef> = { ...task, ...cleanAchievement(task), taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) };
+  const body: Partial<TaskDef> = { ...task, ...cleanAchievement(task), ...cleanCustomer(task), taskId: task.taskId.trim(), title: title === "" ? null : title, params: cleanParams(task), filter: cleanFilter(task) };
   delete body.sort;
   return api.request("/tasks", { method: "POST", body, schema: taskSchema });
 }
@@ -308,7 +323,33 @@ function cleanFilter(task: Pick<TaskDef, "kind" | "filter">): TaskFilter | null 
 }
 
 /** Поля достижения «нет»: у ежедневных, недельных и партнёрских целей их не бывает. */
-export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0, emblemTier: null } as const;
+const ACHIEVEMENT_EMPTY = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0, emblemTier: null } as const;
+
+/** Заказчика нет: задание своё. У цели забега и вида по сигналу клиента продавать нечего. */
+export const NO_CUSTOMER_FIELDS = { customer: null, payModel: null, rate: null, holdDays: 0 } as const;
+
+/** Пустые необязательные поля обычного задания — достижения и заказчика; для формы «нового» и тестов. */
+export const NO_ACHIEVEMENT_FIELDS = { ...ACHIEVEMENT_EMPTY, ...NO_CUSTOMER_FIELDS } as const;
+
+/** Подпись ставки: «$0,40 за выполнение» или «12,5% дохода»; `null` — ставка не задана. */
+export function rateLabel(payModel: PayModel | null, rate: number | null): string | null {
+  if (payModel === null || rate === null || !Number.isFinite(rate)) return null;
+  if (payModel === "cpa") return `$${(rate / 100).toLocaleString("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} за выполнение`;
+  return `${(rate / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}% дохода`;
+}
+
+/**
+ * Поля заказчика в том виде, что принимает сервер: у цели забега — пусто,
+ * пустой заказчик снимает и модель со ставкой, а удержание считается только у
+ * подписки на канал.
+ */
+function cleanCustomer(task: Pick<TaskDef, "kind" | "customer" | "payModel" | "rate" | "holdDays">): Pick<TaskDef, "customer" | "payModel" | "rate" | "holdDays"> {
+  if (!PARTNER_KINDS.has(task.kind)) return NO_CUSTOMER_FIELDS;
+  const holdDays = task.kind === CHANNEL_KIND ? task.holdDays : 0;
+  const customer = task.customer?.trim() ?? "";
+  if (customer === "") return { ...NO_CUSTOMER_FIELDS, holdDays };
+  return { customer, payModel: task.payModel, rate: task.rate, holdDays };
+}
 
 /** Достижение игрока: срок «достижение», но не партнёрская цель — её рисует вкладка партнёров. */
 export function isAchievement(task: Pick<TaskDef, "kind" | "period">): boolean {
@@ -319,7 +360,7 @@ export function isAchievement(task: Pick<TaskDef, "kind" | "period">): boolean {
 function cleanAchievement(
   task: Pick<TaskDef, "kind" | "period" | "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige" | "emblemTier">,
 ): Pick<TaskDef, "category" | "ladder" | "rung" | "hidden" | "hint" | "prestige" | "emblemTier"> {
-  if (!isAchievement(task)) return NO_ACHIEVEMENT_FIELDS;
+  if (!isAchievement(task)) return ACHIEVEMENT_EMPTY;
   const ladder = task.ladder?.trim() ?? "";
   const hint = task.hint?.trim() ?? "";
   return {
@@ -336,7 +377,7 @@ function cleanAchievement(
 /** Смена срока в форме: у не-достижения поля достижения остаются пустыми, а не висят скрытыми в форме. */
 export function withPeriod(task: TaskDef, period: TaskPeriod): TaskDef {
   const next = { ...task, period };
-  return isAchievement(next) ? next : { ...next, ...NO_ACHIEVEMENT_FIELDS };
+  return isAchievement(next) ? next : { ...next, ...ACHIEVEMENT_EMPTY };
 }
 
 /** Площадки ссылки или бота; пусто — все. Запись прошлой панели с одной площадкой — список из неё. */
@@ -365,11 +406,11 @@ export function withKind(task: TaskDef, kind: string): TaskDef {
   const clientPeriod = CLIENT_KINDS.get(kind);
   if (clientPeriod !== undefined) {
     const next = { ...task, kind, period: clientPeriod, target: 1, params: null, limit: null, image: null, filter: null, tier: null };
-    return clientPeriod === "achievement" ? next : { ...next, ...NO_ACHIEVEMENT_FIELDS };
+    return clientPeriod === "achievement" ? { ...next, ...NO_CUSTOMER_FIELDS } : { ...next, ...NO_ACHIEVEMENT_FIELDS };
   }
   // Фильтр принадлежит виду: у другого вида он был бы чужим. Друзья и уровень аккаунта читает витрина достижений, поэтому срок у них — «достижение».
-  if (STATE_KINDS.has(kind)) return { ...task, kind, period: "achievement", params: null, limit: null, image: null, filter: null, tier: null };
-  if (!PARTNER_KINDS.has(kind)) return { ...task, kind, params: null, limit: null, image: null, filter: null };
+  if (STATE_KINDS.has(kind)) return { ...task, ...NO_CUSTOMER_FIELDS, kind, period: "achievement", params: null, limit: null, image: null, filter: null, tier: null };
+  if (!PARTNER_KINDS.has(kind)) return { ...task, ...NO_CUSTOMER_FIELDS, kind, params: null, limit: null, image: null, filter: null };
   const url = task.params?.url ?? "";
   const kept = partnerPlatforms(task.params);
   const channelPlatform = task.params?.platform ?? CHANNEL_PLATFORMS.find((platform) => kept.includes(platform)) ?? "telegram";
@@ -377,7 +418,8 @@ export function withKind(task: TaskDef, kind: string): TaskDef {
     kind === CHANNEL_KIND ? { platform: channelPlatform, chat: task.params?.chat ?? "", url } : kept.length === 0 ? { url } : { platforms: kept, url };
   // Повтор выбирают у подписки сами; ссылка и бот — только разово.
   const period = kind === CHANNEL_KIND && task.kind === CHANNEL_KIND ? task.period : "achievement";
-  return { ...task, ...NO_ACHIEVEMENT_FIELDS, kind, period, target: 1, params, filter: null, tier: null };
+  // Удержание проверяется только у подписки: при смене вида на ссылку или бота оно сбрасывается.
+  return { ...task, ...ACHIEVEMENT_EMPTY, kind, period, target: 1, params, filter: null, tier: null, holdDays: kind === CHANNEL_KIND ? task.holdDays : 0 };
 }
 
 /** Площадка партнёрской цели; `undefined` — цель видна на всех площадках. */
@@ -402,8 +444,24 @@ function partnerProblem(task: TaskDef): string | null {
   }
   const url = task.params.url.trim();
   if (url.length > URL_MAX || !isHttpsUrl(url)) return `Ссылка — https://…, до ${String(URL_MAX)} знаков`;
+  const customerProblem = customerProblemOf(task);
+  if (customerProblem !== null) return customerProblem;
   if (task.limit !== null && (!Number.isInteger(task.limit) || task.limit < TASK_LIMIT_RANGE.min || task.limit > TASK_LIMIT_RANGE.max)) {
     return `Лимит выполнений — целое от ${String(TASK_LIMIT_RANGE.min)} до ${TASK_LIMIT_RANGE.max.toLocaleString("ru-RU")} или пусто — без лимита`;
+  }
+  return null;
+}
+
+/** Заказчик, модель, ставка и удержание: те же правила, что у схемы сервера и `CHECK` базы. */
+function customerProblemOf(task: TaskDef): string | null {
+  const customer = task.customer?.trim() ?? "";
+  if (customer.length > CUSTOMER_MAX) return `Заказчик — до ${String(CUSTOMER_MAX)} знаков`;
+  if (!HOLD_DAYS.some((days) => days === task.holdDays)) return "Удержание — сразу, 1, 3 или 7 суток";
+  if (task.kind !== CHANNEL_KIND && task.holdDays !== 0) return "Удержание проверяется только у подписки на канал";
+  if (customer === "") return task.payModel === null && task.rate === null ? null : "Модель и ставка — только у заданий с заказчиком";
+  if (task.payModel === null) return "У заказчика нужна модель оплаты — CPA или RS";
+  if (task.rate === null || !Number.isInteger(task.rate) || task.rate < 1 || task.rate > PAY_RATE_MAX[task.payModel]) {
+    return task.payModel === "cpa" ? "Ставка CPA — целые центы, от 1 до 100 000" : "Ставка RS — сотые доли процента, от 1 до 10 000 (1 250 — это 12,5%)";
   }
   return null;
 }
@@ -483,6 +541,7 @@ export function taskProblem(task: TaskDef, isNew: boolean, catalog: readonly Tas
   if (task.params !== null) return "Ссылка — только у партнёрских целей";
   if (task.limit !== null) return "Лимит выполнений — только у партнёрских целей";
   if (task.image !== null) return "Картинка — только у партнёрских целей";
+  if (task.customer !== null || task.holdDays !== 0) return "Заказчик и удержание — только у партнёрских целей";
   return null;
 }
 

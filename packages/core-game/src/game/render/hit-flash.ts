@@ -9,6 +9,22 @@
  * которой удары вспышку не зажигают. Рендер, на исход забега не влияет.
  */
 
+/** Сколько тиков держится вспышка попадания у фигуры — около двух десятых секунды. */
+export const HIT_FLASH_TICKS = 7;
+
+/** Вспышка неубиваемого — кайма ярче: короче заливки, чтобы не спорить с отталкиванием. */
+export const UNKILLABLE_FLASH_TICKS = 6;
+
+/**
+ * Как вспыхивает враг при попадании: `fill` — белая заливка, `rim` — кайма ярче, `none` — не вспыхивает.
+ * У неубиваемого заливки нет: белая говорит «ранен», а он не ранен — удар его только отодвигает (Р205).
+ * `age` — тиков с последнего попадания.
+ */
+export function hitFlashStyle(unkillable: boolean, age: number): "fill" | "rim" | "none" {
+  if (unkillable) return age < UNKILLABLE_FLASH_TICKS ? "rim" : "none";
+  return age < HIT_FLASH_TICKS ? "fill" : "none";
+}
+
 /** Сколько тиков горит вспышка спрайта. */
 export const ART_HIT_FLASH_TICKS = 3;
 

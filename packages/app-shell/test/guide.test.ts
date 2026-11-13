@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { BOOSTS, CONTENT_SNAPSHOT, DROPS, ENEMIES, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
+import { BOOSTS, CONTENT_SNAPSHOT, DROPS, ENEMIES, ENEMY_LOOKS, ENEMY_STAGES, LOADOUT_LIMITS, MAX_BOOSTS_PER_RUN, PASSIVES, BASE_WEAPONS, RUBEZH, WEAPON_EVOLUTIONS } from "@bh/core-game";
 import { RUBEZH_REWARD_MUL } from "@bh/shared-types";
 import { formatDuration, hasTranslation, t } from "../src/i18n";
 // Словарь гайдбука приезжает вместе с его чанком — тест грузит его так же.
@@ -10,6 +10,7 @@ import {
   eliteEnemies,
   evolutionRecipes,
   enemyResists,
+  enemyTrailKey,
   guideBoosts,
   passiveCategories,
   passiveRange,
@@ -20,8 +21,9 @@ import {
   weaponElements,
   weaponGrowth,
 } from "../src/screens/guide/guide-data";
+import { TrailLine } from "../src/screens/guide/elements";
 import { GuideScreen } from "../src/screens/guide/GuideScreen";
-import { EnemyScene, PickupIcon } from "../src/screens/guide/scenes";
+import { EnemyScene, PickupIcon, WorldShape } from "../src/screens/guide/scenes";
 
 // Гайдбук собирается из контента (docs/27-design-system-and-app-shell.md §6):
 // враг или оружие, добавленные данными, обязаны получить в нём текст, а не
@@ -73,6 +75,13 @@ describe("гайдбук", () => {
     expect(markup).toContain(`Боссы стоят ${bossSeconds} с`);
     expect(hasTranslation("guide.pickup.freeze.name")).toBe(true);
     expect(renderToStaticMarkup(createElement(PickupIcon, { id: "freeze" }))).toContain("<svg");
+  });
+
+  it("рисует «капюшон» Карачуна: та же фигура и цвет тела, что на канве", () => {
+    const markup = renderToStaticMarkup(createElement("svg", null, createElement(WorldShape, { shape: "hood", color: ENEMY_LOOKS.stalker.color, r: 16 })));
+    expect(ENEMY_LOOKS.stalker.shape).toBe("hood");
+    expect(markup).toContain("<polygon");
+    expect(markup).toContain(`fill="#${ENEMY_LOOKS.stalker.color.toString(16).padStart(6, "0")}"`);
   });
 
   it("не держит в словарях ключей удалённых огонька, кастера и их паттернов", () => {
@@ -161,6 +170,30 @@ describe("гайдбук", () => {
       const attack = enemy.element === undefined ? [] : [enemy.element];
       for (const element of [...strong, ...weak, ...attack]) expect(hasTranslation(`guide.element.${element}`), enemy.id).toBe(true);
     }
+  });
+
+  it("у врага со следом в гайдбуке строка про лужи, у остальных её нет", () => {
+    const lurker = ENEMIES.find((enemy) => enemy.id === "bog_lurker");
+    if (lurker === undefined) throw new Error("нет Болотника в контенте");
+    const key = enemyTrailKey(lurker);
+    expect(key).toBe("guide.enemy.trail.poison");
+    expect(t(key ?? "")).toBe("Оставляет ядовитые лужи — не стой в них");
+    // Любой враг со следом получает строку по своей стихии, и текст для каждой есть.
+    for (const element of [undefined, "fire", "cold", "lightning", "poison"] as const) {
+      const withTrail = { ...lurker, ...(element === undefined ? { element: undefined } : { element }) };
+      const trailKey = enemyTrailKey(withTrail);
+      expect(trailKey, String(element)).not.toBeNull();
+      expect(hasTranslation(trailKey ?? ""), String(element)).toBe(true);
+    }
+    for (const enemy of ENEMIES.filter((entry) => entry.trail === undefined)) expect(enemyTrailKey(enemy), enemy.id).toBeNull();
+  });
+
+  it("строка про лужи рисуется на карточке врага со следом и пуста у остальных", () => {
+    const lurker = ENEMIES.find((enemy) => enemy.id === "bog_lurker");
+    const plain = ENEMIES.find((enemy) => enemy.trail === undefined);
+    if (lurker === undefined || plain === undefined) throw new Error("нет нужных врагов в контенте");
+    expect(renderToStaticMarkup(createElement(TrailLine, { def: lurker }))).toContain("Оставляет ядовитые лужи — не стой в них");
+    expect(renderToStaticMarkup(createElement(TrailLine, { def: plain }))).toBe("");
   });
 
   it("делит стойкость врага на стойкость и слабость, а без стойкостей — пусто", () => {

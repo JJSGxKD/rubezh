@@ -9,6 +9,7 @@ import {
   POOL_TIERS,
   TASK_KIND_IDS,
   TASK_PERIODS,
+  PAY_MODELS,
   runFilterSchema,
   taskGroup,
   taskParamsSchema,
@@ -130,6 +131,10 @@ const defSchema = z.object({
   hint: z.string().nullable(),
   prestige: z.number().int(),
   emblem_tier: z.enum(EMBLEM_TIERS).nullable(),
+  customer: z.string().nullable(),
+  pay_model: z.enum(PAY_MODELS).nullable(),
+  rate: z.number().int().nullable(),
+  hold_days: z.union([z.literal(0), z.literal(1), z.literal(3), z.literal(7)]),
 });
 
 const orderRowSchema = z.object({ task_id: z.string(), period: z.enum(TASK_PERIODS), kind: z.string(), sort: z.number().int() });
@@ -153,7 +158,7 @@ export class PrismaTasksRepository implements TasksRepository {
   async catalog(): Promise<TaskDef[]> {
     const rows = await this.prisma.$queryRaw<unknown[]>`
       SELECT task_id, period::text, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter,
-             category, ladder, rung, hidden, hint, prestige, emblem_tier
+             category, ladder, rung, hidden, hint, prestige, emblem_tier, customer, pay_model, rate, hold_days
       FROM task_def ORDER BY period, sort, task_id`;
     const defs: TaskDef[] = [];
     for (const raw of rows) {
@@ -195,6 +200,10 @@ export class PrismaTasksRepository implements TasksRepository {
         hint: row.hint,
         prestige: row.prestige,
         emblemTier: row.emblem_tier,
+        customer: row.customer,
+        payModel: row.pay_model,
+        rate: row.rate,
+        holdDays: row.hold_days,
       });
     }
     return defs;
@@ -238,10 +247,10 @@ export class PrismaTasksRepository implements TasksRepository {
     return (
       (await this.prisma.$executeRaw`
         INSERT INTO task_def (task_id, period, kind, target, title, coins, gems, shards, pass_points, sort, active, params, completion_limit, image_id, tier, filter,
-                              category, ladder, rung, hidden, hint, prestige, emblem_tier, created_at, updated_at, updated_by)
+                              category, ladder, rung, hidden, hint, prestige, emblem_tier, customer, pay_model, rate, hold_days, created_at, updated_at, updated_by)
         VALUES (${task.taskId}, ${task.period}::"TaskPeriod", ${task.kind}, ${task.target}, ${task.title}, ${task.coins}, ${task.gems}, ${task.shards},
                 ${task.passPoints}, ${task.sort}, ${task.active}, ${paramsJson(task)}::jsonb, ${task.limit}, ${task.image}, ${task.tier}, ${filterJson(task)}::jsonb,
-                ${task.category}, ${task.ladder}, ${task.rung}, ${task.hidden}, ${task.hint}, ${task.prestige}, ${task.emblemTier}, ${at}, ${at}, ${actorAccountId}::uuid)
+                ${task.category}, ${task.ladder}, ${task.rung}, ${task.hidden}, ${task.hint}, ${task.prestige}, ${task.emblemTier}, ${task.customer}, ${task.payModel}, ${task.rate}, ${task.holdDays}, ${at}, ${at}, ${actorAccountId}::uuid)
         ON CONFLICT (task_id) DO NOTHING`) > 0
     );
   }
@@ -255,7 +264,8 @@ export class PrismaTasksRepository implements TasksRepository {
           pass_points = ${task.passPoints}, active = ${task.active}, params = ${paramsJson(task)}::jsonb,
           completion_limit = ${task.limit}, image_id = ${task.image}, tier = ${task.tier}, filter = ${filterJson(task)}::jsonb,
           category = ${task.category}, ladder = ${task.ladder}, rung = ${task.rung}, hidden = ${task.hidden}, hint = ${task.hint}, prestige = ${task.prestige},
-          emblem_tier = ${task.emblemTier}, updated_at = ${at}, updated_by = ${actorAccountId}::uuid
+          emblem_tier = ${task.emblemTier}, customer = ${task.customer}, pay_model = ${task.payModel}, rate = ${task.rate}, hold_days = ${task.holdDays},
+          updated_at = ${at}, updated_by = ${actorAccountId}::uuid
         WHERE task_id = ${task.taskId}`) > 0
     );
   }

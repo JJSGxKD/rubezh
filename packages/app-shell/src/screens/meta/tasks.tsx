@@ -14,7 +14,9 @@ import {
   claimFailureKey,
   createTasksApi,
   isClaimable,
+  isExternalChannel,
   isFeedTask,
+  openExternalBot,
   openTaskLink,
   pointsFailureKey,
   sortTasks,
@@ -229,11 +231,23 @@ export function TasksScreen(): ReactNode {
    */
   const open = (task: TaskItem, link: string): void => {
     track("task_link_opened", { task: task.id, kind: task.kind });
+    // Канал другой площадки (Р188): сначала бот, он свяжет аккаунты и пришлёт сам канал.
+    if (isExternalChannel(task)) return void startBot(task);
     openTaskLink(link);
     void api.open(task.id).then((response) => {
       if (response.ok) setState((current) => ({ status: "ready", tasks: response.data.tasks, networks: current.status === "ready" ? current.networks : [] }));
       else if (response.code === TASK_LIMIT_REACHED) close(task.id);
     });
+  };
+
+  /**
+   * Бот площадки канала: ссылку с кодом выдаёт сервер, открывает площадка. Отказ — строкой под
+   * карточкой; кнопки остаются, повторить можно сразу.
+   */
+  const startBot = async (task: TaskItem): Promise<void> => {
+    setNotice(null);
+    const result = await openExternalBot(api, task);
+    if (!result.ok) setNotice({ taskId: task.id, text: t(result.key) });
   };
 
   const row = (task: TaskItem, index: number): ReactNode => (
@@ -342,14 +356,17 @@ function withStepClaimed(points: TaskPoints, period: PointsPeriod, step: number)
   return { ...points, [period]: { ...bar, steps: bar.steps.map((candidate) => (candidate.points === step ? { ...candidate, state: "claimed" as const } : candidate)) } };
 }
 
-function ResetLine(props: { period: ResetPeriod }): ReactNode {
+export function ResetLine(props: { period: ResetPeriod }): ReactNode {
   // Время считается при открытии вида, без тикающего таймера: минутная
   // точность не стоит перерисовки экрана раз в секунду.
   const [resetIn] = useState(() => msUntilReset(Date.now(), props.period));
+  // Плашка, а не голый текст: точки живого фона не должны попадать между буквами.
   return (
-    <p className="mb-3 flex items-center gap-1.5 text-xs text-text-muted">
-      <Clock size={14} aria-hidden="true" />
-      {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
-    </p>
+    <div className="mb-3">
+      <p className="surface-sunken inline-flex items-center gap-1.5 rounded-pill px-2.5 py-1 text-xs text-text-muted">
+        <Clock size={14} aria-hidden="true" />
+        {t("tasks.resetIn", { time: formatCountdown(resetIn) })}
+      </p>
+    </div>
   );
 }

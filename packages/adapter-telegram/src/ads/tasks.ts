@@ -30,8 +30,12 @@ const EVENTS = { reward: "reward", notFound: "onBannerNotFound", error: "onError
 
 /** Сколько ждём, пока скрипт объявит элемент. */
 export const DEFINE_TIMEOUT_MS = 10_000;
-/** Сколько ждём, пока элемент нарисует задание; дольше — задания нет. */
-export const READY_TIMEOUT_MS = 8_000;
+/**
+ * Сколько ждём, пока элемент нарисует задание; дольше — задания нет. Сеть
+ * берёт задание по сети игрока, и на медленной связи 8 секунд не хватало;
+ * «задания нет» сеть и так говорит сама — событием `onBannerNotFound`.
+ */
+export const READY_TIMEOUT_MS = 20_000;
 
 /** Ровно то из DOM, что нужно заданию, — в тестах подменяется. */
 export interface TaskElement {
@@ -98,6 +102,12 @@ export function mountTask(mount: NetworkTaskMount, env: TaskEnv): NetworkTaskHan
     const element = env.dom.create(TASK_TAG);
     element.setAttribute("data-block-id", mount.blockId);
     element.setAttribute("data-debug", mount.debug === true ? "true" : "false");
+    // Пользовательский элемент по умолчанию строчный, а у строчного наблюдатель
+    // размеров всегда видит ноль: задание нарисовано, а «на экране» не наступает
+    // никогда, и строка снимается по сроку. Блок во всю ширину — как в рабочей
+    // интеграции `vpnsibcom_web` (`.adsgram-task-override`).
+    element.style.setProperty("display", "block");
+    element.style.setProperty("width", "100%");
     const { look } = mount;
     element.style.setProperty("--adsgram-task-font-size", look.fontSize);
     element.style.setProperty("--adsgram-task-icon-size", look.iconSize);

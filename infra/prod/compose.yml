@@ -58,6 +58,7 @@ services:
     networks: [edge, data, tunnel]
     volumes:
       - xray-config:/xray-config
+      - xray-status:/xray-status:ro
     # Готовность, а не жизнь: выкат не признает здоровой версию без базы или Redis.
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
@@ -200,6 +201,7 @@ services:
     volumes:
       - ./xray/run.sh:/xray-run.sh:ro
       - xray-config:/etc/xray:ro
+      - xray-status:/xray-status
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -245,3 +247,5 @@ volumes:
   caddy-data: {}
   caddy-config: {}
   xray-config: {}
+  # Статус ядра Xray (Р202): пишет контейнер Xray, API только читает
+  xray-status: {}

@@ -8,6 +8,7 @@ import { ENDLESS_CURVE } from "../src/content/waves";
 import { ACCOUNT_UNLOCKS } from "../src/content/unlocks";
 import { WEAPONS } from "../src/content/weapons";
 import { unlocksAt } from "../src/game/progression/unlocks";
+import { withoutStalker } from "./helpers/without-stalker";
 import {
   POWER_PROFILES,
   simulateBalanceRun,
@@ -164,10 +165,10 @@ describe("свойства баланса", () => {
   it("повторяет эталонный забег бота на «Сложной»", { timeout: 60_000 }, () => {
     const run = simulateBalanceRun({ seed: 1, skill: "dodging", startingWeaponId: STARTING_WEAPONS[0], maxSec: 900 });
     expect({ survivalSec: run.survivalSec, level: run.level, wave: run.wave, enemiesKilled: run.enemiesKilled }).toEqual({
-      survivalSec: 175.68333333333334,
-      level: 13,
-      wave: 5,
-      enemiesKilled: 757,
+      survivalSec: 185.21666666666667,
+      level: 15,
+      wave: 6,
+      enemiesKilled: 793,
     });
   });
 
@@ -196,14 +197,19 @@ const PROFILE_WEAPONS = STARTING_WEAPONS.includes("spark") ? ["spark"] : STARTIN
 
 const profileCache = new Map<string, BalanceRunResult[]>();
 
-/** Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз. */
+/**
+ * Прогоны профиля на одном оружии: пять забегов бота с подстройкой или без неё; считаются один раз.
+ * Без Карачуна (Р205, T-0424): правило касается подстройки, а Карачун не меняет силу игрока, зато
+ * сдвигает любой исход пяти забегов — бот бросает уклонение от толпы ради бегства, и порядок профилей на
+ * таком выборе выпадает случаем (на пяти seed с ним «полный» 525 с против «среднего» 586 с, без него 647 против 462).
+ */
 function profileRuns(profile: PowerProfile, pressure: boolean): BalanceRunResult[] {
   const key = `${profile.id}:${String(pressure)}`;
   const known = profileCache.get(key);
   if (known !== undefined) return known;
 
   const runs = PROFILE_WEAPONS.flatMap((startingWeaponId) =>
-    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure })),
+    SEEDS.map((seed) => simulateBalanceRun({ seed, skill: "dodging", startingWeaponId, maxSec: 1800, loadout: profile.loadout, pressure, content: withoutStalker() })),
   );
   profileCache.set(key, runs);
   return runs;
