@@ -3,7 +3,7 @@ import { approveChange, fetchChangeRequests, rejectChange, withdrawChange, type 
 import { api } from "../../../services";
 import { useSession } from "../../../state/use-session";
 import { ConfirmDialog } from "../../../ui/confirm-dialog";
-import { Badge, Button, DataTable, ErrorNotice, Loading, Notice, Panel } from "../../../ui/kit";
+import { Badge, Button, ErrorNotice, Loading, Notice, Panel } from "../../../ui/kit";
 import { toast, toastError } from "../../../ui/toast";
 import { useApi } from "../../../ui/use-api";
 import { ChangeRequestList } from "./ChangeRequestList";
@@ -56,37 +56,15 @@ export function PricesTab(): ReactNode {
       </Notice>
 
       <Panel title="Товары">
-        <DataTable
-          rows={targets}
-          rowKey={(target) => target.target}
-          empty="Товаров в каталоге нет"
-          columns={[
-            {
-              title: "Товар",
-              primary: true,
-              render: (target) => (
-                <span className="flex flex-col">
-                  <span>{target.title}</span>
-                  <span className="text-xs text-text-muted">{target.target}</span>
-                </span>
-              ),
-            },
-            { title: "Цена, ⭐", align: "right", render: (target) => priceCell(target) },
-            { title: "Цена, ₽", align: "right", render: (target) => skuValuesOf(target.current)?.baseRub ?? "—" },
-            { title: "Самоцветов", align: "right", render: (target) => skuValuesOf(target.current)?.contents.gems ?? "—" },
-            { title: "Значок", render: (target) => (skuValuesOf(target.current)?.badge === "hit" ? "«Хит»" : "—") },
-            { title: "Порядок", align: "right", render: (target) => skuValuesOf(target.current)?.sort ?? "—" },
-            {
-              title: "",
-              render: (target) => (
-                <span className="flex flex-wrap items-center gap-2">
-                  {waitingFor(target.target) === null ? null : <Badge tone="warning">ждёт заявка</Badge>}
-                  {canEdit ? <Button onClick={() => setProposing(target)}>Предложить цену</Button> : null}
-                </span>
-              ),
-            },
-          ]}
-        />
+        {targets.length === 0 ? (
+          <p className="text-sm text-text-muted">Товаров в каталоге нет</p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {targets.map((target) => (
+              <ProductCard key={target.target} target={target} waiting={waitingFor(target.target) !== null} canEdit={canEdit} onPropose={() => setProposing(target)} />
+            ))}
+          </ul>
+        )}
       </Panel>
 
       <Panel title="Заявки">
@@ -145,16 +123,49 @@ export function PricesTab(): ReactNode {
   );
 }
 
-/** Цена сейчас; изменённая командой — с пометкой и ценой в коде. */
-function priceCell(target: ChangeTarget): ReactNode {
+/**
+ * Товар карточкой: цена в звёздах крупно, остальные поля мелко. Карточки, а не
+ * таблица: на 320 px и рядом с боковым меню шесть колонок не помещаются, а
+ * кнопка «Предложить цену» обрезалась.
+ */
+function ProductCard({ target, waiting, canEdit, onPropose }: { target: ChangeTarget; waiting: boolean; canEdit: boolean; onPropose: () => void }): ReactNode {
   const current = skuValuesOf(target.current);
-  if (current === null) return "—";
   const inCode = skuValuesOf(target.inCode);
-  if (!target.overridden || inCode === null || inCode.stars === current.stars) return current.stars;
+  const changed = current !== null && inCode !== null && target.overridden && inCode.stars !== current.stars;
   return (
-    <span className="flex flex-col items-end">
-      <span>{current.stars}</span>
-      <span className="text-xs text-text-muted">в коде {inCode.stars}</span>
-    </span>
+    <li className="flex min-w-0 flex-col gap-2 rounded-sm border border-border bg-surface-sunken p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="break-words font-medium">{target.title}</div>
+          <div className="text-xs text-text-muted">{target.target}</div>
+        </div>
+        {waiting ? <Badge tone="warning">ждёт заявка</Badge> : null}
+      </div>
+      {current === null ? (
+        <p className="text-sm text-text-muted">Значения не разобрались</p>
+      ) : (
+        <>
+          <p className="flex flex-wrap items-baseline gap-x-2 tabular-nums">
+            <span className="text-xl font-semibold">{current.stars} ⭐</span>
+            {changed ? <span className="text-xs text-text-muted">в коде {inCode.stars}</span> : null}
+          </p>
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+            <dt className="text-text-muted">Цена, ₽</dt>
+            <dd className="text-right tabular-nums">{current.baseRub}</dd>
+            <dt className="text-text-muted">Самоцветов</dt>
+            <dd className="text-right tabular-nums">{current.contents.gems}</dd>
+            <dt className="text-text-muted">Значок</dt>
+            <dd className="text-right">{current.badge === "hit" ? "«Хит»" : "—"}</dd>
+            <dt className="text-text-muted">Порядок</dt>
+            <dd className="text-right tabular-nums">{current.sort}</dd>
+          </dl>
+        </>
+      )}
+      {canEdit ? (
+        <div>
+          <Button onClick={onPropose}>Предложить цену</Button>
+        </div>
+      ) : null}
+    </li>
   );
 }
