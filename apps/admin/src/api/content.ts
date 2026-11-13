@@ -85,7 +85,7 @@ export function fetchVersion(api: AdminApi, versionNo: number): Promise<ApiResul
   return api.request(`${ADMIN_CONTENT}/versions/${String(versionNo)}`, { schema: versionSchema });
 }
 
-/** Версия, что «в игре» сейчас: пока это последняя заведённая (публикации — T-0306). */
+/** Последняя заведённая версия: от неё создаются черновики. Что в игре сейчас, говорят указатели (`fetchCurrent`). */
 export function latestVersion(versions: readonly VersionSummary[]): VersionSummary | null {
   let latest: VersionSummary | null = null;
   for (const version of versions) {
@@ -146,4 +146,87 @@ export function startCheck(api: AdminApi, draftId: string): Promise<ApiResult<St
 
 export function fetchCheck(api: AdminApi, checkId: string): Promise<ApiResult<CheckView>> {
   return api.request(`${ADMIN_CONTENT}/checks/${encodeURIComponent(checkId)}`, { schema: checkViewSchema });
+}
+
+// ---------------------------------------------------------------------------
+// Публикация, откат и «Взять из кода» (tasks/T-0306; право content.publish)
+// ---------------------------------------------------------------------------
+
+/** Аудитория версии: «Команде» — аккаунты с ролью, смотрят глазами до игроков; «Всем» — все. */
+export type Audience = "team" | "all";
+
+const pointerSchema = z.object({
+  versionNo: z.number().int(),
+  /** идентификатор аккаунта; `null` — версию поставил выкат */
+  setBy: z.string().nullable(),
+  setAt: dateText,
+});
+export type Pointer = z.infer<typeof pointerSchema>;
+
+/** Какая версия в игре. Нет `team` — команда играет версией «всем»; нет `all` — ничего не публиковалось. */
+const currentPointersSchema = z.object({ team: pointerSchema.nullable(), all: pointerSchema.nullable() });
+export type CurrentPointers = z.infer<typeof currentPointersSchema>;
+
+const publicationPreviewSchema = z.object({
+  audience: z.enum(["team", "all"]),
+  /** версия, которая у аудитории в игре; `null` — играют встроенным контентом */
+  liveVersionNo: z.number().int().nullable(),
+  alreadyLive: z.boolean(),
+  onTeam: z.boolean(),
+  ready: z.boolean(),
+  reason: z.string().nullable(),
+  changes: z.array(z.object({ path: z.string(), from: z.unknown(), to: z.unknown() })),
+  truncated: z.boolean(),
+});
+export type PublicationPreview = z.infer<typeof publicationPreviewSchema>;
+
+const publishResultSchema = z.object({
+  audience: z.enum(["team", "all"]),
+  versionNo: z.number().int(),
+  contentHash: z.string(),
+  created: z.boolean(),
+  changed: z.boolean(),
+  previousVersionNo: z.number().int().nullable(),
+});
+export type PublishResult = z.infer<typeof publishResultSchema>;
+
+const rollbackResultSchema = z.object({
+  audience: z.enum(["team", "all"]),
+  versionNo: z.number().int(),
+  previousVersionNo: z.number().int().nullable(),
+  changed: z.boolean(),
+});
+export type RollbackResult = z.infer<typeof rollbackResultSchema>;
+
+const mergeResultSchema = z.object({
+  baseVersionNo: z.number().int(),
+  fromVersionNo: z.number().int(),
+  added: z.number().int(),
+  changed: z.boolean(),
+  snapshotHash: z.string(),
+});
+export type MergeResult = z.infer<typeof mergeResultSchema>;
+
+export function fetchCurrent(api: AdminApi): Promise<ApiResult<CurrentPointers>> {
+  return api.request(`${ADMIN_CONTENT}/current`, { schema: currentPointersSchema });
+}
+
+/** Готовность черновика к публикации и правки против версии, которая в игре у аудитории. */
+export function fetchPublication(api: AdminApi, draftId: string, audience: Audience): Promise<ApiResult<PublicationPreview>> {
+  return api.request(`${ADMIN_CONTENT}/drafts/${encodeURIComponent(draftId)}/publication`, { query: { audience }, schema: publicationPreviewSchema });
+}
+
+/** Опубликовать черновик. Нет свежей зелёной проверки — 409 `content_check_required` с причиной в тексте. */
+export function publishDraft(api: AdminApi, draftId: string, audience: Audience): Promise<ApiResult<PublishResult>> {
+  return api.request(`${ADMIN_CONTENT}/drafts/${encodeURIComponent(draftId)}/publish`, { method: "POST", body: { audience }, schema: publishResultSchema });
+}
+
+/** Откат: указатель аудитории на версию, что уже бывала в игре. Новой версии не заводит. */
+export function rollbackTo(api: AdminApi, audience: Audience, versionNo: number): Promise<ApiResult<RollbackResult>> {
+  return api.request(`${ADMIN_CONTENT}/rollback`, { method: "POST", body: { audience, versionNo }, schema: rollbackResultSchema });
+}
+
+/** «Взять из кода»: новые понятия и поля версии из кода дописываются в черновик, значения черновика не меняются. */
+export function mergeFromCode(api: AdminApi, draftId: string, versionNo: number): Promise<ApiResult<MergeResult>> {
+  return api.request(`${ADMIN_CONTENT}/drafts/${encodeURIComponent(draftId)}/merge-code`, { method: "POST", body: { versionNo }, schema: mergeResultSchema });
 }
