@@ -3,8 +3,8 @@ id: T-0283
 title: Кикимора — новый паттерн `blink`: исчезает и появляется рядом с игроком после метки на земле
 epic: E10
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0282]
