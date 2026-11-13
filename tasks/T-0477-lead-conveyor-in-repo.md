@@ -16,6 +16,7 @@ shared:
   - .gitignore
   - tasks/README.md
   - docs/09-ci-cd.md
+  - eslint.config.js
 runner: local
 executor: sonnet-5.5
 effort: high
