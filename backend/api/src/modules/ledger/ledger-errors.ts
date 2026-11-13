@@ -31,6 +31,6 @@ export class LedgerEntryNotFoundError extends DomainError {
 
 export class LedgerCursorInvalidError extends DomainError {
   constructor() {
-    super("ledger_cursor_invalid", "Страница журнала не распознана: начните просмотр заново", 400);
+    super("ledger_cursor_invalid", "Страница журнала не распознана: просмотр нужно начать заново", 400);
   }
 }
