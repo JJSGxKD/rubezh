@@ -19,6 +19,7 @@ import { PrismaMediaRepository } from "../src/modules/media/media.repository.js"
 import { MediaService } from "../src/modules/media/media.service.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
+import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import { testPrisma } from "./helpers/test-prisma.js";
 
 /**
@@ -115,7 +116,7 @@ describe.skipIf(DATABASE_URL === "")("второй ключ операций у�
     } as unknown as RolesService;
     const chart = new LedgerChartService(new PrismaLedgerChartRepository(prisma), ledger, roles);
     const fx = { peek: async () => ({ takenAt: new Date(), rates: rates({ RUB: "0.0125" }), payout: rates({ XTR: "0.013" }) }) } as unknown as FxService;
-    const settings = { get: (setting: { fallback: unknown }) => setting.fallback, onChange: () => undefined };
+    const settings = { get: (setting: { fallback: unknown }) => setting.fallback, onChange: () => undefined } as unknown as SettingsReader;
     const approvals = new OperationApprovals(roles, settings, notifier as unknown as OperationsNotifier);
     media = new MediaService(new PrismaMediaRepository(prisma), roles);
     operations = new OperationsService(new PrismaOperationsRepository(prisma), ledger, chart, fx, roles, approvals, media);

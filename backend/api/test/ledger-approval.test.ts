@@ -17,6 +17,7 @@ import { PERMISSIONS, ROLE_PERMISSIONS } from "../src/modules/roles/permissions.
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
 import type { RolesService } from "../src/modules/roles/roles.service.js";
 import { SETTINGS, settingByKey } from "../src/modules/settings/setting-catalog.js";
+import type { SettingsReader } from "../src/modules/settings/settings.service.js";
 import type { Messengers } from "../src/platforms/ports/messenger.js";
 
 /**
@@ -264,7 +265,10 @@ function harness(): Harness {
     rolesFor: async (actor: OperationActor) => (actor.accountId === OWNER.accountId ? ["owner"] : ["finance"]),
     can: async (actor: OperationActor, permission: string) => actor.accountId === OWNER.accountId || permission !== "finance.operation.approve",
   } as unknown as RolesService;
-  const settings = { get: (setting: { key: string; fallback: unknown }) => (setting.key === SETTINGS.financeApproveThresholdUsd.key ? threshold.value : setting.fallback), onChange: () => undefined };
+  const settings = {
+    get: (setting: { key: string; fallback: unknown }) => (setting.key === SETTINGS.financeApproveThresholdUsd.key ? threshold.value : setting.fallback),
+    onChange: () => undefined,
+  } as unknown as SettingsReader;
   const notifier = { pending: vi.fn(async () => undefined), decided: vi.fn(async () => undefined) };
   const approvals = new OperationApprovals(roles, settings, notifier as unknown as OperationsNotifier);
   const media = { require: vi.fn(async () => undefined) };
@@ -578,7 +582,7 @@ describe("OperationsNotifier: поток «Бухгалтерия»", () => {
       },
     };
     const messengers = { for: () => (options.configured === false ? null : messenger) } as unknown as Messengers;
-    const settings = { get: (setting: { key: string }) => (setting.key === "notify.chat.finance" ? (options.finance ?? "") : ""), onChange: () => undefined };
+    const settings = { get: (setting: { key: string }) => (setting.key === "notify.chat.finance" ? (options.finance ?? "") : ""), onChange: () => undefined } as unknown as SettingsReader;
     const targets = { chats: () => ({ general: options.general === undefined ? { chatId: "-100500", threadId: null } : options.general === null ? null : { chatId: options.general, threadId: null } }) };
     const accounts = { displayNames: async (ids: readonly string[]) => new Map(ids.map((id) => [id, id === OWNER.accountId ? "Владелец" : "Ирина"])) };
     const notifier = new OperationsNotifier(settings, targets as never, messengers, accounts as never);

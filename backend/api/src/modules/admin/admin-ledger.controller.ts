@@ -10,7 +10,7 @@ import { FEE_PERCENT_BP_MAX, NAME_MAX, type ArticleView, type CreateArticleInput
 import { LedgerChartService } from "../ledger/ledger-chart.service.js";
 import { DEFAULT_JOURNAL_LIMIT, LedgerService, MAX_JOURNAL_LIMIT } from "../ledger/ledger.service.js";
 import type { AccountBalanceView, JournalFilterInput, JournalPage } from "../ledger/ledger-view.js";
-import { OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
+import { NOTE_MAX, NOTE_MIN, OPERATION_KINDS, OPERATION_STATUSES, operationInputSchema, type OperationInput } from "../ledger/operations/operation-input.js";
 import type { OperationPage, OperationView } from "../ledger/operations/operation-view.js";
 import type { OperationFilter } from "../ledger/operations/operations.repository.js";
 import { OperationsService } from "../ledger/operations/operations.service.js";
@@ -82,6 +82,12 @@ const operationsQuerySchema = z
   })
   .strict();
 
+/** Решение владельца: комментарий к подтверждению необязателен, причина отказа — обязательна, в тех же пределах, что причина операции. */
+const decisionNote = z.string().trim().min(NOTE_MIN).max(NOTE_MAX);
+const approveSchema = z.strictObject({ note: decisionNote.optional() });
+const rejectSchema = z.strictObject({ note: decisionNote });
+const DECISION_PROBLEM = `Некорректное решение: причина отказа обязательна, комментарий и причина — от ${String(NOTE_MIN)} до ${String(NOTE_MAX)} знаков`;
+
 /** Тело операции: ошибка схемы называет поле, а не просто «некорректно» — форма операции длинная. */
 function parseOperation(body: unknown): OperationInput {
   const parsed = operationInputSchema.safeParse(body);
@@ -101,6 +107,9 @@ function parseOperation(body: unknown): OperationInput {
  * Ручные операции (Р220, tasks/T-0461): перевод, обмен, расход, поступление, заём и исправление. Человек
  * описывает событие, сервер собирает проводку; черновик правится, проведённая операция — нет. Список и показ —
  * `ledger.view`, внесение, правка, проведение и удаление черновика — `finance.entry.create`.
+ *
+ * Второй ключ (Р220, tasks/T-0462): крупная операция финансов и любое исправление после `submit` ждут владельца;
+ * подтвердить и отклонить — `finance.operation.approve`, только у владельца.
  */
 @Controller("admin/ledger")
 @UseGuards(AdminSessionGuard, PermissionGuard)
@@ -240,6 +249,28 @@ export class AdminLedgerController {
     const actor = await this.mutator(request);
     const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
     return { data: { operation: await this.operations.submit(actor, operationId) } };
+  }
+
+  /** Подтвердить операцию, ждущую владельца (Р220, T-0462): проводка и решение в одной записи; комментарий необязателен. */
+  @Post("operations/:id/approve")
+  @HttpCode(200)
+  @RequirePermission("finance.operation.approve")
+  async approveOperation(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    const input = parse(() => approveSchema.parse(body ?? {}), DECISION_PROBLEM);
+    return { data: { operation: await this.operations.approve(actor, operationId, input.note) } };
+  }
+
+  /** Отклонить операцию, ждущую владельца: причина обязательна, проводки не будет. */
+  @Post("operations/:id/reject")
+  @HttpCode(200)
+  @RequirePermission("finance.operation.approve")
+  async rejectOperation(@Req() request: unknown, @Param("id") id: string, @Body() body: unknown): Promise<{ data: { operation: OperationView } }> {
+    const actor = await this.mutator(request);
+    const operationId = parse(() => operationIdSchema.parse(id), OPERATION_ID_PROBLEM);
+    const input = parse(() => rejectSchema.parse(body), DECISION_PROBLEM);
+    return { data: { operation: await this.operations.reject(actor, operationId, input.note) } };
   }
 
   @Post("operations/:id/discard")

@@ -828,7 +828,7 @@ describe("журнал учёта в панели по HTTP", () => {
   const uploadReceipt = (cookie: string, bytes: Buffer, profile = "finance_receipt") =>
     app!.inject({ method: "POST", url: "/api/v1/admin/media/images", headers: headers(cookie), payload: { profile, data: bytes.toString("base64") } });
 
-  it("снимок чека: финансам и владельцу загрузка — 200, маркетологу — 403; 640×480 принимается, сторона меньше 300 или больше 1600 — нет", async () => {
+  it("снимок чека: финансам и владельцу загрузка — 201, маркетологу — 403; 640×480 принимается, сторона меньше 300 или больше 1600 — нет", async () => {
     const ctx = await start();
     const finance = await ctx.staff("1010", "Финансы", "finance");
     const marketer = await ctx.staff("1011", "Маркетолог", "marketer");
@@ -838,9 +838,9 @@ describe("журнал учёта в панели по HTTP", () => {
     expect((await uploadReceipt(marketer, receipt)).statusCode).toBe(403);
     expect(ctx.images.rows.size).toBe(0);
     const uploaded = await uploadReceipt(finance, receipt);
-    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.statusCode).toBe(201);
     expect(uploaded.json()).toMatchObject({ data: { imageId: imageIdOf(receipt), width: 640, height: 480 } });
-    expect((await uploadReceipt(owner, receiptWebp(1_600, 300))).statusCode).toBe(200);
+    expect((await uploadReceipt(owner, receiptWebp(1_600, 300))).statusCode).toBe(201);
     expect((await uploadReceipt(finance, receiptWebp(640, 299))).statusCode).toBe(400);
     expect((await uploadReceipt(finance, receiptWebp(1_601, 400))).statusCode).toBe(400);
   });
@@ -877,7 +877,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
     const square = receiptWebp(512, 512);
 
-    expect((await uploadReceipt(owner, square, "home_slide")).statusCode).toBe(200);
+    expect((await uploadReceipt(owner, square, "home_slide")).statusCode).toBe(201);
     const imageId = imageIdOf(square);
 
     expect((await app!.inject({ method: "GET", url: `/api/v1/admin/media/${imageId}.webp`, headers: headers(marketer) })).statusCode).toBe(200);
