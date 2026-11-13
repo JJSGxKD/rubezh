@@ -43,6 +43,7 @@ import { findSiegeProblems } from "./siege-rules";
 import { findPressureProblems, initPressure, isPressureActive } from "./pressure";
 import { buildElitePool } from "./secrets-rules";
 import { createCordonState } from "./cordon";
+import { createHazardState } from "./hazards";
 import { createRubezhState } from "./rubezh";
 import { createStalkerState } from "./stalker";
 import { createStalkerBodyState, findStalkerProblems } from "./stalker-body";
@@ -404,6 +405,7 @@ export function createWorld(options: CreateWorldOptions): World {
         : [],
     ),
     cordon: createCordonState(),
+    hazards: createHazardState(maxEnemies),
     stalkerBody: createStalkerBodyState(stalkerRules, enemyTypes),
     stalker: createStalkerState(
       createRng(deriveSeed(options.seed, STREAM_SALT.stalker)),
