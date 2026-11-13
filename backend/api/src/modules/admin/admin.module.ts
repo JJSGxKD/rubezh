@@ -82,6 +82,8 @@ import { WalletModule } from "../wallet/wallet.module.js";
 import { AdminDiagnosticsController } from "./admin-diagnostics.controller.js";
 import { AdminRequestsController } from "./admin-requests.controller.js";
 import { AdminUiClicksController } from "./admin-ui-clicks.controller.js";
+import { AdminXrayCoreController } from "./admin-xray-core.controller.js";
+import { XrayCoreModule } from "../proxies/xray-core/xray-core.module.js";
 import { AdminExportsController } from "./admin-exports.controller.js";
 import { AdminExportsService } from "./admin-exports.service.js";
 import { AdminFxController } from "./admin-fx.controller.js";
@@ -119,7 +121,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, LedgerModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, ChangeRequestsModule, OnlineCoreModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, LedgerModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, ChangeRequestsModule, OnlineCoreModule, XrayCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -158,6 +160,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminProxiesController,
     AdminProxySubscriptionController,
     AdminProxyTrafficController,
+    AdminXrayCoreController,
     AdminNameRulesRecleanController,
     AdminShopController,
     AdminPromoCodesController,

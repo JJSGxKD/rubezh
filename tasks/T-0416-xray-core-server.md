@@ -3,8 +3,8 @@ id: T-0416
 title: Сервер «Ядра Xray» — запущенная версия, свежий выпуск, совместимость и запуск обновления
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0415, T-0387]
@@ -25,6 +25,8 @@ shared:
   - apps/admin/test/audit.test.ts
   - docs/20-env-and-ports.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
+  - backend/api/test/player-address.test.ts
 runner: any
 executor: sonnet-5.5
 effort: high
@@ -383,16 +385,16 @@ workflow — T-0417.
 
 ## Критерии приёмки
 
-- [ ] `GET /admin/xray-core` отдаёт запущенную версию из файла, свежий выпуск
+- [x] `GET /admin/xray-core` отдаёт запущенную версию из файла, свежий выпуск
       XTLS с кэшем 6 ч, совместимость обеих из `proxy-kit` и состояние кнопки.
-- [ ] «Обновить» запускает `xray-bump.yml` на `dev` только версией из кэша
+- [x] «Обновить» запускает `xray-bump.yml` на `dev` только версией из кэша
       сервера, только с `proxies.edit`, не чаще одного раза за 10 минут и не
       при идущем запуске; отказ GitHub с ответом снимает замок.
-- [ ] Ключ `github.xray-update` — fine-grained, проверка связи показывает,
+- [x] Ключ `github.xray-update` — fine-grained, проверка связи показывает,
       какое право нужно; значение не попадает в ответы, логи и аудит.
-- [ ] Все запросы к GitHub — через `forService("github.api")` с таймаутом 5 с.
-- [ ] Аудит `proxies.xray_core.update` с подписью в панели.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Все запросы к GitHub — через `forService("github.api")` с таймаутом 5 с.
+- [x] Аудит `proxies.xray_core.update` с подписью в панели.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 
