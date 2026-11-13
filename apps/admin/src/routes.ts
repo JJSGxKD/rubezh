@@ -1,4 +1,4 @@
-import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -69,6 +69,7 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
     title: "Вовлечение",
     sections: [
       { id: "tasks", title: "Задания", hint: "Задания, достижения и задания рекламных сетей: цели, частота и награды", permission: "tasks.edit", icon: ListChecks },
+      { id: "rating", title: "Рейтинг", hint: "Доски по сложностям, архив недельных сезонов и места игроков", permission: "players.view", icon: Trophy },
       { id: "broadcasts", title: "Рассылки", hint: "Сообщения игрокам в бота с выбором аудитории", permission: "broadcast.edit", icon: Send },
       { id: "changelog", title: "Журнал обновлений", hint: "«Что нового» по версиям — игроки видят его в игре и в боте", permission: "changelog.edit", icon: BookOpen },
       { id: "home", title: "Главная", hint: "Слайды команды в карусели наверху главной игры", permission: "home.edit", icon: House },

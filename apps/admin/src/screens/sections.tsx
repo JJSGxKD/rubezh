@@ -20,6 +20,7 @@ import { PlayersScreen } from "./players/PlayersScreen";
 import { PromoCodesScreen } from "./promo-codes/PromoCodesScreen";
 import { PromosScreen } from "./promos/PromosScreen";
 import { ProxiesScreen } from "./proxies/ProxiesScreen";
+import { RatingScreen } from "./rating/RatingScreen";
 import { RequestsScreen } from "./requests/RequestsScreen";
 import { ReviewScreen } from "./review/ReviewScreen";
 import { AuditScreen } from "./roles/AuditScreen";
@@ -31,7 +32,7 @@ import { SettingsScreen } from "./settings/SettingsScreen";
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
  * объект раздела из адреса: игрок, отчёт; `null` — список.
  */
-export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> = {
+export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) => ReactNode> = {
   overview: () => <OverviewScreen />,
   online: () => <OnlineScreen />,
   players: (id) => <PlayersScreen id={id} />,
@@ -55,6 +56,7 @@ export const SECTION_SCREENS: Record<string, (id: string | null) => ReactNode> =
   changelog: () => <ChangelogScreen />,
   home: () => <HomeSlidesScreen />,
   tasks: () => <TasksScreen />,
+  rating: (id, tab) => <RatingScreen id={id} tab={tab} />,
   ads: () => <AdsScreen />,
   promos: () => <PromosScreen />,
   "promo-codes": (id) => <PromoCodesScreen id={id} />,
