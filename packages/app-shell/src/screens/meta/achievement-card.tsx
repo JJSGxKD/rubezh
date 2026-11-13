@@ -167,12 +167,12 @@ function ClosedCard(props: { item: Exclude<AchievementItem, OpenAchievement>; in
 }
 
 /** «Ступень 2 из 4» и ряд точек: закрашены выполненные, обводка — текущая. */
-function RungDots(props: { rungs: readonly OpenAchievement[]; current: string }): ReactNode {
+export function RungDots(props: { rungs: readonly OpenAchievement[]; current: string }): ReactNode {
   const position = props.rungs.findIndex((rung) => rung.id === props.current) + 1;
   return (
-    <div className="mt-1.5 flex items-center gap-2">
-      <span className="text-xs font-semibold text-text-muted">{t("achievements.rung", { current: position, total: props.rungs.length })}</span>
-      <span aria-hidden="true" className="flex items-center gap-1">
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="whitespace-nowrap text-xs font-semibold text-text-muted">{t("achievements.rung", { current: position, total: props.rungs.length })}</span>
+      <span aria-hidden="true" className="flex shrink-0 items-center gap-1">
         {props.rungs.map((rung) => (
           <span
             key={rung.id}
