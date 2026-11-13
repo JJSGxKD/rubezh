@@ -98,14 +98,16 @@ describe("права на маршрутах", () => {
     expect(unguarded).toEqual([]);
   });
 
-  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций — finance.entry.create (T-0457, T-0460, T-0461, Р219, Р220)", () => {
+  it("учёт в панели: чтение закрыто ledger.view, правка мест, статей и операций — finance.entry.create, закрытие месяцев — finance.period.close (T-0457, T-0460, T-0461, T-0468, Р219, Р220, Р222)", () => {
     const ledgerRoutes = routes.filter((route) => route.controller === "AdminLedgerController");
-    const reading = ["articles", "balances", "journal", "listOperations", "operation", "places"];
+    const reading = ["articles", "balances", "journal", "listOperations", "listPeriods", "operation", "period", "places"];
+    // сверка, закрытие и снятие закрытия месяца — право только владельца
+    const closing = ["closePeriod", "reopenPeriod", "reviewPeriod"];
     const writing = ["archiveArticle", "archivePlace", "createArticle", "createOperation", "createPlace", "discardOperation", "renameArticle", "submitOperation", "updateOperation", "updatePlace"];
 
-    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...writing].sort());
+    expect(ledgerRoutes.map((route) => route.method).sort()).toEqual([...reading, ...closing, ...writing].sort());
     for (const route of ledgerRoutes) {
-      const expected = reading.includes(route.method) ? "ledger.view" : "finance.entry.create";
+      const expected = reading.includes(route.method) ? "ledger.view" : closing.includes(route.method) ? "finance.period.close" : "finance.entry.create";
       expect(Reflect.getMetadata(PERMISSION_METADATA, route.handler), route.method).toBe(expected);
     }
   });
