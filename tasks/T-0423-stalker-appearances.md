@@ -3,7 +3,7 @@ id: T-0423
 title: Появления Карачуна — предвестие, погоня, растворение, свой поток случайности
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
