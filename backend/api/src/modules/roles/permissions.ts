@@ -69,6 +69,9 @@ export const PERMISSIONS = [
   "fx.rates.edit",
   "revenue.split.view",
   "revenue.split.own.view",
+  // Доли участников проекта (Р217, T-0452): назначить долю с месяца — только владельцу, видят доли
+  // и участник (`revenue.split.own.view`), и финансы (`revenue.split.view`); в наборы ролей не входит
+  "stakeholders.manage",
   // Реклама и партнёры
   "ads.view",
   "ads.edit",

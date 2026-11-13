@@ -21,6 +21,8 @@ import { AdminPromoCodesController } from "./admin-promo-codes.controller.js";
 import { PromoCodesModule } from "../promo-codes/promo-codes.module.js";
 import { PartnersModule } from "../partners/partners.module.js";
 import { AdminCabinetController } from "./admin-cabinet.controller.js";
+import { AdminStakeholdersController } from "./admin-stakeholders.controller.js";
+import { StakeholdersModule } from "../stakeholders/stakeholders.module.js";
 import { AdminPartnersController } from "./admin-partners.controller.js";
 import { AdminPassController } from "./admin-pass.controller.js";
 import { AdminTasksController } from "./admin-tasks.controller.js";
@@ -109,7 +111,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
  * (`JWT_ACCESS_SECRET`, Р53); без входа отвечает 404.
  */
 @Module({
-  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
+  imports: [AuthModule, RunsModule, WalletModule, ProgressModule, FunnelModule, AttributionModule, MessagingModule, NotificationsModule, PaymentsModule, FxModule, DiagnosticsModule, ExportModule, FriendsModule, ReferralsModule, LinksModule, FlagsModule, BroadcastsModule, ChangelogModule, PlayerListModule, TasksModule, BattlePassModule, MediaModule, RestrictionsModule, TestNoticeModule, AdsModule, ShopModule, PromoCodesModule, PartnersModule, StakeholdersModule, AdminNotifyModule, AdConversionsModule, HomeModule, NameRulesModule, SeasonsModule, ContentModule, OnlineCoreModule],
   controllers: [
     AdminSessionController,
     AdminPlayersController,
@@ -151,6 +153,7 @@ import { CspReportsService } from "../csp-reports/csp-reports.service.js";
     AdminPromoCodesController,
     AdminPartnersController,
     AdminCabinetController,
+    AdminStakeholdersController,
     AdminRequestsController,
     AdminUiClicksController,
     AdminContentController,

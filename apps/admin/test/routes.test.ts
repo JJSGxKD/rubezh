@@ -94,6 +94,23 @@ describe("меню панели", () => {
   });
 });
 
+describe("раздел «Платежи» (tasks/T-0437)", () => {
+  const UUID = "3f0c2a52-9d5b-4a79-8a41-0b2a1f6e8c11";
+
+  it("виден с правом payments.view и только с ним; стоит в группе «Поддержка» после «Игроков»", () => {
+    expect(visibleSections(["payments.view"]).map((section) => section.id)).toEqual(["payments"]);
+    expect(visibleSections(["payments.support", "players.view", "analytics.revenue.view"]).map((section) => section.id)).not.toContain("payments");
+    const support = SECTION_GROUPS.find((group) => group.title === "Поддержка")?.sections.map((section) => section.id) ?? [];
+    expect(support.indexOf("payments")).toBe(support.indexOf("players") + 1);
+  });
+
+  it("адрес карточки: id — UUID покупки, обратно собирается", () => {
+    expect(parseRoute(`#/payments/${UUID}`)).toEqual({ section: "payments", id: UUID });
+    expect(parseRoute("#/payments")).toEqual({ section: "payments", id: null });
+    expect(hrefOf({ section: "payments", id: UUID })).toBe(`#/payments/${UUID}`);
+  });
+});
+
 describe("поиск раздела в меню", () => {
   const titles = (groups: SectionGroup[]) => groups.map((group) => `${group.title}: ${group.sections.map((section) => section.title).join(", ")}`);
 
