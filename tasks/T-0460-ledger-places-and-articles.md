@@ -3,7 +3,7 @@ id: T-0460
 title: Места хранения и статьи учёта — сервер
 epic: E15
 priority: P1
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
