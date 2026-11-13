@@ -73,9 +73,18 @@ export function rankRadiusMul(rank: EnemyRank | "normal"): number {
  * пролетать сквозь крупного врага — запрос к сетке вернёт его не во всех
  * клетках, где он есть. Запас только расширяет выборку кандидатов, попадание
  * по-прежнему решает точное расстояние.
+ *
+ * Преследователь (Р205) в расчёт ранга и размера не входит: `findStalkerProblems` не даёт ему ни
+ * `rank`, ни `size`, его хитбокс — просто радиус паттерна. Иначе его радиус раздул бы запрос всех
+ * оружий, а в плотной толпе буфер кандидатов обрезает выборку по-другому, и забеги, не знающие о
+ * преследователе, разошлись бы с прежними эталонами.
  */
-export const MAX_PATTERN_RADIUS =
-  Math.max(...Object.values(PATTERN_TRAITS).map((traits) => traits.radius)) * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX;
+export const MAX_PATTERN_RADIUS = Math.max(
+  Math.max(...Object.entries(PATTERN_TRAITS).filter(([pattern]) => pattern !== "stalker").map(([, traits]) => traits.radius)) *
+    BOSS_RADIUS_MUL *
+    ENEMY_SIZE_MAX,
+  PATTERN_TRAITS.stalker.radius,
+);
 
 /**
  * Параметры паттерна, разложенные в плоский объект с полным набором полей.

@@ -591,8 +591,6 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   // и приходит событием таймлайна в назначенную минуту.
   const stageIndex = flat || isElite(type) ? 0 : pickStage(world, rng);
   const stage = world.stages[stageIndex] ?? world.stages[0];
-  const hpMul = flat ? 1 : world.difficulty.hpMul * stage.hpMul;
-  const damageMul = flat ? 1 : world.difficulty.damageMul * stage.damageMul;
   pool.x[slot] = x;
   pool.y[slot] = y;
   // Предыдущая позиция равна текущей: иначе только что заспавненный враг
@@ -601,9 +599,11 @@ export function spawnEnemy(world: World, typeIndex: number, x: number, y: number
   pool.prevY[slot] = y;
   pool.vx[slot] = 0;
   pool.vy[slot] = 0;
-  pool.hp[slot] = type.hp * hpMul;
+  // Порядок умножения прежний: `(hp × сложность) × ступень` — иначе последние биты здоровья расходятся с
+  // эталонами, и забеги, не знающие о преследователе, сдвигаются.
+  pool.hp[slot] = flat ? type.hp : type.hp * world.difficulty.hpMul * stage.hpMul;
   pool.maxHp[slot] = pool.hp[slot];
-  pool.damage[slot] = type.damage * damageMul;
+  pool.damage[slot] = flat ? type.damage : type.damage * world.difficulty.damageMul * stage.damageMul;
   // Страж пролога слабее обычного; обычному забегу эта строка ничего не стоит.
   if (world.prologue !== null) onPrologueSpawn(world, typeIndex, slot);
   pool.hitTick[slot] = NEVER_HIT;

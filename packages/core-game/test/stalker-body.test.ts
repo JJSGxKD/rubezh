@@ -10,6 +10,7 @@ import { CONTENT_SNAPSHOT } from "../src/content/snapshot";
 import { ENDLESS_CURVE, TIMELINE } from "../src/content/waves";
 import { WEAPONS } from "../src/content/weapons";
 import { findContentProblems } from "../src/game/content-problems";
+import { BOSS_RADIUS_MUL, ENEMY_SIZE_MAX, MAX_PATTERN_RADIUS, PATTERN_TRAITS } from "../src/game/patterns/enemy-types";
 import { captureWorld, restoreWorld } from "../src/game/run/snapshot";
 import { checksumWorld } from "../src/game/sim/checksum";
 import { damageEnemy, inflictDamage } from "../src/game/sim/combat";
@@ -732,5 +733,18 @@ describe("Карачун и таймлайн", () => {
 
     const events = { ...ENDLESS_CURVE, events: [...ENDLESS_CURVE.events, { kind: "flank" as const, enemy: "karachun", count: 1, everySegments: 1 }] };
     expect(findTimelineProblems(TIMELINE, events, ENEMIES).join("\n")).toMatch(MESSAGE);
+  });
+});
+
+describe("запрос оружия к сетке", () => {
+  it("радиус преследователя не раздувает общий запас: забеги без него остаются прежними", () => {
+    const others = Object.entries(PATTERN_TRAITS)
+      .filter(([pattern]) => pattern !== "stalker")
+      .map(([, traits]) => traits.radius);
+    expect(MAX_PATTERN_RADIUS).toBe(Math.max(...others) * BOSS_RADIUS_MUL * ENEMY_SIZE_MAX);
+  });
+
+  it("а сам преследователь в запас помещается: оружие его не пропустит", () => {
+    expect(MAX_PATTERN_RADIUS).toBeGreaterThanOrEqual(PATTERN_TRAITS.stalker.radius);
   });
 });
