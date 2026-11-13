@@ -3,7 +3,7 @@ id: T-0418
 title: Вкладка «Ядро Xray» — версия, свежий выпуск, совместимость и кнопка «Обновить»
 epic: E13
 priority: P2
-status: in-progress
+status: done
 owner: claude-60 / sonnet-5.5 / medium
 author: claude-lead-1
 size: M
