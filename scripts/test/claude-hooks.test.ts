@@ -9,7 +9,7 @@ import { checkCommand } from "../hooks/guard-command.mjs";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
 import { checkWritePath } from "../hooks/guard-write.mjs";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
-import { checkSource, SIM_FORBIDDEN_MATH } from "../hooks/check-edit.mjs";
+import { checkSource, formatEslintJson, SIM_FORBIDDEN_MATH } from "../hooks/check-edit.mjs";
 // @ts-expect-error — утилита разработки на чистом JS, типов у неё нет и не нужно
 import { findLayerViolations } from "../hooks/layer-rules.mjs";
 
@@ -216,6 +216,17 @@ describe("check-edit: чистота симуляции", () => {
   it("список запрещённой математики совпадает с sim-purity.test.ts — правила не расходятся", () => {
     const purity = readFileSync(join(ROOT, "packages/core-game/test/sim-purity.test.ts"), "utf8");
     expect(purity).toContain(SIM_FORBIDDEN_MATH.source);
+  });
+});
+
+describe("check-edit: eslint", () => {
+  it("вывод eslint в формате json превращается в короткие строки, мусор — в пустоту", () => {
+    const report = JSON.stringify([
+      { filePath: "a.ts", messages: [{ ruleId: "no-unused-vars", severity: 1, message: "не используется", line: 3, column: 7 }, { ruleId: "x", severity: 2, message: "плохо", line: 4, column: 1 }] },
+    ]);
+    expect(formatEslintJson(report)).toEqual(["eslint: 3:7 предупреждение no-unused-vars — не используется", "eslint: 4:1 ошибка x — плохо"]);
+    expect(formatEslintJson("pnpm: ошибка")).toEqual([]);
+    expect(formatEslintJson("[]")).toEqual([]);
   });
 });
 
