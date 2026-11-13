@@ -3,8 +3,8 @@ id: T-0472
 title: Коридоры калибровки под игру с Карачуном — мера движения для стоящего, лесенка и набор
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: S
 depends_on: []
