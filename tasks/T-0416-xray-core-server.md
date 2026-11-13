@@ -25,6 +25,7 @@ shared:
   - apps/admin/test/audit.test.ts
   - docs/20-env-and-ports.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: high
