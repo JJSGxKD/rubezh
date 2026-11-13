@@ -1,7 +1,9 @@
 import { z } from "zod";
 import type { AppConfig } from "../../config/app-config.js";
 import { isChatTarget } from "../../platforms/ports/chat-target.js";
+import { DEFAULT_DAILY_LADDER_TEXT, parseDailyLadder } from "../daily/daily-rules.js";
 import { AMOUNTS_PROBLEM, parseAmounts } from "../donations/donation-amounts.js";
+import { MAX_COINS_PER_RUN, MAX_XP_PER_RUN, MIN_REWARDED_SEC, DEFAULT_LEVEL_LADDER_TEXT, parseLevelLadder } from "../progress/progress-rules.js";
 import { pointsFromOf } from "../rating/rating-switch.js";
 import { ratingSinceOf } from "../runs/rated-runs.js";
 import { parseStartDate, seasonOf } from "../seasons/season-rules.js";
@@ -56,6 +58,12 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
   readonly fromEnv: (config: AppConfig) => T | null;
   readonly fallback: T;
   /**
+   * Ключ «деньги» (tasks/T-0310; docs/19-content-admin.md §6): число награды или
+   * цены в той же валюте, что продаётся за звёзды. Обычная правка настроек его не
+   * меняет — только заявка со вторым участником (`change-requests/reward-settings.ts`).
+   */
+  readonly money?: true;
+  /**
    * Проверка, которой нужно текущее время, — только при сохранении из панели;
    * текст ошибки или `null`. Схема времени не знает, и значение из окружения или
    * базы через неё не отсекается.
@@ -66,6 +74,8 @@ export interface SettingDefinition<T extends SettingValue = SettingValue> {
 export const SETTING_KEY = /^[a-z][a-z0-9.-]{1,63}$/;
 
 const NOTIFY_GROUP = "Уведомления команде";
+
+const REWARDS_GROUP = "Награды";
 
 const chatSchema = z
   .string()
@@ -1026,6 +1036,82 @@ export const SETTINGS = {
     { min: 1, max: 20_000, unit: ["самоцвет", "самоцвета", "самоцветов"] },
     2_000,
   ),
+  /**
+   * Награды числами (docs/19-content-admin.md §6, tasks/T-0310): монеты и опыт за
+   * забег, награды за уровень и награда дня. Ключи «деньги»: правятся заявкой
+   * со вторым участником, а не здесь. Умолчание — прежние постоянные в
+   * `progress/progress-rules.ts` и `daily/daily-rules.ts`; окружения нет. Потолки
+   * кошелька (`wallet/wallet-limits.ts`) остаются в коде.
+   */
+  rewardsRunMaxCoins: {
+    ...integer(
+      "rewards.run-max-coins",
+      REWARDS_GROUP,
+      "Награда за забег: потолок монет",
+      "Больше монет за один забег не начисляется, как бы долго игрок ни жил. Выше суточного потолка кошелька из забегов (20 000) часть не начислится",
+      { min: 1, max: 100_000, unit: ["монета", "монеты", "монет"] },
+      MAX_COINS_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMaxXp: {
+    ...integer(
+      "rewards.run-max-xp",
+      REWARDS_GROUP,
+      "Награда за забег: потолок опыта",
+      "Больше опыта за один забег не начисляется. Влияет на то, как быстро растёт уровень аккаунта",
+      { min: 1, max: 100_000, unit: ["очко", "очка", "очков"] },
+      MAX_XP_PER_RUN,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsRunMinSec: {
+    ...integer(
+      "rewards.run-min-sec",
+      REWARDS_GROUP,
+      "Награда за забег: минимальная длина",
+      "Забег короче этого времени награды не даёт: иначе «нажал и вышел» фармили бы монеты",
+      { min: 10, max: 600, unit: ["секунда", "секунды", "секунд"] },
+      MIN_REWARDED_SEC,
+    ),
+    money: true,
+  } satisfies SettingDefinition<number>,
+  rewardsLevelLadder: {
+    key: "rewards.level-ladder",
+    group: REWARDS_GROUP,
+    title: "Награды за уровень аккаунта",
+    hint: "Ступени «с уровня:монет за уровень:самоцветов:раз в сколько уровней» через «;» (до восьми, первая — с первого уровня). Монеты за уровень = число × номер уровня; самоцветы — на каждом уровне, кратном последнему числу. Например 1:50:10:5; 20:80:20:10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseLevelLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_LEVEL_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
+  rewardsDailyLadder: {
+    key: "rewards.daily-ladder",
+    group: REWARDS_GROUP,
+    title: "Награда дня: неделя",
+    hint: "Семь дней через запятую, у каждого «монеты/осколки»: основа до множителей недели и уровня. Седьмой день обычно крупнее. Например 60/0, 80/0, 100/0, 120/0, 150/0, 180/0, 300/10",
+    kind: "text",
+    schema: z
+      .string()
+      .trim()
+      .max(160)
+      .superRefine((value, context) => {
+        const parsed = parseDailyLadder(value);
+        if (!parsed.ok) context.addIssue({ code: "custom", message: parsed.problem });
+      }),
+    fromEnv: () => null,
+    fallback: DEFAULT_DAILY_LADDER_TEXT,
+    money: true,
+  } satisfies SettingDefinition<string>,
   /**
    * Холд оплаты звёздами (docs/35-stage4-plan.md Р218, tasks/T-0453): через сколько дней после оплаты звёзды
    * доступны к выводу. Кабинет участника считает по нему, сколько выручки месяца ещё в холде. Ключ назван по

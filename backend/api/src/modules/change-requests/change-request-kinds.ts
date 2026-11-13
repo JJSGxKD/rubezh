@@ -9,7 +9,7 @@ export type { ChangeTargetView } from "./change-request-types.js";
  * заявка и по каким правилам. Механизм заявок — срок, подтверждение другим,
  * гашение прежней, условие «цель всё ещё равна было» — общий; вид даёт только
  * цель: как её прочитать, проверить и записать. Цены товаров — `SkuPriceKind`,
- * награды придут отдельным видом (T-0310).
+ * числа наград — `RewardSettingKind` (T-0310).
  */
 export interface ChangeKindHandler {
   readonly kind: ChangeKind;
@@ -24,8 +24,10 @@ export interface ChangeKindHandler {
   current(tx: ChangeTx, request: ChangeRequestRow): Promise<JsonValue>;
   /** Записать правку в той же транзакции, что и подтверждение. */
   apply(tx: ChangeTx, request: ChangeRequestRow, by: string, at: Date): Promise<void>;
-  /** После фиксации транзакции: то, что она откатить не может, например кэш реплики. */
-  afterCommit(request: ChangeRequestRow): void;
+  /** После фиксации транзакции: то, что она откатить не может, например кэш реплики. Сбой решения не отменяет. */
+  afterCommit(request: ChangeRequestRow): void | Promise<void>;
+  /** Предупреждения к заявке для того, кто её решает: правка допустима, но на что-то стоит взглянуть. */
+  warnings?(request: ChangeRequestRow): string[];
   /** Цели правки для панели с их значениями сейчас и в коде. */
   targets(): Promise<ChangeTargetView[]>;
   /** Строка для чата и журнала: что меняется, словами. */

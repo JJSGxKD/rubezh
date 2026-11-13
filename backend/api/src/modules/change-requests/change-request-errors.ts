@@ -19,7 +19,14 @@ export class ChangeRequestValueError extends DomainError {
   }
 }
 
-/** Вид заявок сервис пока не умеет: награды придут отдельной задачей. */
+/** Цена или награда правится только заявкой: обычная правка настроек для таких ключей закрыта. */
+export class ChangeRequestRequiredError extends DomainError {
+  constructor(title: string) {
+    super("change_request_required", `«${title}» — число в деньгах: оно меняется только заявкой со вторым участником. Подайте заявку во вкладке «Цены и награды» раздела «Баланс»`, 409);
+  }
+}
+
+/** Вид заявок сервис не умеет: такой заявки не завести. */
 export class ChangeRequestUnsupportedKindError extends DomainError {
   constructor() {
     super("change_request_unsupported_kind", "Заявки этого вида пока не принимаются", 422);

@@ -13,6 +13,7 @@
  * - `taddy.api`, `taddy.exchange` — реклама и лента заданий Taddy;
  * - `ads.creatives` — креативы сетей;
  * - `ads.postback` — постбэки конверсий в кабинет сети;
+ * - `github.api` — GitHub: выпуски Xray и запуск обновления ядра (Р202);
  * - `secrets.check` — проверка ключа интеграции из панели;
  * - `proxy.subscription` — загрузка подписки Xray (Р101): адрес секретный, поэтому
  *   только напрямую (`direct_only`) и без пути в журнале.
@@ -34,6 +35,7 @@ export const OUTBOUND_SERVICES = [
   "taddy.exchange",
   "ads.creatives",
   "ads.postback",
+  "github.api",
   "secrets.check",
   "proxy.subscription",
 ] as const;

@@ -161,4 +161,18 @@ describe("отображение чисел и времени", () => {
     expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).toContain("stakeholders");
     expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).not.toContain("stakeholders");
   });
+
+  it("«Мой проект» виден с правом участника и с правом финансов, без них — нет", () => {
+    expect(visibleSections(["revenue.split.own.view"], MENU).map((section) => section.id)).toContain("my-project");
+    expect(visibleSections(["revenue.split.view"], MENU).map((section) => section.id)).toContain("my-project");
+    expect(visibleSections(["analytics.revenue.view"], MENU).map((section) => section.id)).not.toContain("my-project");
+  });
+
+  it("участник с единственным правом попадает в «Мой проект» сразу после входа", () => {
+    expect(resolveRoute(null, ["revenue.split.own.view"], MENU)).toEqual({ section: "my-project", id: null });
+  });
+
+  it("«Мой проект» — первый в группе «Доход»", () => {
+    expect(SECTION_GROUPS.find((group) => group.title === "Доход")?.sections[0]?.id).toBe("my-project");
+  });
 });

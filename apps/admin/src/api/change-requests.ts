@@ -34,6 +34,8 @@ export const changeRequestSchema = z.object({
   decidedAt: dateText.nullable(),
   createdAt: dateText,
   expiresAt: dateText,
+  /** предупреждения вида правки, например «выше суточного потолка кошелька»; поля нет, когда предупреждать не о чем */
+  warnings: z.array(z.string()).optional(),
 });
 export type ChangeRequest = z.infer<typeof changeRequestSchema>;
 
@@ -41,6 +43,8 @@ export type ChangeRequest = z.infer<typeof changeRequestSchema>;
 export const changeTargetSchema = z.object({
   target: z.string(),
   title: z.string(),
+  /** формат и смысл значения для окна заявки; у цен товаров его нет */
+  hint: z.string().optional(),
   current: z.unknown(),
   inCode: z.unknown(),
   overridden: z.boolean(),
@@ -49,7 +53,7 @@ export type ChangeTarget = z.infer<typeof changeTargetSchema>;
 
 const overviewSchema = z.object({
   requests: z.array(changeRequestSchema),
-  /** цели по видам заявок: сейчас — `sku_price` */
+  /** цели по видам заявок: `sku_price` и `reward_setting` */
   targets: z.record(z.string(), z.array(changeTargetSchema)),
   ttlHours: z.number().int(),
 });
