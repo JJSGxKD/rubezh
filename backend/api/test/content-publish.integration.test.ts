@@ -12,6 +12,7 @@ import { REDIS } from "../src/infra/redis.js";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { ADMIN_CSRF_HEADER, ADMIN_CSRF_VALUE, ADMIN_SESSION_COOKIE } from "../src/modules/admin/admin-cookie.js";
 import { AdminContentController } from "../src/modules/admin/admin-content.controller.js";
+import { AdminContentPublishController } from "../src/modules/admin/admin-content-publish.controller.js";
 import { AdminSessionController } from "../src/modules/admin/admin-session.controller.js";
 import { AdminSessionGuard } from "../src/modules/admin/admin-session.guard.js";
 import { AdminSessionService } from "../src/modules/admin/admin-session.service.js";
@@ -189,6 +190,12 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     return versionNo;
   };
 
+  /**
+   * Версий панели в базе: соседние файлы тестов идут параллельно и заводят версии «из кода», так что
+   * общий счёт между двумя чтениями меняется не только нами; версии панели в этих файлах не заводит никто.
+   */
+  const panelVersions = (): Promise<number> => prisma.contentVersion.count({ where: { source: "panel" } });
+
   /** Версия «из кода» с произвольным снимком: ровно то, что кладёт `content:import`. */
   async function importSnapshot(snapshot: Snap = SNAPSHOT, hash = randomHash()): Promise<{ created: boolean; versionNo: number; contentHash: string }> {
     const files = buildExport(CONTENT_SNAPSHOT, { "enemy.swarm_rat.name": "Крыса" }).files;
@@ -213,7 +220,7 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     // Redis нет: счётчик лимита уходит в память процесса.
     const redis = { eval: async () => Promise.reject(new Error("connection refused")) } as unknown as Redis;
     @Module({
-      controllers: [AdminSessionController, AdminContentController, ContentDeliveryController],
+      controllers: [AdminSessionController, AdminContentController, AdminContentPublishController, ContentDeliveryController],
       providers: [
         { provide: APP_CONFIG, useValue: cfg },
         { provide: REDIS, useValue: redis },
@@ -306,7 +313,7 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     const base = await importSnapshot();
     const ctx = await start();
     const { draftId } = await ctx.draftOf(base.versionNo, { hp: 7 });
-    const before = await prisma.contentVersion.count();
+    const before = await panelVersions();
 
     // проверки не было вовсе
     const none = await ctx.publish(draftId, "team");
@@ -329,7 +336,7 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     expect(outside.error?.code).toBe("content_check_required");
     expect(outside.error?.message).toContain("Уклоняющийся бот: медиана жизни");
 
-    expect(await prisma.contentVersion.count()).toBe(before);
+    expect(await panelVersions()).toBe(before);
     expect(await ctx.pointers()).toEqual({ team: null, all: null });
     expect(ctx.roles.entries.filter((entry) => entry.action.startsWith("content.publish"))).toHaveLength(0);
   });
@@ -440,13 +447,13 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     const second = await ctx.draftOf(base.versionNo, { hp: 22, check: {} });
     const v2 = (await ctx.publish(second.draftId, "all")).data?.versionNo ?? 0;
     expect((await gamer.current()).data?.versionNo).toBe(v2);
-    const versionsBefore = await prisma.contentVersion.count();
+    const versionsBefore = await panelVersions();
 
     const back = await ctx.rollback("all", v1);
     expect(back.status).toBe(201);
     expect(back.data).toMatchObject({ versionNo: v1, previousVersionNo: v2, changed: true });
     expect((await gamer.current()).data?.versionNo).toBe(v1);
-    expect(await prisma.contentVersion.count()).toBe(versionsBefore);
+    expect(await panelVersions()).toBe(versionsBefore);
     // «Команде» откат «Всем» не трогает: она остаётся на новой версии
     expect(await ctx.pointers()).toMatchObject({ team: { versionNo: v2 }, all: { versionNo: v1 } });
 
@@ -454,7 +461,8 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     expect((await ctx.rollback("all", base.versionNo)).data?.versionNo).toBe(base.versionNo);
     expect((await gamer.current()).data?.versionNo).toBe(base.versionNo);
 
-    const entry = ctx.roles.entries.find((row) => row.action === "content.rollback");
+    // второй откат: с v1 на версию из кода
+    const entry = ctx.roles.entries.filter((row) => row.action === "content.rollback")[1];
     expect(entry).toMatchObject({ target: "all", before: { versionNo: v1 }, after: { versionNo: base.versionNo } });
     // повтор на ту же версию — не событие
     const count = ctx.roles.entries.filter((row) => row.action === "content.rollback").length;
@@ -485,12 +493,12 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     for (const lock of [undefined, new OpenLock()]) {
       const ctx = await start(lock === undefined ? {} : { lock });
       const { draftId } = await ctx.draftOf(base.versionNo, { hp: 30 + (lock === undefined ? 0 : 1), check: {} });
-      const before = await prisma.contentVersion.count();
+      const before = await panelVersions();
       const results = await Promise.all([ctx.publish(draftId, "all"), ctx.publish(draftId, "all"), ctx.publish(draftId, "team")]);
       expect(results.map((result) => result.status)).toEqual([201, 201, 201]);
       expect(new Set(results.map((result) => result.data?.versionNo)).size).toBe(1);
       expect(results.filter((result) => result.data?.created)).toHaveLength(1);
-      expect(await prisma.contentVersion.count()).toBe(before + 1);
+      expect(await panelVersions()).toBe(before + 1);
       await app?.close();
       app = null;
     }
@@ -502,11 +510,11 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     stuck.held = "другая-реплика";
     const ctx = await start({ lock: stuck });
     const { draftId } = await ctx.draftOf(base.versionNo, { hp: 33, check: {} });
-    const before = await prisma.contentVersion.count();
+    const before = await panelVersions();
     const result = await ctx.publish(draftId, "all");
     expect(result.status).toBe(409);
     expect(result.error?.code).toBe("content_publish_busy");
-    expect(await prisma.contentVersion.count()).toBe(before);
+    expect(await panelVersions()).toBe(before);
     expect((await ctx.rollback("all", base.versionNo)).error?.code).toBe("content_publish_busy");
   }, 20_000);
 
@@ -534,11 +542,11 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     expect((await gamer.current(1)).data).toMatchObject({ versionNo: schema1 });
     expect((await gamer.current(2)).data).toMatchObject({ versionNo: row.versionNo, hash: row.contentHash });
     expect((await gamer.current(3)).data).toMatchObject({ versionNo: row.versionNo });
-    // клиент старше любой версии получает «ничего» и играет встроенным
+    // схемы 0 не бывает: клиент без схемы версию не получает вовсе
     expect((await gamer.current(0)).status).toBe(400);
   });
 
-  it("версия без совместимой — null: клиент играет встроенным", async () => {
+  it("у текущей версии схема новее клиента: клиент получает последнюю из бывших в игре, которую понимает", async () => {
     const ctx = await start();
     const gamer = await ctx.player("9322");
     const row = await prisma.contentVersion.create({
@@ -546,9 +554,10 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     });
     track(row.versionNo);
     await prisma.contentCurrent.create({ data: { audience: "all", versionNo: row.versionNo, setAt: new Date() } });
-    expect((await gamer.current(1)).data).toBeNull();
-    expect((await gamer.current(5)).data?.versionNo).toBe(row.versionNo);
-  });
+    // База общая: версии соседних тестов тоже бывали в игре, поэтому ждём ровно последнюю из них, а не пустоту.
+    const older = await prisma.contentVersion.findFirst({ where: { publishedAt: { not: null }, versionNo: { lt: row.versionNo }, schemaVersion: { lte: 1 } }, orderBy: { versionNo: "desc" } });
+    expect((await gamer.current(1)).data?.versionNo ?? null).toBe(older?.versionNo ?? null);
+    expect((await gamer.current(5)).data?.versionNo).toBe(row.versionNo);  });
 
   it("клиентский маршрут: без токена — 401, схема обязательна и целая", async () => {
     const ctx = await start();
@@ -781,7 +790,7 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
 
   it("база держит указатель: аудитория из списка, версия существует и не удаляется, пока на неё есть указатель", async () => {
     const base = await importSnapshot();
-    await expect(prisma.$executeRaw`INSERT INTO content_current (audience, version_no, set_at) VALUES ('everyone', ${base.versionNo}, now())`).rejects.toThrow(/content_current_audience/);
+    await expect(prisma.$executeRaw`INSERT INTO content_current (audience, version_no, set_at) VALUES ('any', ${base.versionNo}, now())`).rejects.toThrow(/content_current_audience/);
     await expect(prisma.$executeRaw`INSERT INTO content_current (audience, version_no, set_at) VALUES ('all', 2000000000, now())`).rejects.toThrow();
     await prisma.contentCurrent.create({ data: { audience: "all", versionNo: base.versionNo, setAt: new Date() } });
     await expect(prisma.contentVersion.delete({ where: { versionNo: base.versionNo } })).rejects.toThrow();

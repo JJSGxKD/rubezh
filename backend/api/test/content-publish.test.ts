@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ContentDeliveryService } from "../src/modules/content/content-delivery.service.js";
 import { mergeAdditions } from "../src/modules/content/content-merge.js";
 import { publishBlockReason } from "../src/modules/content/content-publish-rules.js";
 import type { ContentCheckRecord } from "../src/modules/content/content.repository.js";
@@ -131,5 +132,46 @@ describe("mergeAdditions: «Взять из кода» только добавл
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
     expect(Object.getPrototypeOf(result.merged)).toBe(Object.prototype);
     expect((result.merged as { ok: number }).ok).toBe(1);
+  });
+});
+
+describe("выдача версии клиенту: без базы", () => {
+  const pointer = (audience: "team" | "all", versionNo: number) => ({ audience, versionNo, setBy: null, setAt: new Date(0) });
+  const summary = (versionNo: number, schemaVersion: number) => ({ versionNo, contentHash: `h${String(versionNo)}`, schemaVersion, source: "panel" as const, createdBy: null, createdAt: new Date(0), publishedAt: new Date(0) });
+
+  function service(options: { team: number | null; all: number | null; teamRole: boolean; versions: { versionNo: number; schemaVersion: number }[] }) {
+    const publications = {
+      pointers: async () => ({ team: options.team === null ? null : pointer("team", options.team), all: options.all === null ? null : pointer("all", options.all) }),
+      compatibleUpTo: async (max: number, schema: number) => {
+        const found = options.versions.filter((version) => version.versionNo <= max && version.schemaVersion <= schema).sort((a, b) => b.versionNo - a.versionNo)[0];
+        return found === undefined ? null : summary(found.versionNo, found.schemaVersion);
+      },
+    };
+    const roles = { rolesFor: async () => (options.teamRole ? ["analyst"] : []) };
+    return new ContentDeliveryService(publications as never, roles as never);
+  }
+  const account = { accountId: "a", platform: "telegram" as const, platformUserId: "1" };
+
+  it("ничего не публиковалось — null: клиент играет встроенным", async () => {
+    expect(await service({ team: null, all: null, teamRole: false, versions: [] }).current(account, 1)).toBeNull();
+  });
+
+  it("ни одной версии, которую клиент понимает, — тоже null", async () => {
+    const delivery = service({ team: null, all: 5, teamRole: false, versions: [{ versionNo: 5, schemaVersion: 2 }] });
+    expect(await delivery.current(account, 1)).toBeNull();
+    expect((await delivery.current(account, 2))?.versionNo).toBe(5);
+  });
+
+  it("команда получает свой указатель, остальные — «всем»; без отдельного указателя команды все идут за «всеми»", async () => {
+    const versions = [{ versionNo: 3, schemaVersion: 1 }, { versionNo: 4, schemaVersion: 1 }];
+    expect((await service({ team: 4, all: 3, teamRole: true, versions }).current(account, 1))?.versionNo).toBe(4);
+    expect((await service({ team: 4, all: 3, teamRole: false, versions }).current(account, 1))?.versionNo).toBe(3);
+    expect((await service({ team: null, all: 3, teamRole: true, versions }).current(account, 1))?.versionNo).toBe(3);
+  });
+
+  it("команда без публикации «всем» видит свою версию, остальные — ничего", async () => {
+    const versions = [{ versionNo: 4, schemaVersion: 1 }];
+    expect((await service({ team: 4, all: null, teamRole: true, versions }).current(account, 1))?.versionNo).toBe(4);
+    expect(await service({ team: 4, all: null, teamRole: false, versions }).current(account, 1)).toBeNull();
   });
 });

@@ -138,8 +138,15 @@ describe.skipIf(DATABASE_URL === "")("контент на живом Postgres", 
     const count = await prisma.contentVersion.count({ where: { contentHash: hash } });
     expect(count).toBe(1);
 
-    const next = await importVersion();
-    expect(next.versionNo).toBe(first.versionNo + 1);
+    // Соседние файлы тестов заводят версии в той же базе параллельно: «подряд» ждём с повторами, а не одним броском.
+    // Номера, сожжённые повторами, дали бы разрыв в каждой попытке, а чужая вставка — в одной из них.
+    let consecutive = (await importVersion()).versionNo === first.versionNo + 1;
+    for (let attempt = 0; attempt < 5 && !consecutive; attempt += 1) {
+      const head = await importVersion();
+      await Promise.all([importVersion(head.contentHash), importVersion(head.contentHash)]);
+      consecutive = (await importVersion()).versionNo === head.versionNo + 1;
+    }
+    expect(consecutive).toBe(true);
   });
 
   it("гонка двух импортов одного хэша: одна версия, оба ответа сходятся", async () => {
