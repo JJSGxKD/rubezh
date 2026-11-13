@@ -40,6 +40,9 @@ export class PlayerRings {
   readonly ground: Phaser.GameObjects.Graphics;
   private shownLevel: number;
   private levelUpTick = Number.NEGATIVE_INFINITY;
+  /** сколько щитов было в прошлом кадре и когда их стало больше — вспышка «Стойкости» */
+  private shownShield: number;
+  private shieldGainTick = Number.NEGATIVE_INFINITY;
 
   constructor(
     scene: Phaser.Scene,
@@ -51,6 +54,7 @@ export class PlayerRings {
     layer.add(this.ground);
     layer.add(this.graphics);
     this.shownLevel = world.progression.level;
+    this.shownShield = world.player.shieldHits;
   }
 
   /**
@@ -116,6 +120,15 @@ export class PlayerRings {
     // Щит «Эгиды» — светлый ободок вокруг знака и бусина на каждое попадание,
     // которое он ещё примет: щит виден до удара, а не только вспышкой после.
     const shield = this.world.player.shieldHits;
+    // Щит прибавился (оберег «Стойкости» восстановился) — светлое кольцо
+    // коротко расходится от ободка: игрок видит, что оберег снова готов.
+    if (shield > this.shownShield) this.shieldGainTick = tick;
+    this.shownShield = shield;
+    const shieldFlash = levelFlash(tick - this.shieldGainTick);
+    if (shieldFlash !== null) {
+      ground.lineStyle(width * 0.6, SHIELD_RIM.color, shieldFlash.alpha);
+      ground.strokeEllipse(cx, cy, rx * 2 * SHIELD_RIM.scale * shieldFlash.scale, ry * 2 * SHIELD_RIM.scale * shieldFlash.scale);
+    }
     if (shield > 0) {
       const srx = rx * SHIELD_RIM.scale;
       const sry = ry * SHIELD_RIM.scale;
