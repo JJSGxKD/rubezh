@@ -250,7 +250,7 @@ describe("очередь: отложенное до конца тихих час
 
   it("задание из Redis с неверным quietDeferred — ошибка схемы", async () => {
     const { queue } = queueWith({ status: "sent" });
-    await expect(queue.process({ data: { notificationId, accountId, kind: "friend_request", payload: {}, quietDeferred: "да" } })).rejects.toThrow();
+    await expect(queue.process({ data: { notificationId, accountId, kind: "friend_request", payload: {}, quietDeferred: "да" as unknown as boolean } })).rejects.toThrow();
   });
 });
 

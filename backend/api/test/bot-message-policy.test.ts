@@ -208,7 +208,7 @@ describe("сборка оформленного сообщения", () => {
   });
 
   it("общий выключатель выключен или оформление выключено — только простой текст", () => {
-    for (const values of [{}, { "bot.formats.enabled": true, "bot.rich.enabled": false }]) {
+    for (const values of [{}, { "bot.formats.enabled": true, "bot.rich.enabled": false }] as Record<string, SettingValue>[]) {
       const composed = new BotMessages(panelSettings(values)).compose(DOC, BASE);
       expect(composed).toEqual({ text: "Итоги\n\nТы четвёртый", button: BASE.button });
       expect(composed).not.toHaveProperty("rich");
