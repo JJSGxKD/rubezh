@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { STALKER } from "../src/content/stalker";
 import { createBot } from "../src/game/balance/bot";
+import { POWER_PROFILES, simulateBalanceRun } from "../src/game/balance";
 import { createRunWorld, type RunWorld } from "../src/game/run-world";
 import { TICK_HZ } from "../src/game/sim/world";
 import { stepRun } from "./helpers/prologue-run";
@@ -45,7 +46,8 @@ describe("Карачун в боевом забеге", () => {
     expect(ended[0].index).toBe(0);
     expect(ended[0].elapsedSec, "не раньше отметки fromSec").toBeGreaterThanOrEqual(STALKER.appear.fromSec);
     expect(ended[0].lifeSec, "он выходил на поле, а не остался предвестием").toBeGreaterThan(0);
-    expect(ended[0].outcome).toBe("faded");
+    // Бессмертного бота он не убивает, а строй стражей может срезать погоню: исход — не гибель.
+    expect(ended[0].outcome).not.toBe("died");
   });
 
   it("в прологе Карачуна нет", { timeout: 120_000 }, () => {
@@ -83,5 +85,23 @@ describe("шина сцены: stalkerEnded", () => {
     expect(SCENE_SOURCE).toMatch(/journal\.length = 0/);
     // Раздача идёт в обоих циклах шагов: боевом и пошаговой паузе.
     expect(SCENE_SOURCE.match(/this\.emitStalkerEvents\(\)/g)?.length).toBe(2);
+  });
+});
+
+// Эталон забега с Карачуном — golden боевого забега (docs/32-balance.md §3.3). Бессмертный бот, чтобы
+// забег шёл до конца окна и появления не обрывала смерть. Ломается при правке чисел Карачуна или боя:
+// числа обновляются в том же PR.
+describe("эталон забега с Карачуном", () => {
+  it("повторяет появления, касания и толчки бессмертного сильного бота", { timeout: 120_000 }, () => {
+    const run = simulateBalanceRun({
+      seed: 1,
+      skill: "strong",
+      stance: "kite",
+      startingWeaponId: "spark",
+      loadout: POWER_PROFILES.average.loadout,
+      godMode: true,
+      maxSec: 600,
+    });
+    expect({ survivalSec: run.survivalSec, stalker: run.stalker }).toEqual({ survivalSec: 600, stalker: { appearances: 3, hits: 5, pushes: 382 } });
   });
 });

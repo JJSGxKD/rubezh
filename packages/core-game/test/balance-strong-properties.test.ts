@@ -32,16 +32,26 @@ const STARTING_WEAPONS = WEAPONS.filter((weapon) => unlocksAt(ACCOUNT_UNLOCKS, 1
 
 const strongCache = new Map<string, BalanceRunResult[]>();
 
-/** Прогоны сильного бота: профиль и стойка; считаются один раз на файл. */
-function strongRuns(profile: PowerProfile, stance: StrongStance): BalanceRunResult[] {
-  const key = `${profile.id}:${stance}`;
+/** Прогоны сильного бота: профиль и стойка; считаются один раз на файл. Без `content` — нынешний контент, с Карачуном. */
+function strongRuns(profile: PowerProfile, stance: StrongStance, content?: ContentSnapshot): BalanceRunResult[] {
+  const key = `${profile.id}:${stance}${content === undefined ? "" : ":custom"}`;
   const known = strongCache.get(key);
   if (known !== undefined) return known;
 
   const runs: BalanceRunResult[] = [];
   for (const startingWeaponId of STARTING_WEAPONS) {
     for (let seed = 1; seed <= STRONG_BOT_TARGETS.seeds; seed++) {
-      runs.push(simulateBalanceRun({ seed, skill: "strong", stance, startingWeaponId, maxSec: 1800, loadout: profile.loadout }));
+      runs.push(
+        simulateBalanceRun({
+          seed,
+          skill: "strong",
+          stance,
+          startingWeaponId,
+          maxSec: 1800,
+          loadout: profile.loadout,
+          ...(content === undefined ? {} : { content }),
+        }),
+      );
     }
   }
   strongCache.set(key, runs);
@@ -100,7 +110,11 @@ describe("сильный бот: лесенка профилей (Р183, Р194, 
 
   it("новичок к среднему — в коридоре отношений (цель 0,7 = 7 / 10 минут)", { timeout: 600_000 }, () => {
     const { min, max } = PRESSURE_TARGETS.noviceToAverage;
-    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / strongMedian(POWER_PROFILES.average, "kite");
+    // Без Карачуна (Р205, T-0424): отношение калибрует подстройку под силу, а новичка ниже 4-го уровня
+    // Карачун не касается, и с ним отношение съезжало бы от неравенства условий, а не от подстройки:
+    // 501 против 601 с Карачуном и 638 без него (docs/32-balance.md §2.11).
+    const average = summarizeRuns(strongRuns(POWER_PROFILES.average, "kite", withoutStalker())).medianSurvivalSec;
+    const ratio = strongMedian(POWER_PROFILES.novice, "kite") / average;
     expect(ratio).toBeGreaterThanOrEqual(min);
     expect(ratio).toBeLessThanOrEqual(max);
   });
