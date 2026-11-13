@@ -1659,7 +1659,9 @@ erDiagram
   категориями (`emb_vip`, `emb_tester`, `emb_supporter`, `emb_team`,
   `emb_season_champion`, `emb_season_top10`, `emb_season_top100`): цель 1,
   награды нет, прогресса в `TASK_PROGRESS` у них не бывает, `claim` для них — 404,
-  в списке заданий их нет. Держит ли игрок такой знак, сервер вычисляет при
+  в списке заданий их нет. Заказчика (`customer`, `pay_model`, `rate`,
+  `hold_days`, Р138) у знаков нет: схема строки каталога и `CHECK
+  task_def_customer_kind_check` пускают его только к партнёрской цели с `params`. Держит ли игрок такой знак, сервер вычисляет при
   чтении: VIP — по самому позднему `VIP_PERIOD.ends_at`, «Тестер» и «Меценат» —
   по `ACCOUNT.tester_at` и `supporter_at`, «Команда» — по любой строке
   `ACCOUNT_ROLE`, кроме внешней роли `partner`, сезонные — по лучшему месту в
