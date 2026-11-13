@@ -3,7 +3,7 @@ id: T-0394
 title: Оформленное сообщение бота — порт RichDocument с простым текстом, правила звука и тихих часов, bot_message_sent
 epic: E5
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
