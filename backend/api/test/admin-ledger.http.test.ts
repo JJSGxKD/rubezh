@@ -27,6 +27,9 @@ import type { OperationInput } from "../src/modules/ledger/operations/operation-
 import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
+import { LedgerPeriodBlockedError } from "../src/modules/ledger/periods/period-errors.js";
+import type { PeriodListItem, PeriodReportView } from "../src/modules/ledger/periods/period-view.js";
+import { PeriodsService } from "../src/modules/ledger/periods/periods.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Role } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -42,7 +45,8 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 /**
  * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
  * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`;
- * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`.
+ * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`;
+ * месяцы учёта (Р222, tasks/T-0468): `/admin/ledger/periods`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
  */
@@ -214,6 +218,53 @@ class FakeOperations {
   }
 }
 
+const PERIOD_LIST: PeriodListItem[] = [{ period: "2026-11", status: "review", reopenedCount: 0, reviewAt: "2026-12-01T09:00:00.000Z", closedAt: null }];
+
+const PERIOD_REPORT: PeriodReportView = {
+  period: "2026-11",
+  status: "review",
+  reopenedCount: 0,
+  reviewAt: "2026-12-01T09:00:00.000Z",
+  closedAt: null,
+  checklist: [],
+  canClose: true,
+  reportIsDraft: true,
+  report: null,
+};
+
+/** Подменный сервис месяцев: помнит вызовы с автором и отдаёт готовые ответы; может отказать, как настоящий. */
+class FakePeriods {
+  readonly calls: { method: string; actor: string | null; args: unknown[] }[] = [];
+  failWith: Error | null = null;
+
+  private record(method: string, actor: { accountId: string } | null, ...args: unknown[]): void {
+    this.calls.push({ method, actor: actor?.accountId ?? null, args });
+    if (this.failWith !== null) throw this.failWith;
+  }
+
+  async list(): Promise<PeriodListItem[]> {
+    this.record("list", null);
+    return PERIOD_LIST;
+  }
+
+  async report(period: string): Promise<PeriodReportView> {
+    this.record("report", null, period);
+    return PERIOD_REPORT;
+  }
+
+  async startReview(actor: { accountId: string }, period: string): Promise<void> {
+    this.record("startReview", actor, period);
+  }
+
+  async close(actor: { accountId: string }, period: string): Promise<void> {
+    this.record("close", actor, period);
+  }
+
+  async reopen(actor: { accountId: string }, period: string, reason: string): Promise<void> {
+    this.record("reopen", actor, period, reason);
+  }
+}
+
 describe("журнал учёта в панели по HTTP", () => {
   let app: NestFastifyApplication | null = null;
 
@@ -229,6 +280,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const ledger = new FakeLedger();
     const chart = new FakeChart();
     const operations = new FakeOperations();
+    const periods = new FakePeriods();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
     @Module({
       controllers: [AdminSessionController, AdminLedgerController],
@@ -242,6 +294,7 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: LedgerService, useValue: ledger },
         { provide: LedgerChartService, useValue: chart },
         { provide: OperationsService, useValue: operations },
+        { provide: PeriodsService, useValue: periods },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -269,7 +322,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, login, staff };
+    return { ledger, chart, operations, periods, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -733,5 +786,115 @@ describe("журнал учёта в панели по HTTP", () => {
     const conflict = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_draft");
+  });
+  // ----- месяцы учёта (Р222, tasks/T-0468) -----
+
+  it("месяцы: финансы и владелец читают список и отчёт месяца, сервис получает месяц как есть", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1001", "Финансы", "finance");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    for (const cookie of [finance, owner]) {
+      const list = await get("/periods", cookie);
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toEqual({ data: { periods: PERIOD_LIST } });
+      const report = await get("/periods/2026-11", cookie);
+      expect(report.statusCode).toBe(200);
+      expect(report.json()).toEqual({ data: { period: PERIOD_REPORT } });
+    }
+    expect(ctx.periods.calls.map((call) => [call.method, call.args[0]])).toEqual([
+      ["list", undefined],
+      ["report", "2026-11"],
+      ["list", undefined],
+      ["report", "2026-11"],
+    ]);
+  });
+
+  it("участник проекта, маркетолог и администратор месяцев не видят и не меняют: 403, сервис не вызывается", async () => {
+    const ctx = await start();
+    const staffCookies = [await ctx.staff("1002", "Участник", "stakeholder"), await ctx.staff("1003", "Маркетолог", "marketer"), await ctx.staff("1004", "Администратор", "admin")];
+
+    for (const cookie of staffCookies) {
+      expect((await get("/periods", cookie)).statusCode).toBe(403);
+      expect((await get("/periods/2026-11", cookie)).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/review", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/close", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/periods/2026-11/reopen", cookie, { reason: "ошибка в расходах" })).statusCode).toBe(403);
+    }
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("финансы месяц не ставят на сверку, не закрывают и не открывают заново: 403 на review, close и reopen", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1005", "Финансы", "finance");
+
+    expect((await send("POST", "/periods/2026-11/review", finance, {})).statusCode).toBe(403);
+    expect((await send("POST", "/periods/2026-11/close", finance, {})).statusCode).toBe(403);
+    expect((await send("POST", "/periods/2026-11/reopen", finance, { reason: "ошибка в расходах" })).statusCode).toBe(403);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("без сессии — 401 на списке, отчёте и закрытии", async () => {
+    const ctx = await start();
+
+    expect((await app!.inject({ method: "GET", url: `${BASE}/periods` })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "GET", url: `${BASE}/periods/2026-11` })).statusCode).toBe(401);
+    expect((await app!.inject({ method: "POST", url: `${BASE}/periods/2026-11/close`, payload: {} })).statusCode).toBe(401);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("владелец ставит на сверку, закрывает и снимает закрытие: 200 { data: { ok } }, автор и месяц доходят до сервиса", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const review = await send("POST", "/periods/2026-11/review", owner, {});
+    const close = await send("POST", "/periods/2026-11/close", owner, {});
+    const reopen = await send("POST", "/periods/2026-11/reopen", owner, { reason: "Участник оспорил отчёт" });
+
+    for (const response of [review, close, reopen]) {
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ data: { ok: true } });
+    }
+    expect(ctx.periods.calls.map((call) => [call.method, call.args])).toEqual([
+      ["startReview", ["2026-11"]],
+      ["close", ["2026-11"]],
+      ["reopen", ["2026-11", "Участник оспорил отчёт"]],
+    ]);
+    expect(ctx.periods.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it.each(["2026-13", "2026-1", "abc", "2026-11-01", "2026-00"])("месяц %s не вида «ГГГГ-ММ»: 400, сервис не вызывается", async (period) => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    expect((await get(`/periods/${period}`, owner)).statusCode).toBe(400);
+    expect((await send("POST", `/periods/${period}/close`, owner, {})).statusCode).toBe(400);
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it.each([
+    ["без причины", {}],
+    ["причина не строкой", { reason: 5 }],
+    ["лишнее поле", { reason: "ошибка в расходах", force: true }],
+  ])("снятие закрытия: %s — 400 validation_failed, сервис не вызывается", async (_title, body) => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+
+    const response = await send("POST", "/periods/2026-11/reopen", owner, body);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe("validation_failed");
+    expect(ctx.periods.calls).toHaveLength(0);
+  });
+
+  it("отказ закрытия доходит как есть: 409 ledger_period_blocked с текстом о том, что мешает", async () => {
+    const ctx = await start();
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    ctx.periods.failWith = new LedgerPeriodBlockedError("2026-11", [{ code: "operations_pending", severity: "blocker", count: 1, message: "1 операция ждёт подтверждения", refs: [], moreRefs: 0 }]);
+
+    const response = await send("POST", "/periods/2026-11/close", owner, {});
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "ledger_period_blocked", message: expect.stringContaining("1 операция ждёт подтверждения") });
   });
 });
