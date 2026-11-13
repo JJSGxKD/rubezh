@@ -1,5 +1,5 @@
 import type { AdShowOutcome, AdShowRequest } from "@bh/shared-types";
-import { createAdsgram, createAdsonar, createRichads, type AdGlobals, type NetworkEnv, type NetworkShow } from "./networks";
+import { createAdsgram, createRichads, type AdGlobals, type NetworkEnv, type NetworkShow } from "./networks";
 import { browserScriptLoader, type ScriptLoader } from "./script-loader";
 
 // Учёт аудитории сетями — в том же чанке, что показ: загрузчик скриптов у них
@@ -38,7 +38,6 @@ export interface AdShowerOptions {
 export function createAdShower(options: AdShowerOptions): (request: AdShowRequest) => Promise<AdShowOutcome> {
   const networks: Readonly<Record<string, NetworkShow>> = {
     adsgram: createAdsgram(),
-    adsonar: createAdsonar(),
     richads: createRichads(),
   };
   const now = options.now ?? Date.now;

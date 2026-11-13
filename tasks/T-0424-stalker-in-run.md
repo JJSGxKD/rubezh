@@ -3,8 +3,8 @@ id: T-0424
 title: Карачун в забеге — подключение, шина сцены, калибровка и эталоны
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0392, T-0422, T-0423, T-0425, T-0426]
@@ -19,6 +19,7 @@ shared:
   - packages/core-game/src/run-api.ts
   - packages/core-game/src/engine/run-bus.ts
   - packages/core-game/src/game/balance/simulate.ts
+  - packages/core-game/src/game/diagnostics/replay.ts
   - packages/core-game/test/**
   - scripts/balance/balance-sim.ts
   - docs/32-balance.md
@@ -36,7 +37,7 @@ batch: 5
 
 # T-0424. Карачун в забеге — подключение, шина сцены, калибровка и эталоны
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0424.json)](README.md#значки-статуса) [![T-0392](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0392.json&label=T-0392)](T-0392-siege-of-standing-player.md) [![T-0422](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0422.json&label=T-0422)](T-0422-bots-flee-stalker.md) [![T-0423](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0423.json&label=T-0423)](T-0423-stalker-appearances.md) [![T-0425](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0425.json&label=T-0425)](T-0425-stalker-look.md) [![T-0426](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0426.json&label=T-0426)](T-0426-stalker-sound.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0424.json)](README.md#значки-статуса) [![T-0392](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0392.json&label=T-0392)](archive/T-0392-siege-of-standing-player.md) [![T-0422](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0422.json&label=T-0422)](T-0422-bots-flee-stalker.md) [![T-0423](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0423.json&label=T-0423)](T-0423-stalker-appearances.md) [![T-0425](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0425.json&label=T-0425)](T-0425-stalker-look.md) [![T-0426](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0426.json&label=T-0426)](T-0426-stalker-sound.md)
 
 ## Зачем
 

@@ -32,15 +32,6 @@ export interface AdsgramController {
   destroy(): void;
 }
 
-export interface SonarShowParams {
-  adUnit: string;
-  /** полноэкранный загрузчик SDK — у видео за награду, пока ролик грузится */
-  loader?: boolean;
-  onReward?: () => void;
-  onClose?: () => void;
-  onError?: (message?: string) => void;
-}
-
 export interface RichAdsController {
   initialize(params: { pubId: string; appId: string; debug: boolean }): void;
   triggerInterstitialVideo(): Promise<unknown>;
@@ -64,7 +55,6 @@ export interface TaddySdk {
 /** Что SDK сетей кладут в `window` — в тестах подменяется целиком. */
 export interface AdGlobals {
   Adsgram?: { init(params: { blockId: string; debug?: boolean }): AdsgramController };
-  Sonar?: { show(params: SonarShowParams): Promise<{ status: string; message?: string } | undefined> };
   TelegramAdsController?: new () => RichAdsController;
   Taddy?: TaddySdk;
 }
@@ -80,7 +70,6 @@ export interface NetworkEnv {
 export type NetworkShow = (request: AdShowRequest, env: NetworkEnv) => Promise<AdShowOutcome>;
 
 export const ADSGRAM_SCRIPT = "https://sad.adsgram.ai/js/sad.min.js";
-export const ADSONAR_SCRIPT = "https://static.sonartech.io/lib/1.0.0/sonar.js";
 export const RICHADS_SCRIPT = "https://richinfo.co/richpartners/telegram/js/tg-ob.js";
 export const TADDY_SCRIPT = "https://sdk.taddy.pro/web/taddy.min.js";
 
@@ -105,20 +94,6 @@ export async function ensureScript(env: NetworkEnv, present: () => boolean, src:
     return false;
   }
   return present();
-}
-
-/** Исход — один раз: SDK, бывает, сообщает и «закрыто», и «досмотрено». Первое слово — последнее. */
-function settleOnce(): { promise: Promise<AdShowOutcome>; settle: (outcome: AdShowOutcome) => void } {
-  let settle: (outcome: AdShowOutcome) => void = () => undefined;
-  const promise = new Promise<AdShowOutcome>((resolve) => {
-    let done = false;
-    settle = (outcome) => {
-      if (done) return;
-      done = true;
-      resolve(outcome);
-    };
-  });
-  return { promise, settle };
 }
 
 /**
@@ -160,48 +135,6 @@ export function createAdsgram(): NetworkShow {
     } finally {
       controller.removeEventListener("onBannerNotFound", onNotFound);
     }
-  };
-}
-
-/**
- * AdSonar: метод показа у всех форматов один — `Sonar.show`, формат задаёт
- * сам блок в кабинете. У видео за награду исход приходит событиями, у
- * межстраничной — завершением показа: закрыть её и есть досмотреть.
- */
-export function createAdsonar(): NetworkShow {
-  return async (request, env) => {
-    if (request.format === "task") return failed("unsupported");
-    const appId = request.keys["appId"] ?? "";
-    if (request.blockId === null || appId === "") return failed("misconfigured");
-    const src = `${ADSONAR_SCRIPT}?appId=${encodeURIComponent(appId)}${env.debug ? "&isDebug=true" : ""}`;
-    if (!(await ensureScript(env, () => env.globals().Sonar !== undefined, src))) return failed("load_failed");
-    const sdk = env.globals().Sonar;
-    if (sdk === undefined) return failed("load_failed");
-
-    if (request.format === "interstitial") {
-      try {
-        const result = await sdk.show({ adUnit: request.blockId, loader: false });
-        return result?.status === "error" ? failed("no_fill") : COMPLETED;
-      } catch {
-        return failed("sdk_error");
-      }
-    }
-
-    const { promise, settle } = settleOnce();
-    try {
-      const result = await sdk.show({
-        adUnit: request.blockId,
-        loader: true,
-        onReward: () => settle(COMPLETED),
-        onClose: () => settle(CLOSED),
-        onError: () => settle(failed("sdk_error")),
-      });
-      // Отказ показать — статусом, без событий: ни награды, ни закрытия уже не будет.
-      if (result?.status === "error") settle(failed("no_fill"));
-    } catch {
-      settle(failed("sdk_error"));
-    }
-    return await promise;
   };
 }
 

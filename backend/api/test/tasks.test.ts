@@ -1,8 +1,8 @@
 import "reflect-metadata";
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import type { NestFastifyApplication } from "@nestjs/platform-fastify";
 import type { Redis } from "ioredis";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_CONFIG, loadAppConfig } from "../src/config/app-config.js";
 import { createHttpApp } from "../src/http-app.js";
 import { REDIS } from "../src/infra/redis.js";
@@ -24,6 +24,7 @@ import {
   TaskOrderMismatchError,
   TaskShapeLockedError,
 } from "../src/modules/tasks/tasks-errors.js";
+import type { ChannelWatchService } from "../src/modules/tasks/channel-watch.service.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
 import { gameDayOf, pickPool } from "../src/modules/tasks/task-pool.js";
 import {
@@ -264,6 +265,18 @@ class FakeMembership implements ChannelMembership {
   }
 }
 
+/** Служба окон перепроверки (T-0178): помнит, для каких наград её звали, или падает по команде. */
+class FakeWatch {
+  readonly started: { accountId: string; taskId: string; periodStart: string; at: Date }[] = [];
+  failure: Error | null = null;
+
+  async start(account: AccountRef, task: TaskDef, periodStart: string, at: Date): Promise<boolean> {
+    if (this.failure !== null) throw this.failure;
+    this.started.push({ accountId: account.accountId, taskId: task.taskId, periodStart, at });
+    return true;
+  }
+}
+
 function run(patch: Partial<RecordedRun> = {}): RecordedRun {
   return {
     runId: `run-${String(Math.random()).slice(2)}`,
@@ -291,7 +304,7 @@ function run(patch: Partial<RecordedRun> = {}): RecordedRun {
 
 const OWNER_ID = "777000222";
 
-function setup() {
+function setup(options: { watch?: boolean } = {}) {
   const repository = new MemoryTasks();
   const wallet = new FakeWallet();
   const hooks = new RunsHooks();
@@ -305,9 +318,24 @@ function setup() {
   const media = new MediaService(images, rolesService);
   const restrictions = new MemoryRestrictionsRepository();
   const restricted = restrictionsGate(restrictions);
-  const service = new TasksService(repository, wallet as unknown as WalletService, hooks, rolesService, memberships, media, restricted);
+  const watch = new FakeWatch();
+  const service = new TasksService(
+    repository,
+    wallet as unknown as WalletService,
+    hooks,
+    rolesService,
+    memberships,
+    media,
+    restricted,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    options.watch === false ? undefined : (watch as unknown as ChannelWatchService),
+  );
   service.onModuleInit();
-  return { repository, wallet, hooks, service, accounts, roles, membership, media, images, restrictions, restricted };
+  return { repository, wallet, hooks, service, accounts, roles, membership, media, images, restrictions, restricted, watch };
 }
 
 async function person(ctx: ReturnType<typeof setup>, id: string, role?: "game_designer" | "moderator"): Promise<AccountRef> {
@@ -486,6 +514,37 @@ describe("партнёрские цели: ссылка и бот", () => {
   });
 });
 
+describe("правило отписки на карточке (T-0183)", () => {
+  const watched = (...ids: string[]) => ({ taskIds: new Set(ids), days: 7 });
+
+  it("viewOf: recheckDays — у наблюдаемого канала, null у остальных; без аргумента — null у всех", () => {
+    const link = def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/partner" }, target: 1, coins: 50, gems: 0 });
+    const bot = def("ach_partner_bot", { period: "achievement", kind: "bot", params: { platform: "telegram", url: "https://t.me/partner_bot?start=rubezh" }, target: 1, coins: 50, gems: 0 });
+    const noPort = channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } });
+    const defs = [channelTask(), noPort, link, bot, def("daily_runs")];
+    const views = viewOf(defs, [], new Map(), NOON, undefined, watched("ach_channel"));
+    expect(views.map((view) => [view.id, view.recheckDays])).toEqual(
+      expect.arrayContaining([["ach_channel", 7], ["ach_channel_max", null], ["ach_partner_site", null], ["ach_partner_bot", null], ["daily_runs", null]]),
+    );
+    expect(viewOf(defs, [], new Map(), NOON).every((view) => view.recheckDays === null)).toBe(true);
+  });
+
+  it("view, open и claim отдают то же поле; площадка без порта проверки — null", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(channelTask(), channelTask({ taskId: "ach_channel_max", params: { platform: "max", chat: "-100", url: "https://max.ru/x" } }), def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/p" }, target: 1, coins: 50, gems: 0 }));
+    const max: AccountRef = { accountId: ME, platform: "max", platformUserId: "555000111" };
+    expect(byId(await ctx.service.view(PLAYER, NOON), "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(await ctx.service.view(max, NOON), "ach_channel_max")).toMatchObject({ recheckDays: null });
+    const opened = await ctx.service.open(PLAYER, "ach_partner_site", NOON);
+    expect(byId(opened.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(opened.tasks, "ach_partner_site")).toMatchObject({ recheckDays: null });
+    ctx.membership.members.add(`${CHANNEL.chat}|${PLAYER.platformUserId}`);
+    const claimed = await ctx.service.claim(PLAYER, "ach_channel", NOON);
+    expect(byId(claimed.tasks, "ach_channel")).toMatchObject({ recheckDays: 7 });
+    expect(byId(claimed.tasks, "daily_runs")).toMatchObject({ recheckDays: null });
+  });
+});
+
 describe("цель «канал»: проверка площадкой", () => {
   function withChannel() {
     const ctx = setup();
@@ -527,7 +586,7 @@ describe("цель «канал»: проверка площадкой", () => {
       expect.objectContaining({ resource: "gems", amount: 15, reason: "achievement_reward", idempotencyKey: `task:${ME}:ach_channel:${ACHIEVEMENT_PERIOD_START}:gems` }),
     ]);
 
-    // отписка после награды её не отнимает, а повтор не платит
+    // повторный забор не платит и бота не спрашивает; отписку после награды перепроверяет окно (Р115, T-0178), а не забор
     ctx.membership.members.clear();
     expect(await ctx.service.claim(PLAYER, "ach_channel", new Date(NOON.getTime() + DAY))).toMatchObject({ claimed: false });
     expect(ctx.membership.asked).toHaveLength(1);
@@ -594,6 +653,107 @@ describe("цель «канал»: проверка площадкой", () => {
     // понедельник следующей
     expect(await ctx.service.claim(PLAYER, "channel_weekly", new Date(NOON.getTime() + 5 * DAY))).toMatchObject({ claimed: true });
     expect(ctx.wallet.grants.map((grant) => grant.idempotencyKey)).toEqual([`task:${ME}:channel_weekly:2026-09-28:gems`, `task:${ME}:channel_weekly:2026-10-05:gems`]);
+  });
+
+  describe("окно перепроверки после награды (Р115, T-0178)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("награда за подписку ставит окно ровно один раз: задание, срок награды, момент забора", async () => {
+      const ctx = withChannel();
+      join(ctx);
+
+      await ctx.service.claim(PLAYER, "ach_channel", NOON);
+
+      expect(ctx.watch.started).toEqual([{ accountId: ME, taskId: "ach_channel", periodStart: ACHIEVEMENT_PERIOD_START, at: NOON }]);
+    });
+
+    it("повторный забор той же награды окно не ставит", async () => {
+      const ctx = withChannel();
+      join(ctx);
+
+      await ctx.service.claim(PLAYER, "ach_channel", NOON);
+      expect(await ctx.service.claim(PLAYER, "ach_channel", new Date(NOON.getTime() + HOUR))).toMatchObject({ claimed: false });
+
+      expect(ctx.watch.started).toHaveLength(1);
+    });
+
+    it("два нажатия разом — одно окно: ставит тот запрос, чья отметка «забрано» встала первой", async () => {
+      const ctx = withChannel();
+      join(ctx);
+
+      const results = await Promise.all([ctx.service.claim(PLAYER, "ach_channel", NOON), ctx.service.claim(PLAYER, "ach_channel", NOON)]);
+
+      expect(results.filter((result) => result.claimed)).toHaveLength(1);
+      expect(ctx.watch.started).toHaveLength(1);
+    });
+
+    it("ежедневная подписка — окно на каждую награду, со своим сроком", async () => {
+      const ctx = setup();
+      ctx.repository.defs.push(channelTask({ taskId: "channel_daily", period: "daily", gems: 0, coins: 40 }));
+      join(ctx);
+
+      await ctx.service.claim(PLAYER, "channel_daily", NOON);
+      await ctx.service.claim(PLAYER, "channel_daily", new Date(NOON.getTime() + DAY));
+
+      expect(ctx.watch.started.map((started) => [started.taskId, started.periodStart])).toEqual([
+        ["channel_daily", "2026-09-30"],
+        ["channel_daily", "2026-10-01"],
+      ]);
+    });
+
+    it("не подписан или площадка не ответила — награды нет и окна нет", async () => {
+      const ctx = withChannel();
+
+      await expect(ctx.service.claim(PLAYER, "ach_channel", NOON)).rejects.toBeInstanceOf(TaskNotJoinedError);
+      join(ctx);
+      ctx.membership.failure = new MembershipUnavailableError("timeout");
+      await expect(ctx.service.claim(PLAYER, "ach_channel", NOON)).rejects.toBeInstanceOf(TaskCheckUnavailableError);
+
+      expect(ctx.watch.started).toEqual([]);
+    });
+
+    it("цель забега, ссылка и бот окна не ставят: проверить их нечем", async () => {
+      const ctx = setup();
+      ctx.repository.defs.push(
+        def("ach_partner_site", { period: "achievement", kind: "link", params: { url: "https://example.com/partner" }, target: 1, coins: 50, sort: 95 }),
+        def("ach_partner_bot", { period: "achievement", kind: "bot", params: { platform: "telegram", url: "https://t.me/partner_bot?start=rubezh" }, target: 1, coins: 50, sort: 96 }),
+      );
+      for (let index = 0; index < 3; index++) await ctx.hooks.emit(run());
+      await ctx.service.open(PLAYER, "ach_partner_site", NOON);
+      await ctx.service.open(PLAYER, "ach_partner_bot", NOON);
+
+      for (const taskId of ["daily_runs", "ach_partner_site", "ach_partner_bot"]) expect(await ctx.service.claim(PLAYER, taskId, NOON)).toMatchObject({ claimed: true });
+
+      expect(ctx.watch.started).toEqual([]);
+    });
+
+    it("сбой постановки окна награду не отменяет: она выдана и отмечена, в лог — `channel_watch_not_started`", async () => {
+      const ctx = withChannel();
+      join(ctx);
+      const errors: Record<string, unknown>[] = [];
+      vi.spyOn(Logger.prototype, "error").mockImplementation((message: unknown) => void errors.push(JSON.parse(String(message)) as Record<string, unknown>));
+      ctx.watch.failure = new Error("база недоступна");
+
+      const result = await ctx.service.claim(PLAYER, "ach_channel", NOON);
+
+      expect(result).toMatchObject({ claimed: true, credited: { gems: 15 } });
+      expect(byId(result.tasks, "ach_channel")).toMatchObject({ done: true, claimed: true });
+      expect(ctx.wallet.grants).toHaveLength(1);
+      expect(errors).toEqual([expect.objectContaining({ module: "tasks", event: "channel_watch_not_started", accountId: ME, taskId: "ach_channel", reason: "база недоступна" })]);
+      // повтор награду не удваивает и окно не ставит: ставит только запрос, выдавший награду
+      expect(await ctx.service.claim(PLAYER, "ach_channel", NOON)).toMatchObject({ claimed: false });
+      expect(ctx.watch.started).toEqual([]);
+    });
+
+    it("состав без службы окон (старая сборка модуля) забирает награду, как прежде", async () => {
+      const ctx = setup({ watch: false });
+      ctx.repository.defs.push(channelTask());
+      join(ctx);
+
+      expect(await ctx.service.claim(PLAYER, "ach_channel", NOON)).toMatchObject({ claimed: true, credited: { gems: 15 } });
+    });
   });
 
   it("забег цель «канал» не двигает, и знак меню её не считает, пока не нажата", async () => {
@@ -1609,5 +1769,64 @@ describe("виды по сигналу клиента в каталоге (T-037
   it("список в панели: главный экран — среди достижений, история — среди недельных", () => {
     expect(taskGroup({ kind: "home_screen", period: "achievement" })).toBe("achievement");
     expect(taskGroup({ kind: "story_share", period: "weekly" })).toBe("weekly");
+  });
+});
+
+describe("заказчик партнёрского задания: модель оплаты, ставка, срок удержания", () => {
+  const sold = (patch: Partial<TaskDef> = {}) => channelTask({ customer: "Канал «Игровой угол»", payModel: "cpa", rate: 40, holdDays: 3, ...patch });
+  const message = (task: TaskDef) => {
+    const result = taskDefSchema.safeParse(task);
+    return result.success ? null : result.error.issues.map((issue) => issue.message).join("; ");
+  };
+
+  it("CPA и RS со ставкой и сроком проходят; без заказчика — задание своё", () => {
+    expect(taskDefSchema.safeParse(sold()).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 1_250, holdDays: 7 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ holdDays: 0 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(channelTask()).success).toBe(true);
+  });
+
+  it("заказчик без модели и модель без заказчика — ошибка; ставка идёт вместе с моделью", () => {
+    expect(taskDefSchema.safeParse(sold({ payModel: null, rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: null })).success).toBe(false);
+    expect(taskDefSchema.safeParse(channelTask({ rate: 40 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "x".repeat(81) })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ customer: "   " })).success).toBe(false);
+  });
+
+  it("ставка: CPA — целые центы до 100 000, RS — сотые доли процента от 1 до 10 000", () => {
+    expect(taskDefSchema.safeParse(sold({ rate: 100_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ rate: 100_001 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 0 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ rate: 1.5 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_000 })).success).toBe(true);
+    expect(taskDefSchema.safeParse(sold({ payModel: "rs", rate: 10_001 })).success).toBe(false);
+  });
+
+  it("срок удержания — 0, 1, 3 или 7; у ссылки и бота — только 0", () => {
+    for (const days of [0, 1, 3, 7]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(true);
+    for (const days of [2, 5, 14, -1]) expect(taskDefSchema.safeParse({ ...sold(), holdDays: days }).success).toBe(false);
+    const link = def("ach_link", { period: "achievement", kind: "link", params: { url: "https://example.com" }, target: 1, coins: 10, customer: "Сайт", payModel: "cpa", rate: 10 });
+    expect(taskDefSchema.safeParse(link).success).toBe(true);
+    expect(message({ ...link, holdDays: 3 })).toContain("Удержание проверяется только у подписки на канал");
+    expect(taskDefSchema.safeParse({ ...link, kind: "bot", holdDays: 1 }).success).toBe(false);
+  });
+
+  it("цель забега с заказчиком или сроком — ошибка", () => {
+    expect(taskDefSchema.safeParse(def("daily_runs", { customer: "Канал", payModel: "cpa", rate: 10 })).success).toBe(false);
+    expect(taskDefSchema.safeParse(def("daily_runs", { holdDays: 1 })).success).toBe(false);
+  });
+
+  it("старое тело без полей — умолчания: задание своё, удержания нет", () => {
+    const old = Object.fromEntries(Object.entries(channelTask()).filter(([key]) => !["customer", "payModel", "rate", "holdDays"].includes(key)));
+    expect(taskDefSchema.parse(old)).toMatchObject({ customer: null, payModel: null, rate: null, holdDays: 0 });
+  });
+
+  it("игрок полей заказчика не получает", async () => {
+    const ctx = setup();
+    ctx.repository.defs.push(sold({ taskId: "ach_sold" }));
+    const view = byId(await ctx.service.view(PLAYER, NOON), "ach_sold");
+    for (const field of ["customer", "payModel", "rate", "holdDays"]) expect(view).not.toHaveProperty(field);
   });
 });

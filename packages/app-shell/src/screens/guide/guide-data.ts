@@ -166,6 +166,15 @@ export function enemyAttackElement(def: EnemyDef): StatusElement | null {
   return def.element ?? null;
 }
 
+/**
+ * Ключ строки про лужи на карточке врага со следом (`trail`): по стихии его атаки, без
+ * стихии — общий. У врага без следа — `null`. Строку получает любой враг со следом, без
+ * правки гайдбука под каждого.
+ */
+export function enemyTrailKey(def: EnemyDef): string | null {
+  return def.trail === undefined ? null : `guide.enemy.trail.${def.element ?? "physical"}`;
+}
+
 /** Какие стихии берут врага хуже (`strong`) и какие лучше (`weak`) — в порядке перечня. */
 export function enemyResists(def: EnemyDef): { strong: StatusElement[]; weak: StatusElement[] } {
   const strong: StatusElement[] = [];

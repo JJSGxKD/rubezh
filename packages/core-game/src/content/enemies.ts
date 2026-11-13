@@ -48,6 +48,10 @@ export const ENEMIES: EnemyDef[] = [
   // одного залпа (Р166). Угроза в бюджет потока не входит: страж приходит
   // только кольцом, мимо директора.
   { id: "cordon_guard", hp: 600, speed: 34, damage: 6, xp: 3, threat: 8, pattern: "cordon" },
+  // Карачун (Р205): убить нельзя, числа тела — в `content/stalker.ts`. hp и damage движок не читает,
+  // xp ноль: добычи с него нет. В таймлайн и в поток его не вносят — выпускает директор преследователя
+  // (T-0423).
+  { id: "karachun", hp: 1, speed: 150, damage: 0, xp: 0, pattern: "stalker" },
   // Волк морозит: замедление после рывка — вторая причина от него уходить.
   { id: "dasher_wolf", hp: 14, speed: 60, damage: 7, xp: 3, threat: 3, pattern: "dash", resist: { cold: 0.4, fire: -0.25 }, element: "cold" },
   // Вороны берут числом и теснотой кольца: приходят стаей, заходят широко и
@@ -63,6 +67,41 @@ export const ENEMIES: EnemyDef[] = [
     threat: 3,
     pattern: "orbit",
     params: { orbitRadius: 220, shrinkPerSec: 34, minRadius: 0 },
+  },
+  // Ледяной дух: ворон наоборот — медленнее, крепче, кольцо шире и сужается
+  // мягко, а каждое второе-третье касание морозит. Стойкость к холоду парная
+  // (docs/32-balance.md §2.5): огонь бьёт его в полтора раза сильнее. Опыт и
+  // угроза подобраны калибровкой сильного бота: коридоры лесенки узкие
+  // (docs/32-balance.md §2.2).
+  {
+    id: "ice_spirit",
+    hp: 22,
+    speed: 90,
+    damage: 6,
+    xp: 2,
+    threat: 3.8,
+    pattern: "orbit",
+    element: "cold",
+    statusChance: 0.35,
+    resist: { cold: 0.5, fire: -0.5 },
+    params: { orbitRadius: 150, shrinkPerSec: 10 },
+  },
+  // Болотник: медленный преследователь, который зонирует поле. За ним остаются
+  // лужи яда (`trail`): стоять в них больно, поэтому приходится двигаться и
+  // выбирать путь. Стойкость к яду парная: огонь выжигает болото (Р157,
+  // docs/32-balance.md §2.5). Числа стартовые, калибрует геймдизайнер.
+  {
+    id: "bog_lurker",
+    hp: 40,
+    speed: 34,
+    damage: 8,
+    xp: 6,
+    threat: 3.75,
+    pattern: "chase",
+    element: "poison",
+    statusChance: 0.5,
+    resist: { poison: 0.6, fire: -0.4 },
+    trail: { everySec: 1.5, radius: 26, lifeSec: 4, damagePerSec: 5 },
   },
   { id: "bomber_imp", hp: 10, speed: 80, damage: 18, xp: 4, threat: 4, pattern: "exploder", resist: { fire: 0.7, cold: -0.3 }, element: "fire" },
   // Нетопыри не преследуют вовсе: берут упреждение, проносятся мимо насквозь

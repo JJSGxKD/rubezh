@@ -3,8 +3,8 @@ id: T-0415
 title: Ядро Xray сообщает свою версию, диапазон совместимости — в proxy-kit
 epic: E13
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0387]

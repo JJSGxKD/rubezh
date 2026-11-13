@@ -6,6 +6,7 @@ import { createBadgesApi, loadBadges } from "../src/state/badges-api";
 import { useItems } from "../src/state/items";
 import { createItemsApi, markItemsSeen, type InventoryView, type ItemView } from "../src/state/items-api";
 import { createNotificationsApi, formatWhen, loadFeed, markRead } from "../src/state/notifications-api";
+import { Gem, Undo2 } from "lucide-react";
 import { describeNotification } from "../src/screens/meta/notifications";
 import { t } from "../src/i18n";
 import "../src/i18n/history";
@@ -187,6 +188,24 @@ describe("напоминания бота в ленте (T-0128)", () => {
   });
 });
 
+describe("заявка на правку цены ждёт команду (T-0309)", () => {
+  const row = (data: Record<string, unknown>) => describeNotification({ id: "n6", kind: "change_request_pending", data, createdAt: "2026-11-13T09:00:00.000Z", read: false });
+
+  it("строка с именем автора, заголовком и без перехода: решается в панели, а не в игре", () => {
+    const described = row({ requestId: "0c4a5c1e-6a57-4d43-8a2a-0f3f6d0a9b10", kind: "sku_price", target: "gems_60", authorName: "Аня" });
+
+    expect(described?.title).toBe("Заявка на правку цены");
+    expect(described?.text).toBe("Аня предлагает поменять цену в магазине. Решить заявку можно в панели: «Баланс» → «Цены и награды».");
+    expect(described?.target).toBeNull();
+    expect(described?.icon).toBeDefined();
+  });
+
+  it("имя не строкой — запасное слово, а не «undefined» в тексте", () => {
+    expect(row({ kind: "sku_price" })?.text).toContain("предлагает поменять цену");
+    expect(row({ kind: "sku_price" })?.text).not.toContain("undefined");
+  });
+});
+
 describe("уведомление об отписке от канала (T-0177)", () => {
   const AT = "2026-10-28T10:00:00.000Z";
   const CLOSED_UNTIL = "2026-11-27T09:00:00.000Z";
@@ -257,5 +276,72 @@ describe("уведомление об отписке от канала (T-0177)"
 
   it("подпись причины в истории игрока — «Списание награды за отписку»", () => {
     expect(t("history.reason.task_revoke")).toBe("Списание награды за отписку");
+  });
+});
+
+describe("извинение команды в ленте: компенсация и возврат звёзд (Р209, T-0436)", () => {
+  /** Оплата в 22:30 UTC 10.11 — по Москве уже 11.11 */
+  const PAID_AT = "2026-11-10T22:30:00.000Z";
+  const row = (data: Record<string, unknown>, kind = "purchase_support") => describeNotification({ id: "n5", kind, data, createdAt: "2026-11-12T09:00:00.000Z", read: false });
+  const compensated = (gems: number, patch: Record<string, unknown> = {}) => ({ action: "compensated", stars: 50, gems, paidAt: PAID_AT, reason: null, revoked: false, ...patch });
+  const refunded = (reason: string, revoked: boolean, patch: Record<string, unknown> = {}) => ({ action: "refunded", stars: 50, gems: 0, paidAt: PAID_AT, reason, revoked, ...patch });
+
+  it("компенсация: заголовок и текст дословно, значок «самоцвет», никуда не ведёт", () => {
+    const described = row(compensated(120));
+
+    expect(described?.title).toBe("Извинение от команды");
+    expect(described?.text).toBe("Прости: с твоей оплатой 50 ⭐ от 11.11 случился сбой на нашей стороне. Начислили 120 самоцветов — они уже на счёте.");
+    expect(described?.target).toBeNull();
+    expect(described?.over).toBeUndefined();
+    expect((described?.icon as { type: unknown }).type).toBe(Gem);
+  });
+
+  it("компенсация: склонение самоцветов по числу", () => {
+    expect(row(compensated(1))?.text).toContain("Начислили 1 самоцвет — они");
+    expect(row(compensated(3))?.text).toContain("Начислили 3 самоцвета — они");
+    expect(row(compensated(12))?.text).toContain("Начислили 12 самоцветов — они");
+    expect(row(compensated(22))?.text).toContain("Начислили 22 самоцвета — они");
+  });
+
+  it("возврат поддержкой: заголовок «Звёзды вернулись», текст дословно, значок «вернуть», никуда не ведёт", () => {
+    const described = row(refunded("manual", false));
+
+    expect(described?.title).toBe("Звёзды вернулись");
+    expect(described?.text).toBe("Вернули 50 ⭐ за покупку от 11.11 по решению поддержки. Звёзды уже на твоём счёте.");
+    expect(described?.target).toBeNull();
+    expect((described?.icon as { type: unknown }).type).toBe(Undo2);
+  });
+
+  it("возврат, товара нет: текст с извинением", () => {
+    expect(row(refunded("undeliverable", false))?.text).toBe("Вернули 50 ⭐ за покупку от 11.11: этого товара больше нет в магазине. Прости за неудобство — звёзды уже на твоём счёте.");
+  });
+
+  it("забран остаток покупки — фраза дописана через пробел, у обеих причин", () => {
+    expect(row(refunded("manual", true))?.text).toBe("Вернули 50 ⭐ за покупку от 11.11 по решению поддержки. Звёзды уже на твоём счёте. Остаток покупки списан со счёта в игре.");
+    expect(row(refunded("undeliverable", true))?.text).toBe(
+      "Вернули 50 ⭐ за покупку от 11.11: этого товара больше нет в магазине. Прости за неудобство — звёзды уже на твоём счёте. Остаток покупки списан со счёта в игре.",
+    );
+  });
+
+  it("дата — день и месяц по Москве, а не по поясу устройства", () => {
+    expect(row(compensated(5, { paidAt: "2026-11-10T22:30:00.000Z" }))?.text).toContain("от 11.11 случился");
+    expect(row(compensated(5, { paidAt: "2026-12-31T21:00:00.000Z" }))?.text).toContain("от 01.01 случился");
+    expect(row(compensated(5, { paidAt: "2026-11-11T20:59:00.000Z" }))?.text).toContain("от 11.11 случился");
+  });
+
+  it("битые данные — строки нет, а не «undefined» в тексте и не падение ленты", () => {
+    expect(row({})).toBeNull();
+    expect(row(compensated(5, { action: "gifted" }))).toBeNull();
+    expect(row(compensated(5, { action: undefined }))).toBeNull();
+    expect(row(compensated(5, { stars: "50" }))).toBeNull();
+    expect(row(compensated(5, { stars: -5 }))).toBeNull();
+    expect(row(compensated(5, { stars: Number.NaN }))).toBeNull();
+    expect(row(compensated(5, { gems: null }))).toBeNull();
+    expect(row(compensated(5, { gems: 0 }))).toBeNull();
+    expect(row(compensated(5, { paidAt: "вчера" }))).toBeNull();
+    expect(row(compensated(5, { paidAt: 12 }))).toBeNull();
+    expect(row(refunded("external", false))).toBeNull();
+    expect(row(refunded("manual", false, { stars: undefined }))).toBeNull();
+    expect(() => row({ action: 5, stars: {}, gems: [], paidAt: null })).not.toThrow();
   });
 });

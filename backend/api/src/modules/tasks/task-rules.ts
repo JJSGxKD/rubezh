@@ -59,8 +59,12 @@ export const RUN_FILTER_KEYS = {
 export const ACHIEVEMENT_CATEGORIES = ["combat", "collection", "mastery", "friends"] as const;
 export type AchievementCategory = (typeof ACHIEVEMENT_CATEGORIES)[number];
 
-/** Поля достижения у обычного задания: категории, лестницы и престижа у него нет. */
-export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0 } as const;
+/**
+ * Пустые необязательные поля обычного задания: категории, лестницы и престижа
+ * у него нет, и заказчика с моделью оплаты (Р138) — тоже, поэтому их пустые
+ * значения лежат здесь же: так литералы определений в тестах не множатся.
+ */
+export const NO_ACHIEVEMENT_FIELDS = { category: null, ladder: null, rung: null, hidden: false, hint: null, prestige: 0, customer: null, payModel: null, rate: null, holdDays: 0 } as const;
 
 /** Потолок очков престижа одного достижения — от опечатки в панели. */
 export const PRESTIGE_MAX = 10_000;
@@ -102,6 +106,7 @@ export const WEAPON_EVOLUTIONS = {
   starfall: "spark",
   tempest: "storm",
   blade_whirl: "knife",
+  whirl: "flail",
   frost_crown: "wardstone",
   forge: "hearth",
   viper: "sting",
@@ -262,11 +267,34 @@ export const taskParamsSchema = z
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 
-/** Видна ли цель игроку этой площадки: цель без площадок — всем. */
-export function visibleOn(params: TaskParams | null, platform: PlatformId): boolean {
+/** Нет подключённых площадок: каналы чужих площадок не видны (поведение до связи аккаунтов, Р188). */
+export const NO_LINKABLE: ReadonlySet<PlatformId> = new Set();
+
+/**
+ * Видна ли цель игроку этой площадки: цель без площадок — всем.
+ *
+ * Канал другой площадки (Р188, T-0377) виден, только если площадка в `linkable`:
+ * у неё есть и проверка подписки, и бот, через который игрок свяжет аккаунты.
+ * Каналом считается цель с `chat` — схема каталога даёт `chat` только подписке на
+ * канал; площадка у ссылки и бота по-прежнему значит «где видна».
+ */
+export function visibleOn(params: TaskParams | null, platform: PlatformId, linkable: ReadonlySet<PlatformId> = NO_LINKABLE): boolean {
   if (params === null) return true;
   if (params.platforms !== undefined) return params.platforms.includes(platform);
-  return params.platform === undefined || params.platform === platform;
+  if (params.platform === undefined || params.platform === platform) return true;
+  return params.chat !== undefined && linkable.has(params.platform);
+}
+
+/**
+ * Как игрок проверяется в канале: `own` — канал его площадки, спрашиваем по его
+ * id; `external` — канал другой площадки, нужна связь аккаунтов и кнопка бота.
+ * У остальных целей способа нет.
+ */
+export type ChannelLinkMode = "own" | "external";
+
+export function channelLinkMode(def: Pick<TaskDef, "kind" | "params">, platform: PlatformId): ChannelLinkMode | null {
+  if (def.kind !== "channel" || def.params?.platform === undefined) return null;
+  return def.params.platform === platform ? "own" : "external";
 }
 
 export type TaskRun = Pick<RecordedRun, "difficulty" | "mode" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "weapons" | "boosts" | "xpCollected" | "counters">;
@@ -296,6 +324,16 @@ export const TASK_LIMIT_RANGE = { min: 1, max: 1_000_000 } as const;
  * перехода, а переход после исчерпания час не продлевает.
  */
 export const TASK_LIMIT_GRACE_MIN = 60;
+
+/** Модели оплаты заказчику (Р138): за выполнение или доля дохода. */
+export const PAY_MODELS = ["cpa", "rs"] as const;
+export type PayModel = (typeof PAY_MODELS)[number];
+
+/** Ставка: у CPA — центы доллара за выполнение, у RS — сотые доли процента (1 250 — 12,5%). */
+export const PAY_RATE_MAX = { cpa: 100_000, rs: 10_000 } as const satisfies Record<PayModel, number>;
+
+/** Сколько суток удержания может требовать заказчик; 0 — сразу. */
+export const HOLD_DAYS = [0, 1, 3, 7] as const;
 
 /** Идентификатор задания: латиница в нижнем регистре, цифры и подчёркивание, с буквы, до 48 знаков. */
 const TASK_ID = /^[a-z][a-z0-9_]{1,47}$/;
@@ -330,6 +368,14 @@ export const taskDefSchema = z
     limit: z.number().int().min(TASK_LIMIT_RANGE.min).max(TASK_LIMIT_RANGE.max).nullable().default(null),
     /** картинка 1:1 партнёрской цели (Р82) — id из `media`; `null` — значок вида, и панель до картинок поля не слала */
     image: z.string().regex(IMAGE_ID).nullable().default(null),
+    /** заказчик партнёрской цели (Р138); `null` — задание своё, и панель до заказчиков поля не слала */
+    customer: z.string().trim().min(1).max(80).nullable().default(null),
+    /** модель оплаты — вместе с заказчиком */
+    payModel: z.enum(PAY_MODELS).nullable().default(null),
+    /** ставка: центы у `cpa`, сотые доли процента у `rs` — вместе с моделью */
+    rate: z.number().int().min(1).max(PAY_RATE_MAX.cpa).nullable().default(null),
+    /** после скольких суток удержания выполнение оплачивается; 0 — сразу */
+    holdDays: z.union([z.literal(0), z.literal(1), z.literal(3), z.literal(7)]).default(0),
     /** категория достижения; `null` — не достижение, и панель до престижа поля не слала */
     category: z.enum(ACHIEVEMENT_CATEGORIES).nullable().default(null),
     /** лестница: достижения с общим `ladder` идут ступенями `rung` с единицы */
@@ -349,6 +395,15 @@ export const taskDefSchema = z
   .refine((task) => task.limit === null || isCheckedKind(task.kind), { message: "лимит выполнений — только у партнёрской цели", path: ["limit"] })
   // У цели забега рядом с текстом — её прогресс, картинку туда не ставим.
   .refine((task) => task.image === null || isCheckedKind(task.kind), { message: "картинка — только у партнёрской цели", path: ["image"] })
+  // Продаётся действие вне игры: у цели забега заказчика и удержания нет.
+  .refine((task) => isCheckedKind(task.kind) || (task.customer === null && task.holdDays === 0), { message: "заказчик и удержание — только у партнёрской цели", path: ["customer"] })
+  .refine((task) => (task.customer === null) === (task.payModel === null), { message: "заказчик и модель оплаты задаются вместе", path: ["payModel"] })
+  .refine((task) => (task.payModel === null) === (task.rate === null), { message: "ставка и модель оплаты задаются вместе", path: ["rate"] })
+  .refine((task) => task.payModel === null || task.rate === null || task.rate <= PAY_RATE_MAX[task.payModel], {
+    message: "ставка выше предела: у CPA — до 100 000 центов, у RS — до 10 000 (100%)",
+    path: ["rate"],
+  })
+  .refine((task) => task.kind === "channel" || task.holdDays === 0, { message: "Удержание проверяется только у подписки на канал", path: ["holdDays"] })
   .refine((task) => isCheckedKind(task.kind) === (task.params !== null), { message: "ссылка — у партнёрской цели, и только у неё", path: ["params"] })
   .refine((task) => task.kind !== "channel" || (task.params?.platform !== undefined && task.params.chat !== undefined), {
     message: "у подписки на канал нужны площадка и канал — по ним спрашивает бот",

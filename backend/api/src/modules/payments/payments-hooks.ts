@@ -1,4 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
+import type { PlatformId } from "../../platforms/ports/platform.js";
+import type { DiscrepancyKind } from "./payment-reconcile.js";
 import type { PaymentMode, PurchaseAction, PurchaseProduct, StoredPurchase } from "./purchase-types.js";
 
 /**
@@ -83,6 +85,34 @@ export interface SupportAction {
   actorName: string;
   note: string;
   at: Date;
+  /** самоцветы компенсации (Р209) — только у `compensate` */
+  gems?: number;
+  /** что именно сделано — строкой для сообщения команде, например «повторено заданий: 2» (Р209) */
+  detail?: string;
+}
+
+/**
+ * Звёзды вернулись по нашему заказу (Р209): покупка уже отмечена возвращённой, остаток —
+ * забран, если был. Приходит один раз на покупку, при первой отметке возврата.
+ */
+export interface RefundDone {
+  purchase: StoredPurchase;
+  /** отзыв остатка покупки что-то вернул в счёт — только у возврата поддержкой */
+  revoked: boolean;
+  at: Date;
+}
+
+/**
+ * Сверка с выпиской площадки нашла новые расхождения (Р209, tasks/T-0433): одно
+ * событие на сверку площадки. `found` — сколько новых, `kinds` — их по видам (только
+ * ненулевые), `open` — сколько открытых расхождений площадки после сверки.
+ */
+export interface ReconcileFound {
+  platform: PlatformId;
+  found: number;
+  open: number;
+  kinds: Partial<Record<DiscrepancyKind, number>>;
+  at: Date;
 }
 
 export type StuckListener = (purchase: StuckPurchase) => Promise<void>;
@@ -92,6 +122,8 @@ export type ExternalRefundListener = (refund: ExternalRefund) => Promise<void>;
 export type PaidListener = (purchase: PaidPurchase) => Promise<void>;
 export type SubscriptionListener = (change: SubscriptionChange) => Promise<void>;
 export type SupportListener = (action: SupportAction) => Promise<void>;
+export type RefundDoneListener = (event: RefundDone) => Promise<void>;
+export type ReconcileFoundListener = (event: ReconcileFound) => Promise<void>;
 
 @Injectable()
 export class PaymentsHooks {
@@ -102,6 +134,8 @@ export class PaymentsHooks {
   private readonly abandoned: { name: string; listener: AbandonedListener }[] = [];
   private readonly externalRefunds: { name: string; listener: ExternalRefundListener }[] = [];
   private readonly support: { name: string; listener: SupportListener }[] = [];
+  private readonly refundDone: { name: string; listener: RefundDoneListener }[] = [];
+  private readonly reconcileFound: { name: string; listener: ReconcileFoundListener }[] = [];
 
   onPaid(name: string, listener: PaidListener): void {
     this.paid.push({ name, listener });
@@ -127,6 +161,14 @@ export class PaymentsHooks {
     this.support.push({ name, listener });
   }
 
+  onRefundDone(name: string, listener: RefundDoneListener): void {
+    this.refundDone.push({ name, listener });
+  }
+
+  onReconcileFound(name: string, listener: ReconcileFoundListener): void {
+    this.reconcileFound.push({ name, listener });
+  }
+
   /** После записи оплаты; упавший слушатель не отменяет ни её, ни остальных. */
   emitPaid(purchase: PaidPurchase): Promise<void> {
     return this.emit(this.paid, purchase, { purchaseId: purchase.purchaseId });
@@ -150,6 +192,16 @@ export class PaymentsHooks {
   /** Поддержка вернула звёзды или повторила выдачу: действие уже выполнено и записано. Упавший слушатель не мешает остальным. */
   emitSupport(action: SupportAction): Promise<void> {
     return this.emit(this.support, action, { purchaseId: action.purchase.purchaseId });
+  }
+
+  /** Звёзды вернулись по нашему заказу (Р209), впервые. Упавший слушатель не мешает остальным. */
+  emitRefundDone(event: RefundDone): Promise<void> {
+    return this.emit(this.refundDone, event, { purchaseId: event.purchase.purchaseId });
+  }
+
+  /** Сверка нашла новые расхождения (Р209): уже записаны. Упавший слушатель не мешает остальным и самой сверке. */
+  emitReconcileFound(event: ReconcileFound): Promise<void> {
+    return this.emit(this.reconcileFound, event, { platform: event.platform });
   }
 
   emitSubscriptionChanged(change: SubscriptionChange): Promise<void> {

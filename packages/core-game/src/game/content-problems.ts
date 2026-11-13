@@ -18,6 +18,8 @@ import { findDropsContentProblems } from "./sim/gems";
 import { findMapContentProblems } from "./sim/map-types";
 import { MAX_PICKUPS } from "./sim/pickups";
 import { findStageProblems } from "./sim/stages";
+import { findStalkerMapProblems } from "./sim/stalker";
+import { findStalkerProblems } from "./sim/stalker-body";
 import { findTimelineProblems } from "./sim/timeline-content";
 import { findWeaponContentProblems } from "./weapons";
 
@@ -84,6 +86,8 @@ export function findContentProblems(content: ContentSnapshot): ContentProblem[] 
   add("cardToolUnlocks", findCardToolProblems(content.cardToolUnlocks));
   add("pressure", findPressureProblems(content.pressure));
   add("siege", findSiegeProblems(content.siege, content.enemies));
+  add("stalker", findStalkerProblems(content.stalker, content.enemies, { maxAccountLevel: Math.max(...content.accountUnlocks.map((entry) => entry.level)) }));
+  add("stalker", findStalkerMapProblems(content.stalker, content.maps));
   return problems;
 }
 

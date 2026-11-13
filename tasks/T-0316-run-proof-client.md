@@ -3,8 +3,8 @@ id: T-0316
 title: Запись для проверки у каждого забега — лог ввода, выборы и контрольные суммы сквозь продолжение из снимка; отправка на сервер очередью
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0317]
@@ -20,9 +20,16 @@ shared:
   - packages/core-game/src/game/diagnostics/input-log.ts
   - packages/core-game/src/game/diagnostics/replay.ts
   - packages/core-game/src/game/run/snapshot.ts
+  - packages/core-game/src/game/MainScene.ts
+  - packages/core-game/src/engine/run-probe.ts
   - packages/core-game/test/**
   - packages/app-shell/src/state/runs.ts
   - packages/app-shell/src/state/run.ts
+  - packages/app-shell/src/state/run-save.ts
+  - packages/app-shell/test/run-save.test.ts
+  - packages/app-shell/test/runs.test.ts
+  - packages/app-shell/test/run-outcome.test.ts
+  - scripts/test/run-proof-schema.test.ts
   - docs/28-diagnostics.md
 runner: any
 executor: sonnet-5.5
@@ -162,10 +169,10 @@ batch: 8
 
 ## Критерии приёмки
 
-- [ ] У каждого забега — запись для проверки; продолженный из снимка повторяется целиком.
-- [ ] Запись не влияет на мир; сжата, до 64 КБ.
-- [ ] Отправка очередью после записи забега, без ожидания игрока.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] У каждого забега — запись для проверки; продолженный из снимка повторяется целиком.
+- [x] Запись не влияет на мир; сжата, до 64 КБ.
+- [x] Отправка очередью после записи забега, без ожидания игрока.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

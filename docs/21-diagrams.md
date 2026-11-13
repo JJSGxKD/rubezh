@@ -53,6 +53,15 @@ erDiagram
     }
 
     ACCOUNT ||--o{ ACCOUNT_ROLE : "имеет"
+    ACCOUNT ||--o{ STAKEHOLDER_SHARE : "доли участника проекта: по строке на месяц начала (Р217)"
+    ACCOUNT ||--o{ STAKEHOLDER_SHARE : "назначил долю: владелец"
+    LEDGER_ACCOUNT ||--o{ LEDGER_LINE : "строки проводок по счёту (Р219)"
+    LEDGER_ARTICLE ||--o{ LEDGER_ACCOUNT : "счета статьи по валютам: заводятся при первой проводке (Р220)"
+    LEDGER_ENTRY ||--|{ LEDGER_LINE : "строки проводки: в каждой валюте сумма — ноль"
+    LEDGER_ENTRY |o--o| LEDGER_ENTRY : "сторно: ссылка на исходную, у исходной — не больше одного"
+    LEDGER_OPERATION |o..o| LEDGER_ENTRY : "проведённая операция — проводка op:<id> по ключу источника, без внешнего ключа (Р220)"
+    LEDGER_OPERATION ||--o| LEDGER_LOAN : "заём: условия появляются вместе с проводкой"
+    LEDGER_ACCOUNT ||--o{ LEDGER_LOAN : "счёт-обязательство займа: у займов одного кредитора в одной валюте общий"
     ACCOUNT ||--o{ RUN : "играет"
     ACCOUNT ||--o{ PURCHASE : "оплачивает"
     RUN |o--o{ PURCHASE : "продолжен за; вайп обнуляет ссылку"
@@ -116,6 +125,7 @@ erDiagram
     PURCHASE ||--o| VIP_SUBSCRIPTION : "первая покупка — id подписки"
     VIP_SUBSCRIPTION ||--o{ VIP_PERIOD : "оплаченные периоды"
     PURCHASE ||--o| VIP_PERIOD : "период за оплату"
+    PURCHASE ||--o| PURCHASE_COMPENSATION : "компенсация за сбой оплаты — одна на покупку (Р209)"
     ACCOUNT ||--o| VIP_DAILY : "самоцветы VIP дня"
     ACCOUNT ||--o{ SHOWCASE_OFFER : "витрина снаряжения на сутки"
     ACCOUNT ||--o| TESTER_COMPENSATION : "что вернуть тестеру после вайпа"
@@ -130,6 +140,10 @@ erDiagram
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
+    CONTENT_VERSION ||--o{ CONTENT_DRAFT : "черновик правит копию снимка версии-основы"
+    CONTENT_DRAFT ||--o{ CONTENT_CHECK : "проверки черновика в sim-worker"
+    ACCOUNT ||--o{ TASK_CHANNEL_WATCH : "окна перепроверки подписки после награды"
+    TASK_DEF ||--o{ TASK_CHANNEL_WATCH : "задание, чья награда под наблюдением"
     PROMO_CAMPAIGN ||--|{ PROMO_CODE : "общий код или пачка"
     PROMO_CAMPAIGN ||--o{ PROMO_REDEMPTION : "активации"
     ACCOUNT ||--o{ PROMO_REDEMPTION : "активировал промокод"
@@ -143,6 +157,7 @@ erDiagram
     ACCOUNT ||--o{ ACCOUNT_RESTRICTION : "ограничения игрока"
     ACCOUNT |o--o{ ACCOUNT_RESTRICTION : "наложил и снял — команда"
     ACCOUNT ||--o{ BOT_MENTION_TASK : "задания «юзернейм бота»: имя и bio"
+    ACCOUNT ||--o{ EXTERNAL_IDENTITY : "связь с аккаунтом MAX или VK для заданий «подпишись через бота»"
 
     RUN {
         string run_id PK "ключ идемпотентности от клиента"
@@ -173,6 +188,9 @@ erDiagram
         string style "nullable: ключ сильнейшей оси: t, k, h, c или b"
         string band "nullable: полоса силы ожидаемого: novice…full"
         jsonb score_input "nullable: сила на старте, журнал охоты, оценка сборки — для runs:rescore"
+        string review_outcome "nullable: honest|annulled — решение разбора (Р203)"
+        datetime reviewed_at "nullable"
+        uuid reviewed_by "nullable: кто решил, без FK"
     }
 
     ACCOUNT_SESSION {
@@ -355,7 +373,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, app_update, task_unsubscribed"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -439,6 +457,8 @@ erDiagram
         enum status "pending|paid|refunded"
         string telegram_charge_id UK "nullable: id оплаты в Telegram"
         datetime invoiced_at "когда выставлен последний счёт"
+        datetime checkout_at "nullable: последняя предварительная проверка (Р209)"
+        string checkout_refusal "nullable: отказ этой проверки"
         datetime paid_at "nullable: продолжение выдано"
         enum refund_reason "nullable: test_mode|unused|external|undeliverable|manual"
         datetime refund_requested_at "nullable"
@@ -703,6 +723,10 @@ erDiagram
         boolean hidden "скрытое, пока не выполнено; нужна подсказка hint (CHECK)"
         string hint "nullable, до 120 знаков: что видит игрок у закрытого скрытого"
         int prestige "очки престижа за выполненное достижение; у daily и weekly — ноль (CHECK)"
+        string customer "nullable, до 80 знаков: кто платит за партнёрское задание (Р138); null — задание своё; только у партнёрской цели (CHECK)"
+        string pay_model "nullable: cpa — за выполнение, rs — доля дохода; null вместе с customer (CHECK)"
+        int rate "nullable: у cpa — центы доллара за выполнение, 1–100 000; у rs — сотые доли процента, 1–10 000; вместе с pay_model (CHECK)"
+        smallint hold_days "0, 1, 3 или 7: после скольких суток удержания выполнение оплачивается; 0 — сразу; не ноль только у подписки на канал (схема)"
         int sort
         boolean active
         datetime created_at
@@ -784,7 +808,7 @@ erDiagram
     }
 
     AD_NETWORK {
-        string network_key PK "adsgram, adsonar, richads, taddy"
+        string network_key PK "adsgram, richads, taddy"
         string name
         boolean active "из миграции — выключены"
         int priority "меньше — раньше в круге"
@@ -1038,6 +1062,10 @@ erDiagram
         bigint traffic_used_bytes "nullable"
         bigint traffic_total_bytes "nullable"
         datetime expires_at "nullable"
+        string routing_source "nullable: none, json, header или json+header (CHECK); null — не обновлялась после T-0385"
+        int routing_direct "nullable: записей мимо туннеля; null — заголовок есть, состав не разобран"
+        int routing_block "nullable: записей, которые блокируются"
+        string[] routing_hints "geosite:/geoip: из записей мимо туннеля, до восьми"
         uuid updated_by "без внешнего ключа"
         datetime updated_at
         datetime created_at "когда подключена: порядок карточек в панели"
@@ -1056,6 +1084,9 @@ erDiagram
         int latency_ms "nullable"
         datetime last_probe_at "nullable"
         datetime next_probe_at
+        string network "nullable: tcp, ws, grpc, httpupgrade или xhttp (CHECK); null — узел записан до T-0385"
+        string security "nullable: none, tls или reality (CHECK)"
+        string flow "nullable: flow VLESS"
     }
 
     PROXY_SUBSCRIPTION ||--o{ PROXY_SUBSCRIPTION_NODE : "узлы подписки"
@@ -1232,12 +1263,228 @@ erDiagram
         int count "подарки, не меньше нуля (CHECK); тратит включение буста на забег (T-0312)"
     }
 
+    CONTENT_VERSION {
+        serial version_no PK "растёт без дыр: повторный импорт того же хэша номер не тратит"
+        string content_hash UK "hashSnapshot движка (8 знаков) — тот же, что игра пишет в итог забега (Р16)"
+        smallint schema_version "версия формы снимка; клиент берёт последнюю, которую понимает"
+        jsonb snapshot "весь контент забега; jsonb переставляет ключи, хэш считает не сервер"
+        jsonb json_schema "JSON Schema снимка: ею проверяется форма правки"
+        jsonb names "тексты nameKey и descriptionKey для панели"
+        string source "repo или panel (CHECK)"
+        uuid created_by "без FK; null — завёл выкат"
+        datetime created_at
+        datetime published_at "null — не публиковалась; публикация — T-0306"
+    }
+
+    CONTENT_DRAFT {
+        uuid draft_id PK
+        int base_version_no FK "RESTRICT: версию-основу не удалить, пока на ней есть черновик"
+        string title "до 80 знаков"
+        jsonb snapshot "копия снимка версии; правится по пути под блокировкой строки"
+        uuid author "без FK"
+        datetime updated_at
+        datetime archived_at "архив: из списка уходит, строка остаётся"
+    }
+
+    CONTENT_CHECK {
+        uuid check_id PK "он же id задания BullMQ в очереди content-check"
+        uuid draft_id FK "RESTRICT"
+        string snapshot_hash "sha256 канонического JSON снимка, который проверяли"
+        string status "queued, done, failed, timeout (CHECK)"
+        jsonb report "итог sim-worker как есть или { error }"
+        datetime created_at "частичный UNIQUE (draft_id, snapshot_hash) где status не failed"
+    }
+
+    TASK_CHANNEL_WATCH {
+        uuid account_id PK,FK "каскадом"
+        string task_id PK,FK "задание-подписка на канал"
+        date period_start PK "срок награды — как в TASK_PROGRESS"
+        datetime started_at "забор награды"
+        datetime watch_until "started_at + 7 суток (Р115)"
+        datetime next_check_at "частичный индекс только по state = watching"
+        datetime checked_at "nullable: последняя проверка с ответом площадки"
+        string state "watching, kept, expired, penalized (CHECK)"
+        int event_no "nullable: номер события отписки пары; только у penalized (CHECK)"
+        datetime penalized_at "nullable: момент штрафа; вместе с event_no"
+        json revoked "nullable: списано по ресурсам coins, gems, shards"
+        boolean held_d1 "nullable: был в канале на 1-й день (Р139); null — не известно"
+        boolean held_d3 "nullable: то же на 3-й день"
+        boolean held_d7 "nullable: то же на 7-й день"
+    }
+
     ACTIVITY_DAILY {
         string day PK "закрытые сутки по Москве «2026-10-01»; без внешних ключей: строка — факт истории"
         int dau "разных аккаунтов с запуском игры в этих сутках"
         int wau "то же за 7 суток, заканчивающихся ими включительно"
         int mau "то же за 30 суток"
         datetime computed_at "когда ночное задание записало строку (T-0203)"
+    }
+
+    EXTERNAL_IDENTITY {
+        uuid account_id PK,FK "каскадом: аккаунт уносит свои связи"
+        enum platform PK "max или vk (CHECK): у аккаунта на площадке одна связь"
+        string external_user_id "UNIQUE вместе с platform: один id площадки — один аккаунт; в аналитику не пишется"
+        datetime linked_at
+    }
+
+    PROXY_TRAFFIC_HOUR {
+        datetime hour PK "начало часа по UTC (CHECK): корзина, в которую прибавляются байты чтения Xray"
+        string subscription_key PK "ключ подписки, БЕЗ внешнего ключа: отчёт соединяется с живыми подписками"
+        string node_key PK "16 hex от параметров узла"
+        string node_name "название на последнем чтении: узел мог уйти из подписки"
+        bigint up_bytes "отдано: от нас к узлу (uplink); не меньше 0 (CHECK)"
+        bigint down_bytes "получено: от узла к нам (downlink); не меньше 0 (CHECK)"
+    }
+
+    PURCHASE_COMPENSATION {
+        uuid purchase_id PK,FK "Restrict: одна компенсация на покупку — первичным ключом"
+        uuid account_id "кому начислено; без внешнего ключа: запись денег переживает аккаунт"
+        string resource "пока только gems (Р2)"
+        int amount "сколько самоцветов решено начислить"
+        int suggested "nullable: что предложила панель — по разнице видно, правили ли сумму"
+        string note "причина, до 200 знаков"
+        uuid actor_account_id "кто нажал; без внешнего ключа, как в журнале аудита"
+        datetime created_at "когда занята покупка"
+        datetime credited_at "nullable: когда легло в кошелёк; пусто — повтор доначислит ту же сумму"
+    }
+
+    CHANGE_REQUEST {
+        uuid request_id PK
+        string kind "sku_price, reward_setting (CHECK)"
+        string target "id товара или ключ настройки, БЕЗ внешнего ключа: каталог и настройки в коде"
+        jsonb before "значения правимых полей на момент заявки: цель всё ещё равна им — условие применения"
+        jsonb after "что станет: только изменяемые поля"
+        string reason "до 200 знаков, обязательна"
+        uuid author "без FK: заявка переживает аккаунт"
+        string status "pending, approved, rejected, expired, superseded (CHECK)"
+        uuid decided_by "nullable, без FK: кто подтвердил, отклонил или отозвал; пусто — закрылась сама"
+        datetime decided_at "nullable"
+        datetime created_at "срок жизни — 72 часа от него; частичный UNIQUE (kind, target) где status = pending"
+    }
+
+    SHOP_SKU_OVERRIDE {
+        string sku_id PK "товар каталога в коде, БЕЗ внешнего ключа"
+        jsonb fields "правка поверх каталога: stars, baseRub, contents.gems, badge, sort"
+        uuid set_by "без FK: кто подтвердил последнюю правку"
+        datetime set_at
+    }
+
+    PAYMENT_RECONCILE_RUN {
+        uuid run_id PK "одна сверка выписки площадки"
+        string platform "площадка выписки"
+        string trigger "schedule | manual"
+        uuid actor_account_id "nullable: кто нажал «Сверить сейчас»; без внешнего ключа"
+        datetime started_at "когда началась"
+        datetime finished_at "nullable: пусто — сверка оборвалась, не дойдя до конца"
+        int from_offset "позиция выписки, с которой читали"
+        int to_offset "nullable: позиция, до которой дочитали; пусто у сверки с ошибкой — курсор не двигается"
+        datetime covered_from "nullable: время первой прочитанной операции"
+        datetime covered_to "nullable: время последней прочитанной операции"
+        int scanned "прочитано операций"
+        int found "новых расхождений"
+        int matched "закрыто само"
+        string error "nullable: ошибка площадки или базы, первые 300 знаков"
+    }
+
+    PAYMENT_DISCREPANCY {
+        uuid discrepancy_id PK "одно расхождение — одна строка навсегда: уникальный ключ (platform, kind, charge_id)"
+        string platform "площадка выписки"
+        string kind "charged_unrecorded | recorded_missing | refund_unrecorded"
+        string charge_id "идентификатор оплаты на площадке, до 256 знаков"
+        uuid purchase_id "nullable: покупка по payload или по оплате; без внешнего ключа — покупки может не быть"
+        uuid account_id "nullable: для показа; без внешнего ключа"
+        string payer_id "nullable: игрок на площадке из выписки"
+        int amount "сумма операции; у «записано, но нет» — chargedStars"
+        string payload "nullable: что стояло в счёте, до 128 знаков"
+        datetime occurred_at "когда случилась операция выписки или записана оплата"
+        datetime detected_at "когда сверка нашла"
+        uuid run_id "сверка, нашедшая расхождение; без внешнего ключа"
+        datetime resolved_at "nullable: когда закрыто"
+        string resolution "nullable: matched | retried | refunded | dismissed"
+        uuid resolved_by "nullable: кто разобрал; без внешнего ключа"
+        string note "nullable: пометка разбора, до 200 знаков"
+    }
+
+    STAKEHOLDER_SHARE {
+        uuid share_id PK
+        uuid account_id FK "Restrict: участник проекта; роль снимается, доля остаётся"
+        date from_month "первое число месяца по UTC, с которого действует доля; CHECK: день месяца равен 1"
+        int share_bp "сотые доли процента: 2550 — 25,5 %; CHECK: 0…10000; ноль — конец участия"
+        string note "причина, до 500 знаков: видят владелец и финансы, участнику не отдаётся"
+        uuid set_by FK "Restrict: кто назначил (владелец)"
+        datetime set_at
+    }
+
+    LEDGER_ACCOUNT {
+        string account_id PK "устойчивый ключ: stars.bot.hold, revenue.shop.telegram"
+        enum type "asset | revenue | expense | liability | equity"
+        string currency "код из справочника ядра курсов: XTR, GRAM, USDT, RUB"
+        string name "подпись для панели"
+        datetime created_at "порядок показа внутри типа"
+        datetime archived_at "nullable: счёт скрыт, строки остаются"
+        string place "nullable: группа места хранения; stars.bot у обоих состояний звёзд, у прочих мест — их id; у статей пусто (Р220)"
+        int fee_percent_bp "nullable: комиссия места в сотых долях процента, 0…10000; CHECK"
+        bigint fee_fixed "nullable: фикса комиссии в минимальных единицах валюты фиксы, не меньше нуля; задаётся парой с валютой; CHECK"
+        string fee_fixed_currency "nullable: валюта фиксы — может отличаться от валюты места"
+        string article_id FK "nullable, Restrict: статья, если счёт — статья в валюте: expense.<статья>.<валюта>, income.<статья>.<валюта>"
+    }
+
+    LEDGER_ARTICLE {
+        string article_id PK "устойчивый ключ: vps, ads_taddy; из названия транслитом, занят — суффикс -2"
+        enum kind "expense | income: счета типа expense и revenue"
+        string name "подпись для панели"
+        boolean system "служебная (комиссии, курсовая разница, налог): не архивируется"
+        datetime created_at "порядок показа внутри вида"
+        datetime archived_at "nullable: новых счетов по статье нет, старые остаются"
+    }
+
+    LEDGER_ENTRY {
+        uuid entry_id PK
+        string source_key UK "ключ идемпотентности: purchase:<id>:paid; до 128 знаков"
+        datetime at "когда случилось"
+        string period "ГГГГ-ММ по UTC, из at; CHECK по формату"
+        string memo "до 500 знаков"
+        uuid reversal_of UK,FK "nullable, Restrict: сторно — entry_id исходной; у исходной не больше одного"
+        json meta "nullable: плоское примечание для разбора"
+        uuid created_by "nullable: кто записал; пусто — сервер; без внешнего ключа, журнал переживает аккаунты"
+        datetime created_at
+    }
+
+    LEDGER_LINE {
+        uuid line_id PK
+        uuid entry_id FK "Restrict"
+        string account_id FK "Restrict"
+        bigint amount "минимальные единицы валюты счёта, дебет плюс, кредит минус; CHECK: не ноль; (entry_id, account_id) уникальны"
+    }
+
+    LEDGER_OPERATION {
+        uuid operation_id PK
+        enum kind "transfer | exchange | expense | income | loan | reversal"
+        enum status "draft | pending | posted | rejected: в T-0461 черновик проводится сразу, pending — второй ключ (T-0462)"
+        json input "поля вида без причины и ссылки: суммы десятичными строками в валюте места, дата события; читается той же схемой, что тело запроса"
+        string note "причина или описание, 3…500 знаков; становится описанием проводки"
+        string link "nullable: https-ссылка на подтверждение"
+        decimal amount_usd "nullable, numeric(18,2): оценка размера по курсам на ввод, вверх до цента; нет курса — пусто; CHECK: не меньше нуля"
+        string source_key UK "nullable: op:<id>, когда операция проведена; CHECK: у проведённой не пуст"
+        uuid created_by "кто внёс; без внешнего ключа, как в журнале"
+        datetime created_at
+        uuid decided_by "nullable: кто подтвердил или отклонил (T-0462)"
+        datetime decided_at "nullable"
+        string decision_note "nullable: причина решения, до 500 знаков"
+        string template_id "nullable: шаблон повторяющегося расхода, из которого создан черновик (T-0463)"
+        string template_period "nullable: ГГГГ-ММ; (template_id, template_period) уникальны — на период один черновик; CHECK: только парой и в этом формате"
+    }
+
+    LEDGER_LOAN {
+        uuid loan_id PK
+        string lender "имя кредитора, до 128 знаков"
+        string account_id FK "Restrict: счёт-обязательство loan.<кредитор>.<валюта>"
+        string currency "код из справочника ядра курсов"
+        bigint principal "тело займа в минимальных единицах валюты; CHECK: больше нуля"
+        bigint premium "премия сверх тела; CHECK: не меньше нуля"
+        int repayment_bp "доля чистой прибыли месяца на погашение, сотые доли процента; CHECK: 0…10000"
+        uuid operation_id UK,FK "Restrict: операция займа"
+        datetime created_at
     }
 ```
 
@@ -1289,6 +1536,10 @@ erDiagram
   (ключ `season_overtaken:сезон:игровой день`), `season_closing`
   (`season_closing:сезон`) и `daily_reward_ready` (`daily_reward_ready:игровой
   день`); пишет их планировщик модуля `reminders`, схема таблицы не менялась.
+  Извинение за сбой оплаты и возврат звёзд (Р209, T-0436) — вид
+  `purchase_support` (ключи `purchase_support:compensated:покупка` и
+  `purchase_support:refunded:покупка`, поток — §4.40); в бота уходит по ключу
+  игрока `bot.teamMessage`, как сообщение команды, и не считается напоминанием.
 - **`DAILY_REWARD` — награда дня** (`35-stage4-plan.md`, Р45, WP13): одна
   строка на аккаунт, появляется с первым забранным днём. Прогресс не
   сбрасывается: пропуск дня его останавливает. День недели и ступень
@@ -1348,6 +1599,33 @@ erDiagram
   Москве) выбирает набор — 2/2/1 дневных, 2/3/1 недельных. Набор нигде не
   хранится: он одинаков у всех игроков и реплик, забег двигает только
   выбранные, невыбранные нельзя забрать, знак меню их не считает.
+- **`TASK_CHANNEL_WATCH` — перепроверка подписки после награды**
+  (`35-stage4-plan.md` Р115, T-0178): строка на каждую выданную награду за
+  подписку на канал (`kind = channel`) на площадке, у которой есть проверка
+  участника (сейчас Telegram), ключ — как у `TASK_PROGRESS`. Ежедневная и
+  еженедельная подписка (Р82) даёт по награде за срок, и у каждой своё окно в
+  7 суток. Окно заводит забор награды после выдачи, и только запрос, чья
+  отметка «забрано» встала первой; награды, выданные до выката, окон не имеют.
+  Проход раз в 5 минут (`ChannelWatchJob`, очередь BullMQ с постоянным id)
+  берёт до 200 окон с наступившим `next_check_at` — частичный индекс по
+  `watching` — и по одному вопросу на пару «игрок + задание» спрашивает бота
+  площадки. Нет ответа (сбой, таймаут, ошибка настройки канала) — штрафа нет:
+  окно откладывается, а через сутки после конца закрывается как `expired`.
+  Не состоит — событие отписки: награды всех открытых окон пары списываются
+  разом (`revokeUpTo`, не больше начисленного и не больше баланса) и
+  считаются одним нарушением с общим `event_no`; со второго события пары
+  `partner_tasks` закрывается на 30 суток. Событие идёт под замком пары
+  (`pg_try_advisory_xact_lock`, без ожидания) и кончается отметкой
+  `penalized`, поэтому всё до неё идемпотентно по ключам. Те же проверки
+  ставят отметки удержания (`35-stage4-plan.md` Р139, T-0223):
+  `held_d1`, `held_d3`, `held_d7` — первой успешной проверкой не раньше
+  чем через 1, 3 и 7 суток после награды, «в канале» — `true`. Отписка
+  закрывает ещё пустые отметки `false`, поставленная не меняется никогда
+  (`COALESCE` в одном `UPDATE`); нет ответа площадки — нет отметки, а
+  окно, закрывшееся без ответа, оставляет пустую отметку: это «неизвестно»,
+  а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
+  `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
+  заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -1387,6 +1665,18 @@ erDiagram
   проверяется по VIP в момент забора, поэтому купленный посреди месяца VIP
   открывает и пройденные ступени. Вайп стирает очки, журнал и подарки, ленты
   месяца остаются.
+- **`CONTENT_VERSION`, `CONTENT_DRAFT`, `CONTENT_CHECK` — контент игры на
+  сервере** (`35-stage4-plan.md` Р16, Р160, `19-content-admin.md` §3, T-0303):
+  версия — неизменяемый снимок со схемой и именами. Версию «из кода» заводит
+  выкат командой `content:import` из выгрузки `content:export`; хэш в выгрузке
+  считает движок (в него входят рубеж и пролог, которых в снимке нет), сервер
+  ждёт готовый. Черновик — копия снимка версии: правка по пути
+  (`enemies[id=swarm_rat].hp`) идёт под блокировкой строки, форма значения
+  проверяется JSON Schema той же версии, не та форма — 422 и черновик не
+  меняется. Проверка — задание очереди `content-check` с черновиком и базой;
+  отчёт воркера читается при опросе `GET /checks/:id`, повтор того же снимка
+  отдаёт прошлый отчёт (`snapshot_hash` — sha256 канонического JSON: порядок
+  ключей jsonb его не меняет). Вайп таблицы не трогает: это правила игры.
 - **`MEDIA_IMAGE` — картинки из панели** (`35-stage4-plan.md`, О42, Р82):
   в базе до CDN. id — хэш содержимого, строка не меняется никогда, поэтому
   адрес `/api/v1/media/<id>.webp` кешируется навсегда и при переезде на CDN
@@ -1527,6 +1817,18 @@ erDiagram
   `date`. Текст имени и bio не хранится нигде: порт отдаёт только итог. План
   вайпа таблицу стирает (`wipe-plan.ts`): серия и награждённые сутки — прогресс
   того же рода, что награда дня, а кошелёк после вайпа обнулён.
+- **`EXTERNAL_IDENTITY` — связь с аккаунтом MAX или VK** (`35-stage4-plan.md`
+  Р188, `tasks/T-0377`, поток — §4.36). Нужна одному: проверить подписку на
+  канал другой площадки, зная, кто игрок там; входу она не служит. Связь
+  постоянная: пара «площадка + id» принадлежит одному аккаунту (уникальный
+  индекс), у аккаунта на площадке одна связь (первичный ключ), строку не
+  меняют и не освобождают — перепривязка только через поддержку. Запись — один
+  `INSERT … ON CONFLICT DO NOTHING`: два бота разом с одним id не создадут две
+  связи, а кто владеет парой, читается уже после вставки (`linked`, `already`,
+  `taken`). Площадку держит `CHECK` (`max` или `vk`). Игровой аккаунт
+  Telegram остаётся в `ACCOUNT`; вход по аккаунту MAX или VK таблица не
+  создаёт. План вайпа таблицу оставляет (`wipe-plan.ts`): связь постоянна, как
+  привязки приглашения и источника.
 - **`VIP_SUBSCRIPTION`, `VIP_PERIOD`, `VIP_DAILY` — VIP** (`35-stage4-plan.md`,
   §3.6, Р20, Р44, WP10). Срок VIP — не поле, а журнал периодов: каждая
   оплата — ровно один период, начатый с конца прежнего, и конец VIP — самый
@@ -1551,6 +1853,17 @@ erDiagram
   удаляются: по ним видно, когда и по какой цене продавали. Пределы скидки
   и порядок срока держит и база; пересечение и отдых между акциями товара —
   сервис, проверкой и вставкой под блокировкой товара.
+- **`CHANGE_REQUEST`, `SHOP_SKU_OVERRIDE` — цены с подтверждением второго
+  участника** (`19-content-admin.md` §6, T-0309): цена товара — каталог в коде,
+  панель кладёт правку поверх него, но только заявкой. Заявка — «было → стало» с
+  причиной; подтверждает другой человек с правом `sku.price.edit`, и в одной
+  транзакции под блокировкой цели правка попадает в `SHOP_SKU_OVERRIDE`, если
+  цель всё ещё равна `before`. Живая заявка на цель одна — частичный уникальный
+  индекс: новая гасит прежнюю (`superseded`), через 72 часа заявка `expired`.
+  Связей нет: товар — каталог в коде, люди — без внешнего ключа. Строки заявок не
+  удаляются: по ним видно, кто и почему менял цену; вайп их не трогает. Покупка,
+  начатая до правки, оплачивается по цене счёта (`purchase.price_stars`), а не по
+  новой. Поток — §4.41.
 - **`PROMO_*` — промокоды** (`35-stage4-plan.md`, WP41, Р74): кампания —
   то, что заводит команда; код — то, что вводит игрок; активация — один
   игрок в одной кампании, первичным ключом, поэтому второй код той же пачки
@@ -1662,6 +1975,79 @@ erDiagram
   продлевает сама — очередной оплатой по счёту первой покупки; каждое
   продление — своя строка со своей оплатой и `renewal_of` на первую, так
   выручка и возвраты видят каждый период.
+- **`PURCHASE_COMPENSATION` — компенсация самоцветами за сбой оплаты** (Р209,
+  T-0435, поток — §4.40). Первичный ключ `purchase_id` — и есть правило «одна
+  на покупку»: вторую строку база не пустит, а два одновременных нажатия
+  упираются в него, а не в проверку в коде. Строка вставляется **до** кошелька,
+  `credited_at` ставится **после**: упало между — строка есть, отметки нет, и
+  повтор действия доначисляет ту же сумму из строки (кошелёк не начислит
+  дважды: ключ `compensation:<покупка>`, причина `payment_compensation`).
+  Внешний ключ — только на покупку (`Restrict`); аккаунт получателя и актёра
+  без ключей, как в журнале аудита: запись о деньгах не должна исчезнуть вместе
+  с человеком. При вайпе таблица остаётся — это история денег, как покупки.
+- **`PAYMENT_RECONCILE_RUN` и `PAYMENT_DISCREPANCY` — сверка оплат с выпиской
+  площадки** (Р209, T-0433, поток — §4.41). Внешних ключей нет: покупки у
+  «списано, но не записано» может не быть вовсе, а аккаунт нужен только для
+  показа. Уникальный ключ `(platform, kind, charge_id)` — правило «одно
+  расхождение — одна строка навсегда»: повторную находку база не пустит, и
+  второго сообщения команде не будет, а закрытое расхождение той же оплаты не
+  заводится заново. Курсор сверки — `to_offset` последней удачной строки
+  `PAYMENT_RECONCILE_RUN` (удачная — с `finished_at` и без `error`). Решение
+  человека (T-0434) занимает строку условным обновлением `resolved_at is null`:
+  из двух одновременных нажатий записывает одно. При вайпе обе таблицы
+  остаются — это история денег.
+- **`STAKEHOLDER_SHARE` — доли участников проекта** (Р217, T-0452;
+  `29-admin-panel.md` §6.6). Доля действует с первого числа месяца по UTC;
+  уникальность `(account_id, from_month)` — это правило «запись на тот же
+  месяц заменяет прежнюю», а новый месяц — новая строка, поэтому история
+  долей не правится. Конец участия — строка с нулём. Сумма долей всех
+  участников на любой месяц не больше 10 000 б. п. (100 %): проверку делает
+  код (`stakeholder-rules.ts`) под блокировкой `pg_advisory_xact_lock`, а
+  база держит только диапазон `share_bp` и «первое число». Остаток до 100 %
+  — доля владельца, строки у неё нет. Снятие роли `stakeholder` доли не
+  стирает. Изменение — в журнал аудита (`stakeholders.share.set`). При
+  вайпе таблица остаётся: это решения владельца о деньгах.
+- **`LEDGER_ARTICLE` и места хранения — справочник учёта** (Р220, T-0460;
+  `37-accounting.md` §3). Статья — расход или поступление без валюты; счёт
+  статьи в нужной валюте создаётся при первой проводке одним
+  `INSERT … ON CONFLICT DO NOTHING`, поэтому параллельные проводки не
+  плодят дубли, а одна статья «Сервер (VPS)» принимает и рубли, и доллары.
+  Место хранения — счёт-актив с `place` и необязательным шаблоном комиссии
+  (`fee_*`); звёзды бота — одно место в двух счетах с общим `place`.
+  Служебные статьи (`system`) не архивируются, место с ненулевым остатком —
+  тоже: остаток проверяется под блокировкой счетов места. Статьи на старте и
+  `place` у мест на старте вставляет миграция; при вайпе всё остаётся.
+- **`LEDGER_ACCOUNT`, `LEDGER_ENTRY`, `LEDGER_LINE` — журнал учёта** (Р219,
+  T-0457; `37-accounting.md` §2–§3). Проводка — запись и две и больше строк,
+  которые ложатся одной транзакцией; в каждой валюте сумма строк ноль — это
+  проверка ядра `@bh/ledger` до записи, а не ограничение базы. Идемпотентность
+  держит уникальный `source_key`: повтор с теми же строками отдаёт ту же
+  проводку, с другими — отказ `ledger_source_conflict`. **Журнал не правится:**
+  триггеры `BEFORE UPDATE OR DELETE` и `BEFORE TRUNCATE` на `ledger_entry` и
+  `ledger_line` отвечают «Журнал учёта не правится — исправление сторно», а
+  исправление — новая проводка с `reversal_of` (уникален: сторно у проводки
+  одно). Счёт с проводками не удаляется и не меняет `account_id`: внешние ключи
+  `Restrict`, а смена `account_id` — это `UPDATE` строк; название счёта
+  переименованием места или статьи меняется. Начальный план счетов
+  вставляет миграция (`37-accounting.md` §3). `created_by` без внешнего ключа,
+  как журнал аудита. При вайпе таблицы остаются.
+- **`LEDGER_OPERATION` и `LEDGER_LOAN` — ручные операции учёта** (Р220, T-0461;
+  `37-accounting.md` §4 и §6). Операция хранит, **что ввёл человек** (`input`,
+  причина, ссылка), и **ключ проводки**, которую из неё собрал сервер:
+  `op:<id>`. Внешнего ключа на `ledger_entry` нет — связь по ключу источника,
+  как у проводок из платежей; проведение идемпотентно: повторный `submit` —
+  та же проводка, а сбой между записью проводки и отметкой «проведена»
+  лечится повтором. Черновик правится и удаляется, проведённая операция —
+  нет (только сторно, вид `reversal`); черновик, у которого проводка `op:<id>`
+  уже записана, а отметки нет, тоже не правится и не удаляется — его остаётся
+  провести повтором. **Заём** пишет в одной транзакции с
+  отметкой «проведена» строку `LEDGER_LOAN`: тело, премию и ставку погашения
+  для закрытия месяца (волна 4); счёт-обязательство `loan.<кредитор>.<валюта>`
+  создаётся при первом займе (`ON CONFLICT DO NOTHING`) и общий у займов одного
+  кредитора в одной валюте. Транзитные счета обмена `exchange.transit.<валюта>`
+  заводятся так же, при первом обмене. `amount_usd` — оценка для порога
+  второго ключа (T-0462): звезда по курсу выплаты, остальные по рынку. При
+  вайпе обе таблицы остаются.
 - **Журнал аудита не связан внешним ключом с аккаунтом** и переживает его
   удаление: «кто это сделал» не должно пропадать вместе с человеком. Роли,
   наоборот, уходят вместе с аккаунтом — держать их без владельца незачем.
@@ -1715,9 +2101,20 @@ erDiagram
   порядок карточек. Секретов узла (UUID, пароль) в таблицах нет — они только в
   конфиге Xray, в файлах-частях подписок его тома и в ответе поставщика. Слот узла
   уникален на всю систему: порт входа Xray = база + слот, узел не меняет порт между
-  обновлениями, а узлы разных подписок не делят вход. Выключенная подписка держит
+  обновлениями, а узлы разных подписок не делят вход. Транспорт, безопасность и
+  flow узла и сводка своей маршрутизации подписки (T-0385) — сведения для панели,
+  перебор их не использует; пусто у записанного до миграции — поля появляются при
+  следующем обновлении. Выключенная подписка держит
   свои узлы и слоты — включение назад не требует загрузки. При вайпе таблицы
   остаются — это настройка команды.
+- **`PROXY_TRAFFIC_HOUR` — трафик узлов Xray по часам** (Р192, T-0386, поток — §4.30).
+  Считает ядро Xray на нашем сервере, а не поставщик: раз в минуту API читает счётчики
+  выходов со сбросом и прибавляет их к корзине текущего часа
+  (`ON CONFLICT … DO UPDATE SET up_bytes = up_bytes + EXCLUDED.up_bytes`), поэтому
+  реплики пишут без замка и ничего не теряют. Внешнего ключа на подписку нет: отчёт
+  соединяется с живыми подписками, строки удалённой уходят по сроку хранения —
+  35 суток, удаление раз в час. В базе CHECK: час — граница часа по UTC, байты не
+  отрицательны. При вайпе таблица остаётся — это служебные данные команды.
 - **`AD_CONVERSION` — конверсии закупленной рекламы** (WP43, Р86, поток —
   §4.20). Журнал и очередь отправки одной таблицей. Строки не пишет ни
   забег, ни оплата: проход раз в минуту выводит их из фактов — первого
@@ -2017,6 +2414,7 @@ flowchart TD
     ST["packages/shared-types<br/>контракты, лист графа"]
     FX["packages/fx<br/>курсы валют: ядро без игры,<br/>Nest и Prisma, собирается в JS"]
     PK["packages/proxy-kit<br/>подписки Xray, конфиг спутника, пул узлов:<br/>ядро без игры, Nest и Prisma"]
+    LG["packages/ledger<br/>ядро учёта: счета, проводки, сторно, остатки в bigint:<br/>без игры, Nest и Prisma; журнал в базе — модуль бэкенда"]
     PRK["packages/promo-kit<br/>модель промо-материала: форматы, слои, подстановка,<br/>правила правки партнёром: ядро без игры, Nest, Prisma и Fabric"]
     API["backend/api<br/>NestJS"]
     DT["packages/design-tokens<br/>палитра, гарнитуры, шкалы —<br/>общие у игры и панели"]
@@ -2037,6 +2435,7 @@ flowchart TD
     API --> ST
     API --> FX
     API --> PK
+    API --> LG
     SH --> DT
     ADM --> DT
 ```
@@ -2063,7 +2462,12 @@ flowchart TD
 - любых стрелок **из** `shared-types` — это лист графа;
 - любых стрелок **из** `fx` — ядро курсов станет отдельным сервисом и не
   знает ни об игре, ни о Nest, ни о Prisma. Бэкенд берёт его собранным
-  (`dist`), тесты и dev-запуск — исходником.
+  (`dist`), тесты и dev-запуск — исходником;
+- любых стрелок **из** `ledger` — ядро учёта переходит в другие проекты и не
+  знает ни об игре, ни о Nest, ни о Prisma, ни о справочнике валют
+  (`37-accounting.md`, §2). Стрелка `backend/api → ledger` — журнал учёта в
+  базе (T-0457): бэкенд берёт ядро собранным (`dist`), как `fx`, а проводки и
+  таблицы живут в его модуле `modules/ledger`.
 
 ### 2.1 Внутреннее устройство core-game
 
@@ -2204,10 +2608,13 @@ flowchart LR
         TOOLS["roles: инструменты команды<br/>режим разработчика, стресс-тест —<br/>по праву и настройке, реализовано"]
         BOT["platforms/telegram: бот<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
         TGADP["platforms/telegram: адаптер<br/>проверка запуска, оплата Stars,<br/>обновления оплаты, реализовано"]
+        VKADP["platforms/vk: сообщество как бот для заданий<br/>вебхук Callback API, очередь vk-events,<br/>groups.isMember, messages.send, реализовано"]
+        MAXADP["platforms/max: бот заданий-каналов<br/>вебхук с секретом, очередь Redis, ответы по коду,<br/>подписка вебхука у MAX, проверка подписки, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
         EXPORT["export<br/>выгрузка и срок хранения, реализовано"]
         FXM["fx<br/>курсы валют вокруг packages/fx:<br/>опрос под локом, снимки, реализовано"]
+        LEDGER["ledger<br/>журнал учёта вокруг packages/ledger: план счетов,<br/>проводки двойной записью, ключ источника,<br/>остатки и журнал для панели, места и статьи,<br/>ручные операции, реализовано"]
         WALLET["wallet<br/>журнал, балансы, суточные<br/>потолки, реализовано"]
         PROG["progress<br/>уровень аккаунта, награды<br/>за забег, реализовано"]
         ITEMS["items<br/>снаряжение: инвентарь, операции,<br/>добыча, подписанный снимок, реализовано"]
@@ -2219,7 +2626,8 @@ flowchart LR
         SETTINGS["settings<br/>настройки без релиза: база<br/>сильнее окружения, реализовано"]
         SECRETS["secrets<br/>ключи интеграций: шифртекст<br/>в базе, панель сильнее<br/>окружения, реализовано"]
         PROXIES["proxies<br/>прокси для исходящих запросов:<br/>список и режимы сервисов из панели,<br/>пароль шифртекстом, снимок маршрутов<br/>в памяти, реализовано"]
-        SUBSCR["proxies/subscription<br/>подписки Xray (до 10): обновление под замком,<br/>слоты узлов, части подписок и общий конфиг<br/>в томе, проверки узлов, реализовано"]
+        SUBSCR["proxies/subscription<br/>подписки Xray (до 10): обновление под замком,<br/>слоты узлов, части подписок и общий конфиг<br/>в томе, проверки узлов, учёт трафика узлов<br/>по часам, реализовано"]
+        XRAYCORE["proxies/xray-core<br/>«Ядро Xray» в панели: версия из файла статуса,<br/>свежий выпуск XTLS (кэш 6 ч), совместимость из proxy-kit,<br/>запуск workflow обновления под замком, реализовано"]
         BCAST["broadcasts<br/>рассылки: сегмент, очередь<br/>с темпом площадки, реализовано"]
         FRIENDS["friends<br/>дружба, заявки, подарки,<br/>бонус за друзей, реализовано"]
         ACCSET["account-settings<br/>настройки игрока для всех устройств:<br/>слияние по ключам, реализовано"]
@@ -2243,6 +2651,7 @@ flowchart LR
         OUTBOUND["infra/outbound<br/>единый клиент исходящих запросов:<br/>метка сервиса, перебор прокси по режиму<br/>сервиса, запись о каждой попытке<br/>в приёмник, реализовано"]
         HOME["home<br/>карусель главной: до пяти слайдов<br/>по ценности из ответов соседей<br/>и слайды команды из панели;<br/>виджеты награды дня, колеса и заданий;<br/>у каждого источника таймаут, реализовано"]
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
+        EXTIDENT["external-identity<br/>связь аккаунта с MAX и VK для заданий:<br/>одноразовые коды в Redis, пары в базе,<br/>порт ExternalLinkStarters, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
@@ -2250,6 +2659,8 @@ flowchart LR
     FXSRC["Источники курсов<br/>ЦБ, ЕЦБ, ExchangeRate-API,<br/>CoinGecko, TON API, Binance"]
 
     ADSGRAMAPI["AdsGram<br/>api.adsgram.ai/confirm_conversion;<br/>зовёт адрес награды задания"]
+
+    GITHUBAPI["GitHub<br/>api.github.com: последний выпуск XTLS/Xray-core;<br/>запуск xray-bump.yml ключом github.xray-update"]
 
     TADDYAPI["Taddy<br/>api.taddy.pro: креатив и его показы,<br/>лента обмена и проверка задания"]
 
@@ -2259,7 +2670,7 @@ flowchart LR
         PG[("PostgreSQL<br/>источник истины")]
         REDIS[("Redis<br/>кеш, локи, ZSET, очереди")]
         QUEUE["BullMQ<br/>воркеры"]
-        SIMWORKER["sim-worker<br/>отдельный процесс со своей сборкой движка:<br/>очередь content-check, проверка и симуляция<br/>черновика контента, реализовано"]
+        SIMWORKER["sim-worker<br/>отдельный процесс со своей сборкой движка:<br/>очередь content-check — проверка черновика контента,<br/>очередь replay — повтор забега по записи, реализовано"]
     end
 
     CDN["CDN<br/>статика игры + снапшоты конфигурации"]
@@ -2373,7 +2784,7 @@ flowchart LR
 
     QUEUE --> PG
     QUEUE --> REDIS
-    SIMWORKER -- "очередь content-check: задание и отчёт тем же заданием" --> REDIS
+    SIMWORKER -- "очереди content-check и replay: задание и итог тем же заданием" --> REDIS
 
     PANEL["apps/admin<br/>панель команды,<br/>свой поддомен"] -- "/api/v1/admin, cookie" --> CADDY
     CADDY --> ADMINAPI
@@ -2385,6 +2796,9 @@ flowchart LR
     ADMINAPI -. карточка: забеги, кошелёк .-> RUNS
     ADMINAPI -. карточка: кошелёк .-> WALLET
     ADMINAPI -. курсы, заданные курсы .-> FXM
+    ADMINAPI -. "остатки и журнал, право ledger.view;<br/>операции, право finance.entry.create" .-> LEDGER
+    LEDGER -. "оценка размера операции по курсам" .-> FXM
+    LEDGER --> PG
     ADMINAPI -. отчёты, архив .-> EXPORT
     ADMINAPI -. флаги и выкат .-> FLAGS
     ADMINAPI -. "настройки, право settings.edit" .-> SETTINGS
@@ -2400,11 +2814,16 @@ flowchart LR
     PROXIES -. пароль прокси: тот же шифр, что у ключей .-> SECRETS
     OUTBOUND -. "маршруты: прокси и режимы (снимок в памяти)" .-> PROXIES
     PROXIES -. "узлы подписки после ручных прокси" .-> SUBSCR
-    SUBSCR -- "proxy_subscription, proxy_subscription_node" --> PG
+    SUBSCR -- "proxy_subscription, proxy_subscription_node, proxy_traffic_hour" --> PG
     SUBSCR -. "адрес подписки: тот же шифр" .-> SECRETS
     SUBSCR -. "proxy.subscription: только напрямую" .-> OUTBOUND
     SUBSCR -- "замок proxy-subscription:refresh:lock" --> REDIS
     ADMINAPI -. "подписка: обновить, проверить, права proxies.*" .-> SUBSCR
+    ADMINAPI -. "ядро Xray: состояние, проверить выпуск, обновить; права proxies.*" .-> XRAYCORE
+    XRAYCORE -- "кэш выпуска, замок запуска xray-core:update:lock" --> REDIS
+    XRAYCORE -. "ключ github.xray-update на каждом запуске" .-> SECRETS
+    XRAYCORE -- "github.api, таймаут 5 с" --> OUTBOUND
+    OUTBOUND -- "github.api" --> GITHUBAPI
     OUTBOUND -- "outbound:route:сервис — какой прокси сработал, 10 минут" --> REDIS
     FXM -. ключ CoinGecko на каждом проходе .-> SECRETS
     ADCONV -- "ad_conversion; читает link_click, acquisition, run, purchase" --> PG
@@ -2447,7 +2866,7 @@ flowchart LR
     WHEEL -. "уровень аккаунта" .-> PROG
     BADGES -. "крутка ждёт" .-> WHEEL
     CADDY -- "/api/v1/tasks" --> TASKS
-    TASKS -- "task_def, task_progress, task_points_claim, task_run, task_participant" --> PG
+    TASKS -- "task_def, task_progress, task_points_claim, task_run, task_participant, task_channel_watch" --> PG
     CADDY -- "/api/v1/media/хэш.webp" --> MEDIA
     MEDIA -- "media_image" --> PG
     ADMINAPI -. "загрузка картинки и её показ в панели" .-> MEDIA
@@ -2460,6 +2879,28 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    ADMINAPI -. "порт SourceAvatars: аватарка канала, бота, Mini App (Р158)" .-> TGADP
+    TGADP -- "telegram.web: страница бота и CDN Telegram, без перенаправлений" --> OUTBOUND
+    OUTBOUND -- "telegram.web" --> TGAPI
+    TASKS -. "порт ChannelMemberships: groups.isMember (Р188)" .-> VKADP
+    TASKS -. "порт ExternalLinkStarters: vk.me/сообщество?ref=код" .-> VKADP
+    VKADP -. "consume(vk, код, id игрока)" .-> EXTIDENT
+    VKADP -- "очередь vk-events, повтор доставки по event_id" --> REDIS
+    VKADP -. "ключи и сообщество: порт чтения, панель сильнее окружения" .-> SECRETS
+    VKADP -. "vk.community" .-> SETTINGS
+    VKADP -- "vk.api: groups.isMember, messages.send, groups.getById" --> OUTBOUND
+    TASKS -. "канал другой площадки: id игрока там и ссылка на бота (Р188)" .-> EXTIDENT
+    TASKS -. "порт ChannelMemberships: GET /chats/{id}/members (канал MAX, Р188)" .-> MAXADP
+    MAXADP -. "порт ExternalLinkStarters: ссылка на бота; consume(max, код, id игрока)" .-> EXTIDENT
+    MAXADP -- "очередь max-updates: событие bot_started до ответа 200" --> REDIS
+    MAXADP -- "подписка вебхука, личное сообщение, участники канала (max.bot)" --> OUTBOUND
+    EXTIDENT -- "external_identity: пара «площадка + id» за аккаунтом" --> PG
+    EXTIDENT -- "ext-link:код на 30 минут, GETDEL; лимит выдачи" --> REDIS
+    EXTIDENT -. "серверное событие external_account_linked" .-> EVENTS
+    TASKS -. "отписка после награды: отзыв награды (revokeUpTo)" .-> WALLET
+    TASKS -. "повторная отписка: закрыть партнёрские задания на 30 суток" .-> RESTR
+    TASKS -. "уведомление task_unsubscribed" .-> NOTIF
+    TASKS -. "очередь channel-watch: перепроверка раз в 5 минут" .-> QUEUE
     CADDY -- "/api/v1/achievements" --> ACHIEV
     ACHIEV -- "achievement_rarity, achievement_favorite; престиж из task_progress" --> PG
     ACHIEV -- "achievements:rarity:lock, лок пересчёта" --> REDIS
@@ -2515,6 +2956,8 @@ flowchart LR
     RESTR -- "канал restrictions:changed, лок задачи по сроку" --> REDIS
     ADMINAPI -. "наложить и снять; отзыв сессий при блокировке" .-> RESTR
     ADMINAPI -- "возврат и выдача покупки поддержкой" --> PAY
+    ADMINAPI -- "лента платежей и карточка платежа: чтение, реестр источников хронологии (Р209)" --> PAY
+    ADMINAPI -- "очередь payments: брошенные задания и повтор, по одному и по покупке (Р209)" --> QUEUE
     REF -. "можно ли: награды за друзей" .-> RESTR
     FRIENDS -. "можно ли: подарки, бонус за друзей" .-> RESTR
     ADS -. "можно ли: награды за рекламу" .-> RESTR
@@ -2555,13 +2998,19 @@ flowchart LR
 эти маршруты только на свой домен: Caddy поддомена панели отдаёт её статику и
 проксирует `/api/v1/admin`, поэтому CORS нет, а cookie с `SameSite=Strict`
 уходит сама. С игрой панель роднят только токены дизайна — движка, оболочки
-и адаптеров в её бандле нет, это проверяет тест границ слоёв.
+и адаптеров в её бандле нет, это проверяет тест границ слоёв. Строка «пульса»
+в шапке (`GET /admin/pulse`) собирает три источника через их сервисы:
+`OnlineService` (онлайн), `BroadcastsService` (ход рассылки) и
+`CspReportsService` (блокировки клиента за час); упавший источник даёт `null`
+только своей части.
 
 **Площадка — за портами** (`35-stage4-plan.md`, Р22, §3.11): модули домена —
 вход, приёмник, оплата — не знают Telegram, а просят порты
 `platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт,
 состоит ли игрок в канале и что значит ответ Bot API, знает адаптер
-`platforms/telegram/`; у MAX и VK — заглушки. Бот и инструменты команды в чате администраторов порта не
+`platforms/telegram/`; у MAX и VK запуск игры — заглушки. Зато оба служат ботами для заданий (Р188): бот MAX (`platforms/max/`) и сообщество VK (`platforms/vk/`) связывают аккаунт и проверяют подписку на канал или вступление в сообщество, но игру не запускают. Выписка площадки для сверки оплат (Р209) — тоже порт: `PaymentStatements`
+(`platforms/ports/payment-statement.ts`) ← адаптер Telegram на `getStarTransactions`
+(`platforms/telegram/telegram-star-statement.ts`); без токена бота реестр пуст. Бот и инструменты команды в чате администраторов порта не
 требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
@@ -3372,6 +3821,7 @@ sequenceDiagram
     TG->>B: pre_checkout_query — в очереди bot-updates с приоритетом
     B->>P: чей счёт, та ли сумма, свежий ли, жив ли забег
     P->>TG: answerPreCheckoutQuery — до 10 секунд
+    P-)DB: отметка проверки в purchase — после ответа площадке, не ждётся
     TG->>B: successful_payment — сообщением в личке
     B->>Q: подтверждение, jobId от id оплаты
     Q->>DB: pending → paid, telegram_charge_id UK
@@ -3387,6 +3837,13 @@ sequenceDiagram
   очереди `bot-updates` (T-0027), а подтверждение — своим заданием, которое
   повторяется, пока запись не пройдёт. Redis недоступен — запись сразу, не
   прошла и так — ошибка в лог со всеми полями оплаты.
+- **Проверка оставляет след в покупке** (T-0430, Р209): время и отказ
+  последней проверки — две колонки `checkout_at` и `checkout_refusal`, их
+  читает карточка платежа в панели («пройдена» или «отказ — счёт устарел»).
+  Отметка пишется **после** ответа площадке и не ждётся: у Telegram на весь
+  ответ десять секунд. Сбой записи — предупреждение `checkout_mark_failed`
+  в логе, а не ошибка. Проверка продления подписки идёт по счёту первой
+  покупки и перезаписывает её отметку.
 - **Отказаться от денег можно только на проверке.** После
   `successful_payment` звёзды уже у нас, и дальше остаётся только возврат.
   Его сервер делает сам — через ту же очередь, с повтором: тестовая оплата
@@ -3771,8 +4228,41 @@ sequenceDiagram
 ```
 
 «Вернуть» — тот же путь в обратную сторону: вернуть можно только забег,
-снятый модератором, — с честным вердиктом, без читов и не под
-ограничением.
+снятый модератором, — без читов и не под ограничением, с честным
+вердиктом или признанный честным разбором; аннулированный разбором
+возвращается только отменой аннулирования.
+
+Решения разбора забега (Р203, T-0419) ведут в те же `setRanked`: решение
+пишется условным обновлением `run.review_outcome`, а доски и недельная
+таблица текущего сезона пересчитываются по базе. Закрытые сезоны,
+`season_result`, награды и кошелёк не меняются:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель: отчёт забега
+    participant V as runs: RunReviewService
+    participant S as runs: RunsService
+    participant DB as Postgres
+    participant Z as Redis: доски
+
+    P->>V: «Честный» / «Аннулировать» / «Вернуть забег»
+    V->>DB: UPDATE run SET review_outcome … WHERE прежнее состояние допустимо
+    alt обновление не прошло (гонка)
+        V->>DB: перечитать строку — то же решение, отказ или повтор
+    else решение записано
+        V->>DB: аудит players.run.honest / annul / restore
+        alt «Аннулировать» и забег в рейтинге
+            V->>S: setRanked(false) — снять с досок
+        else «Честный» или «Вернуть забег», забег годен для рейтинга
+            V->>S: setRanked(true) — вернуть в текущие доски
+        end
+        S->>DB: лучший оставшийся рейтинговый забег сложности
+        S->>Z: доска сложности; недельная таблица текущего сезона — по базе
+        S->>DB: аудит players.run.unrank / rerank
+    end
+    V-->>P: отчёт забега (RunReportView)
+```
 
 ### 4.22 Предпросмотр черновика из панели (этап 4, реализовано)
 
@@ -4175,7 +4665,7 @@ sequenceDiagram
 - **Память маршрута — подсказка:** Redis лёг — план без запомненного, вызов
   не падает и не ждёт дольше 300 мс.
 
-#### Подписки Xray: от адреса до SOCKS-входа (Р101, Р192, T-0093, T-0384)
+#### Подписки Xray: от адреса до SOCKS-входа (Р101, Р192, T-0093, T-0384, T-0386)
 
 Подписок до десяти, у каждой свой ключ; узлы всех включённых подписок идут в общий
 перебор. Адрес каждой подписки обновляется по расписанию (раз в `proxy.subscription.refresh-hours`,
@@ -4195,6 +4685,7 @@ sequenceDiagram
     participant X as Контейнер Xray (run.sh)
     participant O as Outbound (клиент исходящих)
     participant N as Узел подписки
+    participant T as TrafficCollector (раз в минуту)
 
     S->>R: SET proxy-subscription:refresh:lock NX PX 120000
     S->>P: GET адрес (сервис proxy.subscription, напрямую; DNS проверен, путь в журнале /***, заголовки User-Agent, x-hwid и x-device-os)
@@ -4202,6 +4693,7 @@ sequenceDiagram
     S->>K: parseSubscription, assignSlots (слоты вне чужих, в пределах доли)
     S->>V: subscriptions/ключ.json, часть подписки, права 0600
     S->>K: buildXrayConfig по частям всех включённых подписок
+    S->>T: flush: снять счётчики до перезапуска Xray (сбой запись не останавливает)
     S->>V: config.json атомарно: временный файл и rename
     S->>S: транзакция: узлы подписки заменены, итог, трафик, срок
     X->>V: раз в 5 с: хеш конфига изменился?
@@ -4209,6 +4701,9 @@ sequenceDiagram
     S->>O: узлы в перебор: socks5://xray:порт, лучшие по задержке после ручных прокси
     O->>X: запрос через SOCKS-вход узла
     X->>N: исходящее подключение узла (VLESS, VMess, Trojan, Shadowsocks)
+    T->>X: API ← счётчики Xray: QueryStats «outbound», со сбросом (gRPC по сети tunnel, раз в минуту)
+    X-->>T: прибавки по тегам out-подписка-узел, счётчики в Xray обнулены
+    T->>T: proxy_traffic_hour: прибавление к корзине текущего часа
 ```
 
 - **Сбой поставщика не обнуляет пул:** сеть, код ответа, формат, ноль подходящих
@@ -4237,6 +4732,13 @@ sequenceDiagram
 - **Проверка узла** — запрос на ipify через узел (как «Проверить» у ручного
   прокси), не раньше 20 секунд после записи конфига: Xray перезапускается.
   Проверяет та реплика, что держит замок; остальные собирают пул из таблицы.
+- **Учёт трафика** (T-0386): в конфиге Xray — блоки `stats`, `policy.system` и `api`
+  только со службой `StatsService` на `0.0.0.0:XRAY_STATS_PORT` внутри сети `tunnel`;
+  порт не публикуется. Чтение — со сбросом: реплики читают без замка и не получают
+  одних и тех же байт. Не записалось в базу — прочитанное ждёт в памяти процесса
+  (до 10 000 строк) и прибавляется на следующем чтении. Перезапуск Xray (новый конфиг,
+  сбой) обнуляет счётчики: перед записью конфига API снимает их сам, при сбое
+  теряется до минуты учёта. Счётчик выхода без узла (`block`, служебные) пропускается.
 - **В перебор не все узлы:** `proxy.subscription.candidates` лучших здоровых на
   всю систему (по задержке, у каждой подписки свой фильтр стран), после ручных
   прокси. Узел в пуле и в журнале запросов — `<ключ подписки>:<ключ узла>`.
@@ -4430,24 +4932,28 @@ sequenceDiagram
 
 ---
 
-### 4.33 Проверка черновика контента в sim-worker (этап 4, реализован воркер)
+### 4.33 Проверка черновика контента в sim-worker (этап 4, реализовано)
 
 Редактор баланса (`19-content-admin.md` §4.3, Р160) прогоняет черновик ботом
 калибровки до того, как его увидят игроки. Собранный бэкенд исходники
 `core-game` не импортирует (Р15), поэтому прогон идёт в отдельном процессе со
-своей сборкой движка. Задания ставит сервер (`tasks/T-0303`), воркер — этот
-поток.
+своей сборкой движка. Задание ставит сервер (`POST /admin/content/drafts/:id/check`,
+`tasks/T-0303`), итог он читает при опросе `GET /admin/content/checks/:id`:
+статус и отчёт лежат в `content_check`, повтор того же снимка отдаёт прошлый
+отчёт без нового задания, а проверка, которую воркер не взял за 15 минут,
+становится `failed`.
 
 ```mermaid
 sequenceDiagram
     autonumber
+    participant P as Панель администратора
     participant S as Сервер (T-0303)
     participant R as Redis, очередь content-check
     participant W as sim-worker
     participant E as Движок и бот (внутри сборки)
     participant M as Prometheus
 
-    S->>R: submitCheck: форма, снимки до 2 МБ, ждущих меньше пяти
+    S->>R: черновик и база, снимки до 2 МБ, ждущих меньше пяти (content_check: queued)
     Note over S,R: шестое ждущее — отказ «Проверка уже идёт, дождитесь»
     R->>W: задание {checkId, snapshot, baseSnapshot, scenarios, seeds}, конкурентность 1
     W->>W: размер, затем схема снимка (черновик и база)
@@ -4462,7 +4968,8 @@ sequenceDiagram
         end
         W-->>R: {schemaProblems: [], contentProblems, report: медианы, дельты, коридоры, timeout}
     end
-    R-->>S: событие завершения задания, результат в returnvalue
+    P->>S: опрос GET /checks/:id
+    S->>R: состояние задания, результат в returnvalue
     M->>W: GET /metrics: sim_jobs_total{queue,outcome}, sim_job_seconds{queue}
 ```
 
@@ -4579,6 +5086,599 @@ sequenceDiagram
   есть хоть один забег: разделы открыты сразу.
 - **Закрыты два раздела:** награда дня и забор задания. Список заданий
   отдаётся как обычно — оболочка его просто не показывает.
+
+### 4.36 Отписка от канала после награды: окно, перепроверка, списание (этап 4, реализовано)
+
+Награда за подписку на канал выдаётся один раз и дальше стоила бы игроку
+ничего: подписался, забрал, отписался. Р115 (`35-stage4-plan.md`,
+`tasks/T-0178`) держит награду неделю: сервер перепроверяет подписку и
+списывает награду отписавшемуся. Площадку домен знает только через порт
+`ChannelMemberships` (`platforms/ports/channel-membership.ts`). Окно заводится
+только для канала своей площадки игрока (Telegram): каналы MAX и VK проверяет бот
+той площадки по id игрока там, а окно знает лишь id своей площадки, поэтому
+перепроверки отписки у чужих каналов нет и штрафа нет.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Клиент
+    participant T as TasksService
+    participant W as ChannelWatchService
+    participant J as Планировщик BullMQ, раз в 5 минут
+    participant DB as Postgres task_channel_watch
+    participant P as Порт ChannelMemberships
+    participant L as Кошелёк
+    participant R as Ограничения
+    participant N as Лента уведомлений
+
+    K->>T: POST /tasks/:id/claim — награда за подписку
+    T->>L: grant, ключ task:аккаунт:задание:срок:ресурс
+    T->>DB: markClaimed — условная отметка «забрано»
+    opt отметка встала у этого запроса, kind = channel
+        T->>W: start(аккаунт, задание, срок, момент забора)
+        W->>DB: INSERT окно (watch_until = забор + 7 суток), ON CONFLICT DO NOTHING
+    end
+    Note over T,W: сбой постановки окна награду не отменяет: строка channel_watch_not_started
+
+    J->>W: tick(now)
+    W->>DB: due(now, 200) — watching с наступившим next_check_at
+    W->>DB: каталог заданий — один запрос на проход
+    loop по одной паре «игрок + задание», без параллели
+        W->>P: isMember(канал, игрок) с потолком 5 секунд
+        alt состоит
+            W->>DB: окна на исходе — kept, остальные — postpone на 6 часов
+        else нет ответа: сбой, таймаут, ошибка настройки
+            W->>DB: postpone; через сутки после конца окна — expired, штрафа нет
+        else не состоит
+            W->>DB: withPairLock — pg_try_advisory_xact_lock(пара), занято — пропуск до следующего прохода
+            W->>DB: openOf — все открытые окна пары, lastEventNo + 1
+            loop каждое окно и ресурс награды
+                W->>L: revokeUpTo(ключ награды, ключ отзыва taskrevoke:…), причина task_revoke
+            end
+            opt событие № 2 и дальше
+                W->>R: imposeBySystemFor(partner_tasks, task_unsubscribe, 30 суток)
+            end
+            W->>N: deliver task_unsubscribed, ключ события task_unsubscribed:аккаунт:задание:№
+            W->>DB: markPenalized — последним, state = penalized, event_no, revoked
+        end
+    end
+```
+
+- **Одно событие на пару.** Ежедневная подписка, забранная несколько дней
+  подряд, даёт несколько окон; одна отписка списывает награды всех открытых
+  окон разом и считается одним нарушением. Закрытие партнёрских заданий —
+  со второго события пары, а не со второго окна: иначе отписавшийся один раз
+  получил бы «повтор».
+- **Не ниже нуля.** `revokeUpTo` забирает не больше записи награды и не больше
+  баланса; потраченное не возвращается, и об этом уведомление говорит словами
+  «награда уже потрачена». Очки пасса не списываются.
+- **Нет ответа — нет штрафа.** Недоступность площадки, таймаут и ошибка
+  настройки канала откладывают окно; окно, на которое площадка так и не
+  ответила, закрывается `expired` через сутки после конца.
+- **Оборванный проход.** Списание держится на ключе отзыва, уведомление — на
+  ключе события, закрытие не ослабляет действующее, а `markPenalized` идёт
+  последним и пишет только окна в `watching`. Повтор доделывает событие: номер
+  тот же, списано один раз, уведомление одно.
+- **Две реплики.** Планировщик с постоянным id выпускает одно задание на
+  тик; от двойной работы на одной паре защищает ещё и замок пары. Площадку под
+  замком и внутри транзакции не спрашивают (`15-engineering-standards.md` §4.2).
+
+### 4.37 Связь аккаунта с MAX и VK: код, бот, проверка подписки (этап 4, реализовано: MAX — T-0379, VK — T-0378)
+
+Игрок Telegram берёт задание «подпишитесь на канал MAX» (Р188,
+`35-stage4-plan.md`, `tasks/T-0377`). Сервер проверит подписку, только если
+знает, кто этот игрок на MAX: бот площадки связывает его id с игровым аккаунтом
+по одноразовому коду. Боты — сообщество VK (T-0378, схема вебхука — §4.39) и MAX (T-0379, поток бота — §4.38); здесь —
+то, что они вызывают. Пока бот площадки не подключён, её каналы не видны никому,
+кроме игроков самой площадки.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant K as Клиент
+    participant T as TasksService
+    participant I as ExternalIdentityService
+    participant R as Redis
+    participant B as Бот площадки (MAX — §4.38, VK — §4.39)
+    participant P as Postgres external_identity
+    participant M as Порт ChannelMemberships
+
+    K->>T: POST /tasks/:id/link
+    T->>T: канал не своей площадки, площадка подключена (стартер и проверка подписки)
+    T->>I: startLink(аккаунт, площадка)
+    I->>R: лимит 10 кодов в час на аккаунт
+    I->>R: SET ext-link:код {аккаунт, площадка} EX 1800 NX
+    I-->>K: ссылка на бота с кодом
+    K->>B: открывает бота, жмёт «Начать»
+    B->>I: consume(площадка, код, id игрока на площадке)
+    I->>R: GETDEL ext-link:код
+    alt кода нет, он чужой площадки или аккаунта больше нет
+        I-->>B: expired
+    else код принят
+        I->>P: INSERT … ON CONFLICT DO NOTHING
+        I-->>B: linked, already или taken
+        I->>I: событие external_account_linked (кроме expired)
+    end
+    B-->>K: «Готово» и ссылка на канал
+    K->>T: POST /tasks/:id/claim («Проверить»)
+    T->>I: externalId(аккаунт, площадка)
+    alt связи нет
+        T-->>K: 409 task_link_required
+    else связь есть
+        T->>M: isMember(канал, id игрока на площадке)
+        alt не подписан
+            T-->>K: 409 task_not_joined
+        else подписан
+            T-->>K: награда
+        end
+    end
+```
+
+- **Код одноразовый.** 16 знаков из `A–Z a–z 0–9`, живёт 30 минут, забирается
+  `GETDEL`: два бота с одним кодом получат значение ровно один раз. Код,
+  выданный для одной площадки, не применить на другой — он сгорает.
+- **Выдача ограничена.** Не больше 10 кодов в час на аккаунт; пока бот площадки
+  не настроен, ссылка не выдаётся (`503 link_unavailable`) и лимит не
+  расходуется.
+- **Связь постоянная.** Один id площадки — один игровой аккаунт, у аккаунта на
+  площадке одна связь: повтор той же пары — `already`, чужой id или вторая
+  связь — `taken`, прежняя цела. Параллельные коды это не ломают: пару держит
+  уникальный индекс, а не проверка до записи.
+- **Видимость.** Канал другой площадки виден игроку, только если у площадки
+  есть и проверка подписки (`ChannelMemberships`), и ссылка на бота
+  (`ExternalLinkStarters`, `startUrl` не `null`). Задания каналов своей
+  площадки работают как раньше.
+
+### 4.38 Бот MAX: подписка вебхука, очередь событий, ответ игроку (этап 4, реализовано)
+
+Бот MAX служит росту канала и игру не портирует (Р188, `tasks/T-0379`). Он
+принимает от MAX одно событие — `bot_started` со ссылки с кодом, — связывает
+аккаунты (§4.37) и отвечает игроку ссылкой на канал. Включается ключом: пока в
+«Ключах интеграций» нет ключа бота и секрета вебхука, вебхук отвечает 404.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as MaxSubscriptionService
+    participant X as Bot API MAX
+    participant I as Игрок в MAX
+    participant W as MaxWebhookController
+    participant Q as Redis, очередь max-updates
+    participant H as MaxUpdatesWorker
+    participant E as ExternalIdentityService
+    participant T as Репозиторий заданий
+
+    Note over S,X: при старте и раз в минуту, если есть ключ, секрет и https-адрес API
+    S->>X: GET /subscriptions
+    alt подписки на адрес вебхука с bot_started нет, либо сменился ключ или секрет
+        S->>X: POST /subscriptions — адрес, тип bot_started, секрет
+    end
+
+    I->>X: открывает max.ru/бот?start=код и жмёт «Начать»
+    X->>W: POST /api/v1/max/webhook, заголовок X-Max-Bot-Api-Secret
+    alt нет ключа бота или секрета
+        W-->>X: 404
+    else секрет не совпал (постоянное время, до разбора тела)
+        W-->>X: 401
+    else событие bot_started
+        W->>Q: add, id задания — игрок, время события и хеш кода
+        alt Redis недоступен
+            W-->>X: 503, MAX повторит доставку до 10 раз за 8 часов
+        else записано, повтор того же события — то же задание
+            W-->>X: 200
+        end
+    else прочие типы событий
+        W-->>X: 200 без обработки
+    end
+
+    Q->>H: задание bot_started
+    alt payload пуст
+        H->>X: POST /messages — «открой задание в игре»
+    else есть код
+        H->>E: consume(max, код, id игрока в MAX)
+        alt связь не записалась
+            E-->>H: ошибка, задание повторится по расписанию BullMQ
+        else linked или already
+            H->>T: каталог, адреса включённых заданий-каналов MAX
+            H->>X: POST /messages — «Готово!» и до трёх кнопок-ссылок
+        else taken или expired
+            H->>X: POST /messages — свой текст, без кнопки
+        end
+    end
+```
+
+- **Секрет подписки — единственная защита вебхука.** Неугадываемый путь ею не
+  считается. Подчёркивание из секрета, который создаёт панель, заменяется
+  дефисом: описание поля у MAX допускает латиницу, цифры и дефис.
+- **События не теряются и не дублируются.** Запись в Redis — до ответа 200; у
+  события MAX нет идентификатора, поэтому id задания собирается из игрока,
+  времени события и хеша кода (сам код в Redis открытым не лежит). Выполненное
+  задание помнится сутки: MAX повторяет доставку до 8 часов.
+- **Ответ игроку не повторяется.** Код забирается один раз: упавшая отправка —
+  только строка лога, а повтор `consume` ответил бы связанному игроку «ссылка
+  устарела». Задание повторяется лишь тогда, когда связь не записалась.
+- **Подписка на канал** — `GET /chats/{chatId}/members?user_ids=…` ботом —
+  администратором канала: пустой ответ — не подписан; сеть, 429 и 5xx — «позже»;
+  нет канала, бот не администратор, неверный ключ — ошибка настройки задания.
+
+### 4.39 Сообщество VK как бот: вебхук Callback API, очередь, ответ игроку (этап 4, реализовано)
+
+Игрок Telegram открывает ссылку `https://vk.me/<сообщество>?ref=<код>` из задания
+«вступите в сообщество VK» (Р188, `tasks/T-0378`). VK присылает событие в
+вебхук сервера; сервер записывает его в очередь и отвечает `ok`, а воркер
+связывает VK-id с игровым аккаунтом (§4.37) и отвечает игроку от имени
+сообщества. Вступление потом проверяет порт `ChannelMemberships` — `groups.isMember`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant VK as VK (Callback API)
+    participant C as VkCallbackController
+    participant Q as Redis, очередь vk-events
+    participant W as VkUpdatesWorker
+    participant I as ExternalIdentityService
+    participant A as API VK (vk.api)
+
+    VK->>C: POST /api/v1/vk/callback {type, group_id, secret, event_id, object}
+    alt нет ключа сообщества или секрета
+        C-->>VK: 404
+    else secret не совпал (сверка за постоянное время)
+        C-->>VK: 401, тело дальше не разбирается
+    else type = confirmation
+        alt group_id — своё сообщество
+            C-->>VK: строка подтверждения (text/plain)
+        else чужое
+            C-->>VK: 401
+        end
+    else type = message_new
+        C->>Q: add(jobId = vk-event_id), только from_id и ref
+        alt Redis недоступен
+            C-->>VK: 503, VK повторит доставку
+        else записано (повтор event_id второго задания не заводит)
+            C-->>VK: ok (text/plain)
+        end
+    else прочие типы
+        C-->>VK: ok
+    end
+    Q->>W: задание (до 5 попыток)
+    alt в сообщении нет ref
+        W->>A: messages.send «открой задание в игре»
+    else есть ref
+        W->>I: consume(vk, ref, from_id)
+        I-->>W: linked, already, taken или expired
+        W->>A: messages.send по исходу; при linked и already — ссылка на сообщество и кнопка
+    end
+```
+
+- **Секрет — единственная защита.** Поле `secret` тела сверяется до разбора; адрес
+  вебхука сам по себе не секрет. Ключ сообщества и секрет — «Ключи интеграций»,
+  само сообщество — настройка `vk.community`; без ключа и секрета вебхука для
+  внешнего мира нет.
+- **Сначала очередь, потом `ok`.** Событие записано до ответа, повтор доставки
+  отсекает id задания. Ответ VK — текст, а не `{ data }`: так требует Callback API.
+- **Только личный диалог.** В беседе, куда сообщество добавили, бот молчит;
+  `event_id`, негодный в id задания очереди, не отказ, а событие без отсечения
+  повторов. Метрика `vk_callback_total{type,result}` — строкой лога раз в минуту.
+- **Ответ игроку — не часть записи связи.** Не ушёл — лог без повтора, потому что
+  связь уже записана; упавший `consume` — исключение, очередь повторит задание.
+- **Ключ — в теле запроса к API VK**, не в адресе и не в логах. Нет кнопок у
+  сообщества (ошибка 912) — то же сообщение уходит без кнопки.
+
+### 4.40 Компенсация за сбой оплаты (этап 4, реализована серверная часть)
+
+Владелец извиняется самоцветами из карточки платежа (Р209, WP53, `tasks/T-0435`):
+панель спрашивает предложение, потом начисляет. Окно — T-0438, сообщение игроку —
+T-0436 (слушает то же событие поддержки, а о возврате звёзд — событие `onRefundDone`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель
+    participant C as AdminPaymentCompensationController
+    participant S as PurchaseCompensations
+    participant D as Postgres (purchase_compensation)
+    participant W as WalletService
+    participant A as Журнал действий
+    participant H as PaymentsHooks
+    participant N as PurchaseNotices
+    participant F as NotificationsService (лента и бот)
+
+    P->>C: GET admin/payments/:id/compensation
+    C->>S: preview(актёр, покупка)
+    Note over S: право payments.compensate; эквивалент × множитель, не больше потолка; ручные начисления за 30 суток
+    S-->>P: предложение, blockedReason, existing, recentManual
+
+    P->>C: POST admin/payments/:id/compensate {gems, note}
+    C->>S: compensate(актёр, покупка, {gems, note})
+    S->>S: право → покупка → compensationBlock
+    alt нельзя: не записана, донат, тест, своя, уже начислена
+        S-->>P: 409 с текстом (своя покупка — 403)
+    else строки ещё нет
+        S->>S: gems не больше потолка, иначе 400
+        S->>D: insert(строка) — занял покупку
+        alt exists: другой вызов успел раньше
+            S->>D: byPurchase — взять его строку (уже начислена — 409)
+        end
+    end
+    S->>W: grant(gems, payment_compensation, ключ compensation:id)
+    alt кошелёк упал
+        S-->>P: 503: строка осталась без отметки, нажмите ещё раз
+    else начислено или дубль ключа
+        W-->>S: баланс
+        S->>D: markCredited — updateMany где credited_at пусто
+        alt отметку поставил этот вызов
+            S->>A: payments.compensate (цель — аккаунт)
+            S->>H: emitSupport kind=compensate, gems
+            Note over H: поток «Покупки» команде
+            H->>N: onSupport (только compensate с самоцветами)
+            N->>F: deliver purchase_support:compensated:покупка → лента и дубль в бота
+            Note over N,F: сбой ленты — warn purchase_notice_failed, начисление не откатывается
+        end
+        S-->>P: {gems, balance, repaired}
+    end
+```
+
+- **Один раз на покупку — ключами в базе, а не проверками в коде.** Строка —
+  первичный ключ `purchase_id`, самоцветы — уникальный ключ журнала кошелька.
+  Два одновременных нажатия дают одну строку, одну запись кошелька и один рост
+  баланса; вторая сторона получает «уже начислена» или доделывает ту же строку.
+- **Повтор после сбоя берёт сумму из строки.** Сумма нового запроса
+  игнорируется (ни потолок, ни проверка не применяются): решено было одно, и
+  начислить надо ровно его.
+- **Журнал действий, сообщение команде и строка лога — один раз**, тем
+  вызовом, который поставил `credited_at` (условный `UPDATE`).
+- **Карточка платежа** получает строку `compensated`, пометку и действие
+  `compensate` из источника хронологии (`PaymentFeedSources`), не зная об этом
+  модуле; действие пропадает после начисления.
+- **Сообщение игроку — извинение с суммой и датой оплаты** (T-0436): строка
+  ленты и дубль в бота тем же механизмом, что «Сообщение команды» (ключ игрока
+  `bot.teamMessage`, без потолка, тихие часы к нему не применяются). Ключ
+  события — действие и покупка, повтор не удваивает ни ленту, ни бота.
+- **О возврате звёзд игрок узнаёт так же**, но только когда возврат отмечен
+  впервые и причина — `manual` (поддержка) или `undeliverable` (товара нет):
+  `PaymentRefunds.refund` после отзыва остатка зовёт `emitRefundDone`, а
+  `PurchaseNotices` пишет `purchase_support:refunded:покупка`. Тестовая оплата,
+  неиспользованный второй шанс, внешний возврат, лишняя оплата и повтор
+  задания сообщений не дают.
+
+### 4.41 Сверка оплат с выпиской площадки (этап 4, реализована: сервер и действия по расхождениям)
+
+Раз в сутки и по кнопке сервер читает выписку звёзд бота с курсора, сравнивает
+её с покупками и записывает расхождения (Р209, WP53, `tasks/T-0433`). Действия
+команды по расхождению — вторая схема ниже (`tasks/T-0434`), экран — T-0438.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant T as Таймер (час) / кнопка панели
+    participant R as PaymentReconciler
+    participant L as Redis (payments:reconcile:lock)
+    participant D as Postgres (сверки, расхождения, покупки)
+    participant X as PaymentStatement (порт площадки)
+    participant H as PaymentsHooks
+    participant N as ReconcileAlertNotifier
+    participant C as Поток «Покупки»
+
+    T->>R: tick() / runNow(актёр)
+    alt выключатель payments.reconcile выключен
+        R-->>T: тишина / 409 «Сверка выключена в настройках»
+    end
+    R->>L: SET NX PX 15 минут
+    alt лок занят
+        R-->>T: по расписанию ничего / 409 «Сверка уже идёт — подождите минуту»
+    end
+    loop по каждой площадке с выпиской
+        R->>D: lastFinished(площадка)
+        Note over R: по расписанию — только если удачная была больше 23 часов назад
+        R->>D: startRun(с позиции: прошлая to_offset минус 100)
+        loop страницы по 100, пока страница полная, до 100 страниц
+            R->>X: page(offset, 100) — под таймаутом 20 с
+            X-->>R: операции, от старых к новым
+        end
+        R->>D: открытые расхождения, покупки по оплатам, по payload, оплаченные внутри отрезка
+        R->>R: compare — три вида, свежее 15 минут не сверяется
+        R->>D: insertFound (уникальный ключ: повторная находка — не новая)
+        R->>D: resolveMatched — сошедшееся закрывается само
+        alt ошибка площадки или базы
+            R->>D: finishRun(error, без to_offset): следующая сверка начнёт с того же места
+        else дочитали
+            R->>D: finishRun(to_offset, счётчики)
+            opt есть новые
+                R->>H: emitReconcileFound
+                H->>N: onReconcileFound
+                N->>C: одно сообщение на сверку
+            end
+        end
+    end
+    R->>L: снять лок своим токеном
+```
+
+- **Курсор — позиция в выписке, а не время.** Выписка идёт от старых к новым,
+  позиции не сдвигаются; сверка начинает с `to_offset` прошлой удачной минус 100
+  (запас на границе). Сверка с ошибкой курсор не двигает.
+- **Одна сверка на все реплики** — лок Redis; срок проверяется под локом, а
+  чтение останавливается за 20 секунд до его конца, чтобы сверка не пережила лок.
+- **«Записано, но нет в выписке»** ищется только внутри прочитанного отрезка:
+  от первой операции плюс 30 минут до последней. Покупка, оплата которой
+  записана повтором много позже самой оплаты, может дать ложное расхождение —
+  его закрывает «Разобрано» (T-0434, схема ниже).
+- **Само закрывается**, если при следующей сверке условие пропало: оплата
+  записалась, возврат отмечен, оплата нашлась в выписке (`resolution = matched`).
+
+Действия команды по расхождению (Р209, `tasks/T-0434`): «Повторить учёт»,
+«Вернуть звёзды», «Разобрано». «Повторить учёт» в карточке платежа без
+брошенных заданий идёт сюда же — по открытому расхождению покупки.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant P as Панель / карточка платежа
+    participant A as PaymentDiscrepancies
+    participant D as Postgres (расхождения)
+    participant Q as PaymentsQueue
+    participant W as Воркер очереди оплаты
+    participant J as Журнал, PaymentsHooks
+
+    P->>A: retry | refund | dismiss (расхождение, причина)
+    A->>A: payments.support, расхождение есть, не закрыто, не своя оплата
+    A->>A: действие доступно по виду (409 с текстом, что делать)
+    A->>D: claim: UPDATE … WHERE resolved_at IS NULL
+    alt занял не этот вызов (двойное нажатие)
+        A-->>P: 409 «Расхождение уже разобрано», задания нет
+    else занял
+        alt «Повторить учёт», списано но не записано
+            A->>Q: replay(confirm по выписке, at = время операции площадки)
+        else «Повторить учёт», возврат не у нас
+            A->>Q: replay(refunded по выписке, at = время операции площадки)
+        else «Вернуть звёзды»
+            A->>Q: dispatchRefunds(возврат без покупки, причина manual)
+        end
+        Q->>W: задание с jobId «вид-отпечаток-reconcile»
+        Note over W: запись идемпотентна по оплате, выдача — по ключу покупки;<br/>неизвестный счёт вернёт звёзды сам (unmatched)
+        A->>J: payments.discrepancy.* в журнал, сообщение команде при найденной покупке
+        A-->>P: расхождение после действия
+    end
+```
+
+- **Занять раньше, чем действовать.** Условное обновление — единственный
+  арбитр гонки: двойное нажатие даёт одно задание и одну запись в журнал.
+  Метка `reconcile` в `jobId` нужна, чтобы BullMQ не отбросил второе задание
+  той же оплаты: прежнее могло остаться выполненным или брошенным.
+- **Время оплаты — время операции площадки**, а не время повтора: по нему
+  считаются холд и срок VIP. Подтверждение от бота несёт время прихода
+  обновления, поэтому и повтор брошенного задания пишет оплату временем оплаты.
+- **«Разобрано»** ничего не записывает и не возвращает, сообщения команде не
+  шлёт; доступно у всех трёх видов. «Вернуть звёзды» — только у «списано, но не
+  записано»: у записанной оплаты возврат — в карточке платежа.
+
+### 4.42 Правка цены заявкой с подтверждением второго участника (этап 4, реализовано)
+
+Цена товара — каталог в коде, правка команды ложится поверх него (`19-content-admin.md`
+§6, `29-admin-panel.md` §5.8, `tasks/T-0309`). Предлагает один, подтверждает другой.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Автор (панель)
+    participant C as AdminChangeRequestsController
+    participant S as ChangeRequestsService
+    participant K as SkuPriceKind
+    participant D as Postgres (change_request, shop_sku_override)
+    participant N as Лента и чат админов
+    participant B as Второй участник (панель)
+    participant V as ShopService (витрина и счета)
+    participant J as Журнал действий
+
+    A->>C: POST admin/change-requests {kind, target, after, reason}
+    C->>S: propose(актёр, тело)
+    Note over S: право sku.price.edit, схема тела, причина до 200 знаков
+    S->>D: транзакция под блокировкой пары вид+цель
+    S->>K: prepare — было из каталога с действующей правкой, схема товара
+    alt не по схеме: цена 0, лишнее поле, ничего не меняется
+        K-->>A: 422 change_request_value_invalid
+    else
+        S->>D: прежняя живая заявка → superseded или expired, новая → pending
+        S->>J: change_request.create
+        S->>N: строка ленты участникам с правом, кроме автора, и сообщение в общий чат
+        S-->>A: 201 заявка
+    end
+
+    B->>C: POST admin/change-requests/:id/approve
+    C->>S: approve(актёр, заявка)
+    alt решает автор
+        S-->>B: 403 change_request_own
+    else
+        S->>D: транзакция под блокировкой цели, заявка уже не pending → 409 closed
+        alt прошло 72 часа
+            S->>D: заявка → expired
+            S-->>B: 409 change_request_expired
+        else
+            S->>K: current — цель всё ещё равна было
+            alt цель изменилась
+                S->>D: заявка → superseded
+                S-->>B: 409 change_request_stale
+            else
+                S->>D: заявка → approved, upsert shop_sku_override, одной транзакцией
+                S->>J: change_request.approve и change_request.apply
+                S->>V: сбросить кэш правок реплики
+                S-->>B: 201 заявка approved
+            end
+        end
+    end
+
+    Note over V,D: покупка до правки остаётся по цене счёта, новые счета и витрина берут новую
+```
+
+- **Блокировка — на пару «вид + цель».** Две заявки на один товар и два подтверждения
+  одной заявки выстраиваются в очередь; частичный уникальный индекс держит «одна
+  живая заявка на цель» и под гонкой.
+- **Закрывается заявка до записи правки**, обе — в одной транзакции: проход срока
+  (`expired`) не может опередить применение, а упавшая запись откатывает и заявку.
+- **Правка и каталог.** Витрина, счёт и выдача берут товар из `ShopOverrides`:
+  каталог в коде плюс правка, итог проходит `shopSkuSchema`; битая правка
+  пропускается с записью в лог. Кэш реплики — 10 секунд.
+- **Уведомление не блокирует решение:** сбой ленты или чата — предупреждение в логе,
+  заявка уже записана.
+
+### 4.43 Повтор забега в sim-worker (этап 4, реализован воркер)
+
+Сервер перепроверяет забеги: обязательные — верх досок, высокие дивизионы, редкая
+добыча, Страж; остальные выборкой (`35-stage4-plan.md` WP5, `tasks/T-0319`). Повтор —
+вторая работа `sim-worker` (Р15) рядом с проверкой черновика (§4.33): тот же движок,
+та же функция `replayRecording`, что у `pnpm replay`, но по заданию очереди `replay`
+(`tasks/T-0318`, `28-diagnostics.md` §3.4). Воркер ничего не решает: он отдаёт исход,
+а что с ним делать, определяет сервер.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as Сервер (T-0319)
+    participant R as Redis, очередь replay
+    participant W as sim-worker
+    participant G as Затвор процесса
+    participant C as Воркер проверок content-check
+    participant E as Движок (replaySteps)
+    participant M as Prometheus
+
+    S->>R: задание {runId, proof, contentSnapshot | null, claimed}, приоритет — по важности забега
+    R->>W: задание, конкурентность 1
+    W->>G: встать в полосу replay
+    Note over G,C: затвор общий с воркером проверок: тяжёлое идёт по одной,<br/>из ждущих первой — проверка контента, ждёт человек в панели
+    G-->>W: затвор у повтора
+    W->>W: запись по схеме, сверка неповторимости, контент: снимок — схема, 2 МБ, хэш = contentHash записи
+    alt запись не по схеме
+        W-->>R: {verdict: broken, reason}
+    else запись обрезана
+        W-->>R: {verdict: not_replayable}
+    else снимка нет и хэш чужой, или снимок не сошёлся с хэшем
+        W-->>R: {verdict: content_mismatch}, повтор не стартует
+    else можно повторять
+        loop части по 600 шагов
+            W->>E: повтор: директор спавна и шаг мира на каждый код лога, выборы и вторые шансы на своих тиках
+            E-->>W: свёртки по пути сверены, остановка
+            W->>W: предел 60 с от начала повтора, отдать цикл событий
+        end
+        alt предел вышел
+            W-->>R: {verdict: timeout}
+        else повтор закончен
+            W->>W: итог повтора против заявленного клиентом
+            W-->>R: {verdict: match | mismatch, divergedTick, replayed, reason}
+        end
+    end
+    W->>G: отпустить затвор
+    W->>M: sim_jobs_total{queue=replay, outcome=вердикт}, sim_job_seconds{queue=replay}
+    S->>R: исход — событием завершения задания
+```
+
+- **Исход один на задание.** `match` — забег повторился; `mismatch` — повтор разошёлся
+  (тик свёртки, выбора или второго шанса) или сошёлся сам, но не с тем, что клиент
+  заявил серверу (время, уровень, убийства, контрольная сумма), тика у такого нет;
+  `content_mismatch`, `not_replayable`, `broken`, `timeout` — повторить не вышло, это
+  не расхождение игрока.
+- **Упавшее задание.** Форма самого задания не сошлась (нет `runId` или `claimed`) —
+  задание падает, метрика `outcome="error"`; воркер остаётся жив.
+- **Один повтор — не дольше минуты**, проверка ждёт идущий повтор не дольше этого же
+  срока: начатое не прерывается.
 
 ## 5. Топология развёртывания
 

@@ -54,6 +54,8 @@ import {
 import { imageUrl } from "../../api/media";
 import { api } from "../../services";
 import { ImageField } from "../../ui/image-field";
+import { readSource, refillSourceImages, takeSourceImage } from "../../ui/source-image";
+import { toast } from "../../ui/toast";
 import { FormDialog, isDirty } from "../../ui/form-dialog";
 import { PhonePreview } from "../../ui/phone-preview";
 import { Badge, Button, DataTable, ErrorNotice, Field, FieldRow, Input, Loading, Notice, Panel, RowItem, Select } from "../../ui/kit";
@@ -61,6 +63,7 @@ import { HELP } from "../../ui/help";
 import { applyOrder } from "../../ui/sortable-order";
 import { useApi } from "../../ui/use-api";
 import { NetworkTasksPanel } from "./NetworkTasksPanel";
+import { TaskCustomerFields } from "./task-customer-fields";
 
 type Outcome = { tone: "success"; text: string } | { tone: "danger"; error: ApiError } | null;
 
@@ -93,9 +96,13 @@ export function TasksScreen() {
   const [override, setOverride] = useState<{ group: TaskGroup; ids: string[] } | null>(null);
   /** Пока запрос порядка в пути, ручки неактивны: второй порядок поверх первого дал бы гонку. */
   const [reordering, setReordering] = useState(false);
+  /** Идёт «Картинки источников»: задания обходятся по одному, повторный запуск поверх не нужен. */
+  const [refilling, setRefilling] = useState(false);
 
   const catalog = state.status === "ok" ? state.data.tasks : [];
   const kinds = state.status === "ok" ? state.data.kinds : Object.keys(KIND_TITLES);
+  /** Прежние заказчики — подсказка к полю: отчёт группирует по строке, и опечатка разбила бы заказчика надвое. */
+  const customers = [...new Set(catalog.flatMap((task) => (task.customer === null ? [] : [task.customer])))].sort((x, y) => x.localeCompare(y, "ru"));
   const problem = taskProblem(input, original === null, catalog);
 
   const reset = () => {
@@ -150,6 +157,20 @@ export function TasksScreen() {
     // При ошибке (в том числе 400: список мог измениться у другого администратора) порядок возвращается к серверному.
     if (!result.ok) setOverride(null);
     setOutcome(result.ok ? { tone: "success", text: "Порядок сохранён" } : { tone: "danger", error: result.error });
+    reload();
+  };
+
+  // Заведённым заданиям без картинки — аватарки источников (Р158): сохранение то же, что у формы.
+  const refill = async (tasks: readonly TaskDef[]) => {
+    setRefilling(true);
+    setOutcome(null);
+    const summary = await refillSourceImages(tasks, {
+      take: (request) => takeSourceImage(api, request),
+      save: async (task) => (await saveTask(api, task)).ok,
+    });
+    setRefilling(false);
+    if (summary.updated > 0) toast.success(summary.text);
+    else toast(summary.text);
     reload();
   };
 
@@ -252,7 +273,14 @@ export function TasksScreen() {
           </FieldRow>
           {clientKind ? <Notice tone="info">{HELP.tasks.clientSignal}</Notice> : null}
           {partner ? (
-            <ImageField label="Картинка" help={HELP.tasks.image} profile="task" value={input.image} onChange={(image) => setInput({ ...input, image })} />
+            <ImageField
+              label="Картинка"
+              help={HELP.tasks.image}
+              profile="task"
+              value={input.image}
+              onChange={(image) => setInput((current) => ({ ...current, image }))}
+              source={readSource(input)}
+            />
           ) : null}
           {partner ? (
             <FieldRow>
@@ -315,6 +343,7 @@ export function TasksScreen() {
               </Field>
             </FieldRow>
           ) : null}
+          {partner ? <TaskCustomerFields input={input} onChange={setInput} customers={customers} channel={channel} /> : null}
           {channel ? (
             <Notice tone="info">
               Бот проверяет подписку, когда игрок нажимает «Проверить», — сделайте его администратором канала: без этого площадка подписчиков не покажет.
@@ -420,12 +449,21 @@ export function TasksScreen() {
               key={group.group}
               title={GROUP_TITLES[group.group]}
               help={HELP.tasks.order}
-              {...(index === 0
+              {...(index === 0 || group.group === "partner"
                 ? {
                     actions: (
-                      <Button tone="primary" onClick={() => openForm(null)}>
-                        Новое задание
-                      </Button>
+                      <>
+                        {group.group === "partner" ? (
+                          <Button disabled={refilling || group.tasks.every((task) => !task.active || task.image !== null || readSource(task).state !== "ready")} onClick={() => void refill(group.tasks)}>
+                            {refilling ? "Берём картинки…" : "Картинки источников"}
+                          </Button>
+                        ) : null}
+                        {index === 0 ? (
+                          <Button tone="primary" onClick={() => openForm(null)}>
+                            Новое задание
+                          </Button>
+                        ) : null}
+                      </>
                     ),
                   }
                 : {})}

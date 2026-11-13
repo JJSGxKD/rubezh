@@ -22,6 +22,8 @@ export interface FeedEvent {
   atMs: number;
   /** время забега в секундах: у `long_run` и `week_record`; у `boss` и `chest` — null */
   seconds: number | null;
+  /** очки забега: только у `week_record` в сезоне по очкам, иначе null */
+  points: number | null;
 }
 
 /** Разбор записи из Redis: данные с границы системы не приводятся через `as`. */
@@ -31,6 +33,8 @@ export const feedEventSchema = z.object({
   accountId: z.string().min(1).max(64),
   atMs: z.number().int().nonnegative(),
   seconds: z.number().nonnegative().nullable(),
+  // Записи, сделанные до перехода на очки, поля не несут.
+  points: z.number().int().nonnegative().nullable().default(null),
 });
 
 /**
@@ -38,7 +42,7 @@ export const feedEventSchema = z.object({
  * поэтому повтор того же события даёт ту же строку и `ZADD NX` его не дублирует.
  */
 export function encodeFeedEvent(event: FeedEvent): string {
-  return JSON.stringify({ id: event.id, kind: event.kind, accountId: event.accountId, atMs: event.atMs, seconds: event.seconds });
+  return JSON.stringify({ id: event.id, kind: event.kind, accountId: event.accountId, atMs: event.atMs, seconds: event.seconds, points: event.points });
 }
 
 /** Что уходит клиенту: без `accountId` и сырого `runId`. */
@@ -50,6 +54,8 @@ export interface FeedEventView {
   /** ISO 8601 */
   at: string;
   seconds: number | null;
+  /** очки: у `week_record` в сезоне по очкам; старые клиенты поле не читают */
+  points: number | null;
 }
 
 export interface FeedView {

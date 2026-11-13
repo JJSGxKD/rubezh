@@ -115,6 +115,15 @@ export class SettingsService implements SettingsReader, OnModuleInit, OnModuleDe
     return removed !== null;
   }
 
+  /**
+   * Значение записано в базу не отсюда — заявкой на правку (tasks/T-0310): память
+   * этой реплики перечитывается сразу, а соседним уходит сообщение.
+   */
+  async reload(key: string): Promise<void> {
+    await this.refresh();
+    await this.publish(key);
+  }
+
   async refresh(): Promise<void> {
     let rows: StoredSetting[];
     try {
