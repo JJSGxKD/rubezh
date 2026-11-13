@@ -5,7 +5,7 @@ import { withTimeout } from "../../common/with-timeout.js";
 import { ACCOUNT_REPOSITORY, type AccountRepository } from "../auth/account.repository.js";
 import { RolesService, type AccountRef } from "../roles/roles.service.js";
 import { ChangeRequestClosedError, ChangeRequestExpiredError, ChangeRequestNotAuthorError, ChangeRequestNotFoundError, ChangeRequestOwnError, ChangeRequestStaleError } from "./change-request-errors.js";
-import { ChangeKindRegistry } from "./change-request-kinds.js";
+import { ChangeKindRegistry, type ChangeKindHandler } from "./change-request-kinds.js";
 import { expiresAt, isExpired, sameJson } from "./change-request-rules.js";
 import {
   CHANGE_TTL_HOURS,
@@ -157,7 +157,7 @@ export class ChangeRequestsService {
         throw new ChangeRequestStaleError();
       case "approved": {
         const { request } = outcome;
-        handler.afterCommit(request);
+        await this.afterCommit(handler, request);
         await this.roles.audit({ actorAccountId: actor.accountId, action: "change_request.approve", target: requestId, before: { status: "pending" }, after: { status: "approved", kind: request.kind, target: request.target } });
         await this.roles.audit({ actorAccountId: actor.accountId, action: "change_request.apply", target: `${request.kind}:${request.target}`, before: request.before, after: request.after });
         this.log("approved", { requestId, kind: request.kind, target: request.target, author: request.author, approver: actor.accountId });
@@ -227,12 +227,26 @@ export class ChangeRequestsService {
   private async views(rows: readonly ChangeRequestRow[]): Promise<ChangeRequestView[]> {
     const ids = [...new Set(rows.flatMap((row) => (row.decidedBy === null ? [row.author] : [row.author, row.decidedBy])))];
     const names = ids.length === 0 ? new Map<string, string>() : await withTimeout(this.accounts.displayNames(ids), DB_TIMEOUT_MS, "имена участников");
-    return rows.map((row) => ({
-      ...row,
-      authorName: names.get(row.author) ?? null,
-      decidedByName: row.decidedBy === null ? null : (names.get(row.decidedBy) ?? null),
-      expiresAt: expiresAt(row),
-    }));
+    return rows.map((row) => {
+      // Вид, которого сервис не знает, список не роняет: у такой заявки просто нет предупреждений.
+      const warnings = this.kinds.all().find((handler) => handler.kind === row.kind)?.warnings?.(row) ?? [];
+      return {
+        ...row,
+        authorName: names.get(row.author) ?? null,
+        decidedByName: row.decidedBy === null ? null : (names.get(row.decidedBy) ?? null),
+        expiresAt: expiresAt(row),
+        ...(warnings.length === 0 ? {} : { warnings }),
+      };
+    });
+  }
+
+  /** Правка уже применена и зафиксирована: упавший хвост (кэш реплики, сообщение соседям) решение не отменяет. */
+  private async afterCommit(handler: ChangeKindHandler, request: ChangeRequestRow): Promise<void> {
+    try {
+      await handler.afterCommit(request);
+    } catch (error: unknown) {
+      this.logger.warn(JSON.stringify({ module: "change-requests", event: "after_commit_failed", requestId: request.requestId, reason: error instanceof Error ? error.message : "unknown" }));
+    }
   }
 
   /** Не бросает: заявка уже в базе, и упавший чат не должен превращать её в ошибку запроса. */

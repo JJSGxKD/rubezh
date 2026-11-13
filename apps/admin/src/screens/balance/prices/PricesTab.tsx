@@ -8,22 +8,23 @@ import { toast, toastError } from "../../../ui/toast";
 import { useApi } from "../../../ui/use-api";
 import { ChangeRequestList } from "./ChangeRequestList";
 import { ProposeDialog } from "./ProposeDialog";
-import { describeChange, skuValuesOf } from "./prices-rules";
-
-const KIND_SKU = "sku_price";
+import { RewardProposeDialog, RewardSettings } from "./RewardSettings";
+import { KIND_REWARD, KIND_SKU, describeChange, skuValuesOf } from "./prices-rules";
 
 /**
  * Вкладка «Цены и награды» раздела «Баланс» (docs/19-content-admin.md §6,
- * tasks/T-0309): товары с ценой сейчас и «Предложить цену», ниже — заявки.
- * Цену меняет только заявка, которую подтвердил другой участник; у автора
- * «Подтвердить» нет. Вкладка не зависит от черновика баланса: цены живут
- * отдельно от чисел забега.
+ * tasks/T-0309, T-0310): товары с ценой сейчас и «Предложить цену», награды
+ * с «Предложить», ниже — заявки на то и другое. Цену и награду меняет только
+ * заявка, которую подтвердил другой участник; у автора «Подтвердить» нет.
+ * Вкладка не зависит от черновика баланса: цены и награды живут отдельно от
+ * чисел забега.
  */
 export function PricesTab(): ReactNode {
   const { state, reload } = useApi(() => fetchChangeRequests(api), []);
   const meId = useSession((session) => (session.view.status === "ready" ? session.view.identity.account.accountId : ""));
   const canEdit = useSession((session) => session.view.status === "ready" && session.view.identity.permissions.includes("sku.price.edit"));
   const [proposing, setProposing] = useState<ChangeTarget | null>(null);
+  const [proposingReward, setProposingReward] = useState<ChangeTarget | null>(null);
   const [approving, setApproving] = useState<ChangeRequest | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -31,8 +32,9 @@ export function PricesTab(): ReactNode {
   if (state.status === "error") return <ErrorNotice error={state.error} onRetry={reload} />;
   const overview: ChangeOverview = state.data;
   const targets = overview.targets[KIND_SKU] ?? [];
-  const titleOf = (kind: string, target: string): string => (kind === KIND_SKU ? (targets.find((candidate) => candidate.target === target)?.title ?? target) : target);
-  const waitingFor = (target: string): ChangeRequest | null => overview.requests.find((request) => request.kind === KIND_SKU && request.target === target && request.status === "pending") ?? null;
+  const rewardTargets = overview.targets[KIND_REWARD] ?? [];
+  const titleOf = (kind: string, target: string): string => ((overview.targets[kind] ?? []).find((candidate) => candidate.target === target)?.title ?? target);
+  const waitingFor = (kind: string, target: string): ChangeRequest | null => overview.requests.find((request) => request.kind === kind && request.target === target && request.status === "pending") ?? null;
 
   const decide = async (request: ChangeRequest, act: (id: string) => ReturnType<typeof rejectChange>, done: string): Promise<void> => {
     setBusy(request.requestId);
@@ -51,7 +53,7 @@ export function PricesTab(): ReactNode {
   return (
     <div className="flex flex-col gap-4">
       <Notice tone="info">
-        Цену меняет заявка: один участник предлагает «было → стало» с причиной, другой с тем же правом подтверждает. Заявка живёт {overview.ttlHours} ч, свою подтвердить нельзя.
+        Цену и награду меняет заявка: один участник предлагает «было → стало» с причиной, другой с тем же правом подтверждает. Заявка живёт {overview.ttlHours} ч, свою подтвердить нельзя.
         {canEdit ? "" : " Только чтение: подавать и решать заявки может тот, у кого есть право «sku.price.edit»."}
       </Notice>
 
@@ -61,11 +63,13 @@ export function PricesTab(): ReactNode {
         ) : (
           <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {targets.map((target) => (
-              <ProductCard key={target.target} target={target} waiting={waitingFor(target.target) !== null} canEdit={canEdit} onPropose={() => setProposing(target)} />
+              <ProductCard key={target.target} target={target} waiting={waitingFor(KIND_SKU, target.target) !== null} canEdit={canEdit} onPropose={() => setProposing(target)} />
             ))}
           </ul>
         )}
       </Panel>
+
+      <RewardSettings targets={rewardTargets} canEdit={canEdit} waitingFor={(target) => waitingFor(KIND_REWARD, target)} onPropose={setProposingReward} />
 
       <Panel title="Заявки">
         <ChangeRequestList
@@ -82,11 +86,24 @@ export function PricesTab(): ReactNode {
 
       <ProposeDialog
         target={proposing}
-        waiting={proposing === null ? null : waitingFor(proposing.target)}
+        waiting={proposing === null ? null : waitingFor(KIND_SKU, proposing.target)}
         onClose={() => setProposing(null)}
         onSent={() => {
           setProposing(null);
           toast.success("Заявка отправлена — цена изменится, когда её подтвердит другой участник");
+          reload();
+        }}
+      />
+
+      <RewardProposeDialog
+        target={proposingReward}
+        waiting={proposingReward === null ? null : waitingFor(KIND_REWARD, proposingReward.target)}
+        onClose={() => setProposingReward(null)}
+        onSent={(request) => {
+          setProposingReward(null);
+          // Предупреждение о потолке кошелька — совет: заявка заведена, но решающий должен его увидеть.
+          toast.success("Заявка отправлена — число изменится, когда её подтвердит другой участник");
+          for (const warning of request.warnings ?? []) toast.warning(warning);
           reload();
         }}
       />
@@ -103,6 +120,7 @@ export function PricesTab(): ReactNode {
             ? []
             : [
                 { label: "Было → стало", value: describeChange(approving.kind, approving.before, approving.after).join("; ") },
+                ...(approving.warnings === undefined || approving.warnings.length === 0 ? [] : [{ label: "Внимание", value: approving.warnings.join("; ") }]),
                 { label: "Автор", value: approving.authorName ?? "—" },
                 { label: "Причина", value: approving.reason },
               ]
@@ -115,7 +133,7 @@ export function PricesTab(): ReactNode {
           // Заявку могли решить или заменить, пока окно было открыто: список перечитывается в любом исходе.
           reload();
           if (!result.ok) return { ok: false, error: result.error.message };
-          toast.success("Заявка подтверждена — новая цена уже действует");
+          toast.success(approving.kind === KIND_REWARD ? "Заявка подтверждена — новое число действует со следующей награды" : "Заявка подтверждена — новая цена уже действует");
           return { ok: true };
         }}
       />

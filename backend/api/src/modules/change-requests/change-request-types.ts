@@ -8,7 +8,7 @@ import type { Prisma } from "../../generated/prisma/client.js";
  * здесь; правила — `change-request-rules.ts`, ход заявки — сервис.
  */
 
-/** Что правится: товар магазина — сейчас, награды — T-0310. Список держит и `CHECK` в миграции. */
+/** Что правится: товар магазина и число награды (ключ каталога настроек). Список держит и `CHECK` в миграции. */
 export const CHANGE_KINDS = ["sku_price", "reward_setting"] as const;
 export type ChangeKind = (typeof CHANGE_KINDS)[number];
 
@@ -58,12 +58,16 @@ export interface ChangeRequestView extends ChangeRequestRow {
   authorName: string | null;
   decidedByName: string | null;
   expiresAt: Date;
+  /** предупреждения вида правки (например, «выше потолка кошелька»); поля нет, когда предупреждать не о чем */
+  warnings?: string[];
 }
 
 /** Цель правки для панели: что стоит в коде, что действует сейчас и менялось ли. */
 export interface ChangeTargetView {
   target: string;
   title: string;
+  /** подсказка к значению для окна заявки: формат и смысл; у видов без неё поля нет */
+  hint?: string;
   current: JsonValue;
   inCode: JsonValue;
   overridden: boolean;
