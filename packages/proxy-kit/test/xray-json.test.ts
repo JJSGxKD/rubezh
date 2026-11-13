@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { ProxyNode } from "../src/node.js";
+import { proxyNodeSchema } from "../src/node-schema.js";
 import { parseShareLink } from "../src/share-link.js";
 import { parseSubscription, SubscriptionFormatError } from "../src/subscription.js";
 import { buildXrayConfig } from "../src/xray-config.js";
@@ -156,25 +157,35 @@ describe("пропуски", () => {
 
   const CASES: [name: string, outbound: J.Json, reason: string, detail: string][] = [
     ["kcp", J.withStream(J.OUT_VLESS_WS_TLS, { network: "kcp" }), "unsupported_transport", "network"],
-    ["tcp с http-заголовком", J.withStream(J.OUT_VLESS_REALITY, { tcpSettings: { header: { type: "http" } } }), "unsupported_option", "headerType"],
+    ["tcp с заголовком srtp", J.withStream(J.OUT_VLESS_REALITY, { tcpSettings: { header: { type: "srtp" } } }), "unsupported_option", "headerType"],
     ["allowInsecure", withTls({ allowInsecure: true }), "unsupported_option", "allowInsecure"],
-    ["ECH", withTls({ echConfigList: "cloudflare-ech.com+https://1.1.1.1/dns-query" }), "unsupported_option", "ech"],
-    ["закрепление сертификата", withTls({ pinnedPeerCertificateChainSha256: ["abc"] }), "unsupported_option", "pcs"],
-    ["постквантовая подпись reality", withReality({ mldsa65Verify: "AAAA" }), "unsupported_option", "pqv"],
     ["безопасность xtls", J.withStream(J.OUT_VLESS_WS_TLS, { security: "xtls" }), "unsupported_option", "security"],
-    ["flow, которого нет у ссылок", withVless({ flow: "xtls-rprx-vision-udp443" }), "unsupported_option", "flow"],
-    ["постквантовое шифрование vless", withVless({ encryption: "mlkem768x25519plus.native.0rtt.AAAA" }), "unsupported_option", "encryption"],
+    ["flow, убранный из Xray", withVless({ flow: "xtls-rprx-direct" }), "unsupported_option", "flow"],
+    ["шифрование vless не по формату ядра", withVless({ encryption: "garbage" }), "malformed", "encryption"],
+    ["ECH с пробелом", withTls({ echConfigList: "a b" }), "malformed", "ech"],
+    ["ECH не строкой", withTls({ echConfigList: ["x"] }), "malformed", "ech"],
+    ["echForceQuery не из списка", withTls({ echConfigList: "x", echForceQuery: "always" }), "malformed", "ech"],
+    ["закреплённый сертификат не hex", withTls({ pinnedPeerCertSha256: "zz" }), "malformed", "pcs"],
+    ["закреплённый сертификат списком", withTls({ pinnedPeerCertSha256: [L.PIN_HEX] }), "malformed", "pcs"],
+    ["старое закрепление не списком строк", withTls({ pinnedPeerCertificateChainSha256: "abc" }), "malformed", "pcs"],
+    ["старая проверка имён не списком строк", withTls({ verifyPeerCertInNames: [5] }), "malformed", "vcn"],
+    ["проверка по имени с пробелом", withTls({ verifyPeerCertByName: "a b" }), "malformed", "vcn"],
+    ["постквантовая проверка reality с пробелом", withReality({ mldsa65Verify: "a b" }), "malformed", "pqv"],
+    ["extra не объектом", J.withStream(J.OUT_VLESS_XHTTP, { xhttpSettings: { path: "/x", extra: "str" } }), "malformed", "extra"],
+    ["extra длиннее 4096 знаков", J.withStream(J.OUT_VLESS_XHTTP, { xhttpSettings: { path: "/x", extra: { v: "x".repeat(5000) } } }), "malformed", "extra"],
+    ["downloadSettings с цепочкой", J.withStream(J.OUT_VLESS_XHTTP, { xhttpSettings: { path: "/x", extra: { downloadSettings: { sockopt: { dialerProxy: "fragment" } } } } }), "unsupported_option", "extra.downloadSettings"],
+    ["dialerProxy на узел vless вместо freedom", J.withStream(J.OUT_VLESS_WS_TLS, { sockopt: { dialerProxy: "proxy" } }), "unsupported_option", "dialerProxy"],
     ["vmess alterId", withVmess({ alterId: 4 }), "unsupported_option", "aid"],
     ["цепочка через dialerProxy", J.withStream(J.OUT_VLESS_WS_TLS, { sockopt: { dialerProxy: "first-hop" } }), "unsupported_option", "dialerProxy"],
-    ["цепочка через proxySettings", J.patched(J.OUT_VLESS_WS_TLS, { proxySettings: { tag: "first-hop" } }), "unsupported_option", "proxySettings"],
+    ["цепочка через proxySettings", J.patched(J.OUT_VLESS_WS_TLS, { proxySettings: { tag: "first-hop" } }), "unsupported_option", "dialerProxy"],
     ["два сервера в vnext", J.patched(J.OUT_VLESS_WS_TLS, { settings: { vnext: [vnextEntry("a.example.com"), vnextEntry("b.example.com")] } }), "unsupported_option", "vnext"],
     ["два пользователя", J.patched(J.OUT_VLESS_WS_TLS, { settings: { vnext: [{ address: "example.com", port: 443, users: [{ id: L.UUID }, { id: L.UUID.replace("1111", "2222") }] }] } }), "unsupported_option", "users"],
     ["плоский vless: не UUID", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: "not-a-uuid" } }), "malformed", "uuid"],
     ["плоский vless: нет id", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443 } }), "malformed", "uuid"],
     ["плоский vless: нет адреса", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { port: 443, id: L.UUID } }), "malformed", "address"],
     ["плоский vless: порт 0", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 0, id: L.UUID } }), "malformed", "port"],
-    ["плоский vless: чужой flow", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, flow: "xtls-rprx-vision-udp443" } }), "unsupported_option", "flow"],
-    ["плоский vless: постквантовое шифрование", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, encryption: "mlkem768x25519plus.native.0rtt.AAAA" } }), "unsupported_option", "encryption"],
+    ["плоский vless: чужой flow", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, flow: "xtls-rprx-direct" } }), "unsupported_option", "flow"],
+    ["плоский vless: шифрование не по формату ядра", J.patched(J.OUT_VLESS_REALITY_FLAT, { settings: { address: "example.com", port: 443, id: L.UUID, encryption: "garbage" } }), "malformed", "encryption"],
     ["адрес с пробелом", withVless({}, "exa mple.com"), "malformed", "address"],
     ["адрес с пробелом по краям", withVless({}, " example.com "), "malformed", "address"],
     ["адрес с переводом строки", withVless({}, "example.com\n"), "malformed", "address"],
@@ -376,5 +387,252 @@ describe("маршрутизация конфигов", () => {
     expect(parsed.nodes).toHaveLength(1);
     // только прежнее правило фикстуры `geoip:private`
     expect(parsed.routing).toEqual({ sources: ["json"], direct: 1, block: 0, hints: ["geoip:private"] });
+  });
+});
+
+describe("способы подключения поставщиков (Р192, T-0387)", () => {
+  const reality = (patch: Record<string, unknown>): J.Json =>
+    J.withStream(J.OUT_VLESS_XHTTP, { realitySettings: { serverName: "www.example.com", publicKey: "PUBLICKEY2", shortId: "cd34", ...patch } });
+  const xhttp = (settings: Record<string, unknown>): J.Json => J.withStream(J.OUT_VLESS_XHTTP, { xhttpSettings: { path: "/x", host: "h.example.com", mode: "auto", ...settings } });
+  const only = (outbound: J.Json): ProxyNode => {
+    const parsed = parse(J.config("x", outbound));
+    expect(parsed.skipped).toEqual([]);
+    return parsed.nodes[0] as ProxyNode;
+  };
+
+  /** Тот же узел, что у ссылки, — по узлу и по конфигу Xray. */
+  const PAIRS: [name: string, link: string, outbound: J.Json][] = [
+    ["xhttp с extra", L.VLESS_XHTTP_EXTRA, xhttp({ extra: L.XHTTP_EXTRA })],
+    ["xhttp: поля extra лежат прямо в xhttpSettings", L.VLESS_XHTTP_EXTRA, xhttp(L.XHTTP_EXTRA)],
+    [
+      "ECH",
+      L.VLESS_TLS_ECH,
+      J.patched(J.OUT_VLESS_WS_TLS, { streamSettings: { network: "tcp", security: "tls", tlsSettings: { serverName: "example.com", echConfigList: L.ECH_CONFIG } } }),
+    ],
+    [
+      "закреплённый сертификат и проверка по имени",
+      L.VLESS_TLS_PINNED,
+      J.patched(J.OUT_VLESS_WS_TLS, { streamSettings: { network: "tcp", security: "tls", tlsSettings: { serverName: "example.com", pinnedPeerCertSha256: L.PIN_HEX, verifyPeerCertByName: "example.com" } } }),
+    ],
+    ["постквантовая проверка reality", L.VLESS_REALITY_PQV, J.withStream(J.OUT_VLESS_REALITY, { realitySettings: { serverName: "www.example.com", fingerprint: "chrome", publicKey: "PUBLICKEY1", shortId: "ab12", mldsa65Verify: L.MLDSA65_VERIFY } })],
+    [
+      "flow с UDP 443",
+      L.VLESS_VISION_UDP443,
+      J.patched(J.OUT_VLESS_REALITY, {
+        settings: { vnext: [{ address: "203.0.113.10", port: 443, users: [{ id: L.UUID, encryption: "none", flow: "xtls-rprx-vision-udp443" }] }] },
+        streamSettings: { network: "tcp", security: "reality", realitySettings: { serverName: "www.example.com", fingerprint: "chrome", publicKey: "PUBLICKEY1", shortId: "ab12" } },
+      }),
+    ],
+    [
+      "шифрование VLESS",
+      L.VLESS_ENCRYPTION,
+      {
+        tag: "proxy",
+        protocol: "vless",
+        settings: { vnext: [{ address: "203.0.113.13", port: 443, users: [{ id: L.UUID, encryption: L.VLESS_ENCRYPTION_VALUE }] }] },
+        streamSettings: { network: "tcp", security: "none" },
+      },
+    ],
+    [
+      "RAW с HTTP-маскировкой",
+      L.VMESS_RAW_HTTP,
+      {
+        tag: "proxy",
+        protocol: "vmess",
+        settings: { vnext: [{ address: "203.0.113.12", port: 80, users: [{ id: L.UUID, alterId: 0, security: "auto" }] }] },
+        streamSettings: { network: "tcp", security: "none", tcpSettings: { header: L.RAW_HTTP_HEADER } },
+      },
+    ],
+    [
+      "RAW под новым именем rawSettings",
+      L.VMESS_RAW_HTTP,
+      {
+        tag: "proxy",
+        protocol: "vmess",
+        settings: { vnext: [{ address: "203.0.113.12", port: 80, users: [{ id: L.UUID, alterId: 0, security: "auto" }] }] },
+        streamSettings: { network: "raw", security: "none", rawSettings: { header: L.RAW_HTTP_HEADER } },
+      },
+    ],
+  ];
+
+  describe("узел из JSON равен узлу из ссылки", () => {
+    for (const [name, link, outbound] of PAIRS) {
+      it(name, () => {
+        const fromLink = nodeOfLink(link);
+        const fromJson = parse([J.config(fromLink.name, outbound)]);
+
+        expect(fromJson.skipped).toEqual([]);
+        expect(fromJson.nodes).toEqual([fromLink]);
+        expect(outboundOf(fromJson.nodes[0] as ProxyNode)).toEqual(outboundOf(fromLink));
+      });
+    }
+  });
+
+  describe("extra у XHTTP", () => {
+    it("прочие поля xhttpSettings и объект extra сливаются, extra важнее при совпадении ключа", () => {
+      const node = only(xhttp({ xPaddingBytes: "1-2", noSSEHeader: true, extra: { xPaddingBytes: "100-1000", xmux: { maxConcurrency: "16-32" } } }));
+      expect(node.transport).toEqual({
+        network: "xhttp",
+        path: "/x",
+        host: "h.example.com",
+        mode: "auto",
+        extra: { xPaddingBytes: "100-1000", noSSEHeader: true, xmux: { maxConcurrency: "16-32" } },
+      });
+    });
+
+    it("только path, host и mode — extra нет", () => {
+      expect(only(J.OUT_VLESS_XHTTP).transport).not.toHaveProperty("extra");
+    });
+
+    it("downloadSettings с обычным sockopt проходит, с dialerProxy — пропуск extra.downloadSettings", () => {
+      const download = { address: "203.0.113.12", port: 443, network: "xhttp", security: "reality", sockopt: { mark: 0 } };
+      expect(only(xhttp({ extra: { downloadSettings: download } })).transport.extra).toEqual({ downloadSettings: download });
+
+      const parsed = parse(J.config("x", xhttp({ extra: { downloadSettings: { ...download, sockopt: { dialerProxy: "fragment" } } } })));
+      expect(parsed.skipped).toMatchObject([{ reason: "unsupported_option", detail: "extra.downloadSettings" }]);
+      // то же, если поле лежит прямо в xhttpSettings
+      expect(parse(J.config("x", xhttp({ downloadSettings: { sockopt: { dialerProxy: "fragment" } } }))).skipped).toMatchObject([{ detail: "extra.downloadSettings" }]);
+    });
+
+    it("у httpupgrade лишние поля по-прежнему отбрасываются", () => {
+      const outbound = J.withStream(J.OUT_VLESS_HTTPUPGRADE, { httpupgradeSettings: { path: "/up", host: "up.example.com", extra: { a: 1 } } });
+      expect(only(outbound).transport).toEqual({ network: "httpupgrade", path: "/up", host: "up.example.com" });
+    });
+  });
+
+  describe("TLS и REALITY", () => {
+    const tls = (patch: Record<string, unknown>): J.Json => J.withStream(J.OUT_VLESS_WS_TLS, { tlsSettings: { serverName: "cdn.example.com", ...patch } });
+
+    it("echConfigList, echForceQuery, pinnedPeerCertSha256 и verifyPeerCertByName — в узел", () => {
+      expect(only(tls({ echConfigList: L.ECH_CONFIG, echForceQuery: "half", pinnedPeerCertSha256: L.PIN_HEX, verifyPeerCertByName: "cdn.example.com" })).security).toMatchObject({
+        kind: "tls",
+        ech: L.ECH_CONFIG,
+        echForceQuery: "half",
+        pinnedPeerCertSha256: L.PIN_HEX,
+        verifyPeerCertByName: "cdn.example.com",
+      });
+    });
+
+    it("пустые значения — как не заданные", () => {
+      const node = only(tls({ echConfigList: "", pinnedPeerCertSha256: "", verifyPeerCertByName: "" }));
+      for (const field of ["ech", "pinnedPeerCertSha256", "verifyPeerCertByName", "legacyPinning"]) expect(node.security, field).not.toHaveProperty(field);
+    });
+
+    it("старые поля закрепления Xray принимает — они идут в legacyPinning как есть", () => {
+      expect(only(J.OUT_VLESS_TLS_LEGACY_PINNING).security).toMatchObject({ kind: "tls", legacyPinning: J.LEGACY_PINNING });
+      expect(only(tls({ verifyPeerCertInNames: ["a.example.com"] })).security).toMatchObject({ legacyPinning: { verifyPeerCertInNames: ["a.example.com"] } });
+    });
+
+    it("mldsa65Verify у reality — в узел", () => {
+      expect(only(reality({ mldsa65Verify: L.MLDSA65_VERIFY })).security).toMatchObject({ kind: "reality", mldsa65Verify: L.MLDSA65_VERIFY });
+    });
+
+    it("allowInsecure по-прежнему пропуск, даже рядом с закреплением", () => {
+      const parsed = parse(J.config("x", tls({ allowInsecure: true, pinnedPeerCertSha256: L.PIN_HEX })));
+      expect(parsed.skipped).toMatchObject([{ reason: "unsupported_option", detail: "allowInsecure" }]);
+    });
+  });
+
+  describe("RAW", () => {
+    const withHeader = (header: unknown, key: "tcpSettings" | "rawSettings" = "tcpSettings"): J.Json =>
+      J.patched(J.OUT_VMESS_WS_TLS, { streamSettings: { network: "tcp", security: "none", [key]: { header } } });
+
+    it("header.type = http — rawHeader целиком", () => {
+      const header = { type: "http", request: { version: "1.1", method: "GET", path: ["/a"], headers: { Host: ["h.example.com"], "User-Agent": ["x"] } } };
+      expect(only(withHeader(header)).transport).toEqual({ network: "tcp", rawHeader: header });
+      expect(only(withHeader(header, "rawSettings")).transport).toEqual({ network: "tcp", rawHeader: header });
+    });
+
+    it("none, пусто и без header — без rawHeader", () => {
+      for (const header of [{ type: "none" }, { type: "" }, {}, undefined]) expect(only(withHeader(header)).transport, JSON.stringify(header)).toEqual({ network: "tcp" });
+    });
+
+    it("слишком большой заголовок — malformed / headerType", () => {
+      const parsed = parse(J.config("x", withHeader({ type: "http", request: { path: ["/"], blob: "x".repeat(5000) } })));
+      expect(parsed.skipped).toMatchObject([{ reason: "malformed", detail: "headerType" }]);
+    });
+  });
+
+  describe("цепочка на freedom того же конфига", () => {
+    const withChain = (node: J.Json, ...siblings: J.Json[]): ReturnType<typeof parse> => parse(J.config("chain", [node, ...siblings]));
+    const proxySettings = (tag: string): J.Json => J.patched(J.OUT_VLESS_DIALER, { streamSettings: { network: "tcp", security: "tls", tlsSettings: { serverName: "example.com" } }, proxySettings: { tag } });
+
+    it("sockopt.dialerProxy на freedom: настройки выхода — в узел, сам freedom не узел и не пропуск", () => {
+      const parsed = withChain(J.OUT_VLESS_DIALER, J.OUT_FRAGMENT);
+      expect(parsed.skipped).toEqual([]);
+      expect(parsed.nodes).toHaveLength(1);
+      expect(parsed.nodes[0]?.dialer).toEqual({ settings: J.FRAGMENT_SETTINGS });
+    });
+
+    it("порядок выходов не важен: freedom может стоять до узла", () => {
+      const parsed = withChain(J.OUT_FRAGMENT, J.OUT_VLESS_DIALER);
+      expect(parsed.nodes[0]?.dialer).toEqual({ settings: J.FRAGMENT_SETTINGS });
+    });
+
+    it("proxySettings.tag — то же, что dialerProxy", () => {
+      expect(withChain(proxySettings("fragment"), J.OUT_FRAGMENT).nodes[0]?.dialer).toEqual({ settings: J.FRAGMENT_SETTINGS });
+    });
+
+    it("freedom без settings — пустые настройки; пустой dialerProxy — цепочки нет", () => {
+      expect(withChain(J.OUT_VLESS_DIALER, { tag: "fragment", protocol: "freedom" }).nodes[0]?.dialer).toEqual({ settings: {} });
+      const none = J.withStream(J.OUT_VLESS_DIALER, { sockopt: { dialerProxy: "" } });
+      expect(withChain(none).nodes[0]).not.toHaveProperty("dialer");
+    });
+
+    it("узел с цепочкой и узел без неё — разные ключи", () => {
+      const chained = withChain(J.OUT_VLESS_DIALER, J.OUT_FRAGMENT).nodes[0];
+      const plain = withChain(J.withStream(J.OUT_VLESS_DIALER, { sockopt: {} })).nodes[0];
+      expect(chained?.key).not.toBe(plain?.key);
+    });
+
+    it("настройки с redirect — пропуск dialerProxy.redirect: трафик ушёл бы на другой адрес", () => {
+      const parsed = withChain(J.OUT_VLESS_DIALER, { tag: "fragment", protocol: "freedom", settings: { redirect: "203.0.113.50:443" } });
+      expect(parsed.nodes).toEqual([]);
+      expect(parsed.skipped).toMatchObject([{ reason: "unsupported_option", detail: "dialerProxy.redirect" }]);
+      expect(JSON.stringify(parsed.skipped)).not.toContain("203.0.113.50");
+    });
+
+    it("соседа с таким тегом нет, он не freedom или он сам идёт через другой выход — пропуск dialerProxy", () => {
+      const vless = J.patched(J.OUT_VLESS_WS_TLS, { tag: "fragment" });
+      const chained = { tag: "fragment", protocol: "freedom", settings: {}, proxySettings: { tag: "other" } };
+      const chainedSockopt = { tag: "fragment", protocol: "freedom", settings: {}, streamSettings: { sockopt: { dialerProxy: "other" } } };
+      const cases: [name: string, siblings: J.Json[]][] = [
+        ["соседа нет", []],
+        ["сосед — узел vless", [vless]],
+        ["сосед сам идёт через proxySettings", [chained]],
+        ["сосед сам идёт через sockopt", [chainedSockopt]],
+        ["сосед с другим тегом", [{ tag: "other", protocol: "freedom" }]],
+      ];
+      for (const [name, siblings] of cases) {
+        const parsed = withChain(J.OUT_VLESS_DIALER, ...siblings);
+        expect(parsed.skipped.filter((skip) => skip.detail === "dialerProxy"), name).toHaveLength(1);
+        expect(parsed.nodes.every((node) => node.dialer === undefined), name).toBe(true);
+      }
+    });
+
+    it("сосед из другого конфига массива не виден", () => {
+      const parsed = parse([J.config("a", J.OUT_VLESS_DIALER), J.config("b", J.OUT_FRAGMENT)]);
+      expect(parsed.skipped).toMatchObject([{ reason: "unsupported_option", detail: "dialerProxy" }]);
+    });
+
+    it("sockopt.dialerProxy и proxySettings на разные теги — пропуск dialerProxy", () => {
+      const both = J.patched(J.OUT_VLESS_DIALER, { proxySettings: { tag: "other" } });
+      expect(withChain(both, J.OUT_FRAGMENT, { tag: "other", protocol: "freedom" }).skipped).toMatchObject([{ detail: "dialerProxy" }]);
+    });
+
+    it("proxySettings без тега — пропуск proxySettings, как раньше", () => {
+      const outbound = J.patched(J.OUT_VLESS_WS_TLS, { proxySettings: { transportLayer: true } });
+      expect(withChain(outbound).skipped).toMatchObject([{ reason: "unsupported_option", detail: "proxySettings" }]);
+    });
+
+    it("слишком большие настройки freedom — malformed / dialerProxy", () => {
+      const parsed = withChain(J.OUT_VLESS_DIALER, { tag: "fragment", protocol: "freedom", settings: { noises: [{ packet: "x".repeat(5000) }] } });
+      expect(parsed.skipped).toMatchObject([{ reason: "malformed", detail: "dialerProxy" }]);
+    });
+
+    it("узел с цепочкой, собранный в конфиг, принимает схему узла", () => {
+      const node = withChain(J.OUT_VLESS_DIALER, J.OUT_FRAGMENT).nodes[0] as ProxyNode;
+      expect(proxyNodeSchema.parse(JSON.parse(JSON.stringify(node)))).toEqual(node);
+    });
   });
 });

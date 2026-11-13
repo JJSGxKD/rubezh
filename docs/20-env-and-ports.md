@@ -710,9 +710,23 @@ SOCKS-вход, порт `XRAY_SOCKS_PORT_BASE` плюс слот. Порты н
 `0.0.0.0:XRAY_STATS_PORT` внутри сети `tunnel`, порт не публикуется, `compose.yml` не
 менялся. API раз в минуту читает счётчики со сбросом (gRPC поверх `node:http2`) и
 прибавляет их к часовым корзинам `proxy_traffic_hour`; других служб API Xray (правка
-выходов на лету и т. п.) нет. Смена версии Xray: поправить тег и digest в `Dockerfile`, прогнать
-`bash infra/prod/xray/check-config.sh` (золотые конфиги `@bh/proxy-kit` через
-`xray run -test`) и приложить результат к PR.
+выходов на лету и т. п.) нет. Смена версии Xray (Р192, `tasks/T-0387`):
+
+1. Открыть `https://github.com/XTLS/Xray-core/releases` и взять последний выпуск **без**
+   пометки Pre-release. Он старше действующего в `Dockerfile` — не откатываться молча,
+   сначала вопрос тимлиду.
+2. Тег и digest списка образов — `docker buildx imagetools inspect ghcr.io/xtls/xray-core:<тег>`;
+   поправить строку `FROM` в `infra/prod/xray/Dockerfile`.
+3. Пути, которые копирует `Dockerfile` (`/usr/local/bin/xray`, `/usr/local/share/xray`,
+   `/etc/ssl/certs/ca-certificates.crt`), проверить в новом образе: официальный образ без
+   оболочки, поэтому `docker create` и `docker cp` этих путей. Нет пути — стоп, вопрос
+   тимлиду.
+4. Прогнать `bash infra/prod/xray/check-config.sh` (золотые конфиги `@bh/proxy-kit` через
+   `xray run -test`; ключи формы ECH, постквантовой подписи и шифрования VLESS скрипт
+   порождает сам командами `xray tls ech`, `xray mldsa65`, `xray vlessenc`): все строки
+   `ok`. Что новый Xray не принял — правится в таблице `F` в `xray-config.ts` и в золотых
+   файлах.
+5. В PR — вывод `xray version` из собранного образа и вывод `check-config.sh`.
 
 **Если Xray не принял конфиг.** В панели у подписки «Обновлена … — N узлов», а узлы
 «Не отвечают» или не проверены. `docker compose logs xray` показывает строку
