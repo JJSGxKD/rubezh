@@ -59,6 +59,8 @@ export const ANALYTICS_EVENTS = [
   "promo_code_applied",
   "task_completed",
   "task_points_claimed",
+  "pass_opened",
+  "pass_reward_claimed",
   "achievement_unlocked",
   "achievement_favorites_set",
   "task_link_opened",

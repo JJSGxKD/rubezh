@@ -342,6 +342,12 @@ export const EVENT_DICTIONARY = {
   task_completed: { version: 1, payload: payload({ task: id, period: z.enum(["daily", "weekly"]), kind: id, tier: z.enum(["easy", "medium", "hard"]).optional() }) },
   // Забрал награду за ступень очков заданий (T-0105): `step` — порог ступени.
   task_points_claimed: { version: 1, payload: payload({ period: z.enum(["daily", "weekly"]), step: z.number().int().min(1).max(100_000) }) },
+  // Батл-пасс (docs/35-stage4-plan.md Р46, tasks/T-0314): открыл вкладку «Пасс» — `from`
+  // говорит откуда (вкладка заданий, виджет главной, уведомление о закрытии, ссылка);
+  // забрал награду ступени — `tier` 1–30 и `lane`. Событие шлёт клиент после ответа
+  // сервера; серверные строки пасса — лог и таблицы, не события (docs/22 §3.3).
+  pass_opened: { version: 1, payload: payload({ from: z.enum(["tab", "widget", "notification", "link"]) }) },
+  pass_reward_claimed: { version: 1, payload: payload({ tier: z.number().int().min(1).max(30), lane: z.enum(["free", "vip"]) }) },
   // Необязательные `category` и `prestige` (T-0106): какие категории закрывают и за какой престиж;
   // у партнёрской цели их нет. Событие шлёт клиент после забора, смысл прежний.
   achievement_unlocked: {
