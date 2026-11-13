@@ -32,7 +32,8 @@ describe("ответ сервера об участниках", () => {
   });
 
   it("нехватка поля — ошибка", () => {
-    const { ownerSharePercent: _omit, ...broken } = VIEW;
+    const broken: Record<string, unknown> = { ...VIEW };
+    delete broken["ownerSharePercent"];
     expect(stakeholdersViewSchema.safeParse(broken).success).toBe(false);
   });
 
