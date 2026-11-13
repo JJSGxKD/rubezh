@@ -31,5 +31,5 @@ ALTER TABLE "ledger_template" ADD CONSTRAINT "ledger_template_article_id_fkey" F
 ALTER TABLE "ledger_template" ADD CONSTRAINT "ledger_template_place_account_id_fkey" FOREIGN KEY ("place_account_id") REFERENCES "ledger_account"("account_id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- Правила, которые схема Prisma не выражает: месяц — только у годового шаблона и от 1 до 12; сумма больше нуля
-ALTER TABLE "ledger_template" ADD CONSTRAINT "ledger_template_month_check" CHECK (("schedule" = 'yearly' AND "month" BETWEEN 1 AND 12) OR ("schedule" = 'monthly' AND "month" IS NULL));
+ALTER TABLE "ledger_template" ADD CONSTRAINT "ledger_template_month_check" CHECK (("schedule" = 'yearly' AND "month" IS NOT NULL AND "month" BETWEEN 1 AND 12) OR ("schedule" = 'monthly' AND "month" IS NULL));
 ALTER TABLE "ledger_template" ADD CONSTRAINT "ledger_template_amount_check" CHECK ("amount" > 0);
