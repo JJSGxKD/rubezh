@@ -24,7 +24,7 @@ import { JournalView } from "../src/screens/ledger/JournalView";
  * строки журнала со знаком и цветом, сторно и курсор «Показать ещё».
  */
 
-const plain = (text: string) => text.replace(/[  ]/g, " ");
+const plain = (text: string) => text.replace(/[  ]/g, " ");
 
 const BALANCES: Balances = {
   accounts: [
