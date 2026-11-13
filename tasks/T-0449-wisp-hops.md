@@ -3,8 +3,8 @@ id: T-0449
 title: Огонёк ведёт шагами с отклонением и гаснет, когда вести некуда
 epic: E16
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []

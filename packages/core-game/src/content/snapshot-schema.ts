@@ -268,7 +268,15 @@ const secretsSchema = z.strictObject({
   stone: z.strictObject({ radius: num }),
   tree: z.strictObject({ radius: num, healPerSec: num, shieldEverySec: num }),
   rift: z.strictObject({ radius: num, elites: count, ringRadius: num, chestSize: chestSize, timeLimitSec: num }),
-  wisp: z.strictObject({ appearSec: num, speed: num }),
+  // Шаг огонька (Р214) — с умолчаниями: снимок, опубликованный до него, разбирается (Р160).
+  wisp: z.strictObject({
+    appearSec: num,
+    speed: num,
+    hopUnits: num.default(200),
+    swayMin: num.default(0.4),
+    swayMax: num.default(0.8),
+    waitUnits: num.default(140),
+  }),
   blessings: z.array(z.strictObject({ id: text, nameKey: text, modifiers: loadoutModifiers })),
 });
 

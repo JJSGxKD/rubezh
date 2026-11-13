@@ -5,7 +5,10 @@ import { RestrictionsModule } from "../restrictions/restrictions.module.js";
 import { WalletModule } from "../wallet/wallet.module.js";
 import { PaymentsContinueLedger } from "./continue-ledger.js";
 import { FulfillmentSweeper } from "./fulfillment-sweeper.js";
+import { PaymentCheckoutMarks } from "./payment-checkout-marks.js";
 import { PaymentFeedSources } from "./payment-feed-sources.js";
+import { PaymentJobs } from "./payment-jobs.js";
+import { PaymentRetry } from "./payment-retry.js";
 import { PAYMENTS_FEED_REPOSITORY, PrismaPaymentsFeedRepository } from "./payments-feed.repository.js";
 import { PaymentsFeed } from "./payments-feed.service.js";
 import { PaymentsHooks } from "./payments-hooks.js";
@@ -59,6 +62,9 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
     SubscriptionRenewal,
     PaymentsFeed,
     PaymentFeedSources,
+    PaymentJobs,
+    PaymentRetry,
+    PaymentCheckoutMarks,
     PurchaseCompensations,
     { provide: PURCHASES_REPOSITORY, useClass: PrismaPurchasesRepository },
     { provide: PAYMENTS_FEED_REPOSITORY, useClass: PrismaPaymentsFeedRepository },
@@ -69,9 +75,10 @@ import { SubscriptionRenewal } from "./subscription-renewal.js";
   // отзыв остатка при возврате — им же; продление подписки — VIP. Поддержка покупок —
   // панели: маршруты и карточка игрока (`admin/admin-purchases.controller.ts`). Лента платежей —
   // панели же (`admin/admin-payments.controller.ts`), а реестр источников хронологии — модулям, которые
-  // добавляют в карточку платежа свои строки: брошенные задания, сверка, компенсация (Р209).
+  // добавляют в карточку платежа свои строки: брошенные задания, сверка, компенсация (Р209). Брошенные
+  // задания очереди и «Повторить учёт» (`PaymentJobs`, `PaymentRetry`) — панели: `admin/admin-payment-jobs.controller.ts`.
   // Компенсация за сбой оплаты — панели же (`admin/admin-payment-compensation.controller.ts`):
   // кошелёк подключён ради неё, цикла нет — кошелёк платежей не знает.
-  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY, PaymentsFeed, PaymentFeedSources, PurchaseCompensations],
+  exports: [PaymentConfirmation, PaymentsQueue, PaymentsHooks, PaymentsService, PurchaseFulfillment, PurchaseRevocation, PurchaseSupport, SubscriptionRenewal, PURCHASES_REPOSITORY, PaymentsFeed, PaymentFeedSources, PaymentJobs, PaymentRetry, PurchaseCompensations],
 })
 export class PaymentsModule {}
