@@ -26,6 +26,23 @@ Nest и Prisma; сеть, время и DNS приходят аргумента�
 - Ссылки: `vless://`, `vmess://` (JSON и адресная форма), `trojan://`, `ss://`.
   Транспорты `tcp`, `ws`, `grpc`, `httpupgrade`, `xhttp`; безопасность `none`,
   `tls`, `reality`. Что не умеем — пропускается с причиной, а не угадывается.
+- Способы подключения поставщиков (Р192, `tasks/T-0387`): `extra` у XHTTP
+  (`transport.extra`: параметр `extra` ссылки либо объект `extra` и прочие поля
+  `xhttpSettings` JSON), ECH (`ech`, `echConfigList`, `echForceQuery`), закреплённый
+  сертификат и проверка по имени (`pcs`, `vcn`; старые поля закрепления Xray 26.11 ещё
+  принимает — `security.legacyPinning`, три поля и только списки строк), постквантовая
+  проверка REALITY (`pqv`, `mldsa65Verify`), `flow` `xtls-rprx-vision-udp443`, шифрование
+  VLESS (`encryption` → `cipher`), HTTP-маскировка RAW (`headerType=http` →
+  `transport.rawHeader`) и цепочка узла через `freedom` того же конфига (`dialer.settings`:
+  фрагментация, шум; в конфиге — служебный выход `<тег узла>-dial`, `sockopt.dialerProxy`).
+  Строки новых параметров — видимые знаки ASCII, 1–4096; отпечаток — 64 hex; объекты —
+  не длиннее 4096 знаков и не глубже 8 уровней (`jsonObjectOf`), иначе `malformed` с именем
+  параметра: значение, которого Xray не примет, обрушило бы конфиг всех подписок. Ключ
+  узла дополняется новыми частями только когда они заданы: у прежних узлов он прежний.
+  По-прежнему пропуск с причиной: `allowInsecure`, kcp, `flow` `direct`/`origin`/`splice`,
+  цепочка на другой прокси-выход (`dialerProxy`) и `freedom` с `redirect`
+  (`dialerProxy.redirect`), несколько `vnext`/`servers`/`users`, VMess `alterId` ≠ 0,
+  плагин Shadowsocks.
 - Секреты ссылок не попадают в причины пропуска и в тексты ошибок.
 - Конфиг Xray: локальный SOCKS-вход на узел, стабильные слоты между обновлениями.
   Узлы нескольких подписок идут одним конфигом: у каждого узла есть группа (ключ

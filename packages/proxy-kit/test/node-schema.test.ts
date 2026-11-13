@@ -3,6 +3,7 @@ import { parseSubscription } from "../src/subscription.js";
 import { parseShareLink } from "../src/share-link.js";
 import type { ProxyNode } from "../src/node.js";
 import { proxyNodeSchema } from "../src/node-schema.js";
+import * as J from "./fixtures/xray-json.js";
 import * as L from "./fixtures/links.js";
 
 // Схема узла для чтения с диска: API хранит узлы подписки в файле-части тома
@@ -115,5 +116,71 @@ describe("отказ", () => {
 
   it("не объект", () => {
     for (const value of [null, undefined, 42, "узел", [], [base]]) reject(value);
+  });
+});
+
+describe("новые поля узла (Р192, T-0387)", () => {
+  const chained = (): ProxyNode => {
+    const body = JSON.stringify([J.config("x", [J.OUT_VLESS_DIALER, J.OUT_FRAGMENT])]);
+    return parseSubscription(body).nodes[0] as ProxyNode;
+  };
+  const legacy = (): ProxyNode => parseSubscription(JSON.stringify([J.config("x", J.OUT_VLESS_TLS_LEGACY_PINNING)])).nodes[0] as ProxyNode;
+
+  it("каждое новое поле, выданное разбором, проходит схему без потерь", () => {
+    const nodes = [
+      node(L.VLESS_XHTTP_EXTRA),
+      node(L.VLESS_TLS_ECH),
+      node(L.VLESS_TLS_PINNED),
+      node(L.VLESS_REALITY_PQV),
+      node(L.VLESS_ENCRYPTION),
+      node(L.VLESS_VISION_UDP443),
+      node(L.VMESS_RAW_HTTP),
+      chained(),
+      legacy(),
+    ];
+    for (const source of nodes) {
+      expect(proxyNodeSchema.parse(source)).toEqual(source);
+      expect(proxyNodeSchema.parse(JSON.parse(JSON.stringify(source)))).toEqual(source);
+    }
+    expect(chained().dialer).toEqual({ settings: J.FRAGMENT_SETTINGS });
+    expect(legacy().security).toMatchObject({ legacyPinning: J.LEGACY_PINNING });
+  });
+
+  const reject = (value: unknown): void => {
+    expect(proxyNodeSchema.safeParse(value).success).toBe(false);
+  };
+  const withTransport = (patch: Record<string, unknown>): unknown => ({ ...node(L.VLESS_XHTTP_EXTRA), transport: { ...node(L.VLESS_XHTTP_EXTRA).transport, ...patch } });
+  const withTls = (patch: Record<string, unknown>): unknown => ({ ...node(L.VLESS_TLS_ECH), security: { ...node(L.VLESS_TLS_ECH).security, ...patch } });
+
+  it("extra и rawHeader — только объект", () => {
+    reject(withTransport({ extra: "строка" }));
+    reject(withTransport({ extra: [1] }));
+    reject(withTransport({ rawHeader: "http" }));
+  });
+
+  it("поля TLS и REALITY — строки; echForceQuery — из списка", () => {
+    reject(withTls({ ech: 5 }));
+    reject(withTls({ echForceQuery: "always" }));
+    reject(withTls({ pinnedPeerCertSha256: [L.PIN_HEX] }));
+    reject(withTls({ verifyPeerCertByName: 1 }));
+    reject({ ...node(L.VLESS_REALITY_PQV), security: { ...node(L.VLESS_REALITY_PQV).security, mldsa65Verify: 1 } });
+  });
+
+  it("legacyPinning — только три известных поля и списки строк: в конфиг не попадёт чужое", () => {
+    reject(withTls({ legacyPinning: { allowInsecure: true } }));
+    reject(withTls({ legacyPinning: { pinnedPeerCertificateChainSha256: "abc" } }));
+    reject(withTls({ legacyPinning: { verifyPeerCertInNames: [5] } }));
+  });
+
+  it("dialer — объект настроек; redirect в них недопустим", () => {
+    const base = chained();
+    reject({ ...base, dialer: "freedom" });
+    reject({ ...base, dialer: { settings: "x" } });
+    reject({ ...base, dialer: { settings: { redirect: "203.0.113.50:443" } } });
+    reject({ ...base, dialer: { settings: {}, tag: "x" } });
+  });
+
+  it("слишком большой объект с диска — отказ, как и при разборе подписки", () => {
+    reject(withTransport({ extra: { v: "x".repeat(5000) } }));
   });
 });

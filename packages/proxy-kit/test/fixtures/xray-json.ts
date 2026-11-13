@@ -130,6 +130,32 @@ export const OUT_SS_LEGACY: Json = {
   settings: { servers: [{ address: "example.com", port: 8388, method: "chacha20-ietf-poly1305", password: "pw" }] },
 };
 
+/** Служебный выход `freedom` с фрагментацией: на него ссылается `sockopt.dialerProxy` узла. */
+export const FRAGMENT_SETTINGS = { fragment: { packets: "tlshello", length: "100-200", interval: "10-20" } };
+export const OUT_FRAGMENT: Json = { tag: "fragment", protocol: "freedom", settings: FRAGMENT_SETTINGS };
+
+/** vless + tcp + tls, идущий через `freedom` с фрагментацией. */
+export const OUT_VLESS_DIALER: Json = {
+  tag: "proxy",
+  protocol: "vless",
+  settings: vnext("example.com", 443, [user()]),
+  streamSettings: { network: "tcp", security: "tls", tlsSettings: { serverName: "example.com" }, sockopt: { dialerProxy: "fragment" } },
+};
+
+/** Старые поля закрепления сертификата: Xray 26.11 их ещё принимает. */
+export const LEGACY_PINNING = {
+  pinnedPeerCertificateChainSha256: [L.PIN_HEX],
+  pinnedPeerCertificatePublicKeySha256: [L.PIN_HEX],
+  verifyPeerCertInNames: ["example.com"],
+};
+
+export const OUT_VLESS_TLS_LEGACY_PINNING: Json = {
+  tag: "proxy",
+  protocol: "vless",
+  settings: vnext("example.com", 443, [user()]),
+  streamSettings: { network: "tcp", security: "tls", tlsSettings: { serverName: "example.com", ...LEGACY_PINNING } },
+};
+
 /** Пары «ссылка — выход»: и то и другое описывает один и тот же узел. */
 export const PAIRS: readonly [name: string, link: string, outbound: Json][] = [
   ["vless reality tcp", L.VLESS_REALITY, OUT_VLESS_REALITY],
