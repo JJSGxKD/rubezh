@@ -8,7 +8,7 @@ import ruGuide from "../src/i18n/ru-guide.json";
 import ruTasks from "../src/i18n/ru-tasks.json";
 import type { ApiRequest, ApiResult } from "../src/state/api-request";
 import { codexOpenedSet, createCodexApi, loadCodexState, type CodexView } from "../src/state/codex-api";
-import { eliteEnemies, regularEnemies, toGuideEnemy } from "../src/screens/guide/guide-data";
+import { eliteEnemies, regularEnemies, toGuideEnemy, unkillableEnemies } from "../src/screens/guide/guide-data";
 import { CodexBar, LockedEnemyCard } from "../src/screens/guide/codex";
 
 // Кодекс врагов в гайдбуке (tasks/T-0127, docs/39-retention-mechanics.md К2):
@@ -86,12 +86,13 @@ describe("записи гайдбука", () => {
     if (def === undefined) throw new Error("в контенте нет врагов");
     expect(toGuideEnemy(def).opened).toBe(true);
     for (const enemy of [...regularEnemies(), ...eliteEnemies()]) expect(enemy.opened, enemy.def.id).toBe(true);
-    for (const enemy of [...regularEnemies(null), ...eliteEnemies(null)]) expect(enemy.opened, enemy.def.id).toBe(true);
+    for (const enemy of [...regularEnemies(null), ...eliteEnemies(null), ...unkillableEnemies(null)]) expect(enemy.opened, enemy.def.id).toBe(true);
+    for (const enemy of unkillableEnemies(new Set())) expect(enemy.opened, `${enemy.def.id}: неубиваемый закрыт, пока не встречен`).toBe(false);
   });
 
   it("с множеством открытых закрыты все остальные, а состав по-прежнему собирается из контента", () => {
     const open = new Set([ENEMIES[0]?.id ?? ""]);
-    const all = [...regularEnemies(open), ...eliteEnemies(open)];
+    const all = [...regularEnemies(open), ...eliteEnemies(open), ...unkillableEnemies(open)];
     expect(all.map((enemy) => enemy.def.id).sort()).toEqual(ENEMIES.map((enemy) => enemy.id).sort());
     expect(all.filter((enemy) => enemy.opened)).toHaveLength(1);
   });
