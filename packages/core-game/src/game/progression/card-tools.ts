@@ -81,9 +81,12 @@ export function applyCardTool(world: World, command: string): CardToolOutcome | 
   return null;
 }
 
-function reroll(world: World): CardToolOutcome | null {
-  if (!canReroll(world)) return null;
-  const progression = world.progression;
+/**
+ * Заменить все карточки новыми из потока `world.cardRng`. Общий путь обычного
+ * переброса и переброса за рекламу: проверку условий и плату — заряд или
+ * право «раз за забег» — делает вызывающий.
+ */
+function replaceOffers(world: World): void {
   const shown = shownIds(world);
   const fresh = candidatesOutside(world, shown);
 
@@ -96,9 +99,14 @@ function reroll(world: World): CardToolOutcome | null {
     next.push(...pickWeighted(world.cardRng, previous, wanted - next.length));
   }
 
-  progression.offers = next;
-  progression.tools.reroll--;
-  return { kind: "reroll", left: progression.tools.reroll, item: null };
+  world.progression.offers = next;
+}
+
+function reroll(world: World): CardToolOutcome | null {
+  if (!canReroll(world)) return null;
+  replaceOffers(world);
+  world.progression.tools.reroll--;
+  return { kind: "reroll", left: world.progression.tools.reroll, item: null };
 }
 
 function skip(world: World): CardToolOutcome | null {
