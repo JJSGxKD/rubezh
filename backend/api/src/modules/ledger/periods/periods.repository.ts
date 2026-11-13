@@ -120,7 +120,10 @@ export class PrismaPeriodsRepository implements PeriodsRepository {
   }
 
   async loadMonth(period: string): Promise<MonthSource> {
-    const [lines, receipts, receiptsMissing, openOperations, unpostedPurchaseIds, loans, shares, fingerprint] = await Promise.all([
+    // Отпечаток снимается первым: проводка, появившаяся после него, изменит отпечаток в транзакции закрытия, а
+    // проводка до него уже есть в строках, которые читаются следом.
+    const fingerprint = await fingerprintOf(this.prisma, period);
+    const [lines, receipts, receiptsMissing, openOperations, unpostedPurchaseIds, loans, shares] = await Promise.all([
       this.lines(period),
       this.receipts(period),
       this.receiptsMissing(period),
@@ -128,7 +131,6 @@ export class PrismaPeriodsRepository implements PeriodsRepository {
       this.unpostedPurchases(period),
       this.loans(period),
       this.shares(period),
-      fingerprintOf(this.prisma, period),
     ]);
     return { lines, receipts: receipts.month, yearReceiptsMinor: receipts.yearMinor, receiptsMissing, openOperations, unpostedPurchaseIds, loans, shares, fingerprint };
   }
