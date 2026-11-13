@@ -373,7 +373,7 @@ erDiagram
     NOTIFICATION {
         uuid notification_id PK
         uuid account_id FK
-        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed"
+        string kind "вид: friend_request, friend_gift, rare_loot, boosts_refunded, team_message, purchase_support, app_update, task_unsubscribed, pass_closed"
         json payload "данные вида, по его схеме"
         string dedupe_key "одно событие — одно уведомление: уникален у аккаунта"
         datetime created_at
@@ -1687,6 +1687,9 @@ erDiagram
   одного. Метка `PASS_CLOSE` пишется последней. Уведомление `pass_closed`
   (`NOTIFICATION`, ключ события `pass_closed:ГГГГ-ММ`) — одно на игрока с числом
   наград, выданных закрытием: это строки `PASS_CLAIM`, записанные не раньше конца месяца.
+  В бота оно дублируется по ключу игрока `bot.teamMessage`, как сообщение команды (без
+  потолка, не напоминание), в ленте игры — строкой «Пасс октября закрыт: 5 наград
+  зачислено на счёт.» без перехода: экран пасса появится в T-0314.
 
   **Подарки при включении буста** (T-0312): `BOOST_CREDIT` тратится в той же
   транзакции, что строка `RUN_BOOST` и списание остального набора. Подарок берётся
