@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
 import type { ArticleView, PlaceView } from "../src/modules/ledger/ledger-chart.js";
@@ -427,5 +429,16 @@ describe("«Расходы месяца»: черновики на период"
     await service.create(actor, vpsBody);
     await service.draftPeriod(actor, "2026-11", NOW);
     expect(submit).not.toHaveBeenCalled();
+  });
+});
+
+describe("проверка базы: месяц шаблона", () => {
+  // NULL в CHECK считается успехом, поэтому «месяц между 1 и 12» без явного «не пусто» пропускает годовой шаблон без месяца.
+  // Саму проверку на живой базе гоняет ledger-templates.integration.test.ts; здесь — страховка без базы.
+  const migration = readFileSync(join(import.meta.dirname, "../prisma/migrations/20261113200000_ledger_templates/migration.sql"), "utf8");
+
+  it("у годового шаблона месяц обязателен явно, у месячного — пуст", () => {
+    expect(migration).toContain(`("schedule" = 'yearly' AND "month" IS NOT NULL AND "month" BETWEEN 1 AND 12)`);
+    expect(migration).toContain(`("schedule" = 'monthly' AND "month" IS NULL)`);
   });
 });
