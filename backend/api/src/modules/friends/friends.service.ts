@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger, type OnModuleInit } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from "@nestjs/common";
+import { emblemOf, PublicIdentity, type PublicEmblem, type PublicMark } from "../../common/public-identity.js";
 import { APP_CONFIG, type AppConfig } from "../../config/app-config.js";
 import { ValidationError } from "../../common/domain-error.js";
 import type { AccessTokenClaims } from "../auth/access-token.js";
@@ -27,10 +28,13 @@ import { FRIENDS_REPOSITORY, type FriendRow, type FriendsRepository, type Reques
  * временем.
  */
 
+/** Строка списка со знаком у имени (T-0240); поля `emblem` нет — знака нет или источник знаков недоступен. */
+type Marked<T> = T & { emblem?: PublicEmblem };
+
 export interface FriendsView {
-  friends: FriendRow[];
-  incoming: RequestRow[];
-  outgoing: RequestRow[];
+  friends: Marked<FriendRow>[];
+  incoming: Marked<RequestRow>[];
+  outgoing: Marked<RequestRow>[];
   limits: { maxFriends: number };
   gifts: {
     /** кому уже подарено сегодня — у этих друзей кнопка подарка неактивна */
@@ -65,6 +69,8 @@ export class FriendsService implements OnModuleInit {
     private readonly notifier: FriendNotifier,
     private readonly notifications: NotificationsService,
     private readonly restrictions: AccountRestrictions,
+    // Нет порта знаков (старый состав модуля) — строки без знака.
+    @Optional() private readonly identity?: PublicIdentity,
   ) {}
 
   /**
@@ -100,13 +106,16 @@ export class FriendsService implements OnModuleInit {
       this.friends.bonusClaimed(accountId),
     ]);
     const claimableToday = Math.min(pending, Math.max(0, GIFT_RULES.maxClaimsPerDay - claimed));
+    // Знак у имени — одним вызовом порта на все три списка; сбой порта экран друзей не роняет.
+    const marks = (await this.identity?.of([...friends, ...incoming, ...outgoing].map((peer) => peer.accountId))) ?? new Map<string, PublicMark>();
+    const marked = <T extends { accountId: string }>(rows: T[]): Marked<T>[] => rows.map((row) => ({ ...row, ...emblemOf(marks.get(row.accountId)) }));
     // Игрок увидел заявки на экране друзей — колокольчик про них гаснет (Р135).
     // Знак вкладки считает ожидающее ответа и от этого не меняется.
     await this.notifications.readFor(accountId, "friend_request");
     return {
-      friends,
-      incoming,
-      outgoing,
+      friends: marked(friends),
+      incoming: marked(incoming),
+      outgoing: marked(outgoing),
       limits: { maxFriends: FRIENDS_RULES.maxFriends },
       gifts: { sentToday, pending, claimableToday, coins: GIFT_RULES.coins },
       bonus: bonusView(qualified, bonusClaimed, FRIEND_BONUS_RULES.steps),

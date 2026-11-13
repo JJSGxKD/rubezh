@@ -1,4 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
+import { emblemOf, PublicIdentity, type PublicMark } from "../../common/public-identity.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { FRIENDS_REPOSITORY, type FriendsRepository } from "../friends/friends.repository.js";
 import { FRIENDS_RULES } from "../friends/friends-rules.js";
@@ -44,6 +45,9 @@ import { SEASONS_REPOSITORY, type SeasonsRepository, type WeekBest } from "./sea
  * не определяет, поэтому строки друзей дивизиона не несут. Игрок под молчаливым
  * ограничением считается среди настоящих игроков без него в доске, как место.
  *
+ * Знак у имени (T-0240) строка берёт у общего порта `PublicIdentity` одним вызовом на таблицу;
+ * `tester` и `supporter` остаются рядом: старый клиент рисует по ним.
+ *
  * Единая сложность (Р126, T-0191): у нерейтинговых сложностей таблица пуста, а
  * лучшее время недели — `null`; форма ответа прежняя, старый клиент ошибки не
  * увидит. Забеги до отсечки рейтинга в недельные времена не входят.
@@ -61,6 +65,8 @@ export class SeasonsViewService {
     @Inject(FRIENDS_REPOSITORY) private readonly friends: FriendsRepository,
     private readonly restrictions: AccountRestrictions,
     private readonly rating: RatingRestrictions,
+    // Нет порта знаков (старый состав модуля) — строки без знака.
+    @Optional() private readonly identity?: PublicIdentity,
   ) {}
 
   async overview(accountId: string, at = new Date()): Promise<Overview> {
@@ -124,7 +130,12 @@ export class SeasonsViewService {
     // Подписи (время, стиль) своего забега берутся тем же запросом, если игрока нет среди показанных строк.
     const ids = standing.top.map((entry) => entry.accountId);
     const withMe = standing.me !== null && !ids.includes(accountId) ? [...ids, accountId] : ids;
-    const rows = new Map((await withTimeout(this.repository.boardRuns(withMe, difficulty, season, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: забеги недели")).map((row) => [row.accountId, row]));
+    // Знак — одним вызовом порта на всю таблицу; сбой порта таблицу не роняет (порт сам отвечает пустой картой).
+    const [boardRuns, marks] = await Promise.all([
+      withTimeout(this.repository.boardRuns(withMe, difficulty, season, this.schedule.ratingSince(), scoring), DB_TIMEOUT_MS, "seasons: забеги недели"),
+      this.identity?.of(ids) ?? Promise.resolve(new Map<string, PublicMark>()),
+    ]);
+    const rows = new Map(boardRuns.map((row) => [row.accountId, row]));
 
     const entries = standing.top.flatMap((entry, index) => {
       const row = rows.get(entry.accountId);
@@ -138,6 +149,7 @@ export class SeasonsViewService {
           photoUrl: row.photoUrl,
           ...(row.tester ? { tester: true as const } : {}),
           ...(row.supporter ? { supporter: true as const } : {}),
+          ...emblemOf(marks.get(entry.accountId)),
           points: scoring === "points" ? entry.score : row.points,
           // По очкам время — подпись лучшего по очкам забега, по времени — само число таблицы.
           survivalSec: scoring === "points" ? row.survivalSec : entry.score,
