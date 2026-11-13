@@ -40,11 +40,10 @@ export const STALKER: StalkerDef = {
     fromSec: 240,
     firstDelaySec: { min: 0, max: 60 },
     // Пауза от конца появления до следующего предвестия: на fromSec — как здесь, к lateAtSec — короче.
-    gapSec: { min: 70, max: 110 },
-    lateGapSec: { min: 35, max: 55 },
+    gapSec: { min: 60, max: 95 },
+    lateGapSec: { min: 30, max: 45 },
     lateAtSec: 900,
-    // Погоня короче 20 с не отнимает у стоящего бота и десятой доли медианы: он уходит и возвращается (§2.11).
-    chaseSec: { min: 20, max: 40 },
+    chaseSec: { min: 15, max: 30 },
     omenSec: 1.5,
     fadeSec: 0.6,
     // На виду и у самого узкого экрана: 150 + радиус тела 16 помещается в половину короткой стороны

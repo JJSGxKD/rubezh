@@ -102,6 +102,6 @@ describe("эталон забега с Карачуном", () => {
       godMode: true,
       maxSec: 600,
     });
-    expect({ survivalSec: run.survivalSec, stalker: run.stalker }).toEqual({ survivalSec: 600, stalker: { appearances: 3, hits: 5, pushes: 382 } });
+    expect({ survivalSec: run.survivalSec, stalker: run.stalker }).toEqual({ survivalSec: 600, stalker: { appearances: 3, hits: 1, pushes: 363 } });
   });
 });

@@ -239,6 +239,8 @@ export const STRONG_BOT_TARGETS = {
    * на `standDropMin`; «бегает», каждый профиль: короче не больше чем на `kiteDropMax` — бегущего он
    * наказывает мало, потому что боты от него уходят (T-0422). Уклоняющийся бот остаётся в
    * `BALANCE_TARGETS.dodgingMedianSec`. Рычаги калибровки — числа `STALKER` и скорость `karachun`.
+   * `kiteDropMax` выполнен, `standDropMin` боту недостижим без обвала бегающих (docs/32-balance.md
+   * §2.11): свойство «стоит» в гейте помечено `it.fails`, вопрос — в PR T-0424.
    */
   stalker: { standDropMin: 0.1, kiteDropMax: 0.15 },
   /**
