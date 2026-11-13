@@ -10,6 +10,7 @@ import { DIFFICULTIES, RUN_MODES } from "../run-rules.js";
 
 const runId = z.string().min(8).max(64);
 const weaponId = z.string().min(1).max(64);
+const enemyId = z.string().min(1).max(64);
 
 /** Сообщение о старте: уходит в начале забега, в очередь, не на горячем пути. */
 export const runStartSchema = z.object({
@@ -120,6 +121,9 @@ export const runFinishSchema = z
         noHitSec: z.number().int().min(0).max(86_400).optional(),
         noKillSec: z.number().int().min(0).max(86_400).optional(),
         killsByElement: z.partialRecord(z.enum(ELEMENT_KEYS), z.number().int().min(0).max(1_000_000)).optional(),
+        // Типы врагов, вышедшие в мир (tasks/T-0479): по ним открываются записи кодекса. Потолок — формы,
+        // а не правила: сверка с контентом — дело потребителя. Старые сборки поля не шлют.
+        enemiesSeen: z.array(enemyId).max(64).optional(),
         // Журнал охоты и оценка сборки для очков эффективности (tasks/T-0292): потолки формы, старые сборки полей не шлют.
         huntLog: z
           .array(
