@@ -7,7 +7,7 @@
 // Это черновой конвейер дизайнера: в сборку игры он не входит, атласы
 // подключаются отдельной задачей (design/art/characters.md, «Интеграция»).
 
-import { mkdirSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -40,6 +40,14 @@ const WALK_FRAMES = 4;
 
 /** Какие враги в каком паке: core — первые три минуты таймлайна, late — остальное (docs/27 §3.5). */
 const CORE_ENEMIES = new Set(["swarm_rat", "dasher_wolf", "shooter_wisp", "bone_walker", "circler_crow", "elite_ghoul"]);
+
+/**
+ * Ступени 0…2 лежат в паках своих врагов, как раньше; 3…5 (с 8-й, 11-й и 14-й
+ * минуты) — в паке `stages`, который забег грузит после остальных: до 8-й
+ * минуты кадры поздних ступеней не нужны, но видеопамять уже занята (Р215,
+ * T-0441). Нарисованной ступени тон-заплатка движка не нужен.
+ */
+const BASE_STAGES = 3;
 
 function rimFilter(id, color, radius) {
   return `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox">
@@ -110,7 +118,7 @@ export function collectFrames() {
   // `r157` — новый контент Р157 (T-0281…T-0285): свой пак, чтобы `late` не
   // перерос 2048 px по высоте и видеопамять не росла, пока этих врагов нет в
   // забеге. Движок подключит пак вместе с контентом.
-  const packs = { core: [], late: [], r157: [], env: decorFrames(PPU) };
+  const packs = { core: [], late: [], r157: [], stages: [], env: decorFrames(PPU) };
   // Тайники — в паке мира рядом с декором: грузятся вместе с землёй, а их
   // кадров немного. Имя — `secret/<вид>/<состояние>`, вид — как `SecretKind`
   // в движке; центр кадра — центр тайника (T-0260).
@@ -158,8 +166,9 @@ export function collectFrames() {
     // Ступени — только у рядовых: элита и боссы ступеней не получают (content/stages.ts).
     const stages = art.rank === undefined ? STAGES.length : (art.phases ?? 1);
     for (let stage = 0; stage < stages; stage++) {
+      const target = stage < BASE_STAGES ? pack : packs.stages;
       enemyFrames(art, stage).forEach((svg, k) => {
-        pack.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius * (art.pad ?? 1)) });
+        target.push({ name: `${art.id}/s${stage}/walk${k}`, svg, size: cellSize(art.radius * (art.pad ?? 1)) });
       });
     }
   }
@@ -296,7 +305,12 @@ async function main() {
   const page = await browser.newPage();
   const packs = collectFrames();
   const report = [];
+  // `ART_PACKS=stages,late` — собрать только эти паки и обновить их строки в
+  // отчёте: чужие атласы не перезаписываются (браузер и шрифты другой машины
+  // дают другие байты и у тех, что не менялись).
+  const only = process.env.ART_PACKS === undefined ? null : new Set(process.env.ART_PACKS.split(","));
   for (const [name, frames] of Object.entries(packs)) {
+    if (only !== null && !only.has(name)) continue;
     await trimFrames(page, frames);
     const layout = pack(frames);
     const png = Buffer.from(await composeAtlas(page, layout), "base64");
@@ -315,7 +329,7 @@ async function main() {
   // в 3–4 КБ против 210 КБ PNG без видимой разницы.
   // Нужна одна нейтральная плитка: цвет зоны рендер кладёт окраской по вершинам.
   // Плитки зон собираются только для сравнения: `ART_ZONE_TILES=1`.
-  const tiles = process.env.ART_ZONE_TILES === "1" ? Object.keys(ZONES) : ["neutral"];
+  const tiles = only !== null ? [] : process.env.ART_ZONE_TILES === "1" ? Object.keys(ZONES) : ["neutral"];
   for (const zone of tiles) {
     const size = 512;
     const png = Buffer.from(await renderSheet(page, { width: size, height: size, frames: [{ svg: groundTile(zone, size), x: 0, y: 0, size }] }, "image/webp"), "base64");
@@ -323,8 +337,24 @@ async function main() {
     report.push({ pack: `ground-${zone}`, frames: 1, atlas: `${size}×${size}`, fill: "100%", png: `${Math.round(png.length / 1024)} КБ`, gpu: `${((size * size * 4) / 1048576).toFixed(2)} МБ` });
   }
   console.table(report);
-  writeFileSync(join(OUT, "atlas-report.json"), `${JSON.stringify(report, null, 1)}\n`);
+  const reportFile = join(OUT, "atlas-report.json");
+  const rows = only === null ? report : mergeReport(JSON.parse(readFileSync(reportFile, "utf8")), report);
+  writeFileSync(reportFile, `${JSON.stringify(rows, null, 1)}\n`);
   await browser.close();
+}
+
+/** Строки пересобранных паков встают на место прежних, новые — перед `env`. */
+function mergeReport(old, fresh) {
+  const rows = [...old];
+  for (const row of fresh) {
+    const at = rows.findIndex((r) => r.pack === row.pack);
+    if (at >= 0) rows[at] = row;
+    else {
+      const env = rows.findIndex((r) => r.pack === "env");
+      rows.splice(env >= 0 ? env : rows.length, 0, row);
+    }
+  }
+  return rows;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) await main();
