@@ -3,7 +3,7 @@ id: T-0313
 title: Батл-пасс — ленты месяца в панели: 30 ступеней двух лент, награды по схеме без случайного, копия прошлого месяца, предпросмотр
 epic: E7
 priority: P3
-status: in-progress
+status: done
 owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
