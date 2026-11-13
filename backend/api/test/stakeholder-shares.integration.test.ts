@@ -22,20 +22,37 @@ const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
 /** Текущее время теста: месяц — 2026-11. */
 const NOW = new Date(Date.UTC(2026, 10, 13, 12));
 
+/**
+ * Владелец без строки в `account_role`. Аварийный вход (`hasOwner`) смотрит на всю общую базу:
+ * настоящая роль `owner`, оставшаяся от этого файла, отключала бы его у соседних интеграционных
+ * тестов (кандидаты в правила имён входят владельцем из `ADMIN_TELEGRAM_IDS`). Права владельца
+ * настоящие — `permissionsOf(["owner"])`, в базу они не пишутся.
+ */
+class VirtualOwnerRoles extends PrismaRolesRepository {
+  ownerId: string | null = null;
+
+  override async rolesOf(accountId: string): Promise<Role[]> {
+    return accountId === this.ownerId ? ["owner"] : await super.rolesOf(accountId);
+  }
+}
+
 describe.skipIf(DATABASE_URL === "")("доли участников на живом Postgres", () => {
   let prisma: PrismaClient;
   let accounts: PrismaAccountRepository;
-  let rolesRepository: PrismaRolesRepository;
+  let rolesRepository: VirtualOwnerRoles;
   let service: StakeholdersService;
   let owner: AccountRef;
+  /** Аккаунты прогона: их роли и записи журнала убираются после него, чтобы общая база их не копила. */
+  const created: string[] = [];
 
   async function person(name: string, roles: Role[] = []): Promise<AccountRef> {
-    const created = await accounts.upsert(
+    const account = await accounts.upsert(
       { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 60_000_000)), displayName: name, username: null, photoUrl: null },
       NOW.getTime(),
     );
-    for (const role of roles) await rolesRepository.grant(created.accountId, role, null);
-    return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };
+    created.push(account.accountId);
+    for (const role of roles) await rolesRepository.grant(account.accountId, role, null);
+    return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
   }
 
   const set = (accountId: string, sharePercent: number, fromMonth: string, note = "договорённость от 13.11", actor: AccountRef = owner) =>
@@ -48,11 +65,12 @@ describe.skipIf(DATABASE_URL === "")("доли участников на жив�
   beforeAll(async () => {
     prisma = testPrisma(DATABASE_URL, 12);
     accounts = new PrismaAccountRepository(prisma);
-    rolesRepository = new PrismaRolesRepository(prisma);
+    rolesRepository = new VirtualOwnerRoles(prisma);
     const config = loadAppConfig({ NODE_ENV: "test", ...AUTH_ENV } as NodeJS.ProcessEnv);
     const roles = new RolesService(config, rolesRepository, accounts);
     service = new StakeholdersService(roles, new PrismaStakeholdersRepository(prisma));
-    owner = await person("Владелец", ["owner"]);
+    owner = await person("Владелец");
+    rolesRepository.ownerId = owner.accountId;
   });
 
   // Сумма долей — на всех участников сразу, поэтому таблица чистится: другие файлы в неё не пишут
@@ -62,6 +80,8 @@ describe.skipIf(DATABASE_URL === "")("доли участников на жив�
 
   afterAll(async () => {
     await prisma.stakeholderShare.deleteMany();
+    await prisma.accountRole.deleteMany({ where: { accountId: { in: created } } });
+    await prisma.auditEntry.deleteMany({ where: { action: "stakeholders.share.set", target: { in: created } } });
     await prisma.$disconnect();
   });
 
@@ -179,6 +199,11 @@ describe.skipIf(DATABASE_URL === "")("доли участников на жив�
     await expect(set(anna.accountId, 10, "2026-12", "причина", anna)).rejects.toMatchObject({ code: "forbidden", status: 403 });
     expect(await rowsOf(anna.accountId)).toHaveLength(0);
     expect(await auditOf(anna.accountId)).toHaveLength(0);
+  });
+
+  it("владелец теста не записан в account_role: аварийный вход соседних тестов не отключён", async () => {
+    expect(await prisma.accountRole.count({ where: { accountId: owner.accountId } })).toBe(0);
+    expect(await rolesRepository.rolesOf(owner.accountId)).toEqual(["owner"]);
   });
 
   it("аккаунта нет — 404", async () => {
