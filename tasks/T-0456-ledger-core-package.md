@@ -3,8 +3,8 @@ id: T-0456
 title: Ядро учёта packages/ledger — счета, проводки, сторно, остатки
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: []
