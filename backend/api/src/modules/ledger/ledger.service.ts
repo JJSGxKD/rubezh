@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Inject, Injectable, Optional } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { balances, findEntryProblems, formatMinor, periodOfEntry, reverse as reverseEntry, type EntryDraft, type EntryLine, type LedgerAccount } from "@bh/ledger";
 import { z } from "zod";
 import { ValidationError } from "../../common/domain-error.js";
@@ -8,7 +8,6 @@ import { decodeCursor, encodeCursor } from "./ledger-cursor.js";
 import { LedgerAlreadyReversedError, LedgerEntryInvalidError, LedgerEntryNotFoundError, LedgerSourceConflictError } from "./ledger-errors.js";
 import { describeProblem } from "./ledger-problems.js";
 import { LedgerPeriodClosedError } from "./periods/period-errors.js";
-import { PERIOD_LOCK, type PeriodLock } from "./periods/period-lock.js";
 import type { AccountBalanceView, JournalEntryView, JournalFilterInput, JournalPage, LedgerMeta } from "./ledger-view.js";
 import { LEDGER_REPOSITORY, type LedgerRepository, type StoredLedgerEntry } from "./ledger.repository.js";
 
@@ -55,21 +54,15 @@ function sameLines(a: readonly EntryLine[], b: readonly EntryLine[]): boolean {
 export class LedgerService {
   private cache: { loadedAt: number; accounts: Map<string, LedgerAccount> } | null = null;
 
-  /**
-   * `periodLock` — замок закрытых месяцев (Р222, tasks/T-0468). Не задан — журнал работает без замка, как до месяцев
-   * учёта: так его собирают тесты и всё, что месяцев не знает.
-   */
-  constructor(
-    @Inject(LEDGER_REPOSITORY) private readonly repository: LedgerRepository,
-    @Optional() @Inject(PERIOD_LOCK) private readonly periodLock?: PeriodLock,
-  ) {}
+  constructor(@Inject(LEDGER_REPOSITORY) private readonly repository: LedgerRepository) {}
 
   /**
    * Записать проводку. Повтор с теми же строками отдаёт ту же проводку (`created: false`), повтор с другими —
    * `LedgerSourceConflictError`: тихая перезапись скрыла бы ошибку источника. Описание и время повтора не
    * сравниваются — повторное задание их не обязано помнить. Месяц проводки — «за какой месяц», если он указан,
-   * а иначе месяц даты; в закрытый месяц не пишется ничего — `LedgerPeriodClosedError` (повтор уже записанной
-   * проводки замок не трогает).
+   * а иначе месяц даты; в закрытый месяц не пишется ничего — `LedgerPeriodClosedError`. Замок месяца держит
+   * репозиторий в транзакции вставки (`insertEntry`): проверка отдельным запросом пропустила бы проводку в месяц,
+   * закрытый между проверкой и вставкой. Повтор уже записанной проводки замок не трогает.
    */
   async post(input: LedgerPostInput, actor?: LedgerActor): Promise<PostResult> {
     await this.assertValid(input);
@@ -83,8 +76,6 @@ export class LedgerService {
     }
 
     const period = periodOfEntry(input);
-    if (this.periodLock !== undefined && (await this.periodLock.isClosed(period))) throw new LedgerPeriodClosedError(period);
-
     const entryId = randomUUID();
     const outcome = await this.repository.insertEntry(
       {
@@ -100,6 +91,7 @@ export class LedgerService {
       input.lines,
     );
     if (outcome === "inserted") return { entryId, created: true };
+    if (outcome === "period_closed") throw new LedgerPeriodClosedError(period);
     if (outcome === "already_reversed") throw new LedgerAlreadyReversedError(input.reversalOf ?? input.sourceKey);
 
     // Ключ заняла другая запись между нашей проверкой и вставкой: читаем победителя и сравниваем с тем же правилом.

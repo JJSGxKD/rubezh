@@ -2,14 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Decimal, type CurrencyCode } from "@bh/fx";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DomainError } from "../src/common/domain-error.js";
-import type { PrismaClient } from "../src/generated/prisma/client.js";
+import type { Prisma, PrismaClient } from "../src/generated/prisma/client.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import type { FxService } from "../src/modules/fx/fx.service.js";
-import { PrismaLedgerRepository } from "../src/modules/ledger/ledger.repository.js";
+import { PrismaLedgerRepository, type InsertResult, type NewLedgerEntry, type StoredLedgerLine } from "../src/modules/ledger/ledger.repository.js";
 import { LedgerService } from "../src/modules/ledger/ledger.service.js";
-import { PrismaPeriodLock } from "../src/modules/ledger/periods/period-lock.js";
 import { periodRange } from "../src/modules/ledger/periods/period-rules.js";
-import type { SourceShare } from "../src/modules/ledger/periods/period-types.js";
+import { parseSnapshot } from "../src/modules/ledger/periods/period-snapshot.js";
+import type { CloseOutcome, ClosePlan, SourceShare } from "../src/modules/ledger/periods/period-types.js";
 import { PrismaPeriodsRepository } from "../src/modules/ledger/periods/periods.repository.js";
 import { PeriodsService } from "../src/modules/ledger/periods/periods.service.js";
 import type { AuditEntry } from "../src/modules/roles/roles.repository.js";
@@ -47,12 +47,42 @@ async function domainError(promise: Promise<unknown>): Promise<DomainError> {
   throw new Error("ожидалась доменная ошибка, а вызов прошёл");
 }
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 /** Всё как у настоящего репозитория, кроме долей: их тест задаёт сам. */
 class TestRepository extends PrismaPeriodsRepository {
   readonly sharesByPeriod = new Map<string, SourceShare[]>();
+  /** Зовётся, когда расчёт закрытия окончен и остаётся транзакция: первым в ней идёт блокировка строки месяца. */
+  onCommitClose: (() => void) | null = null;
 
   protected override async shares(period: string): Promise<SourceShare[]> {
     return this.sharesByPeriod.get(period) ?? [];
+  }
+
+  override async commitClose(plan: ClosePlan): Promise<CloseOutcome> {
+    this.onCommitClose?.();
+    return await super.commitClose(plan);
+  }
+}
+
+/**
+ * Журнал, у которого вставка проводки стоит у ворот: к воротам проводка приходит уже проверенной и с прочитанным
+ * ключом, а войти в базу может только когда тест откроет ворота. Так воспроизводится окно между проверкой и вставкой.
+ */
+class GatedJournal extends PrismaLedgerRepository {
+  private open: () => void = () => undefined;
+  private readonly gate = new Promise<void>((resolve) => (this.open = resolve));
+  private arrive: () => void = () => undefined;
+  readonly arrived = new Promise<void>((resolve) => (this.arrive = resolve));
+
+  release(): void {
+    this.open();
+  }
+
+  override async insertEntry(entry: NewLedgerEntry, lines: readonly StoredLedgerLine[]): Promise<InsertResult> {
+    this.arrive();
+    await this.gate;
+    return await super.insertEntry(entry, lines);
   }
 }
 
@@ -149,7 +179,7 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
 
   beforeAll(async () => {
     prisma = testPrisma(DATABASE_URL, 12);
-    ledger = new LedgerService(new PrismaLedgerRepository(prisma), new PrismaPeriodLock(prisma));
+    ledger = new LedgerService(new PrismaLedgerRepository(prisma));
     people = new PrismaAccountRepository(prisma);
     const fx = {
       ratesAt: async (queries: readonly { currency: CurrencyCode; at: Date }[]) =>
@@ -261,6 +291,192 @@ describe.skipIf(DATABASE_URL === "")("месяцы учёта на живом Po
     await sale(period, `${period}:during-review`, 300n);
 
     expect(await entryKeys(`it:${run}:${period}:during-review`)).toHaveLength(1);
+  });
+
+  /**
+   * «Чужая» транзакция, которая берёт строку месяца и держит её, пока тест не отпустит: так воспроизводится закрытие
+   * или проводка, застрявшие посреди своей транзакции. `finish` идёт под блокировкой перед коммитом.
+   */
+  function holdPeriodRow(period: string, mode: "update" | "share", finish: (tx: Prisma.TransactionClient) => Promise<void>) {
+    let signalReady: () => void = () => undefined;
+    let letGo: () => void = () => undefined;
+    const ready = new Promise<void>((resolve) => (signalReady = resolve));
+    const go = new Promise<void>((resolve) => (letGo = resolve));
+    const done = prisma.$transaction(
+      async (tx) => {
+        if (mode === "update") await tx.$queryRaw`SELECT period FROM ledger_period WHERE period = ${period} FOR UPDATE`;
+        else await tx.$queryRaw`SELECT period FROM ledger_period WHERE period = ${period} FOR SHARE`;
+        signalReady();
+        await go;
+        await finish(tx);
+      },
+      { maxWait: 5_000, timeout: 20_000 },
+    );
+    return {
+      /** Блокировка взята (или транзакция упала раньше — тогда тест увидит её ошибку). */
+      held: Promise.race([ready, done]),
+      release: async () => {
+        letGo();
+        await done;
+      },
+    };
+  }
+
+  /** Исход вызова без ожидания: тест смотрит, застрял ли вызов на блокировке. */
+  function observe<T>(promise: Promise<T>) {
+    const state = { settled: false };
+    const outcome = promise.then(
+      (value) => ({ value, error: null }),
+      (error: unknown) => ({ value: null, error }),
+    );
+    void outcome.then(() => void (state.settled = true));
+    return { state, outcome };
+  }
+
+  it("вставка, пришедшая после коммита закрытия, отклоняется самой вставкой: проводки в закрытом месяце вне снимка не остаётся", async () => {
+    const period = await freshPeriod();
+    await sale(period, `${period}:s1`, 1_000n);
+    await periods.startReview(owner, period, NOW);
+    await periods.close(owner, period, NOW);
+
+    const key = `it:${run}:${period}:after-commit`;
+    const outcome = await new PrismaLedgerRepository(prisma).insertEntry(
+      { entryId: randomUUID(), sourceKey: key, at: at(period, "25"), period, memo: "Запоздавшая оплата", reversalOfId: null, meta: null, createdBy: null },
+      [
+        { accountId: ACCOUNT.stars, amount: 500n },
+        { accountId: ACCOUNT.revenue, amount: -500n },
+      ],
+    );
+
+    expect(outcome).toBe("period_closed");
+    expect(await entryKeys(key)).toEqual([]);
+  });
+
+  it("проводка проверена, месяц закрылся до её вставки: 409 `ledger_period_closed`, а не проводка в закрытом месяце мимо снимка", async () => {
+    const period = await freshPeriod();
+    await sale(period, `${period}:s1`, 1_000n);
+    await periods.startReview(owner, period, NOW);
+    const gated = new GatedJournal(prisma);
+    const late = observe(
+      new LedgerService(gated).post({
+        sourceKey: `it:${run}:${period}:between`,
+        at: at(period, "26"),
+        memo: "Запоздавшая оплата",
+        lines: [
+          { accountId: ACCOUNT.stars, amount: 700n },
+          { accountId: ACCOUNT.revenue, amount: -700n },
+        ],
+      }),
+    );
+    await gated.arrived;
+
+    // проводка стоит у самой вставки, а месяц закрывается: в снимок она не попадает, потому что её ещё нет
+    await periods.close(owner, period, NOW);
+    gated.release();
+    const { error } = await late.outcome;
+
+    expect(error instanceof DomainError ? [error.code, error.status] : error).toEqual(["ledger_period_closed", 409]);
+    expect(await entryKeys(`it:${run}:${period}:between`)).toEqual([]);
+    expect(await lineSum(ACCOUNT.revenue, period)).toBe(-1_000n);
+  });
+
+  it("проводка, пришедшая во время закрытия, ждёт его коммита и читает `closed`: 409, в закрытый месяц не ложится", async () => {
+    const period = await freshPeriod();
+    await sale(period, `${period}:s1`, 1_000n);
+    await periods.startReview(owner, period, NOW);
+    // закрытие в пути: строка месяца под `FOR UPDATE`, статус меняется перед коммитом
+    const closing = holdPeriodRow(period, "update", async (tx) => {
+      // снимок нужен проверке таблицы: закрытый месяц без него она не пропустит; его содержимое тесту не важно
+      await tx.ledgerPeriod.update({ where: { period }, data: { status: "closed", closedAt: NOW, closedBy: owner.accountId, snapshot: {} } });
+    });
+    await closing.held;
+
+    const late = observe(sale(period, `${period}:during-close`, 500n, "20"));
+    await sleep(400);
+    expect(late.state.settled).toBe(false);
+
+    await closing.release();
+    const { error } = await late.outcome;
+
+    expect(error instanceof DomainError ? [error.code, error.status] : error).toEqual(["ledger_period_closed", 409]);
+    expect(await entryKeys(`it:${run}:${period}:during-close`)).toEqual([]);
+  });
+
+  it("закрытие ждёт проводку, взявшую замок раньше, и видит её в отпечатке: 409 `ledger_period_changed`, месяц остаётся на сверке", async () => {
+    const period = await freshPeriod();
+    await sale(period, `${period}:s1`, 1_000n);
+    await periods.startReview(owner, period, NOW);
+    // проводка в пути: замок месяца взят, сама проводка записана, но не закоммичена
+    const key = `it:${run}:${period}:in-flight`;
+    const inFlight = holdPeriodRow(period, "share", async (tx) => {
+      await tx.ledgerEntry.create({
+        data: {
+          entryId: randomUUID(),
+          sourceKey: key,
+          at: at(period, "27"),
+          period,
+          memo: "Проводка в пути",
+          lines: {
+            create: [
+              { lineId: randomUUID(), accountId: ACCOUNT.stars, amount: 800n },
+              { lineId: randomUUID(), accountId: ACCOUNT.revenue, amount: -800n },
+            ],
+          },
+        },
+      });
+    });
+    await inFlight.held;
+    const reachedCommit = new Promise<void>((resolve) => (repository.onCommitClose = resolve));
+    const closing = observe(periods.close(owner, period, NOW));
+    await reachedCommit;
+    repository.onCommitClose = null;
+
+    // расчёт закрытия окончен, до отпечатка остаётся блокировка строки: она ждёт проводку, а не обходит её
+    await sleep(400);
+    expect(closing.state.settled).toBe(false);
+    await inFlight.release();
+    const { error } = await closing.outcome;
+
+    expect(error instanceof DomainError ? error.code : error).toBe("ledger_period_changed");
+    expect((await prisma.ledgerPeriod.findUniqueOrThrow({ where: { period } })).status).toBe("review");
+    expect(await entryKeys(`close:${period}:`)).toEqual([]);
+    expect(await entryKeys(key)).toHaveLength(1);
+  });
+
+  it("проводки и закрытие одновременно, в разные моменты: месяц либо закрыт со всеми проводками в снимке, либо не закрыт; в закрытый месяц мимо снимка ничего не ложится", async () => {
+    // Закрытие идёт сотни миллисекунд; проводки стартуют через разные промежутки и попадают в разные его участки.
+    for (const delay of [0, 10, 25, 40, 60, 90, 130, 180]) {
+      const period = await freshPeriod();
+      await sale(period, `${period}:s1`, 10_000n);
+      await periods.startReview(owner, period, NOW);
+
+      const closing = periods.close(owner, period, NOW);
+      const posts = [0, 5].map((extra, index) => sleep(delay + extra).then(() => sale(period, `${period}:race${String(index)}`, BigInt(100 + index), "22")));
+      const results = await Promise.allSettled([closing, ...posts]);
+
+      const row = await prisma.ledgerPeriod.findUniqueOrThrow({ where: { period } });
+      const stored = await entryKeys(`it:${run}:${period}:race`);
+      // каждая проводка либо записана, либо отклонена замком; ничего третьего
+      results.slice(1).forEach((result, index) => {
+        const key = `it:${run}:${period}:race${String(index)}`;
+        if (result.status === "fulfilled") expect(stored).toContain(key);
+        else {
+          expect(result.reason instanceof DomainError ? result.reason.code : String(result.reason)).toBe("ledger_period_closed");
+          expect(stored).not.toContain(key);
+        }
+      });
+      if (row.status === "closed") {
+        // всё, что лежит в закрытом месяце, учтено снимком: сумма выручки в снимке равна сумме строк журнала
+        const snapshot = parseSnapshot(row.snapshot);
+        const inSnapshot = snapshot.buckets.filter((bucket) => bucket.accountId === ACCOUNT.revenue).reduce((sum, bucket) => sum + BigInt(bucket.minor), 0n);
+        expect(inSnapshot).toBe(-(await lineSum(ACCOUNT.revenue, period)));
+      } else {
+        // закрытие проиграло проводке: она попала в отпечаток, и закрывать по старым цифрам нельзя
+        const failed = results[0];
+        expect(failed?.status === "rejected" && failed.reason instanceof DomainError ? failed.reason.code : failed).toBe("ledger_period_changed");
+        expect(await entryKeys(`close:${period}:`)).toEqual([]);
+      }
+    }
   });
 
   it("два одновременных закрытия — одно: второе получает 409, проводок закрытия ровно столько, сколько у одного", async () => {

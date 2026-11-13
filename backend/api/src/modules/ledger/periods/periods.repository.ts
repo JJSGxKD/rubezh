@@ -137,6 +137,8 @@ export class PrismaPeriodsRepository implements PeriodsRepository {
 
   async commitClose(plan: ClosePlan): Promise<CloseOutcome> {
     return await this.prisma.$transaction(async (tx): Promise<CloseOutcome> => {
+      // `FOR UPDATE` конфликтует с `FOR SHARE` вставки проводки (`PrismaLedgerRepository.insertEntry`): проводка в пути
+      // дописывается до отпечатка ниже, а проводка, пришедшая после, ждёт коммита закрытия и читает `closed`.
       const locked = await lockPeriod(tx, plan.period);
       if (locked === null || locked.status !== "review") return { outcome: "not_review", status: locked?.status ?? "open" };
       // Закрытие считали по месяцу, каким он был: другой номер раза или новая проводка — считать заново.

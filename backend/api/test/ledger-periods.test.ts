@@ -905,9 +905,15 @@ describe("замок закрытого месяца в журнале", () => {
     { accountId: "expense.vps.RUB", type: "expense", currency: "RUB", name: "Сервер", archivedAt: null },
   ];
 
+  /**
+   * Журнал в памяти с тем же договором замка, что у настоящего репозитория: закрытый месяц — `period_closed`,
+   * проводка не записана; замок — внутри вставки, а не отдельным вопросом до неё.
+   */
   class MemoryJournal implements LedgerRepository {
     readonly inserted: NewLedgerEntry[] = [];
     readonly byKey = new Map<string, StoredLedgerEntry>();
+    readonly closedPeriods = new Set<string>();
+    insertCalls = 0;
 
     async accounts(): Promise<StoredLedgerAccount[]> {
       return ACCOUNTS;
@@ -918,6 +924,8 @@ describe("замок закрытого месяца в журнале", () => {
     }
 
     async insertEntry(entry: NewLedgerEntry, lines: readonly EntryLine[]): Promise<InsertResult> {
+      this.insertCalls += 1;
+      if (this.closedPeriods.has(entry.period)) return "period_closed";
       this.inserted.push(entry);
       this.byKey.set(entry.sourceKey, { ...entry, reversalOf: null, meta: null, createdAt: new Date(), lines: [...lines] });
       return "inserted";
@@ -943,27 +951,33 @@ describe("замок закрытого месяца в журнале", () => {
     ...(period === undefined ? {} : { period }),
   });
 
-  const closedNovember = { isClosed: async (period: string) => period === PERIOD };
+  /** Журнал, у которого ноябрь закрыт. */
+  const journalWithClosedNovember = () => {
+    const journal = new MemoryJournal();
+    journal.closedPeriods.add(PERIOD);
+    return journal;
+  };
 
   it("проводка с датой в закрытом месяце — 409 `ledger_period_closed`, в журнал не попадает", async () => {
-    const journal = new MemoryJournal();
-    const ledger = new LedgerService(journal, closedNovember);
+    const journal = journalWithClosedNovember();
+    const ledger = new LedgerService(journal);
     const error = await domainError(ledger.post(draft("op:1", "2026-11-10T12:00:00.000Z")));
     expect(error).toMatchObject({ code: "ledger_period_closed", status: 409 });
     expect(error.message).toContain("2026-11");
     expect(journal.inserted).toEqual([]);
+    expect(journal.byKey.size).toBe(0);
   });
 
   it("«за какой месяц» решает: расход, оплаченный в декабре за закрытый ноябрь, — тоже 409", async () => {
-    const journal = new MemoryJournal();
-    const ledger = new LedgerService(journal, closedNovember);
+    const journal = journalWithClosedNovember();
+    const ledger = new LedgerService(journal);
     expect((await domainError(ledger.post(draft("op:2", "2026-12-03T12:00:00.000Z", PERIOD)))).code).toBe("ledger_period_closed");
     expect(journal.inserted).toEqual([]);
   });
 
   it("открытый месяц пишется как раньше; период проводки — месяц «за какой», если он указан", async () => {
-    const journal = new MemoryJournal();
-    const ledger = new LedgerService(journal, closedNovember);
+    const journal = journalWithClosedNovember();
+    const ledger = new LedgerService(journal);
     await ledger.post(draft("op:3", "2026-12-03T12:00:00.000Z"));
     await ledger.post(draft("op:4", "2026-12-03T12:00:00.000Z", "2026-10"));
     expect(journal.inserted.map((entry) => [entry.sourceKey, entry.period])).toEqual([
@@ -972,15 +986,20 @@ describe("замок закрытого месяца в журнале", () => {
     ]);
   });
 
-  it("повтор проводки, записанной до закрытия, замок не трогает: тот же ключ — та же проводка", async () => {
+  it("повтор проводки, записанной до закрытия, замок не трогает: тот же ключ — та же проводка, до вставки дело не доходит", async () => {
     const journal = new MemoryJournal();
-    await new LedgerService(journal).post(draft("op:5", "2026-11-10T12:00:00.000Z"));
-    const locked = new LedgerService(journal, closedNovember);
-    expect(await locked.post(draft("op:5", "2026-11-10T12:00:00.000Z"))).toMatchObject({ created: false });
+    const ledger = new LedgerService(journal);
+    await ledger.post(draft("op:5", "2026-11-10T12:00:00.000Z"));
+    journal.closedPeriods.add(PERIOD);
+    expect(await ledger.post(draft("op:5", "2026-11-10T12:00:00.000Z"))).toMatchObject({ created: false });
+    expect(journal.insertCalls).toBe(1);
   });
 
-  it("без замка (как в старых вызовах) журнал работает, как работал", async () => {
-    const journal = new MemoryJournal();
-    expect(await new LedgerService(journal).post(draft("op:6", "2026-11-10T12:00:00.000Z"))).toMatchObject({ created: true });
+  it("отказ замка не занимает ключ: после снятия закрытия та же проводка записывается", async () => {
+    const journal = journalWithClosedNovember();
+    const ledger = new LedgerService(journal);
+    expect((await domainError(ledger.post(draft("op:6", "2026-11-10T12:00:00.000Z")))).code).toBe("ledger_period_closed");
+    journal.closedPeriods.delete(PERIOD);
+    expect(await ledger.post(draft("op:6", "2026-11-10T12:00:00.000Z"))).toMatchObject({ created: true });
   });
 });

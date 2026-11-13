@@ -9,7 +9,6 @@ import { OPERATIONS_REPOSITORY, PrismaOperationsRepository } from "./operations/
 import { OperationsService } from "./operations/operations.service.js";
 import { PAYMENT_POSTINGS_REPOSITORY, PrismaPaymentPostingsRepository } from "./payment-postings.repository.js";
 import { NoPeriodHooks, PERIOD_HOOKS } from "./periods/period-hooks.js";
-import { PERIOD_LOCK, PrismaPeriodLock } from "./periods/period-lock.js";
 import { PERIODS_REPOSITORY } from "./periods/period-types.js";
 import { PrismaPeriodsRepository } from "./periods/periods.repository.js";
 import { PeriodsService } from "./periods/periods.service.js";
@@ -24,7 +23,8 @@ import { PeriodsService } from "./periods/periods.service.js";
  * Ручные операции (Р220, T-0461) — `OperationsService`: человек описывает событие, сервер собирает проводку;
  * размер операции оценивается по курсам, поэтому нужен модуль курсов.
  * Месяцы учёта (Р222, T-0468) — `PeriodsService`: сверка, закрытие с водопадом, снятие закрытия; закрытый месяц
- * запирает журнал через `PERIOD_LOCK`, а выплаты по месяцу (T-0469) подключаются хуками `PERIOD_HOOKS`.
+ * запирает журнал замком в транзакции вставки проводки (`PrismaLedgerRepository.insertEntry`), а выплаты по месяцу
+ * (T-0469) подключаются хуками `PERIOD_HOOKS`.
  */
 @Module({
   imports: [FxModule],
@@ -40,7 +40,6 @@ import { PeriodsService } from "./periods/periods.service.js";
     { provide: OPERATIONS_REPOSITORY, useClass: PrismaOperationsRepository },
     { provide: PAYMENT_POSTINGS_REPOSITORY, useClass: PrismaPaymentPostingsRepository },
     { provide: PERIODS_REPOSITORY, useClass: PrismaPeriodsRepository },
-    { provide: PERIOD_LOCK, useClass: PrismaPeriodLock },
     { provide: PERIOD_HOOKS, useClass: NoPeriodHooks },
   ],
   exports: [LedgerService, LedgerChartService, OperationsService, PeriodsService],
