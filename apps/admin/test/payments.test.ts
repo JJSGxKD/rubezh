@@ -11,7 +11,7 @@ import {
   paymentCardSchema,
   retryPayment,
 } from "../src/api/payments";
-import { EMPTY_FEED_FILTERS, feedChips, feedQuery, filtersFromAccount, isPurchaseId, searchProblem, type FeedFilters } from "../src/screens/payments/feed-filters";
+import { EMPTY_FEED_FILTERS, feedChips, feedQuery, filtersFromAccount, filtersProblem, isPurchaseId, searchProblem, type FeedFilters } from "../src/screens/payments/feed-filters";
 import { fakeFetch, json } from "./helpers";
 
 // Раздел «Платежи» (tasks/T-0437): правила фильтров ленты и разбор ответов сервера T-0429 и T-0431.
@@ -120,6 +120,12 @@ describe("чипы фильтров ленты", () => {
 });
 
 describe("поиск по ленте", () => {
+  it("период с позже, чем по, — ошибка формы; одна граница и равные даты — можно", () => {
+    expect(filtersProblem(filters({ from: "2026-11-11", to: "2026-11-01" }))).toBe("Период «с» позже, чем «по»");
+    expect(filtersProblem(filters({ from: "2026-11-11", to: "2026-11-11" }))).toBeNull();
+    expect(filtersProblem(filters({ from: "2026-11-11" }))).toBeNull();
+  });
+
   it("1–7 знаков — подсказка, 8 и больше — можно, пусто — можно", () => {
     const text = "Номер покупки или идентификатор оплаты — от 8 знаков";
     expect(searchProblem("abc")).toBe(text);
@@ -180,7 +186,7 @@ describe("разбор ответов сервера", () => {
 
   it("карточка без pii — pii: null", () => {
     expect(paymentCardSchema.parse({ ...CARD, account: { ...CARD.account, pii: null } }).account.pii).toBeNull();
-    const { pii: _pii, ...bare } = CARD.account;
+    const bare = { accountId: CARD.account.accountId, displayName: CARD.account.displayName, platform: CARD.account.platform };
     expect(paymentCardSchema.parse({ ...CARD, account: bare }).account.pii).toBeNull();
   });
 
