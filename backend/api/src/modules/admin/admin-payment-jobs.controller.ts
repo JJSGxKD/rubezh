@@ -51,7 +51,7 @@ export class AdminPaymentJobsController {
   @Post("payments/:purchaseId/retry")
   @HttpCode(200)
   @RequirePermission("payments.support")
-  async retryPayment(@Req() request: unknown, @Param("purchaseId") purchaseId: string, @Body() body: unknown): Promise<{ data: { retried: string[] } }> {
+  async retryPayment(@Req() request: unknown, @Param("purchaseId") purchaseId: string, @Body() body: unknown): Promise<{ data: { retried: string[]; replayed: string | null } }> {
     const actor = accountOf(request);
     await this.limit(actor.accountId);
     const id = parse(() => purchaseIdSchema.parse(purchaseId), "Некорректный идентификатор покупки");

@@ -40,7 +40,8 @@ import { PURCHASES_REPOSITORY, type ConfirmOutcome, type PurchasesRepository, ty
  * (`failedJobs`) и повторяет кнопкой (`retryFailed`) — тем же путём, что
  * команда на сервере, со свежей серией попыток (Р209, WP53, tasks/T-0431).
  * `jobState` только читает: по нему панель отличает уже повторенное задание
- * от несуществующего.
+ * от несуществующего. Оплата, которую задание не записало вовсе, но она есть
+ * в выписке площадки, записывается новым заданием (`replay`, tasks/T-0434).
  *
  * Redis недоступен — задание выполняется сразу: оплата не должна ждать
  * очередь. Не вышло и так — ошибка в лог со всеми полями оплаты: по ним
@@ -64,7 +65,8 @@ const JOB_OPTIONS = {
 const PENDING_REFUNDS_ON_START = 500;
 
 type PaymentsJob =
-  | { kind: "confirm"; payment: ConfirmedPayment }
+  /** `at` — когда пришло обновление (у повтора по выписке — время операции площадки), а не когда запись прошла; у старых заданий его нет */
+  | { kind: "confirm"; payment: ConfirmedPayment; at?: number }
   | { kind: "refund"; order: RefundOrder }
   /** возврат, о котором сообщила площадка; `at` — когда пришло обновление, а не когда запись прошла */
   | { kind: "refunded"; chargeId: string; at: number };
@@ -143,8 +145,23 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
     for (const connection of this.connections) connection.disconnect();
   }
 
-  async confirm(payment: ConfirmedPayment): Promise<void> {
-    await this.run({ kind: "confirm", payment }, `confirm-${fingerprint(payment.chargeId)}`);
+  /**
+   * Подтверждение от площадки. Время прихода обновления уходит в задание: оплата записывается временем оплаты,
+   * а не временем повтора брошенного задания — по нему считаются холд и срок VIP (Р209, WP53).
+   */
+  async confirm(payment: ConfirmedPayment, atMs = Date.now()): Promise<void> {
+    await this.run({ kind: "confirm", payment, at: atMs }, `confirm-${fingerprint(payment.chargeId)}`);
+  }
+
+  /**
+   * Повтор по выписке площадки (Р209): задание с меткой в идентификаторе — прежнее задание той же оплаты
+   * могло остаться в очереди выполненным или брошенным, и BullMQ молча не добавил бы второе с тем же id.
+   * `at` — время операции площадки. Запись идемпотентна по идентификатору оплаты, выдача — по ключу покупки,
+   * так что повтор ничего не удваивает.
+   */
+  async replay(job: { kind: "confirm"; payment: ConfirmedPayment; at: number } | { kind: "refunded"; chargeId: string; at: number }, tag: string): Promise<void> {
+    const chargeId = job.kind === "confirm" ? job.payment.chargeId : job.chargeId;
+    await this.run(job, `${job.kind}-${fingerprint(chargeId)}-${tag}`);
   }
 
   /** Возврат от площадки: игрок оспорил оплату или вернула поддержка. Ошибка сюда не пробивается — как у `confirm`. */
@@ -231,7 +248,7 @@ export class PaymentsQueue implements OnModuleInit, OnApplicationBootstrap, OnMo
       await this.confirmation.refunded(data.chargeId, data.at);
       return;
     }
-    const outcome = await this.confirmation.confirm(data.payment);
+    const outcome = await this.confirmation.confirm(data.payment, data.at);
     // Возврат заказывается после записи оплаты и отдельным заданием: упавший
     // возврат не должен повторять запись оплаты.
     await this.dispatchRefunds(this.refunds.afterConfirm(outcome, data.payment));

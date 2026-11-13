@@ -89,3 +89,10 @@ export class CompensationFailedError extends DomainError {
     super("compensation_failed", "Компенсация записана, но не начислена — подробности в логе сервера. Нажмите «Компенсировать» ещё раз", 503);
   }
 }
+
+/** Расхождения сверки с таким идентификатором нет: адрес устарел или чужой (Р209, tasks/T-0434). */
+export class DiscrepancyNotFoundError extends DomainError {
+  constructor() {
+    super("discrepancy_not_found", "Расхождение не найдено", 404);
+  }
+}
