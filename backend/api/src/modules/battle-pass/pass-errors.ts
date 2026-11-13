@@ -24,7 +24,7 @@ export class PassVipRequiredError extends DomainError {
 /** Месяц без своей ленты: править нечего, сначала её заводят. */
 export class PassSeasonNotFoundError extends DomainError {
   constructor() {
-    super("pass_season_not_found", "У этого месяца ещё нет своей ленты — сначала создайте её", 404);
+    super("pass_season_not_found", "У этого месяца ещё нет своей ленты: её нужно создать", 404);
   }
 }
 
@@ -52,7 +52,7 @@ export class PassTierPassedError extends DomainError {
 /** Ленту параллельно изменил другой администратор: панель перечитывает месяц. */
 export class PassSeasonChangedError extends DomainError {
   constructor() {
-    super("pass_season_changed", "Ленту только что изменили — обновите страницу и повторите", 409);
+    super("pass_season_changed", "Ленту только что изменили: страницу нужно обновить", 409);
   }
 }
 
