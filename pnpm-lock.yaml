@@ -412,6 +412,12 @@ importers:
         specifier: 22.20.2
         version: 22.20.2
 
+  packages/ledger:
+    devDependencies:
+      '@types/node':
+        specifier: 22.20.2
+        version: 22.20.2
+
   packages/promo-kit:
     dependencies:
       zod:

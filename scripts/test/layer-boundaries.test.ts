@@ -71,6 +71,11 @@ const RULES: Rule[] = [
     why: "ядро курсов самодостаточно: ни игры, ни Nest, ни Prisma — им станет отдельный сервис (docs/35-stage4-plan.md, Р32)",
   },
   {
+    from: "packages/ledger/src",
+    forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
+    why: "ядро учёта переходит в другие проекты: ни игры, ни Nest, ни Prisma (docs/35-stage4-plan.md, Р98, Р219)",
+  },
+  {
     from: "packages/proxy-kit/src",
     forbidden: /["']@bh\/|["']@nestjs\/|["']@prisma\/|generated\/prisma/,
     why: "пакет проксирования переиспользуется в других проектах: ни игры, ни Nest, ни Prisma",

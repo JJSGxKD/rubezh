@@ -261,6 +261,8 @@ model Account {
   botMentionTasks  BotMentionTask[]
   externalLinks    ExternalIdentity[]
   taskChannelWatch TaskChannelWatch[]
+  sharesHeld       StakeholderShare[]   @relation("StakeholderShares")
+  sharesSet        StakeholderShare[]   @relation("StakeholderSharesSet")
 
   @@unique([platform, platformUserId])
   @@index([lastSeenAt])
@@ -3101,4 +3103,26 @@ model PaymentDiscrepancy {
   @@index([resolvedAt, detectedAt])
   @@index([purchaseId])
   @@map("payment_discrepancy")
+}
+
+// Доли участников проекта (docs/35-stage4-plan.md Р217, tasks/T-0452)
+
+/// Доля участника проекта с месяца (Р217): новая доля — новая строка, конец участия — 0.
+model StakeholderShare {
+  shareId   String   @id @map("share_id") @db.Uuid
+  accountId String   @map("account_id") @db.Uuid
+  /// первое число месяца по UTC, с которого действует доля
+  fromMonth DateTime @map("from_month") @db.Date
+  /// сотые доли процента: 2 550 — 25,5 %
+  shareBp   Int      @map("share_bp")
+  note      String   @db.VarChar(500)
+  setBy     String   @map("set_by") @db.Uuid
+  setAt     DateTime @default(now()) @map("set_at") @db.Timestamptz(3)
+
+  account Account @relation("StakeholderShares", fields: [accountId], references: [accountId], onDelete: Restrict)
+  setter  Account @relation("StakeholderSharesSet", fields: [setBy], references: [accountId], onDelete: Restrict)
+
+  @@unique([accountId, fromMonth])
+  @@index([fromMonth])
+  @@map("stakeholder_share")
 }
