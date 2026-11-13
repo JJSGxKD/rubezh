@@ -18,6 +18,7 @@ shared:
   - backend/api/src/modules/ledger/ledger.module.ts
   - backend/api/src/modules/admin/admin-ledger.controller.ts
   - backend/api/test/admin-ledger.http.test.ts
+  - backend/api/test/route-permissions.test.ts
   - docs/21-diagrams.md
   - docs/37-accounting.md
   - backend/api/src/modules/wipe/wipe-plan.ts
