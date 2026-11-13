@@ -3,8 +3,8 @@ id: T-0381
 title: Рейтинг в панели — раздел: доски, архив сезонов, места игрока в карточке
 epic: E11
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead2-3
 size: M
 depends_on: [T-0380]
@@ -17,6 +17,8 @@ shared:
   - apps/admin/src/routes.ts
   - apps/admin/src/screens/sections.tsx
   - apps/admin/src/screens/players/PlayerCardView.tsx
+  - apps/admin/src/screens/Shell.tsx
+  - apps/admin/test/roles.test.ts
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
 runner: local

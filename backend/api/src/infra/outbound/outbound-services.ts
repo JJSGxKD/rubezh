@@ -5,6 +5,7 @@
  *
  * - `fx.*` — источники курсов (`modules/fx/fx.refresher.ts`);
  * - `telegram.bot` — Bot API;
+ * - `vk.api` — методы API VK ключом сообщества: проверка вступления, ответы игрокам (Р188);
  * - `max.bot` — Bot API MAX: бот заданий-каналов (Р188);
  * - `taddy.api`, `taddy.exchange` — реклама и лента заданий Taddy;
  * - `ads.creatives` — креативы сетей;
@@ -23,6 +24,7 @@ export const OUTBOUND_SERVICES = [
   "fx.tonapi",
   "fx.binance",
   "telegram.bot",
+  "vk.api",
   "max.bot",
   "taddy.api",
   "taddy.exchange",
