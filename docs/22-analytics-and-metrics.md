@@ -157,7 +157,7 @@ Zod-схемы `payload` — в словаре сервера
 |---|---|
 | Привлечение | `link_clicked`, `redirect_served`, `hub_platform_chosen`, `app_first_open` |
 | Аккаунт | `user_registered`, `user_authenticated`, `session_started`, `promo_code_applied` |
-| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_scored`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `stalker_ended`, `tutorial_step`, `tutorial_completed`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
+| Забеги | `run_started`, `run_resumed`, `run_finished`, `run_scored`, `run_replayed`, `run_abandoned`, `run_paused`, `run_synced`, `upgrade_offered`, `upgrade_chosen`, `wave_reached`, `continue_used`, `continue_offered`, `boost_used`, `chest_found`, `chest_opened`, `ring_ended`, `stalker_ended`, `tutorial_step`, `tutorial_completed`, `secret_found`, `secret_used`, `evolution_unlocked`, `card_rerolled`, `card_skipped`, `card_banished` |
 | Интерфейс | `screen_viewed`, `ui_clicked`, `settings_changed`; `home_slide_viewed`, `home_slide_clicked` (карусель главной, WP42); `home_widget_clicked` (виджеты главной, WP42); `feed_event_viewed` (лента живых событий под «Играть», Р114) |
 | Монетизация | `purchase_initiated`, `purchase_completed`, `purchase_failed`, `purchase_refunded`; `showcase_bought`, `shop_banner_clicked` (магазин, WP10); `donation_link_clicked` (донаты проекту, Р109) |
 | Реклама | `ad_shown`, `ad_failed`, `ad_clicked`, `ad_reward_claimed` (WP12); `ad_tested` (проверка рекламы командой, T-0333); выдача показа — строка `ad_session`, а не событие |
@@ -609,6 +609,28 @@ Grafana id кнопок не выводятся (высокая кардинал
   **заготовка метрики** (кода нет: Prometheus в бэкенде появится вместе с
   метриками): гистограмма `rating_run_points{band}` — очки забега, метка `band`
   из пяти полос, без `run_id`;
+- `run_replayed` — **серверное** событие (T-0319, WP5): сервер перепроверил
+  забег повтором в `sim-worker` и получил исход. Поля: `runId`, `verdict` —
+  `match` (повтор совпал), `mismatch` (разошёлся — забег уходит из рейтинга в
+  разбор), `content_mismatch` (нет снимка контента записи), `not_replayable`
+  (запись обрезана), `broken` (запись не по схеме или повтор упал), `timeout`
+  (повтор не уложился в минуту или воркер молчал 72 часа) и `no_proof` (запись не
+  пришла за 72 часа); `divergedTick` — тик первого расхождения (у остальных исходов
+  `null`), `durationMs` — сколько считал повтор (у `no_proof` нуль), `clientOs` —
+  `ios`, `android`, `desktop`, `web` или `unknown` по последней сессии игрока: по нему
+  видно, где движок сервера расходится с клиентским (V8 против JavaScriptCore,
+  `35-stage4-plan.md`, Б5). Идентификатора игрока и текста причины воркера в
+  нагрузке нет — причина лежит в строке забега (`run.replay_result`) и видна
+  разбору. Пишется один раз на исход: повторная доставка того же исхода и исход
+  прошлой попытки события не порождают, а «Повторить снова» даёт новое. **Конверт:**
+  как у `run_scored` — `install_id = 'server'`, `session_id` — id забега,
+  `app_version = 'server'`, площадка — игрока. Клиент событие не шлёт;
+  **заготовка метрики** (кода нет: Prometheus в бэкенде появится вместе с
+  метриками): счётчик `replay_outcome_total{verdict,client_os}` — по одному на
+  исход, метки низкой кардинальности (семь исходов на пять площадок), без
+  `run_id` и `account_id`; пока же каждый исход — строка лога
+  `replay_outcome_total` с теми же полями. По доле `mismatch` на `client_os` видно
+  расхождение движков;
 - `run_abandoned` — `interrupted: "update"`: забег прервало обновление игры, и
   при следующем запуске сохранение другой сборки засчитано брошенным
   (`state/run-interrupted.ts`). Время и уровень — из сохранения, `enemiesKilled`
