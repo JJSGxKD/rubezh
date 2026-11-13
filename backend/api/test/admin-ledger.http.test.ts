@@ -27,6 +27,9 @@ import type { OperationInput } from "../src/modules/ledger/operations/operation-
 import type { OperationPage, OperationView } from "../src/modules/ledger/operations/operation-view.js";
 import type { OperationFilter } from "../src/modules/ledger/operations/operations.repository.js";
 import { OperationsService } from "../src/modules/ledger/operations/operations.service.js";
+import { LedgerTemplateInvalidError } from "../src/modules/ledger/templates/template-errors.js";
+import type { CreateTemplateInput, UpdateTemplateInput } from "../src/modules/ledger/templates/template-input.js";
+import { TemplatesService, type DraftPeriodResult, type TemplateView } from "../src/modules/ledger/templates/templates.service.js";
 import { PermissionGuard } from "../src/modules/roles/permission.guard.js";
 import type { Role } from "../src/modules/roles/permissions.js";
 import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
@@ -42,7 +45,8 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 /**
  * Журнал учёта в панели по HTTP (Р219, tasks/T-0457): `GET /admin/ledger/balances` и `GET /admin/ledger/journal`;
  * места хранения и статьи (Р220, tasks/T-0460): `/admin/ledger/places` и `/admin/ledger/articles`;
- * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`.
+ * ручные операции (Р220, tasks/T-0461): `/admin/ledger/operations`;
+ * шаблоны повторяющихся расходов (Р220, tasks/T-0463): `/admin/ledger/templates`.
  * Настоящие охранники панели и права, сервис учёта подменён: что он считает и как пишет в базу, проверяют
  * `ledger-journal.test.ts` и интеграционный тест; здесь — кто и с какими параметрами пускается к журналу.
  */
@@ -214,6 +218,58 @@ class FakeOperations {
   }
 }
 
+const TEMPLATE: TemplateView = {
+  templateId: "vps",
+  name: "VPS",
+  articleId: "vps",
+  articleName: "Сервер (VPS)",
+  placeAccountId: "bank.karta-t-banka",
+  placeName: "Карта Т-Банка",
+  currency: "RUB",
+  amount: "1500.00",
+  schedule: "monthly",
+  month: null,
+  note: null,
+  archived: false,
+};
+
+const DRAFT_RESULT: DraftPeriodResult = { period: "2026-11", created: 1, existing: 0, failed: [] };
+
+/** Подменный сервис шаблонов: помнит вызовы с автором и отдаёт готовые ответы; может отказать, как настоящий. */
+class FakeTemplates {
+  readonly calls: { method: string; actor: string | null; args: unknown[] }[] = [];
+  failWith: Error | null = null;
+
+  private record(method: string, actor: { accountId: string } | null, ...args: unknown[]): void {
+    this.calls.push({ method, actor: actor?.accountId ?? null, args });
+    if (this.failWith !== null) throw this.failWith;
+  }
+
+  async list(): Promise<TemplateView[]> {
+    this.record("list", null);
+    return [TEMPLATE];
+  }
+
+  async create(actor: { accountId: string }, input: CreateTemplateInput): Promise<TemplateView> {
+    this.record("create", actor, input);
+    return TEMPLATE;
+  }
+
+  async update(actor: { accountId: string }, templateId: string, input: UpdateTemplateInput): Promise<TemplateView> {
+    this.record("update", actor, templateId, input);
+    return TEMPLATE;
+  }
+
+  async archive(actor: { accountId: string }, templateId: string): Promise<void> {
+    this.record("archive", actor, templateId);
+  }
+
+  async draftPeriod(actor: { accountId: string }, period: string): Promise<DraftPeriodResult> {
+    this.record("draftPeriod", actor, period);
+    return DRAFT_RESULT;
+  }
+}
+
 describe("журнал учёта в панели по HTTP", () => {
   let app: NestFastifyApplication | null = null;
 
@@ -229,6 +285,7 @@ describe("журнал учёта в панели по HTTP", () => {
     const ledger = new FakeLedger();
     const chart = new FakeChart();
     const operations = new FakeOperations();
+    const templates = new FakeTemplates();
     const limiter = { consume: async () => true } as unknown as RateLimiter;
     @Module({
       controllers: [AdminSessionController, AdminLedgerController],
@@ -242,6 +299,7 @@ describe("журнал учёта в панели по HTTP", () => {
         { provide: LedgerService, useValue: ledger },
         { provide: LedgerChartService, useValue: chart },
         { provide: OperationsService, useValue: operations },
+        { provide: TemplatesService, useValue: templates },
         { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: RateLimiter, useValue: limiter },
         PanelLoginService,
@@ -269,7 +327,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, login, staff };
+    return { ledger, chart, operations, templates, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
@@ -733,5 +791,100 @@ describe("журнал учёта в панели по HTTP", () => {
     const conflict = await send("PATCH", `/operations/${OPERATION_ID}`, finance, EXPENSE_BODY);
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json<{ error: { code: string } }>().error.code).toBe("ledger_operation_not_draft");
+  });
+
+  const TEMPLATE_BODY = { name: "VPS", articleId: "vps", placeAccountId: "bank.karta-t-banka", amount: "1500.00", schedule: "monthly" };
+
+  it("шаблоны читает тот, кто видит журнал: финансы и владелец — 200, маркетолог, администратор и участник проекта — 403", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1001", "Финансы", "finance");
+    const owner = await ctx.login(`dev-${OWNER_ID}:Владелец`);
+    const denied = [await ctx.staff("1002", "Маркетолог", "marketer"), await ctx.staff("1003", "Администратор", "admin"), await ctx.staff("1004", "Участник", "stakeholder")];
+
+    for (const cookie of [finance, owner]) {
+      const list = await get("/templates", cookie);
+      expect(list.statusCode).toBe(200);
+      expect(list.json()).toEqual({ data: { templates: [TEMPLATE] } });
+    }
+    for (const cookie of denied) expect((await get("/templates", cookie)).statusCode).toBe(403);
+    expect(ctx.templates.calls.map((call) => call.method)).toEqual(["list", "list"]);
+  });
+
+  it("шаблоны не заводят, не правят, не архивируют и не запускают маркетолог, администратор и участник проекта: 403, сервис не вызывается", async () => {
+    const ctx = await start();
+    const denied = [await ctx.staff("1005", "Маркетолог", "marketer"), await ctx.staff("1006", "Администратор", "admin"), await ctx.staff("1007", "Участник", "stakeholder")];
+
+    for (const cookie of denied) {
+      expect((await send("POST", "/templates", cookie, TEMPLATE_BODY)).statusCode).toBe(403);
+      expect((await send("PATCH", "/templates/vps", cookie, { amount: "1600" })).statusCode).toBe(403);
+      expect((await send("POST", "/templates/vps/archive", cookie, {})).statusCode).toBe(403);
+      expect((await send("POST", "/templates/draft-period", cookie, { period: "2026-11" })).statusCode).toBe(403);
+    }
+    expect(ctx.templates.calls).toHaveLength(0);
+  });
+
+  it("без сессии — 401 на заведении и на «Расходах месяца»", async () => {
+    const ctx = await start();
+    const bare = (url: string, payload: object) => app!.inject({ method: "POST", url: `${BASE}${url}`, payload });
+    expect((await bare("/templates", TEMPLATE_BODY)).statusCode).toBe(401);
+    expect((await bare("/templates/draft-period", { period: "2026-11" })).statusCode).toBe(401);
+    expect(ctx.templates.calls).toHaveLength(0);
+  });
+
+  it("финансы заводят, правят и архивируют шаблон: разобранное тело и автор доходят до сервиса", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1008", "Финансы", "finance");
+
+    const created = await send("POST", "/templates", finance, { ...TEMPLATE_BODY, schedule: "yearly", month: 3, note: "Регистратор" });
+    const updated = await send("PATCH", "/templates/vps", finance, { amount: "1600", month: null, note: null });
+    const archived = await send("POST", "/templates/vps/archive", finance, {});
+
+    expect(created.json()).toEqual({ data: { template: TEMPLATE } });
+    expect(updated.json()).toEqual({ data: { template: TEMPLATE } });
+    expect(archived.json()).toEqual({ data: { ok: true } });
+    expect(ctx.templates.calls.map((call) => [call.method, ...call.args])).toEqual([
+      ["create", { ...TEMPLATE_BODY, schedule: "yearly", month: 3, note: "Регистратор" }],
+      ["update", "vps", { amount: "1600", month: null, note: null }],
+      ["archive", "vps"],
+    ]);
+    expect(ctx.templates.calls.every((call) => call.actor !== null)).toBe(true);
+  });
+
+  it("«Расходы месяца»: период доходит до сервиса, ответ — { data: { period, created, existing, failed } }", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1009", "Финансы", "finance");
+
+    const response = await send("POST", "/templates/draft-period", finance, { period: "2026-11" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: DRAFT_RESULT });
+    expect(ctx.templates.calls.map((call) => [call.method, call.args[0]])).toEqual([["draftPeriod", "2026-11"]]);
+  });
+
+  it("неверное тело — 400, сервис не вызывается: лишнее поле, сумма со знаком, график не из списка, месяц вне 1…12, пустая правка, период не строкой", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1010", "Финансы", "finance");
+
+    for (const body of [{ ...TEMPLATE_BODY, extra: 1 }, { ...TEMPLATE_BODY, amount: "-1" }, { ...TEMPLATE_BODY, schedule: "weekly" }, { ...TEMPLATE_BODY, schedule: "yearly", month: 13 }, { name: "VPS" }]) {
+      expect((await send("POST", "/templates", finance, body)).statusCode).toBe(400);
+    }
+    expect((await send("PATCH", "/templates/vps", finance, {})).statusCode).toBe(400);
+    expect((await send("PATCH", "/templates/vps", finance, { amount: "1e3" })).statusCode).toBe(400);
+    expect((await send("PATCH", "/templates/Bad_Id", finance, { amount: "1" })).statusCode).toBe(400);
+    expect((await send("POST", "/templates/draft-period", finance, {})).statusCode).toBe(400);
+    expect((await send("POST", "/templates/draft-period", finance, { period: 202611 })).statusCode).toBe(400);
+    expect((await send("POST", "/templates/draft-period", finance, { period: "2026-11", extra: 1 })).statusCode).toBe(400);
+    expect(ctx.templates.calls).toHaveLength(0);
+  });
+
+  it("отказ сервиса доходит как есть: период вне окна — 400 ledger_template_invalid с текстом", async () => {
+    const ctx = await start();
+    const finance = await ctx.staff("1011", "Финансы", "finance");
+
+    ctx.templates.failWith = new LedgerTemplateInvalidError("Расходы месяца создаются не раньше прошлого месяца");
+    const response = await send("POST", "/templates/draft-period", finance, { period: "2026-01" });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { code: string; message: string } }>().error).toMatchObject({ code: "ledger_template_invalid", message: "Расходы месяца создаются не раньше прошлого месяца" });
   });
 });
