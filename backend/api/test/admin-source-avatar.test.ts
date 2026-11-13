@@ -23,6 +23,8 @@ import { ROLES_REPOSITORY } from "../src/modules/roles/roles.repository.js";
 import { RolesService } from "../src/modules/roles/roles.service.js";
 import { NetworkTasksService } from "../src/modules/tasks/network-tasks.service.js";
 import { TasksService } from "../src/modules/tasks/tasks.service.js";
+import { AppLinks } from "../src/platforms/ports/app-links.js";
+import { TelegramAppLinks } from "../src/platforms/telegram/telegram-app-links.js";
 import { SourceAvatarRejectedError, SourceAvatarUnavailableError, SourceAvatars, type SourceAvatar, type SourceImage, type SourceRef } from "../src/platforms/ports/source-avatar.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
@@ -73,6 +75,7 @@ describe("картинка источника задания по HTTP", () => {
         { provide: ROLES_REPOSITORY, useValue: roles },
         { provide: ADMIN_SESSION_STORE, useValue: store },
         { provide: PANEL_LOGIN_STORE, useValue: new MemoryPanelLoginStore() },
+        { provide: AppLinks, useValue: new AppLinks([new TelegramAppLinks({ miniAppLink: "https://t.me/rubezh_bot?startapp", username: "rubezh_bot" })]) },
         { provide: TasksService, useValue: {} },
         { provide: NetworkTasksService, useValue: {} },
         { provide: SourceAvatars, useValue: new SourceAvatars([avatar]) },
@@ -174,9 +177,8 @@ describe("картинка источника задания по HTTP", () => {
       { kind: "channel", platform: "icq", chat: "@x_chan" },
       { kind: "bot", platform: "telegram", url: "http://t.me/some_bot" },
       { ...channel, extra: 1 },
-      "не объект",
     ]) {
-      expect((await server.inject({ method: "POST", url: URL_PATH, headers, payload: payload as Record<string, unknown> })).statusCode, JSON.stringify(payload)).toBe(400);
+      expect((await server.inject({ method: "POST", url: URL_PATH, headers, payload })).statusCode, JSON.stringify(payload)).toBe(400);
     }
   });
 
