@@ -14,7 +14,7 @@ describe("Болотник", () => {
       speed: 34,
       damage: 8,
       xp: 6,
-      threat: 6,
+      threat: 3.75,
       pattern: "chase",
       element: "poison",
       statusChance: 0.5,

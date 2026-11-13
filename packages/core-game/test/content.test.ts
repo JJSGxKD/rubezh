@@ -221,6 +221,7 @@ describe("контент таймлайна спавна", () => {
     expect(pool.indexOf("bone_walker")).toBe(pool.indexOf("tank_ghoul") + 1);
     expect(pool.indexOf("mire_shambler")).toBe(pool.indexOf("tank_ghoul") + 2);
     // Прежние типы идут в прежнем порядке — без огонька, который стоял пятым.
+    // Болотник встал перед Ледяным духом по калибровке сильного бота (docs/32-balance.md §2.2).
     expect(pool).toEqual([
       "swarm_rat",
       "circler_crow",
@@ -231,8 +232,8 @@ describe("контент таймлайна спавна", () => {
       "tank_ghoul",
       "bone_walker",
       "mire_shambler",
-      "ice_spirit",
       "bog_lurker",
+      "ice_spirit",
     ]);
   });
 
