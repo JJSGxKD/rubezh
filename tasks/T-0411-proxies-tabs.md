@@ -3,8 +3,8 @@ id: T-0411
 title: Раздел «Прокси» — вкладки с адресом вместо одной ленты
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0410, T-0384, T-0386]
