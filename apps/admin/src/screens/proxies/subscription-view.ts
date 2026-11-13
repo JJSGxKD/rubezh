@@ -207,7 +207,7 @@ export interface NodeRow {
   transportText: string;
   securityText: string;
   host: string;
-  countryText: string;
+  country: string | null;
   statusLabel: string;
   tone: "success" | "neutral" | "danger";
   latencyText: string;
@@ -230,7 +230,7 @@ export function nodeRows(nodes: readonly SubscriptionNode[]): NodeRow[] {
       transportText: transportLabel(node.network),
       securityText: securityLabel(node.protocol, node.security, node.flow),
       host: node.host,
-      countryText: node.country ?? "—",
+      country: node.country,
       statusLabel: STATE_VIEW[node.state].label,
       tone: STATE_VIEW[node.state].tone,
       latencyText: node.state === "healthy" && node.latencyMs !== null ? `${String(node.latencyMs)} мс` : "—",
