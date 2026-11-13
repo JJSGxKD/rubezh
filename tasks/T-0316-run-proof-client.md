@@ -3,8 +3,8 @@ id: T-0316
 title: Запись для проверки у каждого забега — лог ввода, выборы и контрольные суммы сквозь продолжение из снимка; отправка на сервер очередью
 epic: E11
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0317]
