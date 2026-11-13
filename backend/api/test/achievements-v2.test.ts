@@ -131,7 +131,7 @@ describe("убийства стихией", () => {
     expect(taskDefSchema.safeParse(achievement("ach_fire_500", base)).success).toBe(false);
     expect(taskDefSchema.safeParse(achievement("ach_fire_500", { ...base, filter: { weapon: "hearth" } })).success).toBe(false);
     expect(taskDefSchema.safeParse(achievement("ach_fire_500", { ...base, filter: { difficulty: "hard" } })).success).toBe(false);
-    expect(taskDefSchema.safeParse(achievement("ach_fire_500", { ...base, filter: { element: "water" } })).success).toBe(false);
+    expect(taskDefSchema.safeParse(achievement("ach_fire_500", { ...base, filter: { element: "water" } as never })).success).toBe(false);
     expect(taskDefSchema.safeParse(achievement("ach_fire_500", { ...base, filter: { element: "fire" } })).success).toBe(true);
   });
 });
