@@ -3,8 +3,8 @@ id: T-0425
 title: Облик Карачуна на канве — знак неубиваемого, предвестие инеем, растворение
 epic: E10
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0423]
@@ -25,6 +25,8 @@ shared:
   - packages/app-shell/src/screens/guide/scenes.tsx
   - packages/app-shell/src/dev/fx-scenes.ts
   - packages/app-shell/test/fx-scenes.test.ts
+  - packages/app-shell/test/guide.test.ts
+  - packages/core-game/src/index.ts
   - docs/17-testing-strategy.md
 runner: any
 executor: sonnet-5.5
