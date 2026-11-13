@@ -124,7 +124,7 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 }
 
 /**
- * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 27 таблиц плана в порядке
+ * Таблицы, которые вайп стирает или читает снимком, — по `@@map` схемы. 28 таблиц плана в порядке
  * `WIPE_ORDER`, затем `purchase` (из неё снимок берёт покупки и ссылку на забег обнуляет стирание)
  * и `tester_compensation` (по ней снимок проверяет, не было ли вайпа). Полноту против `WIPE_ORDER`
  * проверяет тест: таблица, добавленная в план без строки здесь, роняет его.
@@ -157,6 +157,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "pass_progress",
   "pass_claim",
   "boost_credit",
+  "secret_found",
   "purchase",
   "tester_compensation",
 ];
@@ -178,7 +179,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 27 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 28 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -206,6 +207,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.taskChannelWatch.deleteMany({});
     case "AchievementFavorite":
       return await tx.achievementFavorite.deleteMany({});
+    case "SecretFound":
+      return await tx.secretFound.deleteMany({});
     case "ShowcaseOffer":
       return await tx.showcaseOffer.deleteMany({});
     case "ItemEvent":
