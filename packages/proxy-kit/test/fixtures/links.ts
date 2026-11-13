@@ -64,4 +64,45 @@ export const SS_2022 = `ss://2022-blake3-aes-128-gcm:cGFzc3dvcmQxMjM0NTY3OA%3D%3
 /** Старая форма: base64 от всей `метод:пароль@хост:порт`. */
 export const SS_LEGACY = `ss://${b64("chacha20-ietf-poly1305:pw@example.com:8388")}#SS%20old`;
 
+// Способы подключения, которые выдают поставщики (docs/35-stage4-plan.md Р192, tasks/T-0387).
+// Значения, чью форму проверяет ядро Xray (ключи, ECH, постквантовая подпись, шифрование
+// VLESS), — заглушки: `infra/prod/xray/check-config.sh` подставляет настоящую форму.
+
+const enc = encodeURIComponent;
+
+/** sha256 сертификата, 64 hex. */
+export const PIN_HEX = "0123456789abcdef".repeat(4);
+export const ECH_CONFIG = "ECHCONFIG1";
+export const MLDSA65_VERIFY = "MLDSA65VERIFY1";
+export const VLESS_ENCRYPTION_VALUE = "mlkem768x25519plus.native.0rtt.VLESSENCKEY1";
+/** Дополнительные настройки XHTTP из ссылки. */
+export const XHTTP_EXTRA = { xPaddingBytes: "100-1000", xmux: { maxConcurrency: "16-32" } };
+
+/** vless + xhttp + reality с `extra`. */
+export const VLESS_XHTTP_EXTRA =
+  `vless://${UUID}@203.0.113.11:443?type=xhttp&security=reality&sni=www.example.com&pbk=PUBLICKEY2&sid=cd34&path=%2Fx&host=h.example.com&mode=auto&extra=${enc(JSON.stringify(XHTTP_EXTRA))}#XHTTP%20extra`;
+
+/** vless + tcp + tls с ECH. */
+export const VLESS_TLS_ECH = `vless://${UUID}@example.com:443?type=tcp&security=tls&sni=example.com&ech=${ECH_CONFIG}#ECH`;
+
+/** vless + tcp + tls с закреплённым сертификатом и проверкой по имени. */
+export const VLESS_TLS_PINNED = `vless://${UUID}@example.com:443?type=tcp&security=tls&sni=example.com&pcs=${PIN_HEX}&vcn=example.com#Pinned`;
+
+/** vless + reality + постквантовая проверка. */
+export const VLESS_REALITY_PQV =
+  `vless://${UUID}@203.0.113.10:443?type=tcp&security=reality&sni=www.example.com&fp=chrome&pbk=PUBLICKEY1&sid=ab12&pqv=${MLDSA65_VERIFY}&flow=xtls-rprx-vision#PQV`;
+
+/** vless с шифрованием самого VLESS, без TLS. */
+export const VLESS_ENCRYPTION = `vless://${UUID}@203.0.113.13:443?type=tcp&security=none&encryption=${enc(VLESS_ENCRYPTION_VALUE)}#Enc`;
+
+/** vless + reality + flow с UDP 443. */
+export const VLESS_VISION_UDP443 =
+  `vless://${UUID}@203.0.113.10:443?type=tcp&security=reality&sni=www.example.com&fp=chrome&pbk=PUBLICKEY1&sid=ab12&flow=xtls-rprx-vision-udp443#Vision%20udp`;
+
+/** vmess + RAW с HTTP-маскировкой. */
+export const VMESS_RAW_HTTP = `vmess://${UUID}@203.0.113.12:80?type=tcp&headerType=http&host=a.example.com%2Cb.example.com&path=%2Fx&encryption=auto#VM%20raw`;
+
+/** Заголовок RAW, который из этой ссылки должен получиться. */
+export const RAW_HTTP_HEADER = { type: "http", request: { path: ["/x"], headers: { Host: ["a.example.com", "b.example.com"] } } };
+
 export { b64, b64url };

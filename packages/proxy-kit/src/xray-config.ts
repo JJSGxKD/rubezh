@@ -1,4 +1,4 @@
-import type { NodeSecurity, NodeTransport, ProxyNode } from "./node.js";
+import type { LegacyPinning, NodeSecurity, NodeTransport, ProxyNode } from "./node.js";
 
 /**
  * Имена полей конфига Xray — одной таблицей: формат сверяется с образом
@@ -21,6 +21,10 @@ const F = {
   grpc: "grpcSettings",
   httpupgrade: "httpupgradeSettings",
   xhttp: "xhttpSettings",
+  tcp: "tcpSettings",
+  sockopt: "sockopt",
+  dialerProxy: "dialerProxy",
+  freedom: "freedom",
   stats: "stats",
   api: "api",
   policy: "policy",
@@ -154,7 +158,7 @@ export function buildXrayConfig(nodes: readonly PlacedNode[], options: XrayConfi
       protocol: F.socks,
       settings: { auth: "noauth", udp: false },
     })),
-    [F.outbounds]: [{ tag: F.block, protocol: F.blackhole }, ...placed.map(({ group, node }) => outbound(group, node))],
+    [F.outbounds]: [{ tag: F.block, protocol: F.blackhole }, ...placed.flatMap(({ group, node }) => outboundsOf(group, node))],
     [F.routing]: {
       domainStrategy: "AsIs",
       rules: placed.map(({ group, node, slot }) => ({ type: "field", inboundTag: [F.tagIn(slot)], outboundTag: outboundTag(group, node.key) })),
@@ -175,15 +179,31 @@ function statsBlocks(listen: string, port: number): Record<string, unknown> {
   };
 }
 
-function outbound(group: string, node: ProxyNode): Record<string, unknown> {
-  return { tag: outboundTag(group, node.key), protocol: node.protocol, settings: settingsOf(node), [F.stream]: streamOf(node.transport, node.security), [F.mux]: { enabled: false } };
+/** Тег служебного выхода `freedom` узла: суффикс `-dial` счётчик трафика узлом не считает (`xray-stats.ts`), и байты не задваиваются. */
+const dialerTagOf = (group: string, key: string): string => `${outboundTag(group, key)}-dial`;
+
+/**
+ * Выход узла, а у узла с цепочкой — ещё и служебный `freedom` сразу за ним: узел
+ * подключается через него (`sockopt.dialerProxy`). Входов у служебного выхода нет.
+ */
+function outboundsOf(group: string, node: ProxyNode): Record<string, unknown>[] {
+  const stream = streamOf(node.transport, node.security);
+  if (node.dialer === undefined) return [outbound(group, node, stream)];
+
+  const dialerTag = dialerTagOf(group, node.key);
+  const chained = { ...stream, [F.sockopt]: { [F.dialerProxy]: dialerTag } };
+  return [outbound(group, node, chained), { tag: dialerTag, protocol: F.freedom, settings: node.dialer.settings }];
+}
+
+function outbound(group: string, node: ProxyNode, stream: Record<string, unknown>): Record<string, unknown> {
+  return { tag: outboundTag(group, node.key), protocol: node.protocol, settings: settingsOf(node), [F.stream]: stream, [F.mux]: { enabled: false } };
 }
 
 function settingsOf(node: ProxyNode): Record<string, unknown> {
   const { host: address, port, secret } = node;
   switch (node.protocol) {
     case "vless":
-      return { vnext: [{ address, port, users: [{ id: secret, encryption: "none", ...(node.flow === null ? {} : { flow: node.flow }) }] }] };
+      return { vnext: [{ address, port, users: [{ id: secret, encryption: node.cipher ?? "none", ...(node.flow === null ? {} : { flow: node.flow }) }] }] };
     case "vmess":
       return { vnext: [{ address, port, users: [{ id: secret, alterId: 0, security: node.cipher ?? "auto" }] }] };
     case "trojan":
@@ -197,9 +217,25 @@ function streamOf(transport: NodeTransport, security: NodeSecurity): Record<stri
   const stream: Record<string, unknown> = { network: transport.network, security: security.kind };
 
   if (security.kind === "tls") {
-    stream[F.tls] = { serverName: security.serverName, ...(security.alpn.length > 0 ? { alpn: security.alpn } : {}), ...(security.fingerprint === null ? {} : { fingerprint: security.fingerprint }) };
+    stream[F.tls] = {
+      serverName: security.serverName,
+      ...(security.alpn.length > 0 ? { alpn: security.alpn } : {}),
+      ...(security.fingerprint === null ? {} : { fingerprint: security.fingerprint }),
+      ...(security.ech === undefined ? {} : { echConfigList: security.ech }),
+      ...(security.echForceQuery === undefined ? {} : { echForceQuery: security.echForceQuery }),
+      ...(security.pinnedPeerCertSha256 === undefined ? {} : { pinnedPeerCertSha256: security.pinnedPeerCertSha256 }),
+      ...(security.verifyPeerCertByName === undefined ? {} : { verifyPeerCertByName: security.verifyPeerCertByName }),
+      ...legacyPinningOf(security.legacyPinning),
+    };
   } else if (security.kind === "reality") {
-    stream[F.reality] = { serverName: security.serverName, fingerprint: security.fingerprint, publicKey: security.publicKey, shortId: security.shortId, spiderX: security.spiderX };
+    stream[F.reality] = {
+      serverName: security.serverName,
+      fingerprint: security.fingerprint,
+      publicKey: security.publicKey,
+      shortId: security.shortId,
+      spiderX: security.spiderX,
+      ...(security.mldsa65Verify === undefined ? {} : { mldsa65Verify: security.mldsa65Verify }),
+    };
   }
 
   const present = (entries: Record<string, string | undefined>): Record<string, string> =>
@@ -220,12 +256,23 @@ function streamOf(transport: NodeTransport, security: NodeSecurity): Record<stri
       break;
     }
     case "xhttp": {
-      const settings = present({ path: transport.path, host: transport.host, mode: transport.mode });
+      const settings = { ...present({ path: transport.path, host: transport.host, mode: transport.mode }), ...(transport.extra === undefined ? {} : { extra: transport.extra }) };
       if (Object.keys(settings).length > 0) stream[F.xhttp] = settings;
       break;
     }
     case "tcp":
+      if (transport.rawHeader !== undefined) stream[F.tcp] = { header: transport.rawHeader };
       break;
   }
   return stream;
+}
+
+/** Старые поля закрепления сертификата — по одному, по именам из типа: ничего чужого в `tlsSettings` не попадёт. */
+function legacyPinningOf(pinning: LegacyPinning | undefined): Record<string, unknown> {
+  if (pinning === undefined) return {};
+  return {
+    ...(pinning.pinnedPeerCertificateChainSha256 === undefined ? {} : { pinnedPeerCertificateChainSha256: pinning.pinnedPeerCertificateChainSha256 }),
+    ...(pinning.pinnedPeerCertificatePublicKeySha256 === undefined ? {} : { pinnedPeerCertificatePublicKeySha256: pinning.pinnedPeerCertificatePublicKeySha256 }),
+    ...(pinning.verifyPeerCertInNames === undefined ? {} : { verifyPeerCertInNames: pinning.verifyPeerCertInNames }),
+  };
 }
