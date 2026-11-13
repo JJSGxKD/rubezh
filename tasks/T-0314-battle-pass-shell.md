@@ -29,6 +29,7 @@ shared:
   - packages/app-shell/src/screens/meta/notifications.tsx
   - packages/app-shell/src/design-system/tokens.css
   - packages/app-shell/test/notifications.test.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
