@@ -3,8 +3,8 @@ id: T-0236
 title: Знаки у имени — клиент: все знаки в профиле, выбор знака, знак в рейтинге и у друзей
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0235, T-0240, T-0107, T-0111]
