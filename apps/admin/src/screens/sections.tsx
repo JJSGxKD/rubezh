@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AdsScreen } from "./ads/AdsScreen";
 import { BalanceScreen } from "./balance/BalanceScreen";
 import { BroadcastsScreen } from "./broadcasts/BroadcastsScreen";
+import { CabinetScreen } from "./cabinet/CabinetScreen";
 import { ChangelogScreen } from "./changelog/ChangelogScreen";
 import { CspReportsScreen } from "./csp-reports/CspReportsScreen";
 import { TasksSection } from "./tasks/CustomerReport";
@@ -71,4 +72,6 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   promos: () => <PromosScreen />,
   "promo-codes": (id) => <PromoCodesScreen id={id} />,
   partners: (id) => <PartnersScreen id={id} />,
+  // Собственный кабинет партнёра; команда смотрит кабинет глазами партнёра из его карточки, а не по адресу.
+  cabinet: () => <CabinetScreen partnerId={null} />,
 };
