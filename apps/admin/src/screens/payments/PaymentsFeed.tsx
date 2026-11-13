@@ -86,8 +86,8 @@ export function PaymentsFeed() {
   return (
     <Panel title="Платежи" help={HELP.payments.feed}>
       <form onSubmit={search} className="mb-3 flex flex-wrap items-end gap-2">
-        <Field label="Поиск" {...(queryProblem === null ? {} : { error: queryProblem })}>
-          <Input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Номер покупки или идентификатор оплаты" maxLength={256} className="w-full min-w-0 sm:w-96" />
+        <Field label="Номер покупки или идентификатор оплаты" {...(queryProblem === null ? {} : { error: queryProblem })}>
+          <Input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Вставьте номер целиком" maxLength={256} className="w-full min-w-0 sm:w-96" />
         </Field>
         <div className="pt-5">
           <Button type="submit" tone="primary" disabled={queryProblem !== null || (q.trim() === "" && filters.q === "")}>
