@@ -3,8 +3,8 @@ id: T-0314
 title: Батл-пасс — экран: две ленты по 30 ступеням, текущая ступень и очки до следующей, забор, что даёт VIP; вкладка в «Заданиях» и виджет на главной
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-59 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0312]
