@@ -3,8 +3,8 @@ id: T-0261
 title: Кодекс тайников — найденные за всё время на сервере, раздел гайдбука с преданиями, достижение и знак «Следопыт»
 epic: E16
 priority: P3
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0260, T-0235]
