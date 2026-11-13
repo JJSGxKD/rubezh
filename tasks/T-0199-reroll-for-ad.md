@@ -3,8 +3,8 @@ id: T-0199
 title: Переброс карточек за рекламу — один раз за забег, когда заряды кончились
 epic: E10
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0101, T-0089, T-0102, T-0103, T-0106, T-0107, T-0113, T-0116, T-0118, T-0119, T-0120, T-0121, T-0124, T-0125, T-0168, T-0170, T-0171, T-0172, T-0175, T-0182, T-0190, T-0191, T-0193, T-0194, T-0195, T-0196, T-0198]
