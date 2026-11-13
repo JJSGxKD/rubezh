@@ -3039,3 +3039,47 @@ model PurchaseCompensation {
   @@index([createdAt])
   @@map("purchase_compensation")
 }
+
+// Заявки на правку с подтверждением второго участника (docs/19-content-admin.md §6, tasks/T-0309)
+
+/// Заявка на правку: один человек предлагает «было → стало» с причиной, другой с тем же правом
+/// подтверждает. Живёт 72 часа (`change-requests/change-request-types.ts`); новая заявка на ту же цель
+/// гасит прежнюю. `CHECK` в миграции: вид и статус — из списка; частичный уникальный индекс — одна
+/// живая заявка на пару «вид + цель» (Prisma частичные индексы не описывает). Строки не удаляются —
+/// по ним видно, кто и почему менял цену
+model ChangeRequest {
+  requestId String    @id @map("request_id") @db.Uuid
+  /// что правится: `sku_price` — товар магазина, `reward_setting` — награда (T-0310)
+  kind      String    @db.VarChar(24)
+  /// id товара или ключ настройки; без внешнего ключа — каталог и настройки в коде
+  target    String    @db.VarChar(64)
+  /// значения правимых полей на момент заявки — условие применения: цель всё ещё равна `before`
+  before    Json
+  after     Json
+  reason    String    @db.VarChar(200)
+  /// без внешнего ключа — заявка переживает аккаунт
+  author    String    @db.Uuid
+  /// `pending`, `approved`, `rejected`, `expired`, `superseded`
+  status    String    @db.VarChar(12)
+  /// кто решил; `null` — заявка закрылась сама (срок, новая заявка, цель изменилась)
+  decidedBy String?   @map("decided_by") @db.Uuid
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz(3)
+  createdAt DateTime  @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([kind, target, status])
+  @@map("change_request")
+}
+
+/// Правка товара магазина поверх каталога в коде (`shop/shop-overrides.ts`): только поля, которые
+/// разрешено править, — цена в звёздах и в рублях, самоцветы состава, значок, порядок. Кладётся только
+/// подтверждением заявки; итог проходит ту же схему товара, что и каталог. Без внешнего ключа — каталог в коде
+model ShopSkuOverride {
+  skuId  String   @id @map("sku_id") @db.VarChar(32)
+  fields Json
+  /// кто подтвердил последнюю правку
+  setBy  String   @map("set_by") @db.Uuid
+  setAt  DateTime @map("set_at") @db.Timestamptz(3)
+
+  @@map("shop_sku_override")
+}

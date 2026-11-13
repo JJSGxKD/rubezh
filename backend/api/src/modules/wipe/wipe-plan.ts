@@ -73,6 +73,8 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   TaskDef: keep("каталог заданий команды"),
   PassSeason: keep("ленты месяцев пасса команды (T-0311) — настройка, не данные игрока"),
   ShopPromo: keep("акции магазина команды"),
+  ShopSkuOverride: keep("цены и состав товаров, поставленные командой заявкой с подтверждением (T-0309) — настройка, не данные игрока"),
+  ChangeRequest: keep("заявки на правку цен команды (T-0309) — история решений, как журнал аудита"),
   HomeSlide: keep("слайды главной команды"),
   MediaImage: keep("картинки панели"),
   Link: keep("ссылки кампаний"),
