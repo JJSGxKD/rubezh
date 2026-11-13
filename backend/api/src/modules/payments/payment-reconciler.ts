@@ -197,7 +197,7 @@ export class PaymentReconciler implements OnApplicationBootstrap, OnModuleDestro
       summaries = await this.run("manual", actor.accountId, now);
     } catch (error: unknown) {
       this.log("warn", "reconcile_lock_failed", { actorAccountId: actor.accountId, reason: reasonOf(error) });
-      throw new PurchaseActionUnavailableError("Сверка сейчас недоступна: нет связи с Redis — попробуйте позже");
+      throw new PurchaseActionUnavailableError("Сверка сейчас недоступна: нет связи с Redis");
     }
     if (summaries === null) throw new PurchaseActionUnavailableError("Сверка уже идёт — подождите минуту");
     await this.roles.audit({
