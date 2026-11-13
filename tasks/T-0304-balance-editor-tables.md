@@ -3,8 +3,8 @@ id: T-0304
 title: Панель «Баланс» — таблицы контента по разделам, правка ячейки с прежним числом, ошибка формы строкой под записью, список правок черновика
 epic: E7
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0303]
@@ -16,6 +16,7 @@ shared:
   - apps/admin/src/routes.ts
   - apps/admin/src/App.tsx
   - apps/admin/src/ui/help.ts
+  - apps/admin/src/screens/sections.tsx
   - docs/19-content-admin.md
   - docs/29-admin-panel.md
 runner: any
@@ -156,9 +157,9 @@ batch: 7
 
 ## Критерии приёмки
 
-- [ ] Раздел «Баланс»: таблицы восьми разделов, правка ячейки с прежним числом, ошибка под записью, список правок с «Вернуть».
-- [ ] Имена — из словаря игры; без права правки — только чтение.
-- [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
+- [x] Раздел «Баланс»: таблицы восьми разделов, правка ячейки с прежним числом, ошибка под записью, список правок с «Вернуть».
+- [x] Имена — из словаря игры; без права правки — только чтение.
+- [x] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
 ## PR
 

@@ -1,4 +1,4 @@
-import { Activity, Award, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
+import { Activity, Award, BookOpen, Coins, Download, Eraser, Filter, Flag, Gauge, Handshake, House, KeyRound, Link, ListChecks, MousePointerClick, Network, Percent, Radio, Send, ScrollText, ShieldAlert, ShieldX, Scale, SlidersHorizontal, Ticket, Trophy, Tv, UserCog, Users, Waypoints, type LucideIcon } from "lucide-react";
 
 /**
  * Маршруты панели — в хэше адреса: ссылку на карточку игрока можно отправить
@@ -75,6 +75,10 @@ export const SECTION_GROUPS: readonly SectionGroup[] = [
       { id: "changelog", title: "Журнал обновлений", hint: "«Что нового» по версиям — игроки видят его в игре и в боте", permission: "changelog.edit", icon: BookOpen },
       { id: "home", title: "Главная", hint: "Слайды команды в карусели наверху главной игры", permission: "home.edit", icon: House },
     ],
+  },
+  {
+    title: "Контент",
+    sections: [{ id: "balance", title: "Баланс", hint: "Числа игры — враги, таймлайн, оружие, навыки, сундуки — в черновике, без релиза", permission: "content.view", icon: Scale }],
   },
   {
     title: "Эксплуатация",
