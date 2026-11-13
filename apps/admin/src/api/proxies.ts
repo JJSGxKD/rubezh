@@ -149,6 +149,7 @@ const SERVICE_TITLES: Record<string, string> = {
   "taddy.exchange": "Taddy: лента заданий",
   "ads.creatives": "Креативы рекламных сетей",
   "ads.postback": "Постбэки в кабинеты сетей",
+  "github.api": "GitHub API",
   "secrets.check": "Проверка ключей из панели",
   "proxy.subscription": "Загрузка подписки Xray",
 };
