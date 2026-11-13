@@ -8,6 +8,9 @@
       "path": "packages/fx"
     },
     {
+      "path": "packages/ledger"
+    },
+    {
       "path": "packages/proxy-kit"
     },
     {
