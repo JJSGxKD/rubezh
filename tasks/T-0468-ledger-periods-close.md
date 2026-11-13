@@ -3,8 +3,8 @@ id: T-0468
 title: Месяцы учёта — сверка с блокерами, закрытие с водопадом, снятие закрытия
 epic: E15
 priority: P1
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0466, T-0467, T-0461, T-0452]
