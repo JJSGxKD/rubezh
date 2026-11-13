@@ -2325,6 +2325,7 @@ flowchart LR
         TOOLS["roles: инструменты команды<br/>режим разработчика, стресс-тест —<br/>по праву и настройке, реализовано"]
         BOT["platforms/telegram: бот<br/>вебхук или polling,<br/>маршрутизатор команд, реализовано"]
         TGADP["platforms/telegram: адаптер<br/>проверка запуска, оплата Stars,<br/>обновления оплаты, реализовано"]
+        VKADP["platforms/vk: сообщество как бот для заданий<br/>вебхук Callback API, очередь vk-events,<br/>groups.isMember, messages.send, реализовано"]
         MAXADP["platforms/max: бот заданий-каналов<br/>вебхук с секретом, очередь Redis, ответы по коду,<br/>подписка вебхука у MAX, проверка подписки, реализовано"]
         WELCOME["welcome<br/>/start с карточкой, реализовано"]
         NOTIFY["admin-notify<br/>карточки отчётов и забегов<br/>на разбор, реализовано"]
@@ -2583,6 +2584,13 @@ flowchart LR
     TASKS -. "задания сетей: сессия места task под потолком и паузой" .-> ADS
     ADS -. "сеть подтвердила задание, AdTaskHooks" .-> TASKS
     TASKS -. "порт ChannelMemberships: getChatMember" .-> TGADP
+    TASKS -. "порт ChannelMemberships: groups.isMember (Р188)" .-> VKADP
+    TASKS -. "порт ExternalLinkStarters: vk.me/сообщество?ref=код" .-> VKADP
+    VKADP -. "consume(vk, код, id игрока)" .-> EXTIDENT
+    VKADP -- "очередь vk-events, повтор доставки по event_id" --> REDIS
+    VKADP -. "ключи и сообщество: порт чтения, панель сильнее окружения" .-> SECRETS
+    VKADP -. "vk.community" .-> SETTINGS
+    VKADP -- "vk.api: groups.isMember, messages.send, groups.getById" --> OUTBOUND
     TASKS -. "канал другой площадки: id игрока там и ссылка на бота (Р188)" .-> EXTIDENT
     TASKS -. "порт ChannelMemberships: GET /chats/{id}/members (канал MAX, Р188)" .-> MAXADP
     MAXADP -. "порт ExternalLinkStarters: ссылка на бота; consume(max, код, id игрока)" .-> EXTIDENT
@@ -2701,7 +2709,7 @@ flowchart LR
 вход, приёмник, оплата — не знают Telegram, а просят порты
 `platforms/ports/`. Как проверяется подпись запуска, как выставляется счёт,
 состоит ли игрок в канале и что значит ответ Bot API, знает адаптер
-`platforms/telegram/`; у MAX — адаптер бота заданий-каналов `platforms/max/` (связь аккаунтов и проверка подписки на канал, игру он не портирует), у VK пока заглушка. Бот и инструменты команды в чате администраторов порта не
+`platforms/telegram/`; у MAX и VK запуск игры — заглушки. Зато оба служат ботами для заданий (Р188): бот MAX (`platforms/max/`) и сообщество VK (`platforms/vk/`) связывают аккаунт и проверяют подписку на канал или вступление в сообщество, но игру не запускают. Бот и инструменты команды в чате администраторов порта не
 требуют: это наш инструмент, а не игра.
 
 Читается так: **Postgres — источник истины, Redis — проекция.** Приём забега
@@ -4851,7 +4859,7 @@ sequenceDiagram
 Игрок Telegram берёт задание «подпишитесь на канал MAX» (Р188,
 `35-stage4-plan.md`, `tasks/T-0377`). Сервер проверит подписку, только если
 знает, кто этот игрок на MAX: бот площадки связывает его id с игровым аккаунтом
-по одноразовому коду. Боты — T-0378 (VK) и T-0379 (MAX, поток бота — §4.38); здесь —
+по одноразовому коду. Боты — сообщество VK (T-0378, схема вебхука — §4.39) и MAX (T-0379, поток бота — §4.38); здесь —
 то, что они вызывают. Пока бот площадки не подключён, её каналы не видны никому,
 кроме игроков самой площадки.
 
@@ -4862,7 +4870,7 @@ sequenceDiagram
     participant T as TasksService
     participant I as ExternalIdentityService
     participant R as Redis
-    participant B as Бот площадки (MAX — §4.38, VK — T-0378)
+    participant B as Бот площадки (MAX — §4.38, VK — §4.39)
     participant P as Postgres external_identity
     participant M as Порт ChannelMemberships
 
@@ -4983,6 +4991,69 @@ sequenceDiagram
 - **Подписка на канал** — `GET /chats/{chatId}/members?user_ids=…` ботом —
   администратором канала: пустой ответ — не подписан; сеть, 429 и 5xx — «позже»;
   нет канала, бот не администратор, неверный ключ — ошибка настройки задания.
+
+### 4.39 Сообщество VK как бот: вебхук Callback API, очередь, ответ игроку (этап 4, реализовано)
+
+Игрок Telegram открывает ссылку `https://vk.me/<сообщество>?ref=<код>` из задания
+«вступите в сообщество VK» (Р188, `tasks/T-0378`). VK присылает событие в
+вебхук сервера; сервер записывает его в очередь и отвечает `ok`, а воркер
+связывает VK-id с игровым аккаунтом (§4.37) и отвечает игроку от имени
+сообщества. Вступление потом проверяет порт `ChannelMemberships` — `groups.isMember`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant VK as VK (Callback API)
+    participant C as VkCallbackController
+    participant Q as Redis, очередь vk-events
+    participant W as VkUpdatesWorker
+    participant I as ExternalIdentityService
+    participant A as API VK (vk.api)
+
+    VK->>C: POST /api/v1/vk/callback {type, group_id, secret, event_id, object}
+    alt нет ключа сообщества или секрета
+        C-->>VK: 404
+    else secret не совпал (сверка за постоянное время)
+        C-->>VK: 401, тело дальше не разбирается
+    else type = confirmation
+        alt group_id — своё сообщество
+            C-->>VK: строка подтверждения (text/plain)
+        else чужое
+            C-->>VK: 401
+        end
+    else type = message_new
+        C->>Q: add(jobId = vk-event_id), только from_id и ref
+        alt Redis недоступен
+            C-->>VK: 503, VK повторит доставку
+        else записано (повтор event_id второго задания не заводит)
+            C-->>VK: ok (text/plain)
+        end
+    else прочие типы
+        C-->>VK: ok
+    end
+    Q->>W: задание (до 5 попыток)
+    alt в сообщении нет ref
+        W->>A: messages.send «открой задание в игре»
+    else есть ref
+        W->>I: consume(vk, ref, from_id)
+        I-->>W: linked, already, taken или expired
+        W->>A: messages.send по исходу; при linked и already — ссылка на сообщество и кнопка
+    end
+```
+
+- **Секрет — единственная защита.** Поле `secret` тела сверяется до разбора; адрес
+  вебхука сам по себе не секрет. Ключ сообщества и секрет — «Ключи интеграций»,
+  само сообщество — настройка `vk.community`; без ключа и секрета вебхука для
+  внешнего мира нет.
+- **Сначала очередь, потом `ok`.** Событие записано до ответа, повтор доставки
+  отсекает id задания. Ответ VK — текст, а не `{ data }`: так требует Callback API.
+- **Только личный диалог.** В беседе, куда сообщество добавили, бот молчит;
+  `event_id`, негодный в id задания очереди, не отказ, а событие без отсечения
+  повторов. Метрика `vk_callback_total{type,result}` — строкой лога раз в минуту.
+- **Ответ игроку — не часть записи связи.** Не ушёл — лог без повтора, потому что
+  связь уже записана; упавший `consume` — исключение, очередь повторит задание.
+- **Ключ — в теле запроса к API VK**, не в адресе и не в логах. Нет кнопок у
+  сообщества (ошибка 912) — то же сообщение уходит без кнопки.
 
 ## 5. Топология развёртывания
 
