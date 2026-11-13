@@ -380,8 +380,7 @@ describe("журнал учёта в панели по HTTP", () => {
       return await login(`dev-player-${id}:${name}`);
     };
 
-    return { ledger, chart, operations, periods, login, staff };
-    return { ledger, chart, operations, templates, login, staff };
+    return { ledger, chart, operations, periods, templates, login, staff };
   }
 
   const headers = (cookie: string) => ({ cookie, [ADMIN_CSRF_HEADER]: ADMIN_CSRF_VALUE });
