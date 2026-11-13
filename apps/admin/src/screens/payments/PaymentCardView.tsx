@@ -10,6 +10,7 @@ import { navigate } from "../../ui/router";
 import { toast } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { filtersFromAccount } from "./feed-filters";
+import { CompensationDialog } from "./CompensationDialog";
 import { PaymentActionDialog, type PaymentAction } from "./PaymentActionDialog";
 import { MarkBadges, StateBadges, showAccountFeed } from "./PaymentsFeed";
 
@@ -56,8 +57,10 @@ export function PaymentCardView({ purchaseId }: { purchaseId: string }) {
 function Card({ card, onChanged }: { card: PaymentCard; onChanged: () => void }) {
   const { purchase, account } = card;
   const [acting, setActing] = useState<PaymentAction | null>(null);
-  // Только известные панели действия: `compensate` рисует T-0438, незнакомое — не наша забота.
+  const [compensating, setCompensating] = useState(false);
+  // Только известные панели действия: незнакомое — не наша забота. «Компенсировать…» — последней, своим окном.
   const buttons = BUTTONS.filter((button) => card.actions.includes(button.action));
+  const compensable = card.actions.includes("compensate");
   const timeline = [...card.timeline].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
   return (
@@ -114,7 +117,7 @@ function Card({ card, onChanged }: { card: PaymentCard; onChanged: () => void })
       </Panel>
 
       <Panel title="Действия" help={HELP.payments.actions}>
-        {buttons.length === 0 ? (
+        {buttons.length === 0 && !compensable ? (
           <p className="text-sm text-text-muted">Сейчас с платежом ничего сделать нельзя.</p>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
@@ -123,6 +126,11 @@ function Card({ card, onChanged }: { card: PaymentCard; onChanged: () => void })
                 {button.title}
               </Button>
             ))}
+            {compensable ? (
+              <Button className="whitespace-nowrap" onClick={() => setCompensating(true)}>
+                Компенсировать…
+              </Button>
+            ) : null}
           </div>
         )}
       </Panel>
@@ -148,6 +156,7 @@ function Card({ card, onChanged }: { card: PaymentCard; onChanged: () => void })
       </Panel>
 
       <PaymentActionDialog purchase={purchase} action={acting} onClose={() => setActing(null)} onDone={onChanged} />
+      {compensating ? <CompensationDialog purchaseId={purchase.purchaseId} onClose={() => setCompensating(false)} onDone={onChanged} /> : null}
     </>
   );
 }

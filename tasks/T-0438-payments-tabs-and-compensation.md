@@ -3,8 +3,8 @@ id: T-0438
 title: Вкладки «Расхождения» и «Брошенные задания», окно компенсации в «Платежах»
 epic: E1
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0437, T-0434, T-0435, T-0410]
@@ -19,6 +19,7 @@ zones:
   - apps/admin/test/payments-tabs.test.ts
 shared:
   - apps/admin/src/ui/help.ts
+  - apps/admin/src/screens/payments/PaymentParts.tsx
   - docs/29-admin-panel.md
 runner: any
 executor: sonnet-5.5
