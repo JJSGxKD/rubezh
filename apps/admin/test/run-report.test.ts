@@ -110,7 +110,8 @@ describe("схема отчёта", () => {
   });
 
   it("отвергает ответ без обязательных полей", () => {
-    const { rating: _rating, ...broken } = sample();
+    const broken = sample();
+    delete broken.rating;
     expect(runReportSchema.safeParse(broken).success).toBe(false);
   });
 });
@@ -136,7 +137,7 @@ describe("запросы", () => {
   });
 
   it("404 — «не найдено», 409 — отказ с текстом сервера", async () => {
-    const { fetch } = fakeFetch(json(404, { code: "run_not_found", message: "Забег не найден" }), json(409, { code: "run_not_in_review", message: "Забег не в разборе" }));
+    const { fetch } = fakeFetch(json(404, { error: { code: "run_not_found", message: "Забег не найден", requestId: "r1" } }), json(409, { error: { code: "run_not_in_review", message: "Забег не в разборе", requestId: "r2" } }));
     const api = new AdminApi(fetch);
     const missing = await fetchRunReport(api, RUN);
     expect(!missing.ok && missing.error.kind).toBe("not_found");
