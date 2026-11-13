@@ -3,8 +3,8 @@ id: T-0322
 title: Достижения v2 — «Без единой царапины», «Пацифист», стихийники, «Коллекционер», «Мастер Метеора», «Душа компании»; знаки у трудных
 epic: E16
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0321, T-0106, T-0126, T-0235]
