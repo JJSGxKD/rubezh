@@ -3,8 +3,8 @@ id: T-0313
 title: Батл-пасс — ленты месяца в панели: 30 ступеней двух лент, награды по схеме без случайного, копия прошлого месяца, предпросмотр
 epic: E7
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-lead-1 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0311]
@@ -19,9 +19,11 @@ shared:
   - backend/api/src/modules/admin/admin.module.ts
   - backend/api/src/modules/roles/permissions.ts
   - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/App.tsx
   - apps/admin/src/ui/help.ts
   - docs/29-admin-panel.md
+  - docs/30-configuration-map.md
 runner: any
 executor: sonnet-5.5
 effort: high
