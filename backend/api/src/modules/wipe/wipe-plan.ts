@@ -64,6 +64,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   PartnerBinding: keep("слот источника игрока навсегда"),
   ExternalIdentity: keep("связь с аккаунтом MAX или VK постоянна (Р188, T-0377): id площадки не освобождается и второй раз никому не достаётся, как привязки приглашения и источника"),
   Partner: keep("партнёры команды"),
+  StakeholderShare: keep("доли участников проекта — решения владельца о деньгах, а не игровой прогресс (Р217)"),
   TaskParticipant: keep("место в лимите партнёрского задания занимается однажды"),
   PromoRedemption: keep("погашенный код погашен навсегда"),
 

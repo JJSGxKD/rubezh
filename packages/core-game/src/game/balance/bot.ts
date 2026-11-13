@@ -2,7 +2,9 @@ import type { UpgradeOption } from "@bh/shared-types";
 import type { SimInput } from "../sim/step";
 import type { World } from "../sim/world";
 import { chestSizeOf } from "../sim/chests";
+import { stalkerAlive } from "../sim/stalker-body";
 import { ORBITER_RADIUS } from "../weapons";
+import { stalkerFleeDirection } from "./stalker-flee";
 
 /**
  * Бот-игрок для калибровки баланса (docs/26-stage2-plan.md, WP4.6).
@@ -115,6 +117,10 @@ function passiveBot(): Bot {
 }
 
 const scratchChest = { x: 0, y: 0 };
+const scratchStalker = { x: 0, y: 0 };
+
+/** Вес ухода от неубиваемого против ухода от толпы: от него бегут в первую очередь (Р205). */
+const STALKER_FLEE_WEIGHT = 2;
 
 /**
  * Направление к ближайшему сундуку в пределах `CHEST_SEEK_RADIUS_UNITS`.
@@ -170,6 +176,8 @@ export function createDodgingBot(options: DodgingBotOptions): Bot {
       // мешает, а полный проход по пулу на каждом тике стоил бы прогону минуты.
       const found = world.enemyGrid.queryInto(player.x, player.y, reach, world.queryBuffer);
 
+      // Преследователь учтён отдельно: к нему бот не идёт и в список внимания он не входит.
+      const stalkerSlot = stalkerAlive(world) === 1 ? world.stalkerBody.slot : -1;
       let noticed = 0;
       let nearestX = 0;
       let nearestY = 0;
@@ -177,7 +185,7 @@ export function createDodgingBot(options: DodgingBotOptions): Bot {
 
       for (let k = 0; k < found; k++) {
         const i = world.queryBuffer[k];
-        if (world.enemies.alive[i] === 0) continue;
+        if (world.enemies.alive[i] === 0 || i === stalkerSlot) continue;
 
         const dx = player.x - world.enemies.x[i];
         const dy = player.y - world.enemies.y[i];
@@ -217,6 +225,12 @@ export function createDodgingBot(options: DodgingBotOptions): Bot {
         const weight = 1 - attentionDistance[k] / danger;
         awayX += attentionX[k] * weight;
         awayY += attentionY[k] * weight;
+      }
+
+      const fleeing = stalkerFleeDirection(world, scratchStalker);
+      if (fleeing) {
+        awayX += STALKER_FLEE_WEIGHT * scratchStalker.x;
+        awayY += STALKER_FLEE_WEIGHT * scratchStalker.y;
       }
 
       const length = Math.sqrt(awayX * awayX + awayY * awayY);

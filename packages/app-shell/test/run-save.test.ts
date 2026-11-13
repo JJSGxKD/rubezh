@@ -11,6 +11,7 @@ import {
   type RunEngine,
   type RunEvents,
   type RunOptions,
+  type RunProofDraft,
   type RunSession,
   type RunSnapshot,
 } from "@bh/core-game";
@@ -253,6 +254,21 @@ describe("сохранение прерванного забега", () => {
 
     expect(useSavedRun.getState().saved?.dev).toBe(true);
     expect(useSavedRun.getState().saved?.cheats).toBe(true);
+  });
+
+  it("помнит режим, снаряжение и запись для проверки после перезапуска приложения (tasks/T-0316)", () => {
+    // Схема чтения отбрасывает всё, чего не знает: без этих полей продолженный
+    // забег терял бы снаряжение и режим, а запись для проверки — всё прошлое.
+    const proof: RunProofDraft = { unitScale: 2, startingWeaponId: "spark", input: { encoding: "rle-v1", ticks: 3, data: "AAAA", truncated: false }, choices: [[1, "spark"]], continues: [], checkpoints: [[3600, 5]] };
+    const loadout = { modifiers: { damage: 0.1 }, boosts: ["insight"], accountLevel: 4, deviceClass: "light" as const };
+    useSavedRun.getState().save(snapshot({ mode: "prologue", loadout, proof }));
+
+    useSavedRun.setState({ saved: null });
+    useSavedRun.getState().hydrate();
+
+    expect(useSavedRun.getState().saved?.mode).toBe("prologue");
+    expect(useSavedRun.getState().saved?.loadout).toEqual(loadout);
+    expect(useSavedRun.getState().saved?.proof).toEqual(proof);
   });
 
   it("вход на экран без намерения продолжает сохранение, а не стирает его", async () => {
