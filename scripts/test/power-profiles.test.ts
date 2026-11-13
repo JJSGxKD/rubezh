@@ -36,7 +36,8 @@ function compare(label: string, actual: Partial<Record<ItemStat, number>>, expec
 }
 
 describe("профили силы и каталог предметов", () => {
-  const topLevel = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+  // Верхний уровень с оружием, как в профиле: навыки защиты выше (T-0286) предметы не меняют.
+  const topLevel = Math.max(...ACCOUNT_UNLOCKS.filter((row) => row.weapons !== undefined).map((row) => row.level));
 
   it("средний — шесть редких предметов 10-го уровня с броском 0,8", () => {
     const items = canonicalSet("rare", 10, 0.8);

@@ -83,10 +83,13 @@ describe("что откроется дальше", () => {
 
   it("на последнем уровне лестницы и выше — ничего", () => {
     // 14-й уровень — «Закалка»; следом «Кистень» на 15-м (T-0281) и «Метеор»
-    // на 16-м (T-0118), дальше открытий нет.
+    // на 16-м (T-0118), затем навыки защиты «Вампиризм» на 17-м и «Стойкость»
+    // на 19-м (T-0286), дальше открытий нет.
     expect(nextUnlockAfter(14)).toEqual({ level: 15, unlocks: [{ kind: "weapon", id: "flail" }] });
     expect(nextUnlockAfter(15)).toEqual({ level: 16, unlocks: [{ kind: "weapon", id: "meteor" }] });
-    expect(nextUnlockAfter(16)).toBeNull();
+    expect(nextUnlockAfter(16)).toEqual({ level: 17, unlocks: [{ kind: "passive", id: "vampirism" }] });
+    expect(nextUnlockAfter(17)).toEqual({ level: 19, unlocks: [{ kind: "passive", id: "steadfast" }] });
+    expect(nextUnlockAfter(19)).toBeNull();
     expect(nextUnlockAfter(99)).toBeNull();
   });
 

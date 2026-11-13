@@ -219,8 +219,9 @@ export function passiveRange(passive: PassiveDef): UpgradeChange | null {
     labelKey: `upgrade.stat.passive.${passive.stat}`,
     from: Math.round(first * scale * 100) / 100,
     to: Math.round(last * scale * 100) / 100,
-    format: passive.op === "mul" ? "percent" : "plus",
-    lowerIsBetter: passive.stat === "cooldown",
+    // «Вампиризм» и «Стойкость» — правила, а не прибавки к параметру: «1 → 3», «30 → 20», как на карточке.
+    format: passive.stat === "healOnKill" || passive.stat === "wardIntervalSec" ? "value" : passive.op === "mul" ? "percent" : "plus",
+    lowerIsBetter: passive.stat === "cooldown" || passive.stat === "wardIntervalSec",
   };
 }
 

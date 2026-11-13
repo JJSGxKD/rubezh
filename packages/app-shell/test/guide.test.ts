@@ -194,6 +194,11 @@ describe("гайдбук", () => {
     // Сопротивление — процентами, как на карточке выбора.
     const tempering = PASSIVES.find((passive) => passive.stat === "resist");
     expect(tempering === undefined ? null : passiveRange(tempering)).toMatchObject({ from: 10, to: 60 });
+    // «Вампиризм» и «Стойкость» — правила: числа как есть, у периода щита меньше — лучше (T-0286).
+    const vampirism = PASSIVES.find((passive) => passive.id === "vampirism");
+    const steadfast = PASSIVES.find((passive) => passive.id === "steadfast");
+    expect(vampirism === undefined ? null : passiveRange(vampirism)).toMatchObject({ from: 1, to: 3, format: "value", lowerIsBetter: false });
+    expect(steadfast === undefined ? null : passiveRange(steadfast)).toMatchObject({ from: 30, to: 20, format: "value", lowerIsBetter: true });
   });
 
   it("у каждой эволюции есть строка рецепта, и название с описанием переведены", () => {

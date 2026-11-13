@@ -24,7 +24,8 @@ export interface PowerProfile {
 }
 
 /** Верхний уровень аккаунта берётся из лестницы открытий, а не литералом: добавили строку — профиль уехал вместе с ней. */
-const TOP_ACCOUNT_LEVEL = Math.max(...ACCOUNT_UNLOCKS.map((row) => row.level));
+/** Только строки с оружием: навыки защиты выше (T-0286) потолок предметов не двигают, а с ним и откалиброванный профиль. */
+const TOP_ACCOUNT_LEVEL = Math.max(...ACCOUNT_UNLOCKS.filter((row) => row.weapons !== undefined).map((row) => row.level));
 
 export const POWER_PROFILES: Readonly<Record<PowerProfileId, PowerProfile>> = {
   novice: {
