@@ -3,8 +3,8 @@ id: T-0414
 title: Флаги стран у узлов Xray и ручных прокси
 epic: E13
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-lead-1 / sonnet-5.5 / medium
 author: claude-lead-1
 size: S
 depends_on: [T-0413, T-0384, T-0385]
