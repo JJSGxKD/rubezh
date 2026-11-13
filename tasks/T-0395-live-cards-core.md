@@ -88,6 +88,24 @@ HTML карточек и Telegram — T-0396.
     «устарело» и «закрыта» понимает уже первая версия карточки;
   - `bot.formats.enabled` выключен — на запрос «выключено», новые карточки
     не отправляются.
+- **Р225** (`docs/35-stage4-plan.md`, 14.11.2026: Telegram на стороне сервера
+  отключил HTML-виджеты у всех) — **не ушла карточка, уходит запасное
+  сообщение, а не тишина**:
+  - общий выключатель `bot.widget.enabled` (умолчание — **выкл.**): выключен —
+    карточки не отправляются и не правятся, сценарий идёт сообщением
+    `fallback(state)`, как на площадке без карточек;
+  - выключенный ключ вида — то же для своего вида: запасное сообщение, а не
+    `off`. Исход `off` остаётся только у `bot.formats.enabled`: он
+    возвращает бота к поведению до Р199;
+  - отказ площадки на методе карточек — исход порта `unsupported`: это
+    сообщение сразу уходит запасным, карточки этой площадки встают на паузу
+    `bot.widget.retry-minutes` (30) для всех реплик, тревога в чат команды —
+    одна на паузу; пауза кончилась — следующая отправка пробует карточку
+    снова;
+  - правка отправленной карточки получила `unsupported` — карточка
+    закрывается без дальнейших правок, пауза — та же;
+  - запросы из карточек при выключенных или поставленных на паузу
+    карточках — ответ «выключено» (`{ v: 1, off: 1 }`).
 - **Решения тимлида (технические, по Р199):**
   - **общий темп** — правки и отправки карточек по триггерам идут **той же
     очередью BullMQ `notifications-bot`** отдельными именами заданий: её
@@ -156,8 +174,9 @@ HTML карточек и Telegram — T-0396.
      silent: boolean;
      topic?: MessageTopic;
    }
-   export type LiveCardSendOutcome = { status: "sent"; ref: LiveCardRef; version: string } | Exclude<SendOutcome, { status: "sent" }>;
-   export type LiveCardUpdateOutcome = { status: "edited" | "unchanged" | "gone" } | Exclude<SendOutcome, { status: "sent" }>;
+   // unsupported — площадка отказала в методе карточек (Р225): не сбой доставки, а «карточек сейчас нет»
+   export type LiveCardSendOutcome = { status: "sent"; ref: LiveCardRef; version: string } | { status: "unsupported" } | Exclude<SendOutcome, { status: "sent" }>;
+   export type LiveCardUpdateOutcome = { status: "edited" | "unchanged" | "gone" | "unsupported" } | Exclude<SendOutcome, { status: "sent" }>;
    export interface LiveCardPort {
      readonly platform: PlatformId;
      readonly configured: boolean;
@@ -270,7 +289,7 @@ HTML карточек и Telegram — T-0396.
      пропускается: счётчик звука не растёт дважды.
      (`"sent" | "fallback" | "off" | "opted_out" | "not_allowed" | "deferred" | "skipped" | "blocked" | "failed" | "busy"`).
      По порядку:
-     1. выключены `bot.formats.enabled` или ключ вида → `off`;
+     1. выключен `bot.formats.enabled` → `off`;
      2. аккаунта нет или он заблокирован → `skipped`;
      3. площадки без бота → `skipped`;
      4. `canMessage` не `true` → `not_allowed`;
@@ -282,7 +301,12 @@ HTML карточек и Telegram — T-0396.
      7. лок `bot-cards:send:<аккаунт>:<вид>` (`SET NX PX 15000` с токеном),
         занят → `busy`;
      8. состояние вида → `encodeState`;
-     9. порт поддерживает вид → `send`, иначе `messenger.send(BotMessages.compose(kind.fallback(state), { button }))`;
+     9. **карточкой** — только если включены `bot.widget.enabled` и ключ
+        вида, нет паузы площадки (ключ Redis `bot-cards:paused:<площадка>`)
+        и порт поддерживает вид; иначе — **запасное сообщение**
+        `messenger.send(BotMessages.compose(kind.fallback(state), { button }))`,
+        итог `fallback`. Порт ответил `unsupported` → `pause(platform)` и то
+        же запасное сообщение сразу, итог `fallback`;
      10. на успехе порта — `openReplacing`; у прежней — задание
          `card-moved:<id прежней>` — её сохранённое состояние с `moved: 1`.
      - Кнопка — `{ text: "▶ Играть", url: AppLinks.launch(platform, startRef) }`,
@@ -297,6 +321,11 @@ HTML карточек и Telegram — T-0396.
      пришедший друг) через очередь:
      `addPaced("card-send", { accountId, kind, origin }, { jobId: "card-send:<аккаунт>:<вид>:<период>", delayMs: 0 })`.
      Триггеры зовут её, а не `send`: так отправки идут общим темпом.
+   - `pause(platform)` — `SET bot-cards:paused:<площадка> 1 NX PX <bot.widget.retry-minutes>`;
+     ключ поставлен этим вызовом — лог `{ module: "bot-cards", event: "widgets_unavailable", platform }`
+     уровнем `warn` (тревога в чат команды — одна на паузу); уже стоял —
+     ничего. Redis недоступен — карточка этого сообщения всё равно не
+     отправляется, уходит запасное.
    - `touch(accountId, kind)` — есть живая карточка → `addPaced("card-edit", { cardId }, { jobId: "card-edit:<id>", delayMs: max(0, updatedAt + gap − now) })`.
      Повторный `touch`, пока задание ждёт, ничего не добавляет: правки
      сливаются.
@@ -304,8 +333,10 @@ HTML карточек и Telegram — T-0396.
      - карточка закрыта → выход;
      - состояние собирается заново;
      - хэш тот же → выход без вызова площадки;
-     - `update`: `gone` → `close`; `retry` → бросить (повтор BullMQ);
-       успех → `touched`.
+     - пауза площадки или выключены `bot.widget.enabled` и ключ вида → выход
+       без вызова площадки;
+     - `update`: `gone` → `close`; `unsupported` → `close` и `pause`;
+       `retry` → бросить (повтор BullMQ); успех → `touched`.
    - Обработчики `card-moved` и `card-final` — то же без прореживания;
      `card-final` после правки закрывает карточку.
    - Обработчик `card-send` — `send` с `origin` из данных задания (у
@@ -328,7 +359,8 @@ HTML карточек и Telegram — T-0396.
     4. `ref` нет или карточки по нему нет → `{ v: 1, x: 1 }`;
     5. карточка другого аккаунта → `err: "foreign"`;
     6. карточка закрыта → `{ v: 1, x: 1 }`;
-    7. ключ вида выключен → `{ v: 1, off: 1 }`;
+    7. выключены `bot.widget.enabled` или ключ вида, или стоит пауза
+       площадки → `{ v: 1, off: 1 }`;
     8. `RateLimiter.consume({ scope: "bot-card", limit: 300, windowSec: 3600 }, accountId)`
        → `false`: у `r` — ответ из кэша с `stale: 1` (кэша нет —
        `{ v: 1, stale: 1 }`), у действия — `err: "limited"`;
@@ -354,8 +386,10 @@ HTML карточек и Telegram — T-0396.
     - **`exports`** — `BotCardKinds`, `BotCardsService`, `LIVE_CARD_ANSWERER`;
     - обработчики очереди регистрируются в `onModuleInit` сервиса;
     - строка в `app.module.ts`.
-14. **Настройка** — `setting-catalog.ts`, группа «Сообщения бота» (T-0394):
-    `botWidgetEditMinMinutes = integer("bot.widget.edit-min-minutes", BOT_MESSAGES_GROUP, "Правка карточки — не чаще раза в", "Бот правит одну живую карточку не чаще; финальная правка периода — сразу", { min: 1, max: 120, unit: ["минута", "минуты", "минут"] }, 10)`.
+14. **Настройки** — `setting-catalog.ts`, группа «Сообщения бота» (T-0394):
+    - `botWidgetEnabled = { ...feature("bot.widget.enabled", "Живые карточки", "Карточки-виджеты в личке бота. Выключено — те же сценарии приходят обычным сообщением. 14.11.2026 Telegram отключил виджеты: включать, когда вернёт и проверка на проде пройдёт", () => null, false), group: BOT_MESSAGES_GROUP }`;
+    - `botWidgetRetryMinutes = integer("bot.widget.retry-minutes", BOT_MESSAGES_GROUP, "Пауза карточек после отказа площадки", "Площадка отказала в методе карточек — столько минут всё идёт обычными сообщениями, потом карточка пробуется снова", { min: 5, max: 1440, unit: ["минута", "минуты", "минут"] }, 30)`;
+    - `botWidgetEditMinMinutes = integer("bot.widget.edit-min-minutes", BOT_MESSAGES_GROUP, "Правка карточки — не чаще раза в", "Бот правит одну живую карточку не чаще; финальная правка периода — сразу", { min: 1, max: 120, unit: ["минута", "минуты", "минут"] }, 10)`.
 15. **Словарь событий** — сначала `docs/22` §3.3: строка `bot_card_query` с
     полями и абзац «серверное». Потом `event-dictionary.ts`:
     `bot_card_query: { version: 1, payload: payload({ card: id, action: id, outcome: z.enum(["ok", "already", "locked", "limited", "off", "error"]) }) }`
@@ -363,6 +397,7 @@ HTML карточек и Telegram — T-0396.
 16. **`docs/30-configuration-map.md`**, строка 90 — ключи Redis:
     - `bot-card:state:<аккаунт>:<вид>` (30 с);
     - `bot-cards:send:<аккаунт>:<вид>`, `bot-cards:final:lock`;
+    - `bot-cards:paused:<площадка>` — пауза карточек после отказа (Р225);
     - лимит `rl:bot-card:*` — 300 в час;
     - задания `card-*` в очереди `notifications-bot`.
 
@@ -390,7 +425,17 @@ HTML карточек и Telegram — T-0396.
   - два вызова `send(reply)` подряд → две отправки порту; у первой —
     задание `card-moved` с `moved: 1`; живая — одна, вторая;
   - лок занят → `busy`, порт не вызван;
-  - `bot.formats.enabled` выкл. → `off`; ключ вида выкл. → `off`;
+  - `bot.formats.enabled` выкл. → `off`;
+  - `bot.widget.enabled` выкл. или ключ вида выкл. → порт не вызван,
+    `messenger.send` с `fallback(state)` и кнопкой, итог `fallback`;
+  - порт ответил `unsupported` → тут же `messenger.send` с запасным
+    сообщением, итог `fallback`; ключ паузы стоит; `widgets_unavailable` —
+    один лог `warn`; следующая отправка — без вызова порта, запасным;
+    после срока паузы (фейковые часы Redis) порт вызывается снова;
+  - `card-edit`: `update` → `unsupported` → карточка закрыта, пауза стоит;
+    при паузе `card-edit` площадку не зовёт;
+  - ответчик при паузе или выключенном `bot.widget.enabled` →
+    `{ v: 1, off: 1 }`;
   - триггер (`player`) при выключенном выборе игрока → `opted_out`;
     команда (`reply`) при том же выборе — отправлена;
   - политика `wait` → `deferred`, задание `card-send` с задержкой;
@@ -446,6 +491,8 @@ HTML карточек и Telegram — T-0396.
 
 ## Настройки и окружение
 
+- `bot.widget.enabled` — выкл. (Р225), группа «Сообщения бота».
+- `bot.widget.retry-minutes` — 30, коридор 5–1440, группа «Сообщения бота».
 - `bot.widget.edit-min-minutes` — 10, коридор 1–120, группа «Сообщения
   бота».
 - Лимит запросов карточек — константа `CARD_QUERY_LIMIT` (300 в час на
@@ -473,6 +520,10 @@ HTML карточек и Telegram — T-0396.
 - [ ] `answer` всегда возвращает строку ≤ 1024 байт за 8 секунд;
       выключатель, лимит, кэш, чужая и устаревшая карточка — по шагу 11.
 - [ ] `bot_card_query` описан в `docs/22` и пишется на каждый ответ.
+- [ ] Карточка не ушла — уходит запасное сообщение, а не тишина (Р225):
+      выключенные `bot.widget.enabled` или ключ вида, пауза и отказ
+      площадки (`unsupported`) дают `fallback`; пауза общая для реплик,
+      тревога — одна на паузу.
 - [ ] Миграция одна, собрана после свежего `dev`; `wipe-plan` и ER обновлены.
 - [ ] Гейт (`CLAUDE.md`) и `pnpm docs:check` зелёные.
 
