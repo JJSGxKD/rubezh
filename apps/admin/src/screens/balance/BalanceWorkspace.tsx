@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createDraft, patchDraft, type ContentVersion, type CurrentPointers, type DraftChange, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
+import { createDraft, patchDraft, type ContentVersion, type CurrentState, type DraftChange, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
 import { formatDateTime, plural } from "../../format";
 import { api } from "../../services";
 import { Dialog } from "../../ui/dialog";
@@ -59,8 +59,8 @@ export function BalanceWorkspace({
   latest: VersionSummary;
   /** все версии: «История и откат» */
   versions: readonly VersionSummary[];
-  /** какая версия в игре у команды и у всех */
-  pointers: CurrentPointers;
+  /** какая версия в игре у команды и у всех, и нужна ли проверка для публикации */
+  pointers: CurrentState;
   drafts: readonly DraftSummary[];
   reloadDrafts: () => void;
   /** публикация или откат прошли: версии и указатели читаются заново */
@@ -221,7 +221,7 @@ export function BalanceWorkspace({
         <Button onClick={() => setHistoryOpen(true)}>История и откат</Button>
         {draft === null ? null : <CheckRails rails={check.rails} />}
         {draft === null ? null : (
-          <PublishBar draftId={draft.draftId} rails={check.rails} canPublish={canPublish} narrow={narrow} snapshot={editor.snapshot} names={names} onChanged={reloadPublication} />
+          <PublishBar draftId={draft.draftId} rails={check.rails} canPublish={canPublish} requireCheck={pointers.requireCheck} narrow={narrow} snapshot={editor.snapshot} names={names} onChanged={reloadPublication} />
         )}
       </div>
 

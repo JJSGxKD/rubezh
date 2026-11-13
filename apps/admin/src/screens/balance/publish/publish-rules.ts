@@ -40,10 +40,12 @@ function railsHint(rails: Rails): string | null {
  * Кнопки живут только при зелёных рельсах T-0305: схема, проверки и
  * симуляция в коридорах, прогон свежий. Сервер проверяет то же самое ещё раз —
  * кнопка лишь не зовёт его впустую. На телефоне править и публиковать нельзя:
- * там остаются просмотр и откат.
+ * там остаются просмотр и откат. Ключ `content.publish-require-check = false`
+ * снимает требование зелёных рельсов (`requireCheck`): иначе обход, ради
+ * которого его выключают, из панели был бы недоступен.
  */
-export function publishUi(input: { rails: Rails; canPublish: boolean; narrow: boolean; hasDraft: boolean; busy: boolean }): PublishUi {
-  const hint = input.busy ? "Идёт публикация…" : railsHint(input.rails);
+export function publishUi(input: { rails: Rails; canPublish: boolean; narrow: boolean; hasDraft: boolean; busy: boolean; requireCheck?: boolean }): PublishUi {
+  const hint = input.busy ? "Идёт публикация…" : input.requireCheck === false ? null : railsHint(input.rails);
   const state: ButtonState = { enabled: hint === null, hint };
   return { visible: input.canPublish && input.hasDraft && !input.narrow, team: state, all: state };
 }

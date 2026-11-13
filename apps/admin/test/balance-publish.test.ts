@@ -52,6 +52,19 @@ describe("кнопки «Команде» и «Всем»: живут тольк
     expect(publishUi({ ...base, rails: RUNNING }).all.hint).toContain("идёт");
   });
 
+  it("ключ проверки выключен — кнопки не ждут рельсов: иначе обход, ради которого ключ выключают, из панели недоступен", () => {
+    for (const rails of [RED, STALE, EMPTY, RUNNING]) {
+      const ui = publishUi({ ...base, rails, requireCheck: false });
+      expect(ui.team).toEqual({ enabled: true, hint: null });
+      expect(ui.all).toEqual({ enabled: true, hint: null });
+    }
+    // а право, черновик, телефон и идущая публикация по-прежнему решают
+    expect(publishUi({ ...base, rails: RED, requireCheck: false, canPublish: false }).visible).toBe(false);
+    expect(publishUi({ ...base, rails: RED, requireCheck: false, busy: true }).all.enabled).toBe(false);
+    // ключ включён явно — как по умолчанию
+    expect(publishUi({ ...base, rails: RED, requireCheck: true }).all.enabled).toBe(false);
+  });
+
   it("пока публикация идёт, повторное нажатие невозможно", () => {
     const ui = publishUi({ ...base, rails: GREEN, busy: true });
     expect(ui.team.enabled).toBe(false);
@@ -206,10 +219,16 @@ describe("запросы публикации", () => {
     expect(calls[0]?.url).toContain("/content/current");
   });
 
-  it("пустые указатели — null у аудитории, а не ошибка", async () => {
+  it("пустые указатели — null у аудитории, а не ошибка; ключ проверки по умолчанию включён", async () => {
     const { fetch } = fakeFetch(json(200, { data: { team: null, all: null } }));
     const result = await fetchCurrent(new AdminApi(fetch));
-    expect(result.ok && result.data).toEqual({ team: null, all: null });
+    expect(result.ok && result.data).toEqual({ team: null, all: null, requireCheck: true });
+  });
+
+  it("ключ content.publish-require-check приходит вместе с указателями", async () => {
+    const { fetch } = fakeFetch(json(200, { data: { ...POINTERS, requireCheck: false } }));
+    const result = await fetchCurrent(new AdminApi(fetch));
+    expect(result.ok && result.data.requireCheck).toBe(false);
   });
 
   it("предпросмотр — GET /drafts/:id/publication?audience=", async () => {

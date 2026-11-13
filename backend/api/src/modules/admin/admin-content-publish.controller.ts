@@ -38,7 +38,7 @@ export class AdminContentPublishController {
   /** Какая версия сейчас в игре у команды и у всех. */
   @Get("current")
   @RequirePermission("content.view")
-  async current(@Req() request: unknown): Promise<{ data: ContentPointers }> {
+  async current(@Req() request: unknown): Promise<{ data: ContentPointers & { requireCheck: boolean } }> {
     return { data: await this.publication.current(accountOf(request)) };
   }
 

@@ -4,7 +4,7 @@ import { plural } from "../../../format";
 import { api } from "../../../services";
 import { ConfirmDialog } from "../../../ui/confirm-dialog";
 import { HELP } from "../../../ui/help";
-import { Button, ErrorNotice, Help, Loading, Notice } from "../../../ui/kit";
+import { Badge, Button, ErrorNotice, Help, Loading, Notice } from "../../../ui/kit";
 import { toast, toastError } from "../../../ui/toast";
 import type { Loaded } from "../../../ui/use-api";
 import { describeChange } from "../balance-rules";
@@ -24,6 +24,7 @@ export function PublishBar({
   draftId,
   rails,
   canPublish,
+  requireCheck,
   narrow,
   snapshot,
   names,
@@ -32,6 +33,8 @@ export function PublishBar({
   draftId: string;
   rails: Rails;
   canPublish: boolean;
+  /** ключ `content.publish-require-check`: выключен — кнопки не ждут рельсов, и это видно */
+  requireCheck: boolean;
   narrow: boolean;
   /** снимок черновика: по нему правки в окне называются именами, а не путями */
   snapshot: unknown;
@@ -41,7 +44,7 @@ export function PublishBar({
 }) {
   const [busy, setBusy] = useState(false);
   const [allOpen, setAllOpen] = useState(false);
-  const ui = publishUi({ rails, canPublish, narrow, hasDraft: true, busy });
+  const ui = publishUi({ rails, canPublish, narrow, hasDraft: true, busy, requireCheck });
   if (!ui.visible) return null;
 
   const toTeam = async (): Promise<void> => {
@@ -64,6 +67,7 @@ export function PublishBar({
       <Button tone="primary" disabled={!ui.all.enabled} blockedBy={ui.all.hint} onClick={() => setAllOpen(true)}>
         Всем
       </Button>
+      {requireCheck ? null : <Badge tone="warning">Проверка отключена ключом</Badge>}
       <Help text={HELP.balance.publish} />
       <PublishAllDialog open={allOpen} onOpenChange={setAllOpen} draftId={draftId} snapshot={snapshot} names={names} onPublished={onChanged} />
     </span>

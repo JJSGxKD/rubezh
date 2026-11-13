@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fetchCurrent, fetchDiff, fetchDraft, fetchDrafts, fetchVersion, fetchVersions, latestVersion, type ContentVersion, type CurrentPointers, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
+import { fetchCurrent, fetchDiff, fetchDraft, fetchDrafts, fetchVersion, fetchVersions, latestVersion, type ContentVersion, type CurrentState, type DraftDetail, type DraftDiff, type DraftSummary, type VersionSummary } from "../../api/content";
 import type { ApiError, ApiResult } from "../../api/client";
 import { api } from "../../services";
 import { useSession } from "../../state/use-session";
@@ -75,7 +75,7 @@ function Session({
   tab: string | undefined;
   latest: VersionSummary;
   versions: VersionSummary[];
-  pointers: CurrentPointers;
+  pointers: CurrentState;
   drafts: DraftSummary[];
   reloadDrafts: () => void;
   reloadPublication: () => void;

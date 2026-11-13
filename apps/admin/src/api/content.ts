@@ -167,6 +167,14 @@ export type Pointer = z.infer<typeof pointerSchema>;
 const currentPointersSchema = z.object({ team: pointerSchema.nullable(), all: pointerSchema.nullable() });
 export type CurrentPointers = z.infer<typeof currentPointersSchema>;
 
+/**
+ * Указатели и ключ `content.publish-require-check`: выключен — сервер публикует и без свежей
+ * зелёной проверки, и кнопки панели не ждут рельсов. Ответа без поля (сервер старше панели) —
+ * проверка нужна: безопасное умолчание.
+ */
+const currentStateSchema = currentPointersSchema.extend({ requireCheck: z.boolean().default(true) });
+export type CurrentState = z.infer<typeof currentStateSchema>;
+
 const publicationPreviewSchema = z.object({
   audience: z.enum(["team", "all"]),
   /** версия, которая у аудитории в игре; `null` — играют встроенным контентом */
@@ -207,8 +215,8 @@ const mergeResultSchema = z.object({
 });
 export type MergeResult = z.infer<typeof mergeResultSchema>;
 
-export function fetchCurrent(api: AdminApi): Promise<ApiResult<CurrentPointers>> {
-  return api.request(`${ADMIN_CONTENT}/current`, { schema: currentPointersSchema });
+export function fetchCurrent(api: AdminApi): Promise<ApiResult<CurrentState>> {
+  return api.request(`${ADMIN_CONTENT}/current`, { schema: currentStateSchema });
 }
 
 /** Готовность черновика к публикации и правки против версии, которая в игре у аудитории. */

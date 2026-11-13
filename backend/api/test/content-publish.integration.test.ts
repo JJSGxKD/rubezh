@@ -304,7 +304,8 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     };
     const pointers = async () => {
       const response = await adminCall("GET", "/current");
-      return response.json<{ data: { team: { versionNo: number } | null; all: { versionNo: number } | null } }>().data;
+      const data = response.json<{ data: { team: { versionNo: number } | null; all: { versionNo: number } | null } }>().data;
+      return { team: data.team, all: data.all };
     };
     return { accounts, roles, queue, settings, owner, login, adminCall, player, draftOf, publish, rollback, pointers };
   }
@@ -724,7 +725,10 @@ describe.skipIf(DATABASE_URL === "")("публикация контента на
     const { draftId } = await ctx.draftOf(base.versionNo, { hp: 101 });
     expect((await ctx.publish(draftId, "team")).status).toBe(409);
 
+    // панель по ключу знает, нужны ли зелёные рельсы
+    expect((await ctx.adminCall("GET", "/current")).json<{ data: { requireCheck: boolean } }>().data.requireCheck).toBe(true);
     ctx.settings.overrides.set(SETTINGS.contentPublishRequireCheck.key, false);
+    expect((await ctx.adminCall("GET", "/current")).json<{ data: { requireCheck: boolean } }>().data.requireCheck).toBe(false);
     const forced = await ctx.publish(draftId, "team");
     expect(forced.status).toBe(201);
     expect(ctx.roles.entries.find((entry) => entry.action === "content.publish")).toMatchObject({ after: expect.objectContaining({ checkBypassed: true, audience: "team" }) });

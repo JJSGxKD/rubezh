@@ -86,9 +86,10 @@ export class ContentPublishService {
     @Inject(SETTINGS_READER) private readonly settings: SettingsReader,
   ) {}
 
-  async current(actor: AccountRef): Promise<ContentPointers> {
+  /** Что в игре и нужна ли проверка: панель по ключу знает, держать ли кнопки публикации за зелёными рельсами. */
+  async current(actor: AccountRef): Promise<ContentPointers & { requireCheck: boolean }> {
     await this.roles.require(actor, "content.view");
-    return await this.publications.pointers();
+    return { ...(await this.publications.pointers()), requireCheck: this.settings.get(SETTINGS.contentPublishRequireCheck) };
   }
 
   /** Что случится при публикации: готовность с причиной и правки против версии, которая в игре у аудитории. */
