@@ -2,7 +2,7 @@ import type { SecretKind, SecretsDef } from "@bh/shared-types";
 import { drawWeighted } from "../progression/levels";
 import { createDirection, randomDirection } from "./directions";
 import type { WorldBounds } from "./map-types";
-import { createRng, deriveSeed, STREAM_SALT, type Rng } from "./rng";
+import { createRng, deriveSeed, type Rng } from "./rng";
 import { radiusOf } from "./secrets-rules";
 import { clampToBounds, type ElitePoolStep, type SecretSite, type SecretState } from "./world";
 
@@ -31,7 +31,7 @@ export function createSecretState(
   elitePool: readonly ElitePoolStep[] = [],
 ): SecretState {
   // Поток огонька выводится из начального состояния потока тайников — до первого броска раскладки.
-  const wispRng = createRng(deriveSeed(rng.getState(), STREAM_SALT.wisp));
+  const wispRng = createRng(deriveSeed(rng.getState(), WISP_STREAM_SALT));
   const sites: SecretSite[] = [];
   const gap = def.minGapUnits * unitScale;
 
@@ -70,6 +70,9 @@ export function createSecretState(
     blessingLog: [],
   };
 }
+
+/** Соль потока отклонений огонька (рядом с `STREAM_SALT` в `rng.ts` её не держим: файл вне зон задачи). */
+const WISP_STREAM_SALT = 0x57495350;
 
 /** Номер кольца огонька: он не принадлежит ни одному. */
 const WISP_RING = -1;

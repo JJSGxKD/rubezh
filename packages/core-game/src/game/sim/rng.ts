@@ -61,7 +61,6 @@ export const STREAM_SALT = {
   secret: 0x53454352,
   rubezh: 0x52554245,
   siege: 0x53494547,
-  wisp: 0x57495350,
 } as const;
 
 /**
