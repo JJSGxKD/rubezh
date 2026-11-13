@@ -21,9 +21,23 @@ describe("гайдбук: неубиваемые", () => {
     for (const key of ["guide.unkillable.title", "guide.unkillable.text", "guide.enemy.karachun.myth", "guide.enemy.karachun.when", "guide.enemy.karachun.omen"]) {
       expect(hasTranslation(key), key).toBe(true);
     }
-    expect(stalkerGuide()).toEqual({ fromSec: STALKER.appear.fromSec });
+    expect(stalkerGuide()).toEqual({
+      fromSec: STALKER.appear.fromSec,
+      chaseMinSec: STALKER.appear.chaseSec.min,
+      chaseMaxSec: STALKER.appear.chaseSec.max,
+    });
     expect(formatDuration(STALKER.appear.fromSec)).toBe("4:00");
     expect(t("guide.enemy.karachun.when", { time: formatDuration(STALKER.appear.fromSec) })).toContain("после 4:00");
+  });
+
+  it("длительность погони в тексте — из контента, а не зашитое число", () => {
+    const { fromSec, chaseMinSec, chaseMaxSec } = stalkerGuide();
+    const text = t("guide.enemy.karachun.when", { time: formatDuration(fromSec), min: chaseMinSec, max: chaseMaxSec });
+    expect(text).toContain(`гонится ${STALKER.appear.chaseSec.min}–${STALKER.appear.chaseSec.max} секунд`);
+    expect(text).not.toContain("{");
+    expect(text).not.toContain("10–20");
+    // и в готовой разметке блока
+    expect(renderToStaticMarkup(createElement(Enemies))).toContain(`гонится ${chaseMinSec}–${chaseMaxSec} секунд`);
   });
 
   it("рисует блок после элиты: имя, миф и совет уходить", () => {

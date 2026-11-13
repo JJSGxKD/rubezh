@@ -291,7 +291,7 @@ export function Enemies(): ReactNode {
 function UnkillableCard(props: { enemy: GuideEnemy; index: number }): ReactNode {
   const { def } = props.enemy;
   const name = t(`enemy.${def.id}.name`);
-  const { fromSec } = stalkerGuide();
+  const { fromSec, chaseMinSec, chaseMaxSec } = stalkerGuide();
 
   return (
     <Card appearIndex={Math.min(props.index, 6)}>
@@ -303,7 +303,7 @@ function UnkillableCard(props: { enemy: GuideEnemy; index: number }): ReactNode 
             <Badge tone="muted">{t(`guide.pattern.${def.pattern}.name`)}</Badge>
           </div>
           <p className="mt-1 text-sm text-text-muted">{t(`guide.enemy.${def.id}.myth`)}</p>
-          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.when`, { time: formatDuration(fromSec) })}</p>
+          <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.when`, { time: formatDuration(fromSec), min: chaseMinSec, max: chaseMaxSec })}</p>
           <p className="mt-1.5 text-xs text-text-muted">{t(`guide.enemy.${def.id}.omen`)}</p>
         </div>
       </div>

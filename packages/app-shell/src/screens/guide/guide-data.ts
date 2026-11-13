@@ -72,9 +72,10 @@ export function unkillableEnemies(): GuideEnemy[] {
   return ENEMIES.filter(isUnkillable).map(toGuideEnemy);
 }
 
-/** Карачун: с какой секунды приходит — из контента. */
-export function stalkerGuide(): { fromSec: number } {
-  return { fromSec: STALKER.appear.fromSec };
+/** Карачун: с какой секунды приходит и сколько гонится — из контента, чисел в тексте нет. */
+export function stalkerGuide(): { fromSec: number; chaseMinSec: number; chaseMaxSec: number } {
+  const { fromSec, chaseSec } = STALKER.appear;
+  return { fromSec, chaseMinSec: chaseSec.min, chaseMaxSec: chaseSec.max };
 }
 
 /**
