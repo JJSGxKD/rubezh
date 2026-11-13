@@ -9,6 +9,8 @@ import {
   MAX_GEMS_PER_KILL,
   updateGems,
 } from "../src/game/sim/gems";
+import { RUN_MODIFIERS } from "../src/content/modifiers";
+import { BASE_DIFFICULTY, composeDifficulty } from "../src/game/sim/difficulty";
 import { TICK_SEC, createWorld, type World } from "../src/game/sim/world";
 
 // Выпадение опыта: горсть кристаллов разной ценности с полётом от места смерти.
@@ -111,6 +113,54 @@ describe("выпадение кристаллов", () => {
     world.stats.tick += GEM_LAND_TICKS;
     updateGems(world, TICK_SEC);
     expect(world.progression.totalXp).toBe(1);
+  });
+});
+
+describe("опыт в бою при модификаторе (T-0119)", () => {
+  const hurry = composeDifficulty(BASE_DIFFICULTY, ["hurry"], RUN_MODIFIERS);
+  const inverse = composeDifficulty(BASE_DIFFICULTY, ["inverse"], RUN_MODIFIERS);
+  const setupWith = (difficulty = BASE_DIFFICULTY, seed = 1): World =>
+    createWorld({ seed, enemies: [DUMMY], drops: { gems: { maxPerKill: 5 }, ...NO_PICKUPS }, difficulty });
+  const sumOf = (world: World): number => aliveGems(world).reduce((sum, gem) => sum + gem.value, 0);
+
+  it("за врага с опытом 10 и множителем 1,5 кристаллов на 15", () => {
+    const world = setupWith(hurry);
+    dropGems(world, 0, 0, 10);
+    expect(sumOf(world)).toBe(15);
+  });
+
+  it("на 50 seed сумма равна round(xp · xpMul), а каждый кристалл — целое от единицы", () => {
+    for (const [difficulty, mul] of [[hurry, 1.5], [inverse, 1.6]] as const) {
+      for (let seed = 1; seed <= 50; seed++) {
+        for (const xp of [1, 2, 3, 7, 25]) {
+          const world = setupWith(difficulty, seed);
+          dropGems(world, 0, 0, xp);
+          expect(sumOf(world), `seed ${seed}, xp ${xp}, ×${mul}`).toBe(Math.round(xp * mul));
+          expect(aliveGems(world).every((gem) => gem.value >= 1 && Number.isInteger(gem.value))).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("опыт 1 при ×1,5 округляется до 2: горсть делится, а не теряет добавку", () => {
+    const world = setupWith(hurry);
+    dropGems(world, 0, 0, 1);
+    expect(sumOf(world)).toBe(2);
+  });
+
+  it("без модификатора поведение прежнее: те же кристаллы и тот же генератор, что без поля xpMul", () => {
+    const plain = setupWith(BASE_DIFFICULTY, 5);
+    const composed = setupWith(composeDifficulty(BASE_DIFFICULTY, [], RUN_MODIFIERS), 5);
+    dropGems(plain, 0, 0, 25);
+    dropGems(composed, 0, 0, 25);
+    expect(aliveGems(composed)).toEqual(aliveGems(plain));
+    expect(composed.rng.getState()).toBe(plain.rng.getState());
+  });
+
+  it("дробный опыт без модификатора не округляется: формула не теряет добавку", () => {
+    const world = setupWith(BASE_DIFFICULTY);
+    dropGems(world, 0, 0, 1.5);
+    expect(sumOf(world)).toBeCloseTo(1.5, 10);
   });
 });
 
