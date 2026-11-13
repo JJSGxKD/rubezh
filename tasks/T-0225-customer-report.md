@@ -19,7 +19,7 @@ zones:
   - apps/admin/test/customer-report.test.ts
 shared:
   - backend/api/src/modules/admin/admin.module.ts
-  - apps/admin/src/routes.ts
+  - apps/admin/src/screens/sections.tsx
   - apps/admin/src/ui/help.ts
   - docs/07-monetization-and-ads.md
   - docs/29-admin-panel.md
