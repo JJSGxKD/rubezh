@@ -10,24 +10,27 @@ import { toastError } from "../../ui/toast";
 import { useApi } from "../../ui/use-api";
 import { BalancesView } from "./BalancesView";
 import { JournalView } from "./JournalView";
+import { OperationsTab } from "./operations/OperationsTab";
 
 /**
- * Раздел «Бухгалтерия» (docs/29-admin-panel.md §6.7, Р219, tasks/T-0459): вкладки «Остатки» и «Журнал».
- * Адреса: `#/ledger`, `#/ledger/journal`. Только чтение (`ledger.view`): операции руками, бюджеты и отчёт — позже.
+ * Раздел «Бухгалтерия» (docs/29-admin-panel.md §6.7, Р219, tasks/T-0459): вкладки «Остатки», «Журнал» и «Операции»
+ * (Р220, tasks/T-0464). Адреса: `#/ledger`, `#/ledger/journal`, `#/ledger/operations`. Читает `ledger.view`; вносит
+ * операции `finance.entry.create`, решает по ним владелец (`finance.operation.approve`). Бюджеты и отчёт — позже.
  */
 const TABS = [
   { id: "balances", title: "Остатки" },
   { id: "journal", title: "Журнал" },
+  { id: "operations", title: "Операции" },
 ] as const;
 
 type LedgerTab = (typeof TABS)[number]["id"];
 
 export function LedgerScreen({ id }: { id: string | null }) {
-  const tab: LedgerTab = id === "journal" ? "journal" : "balances";
+  const tab: LedgerTab = id === "journal" || id === "operations" ? id : "balances";
   return (
     <div className="flex flex-col gap-4">
-      <TabBar label="Бухгалтерия" tabs={TABS} active={tab} onSelect={(next) => navigate({ section: "ledger", id: next === "journal" ? "journal" : null })} />
-      {tab === "balances" ? <BalancesTab /> : <JournalTab />}
+      <TabBar label="Бухгалтерия" tabs={TABS} active={tab} onSelect={(next) => navigate({ section: "ledger", id: next === "balances" ? null : next })} />
+      {tab === "balances" ? <BalancesTab /> : tab === "journal" ? <JournalTab /> : <OperationsTab />}
     </div>
   );
 }
