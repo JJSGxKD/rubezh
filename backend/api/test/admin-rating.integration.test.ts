@@ -7,7 +7,7 @@ import { createPrisma } from "../src/infra/database.js";
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import type { Permission } from "../src/modules/roles/permissions.js";
 import type { AccountRef, RolesService } from "../src/modules/roles/roles.service.js";
-import { seasonOf } from "../src/modules/seasons/season-rules.js";
+import { type Season, seasonOf } from "../src/modules/seasons/season-rules.js";
 import { SeasonNotFoundError, SeasonsAdminService } from "../src/modules/seasons/seasons-admin.service.js";
 import { PrismaSeasonsAdminRepository } from "../src/modules/seasons/seasons-admin.repository.js";
 import { SeasonSchedule } from "../src/modules/seasons/seasons-schedule.js";
@@ -21,7 +21,10 @@ import { panelSettings } from "./helpers/settings.js";
  *
  * Сезоны берутся из далёкого будущего со случайной сдвижкой: база общая для
  * всех прогонов, и закрытый сезон чужого теста не должен попасть в страницу.
- * Три сезона идут подряд, поэтому между ними чужому сезону встать негде.
+ * Три сезона идут подряд, поэтому между ними чужому сезону встать негде. Но
+ * чужие тесты закрывают сезоны на случайных неделях тех же лет
+ * (`seasons.integration.test.ts` — 2046–2072), поэтому недели берутся только
+ * свободные по базе: и под свои сезоны, и под «несуществующий».
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
@@ -38,9 +41,26 @@ describe.skipIf(!live)("рейтинг в панели на живом Postgres"
   const created: string[] = [];
 
   // Первый из трёх сезонов: понедельник в 2045–2090 годах (настройка points-from не принимает дату позже 2099).
-  const first = seasonOf(new Date(Date.UTC(2045, 0, 1) + randomInt(0, 2_400) * WEEK));
+  // Выбирается в beforeAll по базе: свободны три недели сезонов и три следующие (граница архива и «несуществующий»).
+  const SPAN = 6;
+  let first = seasonOf(new Date(Date.UTC(2045, 0, 1)));
   const seasonAt = (index: number) => seasonOf(new Date(first.startsAt.getTime() + index * WEEK));
-  const [s1, s2, s3] = [seasonAt(0), seasonAt(1), seasonAt(2)];
+  let s1: Season = first;
+  let s2: Season = first;
+  let s3: Season = first;
+
+  async function takenKeys(candidates: readonly string[]): Promise<Set<string>> {
+    const rows = await prisma.season.findMany({ where: { seasonKey: { in: [...candidates] } }, select: { seasonKey: true } });
+    return new Set(rows.map((row) => row.seasonKey));
+  }
+
+  async function freeSpan(): Promise<Season> {
+    for (;;) {
+      const start = seasonOf(new Date(Date.UTC(2045, 0, 1) + randomInt(0, 2_400) * WEEK));
+      const span = Array.from({ length: SPAN }, (_, index) => seasonOf(new Date(start.startsAt.getTime() + index * WEEK)).key);
+      if ((await takenKeys(span)).size === 0) return start;
+    }
+  }
 
   const service = (granted: readonly Permission[] = ["players.view"]) => {
     const set = new Set<Permission>(granted);
@@ -74,6 +94,8 @@ describe.skipIf(!live)("рейтинг в панели на живом Postgres"
     prisma = createPrisma(loadAppConfig({ NODE_ENV: "test", DATABASE_URL } as NodeJS.ProcessEnv));
     accounts = new PrismaAccountRepository(prisma);
     [a, b, c, d] = [await account("Альфа"), await account("Бета"), await account("Гамма"), await account("Дельта")];
+    first = await freeSpan();
+    [s1, s2, s3] = [seasonAt(0), seasonAt(1), seasonAt(2)];
     await season(s1, 4, 2);
     await season(s2, 1, 0);
     await season(s3, 1, 0);
@@ -185,6 +207,11 @@ describe.skipIf(!live)("рейтинг в панели на живом Postgres"
   });
 
   it("несуществующий сезон — 404 «Сезон не найден»", async () => {
-    await expect(service().season(ACTOR, seasonAt(5).key, { difficulty: "hard", board: "common", offset: 0, limit: 100 })).rejects.toBeInstanceOf(SeasonNotFoundError);
+    // Свободной неделя была в beforeAll; чужой тест мог закрыть сезон на ней позже, поэтому берётся первая свободная сейчас.
+    const after = Array.from({ length: SPAN }, (_, index) => seasonAt(3 + index).key);
+    const taken = await takenKeys(after);
+    const missing = after.find((key) => !taken.has(key));
+    if (missing === undefined) throw new Error("за сезонами теста нет свободной недели");
+    await expect(service().season(ACTOR, missing, { difficulty: "hard", board: "common", offset: 0, limit: 100 })).rejects.toBeInstanceOf(SeasonNotFoundError);
   });
 });

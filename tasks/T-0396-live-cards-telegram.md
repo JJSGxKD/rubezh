@@ -54,6 +54,15 @@ T-0397, T-0398, T-0399.
 
 ## Решения
 
+- **Р225** (`docs/35-stage4-plan.md`, 14.11.2026: Telegram на стороне сервера
+  отключил HTML-виджеты у всех) — адаптер отличает «площадка отказала в
+  методе карточек» от сбоя доставки: исход `unsupported`. По нему ядро
+  (T-0395) сразу шлёт запасное сообщение и ставит карточки на паузу.
+  `unsupported` — ответ 404 на метод виджета или 400, где Telegram говорит
+  о методе или виджете, а не о чате, сообщении или наших данных (размеры мы
+  проверяем до сети). 403 — `blocked`, 429, 5xx и сеть — повтор, как
+  раньше. Текст отказа Telegram заранее не известен, поэтому правило — по
+  коду и словам, а не по одной строке.
 - **Р199** (`docs/35-stage4-plan.md`, WP52, правила 2–5):
   - **код карточки не меняется после отправки**: версия облика хранится у
     карточки, флаги «перенесена», «выключено», «устарело», «закрыта» понимает
@@ -151,12 +160,21 @@ T-0397, T-0398, T-0399.
      - не число → `failed` (`not_telegram_user`);
      - `widgets.sendWidget(platformUserId, { html, chatData: message.state, caption: message.caption, allowQueries: true, protect: true, silent: message.silent, keyboard: button ? [[{ text, url }]] : undefined })`;
      - успех → `{ status: "sent", ref: { chatId: platformUserId, messageId }, version }`;
-     - ошибка — `sendOutcomeOf`;
+     - ошибка — `cardOutcomeOf(error)` (ниже);
      - `topic` пока не передаётся: темы — WP52 № 14;
    - `update(ref, state)` → `editMessageWidgetData(ref.chatId, ref.messageId, { chatData: state })`:
      - `edited` и `unchanged` — как есть;
      - 400 с `message to edit not found` или `MESSAGE_ID_INVALID` → `gone`;
-     - остальное — `sendOutcomeOf`;
+     - остальное — `cardOutcomeOf(error)`;
+   - `cardOutcomeOf(error: TelegramApiError)` — экспортируемая, чистая (Р225):
+     - 404 → `{ status: "unsupported" }`;
+     - 400, описание без `chat not found`, `message to edit not found`,
+       `MESSAGE_ID_INVALID`, `message is not modified` и со словом из
+       `/method|widget|not available|not supported|disabled|unsupported/i` →
+       `{ status: "unsupported" }`;
+     - иначе — `sendOutcomeOf(error)`;
+     - комментарий — почему по словам: точный текст отказа Telegram не
+       объявлял, 14.11.2026 виджеты отключили без версии Bot API;
    - `platforms.module.ts`: `liveCardsFor(config, telegramApi)` →
      `new LiveCards([new TelegramLiveCards(telegramApi, loadWidgets(), config.telegram.botToken !== "")])`.
 5. **Правила карточки** — проба `backend/api/widgets/telegram/_probe.html`
@@ -284,9 +302,13 @@ T-0397, T-0398, T-0399.
     - итог `sent` с `ref` и `version`;
     - `platformUserId` `dev-1` → `failed`;
     - 403 → `blocked`;
+    - 404 → `unsupported`; 400 `Bad Request: method is disabled` и 400
+      `WIDGETS_UNAVAILABLE` → `unsupported`; 400 `chat not found` — не
+      `unsupported` (Р225);
   - `update`:
     - `"unchanged"` → `unchanged`;
     - 400 `message to edit not found` → `gone`;
+    - 404 → `unsupported`;
     - 429 → `retry`;
   - `supports("season")` — `false` без файла, `true` с файлом во временном
     каталоге.
@@ -335,6 +357,9 @@ T-0397, T-0398, T-0399.
 - [ ] HTML читается из `backend/api/widgets/telegram/` в разработке и в
       образе; версия — первые 8 hex sha256; файл сверх предела Telegram не
       загружается.
+- [ ] Отказ площадки в методе карточек — `unsupported`, а не `failed`
+      (Р225): 404 и 400 о методе или виджете; 403 — `blocked`, 429 —
+      повтор, 400 о чате или сообщении — как раньше.
 - [ ] Каждый `widget_query` получает ответ, в том числе при сбое домена;
       `shared_widget_query` — «выключено».
 - [ ] Команды карточек — из одной таблицы; в меню — только включённые при

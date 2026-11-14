@@ -2071,6 +2071,22 @@ export interface RunScoreView {
   expectedPoints: number;
 }
 
+/** Знак у имени в строке списка (T-0235, Р149): выбранный игроком или знак по умолчанию. */
+export interface PublicEmblem {
+  id: string;
+  title: string;
+  /** редкость: шкала предметов и отдельный тон `team` у знака «Команда» */
+  tier: string;
+  category: "status" | "season" | "merit";
+  /** порядковый номер сезона — только у сезонного знака */
+  season?: number | undefined;
+}
+
+/** То, что список показывает рядом с именем игрока; облик (T-0237) добавится сюда же. */
+export interface PublicMark {
+  emblem?: PublicEmblem | undefined;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   name: string;
@@ -2084,6 +2100,8 @@ export interface LeaderboardEntry {
   tester?: true | undefined;
   /** поддержал проект (Р109); нет поля — не поддержал */
   supporter?: true | undefined;
+  /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
+  emblem?: PublicEmblem | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */
