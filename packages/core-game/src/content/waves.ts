@@ -155,6 +155,22 @@ export const TIMELINE: TimelineSegmentDef[] = [
       { enemy: "bog_lurker", perSec: 0.4, burst: 3 },
     ],
   },
+  {
+    // Кикимора показывается отдельно, до смеси кривой: игрок должен успеть понять, что метка на земле — место, где
+    // она встанет, а не декор. Кривая начинается на 330-й, поэтому отрезок короткий, как у Болотника: пока он идёт,
+    // выходят первые две Кикиморы выбросом и ещё несколько потоком. Состав 315-го, у которого забрана доля
+    // Крыс и Воронов: бюджет угрозы отрезка 14,2 — не ниже 315-го (13,4) и не выше кривой (14,4).
+    fromSec: 322,
+    spawns: [
+      { enemy: "swarm_rat", perSec: 2.6 },
+      { enemy: "circler_crow", perSec: 1.2 },
+      { enemy: "rushing_bats", perSec: 1.2 },
+      { enemy: "bone_walker", perSec: 0.7 },
+      { enemy: "dasher_wolf", perSec: 0.3 },
+      { enemy: "bog_lurker", perSec: 0.4 },
+      { enemy: "kikimora", perSec: 0.3, burst: 2 },
+    ],
+  },
 ];
 
 /**
@@ -193,6 +209,9 @@ export const ENDLESS_CURVE: EndlessCurveDef = {
     // забеги дольше 690-й секунды, docs/32-balance.md §2.2).
     "bog_lurker",
     "ice_spirit",
+    // Кикимора — последняя в пуле: выходит в смесь с 750-й секунды и сдвигает только забеги дольше неё
+    // (после ледяного духа, чтобы не менять порядок, по которому откалиброваны прежние типы).
+    "kikimora",
   ],
   startTypes: 5,
   typesPerSegment: 1,
