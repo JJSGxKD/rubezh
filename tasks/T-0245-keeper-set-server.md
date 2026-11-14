@@ -3,8 +3,8 @@ id: T-0245
 title: «Набор хранителя» — сервер: 48 часов после первой победы над Рубежом, окрас и самоцветы
 epic: E1
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0237, T-0121]
