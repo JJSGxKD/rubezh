@@ -330,7 +330,7 @@ describe("крутка за рекламу", () => {
   it("VIP крутит без ролика и без сетей: сессия выдаётся выполненной, кулдаун места тот же", async () => {
     const { service, ads, passes, wallet } = setup(rolls(rollFor(3)), 1, []);
     passes.register("vip", async () => true);
-    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: "vip" });
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: "vip", capped: false });
 
     const offer = await ads.offer({ ...PLAYER, device: null }, "wheel_spin", NOON);
     if (!offer.available) throw new Error("показа нет");
@@ -351,14 +351,14 @@ describe("крутка за рекламу", () => {
 
   it("экран знает, есть ли реклама для площадки игрока: блок «везде» сети Telegram в VK кнопки не даёт", async () => {
     const { service } = setup(rolls(0), 1, [adBlock("adsgram", 10)]);
-    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: null });
-    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: false, readyAt: null, pass: null });
+    expect((await service.view(PLAYER, NOON)).ad).toEqual({ available: true, readyAt: null, pass: null, capped: false });
+    expect((await service.view({ accountId: ME, platform: "vk" }, NOON)).ad).toEqual({ available: false, readyAt: null, pass: null, capped: false });
   });
 });
 
 describe("колесо на экране", () => {
   it("сектора — в порядке колеса, с наградой уровня и шансом", () => {
-    const view = viewOf(21, true, { available: false, readyAt: null, pass: null });
+    const view = viewOf(21, true, { available: false, readyAt: null, pass: null, capped: false });
     expect(view.free).toBe(true);
     expect(view.sectors).toHaveLength(WHEEL_SECTORS.length);
     expect(view.sectors[0]).toEqual({ resource: "coins", amount: 70, odds: 0.24 });

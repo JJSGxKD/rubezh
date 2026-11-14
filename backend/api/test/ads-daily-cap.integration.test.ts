@@ -13,7 +13,7 @@ import { PrismaProgressRepository } from "../src/modules/progress/progress.repos
 import { PrismaRunDoubleRepository } from "../src/modules/progress/run-double.repository.js";
 import { RunDoubleService } from "../src/modules/progress/run-double.service.js";
 import type { WalletService } from "../src/modules/wallet/wallet.service.js";
-import { FakeCreatives, flagsOn } from "./helpers/memory-ads.js";
+import { FakeCreatives, adBlock, flagsOn } from "./helpers/memory-ads.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
@@ -34,6 +34,17 @@ const NOON = new Date(Date.UTC(2026, 8, 30, 9));
 const MIDNIGHT = new Date(Date.UTC(2026, 8, 30, 21));
 const at = (base: Date, minutes: number) => new Date(base.getTime() + minutes * MINUTE);
 const KEY = "ads.rewarded.daily-cap";
+
+/**
+ * Сессии пишутся в живую базу, а блоки для выдачи берутся из памяти: готовность
+ * места требует блок настоящей сети по профилю (`servable`), а включать общие
+ * сети в базе из теста нельзя — их читают соседние тесты.
+ */
+class ServedRepository extends PrismaAdsRepository {
+  override async activeBlocks(): Promise<AdBlockRow[]> {
+    return CAPPED_PLACES.map((place) => adBlock("adsgram", 10, { place }));
+  }
+}
 
 describe.skipIf(DATABASE_URL === "")("дневной кап роликов на живом Postgres", () => {
   let prisma: PrismaClient;
@@ -59,7 +70,7 @@ describe.skipIf(DATABASE_URL === "")("дневной кап роликов на 
 
   function service(settings = panelSettings()) {
     const passes = new AdPasses();
-    const ads = new AdsService(repository, () => 0, passes, settings, new FakeCreatives(), new AdNetworkKeys(repository), new InterstitialGate(repository, flagsOn(), settings), restrictionsGate());
+    const ads = new AdsService(new ServedRepository(prisma), () => 0, passes, settings, new FakeCreatives(), new AdNetworkKeys(repository), new InterstitialGate(repository, flagsOn(), settings), restrictionsGate());
     return { ads, passes, settings };
   }
 
@@ -170,7 +181,7 @@ describe.skipIf(DATABASE_URL === "")("дневной кап роликов на 
     await round(me, 12, at(MIDNIGHT, -30));
     expect(await ads.readiness(viewer(me), "wheel_spin", at(MIDNIGHT, -1))).toMatchObject({ capped: true });
     expect(await ads.readiness(viewer(me), "wheel_spin", MIDNIGHT)).toMatchObject({ available: true, capped: false });
-    expect(await ads.offer(viewer(me), "wheel_spin", at(MIDNIGHT, 1))).toMatchObject({ available: true });
+    expect(await ads.readiness(viewer(me), "run_double", at(MIDNIGHT, 1))).toMatchObject({ available: true, capped: false });
   });
 
   it("ключ панели: 3 — кап на третьем ролике, 0 — кап выключен", async () => {

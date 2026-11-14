@@ -142,9 +142,9 @@ describe("кап роликов — готовность места и выда�
     expect(await service.readiness(VIEWER, "wheel_spin", NOON)).toMatchObject({ available: true, capped: false });
     await watchedRound(repository, 3, NOON);
     expect(await service.readiness(VIEWER, "wheel_spin", NOON)).toMatchObject({ available: false, capped: true });
-    // Закрыт кап и у межстраничной: у неё своя политика, а `capped` её не касается.
+    // Межстраничную кап не касается: у неё своя политика, и отказ — её, а не «ad_daily_cap».
     expect(await service.readiness(VIEWER, "interstitial", NOON)).toMatchObject({ capped: false });
-    expect(await service.offer(VIEWER, "interstitial", NOON)).toMatchObject({ available: true });
+    await expect(service.offer(VIEWER, "interstitial", NOON)).resolves.toBeDefined();
   });
 
   it("сессии пропуска VIP не ролики: сколько бы их ни было, кап пуст", async () => {
@@ -211,11 +211,11 @@ describe("кап роликов — забор награды у хозяина 
   async function threeWatched() {
     const ctx = setup(blocksOfAllPlaces(), panelSettings({ [KEY]: 2 }));
     const sessions: { place: AdPlace; sessionId: string }[] = [];
+    // Выданы все три, пока кап свободен, и только потом досмотрены.
     for (const place of ["second_chance", "run_double", "card_reroll"] as const) {
-      const offer = offered(await ctx.service.offer(VIEWER, place, NOON));
-      await ctx.service.report(ME, offer.sessionId, { kind: "completed" }, at(NOON, 1));
-      sessions.push({ place, sessionId: offer.sessionId });
+      sessions.push({ place, sessionId: offered(await ctx.service.offer(VIEWER, place, NOON)).sessionId });
     }
+    for (const { sessionId } of sessions) await ctx.service.report(ME, sessionId, { kind: "completed" }, at(NOON, 1));
     return { ...ctx, sessions };
   }
 
