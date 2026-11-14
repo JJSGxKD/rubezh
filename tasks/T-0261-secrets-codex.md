@@ -3,8 +3,8 @@ id: T-0261
 title: Кодекс тайников — найденные за всё время на сервере, раздел гайдбука с преданиями, достижение и знак «Следопыт»
 epic: E16
 priority: P3
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0260, T-0235]
@@ -25,6 +25,26 @@ shared:
   - backend/api/src/modules/wipe/wipe-plan.ts
   - backend/api/src/modules/wipe/wipe-runner.ts
   - docs/21-diagrams.md
+  - docs/27-design-system-and-app-shell.md
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/runs/dto/runs.dto.ts
+  - backend/api/src/modules/achievements/achievements.service.ts
+  - backend/api/test/secrets-codex.test.ts
+  - backend/api/test/runs-secrets-found.test.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/test/tasks.test.ts
+  - backend/api/test/achievements.integration.test.ts
+  - backend/api/test/emblems.integration.test.ts
+  - apps/admin/src/api/tasks.ts
+  - apps/web-telegram/vite.config.ts
+  - packages/app-shell/src/state/runs.ts
+  - packages/app-shell/src/i18n/ru-guide.json
+  - packages/app-shell/src/i18n/ru-tasks.json
+  - packages/app-shell/test/runs-secrets-found.test.ts
+  - packages/app-shell/test/achievements-api.test.ts
+  - packages/core-game/src/index.ts
+  - packages/shared-types/src/index.ts
 runner: any
 executor: sonnet-5.5
 effort: high

@@ -67,6 +67,7 @@ export default defineConfig(({ mode, command }) => {
       "/api/v1/feedback",
       "/api/v1/bot",
       "/api/v1/bot-mention",
+      "/api/v1/codex",
       "/api/v1/flags",
       "/api/v1/media",
       "/api/v1/client",

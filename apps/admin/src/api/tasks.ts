@@ -42,6 +42,7 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   weapon_masters: "Мастера оружия (Коллекционер)",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  secrets_kinds: "Виды тайников",
   codex_percent: "Кодекс врагов, %",
   status: "Знак статуса",
   season: "Знак сезона",
@@ -103,7 +104,7 @@ export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, Tas
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
  * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
  */
-export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "weapon_masters", "codex_percent"]);
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "weapon_masters", "codex_percent", "secrets_kinds"]);
 
 /**
  * Виды, у которых цель считает сервер (`tasks/task-rules.ts`, `DYNAMIC_TARGET_KINDS`): «Коллекционер»
