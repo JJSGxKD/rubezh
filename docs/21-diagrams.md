@@ -145,6 +145,7 @@ erDiagram
     ACCOUNT ||--o{ ACHIEVEMENT_FAVORITE : "до трёх любимых достижений"
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
+    ACCOUNT ||--o{ CODEX_ENTRY : "открытые записи кодекса врагов"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -1247,6 +1248,12 @@ erDiagram
         string task_id FK "выполненное игроком достижение; UNIQUE вместе с account_id"
     }
 
+    CODEX_ENTRY {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
+        string enemy_id PK "id врага из content/enemies.ts; внешнего ключа нет, список врагов — CODEX_ENEMY_IDS на сервере"
+        datetime first_seen_at "время записи забега, в котором враг встретился первым; не переписывается"
+    }
+
     PASS_PROGRESS {
         uuid account_id PK,FK "каскадом"
         string month_key PK "ГГГГ-ММ по Москве (CHECK)"
@@ -1669,6 +1676,16 @@ erDiagram
   а не «ушёл». Оплачиваемое выполнение — `paidRetention(окно, holdDays)` в
   `channel-watch-rules.ts`. Вайп стирает таблицу вместе с прогрессом
   заданий.
+- **`CODEX_ENTRY` — кодекс врагов** (`39-retention-mechanics.md` К2,
+  `35-stage4-plan.md` Р102, T-0127): по строке на пару «аккаунт — враг»,
+  открытая запись не закрывается и не переписывается (`ON CONFLICT DO NOTHING`).
+  Запись открывает слушатель записи забега (`RunsHooks`) — один раз на забег и
+  только для забегов, засчитываемых заданиям; врагов он берёт из итога забега
+  (`enemiesSeen` и ключи `topKills`) и фильтрует по таблице сервера. Награда — три
+  достижения лестницы `codex` в `TASK_DEF` (30 / 60 / 100%): вид `codex_percent`,
+  как у `friends` и `account_level`, — состояние с действием «максимум», процент
+  дописывает модуль кодекса при записи и при ответе `GET /api/v1/codex`. Вайп
+  стирает записи вместе с прогрессом заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -2812,6 +2829,7 @@ flowchart LR
         BOTMENTION["bot-mention<br/>задания «юзернейм бота» в имени и bio:<br/>проверка раз в игровые сутки через порт,<br/>награда и серия, ночной проход, реализовано"]
         EXTIDENT["external-identity<br/>связь аккаунта с MAX и VK для заданий:<br/>одноразовые коды в Redis, пары в базе,<br/>порт ExternalLinkStarters, реализовано"]
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
+        CODEX["codex<br/>кодекс врагов: записи по итогу забега,<br/>процент в достижения лестницы codex,<br/>ответ для гайдбука, реализовано"]
         APPEAR["appearance<br/>облики героя: каталог из десяти в коде,<br/>владение по состоянию аккаунта при чтении,<br/>выбор облика и кружка аватара, облик в строках<br/>списков через порт PublicIdentity, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
@@ -3070,6 +3088,10 @@ flowchart LR
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
     ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
+    CADDY -- "/api/v1/codex" --> CODEX
+    CODEX -- "codex_entry" --> PG
+    RUNS -. "записанный забег, RunsHooks: кого встретил игрок" .-> CODEX
+    CODEX -. "процент кодекса «максимум», награда в заданиях, T-0127" .-> TASKS
     ACHIEV -. "порт PublicIdentity (common): знак у имени для строк рейтинга, T-0240" .-> RUNS
     ACHIEV -. "порт PublicIdentity: знак у имени для строк таблицы сезона" .-> SEASONS
     ACHIEV -. "порт PublicIdentity: знак у имени для строк друзей" .-> FRIENDS

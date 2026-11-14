@@ -3,8 +3,8 @@ id: T-0127
 title: Кодекс врагов: гайдбук как коллекция, «7/11» и награда за полный
 epic: E16
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-21
 size: M
 depends_on: [T-0106, T-0125, T-0171, T-0190]
@@ -31,6 +31,17 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/39-retention-mechanics.md
+  - docs/27-design-system-and-app-shell.md
+  - docs/30-configuration-map.md
+  - backend/api/src/modules/achievements/achievements.service.ts
+  - backend/api/src/modules/wipe/wipe-runner.ts
+  - backend/api/test/wipe-plan.test.ts
+  - backend/api/test/wipe-runner.integration.test.ts
+  - backend/api/test/tasks.test.ts
+  - backend/api/test/achievements.integration.test.ts
+  - packages/app-shell/src/state/analytics.ts
+  - apps/admin/src/api/tasks.ts
+  - apps/web-telegram/vite.config.ts
 runner: any
 executor: sonnet-5.5
 effort: high
