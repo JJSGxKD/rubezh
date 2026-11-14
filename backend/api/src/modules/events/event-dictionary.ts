@@ -188,6 +188,20 @@ export const EVENT_DICTIONARY = {
     }),
   },
   run_abandoned: { version: 1, payload: runOutcome },
+  // Серверное событие: бот отправил игроку сообщение (tasks/T-0394, Р199).
+  // `format` — как сообщение задумано, `outcome` — чем кончилось: `fallback` —
+  // оформленное не ушло, ушёл простой текст. Игрока в нагрузке нет. Шлёт только
+  // сервер, клиент его не пишет.
+  bot_message_sent: {
+    version: 1,
+    payload: payload({
+      kind: id,
+      format: z.enum(["text", "photo", "rich", "card"]),
+      outcome: z.enum(["sent", "blocked", "failed", "fallback"]),
+      topic: z.enum(["none", "news", "rewards", "support"]),
+      silent: z.boolean(),
+    }),
+  },
   // Серверное событие: бот MAX или VK применил одноразовый код и сервер закрепил
   // (или отклонил) связь игрового аккаунта с аккаунтом площадки (tasks/T-0377,
   // Р188). `result`: `linked` — новая связь, `already` — та же пара уже была,
