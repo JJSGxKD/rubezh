@@ -18,6 +18,8 @@ export const reviewRowSchema = z.object({
   finishedAt: z.string().nullable(),
   /** есть только у держателя права `players.board.restrict` (T-0115) */
   boardMarked: z.boolean().optional(),
+  /** исход перепроверки повтором (T-0319); у забега, которому повтор не назначали, поля нет. Исход читается строкой: он мог появиться на сервере раньше панели */
+  replay: z.object({ verdict: z.string(), divergedTick: z.number().nullable() }).optional(),
 });
 
 export type ReviewRow = z.infer<typeof reviewRowSchema>;
@@ -48,6 +50,7 @@ const REASON_TITLES: Readonly<Record<string, string>> = {
   loadout_level_ahead: "уровень снимка выше уровня аккаунта",
   boost_unpaid: "буст не куплен на этот забег",
   counters_implausible: "счётчики забега не сходятся с ходом боя",
+  replay_mismatch: "повтор забега на сервере разошёлся с записью",
 };
 
 export function reasonTitle(code: string): string {
@@ -73,4 +76,37 @@ export function runsPerPlayer(rows: readonly ReviewRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.accountId, (counts.get(row.accountId) ?? 0) + 1);
   return counts;
+}
+
+/**
+ * Исход перепроверки забега повтором (`GET /runs/:id/replay`) — форма `ReplayView`
+ * сервера (`backend/api/src/modules/runs/run-replay.service.ts`). Исход читается
+ * строкой: сервер мог обновиться раньше панели.
+ */
+const replayedSchema = z.object({ ticks: z.number(), survivalSec: z.number(), level: z.number(), enemiesKilled: z.number(), checksum: z.number() });
+
+export const runReplaySchema = z.object({
+  /** `null` — повтор забегу не назначали */
+  verdict: z.string().nullable(),
+  required: z.boolean(),
+  divergedTick: z.number().nullable(),
+  replayedAt: z.string().nullable(),
+  reason: z.string().nullable(),
+  durationMs: z.number().nullable(),
+  claimed: z.object({ survivalSec: z.number(), level: z.number(), enemiesKilled: z.number() }),
+  replayed: replayedSchema.nullable(),
+  hasProof: z.boolean(),
+  /** кнопка «Повторить снова»: запись жива и повтор сейчас не идёт */
+  canRepeat: z.boolean(),
+});
+
+export type RunReplay = z.infer<typeof runReplaySchema>;
+
+export function fetchRunReplay(api: AdminApi, runId: string): Promise<ApiResult<RunReplay>> {
+  return api.request(`/runs/${encodeURIComponent(runId)}/replay`, { schema: runReplaySchema });
+}
+
+/** «Повторить снова»: сервер ставит задание ещё раз и пишет действие в журнал; ответ — новое состояние. */
+export function repeatRunReplay(api: AdminApi, runId: string): Promise<ApiResult<RunReplay>> {
+  return api.request(`/runs/${encodeURIComponent(runId)}/replay`, { method: "POST", body: {}, schema: runReplaySchema });
 }

@@ -1,5 +1,6 @@
 import type { RunReport } from "../../api/run-report";
-import { formatDateTime } from "../../format";
+import type { RunReplay } from "../../api/review";
+import { formatDateTime, formatNumber } from "../../format";
 import { shortId } from "../players/card-rules";
 
 /**
@@ -134,3 +135,76 @@ export function decisionToast(action: DecisionAction, report: Pick<RunReport, "r
       return ranked ? "Аннулирование отменено, забег в рейтинге" : "Аннулирование отменено";
   }
 }
+
+/**
+ * Перепроверка повтором на сервере (tasks/T-0319): исход словами, тик расхождения
+ * и таблица «заявлено / повтор». Сервер читает те же слова из ключей `replay.*`;
+ * исход новее панели показывается как есть, а не роняет страницу.
+ */
+const REPLAY_VERDICTS: Readonly<Record<string, { tone: BadgeTone; text: string }>> = {
+  pending: { tone: "neutral", text: "ожидает" },
+  match: { tone: "success", text: "совпал" },
+  mismatch: { tone: "danger", text: "разошёлся" },
+  content_mismatch: { tone: "warning", text: "не тот контент (наша сторона)" },
+  not_replayable: { tone: "neutral", text: "запись обрезана, повторить нельзя" },
+  broken: { tone: "warning", text: "повтор не удался (наша сторона)" },
+  timeout: { tone: "warning", text: "не уложился во время (наша сторона)" },
+  no_proof: { tone: "neutral", text: "записи нет" },
+};
+
+export function replayBadge(verdict: string | null): { tone: BadgeTone; text: string } {
+  if (verdict === null) return { tone: "neutral", text: "не назначался" };
+  return REPLAY_VERDICTS[verdict] ?? { tone: "neutral", text: verdict };
+}
+
+/** Тик расхождения; у остальных исходов его нет — расхождение итога с заявленным тика не имеет. */
+export function replayTickText(tick: number | null): string {
+  return tick === null ? "—" : `тик ${formatNumber(tick)}`;
+}
+
+function secondsText(value: number): string {
+  return `${value.toFixed(1).replace(".", ",")} с`;
+}
+
+/** Секунда округляется клиентом в любую сторону — не подлог; тот же допуск у воркера (`CLAIM_SEC_TOLERANCE`). */
+export const REPLAY_SEC_TOLERANCE = 1;
+
+export interface ReplayRow {
+  label: string;
+  claimed: string;
+  replayed: string;
+  /** повтор не сошёлся с заявленным — строка подсвечивается */
+  differs: boolean;
+}
+
+/** Таблица «заявлено / повтор»; повтор не дошёл до итога — справа прочерки, подсвечивать нечего. */
+export function replayRows(replay: Pick<RunReplay, "claimed" | "replayed">): ReplayRow[] {
+  const { claimed, replayed } = replay;
+  return [
+    {
+      label: "Время",
+      claimed: secondsText(claimed.survivalSec),
+      replayed: replayed === null ? "—" : secondsText(replayed.survivalSec),
+      differs: replayed !== null && Math.abs(claimed.survivalSec - replayed.survivalSec) > REPLAY_SEC_TOLERANCE,
+    },
+    { label: "Уровень", claimed: formatNumber(claimed.level), replayed: replayed === null ? "—" : formatNumber(replayed.level), differs: replayed !== null && claimed.level !== replayed.level },
+    {
+      label: "Убийств",
+      claimed: formatNumber(claimed.enemiesKilled),
+      replayed: replayed === null ? "—" : formatNumber(replayed.enemiesKilled),
+      differs: replayed !== null && claimed.enemiesKilled !== replayed.enemiesKilled,
+    },
+  ];
+}
+
+/** Окно «Повторить снова»: что произойдёт, до нажатия. */
+export function replayRepeatChanges(replay: Pick<RunReplay, "verdict">): Change[] {
+  return [
+    { label: "Прежний исход", value: replay.verdict === null ? "повтора не было" : replayBadge(replay.verdict).text },
+    { label: "Исход", value: "сбросится: забег снова ждёт повтора" },
+    { label: "Очередь", value: "задание уйдёт вперёд выборки" },
+    { label: "Журнал действий", value: "запись об этом нажатии" },
+  ];
+}
+
+export const REPLAY_REPEAT_TOAST = "Повтор поставлен в очередь";
