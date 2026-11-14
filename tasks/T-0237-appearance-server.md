@@ -19,6 +19,7 @@ shared:
   - backend/api/src/common/public-identity.ts
   - backend/api/src/modules/runs/runs-view.service.ts
   - backend/api/src/modules/seasons/seasons-view.service.ts
+  - backend/api/src/modules/seasons/dto/seasons.dto.ts
   - backend/api/src/modules/friends/friends.service.ts
   - backend/api/src/modules/achievements/emblems.repository.ts
   - backend/api/src/modules/wipe/wipe-plan.ts
