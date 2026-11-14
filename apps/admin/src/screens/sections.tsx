@@ -39,6 +39,8 @@ import { Loading } from "../ui/kit";
 
 // Витрины компонентов — только при разработке: в сборке условие ложно, и модуль в неё не попадает.
 const DevStands = import.meta.env.DEV ? lazy(() => import("../promo-editor/DevStands")) : null;
+const devScreens: Record<string, (id: string | null) => ReactNode> =
+  DevStands === null ? {} : { dev: (id) => <Suspense fallback={<Loading />}><DevStands id={id} /></Suspense> };
 
 /**
  * Экраны разделов по идентификатору из `SECTIONS` (routes.ts). `id` —
@@ -81,13 +83,5 @@ export const SECTION_SCREENS: Record<string, (id: string | null, tab?: string) =
   partners: (id) => <PartnersScreen id={id} />,
   // Собственный кабинет партнёра; команда смотрит кабинет глазами партнёра из его карточки, а не по адресу.
   cabinet: () => <CabinetScreen partnerId={null} />,
-  ...(DevStands === null
-    ? {}
-    : {
-        dev: (id: string | null) => (
-          <Suspense fallback={<Loading />}>
-            <DevStands id={id} />
-          </Suspense>
-        ),
-      }),
+  ...devScreens,
 };

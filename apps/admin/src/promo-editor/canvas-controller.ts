@@ -1,7 +1,7 @@
 import { Canvas, Textbox, type FabricObject, type IText } from "fabric";
 import { FORMATS, type PromoDoc } from "@bh/promo-kit";
 import { layerToObject, type ObjectContext, type ObjectSpec } from "./fabric-doc";
-import { applySpec, createObject, loadBackground, loadFonts, metaOf, paintBackground, readSpec, signatureOf, type UrlResolver } from "./fabric-objects";
+import { applySpec, createObject, ensureLogos, loadBackground, loadFonts, metaOf, paintBackground, readSpec, signatureOf, type UrlResolver } from "./fabric-objects";
 import { SNAP_SCREEN_PX, snapBox } from "./guides";
 
 /**
@@ -168,7 +168,7 @@ export class CanvasController {
     const { view, raw, ctx, urls } = input;
 
     if (!this.fontsReady) {
-      await loadFonts(view.layers.flatMap((layer) => (layer.type === "text" ? [layer.text] : [])));
+      await Promise.all([loadFonts(view.layers.flatMap((layer) => (layer.type === "text" ? [layer.text] : []))), ensureLogos()]);
       this.fontsReady = true;
       if (token !== this.run || this.disposed) return;
     }

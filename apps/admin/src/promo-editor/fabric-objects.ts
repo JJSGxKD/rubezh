@@ -1,8 +1,6 @@
 /// <reference types="vite/client" />
 import { FORMATS, type PromoDoc } from "@bh/promo-kit";
 import { FabricImage, Rect, Textbox, cache, type FabricObject, type StaticCanvas } from "fabric";
-import rune from "../../../../packages/app-shell/src/design-system/brand/rune.svg?raw";
-import wordmark from "../../../../packages/app-shell/src/design-system/brand/wordmark.svg?raw";
 import { FONT_FAMILIES, coverCrop, type ImageSpec, type ObjectSpec } from "./fabric-doc";
 import { logoImage } from "./logo-svg";
 import { qrImageUrl } from "./qr-svg";
@@ -14,6 +12,34 @@ import { qrImageUrl } from "./qr-svg";
  * на экране. Все решения «что рисовать» — в `fabric-doc.ts`, здесь только
  * Fabric.
  */
+
+/**
+ * Файлы знака игры берутся как есть, по адресу из сборки, а не копией:
+ * `logo.mjs` перерисует знак — и промо подхватит его само. Импортом SVG
+ * панель не пользуется (`country-flag.test.ts`), поэтому адрес и `fetch`.
+ */
+const LOGO_URLS: Record<"full" | "rune", string> = {
+  full: new URL("../../../../packages/app-shell/src/design-system/brand/wordmark.svg", import.meta.url).href,
+  rune: new URL("../../../../packages/app-shell/src/design-system/brand/rune.svg", import.meta.url).href,
+};
+
+/** Разметка знаков после `ensureLogos`; пока её нет, на холсте заглушка. */
+const logoMarkup = new Map<"full" | "rune", string>();
+
+/** Прочитать знаки заранее: `signatureOf` и `createObject` синхронно решают, что рисовать. */
+export async function ensureLogos(): Promise<void> {
+  await Promise.all(
+    (["full", "rune"] as const).map(async (variant) => {
+      if (logoMarkup.has(variant)) return;
+      try {
+        const response = await fetch(LOGO_URLS[variant]);
+        if (response.ok) logoMarkup.set(variant, await response.text());
+      } catch {
+        // Знак не открылся — на холсте заглушка, выгрузка предупредит пустым местом.
+      }
+    }),
+  );
+}
 
 /** Откуда брать адреса картинок: набор команды, фото партнёра (по id слоя). */
 export interface UrlResolver {
@@ -64,7 +90,8 @@ function resolveImage(spec: ImageSpec, urls: UrlResolver): ResolvedImage | null 
       return url === null ? null : { url, size: { width: spec.width, height: spec.height } };
     }
     case "logo": {
-      const image = logoImage(source.variant === "rune" ? rune : wordmark, { width: spec.width, height: spec.height });
+      const markup = logoMarkup.get(source.variant);
+      const image = markup === undefined ? null : logoImage(markup, { width: spec.width, height: spec.height });
       return image === null ? null : { url: image.url, size: { width: image.width, height: image.height } };
     }
   }
