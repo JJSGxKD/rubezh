@@ -549,7 +549,9 @@ describe("знаки у имени в форме (T-0235)", () => {
     expect(targetLabel(emblem())).toBe("—");
     expect(rewardLabel(emblem())).toBe("");
     expect(Object.keys(EMBLEM_TIER_TITLES)).toEqual([...EMBLEM_TIERS]);
-    expect(EMBLEM_TIERS).toEqual(["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"]);
+    expect(EMBLEM_TIERS).toEqual(["common", "uncommon", "rare", "epic", "legendary", "mythic", "team", "partner"]);
+    expect(EMBLEM_TIER_TITLES.team).toBe("Команда");
+    expect(EMBLEM_TIER_TITLES.partner).toBe("Партнёр");
   });
 
   it("знаки статуса и сезона лежат среди достижений, в конце по месту", () => {
