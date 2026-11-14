@@ -3,8 +3,8 @@ id: T-0274
 title: Редактор промо на Fabric.js — холст, слои, текст, картинки, QR, отмена и выгрузка PNG/JPEG
 epic: E7
 priority: P2
-status: ready
-owner:
+status: in-progress
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0272, T-0218]
