@@ -3,7 +3,7 @@ id: T-0237
 title: Облики-архетипы — сервер: каталог, кто чем владеет, выбор облика и аватара, облик в списках
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
