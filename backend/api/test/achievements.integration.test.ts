@@ -59,7 +59,7 @@ const HOUR = 3_600_000;
 const STAMP = String(Date.now());
 
 /** Строки статусных и сезонных знаков (T-0235): они тоже в витрине, но целей, наград и престижа у них нет. */
-const EMBLEM_ROWS = 7;
+const EMBLEM_ROWS = 8;
 
 /** Девять существующих достижений: цель и награда не меняются миграцией. */
 const OLD: Readonly<Record<string, { target: number; coins: number; gems: number; title: string }>> = {

@@ -35,8 +35,9 @@ import {
  * каталог заданий. Без базы: живые запросы — в `emblems.integration.test.ts`.
  */
 
-const NOTHING: StatusState = { vipActive: false, testerAt: null, supporterAt: null, hasRole: false };
+const NOTHING: StatusState = { vipActive: false, testerAt: null, supporterAt: null, hasRole: false, partnerActive: false };
 const WHEN = new Date(Date.UTC(2026, 9, 24, 12));
+const EVERYTHING: StatusState = { vipActive: true, testerAt: WHEN, supporterAt: WHEN, hasRole: true, partnerActive: true };
 
 describe("статусные знаки: кто держит", () => {
   it("VIP активен — emb_vip; истёк — нет", () => {
@@ -57,13 +58,22 @@ describe("статусные знаки: кто держит", () => {
     expect(heldStatus({ ...NOTHING, hasRole: true })).toEqual(new Set(["emb_team"]));
   });
 
-  it("ничего нет — пусто; всё есть — четыре знака", () => {
+  it("активный партнёр с кабинетом — emb_partner, и только он: «Команды» ему этот флаг не даёт", () => {
+    expect(heldStatus({ ...NOTHING, partnerActive: true })).toEqual(new Set(["emb_partner"]));
+    expect(heldStatus({ ...NOTHING, partnerActive: false })).toEqual(new Set());
+  });
+
+  it("сотрудник команды и партнёр в одном аккаунте — оба знака", () => {
+    expect(heldStatus({ ...NOTHING, hasRole: true, partnerActive: true })).toEqual(new Set(["emb_team", "emb_partner"]));
+  });
+
+  it("ничего нет — пусто; всё есть — пять статусных знаков", () => {
     expect(heldStatus(NOTHING)).toEqual(new Set());
-    expect(heldStatus({ vipActive: true, testerAt: WHEN, supporterAt: WHEN, hasRole: true })).toEqual(new Set(["emb_team", "emb_vip", "emb_supporter", "emb_tester"]));
+    expect(heldStatus(EVERYTHING)).toEqual(new Set(["emb_team", "emb_partner", "emb_vip", "emb_supporter", "emb_tester"]));
   });
 
   it("статус не выдаёт сезонных знаков", () => {
-    for (const id of heldStatus({ vipActive: true, testerAt: WHEN, supporterAt: WHEN, hasRole: true })) expect(id.startsWith("emb_season_"), id).toBe(false);
+    for (const id of heldStatus(EVERYTHING)) expect(id.startsWith("emb_season_"), id).toBe(false);
   });
 });
 
@@ -111,8 +121,8 @@ describe("сезонные знаки: пороги 1 / 10 / 100", () => {
 });
 
 describe("знак в списках: выбранный, иначе по умолчанию", () => {
-  it("порядок по умолчанию: Команда, VIP, Меценат, Тестер", () => {
-    expect(STATUS_ORDER).toEqual(["emb_team", "emb_vip", "emb_supporter", "emb_tester"]);
+  it("порядок по умолчанию: Команда, Партнёр, VIP, Меценат, Тестер", () => {
+    expect(STATUS_ORDER).toEqual(["emb_team", "emb_partner", "emb_vip", "emb_supporter", "emb_tester"]);
   });
 
   it("выбран и держится — он", () => {
@@ -139,6 +149,22 @@ describe("знак в списках: выбранный, иначе по умо
     expect(shownEmblem(null, new Set(["emb_vip", "emb_team", "emb_tester"]))).toBe("emb_team");
     expect(shownEmblem(null, new Set(["emb_tester", "emb_vip", "emb_supporter"]))).toBe("emb_vip");
     expect(shownEmblem(null, new Set(["emb_tester", "emb_supporter"]))).toBe("emb_supporter");
+  });
+
+  it("Партнёр важнее VIP, но уступает Команде", () => {
+    expect(shownEmblem(null, new Set(["emb_partner", "emb_vip"]))).toBe("emb_partner");
+    expect(shownEmblem(null, new Set(["emb_vip", "emb_partner", "emb_supporter", "emb_tester"]))).toBe("emb_partner");
+    expect(shownEmblem(null, new Set(["emb_team", "emb_partner"]))).toBe("emb_team");
+  });
+
+  it("выбор сильнее порядка: выбранный VIP остаётся, даже когда держится Партнёр", () => {
+    expect(shownEmblem("emb_vip", new Set(["emb_partner", "emb_vip"]))).toBe("emb_vip");
+    expect(shownEmblem("emb_partner", new Set(["emb_partner", "emb_vip"]))).toBe("emb_partner");
+  });
+
+  it("выбранный Партнёр перестал держаться — первый держимый из порядка по умолчанию", () => {
+    expect(shownEmblem("emb_partner", new Set(["emb_vip", "emb_tester"]))).toBe("emb_vip");
+    expect(shownEmblem("emb_partner", new Set())).toBeNull();
   });
 
   it("по умолчанию берутся только статусные: сезонный и заслуга сами не показываются", () => {
@@ -174,6 +200,15 @@ describe("публичный знак в строке списка", () => {
 
   it("знак «Команда» несёт тон team", () => {
     expect(publicEmblemOf({ taskId: "emb_team", title: "Команда", category: "status", emblemTier: "team" }, null).tier).toBe("team");
+  });
+
+  it("знак «Партнёр» несёт свой тон partner и группу status", () => {
+    expect(publicEmblemOf({ taskId: "emb_partner", title: "Партнёр", category: "status", emblemTier: "partner" }, null)).toStrictEqual({
+      id: "emb_partner",
+      title: "Партнёр",
+      tier: "partner",
+      category: "status",
+    });
   });
 });
 
@@ -216,8 +251,8 @@ describe("каталог заданий: виды status и season", () => {
     expect(isEmblemKind("channel")).toBe(false);
   });
 
-  it("редкость знака — шкала предметов и отдельный тон team", () => {
-    expect([...EMBLEM_TIERS]).toEqual([...ITEM_RARITIES, "team"]);
+  it("редкость знака — шкала предметов и отдельные тона team и partner", () => {
+    expect([...EMBLEM_TIERS]).toEqual([...ITEM_RARITIES, "team", "partner"]);
     expect([...EMBLEM_CATEGORIES]).toEqual(["status", "season"]);
   });
 
@@ -377,9 +412,16 @@ describe("каталог заданий: виды status и season", () => {
     expect(taskDefSchema.safeParse({ ...partner, emblemTier: null }).success).toBe(true);
   });
 
+  it("строка знака «Партнёр» с редкостью partner принимается, неизвестная редкость — нет", () => {
+    expect(accepted({ taskId: "emb_partner", title: "Партнёр", hint: "Быть партнёром игры", emblemTier: "partner" })).toBe(true);
+    expect(accepted({ taskId: "emb_partner", emblemTier: "partners" })).toBe(false);
+    expect(taskDefSchema.safeParse(merit({ emblemTier: "partner" })).success).toBe(true);
+  });
+
   it("тип строки несёт редкость знака", () => {
     const parsed: TaskDef = taskDefSchema.parse(row());
     expect(parsed.emblemTier).toBe("legendary");
     expect(EMBLEM_IDS.vip).toBe("emb_vip");
+    expect(EMBLEM_IDS.partner).toBe("emb_partner");
   });
 });
