@@ -385,15 +385,21 @@ export interface RunEvents {
     toolsTotal: CardTools;
     /** сработает ли переброс прямо сейчас — есть ли чем заменить карточки */
     canReroll: boolean;
+    /**
+     * сработает ли переброс за рекламу прямо сейчас (tasks/T-0199): зарядов переброса нет, право
+     * «раз за забег» не потрачено, есть чем заменить карточки. Есть ли реклама, движок не знает.
+     */
+    canAdReroll: boolean;
     /** карточки заменены на том же уровне (переброс, изгнание), а не набран новый */
     refreshed: boolean;
   };
   /**
    * Игрок применил действие с карточками и оно сработало. `left` — зарядов
    * этого вида осталось, `item` — изгнанный предмет (`weapon:<id>` /
-   * `passive:<id>`), у остальных действий его нет.
+   * `passive:<id>`), у остальных действий его нет. `viaAd` — переброс взят за рекламу,
+   * заряд не списан.
    */
-  cardTool: { kind: keyof CardTools; left: number; level: number; item?: string };
+  cardTool: { kind: keyof CardTools; left: number; level: number; item?: string; viaAd?: true };
   /** выпал сундук: `index` с нуля, `size` — сколько улучшений в нём */
   chestFound: { index: number; size: ChestSize; source: ChestSource; elapsedSec: number };
   /**
@@ -739,6 +745,11 @@ export interface RunSession {
   chooseUpgrade(optionId: string): void;
   /** заменить все карточки на новые; без заряда или без альтернатив — ничего */
   rerollOffers(): void;
+  /**
+   * переброс за рекламу: оболочка зовёт его только после того, как сервер записал показ
+   * (tasks/T-0199); без зарядов, один раз за забег, иначе — ничего
+   */
+  rerollOffersViaAd(): void;
   /** взять уровень без улучшения за долю опыта до следующего */
   skipOffers(): void;
   /** убрать предмет карточки из забега насовсем; лечение изгнать нельзя */

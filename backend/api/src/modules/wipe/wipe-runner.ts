@@ -132,6 +132,7 @@ export async function runWipe(prisma: PrismaClient, now: Date, deleter: Deleter 
 export const WIPE_LOCK_TABLES: readonly string[] = [
   "run_ad_continue",
   "run_gem_continue",
+  "run_ad_reroll",
   "run_proof",
   "run_reward",
   "run_boost",
@@ -189,6 +190,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.runAdContinue.deleteMany({});
     case "RunGemContinue":
       return await tx.runGemContinue.deleteMany({});
+    case "RunAdReroll":
+      return await tx.runAdReroll.deleteMany({});
     case "RunProof":
       return await tx.runProof.deleteMany({});
     case "RunReward":

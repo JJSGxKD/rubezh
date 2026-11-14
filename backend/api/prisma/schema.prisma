@@ -266,6 +266,7 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  adRerolls        RunAdReroll[]
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
@@ -521,6 +522,7 @@ model Run {
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
+  adRerolls    RunAdReroll[]
   gemContinues RunGemContinue[]
   proof        RunProof?
 
@@ -1843,6 +1845,8 @@ enum AdPlace {
   run_double
   task
   interstitial
+  /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
+  card_reroll
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -3444,6 +3448,28 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Переброс карточек за рекламу (T-0199)
+
+/// Переброс карточек за рекламу (docs/35-stage4-plan.md Р133): один на забег, выданный по сессии показа места
+/// `card_reroll` — досмотренной или пропуску VIP. Забег — хозяин места, как у второго шанса; итог сверяется с этой
+/// книгой: заявленный рекламный переброс без строки отклоняет забег. `run_id` — ключ: второй переброс на забег не
+/// записывается, а сессия показа уникальна и потому не тратится на два забега.
+model RunAdReroll {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_reroll")
 }
 
 // Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
