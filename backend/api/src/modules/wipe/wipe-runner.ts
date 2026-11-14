@@ -158,6 +158,7 @@ export const WIPE_LOCK_TABLES: readonly string[] = [
   "pass_progress",
   "pass_claim",
   "boost_credit",
+  "codex_entry",
   "purchase",
   "tester_compensation",
 ];
@@ -179,7 +180,7 @@ async function lockTables(tx: Prisma.TransactionClient, timeoutMs: number): Prom
 }
 
 /**
- * Стереть все строки модели плана. Ветка на каждую из 27 стираемых моделей — явная,
+ * Стереть все строки модели плана. Ветка на каждую из 28 стираемых моделей — явная,
  * без обращения к делегату по имени: стирание не должно зависеть от опечатки.
  * Модель, которой тут нет, — отказ; тест проверяет, что ветка есть у каждой модели `WIPE_ORDER`.
  */
@@ -209,6 +210,8 @@ export const deleteAll: Deleter = async (tx, model) => {
       return await tx.taskChannelWatch.deleteMany({});
     case "AchievementFavorite":
       return await tx.achievementFavorite.deleteMany({});
+    case "CodexEntry":
+      return await tx.codexEntry.deleteMany({});
     case "ShowcaseOffer":
       return await tx.showcaseOffer.deleteMany({});
     case "ItemEvent":

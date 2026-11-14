@@ -77,6 +77,7 @@
   "task.kind.evolution_runs": "Получи эволюцию оружия в {count} {target, plural, one {забеге} few {забегах} many {забегах} other {забегах}}",
   "task.kind.friends": "Набери друзей: {count}",
   "task.kind.account_level": "Дорасти до {count} уровня аккаунта",
+  "task.kind.codex_percent": "Открой {target}% записей в кодексе врагов",
   "botMention.title": "Юзернейм бота",
   "botMention.name.title": "Юзернейм бота в имени",
   "botMention.name.hint": "Впиши {bot} в имя своего профиля. Награда — за каждые игровые сутки, пока он там стоит.",

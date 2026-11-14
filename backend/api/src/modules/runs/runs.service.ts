@@ -21,7 +21,7 @@ import { RunAdRerollService } from "./run-ad-reroll.service.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
 import { detailsOf } from "./run-details.js";
-import { RunsHooks } from "./runs-hooks.js";
+import { RunsHooks, enemiesSeenOf } from "./runs-hooks.js";
 import { RunNotFoundError } from "./runs-view.service.js";
 
 /**
@@ -232,6 +232,7 @@ export class RunsService {
       xpCollected: run.stats?.xpCollected ?? null,
       // Неправдоподобные счётчики в задания и достижения не идут.
       counters: judged.reasons.includes("counters_implausible") ? null : counters,
+      enemiesSeen: enemiesSeenOf(run.stats),
       deathCause: run.deathCause,
       cheats: run.cheats,
       continues: run.continues.length,
