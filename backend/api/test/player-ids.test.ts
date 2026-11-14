@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { canCheckUserId } from "../src/modules/bot-mention/bot-mention-rules.js";
 import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 describe("уникальный platformUserId для тестов", () => {
@@ -7,10 +8,11 @@ describe("уникальный platformUserId для тестов", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("строка из 16 цифр без ведущего нуля: укладывается в platform_user_id и не пересекается с короткими id тестов", () => {
+  it("строка из 15 цифр без ведущего нуля: сервер пускает её к площадке, она укладывается в platform_user_id и не пересекается с короткими id тестов", () => {
     for (let i = 0; i < 1_000; i++) {
       const id = uniquePlatformUserId();
-      expect(id).toMatch(/^[1-9]\d{15}$/u);
+      expect(id).toMatch(/^[1-9]\d{14}$/u);
+      expect(canCheckUserId(id)).toBe(true);
       expect(id.length).toBeLessThanOrEqual(32);
     }
   });
