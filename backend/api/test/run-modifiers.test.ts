@@ -131,8 +131,8 @@ describe("словарь событий: модификатор забега", (
   it("run_started: modifier из списка проходит, значение вне списка — нет, старый payload проходит", () => {
     const { payload } = EVENT_DICTIONARY.run_started;
     expect(payload.safeParse(started).success).toBe(true);
-    expect(payload.safeParse({ ...started, modifier: "hurry" }).success).toBe(true);
-    expect(payload.safeParse({ ...started, modifier: "inverse" }).success).toBe(true);
+    // Список словаря — копия `RUN_MODIFIER_IDS`: добавили модификатор и забыли словарь — событие не пройдёт.
+    for (const id of RUN_MODIFIER_IDS) expect(payload.safeParse({ ...started, modifier: id }).success, `модификатора ${id} нет в словаре событий`).toBe(true);
     expect(payload.safeParse({ ...started, modifier: "fast" }).success).toBe(false);
     expect(payload.safeParse({ ...started, modifier: "" }).success).toBe(false);
   });
@@ -176,7 +176,7 @@ describe("приём забега с модификатором", () => {
   });
 
   it("забег с модификатором не идёт в рейтинг: ни места, ни рекорда, доска пуста", async () => {
-    const { me, result, stored } = await played(12, ["inverse"], ["inverse"], { survivalSec: 600, level: 12, enemiesKilled: 1500, startingWeaponId: "knife" });
+    const { me, result, stored } = await played(12, ["inverse"], ["inverse"]);
 
     expect(result).toMatchObject({ recorded: false, verdict: "ok", isNewBest: false, rank: null, bestSurvivalSec: 0 });
     expect(stored?.record?.ranked).toBe(false);

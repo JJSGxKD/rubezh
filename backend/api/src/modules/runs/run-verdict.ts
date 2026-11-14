@@ -27,6 +27,11 @@ import { MAX_WEAPONS } from "./run-rules.js";
  *   честные исключения, поэтому
  *   забег сохраняется, но в рейтинг не идёт и ждёт разбора.
  *
+ * Модификатор забега (T-0122, Р105) добавляет две причины: заявленный, но не
+ * открытый на сервере — отказ (`modifier_locked`), старт и итог назвали разное —
+ * подозрение (`modifier_mismatch`). Честный забег на модификаторе иначе уезжал бы
+ * в `suspicious` по убийствам и уровням, поэтому его пределы шире на таблицу.
+ *
  * Ни то ни другое не выбрасывает забег: он пишется в базу с вердиктом.
  * Ошибиться может и проверка, а данные, выброшенные сегодня, завтра не
  * разобрать.
@@ -66,6 +71,39 @@ export function rubezhWinOf(claim: RubezhClaim | null | undefined, reasons: read
   return rubezhClaimsWin(claim) && !reasons.includes("rubezh_implausible");
 }
 
+/**
+ * Модификаторы забега (`RUN_MODIFIER_IDS` из `shared-types`): сервер пакет не
+ * импортирует, список продублирован, а равенство с ним, с уровнями открытия
+ * (`ACCOUNT_UNLOCKS`) и с множителями награды держит `run-modifiers.test.ts`.
+ */
+export const RUN_MODIFIER_IDS = ["hurry", "inverse"] as const;
+export type RunModifierId = (typeof RUN_MODIFIER_IDS)[number];
+
+export function isRunModifierId(value: unknown): value is RunModifierId {
+  return (RUN_MODIFIER_IDS as readonly unknown[]).includes(value);
+}
+
+/** С какого уровня аккаунта открыт модификатор: копия строк `modifiers` из `unlocks.ts`. */
+export const MODIFIER_UNLOCK_LEVEL: Readonly<Record<RunModifierId, number>> = { hurry: 9, inverse: 12 };
+
+/** Модификаторы, открытые аккаунту этого уровня. Уровень — серверный, из `account_progress`. */
+export function unlockedModifiers(level: number): RunModifierId[] {
+  return RUN_MODIFIER_IDS.filter((id) => level >= MODIFIER_UNLOCK_LEVEL[id]);
+}
+
+/**
+ * Во сколько раз модификатор поднимает пределы `kill_rate` и `level_rate`. На
+ * «Спешке» врагов и опыта больше, поэтому честный забег убивает и качается
+ * быстрее обычного; на «Инверсии» врагов меньше — убийства прежние, а опыта с
+ * врага больше — уровни быстрее. Числа стартовые, калибрует геймдизайнер
+ * вместе с `docs/32-balance.md`; заведены на каждый модификатор: тест полноты
+ * не даёт добавить модификатор без строки.
+ */
+export const MODIFIER_VERDICT_MUL: Readonly<Record<RunModifierId, { kills: number; levels: number }>> = {
+  hurry: { kills: 1.5, levels: 1.6 },
+  inverse: { kills: 1, levels: 1.6 },
+};
+
 export type VerdictReason =
   | "weapons_over_slots"
   | "longer_than_wall_clock"
@@ -88,6 +126,10 @@ export type VerdictReason =
   | "loadout_level_ahead"
   /** буст не куплен на этот забег или возвращён */
   | "boost_unpaid"
+  /** заявленный модификатор не открыт на уровне аккаунта на сервере (T-0122) */
+  | "modifier_locked"
+  /** старт и итог забега назвали разные модификаторы (T-0122) */
+  | "modifier_mismatch"
   /**
    * счётчики итога не сходятся с ходом боя: вердикт не меняет (как
    * `unverified_time`), но счётчики не идут в задания и достижения
@@ -132,6 +174,12 @@ export interface VerdictInput {
   loadout: LoadoutStatus;
   /** заявленные бусты против покупок на забег */
   boosts: BoostStatus;
+  /** модификатор, заявленный итогом (T-0122); нет или `null` — забег без модификатора */
+  modifierId?: string | null | undefined;
+  /** модификаторы, открытые аккаунту по уровню на сервере; не передан — не открыт ни один */
+  unlockedModifiers?: readonly string[] | undefined;
+  /** модификатор из старта: `null` — старт пришёл без него, не передан — старт не дошёл и сверять не с чем */
+  startModifierId?: string | null | undefined;
   /** счётчики итога; `null` — итог без них (старая сборка) */
   counters: RunCounters | null;
   /** рубеж из итога; нет поля — забег до рубежа или итог старой сборки */
@@ -153,8 +201,9 @@ const REJECTING: ReadonlySet<VerdictReason> = new Set([
   "loadout_forged",
   "loadout_level_ahead",
   "boost_unpaid",
+  "modifier_locked",
 ]);
-const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible", "axis_out_of_range"]);
+const SUSPICIOUS: ReadonlySet<VerdictReason> = new Set(["kill_rate", "level_rate", "unknown_content", "underpaid_continue", "loadout_stale", "rubezh_implausible", "axis_out_of_range", "modifier_mismatch"]);
 
 export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdict {
   const reasons: VerdictReason[] = [];
@@ -171,11 +220,13 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   // Темп считается от длины забега, но не короче минуты для уровней: первые
   // уровни приходят за полминуты, и короткий забег иначе выглядел бы
   // невозможным. Для убийств хватает секунды — делить на ноль нельзя.
+  // Заявленный известный модификатор поднимает оба предела на свою таблицу.
+  const modifier = isRunModifierId(input.modifierId) ? MODIFIER_VERDICT_MUL[input.modifierId] : null;
   const killsPerSec = input.enemiesKilled / Math.max(input.survivalSec, 1);
-  if (killsPerSec > limits.maxKillsPerSec) reasons.push("kill_rate");
+  if (killsPerSec > limits.maxKillsPerSec * (modifier?.kills ?? 1)) reasons.push("kill_rate");
 
   const levelsPerMin = input.level / Math.max(input.survivalSec / 60, 1);
-  if (levelsPerMin > limits.maxLevelsPerMin) reasons.push("level_rate");
+  if (levelsPerMin > limits.maxLevelsPerMin * (modifier?.levels ?? 1)) reasons.push("level_rate");
 
   // Пустой список — проверка выключена: сборку, не внесённую в список, иначе
   // приняли бы за чужую просто потому, что список забыли заполнить.
@@ -191,6 +242,11 @@ export function judgeRun(input: VerdictInput, limits: AppConfig["runs"]): Verdic
   if (input.loadout === "stale") reasons.push("loadout_stale");
   if (input.loadout === "level_ahead") reasons.push("loadout_level_ahead");
   if (input.boosts === "unpaid") reasons.push("boost_unpaid");
+
+  // Модификатор: открыт ли он на серверном уровне и сошёлся ли итог со стартом. Старт, которого нет, — не причина.
+  const claimed = input.modifierId ?? null;
+  if (claimed !== null && !(input.unlockedModifiers ?? []).includes(claimed)) reasons.push("modifier_locked");
+  if (input.startModifierId !== undefined && input.startModifierId !== claimed) reasons.push("modifier_mismatch");
 
   // Ни отказ, ни подозрение: рейтинг на счётчиках не строится, и ложное
   // срабатывание не должно выбивать честный забег из него.
