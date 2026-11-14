@@ -3,7 +3,7 @@ id: T-0122
 title: Модификаторы забега: проверка и награда ×1,25 на сервере, без рейтинга
 epic: E10
 priority: P1
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead2-19
 size: M
