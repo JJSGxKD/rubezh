@@ -11,6 +11,7 @@ import { NameRulesCache } from "../src/modules/name-rules/name-rules-cache.servi
 import { PrismaNameRulesRepository, loadNameRuleSet, type StoredNameRule } from "../src/modules/name-rules/name-rules.repository.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Счётчики срабатываний правил имён на живых Postgres и Redis (tasks/T-0340):
@@ -39,7 +40,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("счётчики ср�
   const ruleIds: string[] = [];
   const accountIds: string[] = [];
 
-  const newUserId = (): string => String(500_000_000 + Math.floor(Math.random() * 400_000_000));
+  const newUserId = (): string => uniquePlatformUserId();
 
   async function addRule(category: StoredNameRule["category"], kind: StoredNameRule["kind"], pattern: string): Promise<StoredNameRule> {
     const at = new Date();

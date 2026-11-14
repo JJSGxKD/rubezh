@@ -46,6 +46,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Награды числами в панели (tasks/T-0310; docs/19-content-admin.md §6). Первая
@@ -360,7 +361,7 @@ describe.skipIf(DATABASE_URL === "")("награды в панели на жив
       new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds, new NotificationsService(new PrismaNotificationsRepository(prisma))),
       ctx.settings,
     );
-    const player = (await accounts.upsert({ platform: "telegram", platformUserId: String(740_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Награждаемый", username: null }, Date.now())).accountId;
+    const player = (await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Награждаемый", username: null }, Date.now())).accountId;
     const job = (): RewardJob => ({
       runId: randomUUID(),
       accountId: player,
@@ -407,7 +408,7 @@ describe.skipIf(DATABASE_URL === "")("награды в панели на жив
       new ItemsService(new PrismaItemsRepository(prisma), wallet, config, cryptoSeeds, new NotificationsService(new PrismaNotificationsRepository(prisma))),
       ctx.settings,
     );
-    const player = (await new PrismaAccountRepository(prisma).upsert({ platform: "telegram", platformUserId: String(750_000_000 + Math.floor(Math.random() * 9_000_000)), displayName: "Порог", username: null }, Date.now())).accountId;
+    const player = (await new PrismaAccountRepository(prisma).upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Порог", username: null }, Date.now())).accountId;
     const short = (): RewardJob => ({ runId: randomUUID(), accountId: player, difficulty: "easy", survivalSec: 45, enemiesKilled: 0, level: 1, cheats: false, verdict: "ok", finishedAt: new Date().toISOString() });
     expect((await rewards.grant(short())).skipped).toBeNull();
 

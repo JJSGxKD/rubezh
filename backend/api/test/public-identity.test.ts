@@ -30,6 +30,7 @@ import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survi
 import { memoryNotifications } from "./helpers/memory-notifications.js";
 import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Один порт знака у имени для строк списков (tasks/T-0240, docs/35-stage4-plan.md Р149):
@@ -169,7 +170,7 @@ describe("рейтинг", () => {
   }
 
   async function player(survivalSec: number): Promise<AccountRef> {
-    const account = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: "Игрок", username: null, photoUrl: null }, Date.now());
+    const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Игрок", username: null, photoUrl: null }, Date.now());
     const ref = { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
     await service.finish(ref, finish(survivalSec));
     return ref;

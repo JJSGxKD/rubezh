@@ -23,6 +23,7 @@ import { SETTINGS } from "../src/modules/settings/setting-catalog.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Лента на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2;
@@ -110,7 +111,7 @@ describe.skipIf(!live)("лента событий на живых Postgres и Re
 
   async function account(name = "Игрок"): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(700_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null },
       Date.now(),
     );
     return created.accountId;

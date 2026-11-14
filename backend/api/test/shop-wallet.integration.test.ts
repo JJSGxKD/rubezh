@@ -10,6 +10,7 @@ import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Каталог магазина и настоящий кошелёк на живом Postgres (адрес —
@@ -39,7 +40,7 @@ describe.skipIf(DATABASE_URL === "")("каталог магазина и кош�
 
   it("каждый товар каталога выдаётся настоящим кошельком, и повтор не удваивает", async () => {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(730_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Магазин", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Магазин", username: null },
       Date.now(),
     );
     const accountId = created.accountId;

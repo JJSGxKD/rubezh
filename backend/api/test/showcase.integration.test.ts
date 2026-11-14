@@ -19,6 +19,7 @@ import { WalletService } from "../src/modules/wallet/wallet.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Витрина на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -41,7 +42,7 @@ describe.skipIf(DATABASE_URL === "")("витрина на живом Postgres", 
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(830_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Витрина", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Витрина", username: null },
       Date.now(),
     );
     return created.accountId;

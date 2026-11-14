@@ -13,6 +13,7 @@ import { PrismaSessionsRepository } from "../src/modules/attribution/sessions.re
 import { PrismaAccountRepository } from "../src/modules/auth/account.repository.js";
 import { newClickId, newLinkCode } from "../src/modules/links/link-code.js";
 import { PrismaLinksRepository } from "../src/modules/links/links.repository.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Покупки и возврат на следующий день в постбэках на живом Postgres (tasks/T-0071, docs/35-stage4-plan.md
@@ -139,7 +140,7 @@ describe.skipIf(DATABASE_URL === "")("возврат на следующий д�
     });
     const launchedAt = new Date(clickAt.getTime() + 30_000);
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(5_000_000_000 + Math.floor(Math.random() * 900_000_000)), displayName: "Из рекламы", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Из рекламы", username: null, photoUrl: null },
       (patch.createdAt ?? launchedAt).getTime(),
     );
     if (patch.team === true) await prisma.accountRole.create({ data: { accountId: account.accountId, role: "marketer" } });
@@ -150,7 +151,7 @@ describe.skipIf(DATABASE_URL === "")("возврат на следующий д�
   /** Новичок по прямой ссылке `l-<код>`: клика нет. */
   async function direct(code: string, at: Date) {
     const account = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(5_000_000_000 + Math.floor(Math.random() * 900_000_000)), displayName: "По прямой", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "По прямой", username: null, photoUrl: null },
       at.getTime(),
     );
     await launch(account.accountId, "link", `l-${code}`, code, at);

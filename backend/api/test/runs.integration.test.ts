@@ -11,6 +11,7 @@ import { ALL_BOARDS, COMMON_ONLY, RedisLeaderboardStore } from "../src/modules/r
 import { PrismaRunsRepository, type RunFinishRecord } from "../src/modules/runs/runs.repository.js";
 import { secondsScore } from "./helpers/memory-runs.js";
 import { redisDatabase } from "./helpers/redis-database.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Забеги на настоящих Postgres и Redis (docs/17-testing-strategy.md §4.2).
@@ -39,7 +40,7 @@ describe.skipIf(!live)("забеги на живых Postgres и Redis", () => {
 
   async function account(name = "Дым"): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(900_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: name, username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null },
       Date.now(),
     );
     return created.accountId;

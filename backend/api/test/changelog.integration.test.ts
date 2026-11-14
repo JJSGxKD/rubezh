@@ -12,6 +12,7 @@ import { RolesService } from "../src/modules/roles/roles.service.js";
 import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 // Р125: журнал скрыт у игроков константой. Тест проверяет механику раздачи,
 // поэтому по умолчанию журнал «открыт»; скрытый режим — отдельный кейс.
@@ -50,7 +51,7 @@ describe.skipIf(DATABASE_URL === "")("журнал обновлений на ж�
   const version = (): string => `${String(1000 + Math.floor(Math.random() * 9000))}.${String(Math.floor(Math.random() * 1000))}.0`;
 
   async function account(platform: "telegram" | "web", seenAt = Date.now()): Promise<string> {
-    const created = await accounts.upsert({ platform, platformUserId: String(880_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Журнал", username: null }, seenAt);
+    const created = await accounts.upsert({ platform, platformUserId: uniquePlatformUserId(), displayName: "Журнал", username: null }, seenAt);
     return created.accountId;
   }
 

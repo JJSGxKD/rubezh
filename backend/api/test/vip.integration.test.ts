@@ -20,6 +20,7 @@ import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { switchesOf } from "./helpers/notify-targets.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * VIP на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -81,7 +82,7 @@ describe.skipIf(DATABASE_URL === "")("VIP на живом Postgres", () => {
   let vip: PrismaVipRepository;
 
   async function account(): Promise<string> {
-    const platformUserId = String(970_000_000 + Math.floor(Math.random() * 20_000_000));
+    const platformUserId = uniquePlatformUserId();
     return (await accounts.upsert({ platform: "telegram", platformUserId, displayName: "VIP", username: null }, Date.now())).accountId;
   }
 

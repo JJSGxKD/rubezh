@@ -24,6 +24,7 @@ import { signInitData } from "./helpers/init-data.js";
 import { MemoryRefreshStore } from "./helpers/memory-auth.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Автоисточники и сводка незнакомых ключей на живом Postgres (Р116, T-0179; адрес —
@@ -91,7 +92,7 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
   const launch = (startParam: string | null, at = new Date()) => ({ startParam, platform: "telegram" as const, startedAt: at.toISOString() });
 
   async function account(): Promise<string> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e12)), displayName: "Новичок", username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Новичок", username: null, photoUrl: null }, Date.now());
     return created.accountId;
   }
 
@@ -339,8 +340,8 @@ describe.skipIf(DATABASE_URL === "")("автоисточники на живом
       recorder.onModuleInit();
       const auth = new AuthService(config, accounts, new MemoryRefreshStore(), hooks, launchVerifiersFor(config));
       const key = `src-b${run}_cmp-oct`;
-      const botUser = String(Math.floor(Math.random() * 1e12));
-      const appUser = Math.floor(Math.random() * 1e9) + 1_000_000_000;
+      const botUser = uniquePlatformUserId();
+      const appUser = Number(uniquePlatformUserId());
 
       await auth.enterChannel({ platform: "telegram", platformUserId: botUser, displayName: "Из бота", username: null, startParam: `CMP-oct_SRC-B${run.toUpperCase()}` });
       await auth.loginWithLaunch(

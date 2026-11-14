@@ -15,6 +15,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Компенсация за сбой оплаты на настоящем Postgres (tasks/T-0435,
@@ -27,7 +28,7 @@ import { testPrisma } from "./helpers/test-prisma.js";
  */
 
 const DATABASE_URL = process.env.TEST_DATABASE_URL ?? "";
-const OWNER_ID = String(790_000_000 + Math.floor(Math.random() * 9_000_000));
+const OWNER_ID = uniquePlatformUserId();
 const NOTE = "Сбой оплаты: товар не пришёл";
 const NOW = new Date();
 
@@ -86,7 +87,7 @@ describe.skipIf(DATABASE_URL === "")("компенсация за сбой оп�
     const arrival = (platformUserId: string, name: string) => ({ platform: "telegram" as const, platformUserId, displayName: name, username: null, photoUrl: null });
     const ownerAccount = await accounts.upsert(arrival(OWNER_ID, "Владелец"), Date.now());
     owner = { accountId: ownerAccount.accountId, platform: "telegram", platformUserId: OWNER_ID };
-    playerId = (await accounts.upsert(arrival(String(780_000_000 + Math.floor(Math.random() * 9_000_000)), "Пострадавший"), Date.now())).accountId;
+    playerId = (await accounts.upsert(arrival(uniquePlatformUserId(), "Пострадавший"), Date.now())).accountId;
 
     rolesRepository = new MemoryRolesRepository();
     const roles = new RolesService(config, rolesRepository, accounts);

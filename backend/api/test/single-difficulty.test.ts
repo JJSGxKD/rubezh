@@ -23,6 +23,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, MemoryRunsRepository, ratingRestrictions, survivalScorer } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Одна сложность на сервере (Р126, tasks/T-0191): рейтинг и сезоны считают
@@ -39,7 +40,7 @@ const HOUR = 3_600_000;
 const AFTER_MS = SINCE_MS + 3 * HOUR;
 
 function account(): AccountRef {
-  return { accountId: randomUUID(), platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)) };
+  return { accountId: randomUUID(), platform: "telegram", platformUserId: uniquePlatformUserId() };
 }
 
 function runOf(difficultyId: Difficulty, patch: Partial<RunFinish> = {}): RunFinish {
@@ -112,7 +113,7 @@ function world(since: number | null = 20261026) {
   const service = new RunsService(config(), runs, board, roles, hooks, new RunContinues(), new RunLoadouts(), rating.rating, undefined, survivalScorer());
   const view = new RunsViewService(runs, board, new RunExtras(), rating.rating, new RunPrestige());
   const player = async (name: string): Promise<AccountRef> => {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };
   };
   return { runs, board, settings, rating, rolesRepository, hooks, recorded, service, view, player };

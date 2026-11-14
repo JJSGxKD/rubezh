@@ -7,6 +7,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { ShopChoice } from "../src/modules/shop/shop-choice.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * «Выбор игроков» на живых Postgres и Redis (docs/17-testing-strategy.md
@@ -29,7 +30,7 @@ describe.skipIf(!live)("выбор игроков на живых Postgres и Re
   const cacheKey = `test:shop-choice:${randomUUID()}`;
 
   async function player(): Promise<string> {
-    const platformUserId = String(950_000_000 + Math.floor(Math.random() * 30_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Покупатель", username: null }, Date.now());
     return created.accountId;
   }

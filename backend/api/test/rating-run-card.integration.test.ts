@@ -19,6 +19,7 @@ import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { MemoryLeaderboardStore, ratingRestrictions } from "./helpers/memory-runs.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Карточка рейтингового забега на настоящем Postgres (tasks/T-0297). Адрес —
@@ -38,7 +39,7 @@ describe.skipIf(!live)("карточка забега на живом Postgres",
   const memory = new MemoryRestrictionsRepository();
 
   async function account(name = "Дым"): Promise<AccountRef> {
-    const platformUserId = String(900_000_000 + Math.floor(Math.random() * 90_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: name, username: "hidden_name", photoUrl: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId };
   }

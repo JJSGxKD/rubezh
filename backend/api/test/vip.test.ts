@@ -40,6 +40,7 @@ import { MemoryRestrictionsRepository, restrictionsGate } from "./helpers/memory
 import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { gameDay, MemoryVipRepository } from "./helpers/memory-vip.js";
 import { switchesOf } from "./helpers/notify-targets.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * VIP (docs/35-stage4-plan.md §3.6, Р20, Р26, Р44; WP10): оплата — период с
@@ -55,7 +56,7 @@ function config(patch: Record<string, string> = {}): AppConfig {
 }
 
 function player(platform: AccountRef["platform"] = "telegram"): AccountRef {
-  return { accountId: randomUUID(), platform, platformUserId: String(555_000_000 + Math.floor(Math.random() * 1_000_000)) };
+  return { accountId: randomUUID(), platform, platformUserId: uniquePlatformUserId() };
 }
 
 class FakeWallet {

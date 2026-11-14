@@ -5,6 +5,7 @@ import { PrismaAccountRepository } from "../src/modules/auth/account.repository.
 import { PaymentCheckoutMarks } from "../src/modules/payments/payment-checkout-marks.js";
 import { PaymentFeedSources } from "../src/modules/payments/payment-feed-sources.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Отметка предварительной проверки на настоящем Postgres (tasks/T-0430,
@@ -45,7 +46,7 @@ describe.skipIf(DATABASE_URL === "")("отметка предварительн�
   beforeAll(async () => {
     prisma = testPrisma(DATABASE_URL, 4);
     const accounts = new PrismaAccountRepository(prisma);
-    const arrival = { platform: "telegram" as const, platformUserId: String(800_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Стрелок", username: null, photoUrl: null };
+    const arrival = { platform: "telegram" as const, platformUserId: uniquePlatformUserId(), displayName: "Стрелок", username: null, photoUrl: null };
     accountId = (await accounts.upsert(arrival, Date.now())).accountId;
     await wipeWindow();
     marks = new PaymentCheckoutMarks(prisma, new PaymentFeedSources());

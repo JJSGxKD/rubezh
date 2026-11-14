@@ -12,6 +12,7 @@ import { PrismaCompensationRepository } from "../src/modules/wipe/compensation.r
 import { CompensationNotFoundError, CompensationService } from "../src/modules/wipe/compensation.service.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Выдача компенсации на живом Postgres и настоящем кошельке (docs/17-testing-strategy.md
@@ -31,7 +32,7 @@ describe.skipIf(DATABASE_URL === "")("компенсация после вайп
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(740_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Тестер", username: null, photoUrl: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Тестер", username: null, photoUrl: null },
       Date.now(),
     );
     createdAccounts.push(created.accountId);

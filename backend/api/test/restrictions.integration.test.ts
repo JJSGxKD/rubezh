@@ -13,6 +13,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Ограничения на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -77,7 +78,7 @@ describe.skipIf(DATABASE_URL === "")("ограничения на живом Pos
 
   async function person(): Promise<AccountRef> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(930_000_000 + Math.floor(Math.random() * 60_000_000)), displayName: "Ограничения", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Ограничения", username: null },
       Date.now(),
     );
     return { accountId: created.accountId, platform: created.platform, platformUserId: created.platformUserId };

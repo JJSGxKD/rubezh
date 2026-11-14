@@ -51,6 +51,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Облики-архетипы на живых Postgres и Redis (tasks/T-0237, docs/35-stage4-plan.md Р150;
@@ -84,7 +85,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
 
   async function account(): Promise<string> {
     const created = await accounts.upsert(
-      { platform: "telegram", platformUserId: String(970_000_000 + Math.floor(Math.random() * 15_000_000)), displayName: "Облик", username: null },
+      { platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Облик", username: null },
       Date.now(),
     );
     return created.accountId;

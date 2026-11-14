@@ -27,6 +27,7 @@ import { MemoryRunsRepository } from "./helpers/memory-runs.js";
 import { switchesOf } from "./helpers/notify-targets.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Донаты на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -47,7 +48,7 @@ describe.skipIf(DATABASE_URL === "")("донаты на живом Postgres", ()
   let donations: PrismaDonationsRepository;
 
   async function account(): Promise<{ accountId: string; platformUserId: string }> {
-    const platformUserId = String(960_000_000 + Math.floor(Math.random() * 30_000_000));
+    const platformUserId = uniquePlatformUserId();
     const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Донатор", username: null }, Date.now());
     return { accountId: created.accountId, platformUserId };
   }
@@ -319,7 +320,7 @@ describe.skipIf(DATABASE_URL === "" || REDIS_URL === "")("донаты в соб
       expect(lines.lines[0]).not.toContain("ничего — товар не забирается");
 
       const accounts = new PrismaAccountRepository(prisma);
-      const platformUserId = String(960_000_000 + Math.floor(Math.random() * 30_000_000));
+      const platformUserId = uniquePlatformUserId();
       const created = await accounts.upsert({ platform: "telegram", platformUserId, displayName: "Донатор", username: null }, Date.now());
       const token = await signAccessToken({ accountId: created.accountId, platform: "telegram", platformUserId }, secretKey(AUTH_ENV.JWT_ACCESS_SECRET), 900, Date.now());
       const headers = { authorization: `Bearer ${token}` };

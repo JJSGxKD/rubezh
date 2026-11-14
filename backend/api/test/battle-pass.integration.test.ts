@@ -21,6 +21,7 @@ import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Батл-пасс на живом Postgres (docs/17-testing-strategy.md §4.2; адрес —
@@ -49,7 +50,7 @@ describe.skipIf(DATABASE_URL === "")("батл-пасс на живом Postgres
   const seasonMonths: string[] = [];
 
   async function person(): Promise<AccountRef> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(790_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Пасс", username: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Пасс", username: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId: "1" };
   }
 

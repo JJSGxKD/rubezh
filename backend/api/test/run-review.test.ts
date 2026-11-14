@@ -28,6 +28,7 @@ import { AUTH_ENV } from "./helpers/auth-env.js";
 import { MemoryAdminSessionStore } from "./helpers/memory-admin-sessions.js";
 import { MemoryAccountRepository } from "./helpers/memory-auth.js";
 import { MemoryRolesRepository } from "./helpers/memory-roles.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Отчёт забега и решения разбора (Р203, tasks/T-0419): правила переходов,
@@ -170,7 +171,7 @@ let designer: AccountRef;
 let target: AccountRef;
 
 async function player(name: string): Promise<AccountRef> {
-  const account = await accounts.upsert({ platform: "telegram", platformUserId: String(Math.floor(Math.random() * 1e9)), displayName: name, username: null, photoUrl: null }, Date.now());
+  const account = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: name, username: null, photoUrl: null }, Date.now());
   return { accountId: account.accountId, platform: account.platform, platformUserId: account.platformUserId };
 }
 

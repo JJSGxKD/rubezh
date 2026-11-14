@@ -28,6 +28,7 @@ import { MemoryRolesRepository } from "./helpers/memory-roles.js";
 import { redisDatabase } from "./helpers/redis-database.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
+import { uniquePlatformUserId } from "./helpers/player-ids.js";
 
 /**
  * Закрытие месяца батл-пасса на живом Postgres (docs/17-testing-strategy.md
@@ -106,7 +107,7 @@ describe.skipIf(DATABASE_URL === "")("закрытие месяца пасса �
   const usedMonths = new Set<string>();
 
   async function person(): Promise<AccountRef> {
-    const created = await accounts.upsert({ platform: "telegram", platformUserId: String(780_000_000 + Math.floor(Math.random() * 90_000_000)), displayName: "Закрытие", username: null }, Date.now());
+    const created = await accounts.upsert({ platform: "telegram", platformUserId: uniquePlatformUserId(), displayName: "Закрытие", username: null }, Date.now());
     return { accountId: created.accountId, platform: "telegram", platformUserId: "1" };
   }
 
