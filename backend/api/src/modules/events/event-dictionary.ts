@@ -360,6 +360,10 @@ export const EVENT_DICTIONARY = {
   // `auto` — «по умолчанию»; `category` — группа знака, который стал виден у имени (у `auto` без
   // знака её нет). Событие шлёт клиент после ответа сервера; выбор того же знака события не шлёт.
   emblem_shown_changed: { version: 1, payload: payload({ emblem: id, category: z.enum(["status", "season", "merit"]).optional() }) },
+  // Сменил облик героя или кружок аватара (T-0238, docs/35-stage4-plan.md Р150): `appearance` — id
+  // облика, который действует после выбора, `avatarPhoto` — в кружке фото из Telegram. Событие шлёт
+  // клиент после ответа сервера; выбор того же облика и того же кружка события не шлёт.
+  appearance_changed: { version: 1, payload: payload({ appearance: id, avatarPhoto: z.boolean() }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У
