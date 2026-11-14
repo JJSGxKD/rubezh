@@ -13,6 +13,7 @@ import { PrismaEmblemsRepository } from "../src/modules/achievements/emblems.rep
 import { PrismaAchievementsRepository } from "../src/modules/achievements/achievements.repository.js";
 import { EmblemsService } from "../src/modules/achievements/emblems.service.js";
 import { APPEARANCES } from "../src/modules/appearance/appearance-catalog.js";
+import { PrismaAppearanceGrantsRepository } from "../src/modules/appearance/appearance-grants.repository.js";
 import { AppearanceLockedError, AppearanceNotFoundError } from "../src/modules/appearance/appearance-errors.js";
 import type { AppearanceView } from "../src/modules/appearance/appearance-rules.js";
 import { AppearanceController } from "../src/modules/appearance/appearance.controller.js";
@@ -221,7 +222,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
     const wallet = new WalletService(new PrismaWalletRepository(prisma), config, new RolesService(config, new MemoryRolesRepository(), new MemoryAccountRepository()));
     tasks = new TasksService(new PrismaTasksRepository(prisma), wallet, new RunsHooks(), rolesStub, unused, unused, unused);
     emblems = new EmblemsService(tasks, new PrismaEmblemsRepository(prisma), new PrismaAchievementsRepository(prisma), panelSettings());
-    appearance = new AppearanceService(tasks, new PrismaAppearanceRepository(counted), new PrismaEmblemsRepository(counted));
+    appearance = new AppearanceService(tasks, new PrismaAppearanceRepository(counted), new PrismaEmblemsRepository(counted), new PrismaAppearanceGrantsRepository(counted));
   });
 
   afterAll(async () => {
@@ -248,7 +249,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
       const view = await appearance.viewFor(me);
 
       expect(view).toMatchObject({ selected: "keeper", effective: "keeper", avatarPhoto: false });
-      expect(view.items).toHaveLength(10);
+      expect(view.items).toHaveLength(11);
       expect(view.items.filter((item) => item.held).map((item) => item.id)).toEqual(["keeper"]);
     });
 
@@ -472,19 +473,19 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
       expect(withoutEmblem !== undefined && "emblem" in withoutEmblem).toBe(false);
     });
 
-    it("на список из 50 аккаунтов — по одному запросу на источник: пять, а не пять на строку", async () => {
+    it("на список из 50 аккаунтов — по одному запросу на источник: шесть, а не шесть на строку", async () => {
       const ids: string[] = [];
       for (let index = 0; index < 50; index++) ids.push(await account());
       queries = 0;
 
       const marks = await appearance.of(ids);
 
-      expect(queries).toBe(5);
+      expect(queries).toBe(6);
       expect(marks.size).toBe(50);
       expect(marks.get(ids[0] ?? "")).toStrictEqual({ appearance: "keeper" });
     });
 
-    it("рейтинг из 50 строк через порт — один вызов источника обликов и пять запросов", async () => {
+    it("рейтинг из 50 строк через порт — один вызов источника обликов и шесть запросов", async () => {
       const ids: string[] = [];
       for (let index = 0; index < 50; index++) ids.push(await account());
       const spy = vi.spyOn(appearance, "of");
@@ -494,7 +495,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
 
       expect(board.entries).toHaveLength(50);
       expect(spy).toHaveBeenCalledTimes(1);
-      expect(queries).toBe(5);
+      expect(queries).toBe(6);
     });
 
     it("пустой список и не-uuid не ходят в базу; повтор id не удваивает запросы", async () => {
@@ -505,7 +506,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
       const me = await account();
       queries = 0;
       expect((await appearance.of([me, me, me])).size).toBe(1);
-      expect(queries).toBe(5);
+      expect(queries).toBe(6);
     });
   });
 
@@ -541,7 +542,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
       expect((await http.inject({ method: "PUT", url: "/api/v1/appearance", payload: { id: "keeper" } })).statusCode).toBe(401);
     });
 
-    it("GET у новичка: десять обликов, держится один, avatarPhoto false; форма из задачи", async () => {
+    it("GET у новичка: одиннадцать обликов, держится один, avatarPhoto false; форма из задачи", async () => {
       const http = await boot();
       const me = await player();
 
@@ -551,7 +552,7 @@ describe.skipIf(!live)("облики на живых Postgres и Redis", () => {
       const body = response.json<{ data: AppearanceView }>().data;
       expect(Object.keys(body).sort()).toEqual(["avatarPhoto", "effective", "items", "selected"]);
       expect(body.avatarPhoto).toBe(false);
-      expect(body.items).toHaveLength(10);
+      expect(body.items).toHaveLength(11);
       expect(body.items.filter((item) => item.held)).toHaveLength(1);
       expect(Object.keys(body.items[0] ?? {}).sort()).toEqual(["archetype", "held", "id", "rarity", "source"]);
     });

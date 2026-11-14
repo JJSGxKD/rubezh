@@ -23,6 +23,7 @@ import { RunsHooks } from "../src/modules/runs/runs-hooks.js";
 import { EXCHANGE_RESOURCES } from "../src/modules/wallet/wallet-limits.js";
 import { WALLET_RESOURCES, type WalletResource } from "../src/modules/wallet/wallet-types.js";
 import type { RevokeInput, RevokeOutcome } from "../src/modules/wallet/wallet.repository.js";
+import { KEEPER_SET_SKU } from "../src/modules/shop/keeper-set.js";
 import { SHOP_RESOURCES, SHOP_SKUS, TITLE_MAX, contentsOf, shopSkuSchema, skuById } from "../src/modules/shop/shop-catalog.js";
 import { ShopController } from "../src/modules/shop/shop.controller.js";
 import { ShopPromoService } from "../src/modules/shop/shop-promo.service.js";
@@ -190,7 +191,7 @@ describe("каталог магазина", () => {
       if (smaller === undefined || larger === undefined) continue;
       expect((larger.contents.gems ?? 0) / larger.stars).toBeGreaterThanOrEqual((smaller.contents.gems ?? 0) / smaller.stars);
     }
-    expect(SHOP_SKUS.filter((sku) => sku.once).map((sku) => sku.kind)).toEqual(["starter"]);
+    expect(SHOP_SKUS.filter((sku) => sku.once).map((sku) => sku.kind)).toEqual(["starter", "bundle"]);
   });
 });
 
@@ -203,7 +204,8 @@ describe("витрина и счёт", () => {
   it("в Telegram — цены в звёздах из каталога; на площадке без способа оплаты — витрина без цен", async () => {
     const view = await ctx.shop.view(player());
     expect(view.payable).toBe(true);
-    expect(view.items.map((item) => item.sku)).toEqual([...SHOP_SKUS].sort((a, b) => a.sort - b.sort).map((sku) => sku.id));
+    // «Набор хранителя» — только в своём окне после первой победы (`keeper-set.test.ts`).
+    expect(view.items.map((item) => item.sku)).toEqual([...SHOP_SKUS].filter((sku) => sku.id !== KEEPER_SET_SKU).sort((a, b) => a.sort - b.sort).map((sku) => sku.id));
     expect(view.items.find((item) => item.sku === "gems_60")).toMatchObject({ stars: 50, chargedStars: 50, owned: false, contents: [{ resource: "gems", amount: 60 }] });
     expect(view.mode).toBe("live");
 
@@ -416,10 +418,12 @@ describe("подача товара — только правда", () => {
   });
 
   it("первым — под игрока: новичку стартовый, остальным — самоцветы по лучшей цене", () => {
-    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(), equipped: 0 })).toBe("starter");
-    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("gems_700");
-    expect(recommendedSku(SHOP_SKUS, price, { owned: new Set(["starter"]), equipped: 0 })).toBe("gems_700");
-    expect(recommendedSku(SHOP_SKUS, () => null, { owned: new Set(), equipped: 0 })).toBeNull();
+    // Набор хранителя в подбор не входит: у него своя карточка и своё окно, магазин отдаёт подбору постоянные товары.
+    const evergreen = SHOP_SKUS.filter((sku) => sku.id !== KEEPER_SET_SKU);
+    expect(recommendedSku(evergreen, price, { owned: new Set(), equipped: 0 })).toBe("starter");
+    expect(recommendedSku(evergreen, price, { owned: new Set(["starter"]), equipped: 2 })).toBe("gems_700");
+    expect(recommendedSku(evergreen, price, { owned: new Set(["starter"]), equipped: 0 })).toBe("gems_700");
+    expect(recommendedSku(evergreen, () => null, { owned: new Set(), equipped: 0 })).toBeNull();
   });
 
   it("витрина несёт бейджи, выгоду, рекомендацию и ссылку Tribute — только в Telegram и только заданную", async () => {
