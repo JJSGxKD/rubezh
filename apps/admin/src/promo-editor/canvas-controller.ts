@@ -69,6 +69,8 @@ export class CanvasController {
   private lastMarks = "";
   private fontsReady = false;
   private disposed = false;
+  /** текст, из которого только что вышли: Fabric следом шлёт `modified`, а текст уже ушёл своим событием */
+  private leftText: FabricObject | null = null;
 
   constructor(
     element: HTMLCanvasElement,
@@ -115,6 +117,7 @@ export class CanvasController {
 
   private finish(target: FabricObject): void {
     this.events.guides(NO_GUIDES);
+    if (this.leftText === target) return;
     const id = metaOf(target)?.layerId;
     const prev = id === undefined ? undefined : this.rawSpecs.get(id);
     if (id === undefined || prev === undefined) return;
@@ -137,6 +140,11 @@ export class CanvasController {
     const id = metaOf(target)?.layerId;
     const prev = id === undefined ? undefined : this.rawSpecs.get(id);
     if (id === undefined || prev === undefined) return;
+    // `modified` приходит в том же вызове сразу за выходом — после него метка снимается.
+    this.leftText = target;
+    queueMicrotask(() => {
+      if (this.leftText === target) this.leftText = null;
+    });
     this.events.editText(id, target.text, readSpec(target, prev, { text: true }));
   }
 
