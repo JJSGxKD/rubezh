@@ -27,6 +27,7 @@ const loaders = {
   friends: () => import("../screens/meta/friends"),
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
+  emblems: () => import("../screens/meta/emblems"),
   notifications: () => import("../screens/meta/notifications"),
   changelog: () => import("../screens/meta/changelog"),
   guide: () => import("../screens/guide/GuideScreen"),
@@ -70,6 +71,8 @@ export const ProfileScreen = screen(loaders.profile, "ProfileScreen");
 export const LevelScreen = screen(loaders.profile, "LevelScreen");
 // История имущества — тоже из профиля и в его чанке.
 export const HistoryScreen = screen(loaders.profile, "HistoryScreen");
+// Знаки у имени открываются из профиля — своим небольшим чанком: рейтинг и друзья берут из него только чип.
+export const EmblemsScreen = screen(loaders.emblems, "EmblemsScreen");
 export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
 export const ChangelogScreen = screen(loaders.changelog, "ChangelogScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");

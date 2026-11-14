@@ -10,7 +10,7 @@ import type { RateLimit } from "../ingest/rate-limiter.js";
  * перерыва; живой игрок столько не сыграет, а скрипт, долбящий приём,
  * упрётся сюда.
  */
-export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | "gemContinue" | "leaderboard" | "profile" | "proof", RateLimit> = {
+export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | "adReroll" | "gemContinue" | "leaderboard" | "profile" | "proof", RateLimit> = {
   start: { scope: "runs:start", limit: 120, windowSec: 3600 },
   finish: { scope: "runs:finish", limit: 120, windowSec: 3600 },
   // Лист забега — четыре чтения из базы на открытие. Игрок листает десяток
@@ -20,6 +20,9 @@ export const RUNS_LIMITS: Record<"start" | "finish" | "detail" | "adContinue" | 
   // Второй шанс за рекламу: вопрос «можно ли» на каждой смерти и забор по
   // досмотру. Больше двух сотен смертей в час не бывает и у самых быстрых.
   adContinue: { scope: "runs:continue-ad", limit: 240, windowSec: 3600 },
+  // Переброс карточек за рекламу: вопрос «можно ли» раз на забег и один забор.
+  // Забег каждые полминуты — потолок живого игрока, как у приёма итогов.
+  adReroll: { scope: "runs:reroll-ad", limit: 120, windowSec: 3600 },
   // Второй шанс за самоцветы: цена на каждой смерти и сама покупка. Тот же
   // порядок, что у рекламного: честному игроку и двух сотен не нужно.
   gemContinue: { scope: "runs:continue-gems", limit: 240, windowSec: 3600 },

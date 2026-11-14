@@ -8,11 +8,12 @@
 
 /**
  * Места показа (§3.7): второй шанс, крутка колеса, удвоение награды за
- * забег, задания и межстраничная между забегами (О18). Награду за место
+ * забег, переброс карточек выбора улучшения (Р133), задания и межстраничная
+ * между забегами (О18). Награду за место
  * выдаёт его хозяин — колесо, забег, задания, — забирая сессию показа; модуль
  * рекламы лишь ручается, что показ был.
  */
-export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] as const;
+export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 
 /**
@@ -54,6 +55,8 @@ export const PLACE_RULES: Record<AdPlace, PlaceRules> = {
   second_chance: { rewarded: true, pass: true, cooldown: null },
   wheel_spin: { rewarded: true, pass: true, cooldown: { baseMin: 120, factor: 1.5, capMin: 360 } },
   run_double: { rewarded: true, pass: true, cooldown: { baseMin: 5, factor: 1.5, capMin: 60 } },
+  // «Раз за забег» держит хозяин места — модуль забегов (`runs/run-ad-reroll.service.ts`), как у второго шанса.
+  card_reroll: { rewarded: true, pass: true, cooldown: null },
   // Сколько заданий сети и как часто, решает хозяин места — задания — по
   // строке сети из панели (`tasks/network-task-rules.ts`).
   task: { rewarded: true, pass: false, cooldown: null },

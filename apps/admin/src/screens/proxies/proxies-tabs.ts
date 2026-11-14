@@ -4,6 +4,7 @@ import type { Route } from "../../routes";
 export const PROXY_TABS = [
   { id: "xray", title: "Подписки Xray" },
   { id: "traffic", title: "Трафик" },
+  { id: "core", title: "Ядро Xray" },
   { id: "manual", title: "Ручные прокси" },
   { id: "modes", title: "Режимы" },
 ] as const;

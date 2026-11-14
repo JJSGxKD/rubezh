@@ -69,6 +69,8 @@ const finishFields = {
   countInRating: z.optional(z.boolean()),
   continues: z.optional(z.array(z.number())),
   boosts: z.optional(z.array(z.string())),
+  // Переброс за рекламу (T-0199): записи прошлых сборок его не знают — это забег без него.
+  adRerolls: z.optional(z.number()),
   passives: z.optional(z.array(z.object({ id: z.string(), level: z.number() }))),
   stats: z.optional(
     z.object({
@@ -316,6 +318,8 @@ export function toSubmission(result: RunResult, countInRating = false): RunFinis
     continues: [...result.continues],
     // Бусты — те, что применил движок: сервер сверит их с покупкой на забег.
     ...(result.boosts === undefined || result.boosts.length === 0 ? {} : { boosts: [...result.boosts] }),
+    // Рекламный переброс карточек: сервер сверит число с книгой показов — без него забег отклонят.
+    ...(result.adRerolls === undefined || result.adRerolls === 0 ? {} : { adRerolls: result.adRerolls }),
     passives: result.passives.map(({ id, level }) => ({ id, level })),
     stats: {
       damageTaken: Math.round(result.damageTaken),

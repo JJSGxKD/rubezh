@@ -1,5 +1,5 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
-import { emblemOf, PublicIdentity, type PublicMark } from "../../common/public-identity.js";
+import { markOf, PublicIdentity, type PublicMark } from "../../common/public-identity.js";
 import { withTimeout } from "../../common/with-timeout.js";
 import { FRIENDS_REPOSITORY, type FriendsRepository } from "../friends/friends.repository.js";
 import { FRIENDS_RULES } from "../friends/friends-rules.js";
@@ -149,7 +149,7 @@ export class SeasonsViewService {
           photoUrl: row.photoUrl,
           ...(row.tester ? { tester: true as const } : {}),
           ...(row.supporter ? { supporter: true as const } : {}),
-          ...emblemOf(marks.get(entry.accountId)),
+          ...markOf(marks.get(entry.accountId)),
           points: scoring === "points" ? entry.score : row.points,
           // По очкам время — подпись лучшего по очкам забега, по времени — само число таблицы.
           survivalSec: scoring === "points" ? row.survivalSec : entry.score,

@@ -3,8 +3,8 @@ id: T-0394
 title: Оформленное сообщение бота — порт RichDocument с простым текстом, правила звука и тихих часов, bot_message_sent
 epic: E5
 priority: P2
-status: ready
-owner:
+status: done
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0393]
@@ -29,6 +29,7 @@ shared:
   - scripts/test/event-dictionary.test.ts
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - docs/21-diagrams.md
 runner: any
 executor: sonnet-5.5
 effort: high

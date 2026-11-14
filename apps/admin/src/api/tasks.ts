@@ -36,8 +36,13 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   chests_opened: "Сундуки",
   crystals_collected: "Кристаллы",
   evolution_runs: "Эволюции",
+  no_hit_sec: "Без попаданий подряд, с",
+  no_kill_sec: "Без убийств подряд, с",
+  element_kills: "Убийства стихией",
+  weapon_masters: "Мастера оружия (Коллекционер)",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  codex_percent: "Кодекс врагов, %",
   status: "Знак статуса",
   season: "Знак сезона",
   channel: "Подписка на канал",
@@ -61,6 +66,7 @@ export const FILTER_KEYS: Record<string, FilterKey> = {
   element_runs: "element",
   difficulty_runs: "difficulty",
   difficulty_survive_sec: "difficulty",
+  element_kills: "element",
 };
 export const FILTER_LABELS: Record<FilterKey, string> = { weapon: "оружие", element: "стихия", difficulty: "сложность" };
 
@@ -97,7 +103,17 @@ export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, Tas
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
  * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
  */
-export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level"]);
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "weapon_masters", "codex_percent"]);
+
+/**
+ * Виды, у которых цель считает сервер (`tasks/task-rules.ts`, `DYNAMIC_TARGET_KINDS`): «Коллекционер»
+ * требует всех «Мастеров оружия», сколько их включено сейчас. Хранимое число не читается, поэтому форма
+ * показывает подпись вместо поля.
+ */
+export const COMPUTED_TARGET_KINDS: ReadonlySet<string> = new Set(["weapon_masters"]);
+
+/** Подпись цели, которую считает сервер. */
+export const COMPUTED_TARGET_TITLE = "считается сама";
 
 /**
  * Знаки статусов и сезонов у имени (T-0235, `tasks/task-rules.ts`, `EMBLEM_KINDS`): строки каталога без
@@ -120,8 +136,8 @@ export const ALL_CATEGORIES = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] 
 export type AchievementCategory = (typeof ALL_CATEGORIES)[number];
 export const CATEGORY_TITLES: Record<AchievementCategory, string> = { combat: "Бой", collection: "Коллекция", mastery: "Мастерство", friends: "Друзья", status: "Статус", season: "Сезоны" };
 
-/** Редкость знака у имени: шкала предметов и тон `team` для знака «Команда» (как на сервере, `EMBLEM_TIERS`). */
-export const EMBLEM_TIERS = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"] as const;
+/** Редкость знака у имени: шкала предметов и тона `team` («Команда») и `partner` («Партнёр») — как на сервере, `EMBLEM_TIERS`. */
+export const EMBLEM_TIERS = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "team", "partner"] as const;
 export type EmblemTier = (typeof EMBLEM_TIERS)[number];
 export const EMBLEM_TIER_TITLES: Record<EmblemTier, string> = {
   common: "Обычный",
@@ -131,6 +147,7 @@ export const EMBLEM_TIER_TITLES: Record<EmblemTier, string> = {
   legendary: "Легендарный",
   mythic: "Мифический",
   team: "Команда",
+  partner: "Партнёр",
 };
 /** Пусто — у достижения знака нет. */
 export const NO_EMBLEM_TITLE = "Нет знака";
@@ -159,7 +176,7 @@ const CHAT_MAX = 64;
 const URL_MAX = 256;
 
 /** Цели во времени — в секундах: форма подсказывает минуты. */
-export const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec"]);
+export const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec", "no_hit_sec", "no_kill_sec"]);
 
 /** Тот же формат id, что проверяет сервер (`tasks/task-rules.ts`). */
 export const TASK_ID_PATTERN = /^[a-z][a-z0-9_]{1,47}$/;
@@ -477,7 +494,7 @@ function filterProblemOf(task: Pick<TaskDef, "kind" | "filter">): string | null 
 
 /** Поля достижения: те же правила, что у схемы сервера и `CHECK` базы. */
 function achievementProblemOf(task: TaskDef): string | null {
-  if (STATE_KINDS.has(task.kind) && task.period !== "achievement") return "Друзья и уровень аккаунта — только у достижений: срок их не сбросил бы";
+  if (STATE_KINDS.has(task.kind) && task.period !== "achievement") return "Друзья, уровень аккаунта и мастера оружия — только у достижений: срок их не сбросил бы";
   const ladder = task.ladder?.trim() ?? "";
   const hint = task.hint?.trim() ?? "";
   if (!isAchievement(task)) {
@@ -565,6 +582,7 @@ export function rewardLabel(task: Pick<TaskDef, "coins" | "gems" | "shards">): s
 export function targetLabel(task: Pick<TaskDef, "kind" | "target"> & Partial<Pick<TaskDef, "params" | "period">>): string {
   // Знак не выполняют, а держат: цели у него нет.
   if (isEmblemRow(task)) return "—";
+  if (COMPUTED_TARGET_KINDS.has(task.kind)) return COMPUTED_TARGET_TITLE;
   const params = task.params ?? null;
   if (params !== null) {
     const listed = task.kind === CHANNEL_KIND ? (params.platform === undefined ? [] : [params.platform]) : partnerPlatforms(params);

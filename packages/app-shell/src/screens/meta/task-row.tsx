@@ -42,7 +42,7 @@ const ICONS: Partial<Record<string, ReactNode>> = {
  */
 export function goalIcon(task: Pick<TaskItem, "kind" | "filter">): ReactNode {
   const filter = task.filter ?? null;
-  if (task.kind === "element_runs") {
+  if (task.kind === "element_runs" || task.kind === "element_kills") {
     const element = statusElementOf(filter?.element);
     if (element !== null) return <ElementMark element={element} size={22} />;
   }
@@ -62,7 +62,7 @@ function statusElementOf(value: string | undefined): StatusElement | null {
 }
 
 /** Цели во времени считаются в секундах, а читаются минутами. */
-const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec"]);
+const TIME_KINDS: ReadonlySet<string> = new Set(["survive_sec", "best_survival_sec", "no_hit_sec", "no_kill_sec"]);
 
 export function TaskRow(props: {
   index: number;
@@ -233,8 +233,9 @@ export function taskHint(task: TaskItem): string | null {
  * с разрядами, как в полосе прогресса. Незнакомый вид без заголовка — просто
  * число цели.
  */
-export function goalText(task: Pick<TaskItem, "kind" | "target"> & { filter?: TaskItem["filter"] }): string {
+export function goalText(task: Pick<TaskItem, "kind" | "target"> & { filter?: TaskItem["filter"]; value?: number }): string {
   const key = `task.kind.${task.kind}`;
   if (!hasTranslation(key)) return formatNumber(task.target);
-  return t(key, { target: task.target, count: formatNumber(task.target), time: formatCountdown(task.target * 1000), ...goalFilterParams(task) });
+  // `value` — у целей, где текст сам несёт прогресс («Коллекционер»: «6 из 7»).
+  return t(key, { target: task.target, count: formatNumber(task.target), value: formatNumber(task.value ?? 0), time: formatCountdown(task.target * 1000), ...goalFilterParams(task) });
 }

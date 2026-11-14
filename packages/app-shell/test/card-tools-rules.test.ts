@@ -1,6 +1,9 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { UpgradeOption } from "@bh/shared-types";
-import { cardTapAction, toolButtons } from "../src/screens/run/card-tools-rules";
+import { adRerollButton, cardTapAction, toolButtons } from "../src/screens/run/card-tools-rules";
+import { CardToolsBar, type CardToolsBarProps } from "../src/screens/run/CardTools";
 import { boostIcon } from "../src/screens/boost-icons";
 import ruBoosts from "../src/i18n/ru-boosts.json";
 import ruRun from "../src/i18n/ru-run.json";
@@ -65,6 +68,108 @@ describe("кнопки действий", () => {
   });
 });
 
+describe("кнопка переброса за рекламу (tasks/T-0199)", () => {
+  const ready = { kind: "ready", pass: false } as const;
+  const base = { left: tools(0, 0, 0), canAdReroll: true, stage: ready, banishing: false };
+
+  it("зарядов переброса нет, движок обещает переброс, стадия готова — кнопка есть; у VIP — с пометкой пропуска", () => {
+    expect(adRerollButton(base)).toEqual({ kind: "ready", pass: false });
+    expect(adRerollButton({ ...base, stage: { kind: "ready", pass: true } })).toEqual({ kind: "ready", pass: true });
+    // Заряды пропуска и изгнания кнопку не прячут: прячет только заряд переброса.
+    expect(adRerollButton({ ...base, left: tools(0, 2, 1) })).toEqual({ kind: "ready", pass: false });
+  });
+
+  it("пока идёт ролик — кнопка занята", () => {
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: false } })).toEqual({ kind: "busy" });
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: true } })).toEqual({ kind: "busy" });
+  });
+
+  it("есть заряд переброса, движок не обещает переброса, режим изгнания, стадии idle, checking и gone — кнопки нет", () => {
+    expect(adRerollButton({ ...base, left: tools(1, 0, 0) })).toEqual({ kind: "hidden" });
+    expect(adRerollButton({ ...base, canAdReroll: false })).toEqual({ kind: "hidden" });
+    expect(adRerollButton({ ...base, banishing: true })).toEqual({ kind: "hidden" });
+    for (const kind of ["idle", "checking", "gone"] as const) expect(adRerollButton({ ...base, stage: { kind } }), kind).toEqual({ kind: "hidden" });
+    // Идёт ролик, а режим изгнания включён: кнопки в режиме изгнания нет и тогда.
+    expect(adRerollButton({ ...base, stage: { kind: "watching", pass: false }, banishing: true })).toEqual({ kind: "hidden" });
+  });
+});
+
+describe("раскладка кнопки за рекламу (tasks/T-0199)", () => {
+  const noop = (): void => undefined;
+  const row = toolButtons({ left: tools(0, 1, 1), total: tools(1, 1, 1), canReroll: true, offers: cards });
+  const render = (patch: Partial<CardToolsBarProps>): string =>
+    renderToStaticMarkup(createElement(CardToolsBar, { buttons: row, banishing: false, onReroll: noop, onSkip: noop, onToggleBanish: noop, ...patch }));
+  const ad = (patch: Partial<NonNullable<CardToolsBarProps["adReroll"]>> = {}): NonNullable<CardToolsBarProps["adReroll"]> => ({
+    state: { kind: "ready", pass: false },
+    notice: null,
+    onWatch: noop,
+    ...patch,
+  });
+  const count = (html: string, text: string): number => html.split(text).length - 1;
+
+  it("под рядом — кнопка на всю ширину с подписью «Один раз за забег»; в ряду та же кнопка ставится на место серой «Переброс»", () => {
+    const html = render({ adReroll: ad() });
+    expect(count(html, ">Перебросить за рекламу<")).toBe(1);
+    expect(html).toContain("Один раз за забег");
+    // Серая «Переброс ×0» остаётся: ряд не прыгает; на невысоком экране вместо неё в ряд встаёт короткая кнопка.
+    expect(html).toContain(">Переброс<");
+    expect(html).toContain(">За рекламу<");
+    expect(html.indexOf(">За рекламу<")).toBeLessThan(html.indexOf(">Переброс<"));
+    expect(html).toMatch(/hidden[^"]*short:inline-flex/);
+  });
+
+  it("зарядов не было вовсе — ряда нет, кнопка одна под карточками и в ряд не встаёт", () => {
+    const html = render({ buttons: [], adReroll: ad() });
+    expect(count(html, "Перебросить за рекламу</span>")).toBe(1);
+    expect(html).not.toContain(">За рекламу<");
+    expect(html).not.toContain(">Пропуск<");
+  });
+
+  it("VIP — другая подпись и в ряду, и под ним", () => {
+    const html = render({ adReroll: ad({ state: { kind: "ready", pass: true } }) });
+    expect(html).toContain(">Перебросить — VIP, без рекламы<");
+    expect(html).toContain(">VIP, без рекламы<");
+    expect(html).not.toContain(">За рекламу<");
+  });
+
+  it("пока идёт ролик, кнопки отключены и помечены занятыми", () => {
+    const html = render({ buttons: [], adReroll: ad({ state: { kind: "busy" } }) });
+    expect(html).toContain("disabled");
+    expect(html).toContain('aria-busy="true"');
+  });
+
+  it("без поля, в режиме изгнания и со скрытой стадией кнопки нет; ряд прежний", () => {
+    const plain = render({});
+    for (const html of [
+      plain,
+      render({ adReroll: ad({ state: { kind: "hidden" } }) }),
+      render({ banishing: true, adReroll: ad({ state: { kind: "hidden" } }) }),
+    ]) {
+      expect(html).not.toContain("рекламу");
+      expect(html).not.toContain("short:inline-flex");
+    }
+  });
+
+  it("заметка — строкой статуса под кнопкой; на невысоком экране ряд сверху ближе: запаса окна на 360 px — около 13 px", () => {
+    for (const notice of ["closed", "failed", "claim_failed", "restricted"] as const) {
+      const html = render({ adReroll: ad({ notice }) });
+      expect(html, notice).toContain('role="status"');
+      expect(html, notice).toContain(ruRun[`run.tools.rerollAd.notice.${notice}`]);
+      expect(html, notice).toContain("short:mt-1");
+      expect(html, notice).toContain("short:text-xs");
+    }
+    const quiet = render({ adReroll: ad() });
+    expect(quiet).not.toContain('role="status"');
+    expect(quiet).toContain("short:mt-2");
+  });
+
+  it("заметка про закрытые награды видна и без кнопки: кнопка уже ушла, а объяснить нужно", () => {
+    const html = render({ buttons: [], adReroll: ad({ state: { kind: "hidden" }, notice: "restricted" }) });
+    expect(html).toContain(ruRun["run.tools.rerollAd.notice.restricted"]);
+    expect(html).not.toContain(">Перебросить за рекламу<");
+  });
+});
+
 describe("тап по карточке", () => {
   it("обычный режим — выбор", () => {
     expect(cardTapAction("choose", option("weapon_new"))).toBe("choose");
@@ -88,6 +193,15 @@ describe("тексты и значок", () => {
       "run.tools.banish.cancel",
       "run.tools.caption",
       "run.tools.left",
+      "run.tools.rerollAd",
+      "run.tools.rerollAd.short",
+      "run.tools.rerollAd.pass",
+      "run.tools.rerollAd.pass.short",
+      "run.tools.rerollAd.once",
+      "run.tools.rerollAd.notice.closed",
+      "run.tools.rerollAd.notice.failed",
+      "run.tools.rerollAd.notice.claim_failed",
+      "run.tools.rerollAd.notice.restricted",
     ]) {
       expect(ruRun, key).toHaveProperty([key]);
     }

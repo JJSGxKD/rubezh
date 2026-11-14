@@ -133,25 +133,33 @@ export class AchievementsService {
   }
 
   /**
-   * Дописать прогресс «друзья» и «уровень аккаунта». Сбой чтения витрину не роняет:
-   * прогресс остаётся как был, а следующее открытие допишет.
+   * Дописать прогресс «друзья», «уровень аккаунта» и «Мастера оружия» («Коллекционер»).
+   * Сбой чтения витрину не роняет: прогресс остаётся как был, а следующее открытие допишет.
    */
   private async syncState(accountId: string, at: Date): Promise<void> {
     try {
-      const defs = (await this.tasks.achievementDefs()).filter((def) => isStateKind(def.kind));
-      if (defs.length === 0) return;
-      const wants = new Set(defs.map((def) => def.kind));
-      const [friends, level] = await Promise.all([
-        wants.has("friends") ? withTimeout(this.friends.friendCount(accountId), STATE_TIMEOUT_MS, "друзья") : Promise.resolve(0),
-        wants.has("account_level") ? withTimeout(this.levels.view(accountId), STATE_TIMEOUT_MS, "уровень аккаунта").then((progress) => progress.level) : Promise.resolve(0),
-      ]);
-      const deltas = defs.flatMap((def): TaskDelta[] =>
-        isStateKind(def.kind) ? [{ taskId: def.taskId, period: def.period, target: def.target, op: STATE_KINDS[def.kind].op, amount: def.kind === "friends" ? friends : level }] : [],
-      );
-      await this.tasks.applyState(accountId, deltas, at);
+      const all = (await this.tasks.achievementDefs()).filter((def) => isStateKind(def.kind));
+      // Друзья и уровень читаются здесь; остальные состояния дописывают их модули (кодекс — `codex`).
+      const defs = all.filter((def) => def.kind === "friends" || def.kind === "account_level");
+      if (defs.length > 0) await this.syncPlayerState(accountId, defs, at);
+      // «Мастеров» считает сервис заданий — он же дописывает их после каждого забега.
+      if (all.some((def) => def.kind === "weapon_masters")) await this.tasks.syncMasters(accountId, at);
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "achievements", event: "state_sync_failed", accountId, reason: error instanceof Error ? error.message : "unknown" }));
     }
+  }
+
+  /** Друзья и уровень аккаунта: читаются у своих сервисов и пишутся «максимумом». */
+  private async syncPlayerState(accountId: string, defs: readonly TaskDef[], at: Date): Promise<void> {
+    const wants = new Set(defs.map((def) => def.kind));
+    const [friends, level] = await Promise.all([
+      wants.has("friends") ? withTimeout(this.friends.friendCount(accountId), STATE_TIMEOUT_MS, "друзья") : Promise.resolve(0),
+      wants.has("account_level") ? withTimeout(this.levels.view(accountId), STATE_TIMEOUT_MS, "уровень аккаунта").then((progress) => progress.level) : Promise.resolve(0),
+    ]);
+    const deltas = defs.flatMap((def): TaskDelta[] =>
+      isStateKind(def.kind) ? [{ taskId: def.taskId, period: def.period, target: def.target, op: STATE_KINDS[def.kind].op, amount: def.kind === "friends" ? friends : level }] : [],
+    );
+    await this.tasks.applyState(accountId, deltas, at);
   }
 
   /** Статусные и сезонные знаки, которые игрок держит сейчас; без сервиса знаков — никакие. */
