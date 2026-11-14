@@ -71,11 +71,12 @@ export const CATEGORY_IDS = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] as
 export type AchievementCategory = (typeof CATEGORY_IDS)[number];
 
 /**
- * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов и
- * отдельный тон `team` для знака «Команда». Стоит в каталоге и не плавает
- * вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
+ * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов,
+ * отдельный тон `team` для знака «Команда» и отдельный тон `partner` для знака
+ * «Партнёр»: ни то ни другое не заслуга и не покупка. Стоит в каталоге и не
+ * плавает вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
  */
-export const EMBLEM_TIERS = [...ITEM_RARITIES, "team"] as const;
+export const EMBLEM_TIERS = [...ITEM_RARITIES, "team", "partner"] as const;
 export type EmblemTier = (typeof EMBLEM_TIERS)[number];
 
 /**

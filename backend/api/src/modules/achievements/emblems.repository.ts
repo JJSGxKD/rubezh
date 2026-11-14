@@ -4,7 +4,7 @@ import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { MIN_BOARD } from "../seasons/season-rules.js";
 import { ACHIEVEMENT_PERIOD_START } from "../tasks/tasks.repository.js";
-import { EMBLEM_IDS, EXTERNAL_ROLES, SEASON_STEPS } from "./emblem-rules.js";
+import { EMBLEM_IDS, EXTERNAL_ROLES, PARTNER_EMBLEM_STATUS, PARTNER_ROLE, SEASON_STEPS } from "./emblem-rules.js";
 
 /**
  * Хранилище знаков у имени (tasks/T-0235). Каждый запрос берёт список аккаунтов целиком
@@ -22,6 +22,8 @@ export interface AccountEmblemRow {
   supporterAt: Date | null;
   /** есть роль команды (внешние роли не в счёт) */
   hasRole: boolean;
+  /** роль `partner` и карточка партнёра этого аккаунта в статусе `active` */
+  partnerActive: boolean;
   shownEmblemId: string | null;
 }
 
@@ -54,6 +56,7 @@ const statusSchema = z.object({
   supporter_at: z.date().nullable(),
   shown_emblem_id: z.string().nullable(),
   has_role: z.boolean(),
+  partner_active: z.boolean(),
 });
 const vipSchema = z.object({ account_id: z.string(), until: z.date() });
 const standingSchema = z.object({
@@ -74,12 +77,23 @@ export class PrismaEmblemsRepository implements EmblemsRepository {
     if (accountIds.length === 0) return result;
     const rows = await this.prisma.$queryRaw<unknown[]>`
       SELECT a.account_id::text AS account_id, a.tester_at, a.supporter_at, a.shown_emblem_id,
-             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = a.account_id AND r.role::text <> ALL(${[...EXTERNAL_ROLES]}::text[])) AS has_role
+             EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = a.account_id AND r.role::text <> ALL(${[...EXTERNAL_ROLES]}::text[])) AS has_role,
+             EXISTS (
+               SELECT 1 FROM partner p
+               JOIN account_role r ON r.account_id = p.account_id AND r.role::text = ${PARTNER_ROLE}
+               WHERE p.account_id = a.account_id AND p.status = ${PARTNER_EMBLEM_STATUS}
+             ) AS partner_active
       FROM account a
       WHERE a.account_id = ANY(${[...accountIds]}::uuid[])`;
     for (const raw of rows) {
       const row = statusSchema.parse(raw);
-      result.set(row.account_id, { testerAt: row.tester_at, supporterAt: row.supporter_at, hasRole: row.has_role, shownEmblemId: row.shown_emblem_id });
+      result.set(row.account_id, {
+        testerAt: row.tester_at,
+        supporterAt: row.supporter_at,
+        hasRole: row.has_role,
+        partnerActive: row.partner_active,
+        shownEmblemId: row.shown_emblem_id,
+      });
     }
     return result;
   }
@@ -162,9 +176,10 @@ export class PrismaEmblemsRepository implements EmblemsRepository {
 
 /**
  * Держатели статусных и сезонных знаков среди игроков с забегом — кусок прохода редкости
- * (`AchievementsRepository.recomputeRarity`, tasks/T-0106, T-0235). Подставляется в `WITH` после
- * выражения `pop (account_id)` — населения прохода, — и отдаёт строки `(task_id, holders)` по
- * одной на знак. Те же правила, что у `heldStatus` и `heldSeason`; VIP считается на момент прохода.
+ * (`AchievementsRepository.recomputeRarity`, tasks/T-0106, T-0235, T-0480). Подставляется в `WITH`
+ * после выражения `pop (account_id)` — населения прохода, — и отдаёт строки `(task_id, holders)` по
+ * одной на знак: VIP, Тестер, Меценат, Команда, Партнёр и три сезонных. Те же правила, что у
+ * `heldStatus` и `heldSeason`; VIP считается на момент прохода.
  */
 export function emblemHoldersSql(now: Date): Prisma.Sql {
   const [champion, top10, top100] = SEASON_STEPS;
@@ -180,6 +195,13 @@ export function emblemHoldersSql(now: Date): Prisma.Sql {
     UNION ALL
     SELECT ${EMBLEM_IDS.team}::text, count(*)::int
     FROM pop WHERE EXISTS (SELECT 1 FROM account_role r WHERE r.account_id = pop.account_id AND r.role::text <> ALL(${[...EXTERNAL_ROLES]}::text[]))
+    UNION ALL
+    SELECT ${EMBLEM_IDS.partner}::text, count(*)::int
+    FROM pop WHERE EXISTS (
+      SELECT 1 FROM partner p
+      JOIN account_role r ON r.account_id = p.account_id AND r.role::text = ${PARTNER_ROLE}
+      WHERE p.account_id = pop.account_id AND p.status = ${PARTNER_EMBLEM_STATUS}
+    )
     UNION ALL
     SELECT step.id AS task_id, count(*) FILTER (WHERE standing.best_place <= step.max_place)::int AS holders
     FROM (VALUES (${champion.id}::text, ${champion.maxPlace}::int), (${top10.id}::text, ${top10.maxPlace}::int), (${top100.id}::text, ${top100.maxPlace}::int)) AS step (id, max_place)
