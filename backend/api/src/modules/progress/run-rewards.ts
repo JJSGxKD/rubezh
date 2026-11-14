@@ -40,7 +40,7 @@ const JOB_OPTIONS = {
 /** Награда — три-четыре короткие транзакции; больше параллельности упрётся в пул базы. */
 const WORKER_CONCURRENCY = 4;
 
-export type RewardJob = Pick<RecordedRun, "runId" | "accountId" | "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "rubezhCleared"> & { finishedAt: string };
+export type RewardJob = Pick<RecordedRun, "runId" | "accountId" | "difficulty" | "survivalSec" | "enemiesKilled" | "level" | "cheats" | "verdict" | "rubezhCleared" | "modifierId"> & { finishedAt: string };
 
 @Injectable()
 export class RunRewards implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy {
@@ -169,6 +169,8 @@ function jobOf(run: RecordedRun): RewardJob {
     verdict: run.verdict,
     // Задание, поставленное до рубежа, поля не несёт: оно платит как раньше.
     rubezhCleared: run.rubezhCleared === true,
+    // Задание, поставленное до модификаторов, поля не несёт: оно платит как раньше.
+    modifierId: run.modifierId ?? null,
     finishedAt: run.finishedAt.toISOString(),
   };
 }

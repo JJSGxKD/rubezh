@@ -52,6 +52,11 @@ export interface RecordedRun {
    * за неё награда при вердикте `ok` и без читов; поля нет — победы нет.
    */
   rubezhCleared?: boolean;
+  /**
+   * Модификатор забега, как он записан (T-0122): награду множит только вердикт
+   * `ok` без читов. Поля или `null` нет — забег без модификатора.
+   */
+  modifierId?: string | null;
 }
 
 export type RunListener = (run: RecordedRun) => Promise<void>;

@@ -21,6 +21,9 @@ shared:
   - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/30-configuration-map.md
+  - docs/32-balance.md
+  - backend/api/src/modules/runs/runs-hooks.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
   - backend/api/prisma/schema.prisma
   - backend/api/prisma/migrations/**
 runner: any

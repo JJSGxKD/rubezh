@@ -179,8 +179,10 @@ describe("награда за модификатор забега (T-0122)", () 
     const near = { ...RUN, difficulty: "hard" as const, survivalSec: 1_560, enemiesKilled: 2_000 };
     expect(runReward(near).coins).toBeLessThan(MAX_COINS_PER_RUN);
     expect(runReward({ ...near, modifierId: "hurry" }).coins).toBe(MAX_COINS_PER_RUN);
-    const capped = runReward({ ...near, survivalSec: 2_400, enemiesKilled: 9_000, modifierId: "inverse" });
-    expect(capped).toEqual({ coins: MAX_COINS_PER_RUN, xp: MAX_XP_PER_RUN, skipped: null });
+    // Опыт: 745 базы — 1 266 со сложностью, под потолком, а ×1,25 даёт 1 583 и упирается в 1 500.
+    const long = { ...RUN, difficulty: "hard" as const, survivalSec: 2_400, enemiesKilled: 9_000, level: 70 };
+    expect(runReward(long).xp).toBeLessThan(MAX_XP_PER_RUN);
+    expect(runReward({ ...long, modifierId: "inverse" })).toEqual({ coins: MAX_COINS_PER_RUN, xp: MAX_XP_PER_RUN, skipped: null });
   });
 
   it("множители складываются с наградой за победу над стражем до одного округления", () => {

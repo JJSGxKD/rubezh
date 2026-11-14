@@ -14,7 +14,7 @@ import { isPrologueWin } from "./prologue-rules.js";
 import { PrologueService } from "./prologue.service.js";
 import { countersOf } from "./run-counters.js";
 import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js";
-import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
+import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, unlockedModifiers, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
 import { RunAdRerollService } from "./run-ad-reroll.service.js";
@@ -46,6 +46,12 @@ import { RunNotFoundError } from "./runs-view.service.js";
  * «не в рейтинге» отдаётся без обращения к Redis. Отсечку сервис спрашивает у
  * `RatingRestrictions` на каждый вызов: она читается из памяти настроек, а не
  * из базы.
+ *
+ * **Модификатор забега** (Р105, tasks/T-0122): открыт ли он, решает уровень
+ * аккаунта на **сервере**, а не `accountLevel` тела; сошёлся ли он со стартом —
+ * вердикт (`run-verdict.ts`). Забег с модификатором в рейтинг и в рекорд
+ * сложности не идёт: доска сравнима только при равных условиях. Награду, задания
+ * и достижения он получает как обычный (множитель — `progress-rules.ts`).
  */
 
 /** Менять нечего: снимают уже снятый или возвращают тот, что не был снят модератором. */
@@ -115,6 +121,7 @@ export class RunsService {
       startingWeaponId: start.startingWeaponId,
       contentHash: start.contentHash,
       startedAt: startedAtMs === null ? null : new Date(startedAtMs),
+      modifierId: start.modifierIds?.[0] ?? null,
     });
     if (outcome === "foreign") throw new ValidationError("Некорректный забег");
     if (outcome === "created") void this.hooks.emitStarted({ runId: start.runId, accountId: account.accountId, at: new Date(nowMs) });
@@ -128,12 +135,15 @@ export class RunsService {
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
     const adRerolls = run.adRerolls ?? 0;
-    const [paid, loadout, boosts, paidAdRerolls] = await Promise.all([
+    const modifierId = run.modifierIds?.[0] ?? null;
+    const [paid, loadout, boosts, paidAdRerolls, accountLevel] = await Promise.all([
       this.continues.check(run.runId, run.continues),
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
       // Заявлен рекламный переброс — сверяем с книгой показов; без сервиса книги подтверждённых нет.
       adRerolls === 0 ? Promise.resolve(0) : (this.adRerolls?.paid(run.runId, adRerolls) ?? Promise.resolve(0)),
+      // Уровень нужен только забегу с модификатором: остальные не ходят за ним в базу.
+      modifierId === null ? Promise.resolve(0) : this.runs.accountLevel(account.accountId),
     ]);
     const counters = countersOf(run.stats);
     const mode = await this.modeOf(account, run.mode, run.difficultyId);
@@ -159,6 +169,10 @@ export class RunsService {
         cheats: run.cheats,
         loadout,
         boosts,
+        modifierId,
+        unlockedModifiers: unlockedModifiers(accountLevel),
+        // Старт дошёл — сверяем с ним (и «без модификатора» тоже); не дошёл — сверять не с чем.
+        startModifierId: existing === null ? undefined : existing.modifierId,
         rubezh: run.rubezh ?? null,
         axisOutOfRange: scored?.outOfRange ?? false,
       },
@@ -169,7 +183,8 @@ export class RunsService {
     // Нерейтинговый забег ограничений рейтинга не касается: `held` для него не нужен и не вычисляется.
     const rated = isRatedRun(run.difficultyId, new Date(nowMs), this.rating.since());
     // Пролог в рейтинг не идёт ни при каких условиях (Р151): сложность у него и так нерейтинговая, но правило не должно зависеть от неё.
-    const rankable = rated && mode !== "prologue" && judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
+    // Забег с модификатором — тоже вне рейтинга и рекорда: условия забега иные (T-0122).
+    const rankable = rated && mode !== "prologue" && modifierId === null && judged.verdict === "ok" && (!run.cheats || (run.countInRating && (await this.canCountCheats(account))));
     const held = rankable ? await this.rating.hold(account.accountId, new Date(nowMs)) : null;
     const ranked = rankable && held === null;
     // Лучшее в тени — до записи этого забега: иначе не понять, новый ли это рекорд.
@@ -203,6 +218,7 @@ export class RunsService {
       verdictReasons: judged.reasons,
       rubezhReached: run.rubezh?.reached ?? false,
       rubezhClearedSec: run.rubezh?.clearedSec ?? null,
+      modifierId,
       score: scored === null ? null : storedScoreOf(scored),
       scoreInput: scorable ? storedInputOf(run) : null,
     });
@@ -240,6 +256,7 @@ export class RunsService {
       reasons: judged.reasons,
       finishedAt: new Date(nowMs),
       rubezhCleared,
+      modifierId,
     });
     if (result.score !== undefined) void this.scorer?.announce(account, run.runId, result.score);
     return result;
