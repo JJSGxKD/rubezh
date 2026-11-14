@@ -35,6 +35,8 @@ import { homeFace } from "../state/prologue";
 import type { ItemView } from "../state/items-api";
 import { BootScreen } from "./gates";
 import { EquipSlot, ItemTile, RARITIES, SLOTS } from "./meta/arsenal-parts";
+import { AppearancePreview } from "./meta/appearance-preview";
+import { EmblemsPreview } from "./meta/emblem-preview";
 import { LeaderboardRow, YouStrip } from "./meta/rating";
 import { Podium } from "./meta/rating-podium";
 import { DivisionPlaque, StyleCard } from "./meta/rating-style";
@@ -60,7 +62,7 @@ import type { ContinueStage } from "../state/continue-purchase";
  * Экраны забега и загрузки открываются здесь на тестовых данных: иначе чтобы
  * посмотреть экран смерти в ландшафте, пришлось бы умереть в ландшафте.
  */
-type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating" | "runCard";
+type Preview = "boot" | "runLoading" | "levelUp" | "levelUpLong" | "levelUpLimit" | "levelUpLimitHurt" | "pause" | "death" | "abandoned" | "rubezhHeld" | "levelUpRecommended" | "prologueWin" | "prologueWinPending" | "prologueWinOffline" | "homeBefore" | "homeAfter" | "chance" | "record" | "chest1" | "chest3" | "chest5" | "blessing" | "aside" | "rating" | "runCard" | "emblems" | "appearance";
 
 export function GalleryScreen(): ReactNode {
   const navigation = useNavigation();
@@ -113,6 +115,8 @@ export function GalleryScreen(): ReactNode {
           <ListItem title={t("gallery.preview.aside")} hint={t("gallery.preview.asideHint")} onClick={() => setPreview("aside")} />
           <ListItem title={t("gallery.preview.rating")} onClick={() => setPreview("rating")} />
           <ListItem title={t("gallery.preview.runCard")} onClick={() => setPreview("runCard")} />
+          <ListItem title={t("gallery.preview.emblems")} onClick={() => setPreview("emblems")} />
+          <ListItem title={t("gallery.preview.appearance")} onClick={() => setPreview("appearance")} />
         </ListGroup>
 
         <SectionTitle>{t("gallery.modals")}</SectionTitle>
@@ -491,6 +495,10 @@ function renderPreview(preview: Preview): ReactNode {
       return <AsidePreview />;
     case "rating":
       return <RatingPreview />;
+    case "emblems":
+      return <EmblemsPreview />;
+    case "appearance":
+      return <AppearancePreview />;
     case "runCard":
       return (
         <Suspense fallback={null}>

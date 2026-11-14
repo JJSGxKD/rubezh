@@ -6,7 +6,10 @@ import { CoinIcon } from "../../design-system/components/CurrencyIcons";
 import { formatNumber, t } from "../../i18n";
 import { copyText } from "../../state/clipboard";
 import { friendInviteUrl, type FriendsApi, type FriendsView } from "../../state/friends-api";
+import type { PublicEmblemView } from "../../state/public-emblem";
 import { track, useShell } from "../../state/shell";
+import { EmblemChip } from "./emblem-chip";
+import { TesterBadge } from "./tester-badge";
 import { bonusTrack, coinIconsNeedRoom, peerActionView, type PeerActionKind } from "./friends-rules";
 
 /**
@@ -316,10 +319,36 @@ export function PeerAction(props: { kind: PeerActionKind; variant: "secondary" |
 }
 
 /**
- * Строка другого игрока: имя и аватар — то же, что и так видно в рейтинге.
- * После имени — место под знак (`badge`): знак «Тестер» рисует T-0043.
+ * Метки у имени игрока в списке друзей: знак у имени (T-0236) — под именем, а
+ * сервер до знаков без поля `emblem` — прежняя метка «Тестер» после имени.
+ * Знаков в строке не два: есть `emblem` — метки нет. Облик и выбор кружка
+ * (T-0238) идут тем же объектом — в `PeerRow` они попадают в аватар.
  */
-export function PeerRow(props: { name: string; photoUrl: string | null; children: ReactNode; onPress?: () => void; badge?: ReactNode }): ReactNode {
+export function peerMarks(peer: {
+  tester?: true | undefined;
+  emblem?: PublicEmblemView | undefined;
+  appearance?: string | undefined;
+  avatarPhoto?: true | undefined;
+}): { badge?: ReactNode; emblem?: ReactNode; appearance?: string; avatarPhoto?: boolean } {
+  const avatar = { ...(peer.appearance === undefined ? {} : { appearance: peer.appearance }), ...(peer.avatarPhoto === true ? { avatarPhoto: true } : {}) };
+  if (peer.emblem !== undefined) return { ...avatar, emblem: <EmblemChip emblem={peer.emblem} /> };
+  return peer.tester === true ? { ...avatar, badge: <TesterBadge /> } : avatar;
+}
+
+/**
+ * Строка другого игрока: имя и аватар — то же, что и так видно в рейтинге.
+ * После имени — место под метку (`badge`), под именем — под знак (`emblem`).
+ */
+export function PeerRow(props: {
+  name: string;
+  photoUrl: string | null;
+  children: ReactNode;
+  onPress?: () => void;
+  badge?: ReactNode;
+  emblem?: ReactNode;
+  appearance?: string;
+  avatarPhoto?: boolean;
+}): ReactNode {
   return (
     <Card>
       <div className="flex items-center gap-3">
@@ -331,11 +360,14 @@ export function PeerRow(props: { name: string; photoUrl: string | null; children
           aria-label={props.onPress === undefined ? props.name : t("friends.remove.title", { name: props.name })}
         >
           <span className="shrink-0">
-            <Avatar name={props.name} url={props.photoUrl} size={36} />
+            <Avatar name={props.name} url={props.photoUrl} size={36} appearance={props.appearance} avatarPhoto={props.avatarPhoto} />
           </span>
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 truncate text-sm font-medium text-text">{props.name}</span>
-            {props.badge}
+          <span className="min-w-0">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="min-w-0 truncate text-sm font-medium text-text">{props.name}</span>
+              {props.badge}
+            </span>
+            {props.emblem === undefined ? null : <span className="mt-0.5 flex min-w-0">{props.emblem}</span>}
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">{props.children}</div>

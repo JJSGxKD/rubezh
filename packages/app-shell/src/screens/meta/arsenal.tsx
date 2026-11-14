@@ -14,7 +14,6 @@ import { ShardIcon } from "../../design-system/components/ShardIcon";
 import { formatNumber, hasTranslation, t } from "../../i18n";
 import "../../i18n/arsenal";
 import type { ApiFailure } from "../../state/api-request";
-import { devModeAllowed, useDevMode } from "../../state/dev-mode";
 import { useItems } from "../../state/items";
 import {
   loadInventory,
@@ -23,10 +22,14 @@ import {
   type ItemAction,
   type ItemView,
 } from "../../state/items-api";
+import { useLoadOwnAppearance, useOwnAppearance } from "../../state/appearance-api";
+import { useNavigation } from "../../state/navigation";
 import { useSession } from "../../state/session";
+import { useViewerArt } from "../../state/viewer-art";
 import { useWallet } from "../../state/wallet";
 import { loadWallet } from "../../state/wallet-api";
 import { ItemSheet } from "./arsenal-item";
+import "../../i18n/appearance";
 import { heroPortrait } from "./hero-portrait";
 import {
   CostLabel,
@@ -62,6 +65,11 @@ const MERGE_COUNT = 3;
 export function ArsenalScreen(): ReactNode {
   const inventory = useItems((state) => state.inventory);
   const session = useSession((state) => state.status);
+  const signedIn = useSession((state) => state.account !== null);
+  const navigation = useNavigation();
+  // Облики — это арт: кнопка «Облик» и портрет выбранного облика только у зрителя с артом (T-0238).
+  const art = useViewerArt();
+  useLoadOwnAppearance(art && signedIn);
   const [status, setStatus] = useState<Status>(
     inventory === null ? "loading" : "ready",
   );
@@ -210,7 +218,14 @@ export function ArsenalScreen(): ReactNode {
               ))}
             </div>
             <div className="relative flex justify-center">
-              <HeroFigure />
+              <div className="flex flex-col items-center gap-2">
+                <HeroFigure />
+                {art && signedIn ? (
+                  <Button track="open_appearance" variant="secondary" size="s" onClick={() => navigation.push("appearance")}>
+                    {t("appearance.open")}
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <div className="relative grid gap-3">
               {RIGHT_SLOTS.map((slot) => (
@@ -395,8 +410,9 @@ function StatChip(props: {
  * «Черновой арт» — герой-спрайт тем же рисунком, что в забеге.
  */
 function HeroFigure(): ReactNode {
-  const sprites = useDevMode((state) => state.settings.visuals.sprites === true);
-  const portrait = heroPortrait(sprites, devModeAllowed());
+  const art = useViewerArt();
+  const appearance = useOwnAppearance((state) => state.own?.effective);
+  const portrait = heroPortrait(art, appearance);
   if (portrait !== null) return <img src={portrait} alt="" className="h-44 w-auto animate-float" />;
   return (
     <svg

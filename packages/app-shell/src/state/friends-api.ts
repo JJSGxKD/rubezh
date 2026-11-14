@@ -1,5 +1,6 @@
 import { z } from "zod/mini";
 import { apiRequest, type ApiRequest, type ApiResult } from "./api-request";
+import { publicEmblemSchema } from "./public-emblem";
 import { useShell } from "./shell";
 
 /**
@@ -16,6 +17,12 @@ const peer = {
   photoUrl: z.nullable(z.string()),
   /** играл на открытом тесте до вайпа; нет поля — не тестер (Р87) */
   tester: z.optional(z.literal(true)),
+  /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен: рисуется метка `tester` */
+  emblem: z.optional(publicEmblemSchema),
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен: кружок рисует фото */
+  appearance: z.optional(z.string()),
+  /** в кружке фото площадки, а не голова облика (T-0237) */
+  avatarPhoto: z.optional(z.literal(true)),
 };
 
 const friendSchema = z.object({ ...peer, since: z.string(), source: z.string() });

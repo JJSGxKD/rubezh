@@ -4,6 +4,7 @@ import type { LeaderboardEntry } from "@bh/shared-types";
 import { Avatar, staggerStyle } from "../../design-system/components";
 import { formatDuration, formatNumber, t } from "../../i18n";
 import "../../i18n/season";
+import { EmblemChip } from "./emblem-chip";
 import { podiumSteps, scoreOf, type Scoring } from "./rating-rules";
 import { RowOpener, entryRunId } from "./run-card-link";
 
@@ -38,8 +39,14 @@ export function Podium(props: { entries: readonly LeaderboardEntry[]; scoring: S
           <li key={step.place} data-place={step.place} className="relative flex min-w-0 animate-rise-in flex-col items-center" style={staggerStyle(index)}>
             {runId === null ? null : <RowOpener runId={runId} name={step.entry.name} />}
             {step.place === 1 ? <Crown size={18} aria-hidden="true" className="mb-1 text-elite" /> : null}
-            <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} />
+            <Avatar name={step.entry.name} url={step.entry.photoUrl} size={look.avatar} appearance={step.entry.appearance} avatarPhoto={step.entry.avatarPhoto} />
             <span className={`mt-1.5 max-w-full truncate font-display text-sm font-bold ${step.entry.isMe ? "text-accent" : "text-text"}`}>{step.entry.name}</span>
+            {/* Три колонки на узком экране тесны для названия: на пьедестале знак — только значок (T-0236). */}
+            {step.entry.emblem === undefined ? null : (
+              <span className="mt-0.5 flex">
+                <EmblemChip emblem={step.entry.emblem} fit="glyph" />
+              </span>
+            )}
             <span className="font-display text-sm tabular-nums text-text-muted">
               <span aria-hidden={score.kind === "points" ? "true" : undefined}>{score.kind === "points" ? formatNumber(score.value) : formatDuration(score.value)}</span>
               {score.kind === "points" ? <span className="sr-only">{t("rating.points.sr", { points: formatNumber(score.value) })}</span> : null}
