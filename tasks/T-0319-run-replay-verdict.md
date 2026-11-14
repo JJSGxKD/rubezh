@@ -3,8 +3,8 @@ id: T-0319
 title: Перепроверка забегов — кому повтор обязателен, выборка остальных, постановка в sim-worker, исход в вердикт забега и в разбор
 epic: E11
 priority: P1
-status: ready
-owner:
+status: done
+owner: claude-62 / sonnet-5.5 / extra
 author: claude-lead-1
 size: M
 depends_on: [T-0317, T-0318, T-0294, T-0295]
@@ -27,6 +27,16 @@ shared:
   - backend/api/src/modules/events/event-dictionary.ts
   - apps/admin/src/screens/review/**
   - apps/admin/src/api/review.ts
+  - apps/admin/src/api/audit.ts
+  - apps/admin/test/audit.test.ts
+  - apps/admin/test/review-replay.test.ts
+  - backend/api/src/modules/runs/run-replay.repository.ts
+  - backend/api/src/modules/runs/run-replay-facts.ts
+  - backend/api/src/modules/admin-notify/run-review-card.ts
+  - backend/api/test/run-replay.test.ts
+  - backend/api/test/ledger-operations.test.ts
+  - packages/app-shell/src/state/analytics.ts
+  - docs/21-diagrams.md
   - docs/22-analytics-and-metrics.md
   - docs/28-diagnostics.md
   - docs/30-configuration-map.md

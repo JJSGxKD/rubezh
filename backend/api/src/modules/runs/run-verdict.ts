@@ -99,7 +99,12 @@ export type VerdictReason =
    * индекс оси очков эффективности выше двойного потолка (tasks/T-0293): выброс,
    * которого честный забег не даёт; очков он не меняет, но в рейтинг не идёт
    */
-  | "axis_out_of_range";
+  | "axis_out_of_range"
+  /**
+   * повтор забега на сервере разошёлся с записью (tasks/T-0319): причину дописывает
+   * перепроверка уже после приёма забега, `judgeRun` её не ставит
+   */
+  | "replay_mismatch";
 
 export interface VerdictInput {
   survivalSec: number;

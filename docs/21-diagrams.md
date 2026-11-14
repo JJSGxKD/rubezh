@@ -196,6 +196,13 @@ erDiagram
         string review_outcome "nullable: honest|annulled — решение разбора (Р203)"
         datetime reviewed_at "nullable"
         uuid reviewed_by "nullable: кто решил, без FK"
+        string replay_verdict "nullable: pending|match|mismatch|content_mismatch|not_replayable|broken|timeout|no_proof — перепроверка повтором (T-0319); null — повтор не нужен"
+        int replay_diverged_tick "nullable: тик первого расхождения"
+        datetime replayed_at "nullable: когда записан исход"
+        boolean replay_required "обязательный повтор (верх, рубин и золото, эпическая добыча, Страж), а не выборка"
+        int replay_attempt "номер попытки: растёт по «Повторить снова», входит в id задания"
+        datetime replay_queued_at "nullable: когда задание поставлено в очередь replay"
+        json replay_result "nullable: { reason, replayed, durationMs } воркера — таблица «заявлено / повтор»"
     }
 
     ACCOUNT_SESSION {
@@ -893,7 +900,7 @@ erDiagram
         bytea proof "gzip от JSON записи run-proof-v1: до 64 КБ сжатой, до 512 КБ распакованной"
         int size_bytes "сжатые байты, от 1 до 65536"
         datetime received_at
-        datetime keep_until "received_at + 7 дней; у проверенных верхних и с редкой добычей — 180 (T-0319); очистка раз в час удаляет просроченные пачками по 1000"
+        datetime keep_until "received_at + 7 дней; у совпавших обязательных и у разошедшихся — 180 (T-0319); очистка раз в час удаляет просроченные пачками по 1000"
     }
 
     VIP_SUBSCRIPTION {
@@ -5731,7 +5738,7 @@ sequenceDiagram
 - **Уведомление не блокирует решение:** сбой ленты или чата — предупреждение в логе,
   заявка уже записана.
 
-### 4.43 Повтор забега в sim-worker (этап 4, реализован воркер)
+### 4.43 Повтор забега в sim-worker (этап 4, реализованы воркер и сервер)
 
 Сервер перепроверяет забеги: обязательные — верх досок, высокие дивизионы, редкая
 добыча, Страж; остальные выборкой (`35-stage4-plan.md` WP5, `tasks/T-0319`). Повтор —
@@ -5778,7 +5785,44 @@ sequenceDiagram
     end
     W->>G: отпустить затвор
     W->>M: sim_jobs_total{queue=replay, outcome=вердикт}, sim_job_seconds{queue=replay}
-    S->>R: исход — событием завершения задания
+    S->>R: проход раз в минуту читает выполненные и упавшие задания, закрывает исход в строке забега
+```
+
+Сервер (`tasks/T-0319`) решает, что повторять, и закрывает исход:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant G as Приём забега (RunsHooks)
+    participant S as RunReplayService
+    participant DB as Postgres, run
+    participant P as Приём записи (run_proof)
+    participant Q as Redis, очередь replay
+    participant W as sim-worker
+    participant J as Проход раз в минуту
+    participant A as Разбор в панели
+
+    G->>S: забег записан
+    S->>S: нужен ли повтор (первая сотня, рубин и золото, добыча, Страж, выборка по хэшу runId)
+    S->>DB: replay_verdict = pending, replay_required (условное обновление)
+    P->>S: запись принята (в любом порядке с решением)
+    S->>DB: занять постановку: replay_queued_at, номер попытки
+    S->>Q: задание replay-забег-попытка, приоритет по важности
+    Q->>W: повтор
+    W-->>Q: исход тем же заданием
+    J->>Q: выполненные и упавшие задания
+    J->>DB: закрыть исход одной транзакцией, только если ждёт эта попытка
+    alt разошёлся
+        DB-->>DB: вердикт строже прежнего, причина replay_mismatch, ranked = false, запись 180 дней
+        J->>S: доски и таблица недели — по базе
+    else совпал
+        DB-->>DB: вердикт прежний, запись обязательного забега 180 дней
+    else наша сторона: контент, сбой, предел времени
+        DB-->>DB: вердикт и рейтинг прежние, предупреждение в лог
+    end
+    J->>J: событие run_replayed, строка метрики replay_outcome_total
+    J->>DB: записи нет 72 часа — no_proof; воркер молчит 72 часа — timeout
+    A->>S: «Повторить снова» — новая попытка, задание вперёд выборки, строка аудита
 ```
 
 - **Исход один на задание.** `match` — забег повторился; `mismatch` — повтор разошёлся
