@@ -4,7 +4,7 @@ title: Кикимора — новый паттерн `blink`: исчезает 
 epic: E10
 priority: P2
 status: in-progress
-owner: claude-lead-1 / sonnet-5.5 / high
+owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
 depends_on: [T-0282]
