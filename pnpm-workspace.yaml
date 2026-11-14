@@ -19,3 +19,11 @@ onlyBuiltDependencies:
   - "@prisma/client"
   - "@prisma/engines"
   - msgpackr-extract
+
+# fabric (редактор промо в панели, T-0274) для Node держит необязательные
+# зависимости `canvas` (нативная сборка) и `jsdom`. Редактор работает только в
+# браузере, поэтому их не ставим вовсе: нативной сборки нет, в
+# `onlyBuiltDependencies` ничего не добавляется.
+ignoredOptionalDependencies:
+  - canvas
+  - jsdom
