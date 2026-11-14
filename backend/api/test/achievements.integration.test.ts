@@ -59,7 +59,7 @@ const HOUR = 3_600_000;
 const STAMP = String(Date.now());
 
 /** Строки статусных и сезонных знаков (T-0235): они тоже в витрине, но целей, наград и престижа у них нет. */
-const EMBLEM_ROWS = 7;
+const EMBLEM_ROWS = 8;
 
 /** Девять существующих достижений: цель и награда не меняются миграцией. */
 const OLD: Readonly<Record<string, { target: number; coins: number; gems: number; title: string }>> = {
@@ -190,8 +190,8 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
   });
 
   describe("каталог после миграции", () => {
-    it("ровно 81 достижение (48, 17 про боссов, элит, сундуки, кристаллы и эволюции и 16 — достижения v2), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
-      expect(catalog.length).toBe(81);
+    it("ровно 84 достижения (48, 17 про боссов, элит, сундуки, кристаллы и эволюции, 3 про кодекс врагов и 16 — достижения v2), id уникальны, у каждого категория из четырёх и престиж больше нуля", () => {
+      expect(catalog.length).toBe(84);
       expect(new Set(catalog.map((task) => task.taskId)).size).toBe(catalog.length);
       for (const task of catalog) {
         expect(["combat", "collection", "mastery", "friends"], task.taskId).toContain(task.category);
@@ -255,7 +255,7 @@ describe.skipIf(!live)("достижения на живых Postgres и Redis",
 
     it("новые награждаются монетами, без самоцветов и осколков; вместе со старыми они не упираются в суточный потолок", () => {
       const added = catalog.filter((task) => OLD[task.taskId] === undefined);
-      expect(added.length).toBe(72);
+      expect(added.length).toBe(75); // 56 прежних новых, три достижения кодекса (T-0127) и 16 — v2 (T-0322)
       for (const task of added) expect(task, task.taskId).toMatchObject({ gems: 0, shards: 0, passPoints: 0 });
       for (const task of added) expect(task.coins, task.taskId).toBeGreaterThan(0);
       // Достижения v2 (T-0322) в сумму не входят: вместе с ними монет 29 350 против потолка 20 000 в сутки

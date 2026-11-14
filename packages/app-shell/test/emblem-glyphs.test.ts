@@ -15,9 +15,23 @@ describe("значки знаков", () => {
   });
 
   it("статусные знаки и места в сезоне — все со своим значком", () => {
-    for (const id of ["emb_vip", "emb_tester", "emb_supporter", "emb_team", "emb_season_champion", "emb_season_top10", "emb_season_top100"]) {
+    for (const id of ["emb_vip", "emb_tester", "emb_supporter", "emb_team", "emb_partner", "emb_season_champion", "emb_season_top10", "emb_season_top100"]) {
       expect(EMBLEM_GLYPHS[id], id).toBeDefined();
     }
+  });
+
+  it("«Партнёр» нарисован своим значком, а не копией значка «Команды» или другого знака", () => {
+    const partner = EMBLEM_GLYPHS.emb_partner;
+    expect(partner?.length).toBeGreaterThan(0);
+    for (const [id, glyph] of Object.entries(EMBLEM_GLYPHS)) {
+      if (id !== "emb_partner") expect(JSON.stringify(glyph), id).not.toBe(JSON.stringify(partner));
+    }
+  });
+
+  it("значок «Партнёра» — две сцепленные петли: слои f и s, главная форма и не больше одной детали", () => {
+    const partner = EMBLEM_GLYPHS.emb_partner;
+    if (partner === undefined) throw new Error("нет значка Партнёра");
+    expect(partner.map(([kind]) => kind)).toEqual(["f", "s"]);
   });
 
   it("значок рисуется тем же языком, что значки оружия", () => {

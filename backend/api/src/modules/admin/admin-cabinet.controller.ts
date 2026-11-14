@@ -14,13 +14,18 @@ import {
   type CabinetPromos,
   type CabinetQuery,
 } from "../partners/partner-cabinet.js";
+import type { CabinetFunnel } from "../partners/partner-cabinet-funnel.js";
 import { PermissionGuard } from "../roles/permission.guard.js";
 import { ADMIN_LIMITS } from "./admin-limits.js";
-import { parse } from "./admin-parse.js";
+import { parse, periodOf } from "./admin-parse.js";
 import { AdminSessionGuard } from "./admin-session.guard.js";
+import { periodQuerySchema } from "./dto/admin.dto.js";
 
 /** Чужой кабинет для поддержки — по `partnerId`; ничего другого в запросе нет. */
 const cabinetQuerySchema = z.object({ partnerId: z.uuid().optional() }).strict();
+
+/** Воронка — ещё и период, как у остальных отчётов панели: пусто — последние тридцать суток. */
+const funnelQuerySchema = periodQuerySchema.extend({ partnerId: z.uuid().optional() }).strict();
 
 /**
  * Новая ссылка: название словами партнёра (в кампанию оно идёт латиницей), источник из списка, заметка.
@@ -44,6 +49,8 @@ const copySchema = z.object({ code: z.string().trim().min(1).max(CABINET_LIMITS.
  * а не маршрут: своё — `partner.cabinet`, чужое глазами партнёра (`?partnerId=`, только чтение) —
  * `partners.view`. Одно право на маршруте не выразило бы «или то, или другое», а разделы кабинета следующих
  * задач берут партнёра той же точкой — `PartnerCabinet.partnerOf`.
+ *
+ * Воронка (T-0219) — `GET /funnel` с периодом; партнёра выбирает та же `partnerOf`, фильтр навязывает сервер.
  *
  * Запись (новая ссылка, копия промокода) принимает `?partnerId=` тоже — ради отказа «Кабинет открыт для
  * просмотра»: в режиме поддержки кабинет только читают.
@@ -73,6 +80,13 @@ export class AdminCabinetController {
     await this.limit(actor.accountId);
     const input = parse(() => newLinkSchema.parse(body), "Название — от двух знаков, источник — из списка, заметка — до 120 знаков");
     return { data: await this.cabinet.createLink(actor, this.scope(query), { campaign: input.campaign, source: input.source, note: input.note ?? null }) };
+  }
+
+  /** Воронка игроков партнёра за период по дате привязки; группы меньше порога сервер не отдаёт. */
+  @Get("funnel")
+  async funnel(@Req() request: unknown, @Query() query: unknown): Promise<{ data: CabinetFunnel }> {
+    const { partnerId, from, to } = parse(() => funnelQuerySchema.parse(query), "Некорректный период или запрос кабинета");
+    return { data: await this.cabinet.funnel(accountOf(request), { partnerId }, periodOf({ from, to }, new Date())) };
   }
 
   @Get("promos")

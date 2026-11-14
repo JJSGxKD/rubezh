@@ -600,7 +600,7 @@ export function TasksScreen() {
 
 /** Редкость знака словом: цвета знаков игра берёт из своей палитры, панель их не рисует. */
 function EmblemTierBadge({ tier }: { tier: EmblemTier }) {
-  return <Badge tone={tier === "team" ? "info" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
+  return <Badge tone={tier === "team" ? "info" : tier === "partner" ? "warning" : "neutral"}>{EMBLEM_TIER_TITLES[tier]}</Badge>;
 }
 
 /**

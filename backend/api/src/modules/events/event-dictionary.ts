@@ -188,6 +188,20 @@ export const EVENT_DICTIONARY = {
     }),
   },
   run_abandoned: { version: 1, payload: runOutcome },
+  // Серверное событие: бот отправил игроку сообщение (tasks/T-0394, Р199).
+  // `format` — как сообщение задумано, `outcome` — чем кончилось: `fallback` —
+  // оформленное не ушло, ушёл простой текст. Игрока в нагрузке нет. Шлёт только
+  // сервер, клиент его не пишет.
+  bot_message_sent: {
+    version: 1,
+    payload: payload({
+      kind: id,
+      format: z.enum(["text", "photo", "rich", "card"]),
+      outcome: z.enum(["sent", "blocked", "failed", "fallback"]),
+      topic: z.enum(["none", "news", "rewards", "support"]),
+      silent: z.boolean(),
+    }),
+  },
   // Серверное событие: бот MAX или VK применил одноразовый код и сервер закрепил
   // (или отклонил) связь игрового аккаунта с аккаунтом площадки (tasks/T-0377,
   // Р188). `result`: `linked` — новая связь, `already` — та же пара уже была,
@@ -356,6 +370,14 @@ export const EVENT_DICTIONARY = {
   // Сохранил любимые достижения для профиля (T-0107): `count` — сколько их стало.
   // Событие шлёт клиент после ответа сервера; пустой список («убрал все») — тоже сохранение.
   achievement_favorites_set: { version: 1, payload: payload({ count: z.number().int().min(0).max(3) }) },
+  // Открыл вкладку «Враги» гайдбука с кодексом (T-0127): сколько записей открыто,
+  // сколько их всего и ждёт ли награда за полный кодекс. Событие шлёт клиент после
+  // ответа сервера; гость и ошибка сети кодекса не показывают и события не дают.
+  codex_viewed: { version: 1, payload: payload({ opened: count, total: count, claimable: z.boolean() }) },
+  // Сменил знак у имени (T-0236, docs/35-stage4-plan.md Р149): `emblem` — id выбранного знака или
+  // `auto` — «по умолчанию»; `category` — группа знака, который стал виден у имени (у `auto` без
+  // знака её нет). Событие шлёт клиент после ответа сервера; выбор того же знака события не шлёт.
+  emblem_shown_changed: { version: 1, payload: payload({ emblem: id, category: z.enum(["status", "season", "merit"]).optional() }) },
   // Открыл ссылку цели — канал проекта (docs/35-stage4-plan.md Р52): сколько
   // открывших доходят до награды. Подписку проверяет бот, и она видна только
   // по achievement_unlocked; открытие без награды — «не подписался». У

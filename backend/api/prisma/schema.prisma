@@ -196,6 +196,10 @@ model Account {
   prologueDoneAt DateTime? @map("prologue_done_at") @db.Timestamptz(3)
   /// знак у имени, который игрок выбрал носить (T-0235, Р149); пусто — «по умолчанию». Держит ли он знак сейчас, сервер считает при чтении
   shownEmblemId  String?   @map("shown_emblem_id") @db.VarChar(48)
+  /// облик героя, который игрок выбрал (T-0237, Р150); пусто — Хранитель. Держит ли он облик сейчас, сервер считает при чтении
+  appearanceId   String?   @map("appearance_id") @db.VarChar(24)
+  /// в кружке аватара — фото площадки, а не голова облика (T-0237, Р47); по умолчанию голова облика
+  avatarPhoto    Boolean   @default(false) @map("avatar_photo")
 
   roles         AccountRole[]
   // Знак у имени (T-0235): выбранная строка каталога; удалённая из каталога сбрасывает выбор
@@ -219,6 +223,8 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс врагов (T-0127)
+  codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
   passProgress  PassProgress[]
   passClaims    PassClaim[]
@@ -3376,6 +3382,34 @@ model LedgerLoan {
   @@map("ledger_loan")
 }
 
+// Месяцы учёта: сверка, закрытие и замок (docs/37-accounting.md §13, Р222, tasks/T-0468)
+
+/// open — открыт (строки у такого месяца может не быть вовсе), review — на сверке, closed — закрыт.
+enum LedgerPeriodStatus {
+  open
+  review
+  closed
+}
+
+/// Месяц учёта по UTC, «ГГГГ-ММ». Закрытый месяц запирает журнал: проводка с его месяцем отклоняется. `snapshot` —
+/// параметры и итог закрытия (ставки, доли, займы, курсы, водопад), по нему месяц пересчитывается без базы и не
+/// зависит от того, что поменяют потом; снимается вместе с закрытием. `reopened_count` входит в ключи проводок
+/// закрытия (`close:<месяц>:r<N>:…`), поэтому повторное закрытие не конфликтует со сторнированными.
+model LedgerPeriod {
+  period        String             @id @db.Char(7)
+  status        LedgerPeriodStatus @default(open)
+  reviewAt      DateTime?          @map("review_at") @db.Timestamptz(3)
+  /// кто поставил на сверку и закрыл; без внешнего ключа, как в журнале: учёт переживает аккаунты
+  reviewBy      String?            @map("review_by") @db.Uuid
+  closedAt      DateTime?          @map("closed_at") @db.Timestamptz(3)
+  closedBy      String?            @map("closed_by") @db.Uuid
+  reopenedCount Int                @default(0) @map("reopened_count")
+  snapshot      Json?
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("ledger_period")
+}
+
 // Шаблоны повторяющихся расходов (docs/37-accounting.md §8, Р220, tasks/T-0463)
 
 enum LedgerTemplateSchedule {
@@ -3410,4 +3444,25 @@ model LedgerTemplate {
   @@index([articleId])
   @@index([placeAccountId])
   @@map("ledger_template")
+}
+
+// Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
+// кодекс — три достижения лестницы `codex` в `task_def`, процент пишется в
+// `task_progress` видом `codex_percent`.
+
+/// Открытая запись кодекса: игрок встретил врага в забеге. Одна строка на пару,
+/// открытая запись не закрывается и не переписывается — повтор забега ничего
+/// не меняет (`ON CONFLICT DO NOTHING`). Список врагов — таблица сервера
+/// `CODEX_ENEMY_IDS`, внешнего ключа на врага нет: враги живут в контенте движка
+model CodexEntry {
+  accountId   String   @map("account_id") @db.Uuid
+  /// id врага из контента (`content/enemies.ts`)
+  enemyId     String   @map("enemy_id") @db.VarChar(48)
+  /// когда запись открыта: время записи забега, в котором враг встретился первым
+  firstSeenAt DateTime @map("first_seen_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, enemyId])
+  @@map("codex_entry")
 }

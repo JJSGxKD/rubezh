@@ -72,11 +72,12 @@ export const CATEGORY_IDS = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] as
 export type AchievementCategory = (typeof CATEGORY_IDS)[number];
 
 /**
- * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов и
- * отдельный тон `team` для знака «Команда». Стоит в каталоге и не плавает
- * вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
+ * Редкость знака у имени (docs/35-stage4-plan.md Р149): шкала предметов,
+ * отдельный тон `team` для знака «Команда» и отдельный тон `partner` для знака
+ * «Партнёр»: ни то ни другое не заслуга и не покупка. Стоит в каталоге и не
+ * плавает вместе с «есть у N%»: цвет знака у имени не должен меняться сам.
  */
-export const EMBLEM_TIERS = [...ITEM_RARITIES, "team"] as const;
+export const EMBLEM_TIERS = [...ITEM_RARITIES, "team", "partner"] as const;
 export type EmblemTier = (typeof EMBLEM_TIERS)[number];
 
 /**
@@ -229,7 +230,8 @@ export type RunKind = keyof typeof RUN_KINDS;
  * Состояния игрока (tasks/T-0106): число друзей и уровень аккаунта забег не
  * двигает, поэтому они не в `RUN_KINDS`. Сервер читает их при открытии витрины
  * достижений и дописывает прогресс с действием «максимум» — значение не убывает:
- * друзей стало меньше, а выполненное осталось выполненным.
+ * друзей стало меньше, а выполненное осталось выполненным. Процент кодекса врагов
+ * (tasks/T-0127) дописывает его собственный модуль: витрина этот вид не читает.
  */
 export const STATE_KINDS = {
   /** друзья в списке */
@@ -241,6 +243,8 @@ export const STATE_KINDS = {
    * прогрессу, а не забег; цель — число «Мастеров» (`DYNAMIC_TARGET_KINDS`).
    */
   weapon_masters: { op: "max" },
+  /** доля открытого кодекса врагов, процентов (tasks/T-0127): дописывает модуль кодекса */
+  codex_percent: { op: "max" },
 } as const satisfies Record<string, { op: "max" }>;
 
 export type StateKind = keyof typeof STATE_KINDS;

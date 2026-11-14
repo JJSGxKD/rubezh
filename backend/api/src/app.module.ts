@@ -74,6 +74,8 @@ import { BotMentionModule } from "./modules/bot-mention/bot-mention.module.js";
 import { ExternalIdentityModule } from "./modules/external-identity/external-identity.module.js";
 import { VkModule } from "./platforms/vk/vk.module.js";
 import { AchievementsModule } from "./modules/achievements/achievements.module.js";
+import { CodexModule } from "./modules/codex/codex.module.js";
+import { AppearanceModule } from "./modules/appearance/appearance.module.js";
 import { RemindersModule } from "./modules/reminders/reminders.module.js";
 import { RemindersOffModule } from "./platforms/telegram/reminders-off.command.js";
 import { MaxModule } from "./platforms/max/max.module.js";
@@ -182,6 +184,8 @@ export const APP_MODULES = [
   ExternalIdentityModule,
   VkModule,
   AchievementsModule,
+  CodexModule,
+  AppearanceModule,
   BattlePassModule,
   RemindersModule,
   RemindersOffModule,

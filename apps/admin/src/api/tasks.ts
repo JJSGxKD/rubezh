@@ -42,6 +42,7 @@ export const KIND_TITLES: Partial<Record<string, string>> = {
   weapon_masters: "Мастера оружия (Коллекционер)",
   friends: "Друзья в списке",
   account_level: "Уровень аккаунта",
+  codex_percent: "Кодекс врагов, %",
   status: "Знак статуса",
   season: "Знак сезона",
   channel: "Подписка на канал",
@@ -102,7 +103,7 @@ export const CLIENT_KINDS: ReadonlyMap<string, TaskPeriod> = new Map<string, Tas
  * Состояния игрока, которые забег не двигает (`tasks/task-rules.ts`, `STATE_KINDS`): сервер
  * читает их при открытии витрины достижений. Только у достижений — срок их не сбросил бы.
  */
-export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "weapon_masters"]);
+export const STATE_KINDS: ReadonlySet<string> = new Set(["friends", "account_level", "weapon_masters", "codex_percent"]);
 
 /**
  * Виды, у которых цель считает сервер (`tasks/task-rules.ts`, `DYNAMIC_TARGET_KINDS`): «Коллекционер»
@@ -135,8 +136,8 @@ export const ALL_CATEGORIES = [...ACHIEVEMENT_CATEGORIES, ...EMBLEM_CATEGORIES] 
 export type AchievementCategory = (typeof ALL_CATEGORIES)[number];
 export const CATEGORY_TITLES: Record<AchievementCategory, string> = { combat: "Бой", collection: "Коллекция", mastery: "Мастерство", friends: "Друзья", status: "Статус", season: "Сезоны" };
 
-/** Редкость знака у имени: шкала предметов и тон `team` для знака «Команда» (как на сервере, `EMBLEM_TIERS`). */
-export const EMBLEM_TIERS = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "team"] as const;
+/** Редкость знака у имени: шкала предметов и тона `team` («Команда») и `partner` («Партнёр») — как на сервере, `EMBLEM_TIERS`. */
+export const EMBLEM_TIERS = ["common", "uncommon", "rare", "epic", "legendary", "mythic", "team", "partner"] as const;
 export type EmblemTier = (typeof EMBLEM_TIERS)[number];
 export const EMBLEM_TIER_TITLES: Record<EmblemTier, string> = {
   common: "Обычный",
@@ -146,6 +147,7 @@ export const EMBLEM_TIER_TITLES: Record<EmblemTier, string> = {
   legendary: "Легендарный",
   mythic: "Мифический",
   team: "Команда",
+  partner: "Партнёр",
 };
 /** Пусто — у достижения знака нет. */
 export const NO_EMBLEM_TITLE = "Нет знака";

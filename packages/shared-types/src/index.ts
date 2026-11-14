@@ -2082,9 +2082,13 @@ export interface PublicEmblem {
   season?: number | undefined;
 }
 
-/** То, что список показывает рядом с именем игрока; облик (T-0237) добавится сюда же. */
+/** То, что список показывает рядом с именем игрока: знак, облик героя и выбор аватара. */
 export interface PublicMark {
   emblem?: PublicEmblem | undefined;
+  /** действующий облик (T-0237, Р150): выбранный, а если игрок им больше не владеет, — `keeper`; нет поля — сервер до обликов или источник недоступен */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237, Р47); нет поля — голова облика */
+  avatarPhoto?: true | undefined;
 }
 
 export interface LeaderboardEntry {
@@ -2102,6 +2106,10 @@ export interface LeaderboardEntry {
   supporter?: true | undefined;
   /** знак у имени (T-0240); нет поля — сервер до знаков или источник знаков недоступен, клиент рисует по `tester` и `supporter` */
   emblem?: PublicEmblem | undefined;
+  /** действующий облик героя (T-0237); нет поля — сервер до обликов или источник недоступен, клиент рисует Хранителя */
+  appearance?: string | undefined;
+  /** в кружке аватара фото площадки, а не голова облика (T-0237) */
+  avatarPhoto?: true | undefined;
   /** очки престижа за достижения (T-0107); нет поля или ноль — значок не рисуется */
   prestige?: number | undefined;
   /** у аккаунта засчитана победа над стражем рубежа (T-0121); нет поля — не засчитана */

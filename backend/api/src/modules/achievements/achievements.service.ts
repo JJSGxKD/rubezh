@@ -139,10 +139,11 @@ export class AchievementsService {
   private async syncState(accountId: string, at: Date): Promise<void> {
     try {
       const all = (await this.tasks.achievementDefs()).filter((def) => isStateKind(def.kind));
-      const defs = all.filter((def) => def.kind !== "weapon_masters");
+      // Друзья и уровень читаются здесь; остальные состояния дописывают их модули (кодекс — `codex`).
+      const defs = all.filter((def) => def.kind === "friends" || def.kind === "account_level");
       if (defs.length > 0) await this.syncPlayerState(accountId, defs, at);
       // «Мастеров» считает сервис заданий — он же дописывает их после каждого забега.
-      if (all.length > defs.length) await this.tasks.syncMasters(accountId, at);
+      if (all.some((def) => def.kind === "weapon_masters")) await this.tasks.syncMasters(accountId, at);
     } catch (error: unknown) {
       this.logger.warn(JSON.stringify({ module: "achievements", event: "state_sync_failed", accountId, reason: error instanceof Error ? error.message : "unknown" }));
     }
