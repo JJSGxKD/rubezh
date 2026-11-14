@@ -28,6 +28,7 @@ const loaders = {
   rating: () => import("../screens/meta/rating"),
   profile: () => import("../screens/meta/profile"),
   emblems: () => import("../screens/meta/emblems"),
+  appearance: () => import("../screens/meta/appearance"),
   notifications: () => import("../screens/meta/notifications"),
   changelog: () => import("../screens/meta/changelog"),
   guide: () => import("../screens/guide/GuideScreen"),
@@ -73,6 +74,8 @@ export const LevelScreen = screen(loaders.profile, "LevelScreen");
 export const HistoryScreen = screen(loaders.profile, "HistoryScreen");
 // Знаки у имени открываются из профиля — своим небольшим чанком: рейтинг и друзья берут из него только чип.
 export const EmblemsScreen = screen(loaders.emblems, "EmblemsScreen");
+// Облики героя открываются из арсенала и профиля — своим небольшим чанком, только зрителю с артом.
+export const AppearanceScreen = screen(loaders.appearance, "AppearanceScreen");
 export const NotificationsScreen = screen(loaders.notifications, "NotificationsScreen");
 export const ChangelogScreen = screen(loaders.changelog, "ChangelogScreen");
 export const TasksScreen = screen(loaders.tasks, "TasksScreen");
