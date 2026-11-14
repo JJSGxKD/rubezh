@@ -10,28 +10,29 @@
 --
 -- «Коллекционер»: хранимая цель строки сервером не читается — она равна числу
 -- включённых «Мастеров оружия» (`DYNAMIC_TARGET_KINDS`), семь — лишь стартовое
--- значение для панели. `sort` — после последнего достижения с шагом 10 (970…1120).
+-- значение для панели. `sort` — после последнего достижения (760) с шагом 5 (770…845):
+-- с 900 идут строки знаков статуса и сезона, витрина держит их в конце.
 -- Повтор миграции строки не затирает: правки из панели остаются.
 INSERT INTO "task_def" ("task_id", "period", "kind", "filter", "target", "title", "hint", "category", "ladder", "rung", "hidden", "prestige", "coins", "emblem_tier", "sort", "created_at", "updated_at") VALUES
   -- Мастерство: испытания по итогу одного забега
-  ('ach_no_hit_10',     'achievement', 'no_hit_sec',     NULL,                          600,   'Без единой царапины', NULL, 'mastery', NULL, NULL, false, 40, 800, 'legendary', 970,  now(), now()),
-  ('ach_pacifist',      'achievement', 'no_kill_sec',    NULL,                          60,    'Пацифист',            NULL, 'mastery', NULL, NULL, false, 10, 150, NULL,        980,  now(), now()),
+  ('ach_no_hit_10',     'achievement', 'no_hit_sec',     NULL,                          600,   'Без единой царапины', NULL, 'mastery', NULL, NULL, false, 40, 800, 'legendary', 770,  now(), now()),
+  ('ach_pacifist',      'achievement', 'no_kill_sec',    NULL,                          60,    'Пацифист',            NULL, 'mastery', NULL, NULL, false, 10, 150, NULL,        775,  now(), now()),
   -- Бой: убийства стихией (огонь, холод, молния, яд — по три ступени)
-  ('ach_fire_500',      'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      500,   'Поджигатель',   NULL, 'combat', 'fire_kills',      1, false, 5,  100, NULL,   990,  now(), now()),
-  ('ach_fire_2500',     'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      2500,  'Пламенный',     NULL, 'combat', 'fire_kills',      2, false, 10, 200, NULL,   1000, now(), now()),
-  ('ach_fire_10k',      'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      10000, 'Огнепоклонник', NULL, 'combat', 'fire_kills',      3, false, 20, 400, 'epic', 1010, now(), now()),
-  ('ach_cold_500',      'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      500,   'Иней',          NULL, 'combat', 'cold_kills',      1, false, 5,  100, NULL,   1020, now(), now()),
-  ('ach_cold_2500',     'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      2500,  'Мороз',         NULL, 'combat', 'cold_kills',      2, false, 10, 200, NULL,   1030, now(), now()),
-  ('ach_cold_10k',      'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      10000, 'Стужа',         NULL, 'combat', 'cold_kills',      3, false, 20, 400, 'epic', 1040, now(), now()),
-  ('ach_lightning_500', 'achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 500,   'Искрящий',      NULL, 'combat', 'lightning_kills', 1, false, 5,  100, NULL,   1050, now(), now()),
-  ('ach_lightning_2500','achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 2500,  'Грозовой',      NULL, 'combat', 'lightning_kills', 2, false, 10, 200, NULL,   1060, now(), now()),
-  ('ach_lightning_10k', 'achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 10000, 'Громовержец',   NULL, 'combat', 'lightning_kills', 3, false, 20, 400, 'epic', 1070, now(), now()),
-  ('ach_poison_500',    'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    500,   'Знахарь',       NULL, 'combat', 'poison_kills',    1, false, 5,  100, NULL,   1080, now(), now()),
-  ('ach_poison_2500',   'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    2500,  'Ядовитый',      NULL, 'combat', 'poison_kills',    2, false, 10, 200, NULL,   1090, now(), now()),
-  ('ach_poison_10k',    'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    10000, 'Отравитель',    NULL, 'combat', 'poison_kills',    3, false, 20, 400, 'epic', 1100, now(), now()),
+  ('ach_fire_500',      'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      500,   'Поджигатель',   NULL, 'combat', 'fire_kills',      1, false, 5,  100, NULL,   780,  now(), now()),
+  ('ach_fire_2500',     'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      2500,  'Пламенный',     NULL, 'combat', 'fire_kills',      2, false, 10, 200, NULL,   785, now(), now()),
+  ('ach_fire_10k',      'achievement', 'element_kills',  '{"element": "fire"}'::jsonb,      10000, 'Огнепоклонник', NULL, 'combat', 'fire_kills',      3, false, 20, 400, 'epic', 790, now(), now()),
+  ('ach_cold_500',      'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      500,   'Иней',          NULL, 'combat', 'cold_kills',      1, false, 5,  100, NULL,   795, now(), now()),
+  ('ach_cold_2500',     'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      2500,  'Мороз',         NULL, 'combat', 'cold_kills',      2, false, 10, 200, NULL,   800, now(), now()),
+  ('ach_cold_10k',      'achievement', 'element_kills',  '{"element": "cold"}'::jsonb,      10000, 'Стужа',         NULL, 'combat', 'cold_kills',      3, false, 20, 400, 'epic', 805, now(), now()),
+  ('ach_lightning_500', 'achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 500,   'Искрящий',      NULL, 'combat', 'lightning_kills', 1, false, 5,  100, NULL,   810, now(), now()),
+  ('ach_lightning_2500','achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 2500,  'Грозовой',      NULL, 'combat', 'lightning_kills', 2, false, 10, 200, NULL,   815, now(), now()),
+  ('ach_lightning_10k', 'achievement', 'element_kills',  '{"element": "lightning"}'::jsonb, 10000, 'Громовержец',   NULL, 'combat', 'lightning_kills', 3, false, 20, 400, 'epic', 820, now(), now()),
+  ('ach_poison_500',    'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    500,   'Знахарь',       NULL, 'combat', 'poison_kills',    1, false, 5,  100, NULL,   825, now(), now()),
+  ('ach_poison_2500',   'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    2500,  'Ядовитый',      NULL, 'combat', 'poison_kills',    2, false, 10, 200, NULL,   830, now(), now()),
+  ('ach_poison_10k',    'achievement', 'element_kills',  '{"element": "poison"}'::jsonb,    10000, 'Отравитель',    NULL, 'combat', 'poison_kills',    3, false, 20, 400, 'epic', 835, now(), now()),
   -- Коллекция: все «Мастера оружия» разом и недостающий «Мастер Метеора»
-  ('ach_collector',     'achievement', 'weapon_masters', NULL,                          7,     'Коллекционер',   NULL, 'collection', NULL, NULL, false, 40, 800, 'epic',     1110, now(), now()),
-  ('ach_weapon_meteor', 'achievement', 'weapon_runs',    '{"weapon": "meteor"}'::jsonb,     5,     'Мастер Метеора', NULL, 'collection', NULL, NULL, false, 10, 150, 'uncommon', 1120, now(), now())
+  ('ach_collector',     'achievement', 'weapon_masters', NULL,                          7,     'Коллекционер',   NULL, 'collection', NULL, NULL, false, 40, 800, 'epic',     840, now(), now()),
+  ('ach_weapon_meteor', 'achievement', 'weapon_runs',    '{"weapon": "meteor"}'::jsonb,     5,     'Мастер Метеора', NULL, 'collection', NULL, NULL, false, 10, 150, 'uncommon', 845, now(), now())
 ON CONFLICT ("task_id") DO NOTHING;
 
 -- Ступень «5 друзей» зовётся «Душа компании»: второго достижения не заводим, цель,
