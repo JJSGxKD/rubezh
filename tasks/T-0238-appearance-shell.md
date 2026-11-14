@@ -3,7 +3,7 @@ id: T-0238
 title: Облики — экран «Облик» из арсенала и профиля, портрет в арсенале, голова облика в аватаре
 epic: E16
 priority: P2
-status: in-progress
+status: done
 owner: claude-10 / sonnet-5.5 / high
 author: claude-lead-1
 size: M
@@ -15,6 +15,12 @@ zones:
   - packages/app-shell/src/screens/meta/appearance-rules.ts
   - packages/app-shell/test/appearance-rules.test.ts
   - packages/app-shell/test/appearance-api.test.ts
+  - packages/app-shell/test/appearance-avatar.test.ts
+  - packages/app-shell/test/hero-portrait.test.ts
+  - packages/app-shell/src/screens/meta/appearance-preview.tsx
+  - packages/app-shell/src/state/viewer-art.ts
+  - packages/app-shell/src/i18n/appearance.ts
+  - packages/app-shell/src/i18n/ru-appearance.json
 shared:
   - packages/app-shell/src/design-system/components/Data.tsx
   - packages/app-shell/src/screens/meta/hero-portrait.ts
@@ -28,6 +34,9 @@ shared:
   - packages/app-shell/src/state/navigation.ts
   - packages/app-shell/src/app/lazy-screens.tsx
   - packages/app-shell/src/i18n/ru.json
+  - packages/app-shell/src/i18n/ru-gallery.json
+  - packages/app-shell/src/app/App.tsx
+  - apps/web-telegram/vite.config.ts
   - packages/app-shell/src/screens/gallery.tsx
   - backend/api/src/modules/events/event-dictionary.ts
   - docs/22-analytics-and-metrics.md
