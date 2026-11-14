@@ -49,7 +49,8 @@ export class FriendsController {
     const parsed = friendRequestSchema.safeParse(body);
     if (!parsed.success) throw new ValidationError("Некорректная заявка");
     await this.limit(FRIENDS_LIMITS.request, account.accountId);
-    return { data: await this.friends.request(account, parsed.data.accountId) };
+    const target = parsed.data;
+    return { data: target.by === "public" ? await this.friends.requestByPublicId(account, target.publicId) : await this.friends.request(account, target.accountId) };
   }
 
   @Post("requests/:accountId/accept")
