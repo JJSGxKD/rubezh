@@ -113,20 +113,25 @@ export function OperationForm({
       )}
     >
       <div className="flex flex-col gap-4">
-        <OperationFields form={form} chart={chart} set={(patch) => setForm((current) => ({ ...current, ...patch }))} />
-        <section aria-label="Предпросмотр проводки" className="flex flex-col gap-2 rounded-sm bg-surface-sunken px-3 py-2">
-          <h3 className="text-xs text-text-muted">Проводка, которую создаст сервер</h3>
-          {lines.length > 0 ? <Lines lines={lines} /> : <p className="text-sm text-text-muted">Появится, когда форма будет заполнена</p>}
-          {problems.length === 0 ? null : (
-            <ul className="list-disc pl-5 text-xs text-text-muted">
-              {problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          )}
-          <p className={`text-sm font-medium ${outlook.verdict === "pending" ? "text-warning" : outlook.verdict === "immediate" ? "text-success" : "text-text-muted"}`}>{outlook.text}</p>
-        </section>
-        {warning === null ? null : <Notice tone="warning">{warning}</Notice>}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_21rem]">
+          <OperationFields form={form} chart={chart} set={(patch) => setForm((current) => ({ ...current, ...patch }))} />
+          {/* Справа от полей и не уезжает при прокрутке: итог видно, пока заполняешь */}
+          <div className="flex flex-col gap-3 lg:sticky lg:top-0 lg:self-start">
+            <section aria-label="Предпросмотр проводки" className="flex flex-col gap-2 rounded-sm bg-surface-sunken px-3 py-2">
+              <h3 className="text-xs text-text-muted">Проводка, которую создаст сервер</h3>
+              {lines.length > 0 ? <Lines lines={lines} /> : <p className="text-sm text-text-muted">Появится, когда форма будет заполнена</p>}
+              {problems.length === 0 ? null : (
+                <ul className="list-disc pl-5 text-xs text-text-muted">
+                  {problems.map((problem) => (
+                    <li key={problem}>{problem}</li>
+                  ))}
+                </ul>
+              )}
+              <p className={`text-sm font-medium ${outlook.verdict === "pending" ? "text-warning" : outlook.verdict === "immediate" ? "text-success" : "text-text-muted"}`}>{outlook.text}</p>
+            </section>
+            {warning === null ? null : <Notice tone="warning">{warning}</Notice>}
+          </div>
+        </div>
         {error === null ? null : <Notice>{error}</Notice>}
       </div>
     </FormDialog>
