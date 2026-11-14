@@ -4,6 +4,7 @@ import { PrismaClient } from "../src/generated/prisma/client.js";
 import { AdDailyCapError } from "../src/modules/ads/ads-errors.js";
 import { AdNetworkKeys } from "../src/modules/ads/ad-network-keys.js";
 import { AdPasses } from "../src/modules/ads/ads-passes.js";
+import { InterstitialGate } from "../src/modules/ads/interstitial-gate.js";
 import { CAPPED_PLACES, type AdPlace } from "../src/modules/ads/ads-rules.js";
 import { PrismaAdsRepository, type AdBlockRow } from "../src/modules/ads/ads.repository.js";
 import { AdsService, type AdOffer, type AdViewer } from "../src/modules/ads/ads.service.js";
@@ -12,7 +13,7 @@ import { PrismaProgressRepository } from "../src/modules/progress/progress.repos
 import { PrismaRunDoubleRepository } from "../src/modules/progress/run-double.repository.js";
 import { RunDoubleService } from "../src/modules/progress/run-double.service.js";
 import type { WalletService } from "../src/modules/wallet/wallet.service.js";
-import { FakeCreatives, interstitialGate } from "./helpers/memory-ads.js";
+import { FakeCreatives, flagsOn } from "./helpers/memory-ads.js";
 import { restrictionsGate } from "./helpers/memory-restrictions.js";
 import { panelSettings } from "./helpers/settings.js";
 import { testPrisma } from "./helpers/test-prisma.js";
@@ -58,7 +59,7 @@ describe.skipIf(DATABASE_URL === "")("дневной кап роликов на 
 
   function service(settings = panelSettings()) {
     const passes = new AdPasses();
-    const ads = new AdsService(repository, () => 0, passes, settings, new FakeCreatives(), new AdNetworkKeys(repository), interstitialGate(repository as never, settings), restrictionsGate());
+    const ads = new AdsService(repository, () => 0, passes, settings, new FakeCreatives(), new AdNetworkKeys(repository), new InterstitialGate(repository, flagsOn(), settings), restrictionsGate());
     return { ads, passes, settings };
   }
 
