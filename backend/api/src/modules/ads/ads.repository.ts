@@ -5,7 +5,19 @@ import type { PrismaClient } from "../../generated/prisma/client.js";
 import { PRISMA } from "../../infra/database.js";
 import { PLATFORM_IDS, type PlatformId } from "../../platforms/ports/platform.js";
 import { type Tx } from "../wallet/wallet-ledger.js";
-import { AD_DEVICES, AD_PLACES, AD_SUCCESS, CLAIM_WINDOW_MIN, type AdDevice, type AdPlace, type AdSuccess, type PlaceHistoryEntry } from "./ads-rules.js";
+import {
+  AD_DEVICES,
+  AD_PLACES,
+  AD_SUCCESS,
+  CAPPED_PLACES,
+  CLAIM_WINDOW_MIN,
+  dailyCapReached,
+  isCappedPlace,
+  type AdDevice,
+  type AdPlace,
+  type AdSuccess,
+  type PlaceHistoryEntry,
+} from "./ads-rules.js";
 import type { InterstitialFacts } from "./interstitial-policy.js";
 
 /**
@@ -97,7 +109,9 @@ export type ClaimOutcome =
   /** `repeat` — сессию забрали раньше: хозяин места дожимает свою награду ключом сессии */
   | { status: "claimed"; session: AdSessionRow; repeat: boolean }
   | { status: "not_completed" }
-  | { status: "cooldown"; retryAt: Date };
+  | { status: "cooldown"; retryAt: Date }
+  /** забрано роликов за игровые сутки уже по дневному капу — этот сверх него */
+  | { status: "capped" };
 
 /** Что считать, собирая факты для межстраничной: какие забеги и места и докуда остановить счёт. */
 export interface InterstitialQuery {
@@ -140,6 +154,12 @@ export interface AdsRepository {
   /** включённые блоки включённых сетей — все места разом: их немного, и сервис держит их в памяти */
   activeBlocks(): Promise<AdBlockRow[]>;
   history(accountId: string, place: AdPlace, at: Date): Promise<PlaceHistory>;
+  /**
+   * Сколько роликов игрок досмотрел за игровые сутки `at` во всех местах под
+   * дневным капом (`CAPPED_PLACES`) — одним запросом. Сессии пропуска VIP не
+   * ролики и не считаются.
+   */
+  rewardedWatchedToday(accountId: string, at: Date): Promise<number>;
   createSession(session: NewAdSession): Promise<void>;
   /** сессия пропуска — сразу выполненная, забирается хозяином места как обычная */
   createPassSession(session: NewPassSession): Promise<void>;
@@ -157,8 +177,20 @@ export interface AdsRepository {
   /**
    * Забрать сессию места. Забор мест игрока идёт по одному: история и решение
    * читаются под блокировкой, и две сессии разом не проскочат кулдаун.
+   *
+   * `dailyCap` — дневной кап роликов (0 — без капа): забор в месте под капом
+   * идёт под общей блокировкой игрока и не даёт забрать роликов больше, чем
+   * кап, даже если их выдали разом, пока кап был свободен. Сессия пропуска в
+   * кап не упирается.
    */
-  claim(sessionId: string, accountId: string, place: AdPlace, at: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome>;
+  claim(
+    sessionId: string,
+    accountId: string,
+    place: AdPlace,
+    at: Date,
+    verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict,
+    dailyCap?: number,
+  ): Promise<ClaimOutcome>;
   /**
    * Сессия задания сети в месте `task`: открытая сессия сети отдаётся снова,
    * новую заводит `create` по истории места — или не заводит (`null`).
@@ -289,6 +321,10 @@ export class PrismaAdsRepository implements AdsRepository {
     return await historyWithin(this.prisma, accountId, place, at);
   }
 
+  async rewardedWatchedToday(accountId: string, at: Date): Promise<number> {
+    return await rewardedToday(this.prisma, accountId, at, "completed_at");
+  }
+
   async createSession(session: NewAdSession): Promise<void> {
     await this.prisma.$executeRaw`
       INSERT INTO ad_session (session_id, account_id, place, block_id, network_key, success, status, created_at, expires_at, creative_id, view_sec)
@@ -401,8 +437,20 @@ export class PrismaAdsRepository implements AdsRepository {
     }
   }
 
-  async claim(sessionId: string, accountId: string, place: AdPlace, at: Date, verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict): Promise<ClaimOutcome> {
+  async claim(
+    sessionId: string,
+    accountId: string,
+    place: AdPlace,
+    at: Date,
+    verdict: (session: AdSessionRow, history: PlaceHistory) => ClaimVerdict,
+    dailyCap = 0,
+  ): Promise<ClaimOutcome> {
+    const capped = dailyCap > 0 && isCappedPlace(place);
     return await this.prisma.$transaction(async (tx) => {
+      // Кап общий на все места игрока, а замок места свой: без общего замка два
+      // забора в разных местах разом оба увидели бы свободный остаток. Общий
+      // берётся первым у всех — порядок замков один, взаимной блокировки нет.
+      if (capped) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:cap`}))`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`ads:${accountId}:${place}`}))`;
       const [raw] = await tx.$queryRawUnsafe<unknown[]>(
         `SELECT ${SESSION_COLUMNS} FROM ad_session WHERE session_id = $1 AND account_id = $2::uuid AND place = $3::"AdPlace"`,
@@ -417,6 +465,8 @@ export class PrismaAdsRepository implements AdsRepository {
       const decision = verdict(session, await historyWithin(tx, accountId, place, at));
       if (decision.kind === "not_completed") return { status: "not_completed" };
       if (decision.kind === "cooldown") return { status: "cooldown", retryAt: decision.retryAt };
+      // Кап — последним: недосмотренной и стоящей на кулдауне сессии говорят об этом, а не о капе.
+      if (capped && (await isVideoSession(tx, sessionId)) && dailyCapReached(await rewardedToday(tx, accountId, at, "claimed_at"), dailyCap)) return { status: "capped" };
 
       const [claimed] = await tx.$queryRawUnsafe<unknown[]>(
         `UPDATE ad_session SET claimed_at = $2, status = 'claimed' WHERE session_id = $1 AND status = 'completed' RETURNING ${SESSION_COLUMNS}`,
@@ -542,6 +592,33 @@ async function doneTasksWithin(db: Db, accountId: string, networkKey: string, ca
     [...candidates],
   );
   return new Set(rows.map((row) => z.object({ creative_id: z.string() }).parse(row).creative_id));
+}
+
+/**
+ * Ролики за награду с начала игровых суток `at`: досмотренные (или забранные)
+ * сессии мест под капом без сессий пропуска — у пропуска нет блока. Окно по
+ * выдаче — как у истории места, чтобы идти индексом `(account_id, place,
+ * created_at)`; начало суток — полночь по Москве, считает база.
+ */
+async function rewardedToday(db: Db, accountId: string, at: Date, column: "completed_at" | "claimed_at"): Promise<number> {
+  const [row] = await db.$queryRawUnsafe<unknown[]>(
+    `WITH day AS (SELECT (date_trunc('day', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3) AS day_start)
+     SELECT count(*)::int AS watched FROM day, ad_session s
+     WHERE s.account_id = $1::uuid AND s.place = ANY($4::text[]::"AdPlace"[]) AND s.block_id IS NOT NULL
+       AND s.created_at >= day.day_start - interval '1 day'
+       AND s.${column} >= day.day_start AND s.${column} < day.day_start + interval '1 day'`,
+    accountId,
+    at,
+    GAME_DAY_TIME_ZONE,
+    [...CAPPED_PLACES],
+  );
+  return z.object({ watched: z.number().int() }).parse(row).watched;
+}
+
+/** Сессия показа ролика, а не пропуска VIP: у пропуска блока нет, и в кап он не входит. */
+async function isVideoSession(db: Db, sessionId: string): Promise<boolean> {
+  const [row] = await db.$queryRawUnsafe<unknown[]>(`SELECT block_id IS NOT NULL AS video FROM ad_session WHERE session_id = $1`, sessionId);
+  return z.object({ video: z.boolean() }).parse(row).video;
 }
 
 async function historyWithin(db: Db, accountId: string, place: AdPlace, at: Date): Promise<PlaceHistory> {
