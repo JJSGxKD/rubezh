@@ -43,7 +43,7 @@ executor: sonnet-5.5
 effort: high
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0327. Второй сундук в кладе за ролик — сервер: место показа `clad_chest`, раз за забег, книга показов и сверка итога

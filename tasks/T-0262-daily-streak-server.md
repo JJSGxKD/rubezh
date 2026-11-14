@@ -28,7 +28,7 @@ executor: sonnet-5.5
 effort: medium
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0262. Серия дней — сервер: +5 % к награде дня за каждый день подряд до +50 %, пропуск — минус две ступени

@@ -38,7 +38,7 @@ batch: 7
 
 # T-0306. Публикация контента — версия сначала команде, потом всем, только после зелёной проверки; откат кнопкой; версия для клиента по его схеме
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0306.json)](README.md#значки-статуса) [![T-0305](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0305.json&label=T-0305)](T-0305-balance-editor-check.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0306.json)](README.md#значки-статуса) [![T-0305](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0305.json&label=T-0305)](archive/T-0305-balance-editor-check.md)
 
 ## Зачем
 

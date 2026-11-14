@@ -47,7 +47,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0386. Пул Xray — учёт трафика по узлу и подписке

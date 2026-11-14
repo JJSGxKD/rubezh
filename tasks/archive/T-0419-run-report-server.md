@@ -31,7 +31,7 @@ effort: extra
 release: minor
 merge: lead
 design: null
-batch: 5
+batch: 4
 ---
 
 # T-0419. Отчёт забега для разбора и решения «Честный», «Аннулировать», «Вернуть забег» — сервер

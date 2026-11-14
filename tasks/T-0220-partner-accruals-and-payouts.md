@@ -34,7 +34,7 @@ design: null
 
 # T-0220. Начисления партнёру и заявки на выплату — в долларах после холда, выплата вручную
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0220.json)](README.md#значки-статуса) [![T-0219](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0219.json&label=T-0219)](T-0219-partner-cabinet-funnel.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0220.json)](README.md#значки-статуса) [![T-0219](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0219.json&label=T-0219)](archive/T-0219-partner-cabinet-funnel.md)
 
 **Черновик.** Правила начисления решены (Р137), но считать их не от чего:
 модели учёта — холдов, комиссий площадок и возвратов как проводок — в коде

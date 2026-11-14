@@ -43,7 +43,7 @@ executor: sonnet-5.5
 effort: extra
 release: minor
 design: null
-batch: 4
+batch: 5
 ---
 
 # T-0072. Метка партнёрки Telegram у игрока — слот источника занят, процент и срок программы в настройках

@@ -28,7 +28,7 @@ batch: 8
 
 # T-0315. Батл-пасс — облики в наградах: окрасы на 10-й и 20-й бесплатной ленты, окрасы и облик сезона в VIP-ленте
 
-[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0315.json)](README.md#значки-статуса) [![T-0313](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0313.json&label=T-0313)](T-0313-battle-pass-ribbons-panel.md) [![T-0245](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json&label=T-0245)](T-0245-keeper-set-server.md)
+[![статус](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0315.json)](README.md#значки-статуса) [![T-0313](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0313.json&label=T-0313)](archive/T-0313-battle-pass-ribbons-panel.md) [![T-0245](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JJSGxKD/rubezh/task-board/status/T-0245.json&label=T-0245)](T-0245-keeper-set-server.md)
 
 **Облики первого месяца готовы** (дизайнер, 31.10.2026, п. 17 очереди) —
 задача в `ready`; таблица владения `appearance_grant` приходит с T-0245
