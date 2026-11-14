@@ -14,7 +14,7 @@ import { FLAG_PLATFORMS } from "./flags";
  * правила проверяет сервер; панель лишь не даёт отправить заведомо неверное.
  */
 
-export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "task", "interstitial"] as const;
+export const AD_PLACES = ["second_chance", "wheel_spin", "run_double", "card_reroll", "task", "interstitial"] as const;
 export type AdPlace = (typeof AD_PLACES)[number];
 export const AD_SUCCESS = ["view", "click", "cpa"] as const;
 export type AdSuccess = (typeof AD_SUCCESS)[number];
@@ -29,6 +29,7 @@ export const PLACE_TITLES: Record<AdPlace, string> = {
   second_chance: "Второй шанс",
   wheel_spin: "Крутка колеса",
   run_double: "Удвоение за забег",
+  card_reroll: "Переброс карточек",
   task: "Задания",
   interstitial: "Между забегами",
 };

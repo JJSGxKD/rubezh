@@ -17,6 +17,7 @@ import { isRatedDifficulty, type Difficulty, type RunMode } from "./run-rules.js
 import { judgeRun, rubezhClaimsWin, rubezhWinOf, trustedStartMs, type RunVerdict, type VerdictReason } from "./run-verdict.js";
 import { RatingRestrictions, boardsOf } from "./rating-restrictions.js";
 import { RUNS_REPOSITORY, type RatingRestricted, type RunsRepository } from "./runs.repository.js";
+import { RunAdRerollService } from "./run-ad-reroll.service.js";
 import { RunContinues } from "./run-continues.js";
 import { RunLoadouts } from "./run-loadouts.js";
 import { detailsOf } from "./run-details.js";
@@ -98,6 +99,8 @@ export class RunsService {
     @Optional() private readonly prologue?: PrologueService,
     // Без подсчёта очков (сбой подключения, тесты других модулей) забег принимается как раньше: очков нет.
     @Optional() @Inject(RunScorer) private readonly scorer: RunScorer | null = null,
+    // Книга рекламных перебросов (T-0199). Без неё заявленный переброс — без подтверждения.
+    @Optional() private readonly adRerolls?: RunAdRerollService,
   ) {}
 
   /** Старт забега: сервер ставит свою отметку времени. Повтор из очереди — не ошибка. */
@@ -124,10 +127,13 @@ export class RunsService {
     // Повтор итога — тот же ответ, что в первый раз, без новой записи.
     if (existing?.status === "finished") return await this.replay(account, run.runId);
 
-    const [paid, loadout, boosts] = await Promise.all([
+    const adRerolls = run.adRerolls ?? 0;
+    const [paid, loadout, boosts, paidAdRerolls] = await Promise.all([
       this.continues.check(run.runId, run.continues),
       this.loadouts.check(account.accountId, run.loadout),
       this.loadouts.checkBoosts(account.accountId, run.runId, run.boosts),
+      // Заявлен рекламный переброс — сверяем с книгой показов; без сервиса книги подтверждённых нет.
+      adRerolls === 0 ? Promise.resolve(0) : (this.adRerolls?.paid(run.runId, adRerolls) ?? Promise.resolve(0)),
     ]);
     const counters = countersOf(run.stats);
     const mode = await this.modeOf(account, run.mode, run.difficultyId);
@@ -148,6 +154,8 @@ export class RunsService {
         continues: run.continues.length,
         paidContinues: paid.paid,
         underpaidContinues: paid.underpaid,
+        adRerolls,
+        paidAdRerolls,
         cheats: run.cheats,
         loadout,
         boosts,
@@ -224,6 +232,7 @@ export class RunsService {
       xpCollected: run.stats?.xpCollected ?? null,
       // Неправдоподобные счётчики в задания и достижения не идут.
       counters: judged.reasons.includes("counters_implausible") ? null : counters,
+      secretsFound: run.stats?.secretsFound ?? [],
       enemiesSeen: enemiesSeenOf(run.stats),
       deathCause: run.deathCause,
       cheats: run.cheats,

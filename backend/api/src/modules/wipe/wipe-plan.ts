@@ -137,6 +137,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 
   // --- стираются: игровой прогресс ---
   RunAdContinue: wipe("второй шанс за рекламу — часть забега"),
+  RunAdReroll: wipe("рекламный переброс карточек (T-0199) — часть забега: свой шаг, а не каскад с забегом"),
   RunGemContinue: wipe("второй шанс за самоцветы (Р162) — часть забега: свой шаг, а не каскад с забегом"),
   RunProof: wipe("запись забега для проверки (T-0317) — часть забега: свой шаг, а не каскад с забегом"),
   RunReward: wipe("награда за забег"),
@@ -148,6 +149,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
   TaskChannelWatch: wipe("окна перепроверки подписки (T-0178) следят за наградой, которой после вайпа нет: прогресс заданий и кошелёк обнулены, отписка не должна отнять заработанное заново"),
   AchievementFavorite: wipe("любимые достижения ссылаются на выполненное, а прогресс заданий после вайпа начинается заново (T-0106)"),
   CodexEntry: wipe("открытые записи кодекса врагов (T-0127) — прогресс того же рода, что задания: процент в task_progress после вайпа начинается заново, записи без него не оставляем"),
+  SecretFound: wipe("найденные виды тайников (T-0261) — прогресс того же рода, что задания: число видов в task_progress после вайпа начинается заново, записи без него не оставляем"),
   ShowcaseOffer: wipe("предложения витрины ссылаются на предметы"),
   ItemEvent: wipe("журнал предметов"),
   Item: wipe("снаряжение стирается"),
@@ -170,6 +172,7 @@ export const WIPE_PLAN: Record<Prisma.ModelName, WipeDecision> = {
 export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "RunAdContinue",
   "RunGemContinue",
+  "RunAdReroll",
   "RunProof",
   "RunReward",
   "RunBoost",
@@ -196,4 +199,5 @@ export const WIPE_ORDER: readonly Prisma.ModelName[] = [
   "PassClaim",
   "BoostCredit",
   "CodexEntry",
+  "SecretFound",
 ];

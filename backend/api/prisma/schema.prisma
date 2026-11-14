@@ -223,6 +223,8 @@ model Account {
   seasonRewards SeasonReward[]
   // Любимые достижения (T-0106)
   achFavorites  AchievementFavorite[]
+  // Кодекс тайников (T-0261)
+  secretsFound  SecretFound[]
   // Кодекс врагов (T-0127)
   codexEntries  CodexEntry[]
   // Батл-пасс (T-0311)
@@ -266,6 +268,7 @@ model Account {
   vipDaily         VipDaily?
   showcaseOffers   ShowcaseOffer[]
   adContinues      RunAdContinue[]
+  adRerolls        RunAdReroll[]
   gemContinues     RunGemContinue[]
   compensation     TesterCompensation?
   botMentionTasks  BotMentionTask[]
@@ -521,6 +524,7 @@ model Run {
   account      Account          @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
   purchases    Purchase[]
   adContinues  RunAdContinue[]
+  adRerolls    RunAdReroll[]
   gemContinues RunGemContinue[]
   proof        RunProof?
 
@@ -1843,6 +1847,8 @@ enum AdPlace {
   run_double
   task
   interstitial
+  /// значения enum в базе дописываются в конец: порядок мест в коде (`AD_PLACES`) свой
+  card_reroll
 }
 
 /// Условие успеха предложения (Р6): показ, клик или целевое действие.
@@ -3446,6 +3452,28 @@ model LedgerTemplate {
   @@map("ledger_template")
 }
 
+// Переброс карточек за рекламу (T-0199)
+
+/// Переброс карточек за рекламу (docs/35-stage4-plan.md Р133): один на забег, выданный по сессии показа места
+/// `card_reroll` — досмотренной или пропуску VIP. Забег — хозяин места, как у второго шанса; итог сверяется с этой
+/// книгой: заявленный рекламный переброс без строки отклоняет забег. `run_id` — ключ: второй переброс на забег не
+/// записывается, а сессия показа уникальна и потому не тратится на два забега.
+model RunAdReroll {
+  runId      String   @id @map("run_id") @db.VarChar(64)
+  accountId  String   @map("account_id") @db.Uuid
+  /// сессия показа; повтор той же сессией на тот же забег дожимает ответ
+  sessionId  String   @unique @map("session_id") @db.VarChar(32)
+  /// сеть показа; у пропуска VIP — его имя
+  networkKey String   @map("network_key") @db.VarChar(32)
+  grantedAt  DateTime @map("granted_at") @db.Timestamptz(3)
+
+  run     Run     @relation(fields: [runId], references: [runId], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("run_ad_reroll")
+}
+
 // Кодекс врагов (docs/39-retention-mechanics.md К2, tasks/T-0127). Награда за
 // кодекс — три достижения лестницы `codex` в `task_def`, процент пишется в
 // `task_progress` видом `codex_percent`.
@@ -3465,4 +3493,25 @@ model CodexEntry {
 
   @@id([accountId, enemyId])
   @@map("codex_entry")
+}
+
+// Кодекс тайников (design/art/meta-v2.md §5.3, tasks/T-0261). Награда — достижение
+// «Следопыт» в `task_def` с видом `secrets_kinds`, число найденных видов пишется в
+// `task_progress` по итогу забега.
+
+/// Найденный вид тайника: игрок нашёл его в забеге, который считается по правилам наград.
+/// Одна строка на пару «аккаунт — вид», найденное не закрывается и не переписывается —
+/// повтор забега ничего не меняет (`ON CONFLICT DO NOTHING`). Виды — список движка
+/// (`SECRET_KINDS`), внешнего ключа на вид нет
+model SecretFound {
+  accountId String   @map("account_id") @db.Uuid
+  /// вид тайника: shrine, hoard, stone, tree, rift или wisp
+  kind      String   @db.VarChar(16)
+  /// когда найден: время записи забега, в котором вид найден первым
+  firstAt   DateTime @map("first_at") @db.Timestamptz(3)
+
+  account Account @relation(fields: [accountId], references: [accountId], onDelete: Cascade)
+
+  @@id([accountId, kind])
+  @@map("secret_found")
 }

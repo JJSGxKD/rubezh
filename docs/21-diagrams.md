@@ -125,6 +125,8 @@ erDiagram
     ACCOUNT ||--o{ AD_SESSION : "показы рекламы"
     RUN ||--o{ RUN_AD_CONTINUE : "продолжен за рекламу"
     ACCOUNT ||--o{ RUN_AD_CONTINUE : "рекламные продолжения за сутки"
+    RUN ||--o| RUN_AD_REROLL : "переброс карточек за рекламу: один на забег (T-0199)"
+    ACCOUNT ||--o{ RUN_AD_REROLL : "рекламные перебросы карточек"
     RUN ||--o{ RUN_GEM_CONTINUE : "продолжен за самоцветы"
     RUN ||--o| RUN_PROOF : "запись для проверки (T-0317)"
     ACCOUNT ||--o{ RUN_GEM_CONTINUE : "продолжения за самоцветы"
@@ -146,6 +148,7 @@ erDiagram
     TASK_DEF ||--o{ ACHIEVEMENT_FAVORITE : "достижение в избранном"
     TASK_DEF |o--o{ ACCOUNT : "знак у имени, который игрок носит (shown_emblem_id)"
     ACCOUNT ||--o{ CODEX_ENTRY : "открытые записи кодекса врагов"
+    ACCOUNT ||--o{ SECRET_FOUND : "найденные виды тайников рубежа"
     ACCOUNT ||--o{ PASS_PROGRESS : "очки пасса по месяцам"
     ACCOUNT ||--o{ PASS_CLAIM : "забранные награды пасса"
     ACCOUNT ||--o{ BOOST_CREDIT : "бусты-подарки"
@@ -713,10 +716,10 @@ erDiagram
     TASK_DEF {
         string task_id PK "правится из панели; не удаляется, а выключается"
         enum period "daily|weekly|achievement"
-        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs; состояния игрока, которые забег не двигает, — friends, account_level; партнёрские — channel, link, bot; знаки без прогресса — status, season"
+        string kind "вид цели: runs, kills, survive_sec, best_survival_sec, run_level, xp_collected, weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec, boost_runs, boss_kills, elite_kills, chests_opened, crystals_collected, evolution_runs, no_hit_sec, no_kill_sec, element_kills; состояния игрока, которые забег не двигает, — friends, account_level, weapon_masters (цель считается по числу «Мастеров оружия»); партнёрские — channel, link, bot; знаки без прогресса — status, season"
         json params "nullable: ровно у партнёрских — ссылка, площадка, у channel — канал"
         string tier "nullable: ступень пула ротации easy|medium|hard, только у daily и weekly (CHECK); null — в игре всегда"
-        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
+        json filter "nullable: оружие, стихия или сложность цели забега (weapon_runs, element_runs, element_kills, difficulty_runs, difficulty_survive_sec); схема в коде, не params — партнёрскую цель отличает params"
         int target "больше нуля"
         string title "nullable: текст по виду цели у клиента"
         int coins
@@ -842,7 +845,7 @@ erDiagram
     AD_BLOCK {
         uuid block_id PK
         string network_key FK
-        enum place "second_chance|wheel_spin|run_double|task|interstitial"
+        enum place "second_chance|wheel_spin|run_double|card_reroll|task|interstitial"
         string external_id "nullable: блок в кабинете сети; нет — показ по ключам сети"
         enum success "view|click|cpa — условие успеха"
         boolean active
@@ -879,6 +882,14 @@ erDiagram
         int continue_no PK "какое по счёту продолжение забега, от 1"
         uuid account_id FK "суточный потолок рекламных продолжений (Р4)"
         string session_id UK "сессия показа места second_chance; без FK — модуль рекламы"
+        string network_key "сеть показа; у пропуска VIP — его имя"
+        datetime granted_at
+    }
+
+    RUN_AD_REROLL {
+        string run_id PK "FK на run (каскад): рекламный переброс один на забег"
+        uuid account_id FK "каскад с аккаунтом"
+        string session_id UK "сессия показа места card_reroll; без FK — модуль рекламы"
         string network_key "сеть показа; у пропуска VIP — его имя"
         datetime granted_at
     }
@@ -1252,6 +1263,10 @@ erDiagram
         uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
         string enemy_id PK "id врага из content/enemies.ts; внешнего ключа нет, список врагов — CODEX_ENEMY_IDS на сервере"
         datetime first_seen_at "время записи забега, в котором враг встретился первым; не переписывается"
+    SECRET_FOUND {
+        uuid account_id PK,FK "каскадом: удалённый аккаунт уносит записи"
+        string kind PK "вид тайника: shrine, hoard, stone, tree, rift, wisp; внешнего ключа нет, список видов — SECRETS_CODEX_KINDS на сервере"
+        datetime first_at "время записи забега, в котором вид найден первым; не переписывается"
     }
 
     PASS_PROGRESS {
@@ -1686,6 +1701,18 @@ erDiagram
   как у `friends` и `account_level`, — состояние с действием «максимум», процент
   дописывает модуль кодекса при записи и при ответе `GET /api/v1/codex`. Вайп
   стирает записи вместе с прогрессом заданий.
+- **`SECRET_FOUND` — кодекс тайников** (`35-stage4-plan.md` Р153,
+  `design/art/meta-v2.md` §5.3, T-0261): по строке на пару «аккаунт — вид
+  тайника», найденный вид не закрывается и не переписывается (`ON CONFLICT DO
+  NOTHING`). Записи открывает слушатель записи забега (`RunsHooks`) — один раз
+  на забег и только для забегов, засчитываемых заданиям (читы, отклонённые
+  разбором записи и пролог ничего не открывают); виды он берёт из итога забега
+  (`stats.secretsFound`, со слов клиента) и фильтрует по списку сервера. Награда —
+  достижение `ach_secrets_all` «Следопыт» в `TASK_DEF` (все шесть видов, знак у
+  имени редкости `epic`): вид `secrets_kinds`, как у `friends` и `account_level`, —
+  состояние с действием «максимум», число видов дописывает модуль кодекса при
+  записи. Ответ для гайдбука — `GET /api/v1/codex/secrets`. Вайп стирает записи
+  вместе с прогрессом заданий.
 - **`ACHIEVEMENT_RARITY`, `ACHIEVEMENT_FAVORITE` и поля достижения в
   `TASK_DEF` — достижения с престижем** (`39-retention-mechanics.md` К1,
   `35-stage4-plan.md` Р102, T-0106): определения остаются в `TASK_DEF` с
@@ -1895,6 +1922,15 @@ erDiagram
   `(account_id, granted_at)`, порознь для рекламы (`network_key` — сеть) и
   VIP (`network_key = 'vip'`, Р162); счёт и запись — под одной блокировкой на
   аккаунт, поэтому два параллельных забора потолок не пробивают.
+- **`RUN_AD_REROLL` — переброс карточек за рекламу** (`35-stage4-plan.md`
+  Р133, T-0199): книга показов места `card_reroll`, по образцу
+  `RUN_AD_CONTINUE`. Хозяин места — модуль забегов: забирает сессию показа и
+  записывает переброс. Первичный ключ — `run_id`: рекламный переброс один на
+  забег, вторая сессия на тот же забег не записывается; уникальная `session_id`
+  не даёт потратить одну сессию на два забега. Запись — `INSERT … ON CONFLICT DO
+  NOTHING`, два параллельных забора дают одну строку. Итог забега с заявленным
+  `adRerolls: 1` без строки отклоняется (`unpaid_ad_reroll`). Суточного потолка нет
+  — награда не валюта. Вайп стирает таблицу своим шагом до забега.
 - **`RUN_GEM_CONTINUE` — второй шанс за самоцветы** (`35-stage4-plan.md` Р162,
   T-0324): третья книга продолжений забега рядом с `PURCHASE` (звёзды) и
   `RUN_AD_CONTINUE` (реклама). Цена в самоцветах — цена в звёздах от начатых
@@ -2831,6 +2867,7 @@ flowchart LR
         ACHIEV["achievements<br/>витрина достижений: престиж, три любимых,<br/>престиж в строках рейтинга через порт забегов,<br/>редкость «есть у N%» фоновой задачей<br/>под локом Redis, знаки у имени: каталог,<br/>выбор знака и знак на список аккаунтов, реализовано"]
         CODEX["codex<br/>кодекс врагов: записи по итогу забега,<br/>процент в достижения лестницы codex,<br/>ответ для гайдбука, реализовано"]
         APPEAR["appearance<br/>облики героя: каталог из десяти в коде,<br/>владение по состоянию аккаунта при чтении,<br/>выбор облика и кружка аватара, облик в строках<br/>списков через порт PublicIdentity, реализовано"]
+        SECRETSCODEX["secrets-codex<br/>кодекс тайников: виды по итогу забега,<br/>число видов в достижение «Следопыт»,<br/>ответ для гайдбука, реализовано"]
         REMINDERS["reminders<br/>напоминания бота: проход раз в 10 минут<br/>под локом, курсор по игрокам, снимок таблицы<br/>недели, суточный отчёт, реализовано"]
     end
 
@@ -3087,6 +3124,10 @@ flowchart LR
     ACHIEV -. "сколько друзей" .-> FRIENDS
     ACHIEV -. "уровень аккаунта" .-> PROG
     ACHIEV -. "порт RunPrestige: престиж таблицы одним запросом, T-0107" .-> RUNS
+    CADDY -- "/api/v1/codex/secrets" --> SECRETSCODEX
+    SECRETSCODEX -- "secret_found" --> PG
+    RUNS -. "записанный забег, RunsHooks: какие тайники нашёл игрок" .-> SECRETSCODEX
+    SECRETSCODEX -. "число видов «максимум», награда в заданиях, T-0261" .-> TASKS
     ACHIEV -- "знаки у имени: account, vip_period, account_role, season_result, season; выбор — account.shown_emblem_id, T-0235" --> PG
     CADDY -- "/api/v1/codex" --> CODEX
     CODEX -- "codex_entry" --> PG

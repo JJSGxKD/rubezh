@@ -451,6 +451,7 @@ export function createWorld(options: CreateWorldOptions): World {
       tools: { ...toolsTotal },
       toolsTotal,
       banished: [],
+      adRerolls: 0,
       limitStacks: limitTypes.map(() => 0),
     },
     // До первого отрезка таймлайна сложность нейтральна: в мире без директора
